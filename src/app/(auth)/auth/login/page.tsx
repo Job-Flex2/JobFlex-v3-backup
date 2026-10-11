@@ -49,12 +49,8 @@ import { safeNextPath } from "@/lib/safeNext";
 import * as React from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
-import { toast } from "@/components/ui/Toast";
-import { OpenInBrowser } from "@/components/auth/open-in-browser";
-import { EmailCodeSignIn } from "@/components/auth/email-code-signin";
-import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
+import { useSearchParams } from "next/navigation";
+import { LoginForm } from "@/components/auth/login-form";
 import styles from "./login.module.css";
 
 /**
@@ -112,89 +108,17 @@ function authErrorMessage(code: string | null): string | null {
 }
 
 function LoginInner() {
-  const router = useRouter();
   const search = useSearchParams();
   // Only honor same-site relative paths so `?next=` can't be used as an open
   // redirect (reject absolute URLs and protocol-relative `//evil.com`).
   // A prefix check alone is not enough (`/\evil.com` resolves off-site) —
   // see lib/safeNext for the origin comparison.
   const nextPath = safeNextPath(search.get("next"));
-  const [loading, setLoading] = React.useState(false);
   // Prefill demo credentials only in local development — never in production.
   const isDev = process.env.NODE_ENV === "development";
   // ?email= prefills the address (a used trial confirmation link lands here,
   // /auth/register/confirm); the dev prefill stands only without it.
   const emailParam = search.get("email")?.trim().slice(0, 200) || null;
-  const [email, setEmail] = React.useState(emailParam ?? (isDev ? "owner@acme.test" : ""));
-  const [password, setPassword] = React.useState(isDev && !emailParam ? "password123" : "");
-
-  const [inlineError, setInlineError] = React.useState<string | null>(() =>
-    authErrorMessage(search.get("error")),
-  );
-  // The mockup's three transient UI states, kept as state rather than the
-  // source's innerHTML rewrites.
-  const [showPw, setShowPw] = React.useState(false);
-  const [signedIn, setSignedIn] = React.useState(false);
-  const [googleBusy, setGoogleBusy] = React.useState(false);
-  // Instagram / Facebook / LINE / TikTok webview: no Google button — Google
-  // refuses its sign-in there (lib/inAppBrowser) — and a way out instead.
-  const inApp = useInAppBrowser();
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    // The mockup's own guard, message included. It trims only for the
-    // emptiness test; the value handed to NextAuth is untouched, as before.
-    if (!email.trim() || !password) {
-      setInlineError("Enter your email and password.");
-      return;
-    }
-    setLoading(true);
-    setInlineError(null);
-    try {
-      const res = await signIn("credentials", { email, password, redirect: false });
-      setLoading(false);
-      if (!res) {
-        const msg =
-          "The auth endpoint did not respond. The database probably isn't reachable — see .env.local.";
-        setInlineError(msg);
-        toast.error("Sign in failed", msg);
-        return;
-      }
-      if (res.error) {
-        // `throttled-<minutes>`: the sign-in brake, not a wrong password (lib/auth).
-        const throttledFor = /^throttled-(\d+)$/.exec(res.code ?? "")?.[1];
-        const msg =
-          res.error === "CredentialsSignin"
-            ? res.code === "db"
-              ? "Couldn't reach the database just now. Try again."
-              : throttledFor
-                ? `Too many attempts — try again in ${throttledFor} minute${throttledFor === "1" ? "" : "s"}.`
-                : "Email or password is wrong."
-            : `Sign-in hit a temporary error (${res.error}). Try once more.`;
-        setInlineError(msg);
-        toast.error("Sign in failed", msg);
-        return;
-      }
-      // The source's terminal state: check mark + "Signed in", button still
-      // disabled. Real navigation follows immediately.
-      setSignedIn(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      router.push(nextPath as any);
-      router.refresh();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setLoading(false);
-      const msg = err?.message ?? "Unexpected error — check the terminal running `npm run dev`.";
-      setInlineError(msg);
-      toast.error("Sign in failed", msg);
-    }
-  }
-
-  function onGoogle() {
-    if (googleBusy) return;
-    setGoogleBusy(true);
-    signIn("google", { callbackUrl: nextPath });
-  }
 
   return (
     <div className="jf-auth-login">
@@ -208,57 +132,15 @@ function LoginInner() {
               button both already say it. Same call as register step 1. */}
           <h1 className={cx("auth-h1")}>Welcome back.</h1>
 
-          <form onSubmit={onSubmit} noValidate>
-            <label className={cx("fld")}><span className={cx("fld-lbl")}>Email</span>
-              <input
-                className={cx("fld-in")}
-                type="email"
-                id="email"
-                placeholder="you@yourshop.com"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              /></label>
-
-            <label className={cx("fld")}><span className={cx("fld-lbl")}>Password</span>
-              <span className={cx("pw-wrap")}>
-                <input
-                  className={cx("fld-in")}
-                  type={showPw ? "text" : "password"}
-                  id="password"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                {/* aria-label is the source's and, like the source's, does not
-                    flip to "Hide password" when the field is revealed. Ported
-                    as authored and flagged rather than silently corrected. */}
-                <button className={cx("pw-toggle")} type="button" aria-label="Show password" onClick={() => setShowPw((v) => !v)}><svg className={cx("ic")}><use href={showPw ? "#i-eye-off" : "#i-eye"}/></svg></button>
-              </span></label>
-
-            <div className={cx("row")}>
-              <span></span>
-              <Link className={cx("link-quiet")} href={"/auth/forgot" as never}>Forgot password?</Link>
-            </div>
-
-            <button className={cx("btn")} type="submit" disabled={loading || signedIn}>
-              {signedIn ? (<><svg className={cx("ic")}><use href="#i-check"/></svg>Signed in</>) : loading ? "Signing in…" : "Sign in"}
-            </button>
-            <div className={cx("err", !inlineError && "is-hidden")} role="alert">{inlineError}</div>
-          </form>
-
-          {/* No password needed (2026-10-10): a code to the address above. */}
-          <EmailCodeSignIn email={email} nextPath={nextPath} />
-
-          {inApp ? <OpenInBrowser app={inApp} /> : (<>
-          <div className={cx("divider")}><span className={cx("kpi-lbl")}>or</span></div>
-          <button className={cx("btn", "btn--ghost")} type="button" onClick={onGoogle}>
-            {googleBusy
-              ? (<><svg className={cx("ic")}><use href="#i-check"/></svg>Redirecting to Google…</>)
-              : (<><svg className={cx("ic", "ic--brand")}><use href="#i-google"/></svg>Continue with Google</>)}
-          </button>
-          </>)}
+          {/* THE FORM (2026-10-10): Google, then the email and "Email me a
+              code"; the password one link away (components/auth/login-form).
+              NextAuth's ?error= codes arrive as its first message. */}
+          <LoginForm
+            nextPath={nextPath}
+            initialEmail={emailParam ?? (isDev ? "owner@acme.test" : "")}
+            initialPassword={isDev && !emailParam ? "password123" : ""}
+            initialError={authErrorMessage(search.get("error"))}
+          />
 
           <div className={cx("foot")}>Don&apos;t have an account? <Link className={cx("link-ink")} href={"/auth/register" as never}>Create an account</Link></div>
 
