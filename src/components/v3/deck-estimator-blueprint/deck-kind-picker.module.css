@@ -1,0 +1,84 @@
+/* ============================================================
+   THE KIND PICKER (deck-kind-picker.tsx) — the four pictures and the
+   samples under the chosen one. Scoped like the studio's module
+   (`:global(.jf-blueprint .content) .cls`); colour comes from the step's
+   own `--step-c`, never the ink: the chosen card is tinted, not blackened.
+   ============================================================ */
+
+:global(.jf-blueprint .content) .picker { display: grid; gap: 14px; min-width: 0; }
+
+/* The four kinds */
+:global(.jf-blueprint .content) .kinds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+:global(.jf-blueprint .content) .kind {
+  position: relative; display: grid; grid-template-rows: auto auto auto 1fr; align-content: start; gap: 6px; min-width: 0;
+  padding: 10px 10px 12px; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.18s var(--ease), transform 0.18s var(--ease), background 0.15s;
+}
+:global(.jf-blueprint .content) .kind:hover { border-color: color-mix(in srgb, var(--step-c, var(--blueprint)) 60%, transparent); transform: translateY(-1px); box-shadow: 0 10px 22px -16px rgba(10, 10, 10, 0.45); }
+:global(.jf-blueprint .content) .kind:focus-visible { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: 2px; }
+:global(.jf-blueprint .content) .kindOn, :global(.jf-blueprint .content) .kindOn:hover {
+  border-color: var(--step-c, var(--blueprint)); background: color-mix(in srgb, var(--step-c, var(--blueprint)) 7%, #fff);
+  box-shadow: inset 0 0 0 1px var(--step-c, var(--blueprint));
+}
+:global(.jf-blueprint .content) .kindName { font-size: 13px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.2; }
+:global(.jf-blueprint .content) .kindBlurb { font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+:global(.jf-blueprint .content) .kindInc { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--step-c, var(--blueprint)); }
+:global(.jf-blueprint .content) .tick {
+  position: absolute; right: 6px; top: 6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--step-c, var(--blueprint)); color: #fff; font-size: 12px; font-weight: 900; line-height: 1; box-shadow: 0 0 0 2px #fff;
+}
+
+/* The picture */
+:global(.jf-blueprint .content) .fig { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius); background: #fff; overflow: hidden; }
+:global(.jf-blueprint .content) .figSmall { aspect-ratio: 5 / 3.4; }
+:global(.jf-blueprint .content) .svg { display: block; width: 100%; height: 100%; }
+:global(.jf-blueprint .content) .svg path { stroke: rgba(10, 10, 10, 0.22); stroke-width: 0.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+:global(.jf-blueprint .content) .layer { transform-box: view-box; }
+/* The build-up: each step of the build fades in and settles down, one after the other. */
+:global(.jf-blueprint .content) .play .layer { animation: deckRise 0.42s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes deckRise {
+  from { opacity: 0; transform: translateY(-2.5%); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The samples */
+:global(.jf-blueprint .content) .samples { display: grid; gap: 8px; min-width: 0; }
+:global(.jf-blueprint .content) .samplesHead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .samplesLbl { font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .samplesHint { font-size: 11px; line-height: 1.4; color: var(--muted); max-width: 60ch; }
+:global(.jf-blueprint .content) .sampleRow { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; min-width: 0; }
+:global(.jf-blueprint .content) .sample {
+  display: grid; gap: 4px; align-content: start; min-width: 0; padding: 8px; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--hair-soft); border-radius: var(--radius); background: #fff; color: var(--ink);
+  transition: border-color 0.15s, background 0.15s, transform 0.18s var(--ease);
+}
+:global(.jf-blueprint .content) .sample:hover { border-color: color-mix(in srgb, var(--step-c, var(--blueprint)) 60%, transparent); transform: translateY(-1px); }
+:global(.jf-blueprint .content) .sample:focus-visible { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: 2px; }
+:global(.jf-blueprint .content) .sampleOn, :global(.jf-blueprint .content) .sampleOn:hover { border-color: var(--step-c, var(--blueprint)); background: color-mix(in srgb, var(--step-c, var(--blueprint)) 7%, #fff); }
+:global(.jf-blueprint .content) .sampleName { font-size: 12px; font-weight: 800; line-height: 1.3; }
+:global(.jf-blueprint .content) .sampleFacts { font-family: var(--font-mono); font-size: 9.5px; line-height: 1.45; color: var(--muted); }
+:global(.jf-blueprint .content) .sampleTag { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--step-c, var(--blueprint)); }
+
+/* A narrow column (the steps beside the 3D are 340–430 px wide): two kinds a row, the samples two a row. */
+@container (max-width: 520px) {
+  :global(.jf-blueprint .content) .kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+:global(.jf-blueprint .content) .picker { container-type: inline-size; }
+
+/* A phone: two kinds a row; the samples slide sideways, one and a bit at a time. */
+@media (max-width: 768px) {
+  :global(.jf-blueprint .content) .kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  :global(.jf-blueprint .content) .kind { padding: 8px 8px 10px; grid-template-rows: auto auto auto; }
+  /* The phone's card is the picture, the name and what it includes; the sentence is for the wider screen. */
+  :global(.jf-blueprint .content) .kindBlurb { display: none; }
+  :global(.jf-blueprint .content) .kindName { font-size: 12px; }
+  :global(.jf-blueprint .content) .sampleRow { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  :global(.jf-blueprint .content) .sample { flex: 0 0 74%; max-width: 280px; scroll-snap-align: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .play .layer { animation: none; }
+  :global(.jf-blueprint .content) .kind, :global(.jf-blueprint .content) .sample { transition: none; }
+  :global(.jf-blueprint .content) .kind:hover, :global(.jf-blueprint .content) .sample:hover { transform: none; }
+}
