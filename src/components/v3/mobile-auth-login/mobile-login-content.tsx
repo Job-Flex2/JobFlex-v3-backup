@@ -65,6 +65,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
+import { EmailCodeSignIn } from "@/components/auth/email-code-signin";
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
 import "./mobile-auth-login.css";
 
@@ -311,6 +312,9 @@ export function MobileLoginContent() {
               {inlineError}
             </div>
           </form>
+
+          {/* No password needed (2026-10-10): a code to the address above. */}
+          <EmailCodeSignIn email={email} nextPath={nextPath} />
 
           {inApp ? (
             <OpenInBrowser app={inApp} />

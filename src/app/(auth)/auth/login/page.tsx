@@ -53,6 +53,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { toast } from "@/components/ui/Toast";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
+import { EmailCodeSignIn } from "@/components/auth/email-code-signin";
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
 import styles from "./login.module.css";
 
@@ -246,6 +247,9 @@ function LoginInner() {
             </button>
             <div className={cx("err", !inlineError && "is-hidden")} role="alert">{inlineError}</div>
           </form>
+
+          {/* No password needed (2026-10-10): a code to the address above. */}
+          <EmailCodeSignIn email={email} nextPath={nextPath} />
 
           {inApp ? <OpenInBrowser app={inApp} /> : (<>
           <div className={cx("divider")}><span className={cx("kpi-lbl")}>or</span></div>
