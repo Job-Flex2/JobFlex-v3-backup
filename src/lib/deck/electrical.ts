@@ -174,7 +174,8 @@ export function buildElectrical(input: ElectricalInput): ElectricalBuild {
     switch (f.kind) {
       case "led-strip": {
         // Under the rail's top (a deck) or under the headers all round (a roof).
-        if (roof && roof.headers.length) return roof.headers.map((h) => one((h.x0 + h.x1) / 2, (h.y0 + h.y1) / 2, roof.headerBottomIn - 1, "header", Math.atan2(h.y1 - h.y0, h.x1 - h.x0), h.lengthIn / 12, [h.lengthIn, 0.6, 0.6]));
+        const headers = roof ? roof.headers.filter((h) => h.lengthIn > 1) : [];
+        if (roof && headers.length) return headers.map((h) => one((h.x0 + h.x1) / 2, (h.y0 + h.y1) / 2, roof.headerBottomIn - 1, "header", Math.atan2(h.y1 - h.y0, h.x1 - h.x0), h.lengthIn / 12, [h.lengthIn, 0.6, 0.6]));
         if (rails.segments.length) return rails.segments.map((sg) => one((sg.x0 + sg.x1) / 2, (sg.y0 + sg.y1) / 2, (frame?.surfaceIn ?? floorIn) + rails.heightIn - 4, "rail", Math.atan2(sg.y1 - sg.y0, sg.x1 - sg.x0), sg.lengthIn / 12, [sg.lengthIn, 0.6, 0.6]));
         // No rail and no roof: along the rim.
         return [one(W / 2, D, (frame?.joistBottomIn ?? floorIn) + 2, "deck", 0, W / 12, [W, 0.6, 0.6])];
@@ -195,9 +196,10 @@ export function buildElectrical(input: ElectricalInput): ElectricalBuild {
           const a = ring[i];
           const b = ring[i + 1];
           const L = Math.hypot(b.x - a.x, b.y - a.y);
+          if (L < 1) continue;
           out.push(one((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2 - 6, "post", Math.atan2(b.y - a.y, b.x - a.x), L / 12, [L, 1, 2.5]));
         }
-        return out;
+        return out.length ? out : [one(W / 2, D / 2, floorIn + 96, "post", 0, (W + D) / 6)];
       }
       case "sconce": {
         const list = (roof ? roof.posts.map((p) => ({ x: p.x, y: p.y })) : posts.map((p) => ({ x: p.x, y: p.y }))).slice(0, Math.max(1, f.qty));

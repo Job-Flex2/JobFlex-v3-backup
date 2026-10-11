@@ -42,6 +42,12 @@ export interface Pt {
   y: number;
 }
 
+export interface ScaleLine {
+  a: Pt;
+  b: Pt;
+  lengthIn: number;
+}
+
 export interface WallJog {
   x: number;
   y: number;
@@ -64,6 +70,8 @@ export interface WallRead {
   windows: Array<{ x0: number; x1: number; sill: number; head: number }>;
   /** A patio or slab at the wall's base, if seen: its left and right ends. */
   patio: { x0: number; x1: number } | null;
+  /** A line the contractor drew on the picture as a measure: two ends and the real length between them. Null unless drawn. */
+  scaleLine: ScaleLine | null;
   /** Black bands or a phone's status bar at the top and the bottom, as fractions of the height. */
   bars: { top: number; bottom: number };
   confidence: number;
@@ -150,11 +158,15 @@ export function parseWallRead(raw: unknown): WallRead | null {
     .filter((w): w is NonNullable<typeof w> => !!w)
     .slice(0, 12);
   const patio = span(r.patio, 0.03);
+  const sl = obj(r.scaleLine);
+  const la = pt(sl.a);
+  const lb = pt(sl.b);
+  const scaleLine = la && lb && typeof sl.lengthIn === "number" && Number.isFinite(sl.lengthIn) && sl.lengthIn >= 6 && sl.lengthIn <= 600 && Math.hypot(lb.x - la.x, lb.y - la.y) >= 0.01 ? { a: la, b: lb, lengthIn: Math.round(sl.lengthIn) } : null;
   const b = obj(r.bars);
   const bars = { top: clamp(num(b.top, 0), 0, 0.35), bottom: clamp(num(b.bottom, 0), 0, 0.35) };
   const confidence = clamp(num(r.confidence, 0.5), 0, 1);
   const note = typeof r.note === "string" && r.note.trim() ? r.note.trim().slice(0, 240) : null;
-  return { base: { left: bl, right: br }, eave, storeys, jogs, door, windows, patio, bars, confidence, note };
+  return { base: { left: bl, right: br }, eave, storeys, jogs, door, windows, patio, scaleLine, bars, confidence, note };
 }
 
 /** The base line's y at a given x (the wall may run a little uphill in the picture). */
@@ -178,6 +190,7 @@ export function readInCrop(read: WallRead, crop: Crop): WallRead {
     door: read.door ? { x0: fx(read.door.x0), x1: fx(read.door.x1), bottom: fy(read.door.bottom), top: fy(read.door.top) } : null,
     windows: read.windows.map((w) => ({ x0: fx(w.x0), x1: fx(w.x1), sill: fy(w.sill), head: fy(w.head) })),
     patio: read.patio ? { x0: fx(read.patio.x0), x1: fx(read.patio.x1) } : null,
+    scaleLine: read.scaleLine ? { a: p(read.scaleLine.a), b: p(read.scaleLine.b), lengthIn: read.scaleLine.lengthIn } : null,
     bars: { top: 0, bottom: 0 },
     confidence: read.confidence,
     note: read.note,
@@ -187,11 +200,15 @@ export function readInCrop(read: WallRead, crop: Crop): WallRead {
 export interface PhotoScale {
   /** Pixels per foot in the picture the read was made on. 0 when nothing in it gives a size. */
   pxPerFt: number;
-  by: "door" | "eave" | "none";
+  by: "line" | "door" | "eave" | "none";
 }
 
-/** A foot in pixels: the door's 80 in., else the wall's storeys to the eave. */
+/** A foot in pixels: a measure the contractor drew, else the door's 80 in., else the wall's storeys to the eave. */
 export function scaleFromRead(read: WallRead, photoW: number, photoH: number): PhotoScale {
+  if (read.scaleLine && read.scaleLine.lengthIn > 0) {
+    const px = Math.hypot((read.scaleLine.b.x - read.scaleLine.a.x) * photoW, (read.scaleLine.b.y - read.scaleLine.a.y) * photoH);
+    if (px > 4) return { pxPerFt: px / (read.scaleLine.lengthIn / 12), by: "line" };
+  }
   if (read.door) {
     const px = (read.door.bottom - read.door.top) * photoH;
     if (px > 8) return { pxPerFt: px / DOOR_HEIGHT_FT, by: "door" };
@@ -481,14 +498,17 @@ const ANCHOR_WORDS: Record<Anchor["by"], string> = {
 /**
  * Everything the studio needs from one read of the picture. `recrop: false`
  * fits a picture already cut to the wall (its read in its own fractions)
- * and leaves it whole.
+ * and leaves it whole; `fallback` is the outline as it stands, kept at its
+ * width and set on the wall's base when nothing in the read gives a scale;
+ * `hand` says the read is the contractor's own marks.
  */
-export function fitPhoto(read: WallRead, deck: FitDeck, heightIn: number, photoW: number, photoH: number, opts: { recrop?: boolean } = {}): PhotoFit {
+export function fitPhoto(read: WallRead, deck: FitDeck, heightIn: number, photoW: number, photoH: number, opts: { recrop?: boolean; fallback?: Placed; hand?: boolean } = {}): PhotoFit {
   const scale = scaleFromRead(read, photoW, photoH);
   const unsure = read.confidence < MIN_CONFIDENCE;
   const onWall = unsure ? null : placeOnWall(read, scale, deck, photoW, photoH);
   const crop = opts.recrop === false ? { x: 0, y: 0, w: 1, h: 1 } : cropForWall(read, scale, onWall, deck, photoW, photoH);
-  const placed = onWall ? placedInCrop(onWall, crop) : { x: 0.1, y: r3(clamp((baseYAt(read, 0.5) - crop.y) / crop.h, 0.3, 0.98)), w: 0.8 };
+  const fallbackOn = !onWall && !unsure && opts.fallback ? (() => { const ax = anchorOn(read, scale, photoW).x; return { x: r3(ax - opts.fallback.w / 2), y: r3(baseYAt(read, ax)), w: opts.fallback.w }; })() : null;
+  const placed = onWall ? placedInCrop(onWall, crop) : fallbackOn ? placedInCrop(fallbackOn, crop) : { x: 0.1, y: r3(clamp((baseYAt(read, 0.5) - crop.y) / crop.h, 0.3, 0.98)), w: 0.8 };
   const wallFt = scale.pxPerFt > 0 ? Math.round(((read.base.right.x - read.base.left.x) * photoW) / scale.pxPerFt) : null;
   const anchor = anchorOn(read, scale, photoW).by;
   const suggestedHeightIn = heightFromDoor(read, scale, photoH);
@@ -497,8 +517,9 @@ export function fitPhoto(read: WallRead, deck: FitDeck, heightIn: number, photoW
   const notes: string[] = [];
   if (unsure) notes.push("The wall could not be read with confidence — the outline is centred; drag it to the wall and pull the handle to size it.");
   else {
-    const found = [wallFt ? `the wall, about ${wallFt} ft wide` : "the wall", read.door ? "the back door" : null, read.windows.length ? `${read.windows.length} window${read.windows.length === 1 ? "" : "s"}` : null, read.jogs.length ? (read.jogs.length === 1 ? "a step in the wall" : `${read.jogs.length} steps in the wall`) : null, read.patio ? "a patio" : null].filter(Boolean);
-    notes.push(`Found ${found.join(", ")} — scale from the ${scale.by === "door" ? "door (80 in.)" : scale.by === "eave" ? "wall's height to the eave" : "picture: none, so the size is yours to pull"}.`);
+    const found = [wallFt ? `the wall, about ${wallFt} ft wide` : "the wall", read.door ? "the back door" : null, read.windows.length ? `${read.windows.length} window${read.windows.length === 1 ? "" : "s"}` : null, read.jogs.length ? (read.jogs.length === 1 ? "a step in the wall" : `${read.jogs.length} steps in the wall`) : null, read.patio ? "a patio" : null, read.scaleLine ? `a measure of ${inWords(read.scaleLine.lengthIn)}` : null].filter(Boolean);
+    const by = scale.by === "line" ? "measure you drew" : scale.by === "door" ? "door (80 in.)" : scale.by === "eave" ? "wall's height to the eave" : "picture: none, so the size is yours to pull";
+    notes.push(`${opts.hand ? "The wall as you marked it: " : "Found "}${found.join(", ")} — scale from the ${by}.`);
     const l = deck.shape.kind === "L" && deck.shape.notch.corner.startsWith("back") && read.jogs.length ? ", its notch on the house's step" : "";
     notes.push(`${ANCHOR_WORDS[anchor]}${l}.`);
     if (suggestedHeightIn !== null && Math.abs(suggestedHeightIn - heightIn) >= 2) notes.push(`The door's threshold is ${inWords(suggestedHeightIn)} above the ground — that is where the floor belongs (the design says ${inWords(Math.round(heightIn))}).`);
@@ -506,15 +527,18 @@ export function fitPhoto(read: WallRead, deck: FitDeck, heightIn: number, photoW
     if (sill !== null && heightIn + 2 > sill) notes.push(`A window sill is only ${inWords(sill)} up — a ${inWords(Math.round(heightIn))} floor would come above it: lower the deck, or that window becomes a door.`);
     else if (sill !== null) notes.push(`The lowest window sill is ${inWords(sill)} up — the floor stays below it.`);
     if (offer) notes.push(offer.text);
+    const angled = obliqueness(read);
+    if (angled !== null && angled >= 12) notes.push(`The picture was taken at an angle — the wall stands ${angled}% taller at one end than the other. Straighten the picture for a true wall before trusting the size.`);
   }
   if (read.note) notes.push(read.note);
-  return { scale, crop, placed, wallFt, anchor, suggestedHeightIn, lowestSillIn: sill, offer, door: !!read.door, windows: read.windows.length, jog: read.jogs.length > 0, confidence: read.confidence, notes: notes.slice(0, 7), unsure };
+  return { scale, crop, placed, wallFt, anchor, suggestedHeightIn, lowestSillIn: sill, offer, door: !!read.door, windows: read.windows.length, jog: read.jogs.length > 0, confidence: read.confidence, notes: notes.slice(0, 8), unsure };
 }
 
 /** The record the design keeps of a fit: what the strip says, and the read in the cropped picture's own fractions, so the next fit needs no model. */
-export function fitSummary(fit: PhotoFit, read: WallRead): NonNullable<DeckPhoto["fit"]> {
+export function fitSummary(fit: PhotoFit, read: WallRead, hand = false): NonNullable<DeckPhoto["fit"]> {
   const whole = fit.crop.w === 1 && fit.crop.h === 1 && fit.crop.x === 0 && fit.crop.y === 0;
   return {
+    hand,
     by: fit.scale.by,
     pxPerFt: Math.round(fit.scale.pxPerFt * 100) / 100,
     wallFt: fit.wallFt,
@@ -528,6 +552,87 @@ export function fitSummary(fit: PhotoFit, read: WallRead): NonNullable<DeckPhoto
     read: whole ? read : readInCrop(read, fit.crop),
   };
 }
+
+/* ------------------------------------------------------------------ */
+/*  The wall marked by hand (owner, 2026-10-10: "start drawing the lines   */
+/*  right on that picture — the house wall where the deck is supposed to   */
+/*  be — kind of measures, and build everything right on that wall")       */
+/* ------------------------------------------------------------------ */
+
+/** A handle on the picture: the wall's base ends, the door's threshold and top, the measure's ends, a step. */
+export type MarkId = "base-left" | "base-right" | "door-bottom" | "door-top" | "scale-a" | "scale-b" | `jog-${number}`;
+
+/** A read to start marking from when the model found nothing: the base along the lower part of the picture, nothing else. */
+export function blankRead(): WallRead {
+  return { base: { left: { x: 0.1, y: 0.8 }, right: { x: 0.9, y: 0.8 } }, eave: null, storeys: null, jogs: [], door: null, windows: [], patio: null, scaleLine: null, bars: { top: 0, bottom: 0 }, confidence: 1, note: null };
+}
+
+/** A read as the contractor's own marks: sure, with no bands to cut. */
+export function markedRead(read: WallRead): WallRead {
+  return { ...read, confidence: 1, bars: { top: 0, bottom: 0 } };
+}
+
+const inside = (p: Pt): Pt => ({ x: r3(clamp(p.x, 0, 1)), y: r3(clamp(p.y, 0, 1)) });
+
+/** One handle moved to `p` (fractions of the picture); the rest of the read stands. */
+export function moveMark(read: WallRead, mark: MarkId, p: Pt): WallRead {
+  const q = inside(p);
+  if (mark === "base-left") return { ...read, base: { ...read.base, left: { x: Math.min(q.x, read.base.right.x - 0.05), y: q.y } } };
+  if (mark === "base-right") return { ...read, base: { ...read.base, right: { x: Math.max(q.x, read.base.left.x + 0.05), y: q.y } } };
+  if (mark === "door-bottom" && read.door) {
+    const d = read.door;
+    const half = (d.x1 - d.x0) / 2;
+    const h = d.bottom - d.top;
+    const cx = clamp(q.x, half, 1 - half);
+    const bottom = clamp(q.y, h + 0.02, 1);
+    return { ...read, door: { x0: r3(cx - half), x1: r3(cx + half), bottom: r3(bottom), top: r3(bottom - h) } };
+  }
+  if (mark === "door-top" && read.door) return { ...read, door: { ...read.door, top: r3(Math.min(q.y, read.door.bottom - 0.03)) } };
+  if (mark === "scale-a" && read.scaleLine) return { ...read, scaleLine: { ...read.scaleLine, a: q } };
+  if (mark === "scale-b" && read.scaleLine) return { ...read, scaleLine: { ...read.scaleLine, b: q } };
+  const jog = /^jog-(\d+)$/.exec(mark);
+  if (jog) {
+    const i = Number(jog[1]);
+    if (!read.jogs[i]) return read;
+    const x = r3(clamp(q.x, read.base.left.x + 0.02, read.base.right.x - 0.02));
+    const jogs = read.jogs.map((j, k) => (k === i ? { ...j, x, y: r3(baseYAt(read, x)) } : j)).sort((a, b) => a.x - b.x);
+    return { ...read, jogs };
+  }
+  return read;
+}
+
+/** A door put on the wall's base at its middle: 80 in. tall at the picture's scale when there is one, else a fifth of the picture. */
+export function addDoor(read: WallRead, photoW: number, photoH: number): WallRead {
+  const scale = scaleFromRead(read, photoW, photoH);
+  const cx = (read.base.left.x + read.base.right.x) / 2;
+  const bottom = baseYAt(read, cx);
+  const h = scale.pxPerFt > 0 ? (DOOR_HEIGHT_FT * scale.pxPerFt) / photoH : 0.2;
+  const w = (h * photoH * 0.45) / photoW;
+  return { ...read, door: { x0: r3(cx - w / 2), x1: r3(cx + w / 2), bottom: r3(bottom), top: r3(Math.max(0.02, bottom - h)) } };
+}
+export const removeDoor = (read: WallRead): WallRead => ({ ...read, door: null });
+
+/** A measure line put in the middle of the picture, 3 ft long until the contractor says otherwise. */
+export function addScaleLine(read: WallRead, lengthIn = 36): WallRead {
+  return { ...read, scaleLine: { a: { x: 0.5, y: 0.45 }, b: { x: 0.5, y: 0.65 }, lengthIn: Math.round(clamp(lengthIn, 6, 600)) } };
+}
+export const removeScaleLine = (read: WallRead): WallRead => ({ ...read, scaleLine: null });
+export function setScaleLength(read: WallRead, lengthIn: number): WallRead {
+  return read.scaleLine ? { ...read, scaleLine: { ...read.scaleLine, lengthIn: Math.round(clamp(lengthIn, 6, 600)) } } : read;
+}
+
+/** A step in the wall put at its middle (or at `x`), the part to the right 2 ft nearer until the contractor says otherwise. */
+export function addJog(read: WallRead, x?: number): WallRead {
+  if (read.jogs.length >= 4) return read;
+  const at = r3(clamp(x ?? (read.base.left.x + read.base.right.x) / 2, read.base.left.x + 0.02, read.base.right.x - 0.02));
+  const jogs = [...read.jogs, { x: at, y: r3(baseYAt(read, at)), dir: "toward" as const, depthFt: JOG_DEFAULT_FT }].sort((a, b) => a.x - b.x);
+  return { ...read, jogs };
+}
+export function setJog(read: WallRead, i: number, patch: Partial<Pick<WallJog, "dir" | "depthFt">>): WallRead {
+  if (!read.jogs[i]) return read;
+  return { ...read, jogs: read.jogs.map((j, k) => (k === i ? { ...j, ...patch, depthFt: patch.depthFt !== undefined ? (patch.depthFt === null ? null : clamp(patch.depthFt, 0.5, 40)) : j.depthFt } : j)) };
+}
+export const removeJog = (read: WallRead, i: number): WallRead => ({ ...read, jogs: read.jogs.filter((_, k) => k !== i) });
 
 /**
  * Black bands at the top and the bottom of a picture (a phone's screenshot
@@ -547,6 +652,217 @@ export function letterboxRows(rowBrightness: ArrayLike<number>, dark = 22): { to
   if (top < Math.max(4, n * 0.01)) top = 0;
   if (bottom < Math.max(4, n * 0.01)) bottom = 0;
   return { top, bottom };
+}
+
+/* ------------------------------------------------------------------ */
+/*  The picture straightened (owner, 2026-10-11: an angled shot of the    */
+/*  house "still can't work and build the deck with this pic")            */
+/* ------------------------------------------------------------------ */
+//
+// A photo taken from the side of the yard shows the wall in perspective: a
+// foot of wall is more pixels at the near end than the far end, the eave
+// and the base converge, and one scale cannot fit it. The contractor puts
+// four corners on the wall — where it meets the ground at each end and the
+// top of the wall above each — and the picture is warped so that quad
+// becomes a rectangle: a true elevation, which the read, the fit and the 3D
+// then take as any square-on photo. The maths here is pure: a homography
+// from four point pairs, its inverse, the output's size (its width from the
+// wall's typed width or a measure across the wall when there is one, else
+// the quad's own average edges), and every line of a read carried through
+// it so a door marked before stays on the door after.
+
+/** Four corners of the wall on the picture: top-left, top-right, bottom-right, bottom-left, as fractions. */
+export type Quad = [Pt, Pt, Pt, Pt];
+
+/**
+ * The 3×3 homography (row-major, h33 = 1) taking each `src` point to its
+ * `dst` point — eight unknowns from four pairs, by elimination. Null when
+ * the points do not make a proper quadrilateral.
+ */
+export function homography(src: readonly Pt[], dst: readonly Pt[]): number[] | null {
+  if (src.length !== 4 || dst.length !== 4) return null;
+  const A: number[][] = [];
+  const b: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const { x, y } = src[i];
+    const { x: u, y: v } = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]);
+    b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]);
+    b.push(v);
+  }
+  const n = 8;
+  for (let c = 0; c < n; c++) {
+    let best = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[best][c])) best = r;
+    if (Math.abs(A[best][c]) < 1e-12) return null;
+    [A[c], A[best]] = [A[best], A[c]];
+    [b[c], b[best]] = [b[best], b[c]];
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c] / A[c][c];
+      if (f === 0) continue;
+      for (let k = c; k < n; k++) A[r][k] -= f * A[c][k];
+      b[r] -= f * b[c];
+    }
+  }
+  const h = b.map((v, i) => v / A[i][i]);
+  if (!h.every(Number.isFinite)) return null;
+  return [...h, 1];
+}
+
+/** A point through the homography. */
+export function applyHomography(H: readonly number[], p: Pt): Pt {
+  const w = H[6] * p.x + H[7] * p.y + H[8];
+  const d = Math.abs(w) < 1e-12 ? 1e-12 : w;
+  return { x: (H[0] * p.x + H[1] * p.y + H[2]) / d, y: (H[3] * p.x + H[4] * p.y + H[5]) / d };
+}
+
+/** The homography going the other way. Null when it has none. */
+export function invertHomography(H: readonly number[]): number[] | null {
+  const [a, b, c, d, e, f, g, h, i] = H;
+  const A = e * i - f * h;
+  const B = -(d * i - f * g);
+  const C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-18) return null;
+  const inv = [A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map((v) => v / det);
+  const k = inv[8] === 0 ? 1 : inv[8];
+  return inv.map((v) => v / k);
+}
+
+/** Corners to start from: the read's base and eave, or a box in the middle of the picture when there is no read. */
+export function wallQuadFromRead(read: WallRead | null): Quad {
+  if (!read) return [{ x: 0.15, y: 0.2 }, { x: 0.85, y: 0.2 }, { x: 0.85, y: 0.85 }, { x: 0.15, y: 0.85 }];
+  const bl = inside(read.base.left);
+  const br = inside(read.base.right);
+  const tl = read.eave ? inside(read.eave.left) : { x: bl.x, y: r3(Math.max(0.02, bl.y - 0.45)) };
+  const tr = read.eave ? inside(read.eave.right) : { x: br.x, y: r3(Math.max(0.02, br.y - 0.45)) };
+  return [tl, tr, br, bl];
+}
+
+/** How much taller the wall stands at one end than the other in the picture, percent — the sign of an angled shot. */
+export function obliqueness(read: WallRead): number | null {
+  if (!read.eave) return null;
+  const hl = read.base.left.y - read.eave.left.y;
+  const hr = read.base.right.y - read.eave.right.y;
+  if (hl <= 0.02 || hr <= 0.02) return null;
+  return Math.round((Math.abs(hl - hr) / Math.max(hl, hr)) * 100);
+}
+
+export interface RectifyPlan {
+  /** Source pixels → output pixels. */
+  H: number[];
+  /** The output picture's size, px. */
+  w: number;
+  h: number;
+  /** What set the output's width against its height. */
+  by: "width" | "measure" | "edges";
+  /** Pixels per foot in the output, when something in the read gives one. */
+  pxPerFt: number | null;
+  /** The quad's two sides' difference, percent — how angled the shot was. */
+  obliquePct: number;
+}
+
+/**
+ * The warp for four corners of the wall. Its height is the average of the
+ * quad's two sides; its width is the wall's typed width at the vertical
+ * scale (the door's 80 in., else the eave by storeys), else a measure drawn
+ * across the wall against that scale, else the quad's own average top and
+ * bottom. The long side is held to `maxSide`.
+ */
+export function rectifyPlan(quad: Quad, read: WallRead | null, photoW: number, photoH: number, opts: { wallWidthFt?: number | null; maxSide?: number } = {}): RectifyPlan | null {
+  if (!(photoW > 0 && photoH > 0)) return null;
+  const px = quad.map((p) => ({ x: p.x * photoW, y: p.y * photoH }));
+  const [tl, tr, br, bl] = px;
+  const len = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y);
+  const top = len(tl, tr);
+  const bottom = len(bl, br);
+  const left = len(tl, bl);
+  const right = len(tr, br);
+  if (top < 8 || bottom < 8 || left < 8 || right < 8) return null;
+  // Left of right, top above bottom, no bow tie.
+  if (tl.x >= tr.x || bl.x >= br.x || tl.y >= bl.y || tr.y >= br.y) return null;
+  const h0 = (left + right) / 2;
+  let w0 = (top + bottom) / 2;
+  let by: RectifyPlan["by"] = "edges";
+  let pxPerFt: number | null = null;
+  const H0 = homography(px, [{ x: 0, y: 0 }, { x: w0, y: 0 }, { x: w0, y: h0 }, { x: 0, y: h0 }]);
+  if (!H0) return null;
+  if (read) {
+    // The read in the first output: a door's height there gives the vertical scale; a measure says which way it runs.
+    const r0 = transformRead(read, H0, photoW, photoH, w0, h0);
+    let vy: number | null = null;
+    let vx: number | null = null;
+    if (r0.door && (r0.door.bottom - r0.door.top) * h0 > 8) vy = ((r0.door.bottom - r0.door.top) * h0) / DOOR_HEIGHT_FT;
+    else if (r0.eave) {
+      const hp = ((r0.base.left.y - r0.eave.left.y + (r0.base.right.y - r0.eave.right.y)) / 2) * h0;
+      if (hp > 8) vy = hp / (STOREY_FT * (r0.storeys ?? 1));
+    }
+    if (r0.scaleLine && r0.scaleLine.lengthIn > 0) {
+      const dx = (r0.scaleLine.b.x - r0.scaleLine.a.x) * w0;
+      const dy = (r0.scaleLine.b.y - r0.scaleLine.a.y) * h0;
+      const ft = r0.scaleLine.lengthIn / 12;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 4) vx = Math.abs(dx) / ft;
+      else if (Math.abs(dy) > 4 && vy === null) vy = Math.abs(dy) / ft;
+    }
+    if (opts.wallWidthFt && opts.wallWidthFt > 0 && vy) {
+      w0 = opts.wallWidthFt * vy;
+      by = "width";
+    } else if (vx && vy) {
+      w0 = w0 * (vy / vx);
+      by = "measure";
+    }
+    pxPerFt = vy;
+  }
+  const maxSide = opts.maxSide ?? 1600;
+  const k = Math.min(1, maxSide / Math.max(w0, h0));
+  const w = Math.max(32, Math.round(w0 * k));
+  const h = Math.max(32, Math.round(h0 * k));
+  const H = homography(px, [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]);
+  if (!H) return null;
+  return { H, w, h, by, pxPerFt: pxPerFt === null ? null : Math.round(pxPerFt * k * 100) / 100, obliquePct: Math.round((Math.abs(left - right) / Math.max(left, right)) * 100) };
+}
+
+/** A read carried through a warp: every line's ends mapped, a box (a door, a window) kept as the box around its mapped corners. */
+export function transformRead(read: WallRead, H: readonly number[], fromW: number, fromH: number, toW: number, toH: number): WallRead {
+  const p = (q: Pt): Pt => {
+    const m = applyHomography(H, { x: q.x * fromW, y: q.y * fromH });
+    return { x: r3(m.x / toW), y: r3(m.y / toH) };
+  };
+  // A box (a door, a window) is read as an upright rectangle even on an angled shot, so its bottom edge cannot lean
+  // with the base: it is carried by its middle — the bottom's centre stays on the base, the top's centre above it —
+  // and its width by its two bottom corners.
+  const box = (x0: number, x1: number, top: number, bottom: number) => {
+    const cx = (x0 + x1) / 2;
+    const bl = p({ x: x0, y: bottom });
+    const br = p({ x: x1, y: bottom });
+    const b = p({ x: cx, y: bottom });
+    const t = p({ x: cx, y: top });
+    return { x0: r3(Math.min(bl.x, br.x)), x1: r3(Math.max(bl.x, br.x)), top: r3(Math.min(t.y, b.y - 0.001)), bottom: r3(b.y) };
+  };
+  const base = { left: p(read.base.left), right: p(read.base.right) };
+  const patioY = (x: number) => baseYAt(read, x);
+  return {
+    base,
+    eave: read.eave ? { left: p(read.eave.left), right: p(read.eave.right) } : null,
+    storeys: read.storeys,
+    jogs: read.jogs.map((j) => ({ ...j, ...p({ x: j.x, y: j.y }) })).sort((a, b) => a.x - b.x),
+    door: read.door ? box(read.door.x0, read.door.x1, read.door.top, read.door.bottom) : null,
+    windows: read.windows.map((w) => { const b = box(w.x0, w.x1, w.head, w.sill); return { x0: b.x0, x1: b.x1, sill: b.bottom, head: b.top }; }),
+    patio: read.patio ? { x0: p({ x: read.patio.x0, y: patioY(read.patio.x0) }).x, x1: p({ x: read.patio.x1, y: patioY(read.patio.x1) }).x } : null,
+    scaleLine: read.scaleLine ? { a: p(read.scaleLine.a), b: p(read.scaleLine.b), lengthIn: read.scaleLine.lengthIn } : null,
+    bars: { top: 0, bottom: 0 },
+    confidence: read.confidence,
+    note: read.note,
+  };
+}
+
+/** A placement carried through a warp: its ground line's two ends mapped. */
+export function transformPlaced(placed: Placed, H: readonly number[], fromW: number, fromH: number, toW: number, toH: number): Placed {
+  const a = applyHomography(H, { x: placed.x * fromW, y: placed.y * fromH });
+  const b = applyHomography(H, { x: (placed.x + placed.w) * fromW, y: placed.y * fromH });
+  return { x: r3(a.x / toW), y: r3((a.y + b.y) / 2 / toH), w: r3(Math.max(0.05, (b.x - a.x) / toW)) };
 }
 
 /** The prompt the read runs on — the JSON the model must answer with, field by field. */

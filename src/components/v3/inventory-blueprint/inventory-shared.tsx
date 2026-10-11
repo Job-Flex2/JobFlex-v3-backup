@@ -3,7 +3,7 @@
 // What the Inventory page's parts share: the class joiner, the handheld
 // switch, the sheet and the empty state (owner, 2026-09-29).
 
-import { useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { OverlayPortal } from "@/components/v3/blueprint-shell/overlay-layer";
@@ -21,6 +21,12 @@ export const useHandheld = () => useSyncExternalStore(subscribe, () => window.ma
  * sidebar, the topbar and the support button. `.inv-layer` re-roots the module.
  */
 export function Sheet({ id = "inv-sheet-title", kicker, title, onClose, footer, wide, children }: { id?: string; kicker: string; title: string; onClose: () => void; footer?: ReactNode; wide?: boolean; children: ReactNode }) {
+  // A dialog closes on Escape (found by the 2026-10-10 error sweep: the sheet only closed from its buttons).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <OverlayPortal>
       <div className="inv-layer">

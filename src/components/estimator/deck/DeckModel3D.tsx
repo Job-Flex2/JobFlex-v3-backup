@@ -104,10 +104,11 @@ export interface DeckBackdrop {
   elevLeftFt: number;
   /** Where the wall steps, as fractions of the picture's width; "toward" brings the part to the right nearer by `depthFt`. */
   jogs: Array<{ x: number; dir: "toward" | "away"; depthFt: number | null }>;
+  /** How far behind the house line the wall stands, ft: 0 for a structure on the house, a yard's worth for a detached one kept as a backdrop. */
+  standoffFt?: number;
 }
 /** A step in the wall the read could not size. */
 const JOG_DEFAULT_FT = 2;
-const RETURN_WALL = 0xb9b3a8;
 
 const LAYER_COUNT = SCENE_LAYERS.length;
 const layerIndex = (name: SceneLayer) => SCENE_LAYERS.indexOf(name);
@@ -1085,9 +1086,11 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         if (zTop - zBottom > 0.2 && wFt > 0.5) {
           const tex = photoTexture(bd.href);
           const photoMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false });
-          const returnMat = new THREE.MeshStandardMaterial({ color: RETURN_WALL, roughness: 0.95, side: THREE.DoubleSide });
+          // The return wall at a step wears a sliver of the picture around that step, a shade darker, so the wall
+          // keeps its own colour into the corner instead of turning plain grey (owner, 2026-10-11).
+          const returnMat = new THREE.MeshBasicMaterial({ map: tex, color: 0xb4b4b4, side: THREE.DoubleSide, toneMapped: false });
           owned.push(photoMat, returnMat);
-          photoMats.push(photoMat);
+          photoMats.push(photoMat, returnMat);
           // The wall's parts between its steps, each at its depth; the part under the deck's middle stands on the house line.
           const jogs = [...bd.jogs].filter((j) => j.x > 0.005 && j.x < 0.995).sort((a, b) => a.x - b.x);
           const xs = [0, ...jogs.map((j) => j.x), 1];
@@ -1096,7 +1099,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const centreFrac = (s.widthFt / 2 - leftX) / wFt;
           let mine = 0;
           for (let i = 0; i + 1 < xs.length; i++) if (centreFrac >= xs[i] && centreFrac <= xs[i + 1]) mine = i;
-          const shift = depths[mine];
+          const shift = depths[mine] + (bd.standoffFt ?? 0);
           const height = zTop - zBottom;
           const yMid = (zTop + zBottom) / 2;
           for (let i = 0; i + 1 < xs.length; i++) {
@@ -1115,6 +1118,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
             const run = depths[i] - depths[i - 1];
             if (Math.abs(run) < 0.05) continue;
             const geo = new THREE.PlaneGeometry(Math.abs(run), height);
+            const uStep = Math.min(0.996, Math.max(0.004, xs[i]));
+            geo.setAttribute("uv", new THREE.Float32BufferAttribute([uStep - 0.004, 1, uStep + 0.004, 1, uStep - 0.004, v0, uStep + 0.004, v0], 2));
             owned.push(geo);
             const wall = new THREE.Mesh(geo, returnMat);
             wall.rotation.y = Math.PI / 2;
@@ -1394,7 +1399,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     };
     const hoverHandle = (h: SceneHandle) => {
       clearHover();
-      const now = h.perUnit === 1 ? `${Math.round(h.value * 2) / 2} ft` : `${Math.round(h.value)} in.`;
+      const now = h.kind === "pitch" ? `${Math.round(h.value)}:12` : h.perUnit === 1 ? `${Math.round(h.value * 2) / 2} ft` : `${Math.round(h.value)} in.`;
       pickRef.current?.({ legend: { role: h.label, nominal: now, lengthFt: 0, count: 1, note: "Drag the knob, or press the arrow keys." }, layer: null, point: [h.x, h.y, h.z], mount: "deck" }, "hover");
     };
     const knobKey = (e: KeyboardEvent, h: SceneHandle) => {

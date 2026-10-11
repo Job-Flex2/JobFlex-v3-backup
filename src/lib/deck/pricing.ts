@@ -96,6 +96,8 @@ export interface DeckPackage {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+/** The proposal keeps a line's name to 200 characters and its description to 400 (lib/deck/convertSchema): cut at a word, never mid-figure. */
+const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1).replace(/\s+\S*$/, "")}…`);
 const plural = (n: number, w: string, many = `${w}s`) => `${n} ${n === 1 ? w : many}`;
 
 export function priceDeck(design: DeckDesign, opts: DeckPriceOptions = {}): DeckPackage {
@@ -127,7 +129,7 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
     if (!(l.quantity > 0) || (!(l.material + l.labor > 0) && !l.tbd)) return;
     const unitPrice = round2((l.material + l.labor) / l.quantity);
     const materialCost = Math.min(unitPrice, round2(l.material / l.quantity));
-    lines.push({ id: l.id, name: l.name, description: l.description, quantity: l.quantity, unit: l.unit, materialCost, laborCost: round2(unitPrice - materialCost), unitPrice, taxable: l.material > 0, tbd: l.tbd });
+    lines.push({ id: l.id, name: clip(l.name, 200), description: l.description === undefined ? undefined : clip(l.description, 400), quantity: l.quantity, unit: l.unit, materialCost, laborCost: round2(unitPrice - materialCost), unitPrice, taxable: l.material > 0, tbd: l.tbd });
     exampleMoney += l.exampleMaterial + l.exampleLabor;
   };
   /** Labor by measure: a rate times a quantity, and how much of it is still an example. */
@@ -248,7 +250,7 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
       work("stairs.landing", s.stairs.filter((st) => st.landing || st.midSupport).length),
     );
     const words = s.stairs.map((st) => (st.kind === "box" ? `box steps wrapping ${st.design.wrapSides === 4 ? "four sides" : st.design.wrapSides === 3 ? "three sides" : "the front"} (${plural(st.risers, "riser")})` : `a ${st.widthIn / 12}-ft flight of ${plural(st.risers, "riser")} down the ${st.design.side}${st.lands === "lower-deck" ? " to the lower level" : st.design.landing === "pad" ? " onto a new pad" : st.design.landing === "patio" ? " onto the patio" : " onto pavers"}${st.landing ? ", a landing midway" : st.midSupport ? ", a beam midway" : ""}${st.rail.sides ? `, ${st.rail.sides === 2 ? "rails both sides" : "a handrail"}` : ""}`));
-    line({ id: "deck-stairs", name: `Stairs — ${plural(s.stairs.length, "stair")}, ${plural(stairSteps, "riser")}`, description: `${words.join("; ")}. ${flights.length ? `2x12 stringers ${flights[0].stringers.spacingIn} in. apart, treads of the deck's boards, riser boards` : "2x6 box frames on blocks over gravel, treads of the deck's boards"}`, quantity: stairSteps, unit: "ea", material: stepMaterial("stairs"), labor: w.amount, exampleMaterial: stepExample("stairs"), exampleLabor: w.example });
+    line({ id: "deck-stairs", name: `Stairs — ${plural(s.stairs.length, "stair")}, ${plural(stairSteps, "riser")}`, description: `${words.length > 3 ? `${words.slice(0, 3).join("; ")}; and ${plural(words.length - 3, "more stair")}` : words.join("; ")}. ${flights.length ? `2x12 stringers ${flights[0].stringers.spacingIn} in. apart, treads of the deck's boards, riser boards` : "2x6 box frames on blocks over gravel, treads of the deck's boards"}`, quantity: stairSteps, unit: "ea", material: stepMaterial("stairs"), labor: w.amount, exampleMaterial: stepExample("stairs"), exampleLabor: w.example });
   }
 
   /* ── Railing ─────────────────────────────────────────────────────── */
@@ -336,10 +338,18 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
   if (el.on) {
     const wiring = sum(work("labor.elec.device", el.labor.devices), work("labor.elec.circuit", el.labor.circuits), work("labor.elec.wireFt", el.labor.wireFt), work("labor.elec.trench", el.labor.trenchFt), work("labor.elec.lv", el.labor.lvFixtures));
     const isFixture = (l: PricedBomLine) => l.kind === "fixture";
+    // The circuits as a count by kind — eight heaters are "8 30-A two-pole circuits for heaters", not eight sentences.
+    const lightCircuits = el.circuits.filter((c) => c.kind === "lights-outlets");
+    const heaterCircuits = new Map<string, number>();
+    for (const c of el.circuits) if (c.kind !== "lights-outlets") { const k = `${c.amps}-A${c.poles === 2 ? " two-pole" : ""}`; heaterCircuits.set(k, (heaterCircuits.get(k) ?? 0) + 1); }
+    const circuitWords = [
+      lightCircuits.length ? `${lightCircuits.length === 1 ? "a 20-A GFCI circuit" : `${lightCircuits.length} 20-A GFCI circuits`} for ${plural(lightCircuits.reduce((a, c) => a + c.devices, 0), "device")}` : null,
+      ...[...heaterCircuits.entries()].map(([k, n]) => (n === 1 ? `a ${k} circuit for a heater` : `${n} ${k} circuits for heaters`)),
+    ].filter((w): w is string => !!w).join("; ");
     line({
       id: "elec-wiring",
       name: `Electrical — ${plural(el.circuits.length, "circuit")}, wiring and boxes`,
-      description: `${el.circuits.map((c) => (c.kind === "lights-outlets" ? `20-A GFCI circuit for ${plural(c.devices, "device")}` : `${c.amps}-A${c.poles === 2 ? " two-pole" : ""} circuit for a heater`)).join("; ")}; ${el.labor.wireFt} ft of wire${el.lv ? `; ${plural(el.lv.transformers, "low-voltage transformer")}` : ""}${el.trenchFt ? `; ${el.trenchFt} ft of trench and conduit` : ""}; ${plural(el.boxes, "weatherproof box", "weatherproof boxes")}, ${plural(el.switches, "switch", "switches")}${el.dimmers ? `, ${plural(el.dimmers, "dimmer")}` : ""}${el.timers ? ", a timer" : ""}. Licensed electrician; permit not included.`,
+      description: `${circuitWords}; ${el.labor.wireFt} ft of wire${el.lv ? `; ${plural(el.lv.transformers, "low-voltage transformer")}` : ""}${el.trenchFt ? `; ${el.trenchFt} ft of trench and conduit` : ""}; ${plural(el.boxes, "weatherproof box", "weatherproof boxes")}, ${plural(el.switches, "switch", "switches")}${el.dimmers ? `, ${plural(el.dimmers, "dimmer")}` : ""}${el.timers ? ", a timer" : ""}. Licensed electrician; permit not included.`,
       quantity: 1,
       unit: "lot",
       material: stepMaterial("electrical", (l) => !isFixture(l)),

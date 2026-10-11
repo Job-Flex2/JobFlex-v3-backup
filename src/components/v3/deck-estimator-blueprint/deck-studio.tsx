@@ -77,6 +77,7 @@ import {
   type RoofPlanShape,
   type StairDesign,
   type Structure,
+  type DeckPhoto,
 } from "@/lib/deck/design";
 import { priceDeck, deckNotes, deckScope, type DeckPackage } from "@/lib/deck/pricing";
 import { roofWords } from "@/lib/deck/roof";
@@ -89,11 +90,12 @@ import { deckElevation, defaultPlacement } from "@/lib/deck/elevation";
 import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
-import { fitPhoto, fitSummary, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead } from "@/lib/deck/photoFit";
+import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad } from "@/lib/deck/photoFit";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
+import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
 import { DeckPlan, type PlanEdgeHit } from "./deck-plan";
-import { DeckPhotoView, cropPhoto, shrinkPhoto, trimLetterbox } from "./deck-photo";
+import { DeckPhotoView, cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "./deck-photo";
 import s from "./deck-studio.module.css";
 
 const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3D").then((m) => m.DeckModel3D), {
@@ -202,9 +204,15 @@ function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (
   );
 }
 
+/** The steps' colours: one hue, lighter at the top and darker down the list (owner, 2026-10-10: "a different colour on each step, a very smooth transition from light to darker, so the contractor isn't confused by so many things to fill out"). */
+function stepTone(n: number): React.CSSProperties {
+  const light = Math.max(34, 90 - (n - 1) * 7);
+  return { "--step-c": `hsl(212 58% ${light}%)`, "--step-ink": light < 62 ? "#fff" : "var(--ink)" } as React.CSSProperties;
+}
+
 function Step({ n, title, summary, children, id }: { n: number; title: string; summary: string; children: React.ReactNode; id?: string }) {
   return (
-    <details className={s.step} open id={id}>
+    <details className={s.step} open id={id} style={stepTone(n)} data-step={n}>
       <summary className={s.stepHead}>
         <span className={s.stepN}>{n}</span>
         <span className={s.stepTitle}>{title}</span>
@@ -290,16 +298,44 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   /** The design changed since it was opened: the auto-save starts. */
   const dirty = React.useRef(false);
 
-  const patch = React.useCallback((p: DeckPatch, keys: string[] = []) => {
-    for (const k of keys) touched.current.add(k);
-    dirty.current = true;
-    setDesign((d) => applyDeckPatch(d, p));
+  // SETTLING (owner, 2026-10-10: "when I change the sizes, make sure it reads the codes and rebuilds the material —
+  // beams, support, everything"): a size change re-runs the tables (lib/deck/settle) and applies the member-sizing
+  // fixes the checks would offer, so what stands on screen is never a frame the tables refuse. The fixes' labels show
+  // under the verdict until the next resize.
+  const bookRef = React.useRef(book);
+  const marketRef = React.useRef(market);
+  React.useEffect(() => {
+    bookRef.current = book;
+    marketRef.current = market;
+  }, [book, market]);
+  const [autoNotes, setAutoNotes] = React.useState<string[]>([]);
+  const settle = React.useCallback((next: DeckDesign): DeckDesign => {
+    const settled = settleDesign(next, { rates: bookRef.current, market: marketRef.current });
+    queueMicrotask(() => setAutoNotes(settled.fixes));
+    return settled.design;
   }, []);
+  const patch = React.useCallback(
+    (p: DeckPatch, keys: string[] = []) => {
+      for (const k of keys) touched.current.add(k);
+      dirty.current = true;
+      setDesign((d) => {
+        const next = applyDeckPatch(d, p);
+        return resizes(p) ? settle(next) : next;
+      });
+    },
+    [settle],
+  );
   /** A change to the roof: the whole roof object goes in, so nothing nested is lost. */
-  const rp = React.useCallback((p: Partial<RoofDesign>) => {
-    dirty.current = true;
-    setDesign((d) => applyDeckPatch(d, { roof: { ...d.roof, ...p } }));
-  }, []);
+  const rp = React.useCallback(
+    (p: Partial<RoofDesign>) => {
+      dirty.current = true;
+      setDesign((d) => {
+        const next = applyDeckPatch(d, { roof: { ...d.roof, ...p } });
+        return roofResizes(p) ? settle(next) : next;
+      });
+    },
+    [settle],
+  );
   const setStairs = React.useCallback((fn: (list: StairDesign[]) => StairDesign[]) => {
     dirty.current = true;
     setDesign((d) => applyDeckPatch(d, { stairs: fn(d.stairs) }));
@@ -402,6 +438,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         case "stair":
           setStairs((list) => list.map((st) => (st.id === e.id ? { ...st, atFt: Math.max(st.widthFt / 2, toHalfFt(e.value)) } : st)));
           break;
+        case "pitch": {
+          // The knob at the peak: whole pitches only, from the list the studio offers.
+          const v = Math.min(ROOF_LIMITS.pitch.max, Math.max(ROOF_LIMITS.pitch.min, Math.round(e.value)));
+          rp({ pitch: PITCHES.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a)) });
+          break;
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `polygon` is derived from `design` below; the latest design is what matters.
@@ -663,12 +705,100 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     };
   }, [design.photo?.url, photoHref]);
   // THE PHOTO AS THE WALL in the 3D (owner, 2026-10-10): the same picture, placement and scale the photo view uses.
+  // On the house (a ledger, or a roof on the wall) it IS the wall; a detached gazebo keeps it as a backdrop a yard back.
   const [showHouse, setShowHouse] = React.useState(true);
   const backdrop = React.useMemo<DeckBackdrop | null>(() => {
     const p = design.photo;
     if (!showHouse || !p?.placed || !photoHref) return null;
-    return { href: photoHref, w: p.w, h: p.h, placed: p.placed, elevWidthFt: elevation.widthFt, elevLeftFt: elevation.leftFt, jogs: (p.fit?.read?.jogs ?? []).map((j) => ({ x: j.x, dir: j.dir, depthFt: j.depthFt })) };
-  }, [design.photo, photoHref, elevation.widthFt, elevation.leftFt, showHouse]);
+    return { href: photoHref, w: p.w, h: p.h, placed: p.placed, elevWidthFt: elevation.widthFt, elevLeftFt: elevation.leftFt, jogs: (p.fit?.read?.jogs ?? []).map((j) => ({ x: j.x, dir: j.dir, depthFt: j.depthFt })), standoffFt: scene.house ? 0 : 16 };
+  }, [design.photo, photoHref, elevation.widthFt, elevation.leftFt, showHouse, scene.house]);
+  // MARK THE WALL (owner, 2026-10-10: "start drawing the lines right on that picture — the house wall where the deck
+  // is supposed to be — kind of measures"): the read's base, door, measure and steps as handles on the picture; every
+  // change fits the deck again, from the marks, with no model.
+  const [marking, setMarking] = React.useState(false);
+  const markRead: WallRead = design.photo?.fit?.read ?? blankRead();
+  const applyRead = (read: WallRead) => {
+    const p = design.photo;
+    if (!p) return;
+    const marked = markedRead(read);
+    const fit = fitPhoto(marked, fitDeck, design.heightIn, p.w, p.h, { recrop: false, fallback: p.placed ?? defaultPlacement(), hand: true });
+    patch({ photo: { ...p, placed: fit.placed, fit: fitSummary(fit, marked, true) } });
+  };
+  // STRAIGHTEN THE PICTURE (owner, 2026-10-11: an angled shot of the house "still can't work and build the deck with
+  // this pic"): four corners put on the wall, and the picture is warped so the wall stands square — then the read,
+  // the fit and the 3D take it as any square-on photo (lib/deck/photoFit rectifyPlan). The picture before is kept
+  // in the design, so it can be undone.
+  const [straightening, setStraightening] = React.useState(false);
+  const [corners, setCorners] = React.useState<Quad | null>(null);
+  const [wallWidthFt, setWallWidthFt] = React.useState<number | null>(null);
+  const startStraighten = () => {
+    if (!design.photo) return;
+    setCorners(wallQuadFromRead(design.photo.fit?.read ?? null));
+    setMarking(false);
+    setStraightening(true);
+    setView("photo");
+  };
+  const cancelStraighten = () => {
+    setStraightening(false);
+    setCorners(null);
+  };
+  const straightenNow = async () => {
+    const p = design.photo;
+    if (!p || !corners || photoBusy) return;
+    const read = p.fit?.read ?? null;
+    const plan = rectifyPlan(corners, read, p.w, p.h, { wallWidthFt });
+    if (!plan) {
+      setPhotoError("The four corners do not make a wall: the two top corners above the two bottom ones, left of right, each a little apart.");
+      return;
+    }
+    setPhotoBusy(true);
+    setPhotoError(null);
+    setPhotoNote(null);
+    try {
+      setPhotoStage("Straightening the picture…");
+      const href = photoHref ?? (await deckPhotoHref(p.url).catch(() => null));
+      const blob = href ? await fetch(href).then((r) => (r.ok ? r.blob() : null)).catch(() => null) : null;
+      if (!blob) throw new Error("The picture could not be fetched to straighten it — try again.");
+      const warped = await straightenPhoto(new File([blob], "house.jpg", { type: blob.type || "image/jpeg" }), plan.H, { w: plan.w, h: plan.h }, { w: p.w, h: p.h });
+      if (!warped) throw new Error("The picture could not be straightened.");
+      setPhotoStage("Saving the picture…");
+      const form = new FormData();
+      form.set("file", warped.file);
+      form.set("w", String(warped.w));
+      form.set("h", String(warped.h));
+      const res = await uploadDeckPhoto(form);
+      if (!res.ok) {
+        setPhotoError(res.error);
+        return;
+      }
+      const read2 = read ? transformRead(read, plan.H, p.w, p.h, warped.w, warped.h) : null;
+      let placed: Placed = p.placed ? transformPlaced(p.placed, plan.H, p.w, p.h, warped.w, warped.h) : defaultPlacement();
+      let fit: DeckPhoto["fit"] = null;
+      if (read2) {
+        const f = fitPhoto(read2, fitDeck, design.heightIn, warped.w, warped.h, { recrop: false, fallback: placed, hand: p.fit?.hand });
+        placed = f.placed;
+        fit = fitSummary(f, read2, p.fit?.hand ?? false);
+      }
+      setPhotoHref(res.href);
+      patch({ photo: { url: res.url, w: res.w, h: res.h, placed, fit, straightened: { quad: corners, before: { url: p.url, w: p.w, h: p.h, placed: p.placed, fit: p.fit ?? null } } } });
+      setStraightening(false);
+      setCorners(null);
+      setPhotoNote(plan.by === "edges" ? `Straightened from the corners alone (the shot was ${plan.obliquePct}% off square). For the exact width, go back to the original, type the wall's width or draw a measure across it, and straighten again.` : plan.by === "width" ? "Straightened to the width you typed." : "Straightened to the measure you drew.");
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : "The picture could not be straightened.");
+    } finally {
+      setPhotoBusy(false);
+      setPhotoStage(null);
+    }
+  };
+  /** Back to the picture as it was taken, with its own placement and read. */
+  const unstraighten = () => {
+    const st = design.photo?.straightened;
+    if (!st) return;
+    patch({ photo: { ...st.before, straightened: null } });
+    setPhotoHref(null);
+    setPhotoNote(null);
+  };
   const suggestedHeight = design.photo?.fit?.suggestedHeightIn ?? null;
   const heightOffer = suggestedHeight !== null && Math.abs(suggestedHeight - design.heightIn) >= 2 ? suggestedHeight : null;
   const refreshPhoto = async () => {
@@ -700,11 +830,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     setBusy(true);
     setError(null);
     try {
+      // Every text inside the proposal's caps (lib/deck/convertSchema): a big design never fails convert over a long sentence.
       const res = await convertDeckEstimateToProposal({
-        title,
-        scope: deckScope(pkg, address || null).join("\n"),
-        assumptions: deckNotes(pkg),
-        lines: pkg.lines.map((l) => ({ name: l.name, description: l.description, quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })),
+        title: title.slice(0, 200),
+        scope: deckScope(pkg, address || null).join("\n").slice(0, 6000),
+        assumptions: deckNotes(pkg).slice(0, 20).map((n) => n.slice(0, 600)),
+        lines: pkg.lines.map((l) => ({ name: l.name.slice(0, 200), description: l.description?.slice(0, 400), quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })),
         address: address || null,
         plan: { design, scene },
         clientId: clientId ?? null,
@@ -772,6 +903,42 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const polygon = r.plan.shape === "hexagon" || r.plan.shape === "octagon" || r.plan.shape === "round";
   const planShapes: RoofPlanShape[] = design.structure === "pergola" ? (withDeck ? ["follows-deck", "square", "rect"] : ["square", "rect"]) : design.structure === "covered-deck" ? ["follows-deck", "square", "rect"] : withDeck ? ["follows-deck", "square", "rect", "hexagon", "octagon", "round"] : ["square", "rect", "hexagon", "octagon", "round"];
   const canAttach = (withDeck ? design.placement !== "detached" : true) && !polygon && r.kind !== "pyramid" && r.kind !== "double-tier" && r.kind !== "gambrel" && r.kind !== "dutch-gable" && r.kind !== "pergola";
+  // The roof's outline and size — in the Roof step over a deck; the "Footprint" step for a gazebo or pergola on its own floor.
+  const outlineBlock = (
+    <>
+      <Field label="Outline" wide>
+        <Seg small label="Roof outline" value={r.plan.shape} onChange={(sh: RoofPlanShape) => rp({ plan: { ...r.plan, shape: sh } })} options={planShapes.map((sh) => ({ value: sh, label: ROOF_PLAN_LABEL[sh] }))} />
+      </Field>
+      {r.plan.shape !== "follows-deck" ? (
+        <div className={s.grid2}>
+          {polygon ? (
+            <Field label="Across the flats" aside="ft">
+              <NumberInput label="Across the flats, feet" value={r.plan.acrossFt} parse={parseFeet} format={feetText} min={ROOF_LIMITS.acrossFt.min} max={ROOF_LIMITS.acrossFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, acrossFt: n2 } })} />
+            </Field>
+          ) : (
+            <>
+              <Field label={r.plan.shape === "square" ? "Across" : "Along the house"} aside="ft">
+                <NumberInput label="Roof width, feet" value={r.plan.widthFt} parse={parseFeet} format={feetText} min={ROOF_LIMITS.planFt.min} max={ROOF_LIMITS.planFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, widthFt: n2, depthFt: r.plan.shape === "square" ? n2 : r.plan.depthFt } })} />
+              </Field>
+              {r.plan.shape === "rect" ? (
+                <Field label="Out from the house" aside="ft">
+                  <NumberInput label="Roof depth, feet" value={r.plan.depthFt} parse={parseFeet} format={feetText} min={ROOF_LIMITS.planFt.min} max={ROOF_LIMITS.planFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, depthFt: n2 } })} />
+                </Field>
+              ) : null}
+            </>
+          )}
+          {withDeck ? (
+            <Field label="Shift along the house" aside="ft · 0 = centred">
+              <NumberInput label="Shift along the house, feet" value={r.plan.offsetFt} parse={(t) => (t.trim() === "" ? null : Number(t))} format={(n2) => String(Math.round(n2 * 10) / 10)} min={ROOF_LIMITS.offsetFt.min} max={ROOF_LIMITS.offsetFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, offsetFt: n2 } })} />
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
+      {roof ? (
+        <p className={s.hint}>{Math.round(roof.footprintSqFt)} sq ft under the eaves · {roof.posts.length} posts{roof.attach === "wall" ? " and the house wall" : ""}{roof.kind !== "pergola" ? ` · ${Math.round(roof.roofAreaSqFt)} sq ft of roof, ${roof.squares} squares` : ""}{roof.engineered ? " · engineered beam where the sawn tables stop" : ""}</p>
+      ) : null}
+    </>
+  );
   const metalRoof = r.roofing === "metal-panel" || r.roofing === "standing-seam";
   const front = design.shape.kind === "rect" ? design.shape.front : undefined;
   const woodRail = design.rail.type === "treated" || design.rail.type === "cedar";
@@ -854,7 +1021,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                 {editing && !placing ? (
                   <div className={s.placeBanner} data-deck-editing>
-                    <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height, the lower level, each stair along its edge. Everything re-frames and re-prices as you drag.</span>
+                    <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge. Everything re-frames and re-prices as you drag.</span>
                     <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setEditing(false)}>Done</button>
                   </div>
                 ) : null}
@@ -882,7 +1049,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 ) : null}
               </div>
             ) : design.photo ? (
-              <DeckPhotoView photo={design.photo} href={photoHref} elevation={elevation} onPlace={(placed) => patch({ photo: { ...design.photo!, placed } })} onRefresh={refreshPhoto} />
+              <DeckPhotoView photo={design.photo} href={photoHref} elevation={elevation} onPlace={(placed) => patch({ photo: { ...design.photo!, placed } })} onRefresh={refreshPhoto} marking={marking} read={marking ? markRead : (design.photo.fit?.read ?? null)} onRead={applyRead} corners={straightening ? corners : null} onCorners={setCorners} />
             ) : (
               <div className={s.photoEmpty} data-deck-photo="empty">
                 <p>Take a picture of the back of the house from the yard, square on. The {what.toLowerCase()} is drawn over it, and the client sees their own house with it in place.</p>
@@ -947,6 +1114,11 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <div className={s.photoRow}>
                 <span className={s.mono}>{design.photo.fit ? "Fitted to the wall — drag to adjust, pull the handle to size · the client sees it placed like this" : "Drag the outline to the wall · pull the handle to size it · the client sees it placed like this"}</span>
                 <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={refitPhoto} disabled={photoBusy} data-deck-photo-refit>{photoBusy ? (photoStage ?? "Working…") : "Fit to the wall"}</button>
+                <button type="button" className={cx(s.btn, s.btnSm, marking && s.btnOn)} aria-pressed={marking} onClick={() => { setStraightening(false); setCorners(null); setMarking((m) => !m); }} data-deck-photo-mark>{marking ? "Marking the wall" : "Mark the wall"}</button>
+                <button type="button" className={cx(s.btn, s.btnSm, straightening && s.btnOn)} aria-pressed={straightening} onClick={() => (straightening ? cancelStraighten() : startStraighten())} disabled={photoBusy} data-deck-photo-straighten>{straightening ? "Straightening" : "Straighten the picture"}</button>
+                {design.photo.straightened ? (
+                  <button type="button" className={cx(s.btn, s.btnSm)} onClick={unstraighten} disabled={photoBusy} data-deck-photo-unstraighten>Original picture</button>
+                ) : null}
                 {design.photo.fit?.read ? <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => void readPhotoAgain()} disabled={photoBusy} data-deck-photo-reread>Read the picture again</button> : null}
                 {design.photo.fit?.offer ? (
                   <button type="button" className={cx(s.btn, s.btnSm)} onClick={applyOffer} data-deck-photo-offer>
@@ -960,6 +1132,51 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <button type="button" className={cx(s.btn, s.btnSm)} onClick={pickPhoto} disabled={photoBusy}>Another photo</button>
                 <button type="button" className={cx(s.btn, s.btnSm)} onClick={removePhoto}>Remove</button>
               </div>
+              {straightening ? (
+                <div className={s.photoTools} data-deck-photo-straighten-tools>
+                  <span className={s.mono}>Drag the four white corners onto the wall — where it meets the ground at the left and the right, and the top of the wall above each. The picture is then warped so the wall stands square: an angled shot becomes a true elevation.</span>
+                  <label className={s.markField}>
+                    <span className={s.mono}>The wall between the corners is</span>
+                    <NumberInput label="Width of the wall between the corners, feet" value={wallWidthFt ?? 0} parse={parseFeet} format={(n2) => (n2 > 0 ? feetText(n2) : "")} min={0} max={200} onCommit={(n2) => setWallWidthFt(n2 > 0 ? n2 : null)} />
+                    <span className={s.mono}>ft wide — optional, it sets the exact width</span>
+                  </label>
+                  <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={() => void straightenNow()} disabled={photoBusy} data-deck-photo-straighten-go>{photoBusy ? (photoStage ?? "Working…") : "Straighten it"}</button>
+                  <button type="button" className={cx(s.btn, s.btnSm)} onClick={cancelStraighten} disabled={photoBusy}>Cancel</button>
+                </div>
+              ) : null}
+              {marking ? (
+                <div className={s.photoTools} data-deck-photo-tools>
+                  <span className={s.mono}>Drag the yellow ends to where the wall meets the ground · the door&apos;s bottom to its threshold, its top to the frame · a step where the wall jogs · a measure along anything you know the size of</span>
+                  {markRead.door ? (
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => applyRead(removeDoor(markRead))} data-deck-mark-door="remove">Remove the door</button>
+                  ) : (
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => applyRead(addDoor(markRead, design.photo!.w, design.photo!.h))} data-deck-mark-door="add">Add the door</button>
+                  )}
+                  {markRead.scaleLine ? (
+                    <>
+                      <label className={s.markField}>
+                        <span className={s.mono}>The measure is</span>
+                        <NumberInput label="Length of the measure, inches" value={markRead.scaleLine.lengthIn} parse={parseInches} format={(n2) => String(Math.round(n2))} min={6} max={600} onCommit={(n2) => applyRead(setScaleLength(markRead, n2))} />
+                        <span className={s.mono}>in.</span>
+                      </label>
+                      <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => applyRead(removeScaleLine(markRead))} data-deck-mark-measure="remove">Remove the measure</button>
+                    </>
+                  ) : (
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => applyRead(addScaleLine(markRead))} data-deck-mark-measure="add">Add a measure</button>
+                  )}
+                  <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => applyRead(addJog(markRead))} disabled={markRead.jogs.length >= 4} data-deck-mark-step="add">Add a step</button>
+                  {markRead.jogs.map((j, i) => (
+                    <span key={i} className={s.markField} data-deck-mark-jog={i}>
+                      <span className={s.mono}>step {i + 1} · the part to its right</span>
+                      <Seg small label={`Step ${i + 1} goes`} value={j.dir} onChange={(dir: "toward" | "away") => applyRead(setJog(markRead, i, { dir }))} options={[{ value: "toward", label: "comes out" }, { value: "away", label: "steps back" }]} />
+                      <NumberInput label={`Step ${i + 1} depth, feet`} value={j.depthFt ?? 2} parse={parseFeet} format={feetText} min={0.5} max={40} onCommit={(n2) => applyRead(setJog(markRead, i, { depthFt: n2 }))} />
+                      <span className={s.mono}>ft</span>
+                      <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => applyRead(removeJog(markRead, i))} aria-label={`Remove step ${i + 1}`}>×</button>
+                    </span>
+                  ))}
+                  <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={() => setMarking(false)} data-deck-mark-done>Done</button>
+                </div>
+              ) : null}
               {design.photo.fit?.notes.length || photoNote ? (
                 <ul className={s.photoNotes} data-deck-photo-fit aria-label="What the picture showed">
                   {photoNote ? <li className={s.photoNoteBad}>{photoNote}</li> : null}
@@ -975,6 +1192,11 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             <span className={s.verdictText}>{issues[0] ? `${issues[0].part}: ${issues[0].text}` : `${summary.pass} checks pass — every number names its table.`}</span>
             <span className={s.verdictTotal}>{money(pkg.subtotal)}</span>
           </a>
+          {autoNotes.length ? (
+            <p className={s.autoNote} role="status" data-deck-autofix>
+              Re-sized to the tables: {autoNotes.join(" · ")}.
+            </p>
+          ) : null}
         </section>
 
         {/* ── the steps ──────────────────────────────────────────── */}
@@ -988,6 +1210,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </button>
               ))}
             </div>
+            {/* WHERE IT STANDS (owner, 2026-10-10): from the very start, a plain site or the house's own wall from a photo. */}
+            <Field label="Where it stands" wide>
+              <div className={s.chips} role="group" aria-label="Where it stands">
+                <button type="button" className={cx(s.chip, !design.photo && s.chipOn)} aria-pressed={!design.photo} onClick={() => { if (design.photo) removePhoto(); }} data-deck-site="plain">
+                  A plain site<span>the drawn house</span>
+                </button>
+                <button type="button" className={cx(s.chip, !!design.photo && s.chipOn)} aria-pressed={!!design.photo} onClick={() => (design.photo ? setView("photo") : pickPhoto())} disabled={photoBusy} data-deck-site="photo">
+                  {design.photo ? "The photo of the house" : "A photo of the house"}<span>{design.photo ? `${design.photo.straightened ? "straightened · " : ""}${design.photo.fit?.hand ? "marked by hand" : design.photo.fit ? "fitted to the wall" : "placed by hand"}` : photoBusy ? (photoStage ?? "working…") : "upload one — the wall is read off it"}</span>
+                </button>
+              </div>
+              <p className={s.hint}>With a photo the wall, the door and its steps are read off the picture — or marked by hand — and the {what.toLowerCase()} is set against the real wall, in the 3D too. A gazebo that stands on its own keeps the house behind it.</p>
+            </Field>
             {design.structure === "gazebo" || design.structure === "pergola" ? (
               <Field label="It stands" wide>
                 <Seg small label="It stands" value={design.floor} onChange={(f: Floor) => patch({ floor: f })} options={(["deck", "slab", "ground"] as const).map((f) => ({ value: f, label: FLOOR_LABEL[f] }))} />
@@ -995,6 +1229,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             ) : null}
             {!withDeck ? <p className={s.hint}>{design.floor === "slab" ? "A new 4-in. slab a foot wider than the posts goes in the price; the posts sit on anchored bases." : "Each post gets its own poured footing, sized for what it carries."}</p> : null}
           </Step>
+
+          {!withDeck ? (
+            <Step n={next()} title={design.structure === "pergola" ? "The pergola's footprint" : "The gazebo's footprint"} summary={sizeWords(design)} id="step-footprint">
+              {outlineBlock}
+            </Step>
+          ) : null}
 
           {withDeck ? (
             <Step n={next()} title={design.structure === "gazebo" || design.structure === "pergola" ? "The deck under it" : "Shape"} summary={shapeSummary} id="step-shape">
@@ -1296,35 +1536,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <Seg small label="On the house or free" value={r.attach} onChange={(a) => rp({ attach: a })} options={[{ value: "wall", label: "On the house wall" }, { value: "free", label: "Free-standing" }]} />
                 </Field>
               ) : null}
-              <Field label="Outline" wide>
-                <Seg small label="Roof outline" value={r.plan.shape} onChange={(sh: RoofPlanShape) => rp({ plan: { ...r.plan, shape: sh } })} options={planShapes.map((sh) => ({ value: sh, label: ROOF_PLAN_LABEL[sh] }))} />
-              </Field>
-              {r.plan.shape !== "follows-deck" ? (
-                <div className={s.grid2}>
-                  {polygon ? (
-                    <Field label="Across the flats" aside="ft">
-                      <NumberInput label="Across the flats, feet" value={r.plan.acrossFt} parse={parseFeet} format={feetText} min={ROOF_LIMITS.acrossFt.min} max={ROOF_LIMITS.acrossFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, acrossFt: n2 } })} />
-                    </Field>
-                  ) : (
-                    <>
-                      <Field label={r.plan.shape === "square" ? "Across" : "Along the house"} aside="ft">
-                        <NumberInput label="Roof width, feet" value={r.plan.widthFt} parse={parseFeet} format={feetText} min={ROOF_LIMITS.planFt.min} max={ROOF_LIMITS.planFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, widthFt: n2, depthFt: r.plan.shape === "square" ? n2 : r.plan.depthFt } })} />
-                      </Field>
-                      {r.plan.shape === "rect" ? (
-                        <Field label="Out from the house" aside="ft">
-                          <NumberInput label="Roof depth, feet" value={r.plan.depthFt} parse={parseFeet} format={feetText} min={ROOF_LIMITS.planFt.min} max={ROOF_LIMITS.planFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, depthFt: n2 } })} />
-                        </Field>
-                      ) : null}
-                    </>
-                  )}
-                  {withDeck ? (
-                    <Field label="Shift along the house" aside="ft · 0 = centred">
-                      <NumberInput label="Shift along the house, feet" value={r.plan.offsetFt} parse={(t) => (t.trim() === "" ? null : Number(t))} format={(n2) => String(Math.round(n2 * 10) / 10)} min={ROOF_LIMITS.offsetFt.min} max={ROOF_LIMITS.offsetFt.max} onCommit={(n2) => rp({ plan: { ...r.plan, offsetFt: n2 } })} />
-                    </Field>
-                  ) : null}
-                </div>
-              ) : null}
-              <p className={s.hint}>{Math.round(roof.footprintSqFt)} sq ft under the eaves · {roof.posts.length} posts{roof.attach === "wall" ? " and the house wall" : ""}{roof.kind !== "pergola" ? ` · ${Math.round(roof.roofAreaSqFt)} sq ft of roof, ${roof.squares} squares` : ""}{roof.engineered ? " · engineered beam where the sawn tables stop" : ""}</p>
+              {withDeck ? outlineBlock : null}
 
               <div className={s.sub}>
                 <div className={s.subTitle}>Posts and headers</div>

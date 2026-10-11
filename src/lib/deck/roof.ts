@@ -1360,7 +1360,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const ply = ridge.spec && ridge.spec.kind === "solid" ? thick : THICK_2X_IN;
     const nx = -Math.sin(yaw);
     const ny = Math.cos(yaw);
-    for (let p = 0; p < plies; p++) {
+    for (let p = 0; ridge.lengthIn >= 1 && p < plies; p++) {
       const off = -thick / 2 + (p + 0.5) * ply;
       members.push({ role: "ridge", nominal: ridge.spec ? ridge.spec.stock : ridge.nominal, lengthIn: ridge.lengthIn, cx: (ridgeFrom.x + ridgeTo.x) / 2 + nx * off, cy: (ridgeFrom.y + ridgeTo.y) / 2 + ny * off, cz: peakIn - depth / 2, sx: ridge.lengthIn, sy: ply, sz: depth, yaw, tilt: 0, x0: ridgeFrom.x, y0: ridgeFrom.y, x1: ridgeTo.x, y1: ridgeTo.y });
     }

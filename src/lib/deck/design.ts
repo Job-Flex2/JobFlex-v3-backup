@@ -332,7 +332,9 @@ export interface DeckPhoto {
   /** Where the deck's elevation was placed on it: the ground line's left end and its width, as fractions of the picture. */
   placed: { x: number; y: number; w: number } | null;
   /** What the smart fit found on it (lib/deck/photoFit), kept so the studio can say it after a reload; null or absent when placed by hand. */
-  fit?: { by: "door" | "eave" | "none"; pxPerFt: number; wallFt: number | null; suggestedHeightIn: number | null; door: boolean; windows: number; jog: boolean; confidence: number; notes: string[]; offer: JogOffer | null; read: WallRead | null } | null;
+  fit?: { by: "line" | "door" | "eave" | "none"; pxPerFt: number; wallFt: number | null; suggestedHeightIn: number | null; door: boolean; windows: number; jog: boolean; confidence: number; notes: string[]; offer: JogOffer | null; read: WallRead | null; hand?: boolean } | null;
+  /** The picture straightened from four corners (2026-10-11): the corners used, on the picture before, and that picture with its own placement and read, so it can be undone. */
+  straightened?: { quad: Array<{ x: number; y: number }>; before: { url: string; w: number; h: number; placed: { x: number; y: number; w: number } | null; fit: DeckPhoto["fit"] } } | null;
 }
 
 export interface DeckDesign {
@@ -455,7 +457,8 @@ export function defaultRoofDesign(structure: Structure = "covered-deck"): RoofDe
   return {
     kind: pergola ? "pergola" : gazebo ? "pyramid" : "gable",
     attach: gazebo || pergola ? "free" : "wall",
-    plan: { shape: gazebo ? "square" : "follows-deck", widthFt: 12, depthFt: 12, acrossFt: 12, offsetFt: 0 },
+    // Over a deck the roof follows the deck (a gazebo typed 20 ft wide IS 20 ft wide); on its own floor it is a 12 ft square (gazebo) or rectangle.
+    plan: { shape: "follows-deck", widthFt: 12, depthFt: 12, acrossFt: 12, offsetFt: 0 },
     pitch: gazebo ? 6 : pergola ? 0 : 4,
     eaveHeightIn: 96,
     overhangIn: 12,
@@ -610,7 +613,9 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
   const structure = oneOf(r.structure, STRUCTURES, d.structure);
   // A deck and a covered deck stand on the deck; a gazebo or a pergola on whatever was chosen.
   const floor: Floor = structure === "deck" || structure === "covered-deck" ? "deck" : oneOf(r.floor, FLOORS, d.floor);
-  const roof = normalizeRoof(r.roof, structure, floor, placement);
+  // The deck's own shape first: the roof follows it, or carries its size off the deck.
+  const shape = normalizeShape(r.shape, d.shape);
+  const roof = normalizeRoof(r.roof, structure, floor, placement, shape);
   const photo = normalizePhoto(r.photo);
 
   const beamKind = oneOf(f.beamKind, ["solid", "built-up"] as const, d.framing.beamKind);
@@ -618,7 +623,6 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
   const beam: BeamSize | "auto" = beamKind === "solid" ? (isSolidBeam(beamRaw) ? beamRaw : "auto") : (BUILT_UP_CHOICES as readonly string[]).includes(beamRaw) ? (beamRaw as BuiltUpBeam) : "auto";
   const overhangFt = f.overhangFt === "auto" || f.overhangFt === undefined ? "auto" : toInch(clamp(num(f.overhangFt, 0), DECK_LIMITS.overhangFt.min, DECK_LIMITS.overhangFt.max));
   const railFt = ex.railFt === "auto" || ex.railFt === undefined ? "auto" : Math.round(clamp(num(ex.railFt, 0), DECK_LIMITS.railFt.min, DECK_LIMITS.railFt.max) * 10) / 10;
-  const shape = normalizeShape(r.shape, d.shape);
   const heightIn = Math.round(clamp(num(r.heightIn, d.heightIn), DECK_LIMITS.heightIn.min, DECK_LIMITS.heightIn.max) * 4) / 4;
   const lower = normalizeLower(r.lower, shape, heightIn);
   // A v2 design carried the rail as an allowance in `extras` and the stairs as a count of flights.
@@ -702,13 +706,14 @@ function normalizeElectrical(raw: unknown, rail: RailDesign, legacyRoof: Record<
     out.push({ id, kind, supply: oneOf(f.supply, ["we", "client"] as const, "we"), qty: Math.round(clamp(num(f.qty, 1), ELECTRICAL_LIMITS.qty.min, ELECTRICAL_LIMITS.qty.max)), at, volts240: kind === "heater" && f.volts240 === true });
   });
   // Older designs said "lit post caps" on the rail and a fan or lights on the roof: they become fixtures.
-  if (rail.lighting !== "none" && !out.some((f) => f.kind === "post-cap")) out.push({ id: "e-caps", kind: "post-cap", supply: "we", qty: 1, at: null });
-  if (rail.lighting === "post-caps-risers" && !out.some((f) => f.kind === "step-light")) out.push({ id: "e-steps", kind: "step-light", supply: "we", qty: 1, at: null });
+  if (rail.lighting !== "none" && !out.some((f) => f.kind === "post-cap")) out.push({ id: "e-caps", kind: "post-cap", supply: "we", qty: 1, at: null, volts240: false });
+  if (rail.lighting === "post-caps-risers" && !out.some((f) => f.kind === "step-light")) out.push({ id: "e-steps", kind: "step-light", supply: "we", qty: 1, at: null, volts240: false });
   const lx = obj(legacyRoof.extras);
-  if (lx.fan === true && !out.some((f) => f.kind === "fan")) out.push({ id: "e-fan", kind: "fan", supply: "we", qty: 1, at: null });
-  if (num(lx.lights, 0) > 0 && !out.some((f) => f.kind === "ceiling-light")) out.push({ id: "e-lights", kind: "ceiling-light", supply: "we", qty: Math.round(clamp(num(lx.lights, 0), 1, 12)), at: null });
+  if (lx.fan === true && !out.some((f) => f.kind === "fan")) out.push({ id: "e-fan", kind: "fan", supply: "we", qty: 1, at: null, volts240: false });
+  if (num(lx.lights, 0) > 0 && !out.some((f) => f.kind === "ceiling-light")) out.push({ id: "e-lights", kind: "ceiling-light", supply: "we", qty: Math.round(clamp(num(lx.lights, 0), 1, 12)), at: null, volts240: false });
   return {
-    fixtures: out,
+    // The cap holds after the legacy fixtures too, so a design at the limit reads back the same every time.
+    fixtures: out.slice(0, ELECTRICAL_LIMITS.fixtures),
     feedFt: Math.round(clamp(num(r.feedFt, d.feedFt), ELECTRICAL_LIMITS.feedFt.min, ELECTRICAL_LIMITS.feedFt.max)),
     panelSide: oneOf(r.panelSide, ["left", "right"] as const, d.panelSide),
     timer: r.timer === true,
@@ -721,7 +726,7 @@ function normalizeElectrical(raw: unknown, rail: RailDesign, legacyRoof: Record<
  * shed; a polygon is roofed as a pyramid; a roof can hang on the wall only
  * where the deck meets the house.
  */
-export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, placement: Placement): RoofDesign {
+export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, placement: Placement, deckShape?: DeckShape): RoofDesign {
   // A bare deck keeps a covered deck's roof in the drawer, so switching to one later starts from the usual.
   const d = defaultRoofDesign(structure === "deck" ? "covered-deck" : structure);
   const r = obj(raw);
@@ -734,7 +739,12 @@ export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, 
   else if (kind === "pergola") kind = d.kind;
   if (structure === "gazebo" && kind === "shed") kind = "hip";
   let shape = oneOf(pl.shape, ROOF_PLAN_SHAPES, d.plan.shape);
-  if (floor !== "deck" && shape === "follows-deck") shape = "rect";
+  // Off the deck there is no deck to follow: a gazebo becomes a square, anything else a rectangle, the size the deck had.
+  let carried: { widthFt: number; depthFt: number } | null = null;
+  if (floor !== "deck" && shape === "follows-deck") {
+    shape = structure === "gazebo" ? "square" : "rect";
+    if (deckShape) carried = structure === "gazebo" ? { widthFt: Math.min(deckShape.widthFt, deckShape.depthFt), depthFt: Math.min(deckShape.widthFt, deckShape.depthFt) } : { widthFt: deckShape.widthFt, depthFt: deckShape.depthFt };
+  }
   if (isPolygonShape(shape) && kind !== "pyramid" && kind !== "double-tier" && kind !== "pergola") kind = "pyramid";
   if (kind === "pyramid" && shape === "rect") shape = "square";
   if (kind === "shed" && shape !== "follows-deck") shape = shape === "square" ? "square" : "rect";
@@ -745,8 +755,8 @@ export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, 
   if (floor === "deck" && placement === "detached") attach = "free";
   if (isPolygonShape(shape)) attach = "free";
   if (kind === "pyramid" || kind === "double-tier" || kind === "gambrel" || kind === "dutch-gable") attach = "free";
-  const widthFt = toInch(clamp(num(pl.widthFt, d.plan.widthFt), ROOF_LIMITS.planFt.min, ROOF_LIMITS.planFt.max));
-  const depthFt = shape === "square" ? widthFt : toInch(clamp(num(pl.depthFt, d.plan.depthFt), ROOF_LIMITS.planFt.min, ROOF_LIMITS.planFt.max));
+  const widthFt = toInch(clamp(num(carried?.widthFt ?? pl.widthFt, d.plan.widthFt), ROOF_LIMITS.planFt.min, ROOF_LIMITS.planFt.max));
+  const depthFt = shape === "square" ? widthFt : toInch(clamp(num(carried?.depthFt ?? pl.depthFt, d.plan.depthFt), ROOF_LIMITS.planFt.min, ROOF_LIMITS.planFt.max));
   const roofing = structure === "pergola" ? "none" : (oneOf(r.roofing, ROOFINGS, d.roofing) === "none" ? d.roofing : oneOf(r.roofing, ROOFINGS, d.roofing));
   const metal = roofing === "metal-panel" || roofing === "standing-seam";
   const rafterRaw = r.rafter === "auto" ? "auto" : oneOf(r.rafter, JOIST_SIZES, "auto" as JoistSize | "auto");
@@ -964,7 +974,8 @@ function offerOf(raw: unknown): JogOffer | null {
   return null;
 }
 
-function normalizePhoto(raw: unknown): DeckPhoto | null {
+/** The picture, its size, its placement and its read — shared by the photo and the one it was straightened from. */
+function photoCore(raw: unknown): Omit<DeckPhoto, "straightened"> | null {
   const r = obj(raw);
   if (typeof r.url !== "string" || !r.url || r.url.length > 2000) return null;
   const w = Math.round(clamp(num(r.w, 0), 0, 20000));
@@ -976,7 +987,7 @@ function normalizePhoto(raw: unknown): DeckPhoto | null {
   const fit =
     r.fit && typeof f.pxPerFt === "number"
       ? {
-          by: f.by === "door" ? ("door" as const) : f.by === "eave" ? ("eave" as const) : ("none" as const),
+          by: f.by === "door" ? ("door" as const) : f.by === "eave" ? ("eave" as const) : f.by === "line" ? ("line" as const) : ("none" as const),
           pxPerFt: clamp(num(f.pxPerFt, 0), 0, 10000),
           wallFt: typeof f.wallFt === "number" && Number.isFinite(f.wallFt) ? Math.round(clamp(f.wallFt, 0, 500)) : null,
           suggestedHeightIn: typeof f.suggestedHeightIn === "number" && Number.isFinite(f.suggestedHeightIn) ? Math.round(clamp(f.suggestedHeightIn, 0, 360)) : null,
@@ -984,12 +995,24 @@ function normalizePhoto(raw: unknown): DeckPhoto | null {
           windows: Math.round(clamp(num(f.windows, 0), 0, 12)),
           jog: f.jog === true,
           confidence: clamp(num(f.confidence, 0), 0, 1),
-          notes: (Array.isArray(f.notes) ? f.notes : []).filter((n): n is string => typeof n === "string").map((n) => n.slice(0, 240)).slice(0, 7),
+          notes: (Array.isArray(f.notes) ? f.notes : []).filter((n): n is string => typeof n === "string").map((n) => n.slice(0, 240)).slice(0, 8),
           offer: offerOf(f.offer),
           read: parseWallRead(f.read),
+          hand: f.hand === true,
         }
       : null;
   return { url: r.url, w, h, placed, fit };
+}
+
+function normalizePhoto(raw: unknown): DeckPhoto | null {
+  const core = photoCore(raw);
+  if (!core) return null;
+  const st = obj(obj(raw).straightened);
+  const quad = (Array.isArray(st.quad) ? st.quad : [])
+    .map((q) => { const o = obj(q); return typeof o.x === "number" && typeof o.y === "number" && Number.isFinite(o.x) && Number.isFinite(o.y) ? { x: clamp(o.x, -0.5, 1.5), y: clamp(o.y, -0.5, 1.5) } : null; })
+    .filter((q): q is { x: number; y: number } => !!q);
+  const before = photoCore(st.before);
+  return { ...core, straightened: quad.length === 4 && before ? { quad, before: { url: before.url, w: before.w, h: before.h, placed: before.placed, fit: before.fit ?? null } } : null };
 }
 
 /** True when the design has a deck frame under it (a bare or covered deck, or a gazebo/pergola standing on a deck). */

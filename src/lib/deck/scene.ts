@@ -122,7 +122,7 @@ export const SCENE_MAX_GLOWS = 120;
 
 /** A handle: dragging it along `axis` (scene feet) changes `kind` from `value` by the distance dragged. */
 export interface SceneHandle {
-  kind: "width" | "depth" | "height" | "eave" | "stair" | "lower-depth" | "roof-width" | "roof-depth";
+  kind: "width" | "depth" | "height" | "eave" | "stair" | "lower-depth" | "roof-width" | "roof-depth" | "pitch";
   id: string;
   x: number;
   y: number;
@@ -366,10 +366,14 @@ export function deckScene(s: DeckStructure): DeckScene {
   };
   const box = (name: SceneLayer, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, tag: number, lean = 0, yaw = 0, tilt = 0) => {
     if (boxes.length >= SCENE_MAX_BOXES) return;
+    // A part with no size (a ridge of no length on a square hip, a strip along a degenerate header) would make the
+    // whole scene unreadable — parseDeckScene wants every size above zero — so such a part is simply not drawn.
+    const [ax, ay, az] = [r3(sx), r3(sy), r3(sz)];
+    if (!(ax > 0 && ay > 0 && az > 0) || ![cx, cy, cz].every(Number.isFinite)) return;
     const yw = r4(yaw);
     const tl = r4(tilt);
-    if (yw === 0 && tl === 0) boxes.push([layer(name), r3(cx), r3(cy), r3(cz), r3(sx), r3(sy), r3(sz), lean]);
-    else boxes.push([layer(name), r3(cx), r3(cy), r3(cz), r3(sx), r3(sy), r3(sz), lean, yw, tl]);
+    if (yw === 0 && tl === 0) boxes.push([layer(name), r3(cx), r3(cy), r3(cz), ax, ay, az, lean]);
+    else boxes.push([layer(name), r3(cx), r3(cy), r3(cz), ax, ay, az, lean, yw, tl]);
     tags.push(tag);
   };
   const poly = (name: SceneLayer, ring: number[], tag = -1) => {
@@ -769,6 +773,11 @@ export function deckScene(s: DeckStructure): DeckScene {
   if (roof) {
     const corner = roof.posts.find((p) => p.corner) ?? roof.posts[0];
     if (corner) handles.push({ kind: "eave", id: "eave", x: r3(corner.x), y: r3(corner.y), z: r3(roof.headerBottomIn), axis: "z", value: design.roof.eaveHeightIn, perUnit: 1 / 12, label: "Height to the headers" });
+    // The pitch: a knob at the peak that rides up and down (owner, 2026-10-10: "make the roof pitch draggable"). The rise is
+    // the run times the pitch over 12, so a unit of pitch is the run's twelfth in feet — read off the roof as it stands.
+    if (roof.kind !== "pergola" && design.roof.pitch > 0 && roof.peakIn - roof.headerTopIn > 1) {
+      handles.push({ kind: "pitch", id: "pitch", x: r3(roof.centreX), y: r3(roof.centreY), z: r3(roof.peakIn), axis: "z", value: design.roof.pitch, perUnit: Math.round(((roof.peakIn - roof.headerTopIn) / 12 / design.roof.pitch) * 1000) / 1000, label: "Roof pitch" });
+    }
     if (!frame) {
       const xs = roof.ring.map((p) => p.x);
       const ys = roof.ring.map((p) => p.y);
