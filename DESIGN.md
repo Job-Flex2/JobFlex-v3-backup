@@ -92,6 +92,10 @@ plan, blueprint blue on the "Most picked" one.
 - Status stamps: near-square frame, 10–11px, weight 800, uppercase, tracking
   about .1em, a semantic border and soft fill. Always include readable text.
 - Keep the global font-rendering settings; no page-specific smoothing reset.
+- Owner-approved (2026-10-10), the passwordless sign-up and the sign-in code
+  form: field labels 12px JetBrains Mono caps, about .05em tracking, ink;
+  notes under fields 12.5px Inter in `--ink-soft`; inputs white. The older
+  9.5–10.5px mono labels read badly on a phone; new auth forms use this.
 
 ## Layout, frames and controls
 
