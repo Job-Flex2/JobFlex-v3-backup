@@ -25,7 +25,8 @@
 // Coordinates follow frame.ts: inches, x along the house, y out from it, z
 // up; the stair's own frame has `a` along its width and `b` outward.
 
-import { GUARD_REQUIRED_ABOVE_IN, HANDRAIL_FROM_RISERS, RISER_MAX_IN, THICK_2X_IN, TREAD_MIN_IN, type PostSize } from "./codeTables";
+import { GUARD_REQUIRED_ABOVE_IN, HANDRAIL_FROM_RISERS, RISER_MAX_IN, THICK_2X_IN, type PostSize } from "./codeTables";
+import { IRC_CODE, cite, inFrac, type DeckStateCode } from "./stateCodes";
 import { BAG_CUFT, footingFor, type Footing } from "./frame";
 import type { DeckingProduct } from "./catalog";
 import type { DeckDesign, RailDesign, StairDesign } from "./design";
@@ -189,6 +190,8 @@ export interface StairInput {
   rail: RailDesign;
   /** The ground under a point of the plan, inches. */
   groundAt: (x: number, y: number) => number;
+  /** The state's most riser (lib/deck/stateCodes); the IRC's 7¾ in. when not given. One riser or less is a step, not a stair. */
+  riserMaxIn?: number;
   /** The post size the stair's posts and the rail's posts are cut from. */
   postSize: PostSize;
 }
@@ -237,7 +240,7 @@ export function buildStair(input: StairInput): StairBuild {
   const landingTopIn = lands === "lower-deck" ? groundIn : stair.landing === "pad" ? groundIn + PAD_TOP_IN : stair.landing === "grade" ? groundIn + PAVER_TOP_IN : groundIn;
   const riseIn = Math.max(0, level.surfaceIn - landingTopIn);
   // One riser or less is a step the level below already makes: nothing to build.
-  const risers = riseIn > RISER_MAX_IN ? stairRisers(riseIn) : 0;
+  const risers = riseIn > (input.riserMaxIn ?? RISER_MAX_IN) ? stairRisers(riseIn) : 0;
   const riserIn = risers > 0 ? riseIn / risers : 0;
   const runIn = TREAD_RUN_IN;
   const treads = Math.max(0, risers - 1);
@@ -503,14 +506,18 @@ export function buildStair(input: StairInput): StairBuild {
   };
 }
 
-/** The code's words for a stair, for the checks: riser, tread, width, handrail. */
-export const STAIR_RULES = {
-  riser: `IRC R311.7.5.1 — risers no more than ${RISER_MAX_IN} in.`,
-  tread: `IRC R311.7.5.2 — treads at least ${TREAD_MIN_IN} in.`,
-  width: "IRC R311.7.1 — 36 in. clear",
-  handrail: "IRC R311.7.8 — a handrail from four risers, 34 to 38 in.",
-  landing: "IRC R311.7.3 and R311.7.6 — a landing after 12 ft 3 in. of rise, 36 in. deep",
-  stringer: "AWC DCA 6 — 2x12 cut stringers, 6 ft between supports, on a footing or a pad",
-  guard: "IRC R312.1 — guards on the open sides of a stair more than 30 in. up",
-  box: "Box steps: three risers at most (trade practice); more needs stringers",
-} as const;
+/** The code's words for a stair, in the state's own figures (lib/deck/stateCodes): riser, tread, width, handrail. */
+export function stairRules(code: DeckStateCode = IRC_CODE) {
+  return {
+    riser: cite(code, "R311.7.5.1", `risers no more than ${inFrac(code.riserMaxIn)}`),
+    tread: cite(code, "R311.7.5.2", `treads at least ${code.treadMinIn} in.`),
+    width: cite(code, "R311.7.1", "36 in. clear"),
+    handrail: cite(code, "R311.7.8", "a handrail from four risers, 34 to 38 in."),
+    landing: cite(code, "R311.7.3 and R311.7.6", "a landing after 12 ft 3 in. of rise, 36 in. deep"),
+    stringer: "AWC DCA 6 — 2x12 cut stringers, 6 ft between supports, on a footing or a pad",
+    guard: cite(code, "R312.1", "guards on the open sides of a stair more than 30 in. up"),
+    box: "Box steps: three risers at most (trade practice); more needs stringers",
+  } as const;
+}
+/** The IRC's own words, where no state is known. */
+export const STAIR_RULES = stairRules();

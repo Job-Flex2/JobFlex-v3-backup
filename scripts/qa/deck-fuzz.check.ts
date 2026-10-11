@@ -43,7 +43,7 @@ function randomDesign(r: Rng): unknown {
   const nStairs = r() < 0.3 ? 0 : int(r, 1, 6);
   d.stairs = Array.from({ length: nStairs }, (_, i) => ({ id: `s${i + 1}`, side: pick(r, ["front", "left", "right"]), atFt: odd(r, 0, 60), widthFt: odd(r, 3, 12), level: pick(r, ["upper", "lower"]), wrap: r() < 0.25, wrapSides: pick(r, [1, 3, 4]), landing: pick(r, ["pad", "patio", "grade"]), handrail: pick(r, ["auto", "both", "one", "none"]) }));
   d.lower = { on: r() < 0.4, widthFt: odd(r, 4, 60), depthFt: odd(r, 4, 30), dropIn: odd(r, 4, 96), align: pick(r, ["left", "centre", "right"]) };
-  d.site = { groundSnowPsf: r() < 0.5 ? 0 : int(r, 0, 300), slope: { outDropIn: r() < 0.5 ? 0 : odd(r, -30, 60), acrossDropIn: r() < 0.6 ? 0 : odd(r, -30, 30) }, termite: pick(r, [null, "very-heavy", "moderate-heavy", "slight-moderate", "none-slight"]) };
+  d.site = { groundSnowPsf: r() < 0.5 ? 0 : int(r, 0, 300), slope: { outDropIn: r() < 0.5 ? 0 : odd(r, -30, 60), acrossDropIn: r() < 0.6 ? 0 : odd(r, -30, 30) }, termite: pick(r, [null, "very-heavy", "moderate-heavy", "slight-moderate", "none-slight"]), state: pick(r, [null, "CA", "NJ", "TX", "WI", "UT", "va", "XX", "", 5]) };
   const nFix = r() < 0.3 ? 0 : int(r, 1, 40);
   d.electrical = { fixtures: Array.from({ length: nFix }, (_, i) => ({ id: `e${i + 1}`, kind: pick(r, FIXTURE_KINDS), supply: pick(r, ["we", "client"]), qty: r() < 0.7 ? 1 : int(r, 1, 40), at: r() < 0.5 ? null : { x: odd(r, -60, (w + 5) * 12), y: odd(r, -60, (dep + 5) * 12), z: odd(r, -12, 240), on: pick(r, MOUNTS) }, volts240: bool(r) })), feedFt: int(r, 5, 300), panelSide: pick(r, ["left", "right"]), timer: bool(r) };
   d.structure = pick(r, STRUCTURES); d.floor = pick(r, FLOORS);

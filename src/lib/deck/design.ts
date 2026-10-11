@@ -25,6 +25,8 @@ import { SLOPE_LIMITS, flatSlope, type SiteSlope, type TermiteHazard } from "./s
  * a curved or clipped front, a lower level, decking patterns, more roofs. A v1
  * design reads as a bare deck; a v2 one keeps every choice it made.
  */
+import { deckCodeFor } from "./stateCodes";
+
 export const DECK_DESIGN_VERSION = 3;
 
 /** Which corner of the rectangle an L-shape is missing. "Back" is the house side. */
@@ -260,6 +262,8 @@ export interface SiteDesign {
   groundSnowPsf: number;
   slope: SiteSlope;
   termite: TermiteHazard | null;
+  /** The job's state, two letters: it names the residential code the deck is checked against (lib/deck/stateCodes). Null until an address says. */
+  state: string | null;
 }
 
 /** A second, lower deck in front of the main one, a step or a short stair down. */
@@ -498,8 +502,10 @@ export function defaultLowerLevel(): LowerLevel {
 }
 
 export function defaultSite(): SiteDesign {
-  return { groundSnowPsf: 0, slope: flatSlope(), termite: null };
+  return { groundSnowPsf: 0, slope: flatSlope(), termite: null, state: null };
 }
+/** "ca" → "CA"; anything else → null. */
+export const stateCode = (s: unknown): string | null => (typeof s === "string" && /^[A-Za-z]{2}$/.test(s.trim()) ? s.trim().toUpperCase() : null);
 
 export function defaultElectrical(): ElectricalDesign {
   return { fixtures: [], feedFt: 40, panelSide: "left", timer: false };
@@ -538,10 +544,11 @@ export function defaultDeckDesign(opts: { state?: string | null; frostIn?: numbe
     footing: { type: "poured", aboveGradeIn: 3, frostAlways: false },
     decking: { product: defaultDecking(opts.state), diagonal: false, pattern: "straight", border: 0, fastening: "auto", fascia: "auto", wastePct: 10 },
     extras: { railFt: "auto", demoSqFt: 0, stainless: false, underDeckDrain: false },
-    rail: defaultRailDesign(),
+    // The guard's height the state asks for (42 in. in California), from the start.
+    rail: { ...defaultRailDesign(), heightIn: deckCodeFor(stateCode(opts.state)).guardIn },
     stairs: [],
     lower: defaultLowerLevel(),
-    site: defaultSite(),
+    site: { ...defaultSite(), state: stateCode(opts.state) },
     electrical: defaultElectrical(),
     structure: "deck",
     floor: "deck",
@@ -628,7 +635,7 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
   // A v2 design carried the rail as an allowance in `extras` and the stairs as a count of flights.
   const rail = normalizeRail(r.rail, ex);
   const stairs = normalizeStairs(r.stairs, ex, shape, placement, lower);
-  const site = normalizeSite(r.site, num(r.loadPsf, d.loadPsf));
+  const site = normalizeSite(r.site, num(r.loadPsf, d.loadPsf), opts.state);
   const electrical = normalizeElectrical(r.electrical, rail, obj(r.roof));
   // The pattern; an older design's `diagonal: true` still means a diagonal when the pattern says nothing more.
   const patternRaw: DeckPattern = oneOf(dk.pattern, ["straight", "diagonal", "herringbone"] as const, dk.diagonal === true ? "diagonal" : "straight");
@@ -893,7 +900,7 @@ function normalizeLower(raw: unknown, shape: DeckShape, heightIn: number): Lower
   };
 }
 
-function normalizeSite(raw: unknown, loadPsf: number): SiteDesign {
+function normalizeSite(raw: unknown, loadPsf: number, fallbackState?: string | null): SiteDesign {
   const r = obj(raw);
   const sl = obj(r.slope);
   const d = defaultSite();
@@ -906,6 +913,7 @@ function normalizeSite(raw: unknown, loadPsf: number): SiteDesign {
       acrossDropIn: Math.round(clamp(num(sl.acrossDropIn, 0), SLOPE_LIMITS.dropIn.min, SLOPE_LIMITS.dropIn.max) * 2) / 2,
     },
     termite: oneOf(r.termite, ["very-heavy", "moderate-heavy", "slight-moderate", "none-slight"] as const, d.termite as TermiteHazard) ?? null,
+    state: stateCode(r.state) ?? stateCode(fallbackState),
   };
 }
 

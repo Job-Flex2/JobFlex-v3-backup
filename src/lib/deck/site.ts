@@ -26,6 +26,7 @@
 // contractor can type over any of them.
 
 import { LOADS, type LoadPsf, type SoilPsf } from "./codeTables";
+import { codeWords, deckCodeFor, type DeckStateCode } from "./stateCodes";
 import type { RoofLoad } from "./roofTables";
 import { parseStateZip, resolveMarket } from "../fence/market";
 
@@ -182,6 +183,9 @@ export function fitGround(samples: Array<{ eastFt: number; northFt: number; heig
 /* ------------------------------------------------------------------ */
 
 export interface SiteFacts {
+  /** The residential code the state names (lib/deck/stateCodes), and it in a sentence. */
+  code: DeckStateCode;
+  codeLine: string;
   state: string;
   zip: string | null;
   /** "Denver, CO" or "Colorado" or "U.S. average". */
@@ -222,5 +226,6 @@ export function siteFromAddress(address: string | null | undefined, homeState?: 
   if (deck.beyond || roof.beyond) basis.push(`Past ${SNOW_TABLE_MAX_PSF} psf the code's deck and rafter tables stop: an engineer sets the snow figure here.`);
   const termite = termiteHazard(state);
   if (termite === "very-heavy" || termite === "moderate-heavy") basis.push(`Termite hazard ${TERMITE_LABEL[termite]} (IRC Figure R301.2(6)): ground-contact treatment near the soil, and a termite shield or a 6-in. clearance at the posts.`);
-  return { state, zip, label, frostIn, groundSnowPsf: snow, deckLoad: deck.load, roofLoad: roof.load, snowBeyondTable: deck.beyond || roof.beyond, soilPsf: 1500, termite, basis };
+  const code = deckCodeFor(state);
+  return { code, codeLine: codeWords(code), state, zip, label, frostIn, groundSnowPsf: snow, deckLoad: deck.load, roofLoad: roof.load, snowBeyondTable: deck.beyond || roof.beyond, soilPsf: 1500, termite, basis };
 }

@@ -78,6 +78,7 @@ import {
   type StairDesign,
   type Structure,
   type DeckPhoto,
+  normalizeDeckDesign,
 } from "@/lib/deck/design";
 import { priceDeck, deckNotes, deckScope, type DeckPackage } from "@/lib/deck/pricing";
 import { roofWords } from "@/lib/deck/roof";
@@ -287,7 +288,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   }, [address, homeState]);
   const site = React.useMemo(() => siteFromAddress(address, homeState), [address, homeState]);
   const [design, setDesign] = React.useState<DeckDesign>(() => {
-    if (opened) return opened.design;
+    // A reopened design from before the state codes takes the job's state; one that has its own keeps it.
+    if (opened) return normalizeDeckDesign(opened.design, { state: market.state || homeState });
     const d = defaultDeckDesign({ state: market.state || homeState, frostIn: market.frostIn });
     // The site's snow and termites go in from the start; the design load follows the snow.
     return applyDeckPatch(d, { loadPsf: site.deckLoad, frostIn: site.frostIn, site: { ...d.site, groundSnowPsf: site.groundSnowPsf, termite: site.termite } });
@@ -356,8 +358,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     if (!touched.current.has("load")) p.loadPsf = st.deckLoad;
     if (!touched.current.has("species")) p.framing = { species: defaultFramingSpecies(m.state || homeState) };
     if (!touched.current.has("decking")) p.decking = { product: defaultDecking(m.state || homeState) };
+    // The state's own code (lib/deck/stateCodes): the guard's height it asks for, unless the contractor chose one.
+    if (!touched.current.has("railHeight")) p.rail = { heightIn: st.code.guardIn };
     dirty.current = true;
-    setDesign((d) => applyDeckPatch(d, { ...p, site: { ...d.site, groundSnowPsf: st.groundSnowPsf, termite: st.termite } }));
+    setDesign((d) => applyDeckPatch(d, { ...p, site: { ...d.site, groundSnowPsf: st.groundSnowPsf, termite: st.termite, state: st.state || null } }));
   };
 
   /** Switching what is built: a different kind of roof starts from its own defaults; deck ↔ covered deck keeps the roof as set. */
@@ -1382,6 +1386,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </div>
               {siteNote ? <p className={s.hint}>{siteNote}</p> : null}
               <ul className={s.siteFacts}>
+                <li data-deck-code>{site.codeLine}</li>
                 {site.basis.map((b, i) => (
                   <li key={i}>{b}</li>
                 ))}
@@ -1704,7 +1709,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     </select>
                   </Field>
                   <Field label="Height">
-                    <Seg small label="Rail height" value={design.rail.heightIn} onChange={(v) => patch({ rail: { heightIn: v } })} options={[{ value: 36, label: "36 in." }, { value: 42, label: "42 in." }]} />
+                    <Seg small label="Rail height" value={design.rail.heightIn} onChange={(v) => { touched.current.add("railHeight"); patch({ rail: { heightIn: v } }); }} options={[{ value: 36, label: "36 in." }, { value: 42, label: "42 in." }]} />
                   </Field>
                   {design.rail.type !== "none" ? (
                     <>

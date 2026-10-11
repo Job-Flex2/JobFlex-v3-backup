@@ -22,7 +22,7 @@ import { buildElectrical, type ElectricalBuild } from "./electrical";
 import { framingSpecies } from "./catalog";
 import { groundAt as slopeGroundAt, slopeGradePct } from "./site";
 import { frontEdgeAt, hasDeck, hasLowerLevel, hasRoof, normalizeDeckDesign, shapeOutline, shapeZones, type DeckDesign, type DeckEdge } from "./design";
-import { RISER_MAX_IN } from "./codeTables";
+import { deckCodeFor, type DeckStateCode } from "./stateCodes";
 
 /** The lower level: its own frame and boards, placed in front of the main deck. */
 export interface LowerBuild {
@@ -50,6 +50,8 @@ export interface DeckStructure {
   gradePct: number;
   /** Between the levels: a plain step the lower deck itself makes, or a stair that is wanted. */
   stepDown: { lengthIn: number; dropIn: number; stairWanted: boolean } | null;
+  /** The residential code the deck is checked against: the job's state's own edition and amendments (lib/deck/stateCodes). */
+  code: DeckStateCode;
 }
 
 export type StructureOptions = BuildOptions;
@@ -90,6 +92,7 @@ function railLevelOf(id: "upper" | "lower", frame: DeckFrame, offsetX: number, o
 /** The design, built. Never throws: what cannot be done is flagged on the parts. */
 export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): DeckStructure {
   const design = normalizeDeckDesign(raw);
+  const code = deckCodeFor(design.site.state);
   const species = framingSpecies(design.framing.species);
   const withDeck = hasDeck(design);
   const zones = shapeZones(design.shape);
@@ -135,7 +138,7 @@ export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): De
     const lowerLevel: StairLevel | null = lower ? { id: "lower", surfaceIn: lower.frame.surfaceIn, joistBottomIn: lower.frame.joistBottomIn, x0: lower.offsetXIn, y0: lower.offsetYIn, widthIn: Math.round(design.lower.widthFt * 12), depthIn: Math.round(design.lower.depthFt * 12), frontAt: () => Math.round(design.lower.depthFt * 12) } : null;
     for (const st of design.stairs) {
       const level = st.level === "lower" && lowerLevel ? lowerLevel : upper;
-      stairs.push(buildStair({ design, stair: st, level, lowerLevel: level.id === "upper" ? lowerLevel : null, product: frame.decking, rail: design.rail, groundAt, postSize: design.framing.post === "8x8" ? "6x6" : design.framing.post === "4x6" ? "4x4" : design.framing.post }));
+      stairs.push(buildStair({ design, stair: st, level, lowerLevel: level.id === "upper" ? lowerLevel : null, product: frame.decking, rail: design.rail, groundAt, riserMaxIn: code.riserMaxIn, postSize: design.framing.post === "8x8" ? "6x6" : design.framing.post === "4x6" ? "4x4" : design.framing.post }));
     }
   }
 
@@ -144,7 +147,7 @@ export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): De
   if (lower) {
     const lengthIn = Math.round(design.lower.widthFt * 12);
     const stairBetween = stairs.some((s) => s.level === "upper" && s.lands === "lower-deck");
-    stepDown = { lengthIn, dropIn: lower.dropIn, stairWanted: lower.dropIn > RISER_MAX_IN && !stairBetween };
+    stepDown = { lengthIn, dropIn: lower.dropIn, stairWanted: lower.dropIn > code.riserMaxIn && !stairBetween };
   }
 
   // The rails.
@@ -158,7 +161,7 @@ export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): De
   const ringD = roof && !frame ? roof.depthIn : D;
   const electrical = buildElectrical({ design, frame, roof, stairs, rails, widthIn: ringW, depthIn: ringD, onHouse: frame ? design.placement !== "detached" : roof?.attach === "wall", floorIn: frame ? frame.surfaceIn : roof ? roof.floorIn : 0 });
 
-  return { design, frame, surface, roof, lower, stairs, rails, electrical, groundAt, gradePct, stepDown };
+  return { design, frame, surface, roof, lower, stairs, rails, electrical, groundAt, gradePct, stepDown, code };
 }
 
 /** The structure's deck levels, main first, each with where it sits. */

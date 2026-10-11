@@ -32,6 +32,7 @@ import { deckTakeoff, type BomLine, type BomStep, type DeckTakeoff } from "./tak
 import { deckRate, type ResolvedRate } from "./rates";
 import { railType } from "./catalog";
 import { GUARD_REQUIRED_ABOVE_IN, LEDGER_FASTENER_LABEL, RISER_MAX_IN, ftIn } from "./codeTables";
+import { codeWords } from "./stateCodes";
 import { CEILING_LABEL, FASCIA_FINISH_LABEL, FIXTURE_LABEL, GUTTER_LABEL, PLACEMENT_LABEL, ROOFING_LABEL, ROOF_KIND_LABEL, WALL_FILL_LABEL, sizeWords, structureWords, type DeckDesign } from "./design";
 import { RULE_RAFTER } from "./roofTables";
 import { TERMITE_LABEL } from "./site";
@@ -443,6 +444,8 @@ export function deckScope(pkg: DeckPackage, where?: string | null): string[] {
   if (design.extras.underDeckDrain) out.push("An under-deck drainage system keeps the space below the deck dry.");
   if (design.extras.demoSqFt > 0) out.push(`Tear-out and haul-away of the existing deck, ${design.extras.demoSqFt} sq ft.`);
   out.push("Layout squared and checked before digging; site cleaned when the work is done.");
+  // The code the deck is sized and checked to — the job's state's own edition (lib/deck/stateCodes); the inspector reads it here.
+  out.push(`Built to the ${s.code.name}${s.code.since ? ` (in force since ${s.code.since})` : ""}; the building office's edition and amendments govern.`);
   return out;
 }
 
@@ -450,6 +453,8 @@ export function deckScope(pkg: DeckPackage, where?: string | null): string[] {
 export function deckNotes(pkg: DeckPackage): string[] {
   const { frame, roof, design, structure: s } = pkg;
   const out: string[] = [];
+  // The code it is checked against — the state's own edition (lib/deck/stateCodes); the building office's edition and amendments govern.
+  out.push(codeWords(s.code));
   if (frame) {
     out.push(`Framing sized from the deck tables of the International Residential Code (Section R507)${frame.beams.some((b) => b.table === "DCA6") ? " and the American Wood Council's DCA 6 guide" : ""} for a ${design.loadPsf} psf load${design.site.groundSnowPsf > 40 ? ` (the ${design.site.groundSnowPsf} psf ground snow here)` : ""}. The building department has the final word; permit fees and engineered drawings are not included.`);
     out.push(`Footings assume soil that bears ${design.soilPsf.toLocaleString("en-US")} psf${design.placement === "attached" ? ` and a frost depth of ${design.frostIn} in.` : ""}; rock, fill or a deeper frost line changes them.${s.gradePct >= 2 ? ` The ground's fall (${s.gradePct}%) is as read or typed; the real grade is checked on site.` : ""}`);

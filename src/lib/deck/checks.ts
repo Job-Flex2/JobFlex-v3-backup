@@ -42,9 +42,10 @@ import { FIXTURE_LABEL, GUTTER_LABEL, ROOFING_LABEL, WALL_FILL_LABEL, defaultSta
 import type { RoofFrame } from "./roof";
 import { RULE_HIP, RULE_RAFTER, RULE_RIDGE, RULE_ROOF_LOAD, RULE_TIES } from "./roofTables";
 import type { DeckStructure } from "./structure";
-import { STAIR_RULES } from "./stairs";
+import { stairRules } from "./stairs";
 import { SNOW_TABLE_MAX_PSF, TERMITE_LABEL, deckLoadForSnow, roofLoadForSnow } from "./site";
-import { GUARD_MIN_HEIGHT_IN, STAIR_MIN_WIDTH_IN } from "./codeTables";
+import { STAIR_MIN_WIDTH_IN } from "./codeTables";
+import { cite, codeWords, inFrac, stateName } from "./stateCodes";
 
 /** A change to a design, part by part; anything left out stays as it is. */
 export type DeckPatch = {
@@ -84,6 +85,7 @@ export function deckChecks(s: DeckStructure): DeckCheck[] {
   if (s.lower) deckFrameChecks(s.lower.frame, add, null, "Lower level — ");
   if (roof) roofChecks(roof, design, frame, add);
   siteChecks(s, add);
+  codeCheck(s, add);
   if (frame) guardAndStairChecks(s, add);
   electricalChecks(s, add);
   return out;
@@ -473,43 +475,57 @@ function siteChecks(s: DeckStructure, add: (c: DeckCheck) => void): void {
 /*  Guards, rails and stairs (M3)                                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The code the deck is checked against (lib/deck/stateCodes): the state's own
+ * edition and its amendments — a warning where the state leaves it to its
+ * cities, so the office that issues the permit is asked which edition.
+ */
+function codeCheck(s: DeckStructure, add: (c: DeckCheck) => void): void {
+  const code = s.code;
+  add({ id: "code", level: code.statewide ? "info" : "warn", part: "Code", text: codeWords(code), rule: `${code.short} · R507 deck provisions · AWC DCA 6 tables` });
+  code.notes.slice(0, 4).forEach((n, i) => add({ id: `code-${i}`, level: "info", part: "Code", text: n }));
+}
+
 function guardAndStairChecks(s: DeckStructure, add: (c: DeckCheck) => void): void {
-  const { design, rails, stairs, frame } = s;
+  const { design, rails, stairs, frame, code } = s;
   if (!frame) return;
   const H = design.heightIn;
+  // The state's own figures: the guard's height, the riser and the tread (lib/deck/stateCodes).
+  const SR = stairRules(code);
+  const guardRule = cite(code, "R312.1", `a guard at least ${code.guardIn} in. high where the surface is more than 30 in. up`);
   if (rails.required && !rails.on) {
-    add({ id: "guard", level: "warn", part: "Guard and stairs", text: `More than 30 in. up, so a guard at least 36 in. high is required on the ${Math.round(frame.openEdgeFt)} ft of open edge${s.lower ? " (and on the lower level where it is that high)" : ""}. No railing is in the price yet.`, rule: RULE.guard, fix: { label: "Add a treated-wood railing", patch: { rail: { type: "treated" } } } });
+    add({ id: "guard", level: "warn", part: "Guard and stairs", text: `More than 30 in. up, so a guard at least ${code.guardIn} in. high is required on the ${Math.round(frame.openEdgeFt)} ft of open edge${s.lower ? " (and on the lower level where it is that high)" : ""}. No railing is in the price yet.`, rule: guardRule, fix: { label: "Add a treated-wood railing", patch: { rail: { type: "treated" } } } });
   } else if (rails.on) {
-    add({ id: "guard", level: "pass", part: "Guard and stairs", text: `${Math.round(rails.lf)} ft of ${rails.label.toLowerCase()} railing ${rails.heightIn} in. high${rails.required ? " where the code asks for a guard" : " by choice"}: ${plural(rails.posts, "post")} ${design.rail.postSpacingFt} ft apart at most, bolted through the rim with tension ties; ${rails.infill === "balusters" ? "balusters 5 in. on centre leave the code's 4-in. gap" : rails.infill === "cable" ? "cable runs 3 in. apart, tensioned so a 4-in. sphere cannot pass" : rails.infill === "glass" ? "tempered glass panels" : rails.infill === "panel" ? "solid panels" : "horizontal rails 5 1/2 in. apart"}${rails.stairLf ? `; ${Math.round(rails.stairLf)} ft on the stairs` : ""}.`, rule: `${RULE.guard} · R312.1.3 · R507.2.4` });
+    add({ id: "guard", level: "pass", part: "Guard and stairs", text: `${Math.round(rails.lf)} ft of ${rails.label.toLowerCase()} railing ${rails.heightIn} in. high${rails.required ? " where the code asks for a guard" : " by choice"}: ${plural(rails.posts, "post")} ${design.rail.postSpacingFt} ft apart at most, bolted through the rim with tension ties; ${rails.infill === "balusters" ? "balusters 5 in. on centre leave the code's 4-in. gap" : rails.infill === "cable" ? "cable runs 3 in. apart, tensioned so a 4-in. sphere cannot pass" : rails.infill === "glass" ? "tempered glass panels" : rails.infill === "panel" ? "solid panels" : "horizontal rails 5 1/2 in. apart"}${rails.stairLf ? `; ${Math.round(rails.stairLf)} ft on the stairs` : ""}.`, rule: `${guardRule} · R312.1.3 · R507.2.4` });
     if (rails.system === "wood" && design.rail.postSpacingFt > 6) add({ id: "guard-posts", level: "warn", part: "Guard and stairs", text: `Wood 4x4 rail posts 8 ft apart: the 200-lb load on the top rail wants them no more than 6 ft apart (AWC's guide). Kits are rated by their maker.`, rule: "AWC DCA 6 · IRC Table R301.5", fix: { label: "Posts 6 ft apart", patch: { rail: { postSpacingFt: 6 } } } });
-    if (rails.heightIn < GUARD_MIN_HEIGHT_IN) add({ id: "guard-height", level: "fail", part: "Guard and stairs", text: `A guard must be at least ${GUARD_MIN_HEIGHT_IN} in. high.`, rule: RULE.guard });
+    if (rails.required && rails.heightIn < code.guardIn) add({ id: "guard-height", level: "fail", part: "Guard and stairs", text: `A guard must be at least ${code.guardIn} in. high${code.guardIn !== 36 && stateName(code.state) ? ` in ${stateName(code.state)}` : ""}.`, rule: guardRule, fix: { label: `Make it ${code.guardIn} in.`, patch: { rail: { heightIn: code.guardIn } } } });
   } else if (H <= GUARD_REQUIRED_ABOVE_IN) {
-    add({ id: "guard", level: "info", part: "Guard and stairs", text: "No more than 30 in. up: the code asks for no guard.", rule: RULE.guard });
+    add({ id: "guard", level: "info", part: "Guard and stairs", text: "No more than 30 in. up: the code asks for no guard.", rule: guardRule });
   }
   if (s.lower && s.stepDown?.stairWanted) {
     const atFt = Math.round(((s.lower.offsetXIn + (design.lower.widthFt * 12) / 2) / 12) * 10) / 10;
-    add({ id: "lower-step", level: "warn", part: "Lower level", text: `The lower level is ${ftIn(s.stepDown.dropIn)} down — more than one riser. A stair between the levels is needed.`, rule: STAIR_RULES.riser, fix: { label: "Add a stair between the levels", patch: { stairs: [...design.stairs, { ...defaultStair(`s${design.stairs.length + 1}`, "front", atFt), widthFt: Math.min(6, design.lower.widthFt), landing: "patio" }] } } });
-  } else if (s.lower && s.stepDown) add({ id: "lower-step", level: "info", part: "Lower level", text: `The lower level is one step down (${ftIn(s.stepDown.dropIn)}); where it stands less than 30 in. up no guard is needed between the levels.`, rule: RULE.guard });
+    add({ id: "lower-step", level: "warn", part: "Lower level", text: `The lower level is ${ftIn(s.stepDown.dropIn)} down — more than one riser. A stair between the levels is needed.`, rule: SR.riser, fix: { label: "Add a stair between the levels", patch: { stairs: [...design.stairs, { ...defaultStair(`s${design.stairs.length + 1}`, "front", atFt), widthFt: Math.min(6, design.lower.widthFt), landing: "patio" }] } } });
+  } else if (s.lower && s.stepDown) add({ id: "lower-step", level: "info", part: "Lower level", text: `The lower level is one step down (${ftIn(s.stepDown.dropIn)}); where it stands less than 30 in. up no guard is needed between the levels.`, rule: guardRule });
   const risers = risersFor(H);
   if (stairs.length === 0 && risers > 1) add({ id: "stairs", level: "info", part: "Guard and stairs", text: `Reaching the ground takes ${risers} risers. No stairs are in the price yet.`, rule: RULE.stairs, fix: { label: "Add a flight down the front", patch: { stairs: [defaultStair("s1", "front", design.shape.widthFt / 2)] } } });
   stairs.forEach((st, i) => {
     const tag = `stair-${st.design.id}`;
     const where = `${st.kind === "box" ? "Box steps" : `Stair ${i + 1}`} (${st.design.side})`;
-    if (st.flags.tooTallForBox) add({ id: `${tag}-box`, level: "fail", part: where, text: `Box steps go three risers at most; this climb is ${plural(st.risers, "riser")}. It is framed as a flight.`, rule: STAIR_RULES.box, fix: { label: "Make it a flight", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, wrap: false } : d)) } } });
+    if (st.flags.tooTallForBox) add({ id: `${tag}-box`, level: "fail", part: where, text: `Box steps go three risers at most; this climb is ${plural(st.risers, "riser")}. It is framed as a flight.`, rule: SR.box, fix: { label: "Make it a flight", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, wrap: false } : d)) } } });
     if (st.risers === 0) {
       if (st.lands === "lower-deck") add({ id: `${tag}-step`, level: "info", part: where, text: "The lower level is one step down here: nothing to build but the riser's trim." });
       return;
     }
-    add({ id: `${tag}-riser`, level: "pass", part: where, text: `${plural(st.risers, "riser")} of ${st.riserIn.toFixed(2)} in. (7 3/4 at most), treads ${st.runIn + 1} in. deep with a 1-in. nosing (10 in. at least), ${st.widthIn} in. wide${st.lands === "lower-deck" ? ", landing on the lower level" : st.design.landing === "pad" ? ", onto a new pad" : st.design.landing === "patio" ? ", onto the patio" : ", onto pavers"}.`, rule: `${STAIR_RULES.riser} · ${STAIR_RULES.tread}` });
-    if (st.widthIn < STAIR_MIN_WIDTH_IN) add({ id: `${tag}-width`, level: "fail", part: where, text: `${st.widthIn} in. wide: the code asks for 36 in. clear.`, rule: STAIR_RULES.width, fix: { label: "Make it 3 ft wide", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, widthFt: 3 } : d)) } } });
+    add({ id: `${tag}-riser`, level: "pass", part: where, text: `${plural(st.risers, "riser")} of ${st.riserIn.toFixed(2)} in. (${inFrac(code.riserMaxIn)} at most), treads ${st.runIn + 1} in. deep with a 1-in. nosing (${code.treadMinIn} in. at least), ${st.widthIn} in. wide${st.lands === "lower-deck" ? ", landing on the lower level" : st.design.landing === "pad" ? ", onto a new pad" : st.design.landing === "patio" ? ", onto the patio" : ", onto pavers"}.`, rule: `${SR.riser} · ${SR.tread}` });
+    if (st.widthIn < STAIR_MIN_WIDTH_IN) add({ id: `${tag}-width`, level: "fail", part: where, text: `${st.widthIn} in. wide: the code asks for 36 in. clear.`, rule: SR.width, fix: { label: "Make it 3 ft wide", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, widthFt: 3 } : d)) } } });
     if (st.kind === "flight") {
-      add({ id: `${tag}-stringers`, level: "pass", part: where, text: `${plural(st.stringers.count, "2x12 cut stringer")} ${st.stringers.spacingIn} in. apart (${frame.decking.family === "pvc" ? "PVC treads want 10" : frame.decking.family === "composite" || frame.decking.family === "mineral" ? "composite treads want 12" : "wood treads take 16"}), ${ftIn(st.stringers.lengthIn)} each, on connectors at the rim and a treated kicker${st.pad ? " bolted to the pad" : ""}${st.midSupport ? "; a 2x8 beam on two posts midway — a cut stringer spans 6 ft at most" : ""}${st.landing ? "; a landing midway — a flight climbs 12 ft 3 in. at most" : ""}.`, rule: `${STAIR_RULES.stringer}${st.landing ? ` · ${STAIR_RULES.landing}` : ""}` });
+      add({ id: `${tag}-stringers`, level: "pass", part: where, text: `${plural(st.stringers.count, "2x12 cut stringer")} ${st.stringers.spacingIn} in. apart (${frame.decking.family === "pvc" ? "PVC treads want 10" : frame.decking.family === "composite" || frame.decking.family === "mineral" ? "composite treads want 12" : "wood treads take 16"}), ${ftIn(st.stringers.lengthIn)} each, on connectors at the rim and a treated kicker${st.pad ? " bolted to the pad" : ""}${st.midSupport ? "; a 2x8 beam on two posts midway — a cut stringer spans 6 ft at most" : ""}${st.landing ? "; a landing midway — a flight climbs 12 ft 3 in. at most" : ""}.`, rule: `${SR.stringer}${st.landing ? ` · ${SR.landing}` : ""}` });
       if (st.risers >= HANDRAIL_FROM_RISERS) {
-        if (st.rail.sides === 0 && (st.rail.wanted > 0 || design.rail.type === "none")) add({ id: `${tag}-handrail`, level: "fail", part: where, text: `${plural(st.risers, "riser")}: a graspable handrail 34 to 38 in. above the nosings is required${st.guard ? ", and guards on both open sides" : ""}. ${design.rail.type === "none" ? "Choose a railing to put one on." : "None is on this stair."}`, rule: STAIR_RULES.handrail, fix: design.rail.type === "none" ? { label: "Add a treated-wood railing", patch: { rail: { type: "treated" } } } : { label: st.guard ? "Rails on both sides" : "A handrail on one side", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, handrail: st.guard ? "both" : "one" } : d)) } } });
-        else if (st.guard && st.rail.sides < 2) add({ id: `${tag}-handrail`, level: "warn", part: where, text: `The stair is more than 30 in. up: both open sides want a guard, not one handrail.`, rule: STAIR_RULES.guard, fix: { label: "Rails on both sides", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, handrail: "both" } : d)) } } });
-        else add({ id: `${tag}-handrail`, level: "pass", part: where, text: `${st.rail.sides === 2 ? "Rails on both sides" : "A handrail on one side"}, ${plural(st.rail.posts, "post")}, 36 in. above the nosings.`, rule: STAIR_RULES.handrail });
+        if (st.rail.sides === 0 && (st.rail.wanted > 0 || design.rail.type === "none")) add({ id: `${tag}-handrail`, level: "fail", part: where, text: `${plural(st.risers, "riser")}: a graspable handrail 34 to 38 in. above the nosings is required${st.guard ? ", and guards on both open sides" : ""}. ${design.rail.type === "none" ? "Choose a railing to put one on." : "None is on this stair."}`, rule: SR.handrail, fix: design.rail.type === "none" ? { label: "Add a treated-wood railing", patch: { rail: { type: "treated" } } } : { label: st.guard ? "Rails on both sides" : "A handrail on one side", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, handrail: st.guard ? "both" : "one" } : d)) } } });
+        else if (st.guard && st.rail.sides < 2) add({ id: `${tag}-handrail`, level: "warn", part: where, text: `The stair is more than 30 in. up: both open sides want a guard, not one handrail.`, rule: SR.guard, fix: { label: "Rails on both sides", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, handrail: "both" } : d)) } } });
+        else add({ id: `${tag}-handrail`, level: "pass", part: where, text: `${st.rail.sides === 2 ? "Rails on both sides" : "A handrail on one side"}, ${plural(st.rail.posts, "post")}, 36 in. above the nosings.`, rule: SR.handrail });
       }
-    } else add({ id: `${tag}-box`, level: "pass", part: where, text: `${plural(st.treads, "level")} of 2x6 box frames wrapping ${st.design.wrapSides === 4 ? "all four sides" : st.design.wrapSides === 3 ? "three sides" : "the front"}, the lowest on ${plural(st.boxBlocks, "block")} over gravel, treads of the deck's boards.`, rule: STAIR_RULES.box });
+    } else add({ id: `${tag}-box`, level: "pass", part: where, text: `${plural(st.treads, "level")} of 2x6 box frames wrapping ${st.design.wrapSides === 4 ? "all four sides" : st.design.wrapSides === 3 ? "three sides" : "the front"}, the lowest on ${plural(st.boxBlocks, "block")} over gravel, treads of the deck's boards.`, rule: SR.box });
   });
 }
 
