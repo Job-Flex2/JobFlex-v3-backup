@@ -44,9 +44,9 @@
 :global(.jf-blueprint .content) .btn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
 :global(.jf-blueprint .content) .btn[disabled] { opacity: 0.45; pointer-events: none; }
 :global(.jf-blueprint .content) .btnSm { height: 36px; padding: 0 12px; font-size: 11px; }
-:global(.jf-blueprint .content) .btnPrimary { background: var(--blueprint); color: #fff; }
-:global(.jf-blueprint .content) .btnPrimary:hover { background: var(--blueprint-dark); }
-:global(.jf-blueprint .content) .btnOn { background: var(--ink); color: #fff; }
+:global(.jf-blueprint .content) .btnPrimary { background: var(--step-c, var(--blueprint)); border-color: var(--step-c, var(--ink)); color: #fff; }
+:global(.jf-blueprint .content) .btnPrimary:hover { background: color-mix(in srgb, var(--step-c, var(--blueprint-dark)) 82%, #000); }
+:global(.jf-blueprint .content) .btnOn { background: var(--step-c, var(--ink)); border-color: var(--step-c, var(--ink)); color: var(--step-ink, #fff); }
 :global(.jf-blueprint .content) .link {
   padding: 0; border: 0; background: none; cursor: pointer; justify-self: start;
   font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--blueprint);
@@ -85,7 +85,7 @@
   background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
   background-position: calc(100% - 15px) 17px, calc(100% - 10px) 17px; background-size: 5px 5px; background-repeat: no-repeat;
 }
-:global(.jf-blueprint .content) .in:focus, :global(.jf-blueprint .content) .sel:focus { outline: none; border-color: var(--ink); }
+:global(.jf-blueprint .content) .in:focus, :global(.jf-blueprint .content) .sel:focus { outline: none; border-color: var(--step-c, var(--ink)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--step-c, var(--ink)) 18%, transparent); }
 :global(.jf-blueprint .content) .in::placeholder { color: var(--muted-faint); }
 :global(.jf-blueprint .content) .num { font-variant-numeric: tabular-nums; }
 :global(.jf-blueprint .content) .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -93,24 +93,25 @@
 :global(.jf-blueprint .content) .hintWarn { padding: 8px 10px; border-left: 3px solid var(--warning); background: var(--warning-soft); color: var(--ink-soft); }
 
 /* Segmented */
-:global(.jf-blueprint .content) .seg { display: flex; flex-wrap: wrap; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; }
+:global(.jf-blueprint .content) .seg { display: flex; flex-wrap: wrap; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; }
 :global(.jf-blueprint .content) .segBtn {
   flex: 1 1 auto; min-height: 40px; padding: 0 12px; border: 0; border-right: 1.5px solid var(--hair-soft); background: none; cursor: pointer;
   font-family: var(--font); font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft);
 }
 :global(.jf-blueprint .content) .segBtn:last-child { border-right: 0; }
 :global(.jf-blueprint .content) .segBtn:hover { background: var(--paper); }
-:global(.jf-blueprint .content) .segBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: -2px; }
-:global(.jf-blueprint .content) .segOn, :global(.jf-blueprint .content) .segOn:hover { background: var(--ink); color: #fff; }
+:global(.jf-blueprint .content) .segBtn:focus-visible { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: -2px; }
+:global(.jf-blueprint .content) .segOn, :global(.jf-blueprint .content) .segOn:hover { background: var(--step-c, var(--ink)); color: var(--step-ink, #fff); }
 :global(.jf-blueprint .content) .segSmall .segBtn { min-height: 36px; padding: 0 10px; font-size: 11px; letter-spacing: 0.04em; }
 
 /* Toggle */
 :global(.jf-blueprint .content) .toggle { display: flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; font-size: 13px; color: var(--ink-soft); }
 :global(.jf-blueprint .content) .toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-:global(.jf-blueprint .content) .toggleBox { position: relative; flex-shrink: 0; width: 18px; height: 18px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; }
-:global(.jf-blueprint .content) .toggle input:checked + .toggleBox { background: var(--ink); }
+:global(.jf-blueprint .content) .toggleBox { position: relative; flex-shrink: 0; width: 18px; height: 18px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; transition: background 0.12s, border-color 0.12s; }
+:global(.jf-blueprint .content) .toggle:hover .toggleBox { border-color: var(--step-c, var(--ink)); }
+:global(.jf-blueprint .content) .toggle input:checked + .toggleBox { background: var(--step-c, var(--ink)); border-color: var(--step-c, var(--ink)); }
 :global(.jf-blueprint .content) .toggle input:checked + .toggleBox::after { content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-:global(.jf-blueprint .content) .toggle input:focus-visible + .toggleBox { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+:global(.jf-blueprint .content) .toggle input:focus-visible + .toggleBox { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: 2px; }
 :global(.jf-blueprint .content) .toggles { display: grid; gap: 0; }
 
 /* Chips */
@@ -121,8 +122,8 @@
   font-family: var(--font); font-size: 12px; font-weight: 700; color: var(--ink-soft);
 }
 :global(.jf-blueprint .content) .chip span { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
-:global(.jf-blueprint .content) .chip:hover { border-color: var(--ink); }
-:global(.jf-blueprint .content) .chipOn, :global(.jf-blueprint .content) .chipOn:hover { border-color: var(--ink); background: var(--ink); color: #fff; }
+:global(.jf-blueprint .content) .chip:hover { border-color: var(--step-c, var(--ink)); }
+:global(.jf-blueprint .content) .chipOn, :global(.jf-blueprint .content) .chipOn:hover { border-color: var(--step-c, var(--ink)); background: var(--step-c, var(--ink)); color: var(--step-ink, #fff); }
 :global(.jf-blueprint .content) .chipOn span { color: rgba(255,255,255,0.75); }
 
 /* Layout: the deck on the right, sticky; the steps on the left. */
@@ -132,7 +133,8 @@
 
 /* Steps */
 :global(.jf-blueprint .content) .steps { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-:global(.jf-blueprint .content) .step { background: #fff; border: var(--border); border-left: 4px solid var(--step-c, var(--ink)); border-radius: var(--radius); }
+:global(.jf-blueprint .content) .step { background: #fff; border: 1.5px solid var(--hair); border-left: 4px solid var(--step-c, var(--ink)); border-radius: var(--radius); scroll-margin-top: 76px; transition: box-shadow 0.2s var(--ease), border-color 0.2s; }
+:global(.jf-blueprint .content) .step:focus-within { border-color: color-mix(in srgb, var(--step-c, var(--ink)) 45%, var(--hair)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--step-c, var(--ink)) 14%, transparent); }
 :global(.jf-blueprint .content) .stepHead { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; padding: 12px 16px; cursor: pointer; list-style: none; }
 :global(.jf-blueprint .content) .stepHead::-webkit-details-marker { display: none; }
 :global(.jf-blueprint .content) .step[open] > .stepHead { border-bottom: 1.5px solid var(--hair-soft); }
@@ -140,13 +142,25 @@
   grid-row: span 2; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
   border: 1.5px solid var(--ink); border-radius: 50%; font-family: var(--font-mono); font-size: 11px; font-weight: 700;
 }
-:global(.jf-blueprint .content) .stepHead { background: color-mix(in srgb, var(--step-c, #fff) 9%, #fff); }
+:global(.jf-blueprint .content) .stepHead { background: color-mix(in srgb, var(--step-c, #fff) 8%, #fff); transition: background 0.15s; }
+:global(.jf-blueprint .content) .stepHead:hover { background: color-mix(in srgb, var(--step-c, #fff) 13%, #fff); }
 :global(.jf-blueprint .content) .stepN { background: var(--step-c, #fff); color: var(--step-ink, var(--ink)); border-color: var(--step-c, var(--ink)); }
 :global(.jf-blueprint .content) .step[open] .stepN { box-shadow: 0 0 0 3px color-mix(in srgb, var(--step-c, var(--ink)) 28%, transparent); }
 :global(.jf-blueprint .content) .autoNote { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--blueprint); background: var(--accent-soft); font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--ink); }
 :global(.jf-blueprint .content) .stepTitle { font-size: 14px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; }
-:global(.jf-blueprint .content) .stepSum { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--blueprint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+:global(.jf-blueprint .content) .stepSum { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--step-c, var(--blueprint)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 :global(.jf-blueprint .content) .stepBody { display: grid; gap: 12px; padding: 14px 16px 16px; }
+/* The foot of a step: the next one's name, in the next one's colour. */
+:global(.jf-blueprint .content) .stepFoot { display: flex; justify-content: flex-end; }
+:global(.jf-blueprint .content) .stepFoot:has(> [hidden]) { display: none; }
+:global(.jf-blueprint .content) .stepNext {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; cursor: pointer;
+  border: 1.5px solid var(--step-c, var(--ink)); border-radius: 999px; background: #fff; color: var(--step-c, var(--ink));
+  font-family: var(--font); font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  transition: background 0.15s, color 0.15s, transform 0.15s var(--ease);
+}
+:global(.jf-blueprint .content) .stepNext:hover { background: var(--step-c, var(--ink)); color: #fff; transform: translateX(1px); }
+:global(.jf-blueprint .content) .stepNext:focus-visible { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: 2px; }
 
 /* The viewer */
 :global(.jf-blueprint .content) .viewer { overflow: hidden; }
@@ -256,6 +270,7 @@
   :global(.jf-blueprint .content) .verdictTotal { margin-left: auto; }
   :global(.jf-blueprint .content) .stepHead { padding: 12px 14px; min-height: 52px; }
   :global(.jf-blueprint .content) .stepBody { padding: 12px 14px 14px; }
+  :global(.jf-blueprint .content) .stepNext { min-height: 44px; width: 100%; justify-content: center; }
   :global(.jf-blueprint .content) .in, :global(.jf-blueprint .content) .sel { height: 44px; font-size: 16px; }
   :global(.jf-blueprint .content) .segBtn, :global(.jf-blueprint .content) .segSmall .segBtn { min-height: 44px; }
   :global(.jf-blueprint .content) .toggle { min-height: 44px; }

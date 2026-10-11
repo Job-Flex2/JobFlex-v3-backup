@@ -94,6 +94,8 @@ import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeck
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
 import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
+import { DeckKindPicker } from "./deck-kind-picker";
+import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
@@ -207,24 +209,55 @@ function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (
   );
 }
 
-/** The steps' colours: one hue, lighter at the top and darker down the list (owner, 2026-10-10: "a different colour on each step, a very smooth transition from light to darker, so the contractor isn't confused by so many things to fill out"). */
+/**
+ * The steps' colours (owner, 2026-10-11: "each step accented differently … less black"): one hue per step, around the
+ * wheel from the blueprint's blue — blue, teal, green, amber, terracotta, rose, plum, violet, indigo — all at the same
+ * depth, so the number, the rail, the summary and the chosen controls of a step share its colour and no step is black.
+ */
+const STEP_HUES: ReadonlyArray<[hue: number, sat: number, light: number]> = [[212, 52, 42], [188, 48, 36], [158, 42, 36], [36, 72, 38], [18, 60, 42], [348, 52, 44], [300, 38, 40], [262, 44, 46], [232, 48, 48], [200, 24, 40]];
 function stepTone(n: number): React.CSSProperties {
-  const light = Math.max(34, 90 - (n - 1) * 7);
-  return { "--step-c": `hsl(212 58% ${light}%)`, "--step-ink": light < 62 ? "#fff" : "var(--ink)" } as React.CSSProperties;
+  const [h, sat, light] = STEP_HUES[(Math.max(1, n) - 1) % STEP_HUES.length];
+  return { "--step-c": `hsl(${h} ${sat}% ${light}%)`, "--step-ink": "#fff", "--step-soft": `hsl(${h} ${sat}% 96%)` } as React.CSSProperties;
 }
 
 /** The photo of the house is out (owner, 2026-10-11: "let's not use that picture at all — the 3D model, and you draw the house"); its flow stays here, dormant. */
 const PHOTO_ENABLED = false;
 
 function Step({ n, title, summary, children, id }: { n: number; title: string; summary: string; children: React.ReactNode; id?: string }) {
+  const ref = React.useRef<HTMLDetailsElement>(null);
+  const nextRef = React.useRef<HTMLButtonElement>(null);
+  const nextTitleRef = React.useRef<HTMLSpanElement>(null);
+  // THE WAY DOWN (owner, 2026-10-11: "friendly and easy to use"): each step ends with the next one's name. It is read
+  // off the page after every render, so the steps that come and go (the house, the footprint) need no list of their own.
+  React.useEffect(() => {
+    const nxt = ref.current?.nextElementSibling;
+    const title2 = nxt instanceof HTMLElement && nxt.matches("details[data-step]") ? nxt.querySelector("[data-step-title]")?.textContent ?? null : null;
+    if (nextRef.current) nextRef.current.hidden = !title2;
+    if (nextTitleRef.current) nextTitleRef.current.textContent = title2 ?? "";
+  });
+  const goNext = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const nxt = e.currentTarget.closest("details")?.nextElementSibling;
+    if (!(nxt instanceof HTMLDetailsElement)) return;
+    nxt.open = true;
+    const calm = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    nxt.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+    nxt.querySelector("summary")?.focus({ preventScroll: true });
+  };
   return (
-    <details className={s.step} open id={id} style={stepTone(n)} data-step={n}>
+    <details className={s.step} open id={id} style={stepTone(n)} data-step={n} ref={ref}>
       <summary className={s.stepHead}>
         <span className={s.stepN}>{n}</span>
-        <span className={s.stepTitle}>{title}</span>
+        <span className={s.stepTitle} data-step-title>{title}</span>
         <span className={s.stepSum}>{summary}</span>
       </summary>
-      <div className={s.stepBody}>{children}</div>
+      <div className={s.stepBody}>
+        {children}
+        <div className={s.stepFoot}>
+          <button ref={nextRef} type="button" className={s.stepNext} style={stepTone(n + 1)} onClick={goNext} hidden data-step-next>
+            Next: <span ref={nextTitleRef} /> <span aria-hidden="true">↓</span>
+          </button>
+        </div>
+      </div>
     </details>
   );
 }
@@ -243,12 +276,6 @@ const HEIGHT_PRESETS: ReadonlyArray<{ label: string; inches: number }> = [
   { label: "Second storey", inches: 120 },
 ];
 const CORNER_LABEL: Record<NotchCorner, string> = { "front-left": "Front left", "front-right": "Front right", "back-left": "Back left", "back-right": "Back right" };
-const STRUCTURE_HINT: Record<Structure, string> = {
-  deck: "The deck alone: frame, boards, rails and stairs.",
-  "covered-deck": "A roof over the deck — on the house wall or free-standing.",
-  gazebo: "Its own roof shape, on the deck, a slab or the ground.",
-  pergola: "Open slats on posts and headers: shade, not shelter.",
-};
 /** The roof shapes each structure offers. */
 const KINDS_FOR: Record<Structure, RoofKind[]> = {
   deck: [],
@@ -400,6 +427,19 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       const roof = family(next) === family(d.structure) && d.structure !== "deck" ? d.roof : next === "covered-deck" && d.structure === "deck" && KINDS_FOR["covered-deck"].includes(d.roof.kind) ? d.roof : defaultRoofDesign(next);
       return applyDeckPatch(d, { structure: next, roof, floor: next === "deck" || next === "covered-deck" ? "deck" : d.floor });
     });
+  };
+  // A SAMPLE TO START FROM (owner, 2026-10-11, lib/deck/samples): the sample's kind, shape, height, rails, stairs, levels
+  // and roof laid over the contractor's own address, site, house and lumber, settled to the tables like any resize. The
+  // card stays marked "In use" exactly as long as the design is the one the sample made.
+  const [applied, setApplied] = React.useState<{ id: string; design: DeckDesign } | null>(null);
+  const applySample = (sample: DeckSample) => {
+    dirty.current = true;
+    let next = applyDeckPatch(design, sample.patch);
+    const h2 = houseForShape(next.house, next.shape);
+    if (h2 !== next.house) next = applyDeckPatch(next, { house: h2 });
+    next = settle(next);
+    setDesign(next);
+    setApplied({ id: sample.id, design: next });
   };
 
   const pkg = React.useMemo(() => priceDeck(design, { rates: book, market }), [design, book, market]);
@@ -1278,14 +1318,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         {/* ── the steps ──────────────────────────────────────────── */}
         <div className={s.steps}>
           <Step n={next()} title="What to build" summary={structureSummary} id="step-structure">
-            <div className={s.structure} role="radiogroup" aria-label="What to build">
-              {(Object.keys(STRUCTURE_LABEL) as Structure[]).map((st) => (
-                <button key={st} type="button" role="radio" aria-checked={design.structure === st} className={cx(s.structBtn, design.structure === st && s.structOn)} onClick={() => setStructure(st)} data-structure={st}>
-                  {STRUCTURE_LABEL[st]}
-                  <small>{STRUCTURE_HINT[st]}</small>
-                </button>
-              ))}
-            </div>
+            {/* THE KINDS AS PICTURES (owner, 2026-10-11): the engine's own drawings of each kind, and samples to start from (deck-kind-picker). */}
+            <DeckKindPicker structure={design.structure} onPickKind={setStructure} onPickSample={applySample} appliedSampleId={applied && applied.design === design ? applied.id : null} />
             {/* WHERE IT STANDS (owner, 2026-10-10): from the very start, a plain site or the house's own wall from a photo — out since 2026-10-11, the house is drawn. */}
             {PHOTO_ENABLED ? (
             <Field label="Where it stands" wide>
