@@ -5,7 +5,7 @@
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-house.check.ts
 import { applyDeckPatch } from "../../src/lib/deck/checks";
 import { defaultDeckDesign, normalizeDeckDesign, type DeckShape } from "../../src/lib/deck/design";
-import { HOUSE_BODY_FT, STOREY_FT, deckShapeForHouse, defaultHouse, houseForShape, houseHandles, houseScene, normalizeHouse, referenceX, wallParts, type HouseDesign } from "../../src/lib/deck/house";
+import { HOUSE_BODY_FT, STOREY_FT, deckShapeForHouse, defaultHouse, houseForShape, houseHandles, houseScene, normalizeHouse, quickWall, quickWallOf, referenceX, stepWords, wallParts, wallWords, type HouseDesign } from "../../src/lib/deck/house";
 import { deckScene, parseDeckScene } from "../../src/lib/deck/scene";
 import { buildStructure } from "../../src/lib/deck/structure";
 
@@ -92,6 +92,18 @@ const back = parseDeckScene(JSON.parse(JSON.stringify(sc)));
 check("the client's parser keeps the five-number blocks, the storeys, the roof and the windows", !!back && !!back.house && back.house.blocks.length === 2 && back.house.blocks[0].length === 5 && back.house.storeys === 2 && back.house.roof === "hip" && (back.house.windows?.length ?? 0) === (sc.house?.windows?.length ?? 0));
 check("…and an older scene without them still parses", !!parseDeckScene({ ...JSON.parse(JSON.stringify(sc)), house: { blocks: [[-4, -12, 20, 0]], heightFt: 12, door: [8, 6, 6.67] } }));
 check("the 3D's house line is the deck's: the main block's face at y = 0 under the deck", near(sc.house!.blocks[0][3], 0, 1e-9));
+
+// ── one-click walls and the words
+const notchOf = (sh: DeckShape) => (sh.kind === "L" ? sh.notch : null);
+const qr = quickWall("bump-right", rect, plain);
+check("'Bump-out at the right end' on a 16 ft deck: one step at 12 ft that comes out 3 ft — a 4 × 3 back-right notch", qr.jogs.length === 1 && qr.jogs[0].atFt === 12 && qr.jogs[0].dir === "toward" && notchOf(deckShapeForHouse(rect, qr).shape)?.corner === "back-right" && quickWallOf(rect, qr) === "bump-right", JSON.stringify(qr.jogs));
+const ql = quickWall("bump-left", rect, plain);
+check("'Bump-out at the left end': the wall steps back at 4 ft — a back-left notch", ql.jogs[0].atFt === 4 && ql.jogs[0].dir === "away" && notchOf(deckShapeForHouse(rect, ql).shape)?.corner === "back-left" && quickWallOf(rect, ql) === "bump-left", JSON.stringify(ql.jogs));
+const qn = quickWall("nook", rect, plain);
+check("'The deck in a nook': the wall comes out past both ends; the deck stays a rectangle, no note", qn.jogs.length === 2 && deckShapeForHouse(rect, qn).shape.kind === "rect" && deckShapeForHouse(rect, qn).note === null && quickWallOf(rect, qn) === "nook", JSON.stringify(qn.jogs));
+check("'Straight wall' clears the steps; a wall with none reads as straight", quickWall("straight", rect, qn).jogs.length === 0 && quickWallOf(rect, plain) === "straight");
+check("the words: a straight wall, a wrapped bump-out, a nook, a step the deck cannot frame", /straight wall/.test(wallWords(rect, plain)) && /wraps the bump-out at its right end: a 4 ft × 3 ft notch/.test(wallWords(rect, qr)) && /sits in a nook/.test(wallWords(rect, qn)) && /inside the deck/.test(wallWords(rect, middle)), [wallWords(rect, plain), wallWords(rect, qr)].join(" | "));
+check("a step in words", stepWords(qr.jogs[0], rect) === "12 ft from the deck's left end, the wall to the right comes out 3 ft" && /at the deck's left end/.test(stepWords(qn.jogs[0], rect)) && /at the deck's right end/.test(stepWords(qn.jogs[1], rect)), stepWords(qr.jogs[0], rect));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

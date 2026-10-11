@@ -315,3 +315,50 @@ export function houseWords(house: HouseDesign): string {
   const steps = house.jogs.length === 0 ? "a straight back wall" : `${house.jogs.length} ${house.jogs.length === 1 ? "step" : "steps"} in the back wall`;
   return `${house.storeys === 2 ? "Two storeys" : "One storey"} · ${HOUSE_ROOF_LABEL[house.roof].toLowerCase()} roof · ${steps}`;
 }
+
+/* ------------------------------------------------------------------ */
+/*  One-click walls, and what the wall does to the deck, in words       */
+/* ------------------------------------------------------------------ */
+
+export type QuickWall = "straight" | "bump-right" | "bump-left" | "nook";
+export const QUICK_WALLS: readonly QuickWall[] = ["straight", "bump-right", "bump-left", "nook"];
+export const QUICK_WALL_LABEL: Record<QuickWall, string> = { straight: "Straight wall", "bump-right": "Bump-out at the right end", "bump-left": "Bump-out at the left end", nook: "The deck in a nook" };
+
+/** The wall shaped in one click: the steps a bump-out at either end of the deck, or a nook around it, take. */
+export function quickWall(kind: QuickWall, shape: DeckShape, house: HouseDesign): HouseDesign {
+  const W = shape.widthFt;
+  const d = 3;
+  const w = half(Math.min(6, Math.max(NOTCH_MIN_FT, W / 4)));
+  if (kind === "straight") return { ...house, jogs: [] };
+  if (kind === "bump-right") return { ...house, jogs: [{ id: "j1", atFt: half(W - w), dir: "toward", depthFt: d }] };
+  if (kind === "bump-left") return { ...house, jogs: [{ id: "j1", atFt: w, dir: "away", depthFt: d }] };
+  return { ...house, leftFt: Math.max(house.leftFt, 4), rightFt: Math.max(house.rightFt, 4), jogs: [{ id: "j1", atFt: 0, dir: "away", depthFt: d }, { id: "j2", atFt: W, dir: "toward", depthFt: d }] };
+}
+
+/** Which one-click wall the house is, if any. */
+export function quickWallOf(shape: DeckShape, house: HouseDesign): QuickWall | null {
+  if (!house.jogs.length) return "straight";
+  const fit = deckShapeForHouse(shape, house);
+  if (fit.shape.kind === "L" && fit.shape.notch.corner === "back-right" && house.jogs.length === 1) return "bump-right";
+  if (fit.shape.kind === "L" && fit.shape.notch.corner === "back-left" && house.jogs.length === 1) return "bump-left";
+  const W = shape.widthFt;
+  if (house.jogs.length === 2 && house.jogs[0].dir === "away" && Math.abs(house.jogs[0].atFt) < 0.6 && house.jogs[1].dir === "toward" && Math.abs(house.jogs[1].atFt - W) < 0.6) return "nook";
+  return null;
+}
+
+/** One line on what the wall does to the deck. */
+export function wallWords(shape: DeckShape, house: HouseDesign): string {
+  const fit = deckShapeForHouse(shape, house);
+  if (fit.note) return fit.note;
+  if (quickWallOf(shape, house) === "nook") return "The deck sits in a nook: the house wraps both its ends, its back edge on the wall.";
+  if (fit.shape.kind === "L" && fit.shape.notch.corner.startsWith("back")) return `The deck wraps the bump-out at its ${fit.shape.notch.corner === "back-right" ? "right" : "left"} end: a ${ftWords(fit.shape.notch.widthFt)} × ${ftWords(fit.shape.notch.depthFt)} notch, framed around it.`;
+  return house.jogs.length ? "The wall's steps are past the deck's ends — the deck's back edge runs straight along the house." : "A straight wall behind the deck.";
+}
+
+/** A step, in words: where it is and what the wall does there. */
+export function stepWords(j: HouseJog, shape: DeckShape): string {
+  const W = shape.widthFt;
+  const where = j.atFt < 0 ? `${ftWords(-j.atFt)} left of the deck` : j.atFt > W ? `${ftWords(j.atFt - W)} right of the deck` : j.atFt === 0 ? "at the deck's left end" : j.atFt === W ? "at the deck's right end" : `${ftWords(j.atFt)} from the deck's left end`;
+  return `${where}, the wall to the right ${j.dir === "toward" ? "comes out" : "steps back"} ${ftWords(j.depthFt)}`;
+}
+

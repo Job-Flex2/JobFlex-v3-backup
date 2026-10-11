@@ -92,7 +92,8 @@ import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
-import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
+import { HouseWallPlan } from "./house-wall-plan";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
@@ -1302,7 +1303,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {/* THE HOUSE (owner, 2026-10-11): drawn, not photographed — storeys, the roof, and the back wall's steps the deck fits itself to. */}
           {scene.house ? (
             <Step n={next()} title="The house" summary={houseWords(design.house)} id="step-house">
-              <p className={s.hint}>The house is drawn for the look of the {what.toLowerCase()}: one or two storeys, a hip or a gable roof, and the shape of its back wall. Add a step where the wall comes out or goes back and drag it along the wall in the 3D — a bump-out at the {what.toLowerCase()}&apos;s end notches the {what.toLowerCase()} around it on its own.</p>
+              <p className={s.hint}>The house is drawn for the look of the {what.toLowerCase()}: one or two storeys, a hip or a gable roof, and the shape of its back wall. Pick a wall shape below, or add a step and drag it along the wall — here, or by its knob in the 3D. A bump-out at the {what.toLowerCase()}&apos;s end notches the {what.toLowerCase()} around it on its own.</p>
               <div className={s.rowGrid}>
                 <Field label="Storeys">
                   <Seg small label="Storeys" value={String(design.house.storeys)} onChange={(v) => setHouse({ storeys: v === "2" ? 2 : 1 })} options={[{ value: "1", label: "One" }, { value: "2", label: "Two" }]} />
@@ -1311,23 +1312,44 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <Seg small label="Roof" value={design.house.roof} onChange={(v: HouseRoof) => setHouse({ roof: v })} options={HOUSE_ROOFS.map((r) => ({ value: r, label: HOUSE_ROOF_LABEL[r] }))} />
                 </Field>
               </div>
+              <Field label="The back wall, seen from above — drag a step, or the house's corners" wide>
+                <HouseWallPlan shape={design.shape} house={design.house} onChange={(h) => setHouse(h)} />
+              </Field>
+              <p className={houseNotes(design.shape, design.house).length ? cx(s.call, s.callBad) : s.hint} data-deck-wall-words>{wallWords(design.shape, design.house)}</p>
+              <Field label="The wall's shape" wide>
+                <div className={s.chips} role="group" aria-label="The wall's shape">
+                  {QUICK_WALLS.map((k) => (
+                    <button key={k} type="button" className={cx(s.chip, quickWallOf(design.shape, design.house) === k && s.chipOn)} aria-pressed={quickWallOf(design.shape, design.house) === k} onClick={() => setHouse(quickWall(k, design.shape, design.house))} data-deck-wall-quick={k}>
+                      {QUICK_WALL_LABEL[k]}
+                    </button>
+                  ))}
+                </div>
+              </Field>
               <div className={s.rowGrid}>
-                <NumberInput label="Wall past the left end, feet" value={design.house.leftFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ leftFt: n2 })} />
-                <NumberInput label="Wall past the right end, feet" value={design.house.rightFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ rightFt: n2 })} />
+                <Field label="Wall past the deck's left end" aside="ft">
+                  <NumberInput label="Wall past the left end, feet" value={design.house.leftFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ leftFt: n2 })} />
+                </Field>
+                <Field label="Wall past the deck's right end" aside="ft">
+                  <NumberInput label="Wall past the right end, feet" value={design.house.rightFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ rightFt: n2 })} />
+                </Field>
               </div>
               <div className={s.rows} data-deck-house-jogs>
-                {design.house.jogs.map((j) => (
+                {design.house.jogs.map((j, i) => (
                   <div key={j.id} className={s.row} data-deck-house-jog={j.id}>
                     <div className={s.rowHead}>
-                      <span className={s.rowTitle}>A step in the wall</span>
+                      <span className={s.rowTitle}>Step {i + 1} — {stepWords(j, design.shape)}</span>
                       <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setHouse({ jogs: design.house.jogs.filter((x) => x.id !== j.id) })} data-deck-house-jog-remove>Remove</button>
                     </div>
                     <div className={s.rowGrid}>
-                      <NumberInput label="At, feet from the left end" value={j.atFt} parse={parseFeet} format={feetText} min={-design.house.leftFt + 1} max={design.shape.widthFt + design.house.rightFt - 1} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, atFt: n2 } : x)) })} />
+                      <Field label="Where, from the deck's left end" aside="ft">
+                        <NumberInput label="Step at, feet from the deck's left end" value={j.atFt} parse={parseFeet} format={feetText} min={-design.house.leftFt + 1} max={design.shape.widthFt + design.house.rightFt - 1} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, atFt: n2 } : x)) })} />
+                      </Field>
                       <Field label="The wall to its right">
                         <Seg small label="The wall to its right" value={j.dir} onChange={(v: HouseJog["dir"]) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, dir: v } : x)) })} options={[{ value: "toward", label: "Comes out" }, { value: "away", label: "Steps back" }]} />
                       </Field>
-                      <NumberInput label="By, feet" value={j.depthFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.depthFt.min} max={HOUSE_LIMITS.depthFt.max} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, depthFt: n2 } : x)) })} />
+                      <Field label="By" aside="ft">
+                        <NumberInput label="By, feet" value={j.depthFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.depthFt.min} max={HOUSE_LIMITS.depthFt.max} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, depthFt: n2 } : x)) })} />
+                      </Field>
                     </div>
                   </div>
                 ))}
@@ -1335,9 +1357,6 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={design.house.jogs.length >= HOUSE_LIMITS.jogs} onClick={() => setHouse({ jogs: [...design.house.jogs, { id: nextJogId(design.house.jogs), atFt: Math.max(2, design.shape.widthFt - 4), dir: "toward", depthFt: 3 }] })} data-deck-house-add-jog>
                 Add a step in the wall
               </button>
-              {houseNotes(design.shape, design.house).map((n2) => (
-                <p key={n2} className={cx(s.call, s.callBad)} data-deck-house-note>{n2}</p>
-              ))}
             </Step>
           ) : null}
 

@@ -428,3 +428,15 @@
   :global(.jf-blueprint .content) .rowGrid { grid-template-columns: minmax(0, 1fr); }
   :global(.jf-blueprint .content) .draftList { width: min(420px, 94vw); right: auto; left: 0; }
 }
+
+/* The back wall seen from above (house-wall-plan.tsx): the house's body, the wall line with its steps, the deck under it, handles to drag. */
+.wallPlan { border: 1px solid var(--hair-soft); border-radius: var(--radius); background: var(--paper); padding: 6px 8px 2px; }
+.wallPlanSvg { display: block; width: 100%; height: auto; max-height: 230px; touch-action: none; user-select: none; }
+.wallBody { fill: #e9e5db; stroke: var(--ink); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.wallLine { fill: none; stroke: var(--ink); stroke-width: 2.4; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.wallDeck { fill: rgba(24, 84, 160, 0.14); stroke: var(--blueprint); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.wallEnd { stroke: var(--blueprint); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.wallLabel { fill: var(--ink-soft); font-family: var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.wallNote { fill: var(--blueprint); font-family: var(--font-mono); font-weight: 700; }
+.wallHandle { fill: #1854a0; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: ew-resize; }
+.wallHandle:hover, .wallHandle:focus-visible { fill: var(--ink); outline: none; }
