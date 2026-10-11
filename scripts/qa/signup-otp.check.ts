@@ -6,7 +6,8 @@
 //     start button hands off to Stripe Checkout (test mode only, as signup-flow.check);
 //   · a reload on the code screen reopens it; the email's button in ANOTHER browser opens the
 //     plan step and the waiting tab follows;
-//   · five wrong codes burn the code;
+//   · five wrong codes burn the code; the 21st new account from one IP + User-Agent is
+//     refused in words, another browser on the same IP is not;
 //   · Instagram's webview (iOS): Google stays on top and hands the page to Safari with google=1;
 //   · an address that has an account (qa@acme.test) — the register page's code and the sign-in
 //     page's "Email me a code" both sign it in (QA Co only, CLAUDE.md);
@@ -190,6 +191,40 @@ async function burn(browser: any) {
   }
 }
 
+/** THE NEW-ACCOUNT BRAKE: twenty an hour per IP + User-Agent (lib/signupOtp). With this
+ *  browser's pair already at twenty, a proven new address is refused in words and the code
+ *  stays good; the same IP in another browser (another User-Agent) goes through. */
+async function brake(browser: any) {
+  const ip = newIp();
+  const v = await visitor(browser, "phone", ip);
+  try {
+    const s1 = await toCode(v, `otp.brake.${STAMP}@${MAIL_DOMAIN}`);
+    if (!s1.ok) return check("brake: code screen", false, s1.err);
+    await plantCode(v.page.url());
+    const key = `rl:otp-signup:${ip}:${sha(IPHONE).slice(0, 16)}`;
+    await db.syncState.upsert({ where: { key }, create: { key, cursor: `20:${Date.now() + 3_600_000}` }, update: { cursor: `20:${Date.now() + 3_600_000}` } });
+    v.step("the 21st new account from this IP + browser");
+    await v.page.fill("#otpCode", CODE);
+    await v.page.waitForTimeout(1800);
+    const said = await codeNote(v);
+    const e = v.take();
+    check("brake: the 21st new account from one IP + User-Agent is refused in words", /^Too many sign-ups. Try again in /.test(said) && !(await v.page.locator("section.plan-sheet.is-in").count()) && !e, said + (e ? " · " + e : ""));
+  } finally {
+    await v.ctx.close();
+  }
+  const w = await visitor(browser, "desk", ip);
+  try {
+    const s1 = await toCode(w, `otp.brake2.${STAMP}@${MAIL_DOMAIN}`);
+    if (!s1.ok) return check("brake: other browser code screen", false, s1.err);
+    await plantCode(w.page.url());
+    await w.page.fill("#otpCode", CODE);
+    const plan = await w.page.locator("section.plan-sheet.is-in").waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
+    check("brake: the same IP in another browser still signs up", plan, w.take());
+  } finally {
+    await w.ctx.close();
+  }
+}
+
 async function instagram(browser: any) {
   const v = await visitor(browser, "ig-ios");
   try {
@@ -266,6 +301,7 @@ async function main() {
       await newAddress(browser, "phone", "roofing", toStripe);
       await newAddress(browser, "desk", "", toStripe);
       await burn(browser);
+      await brake(browser);
       await instagram(browser);
       await existing(browser);
     } finally {
@@ -277,7 +313,7 @@ async function main() {
     await db.syncState.deleteMany({ where: { key: { startsWith: "otp:" }, cursor: { contains: MAIL_DOMAIN } } }).catch(() => {});
     await db.syncState.deleteMany({ where: { key: { in: DRAFTS.map((d) => `otp:${d}`) } } }).catch(() => {});
     await db.syncState.deleteMany({ where: { key: { startsWith: "otp-link:" }, cursor: { in: DRAFTS } } }).catch(() => {});
-    await db.syncState.deleteMany({ where: { OR: [...IPS.map((ip) => ({ key: { startsWith: "rl:", endsWith: ":" + ip } })), { key: `rl:otp-mail:${QA_EMAIL}` }, { key: { startsWith: "rl:otp-mail:", contains: MAIL_DOMAIN } }] } }).catch(() => {});
+    await db.syncState.deleteMany({ where: { OR: [...IPS.map((ip) => ({ key: { startsWith: "rl:", endsWith: ":" + ip } })), ...IPS.map((ip) => ({ key: { startsWith: `rl:otp-signup:${ip}:` } })), { key: `rl:otp-mail:${QA_EMAIL}` }, { key: { startsWith: "rl:otp-mail:", contains: MAIL_DOMAIN } }] } }).catch(() => {});
     await db.$disconnect();
   }
   console.log(bad ? `\n${bad} failing` : "\nall green");
