@@ -1,16 +1,17 @@
 "use client";
 
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import { LEGACY_TRIAL_OFFER, TRIAL_EXPERIMENT, type TrialOffer } from "@/lib/trialOffer";
+import { LEGACY_TRIAL_OFFER, TRIAL_EXPERIMENT, TRIAL_TEST_ENDED, type TrialOffer } from "@/lib/trialOffer";
 import { onTrafficReady, trackTrafficExperiment } from "@/lib/traffic-client";
 
 const Context = createContext<TrialOffer>(LEGACY_TRIAL_OFFER);
 export const useTrialOffer = () => useContext(Context);
 
-/** Server terms render on the first paint; analytics observes, never assigns them. */
+/** Server terms render on the first paint; analytics observes, never assigns them.
+ *  A finished test (TRIAL_TEST_ENDED) records no exposure. */
 export function TrialOfferProvider({ offer, children, trackExposure = true }: { offer: TrialOffer; children: ReactNode; trackExposure?: boolean }) {
   useEffect(() => {
-    if (trackExposure) return onTrafficReady(() => trackTrafficExperiment(TRIAL_EXPERIMENT, offer.variant));
+    if (trackExposure && !TRIAL_TEST_ENDED) return onTrafficReady(() => trackTrafficExperiment(TRIAL_EXPERIMENT, offer.variant));
   }, [offer.variant, trackExposure]);
   return <Context.Provider value={offer}>{children}</Context.Provider>;
 }
@@ -19,7 +20,7 @@ export function TrialOfferProvider({ offer, children, trackExposure = true }: { 
 export function useTrialOfferExposure(visible: boolean) {
   const { variant } = useTrialOffer();
   useEffect(() => {
-    if (visible) return onTrafficReady(() => trackTrafficExperiment(TRIAL_EXPERIMENT, variant));
+    if (visible && !TRIAL_TEST_ENDED) return onTrafficReady(() => trackTrafficExperiment(TRIAL_EXPERIMENT, variant));
   }, [visible, variant]);
 }
 

@@ -34,8 +34,8 @@ export function TrialPolicyPanel({ initial }: { initial: SignupTrialState }) {
   const now = p.mode === "card"
     ? p.capReached
       ? "New signups add a card at the plan step — today's ceiling on card-less trials is reached."
-      : "New signups add a card at the plan step; nothing is charged until their assigned 3- or 7-day trial ends."
-    : "New signups start their assigned 3- or 7-day trial with no card — they confirm their email instead.";
+      : "New signups add a card at the plan step; nothing is charged until the 7-day trial ends."
+    : "New signups start a 7-day trial with no card — they confirm their email instead.";
   const source = p.source === "admin"
     ? `Admin switch${p.at ? ` · ${when(p.at)}` : ""}${p.by ? ` · ${p.by}` : ""}`
     : "Deployment default (env)";

@@ -178,6 +178,9 @@
 :global(.jf-blueprint) .experimentEmpty p { max-width:570px; font:500 14px/1.65 var(--font); color:var(--ink-soft); margin:0; }
 :global(.jf-blueprint) .experimentSteps { display:flex; flex-wrap:wrap; gap:16px; margin-top:24px; font:700 11px var(--font-mono); color:var(--blueprint); }
 :global(.jf-blueprint) .experimentControls { display:flex; gap:18px; margin-bottom:20px; }
+/* A finished test: its results stay, with the date it ended and what everyone gets now. */
+:global(.jf-blueprint) .endedNote { display:inline-block; margin:10px 0 0; border:1.5px solid var(--ink); padding:6px 10px; color:var(--ink); font:700 11px/1.5 var(--font-mono); text-transform:uppercase; letter-spacing:.06em; }
+:global(.jf-blueprint) .endedNote span { white-space:nowrap; }
 :global(.jf-blueprint) .experimentNote { display:flex; gap:10px; align-items:flex-start; margin-top:20px; border-top:1px solid var(--traffic-line); padding-top:18px; color:var(--ink-soft); font:500 13px/1.65 var(--font); }
 :global(.jf-blueprint) .experimentNote svg { flex-shrink:0; margin-top:2px; color:var(--blueprint); }
 :global(.jf-blueprint) .notice { display:flex; gap:12px; align-items:flex-start; padding:16px 18px; border:1.5px solid var(--warning); border-left-width:5px; background:var(--warning-soft); font:500 13px/1.65 var(--font); }

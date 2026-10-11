@@ -63,7 +63,7 @@ import { appBaseUrl } from "@/lib/appUrl";
 import { renderEmail } from "@/lib/email/renderEmail";
 import { sendEmail } from "@/lib/sdk/resend";
 import { signupTrialOffer } from "@/lib/trialOfferServer";
-import { storedTrialOffer, type TrialOffer } from "@/lib/trialOffer";
+import { storedTrialOffer, TRIAL_TEST_ENDED, type TrialOffer } from "@/lib/trialOffer";
 import { buildTrialConfirm } from "@/lib/email/build/trial";
 
 /** How long an unpaid intent is honoured. Long enough to pay, short enough
@@ -176,8 +176,9 @@ export async function startPendingSignup(raw: unknown): Promise<{ ok: true; toke
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message || "Check this step and try again." };
   const data = parsed.data;
   const offered = await signupTrialOffer();
-  // A stale tab must see changed terms before any shorter trial is created.
-  if (data.displayedTrialDays !== undefined && data.displayedTrialDays !== offered.days) {
+  // A stale tab must see changed terms before any shorter trial is created
+  // (a tab still showing 3 days from the ended test simply gets the 7).
+  if (data.displayedTrialDays !== undefined && data.displayedTrialDays > offered.days) {
     return { ok: false, error: "Your trial offer changed. Reload this page to review the current offer before continuing." };
   }
   // Twenty an hour per IP + User-Agent (lib/signupBrake; was five per IP).
@@ -876,15 +877,18 @@ async function createAccountFromPending(
       await tx.membership.create({
         data: { userId: user.id, organizationId: org.id, role: "OWNER" },
       });
-      // Retain the offered terms after the browser cookie and signup intent expire.
-      await tx.syncState.upsert({
-        where: { key: `signupTrialOffer:${org.id}` },
-        create: {
-          key: `signupTrialOffer:${org.id}`,
-          cursor: JSON.stringify({ ...storedTrialOffer(rec.trialOffer), recordedAt: new Date().toISOString() }),
-        },
-        update: {},
-      });
+      // Retain the offered terms after the browser cookie and signup intent
+      // expire — while the test runs; after it, no shop is put in a variant.
+      if (!TRIAL_TEST_ENDED) {
+        await tx.syncState.upsert({
+          where: { key: `signupTrialOffer:${org.id}` },
+          create: {
+            key: `signupTrialOffer:${org.id}`,
+            cursor: JSON.stringify({ ...storedTrialOffer(rec.trialOffer), recordedAt: new Date().toISOString() }),
+          },
+          update: {},
+        });
+      }
       // No business name was asked (passwordless): the person's name stands in,
       // marked so the company page, the banner and the first send ask for it.
       if (rec.nameUnset) {

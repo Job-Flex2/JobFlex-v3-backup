@@ -11,7 +11,8 @@ export interface TrafficExperiment {
 // Opt-in only. Add an approved page and its PostHog multivariate flag here.
 // Use a new key for each test; never reuse a completed experiment's key.
 export const TRAFFIC_EXPERIMENTS: readonly TrafficExperiment[] = [
-  { key: "signup_trial_length_v1", path: "/", variants: ["a", "b"], active: true, assignment: "server" },
+  // Ended 2026-10-11 (lib/trialOffer TRIAL_TEST_ENDED): kept for its results.
+  { key: "signup_trial_length_v1", path: "/", variants: ["a", "b"], active: false, assignment: "server" },
   // The landing's default hero (no `?industry=`). SCAFFOLD ONLY (2026-09-20):
   // variant b's content is the owner's to write — landing-e/hero-experiment.tsx
   // holds the empty slot. To launch: fill the slot, create the multivariate

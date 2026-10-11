@@ -2,7 +2,8 @@
 //
 // THE CARD IS TAKEN UP FRONT (owner, 2026-10-06 — back from the card-less
 // experiment of 2026-10-01). The plan step opens Stripe Checkout for the plan
-// picked, the card is taken, the trial runs its saved 3- or 7-day offer, and then Stripe
+// picked, the card is taken, the trial runs seven days (the 3-day test ended
+// 2026-10-11, lib/trialOffer), and then Stripe
 // charges that plan's price (/api/checkout/signup → completePendingSignup).
 // That is the default: no variable, or anything but "false".
 //

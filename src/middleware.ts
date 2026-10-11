@@ -5,7 +5,7 @@ import { getToken } from "next-auth/jwt";
 import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
 import { isPartnerPublic, principalRedirect } from "@/lib/principalRoutes";
 import { REGION_COOKIE, REGION_MAX_AGE_S, consentModeFor } from "@/lib/consent";
-import { TRIAL_OFFER_COOKIE, TRIAL_OFFER_MAX_AGE } from "@/lib/trialOffer";
+import { TRIAL_OFFER_COOKIE, TRIAL_OFFER_MAX_AGE, TRIAL_TEST_ENDED } from "@/lib/trialOffer";
 
 // The standalone handheld URLs (/mobile-*, /trade-services) are protected too:
 // they render the same org data as their /dashboard twins and the (mobile)
@@ -94,7 +94,8 @@ export async function middleware(req: NextRequest) {
   const offerPath = req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/pricing" || req.nextUrl.pathname.startsWith("/auth/register");
   const existingOffer = req.cookies.get(TRIAL_OFFER_COOKIE)?.value;
   let assigned: string | null = null;
-  if (offerPath && existingOffer !== "a" && existingOffer !== "b") {
+  // No assignment once the test is over (lib/trialOffer TRIAL_TEST_ENDED).
+  if (!TRIAL_TEST_ENDED && offerPath && existingOffer !== "a" && existingOffer !== "b") {
     assigned = crypto.getRandomValues(new Uint8Array(1))[0] < 128 ? "a" : "b";
     // Forward it in this request too, so first paint and the next request agree.
     req.cookies.set(TRIAL_OFFER_COOKIE, assigned);

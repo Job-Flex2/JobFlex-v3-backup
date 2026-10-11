@@ -91,7 +91,7 @@ export async function startOtpSignup(raw: unknown): Promise<Sent | Refused> {
     const data = parsed.data;
     if (isDisposableEmail(data.email)) return { ok: false, error: DISPOSABLE_EMAIL_MESSAGE };
     const offered = await signupTrialOffer();
-    if (data.displayedTrialDays !== undefined && data.displayedTrialDays !== offered.days) {
+    if (data.displayedTrialDays !== undefined && data.displayedTrialDays > offered.days) {
       return { ok: false, error: "Your trial offer changed. Reload this page to review the current offer before continuing." };
     }
     // The same address typed again (back from "Use a different email", a
@@ -236,7 +236,7 @@ export async function startOtpGoogleSignup(raw: unknown): Promise<{ ok: true; si
       return { ok: false, error: "That email already has an account. Sign in with Google.", taken: true };
     }
     const offered = await signupTrialOffer();
-    if (data.displayedTrialDays !== undefined && data.displayedTrialDays !== offered.days) {
+    if (data.displayedTrialDays !== undefined && data.displayedTrialDays > offered.days) {
       return { ok: false, error: "Your trial offer changed. Reload this page to review the current offer before continuing." };
     }
     const braked = await newAccountBrake();
