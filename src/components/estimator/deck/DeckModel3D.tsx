@@ -1017,9 +1017,9 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       }
       if (s.house && !bd) {
         const H = s.house;
-        const wallMat = new THREE.MeshStandardMaterial({ color: SIDING, roughness: 0.95, map: siding });
+        const wallMat = new THREE.MeshStandardMaterial({ color: H.siding ? new THREE.Color(H.siding) : SIDING, roughness: 0.95, map: siding });
         const baseMat = new THREE.MeshStandardMaterial({ color: FOUNDATION, roughness: 1, map: concrete });
-        const roofMat = new THREE.MeshStandardMaterial({ color: ROOF, roughness: 0.95, map: shingles, side: THREE.DoubleSide });
+        const roofMat = new THREE.MeshStandardMaterial({ color: H.roofColour ? new THREE.Color(H.roofColour) : ROOF, roughness: 0.95, map: shingles, side: THREE.DoubleSide });
         const glassMat = new THREE.MeshStandardMaterial({ color: GLASS_C, roughness: 0.15, metalness: 0.4 });
         const trimMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
         owned.push(wallMat, baseMat, roofMat, glassMat, trimMat);
@@ -1027,7 +1027,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         const band = Math.min(1.5, Math.max(0.5, s.heightFt - 0.6));
         siding.repeat.set(1, height / 0.5);
         const blocks = H.blocks.map((b) => ({ x0: b[0], y0: b[1], x1: b[2], y1: b[3], h: b[4] ?? height }));
-        mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}`;
+        mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}:${H.siding ?? ""}:${H.roofColour ?? ""}`;
         const part = (geo: THREE.BufferGeometry | null, mat: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, shadow = false) => {
           const m = new THREE.Mesh(geo ?? unitBox, mat);
           if (!geo) m.scale.set(sx, sy, sz);

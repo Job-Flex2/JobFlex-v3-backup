@@ -5,7 +5,7 @@
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-house.check.ts
 import { applyDeckPatch } from "../../src/lib/deck/checks";
 import { defaultDeckDesign, normalizeDeckDesign, type DeckShape } from "../../src/lib/deck/design";
-import { HOUSE_BODY_FT, STOREY_FT, deckShapeForHouse, defaultHouse, houseForShape, houseHandles, houseScene, normalizeHouse, quickWall, quickWallOf, referenceX, stepWords, wallParts, wallWords, type HouseDesign } from "../../src/lib/deck/house";
+import { HOUSE_BODY_FT, STOREY_FT, addStepAt, deckShapeForHouse, defaultHouse, houseForShape, houseHandles, houseScene, moveJogTo, moveWallPart, normalizeHouse, quickWall, quickWallOf, referenceX, resizeDeckLeft, slideDeck, stepWords, wallParts, wallWords, type HouseDesign } from "../../src/lib/deck/house";
 import { deckScene, parseDeckScene } from "../../src/lib/deck/scene";
 import { buildStructure } from "../../src/lib/deck/structure";
 
@@ -104,6 +104,26 @@ check("'The deck in a nook': the wall comes out past both ends; the deck stays a
 check("'Straight wall' clears the steps; a wall with none reads as straight", quickWall("straight", rect, qn).jogs.length === 0 && quickWallOf(rect, plain) === "straight");
 check("the words: a straight wall, a wrapped bump-out, a nook, a step the deck cannot frame", /straight wall/.test(wallWords(rect, plain)) && /wraps the bump-out at its right end: a 4 ft × 3 ft notch/.test(wallWords(rect, qr)) && /sits in a nook/.test(wallWords(rect, qn)) && /inside the deck/.test(wallWords(rect, middle)), [wallWords(rect, plain), wallWords(rect, qr)].join(" | "));
 check("a step in words", stepWords(qr.jogs[0], rect) === "12 ft from the deck's left end, the wall to the right comes out 3 ft" && /at the deck's left end/.test(stepWords(qn.jogs[0], rect)) && /at the deck's right end/.test(stepWords(qn.jogs[1], rect)), stepWords(qr.jogs[0], rect));
+
+// ── shaped by hand: a part in or out, a step added where tapped, a step moved with order and snapping, the deck slid and sized
+const out2 = moveWallPart(bump, rect, 1, 2)!;
+check("the bump-out's part dragged 2 ft further out: its step deepens to 5 ft", out2.jogs[0].depthFt === 5 && out2.jogs[0].dir === "toward", JSON.stringify(out2.jogs));
+check("…dragged 3 ft back in, the step reads 0 and the read-back drops it (the wall is level again)", normalizeHouse(moveWallPart(bump, rect, 1, -3)!, rect).jogs.length === 0);
+check("the part the deck stands on cannot be dragged — null says so", moveWallPart(bump, rect, 0, 2) === null);
+const mid3 = moveWallPart(middle, rect, 1, 1)!;
+check("a middle part pushed out 1 ft: the step before it deepens, the step after it shallows", mid3.jogs[0].depthFt === 4 && mid3.jogs[1].depthFt === 4 && mid3.jogs[1].dir === "away", JSON.stringify(mid3.jogs));
+const plusR = addStepAt(plain, rect, 16);
+check("+ at the deck's right end: the wall beyond comes out 2 ft; the deck stays a rectangle, no note", plusR.jogs.length === 1 && plusR.jogs[0].atFt === 16 && plusR.jogs[0].dir === "toward" && plusR.jogs[0].depthFt === 2 && deckShapeForHouse(rect, plusR).shape.kind === "rect" && deckShapeForHouse(rect, plusR).note === null, JSON.stringify(plusR.jogs));
+check("+ at the deck's left end: the wall to the left comes out (the step there steps back)", addStepAt(plain, rect, 0).jogs[0].dir === "away");
+check("+ on top of a step, or a fifth step, changes nothing", addStepAt(bump, rect, 12.4) === bump && addStepAt({ ...plain, jogs: [1, 2, 3, 4].map((n) => ({ id: `j${n}`, atFt: n * 3, dir: "toward" as const, depthFt: 1 })) }, rect, 14) !== null && addStepAt({ ...plain, jogs: [1, 2, 3, 4].map((n) => ({ id: `j${n}`, atFt: n * 3, dir: "toward" as const, depthFt: 1 })) }, rect, 14).jogs.length === 4);
+check("a step dragged near the deck's end snaps onto it; past a neighbour it stops a foot short; past the wall's end it stops a foot in", moveJogTo(bump, rect, "j1", 15.6).jogs[0].atFt === 16 && moveJogTo(middle, rect, "j1", 12).jogs[0].atFt === 8 && moveJogTo(bump, rect, "j1", -40).jogs[0].atFt === -3, `${moveJogTo(bump, rect, "j1", 15.6).jogs[0].atFt} · ${moveJogTo(middle, rect, "j1", 12).jogs[0].atFt} · ${moveJogTo(bump, rect, "j1", -40).jogs[0].atFt}`);
+const slid = slideDeck(bump, 2);
+check("the deck slid 2 ft right along the wall: the house stays, so more wall past its left end, less past its right, the step 2 ft left in the deck's feet", slid.leftFt === 6 && slid.rightFt === 2 && slid.jogs[0].atFt === 10, JSON.stringify(slid));
+check("…and no further than the wall's reach allows", slideDeck(bump, 10).rightFt === 0 && slideDeck(bump, -70).leftFt === 0);
+const narrowed = resizeDeckLeft(bump, rect, 14, 4, 60);
+check("the deck's left end pulled 2 ft right: 14 ft wide, the right end and the house where they were, the step 2 ft left in the deck's feet", narrowed.shape.widthFt === 14 && narrowed.house.leftFt === 6 && narrowed.house.jogs[0].atFt === 10 && deckShapeForHouse(narrowed.shape, narrowed.house).shape.kind === "L", JSON.stringify(narrowed));
+check("colours: read back, and off into the scene as hex", normalizeHouse({ siding: "blue", roofColour: "forest" }, rect).siding === "blue" && normalizeHouse({ siding: "pink" }, rect).siding === "cream" && houseScene(rect, { ...plain, siding: "grey", roofColour: "brown" }, { deckHeightFt: 3, peakFt: 0, mainEdge: null }).siding === "#b7babb" && /^#[0-9a-f]{6}$/.test(houseScene(rect, plain, { deckHeightFt: 3, peakFt: 0, mainEdge: null }).roofColour));
+check("a half-foot step is a step; nothing less", normalizeHouse({ jogs: [{ atFt: 8, dir: "toward", depthFt: 0.5 }, { atFt: 12, dir: "toward", depthFt: 0.2 }] }, rect).jogs.length === 1);
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

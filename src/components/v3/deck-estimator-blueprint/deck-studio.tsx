@@ -92,7 +92,7 @@ import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
-import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
@@ -338,8 +338,16 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           const fit = deckShapeForHouse(next.shape, next.house);
           if (JSON.stringify(fit.shape) !== JSON.stringify(next.shape)) next = applyDeckPatch(next, { shape: fit.shape });
         } else if (p.shape) {
-          const h2 = houseForShape(next.house, next.shape);
-          if (h2 !== next.house) next = applyDeckPatch(next, { house: h2 });
+          // A deck sized anew keeps the wall's steps where they are and takes its notch from them; a notch picked by
+          // hand (the size unchanged) puts its own step in the wall.
+          const resized = p.shape.widthFt !== d.shape.widthFt || p.shape.depthFt !== d.shape.depthFt;
+          if (resized) {
+            const fit = deckShapeForHouse(next.shape, next.house);
+            if (JSON.stringify(fit.shape) !== JSON.stringify(next.shape)) next = applyDeckPatch(next, { shape: fit.shape });
+          } else {
+            const h2 = houseForShape(next.house, next.shape);
+            if (h2 !== next.house) next = applyDeckPatch(next, { house: h2 });
+          }
         }
         return resizes(p) ? settle(next) : next;
       });
@@ -1303,7 +1311,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {/* THE HOUSE (owner, 2026-10-11): drawn, not photographed — storeys, the roof, and the back wall's steps the deck fits itself to. */}
           {scene.house ? (
             <Step n={next()} title="The house" summary={houseWords(design.house)} id="step-house">
-              <p className={s.hint}>The house is drawn for the look of the {what.toLowerCase()}: one or two storeys, a hip or a gable roof, and the shape of its back wall. Pick a wall shape below, or add a step and drag it along the wall — here, or by its knob in the 3D. A bump-out at the {what.toLowerCase()}&apos;s end notches the {what.toLowerCase()} around it on its own.</p>
+              <p className={s.hint}>The house is drawn for the look of the {what.toLowerCase()}. Shape its back wall on the drawing: drag any part of the wall out or in, a step sideways, the house&apos;s ends wider or narrower, tap + to add a step — and drag the {what.toLowerCase()}&apos;s own ends, front edge and grip to size it and slide it along the wall (the boxes below keep the exact inches). Whatever stands on the wall follows: a bump-out at the {what.toLowerCase()}&apos;s end notches it around on its own.</p>
               <div className={s.rowGrid}>
                 <Field label="Storeys">
                   <Seg small label="Storeys" value={String(design.house.storeys)} onChange={(v) => setHouse({ storeys: v === "2" ? 2 : 1 })} options={[{ value: "1", label: "One" }, { value: "2", label: "Two" }]} />
@@ -1312,9 +1320,31 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <Seg small label="Roof" value={design.house.roof} onChange={(v: HouseRoof) => setHouse({ roof: v })} options={HOUSE_ROOFS.map((r) => ({ value: r, label: HOUSE_ROOF_LABEL[r] }))} />
                 </Field>
               </div>
-              <Field label="The back wall, seen from above — drag a step, or the house's corners" wide>
-                <HouseWallPlan shape={design.shape} house={design.house} onChange={(h) => setHouse(h)} />
+              <Field label="The back wall and the deck, seen from above — drag anything" wide>
+                <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} />
               </Field>
+              <div className={s.rowGrid}>
+                <Field label="Siding">
+                  <div className={s.chips} role="group" aria-label="Siding">
+                    {SIDINGS.map((c) => (
+                      <button key={c.id} type="button" className={cx(s.chip, s.swatchChip, design.house.siding === c.id && s.chipOn)} aria-pressed={design.house.siding === c.id} onClick={() => setHouse({ siding: c.id })} data-deck-house-siding={c.id}>
+                        <span className={s.swatch} style={{ background: c.hex }} aria-hidden />
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+                <Field label="Roof colour">
+                  <div className={s.chips} role="group" aria-label="Roof colour">
+                    {ROOF_COLOURS.map((c) => (
+                      <button key={c.id} type="button" className={cx(s.chip, s.swatchChip, design.house.roofColour === c.id && s.chipOn)} aria-pressed={design.house.roofColour === c.id} onClick={() => setHouse({ roofColour: c.id })} data-deck-house-roof-colour={c.id}>
+                        <span className={s.swatch} style={{ background: c.hex }} aria-hidden />
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              </div>
               <p className={houseNotes(design.shape, design.house).length ? cx(s.call, s.callBad) : s.hint} data-deck-wall-words>{wallWords(design.shape, design.house)}</p>
               <Field label="The wall's shape" wide>
                 <div className={s.chips} role="group" aria-label="The wall's shape">

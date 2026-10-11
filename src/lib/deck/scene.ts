@@ -183,7 +183,7 @@ export interface DeckScene {
   /** The outline as a flat ring, ft (the deck's, or the roof's posts when there is no deck). */
   outline: number[];
   /** The house, where the deck touches one: blocks [x0, y0, x1, y1], its height, and a door on the main wall [centre x, width, height]. */
-  house: { blocks: number[][]; heightFt: number; door: number[] | null; storeys?: 1 | 2; roof?: HouseRoof; windows?: number[][] } | null;
+  house: { blocks: number[][]; heightFt: number; door: number[] | null; storeys?: 1 | 2; roof?: HouseRoof; windows?: number[][]; siding?: string; roofColour?: string } | null;
   /** The ground's fall across the deck, ft: out from the house over its depth, left to right over its width (null = flat). */
   ground: { outDropFt: number; acrossDropFt: number } | null;
   /** Fixtures that glow in the night view: [x, y, z, colour as 0xRRGGBB, sample (1 = the client's own fixture)], ft. */
@@ -736,7 +736,7 @@ export function deckScene(s: DeckStructure): DeckScene {
     const main = frame ? frame.edges.filter((e) => e.house && e.side === "back" && Math.abs(e.y0) < 0.01).sort((a, b) => b.lengthIn - a.lengthIn)[0] : null;
     const hShape = frame ? design.shape : { kind: "rect" as const, widthFt: Math.max(4, width / 12), depthFt: Math.max(4, depth / 12) };
     const hs = houseScene(hShape, design.house, { deckHeightFt: heightIn / 12, peakFt: peakIn / 12, mainEdge: main ? { x0: main.x0 / 12, x1: main.x1 / 12 } : null });
-    house = { blocks: hs.blocks, heightFt: hs.heightFt, door: hs.door, storeys: hs.storeys, roof: hs.roof, windows: hs.windows };
+    house = { blocks: hs.blocks, heightFt: hs.heightFt, door: hs.door, storeys: hs.storeys, roof: hs.roof, windows: hs.windows, siding: hs.siding, roofColour: hs.roofColour };
   }
 
   const outline = frame ? shapeOutline(design.shape).flatMap((p) => [r3(p.x), r3(p.y)]) : (roof?.ring ?? []).flatMap((p) => [r3(p.x), r3(p.y)]);
@@ -911,6 +911,8 @@ export function parseDeckScene(raw: unknown): DeckScene | null {
     if (h.storeys === 1 || h.storeys === 2) house.storeys = h.storeys;
     if (h.roof === "hip" || h.roof === "gable") house.roof = h.roof;
     if (Array.isArray(h.windows)) house.windows = h.windows.map((w) => numbers(w, 5)).filter((w): w is number[] => !!w).slice(0, 60);
+    if (typeof h.siding === "string" && /^#[0-9a-f]{6}$/i.test(h.siding)) house.siding = h.siding;
+    if (typeof h.roofColour === "string" && /^#[0-9a-f]{6}$/i.test(h.roofColour)) house.roofColour = h.roofColour;
   }
   // Version 3: the legend, the tags, the callouts, the ground, the glows. Anything malformed is dropped, not fatal.
   let legend: SceneLegend[] = [];

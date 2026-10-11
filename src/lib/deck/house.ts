@@ -33,9 +33,32 @@ export interface HouseDesign {
   leftFt: number;
   rightFt: number;
   jogs: HouseJog[];
+  /** The look (2026-10-11, "the client would say: this is my house"): the siding's colour and the roof's. */
+  siding: SidingId;
+  roofColour: RoofColourId;
 }
 
-export const HOUSE_LIMITS = { extendFt: { min: 0, max: 60 }, depthFt: { min: 1, max: 12 }, jogs: 4 } as const;
+export type SidingId = "white" | "cream" | "grey" | "blue" | "sage";
+export type RoofColourId = "charcoal" | "brown" | "slate" | "forest" | "terracotta";
+export const SIDINGS: ReadonlyArray<{ id: SidingId; label: string; hex: string }> = [
+  { id: "white", label: "White", hex: "#f2f0ea" },
+  { id: "cream", label: "Cream", hex: "#e9e5db" },
+  { id: "grey", label: "Grey", hex: "#b7babb" },
+  { id: "blue", label: "Blue-grey", hex: "#8ea3b1" },
+  { id: "sage", label: "Sage", hex: "#a7b39b" },
+];
+export const ROOF_COLOURS: ReadonlyArray<{ id: RoofColourId; label: string; hex: string }> = [
+  { id: "charcoal", label: "Charcoal", hex: "#55524c" },
+  { id: "brown", label: "Brown", hex: "#5b4a3b" },
+  { id: "slate", label: "Slate", hex: "#6b7280" },
+  { id: "forest", label: "Forest", hex: "#4a5e4f" },
+  { id: "terracotta", label: "Terracotta", hex: "#9a5a44" },
+];
+export const sidingHex = (id: SidingId) => SIDINGS.find((c) => c.id === id)?.hex ?? SIDINGS[1].hex;
+export const roofHex = (id: RoofColourId) => ROOF_COLOURS.find((c) => c.id === id)?.hex ?? ROOF_COLOURS[0].hex;
+
+/** A step shallower than half a foot is no step: it is dropped, which is how a wall dragged level loses its step. */
+export const HOUSE_LIMITS = { extendFt: { min: 0, max: 60 }, depthFt: { min: 0.5, max: 12 }, jogs: 4 } as const;
 /** Floor to floor. */
 export const STOREY_FT = 9.5;
 /** How deep the house is drawn behind its back wall. */
@@ -51,7 +74,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
 export function defaultHouse(): HouseDesign {
-  return { storeys: 1, roof: "hip", leftFt: 4, rightFt: 4, jogs: [] };
+  return { storeys: 1, roof: "hip", leftFt: 4, rightFt: 4, jogs: [], siding: "cream", roofColour: "charcoal" };
 }
 
 /** The design read back: numbers held to their limits, the steps sorted and kept inside the wall, a back notch of the shape given its step. */
@@ -69,16 +92,18 @@ export function normalizeHouse(raw: unknown, shape: DeckShape): HouseDesign {
       const o = obj(j);
       const id = typeof o.id === "string" && o.id && !seen.has(o.id) ? o.id : `j${i + 1}`;
       seen.add(id);
-      return { id, atFt: half(num(o.atFt, 0)), dir: (o.dir === "away" ? "away" : "toward") as JogDir, depthFt: half(clamp(num(o.depthFt, 2), HOUSE_LIMITS.depthFt.min, HOUSE_LIMITS.depthFt.max)) };
+      return { id, atFt: half(num(o.atFt, 0)), dir: (o.dir === "away" ? "away" : "toward") as JogDir, depthFt: half(clamp(num(o.depthFt, 2), 0, HOUSE_LIMITS.depthFt.max)) };
     })
-    .filter((j) => j.atFt > -leftFt + 0.5 && j.atFt < W + rightFt - 0.5)
+    .filter((j) => j.depthFt >= HOUSE_LIMITS.depthFt.min && j.atFt > -leftFt + 0.5 && j.atFt < W + rightFt - 0.5)
     .sort((a, b) => a.atFt - b.atFt)
     .slice(0, HOUSE_LIMITS.jogs);
   // Two steps on one spot: the second is dropped.
   const spaced = jogs.filter((j, i) => i === 0 || j.atFt - jogs[i - 1].atFt >= 1);
+  const siding = SIDINGS.some((c) => c.id === r.siding) ? (r.siding as SidingId) : d.siding;
+  const roofColour = ROOF_COLOURS.some((c) => c.id === r.roofColour) ? (r.roofColour as RoofColourId) : d.roofColour;
   // The steps are kept exactly as given: the read-back never adds one for a back notch (the studio does that once, when
   // a design opens) and never drops one (a step just removed must stay removed, so the deck can go back to a rectangle).
-  return { storeys, roof, leftFt, rightFt, jogs: spaced };
+  return { storeys, roof, leftFt, rightFt, jogs: spaced, siding, roofColour };
 }
 
 /** One part of the back wall between two steps, in the deck's feet; `depthFt` is how far it stands toward the yard against the house line (the part under the deck's main back edge). */
@@ -100,19 +125,22 @@ export function referenceX(shape: DeckShape): number {
   const m = mainSpan(shape);
   return (m.x0 + m.x1) / 2;
 }
-/** The part of the wall the deck's main back edge mostly runs along — the house line. */
-function referencePart<T extends { x0: number; x1: number }>(parts: T[], shape: DeckShape): T {
+/** Which part of the wall the deck's main back edge mostly runs along — the house line. */
+export function referencePartIndex(parts: ReadonlyArray<{ x0: number; x1: number }>, shape: DeckShape): number {
   const m = mainSpan(shape);
-  let best = parts[0];
-  let most = -1;
-  for (const p of parts) {
+  let best = 0;
+  let most = -Infinity;
+  parts.forEach((p, i) => {
     const overlap = Math.min(p.x1, m.x1) - Math.max(p.x0, m.x0);
     if (overlap > most) {
       most = overlap;
-      best = p;
+      best = i;
     }
-  }
+  });
   return best;
+}
+function referencePart<T extends { x0: number; x1: number }>(parts: T[], shape: DeckShape): T {
+  return parts[referencePartIndex(parts, shape)];
 }
 
 /** The back wall as parts, left to right, each at its depth against the house line. */
@@ -198,8 +226,9 @@ export function houseForShape(house: HouseDesign, shape: DeckShape, opts: { drop
     if (Math.abs(have.depthFt - depth) < 0.01) return house;
     return { ...house, jogs: house.jogs.map((j) => (j === have ? { ...j, depthFt: depth } : j)) };
   }
-  // The step that makes this notch — any other step under the deck's end that contradicts it goes.
-  const kept = house.jogs.filter((j) => !(right ? j.atFt > edge - 0.6 && j.atFt <= W + 0.01 : j.atFt < edge + 0.6 && j.atFt >= -0.01));
+  // The step that makes this notch owns the wall under the deck: the other steps inside the deck's span go, the ones
+  // past its ends stay.
+  const kept = house.jogs.filter((j) => j.atFt < -0.6 || j.atFt > W + 0.6);
   const jogs = [...kept, { id: nextJogId(kept), atFt: edge, dir, depthFt: depth }].sort((a, b) => a.atFt - b.atFt).slice(0, HOUSE_LIMITS.jogs);
   return { ...house, jogs };
 }
@@ -232,6 +261,9 @@ export interface HouseScene {
   roof: HouseRoof;
   /** Windows on the back faces: [centre x, the face's y, width, height, sill], ft. */
   windows: number[][];
+  /** The siding's and the roof's colours, hex. */
+  siding: string;
+  roofColour: string;
 }
 
 /**
@@ -280,7 +312,7 @@ export function houseScene(shape: DeckShape, house: HouseDesign, ctx: { deckHeig
       }
     }
   });
-  return { blocks, heightFt: mainH, door, storeys: house.storeys, roof: house.roof, windows: windows.slice(0, 60) };
+  return { blocks, heightFt: mainH, door, storeys: house.storeys, roof: house.roof, windows: windows.slice(0, 60), siding: sidingHex(house.siding), roofColour: roofHex(house.roofColour) };
 }
 
 /** A back notch on a wall with no steps at all (an older design, or the Shape step ahead of the house) is drawn as the bump-out it wraps. */
@@ -360,5 +392,94 @@ export function stepWords(j: HouseJog, shape: DeckShape): string {
   const W = shape.widthFt;
   const where = j.atFt < 0 ? `${ftWords(-j.atFt)} left of the deck` : j.atFt > W ? `${ftWords(j.atFt - W)} right of the deck` : j.atFt === 0 ? "at the deck's left end" : j.atFt === W ? "at the deck's right end" : `${ftWords(j.atFt)} from the deck's left end`;
   return `${where}, the wall to the right ${j.dir === "toward" ? "comes out" : "steps back"} ${ftWords(j.depthFt)}`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Shaping the wall by hand (2026-10-11: "shape the house in any       */
+/*  direction, inside, outside, wider, narrower — easy")                */
+/* ------------------------------------------------------------------ */
+
+/** The steps as signed depths: + comes out toward the yard, − steps back. */
+const signed = (j: HouseJog) => (j.dir === "toward" ? j.depthFt : -j.depthFt);
+const fromSigned = (j: HouseJog, d: number): HouseJog => ({ ...j, dir: d >= 0 ? "toward" : "away", depthFt: half(Math.min(HOUSE_LIMITS.depthFt.max, Math.abs(d))) });
+
+/**
+ * One part of the wall pushed out (+) or pulled in (−) by `deltaFt`: the step at each of its ends changes by that much,
+ * and a step driven to nothing is dropped on the read-back. The part the deck stands on is the house line and stays —
+ * null says so.
+ */
+export function moveWallPart(house: HouseDesign, shape: DeckShape, part: number, deltaFt: number): HouseDesign | null {
+  const parts = wallParts(house, shape);
+  if (part < 0 || part >= parts.length || part === referencePartIndex(parts, shape)) return null;
+  const d = half(deltaFt);
+  if (d === 0) return house;
+  const jogs = house.jogs.map((j, i) => {
+    if (i === part - 1) return fromSigned(j, signed(j) + d);
+    if (i === part) return fromSigned(j, signed(j) - d);
+    return j;
+  });
+  return { ...house, jogs };
+}
+
+/**
+ * A step put in where the wall was tapped: past the deck's right end the wall beyond comes out 2 ft; at the deck's
+ * left end the wall to the left comes out 2 ft (the step there steps back); anywhere else the wall to the right comes
+ * out 2 ft. Nothing on top of a step already there, nothing past four.
+ */
+export function addStepAt(house: HouseDesign, shape: DeckShape, xFt: number): HouseDesign {
+  const W = shape.widthFt;
+  const x = half(clamp(xFt, -house.leftFt + 1, W + house.rightFt - 1));
+  if (house.jogs.length >= HOUSE_LIMITS.jogs || house.jogs.some((j) => Math.abs(j.atFt - x) < 1)) return house;
+  const dir: JogDir = x <= 0.01 ? "away" : "toward";
+  const jogs = [...house.jogs, { id: nextJogId(house.jogs), atFt: x, dir, depthFt: 2 }].sort((a, b) => a.atFt - b.atFt);
+  return { ...house, jogs };
+}
+
+/** A step moved along the wall: kept a foot clear of its neighbours and the wall's ends, snapped to the deck's ends when near them. */
+export function moveJogTo(house: HouseDesign, shape: DeckShape, id: string, xFt: number): HouseDesign {
+  const W = shape.widthFt;
+  const i = house.jogs.findIndex((j) => j.id === id);
+  if (i < 0) return house;
+  let x = half(xFt);
+  if (Math.abs(x) < 0.75) x = 0;
+  else if (Math.abs(x - W) < 0.75) x = W;
+  const lo = i > 0 ? house.jogs[i - 1].atFt + 1 : -house.leftFt + 1;
+  const hi = i + 1 < house.jogs.length ? house.jogs[i + 1].atFt - 1 : W + house.rightFt - 1;
+  x = clamp(x, lo, hi);
+  if (x === house.jogs[i].atFt) return house;
+  return { ...house, jogs: house.jogs.map((j, k) => (k === i ? { ...j, atFt: x } : j)) };
+}
+
+/* ------------------------------------------------------------------ */
+/*  The deck moved and sized on the same drawing (2026-10-11: "I can    */
+/*  move the deck size at the same time … move it anywhere I want")    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The deck slid along the wall by `deltaFt` (+ to the right): the house stays where it is, so the wall's reach past
+ * the deck's ends and every step move the other way in the deck's own feet. Held where either end would run out.
+ */
+export function slideDeck(house: HouseDesign, deltaFt: number): HouseDesign {
+  // The deck right by d with the house still: more wall past its left end by d, less past its right — both held between
+  // 0 and the most a wall reaches; the steps, fixed in the world, move the other way in the deck's feet.
+  const lo = Math.max(-house.leftFt, house.rightFt - HOUSE_LIMITS.extendFt.max);
+  const hi = Math.min(HOUSE_LIMITS.extendFt.max - house.leftFt, house.rightFt);
+  const d = half(clamp(deltaFt, lo, hi));
+  if (d === 0) return house;
+  return { ...house, leftFt: half(house.leftFt + d), rightFt: half(house.rightFt - d), jogs: house.jogs.map((j) => ({ ...j, atFt: half(j.atFt - d) })) };
+}
+
+/**
+ * The deck's LEFT end moved to a new width while its right end stays put: the house stays too, so the wall's left
+ * reach and every step shift by the change. Returns the shape and the house together.
+ */
+export function resizeDeckLeft(house: HouseDesign, shape: DeckShape, newWidthFt: number, minWidthFt: number, maxWidthFt: number): { house: HouseDesign; shape: DeckShape } {
+  const W = shape.widthFt;
+  const w2 = half(clamp(newWidthFt, minWidthFt, maxWidthFt));
+  const d = W - w2; // the left end moves right by this much
+  if (d === 0) return { house, shape };
+  const leftFt = clamp(half(house.leftFt + d), HOUSE_LIMITS.extendFt.min, HOUSE_LIMITS.extendFt.max);
+  const moved = { ...house, leftFt, jogs: house.jogs.map((j) => ({ ...j, atFt: half(j.atFt - d) })) };
+  return { house: moved, shape: { ...shape, widthFt: w2 } };
 }
 

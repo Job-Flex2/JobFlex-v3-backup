@@ -440,3 +440,17 @@
 .wallNote { fill: var(--blueprint); font-family: var(--font-mono); font-weight: 700; }
 .wallHandle { fill: #1854a0; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: ew-resize; }
 .wallHandle:hover, .wallHandle:focus-visible { fill: var(--ink); outline: none; }
+.wallPlanSvg { max-height: 300px; }
+.wallGrip { fill: #fff; stroke: #1854a0; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: ns-resize; }
+.wallGrip:hover, .wallGrip:focus-visible { fill: #dbe7f5; outline: none; }
+.wallGripLocked { fill: #f3f1ec; stroke: #9a9690; stroke-width: 1.5; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; cursor: not-allowed; }
+.wallDeckHandle { fill: #fff; stroke: var(--blueprint); stroke-width: 2; vector-effect: non-scaling-stroke; cursor: ew-resize; }
+.wallDeckHandle:hover, .wallDeckHandle:focus-visible { fill: #dbe7f5; outline: none; }
+.wallPlus { cursor: pointer; }
+.wallPlus circle { fill: #fff; stroke: var(--ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.wallPlus text { fill: var(--ink); font-family: var(--font-mono); font-weight: 800; pointer-events: none; }
+.wallPlus:hover circle, .wallPlus:focus-visible circle { fill: var(--ink); }
+.wallPlus:hover text, .wallPlus:focus-visible text { fill: #fff; }
+.wallPlus:focus-visible { outline: none; }
+.swatchChip { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.25); flex: none; }
