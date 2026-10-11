@@ -162,6 +162,7 @@ import {
 } from "@/components/v3/settings-blueprint/settings-data";
 import { ProviderKeyForm } from "@/components/v3/settings-blueprint/panes/stripe-key-form";
 import { MobileSettingsSprite } from "./sprite";
+import { PasswordControl } from "@/components/account-password/password-control";
 import "./mobile-settings.css";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
@@ -417,8 +418,10 @@ function AccountPane({ data }: { data: SettingsData }) {
   const [bizPhone, setBizPhone] = useState(a.business.phone);
   const [signingOutAll, setSigningOutAll] = useState(false);
 
+  // The account's own password, added or changed here (2026-10-10).
+  const [hasPw, setHasPw] = useState(a.hasPassword);
   const securityDesc: Record<string, string> = {
-    password: a.security.passwordDesc,
+    password: hasPw ? "Set. Sign in with it, with a code from email or with Google." : "Not set. You sign in with a code from email or with Google.",
     sessions: a.security.sessionsDesc,
   };
 
@@ -463,7 +466,7 @@ function AccountPane({ data }: { data: SettingsData }) {
         <CardHeader card={SECURITY_CARD} />
         <div className="mst-cardB mst-cardB--rows">
           {SECURITY_ITEMS.map((item) => (
-            <div className="mst-sec" key={item.key}>
+            <div className="mst-sec" key={item.key} id={item.key === "password" ? "password" : undefined}>
               <span className="mst-rowIc">
                 <Ic name={item.icon} />
               </span>
@@ -472,9 +475,9 @@ function AccountPane({ data }: { data: SettingsData }) {
                 <span className="mst-rowD">{securityDesc[item.key]}</span>
               </span>
               {item.key === "password" ? (
-                <a className="mst-btn mst-btn--ghost mst-secAct" href={a.forgotHref}>
-                  {item.action}
-                </a>
+                <span className="mst-secAct">
+                  <PasswordControl hasPassword={hasPw} email={a.email} buttonClassName="mst-btn mst-btn--ghost mst-secAct" onSaved={setHasPw} />
+                </span>
               ) : (
                 <button
                   className="mst-btn mst-btn--ghost mst-secAct"

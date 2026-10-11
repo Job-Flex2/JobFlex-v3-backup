@@ -40,6 +40,7 @@ import {
   deleteAccountDesc,
 } from "../settings-data";
 import { Field, Modal, SaveBar, actionError } from "../ui";
+import { PasswordControl } from "@/components/account-password/password-control";
 
 function Badge2({ badge }: { badge: Badge }) {
   return (
@@ -94,8 +95,10 @@ export function AccountPane({ data }: PaneProps) {
     }
   }
 
+  // The account's own password, added or changed here (2026-10-10).
+  const [hasPw, setHasPw] = useState(a.hasPassword);
   const securityDesc: Record<SecurityKey, string> = {
-    password: a.security.passwordDesc,
+    password: hasPw ? "Set. Sign in with it, with a code from email or with Google." : "Not set. You sign in with a code from email or with Google.",
     sessions: a.security.sessionsDesc,
   };
 
@@ -147,7 +150,7 @@ export function AccountPane({ data }: PaneProps) {
         <div className="sc-b">
           <div className="seccols">
             {SECURITY_ITEMS.map((item) => (
-              <div className="seccol" key={item.key}>
+              <div className="seccol" key={item.key} id={item.key === "password" ? "password" : undefined}>
                 <span className="prow-ic">
                   <svg className="ic">
                     <use href={`#${item.icon}`} />
@@ -157,9 +160,7 @@ export function AccountPane({ data }: PaneProps) {
                 <span className="prow-d">{securityDesc[item.key]}</span>
                 {item.badge ? <Badge2 badge={item.badge} /> : null}
                 {item.key === "password" ? (
-                  <a className="btn btn-ghost btn-sm seccol-act" href={a.forgotHref}>
-                    {item.action}
-                  </a>
+                  <PasswordControl hasPassword={hasPw} email={a.email} buttonClassName="btn btn-ghost btn-sm seccol-act" onSaved={setHasPw} />
                 ) : (
                   <button
                     className="btn btn-ghost btn-sm seccol-act"

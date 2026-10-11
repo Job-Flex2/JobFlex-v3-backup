@@ -1005,6 +1005,8 @@ export interface AccountData {
   isOwner: boolean;
   business: { name: string; address: string; website: string; phone: string };
   security: { passwordDesc: string; sessionsDesc: string };
+  /** The account has a password (Add password / Change password, 2026-10-10). */
+  hasPassword: boolean;
   /** Where the Security card's password "Change" button goes. */
   forgotHref: string;
 }

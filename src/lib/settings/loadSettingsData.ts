@@ -82,7 +82,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
     await Promise.all([
       db.user.findUnique({
         where: { id: user.id },
-        select: { name: true, email: true, phone: true, notificationPrefsJson: true, smsPhone: true, smsVerifiedAt: true },
+        select: { name: true, email: true, phone: true, notificationPrefsJson: true, smsPhone: true, smsVerifiedAt: true, hashedPassword: true },
       }),
       db.organization.findUnique({
         where: { id: organizationId },
@@ -151,8 +151,13 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
         website: org.website ?? "",
         phone: org.phone ?? "",
       },
+      // Whether the account has a password at all (a passwordless or Google
+      // account may not) — the Password row says Set / Not set (2026-10-10).
+      hasPassword: Boolean(me?.hashedPassword),
       security: {
-        passwordDesc: "Change it with a link sent to your email address.",
+        passwordDesc: me?.hashedPassword
+          ? "Set. Sign in with it, with a code from email or with Google."
+          : "Not set. You sign in with a code from email or with Google.",
         sessionsDesc: "Logs out every device, including this one.",
       },
       forgotHref: "/auth/forgot",

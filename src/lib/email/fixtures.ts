@@ -11,6 +11,7 @@ import {
 import { buildOwnerAccepted, buildNewLead, buildLeadOffer, buildSupportTicket } from "./build/operator";
 import { buildTrialConfirm, buildTrialReminder } from "./build/trial";
 import { buildOtpCode, buildOtpNoAccount } from "./build/otp";
+import { buildPasswordSet } from "./build/accountPassword";
 import { buildPaymentFailed } from "./build/billing";
 import { buildJobAssignment, buildWorkerInvite, buildTeamInvite } from "./build/worker";
 import {
@@ -544,6 +545,18 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
     label: "18c4 · buildOtpNoAccount()",
     note: "\"Email me a code\" for an address with no account: the page says the same as for any address; this email says there is no account.",
     doc: buildOtpNoAccount({ email: "jordan@riverabuilds.com", href: "https://example.com/auth/register?flow=otp" }),
+  },
+  {
+    id: "b-password-added",
+    label: "18c5 · buildPasswordSet({ added: true })",
+    note: "Account settings → Add password (actions/accountPassword). Reply-to support@jobflex.app.",
+    doc: buildPasswordSet({ name: "Jordan Rivera", email: "jordan@riverabuilds.com", added: true, at: new Date("2026-10-10T20:15:00Z"), forgotHref: "https://example.com/auth/forgot" }),
+  },
+  {
+    id: "b-password-changed",
+    label: "18c6 · buildPasswordSet({ added: false })",
+    note: "Account settings → Change password.",
+    doc: buildPasswordSet({ name: "Jordan Rivera", email: "jordan@riverabuilds.com", added: false, at: new Date("2026-10-10T20:15:00Z"), forgotHref: "https://example.com/auth/forgot" }),
   },
   {
     id: "b-trial-soon",
