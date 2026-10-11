@@ -178,8 +178,13 @@ export async function sendCode(
   const { subject, html, text } = renderEmail(doc);
   // Local only: the code in the server's log, beside EMAIL_DEV_OUTBOX's copy.
   if (process.env.NODE_ENV !== "production") console.info(`[otp] ${d.kind} code for ${d.email}: ${next.noAccount ? "(no account — no code sent)" : code}`);
+  // The shared sender (lib/sdk/resend sendEmail): Resend when RESEND_API_KEY is
+  // set, else SMTP (production: Gmail SMTP, from app@jobflex.app). The send is
+  // awaited — Continue waits for it — so its time is logged, without the address.
+  const sentFrom = Date.now();
   try {
     await sendEmail({ to: d.email, subject, html, text, replyTo: SUPPORT_REPLY_TO });
+    console.info(`[otp] ${d.kind} ${next.noAccount ? "no-account" : "code"} email handed to the transport in ${Date.now() - sentFrom} ms`);
   } catch (err) {
     console.error("[otp] code email failed:", err);
     return { ok: false, error: "Couldn't send the email. Check the address and try again." };
