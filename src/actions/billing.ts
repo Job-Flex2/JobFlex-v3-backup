@@ -7,6 +7,7 @@ import { getPlanBySlug, getOrgPlanContext, revalidatePlanSurfaces } from "@/lib/
 import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { SubscriptionStatus } from "@/lib/prismaEnums";
 import { subscriptionPeriodEndDate } from "@/lib/stripeCompat";
+import { trialOnlyInvoiceIds } from "@/lib/trialInvoices";
 import { normalizeCustomPages } from "@/lib/customPlan";
 import {
   changeCustomPages,
@@ -126,7 +127,8 @@ export async function listSubscriptionInvoices(): Promise<{
       customer: sub.externalCustomerId,
       limit: 12,
     });
-    const invoices: SubscriptionInvoice[] = res.data.map((inv) => ({
+    const trialOnly = await trialOnlyInvoiceIds(stripe, res.data);
+    const invoices: SubscriptionInvoice[] = res.data.filter((inv) => !trialOnly.has(inv.id)).map((inv) => ({
       id: inv.id,
       number: inv.number ?? null,
       amountPaidCents: inv.amount_paid ?? 0,
