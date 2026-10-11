@@ -6,7 +6,7 @@
 // eight-second timeout). Static imports only (tsx has no top-level await).
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/traffic-stale.check.ts
 import { getLiveTraffic, getMapHistory, getTrafficReport, orLastGood, runTrafficQuery } from "../../src/lib/traffic-server";
-import { parseTrafficFilters } from "../../src/lib/traffic-query";
+import { buildTrafficQueries, parseTrafficFilters } from "../../src/lib/traffic-query";
 import { staleLabel } from "../../src/lib/traffic-contract";
 
 let bad = 0;
@@ -138,7 +138,7 @@ async function main() {
 
   const other = await getTrafficReport(parseTrafficFilters({ from: "2026-09-30", to: "2026-10-02", timezone: "America/Los_Angeles" }));
   check("a range never read has nothing to fall back on: the error, with each query named",
-    other.status === "error" && /503/.test(other.message ?? "") && other.errors.length === 6 && !other.stale, `${other.status} · ${other.errors.length}`);
+    other.status === "error" && /503/.test(other.message ?? "") && other.errors.length === Object.keys(buildTrafficQueries(filters)).length && !other.stale, `${other.status} · ${other.errors.length}`);
 
   const kept = await orLastGood("check-never", Promise.reject(new Error("x"))).then(() => "kept", () => "thrown");
   check("orLastGood throws when there was no earlier answer", kept === "thrown");
