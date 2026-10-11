@@ -40,6 +40,28 @@
 .elev .dim { stroke: var(--ink); fill: var(--ink); font-family: var(--font-mono); font-weight: 700; }
 .elev .dim text { stroke: none; }
 .empty { max-width: 8.5in; margin: 40px auto; padding: 24px; background: #fff; border: var(--border); }
+/* The section and the details (lib/deck/permit → deck-sections): ink lines, wood in a warm tint, concrete stippled, steel heavy. */
+.dw { width: 100%; height: 100%; max-height: 8.4in; display: block; }
+.dwDetail { width: 100%; height: auto; max-height: 2.9in; display: block; }
+.dwInk { fill: none; stroke: var(--ink); stroke-width: 0.7; vector-effect: non-scaling-stroke; }
+.dwWood { fill: #efe6d2; stroke: var(--ink); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
+.dwConcrete { fill: url(#permitConcrete); stroke: var(--ink); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
+.dwConcreteDot { fill: #8a8782; }
+.dwSteel { fill: #6b7280; stroke: var(--ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.dwHatch { fill: url(#permitHatch); stroke: var(--ink); stroke-width: 0.8; vector-effect: non-scaling-stroke; }
+.dwHatchLine { stroke: #9a9690; stroke-width: 0.6; }
+.dwDash { fill: none; stroke: var(--ink); stroke-width: 0.6; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.dwThin { fill: none; stroke: var(--muted); stroke-width: 0.5; vector-effect: non-scaling-stroke; }
+.dwGrade { fill: none; stroke: var(--ink); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.dwGlass { fill: #dbe7f2; stroke: var(--ink); stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.dwDim line { stroke: var(--blueprint); stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.dwDimText { fill: var(--blueprint); font-family: var(--font-mono); font-weight: 700; }
+.dwNote { fill: var(--ink-soft); font-family: var(--font-mono); }
+.dwLabel { fill: var(--ink); font-family: var(--font-mono); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.details { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; }
+.detail { display: grid; gap: 4px; align-content: start; }
+.detailTitle { font-size: 11.5px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1.5px solid var(--ink); padding-bottom: 3px; }
+.matGroup { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blueprint); padding-top: 8px; }
 @media print {
   .sheet { background: #fff; padding: 0; }
   .bar { display: none; }
@@ -50,4 +72,5 @@
 @media (max-width: 700px) {
   .page { padding: 14px; min-height: 0; }
   .two { grid-template-columns: 1fr; }
+  .details { grid-template-columns: 1fr; }
 }

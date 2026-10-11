@@ -1079,9 +1079,17 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
           sticks.push({ role: "brace", nominal: "2x4", lengthIn: len, cx: p.x + (along * BRACE_LEG_IN) / 2, cy: p.y, cz: z, sx: BRACE_LEG_IN, sy: THICK_2X_IN, sz: BRACE_LEG_IN, ground: false, lean: { axis: "x", dir: along }, of: b.id });
           hardware.braces += 1;
           if (freeStanding && style === "dropped") {
-            const out: 1 | -1 = b.role === "front" ? -1 : 1;
-            sticks.push({ role: "brace", nominal: "2x4", lengthIn: len, cx: p.x, cy: p.y + (out * BRACE_LEG_IN) / 2, cz: z, sx: THICK_2X_IN, sy: BRACE_LEG_IN, sz: BRACE_LEG_IN, ground: false, lean: { axis: "y", dir: out }, of: b.id });
-            hardware.braces += 1;
+            // The other way there is no beam to brace to: the brace runs from the post up to the underside of the
+            // outside joist at the deck's edge, legs equal so it stays at 45° — and only where the joists reach past
+            // the beam far enough for a real leg (owner, 2026-10-10: a brace that ends in the air "looks disconnected").
+            const out: 1 | -1 = b.role === "front" ? 1 : -1;
+            const edgeY = out === 1 ? Math.max(...zones.map((zn) => zn.y1)) : Math.min(...zones.map((zn) => zn.y0));
+            const leg = Math.min(BRACE_LEG_IN, Math.abs(edgeY - p.y));
+            if (leg >= 12) {
+              const cz2 = joistBottomIn - leg / 2;
+              sticks.push({ role: "brace", nominal: "2x4", lengthIn: Math.round(leg * Math.SQRT2), cx: p.x, cy: p.y + (out * leg) / 2, cz: cz2, sx: THICK_2X_IN, sy: leg, sz: leg, ground: false, lean: { axis: "y", dir: out }, of: b.id });
+              hardware.braces += 1;
+            }
           }
         }
       }

@@ -2,7 +2,8 @@
 // leaves the deck; the roof's pitch is a handle at the peak; a resize settles the member picks to the tables.
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-studio-smart.check.ts
 import { applyDeckPatch, deckChecks } from "../../src/lib/deck/checks";
-import { defaultDeckDesign } from "../../src/lib/deck/design";
+import { defaultDeckDesign, defaultStair } from "../../src/lib/deck/design";
+import { priceStructure } from "../../src/lib/deck/pricing";
 import { deckScene } from "../../src/lib/deck/scene";
 import { buildStructure } from "../../src/lib/deck/structure";
 import { AUTO_FIX, resizes, roofResizes, settleDesign } from "../../src/lib/deck/settle";
@@ -61,6 +62,20 @@ check("the engine itself re-sizes a 2x6 deck grown to 16 ft deep: a middle beam,
 const happy = settleDesign(base);
 check("a design the tables are happy with is left alone", happy.fixes.length === 0 && happy.design === base);
 check("a resize is a shape, a height, a level, a placement, a floor or a structure change", resizes({ shape: base.shape }) && resizes({ heightIn: 40 }) && !resizes({ photo: null }) && roofResizes({ pitch: 6 }) && !roofResizes({ roofing: "metal-panel" }));
+
+// ── the stairs' width: a knob on the flight's far side; the stringers, treads and the price re-count from it
+const withStair = (ft: number) => applyDeckPatch(base, { stairs: [{ ...defaultStair("s1", "front", 8), widthFt: ft }] });
+const s4 = buildStructure(withStair(4));
+const s8 = buildStructure(withStair(8));
+const wk = deckScene(s4).handles.find((h) => h.kind === "stair-width");
+const st4 = s4.stairs[0];
+check("a front stair carries a width knob on its far side, half-way down, along the house", !!wk && wk.axis === "x" && wk.value === 4 && !!st4 && Math.abs(wk.x - (st4.footprint[1].x + st4.footprint[2].x) / 2 / 12) < 0.01 && wk.z < s4.frame!.surfaceIn / 12 && wk.z > 0, JSON.stringify(wk));
+check("…a wrap of box steps has none", !deckScene(buildStructure(applyDeckPatch(base, { heightIn: 18, stairs: [{ ...defaultStair("s1", "front", 8), wrap: true }] }))).handles.some((h) => h.kind === "stair-width"));
+const bom = (s: ReturnType<typeof buildStructure>) => priceStructure(s).bom.filter((l) => l.step === "stairs");
+const stringers = (s: ReturnType<typeof buildStructure>) => bom(s).find((l) => /stringer/i.test(l.label) && !/connector/i.test(l.label))?.qty ?? 0;
+const treads = (s: ReturnType<typeof buildStructure>) => bom(s).filter((l) => /tread|riser/i.test(l.label)).reduce((a, l) => a + l.qty, 0);
+const total = (s: ReturnType<typeof buildStructure>) => priceStructure(s).subtotal;
+check("stairs widened 4 → 8 ft: more stringers (16 in. apart), more tread and riser stock, a higher price", s8.stairs[0].stringers.count > st4.stringers.count && stringers(s8) > stringers(s4) && treads(s8) > treads(s4) && total(s8) > total(s4), `${st4.stringers.count} → ${s8.stairs[0].stringers.count} stringers · stringer stock ${stringers(s4)} → ${stringers(s8)} · treads+risers ${treads(s4)} → ${treads(s8)} · $${total(s4)} → $${total(s8)}`);
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

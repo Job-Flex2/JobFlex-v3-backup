@@ -683,8 +683,11 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const ax = new THREE.Vector3();
       const ay = new THREE.Vector3();
       const az = new THREE.Vector3();
+      // The wiring is priced and listed, never drawn: a cable hanging through the frame reads as a mistake, not a feature
+      // (owner, 2026-10-10: "don't show those wires — show the features and price it out").
+      mount.dataset.deck3dWires = s.boxes.some((b) => b[0] === WIRE) ? "hidden" : "none";
       for (let L = 0; L < LAYER_COUNT; L++) {
-        if (L === FOOTING) continue;
+        if (L === FOOTING || L === WIRE) continue;
         const idx: number[] = [];
         s.boxes.forEach((b, i) => {
           if (b[0] === L && b[7] === 0) idx.push(i);

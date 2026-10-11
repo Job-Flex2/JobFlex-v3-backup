@@ -28,8 +28,15 @@ export interface PlanEdgeHit {
 
 const FIXTURE_MARK: Record<string, string> = { "led-strip": "L", "post-cap": "c", "step-light": "s", "string-light": "S", sconce: "W", "ceiling-light": "L", chandelier: "C", fan: "F", outlet: "O", heater: "H", flood: "F" };
 
-export function DeckPlan({ structure, placing = null, onPlaceStair }: { structure: DeckStructure; placing?: "stair" | null; onPlaceStair?: (hit: PlanEdgeHit) => void }) {
-  const { frame, roof } = structure;
+/**
+ * `show`: "all" (the studio), "floor" (the permit set's floor framing plan: no roof over it, the posts and footings
+ * named) or "roof" (the roof framing plan alone, the deck as a faint outline under it).
+ */
+export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all" }: { structure: DeckStructure; placing?: "stair" | null; onPlaceStair?: (hit: PlanEdgeHit) => void; show?: "all" | "floor" | "roof" }) {
+  const { frame: frameIn, roof: roofIn } = structure;
+  const frame = show === "roof" ? null : frameIn;
+  const roof = show === "floor" ? null : roofIn;
+  const outlineOnly = show === "roof" ? frameIn : null;
   const levels = structureLevels(structure);
   const svgRef = React.useRef<SVGSVGElement>(null);
   const eave = roof?.eaveRing ?? [];
@@ -41,7 +48,7 @@ export function DeckPlan({ structure, placing = null, onPlaceStair }: { structur
   const maxY = Math.max(...ys, 48);
   const size = Math.max(maxX - minX, maxY - minY);
   const font = Math.max(9, size / 34);
-  const pad = font * 5.5;
+  const pad = font * (show === "floor" ? 9 : 5.5);
   const onHouse = frame ? frame.design.placement !== "detached" : roof?.attach === "wall";
   const houseBand = font * 2.2;
   const lw = Math.max(0.8, size / 260);
@@ -106,6 +113,13 @@ export function DeckPlan({ structure, placing = null, onPlaceStair }: { structur
           const d = p.size === "4x6" ? 5.5 : w;
           return <rect key={p.id} x={p.x + ox - w / 2} y={p.y + oy - d / 2} width={w} height={d} fill="var(--ink)" />;
         })}
+        {show === "floor"
+          ? f.posts.filter((p) => !p.roof).map((p) => (
+              <text key={`pn${p.id}`} x={p.x + ox + (p.size === "8x8" ? 3.75 : p.size === "6x6" ? 2.75 : 1.75) + font * 0.25} y={p.y + oy + font * 1.15} fontSize={font * 0.7} className={s.planNote}>
+                {p.id}
+              </text>
+            ))
+          : null}
         <polygon points={outline} fill="none" stroke="var(--ink)" strokeWidth={lw * 2.2} />
         {f.beams.map((b) => (
           <text key={`bt${b.id}`} x={b.x0 + ox + font * 0.6} y={b.y + oy - b.spec.thickIn / 2 - font * 0.45} fontSize={font * 0.9} className={s.planNote}>
@@ -148,10 +162,11 @@ export function DeckPlan({ structure, placing = null, onPlaceStair }: { structur
           HOUSE
         </text>
       ) : null}
-      {/* The deck's levels. */}
-      {levels.map((l) => levelDrawing(l.frame, l.offsetXIn, l.offsetYIn, l.id === "lower"))}
+      {/* The deck's levels — or, on the roof plan, just its outline. */}
+      {outlineOnly ? <polygon points={shapeOutline(outlineOnly.design.shape).map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="var(--muted-light)" strokeWidth={lw * 1.4} strokeDasharray={`${lw * 6} ${lw * 4}`} /> : null}
+      {frame ? levels.map((l) => levelDrawing(l.frame, l.offsetXIn, l.offsetYIn, l.id === "lower")) : null}
       {/* The stairs: the footprint and every tread line. */}
-      {structure.stairs.map((st) => {
+      {(show === "roof" ? [] : structure.stairs).map((st) => {
         const pts = st.footprint.map((p) => `${p.x},${p.y}`).join(" ");
         const treads = st.members.filter((m) => m.role === "tread" || m.role === "box-tread" || m.role === "landing-tread");
         return (
@@ -170,7 +185,7 @@ export function DeckPlan({ structure, placing = null, onPlaceStair }: { structur
         );
       })}
       {/* The rail: a line just inside the edge, a square at every post. */}
-      {structure.rails.on ? (
+      {structure.rails.on && show !== "roof" ? (
         <g className={s.planRail}>
           {structure.rails.segments.map((sg, i) => (
             <line key={i} x1={sg.x0} y1={sg.y0} x2={sg.x1} y2={sg.y1} stroke="var(--ink)" strokeWidth={lw * 2.6} strokeLinecap="butt" opacity={0.75} />
@@ -205,9 +220,19 @@ export function DeckPlan({ structure, placing = null, onPlaceStair }: { structur
           {roof.posts.filter((p) => p.footing).map((p) => (
             <circle key={`rf${p.id}`} cx={p.x} cy={p.y} r={(p.footing?.padIn ?? 12) / 2} fill="none" stroke="var(--muted)" strokeWidth={lw} strokeDasharray={`${lw * 3} ${lw * 2}`} />
           ))}
-          <text x={roof.centreX} y={roof.centreY + font * 0.35} fontSize={font * 0.95} textAnchor="middle" className={s.planNote}>
+          <text x={roof.centreX} y={roof.centreY + font * (show === "roof" ? -0.6 : 0.35)} fontSize={font * (show === "roof" ? 0.8 : 0.95)} textAnchor="middle" className={s.planNote}>
             {roofNote}
           </text>
+          {show === "roof" ? (
+            <text x={roof.centreX} y={roof.centreY + font * 0.5} fontSize={font * 0.8} textAnchor="middle" className={s.planNote}>
+              {`${roof.kind} ${roof.roof.pitch}:12 · ${ftIn(roof.roof.overhangIn)} overhang`}
+            </text>
+          ) : null}
+          {show === "roof" && roof.ridge ? (
+            <text x={roof.centreX} y={roof.centreY + font * 1.6} fontSize={font * 0.8} textAnchor="middle" className={s.planNote}>
+              {`${roof.ridge.kind === "beam" ? `${roof.ridge.spec?.size ?? roof.ridge.nominal} ridge beam` : `${roof.ridge.nominal} ridge board`} · ${ftIn(roof.ridge.lengthIn)}`}
+            </text>
+          ) : null}
           {roof.headers[0] ? (
             <text x={roof.headers[0].x0 + font * 0.6} y={roof.headers[0].y0 - font * 0.6} fontSize={font * 0.85} className={s.planNote}>
               {`${[...new Set(roof.headers.map((h) => h.spec.size))].join("/")} headers · ${roof.posts.length} posts`}
@@ -216,7 +241,7 @@ export function DeckPlan({ structure, placing = null, onPlaceStair }: { structur
         </g>
       ) : null}
       {/* Fixtures: amber marks with a letter. */}
-      {structure.electrical.on ? (
+      {structure.electrical.on && show !== "roof" ? (
         <g className={s.planFixtures}>
           {structure.electrical.fixtures.map((fx) =>
             fx.kind === "led-strip" || fx.kind === "string-light" ? (
@@ -243,6 +268,21 @@ export function DeckPlan({ structure, placing = null, onPlaceStair }: { structur
         <line x1={dimX - font * 0.6} y1={maxY} x2={dimX + font * 0.6} y2={maxY} strokeWidth={lw} />
         <text x={dimX + font * 0.9} y={(minY + maxY) / 2} fontSize={font} transform={`rotate(90 ${dimX + font * 0.9} ${(minY + maxY) / 2})`} textAnchor="middle">{ftIn(maxY - minY)}</text>
       </g>
+      {/* The floor plan's key: every post mark with its size and footing, grouped. */}
+      {show === "floor" && frame
+        ? (() => {
+            const groups = new Map<string, string[]>();
+            for (const l of levels) for (const p of l.frame.posts.filter((pp) => !pp.roof)) {
+              const key = `${p.size} posts on ${p.footing.type === "poured" ? `${p.footing.padIn}-in. poured footings, ${p.footing.depthIn} in. deep` : `${p.footing.padIn}-in. pier blocks`}`;
+              groups.set(key, [...(groups.get(key) ?? []), p.id]);
+            }
+            return [...groups.entries()].map(([key, ids], i) => (
+              <text key={key} x={minX} y={maxY + font * (6 + i * 1.1)} fontSize={font * 0.75} className={s.planNote}>
+                {`${ids.join(", ")}: ${key}`}
+              </text>
+            ));
+          })()
+        : null}
       {placing ? (
         <text x={(minX + maxX) / 2} y={minY - pad * 0.45 - (onHouse ? houseBand : 0)} fontSize={font * 1.1} textAnchor="middle" className={s.planNote}>
           Click an open edge to put the stairs there

@@ -442,6 +442,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         case "stair":
           setStairs((list) => list.map((st) => (st.id === e.id ? { ...st, atFt: Math.max(st.widthFt / 2, toHalfFt(e.value)) } : st)));
           break;
+        case "stair-width": {
+          // The knob sits on the far side: the near side stays put, so the stairs grow (or shrink) under the knob.
+          const w2 = Math.min(STAIR_LIMITS.widthFt.max, Math.max(STAIR_LIMITS.widthFt.min, toHalfFt(e.value)));
+          setStairs((list) => list.map((st) => (st.id === e.id ? { ...st, widthFt: w2, atFt: Math.max(w2 / 2, Math.round((st.atFt + (w2 - st.widthFt) / 2) * 4) / 4) } : st)));
+          break;
+        }
         case "pitch": {
           // The knob at the peak: whole pitches only, from the list the studio offers.
           const v = Math.min(ROOF_LIMITS.pitch.max, Math.max(ROOF_LIMITS.pitch.min, Math.round(e.value)));
@@ -1025,7 +1031,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                 {editing && !placing ? (
                   <div className={s.placeBanner} data-deck-editing>
-                    <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge. Everything re-frames and re-prices as you drag.</span>
+                    <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge and its width at its side. Everything re-frames and re-prices as you drag.</span>
                     <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setEditing(false)}>Done</button>
                   </div>
                 ) : null}

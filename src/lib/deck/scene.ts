@@ -122,7 +122,7 @@ export const SCENE_MAX_GLOWS = 120;
 
 /** A handle: dragging it along `axis` (scene feet) changes `kind` from `value` by the distance dragged. */
 export interface SceneHandle {
-  kind: "width" | "depth" | "height" | "eave" | "stair" | "lower-depth" | "roof-width" | "roof-depth" | "pitch";
+  kind: "width" | "depth" | "height" | "eave" | "stair" | "stair-width" | "lower-depth" | "roof-width" | "roof-depth" | "pitch";
   id: string;
   x: number;
   y: number;
@@ -788,7 +788,12 @@ export function deckScene(s: DeckStructure): DeckScene {
   for (const st of s.stairs) {
     const [a, b] = st.footprint;
     if (!a || !b) continue;
-    handles.push({ kind: "stair", id: st.design.id, x: r3((a.x + b.x) / 2), y: r3((a.y + b.y) / 2), z: r3((st.level === "lower" && s.lower ? s.lower.frame.surfaceIn : frame?.surfaceIn ?? 0) + 2), axis: st.design.side === "front" ? "x" : "y", value: st.design.atFt, perUnit: 1, label: `Stairs along the ${st.design.side}` });
+    const top = (st.level === "lower" && s.lower ? s.lower.frame.surfaceIn : frame?.surfaceIn ?? 0) + 2;
+    handles.push({ kind: "stair", id: st.design.id, x: r3((a.x + b.x) / 2), y: r3((a.y + b.y) / 2), z: r3(top), axis: st.design.side === "front" ? "x" : "y", value: st.design.atFt, perUnit: 1, label: `Stairs along the ${st.design.side}` });
+    // The width: a knob on the flight's far side, half-way down — drag it along the edge and the stairs widen that way
+    // (the stringers, treads, risers, rail and the pad all re-count from the width).
+    const c = st.footprint[2];
+    if (st.kind === "flight" && c) handles.push({ kind: "stair-width", id: st.design.id, x: r3((b.x + c.x) / 2), y: r3((b.y + c.y) / 2), z: r3(top - st.riseIn / 2), axis: st.design.side === "front" ? "x" : "y", value: st.design.widthFt, perUnit: 1, label: "Stair width" });
   }
   return {
     v: DECK_SCENE_VERSION,

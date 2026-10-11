@@ -15,6 +15,8 @@ import { ftIn, RULE } from "@/lib/deck/codeTables";
 import { RULE_RAFTER } from "@/lib/deck/roofTables";
 import { STAIR_RULES } from "@/lib/deck/stairs";
 import { DeckPlan } from "@/components/v3/deck-estimator-blueprint/deck-plan";
+import { detailDrawings, materialSchedule, permitPages, sectionDrawing } from "@/lib/deck/permit";
+import { DrawingSvg } from "./deck-sections";
 import s from "./deck-permit.module.css";
 
 const DECK_LAYERS = new Set(["post", "beam", "rim", "fascia", "decking", "ledger", "slab", "stair"]);
@@ -44,11 +46,16 @@ export function DeckPermitSheet({ design, address, title, shop }: { design: Deck
   const { structure, pkg, checks, elevation } = built;
   const { frame, roof } = structure;
   const what = structureWords(design);
-  const pages: Array<{ no: string; name: string }> = [{ no: "A1", name: "Framing plan" }, { no: "A2", name: "Front elevation" }, { no: "S1", name: "Schedules" }, { no: "S2", name: "Notes and checks" }];
+  // The set: a plan for each level of structure, the elevation, the section, the details, the schedules, the notes (lib/deck/permit).
+  const pages = permitPages(structure);
+  const pageNo = (kind: (typeof pages)[number]["kind"]) => pages.find((p) => p.kind === kind)?.no ?? "";
+  const section = sectionDrawing(structure);
+  const details = detailDrawings(structure);
+  const materials = materialSchedule(pkg);
   const head = (no: string, name: string) => (
     <div className={s.head}>
       <div>
-        <div className={s.sheetNo}>{no} · {name} · {pages.length} sheets</div>
+        <div className={s.sheetNo}>{no} · {name} · sheet {Math.max(1, pages.findIndex((p) => p.no === no) + 1)} of {pages.length}</div>
         <div className={s.title}>{what}</div>
         <div className={s.sub}>{address ? `${address} · ` : ""}{title !== "Deck" ? `${title} · ` : ""}{today}</div>
       </div>
@@ -85,18 +92,31 @@ export function DeckPermitSheet({ design, address, title, shop }: { design: Deck
           <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => window.print()}>Print / save as PDF</button>
         </div>
 
-        {/* A1 — the framing plan */}
-        <section className={s.page} data-permit-page="A1">
-          {head("A1", "Framing plan")}
-          <div className={s.drawing}>
-            <DeckPlan structure={structure} />
-          </div>
-          {foot(`Scale as drawn · ${frame ? `${frame.joistSize} joists @ ${frame.spacingIn} in. · ${[...new Set(frame.beams.map((b) => b.spec.size))].join(", ")} beams · ${posts.length} posts` : roof ? `${roof.posts.length} posts · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in.` : ""}`)}
-        </section>
+        {/* The floor framing plan — the deck's own structure, nothing over it */}
+        {frame ? (
+          <section className={s.page} data-permit-page={pageNo("floor")} data-permit-kind="floor">
+            {head(pageNo("floor"), "Floor framing plan")}
+            <div className={s.drawing}>
+              <DeckPlan structure={structure} show="floor" />
+            </div>
+            {foot(`Scale as drawn · ${frame.joistSize} joists @ ${frame.spacingIn} in. · ${[...new Set(frame.beams.map((b) => b.spec.size))].join(", ")} beams · ${posts.length} posts on ${posts[0]?.footing.type === "poured" ? "poured footings" : "pier blocks"}${frame.ledgers.length ? " · ledger on the house" : ""}`)}
+          </section>
+        ) : null}
 
-        {/* A2 — the front elevation */}
-        <section className={s.page} data-permit-page="A2">
-          {head("A2", "Front elevation, from the yard")}
+        {/* The roof framing plan — the roof alone, the deck as an outline under it */}
+        {roof ? (
+          <section className={s.page} data-permit-page={pageNo("roof")} data-permit-kind="roof">
+            {head(pageNo("roof"), roof.kind === "pergola" ? "Pergola framing plan" : "Roof framing plan")}
+            <div className={s.drawing}>
+              <DeckPlan structure={structure} show="roof" />
+            </div>
+            {foot(`${roof.kind} ${roof.roof.pitch}:12 · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. · ${[...new Set(roof.headers.map((h) => h.spec.size))].join(", ")} headers · ${roof.posts.length} posts${roof.attach === "wall" ? " and a ledger on the house" : ""}`)}
+          </section>
+        ) : null}
+
+        {/* The front elevation */}
+        <section className={s.page} data-permit-page={pageNo("elevation")} data-permit-kind="elevation">
+          {head(pageNo("elevation"), "Front elevation, from the yard")}
           <div className={s.drawing}>
             <svg className={s.elev} viewBox={vb} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`Front elevation, ${fmt(E.widthFt)} wide, ${fmt(E.heightFt)} high`}>
               <g className={s.deck}>
@@ -127,8 +147,38 @@ export function DeckPermitSheet({ design, address, title, shop }: { design: Deck
           {foot(`${fmt(E.widthFt)} wide, ${fmt(E.heightFt)} to the top${structure.gradePct ? ` · the ground falls ${structure.gradePct}% under the deck` : ""}`)}
         </section>
 
-        {/* S1 — schedules */}
-        <section className={s.page} data-permit-page="S1">
+        {/* The section through the deck */}
+        {section ? (
+          <section className={s.page} data-permit-page={pageNo("section")} data-permit-kind="section">
+            {head(pageNo("section"), "Section through the deck")}
+            <div className={s.drawing}>
+              <DrawingSvg drawing={section} label="Section through the deck: the ledger, the joist, the beam, the post and the footing against the grade and the frost line" />
+            </div>
+            {foot(`Looking along the house · frost ${design.frostIn} in. · soil ${design.soilPsf.toLocaleString("en-US")} psf · ${design.loadPsf} psf design load`)}
+          </section>
+        ) : null}
+
+        {/* The details and the lateral connections */}
+        <section className={s.page} data-permit-page={pageNo("details")} data-permit-kind="details">
+          {head(pageNo("details"), "Details and lateral connections")}
+          <div className={s.details}>
+            {details.map((dt, i) => (
+              <div key={i} className={s.detail} data-permit-detail={dt.title}>
+                <div className={s.detailTitle}>{`${i + 1} · ${dt.title}`}</div>
+                <DrawingSvg drawing={dt.drawing} label={dt.title} className={s.dwDetail} fontScale={1.35} />
+                <ol className={s.notes}>
+                  {dt.notes.map((n, k) => (
+                    <li key={k}>{n}</li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+          {foot(`${details.length} details · every fastener and footing from the same tables the schedules cite`)}
+        </section>
+
+        {/* S1 — schedules and materials */}
+        <section className={s.page} data-permit-page="S1" data-permit-kind="schedules">
           {head("S1", "Schedules")}
           <div>
             {frame ? (
@@ -208,9 +258,30 @@ export function DeckPermitSheet({ design, address, title, shop }: { design: Deck
           {foot(`Design load ${design.loadPsf} psf · soil ${design.soilPsf.toLocaleString("en-US")} psf · frost ${design.frostIn} in.${design.site.groundSnowPsf ? ` · ground snow ${design.site.groundSnowPsf} psf` : ""}`)}
         </section>
 
-        {/* S2 — notes and checks */}
-        <section className={s.page} data-permit-page="S2">
-          {head("S2", "Notes and code checks")}
+        {/* S2 — the materials, as the yard counts them */}
+        <section className={s.page} data-permit-page="S2" data-permit-kind="materials">
+          {head("S2", "Materials")}
+          <div>
+            <table className={s.table} data-permit-materials>
+              <thead><tr><th>Item</th><th className={s.r}>Quantity</th><th>Note</th></tr></thead>
+              <tbody>
+                {materials.map((g) => (
+                  <React.Fragment key={g.step}>
+                    <tr><td colSpan={3} className={s.matGroup}>{g.label}</td></tr>
+                    {g.lines.map((l, i) => (
+                      <tr key={i}><td>{l.label}{l.byClient ? " (by the client)" : ""}</td><td className={s.r}>{l.qty.toLocaleString("en-US")} {l.unit}</td><td className={s.rule}>{l.note ?? ""}</td></tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {foot(`${pkg.bom.length} material lines in ${materials.length} steps · quantities before waste where the note says so · the client's own fixtures marked`)}
+        </section>
+
+        {/* S3 — notes and checks */}
+        <section className={s.page} data-permit-page="S3" data-permit-kind="notes">
+          {head("S3", "Notes and code checks")}
           <div className={s.two}>
             <div>
               <div className={s.h2}>General notes</div>

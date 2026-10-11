@@ -1037,6 +1037,26 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
 
   // A free shed's back posts are taller: the back header sits up at the top of the slope.
   const shedRise = kind === "shed" && !wall ? (y1 - y0) * slope : 0;
+  /** A header's top at a point along it: level, or riding up a free shed's slope. */
+  const headerTopAt = (y: number) => headerTopIn + (kind === "shed" && !wall ? (y1 - Math.min(Math.max(y, y0), y1)) * slope : 0);
+  /** The headers that bear on a point: the ones that end there, or run over it between their ends. */
+  const headersAt = (x: number, y: number) =>
+    headers.filter((h) => {
+      if ((Math.abs(h.x0 - x) < 0.5 && Math.abs(h.y0 - y) < 0.5) || (Math.abs(h.x1 - x) < 0.5 && Math.abs(h.y1 - y) < 0.5)) return true;
+      const L = h.lengthIn || 1;
+      const t = ((x - h.x0) * (h.x1 - h.x0) + (y - h.y0) * (h.y1 - h.y0)) / (L * L);
+      if (t <= 0 || t >= 1) return false;
+      return Math.hypot(h.x0 + (h.x1 - h.x0) * t - x, h.y0 + (h.y1 - h.y0) * t - y) < 0.5;
+    });
+  /**
+   * The underside of what a post carries: the headers' TOPS line up for the rafters, so the deepest header through the
+   * post sets its top (a 2x8 gable-end header beside 2x12 eaves rides 4 in. higher; a post under it alone is taller).
+   */
+  const undersideAt = (x: number, y: number) => {
+    const mine = headersAt(x, y);
+    if (!mine.length) return headerBottomIn + (kind === "shed" && !wall && Math.abs(y - y0) < 0.01 ? shedRise : 0);
+    return Math.min(...mine.map((h) => headerTopAt(y) - h.spec.depthIn));
+  };
 
   // All posts: corners and the ones the headers needed.
   const allPostPts: Array<{ x: number; y: number; corner: boolean }> = [...cornerPosts.map((p) => ({ x: p.x, y: p.y, corner: true })), ...extraPosts.map((p) => ({ x: p.x, y: p.y, corner: false }))];
@@ -1045,7 +1065,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   let postBeyond = false;
   let postSpliced = false;
   allPostPts.forEach((p, i) => {
-    const topIn = headerBottomIn + (kind === "shed" && !wall && Math.abs(p.y - y0) < 0.01 ? shedRise : 0);
+    const topIn = undersideAt(p.x, p.y);
     const loadLb = Math.round(shareLb * (p.corner ? 1 : 1.3));
     const tributarySqFt = Math.round((loadLb / 50) * 10) / 10;
     const maxHeightIn = postMaxHeightIn(40, group, r.post, Math.min(160, tributarySqFt));
@@ -1386,7 +1406,11 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
         const P = { x: ridgeFrom.x + (ridgeTo.x - ridgeFrom.x) * t, y: ridgeFrom.y + (ridgeTo.y - ridgeFrom.y) * t };
         const px = Math.min(Math.max(P.x, x0 + 2), x1 - 2);
         const py = Math.min(Math.max(P.y, y0 + 2), y1 - 2);
-        members.push({ role: "tie", nominal: "2x6", lengthIn: across, cx: Math.abs(Math.sin(yaw)) > 0.5 ? (x0 + x1) / 2 : px, cy: Math.abs(Math.sin(yaw)) > 0.5 ? py : (y0 + y1) / 2, cz: headerTopIn + heel + 2.75, sx: across, sy: THICK_2X_IN, sz: 5.5, yaw: tieYaw, tilt: 0, x0: px, y0: py, x1: px, y1: py });
+        // It rests on the headers, side-nailed to the rafters, and stays under them: each end tucks in to where the
+        // rafter's underside clears a 2x6 (a tie run to the header's centre poked up through the roof at the eaves).
+        const tuck = Math.min(across / 4, (5.5 - heel) / Math.max(slope, 0.08) + 2.5);
+        const run = across - 2 * tuck;
+        members.push({ role: "tie", nominal: "2x6", lengthIn: Math.round(run), cx: Math.abs(Math.sin(yaw)) > 0.5 ? (x0 + x1) / 2 : px, cy: Math.abs(Math.sin(yaw)) > 0.5 ? py : (y0 + y1) / 2, cz: headerTopIn + 2.75, sx: run, sy: THICK_2X_IN, sz: 5.5, yaw: tieYaw, tilt: 0, x0: px, y0: py, x1: px, y1: py });
       }
     }
   }
@@ -1519,7 +1543,9 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
           const ex = p.x + u.x * d * (BRACE_LEG_IN / 2);
           const ey = p.y + u.y * d * (BRACE_LEG_IN / 2);
           const yaw = Math.atan2(u.y * d, u.x * d);
-          members.push({ role: "roof-brace", nominal: "4x4", lengthIn: L, cx: ex, cy: ey, cz: p.topIn - BRACE_LEG_IN / 2, sx: L, sy: 3.5, sz: 3.5, yaw, tilt: Math.PI / 4, x0: p.x, y0: p.y, x1: p.x + u.x * d * BRACE_LEG_IN, y1: p.y + u.y * d * BRACE_LEG_IN });
+          // Its top lands on THIS header's underside where the brace meets it (a shallower header rides higher than the post's top).
+          const under = headerTopAt(p.y + u.y * d * BRACE_LEG_IN) - h.spec.depthIn;
+          members.push({ role: "roof-brace", nominal: "4x4", lengthIn: L, cx: ex, cy: ey, cz: under - BRACE_LEG_IN / 2, sx: L, sy: 3.5, sz: 3.5, yaw, tilt: Math.PI / 4, x0: p.x, y0: p.y, x1: p.x + u.x * d * BRACE_LEG_IN, y1: p.y + u.y * d * BRACE_LEG_IN });
           braces++;
         }
       }
