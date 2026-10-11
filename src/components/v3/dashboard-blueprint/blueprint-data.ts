@@ -63,7 +63,19 @@ export type LeadProfileGap = {
   needsCompany: boolean;
   needsAddress: boolean;
   needsTrades: boolean;
+  /** The company name is still the passwordless sign-up's stand-in (lib/orgName). */
+  needsName?: boolean;
 };
+
+/** Only the name is missing: the banner speaks of clients, not leads. */
+export function leadProfileNameOnly(gap: LeadProfileGap): boolean {
+  return Boolean(gap.needsName) && !gap.needsAddress && !gap.needsTrades;
+}
+
+/** "Complete your profile" opens the company page — on the name field when that is missing. */
+export function leadProfileHref(gap: LeadProfileGap): string {
+  return gap.needsName ? "/dashboard/company#company-name" : "/dashboard/company";
+}
 
 /**
  * "your company details, your business address and the trades you take" — the
@@ -73,7 +85,8 @@ export type LeadProfileGap = {
  */
 export function leadProfileMissing(gap: LeadProfileGap): string {
   const parts: string[] = [];
-  if (gap.needsCompany) parts.push("your company details");
+  if (gap.needsName) parts.push("your company name");
+  else if (gap.needsCompany) parts.push("your company details");
   if (gap.needsAddress) parts.push("your business address");
   if (gap.needsTrades) parts.push("the trades you take");
   if (parts.length < 2) return parts[0] ?? "";

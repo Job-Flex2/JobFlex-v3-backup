@@ -76,6 +76,8 @@ import { getDashboardData } from "@/app/dashboard/dashboard-actions";
 import { updateLeadStatus } from "@/actions/leads";
 import {
   leadProfileMissing,
+  leadProfileNameOnly,
+  leadProfileHref,
   type BoardLead,
   type DashboardData,
 } from "@/components/v3/dashboard-blueprint/blueprint-data";
@@ -920,15 +922,17 @@ function DashboardView({ data, notice }: { data: DashboardData; notice?: React.R
             >
               <Icon id="i-pin" className={`${styles.ic} ${styles.bannerPin}`} />
               <div className={styles.bannerBody}>
-                <div className={styles.bannerKicker}>Lead Center</div>
+                <div className={styles.bannerKicker}>{leadProfileNameOnly(gap) ? "Company" : "Lead Center"}</div>
                 <div className={styles.bannerTxt}>
-                  Homeowner leads near you aren&apos;t reaching your shop yet — add {missingPiece} to
-                  start receiving them.
+                  {leadProfileNameOnly(gap)
+                    ? "Your company has no name yet — clients see your own name on proposals, emails and texts."
+                    : <>Homeowner leads near you aren&apos;t reaching your shop yet — add {missingPiece} to
+                  start receiving them.</>}
                 </div>
                 {/* Its own line, not a word inside the sentence: at 44px tall a
                     control inflates the line box it sits in and the paragraph
                     stops reading as a paragraph. */}
-                <Link className={styles.bannerLink} href={R.company}>
+                <Link className={styles.bannerLink} href={leadProfileHref(gap) as Route}>
                   Complete your profile
                   <Icon id="i-arrow" />
                 </Link>

@@ -124,6 +124,7 @@ import { setClientEmail } from "@/actions/clients";
 import type { ManualBuilderData } from "./manual-blueprint-load";
 import { useReveal } from "./use-reveal";
 import { useHandheld } from "./use-handheld";
+import { ensureCompanyName } from "@/components/company-name/company-name-gate";
 
 /**
  * The masthead chip. ONE state rather than a status enum plus a message,
@@ -510,6 +511,8 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
     // A brand-new proposal counts against the monthly cap; the dialog the shell
     // already mounts is what explains it.
     if (!savedId && !(await ensureWithinLimit("proposalsCreated"))) return;
+    // The first send to a client names the business first (lib/orgName).
+    if (opts?.sendAfter && !(await ensureCompanyName())) return;
 
     setBusy(opts?.sendAfter ? "send" : "save");
     setNote({ tone: "live", text: "Saving…" });

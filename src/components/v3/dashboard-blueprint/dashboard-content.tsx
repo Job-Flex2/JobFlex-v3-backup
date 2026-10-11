@@ -18,7 +18,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { WEEK_DAY_EVENT, initDashboardContent, initialWeekIso } from "./blueprint-behavior";
-import type { DashboardData } from "./blueprint-data";
+import { leadProfileHref, leadProfileNameOnly, type DashboardData } from "./blueprint-data";
 
 export function DashboardContent({ data }: { data: DashboardData }) {
   // The week strip is drawn imperatively, but the day it lands on has to reach
@@ -55,11 +55,17 @@ export function DashboardContent({ data }: { data: DashboardData }) {
             <use href="#i-pin" />
           </svg>
           <div className="banner-body">
-            <div className="banner-kicker">Lead Center</div>
+            <div className="banner-kicker">{leadProfileNameOnly(data.leadProfile) ? "Company" : "Lead Center"}</div>
             <div className="banner-txt">
-              Homeowner leads near you aren&apos;t reaching your shop yet — add{" "}
-              <span id="bannerMissing"></span> to start receiving them.{" "}
-              <Link className="banner-link" href="/dashboard/company">
+              {leadProfileNameOnly(data.leadProfile) ? (
+                <>Your company has no name yet — clients see your own name on proposals, emails and texts.{" "}</>
+              ) : (
+                <>
+                  Homeowner leads near you aren&apos;t reaching your shop yet — add{" "}
+                  <span id="bannerMissing"></span> to start receiving them.{" "}
+                </>
+              )}
+              <Link className="banner-link" href={leadProfileHref(data.leadProfile) as Route}>
                 Complete your profile
                 <svg className="ic">
                   <use href="#i-arrow" />

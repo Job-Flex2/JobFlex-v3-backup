@@ -82,6 +82,7 @@ import {
 } from "./proposals-data";
 import { chainsOf, chained, paidTier, type PaidTier } from "@/components/v3/proposals-blueprint/proposals-data";
 import { clientProposalUrl, proposalTextMessage, smsHref } from "@/lib/proposalLink";
+import { ensureCompanyName } from "@/components/company-name/company-name-gate";
 
 /**
  * VIEWS — what the contractor checks after sending (owner, 2026-09-20). A
@@ -723,6 +724,8 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
 
   async function runSend(p: ProposalRow) {
     if (writing) return;
+    // The first send to a client names the business first (lib/orgName).
+    if (!(await ensureCompanyName())) return;
     setWriting(true);
     try {
       await sendProposal(p.id);

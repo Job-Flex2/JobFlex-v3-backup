@@ -28,6 +28,7 @@ import { closeMdl, openMdl } from "@/components/v3/blueprint-shell/mdl-motion";
 import { joinAddress } from "./client-detail-data";
 import { ClampedName, Ic, cx } from "./cd-ui";
 import styles from "./client-detail.module.css";
+import { ensureCompanyName } from "@/components/company-name/company-name-gate";
 
 /** Where the two gates send the reader. Both are real routes. */
 const PHONE_ROUTE = "/dashboard/phone" as Route;
@@ -502,6 +503,8 @@ export function ClientMessageDialog({
 
   async function send() {
     if (busy || !clientId || !canSend) return;
+    // The first message to a client names the business first (lib/orgName).
+    if (!(await ensureCompanyName())) return;
     setBusy(true);
     setError(null);
     try {

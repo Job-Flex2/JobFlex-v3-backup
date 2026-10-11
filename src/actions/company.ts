@@ -9,6 +9,7 @@ import { loadTeamActivity } from "@/lib/teamActivity";
 import { toActivityEntries } from "@/components/v3/company-blueprint/company-data";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { isPageLocked, requirePage } from "@/lib/customPageAccess";
+import { clearOrgNameUnset } from "@/lib/orgName";
 
 const brandingInput = z.object({
   name: z.string().min(1).optional(),
@@ -28,10 +29,10 @@ export async function updateBranding(raw: unknown) {
   // Keep the Lead Center pin in sync — branding is the other surface that can
   // edit the org address (see updateLeadProfile for the same policy).
   const current =
-    data.address !== undefined
+    data.address !== undefined || data.name !== undefined
       ? await db.organization.findUnique({
           where: { id: organizationId },
-          select: { address: true, lat: true, lng: true },
+          select: { address: true, lat: true, lng: true, name: true },
         })
       : null;
   const addressChanged =
@@ -49,6 +50,10 @@ export async function updateBranding(raw: unknown) {
       ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }),
     },
   });
+
+  // A new name is the business named: the passwordless sign-up's stand-in
+  // (the owner's own name, lib/orgName) is no longer asked about.
+  if (data.name !== undefined && data.name.trim() !== (current?.name ?? "").trim()) await clearOrgNameUnset(organizationId);
 
   if (addressChanged || (data.address !== undefined && (current?.lat == null || current?.lng == null))) {
     await geocodeOrgAddress(organizationId, data.address ?? "", { gateOnFailure: false });

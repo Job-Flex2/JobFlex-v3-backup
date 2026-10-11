@@ -12,13 +12,15 @@ import { parseTradeTypes } from "@/lib/tradeTypes";
 export interface LeadSetupNeed {
   needsAddress: boolean;
   needsTrades: boolean;
+  /** The company name is still the passwordless sign-up's stand-in (lib/orgName, 2026-10-10). */
+  needsName: boolean;
   needs: boolean;
 }
 
-export function leadSetupNeedOf(org: { address: string | null; lat: number | null; lng: number | null; tradeTypesJson: string | null }): LeadSetupNeed {
+export function leadSetupNeedOf(org: { address: string | null; lat: number | null; lng: number | null; tradeTypesJson: string | null }, nameUnset = false): LeadSetupNeed {
   const needsAddress = !org.address?.trim() || org.lat == null || org.lng == null;
   const needsTrades = parseTradeTypes(org.tradeTypesJson).length === 0;
-  return { needsAddress, needsTrades, needs: needsAddress || needsTrades };
+  return { needsAddress, needsTrades, needsName: nameUnset, needs: needsAddress || needsTrades || nameUnset };
 }
 
 /** The shop's gap, or null when the shop is unknown (or the read fails: no ribbon is better than a crash). */

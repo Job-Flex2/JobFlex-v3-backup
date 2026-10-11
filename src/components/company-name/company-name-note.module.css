@@ -1,0 +1,9 @@
+/* The "Not set yet" line under the company name field (company-name-note.tsx).
+   Mounted in the desktop company page and the handheld identity sheet; reads
+   the global Blueprint tokens. */
+.note { display: block; margin-top: 7px; padding: 8px 10px; border-left: 3px solid var(--amber, #b88420); background: var(--amber-soft, #faf3e0); font-size: 12.5px; line-height: 1.45; color: var(--ink, #0a0a0a); }
+.note b { font-weight: 800; }
+.keep { display: inline-flex; align-items: center; min-height: 44px; vertical-align: middle; padding: 0; border: 0; background: none; color: var(--ink, #0a0a0a); font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.keep:focus-visible { outline: 2px solid var(--accent, #1854a0); outline-offset: 2px; }
+.keep[disabled] { opacity: 0.6; cursor: default; }
+.err { color: var(--rose, #a83232); font-weight: 700; }

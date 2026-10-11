@@ -61,6 +61,8 @@ import {
   updateLanding,
   updateLeadProfile,
 } from "@/actions/company";
+import { CompanyNameNote } from "@/components/company-name/company-name-note";
+import { companyNameStatus } from "@/actions/companyName";
 import {
   ACT_CATS,
   ALL_CAT,
@@ -688,6 +690,19 @@ function CompanyBoard({ seed }: { seed: CompanySeed }) {
     setActPage(1);
   };
 
+  /* The passwordless sign-up's stand-in name (lib/orgName): said under the
+     field, and /dashboard/company#company-name opens the sheet on it. */
+  const [nameUnset, setNameUnset] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void companyNameStatus().then((st) => {
+      if (live) setNameUnset(st.unset);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   const openIdentity = () => {
     setForm({ ...identity });
     setNameErr(false);
@@ -697,6 +712,12 @@ function CompanyBoard({ seed }: { seed: CompanySeed }) {
     // fight the animation.
     window.setTimeout(() => nameRef.current?.focus(), prefersReducedMotion() ? 0 : 320);
   };
+  useEffect(() => {
+    if (window.location.hash !== "#company-name") return;
+    const t = window.setTimeout(() => openIdentity(), 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
+  }, []);
 
   const submitIdentity = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1615,6 +1636,7 @@ function CompanyBoard({ seed }: { seed: CompanySeed }) {
                 Enter the company name
               </span>
             ) : null}
+            {nameUnset ? <CompanyNameNote inputId="mcoName" unset /> : null}
           </div>
 
           <div className={`${styles.fld} ${emailErr ? styles.invalid : ""}`}>

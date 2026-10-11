@@ -20,6 +20,7 @@ import { parseTradeTypes } from "@/lib/tradeTypes";
 import { CompanyContent } from "@/components/v3/company-blueprint/company-content";
 import { toActivityEntries } from "@/components/v3/company-blueprint/company-data";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
+import { isOrgNameUnset } from "@/lib/orgName";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +51,10 @@ export default async function CompanyPage() {
     throw err;
   }
 
-  const [org, activity] = await Promise.all([
+  const [org, activity, nameUnset] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId } }),
     loadTeamActivity(organizationId, { take: 1000, since: activityWindowStart() }),
+    isOrgNameUnset(organizationId),
   ]);
   if (!org) notFound();
 
@@ -78,6 +80,7 @@ export default async function CompanyPage() {
       activity={toActivityEntries(activity.activities)}
       members={activity.members}
       canEdit={isOwnerOrManager(role)}
+      nameUnset={nameUnset}
     />
   );
 }

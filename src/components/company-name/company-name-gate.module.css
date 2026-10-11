@@ -1,0 +1,40 @@
+/* The one-field company-name prompt before the first send (company-name-gate.tsx).
+   Portalled to <body>, so it carries its own frame and reads the global
+   Blueprint tokens. A bottom sheet at ≤768px (the --msheet-* geometry), a
+   small framed panel above it. */
+
+.layer { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1000; display: grid; align-items: end; justify-items: center; font-family: var(--font-sans, Inter, system-ui, sans-serif); }
+.scrim { position: absolute; inset: 0; background: var(--msheet-scrim, rgba(10, 10, 10, 0.35)); opacity: 0; transition: opacity 0.2s var(--ease-out, ease); }
+.box {
+  position: relative; width: 100%; max-height: var(--msheet-max-h, 92%); overflow: auto;
+  padding: 26px var(--msheet-pad-x, 18px) calc(var(--msheet-foot-pad-y, 18px) + var(--msheet-safe-b, 0px));
+  background: var(--sheet, #fff); border-top: 2px solid var(--ink, #0a0a0a); color: var(--ink, #0a0a0a);
+  transform: translateY(100%); transition: transform 0.26s var(--ease-out, ease);
+}
+.on .scrim { opacity: 1; }
+.on .box { transform: none; }
+.grab { position: absolute; top: var(--msheet-grab-top, 10px); left: 50%; width: var(--msheet-grab-w, 44px); height: var(--msheet-grab-h, 3px); margin-left: calc(var(--msheet-grab-w, 44px) / -2); background: var(--ink-line, #d5d1c8); }
+.kick { margin: 0; font-family: var(--font-mono, monospace); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent, #1854a0); }
+.h { margin: 6px 0 0; font-size: 22px; font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; text-transform: uppercase; }
+.p { margin: 8px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-soft, #2a2a2a); }
+.fld { display: block; margin-top: 16px; }
+.lbl { display: block; margin-bottom: 7px; font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+.in { display: block; width: 100%; height: 48px; padding: 0 13px; border: 2px solid var(--ink, #0a0a0a); border-radius: var(--r-sm, 2px); background: #fff; font: inherit; font-size: 16px; color: var(--ink, #0a0a0a); }
+.in:focus { outline: none; box-shadow: 4px 4px 0 var(--ink, #0a0a0a); }
+.err { margin: 8px 0 0; font-size: 13px; font-weight: 700; color: var(--rose, #a83232); }
+.row { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin-top: 18px; }
+.ghost, .go { min-height: 48px; padding: 0 18px; border: 2px solid var(--ink, #0a0a0a); border-radius: var(--r-sm, 2px); font: inherit; font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.ghost { background: #fff; color: var(--ink, #0a0a0a); }
+.go { background: var(--accent, #1854a0); color: #fff; box-shadow: 3px 3px 0 var(--ink, #0a0a0a); }
+.ghost:focus-visible, .go:focus-visible { outline: 2px solid var(--accent, #1854a0); outline-offset: 2px; }
+.ghost[disabled], .go[disabled] { opacity: 0.55; cursor: default; }
+
+@media (min-width: 769px) {
+  .layer { align-items: center; }
+  .box { width: min(440px, calc(100vw - 48px)); border: 2px solid var(--ink, #0a0a0a); border-radius: var(--r-sm, 2px); padding: 22px 24px 22px; box-shadow: 6px 6px 0 var(--ink, #0a0a0a); transform: translateY(12px); opacity: 0; transition: transform 0.2s var(--ease-out, ease), opacity 0.2s var(--ease-out, ease); }
+  .on .box { transform: none; opacity: 1; }
+  .grab { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrim, .box { transition: none; }
+}

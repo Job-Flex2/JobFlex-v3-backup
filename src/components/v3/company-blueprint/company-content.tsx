@@ -26,6 +26,7 @@ import { initCompanyContent } from "./company-behavior";
 import type { ActivityEntry, CompanyOrgState, TeamMember } from "./company-data";
 import { CompanySprite } from "./sprite";
 import { LOGO_ACCEPT, LOGO_HINT } from "@/lib/logoClient";
+import { CompanyNameNote } from "@/components/company-name/company-name-note";
 
 export type CompanyContentProps = {
   org: CompanyOrgState;
@@ -34,9 +35,11 @@ export type CompanyContentProps = {
   /** False for the limited roles (worker / sales / estimator): the company
    *  actions are `requireManager`-guarded, so the sheet reads but can't save. */
   canEdit: boolean;
+  /** The name is the passwordless sign-up's stand-in (lib/orgName). */
+  nameUnset?: boolean;
 };
 
-export function CompanyContent({ org, activity, members, canEdit }: CompanyContentProps) {
+export function CompanyContent({ org, activity, members, canEdit, nameUnset = false }: CompanyContentProps) {
   // Server data reaches `init` through a ref, NOT through the callback's deps:
   // `useBlueprintContent` re-runs whenever `init` changes identity, and a re-run
   // tears the page down and replays the whole reveal cascade. The ref is never
@@ -99,7 +102,8 @@ export function CompanyContent({ org, activity, members, canEdit }: CompanyConte
               <div className="co-fields">
                 <label className="cf">
                   <span className="cf-lbl">Company name</span>
-                  <input className="cf-in" data-b="name" defaultValue={org.name} />
+                  <input className="cf-in" id="company-name" data-b="name" defaultValue={org.name} />
+                  <CompanyNameNote inputId="company-name" unset={nameUnset} canEdit={canEdit} />
                 </label>
                 <label className="cf">
                   <span className="cf-lbl">Billing email</span>

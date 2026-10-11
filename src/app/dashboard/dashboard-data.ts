@@ -21,6 +21,7 @@ import { parseTradeTypes } from "@/lib/tradeTypes";
 import { firstEstimateTarget } from "@/lib/firstEstimate";
 import { readCustomPages } from "@/lib/customPageAccess";
 import { actorsOf, whoOfEvent } from "@/lib/activityLog";
+import { isOrgNameUnset } from "@/lib/orgName";
 import {
   BOARD_STATUSES,
   activityIcon,
@@ -386,6 +387,10 @@ export async function buildDashboardData(): Promise<DashboardData> {
       PLACEHOLDER_ORG_NAME.test(leadProfileOrg.name.trim()) ||
       (isBlank(leadProfileOrg.phone) && isBlank(leadProfileOrg.website)));
 
+  // The passwordless sign-up names the shop after its owner until the owner
+  // names the business (lib/orgName): that alone raises the banner.
+  const needsName = leadProfileOrg != null && (await isOrgNameUnset(organizationId));
+
   return {
     greeting: "Good " + greetingFor(now) + " · " + MONTH_FMT.format(now) + " " + now.getDate(),
     viewer: {
@@ -403,7 +408,7 @@ export async function buildDashboardData(): Promise<DashboardData> {
     // `needsCompany` still only rides along in the sentence; it does not raise
     // the banner on its own.
     leadProfile:
-      needsTrades || needsAddress ? { needsCompany, needsAddress, needsTrades } : null,
+      needsTrades || needsAddress || needsName ? { needsCompany, needsAddress, needsTrades, needsName } : null,
     firstRun:
       firstRunOrg && estimatesSoFar === 0
         ? firstEstimateTarget(parseTradeTypes(firstRunOrg.tradeTypesJson), firstRunOrg.landingIndustry, firstRunOrg.pages)

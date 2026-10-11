@@ -57,6 +57,7 @@ import { clientChannels, messageClient, type ClientChannel } from "@/actions/cli
 import { loadClientBook } from "./client-book";
 import { AddToProjectSheet } from "@/components/v3/project-links/add-to-project-sheet";
 import { openAddToProject } from "@/components/v3/project-links/open-add-to-project";
+import { ensureCompanyName } from "@/components/company-name/company-name-gate";
 import {
   ALL,
   PAGE_SIZE,
@@ -600,6 +601,8 @@ export function MobileClients() {
 
   const sendMessage = async () => {
     if (sending || !msgId) return;
+    // The first message to a client names the business first (lib/orgName).
+    if (!(await ensureCompanyName())) return;
     setSending(true);
     setMsgErr(null);
     try {

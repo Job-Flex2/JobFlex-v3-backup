@@ -40,6 +40,7 @@
 // a page turn); a filter, a keystroke or a single-row change repaints silently,
 // and a row that LEAVES does so alone through leaveRow.
 
+import { ensureCompanyName } from "@/components/company-name/company-name-gate";
 import {
   bulkDeleteProposals,
   duplicateProposal,
@@ -1766,6 +1767,8 @@ export function initProposalsContent(
   async function confirmSend() {
     const p = byId(sendId);
     if (!p) return;
+    // The first send to a client names the business first (lib/orgName).
+    if (!(await ensureCompanyName())) return;
     setDlgError("#sendErr", null);
     setSaving($("#sendOk"), true, "Sending…", "");
     try {

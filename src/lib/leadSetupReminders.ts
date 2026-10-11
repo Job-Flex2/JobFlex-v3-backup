@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { leadSetupNeedOf } from "@/lib/leadSetup";
 import { buildLeadSetupReminder } from "@/lib/email/build/leadSetup";
 import { renderEmail } from "@/lib/email/renderEmail";
+import { orgNameUnsetKey } from "@/lib/orgName";
 
 const PREFIX = "leadSetupReminder:";
 const DAYS = 14;
@@ -30,8 +31,12 @@ export async function runLeadSetupReminderSweep(now = new Date()): Promise<{ sca
   const { appBaseUrl } = await import("@/lib/appUrl");
   const { sendEmail } = await import("@/lib/sdk/resend");
   const base = await appBaseUrl();
+  // The passwordless sign-up's shops still named after their owner (lib/orgName).
+  const unnamed = new Set(
+    (await db.syncState.findMany({ where: { key: { in: orgs.map((o) => orgNameUnsetKey(o.id)) } }, select: { key: true } }).catch(() => [])).map((r) => r.key),
+  );
   for (const org of orgs) {
-    const need = leadSetupNeedOf(org);
+    const need = leadSetupNeedOf(org, unnamed.has(orgNameUnsetKey(org.id)));
     if (!need.needs) continue;
     out.needing++;
     const to = org.memberships[0]?.user;
@@ -43,7 +48,7 @@ export async function runLeadSetupReminderSweep(now = new Date()): Promise<{ sca
       const count = typeof rec.count === "number" ? rec.count : 0;
       const lastAt = typeof rec.lastAt === "string" ? Date.parse(rec.lastAt) : NaN;
       if (count >= MAX_SENDS || (Number.isFinite(lastAt) && now.getTime() - lastAt < MIN_GAP_MS)) { out.skipped++; continue; }
-      const doc = buildLeadSetupReminder({ name: to.name, business: org.name, needsAddress: need.needsAddress, needsTrades: need.needsTrades, href: `${base}/dashboard/company`, nth: count + 1 });
+      const doc = buildLeadSetupReminder({ name: to.name, business: org.name, needsAddress: need.needsAddress, needsTrades: need.needsTrades, needsName: need.needsName, href: `${base}/dashboard/company${need.needsName ? "#company-name" : ""}`, nth: count + 1 });
       const { subject, html } = renderEmail(doc);
       await sendEmail({ to: to.email, subject, html });
       const cursor = JSON.stringify({ count: count + 1, lastAt: now.toISOString() });
