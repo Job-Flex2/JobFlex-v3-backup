@@ -42,6 +42,8 @@ import { toast } from "@/components/ui/Toast";
 import { checkEmailAvailable, completeCompanySetup } from "@/actions/auth";
 import type { GooglePrefill, SetupPrefill } from "@/app/(auth)/auth/register/register-responsive";
 import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
+import { isEditionPlan, type EditionId } from "@/lib/editions";
+import { annualDeal, dealWords } from "@/lib/planDeal";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
@@ -126,6 +128,7 @@ export function RegisterContent({
   setup = null,
   google: googlePrefill = null,
   industry = null,
+  edition = null,
   utm = null,
   inAppBrowser: inAppInitial = null,
   requiresCard: requiresCardInitial = true,
@@ -171,6 +174,10 @@ export function RegisterContent({
      the server. Pre-selects that chip on step 2 — a suggestion the visitor
      can change, never a lock — and rides along into the signup intent. */
   industry?: TradeType | null;
+  /* THE DOOR THE VISITOR CAME IN BY (2026-10-11, lib/editions): `?edition=deck`
+     from the Deck Studio landing. Its plan is pre-selected and drawn first on
+     the plan step; the trade chip comes with `industry`. */
+  edition?: EditionId | null;
   /* Step 1's error on arrival: a Google address the server refused (a
      throwaway-mail domain — lib/disposableEmail). */
   initialError?: string | null;
@@ -273,6 +280,8 @@ export function RegisterContent({
      account exists — the step cannot price itself before there is an org to
      price for, and `signupPlans` is owner-scoped. */
   const [plans, setPlans] = React.useState<SignupPlan[]>([]);
+  /* The edition's plan first (lib/editions); every other plan as the catalog orders it. */
+  const orderedPlans = React.useMemo(() => (edition ? [...plans.filter((p) => isEditionPlan(p.slug, edition)), ...plans.filter((p) => !isEditionPlan(p.slug, edition))] : plans), [plans, edition]);
   /* Custom and catalog plans share the saved offer returned by signupPlans. */
   const [customTrialDays, setCustomTrialDays] = React.useState<number>(offer.days);
   /* THE CAROUSEL STARTS AT THE FIRST CARD. With `scroll-snap-type: x
@@ -319,7 +328,10 @@ export function RegisterContent({
   /* MONTHLY ONLY for now (owner, 2026-09-04): the yearly tier is unreviewed,
      so the billing switch is gone from every plan surface. The type is kept
      wide so the price math below stays ready for the day it comes back. */
-  const interval = "MONTH" as "MONTH" | "YEAR"; // cast, not annotation: TS narrows an annotated const to its literal
+  /* ANNUAL IS BACK (owner, 2026-10-11): a plan with a yearly price shows both terms on its card — "Monthly $89/mo"
+     and "Annual $890/yr — 2 months free" (lib/planDeal: months, never a percentage) — and the checkout bills the one
+     picked. Monthly until a term is chosen. */
+  const [interval, setInterval] = React.useState<"MONTH" | "YEAR">("MONTH");
   const [plansErr, setPlansErr] = React.useState<string | null>(
     ret?.cancelled ? "Checkout was cancelled — your account has not been created yet." : null,
   );
@@ -705,6 +717,11 @@ export function RegisterContent({
       .then((res) => {
         if (!live) return;
         setPlans(res.plans);
+        // The edition's own plan, pre-selected (lib/editions) — the visitor can still pick another.
+        if (edition) {
+          const own = res.plans.find((p) => isEditionPlan(p.slug, edition));
+          if (own) setPlanSlug((cur) => cur ?? own.slug);
+        }
         setCustomTrialDays(res.customTrialDays);
         setFirstChargeAt(res.firstChargeAt);
         setCheckoutReady(res.checkoutReady);
@@ -722,7 +739,7 @@ export function RegisterContent({
     return () => {
       live = false;
     };
-  }, [step, token]);
+  }, [step, token, edition]);
 
   async function onApplyPromo() {
     if (promoBusy) return;
@@ -1888,7 +1905,7 @@ export function RegisterContent({
             ) : null}
 
             <div className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")} ref={plansRef}>
-              {plans.map((p) => {
+              {orderedPlans.map((p) => {
                 const yearly = interval === "YEAR" ? p.yearlyPriceCents : null;
                 const cents = yearly ?? p.priceCents;
                 const per = yearly ? "/yr" : "/mo";
@@ -1897,10 +1914,7 @@ export function RegisterContent({
                    genuinely cheaper — a struck price that is not a discount is
                    a lie, not a decoration. */
                 const listCents = yearly ? p.priceCents * 12 : 0;
-                const savePct =
-                  yearly && listCents > yearly
-                    ? Math.round((1 - yearly / listCents) * 100)
-                    : 0;
+                const deal = annualDeal(p.priceCents, p.yearlyPriceCents);
                 const on = planSlug === p.slug;
                 const has = includedBySlug.get(p.slug) ?? new Set<string>();
                 return (
@@ -1908,7 +1922,7 @@ export function RegisterContent({
                     key={p.slug}
                     role="button"
                     tabIndex={0}
-                    className={"pw-plan" + (on ? " on" : "") + (p.highlight ? " pw-plan--hero" : "")}
+                    className={"pw-plan" + (on ? " on" : "") + (p.highlight || (!!edition && isEditionPlan(p.slug, edition)) ? " pw-plan--hero" : "")}
                     aria-pressed={on}
                     onClick={() => setPlanSlug(p.slug)}
                     onKeyDown={(e) => {
@@ -1925,10 +1939,28 @@ export function RegisterContent({
                       <i>{per}</i>
                     </span>
                     {freeUntil ? <span className="pw-when">{freeUntilLine(cents, per)}</span> : null}
-                    {savePct > 0 ? (
+                    {p.yearlyPriceCents ? (
+                      <span className="pw-terms" role="group" aria-label={`${p.name} billing`} data-plan-terms={p.slug}>
+                        {(["MONTH", "YEAR"] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            className={"pw-term" + (interval === t ? " on" : "")}
+                            aria-pressed={interval === t}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInterval(t);
+                              setPlanSlug(p.slug);
+                            }}
+                          >
+                            {t === "MONTH" ? `Monthly $${(p.priceCents / 100).toFixed(0)}/mo` : `Annual $${((p.yearlyPriceCents ?? 0) / 100).toFixed(0)}/yr${deal ? ` — ${dealWords(deal)}` : ""}`}
+                          </button>
+                        ))}
+                      </span>
+                    ) : null}
+                    {yearly && deal ? (
                       <span className="pw-save">
-                        <s>${(listCents / 100).toFixed(0)}</s> Save {savePct}% · $
-                        {((listCents - cents) / 100).toFixed(0)}
+                        <s>${(listCents / 100).toFixed(0)}</s> {dealWords(deal)}
                       </span>
                     ) : null}
                     {/* THE CODE'S EFFECT ON THIS PRICE. "Code applied" over an

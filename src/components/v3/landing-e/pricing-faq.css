@@ -94,6 +94,7 @@
   overflow-wrap: anywhere;
 }
 .jf-lp .lp-pw-price {
+.jf-lp .lp-pw-annual { margin: -2px 0 10px; font: 600 12px/1.35 var(--font-mono, ui-monospace, Menlo, monospace); color: var(--lp-ink-muted, #5b6470); }
   font-size: 44px;
   font-weight: 900;
   line-height: 0.95;

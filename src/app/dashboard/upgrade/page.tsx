@@ -22,6 +22,7 @@ import { redirect } from "next/navigation";
 import { requireOrg } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
+import { editionUpgradeTarget } from "@/lib/editionAccess";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { getStripeMode } from "@/lib/stripeMode";
 import { isOwnerRole } from "@/lib/orgContext";
@@ -49,7 +50,7 @@ function verifyReturn(organizationId: string, sessionId: string): Promise<string
 export default async function UpgradePage({
   searchParams,
 }: {
-  searchParams: Promise<{ session_id?: string; checkout?: string; simulated?: string; dir?: string }>;
+  searchParams: Promise<{ session_id?: string; checkout?: string; simulated?: string; dir?: string; edition?: string }>;
 }) {
   let ctx: Awaited<ReturnType<typeof requireOrg>>;
   try {
@@ -105,8 +106,12 @@ export default async function UpgradePage({
       highlight: p.highlight,
     }));
 
+  // ?edition=deck (lib/editions): an existing customer adding the Deck Studio is pointed at the plan that carries it.
+  const target = params.edition === "deck" ? await editionUpgradeTarget("deck").catch(() => null) : null;
   return (
     <UpgradeResponsive
+      focusSlug={target?.slug ?? null}
+      focusWords={target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? "No plan carries the Deck Studio yet — ask us to add it." : null}
       plans={plans}
       currentPlan={sub?.plan ?? null}
       customPages={customPages}

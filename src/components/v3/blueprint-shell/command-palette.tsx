@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { canOpen, navSectionsFor, flattenNavItems } from "./nav-map";
-import { useNavHidden, useNavLocked, useNavRole } from "./nav-role";
+import { useNavHidden, useNavLocked, useNavRole, useNavView, type NavView } from "./nav-role";
 
 type Item = {
   key: string;
@@ -56,9 +56,9 @@ const CREATE: Item[] = [
  *  hides can never be reachable by typing its name instead. CREATE rows are
  *  tested individually: they are not nav items, so nothing else would catch a
  *  worker landing on the proposal builder from a keystroke. */
-function buildItems(role: string | null, locked: readonly string[], hidden: readonly string[]): Item[] {
+function buildItems(role: string | null, locked: readonly string[], hidden: readonly string[], view?: NavView): Item[] {
   const go: Item[] = [];
-  for (const section of navSectionsFor(role, locked, hidden)) {
+  for (const section of navSectionsFor(role, locked, hidden, view)) {
     for (const item of flattenNavItems(section.items)) {
       if (item.href === "#") continue; // surfaces with no page yet stay unlisted
       go.push({
@@ -102,7 +102,8 @@ export function CommandPalette() {
   const role = useNavRole();
   const locked = useNavLocked();
   const hidden = useNavHidden();
-  const items = useMemo(() => buildItems(role, locked, hidden), [role, locked, hidden]);
+  const view = useNavView();
+  const items = useMemo(() => buildItems(role, locked, hidden, view), [role, locked, hidden, view]);
   // Rows carry their own "is this the first of its group" flag, computed here
   // rather than by mutating a cursor while mapping — a running variable read and
   // written during render is exactly the pattern React's rules forbid, and it

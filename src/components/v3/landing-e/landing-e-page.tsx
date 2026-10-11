@@ -59,6 +59,7 @@ import { LandingVariantEffects } from "./landing-variant-effects";
    longer sits on the main thread before the hero has painted: Lighthouse
    put 2–4 s of the mobile LCP in render delay from script work alone. */
 const EstimatorsShowcase = dynamic(() => import("./estimators-showcase").then((m) => m.EstimatorsShowcase));
+import { DeckShots } from "./deck-shots";
 const Montage = dynamic(() => import("./montage").then((m) => m.Montage));
 // The HVAC page's own section (2026-10-01): plans, visits, units, menu, the tech's phone.
 const HvacServiceSection = dynamic(() => import("./hvac-service-section").then((m) => m.HvacServiceSection));
@@ -119,7 +120,9 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const requiresCard = (await signupTrialMode()) === "card";
   const offer = await signupTrialOffer();
   // Every register link carries the trade, the visit's utm_* and the fbclid.
-  const register = signupHref(REGISTER, { industry: variant, utm, fbclid });
+  const registerPlain = signupHref(REGISTER, { industry: variant, utm, fbclid });
+  // THE DECK DOOR (2026-10-11, lib/editions): the decking landing is the Deck Studio's; its sign-up carries the edition.
+  const register = variant === "decking" ? `${registerPlain}${registerPlain.includes("?") ? "&" : "?"}edition=deck` : registerPlain;
   // …and so does the nav's Pricing link, for /pricing to hand on (pricing-visit.tsx).
   const pricing = signupHref(PRICING, { industry: variant, utm, fbclid });
   // The price anchor shows the Subscription page's own catalogue (CRO stage
@@ -161,7 +164,8 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const blocks: Record<string, ReactNode> = {
     hero: <Hero trialDays={offer.days} variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} fbclid={fbclid} requiresCard={requiresCard} inAppBrowser={inAppBrowser} priceLine={priceLine} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
-    showcase: <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
+    // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
+    showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
     hvac: variant === "hvac" ? <div className="lp-cv lp-cv--hvac"><HvacServiceSection registerHref={register} cta={top} /></div> : null,
     montage: (g?.montage ?? true) ? <div className="lp-cv lp-cv--montage"><Montage /></div> : null,
     proposals: <div className="lp-cv lp-cv--proposals"><ProposalsSection proposal={g?.proposal} registerHref={register} cta={low} /></div>,

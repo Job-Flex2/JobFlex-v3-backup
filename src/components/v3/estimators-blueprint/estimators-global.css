@@ -369,6 +369,9 @@
   text-transform: uppercase;
   color: var(--muted);
 }
+/* The Deck Studio's stub is a link that adds it (2026-10-11, lib/editions). */
+.estp .estp-stub--add { border-style: solid; color: var(--blueprint, #1854a0); cursor: pointer; text-decoration: none; }
+.estp .estp-stub--add:hover { background: rgba(24, 84, 160, 0.06); }
 .estp .estp-stub {
   display: inline-flex;
   align-items: baseline;

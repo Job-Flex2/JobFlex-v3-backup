@@ -31,14 +31,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { canOpen } from "@/components/v3/blueprint-shell/nav-map";
-import { useNavLocked, useNavRole } from "@/components/v3/blueprint-shell/nav-role";
+import { useNavLocked, useNavRole, useNavView } from "@/components/v3/blueprint-shell/nav-role";
 import { clearFiling, writeFiling, type Filing } from "@/lib/filingCookie";
-import { ENGINES, QUEUED_COUNT, type EngineDiagram } from "./estimators-data";
+import { ENGINES, QUEUED_COUNT, type Engine, type EngineDiagram } from "./estimators-data";
 
 // Split once at module scope — the roster is a constant, so there is nothing
 // for the component to recompute on a render or memoise.
 const active = ENGINES.filter((e) => e.status === "active");
 const queued = ENGINES.filter((e) => e.status === "queued");
+/* THE DECK STUDIO (2026-10-11, lib/editions): a live engine for an account that holds the edition — the sidebar's
+   unlocked rows say so — and, for every other account, the queued stub becomes the way to add it. */
+const DECK_ENGINE: Extract<Engine, { status: "active" }> = { id: "deck", no: "05", title: "Deck Studio", method: "3D on the house photo", diagram: "sheet", status: "active", href: "/dashboard/deck-estimator", spec: { input: "size · photo · state", output: "3D · permit set · proposal" } };
+const DECK_ADD_HREF = "/dashboard/upgrade?edition=deck";
 
 /** The drawing this engine makes, on the card's blueprint-blue graph paper.
     Straight from the source's DIA map — same viewBox, same path data, same
@@ -195,9 +199,11 @@ export function EstimatorPicker() {
   // a card that routes somewhere the gate bounces is worse than an absent one.
   const role = useNavRole();
   const locked = useNavLocked();
+  const view = useNavView();
+  const deckOpen = view.unlocked.includes("/dashboard/deck-estimator");
   const openEngines = useMemo(
-    () => active.filter((engine) => canOpen(role, engine.href, locked)),
-    [role, locked],
+    () => [...active.filter((engine) => canOpen(role, engine.href, locked)), ...(deckOpen && canOpen(role, DECK_ENGINE.href, locked) ? [DECK_ENGINE] : [])],
+    [role, locked, deckOpen],
   );
   // Two flags because the source has two classes. `open` drives the `hidden`
   // attribute (`.estp[hidden] { display: none }`); `on` is added a frame later
@@ -380,12 +386,21 @@ export function EstimatorPicker() {
         {queued.length > 0 && (
           <div className="estp-queue">
             <span className="estp-queue-label">In the queue</span>
-            {queued.map((engine) => (
-              <span key={engine.id} className="estp-stub">
-                <i>{engine.no}</i>
-                {engine.title}
-              </span>
-            ))}
+            {queued
+              .filter((engine) => !(deckOpen && engine.id === "deck"))
+              .map((engine) =>
+                engine.id === "deck" ? (
+                  <a key={engine.id} className="estp-stub estp-stub--add" href={DECK_ADD_HREF} data-deck-add onClick={() => close()}>
+                    <i>{engine.no}</i>
+                    Deck Studio · add it
+                  </a>
+                ) : (
+                  <span key={engine.id} className="estp-stub">
+                    <i>{engine.no}</i>
+                    {engine.title}
+                  </span>
+                ),
+              )}
           </div>
         )}
       </div>

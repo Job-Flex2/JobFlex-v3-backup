@@ -3,6 +3,7 @@
 import { useTrialOffer } from "@/components/providers/trial-offer";
 import { useEffect, useRef, useState } from "react";
 import { expandPlanFeatures, formatPlanPrice, priceCadence, type PlanDTO } from "@/lib/planCatalog";
+import { annualDeal, dealWords } from "@/lib/planDeal";
 import "./pricing-faq.css";
 
 /* THE REGISTER'S PLAN CARDS ON THE LANDING (owner, 2026-09-26). A port of
@@ -164,6 +165,12 @@ export function PricingPlans({
                 {formatPlanPrice(p.priceCents)}
                 <i>{priceCadence(true)}</i>
               </p>
+              {/* The year's price as the trade reads it (owner, 2026-10-11): months free, never a percentage. */}
+              {p.yearlyPriceCents && annualDeal(p.priceCents, p.yearlyPriceCents) ? (
+                <p className="lp-pw-annual" data-plan-annual={p.slug}>
+                  or {formatPlanPrice(p.yearlyPriceCents)}/yr — {dealWords(annualDeal(p.priceCents, p.yearlyPriceCents))}
+                </p>
+              ) : null}
               <ul id={listId} className={"lp-pw-feats" + (isOpen ? " is-open" : "")}>
                 {rows.map((f) => {
                   const on = has.has(f.toLowerCase());

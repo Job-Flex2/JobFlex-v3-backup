@@ -47,7 +47,7 @@ type Gate = { ok: true; organizationId: string; userId: string; role: string } |
 async function gate(): Promise<Gate> {
   try {
     const ctx = await requireEstimatorOrManager();
-    if (!(await canUseDeckEstimator(ctx.user))) return { ok: false, error: "The deck estimator is coming soon — it is open to admins for testing only." };
+    if (!(await canUseDeckEstimator(ctx.user, ctx.organizationId))) return { ok: false, error: "The deck estimator is coming soon — it is open to admins for testing only." };
     return { ok: true, organizationId: ctx.organizationId, userId: ctx.user.id, role: ctx.role };
   } catch (err) {
     if (err instanceof UnauthorizedError) return { ok: false, error: "Only an estimator, a manager or the owner can do this." };

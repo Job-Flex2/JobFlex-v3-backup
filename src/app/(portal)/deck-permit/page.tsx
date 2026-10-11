@@ -23,7 +23,7 @@ export default async function DeckPermitPage({ searchParams }: { searchParams: P
   try {
     const ctx = await requireOrg();
     organizationId = ctx.organizationId;
-    if (!(await canUseDeckEstimator(ctx.user))) redirect("/dashboard/deck-estimator");
+    if (!(await canUseDeckEstimator(ctx.user, ctx.organizationId))) redirect("/dashboard/deck-estimator");
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fdeck-estimator");
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");

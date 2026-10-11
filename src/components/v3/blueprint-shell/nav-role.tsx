@@ -24,6 +24,10 @@
 // in @/lib/orgContext.
 
 import { createContext, useContext } from "react";
+import type { Workspace } from "@/lib/editions";
+
+export type NavView = { workspace: Workspace; unlocked: string[]; switchable: boolean };
+const PLATFORM_VIEW: NavView = { workspace: "platform", unlocked: [], switchable: false };
 
 export type NavIdentity = {
   /** Raw Membership.role — "OWNER", "INSTALLER", … Never humanised: the nav
@@ -34,6 +38,8 @@ export type NavIdentity = {
   /** Early-access pages this account may not see (lib/earlyAccess). The nav
    *  drops them; the pages themselves also refuse the account server-side. */
   hidden?: string[];
+  /** The edition's view (lib/editions): the workspace this request works in, the rows that stop saying Soon, whether a switch is drawn. */
+  view?: NavView;
 };
 
 const EMPTY: NavIdentity = { role: null, name: null };
@@ -122,6 +128,11 @@ export function NavRoleProvider({
 }
 
 /** Early-access hrefs this account may not see — empty outside the provider. */
+/** The edition's view, or the whole platform outside the provider. */
+export function useNavView(): NavView {
+  return useContext(NavRoleContext).view ?? PLATFORM_VIEW;
+}
+
 export function useNavHidden(): string[] {
   return useContext(NavRoleContext).hidden ?? EMPTY_LOCKED;
 }

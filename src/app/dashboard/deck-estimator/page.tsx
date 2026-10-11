@@ -15,6 +15,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { canUseDeckEstimator } from "@/lib/deck/access";
+import { editionFacts } from "@/lib/editionAccess";
+import { hasEdition } from "@/lib/editions";
 import { isLimitedRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { readDeckRateBook } from "@/lib/deck/rateBookStore";
 import { parseStateZip } from "@/lib/fence/market";
@@ -32,11 +34,14 @@ export const metadata: Metadata = {
 export default async function DeckEstimatorPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   let organizationId: string;
   let open = false;
+  let viaEdition = false;
   try {
     const ctx = await requireOrg();
     organizationId = ctx.organizationId;
     if (isLimitedRole(ctx.role)) redirect("/dashboard?error=forbidden");
-    open = await canUseDeckEstimator(ctx.user);
+    open = await canUseDeckEstimator(ctx.user, ctx.organizationId);
+    // The Deck Studio edition (lib/editions): a subscriber works here as of right, with no admin notice.
+    viaEdition = open && (await editionFacts(ctx.organizationId).then((f) => hasEdition(f, "deck")).catch(() => false));
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fdeck-estimator");
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");
@@ -70,5 +75,5 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
     const res = await loadDeckFromProposal(proposalId);
     if (res.ok) opened = { design: res.design, address: res.address, title: res.title, draftId: null, from: "proposal" };
   }
-  return <DeckStudio initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview opened={opened} />;
+  return <DeckStudio initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={!viaEdition} opened={opened} />;
 }

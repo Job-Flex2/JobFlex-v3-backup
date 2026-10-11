@@ -10,6 +10,7 @@
    what makes the same build the phone hero too (it replaces PhoneOverview
    there, not just DashboardMock). */
 
+import { DeckShot } from "./deck-shots";
 import { FenceShot } from "./fence-shot";
 import { HvacEstimatorShot } from "./hvac-estimator-shot";
 import type { LandingVariant } from "./landing-variants";
@@ -59,6 +60,7 @@ export function HeroVisual({ variant }: { variant: LandingVariant }) {
       {variant.visual === "fence" && <FenceShot active={active} instant={now} onStep={fenceStep} />}
       {variant.visual === "roof" && <RoofShot active={active} instant={now} hero onStep={roofStep} />}
       {variant.visual === "hvac" && <HvacEstimatorShot active={active} instant={now} hero />}
+      {variant.visual === "deck" && <DeckShot />}
       {variant.visual === "smart" && (
         <SmartProposalShot active={active} instant={now} scenario={SMART_SCENARIOS[variant.scenario ?? "kitchen"]} />
       )}

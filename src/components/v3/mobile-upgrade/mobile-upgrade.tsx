@@ -70,6 +70,9 @@ type Confirm =
   | { kind: "pages"; pages: string[]; removing: string[]; adding: string[] };
 
 export type MobileUpgradeProps = {
+  /** The plan an edition's upgrade points at (lib/editions), and the line that says so — drawn by the desk page. */
+  focusSlug?: string | null;
+  focusWords?: string | null;
   plans: UpgradePlan[];
   /** Subscription.plan as stored ("PROFESSIONAL", "CUSTOM", …), or null. */
   currentPlan: string | null;

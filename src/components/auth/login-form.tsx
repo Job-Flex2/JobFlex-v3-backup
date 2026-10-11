@@ -18,6 +18,9 @@
 // is how this form knows to show it (`:-webkit-autofill` / `:autofill` start a
 // no-op animation; a manager's fill fires `input`).
 import * as React from "react";
+// THE DOOR (2026-10-11, lib/editions): a sign-in lands in the Deck Studio when that door was chosen.
+import { readDoorCookie, signInDestination } from "@/lib/doorClient";
+import { EDITIONS } from "@/lib/editions";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -130,7 +133,7 @@ export function LoginForm({
     window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the address said to start Google; the button shows it is on its way
     setGoogleBusy(true);
-    void signIn("google", { callbackUrl: nextPath });
+    void signIn("google", { callbackUrl: signInDestination(nextPath) });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
   }, []);
 
@@ -143,7 +146,7 @@ export function LoginForm({
     }
     if (googleBusy) return;
     setGoogleBusy(true);
-    void signIn("google", { callbackUrl: nextPath });
+    void signIn("google", { callbackUrl: signInDestination(nextPath) });
   }
 
   async function signInWithPassword() {
@@ -174,7 +177,7 @@ export function LoginForm({
         return;
       }
       setSignedIn(true);
-      router.push(nextPath as Route);
+      router.push(signInDestination(nextPath) as Route);
       router.refresh();
     } catch {
       setErr(SERVER_TROUBLE);
@@ -232,7 +235,7 @@ export function LoginForm({
       }
       setSignedIn(true);
       // `?next=` wins; without one, the account's own place (the plan picker for a shop with no plan).
-      window.location.assign(nextPath && nextPath !== "/dashboard" ? nextPath : res.next);
+      window.location.assign(nextPath && nextPath !== "/dashboard" ? nextPath : readDoorCookie() === "deck" ? EDITIONS.deck.homeHref : res.next);
     } catch {
       setErr(SERVER_TROUBLE);
     } finally {

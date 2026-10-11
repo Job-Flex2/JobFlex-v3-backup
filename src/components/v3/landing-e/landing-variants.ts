@@ -37,7 +37,7 @@ export type LandingVariant = {
   showcaseSlide: ShowcaseSlideKey;
   /** The hero's product shot. "dashboard" is the default's; a trade picks
    *  one of the three estimator sequences. */
-  visual: "dashboard" | "roof" | "fence" | "hvac" | "smart";
+  visual: "dashboard" | "roof" | "fence" | "hvac" | "smart" | "deck";
   /** For visual "smart": which job the sequence prices. */
   scenario?: SmartScenarioKey;
   /** A headline a sentence long (owner, 2026-10-01: HVAC, roofing): set a
@@ -168,13 +168,20 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     visual: "smart",
     scenario: "painting",
   },
+  // THE DECK STUDIO'S OWN PAGE (owner, 2026-10-11: "let's do vertical" — lib/editions).
+  // /deck and the deck host land here; the sign-up it writes carries the edition,
+  // and the price line reads the Deck Studio plan off the catalog.
   decking: {
-    h1: ["The complete deck estimate.", "From the size and the material."],
-    sub: "Frame, boards, railing, stairs and labor, priced and ready to send.",
-    primaryCta: "Start free — estimate a deck",
+    h1: ["Deck Studio: the deck in 3D,", "to your state's code, priced."],
+    sub: "Draw it on the house's own photo, frame it from the span tables, print the permit set and send the proposal — with the office around it: clients, calendar, crew and payments. Decks only, nothing else in the way.",
+    primaryCta: "Start Deck Studio — free trial",
     showcaseSlide: "smart",
-    visual: "smart",
+    // The studio's own pictures (deck-shots.tsx): the 3D on the house photo in the hero; no Smart Proposal shot here.
+    visual: "deck",
     scenario: "decking",
+    priceFeature: "Deck Studio",
+    priceNote: "the office included",
+    shotCta: true,
   },
 
   // Batch 2 (2026-09-08): no tool of their own — the Smart Estimator

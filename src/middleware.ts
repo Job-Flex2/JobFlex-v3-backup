@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { DOOR_COOKIE, DOOR_MAX_AGE_S } from "@/lib/editions";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
@@ -50,7 +51,15 @@ const REMOVED_LANDINGS = new Set([
    landing reads the variant from the query only, so this is the one way in. */
 const TRADE_SHORTCUTS: Record<string, string> = {
   "/hvac": "hvac",
+  // The Deck Studio door (2026-10-11, lib/editions): the decking landing is the edition's own page.
+  "/deck": "decking",
 };
+
+/* THE DECK DOOR'S OWN HOST (2026-10-11, lib/editions). On deck.jobflex.app the
+   root IS the Deck Studio landing and the sign-in page opens on the deck door;
+   the choice is remembered as the door cookie. The hosts come from DECK_HOSTS
+   (comma-separated) so a bought domain pointed at the app works the same. */
+const DECK_HOSTS = new Set((process.env.DECK_HOSTS ?? "deck.jobflex.app,deckstudio.jobflex.app").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean));
 
 /* THE INVENTORY PAGES THAT MOVED. The per-trade boards, the HVAC service
    menu page and the handheld HVAC preview went to one shared page on
@@ -107,6 +116,15 @@ export async function middleware(req: NextRequest) {
 
 async function route(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
+  const host = (req.headers.get("host") ?? "").toLowerCase().split(":")[0];
+  if (DECK_HOSTS.has(host) && (pathname === "/" || pathname === "/auth/login")) {
+    const url = req.nextUrl.clone();
+    if (pathname === "/") url.searchParams.set("industry", "decking");
+    else if (!url.searchParams.get("door")) url.searchParams.set("door", "deck");
+    const res = NextResponse.rewrite(url);
+    res.cookies.set(DOOR_COOKIE, "deck", { path: "/", maxAge: DOOR_MAX_AGE_S, sameSite: "lax", secure: req.nextUrl.protocol === "https:" });
+    return res;
+  }
   const moved = MOVED_INVENTORY[pathname];
   if (moved) {
     const url = req.nextUrl.clone();

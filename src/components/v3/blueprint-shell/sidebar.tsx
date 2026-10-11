@@ -20,7 +20,8 @@ import { usePathname } from "next/navigation";
 // so the mobile hamburger drawers could share them instead of carrying a
 // second, href-less copy. Re-exported here for existing importers.
 import { NAV_SECTIONS, activeHref, canOpen, isLimitedRole, navSectionsFor, type NavItem } from "./nav-map";
-import { quotaPill, useNavBadges, useNavLimits, useNavLimitsExempt, type NavLimit, useNavHidden, useNavLocked, useNavRole } from "./nav-role";
+import { quotaPill, useNavBadges, useNavLimits, useNavLimitsExempt, type NavLimit, useNavHidden, useNavLocked, useNavRole, useNavView } from "./nav-role";
+import { DoorSwitch } from "./door-switch";
 import { SignOutButton } from "./sign-out";
 import { foldShortcutLabel } from "./sidebar-fold";
 
@@ -104,7 +105,9 @@ export function Sidebar({
   // Custom-plan page locks ride the same provider; empty on every other plan.
   const navLocked = useNavLocked();
   const navHidden = useNavHidden();
-  const sections = navSectionsFor(navRole, navLocked, navHidden);
+  // The edition's view (lib/editions): the Deck Studio workspace keeps only its rows.
+  const navView = useNavView();
+  const sections = navSectionsFor(navRole, navLocked, navHidden, navView);
   // Unread / pending counts by href, from the layout via the nav provider.
   // Empty outside it, so nothing is drawn — a stale zero beats a wrong number.
   const badges = useNavBadges();
@@ -310,6 +313,14 @@ export function Sidebar({
             classic surfaces, so they do not need a second control here. */}
         {isLimitedRole(navRole) && (
           <SignOutButton className="sb-foot-ic sb-foot-out" iconClassName="ic" />
+        )}
+        {/* THE DOOR SWITCH (2026-10-11): for an account that holds both workspaces — to the Deck Studio, or back. */}
+        {navView.switchable && (
+          <DoorSwitch workspace={navView.workspace} className="sb-foot-ic">
+            <svg className="ic">
+              <use href={navView.workspace === "deck" ? "#i-grid" : "#i-deck"} />
+            </svg>
+          </DoorSwitch>
         )}
       </div>
 

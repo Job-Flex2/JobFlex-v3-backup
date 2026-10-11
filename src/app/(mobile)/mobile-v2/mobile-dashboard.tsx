@@ -54,8 +54,7 @@ import {
   useNavHidden,
   useNavLocked,
   useNavRole,
-  type NavLimit,
-} from "@/components/v3/blueprint-shell/nav-role";
+  type NavLimit, useNavView } from "@/components/v3/blueprint-shell/nav-role";
 import { canOpen } from "@/components/v3/blueprint-shell/nav-map";
 import { ACTIVE_ENGINE_HREFS } from "@/components/v3/estimators-blueprint/estimators-data";
 import { EstimatorPicker } from "@/components/v3/estimators-blueprint/estimator-picker";
@@ -819,7 +818,8 @@ function DashboardView({ data, notice }: { data: DashboardData; notice?: React.R
   const navLimitsExempt = useNavLimitsExempt();
   // Early-access pages this account may not see (lib/earlyAccess).
   const navHidden = useNavHidden();
-  const navSections = navSectionsFor(navRole, navLocked, navHidden);
+  const navView = useNavView();
+  const navSections = navSectionsFor(navRole, navLocked, navHidden, navView);
   /* The composer this page's Help button opens is mounted by the responsive
      shell, which only wraps the authenticated route. On the standalone
      /mobile-v2 review URL there is no provider and no session, so the button

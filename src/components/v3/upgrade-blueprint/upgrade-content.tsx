@@ -23,6 +23,7 @@
 //     next cycle bills the new total — no second charge for the base.
 
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
+import { annualDeal, dealWords } from "@/lib/planDeal";
 import { DEV_EVENT, type DevUpgradeEvent } from "@/lib/devSimulation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -71,7 +72,12 @@ export function UpgradeContent({
   embedded = false,
   devTools,
   customOffered = false,
+  focusSlug = null,
+  focusWords = null,
 }: {
+  /** THE PLAN TO POINT AT (2026-10-11, lib/editions): the one that carries the edition an existing customer came to add (?edition=deck), and the line that says so. */
+  focusSlug?: string | null;
+  focusWords?: string | null;
   /** CUSTOM_PLAN_ENABLED (lib/customPlanFlag): off, a shop not already on the
    *  custom plan is not offered it. One on it always manages its pages. */
   customOffered?: boolean;
@@ -109,7 +115,8 @@ export function UpgradeContent({
   /* MONTHLY ONLY for now (owner, 2026-09-04): the yearly tier is unreviewed,
      so the billing switch is gone from every plan surface. The type is kept
      wide so the price math below stays ready for the day it comes back. */
-  const interval = "MONTH" as "MONTH" | "YEAR"; // cast, not annotation: TS narrows an annotated const to its literal
+  /* ANNUAL IS BACK (owner, 2026-10-11): a plan with a yearly price shows both terms on its card, "2 months free" in words (lib/planDeal). */
+  const [interval, setInterval] = useState<"MONTH" | "YEAR">("MONTH");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // The current plan as the page knows it; moved locally after an in-place
@@ -180,16 +187,19 @@ export function UpgradeContent({
     | null
   >(null);
 
-  async function checkout(slug: string, customPagesToBuy?: string[]) {
-    const res = await fetch("/api/checkout/subscription", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planSlug: slug, interval, customPages: customPagesToBuy }),
-    });
-    const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-    if (!res.ok || !body.url) throw new Error(body.error ?? "Couldn't open checkout.");
-    window.location.assign(body.url);
-  }
+  const checkout = useCallback(
+    async (slug: string, customPagesToBuy?: string[]) => {
+      const res = await fetch("/api/checkout/subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planSlug: slug, interval, customPages: customPagesToBuy }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !body.url) throw new Error(body.error ?? "Couldn't open checkout.");
+      window.location.assign(body.url);
+    },
+    [interval],
+  );
 
   /* An upgrade (or a custom plan) is PAID on Stripe: confirm, then checkout.
      The return leg cancels the subscription it replaces. */
@@ -235,7 +245,7 @@ export function UpgradeContent({
       }
     },
      
-    [busy, interval, router],
+    [busy, checkout, interval, router],
   );
 
   function onPick(p: UpgradePlan) {
@@ -402,29 +412,39 @@ export function UpgradeContent({
         </div>
       ) : null}
 
+      {focusWords ? <p className="jf-up-focus" data-upgrade-focus-words>{focusWords}</p> : null}
       <div className="jf-up-plans has-custom">
         {plans.map((p) => {
           const yearly = interval === "YEAR" ? p.yearlyPriceCents : null;
           const cents = yearly ?? p.priceCents;
           const listCents = yearly ? p.priceCents * 12 : 0;
-          const savePct =
-            yearly && listCents > yearly ? Math.round((1 - yearly / listCents) * 100) : 0;
+          const deal = annualDeal(p.priceCents, p.yearlyPriceCents);
           const isCur = cur === p.slug;
           const dir = direction(p);
           return (
             <div
               key={p.slug}
-              className={"jf-up-plan" + (p.highlight ? " hero" : "") + (isCur ? " cur" : "")}
+              className={"jf-up-plan" + (p.highlight ? " hero" : "") + (isCur ? " cur" : "") + (focusSlug === p.slug ? " focus" : "")}
+              data-upgrade-focus={focusSlug === p.slug ? "" : undefined}
             >
-              {p.highlight ? <span className="jf-up-tag">Most picked</span> : null}
+              {focusSlug === p.slug ? <span className="jf-up-tag">Includes Deck Studio</span> : p.highlight ? <span className="jf-up-tag">Most picked</span> : null}
               <span className="jf-up-n">{p.name}</span>
               <span className="jf-up-price">
                 ${(cents / 100).toFixed(0)}
                 <i>{yearly ? "/yr" : "/mo"}</i>
               </span>
-              {savePct > 0 ? (
+              {p.yearlyPriceCents ? (
+                <span className="pw-terms" role="group" aria-label={`${p.name} billing`} data-plan-terms={p.slug}>
+                  {(["MONTH", "YEAR"] as const).map((t) => (
+                    <button key={t} type="button" className={"pw-term" + (interval === t ? " on" : "")} aria-pressed={interval === t} onClick={() => setInterval(t)}>
+                      {t === "MONTH" ? `Monthly $${(p.priceCents / 100).toFixed(0)}/mo` : `Annual $${((p.yearlyPriceCents ?? 0) / 100).toFixed(0)}/yr${deal ? ` — ${dealWords(deal)}` : ""}`}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
+              {yearly && deal ? (
                 <span className="jf-up-save">
-                  <s>${(listCents / 100).toFixed(0)}</s> Save {savePct}%
+                  <s>${(listCents / 100).toFixed(0)}</s> {dealWords(deal)}
                 </span>
               ) : null}
               <span className="jf-up-feats">

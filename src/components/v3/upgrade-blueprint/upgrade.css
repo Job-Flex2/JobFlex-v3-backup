@@ -148,6 +148,12 @@
 /* Cards rest on the muted system shadow, whatever their standing: the hero
    plan keeps its deeper paper, the current plan keeps its blueprint frame,
    and neither borrows the solid imprint that means "hover me". */
+/* The plan an edition's upgrade points at (2026-10-11, lib/editions), and the two terms on a plan with a yearly price. */
+.jf-upgrade .jf-up-plan.focus { outline: 3px solid var(--blueprint, #1854a0); outline-offset: 2px; }
+.jf-upgrade .jf-up-focus { margin: 0 0 14px; padding: 10px 14px; border: 1.5px solid var(--blueprint, #1854a0); border-radius: 6px; background: rgba(24, 84, 160, 0.06); font: 600 14px/1.4 inherit; color: var(--ink, #111); }
+.jf-upgrade .pw-terms { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+.jf-upgrade .pw-term { appearance: none; border: 1.5px solid var(--hair, #cfd5dd); background: #fff; color: var(--ink, #111); border-radius: 999px; padding: 6px 10px; font: 600 12px/1.15 var(--font-mono, ui-monospace, Menlo, monospace); cursor: pointer; text-align: left; }
+.jf-upgrade .pw-term.on { background: var(--ink, #111); border-color: var(--ink, #111); color: #fff; }
 .jf-upgrade .jf-up-plan.hero {
   background: var(--paper-deep, #eceae3);
   box-shadow: 3px 3px 0 var(--shadow, rgba(10, 10, 10, 0.06));

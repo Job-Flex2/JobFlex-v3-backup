@@ -51,6 +51,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
+import { DoorSwitchSignIn } from "@/components/auth/door-switch-signin";
 import styles from "./login.module.css";
 
 /**
@@ -137,6 +138,8 @@ function LoginInner() {
           {/* THE FORM (2026-10-10): Google, then the email and "Email me a
               code"; the password one link away (components/auth/login-form).
               NextAuth's ?error= codes arrive as its first message. */}
+          {/* WHERE TO SIGN IN (owner, 2026-10-11): the JobFlex platform or the Deck Studio — one account, a remembered door (lib/editions). */}
+          <DoorSwitchSignIn />
           <LoginForm
             nextPath={nextPath}
             initialEmail={emailParam ?? (isDev ? "owner@acme.test" : "")}

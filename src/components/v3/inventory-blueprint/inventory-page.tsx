@@ -31,7 +31,7 @@ export async function TradeInventoryPage({ trade, searchParams }: { trade: Trade
     throw err;
   }
   // The deck estimator is Coming soon for customers (lib/deck/access): its inventory keeps the same door.
-  if (trade === "deck" && !(await canUseDeckEstimator(user))) return <DeckComingSoon />;
+  if (trade === "deck" && !(await canUseDeckEstimator(user, organizationId))) return <DeckComingSoon />;
   const tab = parseTab(one(sp.tab), trade);
   const data = await loadInventoryPage(organizationId, trade, tab);
   return <InventoryContent key={`${trade}-${tab}`} data={data} canEditBook={canEditBook(role)} canWriteStock={!isLimitedRole(role)} />;

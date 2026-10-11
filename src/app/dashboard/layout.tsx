@@ -41,6 +41,9 @@ import { db } from "@/lib/db";
 import { SETUP_PATH, needsCompanySetup } from "@/lib/orgSetup";
 import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
 import { getBlockedCustomPages } from "@/lib/customPageAccess";
+import { workspaceOf } from "@/lib/editionAccess";
+import { unlockedByEdition } from "@/lib/editions";
+import type { NavView } from "@/components/v3/blueprint-shell/nav-role";
 import { UpgradeGate } from "@/components/v3/upgrade-gate/upgrade-gate";
 import { isCustomBlockedPath } from "@/lib/customPlan";
 import { getBadgeCounts } from "@/lib/badgeCounts";
@@ -86,6 +89,8 @@ export default async function DashboardBlueprintLayout({
   // The custom plan's page locks: hrefs this org did not buy, or null on every
   // other plan. Read beside the identity because both come from the same ctx.
   let lockedPages: string[] | null = null;
+  // THE EDITION'S VIEW (2026-10-11, lib/editions): the workspace, the deck rows unlocked, the switch.
+  let navView: NavView = { workspace: "platform", unlocked: [], switchable: false };
   // Platform announcements — published from /admin/announcements, shown as a
   // banner on every organization's dashboard. Read HERE because the shell is a
   // client tree; a failed read costs the banner, never the page.
@@ -153,6 +158,8 @@ export default async function DashboardBlueprintLayout({
     lockedPages = await getBlockedCustomPages(ctx.organizationId).catch(() =>
       getBlockedCustomPages(ctx.organizationId),
     );
+    const ws = await workspaceOf(ctx.organizationId).catch(() => null);
+    if (ws) navView = { workspace: ws.workspace, unlocked: ws.deckAccess ? [...unlockedByEdition("deck")] : [], switchable: ws.switchable };
     announcements = await db.announcement
       .findMany({
         where: {
@@ -230,7 +237,7 @@ export default async function DashboardBlueprintLayout({
     <ResponsiveDashboardShell
       sidebarFolded={sidebarFolded}
       user={user}
-      identity={{ role, name, hidden }}
+      identity={{ role, name, hidden, view: navView }}
       badges={badges}
       locked={lockedPages ?? undefined}
       limits={navLimits}

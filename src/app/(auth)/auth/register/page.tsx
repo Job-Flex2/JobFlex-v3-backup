@@ -180,6 +180,7 @@ export default async function RegisterPage({
         setup={setup}
         google={google}
         industry={industry}
+        edition={sp.edition === "deck" ? "deck" : null}
         utm={hasUtm(utm) ? utm : null}
         inAppBrowser={inAppBrowser}
       />

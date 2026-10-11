@@ -1021,7 +1021,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {adminPreview ? (
             <div className={s.previewNote}>
               <span className={cx(s.stamp, s.stampWarn)}>Coming soon</span>
-              <span>Customers see a coming-soon page here. You can work and test it because you are an admin.</span>
+              <span>Customers without the Deck Studio plan see its offer here. You can work and test it because you are an admin.</span>
             </div>
           ) : null}
           <p className={s.pageSub}>Size the deck — or a covered deck, a gazebo, a pergola — pick what it is built from, and it frames itself from the code tables: joists, beams, posts, footings, the ledger, the stairs, the rails, the roof&apos;s rafters and headers, the wiring to every light. It stands up in 3D bolt by bolt, goes on a photo of the house, and prices the material package line by line. Your work saves itself.</p>

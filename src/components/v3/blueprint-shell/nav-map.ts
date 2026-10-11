@@ -15,6 +15,7 @@
 // dead rather than routing somewhere that 404s.
 
 import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
+import { navAllowed, type Workspace } from "@/lib/editions";
 import { isCustomBlockedPath } from "@/lib/customPlan";
 import { isHiddenHref } from "@/lib/earlyAccess";
 
@@ -324,14 +325,36 @@ export function isLimitedRole(role: string | null | undefined): boolean {
  * production sidebar, intersected with their route gate; office roles get the
  * full map minus anything owner-only.
  */
+/** The edition's view (lib/editions): which workspace, and which rows stop saying "Soon". */
+export type NavView = { workspace?: Workspace; unlocked?: readonly string[] };
+
 export function navSectionsFor(
   role: string | null | undefined,
   locked?: readonly string[],
   /** Early-access pages this account may not see (lib/earlyAccess) — dropped. */
   hidden?: readonly string[],
+  /** THE EDITION'S VIEW (2026-10-11): in the Deck Studio workspace only its rows stay; a deck row stops saying Soon once the account holds the edition. */
+  view?: NavView,
+): NavSection[] {
+  const base = navSectionsBase(role, locked, hidden);
+  if (!view || (view.workspace !== "deck" && !view.unlocked?.length)) return base;
+  const unlocked = view.unlocked ?? [];
+  const hit = (href: string) => unlocked.includes(href.split("?")[0]);
+  const unsoon = (item: NavItem): NavItem => {
+    const next = item.soon && hit(item.href) ? { ...item, soon: false } : item;
+    return next.children ? { ...next, children: next.children.map((c) => (c.soon && hit(c.href) ? { ...c, soon: false } : c)) } : next;
+  };
+  const keep = (item: NavItem) => view.workspace !== "deck" || navAllowed("deck", item.href);
+  return base.map((section) => ({ label: section.label, items: section.items.filter(keep).map(unsoon) })).filter((section) => section.items.length > 0);
+}
+
+function navSectionsBase(
+  role: string | null | undefined,
+  locked?: readonly string[],
+  hidden?: readonly string[],
 ): NavSection[] {
   if (hidden?.length) {
-    return navSectionsFor(role, locked)
+    return navSectionsBase(role, locked)
       .map((section) => ({
         label: section.label,
         items: section.items
