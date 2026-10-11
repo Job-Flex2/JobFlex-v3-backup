@@ -42,7 +42,8 @@
   background: var(--paper-deep);
 }
 .wrap .row:focus-visible,
-.wrap .copy:focus-visible {
+.wrap .copy:focus-visible,
+.copyBare:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
@@ -72,7 +73,8 @@
   line-height: 1.25;
 }
 
-.wrap .copy {
+.wrap .copy,
+.copyBare {
   display: inline-flex;
   min-height: 44px;
   align-items: center;

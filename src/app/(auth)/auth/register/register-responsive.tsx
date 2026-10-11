@@ -29,6 +29,8 @@ import { RegisterContent } from "@/components/v3/auth-register-blueprint/registe
 import type { InAppBrowser } from "@/lib/inAppBrowser";
 import type { TradeType } from "@/lib/tradeTypes";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
+import type { SignupMode } from "@/lib/signupMode";
+import type { OtpRestore } from "@/lib/signupOtp";
 
 /** CLAUDE.md's handheld target: ≤768px. Matches the mobile module's own scale. */
 const HANDHELD = "(max-width: 768px)";
@@ -90,7 +92,11 @@ function RegisterSwitch({
   initialError,
   offerCustom,
   steps,
+  mode,
+  otpRestore,
 }: {
+  mode: SignupMode;
+  otpRestore: OtpRestore | null;
   offerCustom: boolean;
   /** The sign-up's steps, the owner's switch (lib/trialPolicyServer): 3 as built, or 2. */
   steps: 2 | 3;
@@ -125,7 +131,7 @@ function RegisterSwitch({
      day the handheld build is ported to the pending-signup flow. */
   void isHandheld;
   void params;
-  return <RegisterContent setup={setup} google={google} industry={industry} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} />;
+  return <RegisterContent setup={setup} google={google} industry={industry} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} otpRestore={otpRestore} />;
 }
 
 // The attribution capture under either tree reads the query string, so the
@@ -141,7 +147,13 @@ export function RegisterResponsive({
   initialError = null,
   offerCustom = false,
   steps = 3,
+  mode = "password",
+  otpRestore = null,
 }: {
+  /** The sign-up's mode (lib/signupMode): password as built, or passwordless. */
+  mode?: SignupMode;
+  /** Where a passwordless sign-up was left (lib/signupOtp draftRestore). */
+  otpRestore?: OtpRestore | null;
   /** CUSTOM_PLAN_ENABLED, read on the server (lib/customPlanFlag). */
   offerCustom?: boolean;
   /** The sign-up's steps (lib/trialPolicyServer): 3 as built, or 2. */
@@ -161,7 +173,7 @@ export function RegisterResponsive({
 }) {
   return (
     <Suspense fallback={null}>
-      <RegisterSwitch setup={setup} google={google} industry={industry} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} />
+      <RegisterSwitch setup={setup} google={google} industry={industry} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} otpRestore={otpRestore} />
     </Suspense>
   );
 }

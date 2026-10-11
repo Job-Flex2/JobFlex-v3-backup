@@ -10,6 +10,7 @@ import {
 } from "./build/client";
 import { buildOwnerAccepted, buildNewLead, buildLeadOffer, buildSupportTicket } from "./build/operator";
 import { buildTrialConfirm, buildTrialReminder } from "./build/trial";
+import { buildOtpCode, buildOtpNoAccount } from "./build/otp";
 import { buildPaymentFailed } from "./build/billing";
 import { buildJobAssignment, buildWorkerInvite, buildTeamInvite } from "./build/worker";
 import {
@@ -531,6 +532,18 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
     label: "18c2 · buildTrialConfirm()",
     note: "Card-less trial: the address check the account and the trial are created from (link valid 24 h).",
     doc: buildTrialConfirm({ name: "Jordan Rivera", planName: "Professional", href: "https://example.com/auth/register/confirm?t=…" }),
+  },
+  {
+    id: "b-otp-code",
+    label: "18c3 · buildOtpCode()",
+    note: "Passwordless sign-up and \"Email me a code\" on sign-in (lib/signupOtp): the six digits, ten minutes, and a button that does the same in any browser. Subject: \"{code} is your JobFlex code\"; reply-to support@jobflex.app.",
+    doc: buildOtpCode({ code: "482913", email: "jordan@riverabuilds.com", name: "Jordan Rivera", minutes: 10, href: "https://example.com/auth/register/code?k=…" }),
+  },
+  {
+    id: "b-otp-no-account",
+    label: "18c4 · buildOtpNoAccount()",
+    note: "\"Email me a code\" for an address with no account: the page says the same as for any address; this email says there is no account.",
+    doc: buildOtpNoAccount({ email: "jordan@riverabuilds.com", href: "https://example.com/auth/register?flow=otp" }),
   },
   {
     id: "b-trial-soon",

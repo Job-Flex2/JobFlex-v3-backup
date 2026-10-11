@@ -1,0 +1,597 @@
+"use client";
+
+// STEP 1 OF THE PASSWORDLESS SIGN-UP (owner, 2026-10-10; lib/signupOtp).
+//
+//   form  — "Start Your Free Trial": Google on top, then name and email; the
+//           trial's terms under Continue, in the words of signupTrialMode and
+//           the trial offer this visitor was assigned.
+//   code  — "Check your email": one six-digit field (numeric keypad, the
+//           phone's one-time-code fill, paste), sent by itself on the sixth
+//           digit; Resend after 30 s; Use a different email.
+//   google— back from Google: nothing left to ask, the plan step follows.
+//
+// NOTHING IS LOST on the way to the mail app and back (Meta's in-app browser
+// throws pages away): the draft lives on the server, its token in a cookie
+// and in the address (?d=), the name, email and screen in session- and
+// localStorage; the page reopens on the screen it was left on. The code is
+// never kept on this side. While the code screen waits it asks the server how
+// the draft stands — the email's button may have been pressed in another
+// browser — on a timer, on coming back to the tab and on a bfcache restore.
+//
+// IN AN IN-APP BROWSER Google refuses to sign in ("403 disallowed_useragent"),
+// so its button hands the page to Safari / Chrome with the progress in the
+// address and `google=1`, where Google starts at once. When the hand-off does
+// not happen, the app-menu help and Copy link show, and email stays below.
+//
+// The markup wears register-content's classes (`.bp` scope); this file's
+// stylesheet only restyles the fields (white inputs, larger labels — owner's
+// brief, section H) inside `.otp`, so the password sign-up is untouched.
+import * as React from "react";
+import Link from "next/link";
+import type { Route } from "next";
+import { signIn } from "next-auth/react";
+import { HandoffHelp, useBrowserHandoff } from "@/components/auth/open-in-browser";
+import type { InAppBrowser } from "@/lib/inAppBrowser";
+import type { TradeType } from "@/lib/tradeTypes";
+import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
+import type { OtpRestore } from "@/lib/signupOtp";
+import { SIGNUP_MODE_COOKIE, rememberOtpDraft, rememberSignupMode } from "@/lib/signupMode";
+import { trackTraffic } from "@/lib/traffic-client";
+import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
+import {
+  forgetOtpDraft,
+  otpDraftStatus,
+  resendOtpCode,
+  startOtpGoogleSignup,
+  startOtpSignup,
+  verifyOtpCode,
+} from "@/actions/signupOtp";
+import css from "./passwordless.module.css";
+
+type Screen = "form" | "code" | "google" | "done";
+const STORE_KEY = "jf_otp_signup";
+const STORE_TTL_MS = 24 * 60 * 60 * 1000;
+const POLL_MS = 4000;
+const SERVER_TROUBLE = "Something went wrong on our side. Try again in a minute.";
+
+interface Stored {
+  v: 1;
+  at: number;
+  name: string;
+  email: string;
+  screen: "form" | "code";
+  draft: string | null;
+}
+function readStored(): Stored | null {
+  for (const store of ["localStorage", "sessionStorage"] as const) {
+    try {
+      const raw = window[store].getItem(STORE_KEY);
+      if (!raw) continue;
+      const v = JSON.parse(raw) as Stored;
+      if (v?.v === 1 && Date.now() - v.at < STORE_TTL_MS) return v;
+    } catch {
+      /* storage blocked or garbled */
+    }
+  }
+  return null;
+}
+function writeStored(v: Omit<Stored, "v" | "at"> | null) {
+  for (const store of ["localStorage", "sessionStorage"] as const) {
+    try {
+      if (v) window[store].setItem(STORE_KEY, JSON.stringify({ v: 1, at: Date.now(), ...v }));
+      else window[store].removeItem(STORE_KEY);
+    } catch {
+      /* storage blocked: the server's draft still holds */
+    }
+  }
+}
+/** The address bar, with `d` set or removed — the rest of the query (trade,
+ *  utm_*, fbclid, ref, flow) stays as it came. */
+function setDraftInUrl(draft: string | null) {
+  try {
+    const url = new URL(window.location.href);
+    if (draft) url.searchParams.set("d", draft);
+    else url.searchParams.delete("d");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  } catch {
+    /* the cookie still names the draft */
+  }
+}
+
+export interface PasswordlessMeta {
+  consent: boolean;
+  registrationEventId: string;
+  checkoutEventId?: string;
+  fbp?: string;
+  fbc?: string;
+  fbclid?: string;
+  sourceUrl?: string;
+}
+
+export function PasswordlessStep({
+  name,
+  setName,
+  email,
+  setEmail,
+  restore,
+  google,
+  inApp,
+  requiresCard,
+  trialDays,
+  industry,
+  utm,
+  attribution,
+  analytics,
+  meta,
+  initialError,
+  onGoogle,
+  onVerified,
+  onLead,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  email: string;
+  setEmail: (v: string) => void;
+  restore: OtpRestore | null;
+  /** A Google identity parked by the auth callback (?gsu=). */
+  google: { handle: string; email: string } | null;
+  inApp: InAppBrowser | null;
+  requiresCard: boolean;
+  trialDays: number;
+  industry: TradeType | null;
+  utm: UtmParams | null;
+  attribution: { kind: "promo" | "ref"; code: string } | null;
+  analytics: () => unknown;
+  meta: () => PasswordlessMeta;
+  initialError: string | null;
+  onGoogle: () => void;
+  /** The address is proven and the pending signup exists: the plan step. */
+  onVerified: (signupToken: string) => void;
+  /** Meta Lead, once: step 1 passed with an address (lib/metaEvents). */
+  onLead: (email: string) => void;
+}) {
+  const [screen, setScreen] = React.useState<Screen>(google ? "google" : restore?.stage === "code" ? "code" : "form");
+  const [draft, setDraft] = React.useState<string | null>(restore?.draft ?? null);
+  const [sentTo, setSentTo] = React.useState(restore?.email ?? "");
+  const [resendAt, setResendAt] = React.useState(restore?.resendAt ?? 0);
+  const [burned, setBurned] = React.useState(restore?.burned ?? false);
+  const [err, setErr] = React.useState<string | null>(initialError);
+  const [codeErr, setCodeErr] = React.useState<string | null>(restore?.burned ? "That code can't be used any more. Send a new code." : null);
+  const [note, setNote] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [code, setCode] = React.useState("");
+  const [now, setNow] = React.useState(() => Date.now());
+  const codeRef = React.useRef<HTMLInputElement>(null);
+  const verifying = React.useRef(false);
+  const handoff = useBrowserHandoff(inApp ?? "instagram");
+  const track = (outcome: string, reason = "") =>
+    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp" });
+
+  /* This browser's copy of the fields and the screen (never the code). */
+  React.useEffect(() => {
+    if (screen === "google" || screen === "done") return;
+    writeStored({ name, email, screen: screen === "code" ? "code" : "form", draft: screen === "code" ? draft : null });
+  }, [name, email, screen, draft]);
+
+  /* Each screen once for the analyst: step 1 is register-content's event; the code screen is its own. */
+  const codeSeen = React.useRef(false);
+  React.useEffect(() => {
+    if (screen !== "code" || codeSeen.current) return;
+    codeSeen.current = true;
+    trackTraffic(TRAFFIC_EVENTS.step, { step: "code", flow: "otp", variant: "e", steps: 2, mode: "otp" });
+  }, [screen]);
+
+  /* The resend countdown. */
+  React.useEffect(() => {
+    if (screen !== "code" || resendAt <= Date.now()) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [screen, resendAt, now]);
+  const resendIn = Math.max(0, Math.ceil((resendAt - now) / 1000));
+
+  /* Proven: the plan step takes over, once — the code screen stops asking. */
+  const proceeded = React.useRef(false);
+  function proceed(signupToken: string) {
+    if (proceeded.current) return;
+    proceeded.current = true;
+    setScreen("done");
+    writeStored(null);
+    onVerified(signupToken);
+  }
+
+  /* Where the draft stands on the server: moved on in another browser, gone, still waiting. */
+  async function refresh(token: string) {
+    const st = await otpDraftStatus(token).catch(() => null);
+    if (!st) return;
+    if (st.stage === "gone") {
+      if (screen === "code") {
+        setScreen("form");
+        setDraft(null);
+        setDraftInUrl(null);
+        setErr("This sign-up timed out. Start again with your email.");
+      }
+      return;
+    }
+    if (st.stage === "code") {
+      setDraft(token);
+      setSentTo(st.email);
+      if (st.name && !name) setName(st.name);
+      setResendAt(st.resendAt);
+      setBurned(st.burned);
+      setScreen("code");
+      setDraftInUrl(token);
+      return;
+    }
+    if (st.signupToken) {
+      writeStored(null);
+      proceed(st.signupToken);
+      return;
+    }
+    if (st.ticket) {
+      await signInAndGo(st.ticket, st.next ?? "/dashboard");
+      return;
+    }
+    setNote(`${st.email} is confirmed in another browser — carry on there, or ask for a new code here.`);
+  }
+
+  React.useEffect(() => {
+    if (screen !== "code" || !draft) return;
+    const tick = () => {
+      if (document.visibilityState === "visible" && !verifying.current && !proceeded.current) void refresh(draft);
+    };
+    const t = window.setInterval(tick, POLL_MS);
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) tick();
+    };
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("pageshow", onShow);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("pageshow", onShow);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh reads the latest state on each tick
+  }, [screen, draft]);
+
+  /* The fields the server restored win; otherwise what this browser kept. */
+  React.useEffect(() => {
+    if (restore) {
+      if (restore.name) setName(restore.name);
+      if (restore.email) setEmail(restore.email);
+      if (restore.stage === "code") setDraftInUrl(restore.draft);
+      return;
+    }
+    if (google) return;
+    const kept = readStored();
+    if (!kept) return;
+    if (kept.name && !name) setName(kept.name);
+    if (kept.email && !email) setEmail(kept.email);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh sets state after the server answers, not synchronously
+    if (kept.screen === "code" && kept.draft) void refresh(kept.draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
+  }, []);
+
+  /* Back from Google: Google proved the address and named the person. */
+  const googleRan = React.useRef(false);
+  React.useEffect(() => {
+    if (!google || googleRan.current) return;
+    googleRan.current = true;
+    setScreen("google");
+    void startOtpGoogleSignup({
+      handle: google.handle,
+      name,
+      analytics: analytics(),
+      displayedTrialDays: trialDays === 3 || trialDays === 7 ? trialDays : undefined,
+      industry: industry ?? undefined,
+      utm: utm ?? undefined,
+      attribution,
+      meta: meta(),
+    })
+      .then((res) => {
+        if (res.ok) {
+          track("continue", "google");
+          proceed(res.signupToken);
+          return;
+        }
+        setScreen("form");
+        setErr(res.error);
+        track("error", res.taken ? "email_taken_google" : "google_rejected");
+      })
+      .catch(() => {
+        setScreen("form");
+        setErr(SERVER_TROUBLE);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per Google identity
+  }, [google]);
+
+  /* Opened in the system browser by the in-app hand-off with `google=1`:
+     Google starts at once. The mark is taken off the address first, so Back
+     from Google does not start it again. */
+  React.useEffect(() => {
+    if (inApp || google) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("google") !== "1") return;
+    url.searchParams.delete("google");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    rememberSignupMode(url.searchParams.get("flow"));
+    onGoogle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
+  }, []);
+
+  function googleTap() {
+    if (!inApp) return onGoogle();
+    // To Safari / Chrome with the progress in the address: the draft, the
+    // referral (the webview's cookies stay behind) and the mode.
+    const url = new URL(window.location.href);
+    url.searchParams.set("google", "1");
+    if (draft) url.searchParams.set("d", draft);
+    if (attribution && !url.searchParams.has("ref") && !url.searchParams.has("promo")) url.searchParams.set(attribution.kind, attribution.code);
+    if (!url.searchParams.has("flow") && document.cookie.split("; ").includes(`${SIGNUP_MODE_COOKIE}=otp`)) url.searchParams.set("flow", "otp");
+    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome: "google_handoff", reason: inApp, variant: "e", steps: 2, mode: "otp" });
+    handoff.open(url.toString());
+  }
+
+  async function onContinue(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    const n = name.trim();
+    const em = email.trim();
+    if (!n || !em) {
+      setErr("Enter your name and email.");
+      track("error", "missing");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      setErr("Enter a valid email address.");
+      track("error", "email_invalid");
+      return;
+    }
+    setErr(null);
+    setBusy(true);
+    try {
+      const res = await startOtpSignup({
+        name: n,
+        email: em,
+        analytics: analytics(),
+        displayedTrialDays: trialDays === 3 || trialDays === 7 ? trialDays : undefined,
+        industry: industry ?? undefined,
+        utm: utm ?? undefined,
+        attribution,
+        meta: meta(),
+      });
+      if (!res.ok) {
+        setErr(res.error);
+        track("error", /temporary|throwaway|disposable/i.test(res.error) ? "email_disposable" : /Too many/.test(res.error) ? "rate_limited" : /valid email/.test(res.error) ? "email_invalid" : "start_rejected");
+        return;
+      }
+      track("continue");
+      onLead(res.email);
+      rememberOtpDraft(res.draft);
+      setDraft(res.draft);
+      setSentTo(res.email);
+      setResendAt(res.resendAt);
+      setNow(Date.now());
+      setBurned(false);
+      setCode("");
+      setCodeErr(null);
+      setNote(null);
+      setScreen("code");
+      setDraftInUrl(res.draft);
+      window.setTimeout(() => codeRef.current?.focus(), 60);
+    } catch {
+      setErr(SERVER_TROUBLE);
+      track("error", "start_failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInAndGo(ticket: string, next: string) {
+    const auth = await signIn("signup-ticket", { ticket, redirect: false }).catch(() => null);
+    writeStored(null);
+    window.location.assign(auth && !auth.error ? next : `/auth/login?next=${encodeURIComponent(next)}`);
+  }
+
+  async function submitCode(value: string) {
+    if (!draft || verifying.current || value.length !== 6) return;
+    verifying.current = true;
+    setBusy(true);
+    setCodeErr(null);
+    try {
+      const res = await verifyOtpCode(draft, value);
+      if (!res.ok) {
+        setCodeErr(res.error);
+        if (res.burned || res.expired) setBurned(true);
+        if (res.gone) {
+          setScreen("form");
+          setDraft(null);
+          setDraftInUrl(null);
+          setErr(res.error);
+        }
+        setCode("");
+        track("code_error", res.burned ? "burned" : res.expired ? "expired" : res.gone ? "gone" : /Too many/.test(res.error) ? "rate_limited" : "wrong");
+        window.setTimeout(() => codeRef.current?.focus(), 30);
+        return;
+      }
+      track("code_ok", res.kind);
+      if (res.kind === "signin") {
+        await signInAndGo(res.ticket, res.next);
+        return;
+      }
+      writeStored(null);
+      proceed(res.signupToken);
+    } catch {
+      setCodeErr(SERVER_TROUBLE);
+    } finally {
+      verifying.current = false;
+      setBusy(false);
+    }
+  }
+
+  function onCodeChange(v: string) {
+    const digits = v.replace(/\D/g, "").slice(0, 6);
+    setCode(digits);
+    if (codeErr && digits.length) setCodeErr(null);
+    if (digits.length === 6) void submitCode(digits);
+  }
+
+  async function onResend() {
+    if (!draft || busy || resendIn > 0) return;
+    setBusy(true);
+    setCodeErr(null);
+    setNote(null);
+    try {
+      const res = await resendOtpCode(draft);
+      if (!res.ok) {
+        if (res.resendAt) setResendAt(res.resendAt);
+        setCodeErr(res.error);
+        track("code_error", /Too many/.test(res.error) ? "resend_limited" : "resend_rejected");
+        return;
+      }
+      setResendAt(res.resendAt);
+      setNow(Date.now());
+      setBurned(false);
+      setCode("");
+      setNote(`A new code is on its way to ${sentTo}. The one before it no longer works.`);
+      track("code_resent");
+      codeRef.current?.focus();
+    } catch {
+      setCodeErr(SERVER_TROUBLE);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onDifferentEmail() {
+    void forgetOtpDraft(draft).finally(() => rememberOtpDraft(null));
+    setDraft(null);
+    setDraftInUrl(null);
+    setCode("");
+    setCodeErr(null);
+    setNote(null);
+    setScreen("form");
+    track("change_email");
+    window.setTimeout(() => document.getElementById("email")?.focus(), 30);
+  }
+
+  const trialText = `${trialDays}-day free trial · ${requiresCard ? "Card required" : "No card needed"} · Cancel anytime`;
+
+  if (screen === "done") return <div className={css.otp} data-otp-screen="done" />;
+
+  if (screen === "google") {
+    return (
+      <div className={css.otp} data-otp-screen="google">
+        <h1 className="auth-h1">Start Your Free Trial</h1>
+        <p className="auth-lede" role="status">
+          Signed in with Google as <b>{google?.email}</b>. Setting up your plan…
+        </p>
+      </div>
+    );
+  }
+
+  if (screen === "code") {
+    return (
+      <div className={css.otp} data-otp-screen="code">
+        <h1 className="auth-h1">Check your email</h1>
+        <p className="auth-lede">
+          Enter the code we sent to <b className={css.addr}>{sentTo}</b>
+        </p>
+        <form id="otpForm" className={css.codeForm} noValidate onSubmit={(e) => { e.preventDefault(); void submitCode(code); }}>
+          <label className="fld">
+            <span className="fld-lbl">6-digit code</span>
+            <input
+              ref={codeRef}
+              className={`fld-in ${css.codeIn}`}
+              id="otpCode"
+              name="otp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]*"
+              maxLength={6}
+              placeholder="••••••"
+              aria-invalid={codeErr ? true : undefined}
+              aria-describedby="otpNote"
+              value={code}
+              disabled={busy && code.length === 6}
+              onChange={(e) => onCodeChange(e.target.value)}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData("text");
+                if (!pasted) return;
+                e.preventDefault();
+                onCodeChange(pasted);
+              }}
+              autoFocus
+            />
+            <span className={codeErr ? "fld-note fld-note--err" : "fld-note"} id="otpNote" aria-live="polite">
+              {codeErr ?? (burned ? "Send a new code to carry on." : "It works for 10 minutes. Pasting it works too.")}
+            </span>
+          </label>
+          <button className="btn" type="submit" id="otpBtn" disabled={busy || code.length !== 6}>
+            {busy && code.length === 6 ? "Checking…" : "Continue"}
+            <svg className="ic" aria-hidden="true">
+              <use href="#i-arrow-r" />
+            </svg>
+          </button>
+        </form>
+        {note ? <p className={css.note} role="status">{note}</p> : null}
+        <div className={css.codeRow}>
+          <button type="button" className={css.quiet} id="otpResend" onClick={() => void onResend()} disabled={busy || resendIn > 0} data-armed={burned || undefined}>
+            {resendIn > 0 ? `Resend code in ${resendIn} s` : "Resend code"}
+          </button>
+          <button type="button" className={css.quiet} id="otpChange" onClick={onDifferentEmail} disabled={busy && code.length === 6}>
+            Use a different email
+          </button>
+        </div>
+        <p className={css.hint}>No email? Check spam or promotions — it comes from JobFlex.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={css.otp} data-otp-screen="form">
+      <h1 className="auth-h1">Start Your Free Trial</h1>
+      <p className="auth-lede">Create your account in seconds. No password needed.</p>
+
+      <button className={`btn btn--ghost ${css.google}`} type="button" id="googleBtn" onClick={googleTap}>
+        <svg className="ic ic--brand" aria-hidden="true">
+          <use href="#i-google" />
+        </svg>
+        Continue with Google
+      </button>
+      {inApp ? <HandoffHelp handoff={handoff} /> : null}
+
+      <div className="divider">
+        <span className="kpi-lbl">or continue with email</span>
+      </div>
+
+      <form id="step1Form" className={css.form} noValidate onSubmit={(e) => void onContinue(e)}>
+        <label className="fld">
+          <span className="fld-lbl">Your name</span>
+          <input className="fld-in" id="name" placeholder="First and last" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="fld">
+          <span className="fld-lbl">Email</span>
+          <input className="fld-in" type="email" id="email" placeholder="you@yourshop.com" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <button className="btn" type="submit" id="nextBtn" disabled={busy}>
+          {busy ? "Sending code…" : "Continue"}
+          <svg className="ic" aria-hidden="true">
+            <use href="#i-arrow-r" />
+          </svg>
+        </button>
+        <p className={css.trial} id="otpTrial">{trialText}</p>
+        <div className={err ? "err" : "err is-hidden"} id="err1" role="alert">
+          {err}
+        </div>
+      </form>
+
+      <div className="foot">
+        Already have an account?{" "}
+        <Link className="link-ink" href={"/auth/login" as Route}>
+          Sign in
+        </Link>
+      </div>
+    </div>
+  );
+}

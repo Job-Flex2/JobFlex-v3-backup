@@ -45,7 +45,9 @@ import { readGoogleSignup } from "@/lib/googleSignup";
 import { settleReferralsForSignupOrg } from "@/lib/referralRewards";
 import { after } from "next/server";
 import { captureSignupOutcome, trafficIdentitySchema } from "@/lib/traffic-capture-server";
-import { fbcFromFbclid, sendMetaEvent, type MetaSignupContext } from "@/lib/metaCapi";
+import { sendMetaEvent, type MetaSignupContext } from "@/lib/metaCapi";
+import { metaContextFor } from "@/lib/metaSignupContext";
+import { orgNameUnsetKey } from "@/lib/orgName";
 import { metaStartTrial } from "@/lib/metaSignupEvents";
 import { sendWelcomeFirstEstimate } from "@/lib/email/welcome";
 import { trackActivation } from "@/lib/activation-events";
@@ -125,7 +127,7 @@ const pendingSchema = z.object({
   customPages: z.array(z.string().max(40)).max(40).optional(),
 });
 
-type PendingRecord = z.infer<typeof pendingSchema> extends infer T
+export type PendingRecord = z.infer<typeof pendingSchema> extends infer T
   ? Omit<Extract<T, object>, "password" | "googleToken" | "meta"> & {
       /** The browser's Meta context plus, with consent, the request's IP and UA. */
       meta?: MetaSignupContext;
@@ -140,47 +142,20 @@ type PendingRecord = z.infer<typeof pendingSchema> extends infer T
       cardless?: { planSlug: string; requestedAt: number };
       /** When Meta's InitiateCheckout went out (sendSignupInitiateCheckout). */
       checkoutSentAt?: number;
+      /** The passwordless sign-up (lib/signupOtp, 2026-10-10): when the address
+       *  was proven — by the emailed code or link, or by Google — before this
+       *  intent was written. Only that server code sets it; the card-less
+       *  trial then starts without a second email (startVerifiedCardlessTrial). */
+      emailVerifiedAt?: number;
+      /** The business name is the person's name for now (no company name was
+       *  asked): the org is marked `orgNameUnset:<orgId>` (lib/orgName). */
+      nameUnset?: boolean;
+      signupMode?: "otp";
     }
   : never;
 
 function key(token: string): string {
   return `signup:${token}`;
-}
-
-/** The IP and user agent join the Meta context ONLY with marketing consent;
- *  without it the Conversions API gets the hashed email alone. The same goes
- *  for the click id: with consent, an fbc is built from `fbclid` when the
- *  pixel's _fbc cookie is missing (consent given after the landing, or the
- *  pixel blocked), and the fbclid is kept for the events that come later.
- *  fbp / fbc (2026-10-01): the request's own _fbp / _fbc cookies first, the
- *  values the browser put in the body when the request has none. */
-async function metaContextFor(meta: z.infer<typeof pendingSchema>["meta"]): Promise<MetaSignupContext | undefined> {
-  if (!meta) return undefined;
-  const ctx: MetaSignupContext = { consent: meta.consent, registrationEventId: meta.registrationEventId, checkoutEventId: meta.checkoutEventId, sourceUrl: meta.sourceUrl };
-  if (meta.consent) {
-    let jarFbp: string | undefined;
-    let jarFbc: string | undefined;
-    try {
-      const { cookies } = await import("next/headers");
-      const jar = await cookies();
-      jarFbp = jar.get("_fbp")?.value?.slice(0, 120) || undefined;
-      jarFbc = jar.get("_fbc")?.value?.slice(0, 400) || undefined;
-    } catch {
-      /* no request cookies — the body's values stand */
-    }
-    ctx.fbp = jarFbp || meta.fbp;
-    ctx.fbclid = meta.fbclid;
-    ctx.fbc = jarFbc || meta.fbc || fbcFromFbclid(meta.fbclid, Date.now());
-    try {
-      const { headers } = await import("next/headers");
-      const h = await headers();
-      ctx.clientIp = await clientIp();
-      ctx.userAgent = h.get("user-agent")?.slice(0, 400) ?? undefined;
-    } catch {
-      /* no request headers — the event goes without them */
-    }
-  }
-  return ctx;
 }
 
 /**
@@ -623,6 +598,54 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 const RESEND_MAX = 3;
 
 /**
+ * THE CARD-LESS TRIAL WITHOUT A SECOND EMAIL (passwordless sign-up,
+ * 2026-10-10). The address was already proven by the code — or the link, or
+ * Google — when this intent was written (`emailVerifiedAt`, set only by
+ * lib/signupOtp), so the plan step's "Start free trial" creates the trial and
+ * the account at once: the same brakes requestCardlessTrial checks, then the
+ * same finishCardlessTrial the emailed link runs. Answers a sign-in ticket.
+ */
+export async function startVerifiedCardlessTrial(
+  token: string,
+  planSlug: string,
+): Promise<
+  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null }
+  | { ok: false; error: string; requiresCard?: true; done?: boolean; email?: string }
+> {
+  try {
+    const trial = await signupTrialState({ fresh: true });
+    if (trial.mode === "card") {
+      return { ok: false, error: trial.capReached ? TRIALS_PAUSED_MESSAGE : TRIAL_NOW_TAKES_CARD, requiresCard: true };
+    }
+    if (planSlug === CUSTOM_PLAN_SLUG && !customPlanOffered()) return { ok: false, error: CUSTOM_PLAN_OFF_SALE };
+    const rec = await loadPending(token);
+    if (!rec) return { ok: false, error: "That signup expired. Start again." };
+    if (!rec.emailVerifiedAt) return { ok: false, error: "Confirm your email first." };
+    const taken = await db.user.findUnique({ where: { email: rec.email }, select: { id: true } });
+    if (taken) return { ok: false, error: "That email is already registered. Try signing in." };
+    try {
+      await enforceRateLimit(`cardless-trial:${await clientIp()}`, trialRequestsPerIpHour(), HOUR, "free trials from this network");
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Too many free trials. Try again later." };
+    }
+    const refusal = await cardlessTrialRefusal(rec.email);
+    if (refusal) return { ok: false, error: refusal };
+    if (planSlug !== CUSTOM_PLAN_SLUG) {
+      const plan = await getPlanBySlug(planSlug);
+      if (!plan || !plan.active || plan.isFree) return { ok: false, error: "That plan is not available." };
+    }
+    const next: PendingRecord = { ...rec, cardless: { planSlug, requestedAt: Date.now() } };
+    await db.syncState.upsert({ where: { key: key(token) }, update: { cursor: JSON.stringify(next) }, create: { key: key(token), cursor: JSON.stringify(next) } });
+    const res = await finishCardlessTrial(token);
+    if (!res.ok) return { ok: false, error: res.error, done: res.done, email: res.email, ...(res.cardHref ? { requiresCard: true as const } : {}) };
+    return res;
+  } catch (err) {
+    console.error("[signup] verified card-less trial failed:", err);
+    return { ok: false, error: "Couldn't start the trial. Try again." };
+  }
+}
+
+/**
  * THE CARD-LESS TRIAL, STEP TWO: the link from the email. Proves the address,
  * then creates the trialing subscription (no payment method —
  * lib/cardlessTrial) and the same account the paid return creates, with
@@ -837,6 +860,8 @@ async function createAccountFromPending(
           hashedPassword: rec.hashedPassword,
           image: rec.image ?? null,
           activeOrgId: org.id,
+          // The passwordless sign-up proved the address before the intent existed.
+          ...(rec.emailVerifiedAt ? { emailVerified: new Date() } : {}),
         },
         select: { id: true },
       });
@@ -852,6 +877,11 @@ async function createAccountFromPending(
         },
         update: {},
       });
+      // No business name was asked (passwordless): the person's name stands in,
+      // marked so the company page, the banner and the first send ask for it.
+      if (rec.nameUnset) {
+        await tx.syncState.upsert({ where: { key: orgNameUnsetKey(org.id) }, create: { key: orgNameUnsetKey(org.id), cursor: "1" }, update: { cursor: "1" } });
+      }
 
       return { orgId: org.id, userId: user.id };
     });

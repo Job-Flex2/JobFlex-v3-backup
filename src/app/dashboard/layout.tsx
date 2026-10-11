@@ -135,7 +135,7 @@ export default async function DashboardBlueprintLayout({
     if (ctx.role === "OWNER") {
       const org = await db.organization.findUnique({
         where: { id: ctx.organizationId },
-        select: { address: true, tradeTypesJson: true },
+        select: { address: true, tradeTypesJson: true, name: true },
       });
       needsSetup = Boolean(org && needsCompanySetup(org));
     }

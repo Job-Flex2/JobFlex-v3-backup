@@ -52,7 +52,11 @@ import { metaTrackWithServer } from "@/lib/metaEvents";
 import { metaTrack, newEventId, readMetaCookies } from "@/lib/metaPixel";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
-import { rememberFbclidForGoogle } from "@/components/v3/landing-e/landing-variant-effects";
+import { PasswordlessStep } from "./passwordless-step";
+import { rememberSignupMode, type SignupMode } from "@/lib/signupMode";
+import type { OtpRestore } from "@/lib/signupOtp";
+import { rememberFbclidForGoogle, writeLandingCookies } from "@/components/v3/landing-e/landing-variant-effects";
+import { resolveLandingVariant } from "@/components/v3/landing-e/landing-variants";
 import {
   applySignupPromo,
   googleSignupIdentity,
@@ -66,6 +70,7 @@ import {
   completePendingSignup,
   requestCardlessTrial,
   startPendingSignup,
+  startVerifiedCardlessTrial,
   updatePendingSignupAttribution,
   updatePendingSignupPages,
 } from "@/actions/signupCheckout";
@@ -127,7 +132,17 @@ export function RegisterContent({
   initialError = null,
   offerCustom = false,
   steps = 3,
+  mode = "password",
+  otpRestore = null,
 }: {
+  /* THE PASSWORDLESS SIGN-UP (2026-10-10, lib/signupMode): step 1 is
+     ./passwordless-step — name, email, a code from an email — and the plan
+     follows; no password, no company screen. "password" is the sign-up as
+     built, untouched. */
+  mode?: SignupMode;
+  /* Where a passwordless sign-up was left: the code screen, or the plan step
+     of the pending signup it became (lib/signupOtp draftRestore). */
+  otpRestore?: OtpRestore | null;
   /* THE SIGN-UP'S STEPS (owner, 2026-10-07, lib/trialPolicyServer): 3 =
      account · company · plan as built; 2 = step 1 also takes the business
      name and the trades (folded — what the shop does, not lead matching:
@@ -177,7 +192,8 @@ export function RegisterContent({
   const setupMode = setup !== null;
   /* The two-step sign-up: the company's part folds into step 1 (never in
      setup mode, which is the company screen on its own). */
-  const twoStep = steps === 2 && !setupMode;
+  const otp = mode === "otp" && !setupMode;
+  const twoStep = steps === 2 && !setupMode && !otp;
   /* THE FORM (landing-e pass A, 2026-09-11; the only form since 2026-09-16):
      step 1 is name, email, password and — since 2026-09-26 (owner) — a
      password confirmation, checked here in the browser only; the business
@@ -214,7 +230,7 @@ export function RegisterContent({
      shop is live" — which read as being sent back (owner's report). The done
      panel now carries a finalizing state (`payBusy`) for that second. */
   const [step, setStep] = React.useState<Step>(
-    setupMode ? 2 : ret ? (ret.sessionId && !ret.cancelled ? 4 : 3) : googlePrefill ? (twoStep ? 1 : 2) : 1,
+    setupMode ? 2 : ret ? (ret.sessionId && !ret.cancelled ? 4 : 3) : otpRestore?.signupToken ? 3 : googlePrefill ? (twoStep || otp ? 1 : 2) : 1,
   );
   useTrialOfferExposure(step === 3);
   /* GOOGLE ON THIS PAGE proves who the visitor is and nothing more (owner,
@@ -226,7 +242,10 @@ export function RegisterContent({
     googlePrefill ? { handle: googlePrefill.handle, email: googlePrefill.email } : null,
   );
   const lastTrackedStep = React.useRef("");
-  const trafficFlow = setupMode ? "setup" : google ? "google" : "standard";
+  /* The passwordless sign-up's email path reads "otp" (traffic page: Email
+     code signup); every step event also says which mode it ran in. */
+  const trafficFlow = setupMode ? "setup" : google ? "google" : otp ? "otp" : "standard";
+  const signupMode: SignupMode = otp ? "otp" : "password";
   React.useEffect(() => {
     if (step === 4) return;
     const key = `${trafficFlow}:${step}`;
@@ -234,10 +253,15 @@ export function RegisterContent({
     // Parent route effects must record the entry pageview before this screen.
     const timer = window.setTimeout(() => {
       lastTrackedStep.current = key;
-      trackTraffic(TRAFFIC_EVENTS.step, { step, flow: trafficFlow, variant: "e", steps: twoStep ? 2 : 3 });
+      trackTraffic(TRAFFIC_EVENTS.step, { step, flow: trafficFlow, variant: "e", steps: twoStep || otp ? 2 : 3, mode: signupMode });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [step, trafficFlow, twoStep]);
+  }, [step, trafficFlow, twoStep, otp, signupMode]);
+  /* `?flow=otp` / `?flow=off` are kept for this browser (lib/signupMode). */
+  React.useEffect(() => {
+    rememberSignupMode(searchParams?.get("flow") ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
+  }, []);
   /* True once the ticket minted by completePendingSignup has been redeemed:
      the browser holds a session, and step 4 may point at the dashboard. */
   const [signedIn, setSignedIn] = React.useState(false);
@@ -395,7 +419,7 @@ export function RegisterContent({
 
   /** The pending signup this plan step belongs to. Parked by step 2, or carried
    *  back from Stripe on the return URL. */
-  const [token, setToken] = React.useState<string | null>(ret?.token ?? null);
+  const [token, setToken] = React.useState<string | null>(ret?.token ?? otpRestore?.signupToken ?? null);
 
   /* META EVENT IDS (2026-09-09). One id for the browser's CompleteRegistration
      and the server's Conversions API copy, one for InitiateCheckout. The
@@ -420,7 +444,7 @@ export function RegisterContent({
   const leadSent = React.useRef(false);
   const registrationSent = React.useRef(false);
   /** Step 1's outcome for the analyst: passed, or refused and why. */
-  const step1Outcome = (outcome: "continue" | "error", reason = "") => trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: twoStep ? 2 : 3 });
+  const step1Outcome = (outcome: "continue" | "error", reason = "") => trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: twoStep ? 2 : 3, mode: signupMode });
   /* CompleteRegistration, the browser's copy. On the return from Checkout
      the page mounts straight on step 4 — before the consent provider has
      loaded the pixel, so an effect keyed on the step fired into nothing
@@ -560,7 +584,7 @@ export function RegisterContent({
       outcome: "ready", ready_ms: Math.round(performance.now()),
       typed_before_ready: !!pre?.typedAt, typed_ms: pre?.typedAt || -1,
       early_submit: !!pre?.submitAt, submit_ms: pre?.submitAt || -1,
-      variant: "e",
+      variant: "e", mode: signupMode,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the form becomes live
   }, []);
@@ -630,12 +654,12 @@ export function RegisterContent({
            before anything is created, so a failed lookup must not strand a
            verified visitor on a step they cannot complete. */
       }
-      if (live) setStep(twoStep ? 1 : 2);
+      if (live) setStep(twoStep || otp ? 1 : 2);
     });
     return () => {
       live = false;
     };
-  }, [gsu, googlePrefill, initialError, twoStep]);
+  }, [gsu, googlePrefill, initialError, twoStep, otp]);
 
   /* ADDRESS SUGGESTIONS on the company address (owner, 2026-09-02). The same
      Google Places attach every blueprint page uses; the list is appended to
@@ -876,7 +900,8 @@ export function RegisterContent({
       setStartingSlug(null);
     }
   }
-  const onStartPlan = (slug: string) => void (requiresCard ? onStartTrial(slug) : onStartCardless(slug));
+  const onStartPlan = (slug: string) =>
+    void (requiresCard ? onStartTrial(slug) : otp ? onStartCardlessVerified(slug) : onStartCardless(slug));
   const busyLabel = requiresCard ? "Opening checkout…" : "Starting your trial…";
 
   /* ONCE. The intent is spent by its first completion, and React's development
@@ -1155,7 +1180,88 @@ export function RegisterContent({
     // that already has an account signs in and lands on the dashboard. The
     // ad's click id rides to that return in a cookie (2026-10-01).
     rememberFbclidForGoogle(searchParams?.get("fbclid"));
+    if (otp) {
+      // The return of a new address is built from cookies (lib/googleSignup):
+      // the trade and the campaign this page came in on, and the mode — a
+      // page handed over from an in-app browser has none of the landing's.
+      writeLandingCookies(industry ? resolveLandingVariant(industry) : undefined, utm ?? undefined);
+      rememberSignupMode(searchParams?.get("flow") ?? null);
+    }
     void signIn("google", { callbackUrl: "/auth/register" });
+  }
+
+  /* THE PASSWORDLESS PATH'S PLAN STEP WITHOUT A CARD: the address is already
+     proven (the code, the link or Google), so the trial and the account are
+     created at once — no "Check your email" here (actions/signupCheckout
+     startVerifiedCardlessTrial). The browser's CompleteRegistration and
+     StartTrial carry the ids the server's copies used. */
+  async function onStartCardlessVerified(slug: string | null = planSlug) {
+    if (payBusy || !slug || !token) return;
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval, intent: "trial", flow: trafficFlow, card: false, mode: signupMode });
+    setPayBusy(true);
+    setStartingSlug(slug);
+    setPlansErr(null);
+    try {
+      if (slug === CUSTOM_PLAN_SLUG) {
+        const upd = await updatePendingSignupPages(token, customPages);
+        if (!upd.ok) {
+          setPlansErr(upd.error);
+          return;
+        }
+      }
+      const stamped = await updatePendingSignupAttribution(token, attribution);
+      if (!stamped.ok) {
+        setPlansErr(stamped.error);
+        return;
+      }
+      const res = await startVerifiedCardlessTrial(token, slug);
+      if (!res.ok) {
+        trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected", mode: signupMode });
+        if (res.requiresCard) setRequiresCard(true);
+        if (res.done && res.email) {
+          router.replace(`/auth/login?${new URLSearchParams({ next: "/dashboard", email: res.email }).toString()}` as Route);
+          return;
+        }
+        setPlansErr(res.error);
+        return;
+      }
+      if (res.registrationEventId) metaIds.current.registration = res.registrationEventId;
+      fireRegistration();
+      if (res.subscriptionId) metaTrack("StartTrial", { value: 0, currency: "USD" }, `${res.subscriptionId}:trial`);
+      const auth = res.ticket ? await signIn("signup-ticket", { ticket: res.ticket, redirect: false }) : null;
+      const ok = Boolean(auth && !auth.error);
+      setSignedIn(ok);
+      setDoneNote(`Your ${trialDays}-day free trial is on for ${res.email}. No card needed.`);
+      setStep(4);
+    } catch {
+      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "trial_unavailable", mode: signupMode });
+      setPlansErr("Couldn't start the trial. Try again.");
+    } finally {
+      setPayBusy(false);
+      setStartingSlug(null);
+    }
+  }
+
+  /* The address is proven (code, link or Google) and the pending signup
+     exists: the plan step, with the intent's token in the address so a
+     reload opens it again. */
+  function onOtpVerified(signupToken: string) {
+    try {
+      sessionStorage.setItem("jf_meta_reg:" + signupToken, metaIds.current.registration);
+    } catch {
+      /* storage blocked */
+    }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("d");
+      url.searchParams.delete("gsu");
+      url.searchParams.set("signup", signupToken);
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    } catch {
+      /* the plan step works without it */
+    }
+    setToken(signupToken);
+    setStep(3);
   }
 
   const brand = (
@@ -1205,7 +1311,7 @@ export function RegisterContent({
     </>
   );
 
-  const stepper = twoStep ? (
+  const stepper = twoStep || otp ? (
     <div className="stepper" id="stepper" data-steps="2">
       <div className={stItem(0, step)} data-step="1">
         <span className="st-n">1</span>
@@ -1282,6 +1388,41 @@ export function RegisterContent({
               stepper above already says which step this is, so the badge only
               repeated it. Same for step 2's "Almost there". */}
           <div className={step === 1 ? "step" : "step is-hidden"} id="step1">
+            {otp ? (
+              <>
+                <PasswordlessStep
+                  name={name}
+                  setName={setName}
+                  email={email}
+                  setEmail={setEmail}
+                  restore={otpRestore}
+                  google={google}
+                  inApp={inApp}
+                  requiresCard={requiresCard}
+                  trialDays={offer.days}
+                  industry={industry}
+                  utm={utm}
+                  attribution={attribution}
+                  analytics={trafficIdentity}
+                  meta={() => ({
+                    consent: effectiveConsent().marketing,
+                    registrationEventId: metaIds.current.registration,
+                    checkoutEventId: requiresCard ? metaIds.current.checkout : undefined,
+                    ...readMetaCookies(),
+                    fbclid: searchParams?.get("fbclid") || undefined,
+                    sourceUrl: window.location.origin + window.location.pathname,
+                  })}
+                  initialError={err1}
+                  onGoogle={onGoogle}
+                  onVerified={onOtpVerified}
+                  onLead={(em) => {
+                    if (!leadSent.current) leadSent.current = metaTrackWithServer("Lead", { content_name: industry ?? "default" }, { email: em });
+                  }}
+                />
+                {step === 1 && !google && !inApp ? <GoogleOneTap /> : null}
+              </>
+            ) : (
+            <>
             <h1 className="auth-h1">Register.</h1>
 
             <form id="step1Form" noValidate onSubmit={(e) => void onStep1(e)}>
@@ -1477,6 +1618,8 @@ export function RegisterContent({
             {/* Google One Tap (pass A): step 1 only, and only with
                 NEXT_PUBLIC_GOOGLE_CLIENT_ID set. */}
             {step === 1 && !google && !setupMode && !inApp ? <GoogleOneTap /> : null}
+            </>
+            )}
           </div>
 
           {/* ───── ШАГ 2 ───── */}

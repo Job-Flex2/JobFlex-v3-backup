@@ -35,3 +35,20 @@ export function rememberSignupMode(param: string | null): void {
     /* cookies blocked: the parameter still decides this page */
   }
 }
+
+/* The passwordless sign-up's draft (lib/signupOtp), named by this cookie as
+   well as by `?d=` in the address. Written from the browser — a cookie set by
+   a server action refreshes the route, and that refresh put the address back
+   the way it was before `?d=` was added. A day, like the draft. */
+export const OTP_DRAFT_COOKIE = "jf_otp_draft";
+export const OTP_DRAFT_MAX_AGE_S = 24 * 60 * 60;
+export function rememberOtpDraft(token: string | null): void {
+  try {
+    const secure = window.location.protocol === "https:" ? "; secure" : "";
+    document.cookie = token
+      ? `${OTP_DRAFT_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${OTP_DRAFT_MAX_AGE_S}; samesite=lax${secure}`
+      : `${OTP_DRAFT_COOKIE}=; path=/; max-age=0; samesite=lax${secure}`;
+  } catch {
+    /* cookies blocked: the address bar still names the draft */
+  }
+}

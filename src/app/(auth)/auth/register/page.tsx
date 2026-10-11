@@ -31,7 +31,9 @@ import { detectInAppBrowser } from "@/lib/inAppBrowser";
 import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { readPendingSignup } from "@/actions/signupCheckout";
 import { TrialOfferProvider } from "@/components/providers/trial-offer";
-import { signupSteps, signupTrialMode } from "@/lib/trialPolicyServer";
+import { readSignupFlow, signupTrialMode } from "@/lib/trialPolicyServer";
+import { SIGNUP_MODE_COOKIE, resolveSignupMode } from "@/lib/signupMode";
+import { OTP_DRAFT_COOKIE, draftRestore } from "@/lib/signupOtp";
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "@/lib/disposableEmail";
 import { customPlanOffered } from "@/lib/customPlanFlag";
 import { RegisterResponsive, type GooglePrefill, type SetupPrefill } from "./register-responsive";
@@ -154,13 +156,25 @@ export default async function RegisterPage({
      dynamic already, for the cookies above) so step 1 is drawn without the
      Google button from the first paint (lib/inAppBrowser). */
   const inAppBrowser = detectInAppBrowser((await headers()).get("user-agent"));
+  /* THE MODE (2026-10-10, lib/signupMode): the owner's switch, or ?flow=otp
+     in this browser. The passwordless sign-up reopens where it was left
+     (lib/signupOtp): the draft named by ?d= or this browser's cookie. */
+  const signupFlow = await readSignupFlow();
+  const mode = resolveSignupMode(sp.flow, jar.get(SIGNUP_MODE_COOKIE)?.value, signupFlow.passwordless);
+  const otpRestore =
+    mode === "otp" && !setup && !google && typeof sp.signup !== "string"
+      ? await draftRestore(typeof sp.d === "string" ? sp.d : null, jar.get(OTP_DRAFT_COOKIE)?.value ?? null).catch(() => null)
+      : null;
+  const pendingToken = typeof sp.signup === "string" ? sp.signup : (otpRestore?.signupToken ?? null);
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: STEP1_PRELUDE }} />
-      <TrialOfferProvider trackExposure={false} offer={(typeof sp.signup === "string" ? (await readPendingSignup(sp.signup))?.trialOffer : null) ?? await signupTrialOffer()}>
+      <TrialOfferProvider trackExposure={false} offer={(pendingToken ? (await readPendingSignup(pendingToken))?.trialOffer : null) ?? await signupTrialOffer()}>
       <RegisterResponsive
         requiresCard={(await signupTrialMode()) === "card"}
-        steps={await signupSteps()}
+        steps={signupFlow.steps}
+        mode={mode}
+        otpRestore={otpRestore}
         offerCustom={customPlanOffered()}
         initialError={googleError}
         setup={setup}
