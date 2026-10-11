@@ -92,6 +92,7 @@ import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
+import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
@@ -211,6 +212,9 @@ function stepTone(n: number): React.CSSProperties {
   return { "--step-c": `hsl(212 58% ${light}%)`, "--step-ink": light < 62 ? "#fff" : "var(--ink)" } as React.CSSProperties;
 }
 
+/** The photo of the house is out (owner, 2026-10-11: "let's not use that picture at all — the 3D model, and you draw the house"); its flow stays here, dormant. */
+const PHOTO_ENABLED = false;
+
 function Step({ n, title, summary, children, id }: { n: number; title: string; summary: string; children: React.ReactNode; id?: string }) {
   return (
     <details className={s.step} open id={id} style={stepTone(n)} data-step={n}>
@@ -289,7 +293,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const site = React.useMemo(() => siteFromAddress(address, homeState), [address, homeState]);
   const [design, setDesign] = React.useState<DeckDesign>(() => {
     // A reopened design from before the state codes takes the job's state; one that has its own keeps it.
-    if (opened) return normalizeDeckDesign(opened.design, { state: market.state || homeState });
+    if (opened) {
+      // A design from before the drawn house: a back notch gets its step in the wall once, here, so the two agree.
+      const d0 = normalizeDeckDesign(opened.design, { state: market.state || homeState });
+      const h0 = houseForShape(d0.house, d0.shape, { drop: false });
+      return h0 === d0.house ? d0 : applyDeckPatch(d0, { house: h0 });
+    }
     const d = defaultDeckDesign({ state: market.state || homeState, frostIn: market.frostIn });
     // The site's snow and termites go in from the start; the design load follows the snow.
     return applyDeckPatch(d, { loadPsf: site.deckLoad, frostIn: site.frostIn, site: { ...d.site, groundSnowPsf: site.groundSnowPsf, termite: site.termite } });
@@ -321,12 +330,22 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       for (const k of keys) touched.current.add(k);
       dirty.current = true;
       setDesign((d) => {
-        const next = applyDeckPatch(d, p);
+        let next = applyDeckPatch(d, p);
+        // THE HOUSE AND THE DECK AGREE (lib/deck/house): a step in the wall at the deck's end notches the deck; a notch
+        // picked in the Shape step puts its step in the wall; a rectangle takes that step away.
+        if (p.house) {
+          const fit = deckShapeForHouse(next.shape, next.house);
+          if (JSON.stringify(fit.shape) !== JSON.stringify(next.shape)) next = applyDeckPatch(next, { shape: fit.shape });
+        } else if (p.shape) {
+          const h2 = houseForShape(next.house, next.shape);
+          if (h2 !== next.house) next = applyDeckPatch(next, { house: h2 });
+        }
         return resizes(p) ? settle(next) : next;
       });
     },
     [settle],
   );
+  const setHouse = React.useCallback((p: Partial<HouseDesign>) => patch({ house: p }), [patch]);
   /** A change to the roof: the whole roof object goes in, so nothing nested is lost. */
   const rp = React.useCallback(
     (p: Partial<RoofDesign>) => {
@@ -442,6 +461,15 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         case "stair":
           setStairs((list) => list.map((st) => (st.id === e.id ? { ...st, atFt: Math.max(st.widthFt / 2, toHalfFt(e.value)) } : st)));
           break;
+        case "jog":
+          patch({ house: { jogs: design.house.jogs.map((j) => (j.id === e.id ? { ...j, atFt: toHalfFt(e.value) } : j)) } });
+          break;
+        case "house-left":
+          setHouse({ leftFt: Math.min(HOUSE_LIMITS.extendFt.max, Math.max(HOUSE_LIMITS.extendFt.min, -toHalfFt(e.value))) });
+          break;
+        case "house-right":
+          setHouse({ rightFt: Math.min(HOUSE_LIMITS.extendFt.max, Math.max(HOUSE_LIMITS.extendFt.min, toHalfFt(e.value) - design.shape.widthFt)) });
+          break;
         case "stair-width": {
           // The knob sits on the far side: the near side stays put, so the stairs grow (or shrink) under the knob.
           const w2 = Math.min(STAIR_LIMITS.widthFt.max, Math.max(STAIR_LIMITS.widthFt.min, toHalfFt(e.value)));
@@ -457,7 +485,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `polygon` is derived from `design` below; the latest design is what matters.
-    [design, patch, rp, setStairs],
+    [design, patch, rp, setStairs, setHouse],
   );
   React.useEffect(() => {
     if (!playing) return;
@@ -748,7 +776,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const [showHouse, setShowHouse] = React.useState(true);
   const backdrop = React.useMemo<DeckBackdrop | null>(() => {
     const p = design.photo;
-    if (!showHouse || !p?.placed || !photoHref) return null;
+    if (!PHOTO_ENABLED || !showHouse || !p?.placed || !photoHref) return null;
     return { href: photoHref, w: p.w, h: p.h, placed: p.placed, elevWidthFt: elevation.widthFt, elevLeftFt: elevation.leftFt, jogs: (p.fit?.read?.jogs ?? []).map((j) => ({ x: j.x, dir: j.dir, depthFt: j.depthFt })), standoffFt: scene.house ? 0 : 16, wall: p.fit?.read ? wallExtent(p.fit.read) : null };
   }, [design.photo, photoHref, elevation.widthFt, elevation.leftFt, showHouse, scene.house]);
   // MARK THE WALL (owner, 2026-10-10: "start drawing the lines right on that picture — the house wall where the deck
@@ -1052,7 +1080,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <span className={s.cardTitle}>The {what.toLowerCase()}</span>
               <span className={s.mono}>{scene.facts}</span>
             </div>
-            <Seg small label="View" value={view} onChange={setView} options={[{ value: "3d", label: "3D" }, { value: "plan", label: "Framing plan" }, { value: "photo", label: "Photo" }]} />
+            <Seg small label="View" value={view} onChange={setView} options={PHOTO_ENABLED ? [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }, { value: "photo" as const, label: "Photo" }] : [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }]} />
           </div>
           <div className={s.viewBox}>
             {view === "3d" ? (
@@ -1060,7 +1088,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                 {editing && !placing ? (
                   <div className={s.placeBanner} data-deck-editing>
-                    <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge and its width at its side. Everything re-frames and re-prices as you drag.</span>
+                    <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge and its width at its side, the house&apos;s two corners and every step in its wall. Everything re-frames and re-prices as you drag.</span>
                     <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setEditing(false)}>Done</button>
                   </div>
                 ) : null}
@@ -1112,7 +1140,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <button type="button" className={cx(s.btn, s.btnSm, xray && s.btnOn)} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
                   X-ray
                 </button>
-                {design.photo?.placed ? (
+                {PHOTO_ENABLED && design.photo?.placed ? (
                   <button type="button" className={cx(s.btn, s.btnSm, showHouse && s.btnOn)} aria-pressed={showHouse} onClick={() => setShowHouse((v) => !v)} data-deck-house-toggle>
                     House photo
                   </button>
@@ -1148,7 +1176,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </div>
               ) : null}
             </>
-          ) : view === "photo" && design.photo ? (
+          ) : PHOTO_ENABLED && view === "photo" && design.photo ? (
             <>
               <div className={s.photoRow}>
                 <span className={s.mono}>{design.photo.fit ? "Fitted to the wall — drag to adjust, pull the handle to size · the client sees it placed like this" : "Drag the outline to the wall · pull the handle to size it · the client sees it placed like this"}</span>
@@ -1249,7 +1277,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </button>
               ))}
             </div>
-            {/* WHERE IT STANDS (owner, 2026-10-10): from the very start, a plain site or the house's own wall from a photo. */}
+            {/* WHERE IT STANDS (owner, 2026-10-10): from the very start, a plain site or the house's own wall from a photo — out since 2026-10-11, the house is drawn. */}
+            {PHOTO_ENABLED ? (
             <Field label="Where it stands" wide>
               <div className={s.chips} role="group" aria-label="Where it stands">
                 <button type="button" className={cx(s.chip, !design.photo && s.chipOn)} aria-pressed={!design.photo} onClick={() => { if (design.photo) removePhoto(); }} data-deck-site="plain">
@@ -1261,6 +1290,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </div>
               <p className={s.hint}>With a photo the wall, the door and its steps are read off the picture — or marked by hand — and the {what.toLowerCase()} is set against the real wall, in the 3D too. A gazebo that stands on its own keeps the house behind it.</p>
             </Field>
+            ) : null}
             {design.structure === "gazebo" || design.structure === "pergola" ? (
               <Field label="It stands" wide>
                 <Seg small label="It stands" value={design.floor} onChange={(f: Floor) => patch({ floor: f })} options={(["deck", "slab", "ground"] as const).map((f) => ({ value: f, label: FLOOR_LABEL[f] }))} />
@@ -1268,6 +1298,48 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             ) : null}
             {!withDeck ? <p className={s.hint}>{design.floor === "slab" ? "A new 4-in. slab a foot wider than the posts goes in the price; the posts sit on anchored bases." : "Each post gets its own poured footing, sized for what it carries."}</p> : null}
           </Step>
+
+          {/* THE HOUSE (owner, 2026-10-11): drawn, not photographed — storeys, the roof, and the back wall's steps the deck fits itself to. */}
+          {scene.house ? (
+            <Step n={next()} title="The house" summary={houseWords(design.house)} id="step-house">
+              <p className={s.hint}>The house is drawn for the look of the {what.toLowerCase()}: one or two storeys, a hip or a gable roof, and the shape of its back wall. Add a step where the wall comes out or goes back and drag it along the wall in the 3D — a bump-out at the {what.toLowerCase()}&apos;s end notches the {what.toLowerCase()} around it on its own.</p>
+              <div className={s.rowGrid}>
+                <Field label="Storeys">
+                  <Seg small label="Storeys" value={String(design.house.storeys)} onChange={(v) => setHouse({ storeys: v === "2" ? 2 : 1 })} options={[{ value: "1", label: "One" }, { value: "2", label: "Two" }]} />
+                </Field>
+                <Field label="Roof">
+                  <Seg small label="Roof" value={design.house.roof} onChange={(v: HouseRoof) => setHouse({ roof: v })} options={HOUSE_ROOFS.map((r) => ({ value: r, label: HOUSE_ROOF_LABEL[r] }))} />
+                </Field>
+              </div>
+              <div className={s.rowGrid}>
+                <NumberInput label="Wall past the left end, feet" value={design.house.leftFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ leftFt: n2 })} />
+                <NumberInput label="Wall past the right end, feet" value={design.house.rightFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ rightFt: n2 })} />
+              </div>
+              <div className={s.rows} data-deck-house-jogs>
+                {design.house.jogs.map((j) => (
+                  <div key={j.id} className={s.row} data-deck-house-jog={j.id}>
+                    <div className={s.rowHead}>
+                      <span className={s.rowTitle}>A step in the wall</span>
+                      <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setHouse({ jogs: design.house.jogs.filter((x) => x.id !== j.id) })} data-deck-house-jog-remove>Remove</button>
+                    </div>
+                    <div className={s.rowGrid}>
+                      <NumberInput label="At, feet from the left end" value={j.atFt} parse={parseFeet} format={feetText} min={-design.house.leftFt + 1} max={design.shape.widthFt + design.house.rightFt - 1} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, atFt: n2 } : x)) })} />
+                      <Field label="The wall to its right">
+                        <Seg small label="The wall to its right" value={j.dir} onChange={(v: HouseJog["dir"]) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, dir: v } : x)) })} options={[{ value: "toward", label: "Comes out" }, { value: "away", label: "Steps back" }]} />
+                      </Field>
+                      <NumberInput label="By, feet" value={j.depthFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.depthFt.min} max={HOUSE_LIMITS.depthFt.max} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, depthFt: n2 } : x)) })} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={design.house.jogs.length >= HOUSE_LIMITS.jogs} onClick={() => setHouse({ jogs: [...design.house.jogs, { id: nextJogId(design.house.jogs), atFt: Math.max(2, design.shape.widthFt - 4), dir: "toward", depthFt: 3 }] })} data-deck-house-add-jog>
+                Add a step in the wall
+              </button>
+              {houseNotes(design.shape, design.house).map((n2) => (
+                <p key={n2} className={cx(s.call, s.callBad)} data-deck-house-note>{n2}</p>
+              ))}
+            </Step>
+          ) : null}
 
           {!withDeck ? (
             <Step n={next()} title={design.structure === "pergola" ? "The pergola's footprint" : "The gazebo's footprint"} summary={sizeWords(design)} id="step-footprint">
@@ -1909,6 +1981,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             ) : null}
           </Step>
 
+          {PHOTO_ENABLED ? (
           <Step n={next()} title="Photo of the house" summary={photoSummary} id="step-photo">
             <p className={s.hint}>A picture of the back of the house, taken square on from the yard. The studio finds the wall, the door and the windows, cuts the picture to the wall and sets the {what.toLowerCase()} against it at the right size — then you drag it if it should sit elsewhere. It is drawn over the picture where you place it, and the client&apos;s page shows their own house with it in place.</p>
             <div className={s.chips}>
@@ -1924,6 +1997,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             </div>
             {photoError ? <p className={cx(s.call, s.callBad)} role="alert">{photoError}</p> : null}
           </Step>
+          ) : null}
         </div>
       </div>
 

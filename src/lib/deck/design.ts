@@ -18,6 +18,7 @@ import { parseWallRead, type JogOffer, type WallRead } from "./photoFit";
 import { LOADS, POST_SIZES, SOILS, SOLID_BEAMS, SPACINGS, JOIST_SIZES, type BuiltUpBeam, type JoistSize, type LedgerFastener, type LoadPsf, type PostSize, type SoilPsf, type SolidBeam, type SpacingIn } from "./codeTables";
 import { DECKING, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, wallType, type FramingSpeciesId, type RailTypeId, type WallTypeId } from "./catalog";
 import { SLOPE_LIMITS, flatSlope, type SiteSlope, type TermiteHazard } from "./site";
+import { defaultHouse, normalizeHouse, type HouseDesign } from "./house";
 
 /**
  * v2 (2026-10-10): `structure`, `floor`, `roof` and `photo` joined the design.
@@ -420,6 +421,8 @@ export interface DeckDesign {
   floor: Floor;
   roof: RoofDesign;
   photo: DeckPhoto | null;
+  /** The house drawn behind it (lib/deck/house): storeys, roof, how far its back wall runs past the deck, and the steps in that wall. */
+  house: HouseDesign;
 }
 
 /** The rails every number is held inside. */
@@ -554,6 +557,7 @@ export function defaultDeckDesign(opts: { state?: string | null; frostIn?: numbe
     floor: "deck",
     roof: defaultRoofDesign("covered-deck"),
     photo: null,
+    house: defaultHouse(),
   };
 }
 
@@ -694,6 +698,7 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
     floor,
     roof,
     photo,
+    house: normalizeHouse(r.house, shape),
   };
 }
 

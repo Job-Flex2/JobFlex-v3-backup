@@ -227,6 +227,48 @@ function sampleColours(img: HTMLImageElement, r: { x0: number; x1: number; y0: n
     return null;
   }
 }
+/** Triangles into a geometry with normals and a planar roofing UV (one tile per 3 ft). */
+function trisGeometry(pts: number[][]): THREE.BufferGeometry {
+  const pos = new Float32Array(pts.length * 3);
+  const uv = new Float32Array(pts.length * 2);
+  pts.forEach((pt, i) => {
+    pos[i * 3] = pt[0];
+    pos[i * 3 + 1] = pt[1];
+    pos[i * 3 + 2] = pt[2];
+    uv[i * 2] = pt[0] / 3;
+    uv[i * 2 + 1] = (pt[2] + pt[1]) / 3;
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  g.computeVertexNormals();
+  return g;
+}
+/** A hip roof over a w × d footprint centred at the origin: eaves at y = 0, the ridge along x at `rise`, the hips at 45°. */
+function hipRoofGeometry(w: number, d: number, rise: number): { slopes: THREE.BufferGeometry; ends: THREE.BufferGeometry | null } {
+  const hw = w / 2;
+  const hd = d / 2;
+  const hr = Math.max(0.3, hw - hd);
+  const A = [-hw, 0, hd];
+  const B = [hw, 0, hd];
+  const C = [hw, 0, -hd];
+  const D = [-hw, 0, -hd];
+  const R1 = [-hr, rise, 0];
+  const R2 = [hr, rise, 0];
+  return { slopes: trisGeometry([A, B, R2, A, R2, R1, C, D, R1, C, R1, R2, B, C, R2, D, A, R1]), ends: null };
+}
+/** A gable roof: the ridge runs the whole length; its two ends are wall (siding), not roofing. */
+function gableRoofGeometry(w: number, d: number, rise: number): { slopes: THREE.BufferGeometry; ends: THREE.BufferGeometry | null } {
+  const hw = w / 2;
+  const hd = d / 2;
+  const A = [-hw, 0, hd];
+  const B = [hw, 0, hd];
+  const C = [hw, 0, -hd];
+  const D = [-hw, 0, -hd];
+  const R1 = [-hw, rise, 0];
+  const R2 = [hw, rise, 0];
+  return { slopes: trisGeometry([A, B, R2, A, R2, R1, C, D, R1, C, R1, R2]), ends: trisGeometry([B, C, R2, D, A, R1]) };
+}
 function sidingTexture() {
   return canvasTexture(8, 64, (g) => {
     g.fillStyle = "#ffffff";
@@ -594,7 +636,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     /** The camera's first view for this deck, or the same angle refitted to a new size. */
     const frame = (reset: boolean) => {
       const s = sceneRef.current;
-      const peak = Math.max(s.heightFt, s.peakFt ?? s.heightFt);
+      // The house behind the deck is part of the picture (2026-10-11): the first view stands back far enough for its eave.
+      const peak = Math.max(s.heightFt, s.peakFt ?? s.heightFt, s.house && !backdropRef.current ? s.house.heightFt : 0);
       const next = Math.max(s.widthFt, s.depthFt, peak * 1.4, 10);
       const target = new THREE.Vector3(0, Math.max(1, peak * 0.45), 0);
       const narrow = Math.max(1, 1.4 / Math.max(0.3, camera.aspect));
@@ -963,86 +1006,93 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         polys[L] = { mesh, ends, polyIdx: mine };
       }
 
-      // The house: wall, foundation band, a roof slab, a door onto the deck and a window each side — unless the photo stands for it.
+      // THE HOUSE (owner, 2026-10-11: "make it look like a house, not a shed"): one block per part of its back wall on a
+      // foundation band with corner boards and a frieze, the door onto the deck, windows per storey, a hip or gable roof
+      // over it — a two-storey house keeps its bump-outs one storey tall under a hip of their own. Unless a photo stands
+      // for it.
       const bd = backdropRef.current;
       if (!bd) {
         mount.dataset.deck3dBackdrop = "none";
         delete mount.dataset.deck3dWall;
       }
       if (s.house && !bd) {
+        const H = s.house;
         const wallMat = new THREE.MeshStandardMaterial({ color: SIDING, roughness: 0.95, map: siding });
         const baseMat = new THREE.MeshStandardMaterial({ color: FOUNDATION, roughness: 1, map: concrete });
-        const roofMat = new THREE.MeshStandardMaterial({ color: ROOF, roughness: 0.9 });
+        const roofMat = new THREE.MeshStandardMaterial({ color: ROOF, roughness: 0.95, map: shingles, side: THREE.DoubleSide });
         const glassMat = new THREE.MeshStandardMaterial({ color: GLASS_C, roughness: 0.15, metalness: 0.4 });
         const trimMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
         owned.push(wallMat, baseMat, roofMat, glassMat, trimMat);
-        const height = s.house.heightFt;
+        const height = H.heightFt;
         const band = Math.min(1.5, Math.max(0.5, s.heightFt - 0.6));
         siding.repeat.set(1, height / 0.5);
-        for (const [x0, y0, x1, y1] of s.house.blocks) {
-          const w = x1 - x0;
-          const d = y1 - y0;
-          const cx = (x0 + x1) / 2 - ox;
-          const cz = (y0 + y1) / 2 - oz;
-          const wall = new THREE.Mesh(unitBox, wallMat);
-          wall.scale.set(w, height - band, d);
-          wall.position.set(cx, band + (height - band) / 2, cz);
-          wall.castShadow = true;
-          wall.receiveShadow = true;
-          wall.userData.layer = -2;
-          const base = new THREE.Mesh(unitBox, baseMat);
-          base.scale.set(w + 0.02, band, d + 0.02);
-          base.position.set(cx, band / 2, cz);
-          base.receiveShadow = true;
-          base.userData.layer = -2;
-          const roof = new THREE.Mesh(unitBox, roofMat);
-          roof.scale.set(w + 2, 0.5, d + 2);
-          roof.position.set(cx, height + 0.25, cz);
-          roof.castShadow = true;
-          roof.userData.layer = -2;
-          const eave = new THREE.Mesh(unitBox, trimMat);
-          eave.scale.set(w + 2, 0.6, 0.15);
-          eave.position.set(cx, height - 0.05, cz + d / 2 + 1);
-          eave.userData.layer = -2;
-          group.add(wall, base, roof, eave);
-        }
-        if (s.house.door) {
-          const [dx, dw, dh] = s.house.door;
-          const sill = s.heightFt;
-          const opening = (x: number, w: number, h: number, y: number, door: boolean) => {
-            const trim = new THREE.Mesh(unitBox, trimMat);
-            trim.scale.set(w + 0.5, h + 0.5, 0.12);
-            trim.position.set(x - ox, y + h / 2, -oz + 0.03);
-            trim.userData.layer = -2;
-            const glass = new THREE.Mesh(unitBox, glassMat);
-            glass.scale.set(w, h, 0.14);
-            glass.position.set(x - ox, y + h / 2, -oz + 0.04);
-            glass.userData.layer = -2;
-            group.add(trim, glass);
-            // Mullions: a door splits into two leaves, a window into four lights.
-            const bars = door ? [[x - ox, y + h / 2, 0.1, h]] : [[x - ox, y + h / 2, 0.08, h], [x - ox, y + h / 2, w, 0.08]];
-            for (const [bx, by, bw, bh] of bars) {
-              const m = new THREE.Mesh(unitBox, trimMat);
-              m.scale.set(bw, bh, 0.16);
-              m.position.set(bx, by, -oz + 0.05);
-              m.userData.layer = -2;
-              group.add(m);
-            }
-            if (door) {
-              const handle = new THREE.Mesh(unitBox, glassMat);
-              handle.scale.set(0.08, 0.5, 0.2);
-              handle.position.set(x - ox + 0.35, y + 3, -oz + 0.12);
-              handle.userData.layer = -2;
-              group.add(handle);
-            }
-          };
-          opening(dx, dw, dh, sill, true);
-          const main = s.house.blocks[0];
-          for (const side of [-1, 1]) {
-            const wx = dx + side * (dw / 2 + 4.5);
-            if (wx - 1.5 > Math.max(main[0], 0) && wx + 1.5 < Math.min(main[2], s.widthFt)) opening(wx, 3, 4, sill + 2.7, false);
+        const blocks = H.blocks.map((b) => ({ x0: b[0], y0: b[1], x1: b[2], y1: b[3], h: b[4] ?? height }));
+        mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}`;
+        const part = (geo: THREE.BufferGeometry | null, mat: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, shadow = false) => {
+          const m = new THREE.Mesh(geo ?? unitBox, mat);
+          if (!geo) m.scale.set(sx, sy, sz);
+          m.position.set(x, y, z);
+          m.castShadow = shadow;
+          m.receiveShadow = true;
+          m.userData.layer = -2;
+          group.add(m);
+          return m;
+        };
+        for (const b of blocks) {
+          const w = b.x1 - b.x0;
+          const d = b.y1 - b.y0;
+          const cx = (b.x0 + b.x1) / 2 - ox;
+          const cz = (b.y0 + b.y1) / 2 - oz;
+          part(null, wallMat, w, b.h - band, d, cx, band + (b.h - band) / 2, cz, true);
+          part(null, baseMat, w + 0.02, band, d + 0.02, cx, band / 2, cz);
+          // Corner boards at the face's two ends, a frieze under the eave.
+          for (const x of [b.x0 + 0.18, b.x1 - 0.18]) part(null, trimMat, 0.36, b.h - band, 0.36, x - ox, band + (b.h - band) / 2, b.y1 - oz + 0.06);
+          part(null, trimMat, w + 0.3, 0.5, 0.16, cx, b.h - 0.25, b.y1 - oz + 0.1);
+          // The roof: the main kind over the full-height blocks, a hip of its own over a lower bump-out.
+          const ovh = 1.2;
+          const low = b.h < height - 0.01;
+          const kind = low ? "hip" : (H.roof ?? "hip");
+          const rw = w + 2 * ovh;
+          const rd = d + 2 * ovh;
+          const rise = (rd / 2) * (low ? 0.35 : 0.5);
+          const geo = kind === "gable" ? gableRoofGeometry(rw, rd, rise) : hipRoofGeometry(rw, rd, rise);
+          owned.push(geo.slopes);
+          part(geo.slopes, roofMat, 1, 1, 1, cx, b.h, cz, true);
+          if (geo.ends) {
+            owned.push(geo.ends);
+            part(geo.ends, wallMat, 1, 1, 1, cx, b.h, cz);
+          }
+          // Fascia along the eaves.
+          part(null, trimMat, rw, 0.55, 0.16, cx, b.h - 0.05, b.y1 - oz + ovh);
+          part(null, trimMat, rw, 0.55, 0.16, cx, b.h - 0.05, b.y0 - oz - ovh);
+          if (kind === "hip") {
+            part(null, trimMat, 0.16, 0.55, rd, b.x0 - ox - ovh, b.h - 0.05, cz);
+            part(null, trimMat, 0.16, 0.55, rd, b.x1 - ox + ovh, b.h - 0.05, cz);
           }
         }
+        // The door onto the deck and the windows: trim, glass, mullions.
+        const opening = (x: number, w: number, h: number, y: number, door: boolean, face: number) => {
+          const z0 = face - oz;
+          part(null, trimMat, w + 0.5, h + 0.5, 0.12, x - ox, y + h / 2, z0 + 0.03);
+          part(null, glassMat, w, h, 0.14, x - ox, y + h / 2, z0 + 0.04);
+          const bars = door ? [[x - ox, y + h / 2, 0.1, h]] : [[x - ox, y + h / 2, 0.08, h], [x - ox, y + h / 2, w, 0.08]];
+          for (const [bx, by, bw, bh] of bars) part(null, trimMat, bw, bh, 0.16, bx, by, z0 + 0.05);
+          if (door) part(null, glassMat, 0.08, 0.5, 0.2, x - ox + 0.35, y + 3, z0 + 0.12);
+          else part(null, trimMat, w + 0.7, 0.18, 0.3, x - ox, y - 0.09, z0 + 0.12);
+        };
+        if (H.door) {
+          const [dx, dw, dh, face = 0] = H.door;
+          opening(dx, dw, dh, s.heightFt, true, face);
+          if (!H.windows) {
+            // An older scene: a window each side of the door.
+            const main = H.blocks[0];
+            for (const side of [-1, 1]) {
+              const wx = dx + side * (dw / 2 + 4.5);
+              if (wx - 1.5 > Math.max(main[0], 0) && wx + 1.5 < Math.min(main[2], s.widthFt)) opening(wx, 3, 4, s.heightFt + 2.7, false, 0);
+            }
+          }
+        }
+        for (const [wx, face, ww, wh, sill] of H.windows ?? []) opening(wx, ww, wh, sill, false, face);
       }
 
       // The fixtures' light at night: a few real lights, the rest glow.

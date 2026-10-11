@@ -32,6 +32,7 @@ import type { StairMember } from "./stairs";
 import type { RailMember } from "./rails";
 import { railWords } from "./rails";
 import { electricalWords } from "./electrical";
+import { houseHandles, houseScene, type HouseRoof } from "./house";
 
 export const DECK_SCENE_VERSION = 3;
 
@@ -122,7 +123,7 @@ export const SCENE_MAX_GLOWS = 120;
 
 /** A handle: dragging it along `axis` (scene feet) changes `kind` from `value` by the distance dragged. */
 export interface SceneHandle {
-  kind: "width" | "depth" | "height" | "eave" | "stair" | "stair-width" | "lower-depth" | "roof-width" | "roof-depth" | "pitch";
+  kind: "width" | "depth" | "height" | "eave" | "stair" | "stair-width" | "lower-depth" | "roof-width" | "roof-depth" | "pitch" | "jog" | "house-left" | "house-right";
   id: string;
   x: number;
   y: number;
@@ -182,7 +183,7 @@ export interface DeckScene {
   /** The outline as a flat ring, ft (the deck's, or the roof's posts when there is no deck). */
   outline: number[];
   /** The house, where the deck touches one: blocks [x0, y0, x1, y1], its height, and a door on the main wall [centre x, width, height]. */
-  house: { blocks: number[][]; heightFt: number; door: number[] | null } | null;
+  house: { blocks: number[][]; heightFt: number; door: number[] | null; storeys?: 1 | 2; roof?: HouseRoof; windows?: number[][] } | null;
   /** The ground's fall across the deck, ft: out from the house over its depth, left to right over its width (null = flat). */
   ground: { outDropFt: number; acrossDropFt: number } | null;
   /** Fixtures that glow in the night view: [x, y, z, colour as 0xRRGGBB, sample (1 = the client's own fixture)], ft. */
@@ -730,18 +731,12 @@ export function deckScene(s: DeckStructure): DeckScene {
   let house: DeckScene["house"] = null;
   const onWall = frame ? design.placement !== "detached" : roof?.attach === "wall";
   if (onWall) {
-    const margin = 48;
-    const blocks: number[][] = [[r3(-margin), r3(-144), r3(width + margin), 0]];
-    if (frame && design.shape.kind === "L" && design.shape.notch.corner.startsWith("back")) {
-      const b = frame.zones[1].zone;
-      const left = design.shape.notch.corner.endsWith("left");
-      blocks.push([r3(left ? -margin : b.x0), 0, r3(left ? b.x1 : width + margin), r3(b.y0)]);
-    }
-    const main = frame ? frame.edges.filter((e) => e.house && e.side === "back" && Math.abs(e.y0) < 0.01).sort((a, b) => b.lengthIn - a.lengthIn)[0] : { x0: 0, x1: width, lengthIn: width };
-    const doorWidth = main && main.lengthIn >= 120 ? 72 : 36;
-    const door = main && main.lengthIn >= doorWidth + 24 ? [r3((main.x0 + main.x1) / 2), r3(doorWidth), r3(80)] : null;
-    const wallTop = Math.max(heightIn + 108, peakIn + 30);
-    house = { blocks, heightFt: Math.max(10, r3(wallTop)), door };
+    // Drawn from the design's house (lib/deck/house): its back wall's parts, the door on the deck's main back edge,
+    // windows per storey — the shape of a gazebo on its own floor stands in for a deck's.
+    const main = frame ? frame.edges.filter((e) => e.house && e.side === "back" && Math.abs(e.y0) < 0.01).sort((a, b) => b.lengthIn - a.lengthIn)[0] : null;
+    const hShape = frame ? design.shape : { kind: "rect" as const, widthFt: Math.max(4, width / 12), depthFt: Math.max(4, depth / 12) };
+    const hs = houseScene(hShape, design.house, { deckHeightFt: heightIn / 12, peakFt: peakIn / 12, mainEdge: main ? { x0: main.x0 / 12, x1: main.x1 / 12 } : null });
+    house = { blocks: hs.blocks, heightFt: hs.heightFt, door: hs.door, storeys: hs.storeys, roof: hs.roof, windows: hs.windows };
   }
 
   const outline = frame ? shapeOutline(design.shape).flatMap((p) => [r3(p.x), r3(p.y)]) : (roof?.ring ?? []).flatMap((p) => [r3(p.x), r3(p.y)]);
@@ -795,6 +790,7 @@ export function deckScene(s: DeckStructure): DeckScene {
     const c = st.footprint[2];
     if (st.kind === "flight" && c) handles.push({ kind: "stair-width", id: st.design.id, x: r3((b.x + c.x) / 2), y: r3((b.y + c.y) / 2), z: r3(top - st.riseIn / 2), axis: st.design.side === "front" ? "x" : "y", value: st.design.widthFt, perUnit: 1, label: "Stair width" });
   }
+  if (house && frame) for (const h of houseHandles(design.shape, design.house, (frame.surfaceIn + 2) / 12)) handles.push(h);
   return {
     v: DECK_SCENE_VERSION,
     widthFt: r3(Math.max(width, 48)),
@@ -901,16 +897,20 @@ export function parseDeckScene(raw: unknown): DeckScene | null {
   let house: DeckScene["house"] = null;
   const h = (r.house && typeof r.house === "object" ? r.house : null) as Record<string, unknown> | null;
   if (h) {
-    if (!fin(h.heightFt) || !inside(h.heightFt, 1, 120) || !Array.isArray(h.blocks) || h.blocks.length > 4) return null;
+    if (!fin(h.heightFt) || !inside(h.heightFt, 1, 120) || !Array.isArray(h.blocks) || h.blocks.length > 12) return null;
     const blocks: number[][] = [];
     for (const b of h.blocks) {
-      const n = numbers(b, 4);
+      const n = numbers(b, Array.isArray(b) && b.length === 5 ? 5 : 4);
       if (!n) return null;
       blocks.push(n);
     }
-    const door = h.door === null || h.door === undefined ? null : numbers(h.door, 3);
+    const door = h.door === null || h.door === undefined ? null : numbers(h.door, Array.isArray(h.door) && h.door.length === 4 ? 4 : 3);
     if (h.door !== null && h.door !== undefined && !door) return null;
     house = { blocks, heightFt: h.heightFt, door };
+    // The drawn house's look (2026-10-11): storeys, the roof, the windows — malformed ones are dropped, not fatal.
+    if (h.storeys === 1 || h.storeys === 2) house.storeys = h.storeys;
+    if (h.roof === "hip" || h.roof === "gable") house.roof = h.roof;
+    if (Array.isArray(h.windows)) house.windows = h.windows.map((w) => numbers(w, 5)).filter((w): w is number[] => !!w).slice(0, 60);
   }
   // Version 3: the legend, the tags, the callouts, the ground, the glows. Anything malformed is dropped, not fatal.
   let legend: SceneLegend[] = [];
