@@ -263,16 +263,16 @@ export interface Anchor {
   by: "door" | "recess" | "patio" | "run" | "wall";
 }
 
-/** Where the deck's middle belongs along the wall: the door, else the recess, else the patio, else the longest run, else the wall's middle. */
+/**
+ * Where the deck's middle belongs along the wall: the wall's own middle. The
+ * picture is for the look of the deck on the client's wall — the door, the
+ * patio and the recess are read for the height and the notch offers, never
+ * followed (owner, 2026-10-11: "don't try to fit the deck where the door is;
+ * the contractor will put it in the right place"). The contractor drags it.
+ */
 export function anchorOn(read: WallRead, scale: PhotoScale, photoW: number): Anchor {
-  if (read.door) return { x: (read.door.x0 + read.door.x1) / 2, by: "door" };
-  const recess = recessOf(read, scale, photoW);
-  if (recess) return { x: (recess.x0 + recess.x1) / 2, by: "recess" };
-  if (read.patio) return { x: (read.patio.x0 + read.patio.x1) / 2, by: "patio" };
-  if (read.jogs.length) {
-    const longest = wallSegments(read).sort((a, b) => b.x1 - b.x0 - (a.x1 - a.x0))[0];
-    return { x: (longest.x0 + longest.x1) / 2, by: "run" };
-  }
+  void scale;
+  void photoW;
   return { x: (read.base.left.x + read.base.right.x) / 2, by: "wall" };
 }
 
@@ -492,7 +492,7 @@ const ANCHOR_WORDS: Record<Anchor["by"], string> = {
   recess: "No door seen — the deck is set in the house's recess, the covered part a back door is usually in; drag it if the door is elsewhere",
   patio: "No door seen — the deck is set on the patio; drag it where the door is",
   run: "No door seen — the deck sits on the longest run of wall; drag it where the door is",
-  wall: "No door seen — the deck is centred on the wall; drag it where the door is",
+  wall: "The deck is centred on the wall for the look — drag it where it belongs; the contractor sets the exact spot",
 };
 
 /**
@@ -863,6 +863,40 @@ export function transformPlaced(placed: Placed, H: readonly number[], fromW: num
   const a = applyHomography(H, { x: placed.x * fromW, y: placed.y * fromH });
   const b = applyHomography(H, { x: (placed.x + placed.w) * fromW, y: placed.y * fromH });
   return { x: r3(a.x / toW), y: r3((a.y + b.y) / 2 / toH), w: r3(Math.max(0.05, (b.x - a.x) / toW)) };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Straightened on its own, and the wall's span for the 3D (owner,       */
+/*  2026-10-11: "the windows are kind of spread around … make a           */
+/*  continuation behind the back wall so it looks like a house")          */
+/* ------------------------------------------------------------------ */
+
+/** A shot this far off square is straightened as it comes in (percent, see `obliqueness`). */
+export const AUTO_STRAIGHTEN_PCT = 8;
+
+/**
+ * The warp an angled shot gets without anyone marking corners: the wall's
+ * four corners from the read itself (its base ends and the eave above each),
+ * when the read is sure enough and the wall stands `AUTO_STRAIGHTEN_PCT`
+ * taller at one end than the other. Null for a square-on shot, an unsure
+ * read or one without an eave.
+ */
+export function autoRectify(read: WallRead, photoW: number, photoH: number, opts: { maxSide?: number } = {}): RectifyPlan | null {
+  if (read.confidence < MIN_CONFIDENCE || !read.eave) return null;
+  const angled = obliqueness(read);
+  if (angled === null || angled < AUTO_STRAIGHTEN_PCT) return null;
+  const plan = rectifyPlan(wallQuadFromRead(read), read, photoW, photoH, { maxSide: opts.maxSide ?? 2200 });
+  return plan && plan.obliquePct >= AUTO_STRAIGHTEN_PCT ? plan : null;
+}
+
+/** The wall's span on the picture, for the 3D: the base's ends across, the eave's height (null when none was read), the storeys. */
+export function wallExtent(read: WallRead): { x0: number; x1: number; top: number | null; storeys: 1 | 2 | null } {
+  return {
+    x0: r3(Math.min(read.base.left.x, read.base.right.x)),
+    x1: r3(Math.max(read.base.left.x, read.base.right.x)),
+    top: read.eave ? r3((read.eave.left.y + read.eave.right.y) / 2) : null,
+    storeys: read.storeys,
+  };
 }
 
 /** The prompt the read runs on — the JSON the model must answer with, field by field. */

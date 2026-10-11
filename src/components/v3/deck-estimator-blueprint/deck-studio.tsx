@@ -91,7 +91,7 @@ import { deckElevation, defaultPlacement } from "@/lib/deck/elevation";
 import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
-import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad } from "@/lib/deck/photoFit";
+import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
@@ -627,10 +627,38 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       let placed = defaultPlacement();
       let fit: PhotoFit | null = null;
       let wallRead: WallRead | null = null;
+      let before: NonNullable<DeckPhoto["straightened"]>["before"] | null = null;
+      let quad: Quad | null = null;
+      let autoNote: string | null = null;
       if (read.ok) {
         wallRead = read.read;
-        fit = fitPhoto(read.read, fitDeck, design.heightIn, clean.w, clean.h);
-        toUpload = await cropPhoto(clean.file, fit.crop, clean.w, clean.h);
+        // AN ANGLED SHOT IS STRAIGHTENED ON ITS OWN (owner, 2026-10-11: "the windows are kind of spread around"): the
+        // wall's corners from the read make the warp (lib/deck/photoFit autoRectify); the picture as taken, cut to its
+        // wall, is kept too, so "Original picture" can bring it back.
+        const plan = autoRectify(read.read, clean.w, clean.h);
+        let warped: { file: File; w: number; h: number } | null = null;
+        if (plan) {
+          setPhotoStage("Straightening the picture…");
+          warped = await straightenPhoto(clean.file, plan.H, { w: plan.w, h: plan.h }, { w: clean.w, h: clean.h }).catch(() => null);
+        }
+        if (plan && warped) {
+          const fit0 = fitPhoto(read.read, fitDeck, design.heightIn, clean.w, clean.h);
+          const cut0 = await cropPhoto(clean.file, fit0.crop, clean.w, clean.h);
+          const form0 = new FormData();
+          form0.set("file", cut0.file);
+          form0.set("w", String(cut0.w));
+          form0.set("h", String(cut0.h));
+          const res0 = await uploadDeckPhoto(form0);
+          if (res0.ok) before = { url: res0.url, w: res0.w, h: res0.h, placed: fit0.placed, fit: fitSummary(fit0, read.read) };
+          wallRead = transformRead(read.read, plan.H, clean.w, clean.h, warped.w, warped.h);
+          quad = wallQuadFromRead(read.read);
+          fit = fitPhoto(wallRead, fitDeck, design.heightIn, warped.w, warped.h);
+          toUpload = await cropPhoto(warped.file, fit.crop, warped.w, warped.h);
+          autoNote = `The shot was ${plan.obliquePct}% off square — the picture was straightened so the wall stands true and the windows sit where they are. "Original picture" brings back the one you took.`;
+        } else {
+          fit = fitPhoto(read.read, fitDeck, design.heightIn, clean.w, clean.h);
+          toUpload = await cropPhoto(clean.file, fit.crop, clean.w, clean.h);
+        }
         placed = fit.placed;
       } else setPhotoNote(read.error);
       setPhotoStage("Saving the picture…");
@@ -644,7 +672,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         return;
       }
       setPhotoHref(res.href);
-      patch({ photo: { url: res.url, w: res.w, h: res.h, placed, fit: fit && wallRead ? fitSummary(fit, wallRead) : null } });
+      patch({ photo: { url: res.url, w: res.w, h: res.h, placed, fit: fit && wallRead ? fitSummary(fit, wallRead) : null, straightened: before && quad ? { quad, before } : null } });
+      if (autoNote) setPhotoNote(autoNote);
       setView("photo");
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : "The picture could not be read.");
@@ -720,7 +749,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const backdrop = React.useMemo<DeckBackdrop | null>(() => {
     const p = design.photo;
     if (!showHouse || !p?.placed || !photoHref) return null;
-    return { href: photoHref, w: p.w, h: p.h, placed: p.placed, elevWidthFt: elevation.widthFt, elevLeftFt: elevation.leftFt, jogs: (p.fit?.read?.jogs ?? []).map((j) => ({ x: j.x, dir: j.dir, depthFt: j.depthFt })), standoffFt: scene.house ? 0 : 16 };
+    return { href: photoHref, w: p.w, h: p.h, placed: p.placed, elevWidthFt: elevation.widthFt, elevLeftFt: elevation.leftFt, jogs: (p.fit?.read?.jogs ?? []).map((j) => ({ x: j.x, dir: j.dir, depthFt: j.depthFt })), standoffFt: scene.house ? 0 : 16, wall: p.fit?.read ? wallExtent(p.fit.read) : null };
   }, [design.photo, photoHref, elevation.widthFt, elevation.leftFt, showHouse, scene.house]);
   // MARK THE WALL (owner, 2026-10-10: "start drawing the lines right on that picture — the house wall where the deck
   // is supposed to be — kind of measures"): the read's base, door, measure and steps as handles on the picture; every
@@ -895,7 +924,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const roofSummary = roof ? roofWords(roof) : "";
   const extrasSummary = [structure.rails.on ? railWords(structure.rails).split(" — ")[0] : null, structure.stairs.length ? `${structure.stairs.length} ${structure.stairs.length === 1 ? "stair" : "stairs"}` : null].filter(Boolean).join(" · ") || "None yet";
   const electricSummary = structure.electrical.on ? electricalWords(structure.electrical) : "None";
-  const photoSummary = design.photo ? (design.photo.fit && !design.photo.fit.notes[0]?.startsWith("The wall could not") ? (design.photo.fit.door ? "Fitted to the wall, at the door" : "Fitted to the wall") : design.photo.placed ? "Placed on the photo" : "Photo added — place it") : "No photo yet";
+  const photoSummary = design.photo ? (design.photo.fit && !design.photo.fit.notes[0]?.startsWith("The wall could not") ? ("Fitted to the wall") : design.photo.placed ? "Placed on the photo" : "Photo added — place it") : "No photo yet";
 
   const bomByStep = React.useMemo(() => {
     const out = new Map<BomStep, typeof pkg.bom>();

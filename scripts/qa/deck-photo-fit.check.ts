@@ -1,12 +1,13 @@
 // The smart fit of the deck on the photo of the house (2026-10-10, lib/deck/photoFit):
 // the read checked, the scale from the door, the wall's parts and its recess, the
-// crop to the wall, the placement at the door (else the recess, the patio, the
-// longest run), an L's notch on the step it wraps, the height the door asks for,
+// crop to the wall, the placement centred on the wall (the door is read, not
+// followed), an L's notch on the step it wraps, the height the door asks for,
 // the window sill in the way, the offer when the house steps into the deck, the
 // read kept in the cropped picture, and the black bands of a screenshot. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-photo-fit.check.ts
 import {
   anchorOn,
+  autoRectify,
   baseYAt,
   cropForWall,
   fitPhoto,
@@ -23,6 +24,7 @@ import {
   scaleFromRead,
   shapeWithOffer,
   wallSegments,
+  wallExtent,
   addDoor,
   addJog,
   addScaleLine,
@@ -103,20 +105,20 @@ check("the recess is the farthest part — here the left run, 19 ft wide", reces
 check("a flat wall has no recess", recessOf(parseWallRead({ ...RAW, jogs: [] })!, scale, W) === null);
 
 // ── where the deck's middle goes
-check("the door first", anchorOn(read, scale, W).by === "door" && near(anchorOn(read, scale, W).x, 0.394, 0.001));
-check("no door: the recess, the covered part a door is usually in", anchorOn(noDoor, sEave, W).by === "recess" && near(anchorOn(noDoor, sEave, W).x, 0.375, 0.001));
+check("the deck's middle is the wall's middle — the door is not followed (the contractor sets the spot)", anchorOn(read, scale, W).by === "wall" && near(anchorOn(read, scale, W).x, 0.5, 0.001), String(anchorOn(read, scale, W).x));
+check("…nor the recess", anchorOn(noDoor, sEave, W).by === "wall" && near(anchorOn(noDoor, sEave, W).x, 0.5, 0.001));
 const patioOnly = parseWallRead({ ...RAW, door: null, jogs: [], patio: { x0: 0.6, x1: 0.8 } })!;
-check("no door, no step: the patio", anchorOn(patioOnly, scaleFromRead(patioOnly, W, H), W).by === "patio" && near(anchorOn(patioOnly, scaleFromRead(patioOnly, W, H), W).x, 0.7, 0.001));
+check("…nor the patio", anchorOn(patioOnly, scaleFromRead(patioOnly, W, H), W).by === "wall" && near(anchorOn(patioOnly, scaleFromRead(patioOnly, W, H), W).x, 0.5, 0.001));
 const bare = parseWallRead({ ...RAW, door: null, jogs: [] })!;
 check("nothing at all: the wall's middle", anchorOn(bare, scaleFromRead(bare, W, H), W).by === "wall" && near(anchorOn(bare, scaleFromRead(bare, W, H), W).x, 0.5, 0.001));
 
 // ── the placement on the read's picture
 const on = placeOnWall(read, scale, rect, W, H)!;
 check("16 ft at 39 px/ft is 0.39 of a 1600 px picture", near(on.w, 0.39, 0.005), String(on.w));
-check("the deck is centred on the door", near(on.x + on.w / 2, (0.35 + 0.4375) / 2, 0.003), `centre ${(on.x + on.w / 2).toFixed(3)}`);
+check("the deck is centred on the wall", near(on.x + on.w / 2, 0.5, 0.003), `centre ${(on.x + on.w / 2).toFixed(3)}`);
 check("its ground line is the wall's base", near(on.y, 0.8125, 1e-3));
 const wide = rectOf(40);
-check("a deck wider than the picture still centres on the door", near(placeOnWall(read, scale, wide, W, H)!.x + placeOnWall(read, scale, wide, W, H)!.w / 2, 0.394, 0.003));
+check("a deck wider than the picture still centres on the wall", near(placeOnWall(read, scale, wide, W, H)!.x + placeOnWall(read, scale, wide, W, H)!.w / 2, 0.5, 0.003));
 const ftX = scale.pxPerFt / W;
 const lBackRight: FitDeck = { shape: { kind: "L", widthFt: 20, depthFt: 12, notch: { corner: "back-right", widthFt: 6, depthFt: 4 } }, depthFt: 12, elevWidthFt: 20, elevHeightFt: 6.5, elevLeftFt: 0 };
 const onR = placeOnWall(read, scale, lBackRight, W, H)!;
@@ -125,9 +127,9 @@ const readAway = parseWallRead({ ...RAW, jogs: [{ x: 0.25, dir: "away", depthFt:
 const lBackLeft: FitDeck = { ...lBackRight, shape: { kind: "L", widthFt: 20, depthFt: 12, notch: { corner: "back-left", widthFt: 6, depthFt: 4 } } };
 const onL = placeOnWall(readAway, scale, lBackLeft, W, H)!;
 check("…a back-left notch the step whose left side is nearer", near(onL.x + 6 * ftX, 0.25, 0.003), `edge at ${(onL.x + 6 * ftX).toFixed(3)}`);
-check("a back-left notch with no such step to its left stays centred on the door", near(placeOnWall(read, scale, lBackLeft, W, H)!.x + 10 * ftX, 0.394, 0.003));
+check("a back-left notch with no such step to its left stays centred on the wall", near(placeOnWall(read, scale, lBackLeft, W, H)!.x + 10 * ftX, 0.5, 0.003));
 const lFront: FitDeck = { ...lBackRight, shape: { kind: "L", widthFt: 20, depthFt: 12, notch: { corner: "front-right", widthFt: 6, depthFt: 4 } } };
-check("a front notch is the deck's own shape — centred on the door like a rectangle", near(placeOnWall(read, scale, lFront, W, H)!.x + 10 * ftX, 0.394, 0.003));
+check("a front notch is the deck's own shape — centred on the wall like a rectangle", near(placeOnWall(read, scale, lFront, W, H)!.x + 10 * ftX, 0.5, 0.003));
 check("no scale, no placement", placeOnWall(read, { pxPerFt: 0, by: "none" }, rect, W, H) === null);
 
 // ── the crop
@@ -149,25 +151,27 @@ check("the read said in the crop: the door's left edge moves from 0.35 to (0.35 
 check("the door's threshold 110 px up at 39 px/ft is 34 in.", heightFromDoor(read, scale, H) === 34, String(heightFromDoor(read, scale, H)));
 check("no door, no height", heightFromDoor(noDoor, sEave, H) === null);
 check("the lowest sill over the deck's span: the first window's 80 in. (the 16 ft deck reaches it)", lowestSillIn(read, scale, on, H) === 80, String(lowestSillIn(read, scale, on, H)));
-check("…none over a 10 ft deck at the door, which stops short of the windows", lowestSillIn(read, scale, placeOnWall(read, scale, rectOf(10, 10), W, H), H) === null);
+check("…none over a 5 ft deck centred on the wall, which stops short of the windows", lowestSillIn(read, scale, placeOnWall(read, scale, rectOf(5, 10), W, H), H) === null, String(lowestSillIn(read, scale, placeOnWall(read, scale, rectOf(5, 10), W, H), H)));
 
 // ── the house stepping into the deck
-check("a 16 ft deck at the door clears the step — no offer", jogOffer(read, scale, on, rect, W) === null);
+check("a 10 ft deck centred on the wall clears the step — no offer", jogOffer(read, scale, placeOnWall(read, scale, rectOf(10), W, H), rectOf(10), W) === null);
+const offer16 = jogOffer(read, scale, on, rect, W);
+check("a 16 ft deck centred on the wall reaches the bump-out by 3 ft: the offer to notch it", offer16?.kind === "notch" && offer16.corner === "back-right" && offer16.widthFt === 3 && offer16.depthFt === 4, JSON.stringify(offer16));
 const wide24 = rectOf(24);
 const offer = jogOffer(read, scale, placeOnWall(read, scale, wide24, W, H), wide24, W);
-check("a 24 ft deck reaches the bump-out: a back-right notch, 2 ft 6 in. wide, the step's 4 ft deep", offer?.kind === "notch" && offer.corner === "back-right" && offer.widthFt === 2.5 && offer.depthFt === 4, JSON.stringify(offer));
-check("…and the offer says so", offer?.kind === "notch" && /steps 4 ft into the deck's right back corner over 2 ft 6 in\./.test(offer.text), offer?.text);
+check("a 24 ft deck reaches the bump-out by 7 ft: a back-right notch, 7 ft wide, the step's 4 ft deep", offer?.kind === "notch" && offer.corner === "back-right" && offer.widthFt === 7 && offer.depthFt === 4, JSON.stringify(offer));
+check("…and the offer says so", offer?.kind === "notch" && /steps 4 ft into the deck's right back corner over 7 ft/.test(offer.text), offer?.text);
 const inRecess = parseWallRead({ ...RAW, jogs: [{ x: 0.3, dir: "away", depthFt: 3 }, { x: 0.7, dir: "toward", depthFt: 3 }] })!;
 const wide30 = rectOf(30);
 const recessOffer = jogOffer(inRecess, scale, placeOnWall(inRecess, scale, wide30, W, H), wide30, W);
 check("a 30 ft deck at a door inside a 16 ft recess: the offer is to fit it in", recessOffer?.kind === "recess" && recessOffer.widthFt === 16 && /fit the deck into the recess/.test(recessOffer.text), JSON.stringify(recessOffer));
 check("an L already is not offered another notch", jogOffer(read, scale, onR, lBackRight, W) === null);
-check("the shape with the notch taken", JSON.stringify(shapeWithOffer({ kind: "rect", widthFt: 24, depthFt: 12 }, offer!)) === JSON.stringify({ kind: "L", widthFt: 24, depthFt: 12, notch: { corner: "back-right", widthFt: 2.5, depthFt: 4 } }));
+check("the shape with the notch taken", JSON.stringify(shapeWithOffer({ kind: "rect", widthFt: 24, depthFt: 12 }, offer!)) === JSON.stringify({ kind: "L", widthFt: 24, depthFt: 12, notch: { corner: "back-right", widthFt: 7, depthFt: 4 } }));
 check("the shape fitted into the recess", JSON.stringify(shapeWithOffer({ kind: "rect", widthFt: 30, depthFt: 12 }, recessOffer!)) === JSON.stringify({ kind: "rect", widthFt: 16, depthFt: 12 }));
 
 // ── all of it
 const fit = fitPhoto(read, rect, 36, W, H);
-check("the fit: door, 2 windows, a step, 31 ft of wall, 34 in. suggested, no offer", fit.door && fit.windows === 2 && fit.jog && fit.wallFt === 31 && fit.suggestedHeightIn === 34 && fit.offer === null && !fit.unsure && fit.anchor === "door", JSON.stringify({ wallFt: fit.wallFt, h: fit.suggestedHeightIn }));
+check("the fit: door, 2 windows, a step, 31 ft of wall, 34 in. suggested, the 3 ft notch offered", fit.door && fit.windows === 2 && fit.jog && fit.wallFt === 31 && fit.suggestedHeightIn === 34 && fit.offer?.kind === "notch" && fit.offer.widthFt === 3 && !fit.unsure && fit.anchor === "wall", JSON.stringify({ wallFt: fit.wallFt, h: fit.suggestedHeightIn }));
 check("the notes say what was found and the door's height", /Found the wall, about 31 ft wide, the back door, 2 windows, a step in the wall — scale from the door \(80 in\.\)\./.test(fit.notes[0]) && fit.notes.some((n) => /threshold is 2'-10" above the ground/.test(n) && /design says 3 ft/.test(n)), fit.notes.join(" | "));
 const fit34 = fitPhoto(read, rect, 34, W, H);
 check("at 34 in. the note says the floor matches", fit34.notes.some((n) => /floor height matches/.test(n)), fit34.notes.join(" | "));
@@ -175,7 +179,7 @@ const lowSill = parseWallRead({ ...RAW, windows: [{ x0: 0.3, x1: 0.34, sill: 0.7
 const fitSill = fitPhoto(lowSill, rect, 36, W, H);
 check("a sill 18 in. up under a 36 in. floor is called out", fitSill.lowestSillIn === 18 && fitSill.notes.some((n) => /window sill is only 18 in\. up/.test(n)), fitSill.notes.join(" | "));
 const fitRecess = fitPhoto(noDoor, rect, 36, W, H);
-check("no door: the notes say the deck is set in the recess", fitRecess.anchor === "recess" && fitRecess.notes.some((n) => /set in the house's recess/.test(n)), fitRecess.notes.join(" | "));
+check("no door: the deck is still centred on the wall, and the notes say so", fitRecess.anchor === "wall" && fitRecess.notes.some((n) => /centred on the wall/.test(n)), fitRecess.notes.join(" | "));
 const fit24 = fitPhoto(read, wide24, 36, W, H);
 check("the offer rides in the fit and its notes", fit24.offer?.kind === "notch" && fit24.notes.some((n) => /notch the deck around it\?/.test(n)));
 const unsure = fitPhoto(parseWallRead({ ...RAW, confidence: 0.2 })!, rect, 36, W, H);
@@ -185,11 +189,11 @@ check("an L on a stepped house says its notch is on the step", fitL.notes.some((
 
 // ── the fit kept with the picture, and fitted again without the model
 const summary = fitSummary(fit, read);
-check("the summary keeps the read in the cropped picture's fractions", !!summary.read && near(summary.read.door!.x0, (0.35 - fit.crop.x) / fit.crop.w, 1e-3) && summary.offer === null && summary.read.bars.top === 0);
+check("the summary keeps the read in the cropped picture's fractions", !!summary.read && near(summary.read.door!.x0, (0.35 - fit.crop.x) / fit.crop.w, 1e-3) && summary.offer?.kind === "notch" && summary.read.bars.top === 0);
 const again = fitPhoto(summary.read!, rect, 36, Math.round(fit.crop.w * W), Math.round(fit.crop.h * H), { recrop: false });
 check("fitted again on the cropped picture from the kept read: the same placement, the picture left whole", near(again.placed.x, fit.placed.x, 0.004) && near(again.placed.w, fit.placed.w, 0.004) && near(again.placed.y, fit.placed.y, 0.004) && again.crop.w === 1 && again.crop.x === 0, `${JSON.stringify(again.placed)} vs ${JSON.stringify(fit.placed)}`);
 const again24 = fitPhoto(summary.read!, wide24, 36, Math.round(fit.crop.w * W), Math.round(fit.crop.h * H), { recrop: false });
-check("…and a wider deck on the kept read gets the same offer", again24.offer?.kind === "notch" && again24.offer.corner === "back-right" && again24.offer.widthFt === 2.5, JSON.stringify(again24.offer));
+check("…and a wider deck on the kept read gets the same offer", again24.offer?.kind === "notch" && again24.offer.corner === "back-right" && again24.offer.widthFt === 7, JSON.stringify(again24.offer));
 check("fitSummary on a whole picture keeps the read as is", fitSummary(again, summary.read!).read === summary.read);
 
 
@@ -219,7 +223,7 @@ check("no more than four steps", addJog(addJog(addJog(addJog(stepped))))!.jogs.l
 const handFit = fitPhoto(markedRead(blank), rect, 36, 1440, 660, { recrop: false, fallback: { x: 0.2, y: 0.9, w: 0.433 }, hand: true });
 check("a hand-marked wall with no scale keeps the outline's width and sets it on the base's middle", near(handFit.placed.w, 0.433, 1e-3) && near(handFit.placed.y, 0.8, 1e-3) && near(handFit.placed.x + handFit.placed.w / 2, 0.5, 1e-3) && /^The wall as you marked it: the wall — scale from the picture: none/.test(handFit.notes[0]), handFit.notes[0]);
 const handDoor = fitPhoto(markedRead(addDoor(moveMark(blank, "base-left", { x: 0.1, y: 0.8 }), 1440, 660)), rect, 36, 1440, 660, { recrop: false, hand: true });
-check("…with a door added, the scale is the door's and the deck is centred on it", handDoor.scale.by === "door" && handDoor.anchor === "door" && near(handDoor.placed.x + handDoor.placed.w / 2, 0.5, 0.01) && /scale from the door \(80 in\.\)/.test(handDoor.notes[0]));
+check("…with a door added, the scale is the door's and the deck is centred on it", handDoor.scale.by === "door" && handDoor.anchor === "wall" && near(handDoor.placed.x + handDoor.placed.w / 2, 0.5, 0.01) && /scale from the door \(80 in\.\)/.test(handDoor.notes[0]));
 check("the summary says it was marked by hand", fitSummary(handDoor, markedRead(blank), true).hand === true && fitSummary(fit, read).hand === false);
 const lineRead = parseWallRead({ ...RAW, scaleLine: { a: { x: 0.5, y: 0.5 }, b: { x: 0.5, y: 0.75 }, lengthIn: 60 } })!;
 check("a measure line parses and rides through the crop", lineRead.scaleLine?.lengthIn === 60 && near(readInCrop(lineRead, crop).scaleLine!.a.y, (0.5 - crop.y) / crop.h, 1e-3));
@@ -262,6 +266,11 @@ check("no bands, nothing cut", JSON.stringify(letterboxRows(rows(100, 0, 0))) ==
   check("the fit says the picture was taken at an angle", angledFit.notes.some((n) => /taken at an angle/.test(n)), angledFit.notes.join(" | "));
   check("the square-on fit does not", !fitPhoto(read, rect, 36, W, H).notes.some((n) => /taken at an angle/.test(n)));
   const plan = rectifyPlan(trap, angled, W, H)!;
+  const auto = autoRectify(angled, W, H);
+  check("an angled read straightens on its own: a plan from the read's own corners, the long side capped at 2200 px", !!auto && auto.obliquePct >= 8 && Math.max(auto.w, auto.h) <= 2200, auto ? `${auto.obliquePct}% ${auto.w}×${auto.h}` : "null");
+  check("…a square-on read does not, nor an unsure one, nor one without an eave", autoRectify(read, W, H) === null && autoRectify({ ...angled, confidence: 0.2 }, W, H) === null && autoRectify({ ...angled, eave: null }, W, H) === null);
+  const ext = wallExtent(angled);
+  check("the wall's extent for the 3D: the base's ends across and the eave's height", ext.x0 === 0.2 && ext.x1 === 0.8 && ext.top !== null && near(ext.top, 0.3, 0.001) && ext.storeys === 1, JSON.stringify(ext));
   check("the plan from the edges alone: a rectangle, a vertical scale from the door, the angle told", plan.by === "edges" && plan.w > 0 && plan.h > 0 && (plan.pxPerFt ?? 0) > 0 && plan.obliquePct === 31, `${plan.by} ${plan.w}×${plan.h} ${plan.pxPerFt} px/ft ${plan.obliquePct}%`);
   const planW = rectifyPlan(trap, angled, W, H, { wallWidthFt: 30 })!;
   check("a typed wall width sets the output's width at the door's scale", planW.by === "width" && near(planW.w, 30 * (planW.pxPerFt ?? 0), Math.max(2, planW.w * 0.01)), `${planW.w} vs ${30 * (planW.pxPerFt ?? 0)}`);

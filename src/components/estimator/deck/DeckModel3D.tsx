@@ -106,6 +106,8 @@ export interface DeckBackdrop {
   jogs: Array<{ x: number; dir: "toward" | "away"; depthFt: number | null }>;
   /** How far behind the house line the wall stands, ft: 0 for a structure on the house, a yard's worth for a detached one kept as a backdrop. */
   standoffFt?: number;
+  /** The wall's span on the picture (lib/deck/photoFit wallExtent): the base's ends across and the eave's height, fractions. The 3D cuts the picture to it and builds the house's body behind. */
+  wall?: { x0: number; x1: number; top: number | null; storeys: 1 | 2 | null } | null;
 }
 /** A step in the wall the read could not size. */
 const JOG_DEFAULT_FT = 2;
@@ -181,6 +183,49 @@ function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D)
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
   return t;
+}
+/**
+ * The wall's own colour and the roof's, averaged off the picture: the wall's middle band between the base and the
+ * eave, the roof in the strip above the eave (only when it is darker than the wall — sky or a pale soffit keeps the
+ * default). Null when the picture cannot be read back (a cross-origin store without CORS).
+ */
+function sampleColours(img: HTMLImageElement, r: { x0: number; x1: number; y0: number; y1: number }): { wall: THREE.Color; roof: THREE.Color | null } | null {
+  try {
+    const N = 96;
+    const c = document.createElement("canvas");
+    c.width = N;
+    c.height = N;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    if (!g) return null;
+    g.drawImage(img, 0, 0, N, N);
+    const data = g.getImageData(0, 0, N, N).data;
+    const avg = (x0: number, x1: number, y0: number, y1: number): THREE.Color | null => {
+      let rr = 0;
+      let gg = 0;
+      let bb = 0;
+      let n = 0;
+      for (let y = Math.floor(y0 * N); y < Math.ceil(y1 * N); y++) {
+        for (let x = Math.floor(x0 * N); x < Math.ceil(x1 * N); x++) {
+          if (x < 0 || y < 0 || x >= N || y >= N) continue;
+          const i = (y * N + x) * 4;
+          rr += data[i];
+          gg += data[i + 1];
+          bb += data[i + 2];
+          n++;
+        }
+      }
+      return n ? new THREE.Color(rr / n / 255, gg / n / 255, bb / n / 255).convertSRGBToLinear() : null;
+    };
+    const wh = r.y1 - r.y0;
+    const ww = r.x1 - r.x0;
+    const wall = avg(r.x0 + ww * 0.1, r.x1 - ww * 0.1, r.y0 + wh * 0.25, r.y1 - wh * 0.2);
+    if (!wall) return null;
+    const roof = r.y0 > 0.04 ? avg(r.x0 + ww * 0.2, r.x1 - ww * 0.2, Math.max(0, r.y0 - 0.1), r.y0 - 0.01) : null;
+    const lum = (k: THREE.Color) => 0.2126 * k.r + 0.7152 * k.g + 0.0722 * k.b;
+    return { wall, roof: roof && lum(roof) < lum(wall) * 0.8 ? roof : null };
+  } catch {
+    return null;
+  }
 }
 function sidingTexture() {
   return canvasTexture(8, 64, (g) => {
@@ -503,19 +548,33 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const photoMats: THREE.MeshBasicMaterial[] = [];
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin("anonymous");
-    const photoTexture = (href: string): THREE.Texture => {
+    const photoLoads = new Map<string, Array<(img: HTMLImageElement) => void>>();
+    const photoTexture = (href: string, onImage?: (img: HTMLImageElement) => void): THREE.Texture => {
       const hit = textures.get(href);
-      if (hit) return hit;
+      if (hit) {
+        if (onImage) {
+          const img = hit.image as HTMLImageElement | undefined;
+          if (img && img.complete && img.naturalWidth > 0) onImage(img);
+          else photoLoads.get(href)?.push(onImage);
+        }
+        return hit;
+      }
+      photoLoads.set(href, onImage ? [onImage] : []);
       mount.dataset.deck3dBackdrop = "loading";
       const tex = loader.load(
         href,
-        () => {
+        (t) => {
           mount.dataset.deck3dBackdrop = "loaded";
+          const img = t.image as HTMLImageElement | undefined;
+          const cbs = photoLoads.get(href) ?? [];
+          photoLoads.delete(href);
+          if (img) for (const cb of cbs) cb(img);
           dirty = true;
         },
         undefined,
         () => {
           mount.dataset.deck3dBackdrop = "failed";
+          photoLoads.delete(href);
           for (const m of photoMats) {
             if (m.map === tex) {
               m.map = null;
@@ -527,7 +586,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         },
       );
       tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
       textures.set(href, tex);
       return tex;
     };
@@ -906,7 +965,10 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
 
       // The house: wall, foundation band, a roof slab, a door onto the deck and a window each side — unless the photo stands for it.
       const bd = backdropRef.current;
-      if (!bd) mount.dataset.deck3dBackdrop = "none";
+      if (!bd) {
+        mount.dataset.deck3dBackdrop = "none";
+        delete mount.dataset.deck3dWall;
+      }
       if (s.house && !bd) {
         const wallMat = new THREE.MeshStandardMaterial({ color: SIDING, roughness: 0.95, map: siding });
         const baseMat = new THREE.MeshStandardMaterial({ color: FOUNDATION, roughness: 1, map: concrete });
@@ -1077,26 +1139,47 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         if (focusedKnob === key && editRef.current) queueMicrotask(() => knob.focus({ preventScroll: true }));
       });
 
-      // THE PHOTO AS THE WALL: the picture the elevation was placed on, standing on the house line at the placement's scale.
+      // THE PHOTO AS THE WALL: the picture the elevation was placed on, standing on the house line at the placement's
+      // scale — cut to the wall the read found, with the house's body behind it in the picture's own colours: plain
+      // return walls at the steps, plain side walls going back, a roof over it all (owner, 2026-10-11: "it looks like
+      // a piece of paper — make a continuation behind the back wall so it looks like a house; where the picture does
+      // not show what is beside a jog, keep a plain wall; keep the quality of the back wall").
       if (bd && bd.placed.w > 0 && bd.elevWidthFt > 0 && bd.w > 0 && bd.h > 0) {
         const pxPerFt = (bd.placed.w * bd.w) / bd.elevWidthFt;
         const wFt = bd.w / pxPerFt;
         const hFt = bd.h / pxPerFt;
         const leftX = -bd.placed.x * wFt - bd.elevLeftFt;
-        const zTop = bd.placed.y * hFt;
+        const wall = bd.wall && bd.wall.x1 - bd.wall.x0 > 0.05 ? bd.wall : null;
+        const uL = wall ? Math.min(1, Math.max(0, wall.x0)) : 0;
+        const uR = wall ? Math.min(1, Math.max(0, wall.x1)) : 1;
+        // The picture stops at the eave when the read found one — the roof is built, not pasted; else at the picture's top.
+        const groundFrac = Math.min(1, Math.max(0, bd.placed.y));
+        const topFrac = wall && wall.top !== null && wall.top > 0.01 && wall.top < groundFrac - 0.05 ? wall.top : 0;
+        const zTop = (bd.placed.y - topFrac) * hFt;
         const zBottom = Math.max(0, (bd.placed.y - 1) * hFt);
-        const v0 = 1 - Math.min(1, Math.max(0, bd.placed.y));
-        if (zTop - zBottom > 0.2 && wFt > 0.5) {
-          const tex = photoTexture(bd.href);
+        const v0 = 1 - groundFrac;
+        const vTop = 1 - topFrac;
+        if (zTop - zBottom > 0.2 && wFt > 0.5 && uR - uL > 0.02) {
+          // The plain walls and the roof take the picture's own colours once it is in.
+          const plainMat = new THREE.MeshStandardMaterial({ color: SIDING, roughness: 0.95, side: THREE.DoubleSide });
+          const returnMat = new THREE.MeshStandardMaterial({ color: SIDING, roughness: 0.95, side: THREE.DoubleSide });
+          const roofMat = new THREE.MeshStandardMaterial({ color: ROOF, roughness: 0.9 });
+          const fasciaMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
+          owned.push(plainMat, returnMat, roofMat, fasciaMat);
+          const tex = photoTexture(bd.href, (img) => {
+            const c = sampleColours(img, { x0: uL, x1: uR, y0: topFrac, y1: groundFrac });
+            if (!c) return;
+            plainMat.color.copy(c.wall);
+            returnMat.color.copy(c.wall).multiplyScalar(0.82);
+            if (c.roof) roofMat.color.copy(c.roof);
+            dirty = true;
+          });
           const photoMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false });
-          // The return wall at a step wears a sliver of the picture around that step, a shade darker, so the wall
-          // keeps its own colour into the corner instead of turning plain grey (owner, 2026-10-11).
-          const returnMat = new THREE.MeshBasicMaterial({ map: tex, color: 0xb4b4b4, side: THREE.DoubleSide, toneMapped: false });
-          owned.push(photoMat, returnMat);
-          photoMats.push(photoMat, returnMat);
+          owned.push(photoMat);
+          photoMats.push(photoMat);
           // The wall's parts between its steps, each at its depth; the part under the deck's middle stands on the house line.
-          const jogs = [...bd.jogs].filter((j) => j.x > 0.005 && j.x < 0.995).sort((a, b) => a.x - b.x);
-          const xs = [0, ...jogs.map((j) => j.x), 1];
+          const jogs = [...bd.jogs].filter((j) => j.x > uL + 0.005 && j.x < uR - 0.005).sort((a, b) => a.x - b.x);
+          const xs = [uL, ...jogs.map((j) => j.x), uR];
           const depths: number[] = [0];
           for (const j of jogs) depths.push(depths[depths.length - 1] + (j.dir === "toward" ? 1 : -1) * (j.depthFt ?? JOG_DEFAULT_FT));
           const centreFrac = (s.widthFt / 2 - leftX) / wFt;
@@ -1105,29 +1188,65 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const shift = depths[mine] + (bd.standoffFt ?? 0);
           const height = zTop - zBottom;
           const yMid = (zTop + zBottom) / 2;
+          const zOf = (d: number) => d - shift - oz - 0.05;
           for (let i = 0; i + 1 < xs.length; i++) {
             const u0 = xs[i];
             const u1 = xs[i + 1];
             if (u1 - u0 < 0.002) continue;
             const geo = new THREE.PlaneGeometry((u1 - u0) * wFt, height);
-            geo.setAttribute("uv", new THREE.Float32BufferAttribute([u0, 1, u1, 1, u0, v0, u1, v0], 2));
+            geo.setAttribute("uv", new THREE.Float32BufferAttribute([u0, vTop, u1, vTop, u0, v0, u1, v0], 2));
             owned.push(geo);
             const plane = new THREE.Mesh(geo, photoMat);
-            plane.position.set(leftX + ((u0 + u1) / 2) * wFt - ox, yMid, depths[i] - shift - oz - 0.05);
+            plane.position.set(leftX + ((u0 + u1) / 2) * wFt - ox, yMid, zOf(depths[i]));
             group.add(plane);
+            // A fascia along the top of each part when the picture stops at the eave.
+            if (topFrac > 0) {
+              const fascia = new THREE.Mesh(unitBox, fasciaMat);
+              fascia.scale.set((u1 - u0) * wFt + 0.2, 0.6, 0.18);
+              fascia.position.set(leftX + ((u0 + u1) / 2) * wFt - ox, zTop - 0.3, zOf(depths[i]) + 0.12);
+              fascia.userData.layer = -2;
+              group.add(fascia);
+            }
           }
-          // The return walls at each step.
+          // The return walls at each step: plain, in the wall's own colour — the picture does not show them.
           for (let i = 1; i + 1 < xs.length; i++) {
             const run = depths[i] - depths[i - 1];
             if (Math.abs(run) < 0.05) continue;
             const geo = new THREE.PlaneGeometry(Math.abs(run), height);
-            const uStep = Math.min(0.996, Math.max(0.004, xs[i]));
-            geo.setAttribute("uv", new THREE.Float32BufferAttribute([uStep - 0.004, 1, uStep + 0.004, 1, uStep - 0.004, v0, uStep + 0.004, v0], 2));
             owned.push(geo);
-            const wall = new THREE.Mesh(geo, returnMat);
-            wall.rotation.y = Math.PI / 2;
-            wall.position.set(leftX + xs[i] * wFt - ox, yMid, (depths[i] + depths[i - 1]) / 2 - shift - oz - 0.05);
-            group.add(wall);
+            const wallMesh = new THREE.Mesh(geo, returnMat);
+            wallMesh.rotation.y = Math.PI / 2;
+            wallMesh.position.set(leftX + xs[i] * wFt - ox, yMid, (depths[i] + depths[i - 1]) / 2 - shift - oz - 0.05);
+            group.add(wallMesh);
+          }
+          // The house's body: plain side walls back from each end of the wall, a back wall, and a roof over it all.
+          mount.dataset.deck3dWall = wall ? `${(leftX + uL * wFt).toFixed(1)}..${(leftX + uR * wFt).toFixed(1)}` : "whole";
+          if (wall) {
+            const bodyDepth = 26;
+            const xL = leftX + uL * wFt - ox;
+            const xR = leftX + uR * wFt - ox;
+            const zBack = Math.min(...depths.map(zOf)) - bodyDepth;
+            for (const [x, zFront] of [[xL, zOf(depths[0])], [xR, zOf(depths[depths.length - 1])]] as Array<[number, number]>) {
+              const geo = new THREE.PlaneGeometry(zFront - zBack, height);
+              owned.push(geo);
+              const side = new THREE.Mesh(geo, plainMat);
+              side.rotation.y = Math.PI / 2;
+              side.position.set(x, yMid, (zFront + zBack) / 2);
+              side.receiveShadow = true;
+              group.add(side);
+            }
+            const backGeo = new THREE.PlaneGeometry(xR - xL, height);
+            owned.push(backGeo);
+            const back = new THREE.Mesh(backGeo, plainMat);
+            back.position.set((xL + xR) / 2, yMid, zBack);
+            group.add(back);
+            const zFrontMax = Math.max(...depths.map(zOf));
+            const roof = new THREE.Mesh(unitBox, roofMat);
+            roof.scale.set(xR - xL + 2.4, 0.7, zFrontMax - zBack + 2.4);
+            roof.position.set((xL + xR) / 2, zTop + 0.2, (zFrontMax + zBack) / 2);
+            roof.castShadow = true;
+            roof.userData.layer = -2;
+            group.add(roof);
           }
         }
       }

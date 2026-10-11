@@ -365,7 +365,7 @@ export async function cropPhoto(file: File, crop: Crop, w: number, h: number): P
 }
 
 /** A picture shrunk for the upload: the long side at most `maxSide` px, JPEG. Back come the file and its size. */
-export async function shrinkPhoto(file: File, maxSide = 1600): Promise<{ file: File; w: number; h: number }> {
+export async function shrinkPhoto(file: File, maxSide = 2200): Promise<{ file: File; w: number; h: number }> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -384,7 +384,7 @@ export async function shrinkPhoto(file: File, maxSide = 1600): Promise<{ file: F
     const g = canvas.getContext("2d");
     if (!g) return { file, w, h };
     g.drawImage(img, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.86));
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
     if (!blob) return { file, w, h };
     return { file: new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }), w, h };
   } finally {
