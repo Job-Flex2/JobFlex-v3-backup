@@ -467,15 +467,16 @@ export function ResponsiveDashboardShell({
       <CustomGateSwap>{children}</CustomGateSwap>
     </BlueprintShell>
   );
+  // The wrapper is ALWAYS there and only its mark comes and goes (2026-10-11):
+  // a desk drawn bare on one route and inside the wrapper on the next is a
+  // different tree to React, which remounted the whole shell between them —
+  // the sidebar replayed its entry cascade and the plate appeared on its row
+  // without sliding (Deck inventory, Online booking, Service plans and back).
   return (
     <NavRoleProvider identity={identity} badges={badges} locked={locked} limits={limits} limitsExempt={limitsExempt}>
-      {switchable ? (
-        <div data-desk-fallback="" style={{ display: "contents" }}>
-          {desk}
-        </div>
-      ) : (
-        desk
-      )}
+      <div data-desk-fallback={switchable ? "" : undefined} style={{ display: "contents" }}>
+        {desk}
+      </div>
     </NavRoleProvider>
   );
 }

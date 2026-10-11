@@ -147,8 +147,18 @@ export function initBlueprintShell(root: HTMLElement, opts: {
 
   // ================= SLIDING ACTIVE INDICATOR =================
   const sbIndicator = $("#sbIndicator");
-  const moveIndicator = (link: HTMLElement | null) => {
+  // A SLIDE IS A CLICK OR A ROUTE CHANGE; everything else follows the row
+  // (2026-10-11). Until `slideUntil` a re-measure retargets the running slide;
+  // after it, a re-measure (the fold, a resize, a badge, a web font) puts the
+  // plate on its row in the same frame. Re-measured with its transition on,
+  // the plate restarted a 320ms slide on every frame of the fold and trailed
+  // the rail by a quarter of a second, a second motion after the first.
+  const SLIDE_MS = 450;
+  let slideUntil = 0;
+  const moveIndicator = (link: HTMLElement | null, slide = false) => {
     if (!link || !sbIndicator) return;
+    if (slide) slideUntil = performance.now() + SLIDE_MS;
+    const snap = performance.now() > slideUntil;
     // A folded subtree keeps the current page selected, with its parent
     // carrying the visible outline until the subpages are opened again.
     if (!link.offsetHeight) {
@@ -167,27 +177,37 @@ export function initBlueprintShell(root: HTMLElement, opts: {
       left += node.offsetLeft;
       node = node.offsetParent as HTMLElement | null;
     }
+    const width = link.offsetWidth;
+    const height = link.offsetHeight;
+    if (snap) sbIndicator.style.transition = "none";
     sbIndicator.style.transform = `translateY(${top}px)`;
     sbIndicator.style.left = left + "px";
-    sbIndicator.style.width = link.offsetWidth + "px";
-    sbIndicator.style.height = link.offsetHeight + "px";
+    sbIndicator.style.width = width + "px";
+    sbIndicator.style.height = height + "px";
+    if (snap) {
+      void sbIndicator.offsetWidth; // commit the jump before the transition comes back
+      sbIndicator.style.transition = "";
+    }
   };
   // Real routes navigate; only the donor's dead "#" links swallow the click.
   // The plate slides either way, so the animation plays on every item — on a
   // real navigation it gives instant feedback while the next page streams in,
   // and React then re-renders `active` onto the matching item.
+  // On the WINDOW, so it runs after React's own click handler: the sidebar
+  // commits the clicked row (and the trees it opens or closes) inside the
+  // click, and the plate is measured against that layout, not the old one.
   const sbNav = sbIndicator?.parentElement ?? null;
   if (sbNav) {
-    on(sbNav, "click", (e) => {
-      const link = (e.target as HTMLElement).closest<HTMLElement>(".sb-link");
-      if (!link) return;
+    on(window, "click", (e) => {
+      const link = e.target instanceof Element ? e.target.closest<HTMLElement>(".sb-link") : null;
+      if (!link || !sbNav.contains(link)) return;
       if (link.getAttribute("href") === "#") e.preventDefault();
       // A sub-page (an estimator's inventory) keeps the plate on its estimator;
       // the sub-row marks itself once React renders it (2026-10-10).
       const plateFor = link.closest(".sb-sub") ? link.closest(".sb-tree")?.querySelector<HTMLElement>(".sb-parent .sb-link") ?? link : link;
       $$(".sb-link").forEach((l) => l.classList.remove("active"));
       plateFor.classList.add("active");
-      moveIndicator(plateFor);
+      moveIndicator(plateFor, true);
     });
   }
   moveIndicator($(".sb-link.active"));
@@ -218,6 +238,6 @@ export function initBlueprintShell(root: HTMLElement, opts: {
     destroy: () => disposers.forEach((d) => d()),
     // After a route change React swaps which item carries `active`; the plate
     // follows it, and because .ready carries the transition it reads as a slide.
-    syncIndicator: () => moveIndicator($(".sb-link.active")),
+    syncIndicator: () => moveIndicator($(".sb-link.active"), true),
   };
 }

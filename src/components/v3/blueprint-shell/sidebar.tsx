@@ -11,6 +11,7 @@
 // between blueprint pages — no teardown, no re-running the entry cascade.
 
 import { Fragment, useCallback, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -93,7 +94,22 @@ export function Sidebar({
     onMouseLeave: hideTip,
     onBlur: hideTip,
   });
-  const active = activeHref(pathname);
+  // THE CLICKED ROW IS ACTIVE AT ONCE (2026-10-11). The estimator trees open
+  // and close with `active`; read off the pathname alone they moved only when
+  // the next page committed, after the plate had already been aimed at the old
+  // layout — so it slid to a stale spot and was corrected a frame (in Safari a
+  // long frame) later: an overshoot and a bounce, and the list jumped when a
+  // tree closed above a scrolled-down row. The click sets `pending`
+  // synchronously; it counts only while the pathname is still the one the
+  // click left from, so the route that lands takes over by itself.
+  const [pending, setPending] = useState<{ href: string; from: string } | null>(null);
+  const active = activeHref(pending && pending.from === pathname ? pending.href : pathname);
+  const onRowClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    // Committed inside the click, so the shell measures the plate's target
+    // (shell-behavior, after React's handler) against the new layout.
+    flushSync(() => setPending({ href, from: pathname }));
+  };
   // The shell renders on routes that read the session server-side and pass it
   // down. The fallback is deliberately generic rather than the donor's "Ivan":
   // a wrong name is worse than no name.
@@ -154,6 +170,7 @@ export function Sidebar({
                   className={`sb-link${here ? " active" : ""}${child ? " sb-sub-link" : ""}${current ? " sb-sub-on" : ""}${item.locked ? " sb-lockd" : ""}`}
                   aria-current={current ? "page" : undefined}
                   href={item.href as Route}
+                  onClick={(e) => onRowClick(e, item.href)}
                   {...tipProps(
                     (badges[item.href] ?? 0) > 0 ? `${item.label} · ${badges[item.href]} new` : item.locked ? `${item.label} · not in your plan` : item.soon ? `${item.label} · coming soon` : quota ? `${item.label} · ${quota.text}` : item.label,
                   )}
