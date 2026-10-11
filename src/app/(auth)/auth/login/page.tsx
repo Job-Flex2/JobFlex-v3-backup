@@ -114,7 +114,9 @@ function LoginInner() {
   // A prefix check alone is not enough (`/\evil.com` resolves off-site) —
   // see lib/safeNext for the origin comparison.
   const nextPath = safeNextPath(search.get("next"));
-  // Prefill demo credentials only in local development — never in production.
+  // Prefill the demo address only in local development — never in production.
+  // The password is not prefilled (2026-10-10): the form opens on the code in
+  // development as in production, and a filled password would switch it.
   const isDev = process.env.NODE_ENV === "development";
   // ?email= prefills the address (a used trial confirmation link lands here,
   // /auth/register/confirm); the dev prefill stands only without it.
@@ -138,7 +140,6 @@ function LoginInner() {
           <LoginForm
             nextPath={nextPath}
             initialEmail={emailParam ?? (isDev ? "owner@acme.test" : "")}
-            initialPassword={isDev && !emailParam ? "password123" : ""}
             initialError={authErrorMessage(search.get("error"))}
           />
 
