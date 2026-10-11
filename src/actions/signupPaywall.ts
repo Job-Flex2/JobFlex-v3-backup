@@ -50,6 +50,10 @@ export async function signupPlans(token?: string): Promise<{
   /** The custom plan's trial. It has no catalog row, so it rides alongside
    *  the list rather than inside it, using the same saved offer. */
   customTrialDays: number;
+  /** When the trial ends and the first charge falls (unix ms): today plus the
+   *  same saved offer's days that /api/checkout/signup sends Stripe as
+   *  trial_period_days, and the card-less trial uses (lib/signupPricing). */
+  firstChargeAt: number;
 }> {
   const catalog = await getPlanCatalog();
   const pending = token ? await readPendingSignup(token) : null;
@@ -78,6 +82,7 @@ export async function signupPlans(token?: string): Promise<{
     promo,
     checkoutReady: isStripeEnabled(),
     customTrialDays: trialDays,
+    firstChargeAt: Date.now() + trialDays * 24 * 60 * 60 * 1000,
   };
 }
 

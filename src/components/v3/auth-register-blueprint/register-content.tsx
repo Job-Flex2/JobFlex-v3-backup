@@ -325,6 +325,19 @@ export function RegisterContent({
   const [promoText, setPromoText] = React.useState("");
   const [promoBusy, setPromoBusy] = React.useState(false);
   const [promoErr, setPromoErr] = React.useState<string | null>(null);
+  /* THE FIRST CHARGE'S DATE (owner, 2026-10-10): "Free until Oct 13, then
+     $95/mo" beside every price — the server's today plus the saved offer's
+     days, the same days Stripe is given. The cards arrive with it. */
+  const [firstChargeAt, setFirstChargeAt] = React.useState<number | null>(null);
+  const freeUntil = firstChargeAt ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(firstChargeAt)) : null;
+  /** "Free until Oct 13, then $95/mo" — the price after a code's discount, to
+   *  the cent as Stripe charges it; without a card, "… No card needed." */
+  const freeUntilLine = (cents: number, per: string) => {
+    if (!freeUntil) return null;
+    if (!requiresCard) return `Free until ${freeUntil}. No card needed.`;
+    const v = Math.round(cents * (1 - (promo?.percentOff ?? 0) / 100)) / 100;
+    return `Free until ${freeUntil}, then $${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2)}${per}`;
+  };
   /* True from the first frame when Stripe has just sent them back: the account
      is being created before anything else can be clicked. Initial state rather
      than a setState inside the effect below. */
@@ -690,6 +703,7 @@ export function RegisterContent({
         if (!live) return;
         setPlans(res.plans);
         setCustomTrialDays(res.customTrialDays);
+        setFirstChargeAt(res.firstChargeAt);
         setCheckoutReady(res.checkoutReady);
         if (res.promo) setPromo(res.promo);
         // Pre-select what the catalog marks as the one to pick, else the first
@@ -1906,6 +1920,7 @@ export function RegisterContent({
                       ${(cents / 100).toFixed(0)}
                       <i>{per}</i>
                     </span>
+                    {freeUntil ? <span className="pw-when">{freeUntilLine(cents, per)}</span> : null}
                     {savePct > 0 ? (
                       <span className="pw-save">
                         <s>${(listCents / 100).toFixed(0)}</s> Save {savePct}% · $
@@ -2024,6 +2039,7 @@ export function RegisterContent({
                   ${(customCents / 100).toFixed(0)}
                   <i>{interval === "YEAR" ? "/yr" : "/mo"}</i>
                 </span>
+                {freeUntil ? <span className="pw-when">{freeUntilLine(customCents, interval === "YEAR" ? "/yr" : "/mo")}</span> : null}
                 {/* The same saving the catalog plans show, off the same
                     arithmetic: a year here is CUSTOM_YEAR_MULTIPLIER months. */}
                 {interval === "YEAR" ? (
