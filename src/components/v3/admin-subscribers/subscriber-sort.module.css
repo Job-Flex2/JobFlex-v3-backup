@@ -1,0 +1,37 @@
+/* The sortable column headers of "All subscriptions" (subscriber-sort.ts).
+   Scoped like admin-shared so it outranks the dashboard module's resets. The
+   button wears the header's own type — mono, caps, muted — and only the
+   active column turns ink and shows its direction. */
+:global(.jf-blueprint .content) .sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+:global(.jf-blueprint .content) .sortBtn:hover,
+:global(.jf-blueprint .content) .sortBtn[data-active] { color: var(--ink); }
+:global(.jf-blueprint .content) .sortBtn:focus { outline: none; }
+:global(.jf-blueprint .content) .sortBtn:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; }
+/* The direction: the sprite's chevron, pointing down for descending and
+   turned up for ascending. */
+:global(.jf-blueprint .content) .sortIc {
+  flex: none;
+  width: 11px; height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+:global(.jf-blueprint .content) .sortIc[data-dir="asc"] { transform: rotate(180deg); }

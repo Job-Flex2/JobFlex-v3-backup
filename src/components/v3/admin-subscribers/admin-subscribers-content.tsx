@@ -12,6 +12,10 @@
 // live from Stripe by lib/paymentCard; its filter and the with/without count
 // in the card head are counted over the same rows the table shows.
 //
+// Sorting (owner, 2026-10-11) is subscriber-sort.ts: the headers and the
+// "Sort by" list share one state kept in the address, and it only reorders
+// the filtered rows — no count or numeral above the table moves with it.
+//
 // The KPI strip is recomputed over the FILTERED rows through the same
 // computeMetrics() the server used — one MRR rule, never a second copy — so
 // the numerals always describe the table under them.
@@ -19,6 +23,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { getSubscriberStripeStatus } from "@/actions/subscribers";
 import { money, longDate } from "@/lib/format";
 import s from "@/components/v3/admin-overview/admin-shared.module.css";
@@ -39,6 +44,17 @@ import {
   type BillingMetrics,
   type ChangeKind,
 } from "./billing-metrics";
+import {
+  COLUMN_LABEL,
+  SORT_PRESETS,
+  nextSort,
+  presetOf,
+  readSort,
+  sortRows,
+  type SortKey,
+  type SortState,
+} from "./subscriber-sort";
+import so from "./subscriber-sort.module.css";
 
 export interface SubscriberRowDTO extends BillingFacts {
   id: string;
@@ -95,6 +111,25 @@ export function AdminSubscribersContent({
   const [cardFilter, setCardFilter] = useState<CardFilter>("");
   const [openId, setOpenId] = useState<string | null>(null);
 
+  // The address is the sort's one home. replaceState keeps it there without a
+  // navigation, so the server (and Stripe) is never asked again for a re-order.
+  // The state passed is null on purpose: Next's patched replaceState skips the
+  // useSearchParams sync for a state that already carries its own __NA mark.
+  const searchParams = useSearchParams();
+  const sort = useMemo(() => readSort(searchParams), [searchParams]);
+  const setSort = (next: SortState) => {
+    const url = new URL(window.location.href);
+    if (next) {
+      url.searchParams.set("sort", next.key);
+      url.searchParams.set("dir", next.dir);
+    } else {
+      url.searchParams.delete("sort");
+      url.searchParams.delete("dir");
+    }
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  };
+  const preset = presetOf(sort);
+
   const plans = useMemo(() => Array.from(new Set(rows.map((r) => r.plan))).sort(), [rows]);
   // Slug → the catalog name the page prints; the slug stays the filter key.
   const nameOf = useMemo(() => new Map(rows.map((r) => [r.plan, r.planName])), [rows]);
@@ -127,6 +162,8 @@ export function AdminSubscribersContent({
       cardFilter === "with" ? narrowed.filter((r) => hasPayment(r.card)) : cardFilter === "none" ? narrowed.filter((r) => hasNoCard(r.card)) : narrowed,
     [narrowed, cardFilter],
   );
+  // Display order only: everything counted below reads `filtered`.
+  const sorted = useMemo(() => sortRows(filtered, sort), [filtered, sort]);
   const withCard = narrowed.filter((r) => hasPayment(r.card)).length;
   const noCard = narrowed.filter((r) => hasNoCard(r.card)).length;
   const cardUnknown = narrowed.length - withCard - noCard;
@@ -399,6 +436,31 @@ export function AdminSubscribersContent({
               </select>
             </span>
           )}
+          <span className={`bp-sel bp-sel--admin ${s.fSel}`}>
+            <select
+              className="bp-sel-in"
+              value={preset ?? "column"}
+              data-empty={sort ? undefined : "1"}
+              onChange={(e) => {
+                const hit = SORT_PRESETS.find((p) => p.value === e.target.value);
+                if (hit) setSort(hit.state);
+              }}
+              aria-label="Sort by"
+              data-sort-select
+            >
+              {SORT_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+              {/* A header click that no preset names still shows here. */}
+              {sort && preset === null && (
+                <option value="column">
+                  {COLUMN_LABEL[sort.key]}, {sort.dir === "asc" ? "ascending" : "descending"}
+                </option>
+              )}
+            </select>
+          </span>
           {filtersOn && (
             <button
               type="button"
@@ -425,21 +487,17 @@ export function AdminSubscribersContent({
           <table className={s.tbl}>
             <thead>
               <tr>
-                <th>Subscriber</th>
-                <th style={{ width: "13%" }}>Plan</th>
-                <th className={s.num} style={{ width: "9%" }}>
-                  Monthly
-                </th>
-                <th style={{ width: "13%" }}>Status</th>
-                <th style={{ width: "19%" }}>Card</th>
-                <th style={{ width: "10%" }}>Promo</th>
-                <th className={s.num} style={{ width: "12%" }}>
-                  Renews
-                </th>
+                <SortTh col="subscriber" sort={sort} onSort={setSort} />
+                <SortTh col="plan" sort={sort} onSort={setSort} width="13%" />
+                <SortTh col="monthly" sort={sort} onSort={setSort} width="9%" num />
+                <SortTh col="status" sort={sort} onSort={setSort} width="13%" />
+                <SortTh col="card" sort={sort} onSort={setSort} width="19%" />
+                <SortTh col="promo" sort={sort} onSort={setSort} width="10%" />
+                <SortTh col="renews" sort={sort} onSort={setSort} width="12%" num />
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => {
+              {sorted.map((r) => {
                 const open = openId === r.id;
                 return (
                   <RowPair
@@ -455,6 +513,46 @@ export function AdminSubscribersContent({
         )}
       </div>
     </>
+  );
+}
+
+/** A column header that sorts: a real button inside the th, which carries
+ *  aria-sort while it is the active column. */
+function SortTh({
+  col,
+  sort,
+  onSort,
+  width,
+  num = false,
+}: {
+  col: SortKey;
+  sort: SortState;
+  onSort: (next: SortState) => void;
+  width?: string;
+  num?: boolean;
+}) {
+  const dir = sort?.key === col ? sort.dir : null;
+  return (
+    <th
+      className={num ? s.num : undefined}
+      style={width ? { width } : undefined}
+      aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
+    >
+      <button
+        type="button"
+        className={so.sortBtn}
+        data-active={dir ? "" : undefined}
+        data-sort-col={col}
+        onClick={() => onSort(nextSort(sort, col))}
+      >
+        {COLUMN_LABEL[col]}
+        {dir && (
+          <svg className={so.sortIc} data-dir={dir} aria-hidden="true">
+            <use href="#i-chev" />
+          </svg>
+        )}
+      </button>
+    </th>
   );
 }
 
