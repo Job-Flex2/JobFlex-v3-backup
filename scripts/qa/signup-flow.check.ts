@@ -7,8 +7,10 @@
 //   · the same email path in Instagram's webview, iOS and Android user agents (no Google
 //     button on step 1 there);
 //   · the Google buttons (landing at 1440, step 1 at 390) hand off to accounts.google.com;
-//   · THE BRAKE: a sixth step 2 from one address within the hour (startPendingSignup allows
-//     five) shows the brake's own words — "Too many sign-ups…" — not a React error;
+//   · THE BRAKE: with one IP + User-Agent pair at its twenty step 2s for the hour
+//     (lib/signupBrake, 2026-10-10; it was five per IP), the next shows the brake's own
+//     words — "Too many sign-ups…" — not a React error; the same IP in another browser
+//     (another User-Agent) still reaches the plan sheet;
 //   · on every step: no console error, no page error, no 4xx/5xx from this server.
 // Stripe is reached only in TEST mode (dev.db `stripe:mode` = test, the server started with
 // STRIPE_SECRET_KEY blank); in live mode the run stops at the plan sheet and says so. The
@@ -18,6 +20,7 @@
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/signup-flow.check.ts
 // QA_SIGNUP_URL=http://localhost:NNNN uses a server already up instead (no build, no start).
 import type { ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { ensureBuild, playwright, startServer, stopServer } from "./_prod-server";
 
@@ -152,19 +155,34 @@ async function emailPath(browser: any, kind: Kind, industry: string, ip: string,
   }
 }
 
-/** The sixth step 2 from one address: the brake answers in words. */
+/** The 21st step 2 from one IP + User-Agent: the brake answers in words. The pair's count
+ *  is set to the allowance first (lib/signupBrake's key) rather than spent by twenty runs. */
 async function brake(browser: any, ip: string) {
+  const key = `rl:signup-start:${ip}:${createHash("sha256").update(IPHONE).digest("hex").slice(0, 16)}`;
+  const full = `20:${Date.now() + 3_600_000}`;
+  await db.syncState.upsert({ where: { key }, create: { key, cursor: full }, update: { cursor: full } });
   const v = await visitor(browser, "phone", ip);
   try {
     await v.page.goto(`${BASE}/auth/register`, { waitUntil: "load", timeout: 180000 });
     const s1 = await step1(v, `signup.brake@${MAIL_DOMAIN}`);
     if (!s1.ok) return check("brake: step 1", false, [s1.err, v.take()].filter(Boolean).join(" · "));
     const s2 = await step2(v);
-    check("brake: a sixth Create account from one address says why", !s2.ok && /^Too many sign-ups\. Try again in /.test(s2.err) && !/React|#\d{3}/.test(s2.err), `"${s2.err || "(no message)"}"${s2.ok ? " — the plan sheet opened" : ""}`);
+    check("brake: a 21st Create account from one IP + User-Agent says why", !s2.ok && /^Too many sign-ups\. Try again in /.test(s2.err) && !/React|#\d{3}/.test(s2.err), `"${s2.err || "(no message)"}"${s2.ok ? " — the plan sheet opened" : ""}`);
     const e = v.take();
     check("brake: no console error, no 4xx/5xx", !e, e);
   } finally {
     await v.ctx.close();
+  }
+  // The same network, another browser: its own count.
+  const w = await visitor(browser, "desk", ip);
+  try {
+    await w.page.goto(`${BASE}/auth/register`, { waitUntil: "load", timeout: 180000 });
+    const s1 = await step1(w, `signup.brake2@${MAIL_DOMAIN}`);
+    const s2 = s1.ok ? await step2(w) : { ok: false, err: s1.err };
+    const e = w.take();
+    check("brake: the same IP in another browser still reaches the plan sheet", s2.ok && !e, [s2.err, e].filter(Boolean).join(" · "));
+  } finally {
+    await w.ctx.close();
   }
 }
 
@@ -202,8 +220,6 @@ async function main() {
     const browser = await pw.chromium.launch({ channel: "chrome", args: ["--disable-blink-features=AutomationControlled"] }).catch(() => pw.chromium.launch());
     try {
       let n = 0;
-      // Five step 2s per address — exactly the brake's allowance — so the phone's address
-      // is spent when the brake is tried.
       const phoneIp = newIp();
       for (const industry of INDUSTRIES) await emailPath(browser, "phone", industry, phoneIp, n++, toStripe);
       const deskIp = newIp();
@@ -220,7 +236,7 @@ async function main() {
     stopServer(server);
     // This run's pending signups and brake rows (lib/rateLimit keeps them as rl:<key>).
     await db.syncState.deleteMany({ where: { key: { startsWith: "signup:" }, cursor: { contains: MAIL_DOMAIN } } }).catch(() => {});
-    await db.syncState.deleteMany({ where: { OR: IPS.map((ip) => ({ key: { startsWith: "rl:", endsWith: ":" + ip } })) } }).catch(() => {});
+    await db.syncState.deleteMany({ where: { OR: [...IPS.map((ip) => ({ key: { startsWith: "rl:", endsWith: ":" + ip } })), ...IPS.map((ip) => ({ key: { startsWith: `rl:signup-start:${ip}:` } }))] } }).catch(() => {});
     await db.$disconnect();
   }
   console.log(bad ? `\n${bad} failing` : "\nall green");

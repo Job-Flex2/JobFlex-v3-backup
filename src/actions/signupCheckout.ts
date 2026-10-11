@@ -48,6 +48,7 @@ import { captureSignupOutcome, trafficIdentitySchema } from "@/lib/traffic-captu
 import { sendMetaEvent, type MetaSignupContext } from "@/lib/metaCapi";
 import { metaContextFor } from "@/lib/metaSignupContext";
 import { orgNameUnsetKey } from "@/lib/orgName";
+import { signupNetworkBrake } from "@/lib/signupBrake";
 import type { SignupModeLabel } from "@/lib/signupMode";
 import { metaStartTrial } from "@/lib/metaSignupEvents";
 import { sendWelcomeFirstEstimate } from "@/lib/email/welcome";
@@ -179,11 +180,9 @@ export async function startPendingSignup(raw: unknown): Promise<{ ok: true; toke
   if (data.displayedTrialDays !== undefined && data.displayedTrialDays !== offered.days) {
     return { ok: false, error: "Your trial offer changed. Reload this page to review the current offer before continuing." };
   }
-  try {
-    await enforceRateLimit(`signup-start:${await clientIp()}`, 5, HOUR, "sign-ups");
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Too many sign-ups. Try again later." };
-  }
+  // Twenty an hour per IP + User-Agent (lib/signupBrake; was five per IP).
+  const braked = await signupNetworkBrake("signup-start");
+  if (braked) return { ok: false, error: braked };
 
   // Google-backed: the address is the one Google verified, whatever the form
   // says, and there is no password to hash.

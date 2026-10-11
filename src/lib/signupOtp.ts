@@ -27,15 +27,16 @@ import "server-only";
 //   · twenty NEW accounts an hour per network AND browser — the IP paired
 //     with the User-Agent (owner, 2026-10-10: a mobile carrier puts thousands
 //     of people behind one address) — counted when an address is proven, not
-//     when a code is asked for. The password sign-up's own five per IP is
-//     unchanged (actions/signupCheckout startPendingSignup);
+//     when a code is asked for (lib/signupBrake; the password sign-up keeps
+//     its own counter under the same rule);
 //   · nothing in any answer says whether an address has an account: the same
 //     "we sent a code" for both, and the email says what is true.
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { HOUR, clientIp, enforceRateLimit, rateLimitShared, retryInWords } from "@/lib/rateLimit";
+import { HOUR, clientIp, rateLimitShared, retryInWords } from "@/lib/rateLimit";
 import { hashToken, tokensEqual } from "@/lib/tokens";
 import { mintSigninTicket } from "@/lib/signinTicket";
+import { signupNetworkBrake } from "@/lib/signupBrake";
 import { appBaseUrl } from "@/lib/appUrl";
 import { renderEmail } from "@/lib/email/renderEmail";
 import { buildOtpCode, buildOtpNoAccount } from "@/lib/email/build/otp";
@@ -51,8 +52,6 @@ export const OTP_MAX_TRIES = 5;
 export const OTP_RESEND_MS = 30_000;
 const MAILS_PER_ADDRESS_HOUR = 5;
 const MAILS_PER_NETWORK_HOUR = 60;
-/** New accounts per IP + User-Agent pair, counted on proven new addresses. */
-const SIGNUPS_PER_NETWORK_HOUR = 20;
 const DRAFT_TTL_MS = 24 * HOUR;
 export { OTP_DRAFT_COOKIE } from "@/lib/signupMode";
 export const SUPPORT_REPLY_TO = "support@jobflex.app";
@@ -327,19 +326,7 @@ export async function writeVerifiedPending(
 
 /** One brake on the new-account count, shared by the Google arrival. */
 export async function newAccountBrake(): Promise<string | null> {
-  try {
-    let ua = "";
-    try {
-      const { headers } = await import("next/headers");
-      ua = (await headers()).get("user-agent") ?? "";
-    } catch {
-      /* no request: the IP alone */
-    }
-    await enforceRateLimit(`otp-signup:${await clientIp()}:${hashToken(ua).slice(0, 16)}`, SIGNUPS_PER_NETWORK_HOUR, HOUR, "sign-ups");
-    return null;
-  } catch (err) {
-    return err instanceof Error ? err.message : "Too many sign-ups. Try again later.";
-  }
+  return signupNetworkBrake("otp-signup");
 }
 
 /** What the register page opens on for a draft (from `?d=` or the cookie):
