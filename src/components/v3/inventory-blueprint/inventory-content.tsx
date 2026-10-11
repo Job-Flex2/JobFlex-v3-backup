@@ -24,16 +24,18 @@ import { saveFenceCatalog } from "@/actions/fenceCatalog";
 import { saveRoofCatalog } from "@/actions/roofCatalog";
 import { clearHvacCatalog, importHvacCatalogCsv, loadUsCatalog, saveHvacCatalogItem, saveHvacRateCard } from "@/actions/hvacEstimator";
 import { deleteHvacCatalogItem } from "@/actions/inventoryPage";
+import { saveDeckRateBook } from "@/actions/deckEstimator";
 import { HvacServicesContent } from "@/components/v3/hvac-services-blueprint/hvac-services-content";
 import type { InventoryPageData, InventoryTab, PriceBookData } from "@/lib/inventoryPage";
 import { inventoryHref, TRADES, type TradeId } from "@/lib/inventory";
 import { CATALOG_CSV_COLUMNS, STARTER_CATALOG } from "@/lib/hvac/ledger";
 import { FENCE_TYPES } from "@/lib/fence/catalog";
 import { SERVICE_MENU } from "@/lib/hvac/serviceMenu";
+import { DECK_RATE_GROUP_LABEL } from "@/lib/deck/rates";
 import {
   FENCE_RATE_LIMITS, FENCE_TYPE_IDS, HVAC_KINDS, ROOF_FAMILY_OPTIONS,
   bookNumbers, fenceBookRows, fenceDocWith, fenceDocWithout, filterRows, groupRows, hvacBookRows, hvacCardWith, hvacRateRows,
-  nextCustomFenceId, roofBookRows, roofDocWith, roofDocWithout, roofLists, rowKey, shownGroups, slugId, usd2,
+  deckBookRows, deckBookWith, nextCustomFenceId, roofBookRows, roofDocWith, roofDocWithout, roofLists, rowKey, shownGroups, slugId, usd2,
   type BookRow,
 } from "@/lib/priceBook";
 import { InventoryStock } from "./inventory-stock";
@@ -44,6 +46,7 @@ const GROUP_ORDER: Record<TradeId, string[]> = {
   fence: ["Wood", "Vinyl", "Composite", "Chain link", "Aluminum", "Steel", "Rail", "Your own"],
   roof: ["Asphalt shingle", "Metal", "Tile", "Wood shake", "Slate", "Synthetic", "Flat / low slope", "Underlayment"],
   hvac: [...HVAC_KINDS.map((k) => k.label), "Rate card · fees & markups", "Rate card · labor", "Rate card · materials"],
+  deck: (["lumber", "decking", "hardware", "concrete", "roof", "trim", "gutters", "allowance", "electrical", "labor", "roofLabor"] as const).map((k) => DECK_RATE_GROUP_LABEL[k]),
 };
 const FENCE_COLORS = ["#c4914a", "#a86e2d", "#7c5a3a", "#d9d3c4", "#f0ede6", "#5f6b73", "#2f3a44", "#8a4b2f", "#3b6b3b", "#b9b0a2"];
 
@@ -51,7 +54,7 @@ export type InventoryContentProps = { data: InventoryPageData; canEditBook: bool
 
 const hrefFor = (trade: TradeId, tab: InventoryTab, hash = ""): Route => inventoryHref(trade, tab, hash) as Route;
 /** The estimator a trade's inventory sits under, for the kicker. */
-const ESTIMATOR_NAME: Record<TradeId, string> = { roof: "Roof estimator", fence: "Fence estimator", hvac: "HVAC estimator" };
+const ESTIMATOR_NAME: Record<TradeId, string> = { roof: "Roof estimator", fence: "Fence estimator", hvac: "HVAC estimator", deck: "Deck estimator" };
 
 const numOr = (v: unknown, d = 0) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "")); return Number.isFinite(n) ? n : d; };
 const dateOf = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "never");
@@ -75,7 +78,7 @@ export function InventoryContent({ data, canEditBook, canWriteStock }: Inventory
           <h1 className={cx("page-title")}>{TRADES.find((t) => t.id === trade)?.label ?? ""} inventory</h1>
         </div>
         <div className={cx("page-actions")} ref={setPrimarySlot}>
-          {tab === "book" && canEditBook && (
+          {tab === "book" && canEditBook && trade !== "deck" && (
             <button type="button" className={cx("btn", "btn-primary")} onClick={() => setSheet(newRowSheet(trade, data.book))}>
               <Plus className={cx("ic")} aria-hidden="true" />Add item
             </button>
@@ -113,6 +116,7 @@ export function InventoryContent({ data, canEditBook, canWriteStock }: Inventory
 function bookRowsOf(book: PriceBookData): BookRow[] {
   if (book.trade === "fence") return fenceBookRows(book.doc);
   if (book.trade === "roof") return roofBookRows(book.doc);
+  if (book.trade === "deck") return deckBookRows(book.book);
   return [...hvacBookRows(book.items, book.own), ...hvacRateRows(book.card, book.defaults)];
 }
 
@@ -127,6 +131,7 @@ function newRowSheet(trade: TradeId, book: PriceBookData): SheetState {
     return { row: null, kind: "fence-type", isNew: true, title: "New fence type", fields: { id: nextCustomFenceId(doc), label: "", like: like.id, materialPerLf: 30, laborPerLf: 15, gateSingle: 450, color: FENCE_COLORS[0] } };
   }
   if (trade === "roof") return { row: null, kind: "roof-system", isNew: true, title: "New roof system", fields: { label: "", family: "asphalt", matPerSq: 150, laborPerSq: 200, wastePct: 12, capPerFt: 2.5, what: "system" } };
+  if (trade === "deck") return { row: null, kind: "deck-rate", isNew: true, title: "Deck prices", fields: {} };
   return { row: null, kind: "hvac-unit", isNew: true, title: "New unit", fields: { kind: "heat-pump", brand: "", model: "", tons: 3, seer2: 16, cost: 0 } };
 }
 
@@ -148,7 +153,7 @@ function PriceBook({ data, rows, canEdit, sheet, setSheet }: { data: InventoryPa
   const numbers = useMemo(() => bookNumbers(rows, GROUP_ORDER[trade]), [rows, trade]);
   const defaults = rows.filter((r) => r.companyDefault).length;
   const catalogRows = rows.filter((r) => r.kind !== "hvac-rate").length;
-  const standing = book.trade === "hvac" ? (book.own ? "Yours" : "Starter") : book.doc ? "Yours" : "Catalog";
+  const standing = book.trade === "hvac" ? (book.own ? "Yours" : "Starter") : book.trade === "deck" ? (Object.keys(book.book).length ? "Yours" : "Examples") : book.doc ? "Yours" : "Catalog";
 
   const openRow = useCallback((r: BookRow) => {
     if (!canEdit) return;
@@ -402,6 +407,15 @@ function EditSheet({ state, book, rows, onClose }: { state: SheetState; book: Pr
       const r = await saveHvacRateCard(hvacCardWith(book.card, str("id"), num("value")));
       return r.ok ? done("Rate card saved") : fail(r);
     }
+    if (state.kind === "deck-rate" && book.trade === "deck") {
+      if (state.isNew) return onClose();
+      const v = num("value");
+      const min = num("min");
+      const max = num("max");
+      if (!(v >= min && v <= max)) return setErr(`Keep it between $${min} and $${max}.`);
+      const r = await saveDeckRateBook(deckBookWith(book.book, str("id"), v));
+      return r.ok ? done("Saved to the company", "Every deck prices from it from now on.") : fail(r);
+    }
   });
 
   const remove = () => start(async () => {
@@ -425,9 +439,13 @@ function EditSheet({ state, book, rows, onClose }: { state: SheetState; book: Pr
       const r = await saveHvacRateCard(hvacCardWith(book.card, str("id"), def));
       return r.ok ? done("Back to the typical figure") : fail(r);
     }
+    if (state.kind === "deck-rate" && book.trade === "deck") {
+      const r = await saveDeckRateBook(deckBookWith(book.book, str("id"), null));
+      return r.ok ? done("Back to the example price") : fail(r);
+    }
   });
 
-  const kicker = state.kind === "hvac-rate" ? "Rate card" : state.kind === "hvac-unit" ? "Catalog unit" : state.kind === "roof-underlayment" ? "Underlayment" : state.kind === "roof-system" ? "Roof system" : "Fence type";
+  const kicker = state.kind === "deck-rate" ? "Deck price book" : state.kind === "hvac-rate" ? "Rate card" : state.kind === "hvac-unit" ? "Catalog unit" : state.kind === "roof-underlayment" ? "Underlayment" : state.kind === "roof-system" ? "Roof system" : "Fence type";
   const removeLabel = state.row ? (state.row.custom ? "Delete" : state.row.companyDefault ? "Reset to catalog" : null) : null;
 
   return (
@@ -447,6 +465,11 @@ function EditSheet({ state, book, rows, onClose }: { state: SheetState; book: Pr
       {state.kind === "hvac-rate" && (
         <div className={cx("fld")}><span className={cx("lbl")}>{state.title}</span><input className={cx("in", "in-mono")} inputMode="decimal" value={str("value")} onChange={(e) => set("value", e.target.value)} aria-label={state.title} /><span className={cx("hint")}>{String(state.row?.specs ?? "")}</span></div>
       )}
+      {state.kind === "deck-rate" && (state.isNew ? (
+        <div className={cx("note")}>The deck estimator prices every job from this book: lumber by the foot, boards, connectors, concrete, roofing, gutters, rails, stairs, the electrical, and the crew&apos;s work by the measure. Every figure here is an example until you type your own — click any row to set it. The same book is under &quot;Your prices&quot; in the estimator.</div>
+      ) : (
+        <div className={cx("fld")}><span className={cx("lbl")}>{state.title}</span><input className={cx("in", "in-mono")} inputMode="decimal" value={str("value")} onChange={(e) => set("value", e.target.value)} aria-label={state.title} /><span className={cx("hint")}>{String(state.row?.specs ?? "")} · per {String(state.row?.unit ?? "")} · ${str("min")}–${str("max")}</span></div>
+      ))}
     </Sheet>
   );
 }

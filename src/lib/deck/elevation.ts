@@ -63,7 +63,7 @@ const area2 = (pts: number[]) => {
 };
 
 /** The layers the elevation draws — the frame's bones and the roof's skin, not every board. */
-const DRAWN: ReadonlySet<SceneLayer> = new Set<SceneLayer>(["post", "beam", "rim", "fascia", "decking", "ledger", "roof-post", "header", "ridge", "rafter", "roofing", "trim", "gutter", "slab"]);
+const DRAWN: ReadonlySet<SceneLayer> = new Set<SceneLayer>(["post", "beam", "rim", "fascia", "decking", "ledger", "roof-post", "header", "ridge", "rafter", "roofing", "trim", "gutter", "slab", "stair", "rail", "glass", "screen", "wall", "light"]);
 
 /** The scene flattened onto the x–z plane. */
 export function deckElevation(scene: DeckScene): Elevation {

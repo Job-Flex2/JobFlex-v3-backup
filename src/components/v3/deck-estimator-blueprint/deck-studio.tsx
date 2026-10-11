@@ -1,16 +1,23 @@
 "use client";
 // THE DECK ESTIMATOR (2026-10-04; M2 roofs, gazebos, pergolas and the photo
-// of the house 2026-10-10) — page CONTENT (the shell owns the chrome).
-// Marked Coming soon: only admins reach this component (lib/deck/access);
-// everyone else gets deck-coming-soon.tsx at the same URL.
+// of the house 2026-10-10; M3 the site, stairs, rails, levels, shaped fronts,
+// the electrical, drafts and the part-by-part 3D 2026-10-10) — page CONTENT
+// (the shell owns the chrome). Marked Coming soon: only admins reach this
+// component (lib/deck/access); everyone else gets deck-coming-soon.tsx.
 //
-// The steps on the left — What to build, Shape, Height and house, Frame,
-// Surface, Roof, Railing and stairs, Photo of the house — and the structure
-// on the right, standing up in 3D (or as a framing plan, or drawn over the
-// photo of the house) with the code-check verdict under it. Every change
-// re-frames, re-counts and re-prices in the browser (lib/deck is pure); below
-// sit the full code-check strip, the price as the proposal will carry it,
-// the material package, and the shop's own prices.
+// The steps on the left — What to build, Shape, Height and house (the site),
+// Frame, Surface, Roof, Stairs and railing, Lights and outlets, Photo of the
+// house — and the structure on the right, standing up in 3D (or as a framing
+// plan, or drawn over the photo) with the code-check verdict under it. Every
+// change re-frames, re-counts and re-prices in the browser (lib/deck is pure);
+// below sit the full code-check strip, the price as the proposal will carry
+// it, Good/Better/Best, the material package, and the shop's own prices.
+//
+// The work saves itself (M3): a draft goes to the server a moment after each
+// change and the page can be opened again from the Drafts list or from a
+// saved proposal. A touch on any part of the 3D names it; a click flies to
+// it; stairs are placed by clicking the plan's edge, fixtures by clicking
+// the structure in the 3D.
 //
 // On a phone (≤768px, in the handheld frame) the same page reads as one
 // column: the picture first, then the steps, the price and the lists.
@@ -26,44 +33,67 @@ import {
   BUILT_UP_CHOICES,
   CEILING_LABEL,
   DECK_LIMITS,
+  ELECTRICAL_LIMITS,
   FASCIA_FINISH_LABEL,
+  FIXTURE_KINDS,
+  FIXTURE_LABEL,
   FLOOR_LABEL,
+  FRONT_LABEL,
   GUTTER_KINDS,
   GUTTER_LABEL,
+  LOWER_LIMITS,
   NOTCH_CORNERS,
+  PATTERN_LABEL,
+  PERGOLA_STYLE_LABEL,
   PLACEMENT_LABEL,
+  RAIL_INFILL_LABEL,
   ROOFING_LABEL,
   ROOFINGS,
   ROOF_KIND_LABEL,
   ROOF_LIMITS,
   ROOF_PLAN_LABEL,
+  STAIR_LANDING_LABEL,
+  STAIR_LIMITS,
+  STAIR_SIDE_LABEL,
   STRUCTURE_LABEL,
+  WALL_FILL_LABEL,
   defaultDeckDesign,
+  defaultFixture,
   defaultRoofDesign,
+  defaultStair,
   hasDeck,
   hasRoof,
   sizeWords,
   structureWords,
   type DeckDesign,
+  type Fixture,
+  type FixtureKind,
   type Floor,
+  type FrontKind,
   type NotchCorner,
   type Placement,
   type RoofDesign,
   type RoofKind,
   type RoofPlanShape,
+  type StairDesign,
   type Structure,
 } from "@/lib/deck/design";
-import { priceDeck, deckNotes, deckScope } from "@/lib/deck/pricing";
+import { priceDeck, deckNotes, deckScope, type DeckPackage } from "@/lib/deck/pricing";
 import { roofWords } from "@/lib/deck/roof";
+import { railWords } from "@/lib/deck/rails";
+import { electricalWords } from "@/lib/deck/electrical";
+import { siteFromAddress, SLOPE_LIMITS, TERMITE_LABEL } from "@/lib/deck/site";
 import { applyDeckPatch, checkSummary, deckChecks, type DeckCheck, type DeckPatch } from "@/lib/deck/checks";
-import { deckScene, sceneBuildLayers, SCENE_LAYER_LABEL } from "@/lib/deck/scene";
+import { deckScene, sceneBuildLayers, SCENE_LAYER_LABEL, type SceneLegend } from "@/lib/deck/scene";
 import { deckElevation, defaultPlacement } from "@/lib/deck/elevation";
 import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
-import { convertDeckEstimateToProposal, deckPhotoHref, saveDeckRateBook, uploadDeckPhoto } from "@/actions/deckEstimator";
+import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
+import { fitPhoto, fitSummary, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead } from "@/lib/deck/photoFit";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
-import { DeckPlan } from "./deck-plan";
-import { DeckPhotoView, shrinkPhoto } from "./deck-photo";
+import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
+import { DeckPlan, type PlanEdgeHit } from "./deck-plan";
+import { DeckPhotoView, cropPhoto, shrinkPhoto, trimLetterbox } from "./deck-photo";
 import s from "./deck-studio.module.css";
 
 const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3D").then((m) => m.DeckModel3D), {
@@ -78,7 +108,7 @@ const cx = (...names: Array<string | false | null | undefined>) => names.filter(
 function parseFeet(text: string): number | null {
   const t = text.trim();
   if (!t) return null;
-  const m = /^(\d+(?:\.\d+)?)\s*(?:'|ft|feet)?\s*(?:(\d+(?:\.\d+)?)\s*(?:"|in)?)?$/i.exec(t);
+  const m = /^(-?\d+(?:\.\d+)?)\s*(?:'|ft|feet)?\s*(?:(\d+(?:\.\d+)?)\s*(?:"|in)?)?$/i.exec(t);
   if (!m) return null;
   return Number(m[1]) + (m[2] ? Number(m[2]) / 12 : 0);
 }
@@ -98,6 +128,13 @@ const feetText = (ft: number) => {
   return inches % 12 === 0 ? String(inches / 12) : `${Math.floor(inches / 12)}'${inches % 12}"`;
 };
 const intText = (t: string) => (t.trim() === "" ? null : Number(t));
+const ago = (iso: string) => {
+  const sec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return "just now";
+  if (sec < 3600) return `${Math.round(sec / 60)} min ago`;
+  if (sec < 86400) return `${Math.round(sec / 3600)} h ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
 
 /* ------------------------------------------------------------------ */
 /*  Small controls                                                     */
@@ -202,7 +239,7 @@ const STRUCTURE_HINT: Record<Structure, string> = {
 const KINDS_FOR: Record<Structure, RoofKind[]> = {
   deck: [],
   "covered-deck": ["shed", "gable", "hip"],
-  gazebo: ["gable", "hip", "pyramid", "double-tier"],
+  gazebo: ["gable", "hip", "pyramid", "double-tier", "gambrel", "dutch-gable"],
   pergola: ["pergola"],
 };
 const EAVE_PRESETS: ReadonlyArray<{ label: string; inches: number }> = [
@@ -212,8 +249,27 @@ const EAVE_PRESETS: ReadonlyArray<{ label: string; inches: number }> = [
 ];
 const PITCHES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12];
 const OVERHANGS = [0, 6, 12, 16, 18, 24, 30, 36];
+/** Fixtures a tap adds, in the order a contractor usually thinks of them. */
+const FIXTURE_CHIPS: FixtureKind[] = ["led-strip", "post-cap", "step-light", "string-light", "sconce", "ceiling-light", "chandelier", "fan", "outlet", "heater", "flood"];
+const FIXTURE_SHORT: Record<FixtureKind, string> = { "led-strip": "LED strip", "post-cap": "Post caps", "step-light": "Step lights", "string-light": "String lights", sconce: "Sconce", "ceiling-light": "Ceiling light", chandelier: "Chandelier", fan: "Fan", outlet: "Outlet", heater: "Heater", flood: "Security light" };
+/** Good / Better / Best: the boards and the rail each tier stands on. */
+const TIERS: ReadonlyArray<{ id: "good" | "better" | "best"; name: string; decking: (state: string | null) => string; rail: DeckDesign["rail"]["type"]; words: string }> = [
+  { id: "good", name: "Good", decking: (st) => defaultDecking(st), rail: "treated", words: "Treated wood boards and rail — the working deck." },
+  { id: "better", name: "Better", decking: () => "composite-better", rail: "composite", words: "Capped composite boards and a composite rail — no staining, ever." },
+  { id: "best", name: "Best", decking: () => "composite-best", rail: "aluminum", words: "Premium composite and an aluminum rail — the thin profile, the long warranty." },
+];
 
-export function DeckStudio({ initialBook, homeState, initialAddress, clientId, adminPreview = false }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean }) {
+type Placing = null | { kind: "stair" } | { kind: "fixture"; id: string };
+
+export interface OpenedDesign {
+  design: DeckDesign;
+  address: string | null;
+  title: string;
+  draftId: string | null;
+  from: "draft" | "proposal";
+}
+
+export function DeckStudio({ initialBook, homeState, initialAddress, clientId, adminPreview = false, opened = null }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null }) {
   const router = useRouter();
   const [address, setAddress] = React.useState(initialAddress ?? "");
   const [addressDraft, setAddressDraft] = React.useState(initialAddress ?? "");
@@ -221,32 +277,56 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     const parsed = parseStateZip(address);
     return parsed.state || parsed.zip ? resolveMarket({ address }) : resolveMarket({ state: homeState });
   }, [address, homeState]);
-  const [design, setDesign] = React.useState<DeckDesign>(() => defaultDeckDesign({ state: market.state || homeState, frostIn: market.frostIn }));
+  const site = React.useMemo(() => siteFromAddress(address, homeState), [address, homeState]);
+  const [design, setDesign] = React.useState<DeckDesign>(() => {
+    if (opened) return opened.design;
+    const d = defaultDeckDesign({ state: market.state || homeState, frostIn: market.frostIn });
+    // The site's snow and termites go in from the start; the design load follows the snow.
+    return applyDeckPatch(d, { loadPsf: site.deckLoad, frostIn: site.frostIn, site: { ...d.site, groundSnowPsf: site.groundSnowPsf, termite: site.termite } });
+  });
   const [book, setBook] = React.useState<DeckRateBook>(initialBook);
   /** What the contractor chose by hand; a new address does not overwrite those. */
   const touched = React.useRef(new Set<string>());
+  /** The design changed since it was opened: the auto-save starts. */
+  const dirty = React.useRef(false);
 
   const patch = React.useCallback((p: DeckPatch, keys: string[] = []) => {
     for (const k of keys) touched.current.add(k);
+    dirty.current = true;
     setDesign((d) => applyDeckPatch(d, p));
   }, []);
   /** A change to the roof: the whole roof object goes in, so nothing nested is lost. */
-  const rp = React.useCallback((p: Partial<RoofDesign>) => setDesign((d) => applyDeckPatch(d, { roof: { ...d.roof, ...p } })), []);
+  const rp = React.useCallback((p: Partial<RoofDesign>) => {
+    dirty.current = true;
+    setDesign((d) => applyDeckPatch(d, { roof: { ...d.roof, ...p } }));
+  }, []);
+  const setStairs = React.useCallback((fn: (list: StairDesign[]) => StairDesign[]) => {
+    dirty.current = true;
+    setDesign((d) => applyDeckPatch(d, { stairs: fn(d.stairs) }));
+  }, []);
+  const setFixtures = React.useCallback((fn: (list: Fixture[]) => Fixture[]) => {
+    dirty.current = true;
+    setDesign((d) => applyDeckPatch(d, { electrical: { ...d.electrical, fixtures: fn(d.electrical.fixtures) } }));
+  }, []);
 
   const commitAddress = (text: string) => {
     const next = text.trim();
     setAddress(next);
     const parsed = parseStateZip(next);
     const m = parsed.state || parsed.zip ? resolveMarket({ address: next }) : resolveMarket({ state: homeState });
+    const st = siteFromAddress(next, homeState);
     const p: DeckPatch = {};
-    if (!touched.current.has("frost")) p.frostIn = m.frostIn ?? design.frostIn;
+    if (!touched.current.has("frost")) p.frostIn = st.frostIn;
+    if (!touched.current.has("load")) p.loadPsf = st.deckLoad;
     if (!touched.current.has("species")) p.framing = { species: defaultFramingSpecies(m.state || homeState) };
     if (!touched.current.has("decking")) p.decking = { product: defaultDecking(m.state || homeState) };
-    setDesign((d) => applyDeckPatch(d, p));
+    dirty.current = true;
+    setDesign((d) => applyDeckPatch(d, { ...p, site: { ...d.site, groundSnowPsf: st.groundSnowPsf, termite: st.termite } }));
   };
 
   /** Switching what is built: a different kind of roof starts from its own defaults; deck ↔ covered deck keeps the roof as set. */
   const setStructure = (next: Structure) => {
+    dirty.current = true;
     setDesign((d) => {
       const family = (st: Structure) => (st === "deck" || st === "covered-deck" ? "cover" : st);
       const roof = family(next) === family(d.structure) && d.structure !== "deck" ? d.roof : next === "covered-deck" && d.structure === "deck" && KINDS_FOR["covered-deck"].includes(d.roof.kind) ? d.roof : defaultRoofDesign(next);
@@ -255,25 +335,78 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   };
 
   const pkg = React.useMemo(() => priceDeck(design, { rates: book, market }), [design, book, market]);
+  const structure = pkg.structure;
   const frame = pkg.frame;
   const roof = pkg.roof;
-  const checks = React.useMemo(() => deckChecks(frame, roof, design), [frame, roof, design]);
+  const checks = React.useMemo(() => deckChecks(structure), [structure]);
   const summary = checkSummary(checks);
-  const scene = React.useMemo(() => deckScene(frame, pkg.takeoff.surface, { roof, design }), [frame, pkg.takeoff.surface, roof, design]);
+  const scene = React.useMemo(() => deckScene(structure), [structure]);
   const elevation = React.useMemo(() => deckElevation(scene), [scene]);
   const wall = wallType(design.wall);
   const withDeck = hasDeck(design);
   const withRoof = hasRoof(design);
   const what = STRUCTURE_LABEL[design.structure];
+  const tiers = React.useMemo(() => {
+    if (!withDeck) return null;
+    const st = market.state || homeState;
+    return TIERS.map((t) => {
+      const variant = applyDeckPatch(design, { decking: { product: t.decking(st) }, rail: { type: design.rail.type === "none" && !structure.rails.required ? "none" : t.rail } });
+      const p = priceDeck(variant, { rates: book, market });
+      return { ...t, product: t.decking(st), subtotal: p.subtotal, perSqFt: p.pricePerSqFt, current: design.decking.product === t.decking(st) && (design.rail.type === t.rail || design.rail.type === "none") };
+    });
+  }, [design, book, market, homeState, withDeck, structure.rails.required]);
 
-  /* ── the 3D's build-up ── */
+  /* ── the 3D's build-up, night, connections, picking ── */
   const [view, setView] = React.useState<"3d" | "plan" | "photo">("3d");
   const buildLayers = React.useMemo(() => sceneBuildLayers(scene), [scene]);
   const LAYERS = buildLayers.length;
   const [built, setBuilt] = React.useState<number>(Number.POSITIVE_INFINITY);
   const [xray, setXray] = React.useState(false);
+  const [night, setNight] = React.useState(false);
+  const [connections, setConnections] = React.useState(false);
   const [playing, setPlaying] = React.useState(false);
   const [resetToken, setResetToken] = React.useState(0);
+  const [hoverPick, setHoverPick] = React.useState<DeckPick | null>(null);
+  const [picked, setPicked] = React.useState<{ legend: SceneLegend; point: [number, number, number] } | null>(null);
+  const [focus, setFocus] = React.useState<[number, number, number] | null>(null);
+  const [placing, setPlacing] = React.useState<Placing>(null);
+  const [editing, setEditing] = React.useState(false);
+  /** A handle dragged in the 3D: the design number it stands for takes the dragged value, inside its rails. */
+  const onEdit = React.useCallback(
+    (e: DeckEdit) => {
+      const toHalfFt = (v: number) => Math.round(v * 2) / 2;
+      const toIn = (v: number) => Math.round(v);
+      switch (e.kind) {
+        case "width":
+          patch({ shape: { ...design.shape, widthFt: Math.min(DECK_LIMITS.widthFt.max, Math.max(DECK_LIMITS.widthFt.min, toHalfFt(e.value))) } });
+          break;
+        case "depth":
+          patch({ shape: { ...design.shape, depthFt: Math.min(DECK_LIMITS.depthFt.max, Math.max(DECK_LIMITS.depthFt.min, toHalfFt(e.value))) } });
+          break;
+        case "height":
+          patch({ heightIn: Math.min(DECK_LIMITS.heightIn.max, Math.max(DECK_LIMITS.heightIn.min, toIn(e.value))) });
+          break;
+        case "eave":
+          rp({ eaveHeightIn: Math.min(ROOF_LIMITS.eaveHeightIn.max, Math.max(ROOF_LIMITS.eaveHeightIn.min, toIn(e.value))) });
+          break;
+        case "lower-depth":
+          patch({ lower: { depthFt: Math.min(LOWER_LIMITS.depthFt.max, Math.max(LOWER_LIMITS.depthFt.min, toHalfFt(e.value))) } });
+          break;
+        case "roof-width":
+          if (polygon) rp({ plan: { ...design.roof.plan, acrossFt: Math.min(ROOF_LIMITS.acrossFt.max, Math.max(ROOF_LIMITS.acrossFt.min, toHalfFt(e.value))) } });
+          else rp({ plan: { ...design.roof.plan, widthFt: Math.min(ROOF_LIMITS.planFt.max, Math.max(ROOF_LIMITS.planFt.min, toHalfFt(e.value))), depthFt: design.roof.plan.shape === "square" ? Math.min(ROOF_LIMITS.planFt.max, Math.max(ROOF_LIMITS.planFt.min, toHalfFt(e.value))) : design.roof.plan.depthFt } });
+          break;
+        case "roof-depth":
+          rp({ plan: { ...design.roof.plan, depthFt: Math.min(ROOF_LIMITS.planFt.max, Math.max(ROOF_LIMITS.planFt.min, toHalfFt(e.value))) } });
+          break;
+        case "stair":
+          setStairs((list) => list.map((st) => (st.id === e.id ? { ...st, atFt: Math.max(st.widthFt / 2, toHalfFt(e.value)) } : st)));
+          break;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `polygon` is derived from `design` below; the latest design is what matters.
+    [design, patch, rp, setStairs],
+  );
   React.useEffect(() => {
     if (!playing) return;
     let raf = 0;
@@ -306,37 +439,238 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const sliderValue = Math.min(LAYERS, built);
   const layerNow = sliderValue >= LAYERS ? `Finished ${what.toLowerCase()}` : `Building: ${SCENE_LAYER_LABEL[buildLayers[Math.min(LAYERS - 1, Math.floor(sliderValue))]]}`;
 
+  const onPick = React.useCallback(
+    (pick: DeckPick | null, kind: "hover" | "click") => {
+      if (kind === "hover") {
+        setHoverPick(pick);
+        return;
+      }
+      if (placing?.kind === "fixture") {
+        if (!pick) return;
+        const id = placing.id;
+        setFixtures((list) => list.map((f) => (f.id === id ? { ...f, at: { x: Math.round(pick.point[0] * 12), y: Math.round(pick.point[1] * 12), z: Math.round(pick.point[2] * 12), on: pick.mount } } : f)));
+        setPlacing(null);
+        return;
+      }
+      if (pick?.legend) setPicked({ legend: pick.legend, point: pick.point });
+      else setPicked(null);
+    },
+    [placing, setFixtures],
+  );
+  const placeStair = (hit: PlanEdgeHit) => {
+    setStairs((list) => [...list, { ...defaultStair(`s${list.length + 1}-${Date.now().toString(36).slice(-3)}`, hit.side, hit.atFt), level: hit.level }]);
+    setPlacing(null);
+  };
+
+  /* ── drafts: the work saves itself ── */
+  const [draftId, setDraftId] = React.useState<string | null>(opened?.draftId ?? null);
+  const [draftTitle, setDraftTitle] = React.useState<string>(opened ? (opened.from === "draft" && opened.title === structureWords(opened.design) ? "" : opened.title) : "");
+  const [saveState, setSaveState] = React.useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [savedAt, setSavedAt] = React.useState<string | null>(null);
+  const [drafts, setDrafts] = React.useState<DeckDraftRow[] | null>(null);
+  React.useEffect(() => {
+    if (!dirty.current) return;
+    const t = setTimeout(async () => {
+      setSaveState("saving");
+      try {
+        localStorage.setItem("jf-deck-draft", JSON.stringify({ design, address, at: Date.now() }));
+      } catch {
+        /* the server copy is the one that counts */
+      }
+      const res = await saveDeckDraft({ id: draftId, title: draftTitle || null, design, address });
+      if (res.ok) {
+        setDraftId(res.id);
+        setSavedAt(res.updatedAt);
+        setSaveState("saved");
+      } else setSaveState("failed");
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [design, address, draftId, draftTitle]);
+  const refreshDrafts = async () => {
+    const res = await listDeckDrafts();
+    setDrafts(res.ok ? res.drafts : []);
+  };
+  const openDraft = async (id: string) => {
+    const res = await loadDeckDraft(id);
+    if (!res.ok) return;
+    dirty.current = false;
+    setDesign(res.draft.design);
+    setDraftId(res.draft.id);
+    setDraftTitle(res.draft.title);
+    setAddress(res.draft.address ?? "");
+    setAddressDraft(res.draft.address ?? "");
+    setSavedAt(res.draft.updatedAt);
+    setSaveState("saved");
+  };
+  const removeDraft = async (id: string) => {
+    await deleteDeckDraft(id);
+    if (id === draftId) {
+      setDraftId(null);
+      setSaveState("idle");
+    }
+    void refreshDrafts();
+  };
+  const startFresh = () => {
+    dirty.current = false;
+    setDesign(defaultDeckDesign({ state: market.state || homeState, frostIn: market.frostIn }));
+    setDraftId(null);
+    setDraftTitle("");
+    setSaveState("idle");
+    setSavedAt(null);
+    touched.current.clear();
+  };
+
+  /* ── the site: reading the ground ── */
+  const [siteBusy, setSiteBusy] = React.useState(false);
+  const [siteNote, setSiteNote] = React.useState<string | null>(null);
+  const readGround = async () => {
+    setSiteBusy(true);
+    setSiteNote(null);
+    try {
+      const res = await readDeckSite(address);
+      if (!res.ok) {
+        setSiteNote(res.error);
+        return;
+      }
+      const depthIn = Math.round(design.shape.depthFt * 12);
+      const drop = Math.round(((res.gradePct / 100) * depthIn) * 2) / 2;
+      patch({ site: { ...design.site, slope: { outDropIn: drop, acrossDropIn: 0 } } });
+      setSiteNote(`USGS lidar reads the ground falling about ${res.gradePct}% here, toward ${["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"][Math.round(res.downhillDeg / 45) % 8]}. Set as ${drop} in. of fall away from the house across the deck — change it if the yard falls the other way.`);
+    } finally {
+      setSiteBusy(false);
+    }
+  };
+
   /* ── the photo of the house ── */
   const [photoHref, setPhotoHref] = React.useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = React.useState(false);
   const [photoError, setPhotoError] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const pickPhoto = () => fileRef.current?.click();
-  const onPhotoFile = async (file: File | null) => {
-    if (!file) return;
+  /** What the studio is doing with the picture right now, for the buttons. */
+  const [photoStage, setPhotoStage] = React.useState<string | null>(null);
+  /** The read's own trouble (no key, no wall seen): the picture still goes up, placed by hand. */
+  const [photoNote, setPhotoNote] = React.useState<string | null>(null);
+  /** The last picture chosen, so "Fit to the wall" can read it again at full size. */
+  const lastFile = React.useRef<File | null>(null);
+  const fitDeck = React.useMemo<FitDeck>(() => ({ shape: design.shape, depthFt: design.shape.depthFt, elevWidthFt: elevation.widthFt, elevHeightFt: elevation.heightFt, elevLeftFt: elevation.leftFt }), [design.shape, elevation]);
+  // THE SMART FIT (owner, 2026-10-10): the picture is shrunk, its black bands
+  // cut, read once by the vision model (actions readDeckPhoto), cropped to
+  // the wall and placed by the read (lib/deck/photoFit) — then saved. A read
+  // that fails still saves the picture, centred, and says why.
+  const placePhoto = async (file: File) => {
     setPhotoBusy(true);
     setPhotoError(null);
+    setPhotoNote(null);
     try {
+      lastFile.current = file;
+      setPhotoStage("Reading the picture…");
       const small = await shrinkPhoto(file);
+      const clean = await trimLetterbox(small.file, small.w, small.h);
+      setPhotoStage("Finding the wall…");
+      const readForm = new FormData();
+      readForm.set("file", clean.file);
+      const read = await readDeckPhoto(readForm);
+      let toUpload: { file: File; w: number; h: number } = clean;
+      let placed = defaultPlacement();
+      let fit: PhotoFit | null = null;
+      let wallRead: WallRead | null = null;
+      if (read.ok) {
+        wallRead = read.read;
+        fit = fitPhoto(read.read, fitDeck, design.heightIn, clean.w, clean.h);
+        toUpload = await cropPhoto(clean.file, fit.crop, clean.w, clean.h);
+        placed = fit.placed;
+      } else setPhotoNote(read.error);
+      setPhotoStage("Saving the picture…");
       const form = new FormData();
-      form.set("file", small.file);
-      form.set("w", String(small.w));
-      form.set("h", String(small.h));
+      form.set("file", toUpload.file);
+      form.set("w", String(toUpload.w));
+      form.set("h", String(toUpload.h));
       const res = await uploadDeckPhoto(form);
       if (!res.ok) {
         setPhotoError(res.error);
         return;
       }
       setPhotoHref(res.href);
-      patch({ photo: { url: res.url, w: res.w, h: res.h, placed: defaultPlacement() } });
+      patch({ photo: { url: res.url, w: res.w, h: res.h, placed, fit: fit && wallRead ? fitSummary(fit, wallRead) : null } });
       setView("photo");
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : "The picture could not be read.");
     } finally {
       setPhotoBusy(false);
+      setPhotoStage(null);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
+  const onPhotoFile = (file: File | null) => {
+    if (file) void placePhoto(file);
+  };
+  /** The model's read again — on the picture as chosen when it is still here, else on the saved one. */
+  const readPhotoAgain = async () => {
+    if (!design.photo || photoBusy) return;
+    let file = lastFile.current;
+    if (!file) {
+      const href = photoHref ?? (await deckPhotoHref(design.photo.url).catch(() => null));
+      if (!href) return;
+      try {
+        const blob = await fetch(href).then((r) => (r.ok ? r.blob() : null));
+        if (!blob) return;
+        file = new File([blob], "house.jpg", { type: blob.type || "image/jpeg" });
+      } catch {
+        return;
+      }
+    }
+    await placePhoto(file);
+  };
+  /** The fit again, from the read the picture carries — no second look by the model. */
+  const refitPhoto = () => {
+    const p = design.photo;
+    if (!p || photoBusy) return;
+    const read = p.fit?.read;
+    if (!read) {
+      void readPhotoAgain();
+      return;
+    }
+    const fit = fitPhoto(read, fitDeck, design.heightIn, p.w, p.h, { recrop: false });
+    patch({ photo: { ...p, placed: fit.placed, fit: fitSummary(fit, read) } });
+  };
+  /** The house's step taken into the deck's shape — then the deck is set on it again once the new shape's elevation is in. */
+  const refitAfter = React.useRef(false);
+  const applyOffer = () => {
+    const offer = design.photo?.fit?.offer;
+    if (!offer) return;
+    refitAfter.current = true;
+    patch({ shape: shapeWithOffer(design.shape, offer) });
+  };
+  React.useEffect(() => {
+    if (!refitAfter.current) return;
+    refitAfter.current = false;
+    queueMicrotask(refitPhoto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the shape the offer set
+  }, [fitDeck]);
+  // A design that already holds a photo (a reopened estimate) needs its read link.
+  React.useEffect(() => {
+    const url = design.photo?.url;
+    if (!url || photoHref) return;
+    let gone = false;
+    deckPhotoHref(url)
+      .then((href) => {
+        if (!gone && href) setPhotoHref(href);
+      })
+      .catch(() => null);
+    return () => {
+      gone = true;
+    };
+  }, [design.photo?.url, photoHref]);
+  // THE PHOTO AS THE WALL in the 3D (owner, 2026-10-10): the same picture, placement and scale the photo view uses.
+  const [showHouse, setShowHouse] = React.useState(true);
+  const backdrop = React.useMemo<DeckBackdrop | null>(() => {
+    const p = design.photo;
+    if (!showHouse || !p?.placed || !photoHref) return null;
+    return { href: photoHref, w: p.w, h: p.h, placed: p.placed, elevWidthFt: elevation.widthFt, elevLeftFt: elevation.leftFt, jogs: (p.fit?.read?.jogs ?? []).map((j) => ({ x: j.x, dir: j.dir, depthFt: j.depthFt })) };
+  }, [design.photo, photoHref, elevation.widthFt, elevation.leftFt, showHouse]);
+  const suggestedHeight = design.photo?.fit?.suggestedHeightIn ?? null;
+  const heightOffer = suggestedHeight !== null && Math.abs(suggestedHeight - design.heightIn) >= 2 ? suggestedHeight : null;
   const refreshPhoto = async () => {
     if (!design.photo) return;
     const href = await deckPhotoHref(design.photo.url).catch(() => null);
@@ -347,6 +681,16 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     setPhotoHref(null);
     if (view === "photo") setView("3d");
   };
+  // A reopened design with a photo needs a fresh read link.
+  React.useEffect(() => {
+    if (opened?.design.photo) {
+      deckPhotoHref(opened.design.photo.url)
+        .then((href) => {
+          if (href) setPhotoHref(href);
+        })
+        .catch(() => {});
+    }
+  }, [opened]);
 
   /* ── the proposal ── */
   const [busy, setBusy] = React.useState(false);
@@ -376,18 +720,26 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     }
     setBusy(false);
   };
+  const permitHref = React.useMemo(() => {
+    try {
+      const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ design, address }))));
+      return `/deck-permit?d=${encodeURIComponent(payload)}`;
+    } catch {
+      return null;
+    }
+  }, [design, address]);
 
   /* ── the shop's prices ── */
-  const [drafts, setDrafts] = React.useState<Record<string, string>>(() => Object.fromEntries(Object.entries(initialBook).map(([k, v]) => [k, String(v)])));
+  const [drafts2, setDrafts2] = React.useState<Record<string, string>>(() => Object.fromEntries(Object.entries(initialBook).map(([k, v]) => [k, String(v)])));
   const [saving, setSaving] = React.useState<"idle" | "saving" | "saved" | "failed">("idle");
-  const draftBook = React.useMemo(() => sanitizeDeckRateBook(Object.fromEntries(Object.entries(drafts).filter(([, v]) => v.trim() !== "").map(([k, v]) => [k, Number(v)]))), [drafts]);
+  const draftBook = React.useMemo(() => sanitizeDeckRateBook(Object.fromEntries(Object.entries(drafts2).filter(([, v]) => v.trim() !== "").map(([k, v]) => [k, Number(v)]))), [drafts2]);
   const unsaved = JSON.stringify(draftBook) !== JSON.stringify(book);
   const saveBook = async () => {
     setSaving("saving");
     const res = await saveDeckRateBook(draftBook).catch(() => ({ ok: false as const, error: "" }));
     if (res.ok) {
       setBook(res.book);
-      setDrafts(Object.fromEntries(Object.entries(res.book).map(([k, v]) => [k, String(v)])));
+      setDrafts2(Object.fromEntries(Object.entries(res.book).map(([k, v]) => [k, String(v)])));
       setSaving("saved");
     } else setSaving("failed");
   };
@@ -396,12 +748,13 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const r = design.roof;
   const structureSummary = `${what}${withRoof && design.structure !== "covered-deck" ? ` · ${FLOOR_LABEL[design.floor].toLowerCase()}` : ""}`;
   const shapeSummary = `${sizeWords(design)} · ${Math.round(pkg.areaSqFt)} sq ft`;
-  const heightSummary = withDeck ? `${design.heightIn >= 24 ? ftIn(design.heightIn) : `${design.heightIn} in.`} · ${design.placement === "attached" ? "ledger" : design.placement === "beside" ? "own posts" : "free-standing"}` : `${design.loadPsf} psf · ${design.soilPsf.toLocaleString("en-US")} psf soil · frost ${design.frostIn} in.`;
+  const heightSummary = withDeck ? `${design.heightIn >= 24 ? ftIn(design.heightIn) : `${design.heightIn} in.`} · ${design.placement === "attached" ? "ledger" : design.placement === "beside" ? "own posts" : "free-standing"}${structure.gradePct >= 2 ? ` · ${structure.gradePct}% fall` : ""}` : `${design.loadPsf} psf · ${design.soilPsf.toLocaleString("en-US")} psf soil · frost ${design.frostIn} in.`;
   const frameSummary = frame ? `${frame.joistSize} @ ${frame.spacingIn}" · ${[...new Set(frame.beams.map((b) => b.spec.size))].join(", ")} ${frame.beamStyle === "flush" ? "flush" : "beam"}` : "";
-  const surfaceSummary = frame ? frame.decking.label : "";
+  const surfaceSummary = frame ? `${frame.decking.label}${design.decking.pattern !== "straight" ? ` · ${design.decking.pattern}` : ""}${design.decking.border ? " · border" : ""}` : "";
   const roofSummary = roof ? roofWords(roof) : "";
-  const extrasSummary = [pkg.railFt ? `${Math.round(pkg.railFt)} ft rail` : null, pkg.stairSteps ? `${pkg.stairSteps} steps` : null].filter(Boolean).join(" · ") || "None yet";
-  const photoSummary = design.photo ? (design.photo.placed ? "Placed on the photo" : "Photo added — place it") : "No photo yet";
+  const extrasSummary = [structure.rails.on ? railWords(structure.rails).split(" — ")[0] : null, structure.stairs.length ? `${structure.stairs.length} ${structure.stairs.length === 1 ? "stair" : "stairs"}` : null].filter(Boolean).join(" · ") || "None yet";
+  const electricSummary = structure.electrical.on ? electricalWords(structure.electrical) : "None";
+  const photoSummary = design.photo ? (design.photo.fit && !design.photo.fit.notes[0]?.startsWith("The wall could not") ? (design.photo.fit.door ? "Fitted to the wall, at the door" : "Fitted to the wall") : design.photo.placed ? "Placed on the photo" : "Photo added — place it") : "No photo yet";
 
   const bomByStep = React.useMemo(() => {
     const out = new Map<BomStep, typeof pkg.bom>();
@@ -416,10 +769,14 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   let n = 0;
   const next = () => ++n;
   const kinds = KINDS_FOR[design.structure];
-  const polygon = r.plan.shape === "hexagon" || r.plan.shape === "octagon";
-  const planShapes: RoofPlanShape[] = design.structure === "pergola" ? (withDeck ? ["follows-deck", "square", "rect"] : ["square", "rect"]) : design.structure === "covered-deck" ? ["follows-deck", "square", "rect"] : withDeck ? ["follows-deck", "square", "rect", "hexagon", "octagon"] : ["square", "rect", "hexagon", "octagon"];
-  const canAttach = (withDeck ? design.placement !== "detached" : true) && !polygon && r.kind !== "pyramid" && r.kind !== "double-tier" && r.kind !== "pergola";
+  const polygon = r.plan.shape === "hexagon" || r.plan.shape === "octagon" || r.plan.shape === "round";
+  const planShapes: RoofPlanShape[] = design.structure === "pergola" ? (withDeck ? ["follows-deck", "square", "rect"] : ["square", "rect"]) : design.structure === "covered-deck" ? ["follows-deck", "square", "rect"] : withDeck ? ["follows-deck", "square", "rect", "hexagon", "octagon", "round"] : ["square", "rect", "hexagon", "octagon", "round"];
+  const canAttach = (withDeck ? design.placement !== "detached" : true) && !polygon && r.kind !== "pyramid" && r.kind !== "double-tier" && r.kind !== "gambrel" && r.kind !== "dutch-gable" && r.kind !== "pergola";
   const metalRoof = r.roofing === "metal-panel" || r.roofing === "standing-seam";
+  const front = design.shape.kind === "rect" ? design.shape.front : undefined;
+  const woodRail = design.rail.type === "treated" || design.rail.type === "cedar";
+  const infills = design.rail.type === "cable" ? (["auto", "cable"] as const) : design.rail.type === "glass" ? (["auto", "glass"] as const) : design.rail.type === "aluminum" ? (["auto", "balusters", "cable", "glass", "horizontal"] as const) : woodRail ? (["auto", "balusters", "horizontal"] as const) : (["auto", "balusters", "panel"] as const);
+  const placingFixture = placing?.kind === "fixture" ? design.electrical.fixtures.find((f) => f.id === placing.id) : null;
 
   return (
     <div className={s.studio}>
@@ -433,11 +790,11 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <span>Customers see a coming-soon page here. You can work and test it because you are an admin.</span>
             </div>
           ) : null}
-          <p className={s.pageSub}>Size the deck — or a covered deck, a gazebo, a pergola — pick what it is built from, and it frames itself from the code tables: joists, beams, posts, footings, the ledger, the roof&apos;s rafters and headers. It stands up in 3D, goes on a photo of the house, and prices the material package line by line.</p>
+          <p className={s.pageSub}>Size the deck — or a covered deck, a gazebo, a pergola — pick what it is built from, and it frames itself from the code tables: joists, beams, posts, footings, the ledger, the stairs, the rails, the roof&apos;s rafters and headers, the wiring to every light. It stands up in 3D bolt by bolt, goes on a photo of the house, and prices the material package line by line. Your work saves itself.</p>
         </div>
       </div>
 
-      {/* The job: where it is decides the lumber, the frost line and the market's prices. */}
+      {/* The job: where it is decides the lumber, the frost line, the snow, the market's prices. */}
       <section className={cx(s.card, s.jobBar)} aria-label="Job">
         <form
           className={s.addrForm}
@@ -446,13 +803,38 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             commitAddress(addressDraft);
           }}
         >
-          <Field label="Job address" aside={<span>{market.label}{market.frostIn !== undefined ? ` · frost ${market.frostIn} in.` : ""}</span>} wide>
+          <Field label="Job address" aside={<span>{site.label}{` · frost ${design.frostIn} in. · snow ${design.site.groundSnowPsf} psf`}</span>} wide>
             <input className={s.in} value={addressDraft} placeholder="Street, city, state ZIP" autoComplete="street-address" onChange={(e) => setAddressDraft(e.target.value)} onBlur={() => addressDraft.trim() !== address && commitAddress(addressDraft)} />
           </Field>
         </form>
         <div className={s.jobFacts}>
           <span className={s.mono}>{(frame ?? roof)?.species.region} lumber: {(frame ?? roof)?.species.short}</span>
           {exampleShare > 0 ? <span className={cx(s.stamp, s.stampWarn)}>{exampleShare}% example prices</span> : <span className={cx(s.stamp, s.stampPass)}>Your prices</span>}
+          <div className={s.draftBar} data-deck-drafts>
+            <span className={s.draftState} data-deck-save={saveState}>
+              {saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `Saved ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : opened?.from === "proposal" ? "Opened from the proposal" : "Saves itself as you work"}
+            </span>
+            <details className={s.drafts} onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && void refreshDrafts()}>
+              <summary className={cx(s.btn, s.btnSm)}>Drafts</summary>
+              <div className={s.draftList}>
+                <div className={s.draftRow}>
+                  <input className={cx(s.in)} value={draftTitle} placeholder={structureWords(design)} aria-label="Name this draft" onChange={(e) => { dirty.current = true; setDraftTitle(e.target.value); }} />
+                  <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={startFresh}>New</button>
+                </div>
+                {drafts === null ? <div className={s.draftEmpty}>Reading…</div> : drafts.length === 0 ? <div className={s.draftEmpty}>No saved drafts yet. The one you are working on appears here a moment after your first change.</div> : null}
+                {(drafts ?? []).map((d) => (
+                  <div key={d.id} className={s.draftRow} data-deck-draft={d.id}>
+                    <div>
+                      <div className={s.draftName}>{d.title}{d.id === draftId ? " · open" : ""}</div>
+                      <div className={s.draftMeta}>{ago(d.updatedAt)}{d.address ? ` · ${d.address}` : ""}{d.by ? ` · ${d.by}` : ""}</div>
+                    </div>
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => void openDraft(d.id)} disabled={d.id === draftId}>Open</button>
+                    <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => void removeDraft(d.id)} aria-label={`Delete the draft ${d.title}`}>×</button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          </div>
         </div>
       </section>
 
@@ -468,10 +850,36 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           </div>
           <div className={s.viewBox}>
             {view === "3d" ? (
-              <DeckModel3D scene={scene} built={built} xray={xray} resetToken={resetToken} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+              <>
+                <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+                {editing && !placing ? (
+                  <div className={s.placeBanner} data-deck-editing>
+                    <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height, the lower level, each stair along its edge. Everything re-frames and re-prices as you drag.</span>
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setEditing(false)}>Done</button>
+                  </div>
+                ) : null}
+                {hoverPick?.legend && !placing ? (
+                  <div className={s.pickTag} data-deck-hover>
+                    <b>{hoverPick.legend.role}{hoverPick.legend.nominal ? ` · ${hoverPick.legend.nominal}` : ""}{hoverPick.legend.lengthFt ? ` · ${ftIn(hoverPick.legend.lengthFt * 12)}` : ""}</b>
+                    {hoverPick.legend.note.split(/(?<=\.)\s/)[0]} {hoverPick.layer !== null ? <span className={s.mono}>click to zoom</span> : null}
+                  </div>
+                ) : null}
+                {placingFixture ? (
+                  <div className={s.placeBanner} data-deck-placing="fixture">
+                    <span>Click on the {what.toLowerCase()} where the {FIXTURE_SHORT[placingFixture.kind].toLowerCase()} goes — a post, a header, the rail, the ceiling, the house wall.</span>
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setPlacing(null)}>Cancel</button>
+                  </div>
+                ) : null}
+              </>
             ) : view === "plan" ? (
               <div className={s.planWrap}>
-                <DeckPlan frame={frame} roof={roof} />
+                <DeckPlan structure={structure} placing={placing?.kind === "stair" ? "stair" : null} onPlaceStair={placeStair} />
+                {placing?.kind === "stair" ? (
+                  <div className={s.placeBanner} data-deck-placing="stair">
+                    <span>Click an open edge of the deck where the stairs go.</span>
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setPlacing(null)}>Cancel</button>
+                  </div>
+                ) : null}
               </div>
             ) : design.photo ? (
               <DeckPhotoView photo={design.photo} href={photoHref} elevation={elevation} onPlace={(placed) => patch({ photo: { ...design.photo!, placed } })} onRefresh={refreshPhoto} />
@@ -479,35 +887,86 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <div className={s.photoEmpty} data-deck-photo="empty">
                 <p>Take a picture of the back of the house from the yard, square on. The {what.toLowerCase()} is drawn over it, and the client sees their own house with it in place.</p>
                 <button type="button" className={cx(s.btn, s.btnPrimary)} onClick={pickPhoto} disabled={photoBusy}>
-                  {photoBusy ? "Saving the picture…" : "Add a photo of the house"}
+                  {photoBusy ? (photoStage ?? "Saving the picture…") : "Add a photo of the house"}
                 </button>
                 {photoError ? <p className={cx(s.call, s.callBad)} role="alert">{photoError}</p> : null}
               </div>
             )}
           </div>
           {view === "3d" ? (
-            <div className={s.buildRow}>
-              <button type="button" className={cx(s.btn, s.btnSm, playing && s.btnOn)} onClick={() => (playing ? setPlaying(false) : play())}>
-                {playing ? "Pause" : "Build it"}
-              </button>
-              <label className={s.buildSlider}>
-                <span className={s.mono}>{layerNow}</span>
-                <input type="range" min={0} max={LAYERS} step={0.01} value={sliderValue} aria-label="How much is standing" onChange={(e) => { setPlaying(false); setBuilt(Number(e.target.value)); }} />
-              </label>
-              <button type="button" className={cx(s.btn, s.btnSm, xray && s.btnOn)} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
-                X-ray
-              </button>
-              <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setResetToken((t) => t + 1)}>
-                Reset view
-              </button>
-            </div>
+            <>
+              <div className={s.buildRow}>
+                <button type="button" className={cx(s.btn, s.btnSm, playing && s.btnOn)} onClick={() => (playing ? setPlaying(false) : play())}>
+                  {playing ? "Pause" : "Build it"}
+                </button>
+                <label className={s.buildSlider}>
+                  <span className={s.mono}>{layerNow}</span>
+                  <input type="range" min={0} max={LAYERS} step={0.01} value={sliderValue} aria-label="How much is standing" onChange={(e) => { setPlaying(false); setBuilt(Number(e.target.value)); }} />
+                </label>
+                <button type="button" className={cx(s.btn, s.btnSm, xray && s.btnOn)} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
+                  X-ray
+                </button>
+                {design.photo?.placed ? (
+                  <button type="button" className={cx(s.btn, s.btnSm, showHouse && s.btnOn)} aria-pressed={showHouse} onClick={() => setShowHouse((v) => !v)} data-deck-house-toggle>
+                    House photo
+                  </button>
+                ) : null}
+                <button type="button" className={cx(s.btn, s.btnSm, connections && s.btnOn)} aria-pressed={connections} onClick={() => setConnections((c) => !c)} data-deck-connections>
+                  Connections
+                </button>
+                <button type="button" className={cx(s.btn, s.btnSm, night && s.btnOn)} aria-pressed={night} onClick={() => setNight((x) => !x)} data-deck-night>
+                  Night
+                </button>
+                <button type="button" className={cx(s.btn, s.btnSm, editing && s.btnOn)} aria-pressed={editing} onClick={() => setEditing((x) => !x)} data-deck-edit>
+                  Edit in 3D
+                </button>
+                <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => { setResetToken((t) => t + 1); setPicked(null); }}>
+                  Reset view
+                </button>
+              </div>
+              {picked ? (
+                <div className={s.pickCard} data-deck-picked>
+                  <div className={s.pickHead}>
+                    {picked.legend.role}
+                    <span>{picked.legend.nominal}{picked.legend.lengthFt ? ` · ${ftIn(picked.legend.lengthFt * 12)}` : ""}{picked.legend.count > 1 ? ` · ${picked.legend.count} of them` : ""}</span>
+                  </div>
+                  <div className={s.pickBody}>{picked.legend.note}</div>
+                  <div className={s.pickActs}>
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setFocus([...picked.point] as [number, number, number])}>Zoom</button>
+                    <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => setPicked(null)}>Close</button>
+                  </div>
+                </div>
+              ) : connections ? (
+                <div className={s.pickCard}>
+                  <div className={s.pickBody}>Numbered tags mark the connections: click one to read how it is made and fly to it. Click any part — a joist, a hanger, a rafter, a bolt — to name it.</div>
+                </div>
+              ) : null}
+            </>
           ) : view === "photo" && design.photo ? (
-            <div className={s.photoRow}>
-              <span className={s.mono}>Drag the outline to the wall · pull the handle to size it · the client sees it placed like this</span>
-              <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch({ photo: { ...design.photo!, placed: defaultPlacement() } })}>Centre it</button>
-              <button type="button" className={cx(s.btn, s.btnSm)} onClick={pickPhoto} disabled={photoBusy}>{photoBusy ? "Saving…" : "Another photo"}</button>
-              <button type="button" className={cx(s.btn, s.btnSm)} onClick={removePhoto}>Remove</button>
-            </div>
+            <>
+              <div className={s.photoRow}>
+                <span className={s.mono}>{design.photo.fit ? "Fitted to the wall — drag to adjust, pull the handle to size · the client sees it placed like this" : "Drag the outline to the wall · pull the handle to size it · the client sees it placed like this"}</span>
+                <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={refitPhoto} disabled={photoBusy} data-deck-photo-refit>{photoBusy ? (photoStage ?? "Working…") : "Fit to the wall"}</button>
+                {design.photo.fit?.read ? <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => void readPhotoAgain()} disabled={photoBusy} data-deck-photo-reread>Read the picture again</button> : null}
+                {design.photo.fit?.offer ? (
+                  <button type="button" className={cx(s.btn, s.btnSm)} onClick={applyOffer} data-deck-photo-offer>
+                    {design.photo.fit.offer.kind === "notch" ? "Notch the deck around the step" : `Fit the deck into the ${design.photo.fit.offer.widthFt} ft recess`}
+                  </button>
+                ) : null}
+                {heightOffer !== null ? (
+                  <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch({ heightIn: heightOffer })} data-deck-photo-height>Use {heightOffer} in. height</button>
+                ) : null}
+                <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch({ photo: { ...design.photo!, placed: defaultPlacement() } })}>Centre it</button>
+                <button type="button" className={cx(s.btn, s.btnSm)} onClick={pickPhoto} disabled={photoBusy}>Another photo</button>
+                <button type="button" className={cx(s.btn, s.btnSm)} onClick={removePhoto}>Remove</button>
+              </div>
+              {design.photo.fit?.notes.length || photoNote ? (
+                <ul className={s.photoNotes} data-deck-photo-fit aria-label="What the picture showed">
+                  {photoNote ? <li className={s.photoNoteBad}>{photoNote}</li> : null}
+                  {(design.photo.fit?.notes ?? []).map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              ) : null}
+            </>
           ) : null}
           <input ref={fileRef} className={s.fileHidden} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" aria-label="Photo of the house" onChange={(e) => void onPhotoFile(e.target.files?.[0] ?? null)} />
           <a className={s.verdict} href="#deck-checks">
@@ -538,7 +997,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           </Step>
 
           {withDeck ? (
-            <Step n={next()} title={design.structure === "gazebo" || design.structure === "pergola" ? "The deck under it" : "Shape"} summary={shapeSummary}>
+            <Step n={next()} title={design.structure === "gazebo" || design.structure === "pergola" ? "The deck under it" : "Shape"} summary={shapeSummary} id="step-shape">
               <Seg label="Shape" value={design.shape.kind} onChange={(k) => patch({ shape: k === "rect" ? { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt } : { kind: "L", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, notch: { corner: "front-right", widthFt: Math.max(2, Math.round(design.shape.widthFt / 2)), depthFt: Math.max(2, Math.round(design.shape.depthFt / 2)) } } })} options={[{ value: "rect", label: "Rectangle" }, { value: "L", label: "L-shaped" }]} />
               <div className={s.grid2}>
                 <Field label="Along the house" aside="ft">
@@ -563,11 +1022,48 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   </div>
                   <p className={s.hint}>A back corner is where the house steps out into the deck — a bump-out or a bay.</p>
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <Field label="The front edge" wide>
+                    <Seg small label="The front edge" value={front?.kind ?? "straight"} onChange={(k: FrontKind) => patch({ shape: { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, front: k === "straight" ? undefined : { kind: k, bulgeFt: front?.bulgeFt ?? 2, clipFt: front?.clipFt ?? 2 } } })} options={(["straight", "curve", "clipped"] as const).map((k) => ({ value: k, label: FRONT_LABEL[k] }))} />
+                  </Field>
+                  {front?.kind === "curve" ? (
+                    <Field label="The bow at the middle" aside="ft · laminated rim, joists cut to the arc" wide>
+                      <NumberInput label="How far the front bows out at the middle, feet" value={front.bulgeFt} parse={parseFeet} format={feetText} min={DECK_LIMITS.bulgeFt.min} max={Math.min(DECK_LIMITS.bulgeFt.max, design.shape.widthFt / 3)} onCommit={(n2) => patch({ shape: { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, front: { ...front, bulgeFt: n2 } } })} />
+                    </Field>
+                  ) : front?.kind === "clipped" ? (
+                    <Field label="Each corner clipped" aside="ft at 45°" wide>
+                      <NumberInput label="How much each front corner is clipped, feet" value={front.clipFt} parse={parseFeet} format={feetText} min={DECK_LIMITS.clipFt.min} max={Math.min(DECK_LIMITS.clipFt.max, (design.shape.widthFt - 2) / 2, design.shape.depthFt - 2)} onCommit={(n2) => patch({ shape: { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, front: { ...front, clipFt: n2 } } })} />
+                    </Field>
+                  ) : null}
+                  <div className={s.sub}>
+                    <Toggle checked={design.lower.on} onChange={(v) => patch({ lower: { on: v } })}>A lower level in front, a step down</Toggle>
+                    {design.lower.on ? (
+                      <>
+                        <div className={s.grid2}>
+                          <Field label="Along the house" aside="ft">
+                            <NumberInput label="Lower level width, feet" value={design.lower.widthFt} parse={parseFeet} format={feetText} min={LOWER_LIMITS.widthFt.min} max={design.shape.widthFt} onCommit={(n2) => patch({ lower: { widthFt: n2 } })} />
+                          </Field>
+                          <Field label="Out from the deck" aside="ft">
+                            <NumberInput label="Lower level depth, feet" value={design.lower.depthFt} parse={parseFeet} format={feetText} min={LOWER_LIMITS.depthFt.min} max={LOWER_LIMITS.depthFt.max} onCommit={(n2) => patch({ lower: { depthFt: n2 } })} />
+                          </Field>
+                          <Field label="Step down" aside={`in. · ${ftIn(design.lower.dropIn)}`}>
+                            <NumberInput label="How far down the lower level sits, inches" value={design.lower.dropIn} parse={parseInches} format={(v) => String(Math.round(v * 4) / 4)} min={LOWER_LIMITS.dropIn.min} max={Math.max(LOWER_LIMITS.dropIn.min, design.heightIn - 4)} onCommit={(n2) => patch({ lower: { dropIn: n2 } })} />
+                          </Field>
+                          <Field label="Set">
+                            <Seg small label="Where the lower level sits" value={design.lower.align} onChange={(a) => patch({ lower: { align: a } })} options={[{ value: "left", label: "Left" }, { value: "centre", label: "Centre" }, { value: "right", label: "Right" }]} />
+                          </Field>
+                        </div>
+                        <p className={s.hint}>One riser (up to 7¾ in.) is a step the lower deck itself makes; more than that wants a stair between the levels — the checks offer one.</p>
+                      </>
+                    ) : null}
+                  </div>
+                </>
+              )}
             </Step>
           ) : null}
 
-          <Step n={next()} title={withDeck ? "Height and house" : "Site"} summary={heightSummary}>
+          <Step n={next()} title={withDeck ? "Height, house and ground" : "Site"} summary={heightSummary} id="step-site">
             {withDeck ? (
               <>
                 <Field label="How it meets the house" wide>
@@ -613,8 +1109,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </div>
             )}
             <div className={s.grid2}>
-              <Field label="Design load" aside="live or snow">
-                <select className={s.sel} value={design.loadPsf} onChange={(e) => patch({ loadPsf: Number(e.target.value) as LoadPsf })}>
+              <Field label="Design load" aside={design.site.groundSnowPsf > 40 ? `snow here ${design.site.groundSnowPsf} psf` : "live or snow"}>
+                <select className={s.sel} value={design.loadPsf} onChange={(e) => patch({ loadPsf: Number(e.target.value) as LoadPsf }, ["load"])}>
                   {LOADS.map((l) => (
                     <option key={l} value={l}>
                       {l === 40 ? "40 psf — live load" : `${l} psf ground snow`}
@@ -629,6 +1125,28 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <option value={3000}>3,000 psf or more</option>
                 </select>
               </Field>
+            </div>
+            <div className={s.sub} data-deck-site>
+              <div className={s.subTitle}>The ground</div>
+              <div className={s.grid2}>
+                <Field label="Falls away from the house" aside={`in. over ${design.shape.depthFt} ft`}>
+                  <NumberInput label="How far the ground falls away from the house across the deck, inches" value={design.site.slope.outDropIn} parse={intText} format={String} min={SLOPE_LIMITS.dropIn.min} max={SLOPE_LIMITS.dropIn.max} onCommit={(n2) => patch({ site: { ...design.site, slope: { ...design.site.slope, outDropIn: n2 } } })} />
+                </Field>
+                <Field label="Falls left to right" aside={`in. over ${design.shape.widthFt} ft`}>
+                  <NumberInput label="How far the ground falls left to right across the deck, inches" value={design.site.slope.acrossDropIn} parse={intText} format={String} min={SLOPE_LIMITS.dropIn.min} max={SLOPE_LIMITS.dropIn.max} onCommit={(n2) => patch({ site: { ...design.site, slope: { ...design.site.slope, acrossDropIn: n2 } } })} />
+                </Field>
+              </div>
+              <div className={s.chips}>
+                <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => void readGround()} disabled={siteBusy || address.trim().length < 8} data-deck-read-ground>{siteBusy ? "Reading the lidar…" : "Read the ground from the address"}</button>
+                {design.site.slope.outDropIn || design.site.slope.acrossDropIn ? <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => patch({ site: { ...design.site, slope: { outDropIn: 0, acrossDropIn: 0 } } })}>Level</button> : null}
+              </div>
+              {siteNote ? <p className={s.hint}>{siteNote}</p> : null}
+              <ul className={s.siteFacts}>
+                {site.basis.map((b, i) => (
+                  <li key={i}>{b}</li>
+                ))}
+                {design.site.termite ? <li>Termite hazard here: {TERMITE_LABEL[design.site.termite]}.</li> : null}
+              </ul>
             </div>
             {!withDeck && design.floor === "ground" && r.attach !== "wall" ? <Toggle checked={design.footing.frostAlways} onChange={(v) => patch({ footing: { frostAlways: v } })}>Dig to the frost line anyway</Toggle> : null}
           </Step>
@@ -695,6 +1213,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <Toggle checked={design.framing.joistTape} onChange={(v) => patch({ framing: { joistTape: v } })}>Joist tape on every top</Toggle>
                 <Toggle checked={design.framing.braces} onChange={(v) => patch({ framing: { braces: v } })}>Knee braces at corner posts over 2 ft</Toggle>
                 <Toggle checked={design.framing.blocking === "mid-span"} onChange={(v) => patch({ framing: { blocking: v ? "mid-span" : "auto" } })}>Mid-span blocking on spans over 8 ft</Toggle>
+                {design.heightIn >= 84 ? <Toggle checked={design.extras.underDeckDrain} onChange={(v) => patch({ extras: { underDeckDrain: v } })}>Under-deck drainage — a dry room below</Toggle> : null}
               </div>
               {design.placement === "attached" ? (
                 <div className={s.grid2}>
@@ -736,6 +1255,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <p className={s.hint}>
                 Joists no more than {frame.decking.maxSpacingIn.square} in. apart ({frame.decking.maxSpacingIn.diagonal} in. on the diagonal) — {frame.decking.sourceNote}.
               </p>
+              <Field label="Pattern" wide>
+                <Seg small label="Pattern" value={design.decking.pattern} onChange={(v) => patch({ decking: { pattern: v, diagonal: v !== "straight" } })} options={(["straight", "diagonal", "herringbone"] as const).map((v) => ({ value: v, label: PATTERN_LABEL[v] }))} />
+              </Field>
+              <Field label="Picture-frame border" wide>
+                <Seg small label="Picture-frame border" value={design.decking.border} onChange={(v) => patch({ decking: { border: v } })} options={[{ value: 0, label: "None" }, { value: 1, label: "One board" }, { value: 2, label: "Two boards" }]} />
+              </Field>
               <div className={s.grid2}>
                 <Field label="Fastened with">
                   <select className={s.sel} value={design.decking.fastening} onChange={(e) => patch({ decking: { fastening: e.target.value as DeckDesign["decking"]["fastening"] } })}>
@@ -755,7 +1280,6 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <NumberInput label="Waste allowance on the boards, percent" value={design.decking.wastePct} parse={intText} format={String} min={0} max={30} onCommit={(n2) => patch({ decking: { wastePct: n2 } })} />
                 </Field>
               </div>
-              <Toggle checked={design.decking.diagonal} onChange={(v) => patch({ decking: { diagonal: v } })}>Boards on the diagonal (45°)</Toggle>
             </Step>
           ) : null}
 
@@ -800,7 +1324,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   ) : null}
                 </div>
               ) : null}
-              <p className={s.hint}>{Math.round(roof.footprintSqFt)} sq ft under the eaves · {roof.posts.length} posts{roof.attach === "wall" ? " and the house wall" : ""}{roof.kind !== "pergola" ? ` · ${Math.round(roof.roofAreaSqFt)} sq ft of roof, ${roof.squares} squares` : ""}</p>
+              <p className={s.hint}>{Math.round(roof.footprintSqFt)} sq ft under the eaves · {roof.posts.length} posts{roof.attach === "wall" ? " and the house wall" : ""}{roof.kind !== "pergola" ? ` · ${Math.round(roof.roofAreaSqFt)} sq ft of roof, ${roof.squares} squares` : ""}{roof.engineered ? " · engineered beam where the sawn tables stop" : ""}</p>
 
               <div className={s.sub}>
                 <div className={s.subTitle}>Posts and headers</div>
@@ -823,6 +1347,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <Field label="Headers (beams on the posts)" aside={r.header === "auto" ? `picked: ${[...new Set(roof.headers.map((h) => h.spec.size))].join(", ") || "—"}` : undefined}>
                     <select className={s.sel} value={r.header} onChange={(e) => rp({ header: e.target.value as RoofDesign["header"] })}>
                       <option value="auto">Auto — least cost</option>
+                      <option value="lvl">Engineered LVL throughout</option>
                       <optgroup label="Built up from 2x">
                         {BUILT_UP_CHOICES.map((b) => (
                           <option key={b} value={b}>{`${b[0]}-ply ${b.slice(2)}`}</option>
@@ -844,6 +1369,14 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   </Field>
                 </div>
                 <Toggle checked={r.braces} onChange={(v) => rp({ braces: v })}>Knee braces at the posts</Toggle>
+                <Field label="Walls between the posts" wide>
+                  <Seg small label="Walls between the posts" value={r.walls.fill} onChange={(v) => rp({ walls: { ...r.walls, fill: v } })} options={(["none", "screen", "lattice", "solid"] as const).map((v) => ({ value: v, label: WALL_FILL_LABEL[v].split(",")[0] }))} />
+                </Field>
+                {r.walls.fill !== "none" ? (
+                  <Field label="On how many sides" aside={`of ${roof.ring.length - (roof.attach === "wall" ? 1 : 0)} open`} wide>
+                    <NumberInput label="How many sides get walls" value={r.walls.sides} parse={intText} format={String} min={1} max={Math.max(1, roof.ring.length - (roof.attach === "wall" ? 1 : 0))} onCommit={(n2) => rp({ walls: { ...r.walls, sides: n2 } })} />
+                  </Field>
+                ) : null}
               </div>
 
               <div className={s.sub}>
@@ -852,19 +1385,23 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <Field label="Pitch" aside={`${r.pitch}:12 · ${Math.round(Math.atan(r.pitch / 12) * (180 / Math.PI))}°`} wide>
                     <Seg small label="Pitch" value={r.pitch} onChange={(p) => rp({ pitch: p })} options={PITCHES.map((p) => ({ value: p, label: `${p}:12` }))} />
                   </Field>
-                ) : null}
+                ) : (
+                  <Field label="The top" wide>
+                    <Seg small label="Pergola top" value={r.pergolaStyle} onChange={(v) => rp({ pergolaStyle: v })} options={(["flat", "louvered", "arched"] as const).map((v) => ({ value: v, label: PERGOLA_STYLE_LABEL[v] }))} />
+                  </Field>
+                )}
                 <Field label="Rafters" aside={r.rafter === "auto" ? `picked: ${roof.rafters.size}` : undefined} wide>
                   <Seg small label="Rafters" value={r.rafter} onChange={(v) => rp({ rafter: v })} options={[{ value: "auto", label: "Auto" }, ...(["2x6", "2x8", "2x10", "2x12"] as const).map((j) => ({ value: j, label: j }))]} />
                 </Field>
                 <Field label="Rafter spacing" aside="on center" wide>
                   <Seg small label="Rafter spacing" value={r.rafterSpacingIn} onChange={(v) => rp({ rafterSpacingIn: v })} options={[{ value: 12, label: '12"' }, { value: 16, label: '16"' }, { value: 24, label: '24"' }]} />
                 </Field>
-                {r.kind === "gable" || r.kind === "hip" ? (
+                {r.kind === "gable" || r.kind === "hip" || r.kind === "gambrel" ? (
                   <Field label="At the ridge" aside={r.ridge === "auto" && roof.ridge ? `picked: ${roof.ridge.kind === "beam" ? "ridge beam" : "ridge board"}` : undefined} wide>
                     <Seg small label="At the ridge" value={r.ridge} onChange={(v) => rp({ ridge: v })} options={[{ value: "auto", label: "Auto" }, { value: "beam", label: "Ridge beam", title: "The rafters bear on a beam; the ceiling stays open" }, { value: "board", label: "Ridge board + ties", title: "A board between the rafters, with rafter ties every 4 ft" }]} />
                   </Field>
                 ) : null}
-                {design.structure === "pergola" ? (
+                {design.structure === "pergola" && r.pergolaStyle !== "louvered" ? (
                   <div className={s.grid2}>
                     <Field label="Slats">
                       <Seg small label="Slats" value={r.slats.size} onChange={(v) => rp({ slats: { ...r.slats, size: v } })} options={(["2x2", "2x4", "2x6"] as const).map((v) => ({ value: v, label: v }))} />
@@ -874,9 +1411,9 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     </Field>
                   </div>
                 ) : null}
-                <Field label="Roof load" aside={r.load === "auto" ? `from the deck's load: ${roof.roofLoad} psf` : undefined} wide>
+                <Field label="Roof load" aside={r.load === "auto" ? `from the site: ${roof.roofLoad} psf` : undefined} wide>
                   <select className={s.sel} value={String(r.load)} onChange={(e) => rp({ load: e.target.value === "auto" ? "auto" : (Number(e.target.value) as RoofDesign["load"]) })}>
-                    <option value="auto">Auto — follows the design load</option>
+                    <option value="auto">Auto — follows the ground snow here</option>
                     <option value="20">20 psf roof live load</option>
                     <option value="30">30 psf ground snow</option>
                     <option value="50">50 psf ground snow</option>
@@ -943,48 +1480,188 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           ) : null}
 
           {withDeck ? (
-            <Step n={next()} title="Railing and stairs" summary={extrasSummary}>
-              <p className={s.hint}>Priced as allowances until the rail and stair builder lands.</p>
-              <div className={s.grid2}>
-                <Field label="Railing">
-                  <select className={s.sel} value={design.extras.rail} onChange={(e) => patch({ extras: { rail: e.target.value as DeckDesign["extras"]["rail"] } })}>
-                    {RAIL_TYPES.map((rt) => (
-                      <option key={rt.id} value={rt.id}>{rt.label}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Railing length" aside={design.extras.railFt === "auto" ? `auto: ${Math.round(pkg.railFt)} ft` : "ft"}>
-                  <NumberInput label="Railing length, feet (blank for every open edge)" value={design.extras.railFt === "auto" ? pkg.railFt : design.extras.railFt} parse={(t) => (t.trim() === "" ? null : parseFeet(t))} format={feetText} min={DECK_LIMITS.railFt.min} max={DECK_LIMITS.railFt.max} onCommit={(n2) => patch({ extras: { railFt: n2 } })} />
-                </Field>
-                {design.extras.rail === "custom" ? (
-                  <Field label="Your rail price, installed" aside="$/ft">
-                    <NumberInput label="Custom rail price per foot, installed" value={design.extras.railCustomPerFt} parse={intText} format={String} min={0} max={1000} onCommit={(n2) => patch({ extras: { railCustomPerFt: n2 } })} />
+            <Step n={next()} title="Stairs and railing" summary={extrasSummary} id="step-stairs">
+              <div className={s.sub}>
+                <div className={s.subTitle}>Railing</div>
+                <div className={s.grid2}>
+                  <Field label="Railing" aside={structure.rails.required && design.rail.type === "none" ? "a guard is required" : undefined}>
+                    <select className={s.sel} value={design.rail.type} onChange={(e) => patch({ rail: { type: e.target.value as DeckDesign["rail"]["type"], infill: "auto" } })} data-deck-rail>
+                      {RAIL_TYPES.map((rt) => (
+                        <option key={rt.id} value={rt.id}>{rt.label}</option>
+                      ))}
+                    </select>
                   </Field>
+                  <Field label="Height">
+                    <Seg small label="Rail height" value={design.rail.heightIn} onChange={(v) => patch({ rail: { heightIn: v } })} options={[{ value: 36, label: "36 in." }, { value: 42, label: "42 in." }]} />
+                  </Field>
+                  {design.rail.type !== "none" ? (
+                    <>
+                      <Field label="Infill" aside={design.rail.infill === "auto" ? `picked: ${RAIL_INFILL_LABEL[structure.rails.infill].toLowerCase()}` : undefined}>
+                        <select className={s.sel} value={design.rail.infill} onChange={(e) => patch({ rail: { infill: e.target.value as DeckDesign["rail"]["infill"] } })}>
+                          {infills.map((v) => (
+                            <option key={v} value={v}>{v === "auto" ? "Auto" : RAIL_INFILL_LABEL[v]}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Posts apart" aside="ft">
+                        <Seg small label="Rail posts apart" value={design.rail.postSpacingFt} onChange={(v) => patch({ rail: { postSpacingFt: v } })} options={[{ value: 4, label: "4" }, { value: 6, label: "6" }, { value: 8, label: "8" }]} />
+                      </Field>
+                      {design.rail.type === "custom" ? (
+                        <Field label="Your rail price, installed" aside="$/ft">
+                          <NumberInput label="Custom rail price per foot, installed" value={design.rail.customPerFt} parse={intText} format={String} min={0} max={1000} onCommit={(n2) => patch({ rail: { customPerFt: n2 } })} />
+                        </Field>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+                {design.rail.type !== "none" ? (
+                  <div className={s.toggles}>
+                    {woodRail ? <Toggle checked={design.rail.cap} onChange={(v) => patch({ rail: { cap: v } })}>A flat 2x6 drink cap</Toggle> : null}
+                    {design.lower.on ? <Toggle checked={design.rail.lowerLevel} onChange={(v) => patch({ rail: { lowerLevel: v } })}>Rail on the lower level too</Toggle> : null}
+                  </div>
                 ) : null}
-                <Field label="Flights of stairs">
-                  <NumberInput label="Flights of stairs" value={design.extras.stairFlights} parse={(t) => (t.trim() === "" ? null : Math.round(Number(t)))} format={String} min={0} max={6} onCommit={(n2) => patch({ extras: { stairFlights: n2 } })} />
-                </Field>
-                <Field label="Stair width" aside="ft">
-                  <NumberInput label="Stair width, feet" value={design.extras.stairWidthFt} parse={parseFeet} format={feetText} min={3} max={12} onCommit={(n2) => patch({ extras: { stairWidthFt: n2 } })} />
-                </Field>
-                <Field label="Tear out an old deck" aside="sq ft">
-                  <NumberInput label="Old deck to tear out, square feet" value={design.extras.demoSqFt} parse={intText} format={String} min={0} max={4000} onCommit={(n2) => patch({ extras: { demoSqFt: n2 } })} />
-                </Field>
+                {structure.rails.on ? <p className={s.hint}>{railWords(structure.rails)}. Lit post caps and step lights are under Lights and outlets.</p> : null}
               </div>
-              {design.extras.railFt !== "auto" ? (
-                <button type="button" className={s.link} onClick={() => patch({ extras: { railFt: "auto" } })}>
-                  Railing on every open edge
-                </button>
-              ) : null}
-              <Toggle checked={design.extras.stainless} onChange={(v) => patch({ extras: { stainless: v } })}>Stainless connectors — within 300 ft of salt water</Toggle>
+
+              <div className={s.sub} data-deck-stairs>
+                <div className={s.subTitle}>Stairs</div>
+                <div className={s.rows}>
+                  {design.stairs.map((st, i) => {
+                    const built = structure.stairs.find((b) => b.design.id === st.id);
+                    const sideLen = st.level === "lower" ? (st.side === "front" ? design.lower.widthFt : design.lower.depthFt) : st.side === "front" ? design.shape.widthFt : design.shape.depthFt;
+                    return (
+                      <div key={st.id} className={s.row} data-deck-stair={st.id}>
+                        <div className={s.rowHead}>
+                          <span className={s.rowTitle}>{st.wrap ? "Box steps" : `Stair ${i + 1}`}{built ? ` · ${built.risers} risers of ${built.riserIn.toFixed(2)} in.${built.lands === "lower-deck" ? " to the lower level" : ""}` : ""}</span>
+                          <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setStairs((list) => list.filter((x) => x.id !== st.id))}>Remove</button>
+                        </div>
+                        <div className={s.rowGrid}>
+                          <Field label="Down the">
+                            <Seg small label="Which side" value={st.side} onChange={(v) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, side: v, wrap: v === "front" && x.wrap } : x)))} options={(["front", "left", "right"] as const).map((v) => ({ value: v, label: STAIR_SIDE_LABEL[v] }))} />
+                          </Field>
+                          <Field label="Centred at" aside={`ft from the ${st.side === "front" ? "left end" : "house"}`}>
+                            <NumberInput label="Where the stair's middle sits along the side, feet" value={st.atFt} parse={parseFeet} format={feetText} min={st.widthFt / 2} max={Math.max(st.widthFt / 2, sideLen - st.widthFt / 2)} onCommit={(n2) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, atFt: n2 } : x)))} />
+                          </Field>
+                          <Field label="Width" aside="ft">
+                            <NumberInput label="Stair width, feet" value={st.widthFt} parse={parseFeet} format={feetText} min={STAIR_LIMITS.widthFt.min} max={STAIR_LIMITS.widthFt.max} onCommit={(n2) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, widthFt: n2 } : x)))} />
+                          </Field>
+                          <Field label="Lands on">
+                            <select className={s.sel} value={st.landing} onChange={(e) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, landing: e.target.value as StairDesign["landing"] } : x)))}>
+                              {(["pad", "patio", "grade"] as const).map((v) => (
+                                <option key={v} value={v}>{STAIR_LANDING_LABEL[v]}</option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Handrail">
+                            <select className={s.sel} value={st.handrail} onChange={(e) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, handrail: e.target.value as StairDesign["handrail"] } : x)))}>
+                              <option value="auto">Auto — as the code asks</option>
+                              <option value="both">Both sides</option>
+                              <option value="one">One side</option>
+                              <option value="none">None</option>
+                            </select>
+                          </Field>
+                          {design.lower.on ? (
+                            <Field label="From">
+                              <Seg small label="From which level" value={st.level} onChange={(v) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, level: v } : x)))} options={[{ value: "upper", label: "The deck" }, { value: "lower", label: "The lower level" }]} />
+                            </Field>
+                          ) : null}
+                        </div>
+                        {st.side === "front" ? (
+                          <div className={s.rowActs}>
+                            <Toggle checked={st.wrap} onChange={(v) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, wrap: v } : x)))}>Box steps wrapping the deck (three risers at most)</Toggle>
+                            {st.wrap ? <Seg small label="Wrap how many sides" value={st.wrapSides} onChange={(v) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, wrapSides: v } : x)))} options={[{ value: 1, label: "Front" }, { value: 3, label: "Three sides" }, ...(design.placement === "detached" ? [{ value: 4 as const, label: "All four" }] : [])]} /> : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className={s.chips}>
+                  <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => setStairs((list) => [...list, defaultStair(`s${list.length + 1}-${Date.now().toString(36).slice(-3)}`, "front", design.shape.widthFt / 2)])} data-deck-add-stair>Add stairs down the front</button>
+                  <button type="button" className={cx(s.btn, s.btnSm, placing?.kind === "stair" && s.btnOn)} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => { setPlacing(placing?.kind === "stair" ? null : { kind: "stair" }); setView("plan"); }} data-deck-place-stair>{placing?.kind === "stair" ? "Click the plan…" : "Place by clicking the plan"}</button>
+                </div>
+                <div className={s.grid2}>
+                  <Field label="Tear out an old deck" aside="sq ft">
+                    <NumberInput label="Old deck to tear out, square feet" value={design.extras.demoSqFt} parse={intText} format={String} min={0} max={4000} onCommit={(n2) => patch({ extras: { demoSqFt: n2 } })} />
+                  </Field>
+                </div>
+                <Toggle checked={design.extras.stainless} onChange={(v) => patch({ extras: { stainless: v } })}>Stainless connectors — within 300 ft of salt water</Toggle>
+              </div>
             </Step>
           ) : null}
 
+          <Step n={next()} title="Lights, outlets and heaters" summary={electricSummary} id="step-electrical">
+            <p className={s.hint}>Tap what the {what.toLowerCase()} gets. Each one is placed where it usually goes — or click <b>Place in 3D</b> and touch the spot. The wiring, the boxes, the switches and the circuits are counted and priced as electrical work; a fixture the client buys is drawn as a sample and left to be determined.</p>
+            <div className={s.fixChips}>
+              {FIXTURE_CHIPS.map((k) => (
+                <button key={k} type="button" className={s.chip} disabled={design.electrical.fixtures.length >= ELECTRICAL_LIMITS.fixtures} onClick={() => setFixtures((list) => [...list, defaultFixture(`e${list.length + 1}-${Date.now().toString(36).slice(-3)}`, k)])} data-deck-add-fixture={k}>
+                  + {FIXTURE_SHORT[k]}
+                </button>
+              ))}
+            </div>
+            <div className={s.rows}>
+              {design.electrical.fixtures.map((f) => {
+                const placedOnes = structure.electrical.fixtures.filter((pf) => pf.id === f.id || pf.id.startsWith(`${f.id}-`));
+                return (
+                  <div key={f.id} className={s.row} data-deck-fixture={f.id}>
+                    <div className={s.rowHead}>
+                      <span className={s.rowTitle}>{FIXTURE_SHORT[f.kind]}{f.supply === "client" ? <span className={s.tbd}>by the client · TBD</span> : null}</span>
+                      <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setFixtures((list) => list.filter((x) => x.id !== f.id))}>Remove</button>
+                    </div>
+                    <div className={s.rowGrid}>
+                      <Field label="What">
+                        <select className={s.sel} value={f.kind} onChange={(e) => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, kind: e.target.value as FixtureKind, at: null } : x)))}>
+                          {FIXTURE_KINDS.map((k) => (
+                            <option key={k} value={k}>{FIXTURE_LABEL[k]}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Who buys the fixture" aside={f.supply === "client" ? "wiring and hanging stay in the price" : undefined}>
+                        <Seg small label="Who buys the fixture" value={f.supply} onChange={(v) => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, supply: v } : x)))} options={[{ value: "we", label: "We supply it" }, { value: "client", label: "The client" }]} />
+                      </Field>
+                      {f.kind !== "led-strip" && f.kind !== "post-cap" && f.kind !== "step-light" && f.kind !== "string-light" ? (
+                        <Field label="How many">
+                          <NumberInput label="How many" value={f.qty} parse={intText} format={String} min={1} max={ELECTRICAL_LIMITS.qty.max} onCommit={(n2) => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, qty: n2 } : x)))} />
+                        </Field>
+                      ) : null}
+                      {f.kind === "heater" ? (
+                        <Field label="Heater">
+                          <Seg small label="Heater voltage" value={f.volts240 ? "240" : "120"} onChange={(v) => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, volts240: v === "240" } : x)))} options={[{ value: "120", label: "1.5 kW, 120 V" }, { value: "240", label: "4 kW, 240 V" }]} />
+                        </Field>
+                      ) : null}
+                    </div>
+                    <div className={s.rowActs}>
+                      <button type="button" className={cx(s.btn, s.btnSm, placing?.kind === "fixture" && placing.id === f.id && s.btnOn)} onClick={() => { setPlacing(placing?.kind === "fixture" && placing.id === f.id ? null : { kind: "fixture", id: f.id }); setView("3d"); }} data-deck-place-fixture={f.id}>
+                        {placing?.kind === "fixture" && placing.id === f.id ? "Click the 3D…" : f.at ? "Move it in 3D" : "Place in 3D"}
+                      </button>
+                      {f.at ? <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, at: null } : x)))}>Back to the usual spot</button> : null}
+                      <span className={s.mono}>{f.at ? `on the ${f.at.on}` : placedOnes.length ? `${placedOnes.length === 1 ? "placed" : `${placedOnes.length} placed`} where it usually goes` : ""}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {structure.electrical.on ? (
+              <>
+                <div className={s.grid2}>
+                  <Field label="Panel to the structure" aside="ft of feed">
+                    <NumberInput label="Feet from the house's panel to the structure" value={design.electrical.feedFt} parse={intText} format={String} min={ELECTRICAL_LIMITS.feedFt.min} max={ELECTRICAL_LIMITS.feedFt.max} onCommit={(n2) => patch({ electrical: { ...design.electrical, feedFt: n2 } })} />
+                  </Field>
+                  <Field label="The feed comes from the">
+                    <Seg small label="Panel side" value={design.electrical.panelSide} onChange={(v) => patch({ electrical: { ...design.electrical, panelSide: v } })} options={[{ value: "left", label: "Left end" }, { value: "right", label: "Right end" }]} />
+                  </Field>
+                </div>
+                <Toggle checked={design.electrical.timer} onChange={(v) => patch({ electrical: { ...design.electrical, timer: v } })}>A timer or photocell on the lights</Toggle>
+                <p className={s.hint}>{electricalWords(structure.electrical)} · {structure.electrical.boxes} boxes · {structure.electrical.switches} switches{structure.electrical.lv ? ` · ${structure.electrical.lv.transformers} transformer${structure.electrical.lv.transformers > 1 ? "s" : ""}` : ""}{structure.electrical.trenchFt ? ` · ${structure.electrical.trenchFt} ft of trench` : ""}. Turn on <b>Night</b> over the 3D to see them lit.</p>
+              </>
+            ) : null}
+          </Step>
+
           <Step n={next()} title="Photo of the house" summary={photoSummary} id="step-photo">
-            <p className={s.hint}>A picture of the back of the house, taken square on from the yard. The {what.toLowerCase()} is drawn over it where you place it, and the client&apos;s page shows their own house with it in place.</p>
+            <p className={s.hint}>A picture of the back of the house, taken square on from the yard. The studio finds the wall, the door and the windows, cuts the picture to the wall and sets the {what.toLowerCase()} against it at the right size — then you drag it if it should sit elsewhere. It is drawn over the picture where you place it, and the client&apos;s page shows their own house with it in place.</p>
             <div className={s.chips}>
               <button type="button" className={cx(s.btn, s.btnSm, !design.photo && s.btnPrimary)} onClick={pickPhoto} disabled={photoBusy} data-deck-photo-add>
-                {photoBusy ? "Saving the picture…" : design.photo ? "Another photo" : "Add a photo"}
+                {photoBusy ? (photoStage ?? "Saving the picture…") : design.photo ? "Another photo" : "Add a photo"}
               </button>
               {design.photo ? (
                 <>
@@ -1037,7 +1714,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               {pkg.lines.map((l) => (
                 <tr key={l.id} data-line={l.id}>
                   <td>
-                    <div className={s.lineName}>{l.name}</div>
+                    <div className={s.lineName}>{l.name}{l.tbd ? <span className={s.tbd}>to be determined</span> : null}</div>
                     {l.description ? <div className={s.lineDesc}>{l.description}</div> : null}
                   </td>
                   <td className={cx(s.r, s.nums)}>
@@ -1057,6 +1734,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             </tfoot>
           </table>
         </div>
+        {tiers ? (
+          <div className={s.tiers} data-deck-tiers>
+            {tiers.map((t) => (
+              <div key={t.id} className={cx(s.tier, t.current && s.tierOn)}>
+                <div className={s.tierName}>{t.name}{t.current ? " · this one" : ""}</div>
+                <div className={s.tierV}>{money(t.subtotal)}</div>
+                <div className={s.tierH}>{t.words} {money(t.perSqFt, true)} a square foot.</div>
+                {!t.current ? <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch({ decking: { product: t.product }, rail: { type: design.rail.type === "none" && !structure.rails.required ? "none" : t.rail } }, ["decking"])}>Use this</button> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className={s.convert}>
           {exampleShare > 0 ? (
             <p className={cx(s.call, s.callWarn)}>
@@ -1071,9 +1760,16 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {error ? <p className={cx(s.call, s.callBad)} role="alert">{error}</p> : null}
           <div className={s.convertRow}>
             <div className={s.mono}>{title}</div>
-            <button type="button" className={cx(s.btn, s.btnPrimary)} disabled={busy} onClick={convert}>
-              {busy ? "Making the proposal…" : summary.fail ? "Convert anyway" : "Convert to proposal"}
-            </button>
+            <div className={s.rowActs}>
+              {permitHref ? (
+                <a className={cx(s.btn)} href={permitHref as Route} target="_blank" rel="noopener" data-deck-permit>
+                  Permit sheet
+                </a>
+              ) : null}
+              <button type="button" className={cx(s.btn, s.btnPrimary)} disabled={busy} onClick={convert}>
+                {busy ? "Making the proposal…" : summary.fail ? "Convert anyway" : "Convert to proposal"}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -1116,10 +1812,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         <div className={s.head}>
           <div>
             <div className={s.cardTitle}>Material package</div>
-            <div className={s.cardSub}>What to load on the truck, in the lengths the yard sells. Lumber near the soil is ordered ground-contact.</div>
+            <div className={s.cardSub}>What to load on the truck, in the lengths the yard sells. Lumber near the soil is ordered ground-contact. A fixture the client buys is listed, not priced.</div>
           </div>
           <div className={s.mono}>
-            {Math.round(pkg.takeoff.framingLf)} ft of framing · {pkg.takeoff.concreteBags} bags · {pkg.takeoff.footings} footings{pkg.takeoff.roofSquares ? ` · ${pkg.takeoff.roofSquares} squares of roof` : ""}
+            {Math.round(pkg.takeoff.framingLf)} ft of framing · {pkg.takeoff.concreteBags} bags · {pkg.takeoff.footings} footings{pkg.takeoff.roofSquares ? ` · ${pkg.takeoff.roofSquares} squares of roof` : ""}{pkg.takeoff.stairRisers ? ` · ${pkg.takeoff.stairRisers} risers` : ""}{pkg.takeoff.railLf ? ` · ${Math.round(pkg.takeoff.railLf)} ft of rail` : ""}
           </div>
         </div>
         <div className={s.tableWrap}>
@@ -1144,14 +1840,14 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                       {l.qty.toLocaleString("en-US")} <span className={s.unit}>{l.unit}</span>
                     </td>
                     <td>
-                      <div className={s.lineName}>{l.label}</div>
+                      <div className={s.lineName}>{l.label}{l.byClient ? <span className={s.tbd}>by the client</span> : null}</div>
                       {l.note ? <div className={s.lineDesc}>{l.note}</div> : null}
                     </td>
                     <td className={cx(s.r, s.nums)}>
-                      {money(l.unitPrice, true)}
-                      {l.source !== "book" ? <span className={s.example} title="An example price — set yours under Your prices">ex</span> : null}
+                      {l.byClient ? "—" : money(l.unitPrice, true)}
+                      {l.source !== "book" && !l.byClient ? <span className={s.example} title="An example price — set yours under Your prices">ex</span> : null}
                     </td>
-                    <td className={cx(s.r, s.nums)}>{money(l.cost, true)}</td>
+                    <td className={cx(s.r, s.nums)}>{l.byClient ? "TBD" : money(l.cost, true)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1165,7 +1861,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         <div className={s.head}>
           <div>
             <div className={s.cardTitle}>Your prices</div>
-            <div className={s.cardSub}>Every default here is an example, scaled to {market.label}. Type your own and save: your number is charged as typed, on every deck from then on. Leave a row blank to go back to the example.</div>
+            <div className={s.cardSub}>Every default here is an example, scaled to {market.label}. Type your own and save: your number is charged as typed, on every deck from then on. Leave a row blank to go back to the example. The same book is on the <a href="/dashboard/deck-estimator/inventory">deck inventory page</a>.</div>
           </div>
           <div className={s.headStamps}>
             {saving === "saved" && !unsaved ? <span className={cx(s.stamp, s.stampPass)}>Saved</span> : null}
@@ -1189,7 +1885,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     <label key={rt.key} className={s.rateRow}>
                       <span className={s.rateLabel}>{rt.label}</span>
                       <span className={s.rateUnit}>per {rt.unit}</span>
-                      <input className={cx(s.in, s.num, s.rateIn)} inputMode="decimal" placeholder={example.toFixed(2)} value={drafts[rt.key] ?? ""} onChange={(e) => setDrafts((d) => ({ ...d, [rt.key]: e.target.value }))} />
+                      <input className={cx(s.in, s.num, s.rateIn)} inputMode="decimal" placeholder={example.toFixed(2)} value={drafts2[rt.key] ?? ""} onChange={(e) => setDrafts2((d) => ({ ...d, [rt.key]: e.target.value }))} />
                     </label>
                   );
                 })}
@@ -1201,3 +1897,5 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     </div>
   );
 }
+
+export type { DeckPackage };

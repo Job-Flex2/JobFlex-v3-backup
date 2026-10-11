@@ -20,6 +20,8 @@ import { readDeckRateBook } from "@/lib/deck/rateBookStore";
 import { parseStateZip } from "@/lib/fence/market";
 import { DeckStudio } from "@/components/v3/deck-estimator-blueprint/deck-studio";
 import { DeckComingSoon } from "@/components/v3/deck-estimator-blueprint/deck-coming-soon";
+import { loadDeckDraft, loadDeckFromProposal } from "@/actions/deckEstimator";
+import type { DeckDesign } from "@/lib/deck/design";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -57,5 +59,16 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
   const [book, org] = await Promise.all([readDeckRateBook(organizationId), db.organization.findUnique({ where: { id: organizationId }, select: { address: true } })]);
   // The shop's own state picks the lumber a new deck starts with, until a job address says otherwise.
   const homeState = parseStateZip(org?.address).state;
-  return <DeckStudio initialBook={book} homeState={homeState} initialAddress={initialAddress} clientId={clientId} adminPreview />;
+  // Opened again (M3): a saved draft (`?draft=`) or the deck a proposal carries (`?proposal=`).
+  let opened: { design: DeckDesign; address: string | null; title: string; draftId: string | null; from: "draft" | "proposal" } | null = null;
+  const draftId = one(params.draft);
+  const proposalId = one(params.proposal);
+  if (draftId) {
+    const res = await loadDeckDraft(draftId);
+    if (res.ok) opened = { design: res.draft.design, address: res.draft.address, title: res.draft.title, draftId: res.draft.id, from: "draft" };
+  } else if (proposalId) {
+    const res = await loadDeckFromProposal(proposalId);
+    if (res.ok) opened = { design: res.design, address: res.address, title: res.title, draftId: null, from: "proposal" };
+  }
+  return <DeckStudio initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview opened={opened} />;
 }

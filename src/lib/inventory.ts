@@ -22,16 +22,17 @@
 // suggested; instead, when a job sells, its per-job materials go on a
 // shopping list for that job (jobBuyList), and the crew's pick list says so.
 
-export type TradeId = "fence" | "roof" | "hvac";
+export type TradeId = "fence" | "roof" | "hvac" | "deck";
 
 export const TRADES: Array<{ id: TradeId; label: string; noun: string }> = [
   { id: "fence", label: "Fence", noun: "fence" },
   { id: "roof", label: "Roofing", noun: "roof" },
   { id: "hvac", label: "HVAC", noun: "HVAC" },
+  { id: "deck", label: "Deck", noun: "deck" },
 ];
 
 export function isTradeId(x: string | null | undefined): x is TradeId {
-  return x === "fence" || x === "roof" || x === "hvac";
+  return x === "fence" || x === "roof" || x === "hvac" || x === "deck";
 }
 
 /**
@@ -44,6 +45,7 @@ export const INVENTORY_PATH: Record<TradeId, string> = {
   roof: "/dashboard/roof-estimator/inventory",
   fence: "/dashboard/fence-estimator/inventory",
   hvac: "/dashboard/hvac-estimator/inventory",
+  deck: "/dashboard/deck-estimator/inventory",
 };
 export const INVENTORY_PATHS: readonly string[] = Object.values(INVENTORY_PATH);
 
@@ -55,7 +57,7 @@ export function inventoryHref(trade: TradeId, tab?: "book" | "stock" | "services
 /** The trade whose inventory a path is, or null. */
 export function inventoryTradeOf(pathname: string | null | undefined): TradeId | null {
   const path = (pathname ?? "").split("?")[0];
-  for (const t of ["roof", "fence", "hvac"] as const) if (path === INVENTORY_PATH[t]) return t;
+  for (const t of ["roof", "fence", "hvac", "deck"] as const) if (path === INVENTORY_PATH[t]) return t;
   return null;
 }
 

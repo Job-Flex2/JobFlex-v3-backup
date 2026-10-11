@@ -24,12 +24,13 @@ import {
   type SpeciesGroup,
 } from "../../src/lib/deck/codeTables";
 import { DECKING, FRAMING_SPECIES, WALL_TYPES, defaultDecking, defaultFramingSpecies, deckingProduct } from "../../src/lib/deck/catalog";
-import { defaultDeckDesign, normalizeDeckDesign, shapeAreaSqFt, shapeEdges, shapeOutline, shapeZones, sizeWords, type DeckDesign } from "../../src/lib/deck/design";
+import { defaultDeckDesign, defaultStair, normalizeDeckDesign, shapeAreaSqFt, shapeEdges, shapeOutline, shapeZones, sizeWords, type DeckDesign } from "../../src/lib/deck/design";
 import { autoOverhangIn, buildDeckFrame, layoutPosts, splitRun, supportShares, STOCK_MAX_IN } from "../../src/lib/deck/frame";
 import { deckSurface, planRow } from "../../src/lib/deck/surface";
 import { deckTakeoff, packPieces, stockFor } from "../../src/lib/deck/takeoff";
 import { DECK_RATES, deckRate, sanitizeDeckRateBook } from "../../src/lib/deck/rates";
-import { deckNotes, deckScope, priceDeck, railFeet, stairSteps } from "../../src/lib/deck/pricing";
+import { deckNotes, deckScope, priceDeck } from "../../src/lib/deck/pricing";
+import { buildStructure } from "../../src/lib/deck/structure";
 import { applyDeckPatch, checkSummary, deckChecks } from "../../src/lib/deck/checks";
 import { deckScene, parseDeckScene, SCENE_LAYERS } from "../../src/lib/deck/scene";
 
@@ -40,6 +41,9 @@ const framed = <T,>(v: T | null): T => {
 };
 import { deckConvertSchema, parseDeckPlan } from "../../src/lib/deck/convertSchema";
 import { resolveMarket } from "../../src/lib/fence/market";
+
+/** The checks of a design, built whole (M3: the checks read the structure, not a frame). */
+const checksOf = (d: DeckDesign) => deckChecks(buildStructure(d));
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -257,7 +261,7 @@ console.log("── what changes the frame");
   const asked = buildDeckFrame({ ...WA, framing: { ...WA.framing, joist: "2x6", overhangFt: 0 } });
   check("a 2x6 the contractor asks for cannot span 11-9: the engine adds a middle beam rather than refuse", asked.joistSize === "2x6" && asked.beams.length === 2 && !asked.flags.joistBeyondTable);
   const far = buildDeckFrame({ ...WA, framing: { ...WA.framing, overhangFt: 4 } });
-  check("an overhang past the table is drawn as asked and flagged, not quietly shortened", far.zones[0].frontCantIn === 46.5 && far.flags.joistBeyondTable && deckChecks(far).some((c) => c.id.startsWith("joist-overhang") && c.level === "fail" && !!c.fix));
+  check("an overhang past the table is drawn as asked and flagged, not quietly shortened", far.zones[0].frontCantIn === 46.5 && far.flags.joistBeyondTable && checksOf(far.design).some((c) => c.id.startsWith("joist-overhang") && c.level === "fail" && !!c.fix));
   const four = buildDeckFrame({ ...WA, framing: { ...WA.framing, post: "4x4" }, heightIn: 120 });
   check("4x4 posts 8 ft tall under 50 sq ft: the table says no (11-0 at 60 sq ft … but 8'-6\" tall carries less than it must)", four.posts.some((p) => p.heightIn > p.maxHeightIn) === (four.posts[1].heightIn > postMaxHeightIn(40, "DF", "4x4", four.posts[1].tributarySqFt)));
   const block = buildDeckFrame({ ...WA, placement: "detached", shape: { kind: "rect", widthFt: 12, depthFt: 12 }, heightIn: 18, footing: { ...WA.footing, type: "pier-block" } });
@@ -301,7 +305,7 @@ console.log("── a sweep: every size the studio draws, framed inside the tabl
                 const carried = f.posts.reduce((a, p) => a + p.tributarySqFt, 0);
                 if (placement === "detached" && !near(carried, f.areaSqFt, 0.02)) trouble.push(`${tag}: posts carry ${carried} of ${f.areaSqFt} sq ft`);
               }
-              const failed = deckChecks(f).filter((c) => c.level === "fail");
+              const failed = checksOf(design).filter((c) => c.level === "fail");
               if (failed.length === 0) clean++;
               // The only things an automatic frame may fail on: a deck too low to frame, or one past the post table's 14 ft.
               for (const c of failed) if (!(c.id === "low-fit" || c.id === "low-beam" || c.id === "post-height" || c.id === "beam-fit")) fails.push(`${tag}: ${c.id} — ${c.text}`);
@@ -341,7 +345,7 @@ check("6-ft rows come two to a 12-ft board", JSON.stringify([...planRow(72, 10, 
 
 console.log("── the material package");
 {
-  const t = deckTakeoff(fWA);
+  const t = deckTakeoff(buildStructure(WA));
   const q = (id: string) => t.lines.find((l) => l.id === id)?.qty ?? 0;
   check("lumber as the yard sells it: 15 joists from 12-ft 2x8s, 2 sixteens for the rim, a 16-ft ledger, one 16-ft 4x10", q("lumber-joist-2x8-12") === 15 && q("lumber-rim-2x8-16") === 2 && q("lumber-ledger-2x8-16") === 1 && q("lumber-beam-4x10-16") === 1);
   check("three 15-in. posts come out of one 8-ft 6x6; twelve blocks out of two 8-ft 2x8s", q("lumber-post-6x6-8") === 1 && q("lumber-blocking-2x8-8") === 2);
@@ -355,10 +359,10 @@ console.log("── the material package");
   check("every line is filed under a step, and the steps come in build order", t.lines.map((l) => l.step).join().replace(/(\w+)(,\1)+/g, "$1") === "footings,ledger,framing,decking");
   check("stock: the shortest stick that the piece comes out of", stockFor(139.5) === 12 && stockFor(96) === 8 && stockFor(96.5) === 10 && stockFor(240) === 20);
   check("short pieces are laid into boards longest first: 15 blocks need two 10-ft boards, not three 8s", JSON.stringify(packPieces([...new Array(13).fill(14.5), 12.25, 12.25], [8, 10, 12, 16])) === JSON.stringify({ stockFt: 10, boards: 2 }));
-  const st = deckTakeoff(buildDeckFrame({ ...WA, extras: { ...WA.extras, stainless: true } }));
+  const st = deckTakeoff(buildStructure({ ...WA, extras: { ...WA.extras, stainless: true } }));
   check("stainless multiplies the connectors and fasteners, not the flashing or the tape", st.lines.find((l) => l.id === "hangers")!.factor > 2 && st.lines.find((l) => l.id === "flashing")!.factor === 1 && st.lines.find((l) => l.id === "joist-tape")!.factor === 1);
-  const four = deckTakeoff(buildDeckFrame({ ...WA, ledger: { fastener: "ledgerlok", lateral: "four" } }));
-  const fir = deckTakeoff(buildDeckFrame({ ...WA, framing: { ...WA.framing, species: "douglas-fir" }, ledger: { fastener: "ledgerlok", lateral: "two" } }));
+  const four = deckTakeoff(buildStructure({ ...WA, ledger: { fastener: "ledgerlok", lateral: "four" } }));
+  const fir = deckTakeoff(buildStructure({ ...WA, framing: { ...WA.framing, species: "douglas-fir" }, ledger: { fastener: "ledgerlok", lateral: "two" } }));
   check("LedgerLOK instead of lags: closer together — every 14 in. in a fir ledger (15), every 12 in. in a hem-fir one (17) — and four 750-lb ties when chosen", fir.lines.find((l) => l.id === "ledger-fasteners")!.qty === 15 && four.lines.find((l) => l.id === "ledger-fasteners")!.qty === 17 && /LedgerLOK/.test(four.lines.find((l) => l.id === "ledger-fasteners")!.label) && /every 12 in\./.test(four.lines.find((l) => l.id === "ledger-fasteners")!.note ?? "") && four.lines.find((l) => l.id === "lateral-ties")!.qty === 4);
 }
 
@@ -381,51 +385,55 @@ const seattle = resolveMarket({ state: "WA", zip: "98052" });
   const framing = own.lines.find((l) => l.id === "deck-framing")!;
   check("the framing line's labor is then the shop's $12 a square foot", framing.laborCost === 12, String(framing.laborCost));
   check("…and less of the total stands on examples", own.exampleShare < 1 && own.exampleShare > 0.3, own.exampleShare.toFixed(2));
-  const full = priceDeck({ ...WA, heightIn: 96, shape: { kind: "rect", widthFt: 20, depthFt: 14 }, decking: { ...WA.decking, product: "composite-better" }, extras: { ...WA.extras, rail: "aluminum", stairFlights: 1, demoSqFt: 150 } }, { market: seattle });
-  check("composite, 8 ft up, with rail, stairs and a tear-out: eight lines", full.lines.map((l) => l.id).join() === "deck-footings,deck-ledger,deck-framing,deck-decking,deck-fascia,deck-rail,deck-stairs,deck-demo");
-  check("railing on every open edge less the stair opening (48 − 4 = 44 ft); 13 risers; tear-out is labor only", full.railFt === 44 && railFeet(framed(full.frame)) === 44 && full.stairSteps === 13 && stairSteps(framed(full.frame).design) === 13 && full.lines.find((l) => l.id === "deck-demo")!.materialCost === 0 && !full.lines.find((l) => l.id === "deck-demo")!.taxable);
-  const custom = priceDeck({ ...WA, extras: { ...WA.extras, rail: "custom", railFt: 30, railCustomPerFt: 200 } });
-  check("a custom rail is the shop's own price per foot, over the feet it typed — never an example", custom.lines.find((l) => l.id === "deck-rail")!.unitPrice === 200 && custom.lines.find((l) => l.id === "deck-rail")!.quantity === 30);
+  // A v2 design's words (extras.rail, stairFlights) still read as a rail type and flights down the front.
+  const legacy = normalizeDeckDesign({ shape: { kind: "rect", widthFt: 20, depthFt: 14 }, heightIn: 96, extras: { rail: "aluminum", stairFlights: 2, stairWidthFt: 5 } });
+  check("an older design's railing allowance and stair count become a rail and real stairs", legacy.rail.type === "aluminum" && legacy.stairs.length === 2 && legacy.stairs.every((st) => st.side === "front" && st.widthFt === 5) && legacy.stairs[0].atFt < legacy.stairs[1].atFt);
+  const full = priceDeck({ ...WA, heightIn: 96, shape: { kind: "rect", widthFt: 20, depthFt: 14 }, decking: { ...WA.decking, product: "composite-better" }, rail: { ...WA.rail, type: "aluminum" }, stairs: [defaultStair("s1", "front", 10)], extras: { ...WA.extras, demoSqFt: 150 } }, { market: seattle });
+  check("composite, 8 ft up, with rail, stairs and a tear-out: eight lines", full.lines.map((l) => l.id).join() === "deck-footings,deck-ledger,deck-framing,deck-decking,deck-fascia,deck-stairs,deck-rail,deck-demo", full.lines.map((l) => l.id).join());
+  const rails = full.structure.rails;
+  check("railing on every open edge less the stair opening (48 − 4 = 44 ft) plus both sides of the stair; 13 risers; tear-out is labor only", rails.lf === 44 && rails.stairLf > 20 && full.railFt === rails.totalLf && full.stairSteps === 13 && full.structure.stairs[0].rail.sides === 2 && full.lines.find((l) => l.id === "deck-demo")!.materialCost === 0 && !full.lines.find((l) => l.id === "deck-demo")!.taxable, `${rails.lf} + ${rails.stairLf}`);
+  const custom = priceDeck({ ...WA, rail: { ...WA.rail, type: "custom", customPerFt: 200 } });
+  check("a custom rail is the shop's own price per foot, over the feet it runs — never an example", custom.lines.find((l) => l.id === "deck-rail")!.unitPrice === 200 && custom.lines.find((l) => l.id === "deck-rail")!.quantity === custom.structure.rails.totalLf);
   const redwood = priceDeck({ ...WA, framing: { ...WA.framing, species: "redwood" } });
   check("redwood heart frames cost more than treated hem-fir, and span less (bigger joists or beams)", redwood.materialSubtotal > national.materialSubtotal * 1.3);
-  const parsed = deckConvertSchema.safeParse({ title: "Deck — 16 ft × 12 ft", scope: deckScope(full).join("\n"), assumptions: deckNotes(full), lines: full.lines.map((l) => ({ name: l.name, description: l.description, quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })), address: "118 Cedar Ln, Redmond, WA 98052", plan: { design: framed(full.frame).design, scene: JSON.parse(JSON.stringify(deckScene(framed(full.frame), full.takeoff.surface))) } });
+  const parsed = deckConvertSchema.safeParse({ title: "Deck — 16 ft × 12 ft", scope: deckScope(full).join("\n"), assumptions: deckNotes(full), lines: full.lines.map((l) => ({ name: l.name, description: l.description, quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })), address: "118 Cedar Ln, Redmond, WA 98052", plan: { design: framed(full.frame).design, scene: JSON.parse(JSON.stringify(deckScene(full.structure))) } });
   check("every line the engine makes passes the rules the convert action applies", parsed.success, parsed.success ? "" : JSON.stringify(parsed.error.issues[0]));
   check("a broken 3D is refused, not sent to a client", !deckConvertSchema.safeParse({ title: "x", assumptions: [], lines: [{ name: "a", quantity: 1, materialCost: 1, laborCost: 1 }], plan: { design: {}, scene: { v: 1, boxes: "nope" } } }).success);
   const scope = deckScope(full, "118 Cedar Ln, Redmond");
-  check("the client's scope: plain sentences, the deck's size first, no dollar sign and no estimate words", /^Build a 20 ft × 14 ft deck \(280 sq ft\), 8'-0" above the ground, at 118 Cedar Ln/.test(scope[0]) && scope.every((s) => !/\$|estimate|example|allowance/i.test(s)) && scope.some((s) => /44 ft of aluminum railing/.test(s)) && scope.some((s) => /13 risers/.test(s)));
+  check("the client's scope: plain sentences, the deck's size first, no dollar sign and no estimate words", /^Build a 20 ft × 14 ft deck \(280 sq ft\), 8'-0" above the ground, at 118 Cedar Ln/.test(scope[0]) && scope.every((s) => !/\$|estimate|example|allowance/i.test(s)) && scope.some((s) => /ft of aluminum railing/.test(s)) && scope.some((s) => /13 risers/.test(s)));
   check("the notes name the code, the soil and frost the footings assume, and what is not included", deckNotes(p).some((n) => /International Residential Code/.test(n) && /DCA 6/.test(n) && /permit fees/.test(n)) && deckNotes(p).some((n) => /1,500 psf/.test(n) && /18 in\./.test(n)) && deckNotes(p).some((n) => /guard rail/.test(n)));
 }
 
 console.log("── the code-check strip");
 {
-  const checks = deckChecks(fWA);
+  const checks = checksOf(WA);
   const sum = checkSummary(checks);
   check("the default deck: nothing fails; joists, beam, posts, footings and ledger each pass with their numbers and their table", sum.fail === 0 && ["joist-span", "beam-b1", "post-height", "footing-size", "footing-depth", "ledger", "ledger-lateral"].every((id) => checks.find((c) => c.id === id)?.level === "pass") && checks.filter((c) => c.level === "pass").every((c) => !!c.rule));
   check("the joist line reads the span and the table's limit", /2x8 at 16 in\. span 9'-9"; the table allows 11'-1"/.test(checks.find((c) => c.id === "joist-span")!.text));
   check("36 in. up needs a guard: a warning with a one-tap railing allowance; 5 risers to the ground, a one-tap flight", checks.find((c) => c.id === "guard")?.level === "warn" && !!checks.find((c) => c.id === "guard")?.fix && /5 risers/.test(checks.find((c) => c.id === "stairs")!.text));
   const withRail = applyDeckPatch(WA, checks.find((c) => c.id === "guard")!.fix!.patch);
-  check("tapping the fix answers the check", withRail.extras.rail === "treated" && deckChecks(buildDeckFrame(withRail)).find((c) => c.id === "guard")?.level === "pass");
-  const lowDeck = deckChecks(buildDeckFrame({ ...WA, heightIn: 24 }));
+  check("tapping the fix answers the check", withRail.rail.type === "treated" && checksOf(withRail).find((c) => c.id === "guard")?.level === "pass");
+  const lowDeck = checksOf({ ...WA, heightIn: 24 });
   check("24 in. up: no guard is asked for", lowDeck.find((c) => c.id === "guard")?.level === "info");
   const wide = buildDeckFrame({ ...WA, decking: { ...WA.decking, product: "composite-better" }, framing: { ...WA.framing, spacingIn: 24 } });
-  const spacing = deckChecks(wide).find((c) => c.id === "joist-spacing")!;
-  check("composite on joists 24 in. apart fails, and the fix sets them at 16", spacing.level === "fail" && deckChecks(buildDeckFrame(applyDeckPatch(wide.design, spacing.fix!.patch))).find((c) => c.id === "joist-spacing")?.level === "pass");
-  const blocks = deckChecks(buildDeckFrame({ ...WA, footing: { ...WA.footing, type: "pier-block" } })).find((c) => c.id === "footing-blocks")!;
+  const spacing = checksOf(wide.design).find((c) => c.id === "joist-spacing")!;
+  check("composite on joists 24 in. apart fails, and the fix sets them at 16", spacing.level === "fail" && checksOf(applyDeckPatch(wide.design, spacing.fix!.patch)).find((c) => c.id === "joist-spacing")?.level === "pass");
+  const blocks = checksOf({ ...WA, footing: { ...WA.footing, type: "pier-block" } }).find((c) => c.id === "footing-blocks")!;
   check("pier blocks under a deck on the house fail (free-standing, 200 sq ft and 20 in. at most), with the fix to pour", blocks.level === "fail" && /hangs on the house/.test(blocks.text) && blocks.fix?.patch.footing?.type === "poured");
-  const smallFree = deckChecks(buildDeckFrame({ ...WA, placement: "detached", shape: { kind: "rect", widthFt: 12, depthFt: 12 }, heightIn: 18, footing: { ...WA.footing, type: "pier-block" } }));
+  const smallFree = checksOf({ ...WA, placement: "detached", shape: { kind: "rect", widthFt: 12, depthFt: 12 }, heightIn: 18, footing: { ...WA.footing, type: "pier-block" } });
   check("a small low free-standing deck may sit on blocks — with the code's own caveat — and may need no permit", smallFree.find((c) => c.id === "footing-blocks")?.level === "warn" && smallFree.some((c) => c.id === "free-permit") && smallFree.some((c) => c.id === "free-lateral" && c.level === "warn"));
-  const tall = deckChecks(buildDeckFrame({ ...WA, heightIn: 200 }));
+  const tall = checksOf({ ...WA, heightIn: 200 });
   check("posts past 14 ft are an engineer's, and the strip says so", tall.find((c) => c.id === "post-height")?.level === "fail" && /engineer/.test(tall.find((c) => c.id === "post-height")!.text));
-  const ground = deckChecks(buildDeckFrame({ ...WA, heightIn: 6 }));
+  const ground = checksOf({ ...WA, heightIn: 6 });
   check("a deck 6 in. high cannot be framed: it fails plainly instead of drawing joists in the dirt", ground.find((c) => c.id === "low-fit")?.level === "fail");
-  const veneer = deckChecks(buildDeckFrame({ ...WA, wall: "brick-veneer" }));
+  const veneer = checksOf({ ...WA, wall: "brick-veneer" });
   check("on brick veneer the strip says why there is no ledger", veneer.some((c) => c.id === "free-wall" && /veneer/.test(c.text)) && !veneer.some((c) => c.part === "Ledger"));
-  const deepChecks = deckChecks(buildDeckFrame({ ...WA, shape: { kind: "rect", widthFt: 16, depthFt: 22 } }));
+  const deepChecks = checksOf({ ...WA, shape: { kind: "rect", widthFt: 16, depthFt: 22 } });
   check("a middle beam is flagged for the building office, not hidden", deepChecks.some((c) => c.id.startsWith("beam-both") && c.level === "warn") && deepChecks.some((c) => c.id === "joist-middle-beam"));
-  const ll70 = deckChecks(buildDeckFrame({ ...WA, loadPsf: 70, ledger: { fastener: "ledgerlok", lateral: "two" } })).find((c) => c.id === "ledger")!;
+  const ll70 = checksOf({ ...WA, loadPsf: 70, ledger: { fastener: "ledgerlok", lateral: "two" } }).find((c) => c.id === "ledger")!;
   check("a structural screw with no printed spacing at 70 psf fails, with the way back to lags", ll70.level === "fail" && ll70.fix?.patch.ledger?.fastener === "lag");
-  check("Southern pine and snow loads each say why the beams are built up", deckChecks(buildDeckFrame(TX)).some((c) => c.id === "beam-kind" && /Southern pine/.test(c.text)) && deckChecks(buildDeckFrame({ ...WA, loadPsf: 50 })).some((c) => c.id === "beam-kind" && /50 psf/.test(c.text)));
-  check("treated SPF warns that posts, ledger and beams need a ground-contact species", deckChecks(buildDeckFrame({ ...WA, framing: { ...WA.framing, species: "spf" } })).some((c) => c.id === "lumber-spf" && c.level === "warn"));
+  check("Southern pine and snow loads each say why the beams are built up", checksOf(TX).some((c) => c.id === "beam-kind" && /Southern pine/.test(c.text)) && checksOf({ ...WA, loadPsf: 50 }).some((c) => c.id === "beam-kind" && /50 psf/.test(c.text)));
+  check("treated SPF warns that posts, ledger and beams need a ground-contact species", checksOf({ ...WA, framing: { ...WA.framing, species: "spf" } }).some((c) => c.id === "lumber-spf" && c.level === "warn"));
   // Every fix the strip offers on a spread of troubled decks leaves a design the engine still builds.
   const troubled: DeckDesign[] = [
     { ...WA, framing: { ...WA.framing, joist: "2x6", overhangFt: 3 } },
@@ -438,9 +446,9 @@ console.log("── the code-check strip");
   let fixesHelped = 0;
   for (const d of troubled) {
     const f = buildDeckFrame(d);
-    for (const c of deckChecks(f).filter((x) => x.level === "fail" && x.fix)) {
+    for (const c of checksOf(f.design).filter((x) => x.level === "fail" && x.fix)) {
       fixesTried++;
-      const after = deckChecks(buildDeckFrame(applyDeckPatch(f.design, c.fix!.patch)));
+      const after = checksOf(applyDeckPatch(f.design, c.fix!.patch));
       if (after.find((x) => x.id === c.id)?.level !== "fail") fixesHelped++;
     }
   }
@@ -450,22 +458,23 @@ console.log("── the code-check strip");
 console.log("── the 3D, as data");
 {
   const p = priceDeck({ ...WA, decking: { ...WA.decking, product: "composite-better" } });
-  const scene = deckScene(p.frame, framed(p.takeoff.surface));
-  check("a box for every stick, every board and every fascia run, filed by layer in build order", scene.boxes.length === framed(p.frame).sticks.length + framed(p.takeoff.surface).pieces.length + 3 && SCENE_LAYERS.slice(0, 10).join() === "footing,post,beam,ledger,joist,rim,blocking,brace,decking,fascia");
+  const scene = deckScene(p.structure);
+  const hardware = scene.boxes.filter((b) => b[0] === SCENE_LAYERS.indexOf("hardware")).length;
+  check("a box for every stick, every board, every fascia run and every bolt, hanger and tie, filed by layer in build order", scene.boxes.length === framed(p.frame).sticks.length + framed(p.takeoff.surface).pieces.length + 3 + hardware && hardware > 30 && SCENE_LAYERS.slice(0, 10).join() === "footing,post,beam,ledger,joist,rim,blocking,brace,decking,fascia", `${scene.boxes.length} boxes, ${hardware} hardware`);
+  check("every box carries a tag into the legend; the legend names the parts and their cuts; the connections are called out", scene.tags.length === scene.boxes.length && scene.legend.length > 8 && scene.legend.some((l) => /hanger/.test(l.role)) && scene.legend.some((l) => /lag|bolt|screw/.test(l.nominal)) && scene.callouts.length >= 5, `${scene.legend.length} legend, ${scene.callouts.length} callouts`);
   check("in feet: 16 x 12, the boards' tops at 3 ft", scene.widthFt === 16 && scene.depthFt === 12 && scene.heightFt === 3 && scene.boxes.filter((b) => b[0] === SCENE_LAYERS.indexOf("decking")).every((b) => near(b[3] + b[6] / 2, 3, 0.001)));
   check("a footing for every post, and a house with a door where the deck meets one", scene.footings.length === 3 && !!scene.house && scene.house.blocks.length === 1 && !!scene.house.door && scene.house.heightFt === 12);
   check("it reads back exactly after a trip through JSON", JSON.stringify(parseDeckScene(JSON.parse(JSON.stringify(scene)))) === JSON.stringify(scene));
-  check("a 16 x 12 deck's scene is a few kilobytes", JSON.stringify(scene).length < 12_000, `${JSON.stringify(scene).length} bytes`);
-  check("bad shapes are no scene: a wrong version, a box with a missing number, a negative size, a layer that does not exist", parseDeckScene({ ...scene, v: 3 }) === null && parseDeckScene({ ...scene, boxes: [[0, 1, 2]] }) === null && parseDeckScene({ ...scene, boxes: [[0, 1, 1, 1, -1, 1, 1, 0]] }) === null && parseDeckScene({ ...scene, boxes: [[99, 1, 1, 1, 1, 1, 1, 0]] }) === null && parseDeckScene("x") === null);
-  const detached = deckScene(buildDeckFrame({ ...WA, placement: "detached" }), deckSurface(buildDeckFrame({ ...WA, placement: "detached" })));
+  check("a 16 x 12 deck's scene with its hardware and legend stays under 60 kB", JSON.stringify(scene).length < 60_000, `${JSON.stringify(scene).length} bytes`);
+  check("bad shapes are no scene: a wrong version, a box with a missing number, a negative size, a layer that does not exist", parseDeckScene({ ...scene, v: 4 }) === null && parseDeckScene({ ...scene, boxes: [[0, 1, 2]] }) === null && parseDeckScene({ ...scene, boxes: [[0, 1, 1, 1, -1, 1, 1, 0]] }) === null && parseDeckScene({ ...scene, boxes: [[99, 1, 1, 1, 1, 1, 1, 0]] }) === null && parseDeckScene("x") === null);
+  const detached = deckScene(buildStructure({ ...WA, placement: "detached" }));
   check("a detached deck stands alone: no house", detached.house === null);
-  const dFrame = buildDeckFrame({ ...WA, decking: { ...WA.decking, diagonal: true } });
-  const dScene = deckScene(dFrame, deckSurface(dFrame));
+  const dScene = deckScene(buildStructure({ ...WA, decking: { ...WA.decking, diagonal: true } }));
   const ringArea = (r: number[]) => Math.abs(r.reduce((a, _, i) => (i % 2 ? a : a + r[i] * r[(i + 3) % r.length] - r[(i + 2) % r.length] * r[i + 1]), 0)) / 2;
   check("boards on the diagonal are cut to the outline: together they cover the deck less the gaps", !!dScene.diagonal && dScene.diagonal.boards.length > 30 && near(dScene.diagonal.boards.reduce((a, r) => a + ringArea(r), 0), 192 * (5.5 / 5.625), 0.02) && dScene.boxes.every((b) => b[0] !== SCENE_LAYERS.indexOf("decking")));
   const big = priceDeck({ ...WA, shape: { kind: "rect", widthFt: 60, depthFt: 40 } });
-  const bigScene = deckScene(big.frame, big.takeoff.surface);
-  check("the largest deck the studio draws still fits the stored scene's limits", bigScene.boxes.length < 6000 && JSON.stringify(bigScene).length < 400_000 && !!parseDeckScene(JSON.parse(JSON.stringify(bigScene))), `${bigScene.boxes.length} boxes, ${JSON.stringify(bigScene).length} bytes`);
+  const bigScene = deckScene(big.structure);
+  check("the largest deck the studio draws still fits the stored scene's limits", bigScene.boxes.length < 12000 && JSON.stringify(bigScene).length < 900_000 && !!parseDeckScene(JSON.parse(JSON.stringify(bigScene))), `${bigScene.boxes.length} boxes, ${JSON.stringify(bigScene).length} bytes`);
   const plan = parseDeckPlan(JSON.parse(JSON.stringify({ v: 1, design: framed(p.frame).design, scene, address: "118 Cedar Ln" })));
   check("the deck kept with a proposal reads back: the design, the scene, the address", !!plan && plan.design.decking.product === "composite-better" && plan.scene.boxes.length === scene.boxes.length && plan.address === "118 Cedar Ln" && parseDeckPlan({ design: {}, scene: null }) === null);
 }

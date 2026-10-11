@@ -82,7 +82,7 @@ export type TradeBoardData = {
 };
 
 const OPEN = ["DRAFT", "SENT", "VIEWED"];
-const ALL_TRADES: readonly TradeId[] = ["fence", "roof", "hvac"];
+const ALL_TRADES: readonly TradeId[] = ["fence", "roof", "hvac", "deck"];
 
 /**
  * The organization's proposals that belong to the wanted trades, each with
@@ -222,7 +222,7 @@ export async function loadTradeBoard(organizationId: string, trade: string): Pro
 
 /** How many items are low per trade — the sidebar's badge on each board. */
 export async function lowStockCounts(organizationId: string): Promise<Record<TradeId, number>> {
-  const out: Record<TradeId, number> = { fence: 0, roof: 0, hvac: 0 };
+  const out: Record<TradeId, number> = { fence: 0, roof: 0, hvac: 0, deck: 0 };
   const items = await db.inventoryItem.findMany({ where: { organizationId }, select: { id: true, trade: true, key: true, name: true, unit: true, onHand: true, reorderPoint: true, supplierId: true } });
   if (!items.length) return out;
   const proposals = await tradeProposals(organizationId, ALL_TRADES);

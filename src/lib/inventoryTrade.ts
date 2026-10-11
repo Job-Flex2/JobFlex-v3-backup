@@ -30,14 +30,15 @@ export type TradeEvidence = {
   roofMeasurement?: boolean;
 };
 
-const ALL: readonly TradeId[] = ["roof", "fence", "hvac"];
-const PROFILE: Record<string, TradeId> = { roofing: "roof", fencing: "fence", hvac: "hvac" };
+const ALL: readonly TradeId[] = ["roof", "fence", "hvac", "deck"];
+const PROFILE: Record<string, TradeId> = { roofing: "roof", fencing: "fence", hvac: "hvac", decking: "deck" };
 
 /** Trade words a material line can carry even when its name drifted from the estimator's. */
 const WORDS: Record<TradeId, RegExp> = {
   roof: /\b(shingles?|underlayment|ridge vent|ridge cap|hip (?:&|and) ridge|drip edge|flashing|ice (?:&|and) water|tpo|epdm|roofing|starter strip|pipe boots?|valley metal)\b/i,
   fence: /\b(fence|fencing|pickets?|line posts?|corner posts?|end posts?|gate posts?|chain ?link|privacy panels?|fence boards?)\b/i,
   hvac: /\b(furnace|heat pumps?|condensers?|air handlers?|evaporator|thermostats?|line sets?|refrigerant|duct(?:work)?|btu|seer2?|afue|mini.?splits?|ductless|b-vent)\b/i,
+  deck: /\b(joists?|ledger|deck(?:ing)? boards?|rim joist|post caps?|post bases?|joist hangers?|hurricane ties?|stringers?|balusters?|rail posts?|rafters?|ridge beam|hip rafters?|pergola|gazebo|deck screws)\b/i,
 };
 
 /** A key with plurals flattened, so "shingles" and "shingle" read the same. */
@@ -49,6 +50,7 @@ function presetKeys(): Record<TradeId, string[]> {
     roof: presetItems("roof").map((p) => flat(stockKey(p.name))),
     fence: presetItems("fence").map((p) => flat(stockKey(p.name))),
     hvac: presetItems("hvac").map((p) => flat(stockKey(p.name))),
+    deck: presetItems("deck").map((p) => flat(stockKey(p.name))),
   };
   return keys;
 }
@@ -62,7 +64,7 @@ function namesPreset(lineKey: string, trade: TradeId): boolean {
 
 /** The votes each trade gets from a proposal's material lines. */
 export function lineVotes(lines: readonly StockLine[]): Record<TradeId, number> {
-  const votes: Record<TradeId, number> = { roof: 0, fence: 0, hvac: 0 };
+  const votes: Record<TradeId, number> = { roof: 0, fence: 0, hvac: 0, deck: 0 };
   for (const l of lines) {
     if (!(l.quantity > 0)) continue;
     const key = stockKey(l.name);

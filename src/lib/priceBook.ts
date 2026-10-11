@@ -18,8 +18,9 @@ import type { RoofCatalogDoc } from "@/lib/roofPackage/catalogSchema";
 import type { CatalogItem, EquipmentKind } from "@/lib/hvac/types";
 import type { HvacRateCard } from "@/lib/hvac/ledger";
 import type { TradeId } from "@/lib/inventory";
+import { DECK_RATE_GROUP_LABEL, deckRateRows, type DeckRateBook } from "@/lib/deck/rates";
 
-export type BookKind = "fence-type" | "roof-system" | "roof-underlayment" | "hvac-unit" | "hvac-rate";
+export type BookKind = "fence-type" | "roof-system" | "roof-underlayment" | "hvac-unit" | "hvac-rate" | "deck-rate";
 
 /** One line of the book, whatever the trade. */
 export type BookRow = {
@@ -337,6 +338,34 @@ export function hvacCardWith(card: HvacRateCard, id: string, value: number): Hva
 }
 
 /* ── shared ─────────────────────────────────────────────────────────── */
+
+/* ── DECK (2026-10-10) ─────────────────────────────────────────────── */
+
+/** Every row of the deck estimator's price book: the example figure, or the shop's own where it typed one. */
+export function deckBookRows(book: DeckRateBook): BookRow[] {
+  return deckRateRows(book).map((r) => ({
+    trade: "deck",
+    kind: "deck-rate",
+    id: r.key,
+    group: DECK_RATE_GROUP_LABEL[r.group],
+    name: r.label,
+    specs: `example $${r.price} per ${r.unit}`,
+    unit: r.unit,
+    price: r.own ?? r.price,
+    labor: null,
+    companyDefault: r.own !== null,
+    custom: false,
+    fields: { value: r.own ?? r.price, example: r.price, min: r.min, max: r.max },
+  }));
+}
+
+/** The deck book after one row is typed (or blanked back to the example). */
+export function deckBookWith(book: DeckRateBook, key: string, value: number | null): DeckRateBook {
+  const next = { ...book };
+  if (value === null) delete next[key];
+  else next[key] = value;
+  return next;
+}
 
 export function groupRows(rows: BookRow[], order?: string[]): BookGroup[] {
   const map = new Map<string, BookRow[]>();

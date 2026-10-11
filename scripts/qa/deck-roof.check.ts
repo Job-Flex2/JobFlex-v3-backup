@@ -82,7 +82,7 @@ const base = (over: Over): DeckDesign => {
     check("rafters: about one per 16 in. of ridge on each side, plus flies at the front rake", roof.rafters.count >= 2 * perSide && roof.rafters.count <= 2 * perSide + 4, `${roof.rafters.count} (commons ${roof.rafters.commons}, flies ${roof.rafters.flies})`);
     check("the ridge: no beam in the table spans 12 ft under a 17-ft roof, so a ridge board with ties, and the strip says so", roof.ridge?.kind === "board" && roof.ridge.fellBack && roof.ties === Math.floor(roof.ridge.spanIn / 48) + 1, `${roof.ridge?.kind} fellBack=${roof.ridge?.fellBack} ties=${roof.ties}`);
     const asBeam = buildStructure(normalizeDeckDesign({ ...d, roof: { ...d.roof, ridge: "beam" } })).roof!;
-    check("asked for a beam anyway: a king post over the front header, and the ridge flagged for an engineer", asBeam.ridge?.kind === "beam" && asBeam.kingPosts === 1 && asBeam.headers.some((h) => h.kingPost) && asBeam.flags.ridgeBeyondTable);
+    check("asked for a beam anyway: no sawn beam spans it, so an engineered LVL ridge on a king post over the front header, nothing flagged", asBeam.ridge?.kind === "beam" && asBeam.ridge.spec?.kind === "lvl" && asBeam.engineered && asBeam.kingPosts === 1 && asBeam.headers.some((h) => h.kingPost) && !asBeam.flags.ridgeBeyondTable, `${asBeam.ridge?.spec?.size} beyond=${asBeam.flags.ridgeBeyondTable}`);
     const area = 2 * ((12 * 12 + 12) / 12) * (run / 12) / Math.cos(Math.atan(0.5));
     check("roof area: two faces, 13 ft by the sloped run", near(roof.roofAreaSqFt, area, 0.03), `${roof.roofAreaSqFt} vs ${Math.round(area)}`);
     check("squares with 10% waste, sheets by 32 sq ft", near(roof.squares, Math.ceil((area * 1.1) / 100 * 10) / 10, 0.05) && roof.sheets === Math.ceil((roof.roofAreaSqFt * 1.1) / 32 - 1e-9));
@@ -91,7 +91,7 @@ const base = (over: Over): DeckDesign => {
     const pkg = priceDeck(d);
     check("the roof's lines: posts, framing, deck, roofing, trim, gutters", ["roof-posts", "roof-frame", "roof-deck", "roofing", "roof-trim", "roof-gutters"].every((id) => pkg.lines.some((l) => l.id === id)), pkg.lines.map((l) => l.id).join(","));
     check("every material line is on a price-book row", pkg.bom.every((l) => rateKeys.has(l.rateKey)), pkg.bom.filter((l) => !rateKeys.has(l.rateKey)).map((l) => l.rateKey).join(","));
-    const checks = deckChecks(frame, roof, d);
+    const checks = deckChecks(buildStructure(d));
     check("the strip reads the roof: rafters, headers, ridge, posts, the house, gutters — and nothing fails", ["rafter-span", "ridge", "roof-post-height", "roof-wall-height", "gutters"].every((id) => checks.some((c) => c.id === id)) && checks.some((c) => c.id.startsWith("header-h")) && !checks.some((c) => c.level === "fail"), `${checks.map((c) => c.id).join(",")} | fails: ${checks.filter((c) => c.level === "fail").map((c) => c.id).join(",")}`);
   }
 }
@@ -123,7 +123,7 @@ const base = (over: Over): DeckDesign => {
     check("purlins across the rafters, no sheathing, metal panels by length", roof.members.some((m) => m.role === "purlin") && roof.sheets === 0 && roof.metalPanels.length > 0);
     const pkg = priceDeck(d);
     check("no gutter line, a roof deck line for the drip edge only", !pkg.lines.some((l) => l.id === "roof-gutters") && pkg.bom.some((l) => l.id === "drip-edge") && !pkg.bom.some((l) => l.id === "sheathing"));
-    const checks = deckChecks(frame, roof, d);
+    const checks = deckChecks(buildStructure(d));
     check("a covered deck with no gutters is told so (free-standing: a bracing note, no wall)", checks.some((c) => c.id === "gutters" && c.level === "warn") && checks.some((c) => c.id === "roof-free") && !checks.some((c) => c.id === "roof-wall-height"));
   }
 }
@@ -139,7 +139,7 @@ const base = (over: Over): DeckDesign => {
   if (roof) {
     const pkg = priceDeck(d);
     check("the pergola's lines: posts and framing only", pkg.lines.filter((l) => l.id.startsWith("roof")).map((l) => l.id).sort().join(",") === "roof-frame,roof-posts", pkg.lines.map((l) => l.id).join(","));
-    const checks = deckChecks(null, roof, d);
+    const checks = deckChecks(buildStructure(d));
     check("the strip reads a pergola: rafters span, open slats, footings", checks.some((c) => c.id === "rafter-span") && checks.some((c) => c.id === "pergola-open") && checks.some((c) => c.id === "roof-footings"));
   }
 }
@@ -194,14 +194,14 @@ console.log("── a sweep: every structure, shape and size the studio offers")
         const offBook = pkg.bom.filter((l) => !rateKeys.has(l.rateKey) || !(l.qty > 0) || !Number.isFinite(l.cost));
         if (offBook.length) trouble.push(`${tag}: material lines off the book: ${offBook.map((l) => l.id).join(",")}`);
         if (!(pkg.subtotal > 0) || pkg.lines.length > 60) trouble.push(`${tag}: ${pkg.lines.length} lines, $${pkg.subtotal}`);
-        const scene = deckScene(pkg.frame, pkg.takeoff.surface, { roof, design: d });
+        const scene = deckScene(pkg.structure);
         const back = parseDeckScene(JSON.parse(JSON.stringify(scene)));
         if (!back || back.boxes.length !== scene.boxes.length || back.polys.length !== scene.polys.length) trouble.push(`${tag}: the scene does not read back`);
         if (scene.polys.length === 0 && roof.kind !== "pergola") trouble.push(`${tag}: no roof planes`);
         if (!(scene.peakFt > scene.heightFt)) trouble.push(`${tag}: peak ${scene.peakFt} not above the floor ${scene.heightFt}`);
         const layers = sceneBuildLayers(scene);
         if (!layers.includes("roof-post") || !layers.includes("rafter")) trouble.push(`${tag}: build order misses the roof`);
-        const checks = deckChecks(pkg.frame, roof, d);
+        const checks = deckChecks(pkg.structure);
         const fails = checks.filter((c) => c.level === "fail");
         const allowed = new Set(["header-h1", "header-h2", "header-h3", "header-h4", "header-h5", "header-h6", "header-h7", "header-h8", "ridge", "roof-post-footing", "roof-footings", "footing-size", "post-area", "roof-post-height"]);
         for (const c of fails) {
@@ -224,16 +224,16 @@ console.log("── a sweep: every structure, shape and size the studio offers")
   }
   check(`${n} structures built, counted, priced, checked, drawn and read back`, trouble.length === 0, trouble.slice(0, 12).join("\n      "));
   console.log(`      ${clean} of ${n} clean`);
-  check("every layer the scenes use is in the build order", SCENE_LAYERS.every((l) => sceneBuildLayers({ v: 2, widthFt: 10, depthFt: 10, heightFt: 3, peakFt: 3, boxes: [[SCENE_LAYERS.indexOf(l), 1, 1, 1, 1, 1, 1, 0]], footings: [], diagonal: null, polys: [], outline: [0, 0, 1, 0, 1, 1], house: null, colors: { frame: "#000000", decking: "#000000", fascia: "#000000", roofing: "#000000" }, facts: "" }).length === 1));
+  check("every layer the scenes use is in the build order", SCENE_LAYERS.every((l) => sceneBuildLayers({ v: 3, widthFt: 10, depthFt: 10, heightFt: 3, peakFt: 3, boxes: [[SCENE_LAYERS.indexOf(l), 1, 1, 1, 1, 1, 1, 0]], tags: [], legend: [], callouts: [], footings: [], diagonal: null, polys: [], polyTags: [], outline: [0, 0, 1, 0, 1, 1], house: null, ground: null, glows: [], handles: [], colors: { frame: "#000000", decking: "#000000", fascia: "#000000", roofing: "#000000", rail: "#000000" }, facts: "" }).length === 1));
 }
 
 console.log("── the plan with a proposal");
 {
   const d = base({ structure: "covered-deck", roof: { kind: "gable" }, photo: { url: "local:deck-photos/org/a.jpg", w: 1600, h: 1200, placed: { x: 0.12, y: 0.86, w: 0.7 } } });
   const pkg = priceDeck(d);
-  const scene = deckScene(pkg.frame, pkg.takeoff.surface, { roof: pkg.roof, design: d });
-  const plan = parseDeckPlan(JSON.parse(JSON.stringify({ v: 2, design: d, scene, address: "118 Cedar Ln" })));
-  check("the plan reads back with its roof, its photo and its placement", !!plan && plan.design.structure === "covered-deck" && plan.design.photo?.placed?.w === 0.7 && plan.scene.polys.length > 0 && plan.scene.v === 2);
+  const scene = deckScene(pkg.structure);
+  const plan = parseDeckPlan(JSON.parse(JSON.stringify({ v: 3, design: d, scene, address: "118 Cedar Ln" })));
+  check("the plan reads back with its roof, its photo and its placement", !!plan && plan.design.structure === "covered-deck" && plan.design.photo?.placed?.w === 0.7 && plan.scene.polys.length > 0 && plan.scene.v === 3);
   const v1 = parseDeckPlan({ v: 1, design: { v: 1, shape: { kind: "rect", widthFt: 12, depthFt: 10 } }, scene: { v: 1, widthFt: 12, depthFt: 10, heightFt: 3, boxes: [[0, 1, 1, 1, 1, 1, 1, 0]], footings: [], diagonal: null, outline: [0, 0, 12, 0, 12, 10, 0, 10], house: null, colors: {}, facts: "old" }, address: null });
   check("a version-1 plan from before M2 still reads: a bare deck, an old scene", !!v1 && v1.design.structure === "deck" && v1.scene.boxes.length === 1 && v1.scene.polys.length === 0);
   const elev = deckElevation(scene);

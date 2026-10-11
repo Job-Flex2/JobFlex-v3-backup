@@ -14,6 +14,7 @@
 import * as React from "react";
 import type { DeckPhoto } from "@/lib/deck/design";
 import { defaultPlacement, elevationOverlay, type Elevation } from "@/lib/deck/elevation";
+import { letterboxRows, type Crop } from "@/lib/deck/photoFit";
 import s from "./deck-studio.module.css";
 
 type Placed = NonNullable<DeckPhoto["placed"]>;
@@ -90,6 +91,93 @@ export function DeckPhotoView({ photo, href, elevation, onPlace, onRefresh }: { 
       </div>
     </div>
   );
+}
+
+function loadImage(file: File): Promise<{ img: HTMLImageElement; release: () => void }> {
+  const url = URL.createObjectURL(file);
+  return new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve({ img: el, release: () => URL.revokeObjectURL(url) });
+    el.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("That picture could not be read — use a JPEG or PNG."));
+    };
+    el.src = url;
+  });
+}
+
+async function canvasFile(canvas: HTMLCanvasElement, name: string): Promise<File | null> {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  return blob ? new File([blob], name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : null;
+}
+
+/**
+ * A phone's screenshot of a photo carries black bands (and the status bar)
+ * above and below it. The rows' brightness, read off a thumbnail, says how
+ * many to cut (lib/deck/photoFit letterboxRows); the picture comes back
+ * without them, so the model and the crop see only the house.
+ */
+export async function trimLetterbox(file: File, w: number, h: number): Promise<{ file: File; w: number; h: number; cut: { top: number; bottom: number } }> {
+  const none = { file, w, h, cut: { top: 0, bottom: 0 } };
+  const { img, release } = await loadImage(file);
+  try {
+    const rows = Math.min(h, 480);
+    const probe = document.createElement("canvas");
+    probe.width = 48;
+    probe.height = rows;
+    const pg = probe.getContext("2d", { willReadFrequently: true });
+    if (!pg) return none;
+    pg.drawImage(img, 0, 0, 48, rows);
+    const data = pg.getImageData(0, 0, 48, rows).data;
+    // Each row's MEDIAN brightness: a status bar's white glyphs on black must still read as the black band they sit in.
+    const bright = new Array<number>(rows);
+    const lumas = new Array<number>(48);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < 48; c++) {
+        const i = (r * 48 + c) * 4;
+        lumas[c] = (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
+      }
+      bright[r] = [...lumas].sort((a, b) => a - b)[24];
+    }
+    const cut = letterboxRows(bright);
+    if (!cut.top && !cut.bottom) return none;
+    const top = Math.round((cut.top / rows) * h);
+    const bottom = Math.round((cut.bottom / rows) * h);
+    const h2 = h - top - bottom;
+    if (h2 < 64) return none;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h2;
+    const g = canvas.getContext("2d");
+    if (!g) return none;
+    g.drawImage(img, 0, top, w, h2, 0, 0, w, h2);
+    const out = await canvasFile(canvas, file.name);
+    return out ? { file: out, w, h: h2, cut: { top, bottom } } : none;
+  } finally {
+    release();
+  }
+}
+
+/** The picture cut to the fit's crop (fractions of it). Back come the file and its size. */
+export async function cropPhoto(file: File, crop: Crop, w: number, h: number): Promise<{ file: File; w: number; h: number }> {
+  const x = Math.round(crop.x * w);
+  const y = Math.round(crop.y * h);
+  const cw = Math.max(16, Math.round(crop.w * w));
+  const ch = Math.max(16, Math.round(crop.h * h));
+  if (x === 0 && y === 0 && cw === w && ch === h) return { file, w, h };
+  const { img, release } = await loadImage(file);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const g = canvas.getContext("2d");
+    if (!g) return { file, w, h };
+    g.drawImage(img, x, y, cw, ch, 0, 0, cw, ch);
+    const out = await canvasFile(canvas, file.name);
+    return out ? { file: out, w: cw, h: ch } : { file, w, h };
+  } finally {
+    release();
+  }
 }
 
 /** A picture shrunk for the upload: the long side at most `maxSide` px, JPEG. Back come the file and its size. */

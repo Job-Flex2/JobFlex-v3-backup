@@ -1,0 +1,53 @@
+/* THE PERMIT SHEET — its own page, no dashboard chrome. The blueprint tokens
+   are set here so the studio's framing plan (deck-studio.module.css, scoped
+   under .jf-blueprint .content) draws the same on paper. Letter pages, one
+   drawing or schedule a page, black ink. */
+.sheet {
+  --paper: #ffffff; --paper-deep: #f6f4ef; --ink: #0a0a0a; --ink-soft: #2a2a2a; --blueprint: #1854a0; --blueprint-dark: #0e3d7a;
+  --muted: #555; --muted-light: #888; --muted-faint: #b0aea8; --hair: rgba(10,10,10,0.12); --hair-soft: rgba(10,10,10,0.1);
+  --success-dark: #2c6335; --success-soft: rgba(58,125,68,0.07); --warning: #b88420; --warning-dark: #96691a; --warning-soft: rgba(184,132,32,0.08); --danger: #a83232; --danger-soft: rgba(168,50,50,0.08);
+  --border: 2px solid var(--ink); --radius: 2px; --font: var(--font-inter), 'Inter', Helvetica, Arial, sans-serif; --font-mono: var(--font-jbmono), 'JetBrains Mono', ui-monospace, monospace;
+  min-height: 100vh; background: #e9e6df; color: var(--ink); font-family: var(--font); font-size: 12px; line-height: 1.45; padding: 20px 16px 60px;
+}
+.bar { max-width: 8.5in; margin: 0 auto 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.bar p { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+.btn { height: 38px; padding: 0 14px; border: var(--border); border-radius: var(--radius); background: #fff; color: var(--ink); font-family: var(--font); font-size: 11.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+.btnPrimary { background: var(--blueprint); color: #fff; border-color: var(--blueprint); }
+.page { position: relative; width: 8.5in; max-width: 100%; min-height: 11in; margin: 0 auto 16px; padding: 0.5in; box-sizing: border-box; background: #fff; border: 1px solid var(--hair); box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+.head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; padding-bottom: 8px; border-bottom: var(--border); }
+.title { font-size: 18px; font-weight: 900; letter-spacing: -0.01em; text-transform: uppercase; }
+.sub { font-size: 12px; color: var(--ink-soft); }
+.shop { text-align: right; font-size: 11px; line-height: 1.4; color: var(--ink-soft); }
+.shop b { display: block; font-size: 12.5px; color: var(--ink); }
+.sheetNo { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blueprint); }
+.drawing { min-height: 0; display: grid; }
+.drawing svg { width: 100%; height: 100%; max-height: 8.6in; display: block; }
+.foot { display: flex; justify-content: space-between; gap: 10px; padding-top: 6px; border-top: 1px solid var(--hair); font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.h2 { font-size: 12px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; margin: 8px 0 4px; }
+.table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.table th { text-align: left; padding: 4px 6px; border-bottom: 1.5px solid var(--ink); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.table td { padding: 4px 6px; border-bottom: 1px solid var(--hair-soft); vertical-align: top; }
+.table td.r, .table th.r { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rule { font-family: var(--font-mono); font-size: 9px; color: var(--blueprint); }
+.notes { margin: 0; padding-left: 16px; font-size: 10.5px; line-height: 1.5; }
+.notes li { margin-bottom: 3px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+.elev polygon { fill: #fff; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.elev .deck polygon { fill: #efe9dc; }
+.elev .roof polygon { fill: #d8dde6; }
+.elev .rail polygon { fill: #f7f4ee; stroke-width: 0.6; }
+.elev .ground { stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.elev .dim { stroke: var(--ink); fill: var(--ink); font-family: var(--font-mono); font-weight: 700; }
+.elev .dim text { stroke: none; }
+.empty { max-width: 8.5in; margin: 40px auto; padding: 24px; background: #fff; border: var(--border); }
+@media print {
+  .sheet { background: #fff; padding: 0; }
+  .bar { display: none; }
+  .page { width: auto; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none; break-after: page; page-break-after: always; }
+  .page:last-child { break-after: auto; page-break-after: auto; }
+  @page { size: letter; margin: 0.5in; }
+}
+@media (max-width: 700px) {
+  .page { padding: 14px; min-height: 0; }
+  .two { grid-template-columns: 1fr; }
+}

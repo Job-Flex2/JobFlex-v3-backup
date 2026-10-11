@@ -14,11 +14,18 @@
 // inside their rails, a choice that the wall or the species rules out moved
 // to the nearest one that stands. It never throws.
 
+import { parseWallRead, type JogOffer, type WallRead } from "./photoFit";
 import { LOADS, POST_SIZES, SOILS, SOLID_BEAMS, SPACINGS, JOIST_SIZES, type BuiltUpBeam, type JoistSize, type LedgerFastener, type LoadPsf, type PostSize, type SoilPsf, type SolidBeam, type SpacingIn } from "./codeTables";
 import { DECKING, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, wallType, type FramingSpeciesId, type RailTypeId, type WallTypeId } from "./catalog";
+import { SLOPE_LIMITS, flatSlope, type SiteSlope, type TermiteHazard } from "./site";
 
-/** v2 (2026-10-10): `structure`, `floor`, `roof` and `photo` joined the design. A v1 design reads as a bare deck. */
-export const DECK_DESIGN_VERSION = 2;
+/**
+ * v2 (2026-10-10): `structure`, `floor`, `roof` and `photo` joined the design.
+ * v3 (M3, 2026-10-10): the site (snow, slope, termites), real stairs and rails,
+ * a curved or clipped front, a lower level, decking patterns, more roofs. A v1
+ * design reads as a bare deck; a v2 one keeps every choice it made.
+ */
+export const DECK_DESIGN_VERSION = 3;
 
 /** Which corner of the rectangle an L-shape is missing. "Back" is the house side. */
 export type NotchCorner = "front-left" | "front-right" | "back-left" | "back-right";
@@ -30,8 +37,21 @@ export const NOTCH_CORNERS: readonly NotchCorner[] = ["front-left", "front-right
  * with a deep part and a shallow part; a BACK notch is where the house
  * itself steps out into the deck (a bump-out or a bay).
  */
+/**
+ * The front edge (M3): straight; bowed out in a circular arc that rises
+ * `bulgeFt` at the middle (the rim laminated, the joists cut to the arc); or
+ * its two corners clipped at 45° by `clipFt`.
+ */
+export type FrontKind = "straight" | "curve" | "clipped";
+export interface FrontProfile {
+  kind: FrontKind;
+  bulgeFt: number;
+  clipFt: number;
+}
+export const FRONT_LABEL: Record<FrontKind, string> = { straight: "Straight", curve: "Curved (bowed out)", clipped: "Clipped corners" };
+
 export type DeckShape =
-  | { kind: "rect"; widthFt: number; depthFt: number }
+  | { kind: "rect"; widthFt: number; depthFt: number; front?: FrontProfile }
   | { kind: "L"; widthFt: number; depthFt: number; notch: { corner: NotchCorner; widthFt: number; depthFt: number } };
 
 /**
@@ -77,20 +97,29 @@ export type Floor = "deck" | "slab" | "ground";
 export const FLOORS: readonly Floor[] = ["deck", "slab", "ground"];
 export const FLOOR_LABEL: Record<Floor, string> = { deck: "On a deck", slab: "On a concrete slab", ground: "On footings in the ground" };
 
-export type RoofKind = "shed" | "gable" | "hip" | "pyramid" | "double-tier" | "pergola";
-export const ROOF_KINDS: readonly RoofKind[] = ["shed", "gable", "hip", "pyramid", "double-tier", "pergola"];
+export type RoofKind = "shed" | "gable" | "hip" | "pyramid" | "double-tier" | "gambrel" | "dutch-gable" | "pergola";
+export const ROOF_KINDS: readonly RoofKind[] = ["shed", "gable", "hip", "pyramid", "double-tier", "gambrel", "dutch-gable", "pergola"];
 export const ROOF_KIND_LABEL: Record<RoofKind, string> = {
   shed: "Shed — one slope",
   gable: "Gable",
   hip: "Hip",
   pyramid: "Pyramid",
   "double-tier": "Double tier (pagoda)",
+  gambrel: "Gambrel (barn)",
+  "dutch-gable": "Dutch gable",
   pergola: "Open slats",
 };
-/** The roof's outline in plan: the deck's own rectangle, or its own figure. */
-export type RoofPlanShape = "follows-deck" | "square" | "rect" | "hexagon" | "octagon";
-export const ROOF_PLAN_SHAPES: readonly RoofPlanShape[] = ["follows-deck", "square", "rect", "hexagon", "octagon"];
-export const ROOF_PLAN_LABEL: Record<RoofPlanShape, string> = { "follows-deck": "Follows the deck", square: "Square", rect: "Rectangle", hexagon: "Hexagon", octagon: "Octagon" };
+/** The roof's outline in plan: the deck's own rectangle, or its own figure. "Round" is framed as a 16-sided ring. */
+export type RoofPlanShape = "follows-deck" | "square" | "rect" | "hexagon" | "octagon" | "round";
+export const ROOF_PLAN_SHAPES: readonly RoofPlanShape[] = ["follows-deck", "square", "rect", "hexagon", "octagon", "round"];
+export const ROOF_PLAN_LABEL: Record<RoofPlanShape, string> = { "follows-deck": "Follows the deck", square: "Square", rect: "Rectangle", hexagon: "Hexagon", octagon: "Octagon", round: "Round" };
+export const isPolygonShape = (s: RoofPlanShape): boolean => s === "hexagon" || s === "octagon" || s === "round";
+/** A pergola's top: flat slats, louvers that turn, or rafters cut to an arch. */
+export type PergolaStyle = "flat" | "louvered" | "arched";
+export const PERGOLA_STYLE_LABEL: Record<PergolaStyle, string> = { flat: "Flat slats", louvered: "Louvers that turn", arched: "Arched rafters" };
+/** Walls between the posts: none, screen panels with a door, lattice, or solid privacy panels. */
+export type WallFill = "none" | "screen" | "lattice" | "solid";
+export const WALL_FILL_LABEL: Record<WallFill, string> = { none: "Open between the posts", screen: "Screened, with a door", lattice: "Lattice panels", solid: "Solid privacy panels" };
 /** On the house wall (a ledger carries the back of the roof) or free on its own posts. */
 export type RoofAttach = "wall" | "free";
 export type Roofing = "arch-shingle" | "3tab-shingle" | "designer-shingle" | "cedar-shake" | "metal-panel" | "standing-seam" | "none";
@@ -153,7 +182,8 @@ export interface RoofDesign {
   post: RoofPostSize;
   rafter: JoistSize | "auto";
   rafterSpacingIn: SpacingIn;
-  header: BeamSize | "auto";
+  /** "lvl": engineered beams throughout; "auto" goes to an LVL only where no sawn header reaches. */
+  header: BeamSize | "auto" | "lvl";
   ridge: RidgeKind;
   roofing: Roofing;
   roofDeck: RoofDeck;
@@ -165,7 +195,132 @@ export interface RoofDesign {
   braces: boolean;
   /** A pergola's slats on top of its rafters. */
   slats: { size: SlatSize; spacingIn: number };
+  /** A pergola's top (M3). */
+  pergolaStyle: PergolaStyle;
+  /** Walls between the posts (M3): what, and on how many sides (the house side is never filled). */
+  walls: { fill: WallFill; sides: number };
+  /** Lights and a fan in the roof (M3). */
+  extras: { fan: boolean; lights: number };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Stairs and rails (M3)                                               */
+/* ------------------------------------------------------------------ */
+
+export type StairSide = "front" | "left" | "right";
+export const STAIR_SIDE_LABEL: Record<StairSide, string> = { front: "Front", left: "Left side", right: "Right side" };
+export type StairLanding = "pad" | "patio" | "grade";
+export const STAIR_LANDING_LABEL: Record<StairLanding, string> = { pad: "New concrete pad", patio: "Existing patio or walk", grade: "Pavers on grade" };
+export type Handrail = "auto" | "both" | "one" | "none";
+
+/** One stair: a flight down an edge, or box steps wrapping the deck's open sides. */
+export interface StairDesign {
+  id: string;
+  side: StairSide;
+  /** Where its middle sits along that side, ft from the side's start (the left end of the front; the house end of a side). */
+  atFt: number;
+  widthFt: number;
+  /** From the main deck or from the lower level. */
+  level: "upper" | "lower";
+  /** Box-framed steps around the deck instead of a flight: the front, three open sides, or all four of a detached deck. */
+  wrap: boolean;
+  wrapSides: 1 | 3 | 4;
+  landing: StairLanding;
+  handrail: Handrail;
+}
+export const STAIR_LIMITS = { widthFt: { min: 3, max: 12 }, count: 6 } as const;
+
+export type RailInfill = "balusters" | "cable" | "glass" | "panel" | "horizontal";
+export const RAIL_INFILL_LABEL: Record<RailInfill, string> = { balusters: "Balusters", cable: "Cable", glass: "Glass panels", panel: "Panels", horizontal: "Horizontal rails" };
+export type RailLighting = "none" | "post-caps" | "post-caps-risers";
+export const RAIL_LIGHTING_LABEL: Record<RailLighting, string> = { none: "No lights", "post-caps": "Lit post caps", "post-caps-risers": "Lit post caps and stair risers" };
+
+/** The railing: its system, height, infill, post spacing, cap and lights. The feet come from the open edges. */
+export interface RailDesign {
+  type: RailTypeId;
+  heightIn: 36 | 42;
+  infill: RailInfill | "auto";
+  postSpacingFt: 4 | 6 | 8;
+  /** A flat 2x6 drink cap on wood rails. */
+  cap: boolean;
+  lighting: RailLighting;
+  /** A custom system's installed price per foot. */
+  customPerFt: number;
+  /** Rail on the lower level too (where its height asks for one it is always on). */
+  lowerLevel: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/*  The site, a lower level, patterns (M3)                              */
+/* ------------------------------------------------------------------ */
+
+/** What the address said about the ground: snow, its fall across the deck, termites. */
+export interface SiteDesign {
+  /** Ground snow load, psf (0 = none / not known). The design load and the roof's page follow it. */
+  groundSnowPsf: number;
+  slope: SiteSlope;
+  termite: TermiteHazard | null;
+}
+
+/** A second, lower deck in front of the main one, a step or a short stair down. */
+export interface LowerLevel {
+  on: boolean;
+  widthFt: number;
+  depthFt: number;
+  /** How far below the main deck it sits, inches. */
+  dropIn: number;
+  align: "left" | "centre" | "right";
+}
+export const LOWER_LIMITS = { widthFt: { min: 4, max: 60 }, depthFt: { min: 4, max: 30 }, dropIn: { min: 4, max: 96 } } as const;
+
+export type DeckPattern = "straight" | "diagonal" | "herringbone";
+export const PATTERN_LABEL: Record<DeckPattern, string> = { straight: "Square to the joists", diagonal: "Diagonal, 45°", herringbone: "Herringbone" };
+
+/* ------------------------------------------------------------------ */
+/*  Electrical and accessories (M3)                                     */
+/* ------------------------------------------------------------------ */
+
+export type FixtureKind = "led-strip" | "post-cap" | "step-light" | "string-light" | "sconce" | "ceiling-light" | "chandelier" | "fan" | "outlet" | "heater" | "flood";
+export const FIXTURE_KINDS: readonly FixtureKind[] = ["led-strip", "post-cap", "step-light", "string-light", "sconce", "ceiling-light", "chandelier", "fan", "outlet", "heater", "flood"];
+export const FIXTURE_LABEL: Record<FixtureKind, string> = {
+  "led-strip": "LED strip under the rail or the headers",
+  "post-cap": "Lit post caps",
+  "step-light": "Stair riser lights",
+  "string-light": "String lights post to post",
+  sconce: "Wall sconce on a post",
+  "ceiling-light": "Ceiling light",
+  chandelier: "Chandelier at the peak",
+  fan: "Ceiling fan",
+  outlet: "Weatherproof outlet, GFCI",
+  heater: "Infrared patio heater",
+  flood: "Security flood light, motion",
+};
+/** Who buys the fixture: the shop prices it, or the client brings their own — then it is drawn as a sample and left to be determined. */
+export type FixtureSupply = "we" | "client";
+export type MountKind = "post" | "header" | "rail" | "deck" | "ceiling" | "wall" | "stair" | "peak";
+
+export interface Fixture {
+  id: string;
+  kind: FixtureKind;
+  supply: FixtureSupply;
+  /** How many (for strips, feet are worked out from where they run). */
+  qty: number;
+  /** Where it was put — plan inches and height, and what it is on — or null for the smart default. */
+  at: { x: number; y: number; z: number; on: MountKind } | null;
+  /** Heaters: 240-volt (4 kW) instead of a plug-in-sized 120-volt (1.5 kW). */
+  volts240?: boolean;
+}
+
+export interface ElectricalDesign {
+  fixtures: Fixture[];
+  /** Feet from the house's panel to where the feed reaches the structure. */
+  feedFt: number;
+  /** Which end of the house wall the feed comes from. */
+  panelSide: "left" | "right";
+  /** Lights on a photocell/timer (the fixtures' own motion sensors aside). */
+  timer: boolean;
+}
+export const ELECTRICAL_LIMITS = { feedFt: { min: 5, max: 300 }, qty: { min: 1, max: 40 }, fixtures: 40 } as const;
 
 /** A photo of the back of the house, kept with the design so the client sees where the deck goes. */
 export interface DeckPhoto {
@@ -176,6 +331,8 @@ export interface DeckPhoto {
   h: number;
   /** Where the deck's elevation was placed on it: the ground line's left end and its width, as fractions of the picture. */
   placed: { x: number; y: number; w: number } | null;
+  /** What the smart fit found on it (lib/deck/photoFit), kept so the studio can say it after a reload; null or absent when placed by hand. */
+  fit?: { by: "door" | "eave" | "none"; pxPerFt: number; wallFt: number | null; suggestedHeightIn: number | null; door: boolean; windows: number; jog: boolean; confidence: number; notes: string[]; offer: JogOffer | null; read: WallRead | null } | null;
 }
 
 export interface DeckDesign {
@@ -223,26 +380,35 @@ export interface DeckDesign {
   };
   decking: {
     product: string;
-    /** Boards at 45° to the joists. */
+    /** Boards at 45° to the joists (kept for the pattern's sake: `pattern` is what is read). */
     diagonal: boolean;
+    pattern: DeckPattern;
+    /** Picture-frame border boards around the edge: none, one or two. */
+    border: 0 | 1 | 2;
     fastening: "auto" | "screws" | "hidden";
     fascia: "auto" | "none" | "match";
     wastePct: number;
   };
   extras: {
-    /** Railing as an allowance: a type and a length ("auto" = every open edge when a guard is required). */
-    rail: RailTypeId;
+    /** Feet of railing typed by hand; "auto" = every open edge less the stair openings, where a guard is required or a rail chosen. */
     railFt: number | "auto";
-    /** The shop's own price per foot for a custom rail, installed. */
-    railCustomPerFt: number;
-    /** Flights of stairs, priced per step until the stair builder lands. */
-    stairFlights: number;
-    stairWidthFt: number;
     /** Tear-out of an old deck, sq ft. */
     demoSqFt: number;
     /** Stainless connectors and fasteners (within 300 ft of salt water the code requires them). */
     stainless: boolean;
+    /** A drainage system under the joists, for a dry space below a high deck (M3). */
+    underDeckDrain: boolean;
   };
+  /** The railing (M3) — "none" leaves the edges open. */
+  rail: RailDesign;
+  /** The stairs (M3). */
+  stairs: StairDesign[];
+  /** A lower level in front (M3). */
+  lower: LowerLevel;
+  /** The site (M3). */
+  site: SiteDesign;
+  /** Lights, outlets, heaters and the wiring to them (M3). */
+  electrical: ElectricalDesign;
   /** What stands on it (M2). A bare deck has `structure: "deck"`; its `roof` is kept so switching back and forth loses nothing. */
   structure: Structure;
   floor: Floor;
@@ -263,10 +429,11 @@ export const DECK_LIMITS = {
   aboveGradeIn: { min: 0, max: 12 },
   wastePct: { min: 0, max: 30 },
   railFt: { min: 0, max: 400 },
-  stairFlights: { min: 0, max: 6 },
-  stairWidthFt: { min: 3, max: 12 },
   demoSqFt: { min: 0, max: 4000 },
   railCustomPerFt: { min: 0, max: 1000 },
+  bulgeFt: { min: 1, max: 8 },
+  clipFt: { min: 1, max: 6 },
+  groundSnowPsf: { min: 0, max: 300 },
 } as const;
 
 export const ROOF_LIMITS = {
@@ -277,6 +444,8 @@ export const ROOF_LIMITS = {
   eaveHeightIn: { min: 84, max: 144 },
   overhangIn: { min: 0, max: 36 },
   slatSpacingIn: { min: 3, max: 24 },
+  wallSides: { min: 1, max: 16 },
+  lights: { min: 0, max: 12 },
 } as const;
 
 /** The roof a structure starts with — a gable over a covered deck, a square pyramid gazebo, a pergola of 2x2 slats. */
@@ -305,7 +474,36 @@ export function defaultRoofDesign(structure: Structure = "covered-deck"): RoofDe
     gutters: { kind: structure === "covered-deck" ? "k5" : "none", guards: false },
     braces: true,
     slats: { size: "2x2", spacingIn: 12 },
+    pergolaStyle: "flat",
+    walls: { fill: "none", sides: 3 },
+    extras: { fan: false, lights: 0 },
   };
+}
+
+/** The railing a deck starts with: none chosen — the checks ask for one where the height requires it. */
+export function defaultRailDesign(): RailDesign {
+  return { type: "none", heightIn: 36, infill: "auto", postSpacingFt: 6, cap: true, lighting: "none", customPerFt: 0, lowerLevel: true };
+}
+
+/** A flight of stairs where a contractor usually puts one: down the front, in the middle, 4 ft wide, onto a new pad. */
+export function defaultStair(id = "s1", side: StairSide = "front", atFt = 0): StairDesign {
+  return { id, side, atFt, widthFt: 4, level: "upper", wrap: false, wrapSides: 1, landing: "pad", handrail: "auto" };
+}
+
+export function defaultLowerLevel(): LowerLevel {
+  return { on: false, widthFt: 12, depthFt: 8, dropIn: 7.5, align: "centre" };
+}
+
+export function defaultSite(): SiteDesign {
+  return { groundSnowPsf: 0, slope: flatSlope(), termite: null };
+}
+
+export function defaultElectrical(): ElectricalDesign {
+  return { fixtures: [], feedFt: 40, panelSide: "left", timer: false };
+}
+
+export function defaultFixture(id: string, kind: FixtureKind): Fixture {
+  return { id, kind, supply: "we", qty: 1, at: null, volts240: false };
 }
 
 /** A new deck for a shop in `state`: the owner's standards, the region's lumber. */
@@ -335,8 +533,13 @@ export function defaultDeckDesign(opts: { state?: string | null; frostIn?: numbe
     },
     ledger: { fastener: "lag", lateral: "two" },
     footing: { type: "poured", aboveGradeIn: 3, frostAlways: false },
-    decking: { product: defaultDecking(opts.state), diagonal: false, fastening: "auto", fascia: "auto", wastePct: 10 },
-    extras: { rail: "none", railFt: "auto", railCustomPerFt: 0, stairFlights: 0, stairWidthFt: 4, demoSqFt: 0, stainless: false },
+    decking: { product: defaultDecking(opts.state), diagonal: false, pattern: "straight", border: 0, fastening: "auto", fascia: "auto", wastePct: 10 },
+    extras: { railFt: "auto", demoSqFt: 0, stainless: false, underDeckDrain: false },
+    rail: defaultRailDesign(),
+    stairs: [],
+    lower: defaultLowerLevel(),
+    site: defaultSite(),
+    electrical: defaultElectrical(),
     structure: "deck",
     floor: "deck",
     roof: defaultRoofDesign("covered-deck"),
@@ -357,7 +560,15 @@ function normalizeShape(raw: unknown, fallback: DeckShape): DeckShape {
   const r = obj(raw);
   const widthFt = toInch(clamp(num(r.widthFt, fallback.widthFt), DECK_LIMITS.widthFt.min, DECK_LIMITS.widthFt.max));
   const depthFt = toInch(clamp(num(r.depthFt, fallback.depthFt), DECK_LIMITS.depthFt.min, DECK_LIMITS.depthFt.max));
-  if (r.kind !== "L") return { kind: "rect", widthFt, depthFt };
+  if (r.kind !== "L") {
+    const f = obj(r.front);
+    const kind = oneOf(f.kind, ["straight", "curve", "clipped"] as const, "straight");
+    if (kind === "straight") return { kind: "rect", widthFt, depthFt };
+    // A bow no deeper than a third of the width stays an arc a crew can bend; a clip leaves at least 2 ft of straight front.
+    const bulgeFt = toInch(clamp(num(f.bulgeFt, 2), DECK_LIMITS.bulgeFt.min, Math.min(DECK_LIMITS.bulgeFt.max, widthFt / 3)));
+    const clipFt = toInch(clamp(num(f.clipFt, 2), DECK_LIMITS.clipFt.min, Math.min(DECK_LIMITS.clipFt.max, (widthFt - 2) / 2, depthFt - 2)));
+    return { kind: "rect", widthFt, depthFt, front: { kind, bulgeFt, clipFt } };
+  }
   const n = obj(r.notch);
   const corner = oneOf(n.corner, NOTCH_CORNERS, "front-right");
   // Each leg keeps at least 3 ft; a rectangle too small for that stays a rectangle.
@@ -407,13 +618,24 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
   const beam: BeamSize | "auto" = beamKind === "solid" ? (isSolidBeam(beamRaw) ? beamRaw : "auto") : (BUILT_UP_CHOICES as readonly string[]).includes(beamRaw) ? (beamRaw as BuiltUpBeam) : "auto";
   const overhangFt = f.overhangFt === "auto" || f.overhangFt === undefined ? "auto" : toInch(clamp(num(f.overhangFt, 0), DECK_LIMITS.overhangFt.min, DECK_LIMITS.overhangFt.max));
   const railFt = ex.railFt === "auto" || ex.railFt === undefined ? "auto" : Math.round(clamp(num(ex.railFt, 0), DECK_LIMITS.railFt.min, DECK_LIMITS.railFt.max) * 10) / 10;
+  const shape = normalizeShape(r.shape, d.shape);
+  const heightIn = Math.round(clamp(num(r.heightIn, d.heightIn), DECK_LIMITS.heightIn.min, DECK_LIMITS.heightIn.max) * 4) / 4;
+  const lower = normalizeLower(r.lower, shape, heightIn);
+  // A v2 design carried the rail as an allowance in `extras` and the stairs as a count of flights.
+  const rail = normalizeRail(r.rail, ex);
+  const stairs = normalizeStairs(r.stairs, ex, shape, placement, lower);
+  const site = normalizeSite(r.site, num(r.loadPsf, d.loadPsf));
+  const electrical = normalizeElectrical(r.electrical, rail, obj(r.roof));
+  // The pattern; an older design's `diagonal: true` still means a diagonal when the pattern says nothing more.
+  const patternRaw: DeckPattern = oneOf(dk.pattern, ["straight", "diagonal", "herringbone"] as const, dk.diagonal === true ? "diagonal" : "straight");
+  const pattern: DeckPattern = patternRaw === "straight" && dk.diagonal === true ? "diagonal" : patternRaw;
 
   return {
     v: DECK_DESIGN_VERSION,
-    shape: normalizeShape(r.shape, d.shape),
+    shape,
     placement,
     wall,
-    heightIn: Math.round(clamp(num(r.heightIn, d.heightIn), DECK_LIMITS.heightIn.min, DECK_LIMITS.heightIn.max) * 4) / 4,
+    heightIn,
     loadPsf: oneOf(num(r.loadPsf, d.loadPsf), LOADS, d.loadPsf) as LoadPsf,
     soilPsf: oneOf(num(r.soilPsf, d.soilPsf), SOILS, d.soilPsf) as SoilPsf,
     frostIn: Math.round(clamp(num(r.frostIn, d.frostIn), DECK_LIMITS.frostIn.min, DECK_LIMITS.frostIn.max)),
@@ -439,24 +661,57 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
     },
     decking: {
       product: oneOf(dk.product, DECKING.map((p) => p.id), d.decking.product),
-      diagonal: dk.diagonal === true,
+      diagonal: pattern !== "straight",
+      pattern,
+      border: (oneOf(num(dk.border, 0), [0, 1, 2] as const, 0) as 0 | 1 | 2),
       fastening: oneOf(dk.fastening, ["auto", "screws", "hidden"] as const, d.decking.fastening),
       fascia: oneOf(dk.fascia, ["auto", "none", "match"] as const, d.decking.fascia),
       wastePct: Math.round(clamp(num(dk.wastePct, d.decking.wastePct), DECK_LIMITS.wastePct.min, DECK_LIMITS.wastePct.max)),
     },
     extras: {
-      rail: oneOf(ex.rail, RAIL_TYPES.map((t) => t.id), d.extras.rail),
       railFt,
-      railCustomPerFt: Math.round(clamp(num(ex.railCustomPerFt, 0), DECK_LIMITS.railCustomPerFt.min, DECK_LIMITS.railCustomPerFt.max) * 100) / 100,
-      stairFlights: Math.round(clamp(num(ex.stairFlights, 0), DECK_LIMITS.stairFlights.min, DECK_LIMITS.stairFlights.max)),
-      stairWidthFt: Math.round(clamp(num(ex.stairWidthFt, d.extras.stairWidthFt), DECK_LIMITS.stairWidthFt.min, DECK_LIMITS.stairWidthFt.max) * 2) / 2,
       demoSqFt: Math.round(clamp(num(ex.demoSqFt, 0), DECK_LIMITS.demoSqFt.min, DECK_LIMITS.demoSqFt.max)),
       stainless: ex.stainless === true,
+      underDeckDrain: ex.underDeckDrain === true && heightIn >= 84,
     },
+    rail,
+    stairs,
+    lower,
+    site,
+    electrical,
     structure,
     floor,
     roof,
     photo,
+  };
+}
+
+function normalizeElectrical(raw: unknown, rail: RailDesign, legacyRoof: Record<string, unknown>): ElectricalDesign {
+  const d = defaultElectrical();
+  const r = obj(raw);
+  const list = Array.isArray(r.fixtures) ? r.fixtures : [];
+  const out: Fixture[] = [];
+  list.slice(0, ELECTRICAL_LIMITS.fixtures).forEach((v, i) => {
+    const f = obj(v);
+    if (!FIXTURE_KINDS.includes(f.kind as FixtureKind)) return;
+    const kind = f.kind as FixtureKind;
+    const a = obj(f.at);
+    const at = typeof a.x === "number" && typeof a.y === "number" ? { x: clamp(num(a.x, 0), -600, 1200), y: clamp(num(a.y, 0), -600, 1200), z: clamp(num(a.z, 0), -60, 400), on: oneOf(a.on, ["post", "header", "rail", "deck", "ceiling", "wall", "stair", "peak"] as const, "deck") } : null;
+    const id = typeof f.id === "string" && /^[a-z0-9-]{1,14}$/.test(f.id) ? f.id : `e${i + 1}`;
+    if (out.some((o) => o.id === id)) return;
+    out.push({ id, kind, supply: oneOf(f.supply, ["we", "client"] as const, "we"), qty: Math.round(clamp(num(f.qty, 1), ELECTRICAL_LIMITS.qty.min, ELECTRICAL_LIMITS.qty.max)), at, volts240: kind === "heater" && f.volts240 === true });
+  });
+  // Older designs said "lit post caps" on the rail and a fan or lights on the roof: they become fixtures.
+  if (rail.lighting !== "none" && !out.some((f) => f.kind === "post-cap")) out.push({ id: "e-caps", kind: "post-cap", supply: "we", qty: 1, at: null });
+  if (rail.lighting === "post-caps-risers" && !out.some((f) => f.kind === "step-light")) out.push({ id: "e-steps", kind: "step-light", supply: "we", qty: 1, at: null });
+  const lx = obj(legacyRoof.extras);
+  if (lx.fan === true && !out.some((f) => f.kind === "fan")) out.push({ id: "e-fan", kind: "fan", supply: "we", qty: 1, at: null });
+  if (num(lx.lights, 0) > 0 && !out.some((f) => f.kind === "ceiling-light")) out.push({ id: "e-lights", kind: "ceiling-light", supply: "we", qty: Math.round(clamp(num(lx.lights, 0), 1, 12)), at: null });
+  return {
+    fixtures: out,
+    feedFt: Math.round(clamp(num(r.feedFt, d.feedFt), ELECTRICAL_LIMITS.feedFt.min, ELECTRICAL_LIMITS.feedFt.max)),
+    panelSide: oneOf(r.panelSide, ["left", "right"] as const, d.panelSide),
+    timer: r.timer === true,
   };
 }
 
@@ -480,21 +735,26 @@ export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, 
   if (structure === "gazebo" && kind === "shed") kind = "hip";
   let shape = oneOf(pl.shape, ROOF_PLAN_SHAPES, d.plan.shape);
   if (floor !== "deck" && shape === "follows-deck") shape = "rect";
-  if ((shape === "hexagon" || shape === "octagon") && kind !== "pyramid" && kind !== "double-tier" && kind !== "pergola") kind = "pyramid";
+  if (isPolygonShape(shape) && kind !== "pyramid" && kind !== "double-tier" && kind !== "pergola") kind = "pyramid";
   if (kind === "pyramid" && shape === "rect") shape = "square";
   if (kind === "shed" && shape !== "follows-deck") shape = shape === "square" ? "square" : "rect";
+  // A gambrel or a Dutch gable needs two gable ends: never over a polygon, never on the wall.
+  if ((kind === "gambrel" || kind === "dutch-gable") && isPolygonShape(shape)) kind = "pyramid";
   let attach = oneOf(r.attach, ["wall", "free"] as const, d.attach);
   // The wall carries a roof only where the deck meets it (or where a gazebo on its own floor is built against it).
   if (floor === "deck" && placement === "detached") attach = "free";
-  if (shape === "hexagon" || shape === "octagon") attach = "free";
-  if (kind === "pyramid" || kind === "double-tier") attach = "free";
+  if (isPolygonShape(shape)) attach = "free";
+  if (kind === "pyramid" || kind === "double-tier" || kind === "gambrel" || kind === "dutch-gable") attach = "free";
   const widthFt = toInch(clamp(num(pl.widthFt, d.plan.widthFt), ROOF_LIMITS.planFt.min, ROOF_LIMITS.planFt.max));
   const depthFt = shape === "square" ? widthFt : toInch(clamp(num(pl.depthFt, d.plan.depthFt), ROOF_LIMITS.planFt.min, ROOF_LIMITS.planFt.max));
   const roofing = structure === "pergola" ? "none" : (oneOf(r.roofing, ROOFINGS, d.roofing) === "none" ? d.roofing : oneOf(r.roofing, ROOFINGS, d.roofing));
   const metal = roofing === "metal-panel" || roofing === "standing-seam";
   const rafterRaw = r.rafter === "auto" ? "auto" : oneOf(r.rafter, JOIST_SIZES, "auto" as JoistSize | "auto");
   const headerRaw = typeof r.header === "string" ? r.header : "auto";
-  const header: BeamSize | "auto" = isSolidBeam(headerRaw) ? headerRaw : (BUILT_UP_CHOICES as readonly string[]).includes(headerRaw) ? (headerRaw as BuiltUpBeam) : "auto";
+  const header: BeamSize | "auto" | "lvl" = headerRaw === "lvl" ? "lvl" : isSolidBeam(headerRaw) ? headerRaw : (BUILT_UP_CHOICES as readonly string[]).includes(headerRaw) ? (headerRaw as BuiltUpBeam) : "auto";
+  const wa = obj(r.walls);
+  const rx = obj(r.extras);
+  const ringSides = shape === "hexagon" ? 6 : shape === "octagon" ? 8 : shape === "round" ? 16 : 4;
   const loadRaw = r.load === "auto" || r.load === undefined ? "auto" : num(r.load, 0);
   const load: RoofLoadChoice = loadRaw === "auto" ? "auto" : ([20, 30, 50, 70] as const).find((l) => l === loadRaw) ?? "auto";
   return {
@@ -529,7 +789,179 @@ export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, 
     gutters: { kind: kind === "pergola" ? "none" : oneOf(gu.kind, GUTTER_KINDS, d.gutters.kind), guards: gu.guards === true },
     braces: typeof r.braces === "boolean" ? r.braces : d.braces,
     slats: { size: oneOf(sl.size, ["2x2", "2x4", "2x6"] as const, d.slats.size), spacingIn: Math.round(clamp(num(sl.spacingIn, d.slats.spacingIn), ROOF_LIMITS.slatSpacingIn.min, ROOF_LIMITS.slatSpacingIn.max)) },
+    pergolaStyle: kind === "pergola" ? oneOf(r.pergolaStyle, ["flat", "louvered", "arched"] as const, d.pergolaStyle) : "flat",
+    walls: { fill: oneOf(wa.fill, ["none", "screen", "lattice", "solid"] as const, d.walls.fill), sides: Math.round(clamp(num(wa.sides, Math.min(3, ringSides - (attach === "wall" ? 1 : 0))), ROOF_LIMITS.wallSides.min, Math.min(ROOF_LIMITS.wallSides.max, ringSides))) },
+    extras: { fan: kind !== "pergola" && rx.fan === true, lights: Math.round(clamp(num(rx.lights, 0), ROOF_LIMITS.lights.min, ROOF_LIMITS.lights.max)) },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  M3 normalisers                                                      */
+/* ------------------------------------------------------------------ */
+
+function normalizeRail(raw: unknown, legacyExtras: Record<string, unknown>): RailDesign {
+  const d = defaultRailDesign();
+  const r = obj(raw);
+  const types = RAIL_TYPES.map((t) => t.id);
+  const type = oneOf(r.type, types, oneOf(legacyExtras.rail, types, d.type));
+  return {
+    type,
+    heightIn: num(r.heightIn, 36) >= 42 ? 42 : 36,
+    infill: oneOf(r.infill, ["auto", "balusters", "cable", "glass", "panel", "horizontal"] as const, d.infill),
+    postSpacingFt: (oneOf(num(r.postSpacingFt, 6), [4, 6, 8] as const, 6) as 4 | 6 | 8),
+    cap: typeof r.cap === "boolean" ? r.cap : d.cap,
+    lighting: oneOf(r.lighting, ["none", "post-caps", "post-caps-risers"] as const, d.lighting),
+    customPerFt: Math.round(clamp(num(r.customPerFt, num(legacyExtras.railCustomPerFt, 0)), DECK_LIMITS.railCustomPerFt.min, DECK_LIMITS.railCustomPerFt.max) * 100) / 100,
+    lowerLevel: typeof r.lowerLevel === "boolean" ? r.lowerLevel : d.lowerLevel,
+  };
+}
+
+function normalizeStairs(raw: unknown, legacyExtras: Record<string, unknown>, shape: DeckShape, placement: Placement, lower: LowerLevel): StairDesign[] {
+  const list = Array.isArray(raw) ? raw : null;
+  const out: StairDesign[] = [];
+  const sideLength = (side: StairSide, level: "upper" | "lower") => (level === "lower" ? (side === "front" ? lower.widthFt : lower.depthFt) : side === "front" ? shape.widthFt : shape.depthFt);
+  const one = (v: unknown, i: number): StairDesign | null => {
+    const s = obj(v);
+    const side = oneOf(s.side, ["front", "left", "right"] as const, "front");
+    const level: "upper" | "lower" = lower.on && s.level === "lower" ? "lower" : "upper";
+    const widthFt = Math.round(clamp(num(s.widthFt, 4), STAIR_LIMITS.widthFt.min, STAIR_LIMITS.widthFt.max) * 2) / 2;
+    const L = sideLength(side, level);
+    const atFt = toInch(clamp(num(s.atFt, L / 2), widthFt / 2, Math.max(widthFt / 2, L - widthFt / 2)));
+    const wrap = s.wrap === true && side === "front";
+    const wrapSides = (oneOf(num(s.wrapSides, 1), placement === "detached" ? ([1, 3, 4] as const) : ([1, 3] as const), 1) as 1 | 3 | 4);
+    return {
+      id: typeof s.id === "string" && /^[a-z0-9-]{1,12}$/.test(s.id) ? s.id : `s${i + 1}`,
+      side,
+      atFt,
+      widthFt,
+      level,
+      wrap,
+      wrapSides,
+      landing: oneOf(s.landing, ["pad", "patio", "grade"] as const, "pad"),
+      handrail: oneOf(s.handrail, ["auto", "both", "one", "none"] as const, "auto"),
+    };
+  };
+  if (list) {
+    list.slice(0, STAIR_LIMITS.count).forEach((v, i) => {
+      const st = one(v, i);
+      if (st && !out.some((o) => o.id === st.id)) out.push(st);
+    });
+  } else {
+    // A v2 design: `extras.stairFlights` flights of `extras.stairWidthFt` down the front, spread along it.
+    const flights = Math.round(clamp(num(legacyExtras.stairFlights, 0), 0, STAIR_LIMITS.count));
+    const widthFt = Math.round(clamp(num(legacyExtras.stairWidthFt, 4), STAIR_LIMITS.widthFt.min, STAIR_LIMITS.widthFt.max) * 2) / 2;
+    for (let i = 0; i < flights; i++) {
+      const st = defaultStair(`s${i + 1}`, "front", toInch((shape.widthFt * (i + 1)) / (flights + 1)));
+      st.widthFt = widthFt;
+      out.push(st);
+    }
+  }
+  // At most one wrap-around; it owns the front.
+  let wrapped = false;
+  return out.filter((st) => {
+    if (!st.wrap) return true;
+    if (wrapped) return false;
+    wrapped = true;
+    return true;
+  });
+}
+
+function normalizeLower(raw: unknown, shape: DeckShape, heightIn: number): LowerLevel {
+  const d = defaultLowerLevel();
+  const r = obj(raw);
+  const front = shape.kind === "rect" ? shape.front : undefined;
+  const on = r.on === true && shape.kind === "rect" && heightIn > LOWER_LIMITS.dropIn.min + 4 && front?.kind !== "curve";
+  const maxDrop = Math.max(LOWER_LIMITS.dropIn.min, Math.min(LOWER_LIMITS.dropIn.max, heightIn - 4));
+  // Between clipped corners the lower deck can be no wider than the straight part of the front.
+  const maxWidth = Math.max(LOWER_LIMITS.widthFt.min, Math.min(LOWER_LIMITS.widthFt.max, shape.widthFt - (front?.kind === "clipped" ? 2 * front.clipFt : 0)));
+  return {
+    on,
+    widthFt: toInch(clamp(num(r.widthFt, Math.min(d.widthFt, maxWidth)), LOWER_LIMITS.widthFt.min, maxWidth)),
+    depthFt: toInch(clamp(num(r.depthFt, d.depthFt), LOWER_LIMITS.depthFt.min, LOWER_LIMITS.depthFt.max)),
+    dropIn: Math.round(clamp(num(r.dropIn, d.dropIn), LOWER_LIMITS.dropIn.min, maxDrop) * 4) / 4,
+    align: oneOf(r.align, ["left", "centre", "right"] as const, d.align),
+  };
+}
+
+function normalizeSite(raw: unknown, loadPsf: number): SiteDesign {
+  const r = obj(raw);
+  const sl = obj(r.slope);
+  const d = defaultSite();
+  // A v2 design knew only its design load: a snow load above 40 psf is read back from it.
+  const legacySnow = loadPsf > 40 ? loadPsf : 0;
+  return {
+    groundSnowPsf: Math.round(clamp(num(r.groundSnowPsf, legacySnow), DECK_LIMITS.groundSnowPsf.min, DECK_LIMITS.groundSnowPsf.max)),
+    slope: {
+      outDropIn: Math.round(clamp(num(sl.outDropIn, 0), SLOPE_LIMITS.dropIn.min, SLOPE_LIMITS.dropIn.max) * 2) / 2,
+      acrossDropIn: Math.round(clamp(num(sl.acrossDropIn, 0), SLOPE_LIMITS.dropIn.min, SLOPE_LIMITS.dropIn.max) * 2) / 2,
+    },
+    termite: oneOf(r.termite, ["very-heavy", "moderate-heavy", "slight-moderate", "none-slight"] as const, d.termite as TermiteHazard) ?? null,
+  };
+}
+
+/** True when the design has a lower level in front of the main deck. */
+export function hasLowerLevel(design: DeckDesign): boolean {
+  return hasDeck(design) && design.lower.on && design.shape.kind === "rect";
+}
+
+/* ------------------------------------------------------------------ */
+/*  The front edge as a line                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The deck's front edge at `x` (inches from the left), inches from the
+ * house: the depth for a straight front; farther out along the bow of a
+ * curve; the depth less the clip near a clipped corner. The curve is a
+ * circular arc through both corners rising `bulge` at the middle.
+ */
+export function frontEdgeAt(shape: DeckShape, xIn: number): number {
+  const D = Math.round(shape.depthFt * 12);
+  if (shape.kind !== "rect" || !shape.front || shape.front.kind === "straight") return D;
+  const W = Math.round(shape.widthFt * 12);
+  if (shape.front.kind === "clipped") {
+    const c = shape.front.clipFt * 12;
+    if (xIn < c) return D - (c - xIn);
+    if (xIn > W - c) return D - (xIn - (W - c));
+    return D;
+  }
+  const s = shape.front.bulgeFt * 12;
+  const half = W / 2;
+  const R = (half * half) / (2 * s) + s / 2;
+  const dx = xIn - half;
+  const inside = Math.max(0, R * R - dx * dx);
+  return D - (R - s) + Math.sqrt(inside);
+}
+
+/** The curve's radius, ft, for the bend check (Infinity when the front is not a curve). */
+export function frontRadiusFt(shape: DeckShape): number {
+  if (shape.kind !== "rect" || !shape.front || shape.front.kind !== "curve") return Infinity;
+  const half = shape.widthFt / 2;
+  const s = shape.front.bulgeFt;
+  return Math.round(((half * half) / (2 * s) + s / 2) * 10) / 10;
+}
+
+/** The front edge's length, inches: the arc, or the clipped line, or the width. */
+export function frontEdgeLengthIn(shape: DeckShape): number {
+  const W = Math.round(shape.widthFt * 12);
+  if (shape.kind !== "rect" || !shape.front || shape.front.kind === "straight") return W;
+  if (shape.front.kind === "clipped") {
+    const c = shape.front.clipFt * 12;
+    return W - 2 * c + 2 * c * Math.SQRT2;
+  }
+  const R = frontRadiusFt(shape) * 12;
+  const half = W / 2;
+  return 2 * R * Math.asin(Math.min(1, half / R));
+}
+
+function offerOf(raw: unknown): JogOffer | null {
+  const o = obj(raw);
+  if (typeof o.text !== "string" || typeof o.widthFt !== "number" || !Number.isFinite(o.widthFt)) return null;
+  const text = o.text.slice(0, 240);
+  if (o.kind === "recess") return { kind: "recess", widthFt: clamp(o.widthFt, 0, 60), text };
+  if (o.kind === "notch" && (o.corner === "back-left" || o.corner === "back-right") && typeof o.depthFt === "number" && Number.isFinite(o.depthFt)) {
+    return { kind: "notch", corner: o.corner, widthFt: clamp(o.widthFt, 0, 60), depthFt: clamp(o.depthFt, 0, 40), text };
+  }
+  return null;
 }
 
 function normalizePhoto(raw: unknown): DeckPhoto | null {
@@ -540,7 +972,24 @@ function normalizePhoto(raw: unknown): DeckPhoto | null {
   if (w < 16 || h < 16) return null;
   const p = obj(r.placed);
   const placed = typeof p.x === "number" && typeof p.y === "number" && typeof p.w === "number" ? { x: clamp(num(p.x, 0.1), -0.5, 1.5), y: clamp(num(p.y, 0.9), 0, 1.5), w: clamp(num(p.w, 0.8), 0.05, 3) } : null;
-  return { url: r.url, w, h, placed };
+  const f = obj(r.fit);
+  const fit =
+    r.fit && typeof f.pxPerFt === "number"
+      ? {
+          by: f.by === "door" ? ("door" as const) : f.by === "eave" ? ("eave" as const) : ("none" as const),
+          pxPerFt: clamp(num(f.pxPerFt, 0), 0, 10000),
+          wallFt: typeof f.wallFt === "number" && Number.isFinite(f.wallFt) ? Math.round(clamp(f.wallFt, 0, 500)) : null,
+          suggestedHeightIn: typeof f.suggestedHeightIn === "number" && Number.isFinite(f.suggestedHeightIn) ? Math.round(clamp(f.suggestedHeightIn, 0, 360)) : null,
+          door: f.door === true,
+          windows: Math.round(clamp(num(f.windows, 0), 0, 12)),
+          jog: f.jog === true,
+          confidence: clamp(num(f.confidence, 0), 0, 1),
+          notes: (Array.isArray(f.notes) ? f.notes : []).filter((n): n is string => typeof n === "string").map((n) => n.slice(0, 240)).slice(0, 7),
+          offer: offerOf(f.offer),
+          read: parseWallRead(f.read),
+        }
+      : null;
+  return { url: r.url, w, h, placed, fit };
 }
 
 /** True when the design has a deck frame under it (a bare or covered deck, or a gazebo/pergola standing on a deck). */
@@ -603,9 +1052,11 @@ export function shapeEdges(shape: DeckShape, placement: Placement): DeckEdge[] {
   const W = Math.round(shape.widthFt * 12);
   const D = Math.round(shape.depthFt * 12);
   const againstHouse = placement !== "detached";
-  const edge = (x0: number, y0: number, x1: number, y1: number, side: DeckEdge["side"], house: boolean): DeckEdge => ({ x0, y0, x1, y1, side, house: house && againstHouse, lengthIn: Math.abs(x1 - x0) + Math.abs(y1 - y0) });
+  const edge = (x0: number, y0: number, x1: number, y1: number, side: DeckEdge["side"], house: boolean, lengthIn?: number): DeckEdge => ({ x0, y0, x1, y1, side, house: house && againstHouse, lengthIn: lengthIn ?? Math.abs(x1 - x0) + Math.abs(y1 - y0) });
   if (shape.kind === "rect") {
-    return [edge(0, 0, W, 0, "back", true), edge(W, 0, W, D, "right", false), edge(0, D, W, D, "front", false), edge(0, 0, 0, D, "left", false)];
+    // A clipped front shortens the sides; a bowed one lengthens the front (its real length is the arc's).
+    const clip = shape.front?.kind === "clipped" ? shape.front.clipFt * 12 : 0;
+    return [edge(0, 0, W, 0, "back", true), edge(W, 0, W, D - clip, "right", false), edge(0, D, W, D, "front", false, frontEdgeLengthIn(shape)), edge(0, 0, 0, D - clip, "left", false)];
   }
   const [a, b] = zones;
   const left = shape.notch.corner.endsWith("left");
@@ -636,7 +1087,23 @@ export function shapeEdges(shape: DeckShape, placement: Placement): DeckEdge[] {
 export function shapeOutline(shape: DeckShape): Array<{ x: number; y: number }> {
   const W = Math.round(shape.widthFt * 12);
   const D = Math.round(shape.depthFt * 12);
-  if (shape.kind === "rect") return [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }, { x: 0, y: D }];
+  if (shape.kind === "rect") {
+    if (shape.front && shape.front.kind === "clipped") {
+      const c = shape.front.clipFt * 12;
+      return [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D - c }, { x: W - c, y: D }, { x: c, y: D }, { x: 0, y: D - c }];
+    }
+    if (shape.front && shape.front.kind === "curve") {
+      // The bow as a run of short straight pieces, right to left along the front.
+      const n = 8;
+      const pts: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }, { x: W, y: 0 }];
+      for (let k = 0; k <= n; k++) {
+        const x = W - (W * k) / n;
+        pts.push({ x, y: frontEdgeAt(shape, x) });
+      }
+      return pts;
+    }
+    return [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }, { x: 0, y: D }];
+  }
   const nw = Math.round(shape.notch.widthFt * 12);
   const nd = Math.round(shape.notch.depthFt * 12);
   switch (shape.notch.corner) {
@@ -652,7 +1119,14 @@ export function shapeOutline(shape: DeckShape): Array<{ x: number; y: number }> 
 }
 
 export function shapeAreaSqFt(shape: DeckShape): number {
-  return shapeZones(shape).reduce((a, z) => a + (z.x1 - z.x0) * (z.y1 - z.y0), 0) / 144;
+  const rect = shapeZones(shape).reduce((a, z) => a + (z.x1 - z.x0) * (z.y1 - z.y0), 0) / 144;
+  if (shape.kind !== "rect" || !shape.front || shape.front.kind === "straight") return rect;
+  if (shape.front.kind === "clipped") return rect - shape.front.clipFt * shape.front.clipFt;
+  // The circular segment outside the chord: R²·acos((R−s)/R) − (R−s)·√(2Rs − s²).
+  const R = frontRadiusFt(shape);
+  const s = shape.front.bulgeFt;
+  const seg = R * R * Math.acos(Math.min(1, (R - s) / R)) - (R - s) * Math.sqrt(Math.max(0, 2 * R * s - s * s));
+  return Math.round((rect + seg) * 100) / 100;
 }
 
 /** The size as a contractor says it: "16 ft × 12 ft", inches kept when there are any. */
@@ -667,7 +1141,9 @@ export function sizeWords(design: DeckDesign): string {
     if (p.shape === "hexagon" || p.shape === "octagon") return `${ft(p.acrossFt)} ${p.shape}`;
     return p.shape === "square" ? `${ft(p.widthFt)} square` : `${ft(p.widthFt)} × ${ft(p.depthFt)}`;
   }
-  return s.kind === "rect" ? `${ft(s.widthFt)} × ${ft(s.depthFt)}` : `${ft(s.widthFt)} × ${ft(s.depthFt)} L-shaped`;
+  const front = s.kind === "rect" && s.front && s.front.kind !== "straight" ? (s.front.kind === "curve" ? " curved front" : " clipped corners") : "";
+  const lower = design.lower.on && s.kind === "rect" ? " two levels" : "";
+  return s.kind === "rect" ? `${ft(s.widthFt)} × ${ft(s.depthFt)}${front}${lower}` : `${ft(s.widthFt)} × ${ft(s.depthFt)} L-shaped`;
 }
 
 /** What is being built, as a title: "16 ft × 12 ft covered deck", "12 ft octagon gazebo". */

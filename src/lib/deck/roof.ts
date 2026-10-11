@@ -48,7 +48,8 @@
 import { POST_ACTUAL_IN, THICK_2X_IN, DRESSED_DEPTH_IN, JOIST_SIZES, SOLID_BEAMS, builtUpBeamMaxSpanIn, solidBeamMaxSpanIn, solidBeamTabulated, joistDepthIn, postMaxHeightIn, type JoistSize, type PostSize, type SpeciesGroup } from "./codeTables";
 import { CEILING_FACTOR, ROOF_DEAD_PSF, RW_FACTOR, rafterMaxSpanIn, roofLoadFor, type RafterGroup, type RoofLoad } from "./roofTables";
 import { beamSpec, footingFor, type BeamSpec, type Footing } from "./frame";
-import { BUILT_UP_CHOICES, isSolidBeam, type BeamSize, type DeckDesign, type RoofDesign, type RoofKind, type Zone } from "./design";
+import { BUILT_UP_CHOICES, isPolygonShape, isSolidBeam, type BeamSize, type DeckDesign, type RoofDesign, type RoofKind, type WallFill, type Zone } from "./design";
+import { roofLoadForSnow } from "./site";
 import type { FramingSpecies } from "./catalog";
 import { deckRate, lumberKey, type DeckRateBook } from "./rates";
 import type { MarketSnapshot } from "../fence/market";
@@ -90,6 +91,28 @@ const SLAB_APRON_IN = 12;
 const SLAB_THICK_IN = 4;
 /** The top of a slab above the ground, inches. */
 const SLAB_TOP_IN = 4;
+/** A gambrel's lower slope (steep) and where it breaks; a Dutch gable's hips stop at this share of the run. */
+const GAMBREL_LOWER_PITCH = 20;
+const GAMBREL_BREAK_SHARE = 0.45;
+const DUTCH_CAP_SHARE = 0.6;
+/** A screened wall's kneewall height, its door, the louver blades. */
+const KNEEWALL_IN = 36;
+const DOOR_W_IN = 36;
+const DOOR_H_IN = 80;
+const LOUVER_BLADE_IN = 5.5;
+const LOUVER_PITCH_IN = 6;
+/** An arched pergola rafter rises this share of its length, 18 in. at most. */
+const ARCH_RISE_SHARE = 0.12;
+const ARCH_RISE_MAX_IN = 18;
+/** Engineered (LVL) beams: 2.0E stock, 1 3/4 in. a ply, the depths a yard carries. */
+const LVL_PLY_IN = 1.75;
+const LVL_DEPTHS_IN = [9.5, 11.875, 14, 16, 18] as const;
+const LVL_FB_PSI = 2600;
+const LVL_E_PSI = 2_000_000;
+const LVL_FV_PSI = 285;
+const LVL_DEFLECTION_RATIO = 240;
+/** A round gazebo is framed as a 16-sided ring with a post at every second corner. */
+const ROUND_SIDES = 16;
 
 /* ------------------------------------------------------------------ */
 /*  What comes out                                                     */
@@ -116,7 +139,11 @@ export type RoofRole =
   | "fascia-rake"
   | "gutter"
   | "downspout"
-  | "cupola";
+  | "cupola"
+  | "kneewall"
+  | "stud"
+  | "door"
+  | "fixture";
 
 /** One member of the roof, inches. `yaw` is the direction of its axis in plan (radians, from +x toward +y); `tilt` its rise along that axis. */
 export interface RoofMember {
@@ -142,7 +169,7 @@ export interface RoofMember {
   ground?: boolean;
 }
 
-export type PlaneKind = "sheathing" | "roofing" | "ceiling" | "soffit" | "slab";
+export type PlaneKind = "sheathing" | "roofing" | "ceiling" | "soffit" | "slab" | "wall" | "screen" | "louver" | "fixture";
 /** A flat polygon in space: [x, y, z, x, y, z, …], inches. */
 export interface RoofPlane {
   kind: PlaneKind;
@@ -229,6 +256,9 @@ export interface RoofFace {
   wallFt: number;
   /** The tier it belongs to. */
   tier: 1 | 2;
+  /** Its own slope (a gambrel's two faces differ) and the header top it springs from. */
+  slope: number;
+  baseTopIn: number;
 }
 
 export interface GutterPlan {
@@ -317,7 +347,17 @@ export interface RoofFrame {
   soffitSqFt: number;
   gutters: GutterPlan | null;
   slab: { sqFt: number; cuYd: number } | null;
-  hardware: { hurricaneTies: number; rafterHangers: number; postBases: number; postCaps: number; slabAnchors: number; braces: number; ledgerScrews: number; ringPlate: number; kingBrackets: number; wallHangers: number };
+  /** Walls between the posts (M3): what, where, and how much. */
+  walls: { fill: WallFill; segments: Array<{ x0: number; y0: number; x1: number; y1: number; lengthIn: number }>; sqFt: number; kneewallLf: number; doors: number } | null;
+  /** Louvered or arched pergola figures (M3). */
+  louvers: { sqFt: number; blades: number } | null;
+  archRafters: boolean;
+  /** Gambrel ties at the break, Dutch-gable gablets. */
+  breakTies: number;
+  gablets: number;
+  /** Any header or the ridge is an engineered beam. */
+  engineered: boolean;
+  hardware: { hurricaneTies: number; rafterHangers: number; postBases: number; postCaps: number; slabAnchors: number; braces: number; ledgerScrews: number; ringPlate: number; kingBrackets: number; wallHangers: number; gussets: number };
   flags: {
     rafterBeyondTable: boolean;
     headerBeyondTable: string[];
@@ -326,12 +366,16 @@ export interface RoofFrame {
     speciesEstimated: boolean;
     tooWideForHip: boolean;
     postSpliced: boolean;
+    /** No engineered beam in the list carries it either. */
+    engineeredBeyond: boolean;
   };
 }
 
 export interface RoofBuildOptions {
   rates?: DeckRateBook;
   market?: MarketSnapshot;
+  /** The ground under a point of the plan, inches (the site's slope). */
+  groundAt?: (x: number, y: number) => number;
 }
 
 /** What the roof needs to know about the deck it stands on: its rectangles and where its footings top out. */
@@ -384,8 +428,8 @@ export function roofRing(design: DeckDesign, deck: DeckUnder | null): { pts: V2[
   const r = design.roof;
   const p = r.plan;
   const wall = r.attach === "wall";
-  if (p.shape === "hexagon" || p.shape === "octagon") {
-    const n = p.shape === "hexagon" ? 6 : 8;
+  if (isPolygonShape(p.shape)) {
+    const n = p.shape === "hexagon" ? 6 : p.shape === "octagon" ? 8 : ROUND_SIDES;
     const across = p.acrossFt * 12;
     const a = across / 2;
     const R = a / Math.cos(Math.PI / n);
@@ -461,6 +505,38 @@ interface FaceSpec {
   ringU0: number;
   ringU1: number;
   tier: 1 | 2;
+  /** Its own slope and the header top it springs from (a gambrel's upper face, a Dutch gable's gable above the hips). */
+  slope?: number;
+  baseTopIn?: number;
+}
+
+/**
+ * An engineered beam for a span: the lightest LVL (plies × depth) that carries
+ * `wLbPerFt` over `spanIn` in bending, shear and deflection (L/240), on the
+ * usual 2.0E figures. An ESTIMATE the maker's software confirms.
+ */
+export function sizeLvl(spanIn: number, wLbPerFt: number): BeamSpec | null {
+  const Lft = spanIn / 12;
+  const w = Math.max(50, wLbPerFt);
+  const Mlbin = ((w * Lft * Lft) / 8) * 12;
+  const V = (w * Lft) / 2;
+  const options: Array<{ plies: number; d: number }> = [];
+  for (const d of LVL_DEPTHS_IN) for (const plies of [1, 2, 3]) options.push({ plies, d });
+  options.sort((a, b) => a.plies * a.d - b.plies * b.d);
+  for (const o of options) {
+    const b = LVL_PLY_IN * o.plies;
+    const S = (b * o.d * o.d) / 6;
+    const I = (b * o.d * o.d * o.d) / 12;
+    const A = b * o.d;
+    const bending = LVL_FB_PSI * S >= Mlbin;
+    const shear = V <= (LVL_FV_PSI * A * 2) / 3;
+    const defl = (5 * (w / 12) * spanIn ** 4) / (384 * LVL_E_PSI * I) <= spanIn / LVL_DEFLECTION_RATIO;
+    if (bending && shear && defl) {
+      const dName = o.d === 11.875 ? "11⅞" : String(o.d);
+      return { size: `${o.plies}-ply LVL 1¾×${dName}`, kind: "lvl", plies: o.plies, thickIn: b, depthIn: o.d, stock: `LVL1.75x${o.d}` };
+    }
+  }
+  return null;
 }
 
 export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, group: SpeciesGroup, deck: DeckUnder | null, opts: RoofBuildOptions = {}): RoofFrame {
@@ -474,7 +550,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const price = (key: string) => deckRate(key, opts.rates, opts.market).price;
 
   // Loads.
-  const roofLoad: RoofLoad = r.load === "auto" ? roofLoadFor(design.loadPsf) : r.load;
+  const roofLoad: RoofLoad = r.load === "auto" ? (design.site.groundSnowPsf > 0 ? roofLoadForSnow(design.site.groundSnowPsf).load : roofLoadFor(design.loadPsf)) : r.load;
   const metal = r.roofing === "metal-panel" || r.roofing === "standing-seam";
   const deadPsf = (pergola ? ROOF_DEAD_PSF.open : metal ? ROOF_DEAD_PSF.metal : r.roofing === "cedar-shake" ? ROOF_DEAD_PSF.shake : ROOF_DEAD_PSF.shingle) + (r.ceiling !== "none" ? ROOF_DEAD_PSF.ceiling : 0);
   const livePsf = pergola ? 10 : roofLoad;
@@ -514,6 +590,9 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   if (kind === "pyramid" && !regular && Math.abs(W - D) > 0.5) {
     kind = "hip";
   }
+  if ((kind === "gambrel" || kind === "dutch-gable") && (regular || wall)) kind = regular ? "pyramid" : "gable";
+  // A Dutch gable needs room for its hips at both ends; a square one is a pyramid with a gablet nowhere to sit.
+  if (kind === "dutch-gable" && Math.abs(W - D) < 24) kind = "hip";
 
   const eaveX0 = x0 - ovh;
   const eaveX1 = x1 + ovh;
@@ -530,7 +609,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   /** The second tier of a double-tier roof. */
   let tier2: { ring: V2[]; apothemIn: number; ovhIn: number; baseTopIn: number } | null = null;
 
-  const rectFace = (id: string, A: V2, B: V2, nrm: V2, runIn: number, top: RoofFace["top"], sideA: RoofFace["sideA"], sideB: RoofFace["sideB"], ringU0: number, ringU1: number, ovhIn = ovh, vTopIn = runIn, tier: 1 | 2 = 1): FaceSpec => ({
+  const rectFace = (id: string, A: V2, B: V2, nrm: V2, runIn: number, top: RoofFace["top"], sideA: RoofFace["sideA"], sideB: RoofFace["sideB"], ringU0: number, ringU1: number, ovhIn = ovh, vTopIn = runIn, tier: 1 | 2 = 1, slopeOverride?: number): FaceSpec => ({
     id,
     A,
     B,
@@ -546,7 +625,13 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     ringU0,
     ringU1,
     tier,
+    slope: slopeOverride,
   });
+  let gablets = 0;
+  let breakTies = 0;
+  /** The gambrel's break line and the Dutch gable's cap, kept for the ties and the gablet walls. */
+  let gambrel: { vBreak: number; alongY: boolean; slopeLo: number } | null = null;
+  let dutch: { vCap: number; alongX: boolean } | null = null;
 
   if (pergola) {
     eaveRing = [{ x: eaveX0, y: eaveY0 }, { x: eaveX1, y: eaveY0 }, { x: eaveX1, y: eaveY1 }, { x: eaveX0, y: eaveY1 }];
@@ -603,6 +688,74 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       ridgeFrom = { x: (eaveX0 + eaveX1) / 2, y: eaveY0 + runIn };
       ridgeTo = { x: (eaveX0 + eaveX1) / 2, y: eaveY1 - runIn };
     }
+    eaveRing = [{ x: eaveX0, y: eaveY0 }, { x: eaveX1, y: eaveY0 }, { x: eaveX1, y: eaveY1 }, { x: eaveX0, y: eaveY1 }];
+  } else if (kind === "gambrel") {
+    // Two slopes a side: steep from the eave to the break, the design's pitch from the break to the ridge.
+    const alongY = D > W;
+    const slopeLo = GAMBREL_LOWER_PITCH / 12;
+    const runIn = (alongY ? eaveX1 - eaveX0 : eaveY1 - eaveY0) / 2;
+    const vBreak = Math.round(runIn * GAMBREL_BREAK_SHARE);
+    gambrel = { vBreak, alongY, slopeLo };
+    const Lu = alongY ? eaveY1 - eaveY0 : eaveX1 - eaveX0;
+    const sides: Array<[string, V2, V2, V2]> = alongY
+      ? [["gl", { x: eaveX0, y: eaveY0 }, { x: eaveX0, y: eaveY1 }, { x: 1, y: 0 }], ["gr", { x: eaveX1, y: eaveY1 }, { x: eaveX1, y: eaveY0 }, { x: -1, y: 0 }]]
+      : [["gb", { x: eaveX1, y: eaveY0 }, { x: eaveX0, y: eaveY0 }, { x: 0, y: 1 }], ["gf", { x: eaveX0, y: eaveY1 }, { x: eaveX1, y: eaveY1 }, { x: 0, y: -1 }]];
+    for (const [id, A, B, nrm] of sides) {
+      faceSpecs.push(rectFace(`${id}1`, A, B, nrm, vBreak, "cap", "rake", "rake", ovh, Lu - ovh, ovh, vBreak, 1, slopeLo));
+      const A2 = { x: A.x + nrm.x * vBreak, y: A.y + nrm.y * vBreak };
+      const B2 = { x: B.x + nrm.x * vBreak, y: B.y + nrm.y * vBreak };
+      const upper = rectFace(`${id}2`, A2, B2, nrm, runIn - vBreak, "ridge", "rake", "rake", ovh, Lu - ovh, 0, runIn - vBreak, 1, slope);
+      faceSpecs.push(upper);
+    }
+    if (alongY) {
+      const cx = (eaveX0 + eaveX1) / 2;
+      ridgeFrom = { x: cx, y: eaveY0 };
+      ridgeTo = { x: cx, y: eaveY1 };
+      ridgeSpanIn = y1 - y0;
+    } else {
+      const cy = (eaveY0 + eaveY1) / 2;
+      ridgeFrom = { x: eaveX0, y: cy };
+      ridgeTo = { x: eaveX1, y: cy };
+      ridgeSpanIn = x1 - x0;
+    }
+    ridgeSupports = "king-king";
+    eaveRing = [{ x: eaveX0, y: eaveY0 }, { x: eaveX1, y: eaveY0 }, { x: eaveX1, y: eaveY1 }, { x: eaveX0, y: eaveY1 }];
+  } else if (kind === "dutch-gable") {
+    // A hip whose ends stop short of the ridge; a small gable (the gablet) stands on the cap above each end.
+    const We = eaveX1 - eaveX0;
+    const De = eaveY1 - eaveY0;
+    const alongX = We > De;
+    const runIn = Math.min(We, De) / 2;
+    const vCap = Math.round(runIn * DUTCH_CAP_SHARE);
+    dutch = { vCap, alongX };
+    const c45 = 1; // cot(45°)
+    // The long faces: hips up to the cap, then a plain gable face to the ridge.
+    const longs: Array<[string, V2, V2, V2, number]> = alongX
+      ? [["hb", { x: eaveX1, y: eaveY0 }, { x: eaveX0, y: eaveY0 }, { x: 0, y: 1 }, We], ["hf", { x: eaveX0, y: eaveY1 }, { x: eaveX1, y: eaveY1 }, { x: 0, y: -1 }, We]]
+      : [["hl", { x: eaveX0, y: eaveY0 }, { x: eaveX0, y: eaveY1 }, { x: 1, y: 0 }, De], ["hr", { x: eaveX1, y: eaveY1 }, { x: eaveX1, y: eaveY0 }, { x: -1, y: 0 }, De]];
+    for (const [id, A, B, nrm, Lu] of longs) {
+      faceSpecs.push(rectFace(`${id}1`, A, B, nrm, vCap, "cap", "hip", "hip", ovh, Lu - ovh, ovh, vCap));
+      const u = unit(sub(B, A));
+      const A2 = { x: A.x + u.x * (c45 * vCap) + nrm.x * vCap, y: A.y + u.y * (c45 * vCap) + nrm.y * vCap };
+      const B2 = { x: B.x - u.x * (c45 * vCap) + nrm.x * vCap, y: B.y - u.y * (c45 * vCap) + nrm.y * vCap };
+      const Lu2 = len(sub(B2, A2));
+      faceSpecs.push(rectFace(`${id}2`, A2, B2, nrm, runIn - vCap, "ridge", "rake", "rake", 0, Lu2, 0, runIn - vCap));
+    }
+    // The end faces: hips to the cap, the gablet wall above.
+    const ends: Array<[string, V2, V2, V2, number]> = alongX
+      ? [["hl", { x: eaveX0, y: eaveY0 }, { x: eaveX0, y: eaveY1 }, { x: 1, y: 0 }, De], ["hr", { x: eaveX1, y: eaveY1 }, { x: eaveX1, y: eaveY0 }, { x: -1, y: 0 }, De]]
+      : [["hb", { x: eaveX1, y: eaveY0 }, { x: eaveX0, y: eaveY0 }, { x: 0, y: 1 }, We], ["hf", { x: eaveX0, y: eaveY1 }, { x: eaveX1, y: eaveY1 }, { x: 0, y: -1 }, We]];
+    for (const [id, A, B, nrm, Lu] of ends) faceSpecs.push(rectFace(id, A, B, nrm, vCap, "cap", "hip", "hip", ovh, Lu - ovh, ovh, vCap));
+    gablets = 2;
+    if (alongX) {
+      ridgeFrom = { x: eaveX0 + vCap, y: (eaveY0 + eaveY1) / 2 };
+      ridgeTo = { x: eaveX1 - vCap, y: (eaveY0 + eaveY1) / 2 };
+    } else {
+      ridgeFrom = { x: (eaveX0 + eaveX1) / 2, y: eaveY0 + vCap };
+      ridgeTo = { x: (eaveX0 + eaveX1) / 2, y: eaveY1 - vCap };
+    }
+    ridgeSpanIn = len(sub(ridgeTo, ridgeFrom));
+    ridgeSupports = "none";
     eaveRing = [{ x: eaveX0, y: eaveY0 }, { x: eaveX1, y: eaveY0 }, { x: eaveX1, y: eaveY1 }, { x: eaveX0, y: eaveY1 }];
   } else {
     // A pyramid over a square or a regular polygon, in one tier or two.
@@ -670,9 +823,13 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const rafterMax = tableSpan(rafterSize);
   const rafterDepth = joistDepthIn(rafterSize);
   const heel = HEEL_SHARE * rafterDepth;
+  const arched = pergola && r.pergolaStyle === "arched";
+  const louvered = pergola && r.pergolaStyle === "louvered";
+  let engineered = false;
+  let engineeredBeyond = false;
 
   // ── Headers: sized from the deck beam table at the roof's load.
-  const headerCandidates: BeamSize[] = r.header !== "auto" ? [r.header] : [...BUILT_UP_CHOICES, ...(solidBeamTabulated(40, group) ? SOLID_BEAMS : [])];
+  const headerCandidates: BeamSize[] = r.header !== "auto" && r.header !== "lvl" ? [r.header] : [...BUILT_UP_CHOICES, ...(solidBeamTabulated(40, group) ? SOLID_BEAMS : [])];
   /**
    * The deck beam table's first column is a 6-ft joist span (150 lb/ft of
    * 50-psf deck). A light roof or a pergola puts less than that on a header;
@@ -689,8 +846,25 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     return Math.floor(base * stretch);
   };
   const postSetCost = price("labor.roofPost") + price("hw.postBase") + price("hw.postCap") + (r.eaveHeightIn / 12) * price(lumberKey(r.post));
-  const pickHeader = (lengthIn: number, eqJoistSpanFt: number): { spec: BeamSpec; maxSpanIn: number; segments: number } => {
+  const pickHeader = (lengthIn: number, eqJoistSpanFt: number, wLbPerFt: number): { spec: BeamSpec; maxSpanIn: number; segments: number } => {
     type Opt = { spec: BeamSpec; maxSpanIn: number; segments: number; cost: number };
+    // An engineered beam, asked for or as the way out when no sawn header reaches: one piece post to post when it can, else the fewest posts an LVL needs.
+    const lvl = (): { spec: BeamSpec; maxSpanIn: number; segments: number } | null => {
+      for (let segments = 1; segments <= 4; segments++) {
+        const span = lengthIn / segments;
+        const spec = sizeLvl(span, wLbPerFt);
+        if (spec) {
+          engineered = true;
+          return { spec, maxSpanIn: Math.ceil(span), segments };
+        }
+      }
+      return null;
+    };
+    const beyond = (): { spec: BeamSpec; maxSpanIn: number; segments: number } => {
+      engineeredBeyond = true;
+      return { spec: { size: "3-ply LVL 1¾×18", kind: "lvl", plies: 3, thickIn: 5.25, depthIn: 18, stock: "LVL1.75x18" }, maxSpanIn: 0, segments: 1 };
+    };
+    if (r.header === "lvl") return lvl() ?? beyond();
     const options: Opt[] = headerCandidates.map((size) => {
       const spec = beamSpec(size);
       const maxSpanIn = headerMaxSpan(size, eqJoistSpanFt);
@@ -698,11 +872,13 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       return { spec, maxSpanIn, segments, cost: (lengthIn / 12) * spec.plies * price(lumberKey(spec.stock)) + (segments - 1) * postSetCost };
     });
     const tabulated = options.filter((o) => o.maxSpanIn > 0);
-    if (!tabulated.length) {
-      const deepest = options.reduce((m, o) => (o.spec.depthIn > m.spec.depthIn || (o.spec.depthIn === m.spec.depthIn && o.spec.plies > m.spec.plies) ? o : m));
-      return { spec: deepest.spec, maxSpanIn: 0, segments: 1 };
-    }
+    if (!tabulated.length) return lvl() ?? beyond();
     const best = tabulated.reduce((m, o) => (o.cost < m.cost - 0.005 || (Math.abs(o.cost - m.cost) <= 0.005 && o.spec.depthIn < m.spec.depthIn) ? o : m));
+    // A sawn header that needs more than two extra posts loses to an engineered beam with fewer.
+    if (best.segments > 3) {
+      const e = lvl();
+      if (e && e.segments < best.segments) return e;
+    }
     return { spec: best.spec, maxSpanIn: best.maxSpanIn, segments: best.segments };
   };
 
@@ -718,12 +894,22 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const auto: "beam" | "board" | "none" = kind === "gable" ? "beam" : "board";
     const asked = r.ridge === "auto" ? auto : r.ridge;
     const rk: "beam" | "board" | "none" = kind === "hip" && asked === "none" ? "board" : kind === "gable" && asked === "none" ? "board" : asked;
-    if (rk === "beam" && kind === "gable") {
-      const runFt = faceSpecs[0].runIn / 12;
+    if (rk === "beam" && (kind === "gable" || kind === "gambrel")) {
+      const runFt = (kind === "gambrel" ? (gambrel ? faceSpecs[0].runIn + faceSpecs[1].runIn : faceSpecs[0].runIn) : faceSpecs[0].runIn) / 12;
       const eq = (2 * runFt * totalPsf) / 50;
-      const pick = pickHeader(ridgeSpanIn, eq);
-      const beyond = pick.maxSpanIn === 0 || pick.maxSpanIn < ridgeSpanIn - 0.01;
+      const wRidge = runFt * totalPsf;
+      let pick = pickHeader(ridgeSpanIn, eq, wRidge);
+      let beyond = pick.maxSpanIn === 0 || pick.maxSpanIn < ridgeSpanIn - 0.01;
       const tieAcross = Math.abs(ridgeTo.x - ridgeFrom.x) > Math.abs(ridgeTo.y - ridgeFrom.y) ? y1 - y0 : x1 - x0;
+      // Asked for a beam that no sawn size spans: an engineered ridge instead of a flag.
+      if (beyond && (r.ridge === "beam" || tieAcross > STOCK_MAX_IN || kind === "gambrel")) {
+        const lvlSpec = sizeLvl(ridgeSpanIn, wRidge);
+        if (lvlSpec) {
+          pick = { spec: lvlSpec, maxSpanIn: ridgeSpanIn, segments: 1 };
+          beyond = false;
+          engineered = true;
+        }
+      }
       if (beyond && r.ridge === "auto" && tieAcross <= STOCK_MAX_IN) {
         // Nothing in the table carries a beam this long: framed with a ridge board and ties instead (the checks say so; "Beam" prices an engineered one).
         const nominal = oneDeeper(rafterSize);
@@ -772,27 +958,32 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     });
   };
 
-  // Posts at the ring's corners (not on the wall).
+  // Posts at the ring's corners (not on the wall); a round ring takes one at every second corner.
+  const postEvery = regular && n === ROUND_SIDES ? 2 : 1;
   const cornerPosts: Array<{ k: number; x: number; y: number }> = [];
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += postEvery) {
     const p = ring[k];
     if (wall && Math.abs(p.y - y0) < 0.01) continue;
     cornerPosts.push({ k, x: p.x, y: p.y });
   }
 
-  // Headers edge by edge, with the posts their spans need.
+  // Headers edge by edge (post to post), with the posts their spans need.
   const extraPosts: Array<{ x: number; y: number; edge: number }> = [];
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += postEvery) {
     if (edgeIsWall(k)) continue;
     const A = ring[k];
-    const B = ring[(k + 1) % n];
+    const B = ring[(k + postEvery) % n];
     const lengthIn = len(sub(B, A));
     const face = faceOfEdge(k);
     // What this header carries: half the rafters' run on its face (eave side), or a king post on a gable end.
     let tribFt = 0;
     let king = false;
     if (pergola) tribFt = (y1 - y0) / 2 / 12 + ovh / 12;
-    else if (face) tribFt = (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
+    else if (face && (kind === "gambrel" || kind === "dutch-gable")) {
+      // The whole slope's weight comes down the lower rafters to the header (the tie or the cap carries the rest across).
+      const whole = kind === "gambrel" && gambrel ? (gambrel.alongY ? (eaveX1 - eaveX0) / 2 : (eaveY1 - eaveY0) / 2) : Math.min(eaveX1 - eaveX0, eaveY1 - eaveY0) / 2;
+      tribFt = whole / 2 / 12 + face.ovhIn / 12;
+    } else if (face) tribFt = (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
     else if (kind === "gable") {
       // A gable end: the rakes bear on nothing; the king post does, when the ridge is a beam.
       const runFt = faceSpecs[0].runIn / 12;
@@ -804,7 +995,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       } else tribFt = 1;
     } else if (kind === "shed") tribFt = (y1 - y0) / 2 / 12 + ovh / 12;
     const eq = Math.round(((2 * tribFt * totalPsf) / 50) * 10) / 10;
-    const pick = pickHeader(lengthIn, eq);
+    const pick = pickHeader(lengthIn, eq, tribFt * totalPsf);
     const wallEnd = wall && (Math.abs(A.y - y0) < 0.01 || Math.abs(B.y - y0) < 0.01);
     const id = `h${k + 1}`;
     if (pick.maxSpanIn === 0) headerBeyond.push(id);
@@ -826,7 +1017,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       const lengthIn = x1 - x0;
       const tribFt = (y1 - y0) / pergolaBays / 12;
       const eq = Math.round(((2 * tribFt * totalPsf) / 50) * 10) / 10;
-      const pick = pickHeader(lengthIn, eq);
+      const pick = pickHeader(lengthIn, eq, tribFt * totalPsf);
       const id = `hm${k}`;
       if (pick.maxSpanIn === 0) headerBeyond.push(id);
       const postAt: number[] = [0, lengthIn];
@@ -849,7 +1040,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
 
   // All posts: corners and the ones the headers needed.
   const allPostPts: Array<{ x: number; y: number; corner: boolean }> = [...cornerPosts.map((p) => ({ x: p.x, y: p.y, corner: true })), ...extraPosts.map((p) => ({ x: p.x, y: p.y, corner: false }))];
-  const postBottomIn = design.floor === "deck" ? (deck ? deck.footingTopIn : 0) : design.floor === "slab" ? SLAB_TOP_IN : design.footing.aboveGradeIn;
+  const groundAt = opts.groundAt ?? (() => 0);
   const designForFootings: DeckDesign = design.floor === "ground" ? { ...design, placement: wall ? "attached" : "detached" } : design;
   let postBeyond = false;
   let postSpliced = false;
@@ -859,10 +1050,14 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const tributarySqFt = Math.round((loadLb / 50) * 10) / 10;
     const maxHeightIn = postMaxHeightIn(40, group, r.post, Math.min(160, tributarySqFt));
     if (r.eaveHeightIn > maxHeightIn) postBeyond = true;
+    // The post's foot: a footing's top over the ground right there (a slab is level).
+    const zg = design.floor === "slab" ? 0 : groundAt(p.x, p.y);
+    const postBottomIn = design.floor === "deck" ? (deck ? deck.footingTopIn : 0) + zg : design.floor === "slab" ? SLAB_TOP_IN : design.footing.aboveGradeIn + zg;
     const heightIn = topIn - postBottomIn;
     const spliced = heightIn > STOCK_MAX_IN;
     if (spliced) postSpliced = true;
     const footing = design.floor === "ground" ? footingFor(designForFootings, p.x, p.y, Math.round((loadLb / (design.loadPsf + 10)) * 10) / 10, r.post, design.footing.aboveGradeIn) : null;
+    if (footing) footing.groundIn = zg;
     posts.push({ id: `rp${i + 1}`, x: p.x, y: p.y, size: r.post, bottomIn: postBottomIn, topIn, heightIn, loadLb, tributarySqFt, maxHeightIn, corner: p.corner, bearing: design.floor, footing, spliced });
     members.push({ role: "roof-post", nominal: r.post, lengthIn: heightIn, cx: p.x, cy: p.y, cz: postBottomIn + heightIn / 2, sx: pw, sy: pd, sz: heightIn, yaw: 0, tilt: 0, x0: p.x, y0: p.y, x1: p.x, y1: p.y, ground: design.floor !== "deck" });
   });
@@ -913,24 +1108,29 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const subfasciaNominal = rafterDepth > 7.5 ? "2x8" : "2x6";
   const fasciaBoardIn = rafterDepth > 7.5 ? 10 : 8;
 
-  /** The top of the rafters at horizontal distance v from the eave line, on a face whose header top is `hTop`. */
-  const zTopAt = (v: number, ovhIn: number, hTop: number) => hTop + heel + (v - ovhIn) * slope;
+  /** The top of the rafters at horizontal distance v from the eave line, on a face whose header top is `hTop`, at a slope `sl`. */
+  const zTopAt = (v: number, ovhIn: number, hTop: number, sl = slope) => hTop + heel + (v - ovhIn) * sl;
+  let peakSeen = -Infinity;
 
   const layFace = (f: FaceSpec, hTop: number, roleTag: string) => {
+    const sl = f.slope ?? slope;
+    const th = Math.atan(sl);
+    const cT = Math.cos(th);
     const u = unit(sub(f.B, f.A));
     const Lu = len(sub(f.B, f.A));
     const at = (uu: number, vv: number): V2 => ({ x: f.A.x + u.x * uu + f.n.x * vv, y: f.A.y + u.y * uu + f.n.y * vv });
     const vMax = (uu: number) => Math.min(f.vTopIn, f.sideA === "hip" ? uu * Math.tan(f.betaA) : Infinity, f.sideB === "hip" ? (Lu - uu) * Math.tan(f.betaB) : Infinity);
     const yaw = Math.atan2(f.n.y, f.n.x);
+    peakSeen = Math.max(peakSeen, zTopAt(f.vTopIn, f.ovhIn, hTop, sl));
     const rafterAt = (uu: number, role: RoofRole) => {
       const v1 = vMax(uu);
       if (!(v1 > 10)) return;
       const p0 = at(uu, 0);
       const p1 = at(uu, v1);
-      const z0 = zTopAt(0, f.ovhIn, hTop) - rafterDepth / 2 / cosT;
-      const z1 = zTopAt(v1, f.ovhIn, hTop) - rafterDepth / 2 / cosT;
-      const L = v1 / cosT;
-      members.push({ role, nominal: rafterSize, lengthIn: L, cx: (p0.x + p1.x) / 2, cy: (p0.y + p1.y) / 2, cz: (z0 + z1) / 2, sx: L, sy: THICK_2X_IN, sz: rafterDepth, yaw, tilt: theta, x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, of: f.id });
+      const z0 = zTopAt(0, f.ovhIn, hTop, sl) - rafterDepth / 2 / cT;
+      const z1 = zTopAt(v1, f.ovhIn, hTop, sl) - rafterDepth / 2 / cT;
+      const L = v1 / cT;
+      members.push({ role, nominal: rafterSize, lengthIn: L, cx: (p0.x + p1.x) / 2, cy: (p0.y + p1.y) / 2, cz: (z0 + z1) / 2, sx: L, sy: THICK_2X_IN, sz: rafterDepth, yaw, tilt: th, x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, of: f.id });
       longest = Math.max(longest, L);
       if (role === "fly") flies++;
       else if (v1 >= f.vTopIn - 0.5) commons++;
@@ -950,9 +1150,9 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const TA = at(cot(f.betaA) * f.vTopIn, f.vTopIn);
     const TB = at(Lu - cot(f.betaB) * f.vTopIn, f.vTopIn);
     const planArea = ringArea([f.A, f.B, TB, TA]);
-    const area = planArea / cosT / 144;
+    const area = planArea / cT / 144;
     roofAreaSqFt += area;
-    const sideLen = (side: RoofFace["sideA"]) => (side === "rake" || side === "wall" ? f.vTopIn / cosT : 0);
+    const sideLen = (side: RoofFace["sideA"]) => (side === "rake" || side === "wall" ? f.vTopIn / cT : 0);
     const rake = (f.sideA === "rake" ? sideLen("rake") : 0) + (f.sideB === "rake" ? sideLen("rake") : 0);
     const wallLen = (f.sideA === "wall" ? sideLen("wall") : 0) + (f.sideB === "wall" ? sideLen("wall") : 0) + (f.top === "wall" ? len(sub(TB, TA)) : 0);
     eaveFt += Lu / 12;
@@ -961,9 +1161,11 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     // Ceiling and soffit areas.
     const A1 = at(cot(f.betaA) * f.ovhIn, f.ovhIn);
     const B1 = at(Lu - cot(f.betaB) * f.ovhIn, f.ovhIn);
-    if (ceilingOn) ceilingSqFt += ringArea([A1, B1, TB, TA]) / cosT / 144;
+    if (ceilingOn) ceilingSqFt += ringArea([A1, B1, TB, TA]) / cT / 144;
     if (r.soffit) soffitSqFt += ringArea([f.A, f.B, B1, A1]) / 144;
     faces.push({
+      slope: sl,
+      baseTopIn: hTop,
       id: f.id,
       ax: f.A.x,
       ay: f.A.y,
@@ -996,17 +1198,17 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     });
 
     // Planes: sheathing and roofing over the whole face, the ceiling under the rafters inside the header, the soffit under the overhang.
-    const zt = (v: number) => zTopAt(v, f.ovhIn, hTop);
+    const zt = (v: number) => zTopAt(v, f.ovhIn, hTop, sl);
     const ring3 = (pts: Array<[V2, number]>) => pts.flatMap(([p, z]) => [p.x, p.y, z]);
     if (!pergola) {
       planes.push({ kind: "sheathing", ring: ring3([[f.A, zt(0) + 0.25], [f.B, zt(0) + 0.25], [TB, zt(f.vTopIn) + 0.25], [TA, zt(f.vTopIn) + 0.25]]), of: f.id });
       planes.push({ kind: "roofing", ring: ring3([[f.A, zt(0) + 0.9], [f.B, zt(0) + 0.9], [TB, zt(f.vTopIn) + 0.9], [TA, zt(f.vTopIn) + 0.9]]), of: f.id });
       if (ceilingOn) {
-        const under = rafterDepth / cosT + 0.75;
+        const under = rafterDepth / cT + 0.75;
         planes.push({ kind: "ceiling", ring: ring3([[A1, zt(f.ovhIn) - under], [B1, zt(f.ovhIn) - under], [TB, zt(f.vTopIn) - under], [TA, zt(f.vTopIn) - under]]), of: f.id });
       }
       if (r.soffit && f.ovhIn > 2) {
-        const zs = zt(0) - rafterDepth / cosT - 0.75;
+        const zs = zt(0) - rafterDepth / cT - 0.75;
         planes.push({ kind: "soffit", ring: ring3([[f.A, zs], [f.B, zs], [B1, zs], [A1, zs]]), of: f.id });
       }
     }
@@ -1017,11 +1219,11 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       if (seenHips.has(key)) return;
       seenHips.add(key);
       const hz = len(sub(T, E));
-      const rise = f.vTopIn * slope;
+      const rise = f.vTopIn * sl;
       const L = Math.hypot(hz, rise);
       const tiltH = Math.atan2(rise, hz);
-      const z0 = zTopAt(0, f.ovhIn, hTop) - hipDepth / 2 / Math.cos(tiltH);
-      const z1 = zTopAt(f.vTopIn, f.ovhIn, hTop) - hipDepth / 2 / Math.cos(tiltH);
+      const z0 = zTopAt(0, f.ovhIn, hTop, sl) - hipDepth / 2 / Math.cos(tiltH);
+      const z1 = zTopAt(f.vTopIn, f.ovhIn, hTop, sl) - hipDepth / 2 / Math.cos(tiltH);
       members.push({ role: "hip", nominal: hipNominal, lengthIn: L, cx: (E.x + T.x) / 2, cy: (E.y + T.y) / 2, cz: (z0 + z1) / 2, sx: L, sy: THICK_2X_IN, sz: hipDepth, yaw: Math.atan2(T.y - E.y, T.x - E.x), tilt: tiltH, x0: E.x, y0: E.y, x1: T.x, y1: T.y, of: f.id });
       hipTotal += L;
       hipCount++;
@@ -1031,31 +1233,75 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
 
     // Fascia: the sub-fascia across the rafter tails, the finish board over it; rakes on the fly rafters.
     const outward = { x: -f.n.x, y: -f.n.y };
-    const zEave = zTopAt(0, f.ovhIn, hTop) - rafterDepth / cosT / 2;
-    if (r.fascia.eave) {
+    const zEave = zTopAt(0, f.ovhIn, hTop, sl) - rafterDepth / cT / 2;
+    if (r.fascia.eave && f.ovhIn > 0) {
       const off = THICK_2X_IN / 2;
       members.push({ role: "subfascia", nominal: subfasciaNominal, lengthIn: Lu, cx: (f.A.x + f.B.x) / 2 + outward.x * off, cy: (f.A.y + f.B.y) / 2 + outward.y * off, cz: zEave, sx: Lu, sy: THICK_2X_IN, sz: depthOf(subfasciaNominal), yaw: Math.atan2(u.y, u.x), tilt: 0, x0: f.A.x, y0: f.A.y, x1: f.B.x, y1: f.B.y, of: f.id });
       members.push({ role: "fascia-eave", nominal: `1x${fasciaBoardIn}`, lengthIn: Lu, cx: (f.A.x + f.B.x) / 2 + outward.x * (THICK_2X_IN + 0.4), cy: (f.A.y + f.B.y) / 2 + outward.y * (THICK_2X_IN + 0.4), cz: zEave - 0.5, sx: Lu + 1.5, sy: 0.75, sz: fasciaBoardIn - 0.75, yaw: Math.atan2(u.y, u.x), tilt: 0, x0: f.A.x, y0: f.A.y, x1: f.B.x, y1: f.B.y, of: f.id });
     }
     if (r.fascia.rake) {
       const rakeAt = (P: V2, T: V2, side: 1 | -1) => {
-        const L = f.vTopIn / cosT;
+        const L = f.vTopIn / cT;
         const off = { x: u.x * side * (THICK_2X_IN / 2 + 0.4), y: u.y * side * (THICK_2X_IN / 2 + 0.4) };
-        members.push({ role: "fascia-rake", nominal: `1x${fasciaBoardIn}`, lengthIn: L, cx: (P.x + T.x) / 2 + off.x, cy: (P.y + T.y) / 2 + off.y, cz: (zEave + zTopAt(f.vTopIn, f.ovhIn, hTop) - rafterDepth / cosT / 2) / 2 - 0.5, sx: L, sy: 0.75, sz: fasciaBoardIn - 0.75, yaw, tilt: theta, x0: P.x, y0: P.y, x1: T.x, y1: T.y, of: f.id });
+        members.push({ role: "fascia-rake", nominal: `1x${fasciaBoardIn}`, lengthIn: L, cx: (P.x + T.x) / 2 + off.x, cy: (P.y + T.y) / 2 + off.y, cz: (zEave + zTopAt(f.vTopIn, f.ovhIn, hTop, sl) - rafterDepth / cT / 2) / 2 - 0.5, sx: L, sy: 0.75, sz: fasciaBoardIn - 0.75, yaw, tilt: th, x0: P.x, y0: P.y, x1: T.x, y1: T.y, of: f.id });
       };
       if (f.sideA === "rake") rakeAt(f.A, TA, -1);
       if (f.sideB === "rake") rakeAt(f.B, TB, 1);
     }
 
-    // Gutters along this eave.
-    if (r.gutters.kind !== "none") {
+    // Gutters along this eave (not along a gambrel's break or a gablet's cap).
+    if (r.gutters.kind !== "none" && f.ovhIn > 0) {
       const gw = r.gutters.kind === "k6" ? 6 : 5;
       const off = THICK_2X_IN + 0.75 + gw / 2 + 0.25;
       members.push({ role: "gutter", nominal: r.gutters.kind, lengthIn: Lu, cx: (f.A.x + f.B.x) / 2 + outward.x * off, cy: (f.A.y + f.B.y) / 2 + outward.y * off, cz: zEave + rafterDepth / 2 - 2.5, sx: Lu + 1, sy: gw, sz: 4, yaw: Math.atan2(u.y, u.x), tilt: 0, x0: f.A.x, y0: f.A.y, x1: f.B.x, y1: f.B.y, of: f.id });
     }
   };
 
-  for (const f of faceSpecs.filter((f) => f.tier === 1)) layFace(f, headerTopIn, f.top === "cap" || f.sideA === "hip" ? "jack" : "rafter");
+  // Upper faces of a gambrel or a Dutch gable spring from where the lower face stops.
+  for (const f of faceSpecs.filter((f) => f.tier === 1)) {
+    if (f.ovhIn === 0 && (kind === "gambrel" || kind === "dutch-gable")) {
+      const lowerId = f.id.replace(/2$/, "1");
+      const lower = faceSpecs.find((g) => g.id === lowerId);
+      if (lower) f.baseTopIn = zTopAt(lower.vTopIn, lower.ovhIn, headerTopIn, lower.slope ?? slope) - heel;
+    }
+  }
+  for (const f of faceSpecs.filter((f) => f.tier === 1)) layFace(f, f.baseTopIn ?? headerTopIn, (f.top === "cap" || f.sideA === "hip") && kind !== "gambrel" ? "jack" : "rafter");
+  // A gambrel's ties at the break: one 2x6 across at every rafter, the pair gusseted.
+  if (gambrel && kind === "gambrel") {
+    const lowerFace = faceSpecs.find((f) => f.id.endsWith("1"))!;
+    const zBreak = zTopAt(lowerFace.vTopIn, lowerFace.ovhIn, headerTopIn, gambrel.slopeLo);
+    const across = (gambrel.alongY ? eaveX1 - eaveX0 : eaveY1 - eaveY0) - 2 * gambrel.vBreak;
+    const along = gambrel.alongY ? y1 - y0 : x1 - x0;
+    const count = Math.floor(along / spacing) + 1;
+    for (let k = 0; k < count; k++) {
+      const t = count === 1 ? 0.5 : k / (count - 1);
+      const P = gambrel.alongY ? { x: (eaveX0 + eaveX1) / 2, y: y0 + 2 + (along - 4) * t } : { x: x0 + 2 + (along - 4) * t, y: (eaveY0 + eaveY1) / 2 };
+      members.push({ role: "tie", nominal: "2x6", lengthIn: across, cx: P.x, cy: P.y, cz: zBreak - rafterDepth / Math.cos(Math.atan(gambrel.slopeLo)) - 2.75, sx: across, sy: THICK_2X_IN, sz: 5.5, yaw: gambrel.alongY ? 0 : halfPi, tilt: 0, x0: P.x, y0: P.y, x1: P.x, y1: P.y });
+      breakTies++;
+    }
+  }
+  // A Dutch gable's gablets: a cap beam where the hips stop, studs at 16 in., a sheathed triangle to the ridge.
+  if (dutch && kind === "dutch-gable") {
+    for (const f of faceSpecs.filter((g) => g.top === "cap" && (g.id === "hl" || g.id === "hr" || g.id === "hb" || g.id === "hf"))) {
+      const u = unit(sub(f.B, f.A));
+      const TA = { x: f.A.x + u.x * f.vTopIn + f.n.x * f.vTopIn, y: f.A.y + u.y * f.vTopIn + f.n.y * f.vTopIn };
+      const TB = { x: f.B.x - u.x * f.vTopIn + f.n.x * f.vTopIn, y: f.B.y - u.y * f.vTopIn + f.n.y * f.vTopIn };
+      const zCap = zTopAt(f.vTopIn, f.ovhIn, headerTopIn);
+      const L = len(sub(TB, TA));
+      const yawCap = Math.atan2(TB.y - TA.y, TB.x - TA.x);
+      members.push({ role: "ring", nominal: "2x6", lengthIn: L, cx: (TA.x + TB.x) / 2, cy: (TA.y + TB.y) / 2, cz: zCap - rafterDepth - 2.75, sx: L, sy: THICK_2X_IN, sz: 5.5, yaw: yawCap, tilt: 0, x0: TA.x, y0: TA.y, x1: TB.x, y1: TB.y, of: f.id });
+      const ridgeEnd = ridgeFrom && ridgeTo ? (len(sub(ridgeFrom, { x: (TA.x + TB.x) / 2, y: (TA.y + TB.y) / 2 })) < len(sub(ridgeTo, { x: (TA.x + TB.x) / 2, y: (TA.y + TB.y) / 2 })) ? ridgeFrom : ridgeTo) : { x: (TA.x + TB.x) / 2, y: (TA.y + TB.y) / 2 };
+      const zRidge = peakSeen;
+      planes.push({ kind: "wall", ring: [TA.x, TA.y, zCap - rafterDepth, TB.x, TB.y, zCap - rafterDepth, ridgeEnd.x, ridgeEnd.y, zRidge - 1], of: f.id });
+      const studs = Math.max(1, Math.floor(L / 16) - 1);
+      for (let k = 1; k <= studs; k++) {
+        const t = k / (studs + 1);
+        const P = { x: TA.x + (TB.x - TA.x) * t, y: TA.y + (TB.y - TA.y) * t };
+        const h = Math.max(6, (zRidge - 1 - (zCap - rafterDepth)) * (1 - Math.abs(2 * t - 1)));
+        members.push({ role: "stud", nominal: "2x4", lengthIn: h, cx: P.x, cy: P.y, cz: zCap - rafterDepth + h / 2, sx: THICK_2X_IN, sy: 3.5, sz: h, yaw: yawCap, tilt: 0, x0: P.x, y0: P.y, x1: P.x, y1: P.y, of: f.id });
+      }
+    }
+  }
 
   // The second tier: a band of short posts on a ring beam at the lower tier's cap, and a small pyramid over it.
   if (tier2 && apex) {
@@ -1101,15 +1347,10 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   }
 
   // ── The ridge, king posts and ties.
+  const archRiseIn = arched ? Math.min(ARCH_RISE_MAX_IN, Math.round(((eaveY1 - eaveY0) / Math.max(1, pergolaBays)) * ARCH_RISE_SHARE)) : 0;
   const peakIn = (() => {
-    if (pergola) return headerTopIn + rafterDepth + (r.slats.size === "2x6" ? 5.5 : r.slats.size === "2x4" ? 3.5 : 1.5);
-    const top1 = faceSpecs.filter((f) => f.tier === 1)[0];
-    let z = top1 ? zTopAt(top1.vTopIn, top1.ovhIn, headerTopIn) : headerTopIn;
-    if (tier2) {
-      const up = faceSpecs.find((f) => f.tier === 2);
-      if (up) z = zTopAt(up.vTopIn, up.ovhIn, tier2.baseTopIn);
-    }
-    return z;
+    if (pergola) return headerTopIn + rafterDepth + archRiseIn + (louvered ? LOUVER_BLADE_IN : r.slats.size === "2x6" ? 5.5 : r.slats.size === "2x4" ? 3.5 : 1.5);
+    return peakSeen > -Infinity ? peakSeen : headerTopIn;
   })();
   if (ridge && ridgeFrom && ridgeTo) {
     const depth = ridge.spec ? ridge.spec.depthIn : depthOf(ridge.nominal);
@@ -1176,11 +1417,31 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     if (x1 - THICK_2X_IN / 2 - placed[placed.length - 1] > 3) placed.push(x1 - THICK_2X_IN / 2);
     // One piece front to back when it comes out of stock; otherwise cut over the header rows.
     const cuts: Array<[number, number]> = L <= STOCK_MAX_IN ? [[eaveY0, eaveY1]] : [eaveY0, ...pergolaMidYs, eaveY1].slice(0, -1).map((a, i, arr) => [a, i + 1 < arr.length ? arr[i + 1] : eaveY1] as [number, number]);
+    /** An arched rafter's top at `y` within its bay: a shallow arc rising archRiseIn at the middle. */
+    const archTop = (ya: number, yb: number, y: number) => {
+      if (!arched) return headerTopIn + rafterDepth;
+      const t = (y - ya) / Math.max(1, yb - ya);
+      return headerTopIn + rafterDepth + archRiseIn * 4 * t * (1 - t);
+    };
     for (const x of placed) {
       for (const [ya, yb] of cuts) {
         const len = yb - ya;
-        members.push({ role: "rafter", nominal: rafterSize, lengthIn: len, cx: x, cy: (ya + yb) / 2, cz: zR, sx: len, sy: THICK_2X_IN, sz: rafterDepth, yaw: yawR, tilt: 0, x0: x, y0: ya, x1: x, y1: yb });
-        longest = Math.max(longest, len);
+        if (arched) {
+          // Five straight pieces follow the arc; the rafter is cut from 2x12 stock.
+          const segs = 5;
+          for (let k = 0; k < segs; k++) {
+            const y0s = ya + (len * k) / segs;
+            const y1s = ya + (len * (k + 1)) / segs;
+            const z0s = archTop(ya, yb, y0s) - rafterDepth / 2;
+            const z1s = archTop(ya, yb, y1s) - rafterDepth / 2;
+            const L = Math.hypot(y1s - y0s, z1s - z0s);
+            members.push({ role: "rafter", nominal: "2x12 (arch cut)", lengthIn: L, cx: x, cy: (y0s + y1s) / 2, cz: (z0s + z1s) / 2, sx: L, sy: THICK_2X_IN, sz: rafterDepth, yaw: yawR, tilt: Math.atan2(z1s - z0s, y1s - y0s), x0: x, y0: y0s, x1: x, y1: y1s, of: "arch" });
+          }
+          longest = Math.max(longest, len);
+        } else {
+          members.push({ role: "rafter", nominal: rafterSize, lengthIn: len, cx: x, cy: (ya + yb) / 2, cz: zR, sx: len, sy: THICK_2X_IN, sz: rafterDepth, yaw: yawR, tilt: 0, x0: x, y0: ya, x1: x, y1: yb });
+          longest = Math.max(longest, len);
+        }
       }
       commons++;
     }
@@ -1198,21 +1459,37 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const Ls = eaveX1 - eaveX0;
     let count = 0;
     let total = 0;
-    for (let y = eaveY0 + sw / 2; y <= eaveY1 - sw / 2 + 1e-6; y += r.slats.spacingIn) {
-      members.push({ role: "slat", nominal: r.slats.size, lengthIn: Ls, cx: (eaveX0 + eaveX1) / 2, cy: y, cz: headerTopIn + rafterDepth + sd / 2, sx: Ls, sy: sw, sz: sd, yaw: 0, tilt: 0, x0: eaveX0, y0: y, x1: eaveX1, y1: y });
-      count++;
-      total += Ls;
+    if (louvered) {
+      // Louver blades at 45°, one every 6 in., as thin planes the 3D tilts.
+      const half = LOUVER_BLADE_IN / 2;
+      const tiltDz = half * Math.SQRT1_2;
+      const tiltDy = half * Math.SQRT1_2;
+      for (let y = eaveY0 + 3; y <= eaveY1 - 3 + 1e-6; y += LOUVER_PITCH_IN) {
+        const bayStart = cuts.find(([a, b]) => y >= a - 1 && y <= b + 1) ?? cuts[0];
+        const zc = archTop(bayStart[0], bayStart[1], y) + 1.5;
+        planes.push({ kind: "louver", ring: [eaveX0, y - tiltDy, zc - tiltDz, eaveX1, y - tiltDy, zc - tiltDz, eaveX1, y + tiltDy, zc + tiltDz, eaveX0, y + tiltDy, zc + tiltDz], of: "louver" });
+        count++;
+        total += Ls;
+      }
+    } else {
+      for (let y = eaveY0 + sw / 2; y <= eaveY1 - sw / 2 + 1e-6; y += r.slats.spacingIn) {
+        const bay = cuts.find(([a, b]) => y >= a - 1 && y <= b + 1) ?? cuts[0];
+        members.push({ role: "slat", nominal: r.slats.size, lengthIn: Ls, cx: (eaveX0 + eaveX1) / 2, cy: y, cz: archTop(bay[0], bay[1], y) + sd / 2, sx: Ls, sy: sw, sz: sd, yaw: 0, tilt: 0, x0: eaveX0, y0: y, x1: eaveX1, y1: y });
+        count++;
+        total += Ls;
+      }
     }
-    slats = { count, nominal: r.slats.size, totalIn: total };
+    slats = louvered ? null : { count, nominal: r.slats.size, totalIn: total };
     eaveFt = 0;
   }
+  const louvers = louvered ? { sqFt: Math.round(footprintSqFt), blades: Math.floor((eaveY1 - eaveY0 - 6) / LOUVER_PITCH_IN) + 1 } : null;
 
   // Purlins across the rafters for metal on open framing.
   if (!pergola && metal && r.roofDeck === "purlins") {
     for (const f of faces) {
       const u = { x: f.ux, y: f.uy };
       const nn = { x: f.nx, y: f.ny };
-      const hTop = f.tier === 2 && tier2 ? tier2.baseTopIn : headerTopIn;
+      const hTop = f.baseTopIn;
       for (let v = 6; v < f.vTopIn - 3; v += 24) {
         // The purlin's ends follow the face's sides at this v.
         const uA = f.sideA === "hip" ? v * cot(f.betaA) : 0;
@@ -1221,7 +1498,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
         const P = { x: f.ax + u.x * uA + nn.x * v, y: f.ay + u.y * uA + nn.y * v };
         const Q = { x: f.ax + u.x * uB + nn.x * v, y: f.ay + u.y * uB + nn.y * v };
         const L = uB - uA;
-        members.push({ role: "purlin", nominal: "2x4", lengthIn: L, cx: (P.x + Q.x) / 2, cy: (P.y + Q.y) / 2, cz: zTopAt(v, f.ovhIn, hTop) + 0.75, sx: L, sy: 1.5, sz: 3.5, yaw: Math.atan2(u.y, u.x), tilt: 0, x0: P.x, y0: P.y, x1: Q.x, y1: Q.y, of: f.id });
+        members.push({ role: "purlin", nominal: "2x4", lengthIn: L, cx: (P.x + Q.x) / 2, cy: (P.y + Q.y) / 2, cz: zTopAt(v, f.ovhIn, hTop, f.slope) + 0.75, sx: L, sy: 1.5, sz: 3.5, yaw: Math.atan2(u.y, u.x), tilt: 0, x0: P.x, y0: P.y, x1: Q.x, y1: Q.y, of: f.id });
       }
     }
   }
@@ -1249,6 +1526,68 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     }
   }
 
+  // Walls between the posts (M3): screen over a kneewall with a door, or lattice or solid panels floor to header.
+  let walls: RoofFrame["walls"] = null;
+  if (r.walls.fill !== "none" && posts.length >= 2) {
+    const fill = r.walls.fill;
+    // The ring's open edges, the farthest from the house first.
+    const edges: Array<{ k: number; A: V2; B: V2; d: number }> = [];
+    for (let k = 0; k < n; k += postEvery) {
+      if (edgeIsWall(k)) continue;
+      const A = ring[k];
+      const B = ring[(k + postEvery) % n];
+      edges.push({ k, A, B, d: (A.y + B.y) / 2 });
+    }
+    edges.sort((a, b) => b.d - a.d);
+    const chosen = edges.slice(0, Math.min(r.walls.sides, edges.length));
+    const segments: NonNullable<RoofFrame["walls"]>["segments"] = [];
+    let sqFt = 0;
+    let kneewallLf = 0;
+    let doors = 0;
+    const zFloor = floorIn + 0.5;
+    const zTop = headerBottomIn;
+    chosen.forEach((e, i) => {
+      const u = unit(sub(e.B, e.A));
+      const L = len(sub(e.B, e.A)) - pw;
+      if (L < 24) return;
+      const A = { x: e.A.x + u.x * (pw / 2), y: e.A.y + u.y * (pw / 2) };
+      const B = { x: e.B.x - u.x * (pw / 2), y: e.B.y - u.y * (pw / 2) };
+      const yaw = Math.atan2(u.y, u.x);
+      segments.push({ x0: A.x, y0: A.y, x1: B.x, y1: B.y, lengthIn: Math.round(L) });
+      const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+      // A door in the first (front) wall: its opening left out of the panel.
+      const door = fill === "screen" && i === 0 && L > DOOR_W_IN + 24;
+      const doorAt = door ? L / 2 : 0;
+      if (fill === "screen") {
+        // The kneewall: 2x4 top and bottom plates with a solid panel, then screen to the header.
+        for (const z of [zFloor + 1.75, zFloor + KNEEWALL_IN - 1.75]) members.push({ role: "kneewall", nominal: "2x4", lengthIn: L, cx: mid.x, cy: mid.y, cz: z, sx: L, sy: 3.5, sz: 1.5, yaw, tilt: 0, x0: A.x, y0: A.y, x1: B.x, y1: B.y, of: `w${e.k}` });
+        kneewallLf += L / 12;
+        const pieces: Array<[number, number]> = door ? [[0, doorAt - DOOR_W_IN / 2], [doorAt + DOOR_W_IN / 2, L]] : [[0, L]];
+        for (const [a, b] of pieces) {
+          if (b - a < 6) continue;
+          const P = { x: A.x + u.x * a, y: A.y + u.y * a };
+          const Q = { x: A.x + u.x * b, y: A.y + u.y * b };
+          planes.push({ kind: "wall", ring: [P.x, P.y, zFloor, Q.x, Q.y, zFloor, Q.x, Q.y, zFloor + KNEEWALL_IN, P.x, P.y, zFloor + KNEEWALL_IN], of: `w${e.k}` });
+          planes.push({ kind: "screen", ring: [P.x, P.y, zFloor + KNEEWALL_IN, Q.x, Q.y, zFloor + KNEEWALL_IN, Q.x, Q.y, zTop, P.x, P.y, zTop], of: `w${e.k}` });
+          sqFt += ((b - a) * (zTop - zFloor - KNEEWALL_IN)) / 144;
+        }
+        if (door) {
+          doors++;
+          const P = { x: A.x + u.x * (doorAt - DOOR_W_IN / 2), y: A.y + u.y * (doorAt - DOOR_W_IN / 2) };
+          const Q = { x: A.x + u.x * (doorAt + DOOR_W_IN / 2), y: A.y + u.y * (doorAt + DOOR_W_IN / 2) };
+          members.push({ role: "door", nominal: "screen door", lengthIn: DOOR_H_IN, cx: (P.x + Q.x) / 2, cy: (P.y + Q.y) / 2, cz: zFloor + DOOR_H_IN / 2, sx: DOOR_W_IN, sy: 1.5, sz: DOOR_H_IN, yaw, tilt: 0, x0: P.x, y0: P.y, x1: Q.x, y1: Q.y, of: `w${e.k}` });
+          planes.push({ kind: "screen", ring: [P.x, P.y, zFloor + DOOR_H_IN, Q.x, Q.y, zFloor + DOOR_H_IN, Q.x, Q.y, zTop, P.x, P.y, zTop], of: `w${e.k}` });
+        }
+      } else {
+        for (const z of [zFloor + 1.75, zTop - 1.75]) members.push({ role: "kneewall", nominal: "2x4", lengthIn: L, cx: mid.x, cy: mid.y, cz: z, sx: L, sy: 3.5, sz: 1.5, yaw, tilt: 0, x0: A.x, y0: A.y, x1: B.x, y1: B.y, of: `w${e.k}` });
+        planes.push({ kind: fill === "lattice" ? "screen" : "wall", ring: [A.x, A.y, zFloor, B.x, B.y, zFloor, B.x, B.y, zTop, A.x, A.y, zTop], of: `w${e.k}` });
+        sqFt += (L * (zTop - zFloor)) / 144;
+        kneewallLf += (2 * L) / 12;
+      }
+    });
+    walls = { fill, segments, sqFt: Math.round(sqFt), kneewallLf: Math.round(kneewallLf), doors };
+  }
+
   // A cupola at the peak.
   if (r.cupola && !pergola) {
     const half = CUPOLA_IN / 2;
@@ -1268,8 +1607,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
 
   // ── Figures for the material list.
   const ridgeFt = ridge ? ridge.lengthIn / 12 : 0;
-  const hipRoof = kind === "hip" || kind === "pyramid" || kind === "double-tier";
-  const wasteFactor = pergola ? 1 : hipRoof ? 1.15 : 1.1;
+  const hipRoof = kind === "hip" || kind === "pyramid" || kind === "double-tier" || kind === "dutch-gable";
+  const wasteFactor = pergola ? 1 : hipRoof ? 1.15 : kind === "gambrel" ? 1.12 : 1.1;
   const squares = pergola ? 0 : Math.ceil((roofAreaSqFt * wasteFactor) / 100 * 10) / 10;
   const sheets = pergola || (metal && r.roofDeck === "purlins") ? 0 : Math.ceil((roofAreaSqFt * wasteFactor) / 32 - 1e-9);
   const metalPanels: RoofFrame["metalPanels"] = [];
@@ -1340,6 +1679,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     ringPlate: (kind === "pyramid" || kind === "double-tier") && regular ? (tier2 ? 2 : 1) : 0,
     kingBrackets: kingPosts + (ridgeSupports === "wall-king" ? 1 : 0),
     wallHangers: wall && kind === "gable" ? 2 : 0,
+    gussets: kind === "gambrel" ? breakTies * 2 : 0,
   };
 
   return {
@@ -1394,6 +1734,12 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     soffitSqFt: Math.round(soffitSqFt),
     gutters,
     slab,
+    walls,
+    louvers,
+    archRafters: arched,
+    breakTies,
+    gablets,
+    engineered,
     hardware,
     flags: {
       rafterBeyondTable: commonSpanIn > rafterMax + 0.01,
@@ -1403,6 +1749,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       speciesEstimated: rafterGroup === "RW",
       tooWideForHip,
       postSpliced,
+      engineeredBeyond,
     },
   };
 }
@@ -1416,8 +1763,8 @@ export function roofPostsForDeck(roof: RoofFrame): Array<{ id: string; x: number
 /** "Gable 6:12 · 2x8 rafters @ 16 in. · 4 posts" */
 export function roofWords(roof: RoofFrame): string {
   const r = roof.roof;
-  if (roof.kind === "pergola") return `Pergola · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. · ${r.slats.size} slats @ ${r.slats.spacingIn} in. · ${roof.posts.length} posts`;
-  const name = roof.kind === "double-tier" ? "Double-tier" : roof.kind.charAt(0).toUpperCase() + roof.kind.slice(1);
+  if (roof.kind === "pergola") return `Pergola${roof.archRafters ? ", arched" : ""} · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. · ${roof.louvers ? "louvers" : `${r.slats.size} slats @ ${r.slats.spacingIn} in.`} · ${roof.posts.length} posts`;
+  const name = roof.kind === "double-tier" ? "Double-tier" : roof.kind === "dutch-gable" ? "Dutch gable" : roof.kind.charAt(0).toUpperCase() + roof.kind.slice(1);
   return `${name} ${r.pitch}:12 · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. · ${roof.posts.length} ${roof.posts.length === 1 ? "post" : "posts"}`;
 }
 

@@ -38,10 +38,13 @@ import {
   risersFor,
 } from "./codeTables";
 import { GROUND_CONTACT_WITHIN_IN, MIN_FRAME_CLEAR_IN, PIER_BLOCK, footingDepthIn, type DeckFrame } from "./frame";
-import { GUTTER_LABEL, ROOFING_LABEL, normalizeDeckDesign, type DeckDesign } from "./design";
-import { railFeet } from "./pricing";
+import { FIXTURE_LABEL, GUTTER_LABEL, ROOFING_LABEL, WALL_FILL_LABEL, defaultStair, frontRadiusFt, normalizeDeckDesign, type DeckDesign } from "./design";
 import type { RoofFrame } from "./roof";
 import { RULE_HIP, RULE_RAFTER, RULE_RIDGE, RULE_ROOF_LOAD, RULE_TIES } from "./roofTables";
+import type { DeckStructure } from "./structure";
+import { STAIR_RULES } from "./stairs";
+import { SNOW_TABLE_MAX_PSF, TERMITE_LABEL, deckLoadForSnow, roofLoadForSnow } from "./site";
+import { GUARD_MIN_HEIGHT_IN, STAIR_MIN_WIDTH_IN } from "./codeTables";
 
 /** A change to a design, part by part; anything left out stays as it is. */
 export type DeckPatch = {
@@ -53,8 +56,8 @@ export function applyDeckPatch(design: DeckDesign, patch: DeckPatch): DeckDesign
   const out: Record<string, unknown> = { ...design };
   for (const [key, value] of Object.entries(patch)) {
     const current = (design as unknown as Record<string, unknown>)[key];
-    // The shape is replaced whole (a rectangle has no notch to keep); every other part is merged.
-    out[key] = key !== "shape" && value && typeof value === "object" && current && typeof current === "object" ? { ...(current as object), ...(value as object) } : value;
+    // The shape is replaced whole (a rectangle has no notch to keep), a list (the stairs, the fixtures) too; every other part is merged.
+    out[key] = key !== "shape" && !Array.isArray(value) && value && typeof value === "object" && current && typeof current === "object" ? { ...(current as object), ...(value as object) } : value;
   }
   return normalizeDeckDesign(out);
 }
@@ -73,18 +76,24 @@ export interface DeckCheck {
 
 const plural = (n: number, w: string, many = `${w}s`) => `${n} ${n === 1 ? w : many}`;
 
-export function deckChecks(frame: DeckFrame | null, roof: RoofFrame | null = null, designIn?: DeckDesign): DeckCheck[] {
-  const design = designIn ?? frame?.design ?? null;
+export function deckChecks(s: DeckStructure): DeckCheck[] {
+  const { design, frame, roof } = s;
   const out: DeckCheck[] = [];
   const add = (c: DeckCheck) => out.push(c);
-  if (frame) deckFrameChecks(frame, add, roof);
-  if (roof && design) roofChecks(roof, design, frame, add);
+  if (frame) deckFrameChecks(frame, add, roof, "");
+  if (s.lower) deckFrameChecks(s.lower.frame, add, null, "Lower level — ");
+  if (roof) roofChecks(roof, design, frame, add);
+  siteChecks(s, add);
+  if (frame) guardAndStairChecks(s, add);
+  electricalChecks(s, add);
   return out;
 }
 
-function deckFrameChecks(frame: DeckFrame, add: (c: DeckCheck) => void, roof: RoofFrame | null): void {
+function deckFrameChecks(frame: DeckFrame, addRaw: (c: DeckCheck) => void, roof: RoofFrame | null, prefix: string): void {
+  const add = (c: DeckCheck) => addRaw(prefix ? { ...c, id: `lower-${c.id}`, part: `${prefix}${c.part}` } : c);
   const { design, species, decking, wall, group, load } = frame;
   const attached = design.placement === "attached";
+  const front = design.shape.kind === "rect" ? design.shape.front : undefined;
 
   /* ── Joists ─────────────────────────────────────────────────────── */
   const maxSpan = joistMaxSpanIn(load, group, frame.joistSize, frame.spacingIn);
@@ -121,9 +130,16 @@ function deckFrameChecks(frame: DeckFrame, add: (c: DeckCheck) => void, roof: Ro
           fix: { label: "Let the studio set the overhang", patch: { framing: { overhangFt: "auto" } } },
         });
     };
-    checkCant(z.frontCantIn, z.spansIn[z.spansIn.length - 1], "outer", `joist-overhang-${z.zone.id}`);
+    checkCant(z.frontCantIn + frame.frontExtraCantIn, z.spansIn[z.spansIn.length - 1], front?.kind === "curve" ? "outer beam at the middle of the bow" : "outer", `joist-overhang-${z.zone.id}`);
     if (z.back === "beam") checkCant(z.backCantIn, z.spansIn[0], "house-side", `joist-overhang-back-${z.zone.id}`);
   }
+  if (front?.kind === "curve") {
+    const R = frontRadiusFt(design.shape);
+    const bendable = decking.family === "pvc" ? 4 : decking.family === "composite" ? 13 : decking.family === "mineral" ? 15 : Infinity;
+    if (R < bendable) add({ id: "front-curve", level: "pass", part: "Front", text: `The bow is a ${R}-ft radius: the rim is laminated from three plies of treated plywood, the joists cut to the arc and blocked, ${decking.family === "pvc" || decking.family === "composite" || decking.family === "mineral" ? "the border heat-bent to the curve" : "the boards' ends cut to the curve"}.`, rule: "Professional Deck Builder / Fine Homebuilding, curved decks" });
+    else add({ id: "front-curve", level: "info", part: "Front", text: `The bow is a ${R}-ft radius. ${decking.label} will not bend that tight${decking.family === "composite" ? " (capped composite bends to about 13 ft with heat)" : decking.family === "pvc" ? "" : ""}: the border is left out and the boards' ends are cut to the arc instead.`, rule: "The maker's bending guide" });
+  }
+  if (front?.kind === "clipped") add({ id: "front-clip", level: "info", part: "Front", text: `Both front corners clipped ${front.clipFt} ft at 45°: the rim turns twice on each side, the joists there are cut short, the rail follows.` });
   if (frame.spacingIn > frame.deckingMaxSpacingIn) {
     add({
       id: "joist-spacing",
@@ -296,19 +312,6 @@ function deckFrameChecks(frame: DeckFrame, add: (c: DeckCheck) => void, roof: Ro
   if (!frame.flags.tooLow && lowestBeam < 0) add({ id: "low-beam", level: "fail", part: "Height", text: `The beams are deeper than the deck is high: their undersides would be ${Math.round(-lowestBeam * 10) / 10} in. in the ground.`, fix: { label: "Let the studio size the beams", patch: { framing: { beam: "auto", beamStyle: "auto" } } } });
   if (decking.minClearanceIn && !frame.flags.tooLow && frame.joistBottomIn < decking.minClearanceIn) add({ id: "low-air", level: "warn", part: "Height", text: `${decking.label} wants at least ${decking.minClearanceIn} in. of open air under the joists; this frame leaves ${Math.round(frame.joistBottomIn * 10) / 10} in.`, rule: "The maker's installation guide" });
 
-  const rail = railFeet(frame);
-  if (design.heightIn > GUARD_REQUIRED_ABOVE_IN) {
-    if (rail > 0) add({ id: "guard", level: "pass", part: "Guard and stairs", text: `More than 30 in. up, so a guard is required on the open edges: ${Math.round(rail)} ft of railing is in the price, at least 36 in. high.`, rule: RULE.guard });
-    else add({ id: "guard", level: "warn", part: "Guard and stairs", text: `More than 30 in. up, so a guard at least 36 in. high is required on the ${Math.round(frame.openEdgeFt)} ft of open edge. No railing is in the price yet.`, rule: RULE.guard, fix: { label: "Add a railing allowance", patch: { extras: { rail: "treated", railFt: "auto" } } } });
-  } else if (rail === 0) {
-    add({ id: "guard", level: "info", part: "Guard and stairs", text: "No more than 30 in. up: the code asks for no guard.", rule: RULE.guard });
-  }
-  const risers = risersFor(design.heightIn);
-  if (risers > 1) {
-    if (design.extras.stairFlights > 0) add({ id: "stairs", level: "pass", part: "Guard and stairs", text: `${plural(design.extras.stairFlights, "flight")} in the price: ${risers} risers of ${(Math.round((design.heightIn / risers) * 100) / 100).toFixed(2)} in. each (7 3/4 in. at most), treads at least 10 in.${risers >= HANDRAIL_FROM_RISERS ? ", with a handrail" : ""}.`, rule: RULE.stairs });
-    else add({ id: "stairs", level: "info", part: "Guard and stairs", text: `Reaching the ground takes ${risers} risers. No stairs are in the price yet.`, rule: RULE.stairs, fix: { label: "Add a flight of stairs", patch: { extras: { stairFlights: 1 } } } });
-  }
-
   /* ── Load ───────────────────────────────────────────────────────── */
   if (load > 40) add({ id: "load", level: "info", part: "Load", text: `Sized for a ${load} psf ground snow load — every table is read on its ${load} psf rows.`, rule: "IRC R507.1" });
 
@@ -368,6 +371,10 @@ function roofChecks(roof: RoofFrame, design: DeckDesign, frame: DeckFrame | null
   /* ── Headers ────────────────────────────────────────────────────────── */
   for (const h of roof.headers) {
     const name = `${h.spec.size} header ${h.id.replace("h", "")}`;
+    if (h.spec.kind === "lvl") {
+      add({ id: `header-${h.id}`, level: h.maxSpanIn > 0 ? "pass" : "fail", part: "Headers", text: h.maxSpanIn > 0 ? `${name}, ${ftIn(h.lengthIn)} post to post: no sawn header in the deck beam table reaches, so an engineered beam is sized by the usual LVL figures (2.0E, 2,600 psi, L/240) — the maker's software or an engineer confirms the size.` : `${name}: even a three-ply 18-in. LVL does not carry ${ftIn(h.lengthIn)} under this roof. More posts, or an engineer.`, rule: "LVL maker's span tables" });
+      continue;
+    }
     if (!(h.maxSpanIn > 0)) {
       add({ id: `header-${h.id}`, level: "fail", part: "Headers", text: `${name} (${ftIn(h.lengthIn)}) carries more than the deck beam table reads at this roof load${h.kingPost ? " — it also holds the ridge's king post" : ""}. An engineer sizes it (an LVL), or the roof gets more posts.`, rule: RULE.beam, fix: r.header !== "auto" ? { label: "Let the studio size the headers", patch: { roof: { ...r, header: "auto" } } } : undefined });
     } else if (h.spanIn > h.maxSpanIn + 0.01) {
@@ -392,6 +399,12 @@ function roofChecks(roof: RoofFrame, design: DeckDesign, frame: DeckFrame | null
     add({ id: "ridge", level: "info", part: "Ridge", text: roof.hardware.ringPlate ? `No ridge: the ${roof.hips.count} hips meet at a steel compression ring at the peak, the way a polygon gazebo is framed.` : `No ridge: the ${roof.hips.count} hips meet at the peak and carry the roof to the corner posts.`, rule: RULE_HIP });
   }
   if (roof.kind === "double-tier") add({ id: "roof-tier", level: "info", part: "Ridge", text: `Two tiers: the lower roof stops at a 2x8 ring beam on the hips; ${plural(roof.members.filter((m) => m.role === "tier-post").length, "4x4 post")} carry the upper roof above a 2-ft open band (screen or louvers are the owner's choice, not in the price).` });
+  if (roof.kind === "gambrel") add({ id: "roof-gambrel", level: "info", part: "Ridge", text: `A gambrel: the lower slope at 20:12, the upper at ${r.pitch}:12, the two rafters of each pair meeting at the break on plywood gussets with a 2x6 tie across — ${plural(roof.breakTies, "tie")}. The ridge is ${roof.ridge?.kind === "beam" ? `a ${roof.ridge.spec?.size ?? roof.ridge.nominal} beam` : "a board"}.`, rule: "IRC R802.3 — rafters tied at every pair" });
+  if (roof.kind === "dutch-gable") add({ id: "roof-dutch", level: "info", part: "Ridge", text: `A Dutch gable: the hips stop at a 2x6 cap beam, and a small gable (the gablet) stands on each end — studs at 16 in., sheathed and sided to match the house, a vent where the owner wants one.` });
+  if (roof.flags.engineeredBeyond) add({ id: "roof-engineered", level: "fail", part: "Headers", text: "A span here is past even an engineered beam from the usual list. More posts, a shorter roof, or an engineer's design.", rule: "LVL maker's span tables" });
+  if (roof.walls) add({ id: "roof-walls", level: "info", part: "Walls", text: `${WALL_FILL_LABEL[roof.walls.fill]} on ${plural(roof.walls.segments.length, "side")}, ${roof.walls.sqFt} sq ft${roof.walls.fill === "screen" ? `, over a 36-in. kneewall that stands in for the guard${roof.walls.doors ? `; ${plural(roof.walls.doors, "screen door")}` : ""}` : ", floor to header"}. The house side is never filled.`, rule: roof.walls.fill === "screen" ? "IRC R312 — the kneewall is the guard" : undefined });
+  if (roof.louvers) add({ id: "roof-louvers", level: "info", part: "Pergola", text: `${roof.louvers.blades} louver blades that turn — open for sun, closed for shade or a light rain. The kit is priced per square foot of cover; a motor is the owner's upgrade.` });
+  if (roof.archRafters) add({ id: "roof-arch", level: "info", part: "Pergola", text: "Arched rafters cut from 2x12 stock, two boards each; the slats follow the curve." });
 
   /* ── Posts ──────────────────────────────────────────────────────────── */
   {
@@ -432,6 +445,91 @@ function roofChecks(roof: RoofFrame, design: DeckDesign, frame: DeckFrame | null
     else if (design.structure === "covered-deck" && frame) add({ id: "gutters", level: "warn", part: "Gutters", text: `No gutters: ${Math.round(roof.eaveFt)} ft of eave drips onto the deck and splashes the house. 5-in. K-style aluminum is the usual answer.`, rule: "IRC R801.3", fix: { label: "Add 5-in. gutters", patch: { roof: { ...r, gutters: { kind: "k5", guards: false } } } } });
     if (r.fascia.eave || r.fascia.rake) add({ id: "roof-fascia", level: "info", part: "Trim", text: `A 2x sub-fascia across the rafter tails and ${r.fascia.finish === "aluminum-wrap" ? "aluminum wrap over it" : `a ${roof.rafters.size === "2x10" || roof.rafters.size === "2x12" ? "1x10" : "1x8"} ${r.fascia.finish === "pvc" ? "PVC" : "primed wood"} board`}${r.fascia.rake && roof.rakeFt ? ", rake boards on the fly rafters" : ""}${roof.soffitSqFt ? `, ${roof.soffitSqFt} sq ft of vented soffit` : ", open eaves (no soffit)"}.` });
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  The site (M3)                                                      */
+/* ------------------------------------------------------------------ */
+
+function siteChecks(s: DeckStructure, add: (c: DeckCheck) => void): void {
+  const { design } = s;
+  const pg = design.site.groundSnowPsf;
+  if (pg > 0) {
+    const deck = deckLoadForSnow(pg);
+    const roofPage = roofLoadForSnow(pg);
+    if (pg > SNOW_TABLE_MAX_PSF) add({ id: "site-snow", level: "fail", part: "Site", text: `Ground snow here is about ${pg} psf — past the ${SNOW_TABLE_MAX_PSF} psf the code's deck and rafter tables carry. An engineer sets the design loads.`, rule: "IRC Figure R301.2(5) · R507.1" });
+    else if (deck.load > design.loadPsf) add({ id: "site-snow", level: "warn", part: "Site", text: `Ground snow here is about ${pg} psf; the deck is read on the ${design.loadPsf} psf tables. Snow country reads the ${deck.load} psf column.`, rule: "IRC R507.1 · Figure R301.2(5)", fix: { label: `Design for ${deck.load} psf`, patch: { loadPsf: deck.load } } });
+    else add({ id: "site-snow", level: "info", part: "Site", text: `Ground snow here is about ${pg} psf (the map's figure; the building office's number governs): the deck is read on its ${design.loadPsf} psf tables${s.roof ? `, the roof on the ${roofPage.load} psf rafter page` : ""}.`, rule: "IRC Figure R301.2(5)" });
+  }
+  if (design.site.termite === "very-heavy" || design.site.termite === "moderate-heavy") add({ id: "site-termite", level: "info", part: "Site", text: `Termite hazard here is ${TERMITE_LABEL[design.site.termite]}: lumber within 6 in. of the soil is ground-contact treated, and the posts stand on bases clear of the concrete; many offices want a termite shield or a soil treatment too.`, rule: "IRC R318 · Figure R301.2(6)" });
+  if (s.gradePct >= 2 && s.frame) {
+    const tallest = s.frame.posts.reduce((m, p) => (p.heightIn > m.heightIn ? p : m), s.frame.posts[0]);
+    const shortest = s.frame.posts.reduce((m, p) => (p.heightIn < m.heightIn ? p : m), s.frame.posts[0]);
+    add({ id: "site-slope", level: "info", part: "Site", text: `The ground falls about ${s.gradePct}% under the deck (${design.site.slope.outDropIn ? `${Math.abs(design.site.slope.outDropIn)} in. ${design.site.slope.outDropIn > 0 ? "away from" : "toward"} the house` : ""}${design.site.slope.outDropIn && design.site.slope.acrossDropIn ? ", " : ""}${design.site.slope.acrossDropIn ? `${Math.abs(design.site.slope.acrossDropIn)} in. ${design.site.slope.acrossDropIn > 0 ? "left to right" : "right to left"}` : ""}): the posts run from ${ftIn(shortest?.heightIn ?? 0)} to ${ftIn(tallest?.heightIn ?? 0)}, each footing dug from its own ground. The stairs land on the real ground.` });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Guards, rails and stairs (M3)                                       */
+/* ------------------------------------------------------------------ */
+
+function guardAndStairChecks(s: DeckStructure, add: (c: DeckCheck) => void): void {
+  const { design, rails, stairs, frame } = s;
+  if (!frame) return;
+  const H = design.heightIn;
+  if (rails.required && !rails.on) {
+    add({ id: "guard", level: "warn", part: "Guard and stairs", text: `More than 30 in. up, so a guard at least 36 in. high is required on the ${Math.round(frame.openEdgeFt)} ft of open edge${s.lower ? " (and on the lower level where it is that high)" : ""}. No railing is in the price yet.`, rule: RULE.guard, fix: { label: "Add a treated-wood railing", patch: { rail: { type: "treated" } } } });
+  } else if (rails.on) {
+    add({ id: "guard", level: "pass", part: "Guard and stairs", text: `${Math.round(rails.lf)} ft of ${rails.label.toLowerCase()} railing ${rails.heightIn} in. high${rails.required ? " where the code asks for a guard" : " by choice"}: ${plural(rails.posts, "post")} ${design.rail.postSpacingFt} ft apart at most, bolted through the rim with tension ties; ${rails.infill === "balusters" ? "balusters 5 in. on centre leave the code's 4-in. gap" : rails.infill === "cable" ? "cable runs 3 in. apart, tensioned so a 4-in. sphere cannot pass" : rails.infill === "glass" ? "tempered glass panels" : rails.infill === "panel" ? "solid panels" : "horizontal rails 5 1/2 in. apart"}${rails.stairLf ? `; ${Math.round(rails.stairLf)} ft on the stairs` : ""}.`, rule: `${RULE.guard} · R312.1.3 · R507.2.4` });
+    if (rails.system === "wood" && design.rail.postSpacingFt > 6) add({ id: "guard-posts", level: "warn", part: "Guard and stairs", text: `Wood 4x4 rail posts 8 ft apart: the 200-lb load on the top rail wants them no more than 6 ft apart (AWC's guide). Kits are rated by their maker.`, rule: "AWC DCA 6 · IRC Table R301.5", fix: { label: "Posts 6 ft apart", patch: { rail: { postSpacingFt: 6 } } } });
+    if (rails.heightIn < GUARD_MIN_HEIGHT_IN) add({ id: "guard-height", level: "fail", part: "Guard and stairs", text: `A guard must be at least ${GUARD_MIN_HEIGHT_IN} in. high.`, rule: RULE.guard });
+  } else if (H <= GUARD_REQUIRED_ABOVE_IN) {
+    add({ id: "guard", level: "info", part: "Guard and stairs", text: "No more than 30 in. up: the code asks for no guard.", rule: RULE.guard });
+  }
+  if (s.lower && s.stepDown?.stairWanted) {
+    const atFt = Math.round(((s.lower.offsetXIn + (design.lower.widthFt * 12) / 2) / 12) * 10) / 10;
+    add({ id: "lower-step", level: "warn", part: "Lower level", text: `The lower level is ${ftIn(s.stepDown.dropIn)} down — more than one riser. A stair between the levels is needed.`, rule: STAIR_RULES.riser, fix: { label: "Add a stair between the levels", patch: { stairs: [...design.stairs, { ...defaultStair(`s${design.stairs.length + 1}`, "front", atFt), widthFt: Math.min(6, design.lower.widthFt), landing: "patio" }] } } });
+  } else if (s.lower && s.stepDown) add({ id: "lower-step", level: "info", part: "Lower level", text: `The lower level is one step down (${ftIn(s.stepDown.dropIn)}); where it stands less than 30 in. up no guard is needed between the levels.`, rule: RULE.guard });
+  const risers = risersFor(H);
+  if (stairs.length === 0 && risers > 1) add({ id: "stairs", level: "info", part: "Guard and stairs", text: `Reaching the ground takes ${risers} risers. No stairs are in the price yet.`, rule: RULE.stairs, fix: { label: "Add a flight down the front", patch: { stairs: [defaultStair("s1", "front", design.shape.widthFt / 2)] } } });
+  stairs.forEach((st, i) => {
+    const tag = `stair-${st.design.id}`;
+    const where = `${st.kind === "box" ? "Box steps" : `Stair ${i + 1}`} (${st.design.side})`;
+    if (st.flags.tooTallForBox) add({ id: `${tag}-box`, level: "fail", part: where, text: `Box steps go three risers at most; this climb is ${plural(st.risers, "riser")}. It is framed as a flight.`, rule: STAIR_RULES.box, fix: { label: "Make it a flight", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, wrap: false } : d)) } } });
+    if (st.risers === 0) {
+      if (st.lands === "lower-deck") add({ id: `${tag}-step`, level: "info", part: where, text: "The lower level is one step down here: nothing to build but the riser's trim." });
+      return;
+    }
+    add({ id: `${tag}-riser`, level: "pass", part: where, text: `${plural(st.risers, "riser")} of ${st.riserIn.toFixed(2)} in. (7 3/4 at most), treads ${st.runIn + 1} in. deep with a 1-in. nosing (10 in. at least), ${st.widthIn} in. wide${st.lands === "lower-deck" ? ", landing on the lower level" : st.design.landing === "pad" ? ", onto a new pad" : st.design.landing === "patio" ? ", onto the patio" : ", onto pavers"}.`, rule: `${STAIR_RULES.riser} · ${STAIR_RULES.tread}` });
+    if (st.widthIn < STAIR_MIN_WIDTH_IN) add({ id: `${tag}-width`, level: "fail", part: where, text: `${st.widthIn} in. wide: the code asks for 36 in. clear.`, rule: STAIR_RULES.width, fix: { label: "Make it 3 ft wide", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, widthFt: 3 } : d)) } } });
+    if (st.kind === "flight") {
+      add({ id: `${tag}-stringers`, level: "pass", part: where, text: `${plural(st.stringers.count, "2x12 cut stringer")} ${st.stringers.spacingIn} in. apart (${frame.decking.family === "pvc" ? "PVC treads want 10" : frame.decking.family === "composite" || frame.decking.family === "mineral" ? "composite treads want 12" : "wood treads take 16"}), ${ftIn(st.stringers.lengthIn)} each, on connectors at the rim and a treated kicker${st.pad ? " bolted to the pad" : ""}${st.midSupport ? "; a 2x8 beam on two posts midway — a cut stringer spans 6 ft at most" : ""}${st.landing ? "; a landing midway — a flight climbs 12 ft 3 in. at most" : ""}.`, rule: `${STAIR_RULES.stringer}${st.landing ? ` · ${STAIR_RULES.landing}` : ""}` });
+      if (st.risers >= HANDRAIL_FROM_RISERS) {
+        if (st.rail.sides === 0 && (st.rail.wanted > 0 || design.rail.type === "none")) add({ id: `${tag}-handrail`, level: "fail", part: where, text: `${plural(st.risers, "riser")}: a graspable handrail 34 to 38 in. above the nosings is required${st.guard ? ", and guards on both open sides" : ""}. ${design.rail.type === "none" ? "Choose a railing to put one on." : "None is on this stair."}`, rule: STAIR_RULES.handrail, fix: design.rail.type === "none" ? { label: "Add a treated-wood railing", patch: { rail: { type: "treated" } } } : { label: st.guard ? "Rails on both sides" : "A handrail on one side", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, handrail: st.guard ? "both" : "one" } : d)) } } });
+        else if (st.guard && st.rail.sides < 2) add({ id: `${tag}-handrail`, level: "warn", part: where, text: `The stair is more than 30 in. up: both open sides want a guard, not one handrail.`, rule: STAIR_RULES.guard, fix: { label: "Rails on both sides", patch: { stairs: design.stairs.map((d) => (d.id === st.design.id ? { ...d, handrail: "both" } : d)) } } });
+        else add({ id: `${tag}-handrail`, level: "pass", part: where, text: `${st.rail.sides === 2 ? "Rails on both sides" : "A handrail on one side"}, ${plural(st.rail.posts, "post")}, 36 in. above the nosings.`, rule: STAIR_RULES.handrail });
+      }
+    } else add({ id: `${tag}-box`, level: "pass", part: where, text: `${plural(st.treads, "level")} of 2x6 box frames wrapping ${st.design.wrapSides === 4 ? "all four sides" : st.design.wrapSides === 3 ? "three sides" : "the front"}, the lowest on ${plural(st.boxBlocks, "block")} over gravel, treads of the deck's boards.`, rule: STAIR_RULES.box });
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Electrical (M3)                                                    */
+/* ------------------------------------------------------------------ */
+
+function electricalChecks(s: DeckStructure, add: (c: DeckCheck) => void): void {
+  const { design, electrical: el, frame } = s;
+  // The code wants a receptacle on a deck of any size that opens from the house (NEC 210.52(E)(3)).
+  if (frame && design.placement !== "detached" && frame.areaSqFt >= 20 && !design.electrical.fixtures.some((f) => f.kind === "outlet")) {
+    add({ id: "elec-outlet", level: "info", part: "Electrical", text: "A deck opening from the house needs at least one weatherproof receptacle within its perimeter (the electrical code). None is in the price yet.", rule: "NEC 210.52(E)(3) · 210.8", fix: { label: "Add an outlet", patch: { electrical: { ...design.electrical, fixtures: [...design.electrical.fixtures, { id: `e${design.electrical.fixtures.length + 1}`, kind: "outlet", supply: "we", qty: 1, at: null }] } } } });
+  }
+  if (!el.on) return;
+  for (const c of el.circuits) add({ id: `elec-${c.id}`, level: "pass", part: "Electrical", text: c.kind === "lights-outlets" ? `Circuit ${c.id.slice(1)}: 20 A, GFCI-protected, ${plural(c.devices, "device")} at ${c.va} VA, ${c.wireFt} ft of 12/2 from the panel.` : `Circuit ${c.id.slice(1)}: a ${c.amps}-A${c.poles === 2 ? " two-pole" : ""} circuit of its own for a ${c.kind === "heater-240" ? "4-kW 240-V" : "1.5-kW 120-V"} heater, ${c.wireFt} ft of ${c.wire}.`, rule: "NEC 210.8 · 210.23 · 424" });
+  if (el.lv) add({ id: "elec-lv", level: "pass", part: "Electrical", text: `${plural(el.lv.transformers, "low-voltage transformer")} (${el.lv.watts} W of strips, caps and string lights at 150 W each), ${el.lv.wireFt} ft of 16/2.`, rule: "NEC 411" });
+  if (el.trenchFt) add({ id: "elec-trench", level: "info", part: "Electrical", text: `The structure stands away from the house: the feed runs underground — about ${el.trenchFt} ft of trench and conduit, 18 in. deep (12 in. with GFCI protection in some jurisdictions).`, rule: "NEC Table 300.5" });
+  if (el.fixtures.some((f) => f.kind === "heater")) add({ id: "elec-heater", level: "info", part: "Electrical", text: "Infrared heaters are hard-wired and mounted with the maker's clearances — usually 8 ft above the floor and clear of the roof, the rails and anything that burns.", rule: "The heater's listing" });
+  if (el.byClient.length) add({ id: "elec-client", level: "info", part: "Electrical", text: `${el.byClient.length === 1 ? "One fixture is" : `${el.byClient.length} fixtures are`} the client's to buy (${[...new Set(el.byClient.map((f) => FIXTURE_LABEL[f.kind].toLowerCase()))].join(", ")}): drawn as a sample, priced at nothing — the box, the wire and the hanging are in the price. The proposal says "to be determined".` });
+  add({ id: "elec-permit", level: "info", part: "Electrical", text: "Outdoor wiring is a licensed electrician's work and an inspection item; the permit is not in this price.", rule: "NEC 406.9 — weatherproof, in-use covers" });
 }
 
 /** The strip's verdict in one glance. */

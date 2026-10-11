@@ -18,6 +18,8 @@ import { roofCatalogSchema, type RoofCatalogDoc } from "@/lib/roofPackage/catalo
 import { DEFAULT_RATE_CARD, STARTER_CATALOG, normalizeRateCard, type HvacRateCard } from "@/lib/hvac/ledger";
 import type { CatalogItem } from "@/lib/hvac/types";
 import { locationIndex } from "@/lib/estimate/location-index";
+import { sanitizeDeckRateBook, type DeckRateBook } from "@/lib/deck/rates";
+import { deckBookKey } from "@/lib/deck/rateBookStore";
 
 export const TRADE_COOKIE = "jf_inventory_trade";
 
@@ -26,7 +28,8 @@ export type InventoryTab = "book" | "stock" | "services";
 export type PriceBookData =
   | { trade: "fence"; doc: FenceCatalogDoc | null; updatedAt: string | null }
   | { trade: "roof"; doc: RoofCatalogDoc | null; updatedAt: string | null }
-  | { trade: "hvac"; items: CatalogItem[]; own: boolean; card: HvacRateCard; cardOwn: boolean; defaults: HvacRateCard; updatedAt: string | null; factor: number; place: string };
+  | { trade: "hvac"; items: CatalogItem[]; own: boolean; card: HvacRateCard; cardOwn: boolean; defaults: HvacRateCard; updatedAt: string | null; factor: number; place: string }
+  | { trade: "deck"; book: DeckRateBook; updatedAt: string | null };
 
 export type InventoryPageData = {
   trade: TradeId;
@@ -51,6 +54,7 @@ export async function resolveInventoryTrade(organizationId: string, requested: s
     if (s.startsWith("roof")) return "roof";
     if (s.startsWith("fenc")) return "fence";
     if (s.startsWith("hvac")) return "hvac";
+    if (s.startsWith("deck")) return "deck";
   }
   return "roof";
 }
@@ -114,8 +118,18 @@ async function hvacBook(organizationId: string): Promise<PriceBookData> {
   return { trade: "hvac", items, own, card, cardOwn, defaults: DEFAULT_RATE_CARD, updatedAt: updatedAt?.toISOString() ?? null, factor: idx.factor, place: idx.place };
 }
 
+/** The deck estimator's price book (lib/deck/rates): the rows the shop typed, under its SyncState key. */
+async function deckBook(organizationId: string): Promise<PriceBookData> {
+  try {
+    const row = await db.syncState.findUnique({ where: { key: deckBookKey(organizationId) } });
+    return { trade: "deck", book: row ? sanitizeDeckRateBook(JSON.parse(row.cursor)) : {}, updatedAt: row?.updatedAt?.toISOString() ?? null };
+  } catch {
+    return { trade: "deck", book: {}, updatedAt: null };
+  }
+}
+
 export async function loadInventoryPage(organizationId: string, trade: TradeId, tab: InventoryTab): Promise<InventoryPageData> {
-  const book = trade === "fence" ? await fenceBook(organizationId) : trade === "roof" ? await roofBook(organizationId) : await hvacBook(organizationId);
+  const book = trade === "fence" ? await fenceBook(organizationId) : trade === "roof" ? await roofBook(organizationId) : trade === "deck" ? await deckBook(organizationId) : await hvacBook(organizationId);
   let stock: InventoryPageData["stock"] = null;
   if (tab === "stock") {
     const data = await loadTradeBoard(organizationId, trade);

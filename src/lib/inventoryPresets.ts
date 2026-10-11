@@ -22,6 +22,8 @@ import { buildLedger, DEFAULT_RATE_CARD, STARTER_CATALOG } from "@/lib/hvac/ledg
 import { SERVICE_MENU } from "@/lib/hvac/serviceMenu";
 import type { BuildingModel } from "@/lib/hvac/types";
 import { stockKey, type TradeId } from "@/lib/inventory";
+import { defaultDeckDesign, normalizeDeckDesign } from "@/lib/deck/design";
+import { priceDeck } from "@/lib/deck/pricing";
 
 export type PresetItem = { name: string; unit: string };
 
@@ -135,13 +137,36 @@ function hvacPresets(): PresetItem[] {
   return [...out.values()];
 }
 
+/** The deck estimator's material package (2026-10-10) over the structures a shop builds: a deck, a covered deck with gutters, a gazebo on a slab, a pergola, with stairs, a rail and lights. */
+function deckPresets(): PresetItem[] {
+  const out = new Map<string, PresetItem>();
+  const unit: Record<string, string> = { pcs: "each", ea: "each", ft: "linear ft", bags: "bag", "sq ft": "sqft", sq: "square" };
+  const base = defaultDeckDesign({ state: "TX", frostIn: 12 });
+  const designs = [
+    normalizeDeckDesign({ ...base, heightIn: 48, rail: { ...base.rail, type: "treated" }, stairs: [{ id: "s1", side: "front", atFt: 8, widthFt: 4, level: "upper", wrap: false, wrapSides: 1, landing: "pad", handrail: "auto" }], electrical: { ...base.electrical, fixtures: [{ id: "e1", kind: "post-cap", supply: "we", qty: 1, at: null }, { id: "e2", kind: "outlet", supply: "we", qty: 1, at: null }] } }),
+    normalizeDeckDesign({ ...base, structure: "covered-deck", decking: { ...base.decking, product: "composite-better" }, rail: { ...base.rail, type: "composite" } }),
+    normalizeDeckDesign({ ...base, structure: "gazebo", floor: "slab", roof: { ...base.roof, kind: "pyramid", plan: { ...base.roof.plan, shape: "octagon", acrossFt: 12 }, roofing: "metal-panel", walls: { fill: "screen", sides: 3 } } }),
+    normalizeDeckDesign({ ...base, structure: "pergola", floor: "ground" }),
+  ];
+  for (const d of designs) {
+    try {
+      const pkg = priceDeck(d);
+      // The package's lines less the job-specific tail ("2x8 × 12 ft — joists" → "2x8 × 12 ft joists") and nothing the client brings.
+      collect(pkg.bom.filter((b) => !b.byClient).map((b) => ({ name: b.label.replace(/ — /g, " ").replace(/,\s*$/, ""), unit: unit[b.unit] ?? b.unit })), out);
+    } catch {
+      /* a structure the engine refuses adds nothing */
+    }
+  }
+  return [...out.values()];
+}
+
 const cache = new Map<TradeId, PresetItem[]>();
 
 /** Every material the trade's estimator prices, once, named as the estimator names it. */
 export function presetItems(trade: TradeId): PresetItem[] {
   const hit = cache.get(trade);
   if (hit) return hit;
-  const built = trade === "fence" ? fencePresets() : trade === "roof" ? roofPresets() : hvacPresets();
+  const built = trade === "fence" ? fencePresets() : trade === "roof" ? roofPresets() : trade === "deck" ? deckPresets() : hvacPresets();
   cache.set(trade, built);
   return built;
 }

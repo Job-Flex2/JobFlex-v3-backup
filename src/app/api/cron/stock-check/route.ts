@@ -17,8 +17,8 @@ export const runtime = "nodejs";
 // Fail-closed cron auth, like the other cron routes. Never throws past one
 // company: a bad org is logged and the rest still run.
 // Each trade's stock tab, under its estimator (2026-10-10).
-const BOARD: Record<string, string> = { fence: inventoryHref("fence", "stock"), roof: inventoryHref("roof", "stock"), hvac: inventoryHref("hvac", "stock") };
-const LABEL: Record<string, string> = { fence: "Fence", roof: "Roofing", hvac: "HVAC" };
+const BOARD: Record<string, string> = { fence: inventoryHref("fence", "stock"), roof: inventoryHref("roof", "stock"), hvac: inventoryHref("hvac", "stock"), deck: inventoryHref("deck", "stock") };
+const LABEL: Record<string, string> = { fence: "Fence", roof: "Roofing", hvac: "HVAC", deck: "Deck" };
 
 export async function GET(req: Request) {
   if (!isCronAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     try {
       // 1) Low stock per board, once a day.
       const low = await lowStockCounts(organizationId);
-      for (const trade of ["fence", "roof", "hvac"] as const) {
+      for (const trade of ["fence", "roof", "hvac", "deck"] as const) {
         if (!low[trade]) continue;
         const said = await db.activityEvent.findFirst({ where: { organizationId, kind: "STOCK_LOW", createdAt: { gte: dayAgo }, meta: { contains: `"trade":"${trade}"` } }, select: { id: true } });
         if (said) continue;
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
       }
       // 2) Jobs starting within two days whose pick list is short on the shelf.
       const jobs = await db.job.findMany({
-        where: { organizationId, materialsLoadedAt: null, startsAt: { gte: new Date(), lte: soon }, proposal: { trade: { in: ["fence", "roof", "hvac"] } } },
+        where: { organizationId, materialsLoadedAt: null, startsAt: { gte: new Date(), lte: soon }, proposal: { trade: { in: ["fence", "roof", "hvac", "deck"] } } },
         select: { id: true, title: true, startsAt: true, proposal: { select: { trade: true, lineItems: { where: { materialCost: { gt: 0 } }, select: { name: true, quantity: true, measurementType: true } } } } },
       });
       for (const job of jobs) {

@@ -22,7 +22,7 @@
 import { DECKING, RAIL_TYPES } from "./catalog";
 import { laborFactor, type MarketBasis, type MarketSnapshot } from "../fence/market";
 
-export type DeckRateGroup = "lumber" | "decking" | "hardware" | "concrete" | "roof" | "trim" | "gutters" | "labor" | "roofLabor" | "allowance";
+export type DeckRateGroup = "lumber" | "decking" | "hardware" | "concrete" | "roof" | "trim" | "gutters" | "labor" | "roofLabor" | "allowance" | "electrical";
 export const DECK_RATE_GROUP_LABEL: Record<DeckRateGroup, string> = {
   lumber: "Framing lumber",
   decking: "Deck boards and fascia",
@@ -33,7 +33,8 @@ export const DECK_RATE_GROUP_LABEL: Record<DeckRateGroup, string> = {
   gutters: "Gutters",
   labor: "Labor, by measure — deck",
   roofLabor: "Labor, by measure — roof",
-  allowance: "Railing, stairs and cupola",
+  allowance: "Railing, stairs, lights and cupola",
+  electrical: "Electrical and accessories",
 };
 
 export interface DeckRateDef {
@@ -57,6 +58,8 @@ const roofLabor = (key: string, label: string, unit: string, price: number, max 
 const roof = (key: string, label: string, unit: string, price: number, basis: MarketBasis = "vinyl", max = 2000): DeckRateDef => ({ key: `roof.${key}`, label, unit, price, group: "roof", basis, min: 0.05, max });
 const trim = (key: string, label: string, unit: string, price: number, basis: MarketBasis = "vinyl", max = 400): DeckRateDef => ({ key: `trim.${key}`, label, unit, price, group: "trim", basis, min: 0.05, max });
 const gut = (key: string, label: string, unit: string, price: number, max = 400): DeckRateDef => ({ key: `gut.${key}`, label, unit, price, group: "gutters", basis: "metal", min: 0.05, max });
+const elec = (key: string, label: string, unit: string, price: number, max = 2000): DeckRateDef => ({ key: `elec.${key}`, label, unit, price, group: "electrical", basis: "metal", min: 0.05, max });
+const elecLabor = (key: string, label: string, unit: string, price: number, max = 2000): DeckRateDef => ({ key: `labor.elec.${key}`, label, unit, price, group: "electrical", basis: "labor", min: 0.1, max });
 
 /**
  * Framing lumber is priced on the freight-only basis ("vinyl" in the market
@@ -123,8 +126,68 @@ export const DECK_RATES: readonly DeckRateDef[] = [
     { key: `rail.${r.id}.material`, label: `Railing, ${r.label.toLowerCase()} — material`, unit: "ft", price: r.perFt[0], group: "allowance", basis: r.basis, min: 0.5, max: 1500 },
     { key: `rail.${r.id}.labor`, label: `Railing, ${r.label.toLowerCase()} — labor`, unit: "ft", price: r.perFt[1], group: "allowance", basis: "labor", min: 0.5, max: 1500 },
   ]),
-  { key: "stairs.material", label: "Stairs — material, per step per foot of width", unit: "step·ft", price: 14, group: "allowance", basis: "vinyl", min: 0.5, max: 500 },
-  { key: "stairs.labor", label: "Stairs — labor, per step per foot of width", unit: "step·ft", price: 20, group: "allowance", basis: "labor", min: 0.5, max: 500 },
+  { key: "stairs.labor", label: "Stairs — labor, per riser per foot of width (stringers, treads, risers)", unit: "step·ft", price: 20, group: "allowance", basis: "labor", min: 0.5, max: 500 },
+  // ── Stairs, rails, lights, the site (M3, 2026-10-10). EXAMPLE prices.
+  { key: "stairs.boxLabor", label: "Box steps — labor, per foot of frame", unit: "ft", price: 7, group: "allowance", basis: "labor", min: 0.5, max: 200 },
+  { key: "stairs.pad", label: "Stair pad — form, pour and finish one", unit: "ea", price: 190, group: "allowance", basis: "labor", min: 10, max: 2000 },
+  { key: "stairs.landing", label: "Stair landing — frame and post one", unit: "ea", price: 420, group: "allowance", basis: "labor", min: 10, max: 5000 },
+  hw("stringerConnector", "Stair stringer connector", 9),
+  hw("railPostTie", "Rail post tension ties, pair, with bolts", 16),
+  hw("railBracket", "Rail bracket", 2.2),
+  hw("postCapWood", "Post cap, decorative", 9),
+  hw("litCap", "Lit post cap, low voltage", 34),
+  hw("riserLight", "Stair riser light", 26),
+  hw("lightKit", "Low-voltage transformer, wire and timer", 140, "ea", 2000),
+  { key: "rim.curved", label: "Curved rim — laminated plywood plies, per foot per ply", unit: "ft", price: 4.2, group: "lumber", basis: "vinyl", min: 0.2, max: 60 },
+  { key: "conc.gravel", label: "Gravel base, 4 in.", unit: "sq ft", price: 1.9, group: "concrete", basis: "vinyl", min: 0.1, max: 40 },
+  { key: "conc.paver", label: "Paver, 12 in., on sand", unit: "ea", price: 3.6, group: "concrete", basis: "vinyl", min: 0.2, max: 60 },
+  labor("lighting", "Set and wire one light", "ea", 28, 500),
+  labor("stepDown", "Build the step between two levels", "ft", 18),
+  // ── Walls, lights, drainage and engineered beams for the roof (M3). EXAMPLE prices.
+  trim("screen", "Screen panels, framed, between posts", "sq ft", 9.5),
+  trim("screenDoor", "Screen door, hung", "ea", 420, "vinyl", 5000),
+  trim("lattice", "Lattice panels, framed", "sq ft", 6.2, "cedar"),
+  trim("privacy", "Solid privacy panels, framed", "sq ft", 11, "cedar"),
+  trim("fan", "Outdoor ceiling fan, wet-rated, with box and switch", "ea", 380, "metal", 5000),
+  trim("light", "Outdoor light fixture, wet-rated, with box", "ea", 120, "metal", 2000),
+  trim("circuit", "New circuit to the structure, GFCI", "ea", 650, "metal", 10000),
+  trim("underDeckDrain", "Under-deck drainage system (troughs, gutter, downspout)", "sq ft", 9, "vinyl"),
+  trim("louverKit", "Louvered pergola slats, manual, per square foot of cover", "sq ft", 38, "metal", 400),
+  { key: "lf.lvl", label: "LVL beam, 1 3/4-in. ply, per foot per inch of depth", unit: "ft·in", price: 0.95, group: "lumber", basis: "vinyl", min: 0.05, max: 20 },
+  { key: "lf.archRafter", label: "Arched rafter, cut from 2x12 stock (two boards each)", unit: "ft", price: 6.4, group: "lumber", basis: "vinyl", min: 0.2, max: 80 },
+  roofLabor("walls", "Framing and hanging wall panels", "sq ft", 5.5, 400),
+  roofLabor("underDeckDrain", "Hang the under-deck drainage", "sq ft", 3.8, 400),
+  // ── Electrical and accessories (M3, 2026-10-10). EXAMPLE prices; the shop's electrician sets the real ones.
+  elec("wire122", "12/2 UF-B wire", "ft", 1.35),
+  elec("wire102", "10/2 UF-B wire", "ft", 2.1),
+  elec("wireLv", "16/2 low-voltage landscape wire", "ft", 0.55),
+  elec("conduit", "3/4-in. PVC conduit with fittings", "ft", 2.4),
+  elec("box", "Weatherproof box with in-use cover", "ea", 24),
+  elec("gfci", "Weather-resistant GFCI receptacle", "ea", 32),
+  elec("switch", "Weatherproof switch", "ea", 18),
+  elec("dimmer", "Dimmer", "ea", 42),
+  elec("fanControl", "Fan speed control", "ea", 38),
+  elec("timer", "Timer or photocell", "ea", 48),
+  elec("breaker20", "20-A breaker", "ea", 14),
+  elec("breaker30", "30-A two-pole breaker", "ea", 36),
+  elec("transformer", "150-W low-voltage transformer with timer", "ea", 120),
+  elec("ledStrip", "LED strip, outdoor, warm white", "ft", 6.5),
+  elec("postCap", "Lit post cap, low voltage", "ea", 34),
+  elec("stepLight", "Stair riser light, low voltage", "ea", 26),
+  elec("string", "Commercial string lights, 48-ft strand", "ea", 85),
+  elec("sconce", "Outdoor wall sconce", "ea", 95),
+  elec("ceilingLight", "Outdoor ceiling light, wet-rated", "ea", 120),
+  elec("chandelier", "Outdoor chandelier (allowance)", "ea", 480, 10000),
+  elec("fan", "Outdoor ceiling fan, wet-rated", "ea", 380, 5000),
+  elec("heater120", "Infrared patio heater, 1,500 W, 120 V", "ea", 260, 5000),
+  elec("heater240", "Infrared patio heater, 4,000 W, 240 V", "ea", 520, 5000),
+  elec("flood", "Security flood light, motion, LED", "ea", 68),
+  elecLabor("device", "Set a box and wire one device", "ea", 85),
+  elecLabor("hang", "Hang a chandelier, fan or heater", "ea", 120),
+  elecLabor("circuit", "Run and connect one circuit at the panel", "ea", 260, 5000),
+  elecLabor("wireFt", "Pull wire, per foot", "ft", 1.6),
+  elecLabor("trench", "Trench, conduit and backfill, per foot", "ft", 14),
+  elecLabor("lv", "Set one low-voltage fixture (strips per 10 ft)", "ea", 22),
   // ── The roof (M2, 2026-10-10). EXAMPLE prices, like everything above.
   hw("hurricaneTie", "Hurricane tie, rafter to header", 1.3),
   hw("rafterHanger", "Rafter hanger, at a ridge beam, ledger or hip", 3.6),

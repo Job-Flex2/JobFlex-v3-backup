@@ -65,7 +65,7 @@ import {
   type SpeciesGroup,
 } from "./codeTables";
 import { deckingProduct, framingSpecies, wallType, type DeckingProduct, type FramingSpecies, type WallType } from "./catalog";
-import { BUILT_UP_CHOICES, isSolidBeam, normalizeDeckDesign, shapeAreaSqFt, shapeEdges, shapeZones, type BeamKind, type BeamSize, type BeamStyle, type DeckDesign, type DeckEdge, type Zone } from "./design";
+import { BUILT_UP_CHOICES, frontEdgeAt, isSolidBeam, normalizeDeckDesign, shapeAreaSqFt, shapeEdges, shapeOutline, shapeZones, type BeamKind, type BeamSize, type BeamStyle, type DeckDesign, type DeckEdge, type Zone } from "./design";
 import { deckRate, lumberKey, type DeckRateBook } from "./rates";
 import type { MarketSnapshot } from "../fence/market";
 
@@ -126,6 +126,10 @@ export interface Stick {
   lean?: { axis: "x" | "y"; dir: 1 | -1 };
   /** The beam or zone it belongs to, for the notes. */
   of?: string;
+  /** A piece turned in plan (a rim along a clipped corner or a bowed front): the direction of its axis, radians from +x. */
+  yaw?: number;
+  /** A rim bent to the front's curve: laminated plies, bought by the foot (M3). */
+  curved?: boolean;
 }
 
 /** The supports of one rectangle of the deck, house side first. */
@@ -143,8 +147,9 @@ export interface ZoneFrame {
 }
 
 export interface BeamSpec {
-  size: BeamSize;
-  kind: BeamKind;
+  /** "4x10", "2-2x12" — or an engineered beam's name ("2-ply LVL 1¾×11⅞", M3). */
+  size: BeamSize | string;
+  kind: BeamKind | "lvl";
   plies: number;
   /** As it measures: thickness (across) and depth, inches. */
   thickIn: number;
@@ -192,9 +197,11 @@ export interface Footing {
   padIn: number;
   padThickIn: number;
   pierIn: number;
-  /** Bottom of the footing below the ground, and its top above it. */
+  /** Bottom of the footing below the ground, and its top above it — the ground right there. */
   depthIn: number;
   topIn: number;
+  /** The ground under this footing, inches, against the ground at the house line (negative downhill; M3 slope). */
+  groundIn: number;
   cuFt: number;
   bags: number;
   /** Feet of form tube. */
@@ -289,7 +296,11 @@ export interface DeckFrame {
     lateralTies: number;
   };
   /** Rows of blocking: where, and how many pieces. */
-  blockingRows: Array<{ y: number; zoneId: Zone["id"]; pieces: number; why: "beam" | "mid-span" | "maker" }>;
+  blockingRows: Array<{ y: number; zoneId: Zone["id"]; pieces: number; why: "beam" | "mid-span" | "maker" | "curve" }>;
+  /** The front's shape (M3): the extra the bow hangs past the straight overhang at its middle, inches; the ground's fall under the deck. */
+  frontExtraCantIn: number;
+  groundHighIn: number;
+  groundLowIn: number;
   /** What the layout could not do inside the tables — read by checks.ts. */
   flags: {
     /** The frame does not fit under a deck this low. */
@@ -313,6 +324,8 @@ export interface BuildOptions {
    * table as the deck area that weighs the same (`loadLb ÷ (load + 10 psf)`).
    */
   extraPosts?: Array<{ id: string; x: number; y: number; size: PostSize; loadLb: number }>;
+  /** The ground's height under a point of the plan, inches (M3: the site's slope). Flat when left out. */
+  groundAt?: (x: number, y: number) => number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -411,13 +424,13 @@ function layoutZone(zone: Zone, back: "ledger" | "beam", cIn: number, middle: nu
   return { zone, back, beamYs, spansIn, backCantIn: back === "beam" ? c - BEARING_HALF_IN : 0, frontCantIn: c - BEARING_HALF_IN };
 }
 
-function zoneInsideTable(l: Omit<ZoneFrame, "ok">, size: JoistSize, spacing: SpacingIn, group: SpeciesGroup, load: LoadPsf): boolean {
+function zoneInsideTable(l: Omit<ZoneFrame, "ok">, size: JoistSize, spacing: SpacingIn, group: SpeciesGroup, load: LoadPsf, extraFrontIn = 0): boolean {
   if (l.spansIn.length === 0 || l.spansIn.some((s) => !(s > 0))) return false;
   const max = joistMaxSpanIn(load, group, size, spacing);
   if (l.spansIn.some((s) => s > max)) return false;
   const first = l.spansIn[0] / 12;
   const last = l.spansIn[l.spansIn.length - 1] / 12;
-  if (l.frontCantIn > joistMaxCantileverIn(load, group, size, last)) return false;
+  if (l.frontCantIn + extraFrontIn > joistMaxCantileverIn(load, group, size, last)) return false;
   if (l.backCantIn > joistMaxCantileverIn(load, group, size, first)) return false;
   return true;
 }
@@ -447,10 +460,11 @@ interface JoistPlan {
  * beams, then the overhang nearest the one asked for. One overhang for the
  * whole deck, so the beams of two rectangles that share a front line up.
  */
-function planJoists(zones: Zone[], backs: Array<"ledger" | "beam">, style: BeamStyle, size: JoistSize, spacing: SpacingIn, group: SpeciesGroup, load: LoadPsf, overhang: number | "auto"): JoistPlan {
+function planJoists(zones: Zone[], backs: Array<"ledger" | "beam">, style: BeamStyle, size: JoistSize, spacing: SpacingIn, group: SpeciesGroup, load: LoadPsf, overhang: number | "auto", extraFrontIn = 0): JoistPlan {
   const shallow = Math.min(...zones.map((z) => z.y1 - z.y0));
   const want = style === "flush" ? 0 : overhang === "auto" ? autoOverhangIn(shallow) : Math.round(overhang * 12);
-  const tries = style === "flush" || overhang !== "auto" ? [want] : overhangTries(want);
+  // A bowed front hangs farther at its middle: the beam comes in until the whole bow is inside the table.
+  const tries = style === "flush" ? [want] : overhang !== "auto" && extraFrontIn === 0 ? [want] : overhangTries(want);
   let best: JoistPlan | null = null;
   for (const c of tries) {
     const fitted: ZoneFrame[] = [];
@@ -460,7 +474,7 @@ function planJoists(zones: Zone[], backs: Array<"ledger" | "beam">, style: BeamS
       let found: ZoneFrame | null = null;
       for (let k = 0; k <= MAX_MIDDLE_BEAMS && !found; k++) {
         const l = layoutZone(zone, backs[i], c, k);
-        if (zoneInsideTable(l, size, spacing, group, load)) {
+        if (zoneInsideTable(l, size, spacing, group, load, extraFrontIn)) {
           found = { ...l, ok: true };
           total += k;
         }
@@ -480,7 +494,7 @@ function planJoists(zones: Zone[], backs: Array<"ledger" | "beam">, style: BeamS
     let l = layoutZone(zone, backs[i], want, 0);
     for (let k = 1; k <= MAX_MIDDLE_BEAMS && l.spansIn.some((s) => s > max); k++) l = layoutZone(zone, backs[i], want, k);
     middle += l.beamYs.length - (backs[i] === "beam" ? 2 : 1);
-    return { ...l, ok: zoneInsideTable(l, size, spacing, group, load) };
+    return { ...l, ok: zoneInsideTable(l, size, spacing, group, load, extraFrontIn) };
   });
   return { size, zones: drawn, middle, inside: false };
 }
@@ -590,7 +604,7 @@ export function footingDepthIn(design: DeckDesign): number {
 export function footingFor(design: DeckDesign, x: number, y: number, tributarySqFt: number, post: PostSize, topIn: number): Footing {
   const required = footingMinSize(design.loadPsf, tributarySqFt, design.soilPsf);
   if (design.footing.type === "pier-block") {
-    return { type: "pier-block", x, y, required, padIn: PIER_BLOCK.baseIn, padThickIn: 8, pierIn: PIER_BLOCK.baseIn, depthIn: 8 - topIn, topIn, cuFt: 0, bags: 0, tubeFt: 0 };
+    return { type: "pier-block", x, y, required, padIn: PIER_BLOCK.baseIn, padThickIn: 8, pierIn: PIER_BLOCK.baseIn, depthIn: 8 - topIn, topIn, groundIn: 0, cuFt: 0, bags: 0, tubeFt: 0 };
   }
   const depthIn = footingDepthIn(design);
   const pierIn = PIER_FOR_POST_IN[post];
@@ -599,13 +613,13 @@ export function footingFor(design: DeckDesign, x: number, y: number, tributarySq
   if (need <= pierIn) {
     // The pier alone is wide enough: one tube from the bottom of the hole to the top.
     const cuFt = cylinderCuFt(pierIn, depthIn + topIn);
-    return { type: "poured", x, y, required, padIn: pierIn, padThickIn, pierIn, depthIn, topIn, cuFt, bags: Math.ceil(cuFt / BAG_CUFT - 1e-9), tubeFt: (depthIn + topIn) / 12 };
+    return { type: "poured", x, y, required, padIn: pierIn, padThickIn, pierIn, depthIn, topIn, groundIn: 0, cuFt, bags: Math.ceil(cuFt / BAG_CUFT - 1e-9), tubeFt: (depthIn + topIn) / 12 };
   }
   // A pad as wide as the table asks, and the pier standing on it.
   const padIn = tubeFor(need);
   const pierHeight = Math.max(0, depthIn - padThickIn) + topIn;
   const cuFt = cylinderCuFt(padIn, padThickIn) + cylinderCuFt(pierIn, pierHeight);
-  return { type: "poured", x, y, required, padIn, padThickIn, pierIn, depthIn, topIn, cuFt, bags: Math.ceil(cuFt / BAG_CUFT - 1e-9), tubeFt: pierHeight / 12 };
+  return { type: "poured", x, y, required, padIn, padThickIn, pierIn, depthIn, topIn, groundIn: 0, cuFt, bags: Math.ceil(cuFt / BAG_CUFT - 1e-9), tubeFt: pierHeight / 12 };
 }
 
 /* ------------------------------------------------------------------ */
@@ -651,7 +665,18 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
   const attached = design.placement === "attached";
   const freeStanding = !attached;
 
-  const deckingMaxSpacingIn = design.decking.diagonal ? decking.maxSpacingIn.diagonal : decking.maxSpacingIn.square;
+  const deckingMaxSpacingIn = design.decking.pattern !== "straight" ? decking.maxSpacingIn.diagonal : decking.maxSpacingIn.square;
+  // The front's shape (M3) and the ground under the deck.
+  const front = design.shape.kind === "rect" ? design.shape.front : undefined;
+  const shaped = !!front && front.kind !== "straight";
+  const bulgeIn = front?.kind === "curve" ? Math.round(front.bulgeFt * 12) : 0;
+  const frontAt = (x: number, y1: number) => (shaped ? frontEdgeAt(design.shape, x) : y1);
+  const groundAt = opts.groundAt ?? (() => 0);
+  const W0 = Math.max(...zones.map((z) => z.x1));
+  const D0 = Math.max(...zones.map((z) => z.y1));
+  const groundSamples = [groundAt(0, 0), groundAt(W0, 0), groundAt(0, D0), groundAt(W0, D0), groundAt(W0 / 2, D0 / 2)];
+  const groundHighIn = Math.max(...groundSamples);
+  const groundLowIn = Math.min(...groundSamples);
   const spacingIn: SpacingIn = design.framing.spacingIn === "auto" ? (deckingMaxSpacingIn >= 16 ? 16 : 12) : design.framing.spacingIn;
 
   const surfaceIn = design.heightIn;
@@ -687,7 +712,7 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
     strips.clear();
     let plan: JoistPlan | null = null;
     for (const size of sizes) {
-      const p = planJoists(zones, backs, style, size, spacingIn, group, load, design.framing.overhangFt);
+      const p = planJoists(zones, backs, style, size, spacingIn, group, load, design.framing.overhangFt, bulgeIn);
       if (!plan || (p.inside && !plan.inside) || (p.inside === plan.inside && p.middle < plan.middle)) plan = p;
       if (plan.inside && plan.middle === 0) break;
     }
@@ -695,7 +720,7 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
     const joistSize = plan.size;
     const joistDepth = joistDepthIn(joistSize);
     const joistBottomIn = joistTopIn - joistDepth;
-    const tooLow = joistBottomIn < MIN_FRAME_CLEAR_IN;
+    const tooLow = joistBottomIn - groundHighIn < MIN_FRAME_CLEAR_IN;
 
     // Beams: for each line, the size and post count that cost least together.
     const lines = mergeLines(plan.zones.flatMap((z) => beamLines(z, style)));
@@ -794,7 +819,11 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
       const topIn = Math.min(footingTopIn, Math.max(0, beam.bottomIn));
       beam.postXs.forEach((x, k) => {
         const tributarySqFt = Math.round(areas[k] * 10) / 10;
-        const heightIn = Math.max(0, beam.bottomIn - topIn);
+        // The ground under this post: a downhill post is taller, its footing deeper in the picture.
+        const zg = groundAt(x, beam.y);
+        const heightIn = Math.max(0, beam.bottomIn - (topIn + zg));
+        const footing = footingFor(design, x, beam.y, tributarySqFt, design.framing.post, topIn);
+        footing.groundIn = zg;
         posts.push({
           id: `${beam.id}p${k + 1}`,
           beamId: beam.id,
@@ -805,7 +834,7 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
           tributarySqFt,
           maxHeightIn: postMaxHeightIn(load, group, design.framing.post, tributarySqFt),
           corner: k === 0 || k === beam.postXs.length - 1,
-          footing: footingFor(design, x, beam.y, tributarySqFt, design.framing.post, topIn),
+          footing,
         });
       });
     }
@@ -813,6 +842,8 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
     // A roof's posts (M2): a footing and a base each, the post itself drawn by the roof.
     for (const rp of opts.extraPosts ?? []) {
       const tributarySqFt = Math.round((rp.loadLb / (load + 10)) * 10) / 10;
+      const footing = footingFor(design, rp.x, rp.y, tributarySqFt, rp.size, footingTopIn);
+      footing.groundIn = groundAt(rp.x, rp.y);
       posts.push({
         id: rp.id,
         beamId: "roof",
@@ -823,7 +854,7 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
         tributarySqFt,
         maxHeightIn: postMaxHeightIn(load, group, rp.size, tributarySqFt),
         corner: false,
-        footing: footingFor(design, rp.x, rp.y, tributarySqFt, rp.size, footingTopIn),
+        footing,
         roof: true,
       });
     }
@@ -875,10 +906,12 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
       const frontRim = style === "dropped" ? rimPlies(frontExposed) * THICK_2X_IN : 0;
       const backRim = style === "dropped" && zf.back === "beam" ? rimPlies(backExposed) * THICK_2X_IN : 0;
       const start = zf.back === "ledger" ? z.y0 + THICK_2X_IN : style === "flush" && backBeam ? z.y0 + backBeam.spec.thickIn : z.y0 + backRim;
-      const end = style === "flush" && frontBeam ? z.y1 - frontBeam.spec.thickIn : z.y1 - frontRim;
+      const endStraight = style === "flush" && frontBeam ? z.y1 - frontBeam.spec.thickIn : z.y1 - frontRim;
       const mine = joists.filter((j) => j.zoneId === z.id);
 
       for (const j of mine) {
+        // A shaped front cuts each joist to the arc or the clip (a rim's thickness back from it).
+        const end = shaped && style === "dropped" ? frontAt(j.x, z.y1) - frontRim : endStraight;
         // Where this joist is cut: at every flush middle beam; over a dropped one only when it is longer than stock.
         let cuts: Array<[number, number]>;
         if (style === "flush") {
@@ -917,7 +950,28 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
           }
           hardware.rimScrews += 3 * mine.length;
         };
-        rim(z.y1, rimPlies(frontExposed), -1);
+        if (shaped) {
+          // The front rim follows the outline: short straight pieces along a clip or around the bow (bent plies).
+          const ring = shapeOutline(design.shape);
+          const plies = rimPlies(frontExposed);
+          for (let i = 1; i + 1 < ring.length; i++) {
+            const A = ring[i];
+            const B = ring[i + 1];
+            if (A.y < 0.5 && B.y < 0.5) continue;
+            const L = Math.hypot(B.x - A.x, B.y - A.y);
+            if (L < 1) continue;
+            const yaw = Math.atan2(B.y - A.y, B.x - A.x);
+            // Inward is to the right of the ring's direction (the ring runs clockwise in plan).
+            const nx = Math.sin(yaw);
+            const ny = -Math.cos(yaw);
+            const curved = front?.kind === "curve" && !(Math.abs(A.y - z.y1) < 0.01 && Math.abs(B.y - z.y1) < 0.01 && Math.abs(Math.sin(yaw)) < 1e-6);
+            for (let p = 0; p < plies; p++) {
+              const off = (p + 0.5) * THICK_2X_IN;
+              sticks.push({ role: "rim", nominal: joistSize, lengthIn: L, cx: (A.x + B.x) / 2 + nx * off, cy: (A.y + B.y) / 2 + ny * off, cz: joistBottomIn + joistDepth / 2, sx: L, sy: THICK_2X_IN, sz: joistDepth, ground: joistGround, of: z.id, yaw, curved });
+            }
+          }
+          hardware.rimScrews += 3 * mine.length;
+        } else rim(z.y1, rimPlies(frontExposed), -1);
         if (zf.back === "beam") rim(z.y0, rimPlies(backExposed), 1);
       }
     }
@@ -967,7 +1021,7 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
       // A beam that sits right on its footing needs the base, no post and no cap.
       if (p.heightIn >= 1) {
         hardware.postCaps += 1;
-        sticks.push({ role: "post", nominal: p.size, lengthIn: p.heightIn, cx: p.x, cy: p.y, cz: p.footing.topIn + p.heightIn / 2, sx: w, sy: d, sz: p.heightIn, ground: true, of: p.beamId });
+        sticks.push({ role: "post", nominal: p.size, lengthIn: p.heightIn, cx: p.x, cy: p.y, cz: p.footing.groundIn + p.footing.topIn + p.heightIn / 2, sx: w, sy: d, sz: p.heightIn, ground: true, of: p.beamId });
       }
     }
 
@@ -977,7 +1031,7 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
     const blockingRows: DeckFrame["blockingRows"] = [];
     for (const zf of plan.zones) {
       const z = zf.zone;
-      const rows: Array<{ y: number; why: "beam" | "mid-span" | "maker" }> = [];
+      const rows: Array<{ y: number; why: "beam" | "mid-span" | "maker" | "curve" }> = [];
       if (style === "dropped") {
         zf.beamYs.forEach((y, i) => {
           const isBack = zf.back === "beam" && i === 0;
@@ -986,6 +1040,8 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
           if (runsPast) rows.push({ y, why: "beam" });
         });
       }
+      // Under a bowed front every bay is blocked midway out to the arc (the border's bearing).
+      if (front?.kind === "curve" && style === "dropped") rows.push({ y: zf.beamYs[zf.beamYs.length - 1] + (z.y1 + bulgeIn - zf.beamYs[zf.beamYs.length - 1]) / 2, why: "curve" });
       const supports = [zf.back === "ledger" ? z.y0 + THICK_2X_IN : zf.beamYs[0], ...(zf.back === "ledger" ? zf.beamYs : zf.beamYs.slice(1))];
       for (let i = 0; i + 1 < supports.length; i++) {
         const span = supports[i + 1] - supports[i];
@@ -1000,6 +1056,7 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
         for (let i = 0; i + 1 < xs.length; i++) {
           const gap = xs[i + 1] - xs[i] - THICK_2X_IN;
           if (gap < 3) continue;
+          if (shaped && row.y > Math.min(frontAt(xs[i], z.y1), frontAt(xs[i + 1], z.y1)) - 2) continue;
           pieces += 1;
           sticks.push({ role: "blocking", nominal: joistSize, lengthIn: gap, cx: (xs[i] + xs[i + 1]) / 2, cy: row.y, cz: joistBottomIn + joistDepth / 2, sx: gap, sy: THICK_2X_IN, sz: joistDepth, ground: joistGround, of: z.id });
         }
@@ -1059,11 +1116,15 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
       sticks,
       hardware,
       blockingRows,
+      frontExtraCantIn: bulgeIn,
+      groundHighIn,
+      groundLowIn,
       flags: { tooLow, droppedDoesNotFit, joistBeyondTable: !plan.inside, beamBeyondTable: beyond },
     };
   };
 
-  const style = design.framing.beamStyle;
+  // A shaped front needs a beam under the joists: they run past it to the arc or the clip.
+  const style = shaped ? (design.framing.beamStyle === "flush" ? "dropped" : design.framing.beamStyle) : design.framing.beamStyle;
   if (style === "auto") {
     const dropped = attempt("dropped", true);
     if (dropped) return dropped;

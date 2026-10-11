@@ -46,6 +46,12 @@ export function defaultStocked(trade: TradeId, name: string): boolean {
     if (FENCE_STOCKED.test(name)) return true;
     return !FENCE_PER_JOB.test(name);
   }
+  if (trade === "deck") {
+    // Hardware, fasteners, flashing, tape, concrete and the rough electrical live on the shelf; lumber, boards, roofing,
+    // rail systems and fixtures (lit or decorative caps among them) are bought per job.
+    if (/\b(lit|decorative|composite|aluminum|vinyl|glass|cable|transformer|receptacles? for|heater|light|fan|chandelier)\b/i.test(name)) return false;
+    return /\b(hangers?|ties?|screws?|lags?|bolts?|anchors?|flashing|membrane|tape|nails|concrete|tubes?|post bases?|post caps?|hold-downs?|connectors?|brackets?|gfci|box(?:es)?|switch(?:es)?|breakers?|wire|conduit)\b/i.test(name);
+  }
   return !(category === "Equipment" && HVAC_EQUIPMENT.test(name) && !HVAC_PART.test(name));
 }
 
@@ -54,6 +60,7 @@ export const STOCK_DEFAULT_NOTE: Record<TradeId, string> = {
   roof: "Suggested: the small stuff every truck carries is kept in stock — underlayment, ice & water, drip edge, starter, flashing, boots, vents, nails and sealants. Shingles, membranes and coatings are bought per job: the color and the system change with every roof.",
   fence: "Suggested: posts, rails, concrete, fasteners, caps and gate hardware are kept in stock. Pickets, boards, panels and fabric — and the vinyl, composite, aluminum, steel and chain-link systems — are bought per job.",
   hvac: "Suggested: the parts a service truck carries are kept in stock — capacitors, contactors, motors, thermostats, line sets, disconnects, drains. Equipment — condensers, furnaces, coils, air handlers, water heaters — is ordered per job.",
+  deck: "Suggested: hangers, ties, screws, lags, bolts, bases, caps, flashing, tape, concrete and the electrical boxes and wire are kept in stock. Lumber, deck boards, roofing, rail systems and fixtures are bought per job: the species and the product change with every deck.",
 };
 
 /** One row of the stock checklist: a standard item or one already on the list. */

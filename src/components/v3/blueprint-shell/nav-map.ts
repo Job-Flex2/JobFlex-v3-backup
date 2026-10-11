@@ -132,7 +132,14 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       // The deck estimator (2026-10-04): marked Coming soon for everyone,
       // open to admins for testing (lib/deck/access).
-      { label: "Deck estimator", icon: "i-deck", href: "/dashboard/deck-estimator", soon: true },
+      {
+        label: "Deck estimator",
+        icon: "i-deck",
+        href: "/dashboard/deck-estimator",
+        soon: true,
+        // Its inventory (the deck price book and stock, 2026-10-10) folds under it like the others'; the same Coming-soon door guards it.
+        children: [{ label: "Deck inventory", icon: "i-folder", href: "/dashboard/deck-estimator/inventory", soon: true }],
+      },
       { label: "Phone", icon: "i-phone", href: "/dashboard/phone" },
       { label: "Messages", icon: "i-msg", href: "/dashboard/messages" },
       { label: "Reviews", icon: "i-thumb", href: "/dashboard/reviews" },

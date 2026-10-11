@@ -30,6 +30,7 @@ export type CustomPageId =
   | "smart-proposal"
   | "roof-estimator"
   | "fence-estimator"
+  | "deck-estimator"
   | "video-estimator"
   | "hvac-estimator"
   | "calendar"
@@ -63,6 +64,8 @@ export const CUSTOM_PAGES: CustomPage[] = [
   { id: "video-estimator", label: "Video estimator", note: "Estimate from a walkthrough", href: "/dashboard/video-estimator",
     aliases: ["/mobile-video-estimator-v1"] },
   { id: "hvac-estimator", label: "HVAC estimator", note: "Load, unit and price for a replacement", href: "/dashboard/hvac-estimator",
+    aliases: [] },
+  { id: "deck-estimator", label: "Deck estimator", note: "Decks, gazebos and pergolas, framed to code (coming soon)", href: "/dashboard/deck-estimator",
     aliases: [] },
   { id: "calendar", label: "Calendar", note: "Scheduling and crew days", href: "/dashboard/calendar",
     aliases: ["/v3/calendar-a", "/mobile-calendar-v2"] },
@@ -209,6 +212,7 @@ const CUSTOM_PAGE_ROWS: Record<string, string[]> = {
   "fence-estimator": ["fence estimator"],
   "video-estimator": ["video estimator"],
   "hvac-estimator": ["hvac estimator"],
+  "deck-estimator": ["deck estimator"],
   calendar: ["calendar"],
   leads: ["free leads"],
   workers: ["workers management"],

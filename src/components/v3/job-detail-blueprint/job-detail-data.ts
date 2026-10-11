@@ -1,5 +1,6 @@
 // JOB DETAIL — BLUEPRINT · the shapes both editions read, and nothing else.
 import type { CrewBoardData, CrewDoor } from "@/components/v3/crew-board/crew-board-data";
+import type { TradeId } from "@/lib/inventory";
 //
 // ── THIS FILE USED TO BE THE DONOR'S FIXTURE ───────────────────────────────
 // It held the demo job ("Roof tear-off & reroof — 4812 Maple Ave"), its crew,
@@ -309,7 +310,7 @@ export type JobDetailRecord = {
    *  shelf has it. Both audiences see it — the crew is who loads the truck. */
   pick: JdPick[];
   /** The trade whose shelf the pick list reads (the Inventory link), else null. */
-  pickTrade: "roof" | "fence" | "hvac" | null;
+  pickTrade: TradeId | null;
   /** ISO time the truck was marked loaded, else null. */
   loadedAt: string | null;
   /** The warehouse items out on this job once loaded (for leftovers back). */

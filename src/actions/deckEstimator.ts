@@ -28,12 +28,19 @@ import { stateFromAddress, stateTaxRate } from "@/lib/pricing/salesTax";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { recordInventoryLink } from "@/lib/inventoryPick";
 import { logServerError } from "@/lib/server-events";
+import { runVisionJson } from "@/lib/sdk/openaiVision";
+import { friendlyAIError, isOpenAIEnabled } from "@/lib/sdk/openai";
+import { parseWallRead, WALL_READ_PROMPT, type WallRead } from "@/lib/deck/photoFit";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { sanitizeDeckRateBook, type DeckRateBook } from "@/lib/deck/rates";
 import { deckBookKey as bookKey } from "@/lib/deck/rateBookStore";
 import { DECK_PLAN_EVENT, DECK_PLAN_VERSION, deckConvertSchema, firstIssue, type DeckConvertInput } from "@/lib/deck/convertSchema";
 import { putPrivate } from "@/lib/media/privateStore";
 import { mediaHref } from "@/lib/media/signedLink";
+import { normalizeDeckDesign, structureWords, type DeckDesign } from "@/lib/deck/design";
+import { fitGround } from "@/lib/deck/site";
+import { geocode, isMapsEnabled } from "@/lib/maps";
+import { in3depCoverage, sample3depElevations } from "@/lib/elevation3dep";
 
 type Gate = { ok: true; organizationId: string; userId: string; role: string } | { ok: false; error: string };
 
@@ -97,6 +104,37 @@ export async function uploadDeckPhoto(form: FormData): Promise<DeckPhotoResult> 
   } catch (err) {
     logServerError("deck-photo", err, { kind: "action", organizationId: g.organizationId });
     return { ok: false, error: "The picture could not be saved. Try again in a moment." };
+  }
+}
+
+export type DeckPhotoRead = { ok: true; read: WallRead } | { ok: false; error: string; configured: boolean };
+
+/**
+ * THE SMART FIT'S READ (2026-10-10): the vision model looks at the picture
+ * once and says where the wall meets the ground, its eave, any jog, the
+ * back door, the windows and any black bars (lib/deck/photoFit
+ * WALL_READ_PROMPT). The studio does the arithmetic — scale, crop,
+ * placement — in the browser from this read, so nothing is stored here but
+ * what the design keeps. Owner: "the deck should find by itself where it's
+ * supposed to be, that wall on the picture."
+ */
+export async function readDeckPhoto(form: FormData): Promise<DeckPhotoRead> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error, configured: true };
+  const file = form.get("file");
+  if (!(file instanceof File)) return { ok: false, error: "No picture was sent.", configured: true };
+  if (!PHOTO_TYPES.has(file.type)) return { ok: false, error: "Use a JPEG, PNG or WebP picture.", configured: true };
+  if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: "That picture is too big — the studio should have shrunk it. Try again.", configured: true };
+  if (!isOpenAIEnabled()) return { ok: false, error: "Reading the picture needs the AI key on the server — drag the outline to the wall instead.", configured: false };
+  try {
+    const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
+    const raw = await runVisionJson<unknown>({ systemPrompt: WALL_READ_PROMPT, userPrompt: "Read this photo of the house and answer with the JSON.", imageUrl: dataUrl, detail: "high" });
+    const read = parseWallRead(raw);
+    if (!read) return { ok: false, error: "The wall could not be found in that picture — drag the outline to it, or take the picture square on from the yard.", configured: true };
+    return { ok: true, read };
+  } catch (err) {
+    logServerError("deck-photo-read", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: friendlyAIError(err, "deck-photo-read"), configured: true };
   }
 }
 
@@ -200,4 +238,170 @@ async function writeProposal(organizationId: string, userId: string, role: strin
   if (projectId) revalidatePath(`/dashboard/projects/${projectId}`);
   revalidatePath("/dashboard/proposals");
   return proposal.id;
+}
+
+
+/* ── Drafts: save the work in progress, open it later (M3, 2026-10-10) ───── */
+//
+// Owner: "when building and want to finish later — save or auto save, open
+// later and finish." A draft is the design and the address under a SyncState
+// row `deckdraft:<orgId>:<id>` (no table of its own, like the price book):
+// the studio auto-saves a few seconds after a change, lists the shop's drafts,
+// reopens one by `?draft=<id>`, and can also reopen the deck a saved proposal
+// carries (its DECK_PLAN).
+
+const DRAFT_PREFIX = "deckdraft:";
+const DRAFT_MAX = 60;
+const draftKey = (organizationId: string, id: string) => `${DRAFT_PREFIX}${organizationId}:${id}`;
+
+export interface DeckDraftRow {
+  id: string;
+  title: string;
+  address: string | null;
+  updatedAt: string;
+  by: string | null;
+}
+export interface DeckDraft extends DeckDraftRow {
+  design: DeckDesign;
+}
+
+function readDraft(id: string, cursor: string): DeckDraft | null {
+  try {
+    const raw = JSON.parse(cursor) as Record<string, unknown>;
+    const design = normalizeDeckDesign(raw.design);
+    return { id, title: typeof raw.title === "string" ? raw.title.slice(0, 120) : structureWords(design), address: typeof raw.address === "string" ? raw.address.slice(0, 300) : null, updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date(0).toISOString(), by: typeof raw.by === "string" ? raw.by : null, design };
+  } catch {
+    return null;
+  }
+}
+
+export type DraftSaveResult = { ok: true; id: string; updatedAt: string } | { ok: false; error: string };
+
+/** Save (or re-save) a draft. A new draft gets an id; the caller keeps it for the next save. */
+export async function saveDeckDraft(input: { id?: string | null; title?: string | null; design: unknown; address?: string | null }): Promise<DraftSaveResult> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error };
+  const id = input.id && /^[a-f0-9-]{8,40}$/i.test(input.id) ? input.id : randomUUID();
+  const design = normalizeDeckDesign(input.design);
+  const updatedAt = new Date().toISOString();
+  const title = (input.title?.trim() || structureWords(design)).slice(0, 120);
+  const address = input.address?.trim().slice(0, 300) || null;
+  const who = await db.user.findUnique({ where: { id: g.userId }, select: { name: true, email: true } }).catch(() => null);
+  const body = JSON.stringify({ v: 1, title, address, updatedAt, by: who?.name ?? who?.email ?? null, design });
+  try {
+    // A shop keeps at most DRAFT_MAX drafts: the oldest goes when a new one arrives.
+    const key = draftKey(g.organizationId, id);
+    const exists = await db.syncState.findUnique({ where: { key }, select: { key: true } });
+    if (!exists) {
+      const all = await db.syncState.findMany({ where: { key: { startsWith: `${DRAFT_PREFIX}${g.organizationId}:` } }, select: { key: true, cursor: true } });
+      if (all.length >= DRAFT_MAX) {
+        const oldest = all.map((r) => ({ key: r.key, at: readDraft(r.key, r.cursor)?.updatedAt ?? "" })).sort((a, b) => a.at.localeCompare(b.at))[0];
+        if (oldest) await db.syncState.delete({ where: { key: oldest.key } }).catch(() => {});
+      }
+    }
+    await db.syncState.upsert({ where: { key }, create: { key, cursor: body }, update: { cursor: body } });
+    return { ok: true, id, updatedAt };
+  } catch (err) {
+    logServerError("deck-draft-save", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The draft could not be saved. It is still here on this page; try again in a moment." };
+  }
+}
+
+/** The shop's drafts, newest first. */
+export async function listDeckDrafts(): Promise<{ ok: true; drafts: DeckDraftRow[] } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error };
+  try {
+    const rows = await db.syncState.findMany({ where: { key: { startsWith: `${DRAFT_PREFIX}${g.organizationId}:` } }, select: { key: true, cursor: true } });
+    const drafts = rows
+      .map((r) => readDraft(r.key.slice(`${DRAFT_PREFIX}${g.organizationId}:`.length), r.cursor))
+      .filter((d): d is DeckDraft => !!d)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map(({ id, title, address, updatedAt, by }) => ({ id, title, address, updatedAt, by }));
+    return { ok: true, drafts };
+  } catch (err) {
+    logServerError("deck-draft-list", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The drafts could not be read." };
+  }
+}
+
+export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: DeckDraft } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error };
+  if (!/^[a-f0-9-]{8,40}$/i.test(id)) return { ok: false, error: "No such draft." };
+  const row = await db.syncState.findUnique({ where: { key: draftKey(g.organizationId, id) }, select: { cursor: true } }).catch(() => null);
+  const draft = row ? readDraft(id, row.cursor) : null;
+  return draft ? { ok: true, draft } : { ok: false, error: "That draft is gone." };
+}
+
+export async function deleteDeckDraft(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error };
+  if (!/^[a-f0-9-]{8,40}$/i.test(id)) return { ok: false, error: "No such draft." };
+  await db.syncState.deleteMany({ where: { key: draftKey(g.organizationId, id) } }).catch(() => {});
+  return { ok: true };
+}
+
+/** The deck a saved proposal carries (its DECK_PLAN), to open it again in the studio. */
+export async function loadDeckFromProposal(proposalId: string): Promise<{ ok: true; design: DeckDesign; address: string | null; title: string } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error };
+  const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId: g.organizationId }, select: { id: true, title: true, address: true } }).catch(() => null);
+  if (!proposal) return { ok: false, error: "No such proposal." };
+  try {
+    const ev = await db.activityEvent.findFirst({ where: { proposalId: proposal.id, kind: DECK_PLAN_EVENT }, orderBy: { createdAt: "desc" }, select: { meta: true } });
+    const raw = ev?.meta ? (JSON.parse(ev.meta) as Record<string, unknown>) : null;
+    if (!raw) return { ok: false, error: "That proposal has no deck design saved with it." };
+    const design = normalizeDeckDesign(raw.design);
+    // A photo from another shop's folder never comes along.
+    if (design.photo && !design.photo.url.includes(`deck-photos/${g.organizationId}/`) && !design.photo.url.startsWith("data:")) design.photo = null;
+    return { ok: true, design, address: proposal.address ?? (typeof raw.address === "string" ? raw.address : null), title: proposal.title };
+  } catch {
+    return { ok: false, error: "The saved deck could not be read." };
+  }
+}
+
+/* ── The site from the address: where the ground falls (M3, 2026-10-10) ──── */
+//
+// The address is geocoded (Google), then USGS lidar (lib/elevation3dep) is
+// read on a ring of points around the house, and a plane fitted: back come
+// the grade and the direction the ground falls. The studio turns that into
+// inches of fall across the deck for the contractor to confirm — nobody can
+// tell from an address which wall the deck is on. No Google elevation call:
+// where the lidar has a gap the answer is "not read", not a guess.
+
+export type DeckSiteResult = { ok: true; lat: number; lng: number; gradePct: number; downhillDeg: number; resM: number } | { ok: false; error: string };
+
+export async function readDeckSite(address: string): Promise<DeckSiteResult> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, error: g.error };
+  const text = (address ?? "").trim().slice(0, 300);
+  if (text.length < 8) return { ok: false, error: "Type the job's street address first." };
+  if (!isMapsEnabled()) return { ok: false, error: "The map key is not set on this server, so the ground cannot be read. Type the fall by hand." };
+  let at: { lat: number; lng: number } | null;
+  try {
+    at = await geocode(text);
+  } catch (err) {
+    logServerError("deck-site-geocode", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The address could not be found on the map." };
+  }
+  if (!at) return { ok: false, error: "The address could not be found on the map." };
+  if (!in3depCoverage(at)) return { ok: false, error: "No lidar coverage here — type the ground's fall by hand." };
+  // A ring of eight points 30 ft out and four 60 ft out, plus the centre.
+  const FT_PER_DEG_LAT = 364000;
+  const ftPerDegLng = FT_PER_DEG_LAT * Math.cos((at.lat * Math.PI) / 180);
+  const samples: Array<{ eastFt: number; northFt: number }> = [{ eastFt: 0, northFt: 0 }];
+  for (let k = 0; k < 8; k++) samples.push({ eastFt: 30 * Math.cos((k * Math.PI) / 4), northFt: 30 * Math.sin((k * Math.PI) / 4) });
+  for (let k = 0; k < 4; k++) samples.push({ eastFt: 60 * Math.cos((k * Math.PI) / 2 + Math.PI / 4), northFt: 60 * Math.sin((k * Math.PI) / 2 + Math.PI / 4) });
+  const points = samples.map((s) => ({ lat: at!.lat + s.northFt / FT_PER_DEG_LAT, lng: at!.lng + s.eastFt / ftPerDegLng }));
+  try {
+    const res = await sample3depElevations(points);
+    if (!res.ok) return { ok: false, error: res.reason === "gap" ? "The lidar has a gap here — type the ground's fall by hand." : "The elevation service did not answer; try again in a moment." };
+    const fit = fitGround(samples.map((s, i) => ({ ...s, heightFt: res.elevFt[i] })));
+    if (!fit) return { ok: false, error: "The ground around the house could not be read." };
+    return { ok: true, lat: at.lat, lng: at.lng, gradePct: fit.gradePct, downhillDeg: fit.downhillDeg, resM: res.resM };
+  } catch (err) {
+    logServerError("deck-site-lidar", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The elevation service did not answer; try again in a moment." };
+  }
 }

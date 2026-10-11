@@ -13,8 +13,8 @@ import { normalizeDeckDesign, type DeckDesign } from "./design";
 import { parseDeckScene, type DeckScene } from "./scene";
 
 export const DECK_PLAN_EVENT = "DECK_PLAN";
-/** v2 (2026-10-10): the design carries the structure, the roof and the photo of the house; the scene is version 2. A v1 plan reads back as a bare deck. */
-export const DECK_PLAN_VERSION = 2;
+/** v2 (2026-10-10): the structure, the roof and the photo joined; v3 (M3, the same day): stairs, rails, levels, the site and the electrical, the scene version 3. Older plans read back as they were. */
+export const DECK_PLAN_VERSION = 3;
 
 /** The deck as it is kept with a proposal. */
 export interface DeckPlan {

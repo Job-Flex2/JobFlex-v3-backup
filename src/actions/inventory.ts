@@ -40,7 +40,7 @@ const refreshBoards = () => {
 };
 const boardHref = (trade: string) => (isTradeId(trade) ? inventoryHref(trade, "stock") : "/dashboard/inventory?tab=stock");
 const money = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100;
-const LABEL: Record<TradeId, string> = { fence: "Fence", roof: "Roofing", hvac: "HVAC" };
+const LABEL: Record<TradeId, string> = { fence: "Fence", roof: "Roofing", hvac: "HVAC", deck: "Deck" };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** Add or edit a stock item. An existing item of the same trade and name is updated. */
