@@ -23,6 +23,14 @@
 :global(.jf-blueprint .content) .label { font-size: 14px; font-weight: 900; letter-spacing: -.01em; }
 :global(.jf-blueprint .content) .sub { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted); }
 :global(.jf-blueprint .content) .reset { width: 100%; min-height: 44px; }
+/* The sign-up's three settings (2026-10-10): one framed row, the chosen one filled. */
+:global(.jf-blueprint .content) .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper-deep); }
+:global(.jf-blueprint .content) .segBtn { min-height: 44px; padding: 0 12px; font-size: 13px; font-weight: 800; color: var(--ink); background: transparent; border: 0; cursor: pointer; white-space: nowrap; }
+:global(.jf-blueprint .content) .segBtn + .segBtn { border-left: 1.5px solid var(--ink); }
+:global(.jf-blueprint .content) .segBtn[aria-checked="true"] { background: var(--blueprint); color: #fff; }
+:global(.jf-blueprint .content) .segBtn:hover:not([aria-checked="true"]):not([disabled]) { background: var(--paper); }
+:global(.jf-blueprint .content) .segBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+:global(.jf-blueprint .content) .segBtn[disabled] { cursor: default; }
 :global(.jf-blueprint .content) .reset[disabled] { opacity: .45; cursor: default; transform: none; box-shadow: none; }
 @media (max-width: 760px) {
   :global(.jf-blueprint .content) .panel { grid-template-columns: minmax(0, 1fr); padding: 14px; }

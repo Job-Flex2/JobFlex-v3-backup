@@ -118,7 +118,11 @@ export async function resetTrialPolicy(): Promise<SignupTrialState> {
    register page, cached ten seconds per instance like the card. ─────────── */
 export const SIGNUP_FLOW_KEY = "signupFlow";
 export type SignupSteps = 2 | 3;
-export interface SignupFlow { steps: SignupSteps; source: "admin" | "default"; by: string | null; at: string | null }
+/* PASSWORDLESS (2026-10-10): a third setting of the same switch — step 1 is
+   name and email, the address is proven by a six-digit code from an email
+   (lib/signupOtp), then the plan. Stored as `passwordless: true` beside
+   `steps: 2`; a row without it reads as the password sign-up, as before. */
+export interface SignupFlow { steps: SignupSteps; passwordless: boolean; source: "admin" | "default"; by: string | null; at: string | null }
 const STEPS_CACHE_MS = 10_000;
 let stepsCache: { at: number; value: SignupFlow } | null = null;
 
@@ -126,12 +130,12 @@ let stepsCache: { at: number; value: SignupFlow } | null = null;
 export async function readSignupFlow({ fresh = false }: { fresh?: boolean } = {}): Promise<SignupFlow> {
   const now = Date.now();
   if (!fresh && stepsCache && now - stepsCache.at < STEPS_CACHE_MS) return stepsCache.value;
-  let value: SignupFlow = { steps: 3, source: "default", by: null, at: null };
+  let value: SignupFlow = { steps: 3, passwordless: false, source: "default", by: null, at: null };
   try {
     const row = await db.syncState.findUnique({ where: { key: SIGNUP_FLOW_KEY }, select: { cursor: true } });
     if (row?.cursor) {
       const r = JSON.parse(row.cursor) as Record<string, unknown>;
-      if (r.steps === 2 || r.steps === 3) value = { steps: r.steps, source: "admin", by: typeof r.by === "string" ? r.by : null, at: typeof r.at === "string" ? r.at : null };
+      if (r.steps === 2 || r.steps === 3) value = { steps: r.passwordless === true ? 2 : r.steps, passwordless: r.passwordless === true, source: "admin", by: typeof r.by === "string" ? r.by : null, at: typeof r.at === "string" ? r.at : null };
     }
   } catch (err) {
     console.warn("[signup-flow] read failed, using 3 steps:", err);
@@ -143,8 +147,9 @@ export async function readSignupFlow({ fresh = false }: { fresh?: boolean } = {}
 export async function signupSteps(): Promise<SignupSteps> {
   return (await readSignupFlow()).steps;
 }
-export async function setSignupSteps(steps: SignupSteps, by: string | null): Promise<SignupFlow> {
-  const cursor = JSON.stringify({ steps, by, at: new Date().toISOString() });
+export async function setSignupSteps(steps: SignupSteps, by: string | null, passwordless = false): Promise<SignupFlow> {
+  const at = new Date().toISOString();
+  const cursor = JSON.stringify(passwordless ? { steps: 2, passwordless: true, by, at } : { steps, by, at });
   await db.syncState.upsert({ where: { key: SIGNUP_FLOW_KEY }, create: { key: SIGNUP_FLOW_KEY, cursor }, update: { cursor } });
   stepsCache = null;
   return readSignupFlow({ fresh: true });

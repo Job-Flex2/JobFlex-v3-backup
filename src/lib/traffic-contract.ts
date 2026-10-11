@@ -10,7 +10,7 @@ export interface TrafficFilters {
   source: string;
   device: string;
   host: string;
-  flow: "all" | "standard" | "google";
+  flow: "all" | "standard" | "google" | "otp";
   windowDays: number;
   billingMode: "live" | "test" | "all";
   /** Admins only: count before TRAFFIC_SINCE too (lib/traffic-visitor). Off by default. */
@@ -189,6 +189,7 @@ export function pageLabel(page: string): string {
   const labels: Record<string, string> = {
     "/": "Landing page", "/auth/login": "Login", "/auth/register": "Registration entry",
     "registration:1": "Step 1 / Account", "registration:2": "Step 2 / Company", "registration:3": "Step 3 / Plan",
+    "registration:code": "Step 1 / Email code",
   };
   return labels[page] ?? page;
 }

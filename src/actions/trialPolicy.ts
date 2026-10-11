@@ -25,12 +25,12 @@ export async function resetTrialCardPolicyAction(): Promise<Result> {
   }
 }
 
-/** The sign-up's steps, 2 or 3 (lib/trialPolicyServer). */
+/** The sign-up's steps, 2 or 3, or the passwordless sign-up (lib/trialPolicyServer). */
 export async function setSignupStepsAction(input: Record<string, unknown> = {}): Promise<{ ok: true; signup: SignupFlow } | { ok: false; error: string }> {
   const admin = await requirePlatformAdmin();
   if (input.steps !== 2 && input.steps !== 3) return { ok: false, error: "Pick 2 or 3 steps." };
   try {
-    return { ok: true, signup: await setSignupSteps(input.steps, admin.name || admin.email || null) };
+    return { ok: true, signup: await setSignupSteps(input.steps, admin.name || admin.email || null, input.passwordless === true) };
   } catch {
     return { ok: false, error: "The switch could not be saved. Try again." };
   }

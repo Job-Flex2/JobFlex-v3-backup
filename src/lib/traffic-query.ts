@@ -31,7 +31,7 @@ export function parseTrafficFilters(input: Record<string, unknown> = {}, now = n
     // Production (www.jobflex.app, jobflex.app) unless the admin asks for localhost too (2026-10-01).
     environment: input.environment === "all" || input.environment === "development" ? input.environment : "production",
     page: text("page", 240), source: text("source", 160), device: text("device", 80), host: text("host", 253),
-    flow: input.flow === "google" || input.flow === "standard" ? input.flow : "all",
+    flow: input.flow === "google" || input.flow === "standard" || input.flow === "otp" ? input.flow : "all",
     windowDays: [1, 7, 14].includes(Number(input.windowDays)) ? Number(input.windowDays) : 7,
     billingMode: input.billingMode === "test" || input.billingMode === "all" ? input.billingMode : "live",
     fullHistory,
@@ -49,7 +49,13 @@ export function funnelStages(f: TrafficFilters): FunnelStageSpec[] {
     { id: "landing", label: "Landing", where: "event = '$pageview' AND pathname = '/'" },
     { id: "registration", label: "Registration", where: "event = '$pageview' AND pathname = '/auth/register'" },
     ...(f.flow === "standard" ? [{ id: "account", label: "1 / Account", where: `event = ${q(E.step)} AND step = '1'` }] : []),
-    { id: "company", label: "2 / Company", where: `event = ${q(E.step)} AND step = '2'${f.flow === "all" ? "" : ` AND flow = ${q(f.flow)}`}` },
+    // The passwordless sign-up (2026-10-10) has no company screen: name and email, then the code.
+    ...(f.flow === "otp"
+      ? [
+          { id: "account", label: "1 / Account", where: `event = ${q(E.step)} AND step = '1' AND flow = 'otp'` },
+          { id: "code", label: "1 / Email code", where: `event = ${q(E.step)} AND step = 'code' AND flow = 'otp'` },
+        ]
+      : [{ id: "company", label: "2 / Company", where: `event = ${q(E.step)} AND step = '2'${f.flow === "all" ? "" : ` AND flow = ${q(f.flow)}`}` }]),
     { id: "plan", label: "3 / Plan", where: `event = ${q(E.step)} AND step = '3'` },
     { id: "attempt", label: "Trial / purchase attempt", where: `event = ${q(E.attempt)}` },
     { id: "checkout", label: "Checkout opened", where: `event = ${q(E.opened)}` },
