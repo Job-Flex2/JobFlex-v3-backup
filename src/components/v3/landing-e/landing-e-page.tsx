@@ -60,6 +60,7 @@ import { LandingVariantEffects } from "./landing-variant-effects";
    put 2–4 s of the mobile LCP in render delay from script work alone. */
 const EstimatorsShowcase = dynamic(() => import("./estimators-showcase").then((m) => m.EstimatorsShowcase));
 import { DeckShots } from "./deck-shots";
+import { isEditionOpen } from "@/lib/editions";
 const Montage = dynamic(() => import("./montage").then((m) => m.Montage));
 // The HVAC page's own section (2026-10-01): plans, visits, units, menu, the tech's phone.
 const HvacServiceSection = dynamic(() => import("./hvac-service-section").then((m) => m.HvacServiceSection));
@@ -113,7 +114,14 @@ export interface LandingEProps {
 export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, inAppBrowser = null, hook }: LandingEProps) {
   // The trade's hero — with the ad's two lines in place of its own when the
   // link carried a `?hook=` the trade knows.
-  const v = withHook(variantContent(variant), hookContent(variant, hook));
+  const base = withHook(variantContent(variant), hookContent(variant, hook));
+  // THE DECK STUDIO, COMING SOON (lib/editions EDITION_OPEN, owner 2026-10-11):
+  // the decking landing still shows the studio, says it is coming, and signs a
+  // decking shop up to JobFlex itself — Smart Proposal prices a deck today.
+  const deckSoon = variant === "decking" && !isEditionOpen("deck");
+  const v = deckSoon
+    ? { ...base, h1: ["Deck Studio is coming soon.", "The deck in 3D, to your state's code."] as [string, string], primaryCta: "Start with JobFlex — free trial", heroCta: "Start with JobFlex — free trial" }
+    : base;
   // signupTrialMode (lib/trialPolicyServer) — the same answer the plan step
   // reads: the hero's trial line, the plan cards, the FAQ's card answer and
   // the footer.
@@ -122,7 +130,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // Every register link carries the trade, the visit's utm_* and the fbclid.
   const registerPlain = signupHref(REGISTER, { industry: variant, utm, fbclid });
   // THE DECK DOOR (2026-10-11, lib/editions): the decking landing is the Deck Studio's; its sign-up carries the edition.
-  const register = variant === "decking" ? `${registerPlain}${registerPlain.includes("?") ? "&" : "?"}edition=deck` : registerPlain;
+  const register = variant === "decking" && !deckSoon ? `${registerPlain}${registerPlain.includes("?") ? "&" : "?"}edition=deck` : registerPlain;
   // …and so does the nav's Pricing link, for /pricing to hand on (pricing-visit.tsx).
   const pricing = signupHref(PRICING, { industry: variant, utm, fbclid });
   // The price anchor shows the Subscription page's own catalogue (CRO stage
@@ -153,7 +161,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // The trade's price for the first screen (hero-price.ts): the cheapest plan
   // on sale that carries the trade's estimator. Null for a variant that names
   // no plan row, and when the catalogue could not be read.
-  const priceLine = heroPriceLine(v, plans);
+  const priceLine = deckSoon ? "Deck Studio is coming soon — price decks today with JobFlex's Smart Proposal." : heroPriceLine(v, plans);
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is

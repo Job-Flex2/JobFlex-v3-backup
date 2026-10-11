@@ -7,10 +7,15 @@
 // was picked (lib/editions homeFor).
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { EDITIONS, parseDoor, type Door } from "@/lib/editions";
+import { EDITIONS, isEditionOpen, parseDoor, type Door } from "@/lib/editions";
 import { readDoorCookie, writeDoorCookie } from "@/lib/doorClient";
 
+/** The switch is drawn only while the Deck Studio is open (lib/editions): coming soon, there is one door. */
 export function DoorSwitchSignIn() {
+  return isEditionOpen("deck") ? <DoorSwitchButtons /> : null;
+}
+
+function DoorSwitchButtons() {
   const search = useSearchParams();
   const fromUrl = parseDoor(search.get("door"));
   // The cookie is read after the first paint (it is not on the server's render), so the switch never flashes.

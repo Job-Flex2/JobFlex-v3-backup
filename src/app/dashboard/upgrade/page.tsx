@@ -23,6 +23,7 @@ import { requireOrg } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
 import { editionUpgradeTarget } from "@/lib/editionAccess";
+import { isEditionOpen } from "@/lib/editions";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { getStripeMode } from "@/lib/stripeMode";
 import { isOwnerRole } from "@/lib/orgContext";
@@ -111,7 +112,7 @@ export default async function UpgradePage({
   return (
     <UpgradeResponsive
       focusSlug={target?.slug ?? null}
-      focusWords={target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? "No plan carries the Deck Studio yet — ask us to add it." : null}
+      focusWords={target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? (isEditionOpen("deck") ? "No plan carries the Deck Studio yet — ask us to add it." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
       plans={plans}
       currentPlan={sub?.plan ?? null}
       customPages={customPages}

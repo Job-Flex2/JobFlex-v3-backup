@@ -27,6 +27,7 @@
 // while an /dashboard/estimators* route is on screen. A dialog reachable from
 // every page cannot depend on one page's stylesheet being active.
 
+import { isEditionOpen } from "@/lib/editions";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
@@ -389,11 +390,17 @@ export function EstimatorPicker() {
             {queued
               .filter((engine) => !(deckOpen && engine.id === "deck"))
               .map((engine) =>
-                engine.id === "deck" ? (
+                engine.id === "deck" && isEditionOpen("deck") ? (
                   <a key={engine.id} className="estp-stub estp-stub--add" href={DECK_ADD_HREF} data-deck-add onClick={() => close()}>
                     <i>{engine.no}</i>
                     Deck Studio · add it
                   </a>
+                ) : engine.id === "deck" ? (
+                  // Coming soon (lib/editions EDITION_OPEN): named, not sold.
+                  <span key={engine.id} className="estp-stub" data-deck-soon>
+                    <i>{engine.no}</i>
+                    Deck Studio · coming soon
+                  </span>
                 ) : (
                   <span key={engine.id} className="estp-stub">
                     <i>{engine.no}</i>

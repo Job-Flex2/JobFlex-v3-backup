@@ -98,10 +98,41 @@ export const EDITIONS: Record<EditionId, Edition> = {
 
 export const EDITION_IDS: readonly EditionId[] = ["platform", "deck"];
 
-/** "deck" | "platform" from a cookie or a query value; null for anything else. */
-export function parseDoor(v: string | null | undefined): Door | null {
+/**
+ * IS THE EDITION OPEN? (owner, 2026-10-11: "make that studio coming soon on
+ * the landing page, for users and on the subscription — only you can see the
+ * preview.") While an edition is NOT open:
+ *   · nothing sells it — its own plans leave the on-sale catalog
+ *     (lib/planCatalogServer) and checkout refuses them, a plan's feature
+ *     line naming it reads "— coming soon", and the landing, the sign-up, the
+ *     upgrade page, the Estimators page and the studio's own page say so;
+ *   · nothing opens it — a plan's feature line or the custom plan's page
+ *     grant nothing, the sign-in door is not drawn and a "deck" door reads
+ *     as no door;
+ *   · the admins' preview stays (lib/deck/access), and an account already
+ *     ON the edition's own plan keeps it — that was bought.
+ * Set it to true to open the edition: every rule goes back to selling it.
+ */
+export const EDITION_OPEN: Record<EditionId, boolean> = { platform: true, deck: false };
+export const isEditionOpen = (edition: EditionId): boolean => EDITION_OPEN[edition];
+
+/** A catalog plan that is a closed edition's own: not on sale while it is coming soon. */
+export function planComingSoon(slug: string | null | undefined, open: boolean = EDITION_OPEN.deck): boolean {
+  return !open && isEditionPlan(slug, "deck");
+}
+
+/** A plan's feature line as a buyer reads it: one that names a closed edition says "— coming soon". */
+export function featureLineForSale(line: string, open: boolean = EDITION_OPEN.deck): string {
+  if (open || /coming soon/i.test(line)) return line;
+  const l = line.toLowerCase();
+  return EDITIONS.deck.featureWords.some((w) => l.includes(w)) ? `${line} — coming soon` : line;
+}
+
+/** "deck" | "platform" from a cookie or a query value; null for anything else —
+ *  and for "deck" while the Deck Studio is coming soon (no door to it yet). */
+export function parseDoor(v: string | null | undefined, deckOpen: boolean = EDITION_OPEN.deck): Door | null {
   const s = (v ?? "").trim().toLowerCase();
-  return s === "deck" ? "deck" : s === "platform" || s === "jobflex" ? "platform" : null;
+  return s === "deck" ? (deckOpen ? "deck" : null) : s === "platform" || s === "jobflex" ? "platform" : null;
 }
 
 /** True when the plan slug IS the edition (an account on it works in that workspace only). */
@@ -125,11 +156,14 @@ export interface AccessFacts {
 }
 
 /** The edition is open to the account: its own plan, a plan whose features name it, or the custom plan's page. */
-export function hasEdition(facts: AccessFacts, edition: EditionId = "deck"): boolean {
+export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): boolean {
   if (edition === "platform") return true;
   if (facts.lapsed) return false;
   const e = EDITIONS[edition];
+  // The edition's own plan was bought: kept even while the edition is coming soon.
   if (isEditionPlan(facts.planSlug, edition)) return true;
+  // Coming soon: a feature line or the custom plan's page open nothing yet.
+  if (!open) return false;
   const words = facts.features.map((f) => f.toLowerCase());
   if (words.some((f) => e.featureWords.some((w) => f.includes(w)))) return true;
   return !!e.customPage && !!facts.customPages?.includes(e.customPage);
@@ -141,8 +175,8 @@ export function editionOnly(facts: AccessFacts, edition: EditionId = "deck"): bo
 }
 
 /** Both workspaces are open to the account, so a switch is worth drawing. */
-export function canSwitch(facts: AccessFacts): boolean {
-  return hasEdition(facts, "deck") && !editionOnly(facts, "deck");
+export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("deck")): boolean {
+  return hasEdition(facts, "deck", open) && !editionOnly(facts, "deck");
 }
 
 /**
@@ -150,9 +184,9 @@ export function canSwitch(facts: AccessFacts): boolean {
  * edition alone; else the door the browser chose when the account may use
  * it; else the whole platform.
  */
-export function workspaceFor(facts: AccessFacts, door: Door | null): Workspace {
+export function workspaceFor(facts: AccessFacts, door: Door | null, open: boolean = isEditionOpen("deck")): Workspace {
   if (editionOnly(facts, "deck")) return "deck";
-  if (door === "deck" && hasEdition(facts, "deck")) return "deck";
+  if (door === "deck" && hasEdition(facts, "deck", open)) return "deck";
   return "platform";
 }
 
@@ -186,7 +220,9 @@ export function unlockedByEdition(edition: EditionId): readonly string[] {
  * and which is not the edition's own plan; else the edition's own plan when
  * it is on sale; else nothing to point at.
  */
-export function upgradeTargetFrom<P extends { slug: string; priceCents: number; features: readonly string[]; active: boolean }>(plans: readonly P[], edition: EditionId = "deck"): P | null {
+export function upgradeTargetFrom<P extends { slug: string; priceCents: number; features: readonly string[]; active: boolean }>(plans: readonly P[], edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): P | null {
+  // Coming soon: no plan is the way to it yet.
+  if (!open) return null;
   const e = EDITIONS[edition];
   const onSale = plans.filter((p) => p.active);
   const names = (p: P) => p.features.some((f) => e.featureWords.some((w) => f.toLowerCase().includes(w)));
