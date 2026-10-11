@@ -90,6 +90,7 @@ function trafficParts(f: TrafficFilters) {
       ${prop("$device_type")} AS device, ${prop("$browser")} AS browser, ${prop("$os")} AS os,
       ${prop("$geoip_country_name")} AS country, ${prop("$geoip_subdivision_1_name")} AS region, ${prop("$geoip_city_name")} AS city,
       ${prop("step")} AS step, ${prop("flow")} AS flow,
+      ${prop("mode")} AS mode, ${prop("steps")} AS steps, ${prop("signup_mode")} AS signup_mode,
       ${prop("experiment")} AS experiment, ${prop("variant")} AS variant,
       ${prop("verified")} AS verified, ${prop("billing_mode")} AS billing_mode,
       ${prop("intent")} AS intent, ${prop("outcome")} AS outcome
@@ -206,12 +207,15 @@ function buildAllTrafficQueries(f: TrafficFilters): Record<string, string> {
   ), outcomes AS (
     SELECT x.visitor, x.experiment, x.assigned_variant, x.variants,
       countIf(b.event = ${q(E.attempt)} AND b.timestamp >= x.exposed_at AND b.timestamp <= x.exposed_at + INTERVAL ${f.windowDays} DAY) > 0 AS attempted,
-      countIf(b.event = ${q(E.completed)} AND b.verified = 'true' AND b.timestamp >= x.exposed_at AND b.timestamp <= x.exposed_at + INTERVAL ${f.windowDays} DAY) > 0 AS completed
+      countIf(b.event = ${q(E.completed)} AND b.verified = 'true' AND b.timestamp >= x.exposed_at AND b.timestamp <= x.exposed_at + INTERVAL ${f.windowDays} DAY) > 0 AS completed,
+      argMinIf(b.signup_mode, b.timestamp, b.event = ${q(E.completed)} AND b.verified = 'true' AND b.timestamp >= x.exposed_at AND b.timestamp <= x.exposed_at + INTERVAL ${f.windowDays} DAY) AS completed_mode
     FROM exposures x LEFT JOIN base b ON x.visitor = b.visitor
     WHERE x.exposed_at >= ${start} AND x.exposed_at < ${end} AND ${aud(start)}
       ${f.source ? `AND x.exposure_source = ${q(f.source)}` : ""} ${f.device ? `AND x.exposure_device = ${q(f.device === "__unknown__" ? "" : f.device)}` : ""}
     GROUP BY x.visitor, x.experiment, x.assigned_variant, x.variants
-  ) SELECT experiment, assigned_variant, countIf(variants = 1), countIf(variants = 1 AND attempted), countIf(variants = 1 AND completed), countIf(variants > 1)
+  ) SELECT experiment, assigned_variant, countIf(variants = 1), countIf(variants = 1 AND attempted), countIf(variants = 1 AND completed), countIf(variants > 1),
+      countIf(variants = 1 AND completed AND completed_mode = '3-step'), countIf(variants = 1 AND completed AND completed_mode = '2-step'),
+      countIf(variants = 1 AND completed AND completed_mode = 'passwordless'), countIf(variants = 1 AND completed AND completed_mode NOT IN ('3-step', '2-step', 'passwordless'))
     FROM outcomes GROUP BY experiment, assigned_variant ORDER BY experiment, assigned_variant LIMIT 100`;
   // Landing variant d vs e (landing-e pass A): a signup start is a visitor's
   // first registration step in the range; its `variant` property ("e" from
@@ -227,7 +231,24 @@ function buildAllTrafficQueries(f: TrafficFilters): Record<string, string> {
       uniqExactIf(s.visitor, b.event = ${q(E.completed)} AND b.verified = 'true' AND b.timestamp >= s.started_at AND b.timestamp <= s.started_at + INTERVAL ${f.windowDays} DAY) AS completed
     FROM starts s LEFT JOIN base b ON s.visitor = b.visitor
     GROUP BY s.arm ORDER BY s.arm LIMIT 2`;
-  return { overview, trend, pages, breakdowns, funnel, experiments, variants };
+  // The sign-up mode (2026-10-10, lib/signupMode): a start is a visitor's first
+  // registration step in the range, its mode read off that step (mode "otp" =
+  // passwordless, else its step count; earlier events carry neither: unknown);
+  // completion is the verified server event inside the window after it. The
+  // "done" rows count completions by the mode the SERVER recorded on them —
+  // right also for a sign-up finished from the email's button in another browser.
+  const modes = `${audienceBase}, starts AS (
+    SELECT visitor, argMin(if(mode = 'otp', 'passwordless', if(steps = '2', '2-step', if(steps = '3', '3-step', 'unknown'))), timestamp) AS arm, min(timestamp) AS started_at
+    FROM enriched WHERE ${selected} AND event = ${q(E.step)} GROUP BY visitor
+  )
+    SELECT 'start', s.arm, uniqExact(s.visitor),
+      uniqExactIf(s.visitor, b.event = ${q(E.completed)} AND b.verified = 'true' AND b.timestamp >= s.started_at AND b.timestamp <= s.started_at + INTERVAL ${f.windowDays} DAY)
+    FROM starts s LEFT JOIN base b ON s.visitor = b.visitor GROUP BY s.arm
+    UNION ALL
+    SELECT 'done', if(signup_mode = '', 'unknown', signup_mode), 0, uniqExact(visitor)
+    FROM enriched WHERE ${selected} AND event = ${q(E.completed)} AND verified = 'true' GROUP BY if(signup_mode = '', 'unknown', signup_mode)
+    LIMIT 20`;
+  return { overview, trend, pages, breakdowns, funnel, experiments, variants, modes };
 }
 
 export const STAGE_VISITOR_LIMIT = 200;

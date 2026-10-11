@@ -251,6 +251,7 @@ export function AdminTrafficContent({ data, deferred = false, signups: initialSi
       </div>
       {/* Landing variant d vs e (landing-e pass A): signup starts → verified signups, per arm. */}
       {!!report.variants.length && <div className={s.tableScroll} style={{ marginTop: 18 }}><table className={s.table}><thead><tr><th>Landing variant</th><th>Signup starts</th><th>Verified signups</th><th>Start → complete</th></tr></thead><tbody>{report.variants.map(v => <tr key={v.variant}><td><b>{v.variant === "e" ? "e / landing-e" : "d / landing"}</b></td><td><b>{n(v.started)}</b></td><td>{n(v.completed)}</td><td>{coverageIncomplete ? "--" : rate(percent(v.completed, v.started))}</td></tr>)}</tbody></table></div>}
+      {!!report.modes?.length && <div className={s.tableScroll} style={{ marginTop: 18 }}><table className={s.table}><thead><tr><th>Sign-up mode</th><th>Signup starts</th><th>Verified signups</th><th>Start → complete</th><th>Completions recorded</th></tr></thead><tbody>{report.modes.map(m => <tr key={m.mode}><td><b>{m.mode === "unknown" ? "Not recorded" : m.mode === "passwordless" ? "Passwordless" : m.mode === "2-step" ? "2 steps" : "3 steps"}</b></td><td><b>{n(m.started)}</b></td><td>{n(m.completed)}</td><td>{coverageIncomplete ? "--" : rate(percent(m.completed, m.started))}</td><td>{n(m.recorded)}</td></tr>)}</tbody></table></div>}
     </section>
 
     <div className={s.sectionLabel}><span>03 / Explore</span><span>Same date &amp; audience filters</span></div>

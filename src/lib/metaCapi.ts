@@ -176,6 +176,8 @@ export interface MetaSignupContext {
   /** Set once Subscribe (the same first paid invoice) has gone. */
   subscribeSentAt?: string;
   trialSentAt?: string;
+  /** The sign-up's mode (lib/signupMode), stamped at account creation. */
+  signupMode?: string;
 }
 
 export function parseMetaSignup(json: string | null | undefined): MetaSignupContext | null {

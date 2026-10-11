@@ -312,7 +312,7 @@ export async function orLastGood<T>(key: string, fresh: Promise<T>, scope?: stri
 export function emptyTrafficReport(filters: TrafficFilters): TrafficReport {
   return { filters, fetchedAt: new Date().toISOString(), status: "ok", errors: [], totals: null, previous: null,
     lifetime: null, today: null, firstTrackedAt: null, firstStepAt: null, people: null, points: [], pages: [], sources: [],
-    referrers: [], campaigns: [], devices: [], browsers: [], countries: [], terms: [], hosts: [], funnel: [], funnelOutcomes: null, experiments: [], variants: [] };
+    referrers: [], campaigns: [], devices: [], browsers: [], countries: [], terms: [], hosts: [], funnel: [], funnelOutcomes: null, experiments: [], variants: [], modes: [] };
 }
 
 async function loadReport(filters: TrafficFilters, cacheKey: string): Promise<TrafficReport> {
@@ -387,6 +387,17 @@ async function loadReport(filters: TrafficFilters, cacheKey: string): Promise<Tr
     report.funnelOutcomes = { trials: numeric(row[0]), purchases: numeric(row[1]), other: numeric(row[2]), trialAttempts: numeric(row[3]), purchaseAttempts: numeric(row[4]) };
   }
   report.variants = (results.variants || []).map(r => ({ variant: String(r[0]) === "e" ? "e" as const : "d" as const, started: numeric(r[1]), completed: numeric(r[2]) }));
+  {
+    const byMode = new Map<string, { mode: string; started: number; completed: number; recorded: number }>();
+    for (const r of results.modes || []) {
+      const mode = String(r[1] || "unknown");
+      const m = byMode.get(mode) ?? { mode, started: 0, completed: 0, recorded: 0 };
+      if (String(r[0]) === "start") { m.started += numeric(r[2]); m.completed += numeric(r[3]); } else m.recorded += numeric(r[3]);
+      byMode.set(mode, m);
+    }
+    const order = ["3-step", "2-step", "passwordless", "unknown"];
+    report.modes = [...byMode.values()].sort((a, b) => (order.indexOf(a.mode) + 1 || 9) - (order.indexOf(b.mode) + 1 || 9));
+  }
   report.experiments = (results.experiments || []).map(experimentResultFromRow);
   if (!report.totals) { report.status = "error"; report.message = report.errors[0] || "Traffic is unavailable."; }
   // The oldest answer on the page dates the note; a scope only when some of it is fresh.

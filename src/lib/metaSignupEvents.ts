@@ -49,6 +49,7 @@ function eventFor(org: OrgRow, ctx: MetaSignupContext, base: Pick<MetaEvent, "ev
       utm_medium: org.utmMedium,
       utm_campaign: org.utmCampaign,
       utm_content: org.utmContent,
+      ...(ctx.signupMode ? { signup_mode: ctx.signupMode } : {}),
       ...(base.custom ?? {}),
     },
   };

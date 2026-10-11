@@ -40,6 +40,8 @@ export interface ExperimentResult {
   attempts: number;
   completed: number;
   mixedVisitors: number;
+  /** Verified signups by the mode the server recorded (lib/signupMode). */
+  completedByMode?: { "3-step": number; "2-step": number; passwordless: number; unknown: number };
 }
 
 /** A missing or malformed analytics count is unavailable, never a fabricated zero. */
@@ -57,7 +59,8 @@ export function experimentResultFromRow(row: unknown): ExperimentResult {
   };
   const [visitors, attempts, completed, mixedVisitors] = row.slice(2, 6).map(count);
   if (attempts > visitors || completed > visitors) throw new Error("PostHog returned inconsistent experiment counts.");
-  return { experiment: row[0], variant: row[1], visitors, attempts, completed, mixedVisitors };
+  const byMode = row.length >= 10 ? row.slice(6, 10).map(count) : null;
+  return { experiment: row[0], variant: row[1], visitors, attempts, completed, mixedVisitors, ...(byMode ? { completedByMode: { "3-step": byMode[0], "2-step": byMode[1], passwordless: byMode[2], unknown: byMode[3] } } : {}) };
 }
 export interface StageVisitor {
   id: string;
@@ -132,8 +135,13 @@ export interface TrafficReport {
    *  carried `variant` ("e") or not ("d"), and how many of them completed a
    *  verified signup inside the conversion window. */
   variants: VariantFunnel[];
+  modes: ModeFunnel[];
 }
 export interface VariantFunnel { variant: "d" | "e"; started: number; completed: number }
+/** Sign-ups by mode (lib/signupMode): starts by the mode of the visitor's first
+ *  step, their completions inside the window, and completions by the mode the
+ *  server recorded on them. "unknown" = events from before modes were recorded. */
+export interface ModeFunnel { mode: string; started: number; completed: number; recorded: number }
 
 export const TRAFFIC_EVENTS = {
   step: "jf_registration_step_viewed",

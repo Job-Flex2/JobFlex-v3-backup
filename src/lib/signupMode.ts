@@ -52,3 +52,10 @@ export function rememberOtpDraft(token: string | null): void {
     /* cookies blocked: the address bar still names the draft */
   }
 }
+
+/** The sign-up a completed account came through, as the reports split it:
+ *  the owner's three settings (Admin → Trials). Carried on the pending signup,
+ *  then on the server's completion events (jf_signup_completed, Meta's
+ *  CompleteRegistration / StartTrial / Purchase as `signup_mode`). */
+export type SignupModeLabel = "3-step" | "2-step" | "passwordless";
+export const SIGNUP_MODE_LABELS: readonly SignupModeLabel[] = ["3-step", "2-step", "passwordless"];

@@ -307,7 +307,7 @@ export async function writeVerifiedPending(
     createdAt: Date.now(),
     emailVerifiedAt: Date.now(),
     nameUnset: true,
-    signupMode: "otp",
+    signupMode: "passwordless",
   } as PendingRecord;
   await db.syncState.upsert({
     where: { key: `signup:${token}` },

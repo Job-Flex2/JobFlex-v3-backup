@@ -53,7 +53,7 @@ import { metaTrack, newEventId, readMetaCookies } from "@/lib/metaPixel";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
-import { rememberSignupMode, type SignupMode } from "@/lib/signupMode";
+import { rememberSignupMode, type SignupMode, type SignupModeLabel } from "@/lib/signupMode";
 import type { OtpRestore } from "@/lib/signupOtp";
 import { rememberFbclidForGoogle, writeLandingCookies } from "@/components/v3/landing-e/landing-variant-effects";
 import { resolveLandingVariant } from "@/components/v3/landing-e/landing-variants";
@@ -246,6 +246,9 @@ export function RegisterContent({
      code signup); every step event also says which mode it ran in. */
   const trafficFlow = setupMode ? "setup" : google ? "google" : otp ? "otp" : "standard";
   const signupMode: SignupMode = otp ? "otp" : "password";
+  /* The same mode as the reports split completions (lib/signupMode), on the
+     browser's copies of CompleteRegistration / StartTrial. */
+  const modeLabel: SignupModeLabel = otp ? "passwordless" : twoStep ? "2-step" : "3-step";
   React.useEffect(() => {
     if (step === 4) return;
     const key = `${trafficFlow}:${step}`;
@@ -466,8 +469,8 @@ export function RegisterContent({
   const fireRegistration = React.useCallback(() => {
     if (registrationSent.current) return;
     registrationSent.current = true;
-    metaTrack("CompleteRegistration", { content_name: industry ?? "default", status: "true" }, metaIds.current.registration);
-  }, [industry]);
+    metaTrack("CompleteRegistration", { content_name: industry ?? "default", status: "true", signup_mode: modeLabel }, metaIds.current.registration);
+  }, [industry, modeLabel]);
   React.useEffect(() => {
     if (step === 4 && !ret?.sessionId) fireRegistration();
   }, [step, ret?.sessionId, fireRegistration]);
@@ -1150,6 +1153,7 @@ export function RegisterContent({
         landingIndustry: industry ?? undefined,
         utm: utm ?? undefined,
         signupVariant: "e",
+        signupMode: twoStep ? "2-step" : "3-step",
         meta: {
           consent: effectiveConsent().marketing,
           registrationEventId: metaIds.current.registration,
@@ -1241,7 +1245,7 @@ export function RegisterContent({
       }
       if (res.registrationEventId) metaIds.current.registration = res.registrationEventId;
       fireRegistration();
-      if (res.subscriptionId) metaTrack("StartTrial", { value: 0, currency: "USD" }, `${res.subscriptionId}:trial`);
+      if (res.subscriptionId) metaTrack("StartTrial", { value: 0, currency: "USD", signup_mode: modeLabel }, `${res.subscriptionId}:trial`);
       const auth = res.ticket ? await signIn("signup-ticket", { ticket: res.ticket, redirect: false }) : null;
       const ok = Boolean(auth && !auth.error);
       setSignedIn(ok);

@@ -48,6 +48,7 @@ import { captureSignupOutcome, trafficIdentitySchema } from "@/lib/traffic-captu
 import { sendMetaEvent, type MetaSignupContext } from "@/lib/metaCapi";
 import { metaContextFor } from "@/lib/metaSignupContext";
 import { orgNameUnsetKey } from "@/lib/orgName";
+import type { SignupModeLabel } from "@/lib/signupMode";
 import { metaStartTrial } from "@/lib/metaSignupEvents";
 import { sendWelcomeFirstEstimate } from "@/lib/email/welcome";
 import { trackActivation } from "@/lib/activation-events";
@@ -92,6 +93,10 @@ const pendingSchema = z.object({
    *  completion event. "e" — landing-e's arm (pass A, 2026-09-11) — is the
    *  only flow since 2026-09-16; older organizations carry null ("d"). */
   signupVariant: z.enum(["e"]).optional(),
+  /** The sign-up's mode, as the reports split completions (lib/signupMode):
+   *  the password form sends "3-step" or "2-step"; the passwordless one writes
+   *  its own intents (lib/signupOtp). */
+  signupMode: z.enum(["3-step", "2-step"]).optional().catch(undefined),
   /** The visit's utm_*, as the landing carried them (CRO stage 1, 2026-09-09). */
   utm: z
     .object({
@@ -128,7 +133,7 @@ const pendingSchema = z.object({
 });
 
 export type PendingRecord = z.infer<typeof pendingSchema> extends infer T
-  ? Omit<Extract<T, object>, "password" | "googleToken" | "meta"> & {
+  ? Omit<Extract<T, object>, "password" | "googleToken" | "meta" | "signupMode"> & {
       /** The browser's Meta context plus, with consent, the request's IP and UA. */
       meta?: MetaSignupContext;
       /** Null for a Google-backed signup — the finished account signs in with Google. */
@@ -150,7 +155,8 @@ export type PendingRecord = z.infer<typeof pendingSchema> extends infer T
       /** The business name is the person's name for now (no company name was
        *  asked): the org is marked `orgNameUnset:<orgId>` (lib/orgName). */
       nameUnset?: boolean;
-      signupMode?: "otp";
+      /** Which of the owner's three sign-ups this came through (lib/signupMode). */
+      signupMode?: SignupModeLabel;
     }
   : never;
 
@@ -213,6 +219,7 @@ export async function startPendingSignup(raw: unknown): Promise<{ ok: true; toke
     otherTrade: data.otherTrade,
     landingIndustry: data.landingIndustry,
     signupVariant: data.signupVariant,
+    signupMode: data.signupMode,
     utm: data.utm,
     meta: await metaContextFor(data.meta),
     attribution: data.attribution ?? null,
@@ -609,7 +616,7 @@ export async function startVerifiedCardlessTrial(
   token: string,
   planSlug: string,
 ): Promise<
-  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null }
+  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null; signupMode: string | null }
   | { ok: false; error: string; requiresCard?: true; done?: boolean; email?: string }
 > {
   try {
@@ -657,7 +664,7 @@ export async function startVerifiedCardlessTrial(
 export async function confirmCardlessTrial(
   secret: string,
 ): Promise<
-  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null }
+  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null; signupMode: string | null }
   | { ok: false; error: string; done?: boolean; email?: string; cardHref?: string }
 > {
   if (!secret || secret.length > 200) return { ok: false, error: "That link is not valid." };
@@ -683,7 +690,7 @@ function cardlessSignupAlreadyUsed(email: string) {
 async function finishCardlessTrial(
   token: string,
 ): Promise<
-  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null }
+  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null; signupMode: string | null }
   | { ok: false; error: string; done?: boolean; email?: string; cardHref?: string }
 > {
   const rec = await loadPending(token);
@@ -763,7 +770,7 @@ async function finishCardlessTrial(
   // Counted against the day's ceiling; support hears at 80% (lib/trialDailyCap).
   await noteCardlessTrialStarted(created.orgId);
   after(() => nameOrgOnSubscription(sub.id, created.orgId));
-  return { ok: true, email: created.email, ticket: created.ticket, registrationEventId: rec.meta?.registrationEventId ?? null, subscriptionId: sub.id };
+  return { ok: true, email: created.email, ticket: created.ticket, registrationEventId: rec.meta?.registrationEventId ?? null, subscriptionId: sub.id, signupMode: rec.signupMode ?? null };
 }
 
 /** The done record's "session" for a card-less trial — there is no Checkout. */
@@ -849,7 +856,9 @@ async function createAccountFromPending(
           utmMedium: rec.utm?.utm_medium || null,
           utmCampaign: rec.utm?.utm_campaign || null,
           utmContent: rec.utm?.utm_content || null,
-          metaSignupJson: rec.meta ? JSON.stringify(rec.meta) : null,
+          // The mode rides in the stored Meta context, so StartTrial / Purchase
+          // sent later by the webhook carry it too (lib/metaSignupEvents).
+          metaSignupJson: rec.meta ? JSON.stringify({ ...rec.meta, ...(rec.signupMode ? { signupMode: rec.signupMode } : {}) }) : null,
         },
         select: { id: true },
       });
@@ -1018,7 +1027,7 @@ async function createAccountFromPending(
   // round-trip ago.
   const ticket = await mintSigninTicket(userId);
   if (sessionId && rec.analytics) {
-    after(() => captureSignupOutcome(rec.analytics, billing.flow === "cardless" && stripeSubscriptionId ? stripeSubscriptionId : sessionId, analyticsOutcome, planSlug, analyticsLive, rec.landingIndustry ?? null, rec.utm ?? null, rec.signupVariant ?? null));
+    after(() => captureSignupOutcome(rec.analytics, billing.flow === "cardless" && stripeSubscriptionId ? stripeSubscriptionId : sessionId, analyticsOutcome, planSlug, analyticsLive, rec.landingIndustry ?? null, rec.utm ?? null, rec.signupVariant ?? null, rec.signupMode ?? null));
   }
   // The welcome email (landing-e pass A; every signup since 2026-09-16). Sent
   // after the response; a failure is logged, never shown — the account
@@ -1052,6 +1061,7 @@ async function createAccountFromPending(
           industry: rec.landingIndustry ?? "default",
           plan: planSlug ?? "none",
           billing_mode: analyticsLive ? "live" : "test",
+          ...(rec.signupMode ? { signup_mode: rec.signupMode } : {}),
           utm_source: rec.utm?.utm_source,
           utm_medium: rec.utm?.utm_medium,
           utm_campaign: rec.utm?.utm_campaign,
