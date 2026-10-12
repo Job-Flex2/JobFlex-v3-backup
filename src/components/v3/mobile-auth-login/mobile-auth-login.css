@@ -234,13 +234,14 @@ body:has(.jf-mobile-auth-login)::before { content: none; }
 .jf-mobile-auth-login .brand {
   display: inline-flex;
   align-items: center;
-  gap: 11px;
+  gap: 8px;
   min-height: 44px;
   margin-bottom: clamp(20px, 4vh, 34px);
 }
-.jf-mobile-auth-login .jf-pmark { --pmark-h: 36px; }
+/* 22px of ink beside the 20px name (owner, 2026-10-12). */
+.jf-mobile-auth-login .jf-pmark { --pmark-h: 22px; }
 .jf-mobile-auth-login .brand-name {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 900;
   letter-spacing: -0.01em;
   color: var(--paper);

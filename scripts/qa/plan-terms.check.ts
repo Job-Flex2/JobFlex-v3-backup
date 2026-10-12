@@ -14,9 +14,11 @@
 //   · (2026-10-12) on a desk — 1280×800, 1440×900, 1536×864, 1920×1080 — the plan step scrolls,
 //     a card's list scrolls inside it, or a card's start button is not wholly in the window;
 //     the row of cards is not centred (three cards, and four with CUSTOM_PLAN_ENABLED=true on
-//     a second server, where the Custom card must be in the row on the plan step, /pricing,
-//     the landing and /dashboard/upgrade); a plan card's hard offset is not 3px; a sign-in page
-//     still draws the old "J" square (.brand-mark) instead of the product mark (.jf-pmark).
+//     a second server, where the Custom card must be in the row on the plan step and
+//     /dashboard/upgrade, while /pricing and the landing keep three cards and the wide "Build
+//     your plan" plate under them); a plan card's hard offset is not 3px; a sign-in page still
+//     draws the old "J" square (.brand-mark) instead of the product mark (.jf-pmark), or the
+//     mark's ink is not 22–24px tall.
 // Pure half: lib/planDeal (months free in whole months only, never a percentage).
 // The plan step is reached the way signup-flow.check.ts reaches it (its own made-up IP, mail
 // keys blank, its pending signups and brake rows removed after). The upgrade page signs in
@@ -180,7 +182,8 @@ async function visit(browser: any, width: number) {
   return ctx;
 }
 
-async function marketing(browser: any, widths = WIDTHS, cards = 3) {
+async function marketing(browser: any, widths = WIDTHS, plate = false) {
+  const cards = 3;
   for (const width of widths) {
     const ctx = await visit(browser, width);
     const page = await ctx.newPage();
@@ -193,6 +196,8 @@ async function marketing(browser: any, widths = WIDTHS, cards = 3) {
         await surface(page, `${path} @${width}`, scope, width <= 768, width === 1440);
         const n = await page.locator(`${scope} [data-plan-card]`).count();
         check(`${path} @${width}: ${cards} cards in the row`, n === cards, `${n}`);
+        const plates = await page.locator(".pr-custom").count();
+        check(`${path} @${width}: the "Build your plan" plate ${plate ? "under the row" : "absent"}`, plate ? plates === 1 : plates === 0, `${plates}`);
         if (width === 1440) {
           const sh = await page.locator(`${scope} [data-plan-card]:not(.lp-pw-plan--hero)`).first().evaluate((el: HTMLElement) => getComputedStyle(el).boxShadow);
           check(`${path} @${width}: a card's hard offset is 3px`, /3px 3px 0px/.test(sh), sh);
@@ -354,11 +359,11 @@ async function authMarks(browser: any) {
       await page.waitForTimeout(1500);
       const m = await page.evaluate(() => ({
         old: document.querySelectorAll(".brand-mark").length,
-        mark: Array.from(document.querySelectorAll<HTMLElement>(".jf-pmark")).filter((e) => e.getClientRects().length).map((e) => { const r = e.getBoundingClientRect(); const img = e.querySelector("img") as HTMLImageElement | null; return { h: Math.round(r.height), link: !!e.closest('a[href="/"]'), loaded: !!img && img.complete && img.naturalWidth > 0 }; }),
+        mark: Array.from(document.querySelectorAll<HTMLElement>(".jf-pmark")).filter((e) => e.getClientRects().length).map((e) => { const r = e.getBoundingClientRect(); const img = e.querySelector("img") as HTMLImageElement | null; return { ink: Math.round((r.height - 1) * 10) / 10, link: !!e.closest('a[href="/"]'), loaded: !!img && img.complete && img.naturalWidth > 0 }; }),
       }));
       const shown = m.mark.length > 0;
       check(`${path} @${width}: no "J" square`, m.old === 0, `${m.old} .brand-mark (HTTP ${res?.status()})`);
-      if (shown) check(`${path} @${width}: the product mark, linked home, loaded`, m.mark.every((x: any) => x.link && x.loaded && x.h >= 25), JSON.stringify(m.mark));
+      if (shown) check(`${path} @${width}: the product mark, linked home, loaded, 22–24px of ink`, m.mark.every((x: any) => x.link && x.loaded && x.ink >= 22 && x.ink <= 24), JSON.stringify(m.mark));
       else note(`${path} @${width}`, `no brand drawn in this state (HTTP ${res?.status()})`);
     } catch (e) {
       check(`${path} @${width}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
@@ -394,7 +399,7 @@ async function main() {
         stopServer(server);
         server = await startServer(PORT + 1, { STRIPE_SECRET_KEY: "", RESEND_API_KEY: "", SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "", CUSTOM_PLAN_ENABLED: "true" }, "QA_TERMS_PORT");
         BASE = `http://localhost:${PORT + 1}`;
-        await marketing(browser, [390, 1440], 4);
+        await marketing(browser, [390, 1440], true);
         await planStep(browser, 1440, 3, 4);
         await upgrade(browser, [390, 1440], 4);
       }

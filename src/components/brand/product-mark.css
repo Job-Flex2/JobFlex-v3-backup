@@ -4,7 +4,7 @@
    and pulled up by its top inset (0.2876 of the image), as the sidebar's
    .sb-mark-img and the landing's .lp-mark-img are. */
 .jf-pmark {
-  --pmark-h: 34px;
+  --pmark-h: 24px;
   position: relative;
   display: block;
   flex-shrink: 0;

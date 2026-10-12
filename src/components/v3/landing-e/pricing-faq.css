@@ -154,8 +154,6 @@
   stroke-linejoin: round;
   color: #1854a0;
 }
-/* The custom card's "add pages" row, in the plan blue (2026-10-12). */
-.jf-lp .lp-pw-f--add { color: #1854a0; font-weight: 700; }
 /* Not included: the row still prints, greyed, with a dash. #666 rather than
    the register's #888 so the text clears 4.5:1 on the white card. */
 .jf-lp .lp-pw-f--no { color: #666; font-weight: 500; }

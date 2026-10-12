@@ -129,9 +129,10 @@ body:has(.jf-auth-forgot)::before { content: none; }
   display: flex; flex-direction: column; justify-content: center;
   padding: 48px 56px; max-width: 620px; width: 100%; margin: 0 auto;
 }
-.jf-auth-forgot .brand { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 44px; }
-.jf-auth-forgot .jf-pmark { --pmark-h: 34px; }
-.jf-auth-forgot .brand-name { font-size: 19px; font-weight: 900; letter-spacing: -0.01em; }
+.jf-auth-forgot .brand { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 44px; }
+.jf-auth-forgot .jf-pmark { --pmark-h: 24px; }
+.jf-auth-forgot .brand { min-height: calc(34px + 1px); }
+.jf-auth-forgot .brand-name { font-size: 20px; font-weight: 900; letter-spacing: -0.01em; }
 .jf-auth-forgot .auth-kicker { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .jf-auth-forgot .auth-kicker::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sky); }
 .jf-auth-forgot .auth-h1 { font-size: 40px; font-weight: 900; line-height: 1.04; letter-spacing: -0.025em; }
@@ -280,7 +281,8 @@ html:has(.jf-auth-forgot), body:has(.jf-auth-forgot) { height: 100%; }
   max-height: 100dvh; overflow: hidden;
 }
 .jf-auth-forgot .brand { margin-bottom: clamp(10px, 2.6vh, 40px); }
-.jf-auth-forgot .jf-pmark { --pmark-h: clamp(28px, 3.6vh, 34px); }
+.jf-auth-forgot .jf-pmark { --pmark-h: 24px; }
+.jf-auth-forgot .brand { min-height: calc(clamp(28px, 3.6vh, 34px) + 1px); }
 .jf-auth-forgot .auth-kicker { margin-bottom: clamp(6px, 1.2vh, 12px); }
 .jf-auth-forgot .auth-h1 { font-size: clamp(25px, 3.7vh, 40px); }
 .jf-auth-forgot .auth-lede { margin-top: clamp(5px, 1.1vh, 12px); font-size: clamp(12.5px, 1.5vh, 14px); }
@@ -399,9 +401,10 @@ html:has(.jf-auth-forgot), body:has(.jf-auth-forgot) { height: 100%; }
 .jf-auth-forgot .auth-form .brand {
   position: absolute; top: clamp(22px, 4vh, 40px); left: 64px; margin: 0;
 }
-.jf-auth-forgot .brand { gap: 10px; }
-.jf-auth-forgot .jf-pmark { --pmark-h: 32px; }
-.jf-auth-forgot .brand-name { font-size: 18px; }
+.jf-auth-forgot .brand { gap: 8px; }
+.jf-auth-forgot .jf-pmark { --pmark-h: 24px; }
+.jf-auth-forgot .brand { min-height: calc(32px + 1px); }
+.jf-auth-forgot .brand-name { font-size: 20px; }
 .jf-auth-forgot .auth-body { width: 100%; }
 
 .jf-auth-forgot .stepper { gap: 12px; margin-bottom: clamp(16px, 2.8vh, 26px); }
@@ -450,4 +453,10 @@ html:has(.jf-auth-forgot), body:has(.jf-auth-forgot) { height: 100%; }
 @media (max-width: 1000px) {
   .jf-auth-forgot .auth-form { padding-left: 32px; padding-right: 32px; max-width: 560px; }
   .jf-auth-forgot .auth-form .brand { left: 32px; }
+}
+
+/* THE PRODUCT MARK, A SIZE DOWN (owner, 2026-10-12): 24px of ink beside a 20px
+   name, 8px apart, 22px on a phone; the brand row keeps its old height. */
+@media (max-width: 560px) {
+  .jf-auth-forgot .jf-pmark { --pmark-h: 22px; }
 }

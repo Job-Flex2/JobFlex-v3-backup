@@ -98,9 +98,10 @@
   display: flex; flex-direction: column; justify-content: center;
   padding: 48px 56px; max-width: 620px; width: 100%; margin: 0 auto;
 }
-.bp :global(.brand) { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 44px; }
-.bp :global(.jf-pmark) { --pmark-h: 34px; }
-.bp :global(.brand-name) { font-size: 19px; font-weight: 900; letter-spacing: -0.01em; }
+.bp :global(.brand) { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 44px; }
+.bp :global(.jf-pmark) { --pmark-h: 24px; }
+.bp :global(.brand) { min-height: calc(34px + 1px); }
+.bp :global(.brand-name) { font-size: 20px; font-weight: 900; letter-spacing: -0.01em; }
 .bp :global(.auth-kicker) { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .bp :global(.auth-kicker)::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sky); }
 .bp :global(.auth-h1) { font-size: 40px; font-weight: 900; line-height: 1.04; letter-spacing: -0.025em; }
@@ -264,7 +265,8 @@
   max-height: 100dvh; overflow: hidden auto; overscroll-behavior: contain;
 }
 .bp :global(.brand) { margin-bottom: clamp(10px, 2.6vh, 40px); }
-.bp :global(.jf-pmark) { --pmark-h: clamp(28px, 3.6vh, 34px); }
+.bp :global(.jf-pmark) { --pmark-h: 24px; }
+.bp :global(.brand) { min-height: calc(clamp(28px, 3.6vh, 34px) + 1px); }
 .bp :global(.auth-kicker) { margin-bottom: clamp(6px, 1.2vh, 12px); }
 .bp :global(.auth-h1) { font-size: clamp(25px, 3.7vh, 40px); }
 .bp :global(.auth-lede) { margin-top: clamp(5px, 1.1vh, 12px); font-size: clamp(12.5px, 1.5vh, 14px); }
@@ -930,9 +932,10 @@
 .bp :global(.auth-form .brand) {
   position: absolute; top: clamp(22px, 4vh, 40px); left: 64px; margin: 0;
 }
-.bp :global(.brand) { gap: 10px; }
-.bp :global(.jf-pmark) { --pmark-h: 32px; }
-.bp :global(.brand-name) { font-size: 18px; }
+.bp :global(.brand) { gap: 8px; }
+.bp :global(.jf-pmark) { --pmark-h: 24px; }
+.bp :global(.brand) { min-height: calc(32px + 1px); }
+.bp :global(.brand-name) { font-size: 20px; }
 .bp :global(.auth-body) { width: 100%; }
 
 .bp :global(.stepper) { gap: 12px; margin-bottom: clamp(16px, 2.8vh, 26px); }
@@ -1656,4 +1659,10 @@
 }
 @media (min-width: 769px) and (max-width: 1100px) {
   .bp :global(.pw-head-r) { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 14px; }
+}
+
+/* THE PRODUCT MARK, A SIZE DOWN (owner, 2026-10-12): 24px of ink beside a 20px
+   name, 8px apart, 22px on a phone; the brand row keeps its old height. */
+@media (max-width: 560px) {
+  .bp :global(.jf-pmark) { --pmark-h: 22px; }
 }

@@ -87,7 +87,11 @@ row has as many columns as cards, each capped, centred. On a desk the signup
 plan step fits the window from 800px tall without a scroll.
 The sign-in pages (register, login, forgot, reset, invite, worker invite,
 phone login) carry the real product mark ([ProductMark](src/components/brand/ProductMark.tsx),
-the sidebar's and the landing's `/jobflex-mark.png`), not a drawn "J" square.
+the sidebar's and the landing's `/jobflex-mark.png`), not a drawn "J" square:
+24px of ink beside a 20px "JobFlex" (22px on a phone), 8px apart, centred on
+the letters. The custom plan is a card in the row on the plan step and the
+upgrade page; on the landing and /pricing it stays the wide "Build your plan"
+plate under the row.
 
 ## Typography
 
