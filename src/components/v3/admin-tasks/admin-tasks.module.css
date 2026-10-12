@@ -57,11 +57,10 @@
 }
 /* The drawer toggle exists for the handheld layer only. */
 :global(.jf-blueprint .content) .fToggle { display: none; }
-:global(.jf-blueprint .content) .fMore { display: contents; }
 :global(.jf-blueprint .content) .fSort { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 :global(.jf-blueprint .content) .dirBtn { width: 38px; padding: 0; }
-:global(.jf-blueprint .content) .dirIc { transform: rotate(90deg); transition: transform 0.15s var(--ease); }
-:global(.jf-blueprint .content) .dirAsc { transform: rotate(-90deg); }
+:global(.jf-blueprint .content) .dirIc { transition: transform 0.15s var(--ease); }
+:global(.jf-blueprint .content) .dirAsc { transform: rotate(180deg); }
 :global(.jf-blueprint .content) .mine[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 :global(.jf-blueprint .content) .fN {
   display: inline-flex; align-items: center; justify-content: center;
@@ -220,8 +219,7 @@
 :global(.jf-blueprint .content) .iconBtn:disabled { opacity: 0.35; cursor: default; }
 :global(.jf-blueprint .content) .iconBtn :global(svg) { width: 14px; height: 14px; }
 :global(.jf-blueprint .content) .iconDanger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
-:global(.jf-blueprint .content) .up :global(svg) { transform: rotate(-90deg); }
-:global(.jf-blueprint .content) .down :global(svg) { transform: rotate(90deg); }
+:global(.jf-blueprint .content) .up :global(svg) { transform: rotate(180deg); }
 :global(.jf-blueprint .content) .subAdd { display: flex; gap: 8px; }
 :global(.jf-blueprint .content) .subAdd > :first-child { flex: 1 1 auto; min-width: 0; }
 :global(.jf-blueprint .content) .subsEmpty { padding: 12px; font-size: 12.5px; color: var(--muted); text-align: center; }
@@ -252,6 +250,8 @@
 
   /* Filters fold into a drawer behind one button; search stays out. */
   :global(.jf-blueprint .content) .fToggle { display: inline-flex; }
+  :global(.jf-blueprint .content) .fToggle,
+  :global(.jf-blueprint .content) .mine { flex: 1 1 0; }
   :global(.jf-blueprint .content) .fMore { display: none; }
   :global(.jf-blueprint .content) .fMoreOpen { display: grid; gap: 10px; width: 100%; }
   :global(.jf-blueprint .content) .fSearch { flex: 1 1 100%; }

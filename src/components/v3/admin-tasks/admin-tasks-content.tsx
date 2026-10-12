@@ -9,7 +9,7 @@
 // Canceled, with the day each was closed). The tiles count what the page
 // holds, so they move with every change the page learns of.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sheet, useSheet, KIT_BTN_CLASS } from "@/components/v3/admin-users/admin-kit";
 import { useAdminMotion } from "@/components/v3/admin-users/use-admin-motion";
 import ui from "@/components/v3/admin-influencers/admin-ui.module.css";
@@ -24,9 +24,10 @@ import {
   type TaskDetailDTO,
   type TaskRowDTO,
 } from "@/lib/adminTasks/model";
-import { applyFilters, countTasks, sortRows, type Tab, type TaskFilters } from "@/lib/adminTasks/filters";
+import { DEFAULT_DIR, applyFilters, countTasks, defaultSort, serializeFilters, sortRows, type Tab, type TaskFilters } from "@/lib/adminTasks/filters";
 import { useTaskStore } from "./use-task-store";
 import { EMPTY_DRAFT, NewTaskForm, type NewTaskDraft } from "./new-task-sheet";
+import { TaskFilterBar } from "./task-filter-bar";
 import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, useDayOf, useToday } from "./task-bits";
 
 export interface AdminTasksProps {
@@ -56,7 +57,24 @@ export function AdminTasksContent(props: AdminTasksProps) {
     [store.rows, filters, me.id, dayOf],
   );
 
-  const setTab = (tab: Tab) => setFilters((f) => ({ ...f, tab, st: "" }));
+  // Switching tabs drops the status filter (each tab has its own statuses) and,
+  // if the list was on its tab's default order, takes the other tab's default.
+  const setTab = (tab: Tab) =>
+    setFilters((f) => {
+      if (f.tab === tab) return f;
+      const onDefault = f.sort === defaultSort(f.tab) && f.dir === DEFAULT_DIR[f.sort];
+      const sort = onDefault ? defaultSort(tab) : f.sort;
+      return { ...f, tab, st: "", sort, dir: onDefault ? DEFAULT_DIR[sort] : f.dir };
+    });
+
+  // The address carries the filters (and the open task), so a reload or a
+  // shared link shows the same list. replaceState with a null state: Next
+  // skips its own sync when handed window.history.state.
+  useEffect(() => {
+    const qs = serializeFilters(filters);
+    const next = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", next);
+  }, [filters]);
 
   // ── New task ──
   const newSheet = useSheet();
@@ -149,6 +167,8 @@ export function AdminTasksContent(props: AdminTasksProps) {
           <div className={cx("kpi-val")}>{counts.doneWeek}</div>
         </div>
       </div>
+
+      <TaskFilterBar filters={filters} onChange={setFilters} people={people} canBeAssigned={!me.console} />
 
       <section className={cx("card", "tbl-card")}>
         <div className={cx("listHead")}>
