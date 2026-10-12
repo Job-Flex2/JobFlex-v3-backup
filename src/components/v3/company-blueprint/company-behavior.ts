@@ -26,7 +26,7 @@
 
 import { updateBranding, updateLanding, updateLeadProfile } from "@/actions/company";
 import { staggerIn } from "@/components/v3/blueprint-shell/list-motion";
-import { LogoFileError, prepareLogo } from "@/lib/logoClient";
+import { LOGO_HINT, LogoFileError, prepareLogo } from "@/lib/logoClient";
 import { whoColor, whoHtml, whoInitials, roleLabel } from "@/lib/team/who";
 import { rangeStart, type RangeDays } from "@/lib/teamActivityView";
 import {
@@ -314,9 +314,14 @@ export function initCompanyContent(
       .replace(/"/g, "&quot;");
   }
   const dis = canEdit ? "" : " disabled";
-  /** The empty-state markup React rendered inside the drop target, kept so the
-   *  control can go back to it if the logo is ever cleared. */
-  const logoDropDefault = $("#logoDrop")?.innerHTML ?? "";
+  /** The drop target's empty state, for when the logo is removed. Built here,
+   *  not copied off the page: in development the behavior starts twice on the
+   *  same DOM, and the copy then held the first run's logo — removing a logo
+   *  left the old picture in the box. Keep in step with company-content.tsx. */
+  const logoDropDefault =
+    '<svg class="ic"><use href="#i-imgadd"></use></svg>' +
+    '<span class="logo-t">Drop or click</span>' +
+    '<span class="logo-h">' + esc(LOGO_HINT) + "</span>";
 
   function renderSwatches() {
     const host = $("#swatches");
@@ -378,6 +383,27 @@ export function initCompanyContent(
       drop.classList.remove("has-img");
       drop.innerHTML = logoDropDefault;
     }
+    const acts = $("#logoActs");
+    if (acts) acts.hidden = !(co.logoUrl && canEdit);
+    armRemove(false);
+  }
+  /** "Remove logo" asks once more before it clears anything: the first click
+   *  arms it (the label says so) for a few seconds, the second one removes. */
+  let removeArmed = false;
+  let removeTimer: ReturnType<typeof setTimeout> | undefined;
+  function armRemove(on: boolean) {
+    removeArmed = on;
+    if (removeTimer !== undefined) {
+      clearTimeout(removeTimer);
+      timers.delete(removeTimer);
+      removeTimer = undefined;
+    }
+    const btn = $("#logoRemove");
+    if (btn) {
+      btn.textContent = on ? "Click again to remove" : "Remove logo";
+      btn.classList.toggle("armed", on);
+    }
+    if (on) removeTimer = later(() => armRemove(false), 4000);
   }
   function renderTrades() {
     const host = $("#trades");
@@ -743,10 +769,19 @@ export function initCompanyContent(
       playStagger?.(shown);
       return;
     }
-    if (t.closest("#logoDrop")) {
+    if (t.closest("#logoDrop") || t.closest("#logoReplace")) {
       if (!canEdit || logoBusy) return;
       // Open the real picker. The donor flashed the border and saved nothing.
       $<HTMLInputElement>("#logoFile")?.click();
+      return;
+    }
+    if (t.closest("#logoRemove")) {
+      if (!canEdit || logoBusy || !co.logoUrl) return;
+      if (!removeArmed) {
+        armRemove(true);
+        return;
+      }
+      void removeLogo();
       return;
     }
   });
@@ -787,6 +822,30 @@ export function initCompanyContent(
       await commit("saveLogo", async () => {
         try {
           await updateBranding({ logoUrl: dataUrl });
+        } catch (err) {
+          co.logoUrl = previous;
+          renderLogo();
+          renderPreview();
+          throw err;
+        }
+      });
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  /** Take the logo off: proposals, PDFs and emails go back to the initial. */
+  async function removeLogo() {
+    if (!canEdit || logoBusy || !co.logoUrl) return;
+    setLogoBusy(true);
+    const previous = co.logoUrl;
+    co.logoUrl = null;
+    renderLogo();
+    renderPreview();
+    try {
+      await commit("saveLogo", async () => {
+        try {
+          await updateBranding({ logoUrl: null });
         } catch (err) {
           co.logoUrl = previous;
           renderLogo();

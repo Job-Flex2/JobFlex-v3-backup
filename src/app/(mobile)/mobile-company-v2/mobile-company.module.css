@@ -411,6 +411,12 @@
 .logoDrop.busy > * { opacity: 0.45; transition: opacity 0.14s; }
 /* The saved logo fills the drop target once one exists (tap to replace). */
 .logoImg { max-height: 84px; max-width: 100%; object-fit: contain; }
+/* Replace / Remove under a saved logo. */
+.logoActs { display: flex; gap: 10px; margin-top: 12px; }
+.logoActs .btn { flex: 1 1 0; min-height: 44px; padding: 0 10px; font-size: 11.5px; }
+.logoActs .btn:disabled { opacity: 0.5; }
+.logoRemove { color: var(--danger, #a83232); }
+.logoRemove.armed { background: var(--danger, #a83232); border-color: var(--danger, #a83232); color: #fff; }
 .logoT { font-size: 15px; font-weight: 700; }
 .logoH {
   font-family: var(--font-mono);

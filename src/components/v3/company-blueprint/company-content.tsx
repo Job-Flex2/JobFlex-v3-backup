@@ -153,6 +153,14 @@ export function CompanyContent({ org, activity, members, canEdit, nameUnset = fa
                   <span className="logo-h">{LOGO_HINT}</span>
                 </button>
                 <input className="is-hidden" type="file" accept={LOGO_ACCEPT} id="logoFile" />
+                {/* Shown by the behavior once a logo is saved (and only to
+                    someone who may edit): clicking the picture also replaces
+                    it, but nothing on screen said so, and there was no way
+                    to take a logo off at all. */}
+                <div className="logo-acts" id="logoActs" hidden>
+                  <button className="btn btn-ghost" type="button" id="logoReplace">Replace</button>
+                  <button className="btn btn-ghost logo-remove" type="button" id="logoRemove">Remove logo</button>
+                </div>
                 <div className="save-line" id="saveLogo"></div>
               </div>
             </div>

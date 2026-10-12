@@ -341,6 +341,13 @@ function CompanyBoard({ seed }: { seed: CompanySeed }) {
   const logoFileRef = useRef<HTMLInputElement>(null);
   const [logoBusy, setLogoBusy] = useState(false);
   const logoBusyRef = useRef(false);
+  /** "Remove logo" asks once more: the first tap arms it for a few seconds. */
+  const [removeArmed, setRemoveArmed] = useState(false);
+  useEffect(() => {
+    if (!removeArmed) return;
+    const t = window.setTimeout(() => setRemoveArmed(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [removeArmed]);
   // /dashboard/company#logo: this tree mounts after the browser's own hash
   // jump (the viewport switch imports it), so make that jump here.
   useEffect(() => {
@@ -1000,6 +1007,50 @@ function CompanyBoard({ seed }: { seed: CompanySeed }) {
                       </>
                     )}
                   </button>
+                  {logoUrl ? (
+                    <div className={styles.logoActs}>
+                      <button
+                        className={`${styles.btn} ${styles.btnGhost}`}
+                        type="button"
+                        disabled={logoBusy}
+                        onClick={() => {
+                          if (!logoBusyRef.current) logoFileRef.current?.click();
+                        }}
+                      >
+                        Replace
+                      </button>
+                      <button
+                        className={`${styles.btn} ${styles.btnGhost} ${styles.logoRemove}${removeArmed ? ` ${styles.armed}` : ""}`}
+                        type="button"
+                        disabled={logoBusy}
+                        onClick={() => {
+                          if (logoBusyRef.current) return;
+                          if (!removeArmed) {
+                            setRemoveArmed(true);
+                            return;
+                          }
+                          setRemoveArmed(false);
+                          logoBusyRef.current = true;
+                          setLogoBusy(true);
+                          saveBrand.run(async () => {
+                            const previous = logoUrl;
+                            setLogoUrl(null);
+                            try {
+                              await updateBranding({ logoUrl: null });
+                            } catch (err) {
+                              setLogoUrl(previous);
+                              throw err;
+                            } finally {
+                              logoBusyRef.current = false;
+                              setLogoBusy(false);
+                            }
+                          }, 0);
+                        }}
+                      >
+                        {removeArmed ? "Tap again to remove" : "Remove logo"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className={styles.cardBody}>
