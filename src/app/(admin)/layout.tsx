@@ -11,8 +11,9 @@
 // this layout renders its children bare, no shell, no guard.
 //
 // SHELL. The blueprint admin chrome (components/v3/admin-shell) replaces the
-// classic Tailwind header + rail. The three nav badges — unread support
-// tickets, pending payout requests, leads in the manual queue — are the same
+// classic Tailwind header + rail. The nav badges — unread support tickets,
+// pending payout requests, leads in the manual queue, and (2026-10-11) the
+// signed-in admin's own open tasks — are the same
 // queries the old rail received as props, handed to the sidebar through the
 // shared NavRoleProvider's `badges` channel keyed by nav href.
 
@@ -23,6 +24,7 @@ import { db } from "@/lib/db";
 import { readAdminCookie } from "@/lib/adminAuth";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { unreadSupportCount } from "@/actions/support";
+import { myOpenTaskCount } from "@/lib/adminTasks/service";
 import { NavRoleProvider } from "@/components/v3/blueprint-shell/nav-role";
 import { AdminShell } from "@/components/v3/admin-shell/admin-shell";
 import { ContractorMailProvider } from "@/components/v3/admin-mail/contractor-mail";
@@ -46,18 +48,21 @@ export default async function AdminRootLayout({ children }: { children: React.Re
   // Which door the admin came through decides what Sign out clears.
   const viaCookie = (await readAdminCookie()) !== null;
 
-  const [unreadSupport, pendingPayouts, manualQueueLeads] = await Promise.all([
+  const [unreadSupport, pendingPayouts, manualQueueLeads, myOpenTasks] = await Promise.all([
     unreadSupportCount(),
     // A reversed transfer waits on an admin's Retry payout / Write off exactly
     // as a new request waits on Approve, so both light the badge.
     db.payoutRequest.count({ where: { status: { in: ["PENDING", "REVERSED"] } } }),
     db.platformLead.count({ where: { status: "MANUAL_QUEUE", isTest: false } }),
+    // Open tasks given to whoever is signed in (/admin/tasks).
+    myOpenTaskCount(admin.id),
   ]);
 
   const badges: Record<string, number> = {
     "/admin/support": unreadSupport,
     "/admin/payouts": pendingPayouts,
     "/admin/lead-center": manualQueueLeads,
+    "/admin/tasks": myOpenTasks,
   };
 
   const adminName = admin.name || admin.email;

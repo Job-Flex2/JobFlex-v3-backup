@@ -27,6 +27,7 @@ import {
   buildTestEmail,
 } from "./build/platform";
 import { trafficDigestFixture } from "./traffic-fixture";
+import { buildTaskAssigned, buildTaskClosed } from "./build/adminTasks";
 import { firstEstimateTarget } from "@/lib/firstEstimate";
 
 const ORG = { kind: "org" as const, name: "Cedar & Oak Builders", logoUrl: null };
@@ -679,5 +680,35 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
     label: "23 · buildTrafficDigest() — the analyst's daily email",
     note: "Platform lockup, to SUPPORT_NOTIFY_EMAIL. Made-up sessions read by the real analyst; the reading's Markdown follows the CTA block by block.",
     doc: trafficDigestFixture(),
+  },
+  {
+    id: "b-admin-task-assigned",
+    label: "24 · buildTaskAssigned() — /admin/tasks",
+    note: "To the admin a task was given to (never to the one who gave it, never the console's shared login). Reply-to support@jobflex.app. Urgent and High wear the red kicker; the due day is the last row.",
+    doc: buildTaskAssigned({
+      title: "Stripe webhook retries pile up after a 500 on invoice.paid",
+      by: "Ana Ortiz",
+      priority: "URGENT",
+      dueDate: "2026-10-14",
+      description: "Seen in prod logs since Oct 9.\nRunbook: https://dashboard.stripe.com/webhooks — check the endpoint's failed deliveries.",
+      href: "https://example.com/admin/tasks?task=cmv4mhubi0002gd9md3qshhkj",
+      ref: "T-QSHHKJ",
+    }),
+  },
+  {
+    id: "b-admin-task-assigned-plain",
+    label: "24b · buildTaskAssigned() — normal, no due day, no description",
+    doc: buildTaskAssigned({ title: "Add a CSV export to the subscribers list", by: "Console", priority: "NORMAL", dueDate: null, description: "", href: "https://example.com/admin/tasks?task=x", ref: "T-5OJTNL" }),
+  },
+  {
+    id: "b-admin-task-closed",
+    label: "25 · buildTaskClosed() — done",
+    note: "To the task's author when someone else closes it (Done or Canceled). Reply-to support@jobflex.app.",
+    doc: buildTaskClosed({ title: "Write the October investor update", by: "Ben Walsh", status: "DONE", href: "https://example.com/admin/tasks?task=x", ref: "T-CDYGOS" }),
+  },
+  {
+    id: "b-admin-task-canceled",
+    label: "25b · buildTaskClosed() — canceled",
+    doc: buildTaskClosed({ title: "Old landing A/B test cleanup", by: "Ben Walsh", status: "CANCELED", href: "https://example.com/admin/tasks?task=x", ref: "T-ABC123" }),
   },
 ];

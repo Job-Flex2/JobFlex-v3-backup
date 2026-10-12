@@ -49,6 +49,9 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Lead Center", icon: "i-target", href: "/admin/lead-center" },
       { label: "Support", icon: "i-msg", href: "/admin/support" },
+      // Added 2026-10-11: the platform team's own tasks, live between admins;
+      // the badge is the open tasks given to whoever is signed in.
+      { label: "Tasks", icon: "i-board", href: "/admin/tasks" },
       { label: "Health", icon: "i-check", href: "/admin/health" },
       { label: "Integrations", icon: "i-link", href: "/admin/integrations" },
       // Texting is the one integration set up for every contractor at once

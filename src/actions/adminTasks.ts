@@ -7,11 +7,17 @@
 // thrown server-action message is withheld in production and the sheet would
 // show nothing useful. The work itself is lib/adminTasks/service.
 //
+// Emails (a task given to someone, a task closed for its author) go out after
+// the response (next/server after), so the sheet never waits on the mail.
+//
 // No revalidatePath: the page keeps its own state and the live poll
 // (/api/admin/tasks/changes) carries every change to the other admins. A
 // revalidation would re-render the whole route under the person typing.
 
+import { after } from "next/server";
 import { requirePlatformAdmin } from "@/lib/orgContext";
+import { appBaseUrl } from "@/lib/appUrl";
+import { sendTaskNotices } from "@/lib/adminTasks/mail";
 import {
   TaskError,
   addComment,
@@ -53,6 +59,10 @@ async function run(write: (actor: Actor) => Promise<TaskWrite>): Promise<TaskRes
   if (!actor) return { ok: false, error: DENIED };
   try {
     const w = await write(actor);
+    if (w.notices.length > 0) {
+      const base = await appBaseUrl();
+      after(() => sendTaskNotices(w.notices, base));
+    }
     return { ok: true, task: w.task };
   } catch (err) {
     if (err instanceof TaskError) return { ok: false, error: err.message };
