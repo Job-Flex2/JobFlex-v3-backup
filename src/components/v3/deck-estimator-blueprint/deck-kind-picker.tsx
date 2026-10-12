@@ -62,7 +62,7 @@ export function IsoFigure({ drawing, play = 0, label, className }: { drawing: Is
   );
 }
 
-export function DeckKindPicker({ structure, onPickKind, onPickSample, appliedSampleId }: { structure: Structure; onPickKind: (s: Structure) => void; onPickSample: (s: DeckSample) => void; appliedSampleId: string | null }) {
+export function DeckKindPicker({ structure, onPickKind, onPickSample, appliedSampleId, hint }: { structure: Structure; onPickKind: (s: Structure) => void; onPickSample: (s: DeckSample) => void; appliedSampleId: string | null; /** The line beside "Start from a sample" (the client's page says it its own way). */ hint?: string }) {
   const [plays, setPlays] = React.useState<Partial<Record<Structure, number>>>({});
   const bump = (st: Structure) => setPlays((m) => ({ ...m, [st]: (m[st] ?? 0) + 1 }));
   const samples = samplesFor(structure);
@@ -97,7 +97,7 @@ export function DeckKindPicker({ structure, onPickKind, onPickSample, appliedSam
       <div className={p.samples} data-deck-samples={structure}>
         <div className={p.samplesHead}>
           <span className={p.samplesLbl}>Start from a sample</span>
-          <span className={p.samplesHint}>Your address, state, house and lumber stay as set — the sample brings the shape, height, rails, stairs and roof.</span>
+          <span className={p.samplesHint}>{hint ?? "Your address, state, house and lumber stay as set — the sample brings the shape, height, rails, stairs and roof."}</span>
         </div>
         <div className={p.sampleRow}>
           {samples.map((sm) => {

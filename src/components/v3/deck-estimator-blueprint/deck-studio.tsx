@@ -96,6 +96,7 @@ import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedR
 import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
 import { DeckKindPicker } from "./deck-kind-picker";
+import { DeckClientLink } from "./deck-client-link";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { autoFixDesign, autoFixable, resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
@@ -1154,6 +1155,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 ))}
               </div>
             </details>
+            {/* The client designs it (2026-10-11): a link to their own page, no prices; it comes back as a draft. */}
+            <DeckClientLink design={design} address={address} title={draftTitle || structureWords(design)} clientId={clientId} />
           </div>
         </div>
       </section>
