@@ -32,6 +32,7 @@ import { db } from "@/lib/db";
 import { getStripeClient, isStripeEnabled } from "@/lib/sdk/stripe";
 import type { StripeMode } from "@/lib/stripeMode";
 import { ensureRecurringPrice } from "@/lib/stripePriceCache";
+import { priceInterval } from "@/lib/priceInterval";
 import { readScheduledSwitch } from "@/lib/planChange";
 import {
   CUSTOM_BASE_CENTS,
@@ -171,6 +172,10 @@ export type CustomPagesChange =
       chargedCents: number;
       /** The new price per month from the next bill. */
       monthlyCents: number;
+      /** The new price for the term the plan is billed on — the year's on a
+       *  yearly custom plan (2026-10-12: it read "$50/mo" for a $500 year). */
+      termCents: number;
+      interval: CustomInterval;
       trialing: boolean;
     }
   | { ok: false; error: string };
@@ -214,7 +219,8 @@ export async function changeCustomPages(opts: {
 
   if (billing === "none") {
     await writeOrgPages(organizationId, next);
-    return { ok: true, pages: next, added, removed, chargedCents: 0, monthlyCents: customPriceCents(next), trialing: row?.status === "TRIALING" };
+    const interval: CustomInterval = row?.stripePriceId ? ((await priceInterval(row.stripePriceId)) ?? "MONTH") : "MONTH";
+    return { ok: true, pages: next, added, removed, chargedCents: 0, monthlyCents: customPriceCents(next), termCents: customPriceCents(next, interval), interval, trialing: row?.status === "TRIALING" };
   }
 
   if (!row?.externalSubId || !isStripeEnabled()) {
@@ -313,7 +319,8 @@ export async function changeCustomPages(opts: {
   await db.subscription
     .update({ where: { organizationId }, data: { stripePriceId: customItemsOf(sub).base?.price.id ?? prices.base } })
     .catch(() => {});
-  return { ok: true, pages: next, added, removed, chargedCents, monthlyCents: customPriceCents(next), trialing };
+  const interval = intervalOf(sub);
+  return { ok: true, pages: next, added, removed, chargedCents, monthlyCents: customPriceCents(next), termCents: customPriceCents(next, interval), interval, trialing };
 }
 
 /**

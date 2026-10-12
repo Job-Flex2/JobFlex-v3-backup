@@ -440,7 +440,7 @@ export function MobileSubscription({
               <div className="jfms-heroRow">
                 <span className="jfms-heroPrice">
                   {complimentary ? "$0" : priceCents !== null ? formatPlanPrice(priceCents) : "—"}
-                  {complimentary ? <i>free of charge</i> : priceCents !== null ? <i>{priceCadence(true)}</i> : null}
+                  {complimentary ? <i>free of charge</i> : priceCents !== null ? <i>{interval === "YEAR" ? "/yr" : priceCadence(true)}</i> : null}
                 </span>
               </div>
             </div>
@@ -452,7 +452,7 @@ export function MobileSubscription({
               <div className="jfms-heroFact">
                 <span className="jfms-heroFactL">{complimentary ? "Then" : "Billing"}</span>
                 <span className="jfms-heroFactV">
-                  {complimentary ? (complimentary.after === "free" ? "Free plan" : "Choose a plan") : priceCents === null ? "—" : "Per month"}
+                  {complimentary ? (complimentary.after === "free" ? "Free plan" : "Choose a plan") : priceCents === null ? "—" : interval === "YEAR" ? "Per year" : "Per month"}
                 </span>
               </div>
             </div>
@@ -687,7 +687,7 @@ function InvoiceRows({ data }: { data: { available: boolean; invoices: Subscript
             <span className="jfms-invBot">
               <span className="jfms-invDate">{longDate(new Date(inv.created * 1000))}</span>
               <span className="jfms-invAmt">
-                {money(inv.amountPaidCents / 100, inv.currency)}
+                {money((inv.status === "open" ? inv.amountDueCents : inv.amountPaidCents) / 100, inv.currency)}
               </span>
             </span>
           </>

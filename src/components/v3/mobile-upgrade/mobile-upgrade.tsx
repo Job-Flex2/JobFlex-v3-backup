@@ -277,7 +277,11 @@ export function MobileUpgradeContent({
   }, [onCustom, owned]);
   const adds = picked.filter((id) => !owned.includes(id));
   const removes = onCustom ? owned.filter((id) => !picked.includes(id)) : [];
-  const nextMonthlyCents = customPriceCents(picked);
+  /* What a Custom plan the shop is ON comes to after the change, on the term it
+     is billed on — a yearly custom plan is priced by the year (2026-10-12). */
+  const ownTerm: BillingTerm = currentInterval === "YEAR" ? "YEAR" : "MONTH";
+  const nextOwnCents = customPriceCents(picked, ownTerm);
+  const ownPer = ownTerm === "YEAR" ? "per year" : "per month";
   /* A new Custom plan on the switch's term (an existing one is managed page
      by page, monthly). */
   const pickedTermCents = customPriceCents(picked, interval);
@@ -312,8 +316,8 @@ export function MobileUpgradeContent({
       toast.success(
         what || "Plan updated",
         res.chargedCents > 0
-          ? `${dollars(res.chargedCents)} charged today. Your plan is ${dollars(res.monthlyCents)}/mo from the next bill.`
-          : `Your plan is ${dollars(res.monthlyCents)}/mo from the next bill.`,
+          ? `${dollars(res.chargedCents)} charged today. Your plan is ${dollars(res.termCents)}${res.interval === "YEAR" ? "/yr" : "/mo"} from the next bill.`
+          : `Nothing was charged. Your plan is ${dollars(res.termCents)}${res.interval === "YEAR" ? "/yr" : "/mo"} from the next bill.`,
       );
       router.refresh();
     } catch (e) {
@@ -887,14 +891,14 @@ export function MobileUpgradeContent({
                 </div>
                 <div className="mu-list-foot">
                   <span className="mu-total">
-                    <b>{dealDollars(onCustom ? nextMonthlyCents : pickedTermCents)}</b>
+                    <b>{dealDollars(onCustom ? nextOwnCents : pickedTermCents)}</b>
                     <i>
                       {onCustom
                         ? adds.length > 0
-                          ? "per month · added pages prorated today"
+                          ? `${ownPer} · added pages prorated today`
                           : removes.length > 0
-                            ? "per month from the next bill"
-                            : "per month · your plan today"
+                            ? `${ownPer} from the next bill`
+                            : `${ownPer} · your plan today`
                         : interval === "YEAR"
                           ? "per year · paid on Stripe"
                           : "per month · paid on Stripe"}
@@ -911,7 +915,7 @@ export function MobileUpgradeContent({
                       }}
                     >
                       {adds.length > 0
-                        ? `Review · ${dollars(nextMonthlyCents)}/mo`
+                        ? `Review · ${dealDollars(nextOwnCents)}${ownTerm === "YEAR" ? "/yr" : "/mo"}`
                         : removes.length > 0
                           ? `Remove ${removes.length} page${removes.length === 1 ? "" : "s"}`
                           : "No changes"}

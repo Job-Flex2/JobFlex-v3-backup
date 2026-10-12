@@ -258,7 +258,7 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
               ) : (
                 <>
                   {"$" + Math.round(props.priceCents / 100)}
-                  <i>/ mo</i>
+                  <i>{props.interval === "YEAR" ? "/ yr" : "/ mo"}</i>
                 </>
               )}
             </span>
@@ -457,7 +457,7 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
                         {v.status ?? "—"}
                       </span>
                     </span>
-                    <span className={cx("inv-amt")}>{"$" + (v.amountPaidCents / 100).toFixed(2)}</span>
+                    <span className={cx("inv-amt")}>{"$" + ((v.status === "open" ? v.amountDueCents : v.amountPaidCents) / 100).toFixed(2)}</span>
                   </div>
                 ))}
               </div>

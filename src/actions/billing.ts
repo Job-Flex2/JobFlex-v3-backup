@@ -78,6 +78,9 @@ export interface SubscriptionInvoice {
   id: string;
   number: string | null;
   amountPaidCents: number;
+  /** What is still owed — an open invoice's amount (owner, 2026-10-12: an
+   *  unpaid invoice used to read "$0.00", its paid amount). */
+  amountDueCents: number;
   currency: string;
   status: string | null;
   created: number; // epoch seconds
@@ -138,6 +141,7 @@ export async function listSubscriptionInvoices(): Promise<{
       id: inv.id,
       number: inv.number ?? null,
       amountPaidCents: inv.amount_paid ?? 0,
+      amountDueCents: inv.amount_remaining ?? inv.amount_due ?? 0,
       currency: (inv.currency ?? "usd").toUpperCase(),
       status: inv.status ?? null,
       created: inv.created,

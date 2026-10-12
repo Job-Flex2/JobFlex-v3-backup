@@ -51,7 +51,8 @@ export interface UsageRow {
 export interface SubscriptionViewProps {
   /** Display name of the current plan (catalog name, or title-cased orphan slug). */
   planName: string;
-  /** Monthly price of the current plan; null when the slug left the catalog. */
+  /** The current plan's price for the term it is billed on (the year's for a
+   *  yearly subscription — owner, 2026-10-12); null when the slug left the catalog. */
   priceCents: number | null;
   /** The term the subscription is billed on; null when it cannot be told. */
   interval?: "MONTH" | "YEAR" | null;
@@ -241,10 +242,21 @@ export async function loadSubscriptionData(
   const rewardSummary =
     "Each contractor who signs up with it and goes paid takes 50% off one month of your subscription";
 
-  const priceCents = planDto
+  /* ONE MONTH of the plan — what a referral's 50% is worked from, whatever
+     the term — and the price for the term the subscription bills on, which
+     is what the page shows (a yearly plan read "$95/mo" before 2026-10-12). */
+  const yearly = term.currentInterval === "YEAR";
+  const monthlyCents = planDto
     ? planDto.priceCents
     : (sub?.plan ?? "").toUpperCase() === "CUSTOM"
       ? customPriceCents(customPages)
+      : null;
+  const priceCents = planDto
+    ? yearly
+      ? (planDto.yearlyPriceCents ?? planDto.priceCents)
+      : planDto.priceCents
+    : (sub?.plan ?? "").toUpperCase() === "CUSTOM"
+      ? customPriceCents(customPages, yearly ? "YEAR" : "MONTH")
       : null;
 
   /* THE NEXT CHARGE (owner, 2026-09-14). Stripe's preview is the truth when
@@ -252,7 +264,7 @@ export async function loadSubscriptionData(
      page only has to say which referrals that credit came from. Without one
      (no Stripe subscription yet, or the preview failed) the bill is worked
      out from the plan price and the credits not yet spent — marked estimated. */
-  const perReferralCents = Math.round((priceCents ?? 0) * (REFERRAL_REWARD_PCT / 100));
+  const perReferralCents = Math.round((monthlyCents ?? 0) * (REFERRAL_REWARD_PCT / 100));
   const paidRewards = earned
     .filter((r) => r.status === "PAID" && r.rewardAppliedAt)
     .map((r) => r.rewardCents ?? perReferralCents);
