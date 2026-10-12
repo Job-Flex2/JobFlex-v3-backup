@@ -97,7 +97,7 @@ import { HouseWallPlan } from "./house-wall-plan";
 import { DeckKindPicker } from "./deck-kind-picker";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
-import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
+import { autoFixDesign, autoFixable, resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
 import { DeckPlan, type PlanEdgeHit, nearestStairEdge } from "./deck-plan";
 import { DeckPhotoView, cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "./deck-photo";
@@ -448,6 +448,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const roof = pkg.roof;
   const checks = React.useMemo(() => deckChecks(structure), [structure]);
   const summary = checkSummary(checks);
+  // AUTO-FIX (owner, 2026-10-11: "offer fixes or auto fix"): every failure's fix and the warnings the code answers, in
+  // one tap (lib/deck/settle autoFixDesign); what was done and what is left for a person is said under the header.
+  const fixableCount = React.useMemo(() => autoFixable(checks), [checks]);
+  const [fixReport, setFixReport] = React.useState<{ fixed: string[]; left: string[] } | null>(null);
+  const runAutoFix = () => {
+    const r = autoFixDesign(design, { rates: book, market });
+    if (r.design !== design) {
+      dirty.current = true;
+      setDesign(r.design);
+    }
+    setFixReport({ fixed: r.fixes, left: r.left.map((c) => `${c.part}: ${c.text.split(/(?<=\.)\s/)[0]}`) });
+  };
   const scene = React.useMemo(() => deckScene(structure), [structure]);
   const elevation = React.useMemo(() => deckElevation(scene), [scene]);
   const wall = wallType(design.wall);
@@ -981,6 +993,15 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     }
     setBusy(false);
   };
+  // THE MATERIAL LIST (owner, 2026-10-11): the takeoff for the lumber yard's quote or the installer's purchase, on its own page.
+  const materialsHref = React.useCallback((forWhom: "yard" | "installer") => {
+    try {
+      const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ design, address, title: draftTitle.trim() || undefined }))));
+      return `/deck-materials?d=${encodeURIComponent(payload)}&for=${forWhom}`;
+    } catch {
+      return null;
+    }
+  }, [design, address, draftTitle]);
   const permitHref = React.useMemo(() => {
     try {
       const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ design, address }))));
@@ -2227,8 +2248,31 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             {summary.fail ? <span className={cx(s.stamp, s.stampBad)}>{summary.fail} fix</span> : null}
             {summary.warn ? <span className={cx(s.stamp, s.stampWarn)}>{summary.warn} check</span> : null}
             <span className={cx(s.stamp, s.stampPass)}>{summary.pass} pass</span>
+            {fixableCount ? (
+              <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={runAutoFix} data-deck-autofix>
+                Auto-fix {fixableCount === 1 ? "1 item" : `${fixableCount} items`}
+              </button>
+            ) : null}
           </div>
         </div>
+        {fixReport ? (
+          <div className={cx(s.call, fixReport.left.length ? s.callWarn : null, s.fixReport)} role="status" data-deck-fix-report>
+            <button type="button" className={s.fixReportClose} onClick={() => setFixReport(null)} aria-label="Close">×</button>
+            {fixReport.fixed.length ? (
+              <p><b>Fixed:</b> {fixReport.fixed.join(" · ")}.</p>
+            ) : (
+              <p><b>Nothing the studio can change on its own.</b></p>
+            )}
+            {fixReport.left.length ? (
+              <>
+                <p><b>Still for you, an engineer or the building office:</b></p>
+                <ul>{fixReport.left.slice(0, 8).map((l, i) => <li key={i}>{l}</li>)}</ul>
+              </>
+            ) : (
+              <p>Every check passes or is a note.</p>
+            )}
+          </div>
+        ) : null}
         <ul className={s.checks}>
           {ordered.map((c) => (
             <li key={c.id} className={cx(s.check, s[`level_${c.level}`])} data-check={c.id}>
@@ -2239,10 +2283,19 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </div>
                 {c.rule ? <div className={s.checkRule}>{c.rule}</div> : null}
               </div>
-              {c.fix ? (
-                <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch(c.fix!.patch)}>
-                  {c.fix.label}
-                </button>
+              {c.fix || c.alts?.length ? (
+                <div className={s.checkFixes}>
+                  {c.fix ? (
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch(c.fix!.patch)} data-check-fix="primary">
+                      {c.fix.label}
+                    </button>
+                  ) : null}
+                  {(c.alts ?? []).map((a) => (
+                    <button key={a.label} type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => patch(a.patch)} data-check-fix="alt">
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
               ) : null}
             </li>
           ))}
@@ -2255,6 +2308,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           <div>
             <div className={s.cardTitle}>Material package</div>
             <div className={s.cardSub}>What to load on the truck, in the lengths the yard sells. Lumber near the soil is ordered ground-contact. A fixture the client buys is listed, not priced.</div>
+            <div className={s.materialActs}>
+              {materialsHref("yard") ? <a className={cx(s.btn, s.btnSm, s.btnPrimary)} href={materialsHref("yard")! as Route} target="_blank" rel="noopener" data-deck-materials="yard">Material list for the lumber yard ↗</a> : null}
+              {materialsHref("installer") ? <a className={cx(s.btn, s.btnSm)} href={materialsHref("installer")! as Route} target="_blank" rel="noopener" data-deck-materials="installer">For the installer to buy ↗</a> : null}
+            </div>
           </div>
           <div className={s.mono}>
             {Math.round(pkg.takeoff.framingLf)} ft of framing · {pkg.takeoff.concreteBags} bags · {pkg.takeoff.footings} footings{pkg.takeoff.roofSquares ? ` · ${pkg.takeoff.roofSquares} squares of roof` : ""}{pkg.takeoff.stairRisers ? ` · ${pkg.takeoff.stairRisers} risers` : ""}{pkg.takeoff.railLf ? ` · ${Math.round(pkg.takeoff.railLf)} ft of rail` : ""}

@@ -50,6 +50,7 @@ import {
   effectiveJoistSpanFt,
   effectiveSpanFromTributaryFt,
   footingMinSize,
+  POST_TABLE_MAX_AREA,
   joistDepthIn,
   joistMaxCantileverIn,
   joistMaxSpanIn,
@@ -759,11 +760,17 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
       const dcaFt = Math.max(...line.segs.map((s) => s.dcaFt));
       const bothSides = line.segs.some((s) => s.bothSides);
       const room = joistBottomIn - footingTopIn;
+      // NO POST OVER THE TABLE (2026-10-11, owner: "offer fixes or auto fix" — a post carried 195 sq ft): a post carries
+      // the strip of deck the beam holds times the beam between its neighbours, and the post and footing tables stop at
+      // 160 sq ft. So the posts stand no farther apart than that allows, whatever the beam could span (2% short of the
+      // limit, for the rounding of the areas).
+      const stripFt = Math.max(0.5, ...line.segs.map((s) => s.tributaryFt));
+      const areaSpanIn = Math.floor(((POST_TABLE_MAX_AREA * 0.98) / stripFt) * 12);
       type Option = { spec: BeamSpec; maxSpanIn: number; posts: ReturnType<typeof layoutPosts>; cost: number };
       const options: Option[] = beamChoices.map((size) => {
         const spec = beamSpec(size);
         const maxSpanIn = spec.kind === "solid" ? solidBeamMaxSpanIn(load, group, size as (typeof SOLID_BEAMS)[number], dcaFt) : builtUpBeamMaxSpanIn(load, group, size as (typeof BUILT_UP_CHOICES)[number], ircFt);
-        const posts = layoutPosts(lengthIn, maxSpanIn, style);
+        const posts = layoutPosts(lengthIn, maxSpanIn > 0 ? Math.min(maxSpanIn, areaSpanIn) : maxSpanIn, style);
         return { spec, maxSpanIn, posts, cost: (lengthIn / 12) * spec.plies * price(lumberKey(spec.stock)) + posts.count * postSetCost };
       });
       const cheapest = (list: Option[]) => list.reduce((m, o) => (o.cost < m.cost - 0.005 || (Math.abs(o.cost - m.cost) <= 0.005 && o.spec.depthIn < m.spec.depthIn) ? o : m));
