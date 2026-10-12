@@ -381,18 +381,54 @@ export function MobileNav() {
                 ) : (
                   <Link
                     key={item.label}
-                    className={cls + (item.locked ? ` ${styles.sbLockd}` : "")}
+                    className={cls + (item.locked ? ` ${styles.sbLockd}` : "") + (item.tool ? ` ${styles.sbTool}` : "") + (item.tool && item.soon && !item.locked ? ` ${styles.sbToolSoon}` : "")}
+                    data-tone={item.tool?.tone}
                     href={item.href as Route}
                     aria-current={isActive ? "page" : undefined}
+                    aria-describedby={item.tool ? `mnav-does-${item.icon}` : undefined}
                     onClick={() => setOpen(false)}
                   >
-                    <Icon id={item.icon} />
-                    {item.label}
+                    {/* An estimating tool (owner, 2026-10-12) — the desk
+                        sidebar's tool bay in the drawer's grammar: a tile in
+                        the tool's colour, and what it turns into what. */}
+                    {item.tool ? (
+                      <>
+                        <span className={styles.sbTile} aria-hidden="true">
+                          <Icon id={item.icon} />
+                        </span>
+                        <span className={styles.sbTxt}>
+                          <span className={styles.sbName}>{item.label}</span>
+                          {/* Coming soon rides the spec line, so the name keeps the row. */}
+                          <span className={styles.sbDoes} aria-hidden="true">
+                            {item.soon && !item.locked ? (
+                              <>
+                                <span className={styles.sbSoonTag}>Soon</span>
+                                {item.tool.to}
+                              </>
+                            ) : (
+                              <>
+                                {item.tool.from}
+                                <span className={styles.sbArrow}>→</span>
+                                {item.tool.to}
+                              </>
+                            )}
+                          </span>
+                          <span id={`mnav-does-${item.icon}`} hidden>
+                            {`${item.soon && !item.locked ? "Coming soon. " : ""}${item.tool.from} to ${item.tool.to}`}
+                          </span>
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon id={item.icon} />
+                        {item.label}
+                      </>
+                    )}
                     {/* Custom-plan lock beats the badge: a page the plan does
                         not include has no unread anything worth advertising.
                         Still a live link — the route shows the upgrade offer. */}
                     {item.soon && !item.locked ? (
-                      <span className={styles.sbSoon}>Coming soon</span>
+                      item.tool ? null : <span className={styles.sbSoon}>Coming soon</span>
                     ) : item.locked ? (
                       <svg className={styles.sbLockIc} viewBox="0 0 24 24" aria-label="Not in your plan">
                         <rect x="5" y="11" width="14" height="10" rx="1.5" />

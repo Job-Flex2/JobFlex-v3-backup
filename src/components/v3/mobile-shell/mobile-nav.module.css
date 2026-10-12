@@ -465,3 +465,39 @@
   font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;
   color: var(--muted); white-space: nowrap;
 }
+
+/* ── THE ESTIMATING TOOLS (owner, 2026-10-12: "make it look advanced") ──────
+   The desk sidebar draws them in a framed bay (blueprint-global.css, "THE
+   TOOL BAY"); the drawer's rows are already framed, so here each tool keeps
+   its row and gains the bay's tile — in the same six colours — and its spec
+   line, what it turns into what (nav-map `tool`). */
+.sbScroll [data-tone="violet"] { --tone: #6a4bd1; }
+.sbScroll [data-tone="blue"] { --tone: #1854a0; }
+.sbScroll [data-tone="spruce"] { --tone: #2c7a5a; }
+.sbScroll [data-tone="berry"] { --tone: #b8406a; }
+.sbScroll [data-tone="teal"] { --tone: #0d7a8a; }
+.sbScroll [data-tone="cedar"] { --tone: #a0582a; }
+.sbScroll .sbLink.sbTool { min-height: 58px; padding: 8px 11px 8px 9px; }
+.sbScroll .sbTile {
+  flex: 0 0 auto; width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--tone); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--tone) 10%, #fff); color: var(--tone);
+}
+.sbScroll .sbLink .sbTile .ic { width: 19px; height: 19px; opacity: 1; color: inherit; }
+.sbScroll .sbLink.sbTool.active .sbTile { background: var(--tone); color: #fff; }
+.sbScroll .sbLink.sbTool.active { background: color-mix(in srgb, var(--tone) 7%, #fff); }
+.sbScroll .sbLink.sbToolSoon .sbTile { border-style: dashed; background: var(--paper-deep); }
+.sbScroll .sbTxt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sbScroll .sbName { font-weight: 700; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbScroll .sbDoes {
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; font-weight: 500; line-height: 14px;
+  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sbScroll .sbArrow { margin: 0 0.4em; color: var(--tone); font-weight: 700; }
+.sbScroll .sbSoonTag {
+  display: inline-flex; align-items: center; height: 16px; padding: 0 5px; margin-right: 7px; vertical-align: 1px;
+  border: 1px solid var(--muted-light, rgba(10, 10, 10, 0.35)); border-radius: var(--radius);
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;
+}
+.sbScroll .sbLink.sbLockd .sbTile { filter: grayscale(1); }

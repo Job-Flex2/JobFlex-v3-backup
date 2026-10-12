@@ -155,6 +155,12 @@ export function Sidebar({
     // open inside the estimator.
     const here = !child && (item.href === active || !!item.children?.some((c) => c.href === active));
     const current = child && item.href === active;
+    // AN ESTIMATING TOOL (owner, 2026-10-12): a tile in its own colour and,
+    // under the name, what it turns into what. "Soon" moves down to that line,
+    // so the name is never cut short beside it ("Deck estim…").
+    const tool = child ? undefined : item.tool;
+    const soonMark = !!item.soon && !item.locked;
+    const doesId = tool ? `sb-does-${item.icon}` : undefined;
     return item.href === "#" ? (
                 <a key={item.label} className="sb-link" href="#" {...tipProps(item.label)}>
                   <svg className="ic">
@@ -167,27 +173,62 @@ export function Sidebar({
               ) : (
                 <Link
                   key={item.label}
-                  className={`sb-link${here ? " active" : ""}${child ? " sb-sub-link" : ""}${current ? " sb-sub-on" : ""}${item.locked ? " sb-lockd" : ""}`}
+                  className={`sb-link${tool ? " sb-tool" : ""}${here ? " active" : ""}${child ? " sb-sub-link" : ""}${current ? " sb-sub-on" : ""}${item.locked ? " sb-lockd" : ""}${tool && soonMark ? " sb-tool-soon" : ""}`}
+                  data-tone={tool?.tone}
                   aria-current={current ? "page" : undefined}
+                  aria-describedby={doesId}
                   href={item.href as Route}
                   onClick={(e) => onRowClick(e, item.href)}
                   {...tipProps(
-                    (badges[item.href] ?? 0) > 0 ? `${item.label} · ${badges[item.href]} new` : item.locked ? `${item.label} · not in your plan` : item.soon ? `${item.label} · coming soon` : quota ? `${item.label} · ${quota.text}` : item.label,
+                    (badges[item.href] ?? 0) > 0 ? `${item.label} · ${badges[item.href]} new` : item.locked ? `${item.label} · not in your plan` : item.soon ? `${item.label} · coming soon` : quota ? `${item.label} · ${quota.text}` : tool ? `${item.label} · ${tool.from} → ${tool.to}` : item.label,
                   )}
                 >
-                  <svg className="ic">
-                    <use href={`#${item.icon}`} />
-                  </svg>
+                  {tool ? (
+                    <span className="sb-tile" aria-hidden="true">
+                      <svg className="ic">
+                        <use href={`#${item.icon}`} />
+                      </svg>
+                    </span>
+                  ) : (
+                    <svg className="ic">
+                      <use href={`#${item.icon}`} />
+                    </svg>
+                  )}
                   {/* The label in its own span so the folded rail can hide it
                       and keep it for screen readers; the row's name is still
-                      its text. */}
-                  <span className="sb-lbl">{item.label}</span>
+                      its text. A tool's spec line is its description, not
+                      part of its name. */}
+                  {tool ? (
+                    <span className="sb-txt">
+                      <span className="sb-lbl">{item.label}</span>
+                      <span className="sb-does" aria-hidden="true">
+                        {soonMark && <span className="sb-soon">Soon</span>}
+                        {/* Coming soon says what it will make; the tag takes the input's room. */}
+                        <span className="sb-does-t">
+                          {soonMark ? (
+                            tool.to
+                          ) : (
+                            <>
+                              {tool.from}
+                              <span className="sb-arrow">→</span>
+                              {tool.to}
+                            </>
+                          )}
+                        </span>
+                      </span>
+                      <span id={doesId} hidden>
+                        {`${soonMark ? "Coming soon. " : ""}${tool.from} to ${tool.to}`}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="sb-lbl">{item.label}</span>
+                  )}
                   <span className="sb-slot sb-slot-b">
                   {/* CUSTOM-PLAN LOCK — the page is not in this org's plan.
                       Still a live link on purpose: the route renders the
                       upgrade offer, so the padlock is a door, not a wall. */}
-                  {item.soon && !item.locked ? (
-                    <span className="sb-soon" aria-label="Coming soon">Soon</span>
+                  {soonMark ? (
+                    tool ? null : <span className="sb-soon" aria-label="Coming soon">Soon</span>
                   ) : item.locked ? (
                     <svg className="sb-lock-ic" viewBox="0 0 24 24" aria-label="Not in your plan">
                       <rect x="5" y="11" width="14" height="10" rx="1.5" />
@@ -221,6 +262,34 @@ export function Sidebar({
               );
   };
 
+  // A row, or an estimator with the rows folded under it.
+  const renderItem = (item: NavItem) =>
+    item.children?.length ? (
+      <div key={item.label} className={`sb-tree${isOpen(item) ? " is-open" : ""}`}>
+        <div className="sb-parent">
+          {renderRow(item)}
+          {/* The fold (owner, 2026-09-20): a chevron in the row's
+              chevron slot. Open on its own when the estimator or its
+              inventory is the page; the click remembers the choice. */}
+          <button
+            type="button"
+            className="sb-fold-btn"
+            aria-expanded={isOpen(item)}
+            aria-controls={`sb-sub-${item.icon}`}
+            aria-label={`${isOpen(item) ? "Hide" : "Show"} ${item.label} subpages`}
+            onClick={() => setFolds((f) => ({ ...f, [item.href]: !isOpen(item) }))}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+        <div id={`sb-sub-${item.icon}`} className="sb-sub" hidden={!isOpen(item)}>{item.children.map((child) => renderRow(child, true))}</div>
+      </div>
+    ) : (
+      renderRow(item)
+    );
+
   return (
     <aside className="sb" ref={sbRef}>
       <div className="sb-head">
@@ -243,38 +312,34 @@ export function Sidebar({
         <div className="sb-indicator" id="sbIndicator"></div>
         {/* Section labels and estimator trees share the scroll container.
             The indicator accounts for positioned wrappers inside each tree. */}
-        {sections.map((section) => (
-          <Fragment key={section.label}>
-            <div className="sb-sec-label">{section.label}</div>
-            {section.items.map((item) =>
-              item.children?.length ? (
-                <div key={item.label} className={`sb-tree${isOpen(item) ? " is-open" : ""}`}>
-                  <div className="sb-parent">
-                    {renderRow(item)}
-                    {/* The fold (owner, 2026-09-20): a chevron in the row's
-                        chevron slot. Open on its own when the estimator or its
-                        inventory is the page; the click remembers the choice. */}
-                    <button
-                      type="button"
-                      className="sb-fold-btn"
-                      aria-expanded={isOpen(item)}
-                      aria-controls={`sb-sub-${item.icon}`}
-                      aria-label={`${isOpen(item) ? "Hide" : "Show"} ${item.label} subpages`}
-                      onClick={() => setFolds((f) => ({ ...f, [item.href]: !isOpen(item) }))}
-                    >
-                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
+        {sections.map((section) => {
+          // THE TOOL BAY (owner, 2026-10-12). Tools that follow each other
+          // share one framed bay; a section made only of tools puts its label
+          // on the bay's frame instead of above it. A role's mixed section
+          // (an estimator's Automation) keeps its label and frames its tools.
+          const bayOnly = section.items.length > 0 && section.items.every((i) => !!i.tool);
+          const runs: (NavItem | NavItem[])[] = [];
+          for (const item of section.items) {
+            const last = runs[runs.length - 1];
+            if (item.tool && Array.isArray(last)) last.push(item);
+            else runs.push(item.tool ? [item] : item);
+          }
+          return (
+            <Fragment key={section.label}>
+              {!bayOnly && <div className="sb-sec-label">{section.label}</div>}
+              {runs.map((run) =>
+                Array.isArray(run) ? (
+                  <div key={`bay:${run[0].href}`} className="sb-bay">
+                    {bayOnly && <div className="sb-sec-label sb-bay-head">{section.label}</div>}
+                    {run.map(renderItem)}
                   </div>
-                  <div id={`sb-sub-${item.icon}`} className="sb-sub" hidden={!isOpen(item)}>{item.children.map((child) => renderRow(child, true))}</div>
-                </div>
-              ) : (
-                renderRow(item)
-              ),
-            )}
-          </Fragment>
-        ))}
+                ) : (
+                  renderItem(run)
+                ),
+              )}
+            </Fragment>
+          );
+        })}
       </nav>
 
       {/* The account block was a dead <button> showing the hardcoded literals
