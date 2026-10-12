@@ -45,7 +45,7 @@ import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
 import { isEditionPlan, type EditionId } from "@/lib/editions";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, termFromParam, BILLING_PARAM, type BillingTerm } from "@/lib/planDeal";
 import { firstBillCents } from "@/lib/firstMonthDiscount";
-import { PlanDealSlot, PlanTermSwitch, recalledBillingTerm, rememberBillingTerm } from "@/components/billing/PlanTermSwitch";
+import { PlanDealSlot, PlanPrice, PlanTermSwitch, planWhenDeal, recalledBillingTerm, rememberBillingTerm } from "@/components/billing/PlanTermSwitch";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
@@ -363,6 +363,36 @@ export function RegisterContent({
     // A first-month code takes one month's worth off a yearly bill (lib/firstMonthDiscount).
     const v = firstBillCents(per === "/yr" ? "YEAR" : "MONTH", cents, monthlyCents, promo?.percentOff ?? 0) / 100;
     return `Free until ${freeUntil}, then $${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2)}${per}`;
+  };
+  /** The card's "Free until Oct 19, then $405/yr — 3 months free" (2026-10-12: the
+   *  free months ride the line on a year; with a card only — the card-less line has
+   *  no price). It breaks at the dash, never inside a part, and the other term's line
+   *  lies in the same cell unpainted, so the row is one height on either side of the
+   *  switch. */
+  const whenLine = (monthlyCents: number, yearlyCents: number | null | undefined) => {
+    const lineFor = (t: BillingTerm) => {
+      const y = planTerm(t, yearlyCents) === "YEAR";
+      const base = freeUntilLine(y ? (yearlyCents ?? 0) : monthlyCents, y ? "/yr" : "/mo", monthlyCents) ?? "";
+      return { base, deal: requiresCard ? planWhenDeal(t, monthlyCents, yearlyCents) : "" };
+    };
+    const now = lineFor(interval);
+    const other = lineFor(interval === "YEAR" ? "MONTH" : "YEAR");
+    return (
+      <span className="pw-when">
+        <span className="pw-when-now">
+          <span className="pw-when-part">{now.base}</span>
+          {now.deal ? (
+            <>
+              {" "}
+              <span className="pw-when-part">{now.deal.trim()}</span>
+            </>
+          ) : null}
+        </span>
+        <span className="pw-when-ghost" aria-hidden="true">
+          <span className="jf-ghost-t" data-c={other.base + other.deal} />
+        </span>
+      </span>
+    );
   };
   /* True from the first frame when Stripe has just sent them back: the account
      is being created before anything else can be clicked. Initial state rather
@@ -1947,13 +1977,11 @@ export function RegisterContent({
                   >
                     {p.highlight ? <span className="pw-tag">Most picked</span> : null}
                     <span className="pw-plan-n">{p.name}</span>
-                    <span className="pw-price" data-plan-price>
-                      {dealDollars(cents)}
-                      <i>{per}</i>
-                    </span>
-                    {/* "N months free" + "You save $N" on a year, "Billed monthly" otherwise (lib/planDeal). */}
+                    {/* The price with its "N MONTHS FREE" stamp on a year (PlanPrice); under it
+                        "You save $N a year", or "Billed monthly" (PlanDealSlot, lib/planDeal). */}
+                    <PlanPrice term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} figureClassName="pw-price" />
                     <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
-                    {freeUntil ? <span className="pw-when">{freeUntilLine(cents, per, p.priceCents)}</span> : null}
+                    {freeUntil ? whenLine(p.priceCents, p.yearlyPriceCents) : null}
                     {/* THE CODE'S EFFECT ON THIS PRICE. "Code applied" over an
                         unchanged number read as nothing happening (owner,
                         2026-09-02); the same percent checkout applies is
@@ -2043,12 +2071,9 @@ export function RegisterContent({
                 }}
               >
                 <span className="pw-plan-n">Custom</span>
-                <span className="pw-price" data-plan-price>
-                  {dealDollars(customCents)}
-                  <i>{interval === "YEAR" ? "/yr" : "/mo"}</i>
-                </span>
+                <PlanPrice term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} figureClassName="pw-price" />
                 <PlanDealSlot term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} />
-                {freeUntil ? <span className="pw-when">{freeUntilLine(customCents, interval === "YEAR" ? "/yr" : "/mo", customPriceCents(customPages))}</span> : null}
+                {freeUntil ? whenLine(customPriceCents(customPages), customPriceCents(customPages, "YEAR")) : null}
                 {/* the code's line has a row in this grid; the custom card keeps it empty */}
                 {promo?.percentOff ? <span aria-hidden="true" /> : null}
                 <span className="pw-feats" data-plan-feats>

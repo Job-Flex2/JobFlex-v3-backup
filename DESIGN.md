@@ -78,10 +78,15 @@ plan, blueprint blue on the "Most picked" one. The offset is 3px, 4px under
 a pointer (owner, 2026-10-12), on every one of those cards.
 Plan cards, everywhere a customer sees them (owner, 2026-10-12): one
 Monthly | Annual switch over the row ([PlanTermSwitch](src/components/billing/PlanTermSwitch.tsx)),
-never per-card term buttons. Under the price, ONE line of one height:
-"Billed monthly"; on Annual "2 months free · You save $90" (months only when
-whole, the saving in `--emerald`), "You save $N" alone, or "Billed yearly" —
-never a percentage or a struck price. Lists are always open (no "Show all"),
+never per-card term buttons; its Annual half always wears a filled `--emerald`
+badge in the "Most picked" type — "2–3 months free" (the range of whole free
+months), or "Save up to $N" when none is whole. On Annual a card shows the
+year's price with a filled `--emerald` "3 MONTHS FREE" stamp beside it (under
+it on a narrow card; whole months only) and one line "You save $135 a year",
+`--emerald`, bold, 15px; "Billed yearly" when the year saves nothing; on
+Monthly a quiet "Billed monthly" and nothing about the year, the stamp's
+place kept so no card moves on the switch. Never a percentage or a struck
+price. Lists are always open (no "Show all"),
 the cards of a row are one subgrid so prices and first rows align, and the
 row has as many columns as cards, each capped, centred. On a desk the signup
 plan step fits the window from 800px tall without a scroll.

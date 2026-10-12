@@ -29,7 +29,7 @@
 
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, type BillingTerm } from "@/lib/planDeal";
-import { PlanDealSlot, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
+import { PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import { DEV_EVENT, type DevUpgradeEvent } from "@/lib/devSimulation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -525,7 +525,6 @@ export function UpgradeContent({
       <div className="jf-up-plans has-custom">
         {plans.map((p) => {
           const term = planTerm(interval, p.yearlyPriceCents);
-          const cents = term === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents;
           const isCur = cur === p.slug && (!currentInterval || currentInterval === term);
           // The plan the shop is on, on the other term: "Switch to annual / monthly".
           const otherTerm = cur === p.slug && !isCur;
@@ -541,10 +540,7 @@ export function UpgradeContent({
             >
               {focusSlug === p.slug ? <span className="jf-up-tag">Includes Deck Studio</span> : p.highlight ? <span className="jf-up-tag">Most picked</span> : null}
               <span className="jf-up-n">{p.name}</span>
-              <span className="jf-up-price" data-plan-price>
-                {dealDollars(cents)}
-                <i>{term === "YEAR" ? "/yr" : "/mo"}</i>
-              </span>
+              <PlanPrice term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} figureClassName="jf-up-price" />
               <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
               <span className="jf-up-feats" data-plan-feats>
                 {featureRows.map((f) => {
@@ -593,10 +589,12 @@ export function UpgradeContent({
             data-yearly-cents={customPriceCents(onCustom ? owned : picked, "YEAR")}
           >
             <span className="jf-up-n">{onCustom ? "Custom" : "Build your plan"}</span>
-            <span className="jf-up-price" data-plan-price>
-              {dealDollars(customPriceCents(onCustom ? owned : picked, interval))}
-              <i>{termPer}</i>
-            </span>
+            <PlanPrice
+              term={interval}
+              monthlyCents={customPriceCents(onCustom ? owned : picked)}
+              yearlyCents={customPriceCents(onCustom ? owned : picked, "YEAR")}
+              figureClassName="jf-up-price"
+            />
             <PlanDealSlot
               term={interval}
               monthlyCents={customPriceCents(onCustom ? owned : picked)}

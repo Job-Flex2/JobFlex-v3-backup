@@ -45,18 +45,32 @@ export function savedWords(deal: AnnualDeal | null): string {
   return deal ? `You save ${dealDollars(deal.savedCents)}` : "";
 }
 
+/** "You save $135 a year" — the card's green line on Annual (2026-10-12); "" without a deal. */
+export function savedYearWords(deal: AnnualDeal | null): string {
+  return deal ? `${savedWords(deal)} a year` : "";
+}
+
 /** The term a plan is actually billed on: a plan with no yearly price bills
  *  monthly whatever the switch says (the checkout routes refuse YEAR for it). */
 export function planTerm(term: BillingTerm, yearlyCents: number | null | undefined): BillingTerm {
   return term === "YEAR" && yearlyCents ? "YEAR" : "MONTH";
 }
 
-/** The switch's own tag on "Annual": the months-free words when every plan
- *  with a yearly price gives the same whole months, else "" (no tag). */
+/** The switch's own badge on "Annual", always shown (owner, 2026-10-12), read
+ *  off the plans that have a yearly price: the range of their WHOLE free
+ *  months — "2–3 months free", or "2 months free" when they agree; when none
+ *  is whole months, "Save up to $N" with the biggest saving; "" when no year
+ *  saves anything. Pass the deals of the plans with a yearly price. */
 export function sharedDealWords(deals: (AnnualDeal | null)[]): string {
-  const words = new Set(deals.map((d) => dealWords(d)));
-  if (words.size !== 1) return "";
-  return [...words][0];
+  const real = deals.filter((d): d is AnnualDeal => Boolean(d));
+  const months = real.map((d) => d.monthsFree).filter((m): m is number => Boolean(m));
+  if (months.length) {
+    const lo = Math.min(...months);
+    const hi = Math.max(...months);
+    return lo === hi ? `${lo} month${lo === 1 ? "" : "s"} free` : `${lo}–${hi} months free`;
+  }
+  if (real.length) return `Save up to ${dealDollars(Math.max(...real.map((d) => d.savedCents)))}`;
+  return "";
 }
 
 /** Whether a Monthly | Annual switch has anything to switch: some plan has a yearly price. */

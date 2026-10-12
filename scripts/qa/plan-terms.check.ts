@@ -18,7 +18,11 @@
 //     /dashboard/upgrade, while /pricing and the landing keep three cards and the wide "Build
 //     your plan" plate under them); a plan card's hard offset is not 3px; a sign-in page still
 //     draws the old "J" square (.brand-mark) instead of the product mark (.jf-pmark), or the
-//     mark's ink is not 22–24px tall.
+//     mark's ink is not 22–24px tall;
+//   · (2026-10-12, the year's saving shown louder) the Annual badge on the switch is missing on
+//     either side of it, or does not read what the cards' catalogue gives ("2–3 months free",
+//     "Save up to $N"); on Monthly a card says "months free"; on Annual a card's "N MONTHS FREE"
+//     stamp or its "You save $N a year" does not match its prices, or that line is under 15px.
 // Pure half: lib/planDeal (months free in whole months only, never a percentage).
 // The plan step is reached the way signup-flow.check.ts reaches it (its own made-up IP, mail
 // keys blank, its pending signups and brake rows removed after). The upgrade page signs in
@@ -30,7 +34,7 @@ import type { ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 import { PrismaClient } from "@prisma/client";
 import { ensureBuild, playwright, startServer, stopServer } from "./_prod-server";
-import { annualDeal, dealWords, savedWords, sharedDealWords, planTerm } from "../../src/lib/planDeal";
+import { annualDeal, dealWords, savedWords, savedYearWords, sharedDealWords, planTerm } from "../../src/lib/planDeal";
 
 const PORT = Number(process.env.QA_TERMS_PORT || 3314);
 let BASE = (process.env.QA_TERMS_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
@@ -53,12 +57,15 @@ function pure() {
   check("$950/yr on $89/mo: no stamp, never a percentage", dealWords(annualDeal(8900, 95000)) === "" && !/%/.test(dealWords(annualDeal(8900, 95000)) + savedWords(annualDeal(8900, 95000))));
   check("a saving with cents keeps its cents: $1,000.50/yr on $100/mo", savedWords(annualDeal(10000, 100050)) === "You save $199.50");
   check("no yearly price, a dearer year, or a free plan: no deal", annualDeal(8900, null) === null && annualDeal(8900, 106800) === null && annualDeal(0, 1000) === null);
-  check("the switch's tag: only when every yearly plan gives the same whole months", sharedDealWords([annualDeal(8900, 89000), annualDeal(19900, 199000)]) === "2 months free" && sharedDealWords([annualDeal(4500, 29000), annualDeal(19900, 199000)]) === "");
+  check("the switch's badge: the range of whole free months", sharedDealWords([annualDeal(4500, 40500), annualDeal(9500, 85500), annualDeal(19900, 199000)]) === "2\u20133 months free");
+  check("…one value when they agree, and plans without whole months are left out", sharedDealWords([annualDeal(8900, 89000), annualDeal(19900, 199000)]) === "2 months free" && sharedDealWords([annualDeal(4500, 29000), annualDeal(19900, 199000)]) === "2 months free");
+  check("…'Save up to $N' when no plan gives whole months, nothing when no year saves", sharedDealWords([annualDeal(4500, 29000), annualDeal(8900, 95000)]) === "Save up to $250" && sharedDealWords([null, annualDeal(8900, 120000)]) === "" && sharedDealWords([]) === "");
+  check("the card's green line: 'You save $135 a year'", savedYearWords(annualDeal(4500, 40500)) === "You save $135 a year" && dealWords(annualDeal(4500, 40500)) === "3 months free");
   check("a plan with no yearly price bills MONTH on Annual", planTerm("YEAR", null) === "MONTH" && planTerm("YEAR", 29000) === "YEAR" && planTerm("MONTH", 29000) === "MONTH");
 }
 
-type CardRead = { slug: string; top: number; left: number; height: number; priceTop: number; featTop: number; text: string; deal: string; price: string; monthly: number; yearly: number | null; overflow: boolean; cut: boolean };
-type RowRead = { cards: CardRead[]; more: string[]; scrollX: number; vw: number; switches: number; halves: number[] };
+type CardRead = { slug: string; top: number; left: number; height: number; priceTop: number; featTop: number; text: string; deal: string; dealPx: number; stamp: string | null; price: string; monthly: number; yearly: number | null; overflow: boolean; cut: boolean };
+type RowRead = { cards: CardRead[]; more: string[]; scrollX: number; vw: number; switches: number; halves: number[]; badge: string | null; badgeLabel: string | null };
 
 /** Every plan card on the page (data-plan-card), measured. */
 async function read(page: any, scope: string): Promise<RowRead> {
@@ -81,8 +88,11 @@ async function read(page: any, scope: string): Promise<RowRead> {
           top: Math.round(box.top), left: Math.round(box.left), height: Math.round(box.height * 10) / 10,
           priceTop: Math.round((r(c.querySelector("[data-plan-price]"))?.top ?? -1) * 10) / 10,
           featTop: Math.round((r(items[0] || feats)?.top ?? -1) * 10) / 10,
-          text: (c.textContent || "").replace(/\s+/g, " "),
+          // What the card SHOWS (innerText: an unpainted twin of the other term is not text).
+          text: (c.innerText || "").replace(/\s+/g, " "),
           deal: (c.querySelector(".jf-deal")?.textContent || "").replace(/\s+/g, " ").trim(),
+          dealPx: parseFloat(getComputedStyle(c.querySelector(".jf-deal-save") || c.querySelector(".jf-deal") || c).fontSize),
+          stamp: c.querySelector("[data-plan-stamp]")?.textContent?.trim() ?? null,
           price: (c.querySelector("[data-plan-price]")?.textContent || "").replace(/\s+/g, ""),
           monthly: Number(c.dataset.monthlyCents || 0),
           yearly: c.dataset.yearlyCents ? Number(c.dataset.yearlyCents) : null,
@@ -95,6 +105,8 @@ async function read(page: any, scope: string): Promise<RowRead> {
       vw: window.innerWidth,
       switches: root.querySelectorAll(".jf-term").length,
       halves: Array.from(root.querySelectorAll<HTMLElement>(".jf-term-b")).map((b) => Math.round(b.getBoundingClientRect().height)),
+      badge: root.querySelector(".jf-term [data-term-badge]")?.textContent?.trim() ?? null,
+      badgeLabel: root.querySelector('.jf-term [data-term="YEAR"]')?.getAttribute("aria-label") ?? null,
     };
   }, scope);
 }
@@ -113,6 +125,11 @@ function judgeRow(name: string, r: RowRead, term: "MONTH" | "YEAR") {
   check(`${name}: no sideways scroll`, r.scrollX <= r.vw + 1, `${r.scrollX} > ${r.vw}`);
   const wide = r.cards.filter((c) => c.overflow).map((c) => c.slug);
   check(`${name}: nothing wider than its card`, !wide.length, wide.join(", "));
+  // The badge on the switch: there on either side, and it reads the cards' own catalogue.
+  if (r.switches) {
+    const want = sharedDealWords(r.cards.filter((c) => c.yearly).map((c) => annualDeal(c.monthly, c.yearly)));
+    check(`${name}: the Annual badge reads "${want}"`, (want ? r.badge === want : r.badge === null) && (!want || r.badgeLabel === `Annual, ${want}`), `${r.badge} · ${r.badgeLabel}`);
+  }
   check(`${name}: every card open (no Show all)`, !r.more.length && !r.cards.some((c) => c.cut), [...r.more, ...r.cards.filter((c) => c.cut).map((c) => c.slug + " cut")].join(", "));
   for (const row of rows(r.cards)) {
     const ids = row.map((c) => c.slug).join("/");
@@ -123,14 +140,15 @@ function judgeRow(name: string, r: RowRead, term: "MONTH" | "YEAR") {
   for (const c of r.cards) {
     if (c.slug === "custom" && !c.monthly) continue;
     if (term === "MONTH") {
-      check(`${name}: ${c.slug} Monthly says no /yr`, !/\/yr/.test(c.text), c.price);
+      check(`${name}: ${c.slug} Monthly says no /yr and no months free`, !/\/yr/.test(c.text) && !/months? free/i.test(c.text) && !c.stamp, c.price);
     } else {
       const d = annualDeal(c.monthly, c.yearly);
       check(`${name}: ${c.slug} Annual deal has no %`, !/%/.test(c.deal), c.deal);
       if (!c.yearly) check(`${name}: ${c.slug} has no yearly price → /mo, Billed monthly`, /\/mo$/.test(c.price) && /Billed monthly/.test(c.deal), `${c.price} · ${c.deal}`);
       else {
         check(`${name}: ${c.slug} Annual price is the year`, c.price === `$${c.yearly / 100}/yr`.replace(/\.(\d)$/, ".$10"), c.price);
-        check(`${name}: ${c.slug} "${savedWords(d)}"${dealWords(d) ? " + " + dealWords(d) : ""}`, (!d || c.deal.includes(savedWords(d))) && (!d || !dealWords(d) || c.deal.includes(dealWords(d))) && (!d || (!dealWords(d) ? !/months? free/i.test(c.deal) : true)), c.deal);
+        check(`${name}: ${c.slug} "${savedYearWords(d) || "Billed yearly"}"${dealWords(d) ? " + stamp " + dealWords(d) : ""}`, (d ? c.deal === savedYearWords(d) : /Billed yearly/.test(c.deal)) && (dealWords(d) ? c.stamp === dealWords(d) : c.stamp === null), `${c.deal} · stamp ${c.stamp}`);
+        if (d) check(`${name}: ${c.slug} the saving line is 15px or more`, c.dealPx >= 15, `${c.dealPx}px`);
       }
     }
   }

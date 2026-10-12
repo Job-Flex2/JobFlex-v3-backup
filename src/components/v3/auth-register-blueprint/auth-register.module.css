@@ -1666,3 +1666,19 @@
 @media (max-width: 560px) {
   .bp :global(.jf-pmark) { --pmark-h: 22px; }
 }
+
+/* "Free until Oct 19, then $405/yr — 3 months free" (owner, 2026-10-12): it
+   breaks at the dash, never inside a part; the other term's line lies in the
+   same cell unpainted, so the row keeps one height on either side of the
+   switch. */
+.bp :global(.pw-when) { display: grid; }
+.bp :global(.pw-when) > * { grid-area: 1 / 1; }
+.bp :global(.pw-when-part) { white-space: nowrap; }
+.bp :global(.pw-when-ghost) { visibility: hidden; }
+
+/* FOUR CARDS ON A DESK (CUSTOM_PLAN_ENABLED): narrower cards wrap more feature
+   rows and stack the "N MONTHS FREE" stamp under the price, so the list closes
+   up a little — never the saving — and the step still fits 1280×800. */
+@media (min-width: 1101px) {
+  .bp :global(.pw-plans:has(> .pw-plan:nth-child(4))) :global(.pw-f) { padding: clamp(1.5px, 0.28vh, 6px) 0; line-height: 1.2; }
+}

@@ -14,10 +14,14 @@
   border: 2px solid var(--ink, #0a0a0a);
   border-radius: 2px;
   background: #fff;
-  overflow: hidden;
+  /* not hidden: the Annual badge stands over the frame's top edge */
+  overflow: visible;
 }
+/* room over the switch for the badge, so it never sits on what is above */
+.jf-term.has-badge { margin-top: 12px; }
 .jf-term .jf-term-b {
   appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -46,20 +50,28 @@
 @media (hover: hover) and (pointer: fine) {
   .jf-term .jf-term-b:not(.is-on):hover { background: var(--paper, #f2f0eb); color: var(--ink, #0a0a0a); }
 }
-/* The deal every yearly plan shares — a small stamp on the Annual half. */
-.jf-term .jf-term-tag {
+/* THE ANNUAL BADGE (owner, 2026-10-12): always on, whichever half is chosen —
+   a filled --emerald stamp in the "Most picked" type (mono caps, white),
+   pinned over the Annual half's top-right corner, clear of its label. White
+   on #3a7d44 is 5.0:1. */
+.jf-term .jf-term-badge {
+  position: absolute;
+  top: -12px;
+  right: -6px;
+  z-index: 1;
   padding: 3px 6px;
-  border: 1.5px solid var(--emerald, #3a7d44);
   border-radius: 2px;
-  background: #fff;
-  color: var(--emerald, #3a7d44);
+  background: var(--emerald, #3a7d44);
+  color: #fff;
   font-family: var(--font-mono, ui-monospace, Menlo, monospace);
-  font-size: 10px;
+  font-size: 9.5px;
   font-style: normal;
   font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: 0.06em;
+  line-height: 1.15;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 /* On the landing's ink band: a white frame, the chosen half white on ink. */
@@ -80,21 +92,57 @@
   .jf-term .jf-term-b { transition: none; }
 }
 
-/* ── The deal line under a card's price (one line, 2026-10-12) ──────────
-   Always drawn and always one line high — "Billed monthly", "2 months free ·
-   You save $90", "You save $250", "Billed yearly" — so switching Monthly ↔
-   Annual never moves the feature list and no card pushes its neighbours'
-   rows out of line. It never wraps: the longest of them is ~200px at 13px. */
+/* ── The price row (PlanPrice, owner 2026-10-12) ────────────────────────
+   The price, and beside it on a year with whole free months the filled
+   "3 MONTHS FREE" stamp — under it when the card is too narrow for both.
+   The other term's price lies in the same grid cell, unpainted, and the
+   stamp keeps its box on a month, unpainted: the row is one size on either
+   side of the switch. The unpainted text comes from an attribute (Ghost), so
+   it is not text on the page. */
+.jf-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* lines packed at the top, not spread over the row's track: a card whose
+     stamp wrapped under its price must not lift its neighbours' prices */
+  align-content: flex-start;
+  align-self: start;
+  column-gap: 10px;
+  row-gap: 6px;
+  min-width: 0;
+}
+.jf-price .jf-price-fig { display: inline-grid; min-width: 0; }
+.jf-price .jf-price-fig > * { grid-area: 1 / 1; }
+.jf-price .jf-price-ghost { visibility: hidden; }
+.jf-ghost-t::before { content: attr(data-c); }
+.jf-price .jf-price-stamp {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 2px;
+  background: var(--emerald, #3a7d44);
+  color: #fff;
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.jf-price .jf-price-stamp.is-off { visibility: hidden; }
+
+/* ── The deal line under the price (one line, one height) ──────────────
+   "You save $135 a year" on a year, green, bold, 15px; "Billed yearly" for a
+   year that saves nothing; a quiet "Billed monthly" on a month. Never wraps:
+   the longest is ~190px at 15px. */
 .jf-deal {
   display: block;
   height: 1.35em;
   min-width: 0;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.35;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.jf-deal .jf-deal-months { color: var(--ink, #0a0a0a); font-weight: 700; }
-.jf-deal .jf-deal-dot { color: var(--ink-muted, #555); }
-.jf-deal .jf-deal-save { color: var(--emerald, #3a7d44); font-weight: 700; }
-.jf-deal .jf-deal-billed { color: var(--ink-muted, #555); font-weight: 500; }
+.jf-deal .jf-deal-save { color: var(--emerald, #3a7d44); font-weight: 800; }
+.jf-deal .jf-deal-billed { color: var(--ink-muted, #555); font-size: 13px; font-weight: 500; }

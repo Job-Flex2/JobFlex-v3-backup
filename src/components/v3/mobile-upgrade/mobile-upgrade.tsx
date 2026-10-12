@@ -57,7 +57,7 @@ import {
 } from "@/lib/customPlan";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import { dealDollars, offersYearly, planTerm, sharedDealWords, annualDeal, type BillingTerm } from "@/lib/planDeal";
-import { PlanDealSlot, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
+import { PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import "./mobile-upgrade.css";
 
 /** How long the sheets take to leave. Must match the transition in the CSS. */
@@ -541,7 +541,6 @@ export function MobileUpgradeContent({
 
   const planCard = (p: UpgradePlan) => {
     const term = planTerm(interval, p.yearlyPriceCents);
-    const cents = term === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents;
     const isCur = cur === p.slug && (!currentInterval || currentInterval === term);
     // The plan the shop is on, on the other term: "Switch to annual / monthly".
     const otherTerm = cur === p.slug && !isCur;
@@ -573,10 +572,18 @@ export function MobileUpgradeContent({
         </div>
 
         <div className="mu-price">
-          <span className="mu-price-row" data-plan-price>
-            <b>{dealDollars(cents)}</b>
-            <i>{term === "YEAR" ? "/yr" : "/mo"}</i>
-          </span>
+          <PlanPrice
+            term={interval}
+            monthlyCents={p.priceCents}
+            yearlyCents={p.yearlyPriceCents}
+            figureClassName="mu-price-row"
+            figure={(num, per) => (
+              <>
+                <b>{num}</b>
+                <i>{per}</i>
+              </>
+            )}
+          />
           <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
         </div>
 
@@ -968,10 +975,18 @@ export function MobileUpgradeContent({
             </div>
 
             <div className="mu-price">
-              <span className="mu-price-row" data-plan-price>
-                <b>{dealDollars(customPriceCents(customPagesNow, interval))}</b>
-                <i>{termPer}</i>
-              </span>
+              <PlanPrice
+                term={interval}
+                monthlyCents={customPriceCents(customPagesNow)}
+                yearlyCents={customPriceCents(customPagesNow, "YEAR")}
+                figureClassName="mu-price-row"
+                figure={(num, per) => (
+              <>
+                <b>{num}</b>
+                <i>{per}</i>
+              </>
+            )}
+              />
               <PlanDealSlot
                 term={interval}
                 monthlyCents={customPriceCents(customPagesNow)}

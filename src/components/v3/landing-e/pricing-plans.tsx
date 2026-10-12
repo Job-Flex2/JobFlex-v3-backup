@@ -2,9 +2,9 @@
 
 import { useTrialOffer } from "@/components/providers/trial-offer";
 import { useEffect, useRef, useState } from "react";
-import { expandPlanFeatures, formatPlanPrice, type PlanDTO } from "@/lib/planCatalog";
-import { annualDeal, offersYearly, planTerm, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
-import { PlanDealSlot, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
+import { expandPlanFeatures, type PlanDTO } from "@/lib/planCatalog";
+import { annualDeal, offersYearly, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
+import { PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import "./pricing-faq.css";
 
 /* THE REGISTER'S PLAN CARDS ON THE LANDING (owner, 2026-09-26). A port of
@@ -169,7 +169,6 @@ export function PricingPlans({
       <div className="lp-pw-plans" ref={railRef}>
         {plans.map((p) => {
           const has = included.get(p.slug) ?? new Set<string>();
-          const billed = planTerm(term, p.yearlyPriceCents);
           return (
             <article
               key={p.slug}
@@ -180,10 +179,8 @@ export function PricingPlans({
             >
               {p.highlight ? <span className="lp-pw-tag">Most picked</span> : null}
               <h3 className="lp-pw-plan-n">{p.name}</h3>
-              <p className="lp-pw-price" data-plan-price>
-                {formatPlanPrice(billed === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents)}
-                <i>{billed === "YEAR" ? "/yr" : "/mo"}</i>
-              </p>
+              {/* The price, and on a year its "N MONTHS FREE" stamp (PlanPrice). */}
+              <PlanPrice term={term} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} figureClassName="lp-pw-price" />
               <PlanDealSlot term={term} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
               <ul className="lp-pw-feats" data-plan-feats>
                 {rows.map((f) => {
