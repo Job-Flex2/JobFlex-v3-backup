@@ -33,6 +33,7 @@ import { readPlanGrant } from "@/lib/planGrant";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { planLapsed } from "@/lib/planStatus";
 import { trialCardLine, type TrialCardLine } from "@/lib/trialCardLine";
+import { planTermState } from "@/lib/planChange";
 
 // The result shape. These interfaces lived in ./subscription-view.tsx until
 // 2026-08-13, when that desktop view was superseded by the blueprint page at
@@ -52,6 +53,10 @@ export interface SubscriptionViewProps {
   planName: string;
   /** Monthly price of the current plan; null when the slug left the catalog. */
   priceCents: number | null;
+  /** The term the subscription is billed on; null when it cannot be told. */
+  interval?: "MONTH" | "YEAR" | null;
+  /** A booked YEAR → MONTH switch (lib/planChange). */
+  scheduledSwitch?: { at: string; planName: string; interval: "MONTH" | "YEAR" } | null;
   /** Lowercase slug used to mark "current" in the spectrum + matrix. */
   currentSlug: string;
   /** Active catalog plans, display-ordered. */
@@ -151,13 +156,14 @@ function referralsBehind(rewardsNewestFirst: number[], balanceCents: number, spe
 export async function loadSubscriptionData(
   organizationId: string,
 ): Promise<SubscriptionViewProps> {
-  const [sub, planContext, plans, limitOverview, code, trialCard] = await Promise.all([
+  const [sub, planContext, plans, limitOverview, code, trialCard, term] = await Promise.all([
     readAccessSubscription(organizationId),
     getOrgPlanContext(organizationId),
     getPlanCatalog(),
     getOrgLimitOverview(organizationId),
     getOrCreateMyReferralCode(),
     trialCardLine(organizationId).catch(() => null),
+    planTermState(organizationId).catch(() => ({ currentInterval: null, scheduledSwitch: null })),
   ]);
   // No meters for a platform admin in their own organization: the card says
   // "Unlimited · platform admin" instead of counting what is not capped.
@@ -306,6 +312,8 @@ export async function loadSubscriptionData(
   return {
     planName: planDto?.name ?? titleCaseSlug(rawPlan),
     priceCents,
+    interval: term.currentInterval,
+    scheduledSwitch: term.scheduledSwitch,
     currentSlug: planDto?.slug ?? rawPlan.toLowerCase(),
     plans,
     status,

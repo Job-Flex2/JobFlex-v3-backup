@@ -47,9 +47,14 @@ export interface ConfirmPlanChangeProps {
     /** The term the "after" price is for — "/yr" when the plan is bought on
      *  the year (its priceCents then the year's); "/mo" by default. */
     toPer?: "/mo" | "/yr";
+    /** The term the "now" price is for ("/yr" for a shop paying yearly). */
+    fromPer?: "/mo" | "/yr";
     direction: "up" | "down";
     /** How the change is carried out — decides the payment line. */
     how: "checkout" | "switch";
+    /** What the money does, from Stripe's own preview (lib/planChange) —
+     *  replaces the generic line for a change made in place. */
+    payLine?: React.ReactNode;
   };
 }
 
@@ -90,7 +95,7 @@ function Compare({ c }: { c: NonNullable<ConfirmPlanChangeProps["compare"]> }) {
         <div className="jf-confirm-tile is-now">
           <span className="jf-confirm-tile-k">Now</span>
           <span className="jf-confirm-tile-n">{c.from?.name ?? "No plan"}</span>
-          <span className="jf-confirm-tile-p">{c.from ? `${dollars(c.from.priceCents)}/mo` : "—"}</span>
+          <span className="jf-confirm-tile-p">{c.from ? `${dollars(c.from.priceCents)}${c.fromPer ?? "/mo"}` : "—"}</span>
         </div>
         <div className="jf-confirm-arrow" aria-hidden="true">
           {ARROW}
@@ -114,7 +119,7 @@ function Compare({ c }: { c: NonNullable<ConfirmPlanChangeProps["compare"]> }) {
           ))}
         </ul>
       ) : null}
-      <p className="jf-confirm-pay">{paymentLine(c.how, c.direction)}</p>
+      {c.payLine ?? <p className="jf-confirm-pay">{paymentLine(c.how, c.direction)}</p>}
     </>
   );
 }

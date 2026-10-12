@@ -3,9 +3,15 @@ import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { isStripeEnabled, getStripeClient } from "@/lib/sdk/stripe";
-import { getPlanBySlug, getOrgPlanContext, revalidatePlanSurfaces } from "@/lib/planCatalogServer";
-import { ensureRecurringPrice } from "@/lib/stripePriceCache";
-import { SubscriptionStatus } from "@/lib/prismaEnums";
+import { getPlanBySlug, revalidatePlanSurfaces } from "@/lib/planCatalogServer";
+import {
+  applyPlanChange,
+  previewPlanChange as previewPlanChangeFor,
+  releaseScheduledSwitch,
+  type PlanChangeDone,
+  type PlanChangePreview,
+  type PlanChangeRefusal,
+} from "@/lib/planChange";
 import { subscriptionPeriodEndDate } from "@/lib/stripeCompat";
 import { trialOnlyInvoiceIds } from "@/lib/trialInvoices";
 import { normalizeCustomPages } from "@/lib/customPlan";
@@ -215,6 +221,9 @@ export async function cancelSubscription(): Promise<CancelSubscriptionResult> {
   if (sub.externalSubId && isStripeEnabled()) {
     const { stripe } = await getStripeClient();
     try {
+      // A booked YEAR → MONTH switch holds the subscription on a schedule,
+      // which refuses cancel_at_period_end: the switch goes first.
+      await releaseScheduledSwitch(organizationId, stripe);
       const updated = await stripe.subscriptions.update(sub.externalSubId, {
         cancel_at_period_end: true,
       });
@@ -271,142 +280,74 @@ export async function resumeSubscription(): Promise<CancelSubscriptionResult> {
 }
 
 /* ── CHANGE PLAN IN PLACE ────────────────────────────────────────────────
-   Until 2026-09-02 every plan button led to /dashboard/upgrade, whose only
-   move was a NEW Checkout session — a second subscription beside the first,
-   and no way down at all. A shop that already has a Stripe subscription now
-   has its price swapped on that subscription:
-     · UPGRADE  — `always_invoice`: the prorated difference is charged now.
-     · DOWNGRADE — `none`: the lower price starts at once, nothing is charged.
-   A shop with no subscription yet (or a cancelled one) is sent through
-   checkout as before — the caller handles `mode: "checkout"`. */
-export type ChangePlanResult =
-  | { ok: true; mode: "switched"; direction: "up" | "down"; planName: string; chargedCents: number }
-  | { ok: true; mode: "checkout" }
-  | { ok: false; error: string; code?: "card_declined" | "past_due" };
+   Every rule lives in lib/planChange (owner, 2026-10-12): a trial swaps the
+   price and runs on; YEAR → MONTH is booked for the end of the paid year;
+   MONTH → YEAR and a dearer price on the same term are invoiced today with
+   the unused period credited, ALL OR NOTHING on the card — a declined card
+   leaves the plan, the subscription and no open invoice behind, and answers
+   "Card declined — update your card"; a cheaper price on the same term is
+   switched free; an upgrade by tier on the same term, and a shop with no
+   live subscription, go to Stripe's page (`mode: "checkout"`).
+   previewPlanChange answers what the dialog shows — Stripe's own preview. */
+export type ChangePlanResult = PlanChangeDone;
+export type PlanChangePreviewResult = PlanChangePreview | PlanChangeRefusal;
 
-/* PAID BEFORE IT IS APPLIED (owner, 2026-10-12). An upgrade in place used
-   Stripe's default `allow_incomplete`: on a declined card the new price was
-   applied anyway, the subscription went past_due with the difference left on
-   an open invoice, and our row was written ACTIVE on the dearer plan — the
-   plan for free through the whole dunning window. Now the charge is
-   `pending_if_incomplete`: Stripe applies the change only once the invoice is
-   paid; otherwise nothing changes, the attempt's invoice is voided (no open
-   invoice, nothing retried) and the owner is sent to a new card. */
-const CARD_DECLINED = "Card declined — update your card.";
+export async function previewPlanChange(planSlug: string, interval: "MONTH" | "YEAR" = "MONTH"): Promise<PlanChangePreviewResult> {
+  const { organizationId } = await requireOwner();
+  if (!isStripeEnabled()) return { ok: false, error: "Checkout is not configured." };
+  try {
+    return await previewPlanChangeFor(organizationId, String(planSlug), interval === "YEAR" ? "YEAR" : "MONTH");
+  } catch (err) {
+    logServerError("billing.previewPlanChange", err, { kind: "action", organizationId });
+    return { ok: false, error: "Couldn't price the change. Try again." };
+  }
+}
 
 export async function changePlan(
   planSlug: string,
   interval: "MONTH" | "YEAR" = "MONTH",
+  prorationDate?: number | null,
 ): Promise<ChangePlanResult> {
   const { organizationId, user } = await requireOwner();
-  const plan = await getPlanBySlug(planSlug);
-  if (!plan || !plan.active) return { ok: false, error: "That plan is not available." };
-  if (plan.isFree) return { ok: false, error: "That plan can't be switched to here." };
-  if (interval === "YEAR" && !plan.yearlyPriceCents) {
-    return { ok: false, error: "This plan has no yearly option." };
-  }
   if (!isStripeEnabled()) return { ok: false, error: "Checkout is not configured." };
-
-  const [sub, ctx] = await Promise.all([
-    db.subscription.findUnique({ where: { organizationId } }),
-    getOrgPlanContext(organizationId),
-  ]);
-  if (!sub?.externalSubId) return { ok: true, mode: "checkout" };
-  if (ctx.plan?.slug === plan.slug) return { ok: false, error: "That is already your plan." };
-
-  const { stripe, mode } = await getStripeClient();
-  let current;
+  const planWas = await planSnapshot(organizationId);
+  let res: PlanChangeDone;
   try {
-    current = await stripe.subscriptions.retrieve(sub.externalSubId);
-  } catch {
-    return { ok: true, mode: "checkout" };
-  }
-  if (current.status === "canceled" || current.status === "incomplete_expired") {
-    return { ok: true, mode: "checkout" };
-  }
-  // An unpaid subscription is paid first: a dearer plan is not stacked on a debt.
-  if (current.status !== "active" && current.status !== "trialing") {
-    return { ok: false, error: "Your last payment didn't go through. Update your card first, then change the plan.", code: "past_due" };
-  }
-  const item = current.items.data[0];
-  if (!item) return { ok: true, mode: "checkout" };
-
-  // The price of record for the target plan, by Stripe mode (same rule as
-  // the checkout route).
-  let priceId: string | null = null;
-  if (mode === "live") {
-    const price = await db.planPrice.findFirst({
-      where: { planSlug: plan.slug, interval, active: true },
-    });
-    if (!price) return { ok: false, error: "That plan isn't available for checkout yet." };
-    priceId = price.stripePriceId;
-  } else {
-    const cents = interval === "YEAR" ? (plan.yearlyPriceCents ?? 0) : plan.priceCents;
-    priceId = await ensureRecurringPrice({
-      stripe,
-      mode,
-      kind: plan.slug,
-      name: `JobFlex ${plan.name}`,
-      interval,
-      cents,
-    });
-  }
-
-  const currentCents = ctx.plan?.priceCents ?? 0;
-  const direction: "up" | "down" = plan.priceCents > currentCents ? "up" : "down";
-
-  const charging = direction === "up" && current.status !== "trialing";
-  let chargedCents = 0;
-  try {
-    const startedAt = Math.floor(Date.now() / 1000) - 5;
-    let updated = await stripe.subscriptions.update(current.id, {
-      // Any other line goes: a custom plan's page quantity (lib/customBilling)
-      // must not keep billing under a catalog plan.
-      items: [{ id: item.id, price: priceId }, ...current.items.data.slice(1).map((i) => ({ id: i.id, deleted: true as const }))],
-      // A trial in progress keeps its end date either way; nothing is charged in it.
-      ...(current.status === "trialing" ? { trial_end: current.trial_end ?? undefined } : {}),
-      ...(charging
-        ? { proration_behavior: "always_invoice" as const, payment_behavior: "pending_if_incomplete" as const, expand: ["latest_invoice"] }
-        : { proration_behavior: "none" as const, metadata: { ...(current.metadata ?? {}), organizationId, planSlug: plan.slug, interval, customPages: "" } }),
-    });
-    if (charging) {
-      const inv = updated.latest_invoice && typeof updated.latest_invoice !== "string" ? updated.latest_invoice : null;
-      if (updated.pending_update) {
-        if (inv?.id && inv.status === "open") {
-          await stripe.invoices.voidInvoice(inv.id).catch((err) => console.warn("[billing] void after a declined upgrade failed:", err));
-        }
-        return { ok: false, error: CARD_DECLINED, code: "card_declined" };
-      }
-      if (inv && (inv.created ?? 0) >= startedAt) chargedCents = inv.amount_paid ?? 0;
-      updated = await stripe.subscriptions.update(current.id, {
-        metadata: { ...(current.metadata ?? {}), organizationId, planSlug: plan.slug, interval, customPages: "" },
-      });
-    }
-    const trialEnd = updated.trial_end ? new Date(updated.trial_end * 1000) : null;
-    const periodEnd = subscriptionPeriodEndDate(updated);
-    const planWas = await planSnapshot(organizationId);
-    await db.subscription.update({
-      where: { organizationId },
-      data: {
-        plan: plan.slug.toUpperCase(),
-        status: updated.status === "trialing" ? SubscriptionStatus.TRIALING : SubscriptionStatus.ACTIVE,
-        stripePriceId: priceId,
-        trialEndsAt: trialEnd,
-        currentPeriodEnd: periodEnd,
-      },
-    });
-    reportPlanChange(organizationId, "self_serve", planWas);
+    res = await applyPlanChange(organizationId, String(planSlug), interval === "YEAR" ? "YEAR" : "MONTH", typeof prorationDate === "number" ? prorationDate : null);
   } catch (err) {
     logServerError("billing.changePlan", err, { kind: "action", organizationId });
-    const msg = err instanceof Error ? err.message : "";
-    return /payment|card|declined/i.test(msg)
-      ? { ok: false, error: CARD_DECLINED, code: "card_declined" }
-      : { ok: false, error: "Couldn't switch the plan. Try again." };
+    return { ok: false, error: "Couldn't switch the plan. Try again." };
   }
+  if (!res.ok || res.mode === "checkout") return res;
+  if (res.mode === "switched") reportPlanChange(organizationId, "self_serve", planWas);
   revalidatePlanSurfaces();
   revalidatePath("/dashboard/subscription");
-  await billingSaved(organizationId, user.id, `Updated billing settings — plan ${direction === "up" ? "upgraded" : "downgraded"} to ${plan.name}`, { plan: plan.slug, interval, direction });
-  return { ok: true, mode: "switched", direction, planName: plan.name, chargedCents };
+  revalidatePath("/dashboard/upgrade");
+  await billingSaved(
+    organizationId,
+    user.id,
+    res.mode === "scheduled"
+      ? `Updated billing settings — switch to ${res.planName} (${res.interval === "YEAR" ? "annual" : "monthly"}) booked for ${new Date(res.switchAt).toLocaleDateString("en-US")}`
+      : `Updated billing settings — plan changed to ${res.planName} (${res.interval === "YEAR" ? "annual" : "monthly"})${res.chargedCents > 0 ? `, $${(res.chargedCents / 100).toFixed(2)} charged` : ""}`,
+    { plan: planSlug, interval, mode: res.mode, ...(res.mode === "switched" ? { route: res.route, chargedCents: res.chargedCents } : { switchAt: res.switchAt }) },
+  );
+  return res;
+}
+
+/** Cancel the booked YEAR → MONTH switch: the plan goes on as it is. */
+export async function cancelScheduledSwitch(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { organizationId, user } = await requireOwner();
+  try {
+    const released = await releaseScheduledSwitch(organizationId);
+    if (!released) return { ok: false, error: "There is no switch booked." };
+  } catch (err) {
+    logServerError("billing.cancelScheduledSwitch", err, { kind: "action", organizationId });
+    return { ok: false, error: "Couldn't cancel the switch. Try again." };
+  }
+  revalidatePath("/dashboard/subscription");
+  revalidatePath("/dashboard/upgrade");
+  await billingSaved(organizationId, user.id, "Updated billing settings — booked plan switch cancelled", { switch: "cancelled" });
+  return { ok: true };
 }
 
 /* ── CHANGE A CUSTOM PLAN'S PAGES (owner, 2026-10-06) ─────────────────

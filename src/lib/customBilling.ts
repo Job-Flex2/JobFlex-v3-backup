@@ -32,6 +32,7 @@ import { db } from "@/lib/db";
 import { getStripeClient, isStripeEnabled } from "@/lib/sdk/stripe";
 import type { StripeMode } from "@/lib/stripeMode";
 import { ensureRecurringPrice } from "@/lib/stripePriceCache";
+import { readScheduledSwitch } from "@/lib/planChange";
 import {
   CUSTOM_BASE_CENTS,
   CUSTOM_PAGE_CENTS,
@@ -203,6 +204,13 @@ export async function changeCustomPages(opts: {
   const added = next.filter((id) => !owned.includes(id));
   const removed = owned.filter((id) => !next.includes(id));
   if (added.length === 0 && removed.length === 0) return { ok: false, error: "Nothing changed." };
+
+  // A booked switch to a monthly catalog plan holds the subscription on a
+  // schedule (lib/planChange); the pages wait until it is cancelled or done.
+  if (billing === "customer") {
+    const booked = await readScheduledSwitch(organizationId).catch(() => null);
+    if (booked) return { ok: false, error: `A switch to ${booked.planName} is booked for ${new Date(booked.at).toLocaleDateString("en-US")}. Cancel it first to change pages.` };
+  }
 
   if (billing === "none") {
     await writeOrgPages(organizationId, next);

@@ -329,6 +329,8 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
           embedded
           plans={upgradePlans}
           currentPlan={props.currentSlug}
+          currentInterval={props.interval ?? null}
+          scheduledSwitch={props.scheduledSwitch ?? null}
           customPages={props.customPages ?? []}
           isOwner
           checkoutReady={props.checkoutReady}

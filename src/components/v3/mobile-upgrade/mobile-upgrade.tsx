@@ -44,8 +44,8 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
 import { expandPlanFeatures } from "@/lib/planCatalog";
-import { changePlan, updateCustomPages } from "@/actions/billing";
-import { CardDeclinedNote } from "@/components/billing/PlanChangeNotes";
+import { changePlan, previewPlanChange, updateCustomPages, type PlanChangePreviewResult } from "@/actions/billing";
+import { CardDeclinedNote, PlanChangeMoney, ScheduledSwitchNote, longDay, money } from "@/components/billing/PlanChangeNotes";
 import { CustomChangeNote } from "@/components/v3/upgrade-blueprint/custom-change-note";
 import { toast } from "@/components/ui/Toast";
 import {
@@ -72,7 +72,8 @@ type Confirm =
   | { kind: "up"; plan: UpgradePlan; from?: UpgradePlan }
   | { kind: "down"; plan: UpgradePlan; from?: UpgradePlan }
   | { kind: "custom"; pages: string[] }
-  | { kind: "pages"; pages: string[]; removing: string[]; adding: string[] };
+  | { kind: "pages"; pages: string[]; removing: string[]; adding: string[] }
+  | { kind: "change"; plan: UpgradePlan; preview: Extract<PlanChangePreviewResult, { ok: true }> };
 
 export type MobileUpgradeProps = {
   /** The plan an edition's upgrade points at (lib/editions), and the line that says so — drawn by the desk page. */
@@ -102,6 +103,10 @@ export type MobileUpgradeProps = {
   /** CUSTOM_PLAN_ENABLED (lib/customPlanFlag): off, a shop not already on the
    *  custom plan is not offered it. One on it always manages its pages. */
   customOffered?: boolean;
+  /** The term the live subscription bills on; null when unknown or none. */
+  currentInterval?: "MONTH" | "YEAR" | null;
+  /** A booked YEAR → MONTH switch (lib/planChange), drawn with its undo. */
+  scheduledSwitch?: { at: string; planName: string; interval: "MONTH" | "YEAR" } | null;
 };
 
 function Tick({ on }: { on: boolean }) {
@@ -125,11 +130,13 @@ export function MobileUpgradeContent({
   embedded = false,
   devTools,
   customOffered = false,
+  currentInterval = null,
+  scheduledSwitch = null,
 }: MobileUpgradeProps) {
   const router = useRouter();
   /* MONTHLY | ANNUAL (owner, 2026-10-12): the desk build's switch, over the
      rail. A plan with no yearly price is shown and bought monthly. */
-  const [interval, setInterval] = useState<BillingTerm>("MONTH");
+  const [interval, setInterval] = useState<BillingTerm>(currentInterval ?? "MONTH");
   const termFor = useCallback(
     (slug: string): BillingTerm =>
       slug === CUSTOM_PLAN_SLUG ? interval : planTerm(interval, plans.find((p) => p.slug === slug)?.yearlyPriceCents),
@@ -347,28 +354,41 @@ export function MobileUpgradeContent({
     [busy, termFor, closeConfirm],
   );
 
-  /* A downgrade is switched in place, free. */
-  const switchDown = useCallback(
-    async (p: UpgradePlan) => {
+  /* A CHANGE ON THE SUBSCRIPTION THE SHOP HAS (lib/planChange, owner
+     2026-10-12): the dialog showed Stripe's preview; the change is made on
+     the same proration, and the toast says what was really charged — never
+     "Nothing was charged" after a charge. A declined card changes nothing
+     and leaves the way to a new card on the page. */
+  const applyChange = useCallback(
+    async (p: UpgradePlan, preview: Extract<PlanChangePreviewResult, { ok: true }>) => {
       if (busy) return;
       setErr(null);
+      setDeclined(null);
       setBusy(p.slug);
       try {
-        const res = await changePlan(p.slug, termFor(p.slug));
+        const res = await changePlan(p.slug, preview.interval, preview.prorationDate);
         if (!res.ok) {
-          // A card that did not pay changes nothing; the way to a new card stays on the page.
-          if (res.code === "card_declined" || res.code === "past_due") {
-            setDeclined(res.error);
-            return;
-          }
-          throw new Error(res.error);
+          if (res.code === "card_declined" || res.code === "past_due") setDeclined(res.error);
+          else setErr(res.error);
+          return;
         }
         if (res.mode === "checkout") {
           await checkout(p.slug);
           return; // navigating away
         }
-        setCur(p.slug);
-        toast.success(`Moved to ${res.planName}`, res.chargedCents > 0 ? `${dollars(res.chargedCents)} charged today.` : "Nothing was charged. The lower price starts now.");
+        if (res.mode === "scheduled") {
+          toast.success("Switch booked", `Switches to ${res.interval === "MONTH" ? "monthly" : "annual"} on ${longDay(res.switchAt)}. Nothing was charged.`);
+        } else {
+          setCur(p.slug);
+          toast.success(
+            `Moved to ${res.planName}`,
+            res.chargedCents > 0
+              ? `${money(res.chargedCents)} charged today.`
+              : res.route === "trial"
+                ? "Nothing was charged. Your trial runs on."
+                : "Nothing was charged.",
+          );
+        }
         // The layout re-renders with the new plan's locks and quota pills.
         router.refresh();
       } catch (e) {
@@ -378,13 +398,60 @@ export function MobileUpgradeContent({
         closeConfirm();
       }
     },
-     
-    [busy, termFor, router, closeConfirm],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [busy, router, closeConfirm],
   );
 
-  function onPick(p: UpgradePlan) {
-    setConfirm({ kind: direction(p) === "down" && cur ? "down" : "up", plan: p });
+  /* A card asks first what the change would do — Stripe's preview: an
+     upgrade on the same term by tier, or a shop with no live subscription,
+     goes to Stripe's page; everything else is confirmed with the money
+     Stripe quoted (lib/planChange). */
+  async function onPick(p: UpgradePlan) {
+    if (busy) return;
+    setErr(null);
+    setDeclined(null);
+    setBusy(p.slug);
+    try {
+      const preview = await previewPlanChange(p.slug, termFor(p.slug));
+      if (!preview.ok) {
+        if (preview.code === "past_due") setDeclined(preview.error);
+        else setErr(preview.error);
+        return;
+      }
+      if (preview.route === "checkout") setConfirm({ kind: "up", plan: p });
+      else setConfirm({ kind: "change", plan: p, preview });
+    } catch {
+      setErr("Couldn't price the change. Try again.");
+    } finally {
+      setBusy(null);
+    }
   }
+
+  /* The "Now" tile: the plan the shop is on, at the term it pays. */
+  const curPlan = plans.find((p) => p.slug === cur);
+  const curTile = curPlan
+    ? currentInterval === "YEAR"
+      ? { ...curPlan, priceCents: curPlan.yearlyPriceCents ?? curPlan.priceCents }
+      : curPlan
+    : cur === CUSTOM_PLAN_SLUG
+      ? { slug: cur, name: "Custom plan", priceCents: customPriceCents(owned, currentInterval === "YEAR" ? "YEAR" : "MONTH"), features: [] as string[] }
+      : null;
+  const changeTitle = (p: UpgradePlan, v: Extract<PlanChangePreviewResult, { ok: true }>) =>
+    p.slug === cur
+      ? `Switch ${p.name} to ${v.interval === "YEAR" ? "annual" : "monthly"}?`
+      : v.fromInterval && v.fromInterval !== v.interval
+        ? `Switch to ${p.name} ${v.interval === "YEAR" ? "annual" : "monthly"}?`
+        : direction(p) === "down"
+          ? `Downgrade to ${p.name}?`
+          : `Switch to ${p.name}?`;
+  const changeLabel = (p: UpgradePlan, v: Extract<PlanChangePreviewResult, { ok: true }>) =>
+    v.route === "charge"
+      ? `Pay ${money(v.dueNowCents ?? 0)} and switch`
+      : v.route === "schedule"
+        ? `Switch on ${longDay(v.switchAt)}`
+        : direction(p) === "down" && p.slug !== cur
+          ? `Downgrade to ${p.name}`
+          : `Switch to ${p.name}`;
 
   const cannot = !isOwner
     ? "Only the account owner can change the plan"
@@ -471,7 +538,9 @@ export function MobileUpgradeContent({
   const planCard = (p: UpgradePlan) => {
     const term = planTerm(interval, p.yearlyPriceCents);
     const cents = term === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents;
-    const isCur = cur === p.slug;
+    const isCur = cur === p.slug && (!currentInterval || currentInterval === term);
+    // The plan the shop is on, on the other term: "Switch to annual / monthly".
+    const otherTerm = cur === p.slug && !isCur;
     const dir = direction(p);
     const has = included.get(p.slug);
 
@@ -527,13 +596,21 @@ export function MobileUpgradeContent({
           ) : (
             <button
               type="button"
-              className={`mu-cta${dir === "down" && cur ? " is-ghost" : " is-primary"}`}
-              disabled={Boolean(cannot) || busy === p.slug}
+              className={`mu-cta${dir === "down" && cur && !otherTerm ? " is-ghost" : " is-primary"}`}
+              disabled={Boolean(cannot) || busy !== null}
               aria-busy={busy === p.slug}
               title={cannot ?? undefined}
-              onClick={() => onPick(p)}
+              onClick={() => void onPick(p)}
             >
-              {busy === p.slug ? "Switching…" : dir === "down" && cur ? "Downgrade" : "Upgrade"}
+              {busy === p.slug
+                ? "Working…"
+                : otherTerm
+                  ? term === "YEAR"
+                    ? "Switch to annual"
+                    : "Switch to monthly"
+                  : dir === "down" && cur
+                    ? "Downgrade"
+                    : "Upgrade"}
             </button>
           )}
         </div>
@@ -627,7 +704,7 @@ export function MobileUpgradeContent({
                     </>
                   ) : confirm.kind === "pages" ? (
                     <CustomChangeNote pages={confirm.pages} adding={confirm.adding} removing={confirm.removing} />
-                  ) : (
+                  ) : confirm.kind === "custom" ? (
                     <>
                       You&rsquo;ll be taken to Stripe to pay{" "}
                       <b>
@@ -638,7 +715,7 @@ export function MobileUpgradeContent({
                       {confirm.pages.length === 1 ? "" : "s"}.
                       {cur ? " Your current plan is replaced the moment the payment goes through." : ""}
                     </>
-                  )}
+                  ) : null}
                 </p>
                 <div className="mu-box-foot">
                   <button
@@ -655,7 +732,7 @@ export function MobileUpgradeContent({
                     disabled={Boolean(busy)}
                     aria-busy={Boolean(busy)}
                     onClick={() => {
-                      if (confirm.kind === "down") void switchDown(confirm.plan);
+                      if (confirm.kind === "down" || confirm.kind === "change") void onPick(confirm.plan);
                       else if (confirm.kind === "up") void payFor(confirm.plan.slug);
                       else if (confirm.kind === "pages") void changePages(confirm.pages);
                       else void payFor(CUSTOM_PLAN_SLUG, confirm.pages);
@@ -675,24 +752,47 @@ export function MobileUpgradeContent({
      comparison is read from the catalog there); the custom-plan sheets stay. */
   const planDialog = (
     <ConfirmPlanChange
-      open={confirm?.kind === "up" || confirm?.kind === "down"}
-      kicker={confirm?.kind === "down" ? "Downgrade" : "Upgrade"}
+      open={confirm?.kind === "up" || confirm?.kind === "down" || confirm?.kind === "change"}
+      kicker={confirm?.kind === "change" ? "Change plan" : confirm?.kind === "down" ? "Downgrade" : "Upgrade"}
       title={
-        confirm?.kind === "down"
+        confirm?.kind === "change"
+          ? changeTitle(confirm.plan, confirm.preview)
+          : confirm?.kind === "down"
           ? `Downgrade to ${confirm.plan.name}?`
           : confirm?.kind === "up"
             ? `Upgrade to ${confirm.plan.name}?`
             : ""
       }
-      confirmLabel={confirm?.kind === "down" ? `Downgrade to ${confirm.plan.name}` : "Continue to payment"}
+      confirmLabel={
+        confirm?.kind === "change"
+          ? changeLabel(confirm.plan, confirm.preview)
+          : confirm?.kind === "down"
+            ? `Downgrade to ${confirm.plan.name}`
+            : "Continue to payment"
+      }
       busy={Boolean(busy)}
       onCancel={() => closeConfirm()}
       onConfirm={() => {
-        if (confirm?.kind === "down") void switchDown(confirm.plan);
+        if (confirm?.kind === "change") void applyChange(confirm.plan, confirm.preview);
+        else if (confirm?.kind === "down") void onPick(confirm.plan);
         else if (confirm?.kind === "up") void payFor(confirm.plan.slug);
       }}
       compare={
-        confirm && (confirm.kind === "up" || confirm.kind === "down")
+        confirm?.kind === "change"
+          ? {
+              plans,
+              from: curTile,
+              fromPer: currentInterval === "YEAR" ? "/yr" : "/mo",
+              to:
+                confirm.preview.interval === "YEAR"
+                  ? { ...confirm.plan, priceCents: confirm.plan.yearlyPriceCents ?? confirm.plan.priceCents }
+                  : confirm.plan,
+              toPer: confirm.preview.interval === "YEAR" ? "/yr" : "/mo",
+              direction: direction(confirm.plan) === "up" ? "up" : "down",
+              how: "switch",
+              payLine: <PlanChangeMoney preview={confirm.preview} />,
+            }
+          : confirm && (confirm.kind === "up" || confirm.kind === "down")
           ? {
               plans,
               from:
@@ -928,6 +1028,9 @@ export function MobileUpgradeContent({
           {termSwitch}
         </div>
         {declined ? <CardDeclinedNote className="mu-pcn" message={declined} /> : null}
+        {scheduledSwitch ? (
+          <ScheduledSwitchNote className="mu-pcn" at={scheduledSwitch.at} planName={scheduledSwitch.planName} interval={scheduledSwitch.interval} />
+        ) : null}
         {err ? (
           <div className="mu-note is-bad" role="alert">
             <b>That didn&rsquo;t go through</b>
@@ -1006,6 +1109,9 @@ export function MobileUpgradeContent({
             </div>
           ) : null}
           {declined ? <CardDeclinedNote className="mu-pcn" message={declined} /> : null}
+          {scheduledSwitch ? (
+            <ScheduledSwitchNote className="mu-pcn" at={scheduledSwitch.at} planName={scheduledSwitch.planName} interval={scheduledSwitch.interval} />
+          ) : null}
           {err ? (
             <div className="mu-note is-bad" role="alert">
               <b>That didn&rsquo;t go through</b>

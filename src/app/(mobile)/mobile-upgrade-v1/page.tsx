@@ -29,6 +29,7 @@ import { customPlanOffered } from "@/lib/customPlanFlag";
 import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgrade";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import { applyCheckoutReturn } from "@/lib/checkoutReturn";
+import { planTermState } from "@/lib/planChange";
 
 export const dynamic = "force-dynamic";
 
@@ -70,13 +71,14 @@ export default async function MobileUpgradeV1Page({
     ? await verifyReturn(ctx.organizationId, params.session_id)
     : null;
 
-  const [catalog, sub, mode] = await Promise.all([
+  const [catalog, sub, mode, term] = await Promise.all([
     getPlanCatalog(),
     db.subscription.findUnique({
       where: { organizationId: ctx.organizationId },
       select: { plan: true, status: true },
     }),
     getStripeMode(),
+    planTermState(ctx.organizationId).catch(() => ({ currentInterval: null, scheduledSwitch: null })),
   ]);
 
   // The pages a custom-plan org owns, for the "add a page" card.
@@ -109,6 +111,8 @@ export default async function MobileUpgradeV1Page({
     <MobileUpgradeContent
       plans={plans}
       currentPlan={sub?.plan ?? null}
+      currentInterval={term.currentInterval}
+      scheduledSwitch={term.scheduledSwitch}
       customPages={customPages}
       isOwner={isOwnerRole(ctx.role)}
       checkoutReady={isStripeEnabled()}

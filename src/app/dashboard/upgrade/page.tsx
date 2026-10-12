@@ -38,6 +38,7 @@ import { UpgradeResponsive } from "./upgrade-responsive";
 import { isDevSimulationEnabled } from "@/lib/devSimulation";
 import { DevPlanSimulator } from "./dev-plan-simulator";
 import { applyCheckoutReturn } from "@/lib/checkoutReturn";
+import { planTermState } from "@/lib/planChange";
 
 export const metadata = { title: "Plans & upgrade — JobFlex" };
 export const dynamic = "force-dynamic";
@@ -72,13 +73,14 @@ export default async function UpgradePage({
   // A checkout return is always a step up; only the simulator can say "down".
   const upgradedDirection: "up" | "down" = !params.session_id && devSim && params.dir === "down" ? "down" : "up";
 
-  const [catalog, sub, mode] = await Promise.all([
+  const [catalog, sub, mode, term] = await Promise.all([
     getPlanCatalog(),
     db.subscription.findUnique({
       where: { organizationId: ctx.organizationId },
       select: { plan: true, status: true },
     }),
     getStripeMode(),
+    planTermState(ctx.organizationId).catch(() => ({ currentInterval: null, scheduledSwitch: null })),
   ]);
 
   // The pages a custom-plan org owns, for the "add a page" card.
@@ -115,6 +117,8 @@ export default async function UpgradePage({
       focusWords={target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? (isEditionOpen("deck") ? "No plan carries the Deck Studio yet — ask us to add it." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
       plans={plans}
       currentPlan={sub?.plan ?? null}
+      currentInterval={term.currentInterval}
+      scheduledSwitch={term.scheduledSwitch}
       customPages={customPages}
       isOwner={isOwnerRole(ctx.role)}
       checkoutReady={isStripeEnabled()}

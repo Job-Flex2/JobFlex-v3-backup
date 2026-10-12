@@ -183,6 +183,8 @@ export function MobileSubscription({
   checkoutReady,
   customOffered,
   sandbox,
+  interval,
+  scheduledSwitch,
 }: MobileSubscriptionProps) {
 
   const scrollRef = useRef<HTMLElement>(null);
@@ -522,6 +524,8 @@ export function MobileSubscription({
               embedded
               plans={upgradePlans}
               currentPlan={currentSlug}
+              currentInterval={interval ?? null}
+              scheduledSwitch={scheduledSwitch ?? null}
               customPages={customPages ?? []}
               isOwner
               checkoutReady={checkoutReady}

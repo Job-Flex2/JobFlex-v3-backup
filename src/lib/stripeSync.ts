@@ -47,14 +47,24 @@ function idOf(v: string | { id: string } | null | undefined): string | null {
 // with every other path that writes the mirror from Stripe.
 export { isCardlessTrialLapse, mirrorStatusFor };
 
-async function planSlugForPrice(stripePriceId: string | null): Promise<string | null> {
+async function planSlugForPrice(price: Stripe.Price | null | undefined): Promise<string | null> {
+  const stripePriceId = price?.id ?? null;
   if (!stripePriceId) return null;
   const pp = await db.planPrice.findUnique({ where: { stripePriceId } });
   // Store whatever slug was purchased (uppercased to match existing rows like
   // "STARTER") — custom admin-created plans must not collapse to FREE. Feature
   // gating resolves custom slugs to ENTERPRISE (orgPlan.ts) and their quotas
   // come from the plan's own limitsJson; readers match case-insensitively.
-  return pp ? pp.planSlug.toUpperCase() : null;
+  if (pp) return pp.planSlug.toUpperCase();
+  /* A price the app minted itself (lib/stripePriceCache: the sandbox's catalog
+     prices, the custom plan's base) names its plan in metadata.jfKind. Read
+     so a change Stripe makes on its own — a booked YEAR → MONTH switch
+     (lib/planChange) — moves the mirror's plan in the sandbox as the ledger
+     does on live (2026-10-12). Only a slug the catalog knows is taken. */
+  const kind = price?.metadata?.jfKind ?? "";
+  if (kind === "custom" || kind === "custom-base") return "CUSTOM";
+  if (kind && (await db.pricingPlan.findUnique({ where: { slug: kind }, select: { slug: true } }))) return kind.toUpperCase();
+  return null;
 }
 
 /**
@@ -304,7 +314,7 @@ export async function syncSubscriptionFromStripe(
   }
 
   const stripePriceId = sub.items.data[0]?.price?.id ?? null;
-  const planSlug = await planSlugForPrice(stripePriceId);
+  const planSlug = await planSlugForPrice(sub.items.data[0]?.price);
   const discounts = await subscriptionDiscounts(sub, stripe);
   let promo: Awaited<ReturnType<typeof resolvePromoCode>> = null;
   for (const d of discounts) {
