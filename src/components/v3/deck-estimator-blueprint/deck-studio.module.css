@@ -82,10 +82,10 @@
 :global(.jf-blueprint .content) .field { display: block; min-width: 0; }
 :global(.jf-blueprint .content) .fieldWide { grid-column: 1 / -1; }
 :global(.jf-blueprint .content) .lbl {
-  display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 16px; margin-bottom: 5px;
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 6px; min-height: 16px; margin-bottom: 5px;
   font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
 }
-:global(.jf-blueprint .content) .lblAside { letter-spacing: 0.04em; text-transform: none; color: var(--blueprint); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:global(.jf-blueprint .content) .lblAside { letter-spacing: 0.04em; text-transform: none; color: var(--blueprint); text-align: right; margin-left: auto; }
 :global(.jf-blueprint .content) .in, :global(.jf-blueprint .content) .sel {
   width: 100%; height: 40px; padding: 0 11px; box-sizing: border-box;
   border: 1.5px solid var(--hair-soft); border-radius: var(--radius); background: #fff;
@@ -138,13 +138,15 @@
 :global(.jf-blueprint .content) .chipOn span { color: rgba(255,255,255,0.75); }
 
 /* Layout: the deck on the right, sticky; the steps on the left. */
-:global(.jf-blueprint .content) .layout { display: grid; grid-template-columns: minmax(340px, 430px) minmax(0, 1fr); gap: 16px; align-items: start; }
-:global(.jf-blueprint .content) .layout > .viewer { grid-column: 2; grid-row: 1; position: sticky; top: 12px; }
+/* The controls a little wider (2026-10-12: 430 px cut the dropdowns' words in the two-up fields); the viewer keeps the rest. */
+:global(.jf-blueprint .content) .layout { display: grid; grid-template-columns: minmax(340px, 480px) minmax(0, 1fr); gap: 16px; align-items: start; }
+/* Stuck just under the app's own sticky top bar (62 px; at top: 12px the viewer's title hid under it, 2026-10-12). */
+:global(.jf-blueprint .content) .layout > .viewer { grid-column: 2; grid-row: 1; position: sticky; top: 74px; }
 :global(.jf-blueprint .content) .layout > .steps { grid-column: 1; grid-row: 1; }
 
 /* Steps */
 :global(.jf-blueprint .content) .steps { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-:global(.jf-blueprint .content) .step { background: #fff; border: 1.5px solid var(--hair); border-left: 4px solid var(--step-c, var(--ink)); border-radius: var(--radius); scroll-margin-top: 76px; transition: box-shadow 0.2s var(--ease), border-color 0.2s; }
+:global(.jf-blueprint .content) .step { background: #fff; border: 1.5px solid var(--hair); border-left: 4px solid var(--step-c, var(--ink)); border-radius: var(--radius); scroll-margin-top: 124px; transition: box-shadow 0.2s var(--ease), border-color 0.2s; }
 :global(.jf-blueprint .content) .step:focus-within { border-color: color-mix(in srgb, var(--step-c, var(--ink)) 45%, var(--hair)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--step-c, var(--ink)) 14%, transparent); }
 :global(.jf-blueprint .content) .stepHead { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; padding: 12px 16px; cursor: pointer; list-style: none; }
 :global(.jf-blueprint .content) .stepHead::-webkit-details-marker { display: none; }
@@ -271,7 +273,8 @@
   :global(.jf-blueprint .content) .pageSub { font-size: 12.5px; }
   :global(.jf-blueprint .content) .jobBar { padding: 12px 14px; }
   :global(.jf-blueprint .content) .jobFacts { padding-bottom: 0; }
-  :global(.jf-blueprint .content) .steps { display: flex; }
+  /* A column whose steps fill it (2026-10-12: the 1100-px grid's align-items: start shrank the first step to half). */
+  :global(.jf-blueprint .content) .steps { display: flex; align-items: stretch; }
   :global(.jf-blueprint .content) .viewBox { height: 300px; min-height: 0; }
   :global(.jf-blueprint .content) .viewHead { padding: 10px 12px; }
   :global(.jf-blueprint .content) .buildRow { padding: 10px 12px; }
@@ -301,7 +304,8 @@
   :global(.jf-blueprint .content) .table th:last-child, :global(.jf-blueprint .content) .table td:last-child { padding-right: 14px; }
   :global(.jf-blueprint .content) .price .table th:nth-child(3), :global(.jf-blueprint .content) .price .table td:nth-child(3),
   :global(.jf-blueprint .content) .price .table th:nth-child(4), :global(.jf-blueprint .content) .price .table td:nth-child(4) { display: none; }
-  :global(.jf-blueprint .content) .bom th:nth-child(3), :global(.jf-blueprint .content) .bom td:nth-child(3) { display: none; }
+  /* By class, not by place: a group row's third cell is its subtotal (2026-10-12). */
+  :global(.jf-blueprint .content) .bom .bomEach { display: none; }
   :global(.jf-blueprint .content) .rateRows { grid-template-columns: minmax(0, 1fr); padding: 4px 14px 12px; }
   :global(.jf-blueprint .content) .rateRow { grid-template-columns: minmax(0, 1fr) 96px; }
   :global(.jf-blueprint .content) .rateUnit { grid-column: 1; grid-row: 2; }
@@ -423,7 +427,7 @@
 :global(.jf-blueprint .content) .rowActs { display: flex; gap: 6px; flex-wrap: wrap; }
 :global(.jf-blueprint .content) .btnGhost { border-color: var(--hair-soft); color: var(--ink-soft); }
 :global(.jf-blueprint .content) .btnDanger { color: var(--danger); border-color: var(--danger); }
-:global(.jf-blueprint .content) .draftBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .draftBar { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin-left: auto; }
 :global(.jf-blueprint .content) .draftState { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 :global(.jf-blueprint .content) .drafts { position: relative; }
 :global(.jf-blueprint .content) .drafts > summary { list-style: none; cursor: pointer; }
@@ -591,4 +595,91 @@
 @media (max-width: 768px) {
   :global(.jf-blueprint .content) .ownRow { grid-template-columns: repeat(3, minmax(0, 1fr)); padding-bottom: 10px; border-bottom: 1px solid var(--hair-soft); }
   :global(.jf-blueprint .content) .ownRow > :first-child, :global(.jf-blueprint .content) .ownRow > button { grid-column: 1 / -1; }
+}
+
+/* Polish (2026-10-12, owner: "polish the deck studio — smart, nice, easy to use"). */
+:global(.jf-blueprint .content) .jobFacts { flex: 1 1 100%; }
+:global(.jf-blueprint .content) .factsMore { border-top: 1px dashed var(--hair-soft); padding-top: 8px; }
+:global(.jf-blueprint .content) .factsMore > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; min-height: 28px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--step-c, var(--blueprint)); }
+:global(.jf-blueprint .content) .factsMore > summary::-webkit-details-marker { display: none; }
+:global(.jf-blueprint .content) .factsMore > summary::before { content: "▸"; transition: transform 0.15s; }
+:global(.jf-blueprint .content) .factsMore[open] > summary::before { transform: rotate(90deg); }
+:global(.jf-blueprint .content) .factsMore > ul { margin-top: 6px; }
+:global(.jf-blueprint .content) .checksMore { border-top: 1.5px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .checksMore > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 18px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .checksMore > summary:hover { background: var(--paper); }
+:global(.jf-blueprint .content) .checksMore > summary::-webkit-details-marker { display: none; }
+:global(.jf-blueprint .content) .checksMore > summary::before { content: "▸"; color: var(--muted); transition: transform 0.15s; }
+:global(.jf-blueprint .content) .checksMore[open] > summary::before { transform: rotate(90deg); }
+:global(.jf-blueprint .content) .checksMore > summary::after { content: "Show"; margin-left: auto; font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--blueprint); }
+:global(.jf-blueprint .content) .checksMore[open] > summary::after { content: "Hide"; }
+:global(.jf-blueprint .content) .checksMore > .checks { border-top: 1px solid var(--hair-soft); }
+@media (max-width: 768px) {
+  /* The job's two buttons side by side, their lists the bar's width (2026-10-12). */
+  :global(.jf-blueprint .content) .draftBar { margin-left: 0; flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; position: relative; }
+  :global(.jf-blueprint .content) .draftBar > .draftState { grid-column: 1 / -1; }
+  :global(.jf-blueprint .content) .draftBar > .drafts { position: static; }
+  :global(.jf-blueprint .content) .draftBar > .drafts > summary { width: 100%; min-height: 42px; justify-content: center; }
+  :global(.jf-blueprint .content) .draftBar .draftList { left: 0; right: 0; max-width: 100%; }
+  :global(.jf-blueprint .content) .checksMore > summary { padding: 0 14px; min-height: 48px; }
+}
+
+/* The price bar: on a phone or a tablet, once the viewer is above the screen. */
+:global(.jf-blueprint .content) .priceBar { display: none; }
+@media (max-width: 1100px) {
+  /* Stuck to the bottom of the studio's own column, so the side menu never covers it (fixed to the window, it slid under). */
+  :global(.jf-blueprint .content) .priceBar {
+    position: sticky; z-index: 40; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 6px 6px 14px;
+    background: #fff; border: 1.5px solid var(--ink); border-radius: 12px; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+    animation: priceBarIn 0.18s ease-out;
+  }
+  :global(.jf-blueprint .content) .priceBarMain { display: flex; align-items: center; gap: 10px; min-width: 0; color: inherit; text-decoration: none; }
+  :global(.jf-blueprint .content) .priceBarV { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; color: var(--blueprint); font-variant-numeric: tabular-nums; }
+  :global(.jf-blueprint .content) .priceBar .stamp { white-space: nowrap; }
+}
+@media (max-width: 768px) {
+  /* Clear of the help button in the corner. */
+  :global(.jf-blueprint .content) .priceBar { margin-right: 64px; }
+}
+@keyframes priceBarIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { :global(.jf-blueprint .content) .priceBar { animation: none; } }
+
+@media (max-width: 768px) {
+  /* Good / Better / Best, compact on a phone: the name and the price beside the button, the words under them. */
+  :global(.jf-blueprint .content) .tier { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 10px 12px; }
+  :global(.jf-blueprint .content) .tier > .tierName { grid-column: 1; grid-row: 1; }
+  :global(.jf-blueprint .content) .tier > .tierV { grid-column: 1; grid-row: 2; font-size: 20px; }
+  :global(.jf-blueprint .content) .tier > .tierH { grid-column: 1 / -1; grid-row: 3; font-size: 12px; }
+  :global(.jf-blueprint .content) .tier > button { grid-column: 2; grid-row: 1 / span 2; min-height: 42px; padding: 0 14px; }
+  /* The job's facts: the price stamps a size smaller. */
+  :global(.jf-blueprint .content) .jobFacts .stamp { font-size: 9.5px; }
+}
+
+/* More framing choices, folded under a line that says what they are now (2026-10-12). */
+:global(.jf-blueprint .content) .moreBox { border: 1.5px solid var(--hair-soft); border-radius: var(--radius); background: var(--paper); }
+:global(.jf-blueprint .content) .moreBox > summary { cursor: pointer; list-style: none; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; row-gap: 2px; align-items: baseline; padding: 10px 12px; }
+:global(.jf-blueprint .content) .moreBox > summary::-webkit-details-marker { display: none; }
+:global(.jf-blueprint .content) .moreBox > summary::before { content: "▸"; grid-column: 1; grid-row: 1; color: var(--step-c, var(--muted)); transition: transform 0.15s; }
+:global(.jf-blueprint .content) .moreBox[open] > summary::before { transform: rotate(90deg); }
+:global(.jf-blueprint .content) .moreBox > summary:hover { background: color-mix(in srgb, var(--step-c, #000) 5%, transparent); }
+:global(.jf-blueprint .content) .moreTitle { grid-column: 2; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--step-c, var(--ink)); }
+:global(.jf-blueprint .content) .moreSub { grid-column: 2; font-size: 12px; line-height: 1.45; color: var(--muted); }
+:global(.jf-blueprint .content) .moreBody { display: grid; gap: 12px; padding: 4px 12px 12px; }
+/* The material package's groups fold (2026-10-12). */
+:global(.jf-blueprint .content) .groupToggle { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; text-align: left; }
+:global(.jf-blueprint .content) .groupCaret { display: inline-block; color: var(--muted); transition: transform 0.15s; }
+:global(.jf-blueprint .content) .groupToggle[aria-expanded="true"] .groupCaret { transform: rotate(90deg); }
+:global(.jf-blueprint .content) .groupCount { font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: none; color: var(--muted); }
+:global(.jf-blueprint .content) .bomHidden { display: none; }
+@media (max-width: 768px) {
+  :global(.jf-blueprint .content) .groupToggle { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .groupCaret, :global(.jf-blueprint .content) .moreBox > summary::before { transition: none; }
+}
+
+/* A step jumped to lands under the top bar and the step rail (desk), under the rail (phone). */
+@media (max-width: 768px) {
+  :global(.jf-blueprint .content) .step { scroll-margin-top: 58px; }
 }

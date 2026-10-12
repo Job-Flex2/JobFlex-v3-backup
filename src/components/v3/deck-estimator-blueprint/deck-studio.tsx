@@ -103,6 +103,7 @@ import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedR
 import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
 import { DeckKindPicker } from "./deck-kind-picker";
+import { DeckStepRail } from "./deck-step-rail";
 import { DeckClientLink } from "./deck-client-link";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
@@ -551,6 +552,28 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const [ownDraft, setOwnDraft] = React.useState<{ name: string; qty: string; unit: OwnUnit; price: string }>({ name: "", qty: "1", unit: "ea", price: "" });
   /** The custom product picked a moment ago: its name field takes the cursor. */
   const [freshCustom, setFreshCustom] = React.useState<string | null>(null);
+  // THE PRICE BAR (2026-10-12, "polish — easy to use"): on a phone or a tablet the viewer sits above the steps, so once it
+  // scrolls away the price and the checks ride along at the bottom, with a tap back up to the deck.
+  const viewerRef = React.useRef<HTMLElement>(null);
+  /** The steps' column: the step rail reads its steps off it. */
+  const stepsRef = React.useRef<HTMLDivElement>(null);
+  /** The material package's groups that are open (2026-10-12: they start folded, their subtotals in view). */
+  const [bomOpen, setBomOpen] = React.useState<ReadonlySet<BomStep>>(() => new Set());
+  const toggleBom = (step: BomStep) =>
+    setBomOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(step)) next.delete(step);
+      else next.add(step);
+      return next;
+    });
+  const [viewerOut, setViewerOut] = React.useState(false);
+  React.useEffect(() => {
+    const el = viewerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setViewerOut(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const commitAddress = (text: string) => {
     const next = text.trim();
@@ -651,9 +674,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     if (!withDeck) return null;
     const st = market.state || homeState;
     return TIERS.map((t) => {
-      const variant = applyDeckPatch(design, { decking: { product: t.decking(st) }, rail: { type: design.rail.type === "none" && !structure.rails.required ? "none" : t.rail }, custom: { decking: undefined } });
+      // The tier's own railing: none where none is needed and none is drawn, else the tier's. "This one" only when the
+      // deck as drawn IS the tier — boards and railing (2026-10-12: a deck with no railing read as the railed Good tier).
+      const railT = design.rail.type === "none" && !structure.rails.required ? "none" : t.rail;
+      const variant = applyDeckPatch(design, { decking: { product: t.decking(st) }, rail: { type: railT }, custom: { decking: undefined } });
       const p = priceDeck(variant, { rates: book, market });
-      return { ...t, product: t.decking(st), subtotal: p.subtotal, perSqFt: p.pricePerSqFt, current: !design.custom.decking && design.decking.product === t.decking(st) && (design.rail.type === t.rail || design.rail.type === "none") };
+      return { ...t, product: t.decking(st), subtotal: p.subtotal, perSqFt: p.pricePerSqFt, current: !design.custom.decking && design.decking.product === t.decking(st) && design.rail.type === railT };
     });
   }, [design, book, market, homeState, withDeck, structure.rails.required]);
 
@@ -1361,6 +1387,47 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
 
   const issues = checks.filter((c) => c.level === "fail" || c.level === "warn");
   const ordered = [...checks].sort((a, b) => ["fail", "warn", "info", "pass"].indexOf(a.level) - ["fail", "warn", "info", "pass"].indexOf(b.level));
+  /** What the folded framing choices are now, in a line. */
+  const frameMoreWords = frame
+    ? [
+        frame.beamStyle === "flush" ? "flush beams" : "beams under the joists",
+        frame.beamKind === "solid" ? "solid 4x" : "built up from 2x",
+        `${ftIn(frame.zones[0]?.frontCantIn ?? 0)} past the beam`,
+        design.framing.doubleRim ? "doubled rim" : "",
+        design.framing.joistTape ? "joist tape" : "",
+        design.framing.blocking === "mid-span" ? "mid-span blocking" : "",
+        design.placement === "attached" ? `ledger: ${LEDGER_FASTENER_LABEL[design.ledger.fastener].toLowerCase()}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+  /** A check that needs the contractor: a failure, one to check, or a note with something to tap. */
+  const loud = (c: DeckCheck) => c.level === "fail" || c.level === "warn" || (c.level === "info" && (!!c.fix || !!c.alts?.length));
+  const checkRow = (c: DeckCheck) => (
+    <li key={c.id} className={cx(s.check, s[`level_${c.level}`])} data-check={c.id}>
+      <span className={s.checkLevel}>{LEVEL_LABEL[c.level]}</span>
+      <div className={s.checkBody}>
+        <div className={s.checkText}>
+          <b>{c.part}.</b> {c.text}
+        </div>
+        {c.rule ? <div className={s.checkRule}>{c.rule}</div> : null}
+      </div>
+      {c.fix || c.alts?.length ? (
+        <div className={s.checkFixes}>
+          {c.fix ? (
+            <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch(c.fix!.patch)} data-check-fix="primary">
+              {c.fix.label}
+            </button>
+          ) : null}
+          {(c.alts ?? []).map((a) => (
+            <button key={a.label} type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => patch(a.patch)} data-check-fix="alt">
+              {a.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </li>
+  );
 
   // Step numbers follow what is shown.
   let n = 0;
@@ -1423,7 +1490,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <span>Customers without the Deck Studio plan see its offer here. You can work and test it because you are an admin.</span>
             </div>
           ) : null}
-          <p className={s.pageSub}>Size the deck — or a covered deck, a gazebo, a pergola — pick what it is built from, and it frames itself from the code tables: joists, beams, posts, footings, the ledger, the stairs, the rails, the roof&apos;s rafters and headers, the wiring to every light. It stands up in 3D bolt by bolt, goes on a photo of the house, and prices the material package line by line. Your work saves itself.</p>
+          <p className={s.pageSub}>Pick what to build and size it: it frames itself to the code, stands up in 3D, prices every line and saves as you go.</p>
         </div>
       </div>
 
@@ -1446,7 +1513,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {pkg.storeShare > 0 ? <span className={cx(s.stamp, s.stampPass)} title={`Materials at ${STORE_SURVEY.store}'s listed prices, surveyed once (${STORE_SURVEY.asOf}) — your own prices win`} data-deck-store-share>Materials: {STORE_SURVEY.store}, {new Date(STORE_SURVEY.asOf + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span> : null}
           <div className={s.draftBar} data-deck-drafts>
             <span className={s.draftState} data-deck-save={saveState}>
-              {saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `Saved ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : opened?.from === "proposal" ? "Opened from the proposal" : "Saves itself as you work"}
+              {saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `Saved ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : opened?.from === "proposal" ? "Opened from the proposal" : "Saves as you go"}
             </span>
             <details className={s.drafts} onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && void refreshDrafts()}>
               <summary className={cx(s.btn, s.btnSm)}>Drafts</summary>
@@ -1476,7 +1543,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
 
       <div className={s.layout}>
         {/* ── the structure ─────────────────────────────────────── */}
-        <section className={cx(s.card, s.viewer)} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
+        <section ref={viewerRef} className={cx(s.card, s.viewer)} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
           <div className={s.viewHead}>
             <div className={s.viewTitle}>
               <span className={s.cardTitle}>The {what.toLowerCase()}</span>
@@ -1693,7 +1760,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
 
         {/* ── the steps ──────────────────────────────────────────── */}
         <FieldScope.Provider value={rootScope}>
-        <div className={s.steps}>
+        <div className={s.steps} ref={stepsRef}>
+          <DeckStepRail stepsRef={stepsRef} />
           <Step n={next()} title="What to build" summary={structureSummary} id="step-structure">
             {/* THE KINDS AS PICTURES (owner, 2026-10-11): the engine's own drawings of each kind, and samples to start from (deck-kind-picker). */}
             <DeckKindPicker structure={design.structure} onPickKind={setStructure} onPickSample={applySample} appliedSampleId={applied && applied.design === design ? applied.id : null} />
@@ -1722,7 +1790,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {/* THE HOUSE (owner, 2026-10-11): drawn, not photographed — storeys, the roof, and the back wall's steps the deck fits itself to. */}
           {scene.house ? (
             <Step n={next()} title="The house" summary={houseWords(design.house)} id="step-house">
-              <p className={s.hint}>The house is drawn for the look of the {what.toLowerCase()}. Shape its back wall on the drawing: drag any part of the wall out or in, a step sideways, the house&apos;s ends wider or narrower, tap + to add a step — and drag the {what.toLowerCase()}&apos;s own ends, front edge and grip to size it and slide it along the wall (the boxes below keep the exact inches). Whatever stands on the wall follows: a bump-out at the {what.toLowerCase()}&apos;s end notches it around on its own.</p>
+              <p className={s.hint}>Drawn for the look of the {what.toLowerCase()}: drag any part of the back wall in or out, tap + for a step, and size the {what.toLowerCase()} by its ends and front edge. The boxes keep the exact inches.</p>
               <div className={s.rowGrid}>
                 <Field label="Storeys">
                   <Seg small label="Storeys" value={String(design.house.storeys)} onChange={(v) => setHouse({ storeys: v === "2" ? 2 : 1 })} options={[{ value: "1", label: "One" }, { value: "2", label: "Two" }]} />
@@ -1795,8 +1863,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   </div>
                 ))}
               </div>
-              <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={design.house.jogs.length >= HOUSE_LIMITS.jogs} onClick={() => setHouse({ jogs: [...design.house.jogs, { id: nextJogId(design.house.jogs), atFt: Math.max(2, design.shape.widthFt - 4), dir: "toward", depthFt: 3 }] })} data-deck-house-add-jog>
-                Add a step in the wall
+              <button type="button" className={cx(s.btn, s.btnSm)} disabled={design.house.jogs.length >= HOUSE_LIMITS.jogs} onClick={() => setHouse({ jogs: [...design.house.jogs, { id: nextJogId(design.house.jogs), atFt: Math.max(2, design.shape.widthFt - 4), dir: "toward", depthFt: 3 }] })} data-deck-house-add-jog>
+                + Add a step in the wall
               </button>
             </Step>
           ) : null}
@@ -1931,7 +1999,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </Field>
               <Field label="Soil bears">
                 <select className={s.sel} value={design.soilPsf} onChange={(e) => patch({ soilPsf: Number(e.target.value) as SoilPsf })}>
-                  <option value={1500}>1,500 psf — the code&apos;s default</option>
+                  <option value={1500}>1,500 psf (code default)</option>
                   <option value={2000}>2,000 psf</option>
                   <option value={3000}>3,000 psf or more</option>
                 </select>
@@ -1952,13 +2020,16 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 {design.site.slope.outDropIn || design.site.slope.acrossDropIn ? <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => patch({ site: { ...design.site, slope: { outDropIn: 0, acrossDropIn: 0 } } })}>Level</button> : null}
               </div>
               {siteNote ? <p className={s.hint}>{siteNote}</p> : null}
-              <ul className={s.siteFacts}>
-                <li data-deck-code>{site.codeLine}</li>
-                {site.basis.map((b, i) => (
-                  <li key={i}>{b}</li>
-                ))}
-                {design.site.termite ? <li>Termite hazard here: {TERMITE_LABEL[design.site.termite]}.</li> : null}
-              </ul>
+              <details className={s.factsMore} data-deck-facts>
+                <summary>What the code and the site say here</summary>
+                <ul className={s.siteFacts}>
+                  <li data-deck-code>{site.codeLine}</li>
+                  {site.basis.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                  {design.site.termite ? <li>Termite hazard here: {TERMITE_LABEL[design.site.termite]}.</li> : null}
+                </ul>
+              </details>
             </div>
             {!withDeck && design.floor === "ground" && r.attach !== "wall" ? <Toggle checked={design.footing.frostAlways} onChange={(v) => patch({ footing: { frostAlways: v } })}>Dig to the frost line anyway</Toggle> : null}
           </Step>
@@ -1988,20 +2059,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <Field label="Joist spacing" aside={design.framing.spacingIn === "auto" ? `${frame.spacingIn} in. on center` : "on center"} wide>
                 <Seg small label="Joist spacing" value={design.framing.spacingIn} onChange={(v) => patch({ framing: { spacingIn: v } })} options={[{ value: "auto", label: "Auto" }, { value: 12, label: '12"' }, { value: 16, label: '16"' }, { value: 24, label: '24"' }]} />
               </Field>
-              <Field label="Beams" aside={design.framing.beamStyle === "auto" ? (frame.beamStyle === "flush" ? "picked: flush" : "picked: under the joists") : undefined} wide>
-                <Seg small label="Beams" value={design.framing.beamStyle} onChange={(v) => patch({ framing: { beamStyle: v } })} options={[{ value: "auto", label: "Auto" }, { value: "dropped", label: "Under the joists" }, { value: "flush", label: "Flush" }]} />
-              </Field>
               <div className={s.grid2}>
-                <Field label="Beam made of">
-                  {/* What is built, not only what was asked (owner, 2026-10-11: "it says 4x but shows the 2-ply ones"): solid 4x
-                      beams have no code span table for every lumber and load, and then the frame builds them up from 2x — the
-                      select says so and the sizes below follow it. */}
-                  <select className={s.sel} value={frame.beamKind} onChange={(e) => patch({ framing: { beamKind: e.target.value as DeckDesign["framing"]["beamKind"], beam: "auto" } })} data-deck-beam-kind={frame.beamKind}>
-                    <option value="solid" disabled={!solidBeamTabulated(frame.load, frame.group)}>{solidBeamTabulated(frame.load, frame.group) ? "Solid 4x" : "Solid 4x — not in the code's tables for this lumber and load"}</option>
-                    <option value="built-up">Built up from 2x</option>
-                  </select>
-                  {frame.beamKindNote ? <p className={cx(s.call, s.callWarn)} data-deck-beam-note>{frame.beamKindNote}</p> : null}
-                </Field>
                 <Field label="Beam size" aside={design.framing.beam === "auto" ? `picked: ${[...new Set(frame.beams.map((b) => b.spec.size))].join(", ")}` : undefined}>
                   <select className={s.sel} value={design.framing.beam} onChange={(e) => patch({ framing: { beam: e.target.value as DeckDesign["framing"]["beam"] } })}>
                     <option value="auto">Auto — least cost</option>
@@ -2017,43 +2075,68 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     ))}
                   </select>
                 </Field>
-                <Field label="Joists past the beam" aside={design.framing.overhangFt === "auto" ? `auto: ${ftIn(frame.zones[0].frontCantIn)}` : "ft"}>
-                  <select className={s.sel} value={String(design.framing.overhangFt)} onChange={(e) => patch({ framing: { overhangFt: e.target.value === "auto" ? "auto" : Number(e.target.value) } })}>
-                    <option value="auto">Auto — up to 2 ft</option>
-                    {[0, 0.5, 1, 1.5, 2, 2.5, 3].map((v) => (
-                      <option key={v} value={v}>{v === 0 ? "None" : feetText(v).replace(/^(\d+)$/, "$1 ft")}</option>
-                    ))}
-                  </select>
-                </Field>
               </div>
-              <div className={s.toggles}>
-                <Toggle checked={design.framing.doubleRim} onChange={(v) => patch({ framing: { doubleRim: v } })}>Doubled rim and outside joists</Toggle>
-                <Toggle checked={design.framing.joistTape} onChange={(v) => patch({ framing: { joistTape: v } })}>Joist tape on every top</Toggle>
-                <Toggle checked={design.framing.braces} onChange={(v) => patch({ framing: { braces: v } })}>Knee braces at corner posts over 2 ft</Toggle>
-                <Toggle checked={design.framing.blocking === "mid-span"} onChange={(v) => patch({ framing: { blocking: v ? "mid-span" : "auto" } })}>Mid-span blocking on spans over 8 ft</Toggle>
-                {design.heightIn >= 84 ? <Toggle checked={design.extras.underDeckDrain} onChange={(v) => patch({ extras: { underDeckDrain: v } })}>Under-deck drainage — a dry room below</Toggle> : null}
-              </div>
-              {design.placement === "attached" ? (
-                <div className={s.grid2}>
-                  <Field label="Ledger fastened with">
-                    <select className={s.sel} value={design.ledger.fastener} onChange={(e) => patch({ ledger: { fastener: e.target.value as DeckDesign["ledger"]["fastener"] } })}>
-                      {wall.fasteners.map((f) => (
-                        <option key={f} value={f}>{LEDGER_FASTENER_LABEL[f]}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Ties to the house">
-                    <select className={s.sel} value={design.ledger.lateral} onChange={(e) => patch({ ledger: { lateral: e.target.value as "two" | "four" } })}>
-                      <option value="two">Two 1,500-lb hold-downs</option>
-                      <option value="four">Four 750-lb ties</option>
-                    </select>
-                  </Field>
-                </div>
-              ) : null}
               <Field label="Footings" wide>
                 <Seg small label="Footings" value={design.footing.type} onChange={(v) => patch({ footing: { type: v } })} options={[{ value: "poured", label: "Poured concrete" }, { value: "pier-block", label: "Precast pier blocks" }]} />
               </Field>
-              {design.placement !== "attached" ? <Toggle checked={design.footing.frostAlways} onChange={(v) => patch({ footing: { frostAlways: v } })}>Dig to the frost line anyway</Toggle> : null}
+              {/* MORE FRAMING (2026-10-12, "polish — easy to use"): the choices most decks keep as the studio sets them, folded
+                  under one line that says what they are now. */}
+              <details className={s.moreBox} data-deck-more-frame>
+                <summary>
+                  <span className={s.moreTitle}>More framing choices</span>
+                  <span className={s.moreSub}>{frameMoreWords}</span>
+                </summary>
+                <div className={s.moreBody}>
+                  <Field label="Beams" aside={design.framing.beamStyle === "auto" ? (frame.beamStyle === "flush" ? "picked: flush" : "picked: under the joists") : undefined} wide>
+                    <Seg small label="Beams" value={design.framing.beamStyle} onChange={(v) => patch({ framing: { beamStyle: v } })} options={[{ value: "auto", label: "Auto" }, { value: "dropped", label: "Under the joists" }, { value: "flush", label: "Flush" }]} />
+                  </Field>
+                  <div className={s.grid2}>
+                    <Field label="Beam made of">
+                      {/* What is built, not only what was asked (owner, 2026-10-11: "it says 4x but shows the 2-ply ones"): solid 4x
+                          beams have no code span table for every lumber and load, and then the frame builds them up from 2x — the
+                          select says so and the sizes below follow it. */}
+                      <select className={s.sel} value={frame.beamKind} onChange={(e) => patch({ framing: { beamKind: e.target.value as DeckDesign["framing"]["beamKind"], beam: "auto" } })} data-deck-beam-kind={frame.beamKind}>
+                        <option value="solid" disabled={!solidBeamTabulated(frame.load, frame.group)}>{solidBeamTabulated(frame.load, frame.group) ? "Solid 4x" : "Solid 4x — not in the code's tables for this lumber and load"}</option>
+                        <option value="built-up">Built up from 2x</option>
+                      </select>
+                      {frame.beamKindNote ? <p className={cx(s.call, s.callWarn)} data-deck-beam-note>{frame.beamKindNote}</p> : null}
+                    </Field>
+                    <Field label="Joists past the beam" aside={design.framing.overhangFt === "auto" ? `auto: ${ftIn(frame.zones[0].frontCantIn)}` : "ft"}>
+                      <select className={s.sel} value={String(design.framing.overhangFt)} onChange={(e) => patch({ framing: { overhangFt: e.target.value === "auto" ? "auto" : Number(e.target.value) } })}>
+                        <option value="auto">Auto — up to 2 ft</option>
+                        {[0, 0.5, 1, 1.5, 2, 2.5, 3].map((v) => (
+                          <option key={v} value={v}>{v === 0 ? "None" : feetText(v).replace(/^(\d+)$/, "$1 ft")}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className={s.toggles}>
+                    <Toggle checked={design.framing.doubleRim} onChange={(v) => patch({ framing: { doubleRim: v } })}>Doubled rim and outside joists</Toggle>
+                    <Toggle checked={design.framing.joistTape} onChange={(v) => patch({ framing: { joistTape: v } })}>Joist tape on every top</Toggle>
+                    <Toggle checked={design.framing.braces} onChange={(v) => patch({ framing: { braces: v } })}>Knee braces at corner posts over 2 ft</Toggle>
+                    <Toggle checked={design.framing.blocking === "mid-span"} onChange={(v) => patch({ framing: { blocking: v ? "mid-span" : "auto" } })}>Mid-span blocking on spans over 8 ft</Toggle>
+                    {design.heightIn >= 84 ? <Toggle checked={design.extras.underDeckDrain} onChange={(v) => patch({ extras: { underDeckDrain: v } })}>Under-deck drainage — a dry room below</Toggle> : null}
+                  </div>
+                  {design.placement === "attached" ? (
+                    <div className={s.grid2}>
+                      <Field label="Ledger fastened with">
+                        <select className={s.sel} value={design.ledger.fastener} onChange={(e) => patch({ ledger: { fastener: e.target.value as DeckDesign["ledger"]["fastener"] } })}>
+                          {wall.fasteners.map((f) => (
+                            <option key={f} value={f}>{LEDGER_FASTENER_LABEL[f]}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Ties to the house">
+                        <select className={s.sel} value={design.ledger.lateral} onChange={(e) => patch({ ledger: { lateral: e.target.value as "two" | "four" } })}>
+                          <option value="two">Two 1,500-lb hold-downs</option>
+                          <option value="four">Four 750-lb ties</option>
+                        </select>
+                      </Field>
+                    </div>
+                  ) : null}
+                  {design.placement !== "attached" ? <Toggle checked={design.footing.frostAlways} onChange={(v) => patch({ footing: { frostAlways: v } })}>Dig to the frost line anyway</Toggle> : null}
+                </div>
+              </details>
             </Step>
           ) : null}
 
@@ -2399,7 +2482,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <Field label="Railing" aside={structure.rails.required && design.rail.type === "none" ? "a guard is required" : undefined}>
                     <select className={s.sel} value={design.rail.type} onChange={(e) => patch({ rail: { type: e.target.value as DeckDesign["rail"]["type"], infill: "auto" } })} data-deck-rail>
                       {RAIL_TYPES.map((rt) => (
-                        <option key={rt.id} value={rt.id}>{rt.label}</option>
+                        <option key={rt.id} value={rt.id}>{rt.id === "none" ? "No railing" : rt.label}</option>
                       ))}
                     </select>
                   </Field>
@@ -2497,6 +2580,9 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => setStairs((list) => [...list, defaultStair(`s${list.length + 1}-${Date.now().toString(36).slice(-3)}`, "front", design.shape.widthFt / 2)])} data-deck-add-stair>Add stairs down the front</button>
                   <button type="button" className={cx(s.btn, s.btnSm, placing?.kind === "stair" && s.btnOn)} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => { setPlacing(placing?.kind === "stair" ? null : { kind: "stair" }); if (view !== "3d" && view !== "plan") setView("3d"); }} data-deck-place-stair>{placing?.kind === "stair" ? (view === "plan" ? "Click the plan…" : "Click the deck…") : "Place by clicking the deck"}</button>
                 </div>
+              </div>
+              <div className={s.sub} data-deck-extras>
+                <div className={s.subTitle}>The old deck and the hardware</div>
                 <div className={s.grid2}>
                   <Field label="Tear out an old deck" aside="sq ft">
                     <NumberInput label="Old deck to tear out, square feet" value={design.extras.demoSqFt} parse={intText} format={String} min={0} max={4000} onCommit={(n2) => patch({ extras: { demoSqFt: n2 } })} />
@@ -2508,7 +2594,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           ) : null}
 
           <Step n={next()} title="Lights, outlets and heaters" summary={electricSummary} id="step-electrical">
-            <p className={s.hint}>Tap what the {what.toLowerCase()} gets. Each one is placed where it usually goes — or click <b>Place in 3D</b> and touch the spot. The wiring, the boxes, the switches and the circuits are counted and priced as electrical work; a fixture the client buys is drawn as a sample and left to be determined.</p>
+            <p className={s.hint}>Tap what the {what.toLowerCase()} gets: each goes where it usually does, or click <b>Place in 3D</b> and touch the spot. Wiring, boxes and circuits are priced as electrical work; a fixture the client buys is drawn as a sample and left to be determined.</p>
             <div className={s.fixChips}>
               {FIXTURE_CHIPS.map((k) => (
                 <button key={k} type="button" className={s.chip} disabled={design.electrical.fixtures.length >= ELECTRICAL_LIMITS.fixtures} onClick={() => setFixtures((list) => [...list, defaultFixture(`e${list.length + 1}-${Date.now().toString(36).slice(-3)}`, k)])} data-deck-add-fixture={k}>
@@ -2678,7 +2764,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={4}>Subtotal, before tax</td>
+                {/* One cell a column (2026-10-12): a phone hides the material and labor columns, and a cell spanning four
+                    held the table wider than the card. */}
+                <td>Subtotal, before tax</td>
+                <td />
+                <td />
+                <td />
                 <td className={cx(s.r, s.nums, s.strong)}>{money(pkg.subtotal, true)}</td>
               </tr>
             </tfoot>
@@ -2760,33 +2851,22 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             )}
           </div>
         ) : null}
+        {/* What needs the contractor first (2026-10-12); the notes and the passes fold away under it. */}
         <ul className={s.checks}>
-          {ordered.map((c) => (
-            <li key={c.id} className={cx(s.check, s[`level_${c.level}`])} data-check={c.id}>
-              <span className={s.checkLevel}>{LEVEL_LABEL[c.level]}</span>
-              <div className={s.checkBody}>
-                <div className={s.checkText}>
-                  <b>{c.part}.</b> {c.text}
-                </div>
-                {c.rule ? <div className={s.checkRule}>{c.rule}</div> : null}
-              </div>
-              {c.fix || c.alts?.length ? (
-                <div className={s.checkFixes}>
-                  {c.fix ? (
-                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch(c.fix!.patch)} data-check-fix="primary">
-                      {c.fix.label}
-                    </button>
-                  ) : null}
-                  {(c.alts ?? []).map((a) => (
-                    <button key={a.label} type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => patch(a.patch)} data-check-fix="alt">
-                      {a.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </li>
-          ))}
+          {ordered.filter(loud).map((c) => checkRow(c))}
         </ul>
+        {ordered.some((c) => !loud(c)) ? (
+          <details className={s.checksMore} data-deck-checks-more>
+            <summary>
+              {(() => {
+                const notes = ordered.filter((c) => !loud(c) && c.level === "info").length;
+                const passes = ordered.filter((c) => c.level === "pass").length;
+                return [notes ? `${notes} ${notes === 1 ? "note" : "notes"}` : "", passes ? `${passes} passed` : ""].filter(Boolean).join(" and ");
+              })()}
+            </summary>
+            <ul className={s.checks}>{ordered.filter((c) => !loud(c)).map((c) => checkRow(c))}</ul>
+          </details>
+        ) : null}
       </section>
 
       {/* ── the material package ──────────────────────────────────── */}
@@ -2798,6 +2878,11 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             <div className={s.materialActs}>
               {materialsHref("yard") ? <a className={cx(s.btn, s.btnSm, s.btnPrimary)} href={materialsHref("yard")! as Route} target="_blank" rel="noopener" data-deck-materials="yard">Material list for the lumber yard ↗</a> : null}
               {materialsHref("installer") ? <a className={cx(s.btn, s.btnSm)} href={materialsHref("installer")! as Route} target="_blank" rel="noopener" data-deck-materials="installer">For the installer to buy ↗</a> : null}
+              {bomByStep.size ? (
+                <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => setBomOpen((prev) => ([...bomByStep.keys()].every((k) => prev.has(k)) ? new Set() : new Set(bomByStep.keys())))} data-bom-all>
+                  {[...bomByStep.keys()].every((k) => bomOpen.has(k)) ? "Close all lines" : "Open all lines"}
+                </button>
+              ) : null}
             </div>
           </div>
           <div className={s.mono}>
@@ -2810,18 +2895,27 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <tr>
                 <th className={s.r}>Qty</th>
                 <th>Item</th>
-                <th className={s.r}>Each</th>
+                <th className={cx(s.r, s.bomEach)}>Each</th>
                 <th className={s.r}>Cost</th>
               </tr>
             </thead>
             {[...bomByStep].map(([step, rows]) => (
               <tbody key={step} data-bom-step={step}>
                 <tr className={s.groupRow}>
-                  <td colSpan={3}>{BOM_STEP_LABEL[step]}</td>
+                  {/* Two cells and an empty "Each" (2026-10-12): a phone hides that column, and a cell spanning it set the
+                      group's subtotal a column right of the lines' costs. */}
+                  <td colSpan={2}>
+                    <button type="button" className={s.groupToggle} aria-expanded={bomOpen.has(step)} onClick={() => toggleBom(step)} data-bom-toggle={step}>
+                      <span className={s.groupCaret} aria-hidden="true">▸</span>
+                      {BOM_STEP_LABEL[step]}
+                      <span className={s.groupCount}>{rows.length === 1 ? "1 line" : `${rows.length} lines`}</span>
+                    </button>
+                  </td>
+                  <td className={s.bomEach} />
                   <td className={cx(s.r, s.nums)}>{money(rows.reduce((a, l) => a + l.cost, 0), true)}</td>
                 </tr>
                 {rows.map((l) => (
-                  <tr key={l.id}>
+                  <tr key={l.id} className={bomOpen.has(step) ? undefined : s.bomHidden}>
                     <td className={cx(s.r, s.nums)}>
                       {l.qty.toLocaleString("en-US")} <span className={s.unit}>{l.unit}</span>
                     </td>
@@ -2829,7 +2923,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                       <div className={s.lineName}>{l.label}{l.byClient ? <span className={s.tbd}>by the client</span> : null}</div>
                       {l.note ? <div className={s.lineDesc}>{l.note}</div> : null}
                     </td>
-                    <td className={cx(s.r, s.nums)}>
+                    <td className={cx(s.r, s.nums, s.bomEach)}>
                       {l.byClient ? "—" : money(l.unitPrice, true)}
                       {l.source === "store" && !l.byClient ? <span className={s.example} title={`${STORE_SURVEY.label} — set yours under Your prices`} data-price-source="store">{STORE_SURVEY.short}</span> : l.source !== "book" && !l.byClient ? <span className={s.example} title="An example price — set yours under Your prices" data-price-source="example">ex</span> : null}
                     </td>
@@ -2941,6 +3035,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           ))}
         </div>
       </section>
+
+      {viewerOut ? (
+        <div className={s.priceBar} role="region" aria-label="Price" data-deck-pricebar>
+          <a className={s.priceBarMain} href="#deck-checks">
+            <span className={s.priceBarV}>{money(pkg.subtotal)}</span>
+            <span className={cx(s.stamp, summary.fail ? s.stampBad : summary.warn ? s.stampWarn : s.stampPass)}>{summary.fail ? `${summary.fail} to fix` : summary.warn ? `${summary.warn} to check` : "Inside the tables"}</span>
+          </a>
+          <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={() => viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+            See it ↑
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

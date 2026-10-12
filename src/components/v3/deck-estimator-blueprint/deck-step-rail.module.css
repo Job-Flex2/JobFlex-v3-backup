@@ -1,0 +1,30 @@
+/* The step rail (2026-10-12): numbered dots stuck at the top of the studio's steps, the one being read lit and named. */
+:global(.jf-blueprint .content) .rail {
+  /* Under the app's sticky top bar (62 px) on a desk or a tablet; a phone's steps scroll below its fixed header. */
+  position: sticky; top: 70px; z-index: 30; grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px;
+  background: color-mix(in srgb, #fff 94%, transparent); backdrop-filter: blur(6px);
+  border: 1.5px solid var(--hair); border-radius: var(--radius); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+:global(.jf-blueprint .content) .dots { display: flex; gap: 5px; margin: 0; padding: 0; list-style: none; flex: 0 0 auto; }
+:global(.jf-blueprint .content) .dot {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1.5px solid color-mix(in srgb, var(--dot) 55%, #fff); background: #fff; color: var(--dot);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; line-height: 1;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+:global(.jf-blueprint .content) .dot:hover { background: color-mix(in srgb, var(--dot) 12%, #fff); }
+:global(.jf-blueprint .content) .dot:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot) 30%, transparent); }
+:global(.jf-blueprint .content) .on { background: var(--dot); border-color: var(--dot); color: #fff; transform: scale(1.08); }
+:global(.jf-blueprint .content) .now {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+}
+@media (max-width: 768px) {
+  :global(.jf-blueprint .content) .rail { top: 0; padding: 6px 8px; gap: 8px; }
+  :global(.jf-blueprint .content) .dots { gap: 4px; }
+  :global(.jf-blueprint .content) .dot { width: 30px; height: 30px; font-size: 11.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .dot { transition: none; }
+}
