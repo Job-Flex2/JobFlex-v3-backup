@@ -38,6 +38,10 @@ M._resolveFilename = function (this: unknown, request: string, ...rest: unknown[
   return out;
 };
 
+// A layout or page that imports a stylesheet can be called too: Next bundles
+// the CSS, plain node has nothing to do with it.
+(Module as unknown as { _extensions: Record<string, unknown> })._extensions[".css"] = () => {};
+
 type G = typeof globalThis & { __auditSession?: unknown; __auditHeaders?: Record<string, string> };
 /** Every later call runs as this member (null = signed out). */
 export function actAs(user: { id: string; activeOrgId?: string | null } | null) {

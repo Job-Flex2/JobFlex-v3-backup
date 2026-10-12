@@ -13,7 +13,7 @@
 // cards in lib/roleAccess describe. The eight reads the audit caught are
 // checked for every role, both ways: refused where the page is closed to the
 // role, answered where it is open.
-import { actAs, check, outcome, summary } from "./_actionHarness";
+import { actAs, check, outcome, setHeaders, summary } from "./_actionHarness";
 import { randomBytes } from "node:crypto";
 import { db } from "../../src/lib/db";
 import { ROLE_ROUTE_GATES, isPathAllowed } from "../../src/lib/roleRoutes";
@@ -48,6 +48,11 @@ import * as adminUsers from "../../src/actions/adminUsers";
 import * as adminTasks from "../../src/actions/adminTasks";
 import * as deck from "../../src/actions/deckEstimator";
 import * as tasksChanges from "../../src/app/api/admin/tasks/changes/route";
+
+// The handheld group's layout, by require so the harness's stand-ins (and its
+// stylesheet stub) are in place when it loads.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const MobileLayout = require("../../src/app/(mobile)/layout").default as (p: { children: unknown }) => Promise<unknown>;
 
 const tag = `qa-roles-${Date.now()}`;
 const rid = () => randomBytes(9).toString("hex");
@@ -135,6 +140,24 @@ async function main() {
     await expectRefused("ESTIMATOR", estimator, "clientProjectOptions (no clients page)", () => clientProjectOptions(client.id));
     await expectRefused("INSTALLER", installer, "proposalPickList (no proposals)", () => proposalPickList(proposal.id));
     await expectRefused("SALES", sales, "proposalPickList on the owner's proposal", () => proposalPickList(proposal.id));
+
+    // ── the handheld Settings and Plans pages: closed like their desktop twins ──
+    for (const route of ["/mobile-settings-v1", "/mobile-upgrade-v1"]) {
+      for (const role of ROLES) {
+        as(people[role]);
+        setHeaders({ "x-pathname": route });
+        let went: string;
+        try {
+          const r = await MobileLayout({ children: "PAGE" });
+          went = r === "PAGE" ? "bare" : "page";
+        } catch (err) {
+          went = String((err as { digest?: string }).digest ?? (err as Error).message).includes("NEXT_REDIRECT") ? "redirect" : `error: ${(err as Error).message}`;
+        }
+        const open = role === "OWNER" || role === "MANAGER";
+        check(`${role}: ${route} ${open ? "opens" : "sends it home"}`, open ? went === "page" : went === "redirect", went);
+      }
+    }
+    setHeaders({});
 
     // ── the home folder: never the crew; a rep only onto their own proposal ──
     await expectRefused("INSTALLER", installer, "attachHomeFileToProposal", () => attachHomeFileToProposal({ fileId: file.id, proposalId: proposal.id }));
