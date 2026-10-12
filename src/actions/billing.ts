@@ -137,7 +137,9 @@ export async function listSubscriptionInvoices(): Promise<{
       limit: 12,
     });
     const trialOnly = await trialOnlyInvoiceIds(stripe, res.data);
-    const invoices: SubscriptionInvoice[] = res.data.filter((inv) => !trialOnly.has(inv.id)).map((inv) => ({
+    // A voided invoice is an attempt that charged nothing — a plan change the
+    // card declined (lib/planChange) — not a bill: it is not listed.
+    const invoices: SubscriptionInvoice[] = res.data.filter((inv) => !trialOnly.has(inv.id) && inv.status !== "void").map((inv) => ({
       id: inv.id,
       number: inv.number ?? null,
       amountPaidCents: inv.amount_paid ?? 0,
