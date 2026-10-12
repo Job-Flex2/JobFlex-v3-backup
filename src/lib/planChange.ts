@@ -37,6 +37,7 @@ import { subscriptionPeriodEnd, subscriptionPeriodEndDate } from "@/lib/stripeCo
 import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
 import { changeRoute, type BillingTermName, type ChangeRoute } from "@/lib/planChangeRoute";
 import { priceInterval } from "@/lib/priceInterval";
+import { ensureYearFirstMonthCoupon } from "@/lib/yearDiscount";
 
 export type Term = BillingTermName;
 export type { ChangeRoute };
@@ -159,6 +160,57 @@ async function resolve(
   return { stripe, mode, sub, priceId, plan, interval, fromInterval, termCents, route, anchorNow: route === "charge" && fromInterval !== interval };
 }
 
+/* A FIRST-MONTH CODE ON A TERM CHANGE (2026-10-12, lib/firstMonthDiscount).
+   A partner's or a referral's percent coupon runs "repeating" for a month or
+   two. Moved from a monthly to a yearly price while it still runs, Stripe
+   would take the percent off the whole year — 20% of $855 instead of 20% of
+   $95. So on a MONTH → YEAR change such a coupon is:
+     · in a trial (nothing paid yet): swapped for the one-month amount on the
+       yearly plan (lib/yearDiscount) — the discount promised, no more;
+     · on an active subscription (the first month is paid, discount used):
+       taken off before the yearly invoice.
+   Any other discount (a fixed amount, a coupon "forever") stays. */
+type HeldDiscount = { id: string; coupon: Stripe.Coupon | null };
+async function heldDiscounts(stripe: Stripe, sub: Stripe.Subscription): Promise<HeldDiscount[]> {
+  const full = await stripe.subscriptions.retrieve(sub.id, { expand: ["discounts"] });
+  const out: HeldDiscount[] = [];
+  for (const d of full.discounts ?? []) {
+    if (!d || typeof d === "string") continue;
+    const raw = (d as unknown as { coupon?: string | Stripe.Coupon | null; source?: { coupon?: string | Stripe.Coupon | null } }).source?.coupon ??
+      (d as unknown as { coupon?: string | Stripe.Coupon | null }).coupon ??
+      null;
+    const coupon = typeof raw === "string" ? await stripe.coupons.retrieve(raw).catch(() => null) : raw;
+    out.push({ id: d.id, coupon });
+  }
+  return out;
+}
+const isFirstMonth = (c: Stripe.Coupon | null) =>
+  Boolean(c && (c.percent_off ?? 0) > 0 && c.duration === "repeating" && (c.duration_in_months ?? 0) <= 2);
+
+/** The discounts a MONTH → YEAR change keeps, and (in a trial) the one-month coupon that replaces a percent one. */
+async function discountsForYear(r: Resolved): Promise<{ changed: boolean; discounts: Stripe.SubscriptionUpdateParams.Discount[] }> {
+  if (!(r.fromInterval === "MONTH" && r.interval === "YEAR")) return { changed: false, discounts: [] };
+  const held = await heldDiscounts(r.stripe, r.sub);
+  const first = held.filter((h) => isFirstMonth(h.coupon));
+  if (!first.length) return { changed: false, discounts: [] };
+  const kept: Stripe.SubscriptionUpdateParams.Discount[] = held.filter((h) => !isFirstMonth(h.coupon)).map((h) => ({ discount: h.id }));
+  if (r.route === "trial") {
+    const c = first[0].coupon!;
+    const promo = c.metadata?.jfPromoCodeId
+      ? await db.promoCode.findUnique({ where: { id: c.metadata.jfPromoCodeId } })
+      : await db.promoCode.findFirst({ where: { stripeCouponId: c.id } });
+    const coupon = await ensureYearFirstMonthCoupon(r.stripe, r.mode, {
+      kind: c.metadata?.jfKind === "referral" || !promo ? "referral" : "promo",
+      pct: c.percent_off ?? 0,
+      monthlyCents: r.plan.priceCents,
+      months: c.duration_in_months ?? 1,
+      ...(promo ? { promoCodeId: promo.id, code: promo.code } : {}),
+    }).catch(() => null);
+    if (coupon) kept.push({ coupon });
+  }
+  return { changed: true, discounts: kept };
+}
+
 function itemsFor(r: Resolved): Stripe.SubscriptionUpdateParams.Item[] {
   const [first, ...rest] = r.sub.items.data;
   return [{ id: first.id, price: r.priceId, quantity: 1 }, ...rest.map((i) => ({ id: i.id, deleted: true as const }))];
@@ -188,9 +240,11 @@ export async function previewPlanChange(organizationId: string, planSlug: string
   else if (r.route === "free") out.nextBillAt = iso(periodEnd);
   else {
     const prorationDate = Math.floor(Date.now() / 1000);
+    const year = await discountsForYear(r);
     const pre = await r.stripe.invoices.createPreview({
       customer: customerOf(r.sub),
       subscription: r.sub.id,
+      ...(year.changed ? { discounts: year.discounts.length ? (year.discounts as Stripe.InvoiceCreatePreviewParams.Discount[]) : "" } : {}),
       subscription_details: {
         items: itemsFor(r),
         proration_behavior: "always_invoice",
@@ -257,6 +311,8 @@ export async function applyPlanChange(
   if (r.route === "charge") {
     const when = prorationDate && Math.abs(Date.now() / 1000 - prorationDate) < 3600 ? prorationDate : Math.floor(Date.now() / 1000);
     const startedAt = Math.floor(Date.now() / 1000) - 5;
+    const year = await discountsForYear(r);
+    if (year.changed) await stripe.subscriptions.update(sub.id, { discounts: year.discounts });
     try {
       updated = await stripe.subscriptions.update(sub.id, {
         items: itemsFor(r),
@@ -280,9 +336,11 @@ export async function applyPlanChange(
     if (inv && (inv.created ?? 0) >= startedAt) chargedCents = inv.amount_paid ?? 0;
     updated = await stripe.subscriptions.update(sub.id, { metadata: metadataFor(r, organizationId) });
   } else {
+    const year = await discountsForYear(r);
     try {
       updated = await stripe.subscriptions.update(sub.id, {
         items: itemsFor(r),
+        ...(year.changed ? { discounts: year.discounts } : {}),
         proration_behavior: "none",
         ...(r.route === "trial" ? { trial_end: sub.trial_end ?? undefined } : {}),
         metadata: metadataFor(r, organizationId),
