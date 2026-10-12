@@ -91,7 +91,8 @@ export function useTaskStore(initialRows: TaskRowDTO[], initialDetail: TaskDetai
           if (rows === st.rows) rows = { ...st.rows };
           if (flash === st.flash) flash = { ...st.flash };
           rows[r.id] = r;
-          flash[r.id] = at;
+          // This admin's own edit, seen by the poll before its answer: no wash.
+          if (!st.pending.some((p) => p.taskId === r.id)) flash[r.id] = at;
         }
         return rows === st.rows ? st : { ...st, rows, flash };
       });

@@ -30,6 +30,7 @@ import { useTaskStore } from "./use-task-store";
 import { EMPTY_DRAFT, NewTaskForm, type NewTaskDraft } from "./new-task-sheet";
 import { TaskFilterBar } from "./task-filter-bar";
 import { TaskSheetContent, sheetKicker } from "./task-sheet";
+import { useTaskLive } from "./use-task-live";
 import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, useDayOf, useHydrated, useToday } from "./task-bits";
 
 export interface AdminTasksProps {
@@ -107,6 +108,9 @@ export function AdminTasksContent(props: AdminTasksProps) {
     if (props.initialDetail) taskSheet.open();
     else if (props.missingTask) toast.error("That task doesn't exist", "It may have been opened from an old link.");
   }, [props.initialDetail, props.missingTask, taskSheet]);
+
+  // ── Live: other admins' changes, every 3 s while this tab is visible ──
+  const live = useTaskLive({ since: props.serverNow, openId, onRows: store.ingestRows, onDetail: store.ingestDetail });
 
   const openRow = store.rows.find((r) => r.id === openId) ?? null;
   const sheetTask = store.detail && store.detail.id === openId ? store.detail : null;
@@ -194,6 +198,14 @@ export function AdminTasksContent(props: AdminTasksProps) {
           <h1 className={cx("page-title")}>Tasks</h1>
         </div>
         <div className={cx("page-actions")}>
+          <span
+            className={cx("live", live.status === "offline" && "liveOff", live.status === "waiting" && "liveWait")}
+            role="status"
+            title={live.reason ?? (live.status === "live" ? "Changes by other admins appear within a few seconds." : undefined)}
+          >
+            <span className={cx("liveMark")} aria-hidden="true" />
+            {live.status === "offline" ? "No connection" : live.status === "live" ? "Live" : "Connecting"}
+          </span>
           <button type="button" className={cx("btn", "btn-primary")} onClick={openNew}>
             <Ic name="plus" />
             New task
