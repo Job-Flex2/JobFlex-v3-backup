@@ -119,7 +119,9 @@ const base = (over: Over): DeckDesign => {
   // A 14 x 20 free-standing hip pavilion over a detached deck, metal on purlins, no gutters.
   const d = base({ structure: "covered-deck", placement: "detached", shape: { kind: "rect", widthFt: 20, depthFt: 14 }, roof: { kind: "hip", attach: "free", plan: { shape: "follows-deck", widthFt: 20, depthFt: 14, acrossFt: 12, offsetFt: 0 }, pitch: 4, roofing: "metal-panel", roofDeck: "purlins", gutters: { kind: "none", guards: false } } });
   const { frame, roof } = buildStructure(d);
-  check("20x14 hip pavilion: four corners, four headers, four hips, a ridge board between them", !!roof && roof.posts.length >= 4 && roof.headers.length === 4 && roof.hips.count === 4 && roof.ridge?.kind === "board" && roof.ties === 0);
+  // 2026-10-12: a ridge board holds nothing up — the commons that meet on it get rafter ties, and the hips' push on the
+  // corners a tension strap at every header joint (it was "a hip roof ties itself", with no ties).
+  check("20x14 hip pavilion: four corners, four headers, four hips, a ridge board between them with rafter ties and corner straps", !!roof && roof.posts.length >= 4 && roof.headers.length === 4 && roof.hips.count === 4 && roof.ridge?.kind === "board" && roof.ties >= 2 && roof.hipEndTies === 2 && roof.hardware.cornerStraps === 4 && roof.ringTensionLb > 0, roof ? `ties ${roof.ties} + ${roof.hipEndTies}, straps ${roof.hardware.cornerStraps} at ${roof.ringTensionLb} lb` : "");
   if (roof && frame) {
     check("the ridge is the long side less the short side", near(roof.ridge!.lengthIn, (20 - 14) * 12, 0.02), `${roof.ridge!.lengthIn}`);
     check("purlins across the rafters, no sheathing, metal panels by length", roof.members.some((m) => m.role === "purlin") && roof.sheets === 0 && roof.metalPanels.length > 0);

@@ -188,6 +188,12 @@ export interface RoofDesign {
   /** "lvl": engineered beams throughout; "auto" goes to an LVL only where no sawn header reaches. */
   header: BeamSize | "auto" | "lvl";
   ridge: RidgeKind;
+  /**
+   * Cross beams under a gable's ridge BEAM (2026-10-12, owner: "selections of beams for cross roof beams and supports"):
+   * each spans eave header to eave header with a king post on it under the ridge, so the ridge spans shorter and a post
+   * stands under each end. 0–3. A free hip's ridge beam always stands on two, at its ends (lib/deck/roof).
+   */
+  crossBeams: number;
   roofing: Roofing;
   roofDeck: RoofDeck;
   ceiling: CeilingKind;
@@ -490,6 +496,7 @@ export const ROOF_LIMITS = {
   slatSpacingIn: { min: 3, max: 24 },
   wallSides: { min: 1, max: 16 },
   lights: { min: 0, max: 12 },
+  crossBeams: { min: 0, max: 3 },
 } as const;
 
 /** The roof a structure starts with — a gable over a covered deck, a square pyramid gazebo, a pergola of 2x2 slats. */
@@ -510,6 +517,7 @@ export function defaultRoofDesign(structure: Structure = "covered-deck"): RoofDe
     rafterSpacingIn: 16,
     header: "auto",
     ridge: "auto",
+    crossBeams: 0,
     roofing: pergola ? "none" : "arch-shingle",
     roofDeck: "sheathing",
     ceiling: "none",
@@ -869,6 +877,7 @@ export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, 
     rafterSpacingIn: oneOf(num(r.rafterSpacingIn, 0), SPACINGS, d.rafterSpacingIn) as SpacingIn,
     header,
     ridge: oneOf(r.ridge, ["auto", "beam", "board", "none", "trusses"] as const, d.ridge),
+    crossBeams: Math.round(clamp(num(r.crossBeams, 0), ROOF_LIMITS.crossBeams.min, ROOF_LIMITS.crossBeams.max)),
     roofing,
     roofDeck: metal ? oneOf(r.roofDeck, ["sheathing", "purlins"] as const, d.roofDeck) : "sheathing",
     ceiling: kind === "pergola" ? "none" : oneOf(r.ceiling, ["none", "tongue-groove", "beadboard"] as const, d.ceiling),

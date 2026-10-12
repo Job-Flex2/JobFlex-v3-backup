@@ -224,6 +224,11 @@ export interface RoofHeader {
   kingPost: boolean;
   /** Its ends are on the wall (no post there). */
   wallEnd: boolean;
+  /**
+   * A cross beam (2026-10-12): it spans from one eave header to the other, hung on them right over the posts under its
+   * ends, and carries a king post under the ridge at its middle. Not part of the ring.
+   */
+  cross?: boolean;
 }
 
 export interface RoofFace {
@@ -336,6 +341,15 @@ export interface RoofFrame {
   hips: { count: number; nominal: string; totalIn: number; spanIn?: number; loadLb?: number; kind?: "sawn" | "lvl"; beyond?: boolean };
   kingPosts: number;
   ties: number;
+  /** Cross beams under the ridge (2026-10-12): a free hip's ridge beam on two, a gable's ridge beam on those asked for. */
+  crossBeams: number;
+  /** Ties from a free hip's end headers back to the first rafter tie (the king common's thrust), 2026-10-12. */
+  hipEndTies: number;
+  /**
+   * The most a header joint must hold in tension, lb (2026-10-12): hips with nothing under their tops push the corners
+   * out and the headers hold them as a ring; every joint gets a tension strap rated for at least this. 0 when nothing does.
+   */
+  ringTensionLb: number;
   /**
    * Manufactured trusses in place of rafters on a gable (2026-10-11): how many, the two gable ends among them, the span
    * bearing to bearing, the spacing, the chords — and why (asked for; the rafters ran past the table; no beam spans the
@@ -373,7 +387,7 @@ export interface RoofFrame {
   gablets: number;
   /** Any header or the ridge is an engineered beam. */
   engineered: boolean;
-  hardware: { hurricaneTies: number; rafterHangers: number; postBases: number; postCaps: number; slabAnchors: number; braces: number; ledgerScrews: number; ringPlate: number; kingBrackets: number; wallHangers: number; gussets: number };
+  hardware: { hurricaneTies: number; rafterHangers: number; postBases: number; postCaps: number; slabAnchors: number; braces: number; ledgerScrews: number; ringPlate: number; kingBrackets: number; wallHangers: number; gussets: number; cornerStraps: number; crossHangers: number };
   /** Posts left standing in a stair's opening — a ring corner, or one no header could be laid to clear (the checks say to move the stair). */
   postsInStair: Array<{ x: number; y: number; side: StairOpening["side"]; corner: boolean }>;
   flags: {
@@ -608,7 +622,7 @@ export interface HipDesign {
  * its corner post to the ridge and carries half of every jack on both sides: on faces whose corners are `halfAngle`
  * either side of it (45° on a rectangle, 180°/n on an n-sided gazebo) that is a load growing from nothing at the corner
  * to its most at the ridge, W = psf · R² · tan(halfAngle) / 2 for a run R. Bending (M = 0.1283 W L) and deflection
- * (0.02608 W L³ / E I, held to L/180, or L/240 under a ceiling) on No. 2 values — snow load duration 1.15, roof live
+ * (0.01304 W L³ / E I — AISC Table 3-23, case 2; it was doubled until 2026-10-12 — held to L/180, or L/240 under a ceiling) on No. 2 values — snow load duration 1.15, roof live
  * 1.25, built-up plies 1.15 — one size deeper than the commons first, then deeper singles, built-up pairs and threes,
  * then a 2- or 3-ply LVL. An ESTIMATE in the code's own terms; an engineer or the LVL maker confirms a big one.
  */
@@ -618,7 +632,7 @@ export function designHip(runIn: number, ovhIn: number, halfAngle: number, commo
   const M = 0.1283 * loadLb * spanIn;
   const cd = snow ? 1.15 : 1.25;
   const limit = spanIn / (ceiling ? 240 : 180);
-  const defl = (E: number, I: number) => (0.02608 * loadLb * spanIn ** 3) / (E * I);
+  const defl = (E: number, I: number) => (0.01304 * loadLb * spanIn ** 3) / (E * I);
   const sizes = JOIST_SIZES.slice(JOIST_SIZES.indexOf(oneDeeper(commons)));
   for (const plies of [1, 2, 3]) {
     for (const z of sizes) {
@@ -657,8 +671,11 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   // Loads.
   const roofLoad: RoofLoad = r.load === "auto" ? (design.site.groundSnowPsf > 0 ? roofLoadForSnow(design.site.groundSnowPsf).load : roofLoadFor(design.loadPsf)) : r.load;
   const metal = r.roofing === "metal-panel" || r.roofing === "standing-seam";
-  const deadPsf = (pergola ? ROOF_DEAD_PSF.open : metal ? ROOF_DEAD_PSF.metal : r.roofing === "cedar-shake" ? ROOF_DEAD_PSF.shake : ROOF_DEAD_PSF.shingle) + (r.ceiling !== "none" ? ROOF_DEAD_PSF.ceiling : 0);
-  const livePsf = pergola ? 10 : roofLoad;
+  // A LOUVERED TOP (2026-10-12): closed, the blades make a roof — it carries the roof's live or snow load and the blades'
+  // weight like any roof. Open slats carry 10 psf, their own weight, and the wind.
+  const louveredTop = pergola && r.pergolaStyle === "louvered";
+  const deadPsf = (louveredTop ? ROOF_DEAD_PSF.metal : pergola ? ROOF_DEAD_PSF.open : metal ? ROOF_DEAD_PSF.metal : r.roofing === "cedar-shake" ? ROOF_DEAD_PSF.shake : ROOF_DEAD_PSF.shingle) + (r.ceiling !== "none" ? ROOF_DEAD_PSF.ceiling : 0);
+  const livePsf = pergola && !louveredTop ? 10 : roofLoad;
   const totalPsf = livePsf + deadPsf;
 
   // The ring and the floor.
@@ -900,7 +917,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
 
   // ── Rafter size: the smallest that spans the longest common's horizontal span.
   const faceRunToTop = (f: FaceSpec) => Math.max(0, f.vTopIn - f.ovhIn);
-  const tableSpan = (size: JoistSize) => (pergola ? rafterMaxSpanIn(20, rafterGroup, size, spacing as 12 | 16 | 24) : rafterMaxSpanIn(roofLoad, rafterGroup, size, spacing as 12 | 16 | 24, ceilingOn));
+  const tableSpan = (size: JoistSize) => (pergola && !louveredTop ? rafterMaxSpanIn(20, rafterGroup, size, spacing as 12 | 16 | 24) : rafterMaxSpanIn(roofLoad, rafterGroup, size, spacing as 12 | 16 | 24, ceilingOn));
   // A pergola's rafters run front to back in one piece when they can; past the table or past stock, header rows divide the depth into bays.
   const pergolaStock = STOCK_MAX_IN - 2 * ovh - 6;
   let pergolaBays = 1;
@@ -1004,6 +1021,23 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   let trussesBeyond = false;
   let ridgeAcrossIn = 0;
   let tiesBeyondStock = false;
+  let hipEndTies = 0;
+  /** Cross beams (2026-10-12): from eave header to eave header across the ridge, each with a king post at its middle. */
+  const crossPlan: Array<{ A: V2; B: V2; P: number }> = [];
+  /** The cross beams asked for under a gable's ridge beam. */
+  const gableCross = kind === "gable" && !pergola ? Math.max(0, Math.min(3, Math.round(r.crossBeams ?? 0))) : 0;
+  /**
+   * A cross beam at share `t` along the ridge's supports (0 = its start, 1 = its end): square to the ridge, from one side
+   * of the post ring to the other. A gable's ridge runs the ring's length; a hip's from one meeting point to the other.
+   */
+  const crossAt = (t: number): { A: V2; B: V2 } => {
+    const alongX = !!ridgeFrom && !!ridgeTo && Math.abs(ridgeTo.x - ridgeFrom.x) > Math.abs(ridgeTo.y - ridgeFrom.y);
+    if (kind === "hip") {
+      const P = { x: ridgeFrom!.x + (ridgeTo!.x - ridgeFrom!.x) * t, y: ridgeFrom!.y + (ridgeTo!.y - ridgeFrom!.y) * t };
+      return alongX ? { A: { x: P.x, y: y0 }, B: { x: P.x, y: y1 } } : { A: { x: x0, y: P.y }, B: { x: x1, y: P.y } };
+    }
+    return alongX ? { A: { x: x0 + (x1 - x0) * t, y: y0 }, B: { x: x0 + (x1 - x0) * t, y: y1 } } : { A: { x: x0, y: y0 + (y1 - y0) * t }, B: { x: x1, y: y0 + (y1 - y0) * t } };
+  };
   const trussPlan = (spanIn: number, why: NonNullable<RoofFrame["trusses"]>["why"]): NonNullable<RoofFrame["trusses"]> => ({ count: 0, gableEnds: 0, spanIn: Math.round(spanIn), spacingIn: TRUSS_SPACING_IN, chord: spanIn > TRUSS_2X4_MAX_IN || roofLoad >= 50 ? "2x6" : "2x4", why });
   // A trial beam for the ridge may raise the engineered flags; a ridge that ends as a board or trusses gives them back.
   const engineeredBeforeRidge = engineered;
@@ -1021,7 +1055,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     // roof would be longer than stock, the gable is trussed instead — nothing heavy on one post.
     const footingLimitLb = design.floor === "slab" ? Infinity : POST_TABLE_MAX_AREA * (design.loadPsf + 10);
     if (!trusses && r.ridge === "auto" && kind === "gable" && trussFits && acrossRidge > STOCK_MAX_IN && faceSpecs[0]) {
-      const kingLoadLb = totalPsf * (faceSpecs[0].runIn / 12) * (ridgeSpanIn / 12) * 0.5;
+      const kingLoadLb = totalPsf * (faceSpecs[0].runIn / 12) * (ridgeSpanIn / (gableCross + 1) / 12) * 0.5;
       if (kingLoadLb > footingLimitLb) trusses = { ...trussPlan(acrossRidge, "post"), ridgeSpanIn: Math.round(ridgeSpanIn), kingLoadLb: Math.round(kingLoadLb) };
     }
     const auto: "beam" | "board" | "none" = kind === "gable" ? "beam" : "board";
@@ -1033,14 +1067,16 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       const runFt = (kind === "gambrel" ? (gambrel ? faceSpecs[0].runIn + faceSpecs[1].runIn : faceSpecs[0].runIn) : faceSpecs[0].runIn) / 12;
       const eq = (2 * runFt * totalPsf) / 50;
       const wRidge = runFt * totalPsf;
-      let pick = pickHeader(ridgeSpanIn, eq, wRidge);
-      let beyond = pick.maxSpanIn === 0 || pick.maxSpanIn < ridgeSpanIn - 0.01;
+      // Cross beams under it (2026-10-12) cut the ridge into equal spans, each read on its own.
+      const spanEach = ridgeSpanIn / (gableCross + 1);
+      let pick = pickHeader(spanEach, eq, wRidge);
+      let beyond = pick.maxSpanIn === 0 || pick.maxSpanIn < spanEach - 0.01;
       const tieAcross = Math.abs(ridgeTo.x - ridgeFrom.x) > Math.abs(ridgeTo.y - ridgeFrom.y) ? y1 - y0 : x1 - x0;
       // Asked for a beam that no sawn size spans: an engineered ridge instead of a flag.
       if (beyond && (r.ridge === "beam" || tieAcross > STOCK_MAX_IN || kind === "gambrel")) {
-        const lvlSpec = sizeLvl(ridgeSpanIn, wRidge, 2);
+        const lvlSpec = sizeLvl(spanEach, wRidge, 2);
         if (lvlSpec) {
-          pick = { spec: lvlSpec, maxSpanIn: ridgeSpanIn, segments: 1 };
+          pick = { spec: lvlSpec, maxSpanIn: Math.ceil(spanEach), segments: 1 };
           beyond = false;
           engineered = true;
         }
@@ -1055,19 +1091,50 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
         trusses = trussPlan(acrossRidge, "ridge");
       } else {
         ridgeBeyond = beyond;
-        ridge = { kind: "beam", nominal: pick.spec.stock, lengthIn: ridgeLengthIn, spec: pick.spec, spanIn: ridgeSpanIn, maxSpanIn: pick.maxSpanIn, eqJoistSpanFt: Math.round(eq * 10) / 10, fellBack: false };
-        kingPosts = ridgeSupports === "king-king" ? 2 : 1;
+        ridge = { kind: "beam", nominal: pick.spec.stock, lengthIn: ridgeLengthIn, spec: pick.spec, spanIn: Math.round(spanEach), maxSpanIn: pick.maxSpanIn, eqJoistSpanFt: Math.round(eq * 10) / 10, fellBack: false };
+        kingPosts = (ridgeSupports === "king-king" ? 2 : 1) + (kind === "gable" ? gableCross : 0);
+        // Each cross beam's king post carries a span of ridge: half from each side.
+        if (kind === "gable") for (let i = 1; i <= gableCross; i++) crossPlan.push({ ...crossAt(i / (gableCross + 1)), P: wRidge * (spanEach / 12) });
       }
-    } else if (rk === "beam") {
-      // A hip's short ridge as a beam: a built-up pair, bearing on the hips' meeting points.
-      const spec = beamSpec(`2-${oneDeeper(rafterSize)}` as BeamSize);
-      ridge = { kind: "beam", nominal: spec.stock, lengthIn: ridgeLengthIn, spec, spanIn: ridgeLengthIn, maxSpanIn: 0, eqJoistSpanFt: 0, fellBack: false };
+    } else if (rk === "beam" && kind === "hip" && !wall && ridgeLengthIn > 1) {
+      // A FREE HIP'S RIDGE BEAM (2026-10-12): it spans between the hips' meeting points, each held up by a king post on a
+      // CROSS BEAM from eave header to eave header — the hips then bear on it as the beams designHip takes them for
+      // (R802.3), and nothing pushes the headers apart. Until now the "beam" was a doubled board resting on the hips.
+      const top = faceSpecs.find((f) => f.tier === 1 && f.top === "ridge");
+      const runFt = top ? (top.vTopIn - top.ovhIn) / 12 : 0;
+      const wRidge = runFt * totalPsf;
+      const eq = (2 * runFt * totalPsf) / 50;
+      let pick = pickHeader(ridgeLengthIn, eq, wRidge);
+      let beyond = pick.maxSpanIn === 0 || pick.maxSpanIn < ridgeLengthIn - 0.01;
+      if (beyond) {
+        const lvlSpec = sizeLvl(ridgeLengthIn, wRidge, 2);
+        if (lvlSpec) {
+          pick = { spec: lvlSpec, maxSpanIn: Math.ceil(ridgeLengthIn), segments: 1 };
+          beyond = false;
+          engineered = true;
+        }
+      }
+      ridgeBeyond = beyond;
+      ridge = { kind: "beam", nominal: pick.spec.stock, lengthIn: ridgeLengthIn, spec: pick.spec, spanIn: Math.round(ridgeLengthIn), maxSpanIn: pick.maxSpanIn, eqJoistSpanFt: Math.round(eq * 10) / 10, fellBack: false };
+      kingPosts = 2;
+      // On each king post: half the ridge, the tops of the two hips that meet there (2/3 of what each carries — its load
+      // rises toward the top) and the top half of the common between them.
+      const hipFace0 = faceSpecs.find((fs) => fs.tier === 1 && (fs.sideA === "hip" || fs.sideB === "hip"));
+      const hipW = hipFace0 ? designHip(hipFace0.vTopIn, hipFace0.ovhIn, Math.PI / 4, rafterSize, rafterGroup, totalPsf, roofLoad >= 30, ceilingOn).loadLb : 0;
+      const P = (wRidge * (ridgeLengthIn / 12)) / 2 + 2 * ((2 * hipW) / 3) + totalPsf * (spacing / 12) * (runFt / 2);
+      crossPlan.push({ ...crossAt(0), P }, { ...crossAt(1), P });
     } else {
       const nominal = oneDeeper(rafterSize);
       ridge = { kind: "board", nominal, lengthIn: ridgeLengthIn, spec: null, spanIn: 0, maxSpanIn: 0, eqJoistSpanFt: 0, fellBack: false };
-      if (kind === "gable") {
-        ties = Math.floor(ridgeSpanIn / TIE_SPACING_IN) + 1;
+      // A ridge BOARD holds nothing up (2026-10-12): the rafters that meet on it push their headers apart unless rafter
+      // ties hold them, 4 ft on centre at the header line (R802.5.2) — over a gable's whole ridge, and over the stretch
+      // where commons meet the ridge on a free hip, a Dutch gable or a gambrel ("a hip roof ties itself" was wrong there).
+      if (kind === "gable" || kind === "gambrel" || kind === "dutch-gable" || (kind === "hip" && !wall)) {
+        ties = Math.floor((kind === "gable" || kind === "gambrel" ? ridgeSpanIn : ridgeLengthIn) / TIE_SPACING_IN) + 1;
         if (acrossRidge > STOCK_MAX_IN) tiesBeyondStock = true;
+        // A free hip's end: the common from the end header's middle up to the ridge pushes that header out too — a tie
+        // runs from there back to the first rafter tie.
+        if (kind === "hip") hipEndTies = 2;
       }
     }
   }
@@ -1225,17 +1292,20 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       let kingP = 0;
       if (pergola) tribFt = (y1 - y0) / 2 / 12 + ovh / 12;
       else if (face && (kind === "gambrel" || kind === "dutch-gable")) {
-        // The whole slope's weight comes down the lower rafters to the header (the tie or the cap carries the rest across).
+        // The whole slope's weight comes down the lower rafters to the header (the ties take the thrust, not the weight):
+        // its whole run, the overhang included (2026-10-12 — it was read as half the run, though this note said whole).
         const whole = kind === "gambrel" && gambrel ? (gambrel.alongY ? (eaveX1 - eaveX0) / 2 : (eaveY1 - eaveY0) / 2) : Math.min(eaveX1 - eaveX0, eaveY1 - eaveY0) / 2;
-        tribFt = whole / 2 / 12 + face.ovhIn / 12;
+        // A Dutch gable's ends are hip ends, though: their jacks rest half on the hips.
+        tribFt = kind === "dutch-gable" && !face.id.endsWith("1") ? (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12 : whole / 12;
       // An eave header carries half its face's run and the overhang when a ridge BEAM takes the other half; under a ridge
       // board with ties, or trusses, nothing at the ridge carries anything — the whole face comes down on this header.
-      } else if (face) tribFt = kind === "gable" && ridge?.kind !== "beam" ? face.vTopIn / 12 : (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
+      // So does a free hip's long side under a ridge board (2026-10-12): its commons meet on nothing that holds them up.
+      } else if (face) tribFt = ridge?.kind !== "beam" && (kind === "gable" || (kind === "hip" && !wall && face.top === "ridge")) ? face.vTopIn / 12 : (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
       else if (kind === "gable") {
         // A gable end: the rakes bear on nothing; the king post does, when the ridge is a beam.
         const runFt = faceSpecs[0].runIn / 12;
         if (ridge?.kind === "beam") {
-          const P = totalPsf * runFt * (ridgeSpanIn / 12) * 0.5;
+          const P = totalPsf * runFt * (ridgeSpanIn / (gableCross + 1) / 12) * 0.5;
           kingP = P;
           const wEq = (2 * P) / Math.max(1, lengthIn / 12);
           tribFt = wEq / totalPsf;
@@ -1265,7 +1335,52 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       let maxSpanIn = pick.maxSpanIn;
       let eqHeader = eqUsed;
       const keep = keepOutAlong(A, B, lengthIn);
-      if (keep.length && inner.some((at) => inKeep(keep, at))) {
+      // POSTS UNDER THE CROSS BEAMS (2026-10-12): a post stands where each cross beam lands on this header, and the header
+      // spans between them — with more posts between where that is cheaper, or where a span is past every header.
+      const forced = crossPlan
+        .flatMap((c) => [c.A, c.B])
+        .map((Q) => {
+          const d = sub(Q, A);
+          const along = d.x * u.x + d.y * u.y;
+          const off = Math.abs(-d.x * u.y + d.y * u.x);
+          return off < 0.5 && along > pw && along < lengthIn - pw ? along : NaN;
+        })
+        .filter((v) => Number.isFinite(v))
+        .sort((a, b) => a - b);
+      if (forced.length) {
+        const perFtF = (sp: BeamSpec) => sp.plies * (sp.kind === "lvl" ? sp.depthIn * price("lf.lvl") : price(lumberKey(sp.stock)));
+        const minS = minSegs.get(`h${k + 1}`) ?? 1;
+        const wOwn = tribFt * totalPsf;
+        let best: { inner: number[]; spec: BeamSpec; maxSpanIn: number; eq: number; cost: number } | null = null;
+        for (let extra = 0; extra <= Math.max(4, minS); extra++) {
+          const cuts = [0, ...forced, lengthIn];
+          for (let e = 0; e < extra; e++) {
+            let wi = 0;
+            for (let i = 1; i + 1 < cuts.length; i++) if (cuts[i + 1] - cuts[i] > cuts[wi + 1] - cuts[wi]) wi = i;
+            let at = (cuts[wi] + cuts[wi + 1]) / 2;
+            const hit = keep.find(([k0, k1]) => at > k0 && at < k1);
+            if (hit) at = hit[0] > cuts[wi] + pw && at - hit[0] <= hit[1] - at ? hit[0] : hit[1] < cuts[wi + 1] - pw ? hit[1] : hit[0] > cuts[wi] + pw ? hit[0] : NaN;
+            if (!Number.isFinite(at)) break;
+            cuts.splice(wi + 1, 0, at);
+          }
+          if (cuts.length - 1 < minS) continue;
+          const spans = cuts.slice(1).map((v, i) => v - cuts[i]);
+          const sized = headerForSpans(spans, spans.map(() => wOwn));
+          if (!sized) continue;
+          const cost = (lengthIn / 12) * perFtF(sized.spec) + (cuts.length - 2) * postSetCost;
+          if (!best || cost < best.cost - 0.005) best = { inner: cuts.slice(1, -1), ...sized, cost };
+        }
+        if (best) {
+          inner = best.inner;
+          spec = best.spec;
+          maxSpanIn = best.maxSpanIn;
+          eqHeader = best.eq;
+        } else {
+          inner = forced;
+          maxSpanIn = 0;
+        }
+        for (const at of forced) if (inKeep(keep, at)) stuckPosts.push({ x: A.x + u.x * at, y: A.y + u.y * at });
+      } else if (keep.length && inner.some((at) => inKeep(keep, at))) {
         // The cheapest that works, as pickHeader weighs it — the header's lumber against another post — over a few
         // layings; past those, the first that works at all.
         const perFt = (sp: BeamSpec) => sp.plies * (sp.kind === "lvl" ? sp.depthIn * price("lf.lvl") : price(lumberKey(sp.stock)));
@@ -1294,6 +1409,22 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       const spanIn = postAt.slice(1).reduce((m, v, i) => Math.max(m, v - postAt[i]), 0);
       headers.push({ id, x0: A.x, y0: A.y, x1: B.x, y1: B.y, lengthIn, spec, postAt, spanIn, eqJoistSpanFt: eqHeader, maxSpanIn, kingPost: king, wallEnd });
     }
+    // THE CROSS BEAMS (2026-10-12): one span each, eave header to eave header, hung on them over the posts under their
+    // ends; the king post's load at the middle read as the even load that bends it as much (2P/L) — sawn from the deck
+    // beam table where one reaches, else an LVL.
+    crossPlan.forEach((c, i) => {
+      const L = len(sub(c.B, c.A));
+      const wEq = (2 * c.P) / Math.max(1, L / 12);
+      const sized = headerForSpans([L], [wEq]);
+      const id = `x${i + 1}`;
+      headerLoad.set(id, { w: 0, P: c.P });
+      if (!sized) {
+        headerBeyond.push(id);
+        engineeredBeyond = true;
+      }
+      const spec: BeamSpec = sized?.spec ?? { size: "3-ply LVL 1¾×18", kind: "lvl", plies: 3, thickIn: 5.25, depthIn: 18, stock: "LVL1.75x18" };
+      headers.push({ id, x0: c.A.x, y0: c.A.y, x1: c.B.x, y1: c.B.y, lengthIn: L, spec, postAt: [0, L], spanIn: L, eqJoistSpanFt: sized?.eq ?? 0, maxSpanIn: sized?.maxSpanIn ?? 0, kingPost: true, wallEnd: false, cross: true });
+    });
     if (pergola && pergolaBays > 1) {
       for (let k = 1; k < pergolaBays; k++) {
         const yk = y0 + ((y1 - y0) * k) / pergolaBays;
@@ -1383,7 +1514,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       layHeaders();
     }
   }
-  const headerDepth = headers.length ? Math.max(...headers.map((h) => h.spec.depthIn)) : 9.25;
+  const ringHeaders = headers.filter((h) => !h.cross);
+  const headerDepth = ringHeaders.length ? Math.max(...ringHeaders.map((h) => h.spec.depthIn)) : 9.25;
   const headerTopIn = headerBottomIn + headerDepth;
   for (const h of headers) headerTopOf.set(h.id, headerTopIn);
 
@@ -1394,6 +1526,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   /** The headers that bear on a point: the ones that end there, or run over it between their ends. */
   const headersAt = (x: number, y: number) =>
     headers.filter((h) => {
+      // A cross beam hangs on the headers: a post under its end carries the header.
+      if (h.cross) return false;
       if ((Math.abs(h.x0 - x) < 0.5 && Math.abs(h.y0 - y) < 0.5) || (Math.abs(h.x1 - x) < 0.5 && Math.abs(h.y1 - y) < 0.5)) return true;
       const L = h.lengthIn || 1;
       const t = ((x - h.x0) * (h.x1 - h.x0) + (y - h.y0) * (h.y1 - h.y0)) / (L * L);
@@ -1470,8 +1604,10 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   headers.forEach((h, hi) => {
     const u = unit({ x: h.x1 - h.x0, y: h.y1 - h.y0 });
     const yaw = Math.atan2(u.y, u.x);
-    const ext0 = h.wallEnd && Math.abs(h.y0 - y0) < 0.01 ? 0 : pw / 2;
-    const ext1 = h.wallEnd && Math.abs(h.y1 - y0) < 0.01 ? 0 : pw / 2;
+    // A cross beam is drawn between the eave headers' inside faces.
+    const ringThick = Math.max(0, ...ringHeaders.map((g) => g.spec.thickIn));
+    const ext0 = h.cross ? -ringThick / 2 : h.wallEnd && Math.abs(h.y0 - y0) < 0.01 ? 0 : pw / 2;
+    const ext1 = h.cross ? -ringThick / 2 : h.wallEnd && Math.abs(h.y1 - y0) < 0.01 ? 0 : pw / 2;
     const ax = h.x0 - u.x * ext0;
     const ay = h.y0 - u.y * ext0;
     const bx = h.x1 + u.x * ext1;
@@ -1874,10 +2010,12 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       if (ridgeSupports === "king-king") {
         kingAt(inset(ridgeFrom, 1));
         kingAt(inset(ridgeTo, -1));
-      } else kingAt(inset(ridgeTo, -1));
+      } else if (ridgeSupports === "wall-king") kingAt(inset(ridgeTo, -1));
+      // One on each cross beam, right under the ridge (2026-10-12).
+      for (const cb of crossPlan) kingAt({ x: (cb.A.x + cb.B.x) / 2, y: (cb.A.y + cb.B.y) / 2 });
     }
     if (ties > 0) {
-      const across = kind === "gable" && Math.abs(Math.sin(yaw)) > 0.5 ? x1 - x0 : y1 - y0;
+      const across = Math.abs(Math.sin(yaw)) > 0.5 ? x1 - x0 : y1 - y0;
       const tieYaw = yaw + halfPi;
       for (let k = 0; k < ties; k++) {
         const t = ties === 1 ? 0.5 : k / (ties - 1);
@@ -1890,6 +2028,25 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
         const run = across - 2 * tuck;
         members.push({ role: "tie", nominal: "2x6", lengthIn: Math.round(run), cx: Math.abs(Math.sin(yaw)) > 0.5 ? (x0 + x1) / 2 : px, cy: Math.abs(Math.sin(yaw)) > 0.5 ? py : (y0 + y1) / 2, cz: headerTopIn + 2.75, sx: run, sy: THICK_2X_IN, sz: 5.5, yaw: tieYaw, tilt: 0, x0: px, y0: py, x1: px, y1: py });
       }
+    }
+  }
+
+  // A FREE HIP'S END TIES (2026-10-12): the common from each end header's middle up to the ridge's end pushes that header
+  // out; a 2x6 runs under it from there back to the first rafter tie, side-nailed to the common like any rafter tie.
+  if (hipEndTies > 0 && ridgeFrom && ridgeTo) {
+    const alongXr = Math.abs(ridgeTo.x - ridgeFrom.x) >= Math.abs(ridgeTo.y - ridgeFrom.y);
+    const ends: Array<[V2, V2]> = alongXr
+      ? [[{ x: x0, y: ridgeFrom.y }, ridgeFrom], [{ x: x1, y: ridgeTo.y }, ridgeTo]]
+      : [[{ x: ridgeFrom.x, y: y0 }, ridgeFrom], [{ x: ridgeTo.x, y: y1 }, ridgeTo]];
+    for (const [E, Rn] of ends) {
+      const full = len(sub(Rn, E));
+      const dir = unit(sub(Rn, E));
+      const tuck = Math.min(full / 3, (5.5 - heel) / Math.max(slope, 0.08) + 2.5);
+      const S = { x: E.x + dir.x * tuck, y: E.y + dir.y * tuck };
+      const T = { x: Rn.x - dir.x * (THICK_2X_IN / 2), y: Rn.y - dir.y * (THICK_2X_IN / 2) };
+      const L = len(sub(T, S));
+      if (L < 12) continue;
+      members.push({ role: "tie", nominal: "2x6", lengthIn: Math.round(L), cx: (S.x + T.x) / 2, cy: (S.y + T.y) / 2, cz: headerTopIn + 2.75, sx: L, sy: THICK_2X_IN, sz: 5.5, yaw: Math.atan2(dir.y, dir.x), tilt: 0, x0: S.x, y0: S.y, x1: T.x, y1: T.y });
     }
   }
 
@@ -2173,6 +2330,14 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     planes.push({ kind: "slab", ring: [x0 - SLAB_APRON_IN, y0 - SLAB_APRON_IN, SLAB_TOP_IN, x1 + SLAB_APRON_IN, y0 - SLAB_APRON_IN, SLAB_TOP_IN, x1 + SLAB_APRON_IN, y1 + SLAB_APRON_IN, SLAB_TOP_IN, x0 - SLAB_APRON_IN, y1 + SLAB_APRON_IN, SLAB_TOP_IN] });
   }
 
+  // THE RING IN TENSION (2026-10-12): hips with nothing under their tops lean on one another and push the corners out; the
+  // headers hold them as a ring, so every header joint gets a tension strap. A hip's top carries 2W/3 of the jacks on it
+  // (a load rising toward the top); along a hip of slope s·cos a that thrusts out H = (2W/3)/(s·cos a) at its corner, and
+  // the two headers meeting there share it as T = H/(2 sin a) — a = 45° on a rectangle, 180°/n on an n-sided ring. A hip
+  // on a ridge beam held up by king posts, or on the house wall, pushes nothing out.
+  const thrusting = !!hipDesign && slope > 0 && !wall && (kind === "pyramid" || kind === "double-tier" || kind === "dutch-gable" || (kind === "hip" && !(ridge?.kind === "beam" && crossPlan.length > 0)));
+  const ringAngle = regular ? Math.PI / n : Math.PI / 4;
+  const ringTensionLb = thrusting && hipDesign ? Math.round((2 * hipDesign.loadLb) / 3 / (slope * Math.cos(ringAngle)) / (2 * Math.sin(ringAngle))) : 0;
   const rafterCount = commons + jacks + flies;
   const hardware = {
     // A truss is tied down at both bearings; the rake's fly rafters sit on outlookers.
@@ -2187,6 +2352,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     kingBrackets: kingPosts + (ridgeSupports === "wall-king" ? 1 : 0),
     wallHangers: wall && kind === "gable" ? 2 : 0,
     gussets: kind === "gambrel" ? breakTies * 2 : 0,
+    cornerStraps: ringTensionLb > 0 ? ringHeaders.length : 0,
+    crossHangers: 2 * crossPlan.length,
   };
 
   return {
@@ -2224,6 +2391,9 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     hips: { count: hipCount, nominal: hipDesign ? hipDesign.nominal : hipNominal, totalIn: hipTotal, spanIn: hipDesign?.spanIn, loadLb: hipDesign?.loadLb, kind: hipDesign?.kind, beyond: hipDesign?.beyond },
     kingPosts,
     ties,
+    crossBeams: crossPlan.length,
+    hipEndTies: hipEndTies > 0 ? members.filter((m) => m.role === "tie").length - ties : 0,
+    ringTensionLb,
     ridgeAcrossIn,
     trusses,
     slats,

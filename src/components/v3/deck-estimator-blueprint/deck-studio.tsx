@@ -2171,8 +2171,22 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </Field>
                 {r.kind === "gable" || r.kind === "hip" || r.kind === "gambrel" ? (
                   <Field label="At the ridge" aside={r.ridge === "auto" ? (roof.trusses ? "picked: trusses" : roof.ridge ? `picked: ${roof.ridge.kind === "beam" ? "ridge beam" : "ridge board"}` : undefined) : undefined} wide>
-                    <Seg small label="At the ridge" value={r.ridge} onChange={(v) => rp({ ridge: v })} options={[{ value: "auto", label: "Auto" }, { value: "beam", label: "Ridge beam", title: "The rafters bear on a beam; the ceiling stays open" }, { value: "board", label: "Ridge board + ties", title: "A board between the rafters, with rafter ties every 4 ft" }, ...(r.kind === "gable" ? [{ value: "trusses" as const, label: "Trusses", title: "Manufactured trusses 24 in. on center, one piece header to header — designed and stamped by the truss maker" }] : [])]} />
+                    <Seg small label="At the ridge" value={r.ridge} onChange={(v) => rp({ ridge: v })} options={[{ value: "auto", label: "Auto" }, { value: "beam", label: "Ridge beam", title: r.kind === "hip" ? "A beam on two king posts, each standing on a cross beam from eave header to eave header; the ceiling stays open" : "The rafters bear on a beam; the ceiling stays open" }, { value: "board", label: "Ridge board + ties", title: "A board between the rafters, with rafter ties every 4 ft" }, ...(r.kind === "gable" ? [{ value: "trusses" as const, label: "Trusses", title: "Manufactured trusses 24 in. on center, one piece header to header — designed and stamped by the truss maker" }] : [])]} />
                   </Field>
+                ) : null}
+                {/* CROSS BEAMS (2026-10-12, owner: "selections of beams for cross roof beams and supports"): under a gable's
+                    ridge beam, each from eave header to eave header with a king post under the ridge — the ridge spans
+                    shorter, and a post stands under each end. A free hip's ridge beam always stands on two. */}
+                {roof.kind === "gable" && roof.ridge?.kind === "beam" && !roof.trusses ? (
+                  <Field label="Cross beams under the ridge" aside={roof.crossBeams ? `the ridge spans ${ftIn(roof.ridge.spanIn)} between king posts` : "the ridge spans end to end"} wide>
+                    <Seg small label="Cross beams under the ridge" value={r.crossBeams} onChange={(v) => rp({ crossBeams: v })} options={[0, 1, 2, 3].map((v) => ({ value: v, label: v === 0 ? "None" : String(v), title: v === 0 ? "The ridge beam spans from one end to the other on king posts" : `${v} cross beam${v > 1 ? "s" : ""} from eave to eave, each with a king post under the ridge and a post under each end` }))} />
+                  </Field>
+                ) : null}
+                {roof.kind === "hip" && roof.attach === "free" && roof.ridge?.kind === "beam" ? (
+                  <p className={s.hint} data-deck-hip-cross>The ridge beam stands on two king posts, each on a cross beam from eave header to eave header, with a post under each end of the cross beams. Nothing pushes the headers apart, so no ties.</p>
+                ) : null}
+                {roof.ringTensionLb > 0 ? (
+                  <p className={s.hint} data-deck-ring>The hips push the corners out — about {roof.ringTensionLb.toLocaleString("en-US")} lb at each header joint. A tension strap across every joint holds the headers as a ring; they are in the material list.</p>
                 ) : null}
                 {design.structure === "pergola" && r.pergolaStyle !== "louvered" ? (
                   <div className={s.grid2}>
