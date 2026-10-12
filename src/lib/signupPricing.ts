@@ -155,8 +155,8 @@ export async function resolveSignupDiscount(opts: {
             })
           : null;
         if (coupon) return { coupon };
-        // No percent to scale: no discount rather than the percent off a whole year.
-        console.warn(`[${opts.where}] promo ${v.code}: no percent known — not applied to a yearly bill`);
+        // Never the percent off a whole year: without its one-month coupon the code is not applied.
+        console.warn(`[${opts.where}] promo ${v.code}: ${pct ? "the yearly coupon could not be made" : "no percent known"} — not applied to a yearly bill`);
         return null;
       }
       if (promotionCode) return { promotion_code: promotionCode };

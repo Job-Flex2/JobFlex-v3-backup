@@ -41,10 +41,8 @@ export async function ensureYearFirstMonthCoupon(
     currency: "usd",
     duration: "repeating",
     duration_in_months: o.months,
-    name:
-      o.kind === "promo"
-        ? `${o.code ?? "Partner code"} — ${o.pct}% of one month off the first year`
-        : `JobFlex referral — ${o.pct}% of one month off the first year`,
+    // Stripe caps a coupon's name at 40 characters; it is what the invoice prints.
+    name: (o.kind === "promo" ? `${o.code ?? "Partner code"} · ${o.pct}% of a month` : `JobFlex referral · ${o.pct}% of a month`).slice(0, 40),
     metadata: {
       jfKind: o.kind === "promo" ? "promo-year" : "referral",
       pct: String(o.pct),
