@@ -238,19 +238,7 @@ body:has(.jf-mobile-auth-login)::before { content: none; }
   min-height: 44px;
   margin-bottom: clamp(20px, 4vh, 34px);
 }
-.jf-mobile-auth-login .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 2px solid var(--paper);
-  border-radius: var(--radius);
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 17px;
-  font-weight: 900;
-  line-height: 1;
-}
+.jf-mobile-auth-login .jf-pmark { --pmark-h: 36px; }
 .jf-mobile-auth-login .brand-name {
   font-size: 19px;
   font-weight: 900;

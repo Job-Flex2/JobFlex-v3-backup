@@ -72,7 +72,7 @@ export function PricingPage({
             <div className="border-t border-slate-900/10 pt-[6vmin]">
               {sellable.length > 0 ? (
                 <Reveal className="pr-plans">
-                  <PricingPlans plans={sellable} registerHref={REGISTER} />
+                  <PricingPlans plans={sellable} registerHref={REGISTER} customOffered={customOffered} />
                 </Reveal>
               ) : (
                 <p className="py-12 text-center text-[15px] text-slate-500">

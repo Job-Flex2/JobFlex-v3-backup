@@ -119,12 +119,7 @@
     padding: 48px 56px; max-width: 620px; width: 100%; margin: 0 auto;
   }
   :global(.jf-auth-login) .brand { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 44px; }
-  :global(.jf-auth-login) .brand-mark {
-    width: 34px; height: 34px; display: grid; place-items: center;
-    border: var(--border); border-radius: var(--radius);
-    background: var(--ink); color: var(--paper);
-    font-size: 16px; font-weight: 900;
-  }
+  :global(.jf-auth-login) :global(.jf-pmark) { --pmark-h: 34px; }
   :global(.jf-auth-login) .brand-name { font-size: 19px; font-weight: 900; letter-spacing: -0.01em; }
   :global(.jf-auth-login) .auth-kicker { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
   :global(.jf-auth-login) .auth-kicker::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sky); }
@@ -276,7 +271,7 @@
     max-height: 100dvh; overflow: hidden;
   }
   :global(.jf-auth-login) .brand { margin-bottom: clamp(10px, 2.6vh, 40px); }
-  :global(.jf-auth-login) .brand-mark { width: clamp(28px, 3.6vh, 34px); height: clamp(28px, 3.6vh, 34px); }
+  :global(.jf-auth-login) :global(.jf-pmark) { --pmark-h: clamp(28px, 3.6vh, 34px); }
   :global(.jf-auth-login) .auth-kicker { margin-bottom: clamp(6px, 1.2vh, 12px); }
   :global(.jf-auth-login) .auth-h1 { font-size: clamp(25px, 3.7vh, 40px); }
   :global(.jf-auth-login) .auth-lede { margin-top: clamp(5px, 1.1vh, 12px); font-size: clamp(12.5px, 1.5vh, 14px); }
@@ -401,7 +396,7 @@
   position: absolute; top: clamp(22px, 4vh, 40px); left: 64px; margin: 0;
 }
 :global(.jf-auth-login) .brand { gap: 10px; }
-:global(.jf-auth-login) .brand-mark { width: 32px; height: 32px; font-size: 15px; }
+:global(.jf-auth-login) :global(.jf-pmark) { --pmark-h: 32px; }
 :global(.jf-auth-login) .brand-name { font-size: 18px; }
 :global(.jf-auth-login) .auth-body { width: 100%; }
 

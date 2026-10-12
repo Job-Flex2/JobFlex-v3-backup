@@ -99,12 +99,7 @@
   padding: 48px 56px; max-width: 620px; width: 100%; margin: 0 auto;
 }
 .bp :global(.brand) { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 44px; }
-.bp :global(.brand-mark) {
-  width: 34px; height: 34px; display: grid; place-items: center;
-  border: var(--border); border-radius: var(--radius);
-  background: var(--ink); color: var(--paper);
-  font-size: 16px; font-weight: 900;
-}
+.bp :global(.jf-pmark) { --pmark-h: 34px; }
 .bp :global(.brand-name) { font-size: 19px; font-weight: 900; letter-spacing: -0.01em; }
 .bp :global(.auth-kicker) { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .bp :global(.auth-kicker)::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sky); }
@@ -269,7 +264,7 @@
   max-height: 100dvh; overflow: hidden auto; overscroll-behavior: contain;
 }
 .bp :global(.brand) { margin-bottom: clamp(10px, 2.6vh, 40px); }
-.bp :global(.brand-mark) { width: clamp(28px, 3.6vh, 34px); height: clamp(28px, 3.6vh, 34px); }
+.bp :global(.jf-pmark) { --pmark-h: clamp(28px, 3.6vh, 34px); }
 .bp :global(.auth-kicker) { margin-bottom: clamp(6px, 1.2vh, 12px); }
 .bp :global(.auth-h1) { font-size: clamp(25px, 3.7vh, 40px); }
 .bp :global(.auth-lede) { margin-top: clamp(5px, 1.1vh, 12px); font-size: clamp(12.5px, 1.5vh, 14px); }
@@ -618,7 +613,7 @@
      clicked". Composed from three variables so every state states only
      what it changes. */
   --pw-cast: var(--ink);
-  --pw-off: 6px;
+  --pw-off: 3px;
   --pw-ring: 0 0 0 0 transparent;
   background: var(--sheet);
   box-shadow: var(--pw-ring), var(--pw-off) var(--pw-off) 0 var(--pw-cast);
@@ -627,7 +622,7 @@
 /* A lift under a real pointer only: a finger leaves :hover stuck on the card
    it last touched. */
 @media (hover: hover) and (pointer: fine) {
-  .bp :global(.pw-plan:hover) { transform: translate(-2px, -2px); --pw-off: 8px; }
+  .bp :global(.pw-plan:hover) { transform: translate(-1px, -1px); --pw-off: 4px; }
 }
 /* SELECTED: a blue frame, 4px deep — the 2px border plus an inset ring, so
    no row of the comparison moves. The card that was clicked last is the one
@@ -936,7 +931,7 @@
   position: absolute; top: clamp(22px, 4vh, 40px); left: 64px; margin: 0;
 }
 .bp :global(.brand) { gap: 10px; }
-.bp :global(.brand-mark) { width: 32px; height: 32px; font-size: 15px; }
+.bp :global(.jf-pmark) { --pmark-h: 32px; }
 .bp :global(.brand-name) { font-size: 18px; }
 .bp :global(.auth-body) { width: 100%; }
 
@@ -1263,12 +1258,12 @@
     padding: 16px 16px 14px;
     transition: none;
     /* A 4px offset on a phone, as the landing's plan cards (2026-09-26). */
-    --pw-off: 4px;
+    --pw-off: 3px;
   }
   /* No lift inside the carousel — and the card keeps its offset: this used to
      be `box-shadow: none`, which a finger's stuck :hover turned into a card
      with no shadow. Selection is the blue frame here too (2026-09-26). */
-  .bp :global(.pw-plan:hover) { transform: none; --pw-off: 4px; }
+  .bp :global(.pw-plan:hover) { transform: none; --pw-off: 3px; }
   .bp :global(.pw-feats) {
     flex: 0 1 auto; overflow: hidden !important; overscroll-behavior: auto;
     max-height: 250px; margin-bottom: 4px;
@@ -1580,4 +1575,85 @@
   }
   .bp :global(.pw-plan) { flex: none; }
   .bp :global(.pw-feats) { overflow: visible !important; max-height: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   THE PLAN STEP FITS THE SCREEN ON A DESK — owner, 2026-10-12.
+   From 1101px wide the whole step — brand and steps, the head, every card
+   with every row and its button, the code and the terms — stands in the
+   window without a scroll from 800px tall; between 700 and 800 it closes
+   up on clamp(…vh); under 700 the sheet scrolls, nothing is cut and no
+   card scrolls inside. The cards: as many columns as there are cards
+   (`--pw-cols`, written on #stepPlan by register-content), each at most
+   360px, the row centred; the head and the foot take the row's width so
+   they line up with it. A phone and a tablet keep the layout above.
+   Last in the file so it outranks the blocks above at equal specificity.
+   ══════════════════════════════════════════════════════════════════════ */
+@media (min-width: 1101px) {
+  /* brand and steps on one line, the step under them */
+  .bp :global(.plan-sheet-in) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    align-content: start;
+    column-gap: clamp(28px, 4vw, 72px);
+    padding: clamp(12px, 2.2vh, 28px) 48px clamp(10px, 1.8vh, 24px);
+  }
+  .bp :global(.plan-sheet .brand) { margin: 0; }
+  .bp :global(.plan-sheet .stepper) { margin: 0; }
+  .bp :global(.plan-sheet) :global(#stepPlan) {
+    grid-column: 1 / -1;
+    width: min(100%, calc(var(--pw-cols, 3) * 360px + (var(--pw-cols, 3) - 1) * 14px));
+    margin: clamp(14px, 3vh, 36px) auto 0;
+    padding-bottom: 0;
+    gap: clamp(8px, 1.4vh, 16px);
+  }
+
+  /* the head: the question left, the trial's stamp and the switch right */
+  .bp :global(.pw-head),
+  .bp :global(.pw-head:has(.pw-trial)) {
+    flex-direction: row; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px 24px;
+  }
+  .bp :global(.pw-head-r) { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px 14px; }
+  .bp :global(#stepPlan) :global(.auth-h1) { font-size: clamp(26px, 3.9vh, 40px); }
+  .bp :global(.pw-trial) { font-size: 13px; letter-spacing: 0.05em; padding: 9px 12px; }
+
+  /* the cards */
+  .bp :global(.pw-plans) {
+    grid-template-columns: repeat(var(--pw-cols, 3), minmax(0, 360px));
+    justify-content: center;
+    gap: 14px;
+    padding-top: 12px;
+  }
+  .bp :global(.pw-plan) {
+    padding: clamp(10px, 1.7vh, 18px) clamp(14px, 1.2vw, 18px) clamp(10px, 1.6vh, 16px);
+    row-gap: clamp(3px, 0.7vh, 8px);
+  }
+  .bp :global(.pw-price) { font-size: clamp(28px, 4vh, 40px); }
+  .bp :global(.pw-when) { margin-top: 0; font-size: 13px; line-height: 1.3; }
+  .bp :global(.pw-plan) :global(.jf-deal) { margin-top: 0; }
+  .bp :global(.pw-f) { padding: clamp(2px, 0.42vh, 6px) 0; gap: 8px; font-size: 13px; line-height: 1.25; }
+  .bp :global(.pw-plan) :global(.pw-go.pw-go) { min-height: clamp(36px, 4.6vh, 42px); }
+  .bp :global(.pw-plan) :global(.pw-edit) { min-height: clamp(34px, 4.2vh, 42px); }
+
+  /* the code and the terms, one row */
+  .bp :global(.pw-bottom) { display: flex; align-items: flex-start; gap: 10px 28px; }
+  .bp :global(.pw-bottom-l) { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
+  .bp :global(.pw-promo) { flex: 0 0 auto; width: 340px; min-width: 0; }
+  .bp :global(.pw-promo-in) { height: clamp(38px, 4.8vh, 46px); }
+  .bp :global(.pw-promo-ok) { margin-top: 0; }
+  .bp :global(.pw-terms) { flex: 1 1 auto; margin: 0; max-width: none; font-size: 12.5px; line-height: 1.45; }
+}
+/* A tablet and a phone keep their layout: the two wrappers step aside. */
+@media (max-width: 1100px) {
+  .bp :global(.pw-bottom), .bp :global(.pw-bottom-l) { display: contents; }
+}
+@media (max-width: 768px) {
+  .bp :global(.pw-head-r) { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+  .bp :global(.pw-termsw) { margin: 0; }
+  .bp :global(.pw-bottom-l) > :global(.err) { margin-left: 18px; margin-right: 18px; }
+}
+@media (min-width: 769px) and (max-width: 1100px) {
+  .bp :global(.pw-head-r) { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 14px; }
 }

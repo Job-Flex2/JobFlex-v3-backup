@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { expandPlanFeatures, formatPlanPrice, type PlanDTO } from "@/lib/planCatalog";
 import { annualDeal, offersYearly, planTerm, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
 import { PlanDealSlot, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
+import { CUSTOM_BASE_CENTS, CUSTOM_BASE_FEATURES, CUSTOM_PAGE_CENTS, CUSTOM_PLAN_SLUG, customPriceCents } from "@/lib/customPlan";
 import "./pricing-faq.css";
 
 /* THE REGISTER'S PLAN CARDS ON THE LANDING (owner, 2026-09-26). A port of
@@ -29,13 +30,26 @@ import "./pricing-faq.css";
    keeps its month and says "Billed monthly". The choice rides the start
    link as ?billing=annual, so the signup plan step opens on it. Every card
    lists every row — nothing folds — and the cards are one subgrid, so the
-   prices and the first rows stand on one line across the row. */
+   prices and the first rows stand on one line across the row.
+
+   THE CUSTOM PLAN IN THE ROW (owner, 2026-10-12): while it is on sale
+   (`customOffered`, lib/customPlanFlag read on the server) a fourth card,
+   "Custom", prices the base on the switch's term — a year is
+   CUSTOM_YEAR_MULTIPLIER months (lib/customPlan) — so the row of four
+   follows the switch like the register's and the upgrade page's. */
 const PHONE = "(max-width: 768px)";
 
 function Check() {
   return (
     <svg className="lp-pw-ic" viewBox="0 0 24 24" aria-hidden>
       <path d="M4 12.5l5 5L20 6.5" />
+    </svg>
+  );
+}
+function Plus() {
+  return (
+    <svg className="lp-pw-ic" viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
@@ -51,9 +65,12 @@ export function PricingPlans({
   plans,
   registerHref,
   tone = "paper",
+  customOffered = false,
 }: {
   plans: PlanDTO[];
   registerHref: string;
+  /** CUSTOM_PLAN_ENABLED: the "Custom" card at the end of the row. */
+  customOffered?: boolean;
   /** "ink" on the landing's dark pricing band — the switch's colours. */
   tone?: "paper" | "ink";
 }) {
@@ -65,7 +82,13 @@ export function PricingPlans({
   const [active, setActive] = useState(heroIndex);
   const [term, setTerm] = useState<BillingTerm>("MONTH");
   const yearly = offersYearly(plans);
-  const tag = sharedDealWords(plans.filter((p) => p.yearlyPriceCents).map((p) => annualDeal(p.priceCents, p.yearlyPriceCents)));
+  const baseMonth = customPriceCents([]);
+  const baseYear = customPriceCents([], "YEAR");
+  const tag = sharedDealWords([
+    ...plans.filter((p) => p.yearlyPriceCents).map((p) => annualDeal(p.priceCents, p.yearlyPriceCents)),
+    ...(customOffered ? [annualDeal(baseMonth, baseYear)] : []),
+  ]);
+  const dots = [...plans.map((p) => ({ slug: p.slug, name: p.name })), ...(customOffered ? [{ slug: CUSTOM_PLAN_SLUG, name: "Custom" }] : [])];
   const startHref = withBillingTerm(registerHref, yearly ? term : "MONTH");
 
   /* The rail is `position: relative` (pricing-faq.css), so a card's
@@ -202,10 +225,42 @@ export function PricingPlans({
             </article>
           );
         })}
+        {customOffered ? (
+          <article
+            className="lp-pw-plan lp-pw-plan--custom"
+            data-plan-card={CUSTOM_PLAN_SLUG}
+            data-monthly-cents={baseMonth}
+            data-yearly-cents={baseYear}
+          >
+            <h3 className="lp-pw-plan-n">Custom</h3>
+            <p className="lp-pw-price" data-plan-price>
+              {formatPlanPrice(term === "YEAR" ? baseYear : baseMonth)}
+              <i>{term === "YEAR" ? "/yr" : "/mo"}</i>
+            </p>
+            <PlanDealSlot term={term} monthlyCents={baseMonth} yearlyCents={baseYear} />
+            <ul className="lp-pw-feats" data-plan-feats>
+              {CUSTOM_BASE_FEATURES.map((f) => (
+                <li key={f} className="lp-pw-f">
+                  <Check />
+                  <span className="sr-only">Included: </span>
+                  {f}
+                </li>
+              ))}
+              <li className="lp-pw-f lp-pw-f--add">
+                <Plus />
+                Add only the pages you use · {formatPlanPrice(CUSTOM_PAGE_CENTS)}/mo each, on a {formatPlanPrice(CUSTOM_BASE_CENTS)}/mo base
+              </li>
+            </ul>
+            <a href={startHref} className="lp-pw-go" data-cta="pricing-custom-card">
+              Start {days}-day free trial
+              <span className="sr-only"> on the Custom plan</span>
+            </a>
+          </article>
+        ) : null}
       </div>
-      {plans.length > 1 ? (
+      {dots.length > 1 ? (
         <div className="lp-pw-dots">
-          {plans.map((p, i) => (
+          {dots.map((p, i) => (
             <button
               key={p.slug}
               type="button"

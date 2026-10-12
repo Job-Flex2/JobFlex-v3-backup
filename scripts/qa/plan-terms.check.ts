@@ -10,7 +10,13 @@
 //     one line — in Monthly or in Annual — or a card changes height on the switch;
 //   · the page scrolls sideways, or a card's content is wider than the card;
 //   · the switch is not a radio group the arrow keys drive, or a half is under 44px on a phone;
-//   · the landing's Annual does not carry into the signup plan step.
+//   · the landing's Annual does not carry into the signup plan step;
+//   · (2026-10-12) on a desk — 1280×800, 1440×900, 1536×864, 1920×1080 — the plan step scrolls,
+//     a card's list scrolls inside it, or a card's start button is not wholly in the window;
+//     the row of cards is not centred (three cards, and four with CUSTOM_PLAN_ENABLED=true on
+//     a second server, where the Custom card must be in the row on the plan step, /pricing,
+//     the landing and /dashboard/upgrade); a plan card's hard offset is not 3px; a sign-in page
+//     still draws the old "J" square (.brand-mark) instead of the product mark (.jf-pmark).
 // Pure half: lib/planDeal (months free in whole months only, never a percentage).
 // The plan step is reached the way signup-flow.check.ts reaches it (its own made-up IP, mail
 // keys blank, its pending signups and brake rows removed after). The upgrade page signs in
@@ -25,7 +31,7 @@ import { ensureBuild, playwright, startServer, stopServer } from "./_prod-server
 import { annualDeal, dealWords, savedWords, sharedDealWords, planTerm } from "../../src/lib/planDeal";
 
 const PORT = Number(process.env.QA_TERMS_PORT || 3314);
-const BASE = (process.env.QA_TERMS_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
+let BASE = (process.env.QA_TERMS_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
 process.env.QA_BASE_URL = BASE; // ./_qa reads it once, on load
 const req = createRequire(__filename);
 const WIDTHS = [360, 390, 430, 768, 1024, 1440];
@@ -174,8 +180,8 @@ async function visit(browser: any, width: number) {
   return ctx;
 }
 
-async function marketing(browser: any) {
-  for (const width of WIDTHS) {
+async function marketing(browser: any, widths = WIDTHS, cards = 3) {
+  for (const width of widths) {
     const ctx = await visit(browser, width);
     const page = await ctx.newPage();
     try {
@@ -185,6 +191,12 @@ async function marketing(browser: any) {
         await page.locator(`${scope} [data-plan-card]`).first().scrollIntoViewIfNeeded();
         await page.waitForTimeout(1200);
         await surface(page, `${path} @${width}`, scope, width <= 768, width === 1440);
+        const n = await page.locator(`${scope} [data-plan-card]`).count();
+        check(`${path} @${width}: ${cards} cards in the row`, n === cards, `${n}`);
+        if (width === 1440) {
+          const sh = await page.locator(`${scope} [data-plan-card]:not(.lp-pw-plan--hero)`).first().evaluate((el: HTMLElement) => getComputedStyle(el).boxShadow);
+          check(`${path} @${width}: a card's hard offset is 3px`, /3px 3px 0px/.test(sh), sh);
+        }
       }
     } catch (e) {
       check(`marketing @${width}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
@@ -194,8 +206,48 @@ async function marketing(browser: any) {
   }
 }
 
+const DESKS: [number, number][] = [[1280, 800], [1440, 900], [1536, 864], [1920, 1080]];
+
+/** The plan step on a desk: no scroll, no list scrolling, every start button in the window,
+ *  the row centred, the 3px offset. Leaves the viewport at 1440×900. */
+async function fitDesk(page: any, name: string, scope: string, cards: number) {
+  for (const [w, h] of DESKS) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(600);
+    await page.mouse.move(1, 1);
+    await page.waitForTimeout(200);
+    const m = await page.evaluate((scope: string) => {
+      const sheet = document.querySelector(scope) as HTMLElement;
+      const list = Array.from(sheet.querySelectorAll<HTMLElement>("[data-plan-card]"));
+      const box = list.map((c) => c.getBoundingClientRect());
+      const go = list.map((c) => { const r = c.querySelector(".pw-go")!.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+      const sw = sheet.querySelector(".pw-plans")!.getBoundingClientRect();
+      return {
+        n: list.length,
+        sheet: sheet.scrollHeight - sheet.clientHeight,
+        page: document.scrollingElement!.scrollHeight - innerHeight,
+        inner: list.map((c) => { const f = c.querySelector<HTMLElement>("[data-plan-feats]")!; return f.scrollHeight - f.clientHeight; }),
+        goOut: go.filter((g) => g.top < 0 || g.bottom > innerHeight).length,
+        maxBottom: Math.round(Math.max(...go.map((g) => g.bottom))),
+        centre: Math.round(((Math.min(...box.map((r) => r.left)) + Math.max(...box.map((r) => r.right))) / 2 - (sw.left + sw.right) / 2) * 10) / 10,
+        pageCentre: Math.round(((Math.min(...box.map((r) => r.left)) + Math.max(...box.map((r) => r.right))) / 2 - innerWidth / 2) * 10) / 10,
+        shadow: getComputedStyle(list.find((c) => !c.classList.contains("pw-plan--hero")) || list[0]).boxShadow,
+      };
+    }, scope);
+    const at = `${name} @${w}×${h}`;
+    check(`${at}: ${cards} cards in the row`, m.n === cards, `${m.n}`);
+    check(`${at}: the step does not scroll`, m.sheet <= 0 && m.page <= 0, `sheet +${m.sheet}px, page +${m.page}px`);
+    check(`${at}: no list scrolls inside its card`, m.inner.every((x: number) => x <= 0), m.inner.join(" · "));
+    check(`${at}: every start button wholly in the window`, m.goOut === 0, `lowest button ends at ${m.maxBottom}px of ${h}`);
+    check(`${at}: the row is centred`, Math.abs(m.centre) <= 1 && Math.abs(m.pageCentre) <= 1, `${m.centre}px off its rail, ${m.pageCentre}px off the window`);
+    check(`${at}: a card's hard offset is 3px`, /3px 3px 0px/.test(m.shadow), m.shadow);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(400);
+}
+
 /** Landing on Annual → a card's start → step 1 → step 2 → the plan sheet opens on Annual. */
-async function planStep(browser: any, width: number, n: number) {
+async function planStep(browser: any, width: number, n: number, cards = 3) {
   const ctx = await visit(browser, width);
   const page = await ctx.newPage();
   const name = `signup plan step @${width}`;
@@ -236,11 +288,13 @@ async function planStep(browser: any, width: number, n: number) {
       await flip(page, name, scope, "MONTH", width <= 768, false);
     }
     await surface(page, name, scope, width <= 768, width === 1440);
+    if (cards === 4) check(`${name}: the Custom card is in the row`, (await page.locator(`${scope} [data-plan-card="custom"]`).count()) === 1);
+    if (width >= 1280) await fitDesk(page, name, scope, cards);
     // QA_TERMS_SHOTS=<dir>: the plan step on Annual, for a look by eye.
     if (process.env.QA_TERMS_SHOTS) {
       await page.locator(`${scope} .jf-term [data-term="YEAR"]`).first().click().catch(() => {});
       await page.waitForTimeout(400);
-      await page.locator(scope).screenshot({ path: `${process.env.QA_TERMS_SHOTS}/plan-step-${width}.png` }).catch(() => {});
+      await page.locator(scope).screenshot({ path: `${process.env.QA_TERMS_SHOTS}/plan-step-${width}-${cards}.png` }).catch(() => {});
     }
   } catch (e) {
     check(`${name}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
@@ -250,14 +304,19 @@ async function planStep(browser: any, width: number, n: number) {
 }
 
 /** /dashboard/upgrade as qa@acme.test: the desk build at 1024 / 1440, the phone build at ≤768. */
-async function upgrade(browser: any) {
-  const qa = req("./_qa.js");
-  const signer = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const sp = await signer.newPage();
-  await qa.signIn(sp);
-  const cookies = await signer.cookies();
-  await signer.close();
-  for (const width of WIDTHS) {
+let qaCookies: any[] | null = null;
+async function upgrade(browser: any, widths = WIDTHS, cards = 3) {
+  // One sign-in for the run (./_qa, on the first server): localhost's cookies hold on any port.
+  if (!qaCookies) {
+    const qa = req("./_qa.js");
+    const signer = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const sp = await signer.newPage();
+    await qa.signIn(sp);
+    qaCookies = await signer.cookies();
+    await signer.close();
+  }
+  const cookies = qaCookies;
+  for (const width of widths) {
     const ctx = await visit(browser, width);
     await ctx.addCookies(cookies);
     const page = await ctx.newPage();
@@ -266,8 +325,43 @@ async function upgrade(browser: any) {
       await page.locator("[data-plan-card]").first().waitFor({ timeout: 90000 });
       await page.waitForTimeout(2500);
       await surface(page, `/dashboard/upgrade @${width}`, "body", width <= 768, width === 1440);
+      const n = await page.locator("[data-plan-card]").count();
+      check(`/dashboard/upgrade @${width}: ${cards} cards`, n === cards, `${n}`);
+      if (width === 1440) {
+        const c = await page.evaluate(() => {
+          const list = Array.from(document.querySelectorAll<HTMLElement>("[data-plan-card]")).map((x) => x.getBoundingClientRect());
+          const rail = document.querySelector(".jf-up-plans")!.getBoundingClientRect();
+          return Math.round(((Math.min(...list.map((r) => r.left)) + Math.max(...list.map((r) => r.right))) / 2 - (rail.left + rail.right) / 2) * 10) / 10;
+        });
+        check(`/dashboard/upgrade @${width}: the row is centred`, Math.abs(c) <= 1, `${c}px`);
+      }
     } catch (e) {
       check(`/dashboard/upgrade @${width}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
+    } finally {
+      await ctx.close();
+    }
+  }
+}
+
+/** Every sign-in page draws the product mark, never the old "J" square. */
+async function authMarks(browser: any) {
+  const PAGES: [string, number][] = [["/auth/register", 1440], ["/auth/register", 390], ["/auth/login", 1440], ["/auth/login", 390], ["/auth/forgot", 1440], ["/auth/reset?token=qa-none", 1440], ["/auth/invite/qa-none", 1440], ["/w/qa-none", 390], ["/mobile-v1/auth/login", 390]];
+  for (const [path, width] of PAGES) {
+    const ctx = await visit(browser, width);
+    const page = await ctx.newPage();
+    try {
+      const res = await page.goto(BASE + path, { waitUntil: "load", timeout: 180000 });
+      await page.waitForTimeout(1500);
+      const m = await page.evaluate(() => ({
+        old: document.querySelectorAll(".brand-mark").length,
+        mark: Array.from(document.querySelectorAll<HTMLElement>(".jf-pmark")).filter((e) => e.getClientRects().length).map((e) => { const r = e.getBoundingClientRect(); const img = e.querySelector("img") as HTMLImageElement | null; return { h: Math.round(r.height), link: !!e.closest('a[href="/"]'), loaded: !!img && img.complete && img.naturalWidth > 0 }; }),
+      }));
+      const shown = m.mark.length > 0;
+      check(`${path} @${width}: no "J" square`, m.old === 0, `${m.old} .brand-mark (HTTP ${res?.status()})`);
+      if (shown) check(`${path} @${width}: the product mark, linked home, loaded`, m.mark.every((x: any) => x.link && x.loaded && x.h >= 25), JSON.stringify(m.mark));
+      else note(`${path} @${width}`, `no brand drawn in this state (HTTP ${res?.status()})`);
+    } catch (e) {
+      check(`${path} @${width}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
     } finally {
       await ctx.close();
     }
@@ -292,6 +386,18 @@ async function main() {
       await planStep(browser, 1440, 2);
       console.log("── /dashboard/upgrade");
       await upgrade(browser);
+      console.log("── the sign-in pages' mark");
+      await authMarks(browser);
+      // THE CUSTOM PLAN ON SALE: a second server with CUSTOM_PLAN_ENABLED=true (no .env edit).
+      if (!process.env.QA_TERMS_URL) {
+        console.log("── CUSTOM_PLAN_ENABLED=true");
+        stopServer(server);
+        server = await startServer(PORT + 1, { STRIPE_SECRET_KEY: "", RESEND_API_KEY: "", SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "", CUSTOM_PLAN_ENABLED: "true" }, "QA_TERMS_PORT");
+        BASE = `http://localhost:${PORT + 1}`;
+        await marketing(browser, [390, 1440], 4);
+        await planStep(browser, 1440, 3, 4);
+        await upgrade(browser, [390, 1440], 4);
+      }
     } finally {
       await browser.close();
     }

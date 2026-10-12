@@ -74,13 +74,20 @@ An existing hard ink hover treatment may be retained on interactive controls;
 do not give static cards decorative elevation. One owner-approved exception
 (2026-09-26): the subscription plan cards on the landing pricing section and
 on signup step 3 are white with a hard offset shadow, no blur: ink on every
-plan, blueprint blue on the "Most picked" one.
+plan, blueprint blue on the "Most picked" one. The offset is 3px, 4px under
+a pointer (owner, 2026-10-12), on every one of those cards.
 Plan cards, everywhere a customer sees them (owner, 2026-10-12): one
 Monthly | Annual switch over the row ([PlanTermSwitch](src/components/billing/PlanTermSwitch.tsx)),
-never per-card term buttons; on Annual a card shows the year's price, an
-"N months free" stamp only for whole months, and "You save $N" in `--emerald`
-— never a percentage or a struck price. Lists are always open (no "Show all"),
-and the cards of a row are one subgrid so prices and first rows align.
+never per-card term buttons. Under the price, ONE line of one height:
+"Billed monthly"; on Annual "2 months free · You save $90" (months only when
+whole, the saving in `--emerald`), "You save $N" alone, or "Billed yearly" —
+never a percentage or a struck price. Lists are always open (no "Show all"),
+the cards of a row are one subgrid so prices and first rows align, and the
+row has as many columns as cards, each capped, centred. On a desk the signup
+plan step fits the window from 800px tall without a scroll.
+The sign-in pages (register, login, forgot, reset, invite, worker invite,
+phone login) carry the real product mark ([ProductMark](src/components/brand/ProductMark.tsx),
+the sidebar's and the landing's `/jobflex-mark.png`), not a drawn "J" square.
 
 ## Typography
 

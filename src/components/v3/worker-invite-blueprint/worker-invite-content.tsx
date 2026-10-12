@@ -34,6 +34,7 @@ import { roleLabel } from "@/lib/prismaEnums";
 import { isRedirectError } from "@/lib/redirectError";
 import { WorkerInviteSprite } from "./worker-invite-sprite";
 import "./worker-invite.css";
+import { ProductMark } from "@/components/brand/ProductMark";
 
 interface WorkerInviteContentProps {
   token: string;
@@ -142,7 +143,7 @@ export function WorkerInviteContent({
       <main className="auth">
         <section className="auth-form">
           <Link className="brand" href="/">
-            <span className="brand-mark">J</span>
+            <ProductMark />
             <span className="brand-name">JobFlex</span>
           </Link>
 

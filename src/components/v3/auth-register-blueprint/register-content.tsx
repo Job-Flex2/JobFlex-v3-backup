@@ -87,6 +87,7 @@ import {
   customPriceCents,
 } from "@/lib/customPlan";
 import styles from "./auth-register.module.css";
+import { ProductMark } from "@/components/brand/ProductMark";
 
 // 1 account · 2 company · 3 THE PLAN (the paywall) · 4 done.
 /** The picker's exit, in step with the 0.22s transform in the stylesheet. */
@@ -1291,7 +1292,7 @@ export function RegisterContent({
 
   const brand = (
     <Link className="brand" href={"/" as Route}>
-      <span className="brand-mark">J</span>
+      <ProductMark />
       <span className="brand-name">JobFlex</span>
     </Link>
   );
@@ -1838,7 +1839,11 @@ export function RegisterContent({
                   nothing on the card is a sentence.
                 · The promo field carries its own APPLY inside the frame, so the
                   row is one object instead of a field and a stray button. */}
-          <div className={step === 3 ? "step" : "step is-hidden"} id="stepPlan">
+          <div
+            className={step === 3 ? "step" : "step is-hidden"}
+            id="stepPlan"
+            style={{ "--pw-cols": Math.max(1, orderedPlans.length + (offerCustom && plans.length > 0 ? 1 : 0)) } as React.CSSProperties}
+          >
             {/* Title and the billing switch on ONE line: the switch is the
                 control that rewrites every price under it, so it belongs beside
                 the question, not stacked under it where it read as a third
@@ -1849,17 +1854,27 @@ export function RegisterContent({
                 it asks about. The terms paragraph that used to sit between
                 the two moved under the cards, beside the start buttons it
                 speaks for. */}
+            {/* ONE ROW ON A DESK (owner, 2026-10-12): the question on the left; the trial's
+                stamp and the Monthly | Annual switch side by side on the right, so the head
+                takes one row (two when the window is narrow) and the cards fit the screen. */}
             <div className="pw-head">
               <h1 className="auth-h1">Pick a plan.</h1>
-              {/* The trial's promise, its own line under the heading (owner,
-                  2026-10-01) — the stamp the landing carries, in the words
-                  of signupTrialMode (lib/trialPolicyServer; words: lib/trialPolicy trialLine). */}
-              <p className="pw-trial">
-                <svg className="ic" aria-hidden>
-                  <use href="#i-check" />
-                </svg>
-                {trialLine(requiresCard, trialDays)}
-              </p>
+              <div className="pw-head-r">
+                {/* The trial's promise (owner, 2026-10-01) — the stamp the landing carries, in the
+                    words of signupTrialMode (lib/trialPolicyServer; words: lib/trialPolicy trialLine). */}
+                <p className="pw-trial">
+                  <svg className="ic" aria-hidden>
+                    <use href="#i-check" />
+                  </svg>
+                  {trialLine(requiresCard, trialDays)}
+                </p>
+                {/* MONTHLY | ANNUAL (owner, 2026-10-12): one switch over the row, the landing's and
+                    the upgrade page's own (components/billing/PlanTermSwitch). Not drawn when no
+                    plan prices a year. */}
+                {showTerms && !confirmSentTo ? (
+                  <PlanTermSwitch className="pw-termsw" value={interval} onChange={setInterval} tag={termTag} />
+                ) : null}
+              </div>
             </div>
 
             {plansErr ? (
@@ -1894,16 +1909,12 @@ export function RegisterContent({
               </div>
             ) : null}
 
-            {/* MONTHLY | ANNUAL (owner, 2026-10-12): one switch over the row, the landing's and the upgrade
-                page's own (components/billing/PlanTermSwitch). Not drawn when no plan prices a year. */}
-            {showTerms && !confirmSentTo ? (
-              <PlanTermSwitch className="pw-termsw" value={interval} onChange={setInterval} tag={termTag} />
-            ) : null}
-
             {/* ONE GRID (owner, 2026-10-12): each card is a subgrid of the row's tracks — name, price,
                 deal, the free-until line and the code's line when there are any, the full feature list,
                 the start button — so prices and first rows stand on one line and every card is the
-                row's height. Nothing folds: every list is drawn whole. */}
+                row's height. Nothing folds: every list is drawn whole. As many columns as cards
+                (`--pw-cols`, set on #stepPlan so the head lines up with the row), the row centred,
+                a card no wider than the stylesheet's cap. */}
             <div
               className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")}
               ref={plansRef}
@@ -2110,6 +2121,10 @@ export function RegisterContent({
               ) : null}
             </div>
 
+            {/* The code and the terms share one row on a desk (2026-10-12): the field on the left,
+                the fine print beside it. On a phone the wrappers step aside (display: contents). */}
+            <div className="pw-bottom">
+            <div className="pw-bottom-l">
             <div className={"pw-foot" + (planSlug ? " is-armed" : "")}>
               {/* PROMO — the same codes the ?promo / ?ref links carry. Applying
                   one stamps it on the shop and checkout picks it up there. */}
@@ -2149,6 +2164,7 @@ export function RegisterContent({
                 {promoErr}
               </p>
             ) : null}
+            </div>
 
             {/* One disclosure below the promo field, matching the saved offer. */}
             <p className="pw-terms" id="pwTerms">
@@ -2160,6 +2176,7 @@ export function RegisterContent({
               {" "}and acknowledge our{" "}
               <Link href="/privacy" target="_blank" rel="noopener noreferrer"><u>Privacy policy</u></Link>.
             </p>
+            </div>
 
             {/* The testing exit. Small, quiet, cornered — an escape, not an
                 offer. Development builds only: the server refuses the

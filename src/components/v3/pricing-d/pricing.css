@@ -42,10 +42,10 @@
   border-radius: 2px;
   background: #fff;
   color: #0a0a0a;
-  box-shadow: 6px 6px 0 #0a0a0a;
+  box-shadow: 3px 3px 0 #0a0a0a;
 }
 @media (max-width: 768px) {
-  .jf-lp .pr-custom { box-shadow: 4px 4px 0 #0a0a0a; }
+  .jf-lp .pr-custom { box-shadow: 3px 3px 0 #0a0a0a; }
 }
 .jf-lp .pr-page {
   display: flex;

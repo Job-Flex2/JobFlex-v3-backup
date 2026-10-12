@@ -80,44 +80,21 @@
   .jf-term .jf-term-b { transition: none; }
 }
 
-/* ── The deal slot under a card's price ─────────────────────────────────
-   Always drawn and always the same height (stamp + one line), so switching
-   Monthly ↔ Annual never moves the feature list, and a card with a stamp
-   never pushes its neighbours' rows out of line. */
+/* ── The deal line under a card's price (one line, 2026-10-12) ──────────
+   Always drawn and always one line high — "Billed monthly", "2 months free ·
+   You save $90", "You save $250", "Billed yearly" — so switching Monthly ↔
+   Annual never moves the feature list and no card pushes its neighbours'
+   rows out of line. It never wraps: the longest of them is ~200px at 13px. */
 .jf-deal {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 5px;
-  min-height: 44px;
+  display: block;
+  height: 1.35em;
   min-width: 0;
-}
-.jf-deal .jf-deal-stamp {
-  display: inline-block;
-  padding: 3px 7px;
-  border: 1.5px solid var(--emerald, #3a7d44);
-  border-radius: 2px;
-  background: #fff;
-  color: var(--emerald, #3a7d44);
-  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.jf-deal .jf-deal-save {
-  color: var(--emerald, #3a7d44);
   font-size: 13px;
-  font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.jf-deal .jf-deal-billed {
-  color: var(--ink-muted, #5b6470);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.3;
-}
+.jf-deal .jf-deal-months { color: var(--ink, #0a0a0a); font-weight: 700; }
+.jf-deal .jf-deal-dot { color: var(--ink-muted, #555); }
+.jf-deal .jf-deal-save { color: var(--emerald, #3a7d44); font-weight: 700; }
+.jf-deal .jf-deal-billed { color: var(--ink-muted, #555); font-weight: 500; }

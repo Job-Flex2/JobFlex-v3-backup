@@ -1,0 +1,26 @@
+/* The product mark (ProductMark.tsx). Self-scoped; a page sets --pmark-h, the
+   height of the mark's ink, where it used to size the drawn "J" square. The
+   box is the ink's own (0.814 : 1); the image is 1 / 0.4253 of the ink height
+   and pulled up by its top inset (0.2876 of the image), as the sidebar's
+   .sb-mark-img and the landing's .lp-mark-img are. */
+.jf-pmark {
+  --pmark-h: 34px;
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: calc(var(--pmark-h) * 0.814 + 1px);
+  height: calc(var(--pmark-h) + 1px);
+  overflow: hidden;
+}
+.jf-pmark .jf-pmark-img {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--pmark-h) * -0.6763 + 0.5px);
+  width: calc(var(--pmark-h) * 2.3513);
+  height: calc(var(--pmark-h) * 2.3513);
+  max-width: none;
+  transform: translateX(-50%);
+  object-fit: contain;
+  filter: brightness(0);
+}
+.jf-pmark--paper .jf-pmark-img { filter: brightness(0) invert(1); }

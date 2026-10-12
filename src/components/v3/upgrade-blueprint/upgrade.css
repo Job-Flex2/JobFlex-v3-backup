@@ -704,3 +704,18 @@
   text-transform: uppercase;
   color: var(--muted, #57534b);
 }
+
+/* As many columns as cards, each at most 320px, the row centred (owner,
+   2026-10-12): three cards no longer leave an empty fourth column. The count
+   is read off the row itself (a quantity query), so the markup stays as it
+   is. A narrower desk keeps the two-up and one-up rules above. */
+@media (min-width: 1181px) {
+  .jf-upgrade .jf-up-plans,
+  .jf-upgrade .jf-up-plans.has-custom {
+    grid-template-columns: repeat(4, minmax(0, 320px));
+    justify-content: center;
+  }
+  .jf-upgrade .jf-up-plans:has(> .jf-up-plan:last-child:nth-child(3)) { grid-template-columns: repeat(3, minmax(0, 320px)); }
+  .jf-upgrade .jf-up-plans:has(> .jf-up-plan:last-child:nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 320px)); }
+  .jf-upgrade .jf-up-plans:has(> .jf-up-plan:last-child:nth-child(1)) { grid-template-columns: minmax(0, 320px); }
+}

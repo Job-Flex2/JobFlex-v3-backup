@@ -46,7 +46,7 @@ export function LandingPricing({
         </Reveal>
 
         <Reveal delay={120} className="mt-9 sm:mt-11">
-          <PricingPlans plans={sellable} registerHref={registerHref} tone="ink" />
+          <PricingPlans plans={sellable} registerHref={registerHref} tone="ink" customOffered={customOffered} />
         </Reveal>
 
         {customOffered ? (

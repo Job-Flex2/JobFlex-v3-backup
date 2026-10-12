@@ -53,6 +53,7 @@ import { useSearchParams } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { DoorSwitchSignIn } from "@/components/auth/door-switch-signin";
 import styles from "./login.module.css";
+import { ProductMark } from "@/components/brand/ProductMark";
 
 /**
  * Class list by the SOURCE's literal names, so the JSX below reads as the
@@ -129,7 +130,7 @@ function LoginInner() {
 
       <main className={cx("auth")}>
         <section className={cx("auth-form")}>
-          <Link className={cx("brand")} href="/"><span className={cx("brand-mark")}>J</span><span className={cx("brand-name")}>JobFlex</span></Link>
+          <Link className={cx("brand")} href="/"><ProductMark /><span className={cx("brand-name")}>JobFlex</span></Link>
 
           {/* The "Sign in" kicker is gone (2026-09-02): the heading and the
               button both already say it. Same call as register step 1. */}

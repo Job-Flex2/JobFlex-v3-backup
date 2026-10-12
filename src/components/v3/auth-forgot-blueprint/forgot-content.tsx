@@ -35,6 +35,7 @@ import * as React from "react";
 import Link from "next/link";
 import "./auth-forgot.css";
 import { requestPasswordReset } from "@/actions/auth";
+import { ProductMark } from "@/components/brand/ProductMark";
 
 export function ForgotContent() {
   const emailRef = React.useRef<HTMLInputElement>(null);
@@ -88,7 +89,7 @@ export function ForgotContent() {
 
       <main className="auth">
         <section className="auth-form">
-          <Link className="brand" href="/"><span className="brand-mark">J</span><span className="brand-name">JobFlex</span></Link>
+          <Link className="brand" href="/"><ProductMark /><span className="brand-name">JobFlex</span></Link>
 
           <div className={sent ? "state is-hidden" : "state"} id="formState">
             <div className="auth-kicker kpi-lbl">Forgot password</div>

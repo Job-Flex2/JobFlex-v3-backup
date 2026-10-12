@@ -40,6 +40,7 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/Toast";
 import { resetPassword } from "@/actions/auth";
 import "./auth-reset.css";
+import { ProductMark } from "@/components/brand/ProductMark";
 
 /** The donor's inline sprite, verbatim — three symbols, same ids, same paths. */
 function Sprite() {
@@ -95,7 +96,7 @@ export function AuthResetContent() {
 
       <main className="auth">
         <section className="auth-form">
-          <Link className="brand" href="/"><span className="brand-mark">J</span><span className="brand-name">JobFlex</span></Link>
+          <Link className="brand" href="/"><ProductMark /><span className="brand-name">JobFlex</span></Link>
 
           {/* No `?token=` in the URL — the route has always guarded this, and the
               guard is kept. The mockup has no such state, so it is composed

@@ -65,6 +65,7 @@ import { useSearchParams } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { DoorSwitchSignIn } from "@/components/auth/door-switch-signin";
 import "./mobile-auth-login.css";
+import { ProductMark } from "@/components/brand/ProductMark";
 
 /** NextAuth's ?error= codes, in the product's words. */
 function authErrorMessage(code: string | null): string | null {
@@ -111,7 +112,7 @@ export function MobileLoginContent() {
         <div className="hero-wash" />
         <div className="hero-inner">
           <Link className="brand rv rv-1" href="/">
-            <span className="brand-mark">J</span>
+            <ProductMark tone="paper" />
             <span className="brand-name">JobFlex</span>
           </Link>
 

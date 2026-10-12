@@ -92,12 +92,7 @@ body:has(.jf-worker-invite)::before { content: none; }
   min-width: 0;
 }
 .jf-worker-invite .brand { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 44px; }
-.jf-worker-invite .brand-mark {
-  width: 34px; height: 34px; display: grid; place-items: center;
-  border: var(--border); border-radius: var(--radius);
-  background: var(--ink); color: var(--paper);
-  font-size: 16px; font-weight: 900;
-}
+.jf-worker-invite .jf-pmark { --pmark-h: 34px; }
 .jf-worker-invite .brand-name { font-size: 19px; font-weight: 900; letter-spacing: -0.01em; }
 .jf-worker-invite .auth-kicker { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .jf-worker-invite .auth-kicker::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sky); }
@@ -272,7 +267,7 @@ body:has(.jf-worker-invite)::before { content: none; }
 .jf-worker-invite .auth { height: 100dvh; overflow: hidden; }
 .jf-worker-invite .auth-form { padding: clamp(14px, 3.4vh, 44px) 56px; max-height: 100dvh; overflow: hidden; }
 .jf-worker-invite .brand { margin-bottom: clamp(10px, 2.6vh, 40px); }
-.jf-worker-invite .brand-mark { width: clamp(28px, 3.6vh, 34px); height: clamp(28px, 3.6vh, 34px); }
+.jf-worker-invite .jf-pmark { --pmark-h: clamp(28px, 3.6vh, 34px); }
 .jf-worker-invite .auth-kicker { margin-bottom: clamp(6px, 1.2vh, 12px); }
 .jf-worker-invite .auth-h1 { font-size: clamp(25px, 3.7vh, 40px); }
 .jf-worker-invite .auth-lede { margin-top: clamp(5px, 1.1vh, 12px); font-size: clamp(12.5px, 1.5vh, 14px); }

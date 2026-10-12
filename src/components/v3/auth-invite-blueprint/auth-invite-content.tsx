@@ -55,6 +55,7 @@ import Link from "next/link";
 import { acceptInvite, declineInvite } from "@/actions/team";
 import { AuthInviteSprite } from "./auth-invite-sprite";
 import "./auth-invite.css";
+import { ProductMark } from "@/components/brand/ProductMark";
 
 interface AuthInviteContentProps {
   token: string;
@@ -142,7 +143,7 @@ export function AuthInviteContent({
 
       <main className="auth">
         <section className="auth-form">
-          <Link className="brand" href="/"><span className="brand-mark">J</span><span className="brand-name">JobFlex</span></Link>
+          <Link className="brand" href="/"><ProductMark /><span className="brand-name">JobFlex</span></Link>
 
           <div className={stage === "accept" ? "state" : "state is-hidden"} id="acceptState">
             {/* &apos; is the lint-required spelling of the donor's straight

@@ -88,10 +88,12 @@ export function PlanTermSwitch({
   );
 }
 
-/** The deal slot under a card's price, the same on every plan surface: on a
- *  year, "N months free" (whole months only) and "You save $N" in green; on a
- *  month, or for a plan with no yearly price, a quiet "Billed monthly". Always
- *  drawn and one height (plan-term-switch.css), so the switch moves nothing. */
+/** The deal line under a card's price, the same on every plan surface — ONE
+ *  line (owner, 2026-10-12): "2 months free · You save $90" on a year (the
+ *  months only when they are whole, the saving in green), "You save $N"
+ *  alone otherwise, "Billed yearly" for a year with no saving, and a quiet
+ *  "Billed monthly" on a month or for a plan with no yearly price. Always
+ *  drawn and one line high (plan-term-switch.css), so the switch moves nothing. */
 export function PlanDealSlot({
   term,
   monthlyCents,
@@ -110,7 +112,14 @@ export function PlanDealSlot({
         <span className="jf-deal-billed">Billed monthly</span>
       ) : deal ? (
         <>
-          {stamp ? <span className="jf-deal-stamp">{stamp}</span> : null}
+          {stamp ? (
+            <>
+              <span className="jf-deal-months">{stamp}</span>
+              <span className="jf-deal-dot" aria-hidden="true">
+                {" · "}
+              </span>
+            </>
+          ) : null}
           <span className="jf-deal-save">{savedWords(deal)}</span>
         </>
       ) : (
