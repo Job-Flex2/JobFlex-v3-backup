@@ -314,6 +314,11 @@ export default async function PublicProposalPortal({
                           {p.overlay.map((pts, i) => <polygon key={i} points={pts} />)}
                         </svg>
                       )}
+                      {p.pin && (
+                        <span className="pv-site-pin" style={{ left: `${p.pin.x / 10}%`, top: `${p.pin.y / 10}%` }} data-roof-pin>
+                          <svg viewBox="-40 -104 80 112" aria-hidden="true"><ellipse cx="0" cy="2" rx="16" ry="6" fill="#000" fillOpacity="0.28" /><path d="M0 0C-6-22-34-40-34-62a34 34 0 1 1 68 0C34-40 6-22 0 0z" fill="#e5322d" stroke="#fff" strokeWidth="6" strokeLinejoin="round" /><circle cx="0" cy="-62" r="12" fill="#fff" /></svg>
+                        </span>
+                      )}
                     </div>
                     <figcaption>
                       {p.caption}

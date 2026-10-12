@@ -356,8 +356,9 @@ export function MobileProposalClient({ view }: { view: PortalView }) {
             </div>
 
             {/* THE CLIENT'S OWN JOB IN PICTURES — the fence's 3D and traced
-                layout, the roof from the air with the measured outline drawn
-                over it, exactly the set the desk page shows (2026-09-23). */}
+                layout, the roof from the air with one pin on the house (never
+                an outline — owner, 2026-10-12), exactly the set the desk page
+                shows (2026-09-23). */}
             {view.pictures.filter((p) => p.kind === "fence-scene").map((p) => (
               <FenceSceneFigure key={p.kind} className="mpc-scene" src={p.src} poster={p.poster ?? null} caption={p.caption} facts={p.facts} />
             ))}
@@ -373,6 +374,11 @@ export function MobileProposalClient({ view }: { view: PortalView }) {
                     <svg className="mpc-site-ov" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
                       {p.overlay.map((pts, i) => <polygon key={i} points={pts} />)}
                     </svg>
+                  ) : null}
+                  {p.pin ? (
+                    <span className="mpc-site-pin" style={{ left: `${p.pin.x / 10}%`, top: `${p.pin.y / 10}%` }} data-roof-pin>
+                      <svg viewBox="-40 -104 80 112" aria-hidden="true"><ellipse cx="0" cy="2" rx="16" ry="6" fill="#000" fillOpacity="0.28" /><path d="M0 0C-6-22-34-40-34-62a34 34 0 1 1 68 0C34-40 6-22 0 0z" fill="#e5322d" stroke="#fff" strokeWidth="6" strokeLinejoin="round" /><circle cx="0" cy="-62" r="12" fill="#fff" /></svg>
+                    </span>
                   ) : null}
                 </div>
                 <figcaption>

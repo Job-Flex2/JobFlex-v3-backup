@@ -2,15 +2,17 @@
 //
 // Owner: "the client should receive a piece of the picture of the roof." A
 // proposal converted from a roof measurement links to it (ProposalSitePhoto);
-// what the client's page can show, in this order:
+// what the client's page can show:
 //   ortho      EagleView's own clear aerial of the house, when the paid answer
 //              carried imagery and the credentials are on the server;
 //   satellite  Google's static satellite tile at the pin, when that key is on
-//              the server;
-//   plan       the measured outline drawn as a plan, from the measurement's
-//              own rings — no key, no fetch, always there when the outline is.
-// Over the ortho or the satellite the measured outline is drawn as an SVG
-// overlay; both are projected here, one function for the page and the route.
+//              the server.
+// ONE PIN ON THE ROOF, NEVER AN OUTLINE (owner, 2026-10-12: "it shows the
+// outline in a really bad looking shape — remove it and never send any
+// outlines for the roof, just show the pin above the roof"). The measured
+// outline is still read here, but only to find a point well inside the roof
+// for the pin; no outline is drawn over the picture, drawn as a plan, or
+// drawn in the stand-in for the client any more.
 
 export type LatLng = { lat: number; lng: number };
 
@@ -85,9 +87,65 @@ export function frameProject(p: LatLng, frame: RoofFrame): { x: number; y: numbe
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
-/** The outline rings as SVG `points` strings in the 0…1000 square, for an overlay on the picture. */
-export function roofOverlayPoints(rings: LatLng[][], frame: RoofFrame): string[] {
-  return rings.map((ring) => ring.map((p) => { const q = frameProject(p, frame); return `${r1(q.x)},${r1(q.y)}`; }).join(" "));
+/**
+ * Where the pin goes: a point well inside the largest measured roof — the spot farthest from its edges — so an
+ * L-shaped house gets its pin on the roof, not in the yard between its wings. Without an outline, the measurement's
+ * own pin.
+ */
+export function roofPinPoint(instant: InstantLike | null, pin: LatLng | null): LatLng | null {
+  const ring = roofRings(instant)[0];
+  if (!ring) return pin ?? (instant?.lat != null && instant?.lng != null ? { lat: instant.lat, lng: instant.lng } : null);
+  const xs = ring.map((p) => p.lng);
+  const ys = ring.map((p) => p.lat);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  // A degree of longitude shrinks toward the poles: distances are measured with it scaled to match latitude's.
+  const k = Math.cos(((y0 + y1) / 2) * D2R);
+  const inside = (x: number, y: number) => {
+    let hit = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i];
+      const b = ring[j];
+      if (a.lat > y !== b.lat > y && x < ((b.lng - a.lng) * (y - a.lat)) / (b.lat - a.lat || 1e-12) + a.lng) hit = !hit;
+    }
+    return hit;
+  };
+  const edgeDist = (x: number, y: number) => {
+    let best = Infinity;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const ax = ring[j].lng * k, ay = ring[j].lat, bx = ring[i].lng * k, by = ring[i].lat;
+      const px = x * k;
+      const dx = bx - ax, dy = by - ay;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1e-18)));
+      best = Math.min(best, Math.hypot(px - (ax + t * dx), y - (ay + t * dy)));
+    }
+    return best;
+  };
+  // The deepest spots inside (within a tenth of the deepest), and of those the one nearest the roof's middle — a long
+  // rectangle has a whole line of equally deep spots, and its pin belongs at the centre of it.
+  const spots: Array<{ x: number; y: number; d: number }> = [];
+  const N = 24;
+  for (let i = 0; i <= N; i++) {
+    for (let j = 0; j <= N; j++) {
+      const x = x0 + ((x1 - x0) * i) / N;
+      const y = y0 + ((y1 - y0) * j) / N;
+      if (inside(x, y)) spots.push({ x, y, d: edgeDist(x, y) });
+    }
+  }
+  const deepest = Math.max(0, ...spots.map((p) => p.d));
+  const mx = xs.reduce((a, v) => a + v, 0) / xs.length;
+  const my = ys.reduce((a, v) => a + v, 0) / ys.length;
+  const near = (p: { x: number; y: number }) => Math.hypot((p.x - mx) * k, p.y - my);
+  const best = spots.filter((p) => p.d >= deepest * 0.9).sort((a, b) => near(a) - near(b))[0];
+  const pick: LatLng | null = best ? { lat: best.y, lng: best.x } : null;
+  return pick ?? { lat: ys.reduce((a, v) => a + v, 0) / ys.length, lng: xs.reduce((a, v) => a + v, 0) / xs.length };
+}
+
+/** The pin in the picture's 0…1000 square (its tip), or null when it falls off the picture. */
+export function roofPinOnFrame(point: LatLng | null, frame: RoofFrame): { x: number; y: number } | null {
+  if (!point) return null;
+  const q = frameProject(point, frame);
+  if (!(q.x >= 20 && q.x <= 980 && q.y >= 80 && q.y <= 1000)) return null;
+  return { x: r1(q.x), y: r1(q.y) };
 }
 
 export function roofFactsLine(f: RoofFacts): string {
@@ -105,67 +163,15 @@ const font = "Inter, Helvetica, Arial, sans-serif";
 const mono = "ui-monospace, 'JetBrains Mono', Menlo, monospace";
 
 /**
- * The picture's stand-in when the aerial cannot be fetched at request time:
- * the outline drawn where the aerial would have shown it (the same frame
- * projection), so the page's overlay lands exactly on it.
+ * The picture's stand-in when the aerial cannot be fetched at request time: a plain square with the facts — no
+ * outline. The page puts the pin over it, as over the aerial.
  */
-export function roofFrameSvg(rings: LatLng[][], frame: RoofFrame, factsLine: string): string {
-  const polys = roofOverlayPoints(rings, frame);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" role="img" aria-label="Your roof outline">` +
+export function roofStandInSvg(factsLine: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" role="img" aria-label="Your roof">` +
     `<rect width="1000" height="1000" fill="#eceae3"/>` +
     `<g stroke="#d8d5cb" stroke-width="1">${Array.from({ length: 19 }, (_, i) => `<line x1="${(i + 1) * 50}" y1="0" x2="${(i + 1) * 50}" y2="1000"/><line x1="0" y1="${(i + 1) * 50}" x2="1000" y2="${(i + 1) * 50}"/>`).join("")}</g>` +
-    polys.map((p) => `<polygon points="${p}" fill="#e4e1d8" stroke="#0a0a0a" stroke-width="5" stroke-linejoin="round"/>`).join("") +
+    `<text x="500" y="440" text-anchor="middle" font-family="${font}" font-size="30" font-weight="800" fill="#0a0a0a">Your roof</text>` +
+    `<text x="500" y="480" text-anchor="middle" font-family="${font}" font-size="20" fill="#6b6b6b">The aerial picture could not be loaded just now.</text>` +
     `<text x="24" y="972" font-family="${mono}" font-size="20" fill="#6b6b6b" letter-spacing="2">${esc(factsLine.toUpperCase())}</text>` +
     `</svg>`;
-}
-
-const FT_PER_M = 3.28084;
-const EARTH_R_M = 6378137;
-function toLocalFeet(origin: LatLng, p: LatLng): { x: number; y: number } {
-  const east = (p.lng - origin.lng) * D2R * Math.cos(origin.lat * D2R) * EARTH_R_M;
-  const north = (p.lat - origin.lat) * D2R * EARTH_R_M;
-  return { x: east * FT_PER_M, y: north * FT_PER_M };
-}
-
-/** The measured outline as a plan — edge lengths, north, a scale — when there is no aerial to show. */
-export function roofPlanSvg(rings: LatLng[][], factsLine: string): string {
-  const W = 1000, H = 750, PAD = 56, FOOT = 74;
-  const all = rings.flat();
-  if (!all.length) return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#f7f6f2"/></svg>`;
-  const origin = { lat: all.reduce((s, p) => s + p.lat, 0) / all.length, lng: all.reduce((s, p) => s + p.lng, 0) / all.length };
-  const local = rings.map((r) => r.map((p) => toLocalFeet(origin, p)));
-  const pts = local.flat();
-  let minX = Math.min(...pts.map((p) => p.x)), maxX = Math.max(...pts.map((p) => p.x));
-  let minY = Math.min(...pts.map((p) => p.y)), maxY = Math.max(...pts.map((p) => p.y));
-  const grow = Math.max(maxX - minX, maxY - minY, 20) * 0.14 + 4;
-  minX -= grow; maxX += grow; minY -= grow; maxY += grow;
-  const drawW = W - PAD * 2, drawH = H - PAD * 2 - FOOT;
-  const scale = Math.min(drawW / (maxX - minX), drawH / (maxY - minY));
-  const ox = PAD + (drawW - (maxX - minX) * scale) / 2, oy = PAD + (drawH - (maxY - minY) * scale) / 2;
-  const X = (x: number) => ox + (x - minX) * scale, Y = (y: number) => oy + (maxY - y) * scale;
-  const out: string[] = [];
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Your roof, as measured">`);
-  out.push(`<rect width="${W}" height="${H}" fill="#f7f6f2"/><rect x="${PAD}" y="${PAD}" width="${drawW}" height="${drawH}" fill="#fbfaf7" stroke="#0a0a0a" stroke-width="2"/>`);
-  for (const ring of local) {
-    out.push(`<polygon points="${ring.map((p) => `${r1(X(p.x))},${r1(Y(p.y))}`).join(" ")}" fill="#e4e1d8" stroke="#0a0a0a" stroke-width="4" stroke-linejoin="round"/>`);
-    for (let i = 0; i < ring.length; i++) {
-      const a = ring[i], b = ring[(i + 1) % ring.length];
-      const ft = Math.hypot(b.x - a.x, b.y - a.y);
-      if (ft < 4) continue;
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      const nx = -(b.y - a.y) / ft, ny = (b.x - a.x) / ft;
-      // the label sits outside the ring: away from its centre
-      const cx = ring.reduce((s, p) => s + p.x, 0) / ring.length, cy = ring.reduce((s, p) => s + p.y, 0) / ring.length;
-      const sgn = (mx - cx) * nx + (my - cy) * ny >= 0 ? 1 : -1;
-      out.push(`<text x="${r1(X(mx) + nx * sgn * 18)}" y="${r1(Y(my) - ny * sgn * 18 + 5)}" text-anchor="middle" font-family="${mono}" font-size="15" font-weight="700" fill="#0a0a0a" paint-order="stroke" stroke="#fbfaf7" stroke-width="5">${Math.round(ft)}'</text>`);
-    }
-  }
-  out.push(`<g transform="translate(${W - PAD - 26} ${PAD + 34})"><polygon points="0,-22 8,10 0,4 -8,10" fill="#0a0a0a"/><text y="30" text-anchor="middle" font-family="${font}" font-size="13" font-weight="800" fill="#0a0a0a">N</text></g>`);
-  const barFt = [5, 10, 20, 25, 50, 100].find((c) => c >= (maxX - minX) / 5) ?? 200;
-  const bx = PAD + 18, by = H - FOOT - PAD + 30, bw = barFt * scale;
-  out.push(`<line x1="${bx}" y1="${by}" x2="${r1(bx + bw)}" y2="${by}" stroke="#0a0a0a" stroke-width="3"/><line x1="${bx}" y1="${by - 6}" x2="${bx}" y2="${by + 6}" stroke="#0a0a0a" stroke-width="3"/><line x1="${r1(bx + bw)}" y1="${by - 6}" x2="${r1(bx + bw)}" y2="${by + 6}" stroke="#0a0a0a" stroke-width="3"/><text x="${r1(bx + bw / 2)}" y="${by - 10}" text-anchor="middle" font-family="${mono}" font-size="13" font-weight="700" fill="#0a0a0a">${barFt} ft</text>`);
-  out.push(`<text x="${PAD}" y="${H - 40}" font-family="${font}" font-size="20" font-weight="800" fill="#0a0a0a">Your roof, as measured</text>`);
-  out.push(`<text x="${PAD}" y="${H - 18}" font-family="${mono}" font-size="12" fill="#6b6b6b" letter-spacing="1.5">${esc((factsLine || "OUTLINE FROM THE AERIAL MEASUREMENT").toUpperCase())}</text>`);
-  out.push(`</svg>`);
-  return out.join("");
 }

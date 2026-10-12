@@ -528,3 +528,8 @@ body:has(.jf-proposal-portal)::before { content: none; }
 /* Space for the action bar while the inline decision is off-screen. */
 .jf-proposal-portal { padding-bottom: 180px; }
 @media print { .jf-proposal-portal { padding-bottom: 0; } }
+
+/* The roof's one pin (owner, 2026-10-12: "never send any outlines for the roof, just show the pin above the roof"):
+   its tip on the house, drawn at a fixed size whatever the picture's width. */
+.jf-proposal-portal .pv-site-pin { position: absolute; width: 34px; height: 48px; transform: translate(-50%, -93%); pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
+.jf-proposal-portal .pv-site-pin svg { display: block; width: 100%; height: 100%; overflow: visible; }

@@ -1,9 +1,11 @@
 // The pictures a proposal carries to the client (2026-09-23): the fence's
-// layout drawn from the trace, the roof's outline over the aerial and as a
-// plan. Pure, no database.
+// layout drawn from the trace; the roof from the air with ONE PIN on the
+// house and never an outline (owner, 2026-10-12). Pure, no database.
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/proposal-pictures.check.ts
 import { fencePlanSvg, parseFencePlan } from "../../src/lib/fence/planSvg";
-import { frameProject, roofFactsLine, roofFrameFor, roofFrameSvg, roofOverlayPoints, roofPlanSvg, roofRings } from "../../src/lib/roofPictures";
+import { readFileSync, existsSync } from "node:fs";
+import * as roofPictures from "../../src/lib/roofPictures";
+import { frameProject, roofFactsLine, roofFrameFor, roofPinOnFrame, roofPinPoint, roofRings, roofStandInSvg } from "../../src/lib/roofPictures";
 import { fenceConvertSchema } from "../../src/lib/fence/convertSchema";
 
 let bad = 0;
@@ -43,24 +45,36 @@ const ortho = roofFrameFor(instant, { lat: 47.7701, lng: -122.1999 }, { ortho: t
 check("with EagleView on, the clear ortho is the frame (the masked one never is)", ortho?.kind === "ortho" && ortho.token === "tok-wide");
 const sat = roofFrameFor(instant, { lat: 47.7701, lng: -122.1999 }, { ortho: false, satellite: true });
 check("without EagleView, the satellite tile at the pin is the frame", sat?.kind === "satellite" && sat.lat === 47.7701 && sat.zoom === 20);
-check("with neither key there is no aerial frame — the plan is the picture", roofFrameFor(instant, null, { ortho: false, satellite: false }) === null);
+check("with neither key there is no aerial frame — and no roof picture at all", roofFrameFor(instant, null, { ortho: false, satellite: false }) === null);
 const c = frameProject({ lat: 47.7701, lng: -122.1999 }, sat!);
 check("on the satellite frame the pin projects to the centre of the square", Math.abs(c.x - 500) < 0.01 && Math.abs(c.y - 500) < 0.01, `${c.x.toFixed(2)},${c.y.toFixed(2)}`);
 const nw = frameProject({ lat: 47.7705, lng: -122.2004 }, ortho!);
 const se = frameProject({ lat: 47.7697, lng: -122.1994 }, ortho!);
 check("on the ortho frame the bbox corners are the square's corners", Math.abs(nw.x) < 0.01 && Math.abs(nw.y) < 0.01 && Math.abs(se.x - 1000) < 0.01 && Math.abs(se.y - 1000) < 0.01);
-const ov = roofOverlayPoints(roofRings(instant), sat!);
-// The static tile at zoom 20 is about 210 ft across at this latitude, so a
-// 50 × 73 ft roof reads as roughly a quarter of the square, centred on the pin.
-const ovPts = ov[0].split(" ").map((p) => p.split(",").map(Number));
-const xs = ovPts.map((p) => p[0]), ys = ovPts.map((p) => p[1]);
-check("the overlay is one points string per ring, centred on the pin and about a quarter of the tile wide", ov.length === 1 && Math.abs((Math.min(...xs) + Math.max(...xs)) / 2 - 500) < 5 && Math.max(...xs) - Math.min(...xs) > 200 && Math.max(...xs) - Math.min(...xs) < 270 && Math.max(...ys) - Math.min(...ys) > 300 && Math.max(...ys) - Math.min(...ys) < 380, ov[0]);
+// The pin sits on the roof: inside the largest ring, near its middle.
+const pinPt = roofPinPoint(instant, { lat: 47.7701, lng: -122.1999 });
+check("the pin point is inside the roof", !!pinPt && pinPt.lat > 47.77 && pinPt.lat < 47.7702 && pinPt.lng > -122.2 && pinPt.lng < -122.1998, JSON.stringify(pinPt));
+const pinSat = roofPinOnFrame(pinPt, sat!);
+check("on the satellite frame the pin lands near the centre", !!pinSat && Math.abs(pinSat.x - 500) < 30 && Math.abs(pinSat.y - 500) < 30, JSON.stringify(pinSat));
+// An L-shaped house: its centre of the bounding box is in the yard between the wings — the pin must not be.
+const L = [{ lat: 47.77, lng: -122.2 }, { lat: 47.77, lng: -122.1996 }, { lat: 47.7701, lng: -122.1996 }, { lat: 47.7701, lng: -122.1999 }, { lat: 47.7704, lng: -122.1999 }, { lat: 47.7704, lng: -122.2 }];
+const lPin = roofPinPoint({ structures: [{ outline: L }] }, { lat: 47.7702, lng: -122.1997 });
+const inL = !!lPin && ((lPin.lat >= 47.77 && lPin.lat <= 47.7701 && lPin.lng >= -122.2 && lPin.lng <= -122.1996) || (lPin.lat >= 47.77 && lPin.lat <= 47.7704 && lPin.lng >= -122.2 && lPin.lng <= -122.1999));
+check("an L-shaped house gets its pin on the roof, not in the yard between the wings", inL, JSON.stringify(lPin));
+check("without an outline the measurement's own pin is used", JSON.stringify(roofPinPoint({ structures: [] }, { lat: 1, lng: 2 })) === JSON.stringify({ lat: 1, lng: 2 }));
+check("a pin off the picture is not drawn", roofPinOnFrame({ lat: 47.80, lng: -122.2 }, sat!) === null);
 const facts = roofFactsLine({ areaSqft: 2412, squares: 24.1, pitch: "6/12", facetCount: 8, measuredOn: "Sep 19, 2026" });
 check("the facts line reads like a report", facts === "2,412 sq ft · 24.1 squares · 6/12 pitch · 8 facets · measured Sep 19, 2026", facts);
-const planSvg = roofPlanSvg(roofRings(instant), facts);
-check("the roof plan draws the outline with its edge lengths and the facts", /<polygon/.test(planSvg) && (planSvg.match(/\d+'<\/text>/g) ?? []).length === 4 && /2,412 SQ FT/.test(planSvg));
-const frameSvg = roofFrameSvg(roofRings(instant), sat!, facts);
-check("the stand-in for an aerial that cannot be fetched draws the outline where the overlay will land", /<polygon points="/.test(frameSvg) && frameSvg.includes(ov[0]));
+const stand = roofStandInSvg(facts);
+check("the stand-in for an aerial that cannot be fetched has the facts and no outline (the page's pin lands on it)", !/<polygon|<path/.test(stand) && /2,412 SQ FT/.test(stand));
+// Never an outline to the client: nothing left that could draw one.
+check("the roof module has no outline drawers left", !("roofOverlayPoints" in roofPictures) && !("roofPlanSvg" in roofPictures) && !("roofFrameSvg" in roofPictures));
+const pics = readFileSync("src/lib/proposalPictures.ts", "utf8");
+check("the roof picture carries a pin and no overlay", /kind: "roof-photo"[^\n]*overlay: null, pin: roofPinOnFrame/.test(pics) && !/roof-plan/.test(pics.replace(/^\/\/.*$/gm, "")));
+check("the outline-plan route is gone", !existsSync("src/app/api/public-quote/[publicId]/roof-plan/route.ts"));
+for (const page of ["src/components/v3/mobile-proposal-client/mobile-proposal-client.tsx", "src/app/(portal)/portal/q/[publicId]/page.tsx"]) {
+  check(`${page.split("/").slice(-2).join("/")} draws the pin`, /data-roof-pin/.test(readFileSync(page, "utf8")));
+}
 
 console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");
 process.exit(bad ? 1 : 0);
