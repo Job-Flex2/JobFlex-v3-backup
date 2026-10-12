@@ -1,0 +1,183 @@
+/* ============================================================
+   SIGNUPS & TRIALS — /admin/traffic/signups (2026-10-12)
+   The trials board in the admin pages' blueprint vocabulary: ink
+   frames, mono labels, the status tokens (success = a card / paying,
+   warning = no card, blueprint = on trial, danger = a failed card).
+   Scoped like admin-shared: `:global(.jf-blueprint .content) .cls`
+   ⇒ (0,3,0), over the dashboard module's content resets. Tokens only.
+   ============================================================ */
+
+:global(.jf-blueprint .content) .page { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+:global(.jf-blueprint .content) .headSide { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .updated { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--muted); }
+
+/* The page in three sentences. */
+:global(.jf-blueprint .content) .headline {
+  margin: 0; padding: 16px 20px; max-width: 92ch;
+  border: 2px solid var(--ink); border-radius: var(--radius); background: var(--paper-deep);
+  font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--ink); text-wrap: pretty;
+}
+:global(.jf-blueprint .content) .error { margin: 0; font-weight: 600; color: var(--danger); }
+
+:global(.jf-blueprint .content) .kpiSub { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+:global(.jf-blueprint .content) .kpiOf { margin-left: 6px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--muted-light); }
+:global(.jf-blueprint .content) .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted-light); }
+:global(.jf-blueprint .content) .dot[data-tone="good"] { background: var(--success); }
+:global(.jf-blueprint .content) .dot[data-tone="warn"] { background: var(--warning); }
+
+/* ── a section ── */
+:global(.jf-blueprint .content) .card { min-width: 0; border: 2px solid var(--ink); border-radius: var(--radius); background: var(--paper-deep); }
+:global(.jf-blueprint .content) .cardHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; padding: 16px 20px; border-bottom: 1px solid var(--hair); }
+:global(.jf-blueprint .content) .cardHead h2 { margin: 0 0 4px; font: 800 18px/1.15 var(--font); letter-spacing: -0.02em; color: var(--ink); }
+:global(.jf-blueprint .content) .cardHead p { margin: 0; max-width: 72ch; font-size: 13px; line-height: 1.45; color: var(--muted); }
+:global(.jf-blueprint .content) .cardFacts { font-size: 13px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .cardFacts b { font-family: var(--font-mono); color: var(--ink); }
+:global(.jf-blueprint .content) .empty { margin: 0; padding: 18px 20px; font-size: 14px; color: var(--muted); }
+:global(.jf-blueprint .content) .muted { color: var(--muted); }
+
+/* ── the chips ── */
+:global(.jf-blueprint .content) .chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 2px 8px;
+  border: 1.5px solid var(--hair); border-radius: var(--radius); background: var(--paper);
+  font-size: 12px; font-weight: 600; line-height: 1.3; color: var(--ink-soft);
+}
+:global(.jf-blueprint .content) .chip[data-tone="good"] { border-color: var(--success); background: var(--success-soft); color: var(--success-dark); }
+:global(.jf-blueprint .content) .chip[data-tone="warn"] { border-color: var(--warning); background: var(--warning-soft); color: var(--warning-dark); }
+:global(.jf-blueprint .content) .chip[data-tone="info"] { border-color: var(--blueprint); background: var(--chart-fill); color: var(--blueprint); }
+:global(.jf-blueprint .content) .chip[data-tone="bad"] { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+:global(.jf-blueprint .content) .chip[data-tone="muted"] { color: var(--muted); }
+
+/* ── the trials, by the day they end ── */
+:global(.jf-blueprint .content) .dayGroup { padding: 2px 20px 16px; }
+:global(.jf-blueprint .content) .dayLabel { display: flex; align-items: baseline; gap: 10px; margin: 14px 0 10px; font: 800 12px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content) .dayLabel span { font: 600 12px/1 var(--font); letter-spacing: 0; text-transform: none; color: var(--muted); }
+:global(.jf-blueprint .content) .trials { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+:global(.jf-blueprint .content) .trial {
+  position: relative; display: grid; gap: 8px; padding: 12px 14px 12px 19px;
+  border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper-deep);
+}
+/* The edge says the card: green with one on file, amber without. */
+:global(.jf-blueprint .content) .trial::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--warning); }
+:global(.jf-blueprint .content) .trial[data-card="card"]::before { background: var(--success); }
+:global(.jf-blueprint .content) .trialTop { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+:global(.jf-blueprint .content) .who b { font-size: 15px; color: var(--ink); }
+:global(.jf-blueprint .content) .who span { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .ends { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+:global(.jf-blueprint .content) .ends b { font-size: 13.5px; color: var(--ink); }
+:global(.jf-blueprint .content) .ends span { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+:global(.jf-blueprint .content) .ends[data-soon] b,
+:global(.jf-blueprint .content) .ends[data-soon] span { color: var(--danger); }
+:global(.jf-blueprint .content) .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* Day N of seven, as seven cells. */
+:global(.jf-blueprint .content) .days { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .daysCells { display: inline-flex; gap: 2px; }
+:global(.jf-blueprint .content) .daysCells i { width: 9px; height: 12px; border: 1px solid var(--ink-soft); background: var(--paper); }
+:global(.jf-blueprint .content) .daysCells i[data-on] { border-color: var(--blueprint); background: var(--blueprint); }
+:global(.jf-blueprint .content) .daysCells i[data-last] { border-color: var(--danger); }
+:global(.jf-blueprint .content) .did { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .did b { color: var(--ink); }
+:global(.jf-blueprint .content) .trialActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:global(.jf-blueprint .content) .openBtn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px;
+  border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper-deep);
+  font: 700 12.5px var(--font); color: var(--ink); cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+:global(.jf-blueprint .content) .openBtn:hover { background: var(--ink); color: var(--paper); }
+:global(.jf-blueprint .content) .openBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+:global(.jf-blueprint .content) .openBtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; transition: transform 0.15s; }
+:global(.jf-blueprint .content) .openBtn[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+/* ── what they did ── */
+:global(.jf-blueprint .content) .activity { padding-top: 10px; border-top: 1px dashed var(--hair); font-size: 13px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .actDay h4 { margin: 10px 0 6px; font: 800 11px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .actDay ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+:global(.jf-blueprint .content) .actDay li { display: grid; grid-template-columns: 64px 112px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .actDay li time { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+:global(.jf-blueprint .content) .actKind { font: 700 10px/1.4 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--blueprint); }
+:global(.jf-blueprint .content) .actDay li[data-kind="client"] .actKind { color: var(--success); }
+:global(.jf-blueprint .content) .actDay li[data-kind="brief"] .actKind { color: var(--blueprint-dark); }
+:global(.jf-blueprint .content) .actDay li[data-kind="session"] .actKind { color: var(--muted); }
+:global(.jf-blueprint .content) .actText { color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .actText em { font-style: normal; color: var(--muted); }
+:global(.jf-blueprint .content) .peekBtn { margin-left: 8px; padding: 0; border: 0; background: none; font: 700 12px var(--font); color: var(--blueprint); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+:global(.jf-blueprint .content) .peek { grid-column: 1 / -1; margin: 6px 0 8px; padding: 10px 12px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper); }
+:global(.jf-blueprint .content) .peekHead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+:global(.jf-blueprint .content) .peekHead b { color: var(--ink); }
+:global(.jf-blueprint .content) .peekHead span { font-size: 12px; color: var(--muted); }
+:global(.jf-blueprint .content) .peek table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+:global(.jf-blueprint .content) .peek th { padding: 4px 6px; border-bottom: 1px solid var(--hair); text-align: left; font: 700 10px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .peek td { padding: 4px 6px; border-bottom: 1px solid var(--hair-soft); font-variant-numeric: tabular-nums; color: var(--ink); }
+:global(.jf-blueprint .content) .peek td:not(:first-child),
+:global(.jf-blueprint .content) .peek th:not(:first-child) { text-align: right; white-space: nowrap; }
+:global(.jf-blueprint .content) .peekTotals { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .peekTotals b { color: var(--ink); }
+:global(.jf-blueprint .content) .moreBtn { margin-top: 8px; padding: 6px 10px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: var(--paper-deep); font: 700 12px var(--font); color: var(--ink); cursor: pointer; }
+
+/* ── the calendar ── */
+:global(.jf-blueprint .content) .legend [data-seg="paying"], :global(.jf-blueprint .content) .bar [data-seg="paying"] { --seg: var(--success); }
+:global(.jf-blueprint .content) .legend [data-seg="trial"], :global(.jf-blueprint .content) .bar [data-seg="trial"] { --seg: var(--blueprint); }
+:global(.jf-blueprint .content) .legend [data-seg="left"], :global(.jf-blueprint .content) .bar [data-seg="left"] { --seg: var(--muted-faint); }
+:global(.jf-blueprint .content) .legend [data-seg="failed"], :global(.jf-blueprint .content) .bar [data-seg="failed"] { --seg: var(--danger); }
+:global(.jf-blueprint .content) .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; background: var(--seg); }
+:global(.jf-blueprint .content) .calWrap { overflow-x: auto; }
+:global(.jf-blueprint .content) .cal { width: 100%; border-collapse: collapse; font-size: 13px; color: var(--ink); }
+:global(.jf-blueprint .content) .cal th,
+:global(.jf-blueprint .content) .cal td { padding: 9px 12px; border-bottom: 1px solid var(--hair); text-align: left; vertical-align: middle; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .cal thead th { font: 700 10.5px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+:global(.jf-blueprint .content) .cal tbody th { font-weight: 700; white-space: nowrap; }
+:global(.jf-blueprint .content) .cal tbody th button { padding: 0; border: 0; background: none; font: inherit; color: var(--blueprint); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+:global(.jf-blueprint .content) .cal tbody th small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); }
+:global(.jf-blueprint .content) .cal tr[data-empty] { color: var(--muted-light); }
+:global(.jf-blueprint .content) .bar { display: flex; width: 100%; min-width: 160px; height: 14px; border: 1px solid var(--hair); background: var(--paper); }
+:global(.jf-blueprint .content) .bar i { display: block; height: 100%; background: var(--seg); }
+:global(.jf-blueprint .content) .calOpen td { background: var(--paper); }
+:global(.jf-blueprint .content) .calOpen ul { display: grid; gap: 6px; margin: 0; padding: 4px 0; list-style: none; }
+:global(.jf-blueprint .content) .calOpen li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; }
+
+/* ── the payers, and who left ── */
+:global(.jf-blueprint .content) .list { margin: 0; padding: 0; list-style: none; }
+:global(.jf-blueprint .content) .listRow {
+  display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1.6fr) minmax(150px, 1fr); gap: 14px; align-items: start;
+  padding: 12px 20px; border-bottom: 1px solid var(--hair);
+}
+:global(.jf-blueprint .content) .listRow:last-child { border-bottom: 0; }
+:global(.jf-blueprint .content) .listWho,
+:global(.jf-blueprint .content) .listWhat,
+:global(.jf-blueprint .content) .listWhen { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+:global(.jf-blueprint .content) .listWho b,
+:global(.jf-blueprint .content) .listWhen b { color: var(--ink); }
+:global(.jf-blueprint .content) .listWho span,
+:global(.jf-blueprint .content) .listWhen span { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .listWhat > span:not(.chip) { font-size: 12.5px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .listWhat .chip { align-self: flex-start; }
+:global(.jf-blueprint .content) .foot { margin: 0; font-size: 12px; color: var(--muted); }
+
+/* ── a phone ── */
+@media (max-width: 760px) {
+  :global(.jf-blueprint .content) .headline { padding: 14px 16px; font-size: 15px; }
+  :global(.jf-blueprint .content) .cardHead { padding: 14px; }
+  :global(.jf-blueprint .content) .dayGroup { padding: 2px 12px 12px; }
+  :global(.jf-blueprint .content) .ends { text-align: left; }
+  :global(.jf-blueprint .content) .actDay li { grid-template-columns: 58px minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .actText { grid-column: 1 / -1; }
+  :global(.jf-blueprint .content) .listRow { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 12px 14px; }
+  /* The calendar stacks: a block per day, each figure under its label. */
+  :global(.jf-blueprint .content) .cal thead { display: none; }
+  :global(.jf-blueprint .content) .cal,
+  :global(.jf-blueprint .content) .cal tbody,
+  :global(.jf-blueprint .content) .cal tr,
+  :global(.jf-blueprint .content) .cal th,
+  :global(.jf-blueprint .content) .cal td { display: block; width: auto; }
+  :global(.jf-blueprint .content) .cal tr { padding: 8px 14px; border-bottom: 1px solid var(--hair); }
+  :global(.jf-blueprint .content) .cal th,
+  :global(.jf-blueprint .content) .cal td { padding: 3px 0; border-bottom: 0; }
+  :global(.jf-blueprint .content) .cal td[data-label]::before { content: attr(data-label) " · "; font-size: 11px; color: var(--muted); }
+  :global(.jf-blueprint .content) .bar { display: inline-flex; width: 60%; min-width: 0; vertical-align: middle; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .openBtn,
+  :global(.jf-blueprint .content) .openBtn svg { transition: none; }
+}
