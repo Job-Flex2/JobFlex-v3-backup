@@ -24,6 +24,7 @@ import { SubscriptionStatus } from "@/lib/prismaEnums";
 import { CUSTOM_PLAN_SLUG, normalizeCustomPages } from "@/lib/customPlan";
 import { billedPageCount, writeOrgPages } from "@/lib/customBilling";
 import { recordPlanChange } from "@/lib/subscriptionRecord";
+import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
 
 const claimKey = (sessionId: string) => `checkoutReturn:${sessionId}`;
 
@@ -53,6 +54,7 @@ export async function cancelReplacedSubscription(
       console.warn(`[${tag}] replaced subscription ${replaces} belongs to another organization — left alone`);
       return "none";
     }
+    await releaseAttachedSchedule(stripe, replaces).catch(() => null);
     await stripe.subscriptions.cancel(replaces, { prorate: false, invoice_now: false });
     return "canceled";
   } catch (err) {

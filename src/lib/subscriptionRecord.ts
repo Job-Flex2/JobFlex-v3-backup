@@ -13,6 +13,7 @@ import type { SubscriptionStatus } from "@/lib/prismaEnums";
 import { planSnapshot, reportPlanChange } from "@/lib/activation-events";
 import { clearPlanGrant, clearSyncingMark, readPlanGrant, recordPlanActivity } from "@/lib/planGrant";
 import { getStripe, isStripeEnabled } from "@/lib/sdk/stripe";
+import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
 import { getPlanDisplayName } from "@/lib/planCatalogServer";
 
 /* WHICH SUBSCRIPTION THE MIRROR MAY FOLLOW NEXT. An organisation's mirror names
@@ -97,6 +98,7 @@ async function endGrantForCheckout(organizationId: string, planSlug: string, sub
   await clearPlanGrant(organizationId);
   const old = grant.replaced;
   if (old && old.action === "cancel_at_period_end" && old.subId !== subId && isStripeEnabled()) {
+    await releaseAttachedSchedule(getStripe(), old.subId).catch(() => null);
     await getStripe()
       .subscriptions.cancel(old.subId, { prorate: false, invoice_now: false })
       .catch((err) => console.warn("[subscriptionRecord] could not cancel the replaced subscription:", err));

@@ -38,6 +38,10 @@ import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
 import { changeRoute, type BillingTermName, type ChangeRoute } from "@/lib/planChangeRoute";
 import { priceInterval } from "@/lib/priceInterval";
 import { ensureYearFirstMonthCoupon } from "@/lib/yearDiscount";
+import { syncSubscriptionFromStripe } from "@/lib/stripeSync";
+import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
+
+export { releaseAttachedSchedule };
 
 export type Term = BillingTermName;
 export type { ChangeRoute };
@@ -72,7 +76,16 @@ export type PlanChangeDone =
   | PlanChangeRefusal;
 
 /** The booked YEAR → MONTH switch (SyncState `planSwitch:<orgId>`). */
-export type ScheduledSwitch = { scheduleId: string; subId: string; planSlug: string; planName: string; interval: Term; at: string };
+export type ScheduledSwitch = {
+  scheduleId: string;
+  subId: string;
+  planSlug: string;
+  planName: string;
+  interval: Term;
+  at: string;
+  /** The price the switch moves to (records from before 2026-10-12 have none: it is looked up). */
+  priceId?: string;
+};
 const switchKey = (orgId: string) => `planSwitch:${orgId}`;
 
 export const CARD_DECLINED = "Card declined — update your card.";
@@ -92,6 +105,27 @@ const addTerm = (unix: number, term: Term) => {
   return Math.floor(d.getTime() / 1000);
 };
 
+/** Stripe as the change sees it: the admin's live/sandbox client, or one handed in by a check. */
+export type PlanChangeDeps = {
+  stripe: Stripe;
+  mode: StripeMode;
+  /** A check's seam: runs just before our row is written after Stripe applied a change. */
+  onRowWrite?: () => void | Promise<void>;
+};
+const clientOf = async (deps?: PlanChangeDeps): Promise<PlanChangeDeps> => deps ?? (await getStripeClient());
+
+/** The Stripe price for a catalog plan on a term, by mode (the checkout route's rule). */
+async function priceFor(d: PlanChangeDeps, plan: { slug: string; name: string; priceCents: number; yearlyPriceCents: number | null }, interval: Term): Promise<string | null> {
+  if (d.mode === "live") {
+    const price = await db.planPrice.findFirst({ where: { planSlug: plan.slug, interval, active: true } });
+    return price?.stripePriceId ?? null;
+  }
+  const cents = interval === "YEAR" ? (plan.yearlyPriceCents ?? 0) : plan.priceCents;
+  return ensureRecurringPrice({ stripe: d.stripe, mode: d.mode, kind: plan.slug, name: `JobFlex ${plan.name}`, interval, cents });
+}
+
+type Already = { already: true; stripe: Stripe; sub: Stripe.Subscription; plan: { slug: string; name: string }; interval: Term; termCents: number };
+
 type Resolved = {
   stripe: Stripe;
   mode: StripeMode;
@@ -110,7 +144,8 @@ async function resolve(
   organizationId: string,
   planSlug: string,
   wanted: Term,
-): Promise<Resolved | { ok: true; route: "checkout"; plan: { slug: string; name: string }; interval: Term } | PlanChangeRefusal> {
+  deps?: PlanChangeDeps,
+): Promise<Resolved | Already | { ok: true; route: "checkout"; plan: { slug: string; name: string }; interval: Term } | PlanChangeRefusal> {
   const plan = await getPlanBySlug(planSlug);
   if (!plan || !plan.active) return { ok: false, error: "That plan is not available." };
   if (plan.isFree) return { ok: false, error: "That plan can't be switched to here." };
@@ -118,7 +153,7 @@ async function resolve(
   const interval: Term = wanted === "YEAR" && plan.yearlyPriceCents ? "YEAR" : "MONTH";
   const row = await db.subscription.findUnique({ where: { organizationId } });
   if (!row?.externalSubId) return { ok: true, route: "checkout", plan, interval };
-  const { stripe, mode } = await getStripeClient();
+  const { stripe, mode } = await clientOf(deps);
   let sub: Stripe.Subscription;
   try {
     sub = await stripe.subscriptions.retrieve(row.externalSubId);
@@ -132,17 +167,17 @@ async function resolve(
 
   const fromInterval = termOf(sub);
   const current = (row.plan ?? "").toLowerCase();
-  if (current === plan.slug && fromInterval === interval) return { ok: false, error: "That is already your plan.", code: "same_plan" };
 
   const termCents = interval === "YEAR" ? (plan.yearlyPriceCents ?? 0) : plan.priceCents;
-  let priceId: string;
-  if (mode === "live") {
-    const price = await db.planPrice.findFirst({ where: { planSlug: plan.slug, interval, active: true } });
-    if (!price) return { ok: false, error: "That plan isn't available for checkout yet." };
-    priceId = price.stripePriceId;
-  } else {
-    priceId = await ensureRecurringPrice({ stripe, mode, kind: plan.slug, name: `JobFlex ${plan.name}`, interval, cents: termCents });
+  const priceId = await priceFor({ stripe, mode }, plan, interval);
+  if (!priceId) return { ok: false, error: "That plan isn't available for checkout yet." };
+  /* ALREADY THERE (2026-10-12). Stripe holds the target price — an earlier
+     press went through and only our row lags (its write failed, or the
+     webhook has not landed). Nothing is charged again; the row is aligned. */
+  if (sub.items.data.length === 1 && sub.items.data[0].price.id === priceId) {
+    return { already: true, stripe, sub, plan, interval, termCents };
   }
+  if (current === plan.slug && fromInterval === interval) return { ok: false, error: "That is already your plan.", code: "same_plan" };
 
   const catalog = await getPlanCatalog();
   const rank = (slug: string) => (slug === CUSTOM_PLAN_SLUG ? -1 : catalog.findIndex((p) => p.slug === slug));
@@ -221,8 +256,14 @@ function metadataFor(r: Resolved, organizationId: string): Record<string, string
 }
 
 /** What the change would do, from Stripe's own preview. */
-export async function previewPlanChange(organizationId: string, planSlug: string, wanted: Term): Promise<PlanChangePreview | PlanChangeRefusal> {
-  const r = await resolve(organizationId, planSlug, wanted);
+export async function previewPlanChange(organizationId: string, planSlug: string, wanted: Term, deps?: PlanChangeDeps): Promise<PlanChangePreview | PlanChangeRefusal> {
+  const r = await resolve(organizationId, planSlug, wanted, deps);
+  if ("already" in r) {
+    return {
+      ok: true, route: "free", planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, fromInterval: r.interval,
+      dueNowCents: 0, creditCents: 0, termCents: r.termCents, nextBillAt: iso(subscriptionPeriodEnd(r.sub)), switchAt: null, prorationDate: null,
+    };
+  }
   if ("ok" in r) {
     if (!r.ok) return r;
     return {
@@ -269,43 +310,86 @@ export async function applyPlanChange(
   planSlug: string,
   wanted: Term,
   prorationDate?: number | null,
+  deps?: PlanChangeDeps,
 ): Promise<PlanChangeDone> {
-  const r = await resolve(organizationId, planSlug, wanted);
+  /* ONE CHANGE AT A TIME per company: a double click must not run two
+     charges side by side. The lock is a row that lives two minutes at most. */
+  if (!(await takeLock(organizationId))) return { ok: false, error: "A plan change is already under way. Wait a moment and look again." };
+  try {
+    return await applyLocked(organizationId, planSlug, wanted, prorationDate ?? null, deps);
+  } finally {
+    await db.syncState.deleteMany({ where: { key: lockKey(organizationId) } }).catch(() => {});
+  }
+}
+
+const lockKey = (orgId: string) => `planChangeLock:${orgId}`;
+async function takeLock(orgId: string): Promise<boolean> {
+  try {
+    await db.syncState.create({ data: { key: lockKey(orgId), cursor: String(Date.now()) } });
+    return true;
+  } catch {
+    const row = await db.syncState.findUnique({ where: { key: lockKey(orgId) } }).catch(() => null);
+    if (row && Date.now() - Number(row.cursor) > 120_000) {
+      const taken = await db.syncState.updateMany({ where: { key: lockKey(orgId), cursor: row.cursor }, data: { cursor: String(Date.now()) } });
+      return taken.count === 1;
+    }
+    return false;
+  }
+}
+
+async function applyLocked(
+  organizationId: string,
+  planSlug: string,
+  wanted: Term,
+  prorationDate: number | null,
+  deps?: PlanChangeDeps,
+): Promise<PlanChangeDone> {
+  const r = await resolve(organizationId, planSlug, wanted, deps);
+  if ("already" in r) {
+    // An earlier press went through at Stripe: no second charge, the row is aligned.
+    await alignRow(r.stripe, r.sub.id, organizationId, "already at the target price");
+    return { ok: true, mode: "switched", route: "free", planName: r.plan.name, interval: r.interval, chargedCents: 0 };
+  }
   if ("ok" in r) return r.ok ? { ok: true, mode: "checkout" } : r;
   const { stripe, sub } = r;
-  // A booked YEAR → MONTH switch gives way to whatever is asked now.
-  await releaseScheduledSwitch(organizationId, stripe).catch((err) => console.warn("[planChange] release failed:", err));
 
-  if (r.route === "schedule") {
-    const end = subscriptionPeriodEnd(sub);
-    if (!end) return { ok: false, error: "Couldn't read the end of your paid year. Try again." };
-    const fresh = await stripe.subscriptions.retrieve(sub.id);
-    const existing = typeof fresh.schedule === "string" ? fresh.schedule : fresh.schedule?.id;
-    const schedule = existing
-      ? await stripe.subscriptionSchedules.retrieve(existing)
-      : await stripe.subscriptionSchedules.create({ from_subscription: sub.id });
-    const now = schedule.phases[0];
-    await stripe.subscriptionSchedules.update(schedule.id, {
-      end_behavior: "release",
-      phases: [
-        {
-          items: sub.items.data.map((i) => ({ price: i.price.id, quantity: i.quantity ?? 1 })),
-          start_date: now?.start_date ?? subscriptionPeriodEnd(sub)! - 365 * DAY,
-          end_date: end,
-          proration_behavior: "none",
-        },
-        {
-          items: [{ price: r.priceId, quantity: 1 }],
-          proration_behavior: "none",
-          metadata: metadataFor(r, organizationId),
-        },
-      ],
-    });
-    const booked: ScheduledSwitch = { scheduleId: schedule.id, subId: sub.id, planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, at: new Date(end * 1000).toISOString() };
-    await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(booked) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(booked) } });
-    return { ok: true, mode: "scheduled", planName: r.plan.name, interval: r.interval, switchAt: booked.at };
+  if (r.route === "schedule") return bookSwitch(organizationId, r);
+
+  /* A BOOKED YEAR → MONTH SWITCH AND ANOTHER CHANGE (2026-10-12). A
+     subscription held by a schedule takes no direct change of its price, so
+     the schedule is released first — but the booking is put back, as it was,
+     if the new change does not go through: the shop keeps "Switches to
+     monthly on <date>". Only a change that succeeds ends the booking. */
+  const booked = await readSwitchRecord(organizationId);
+  const held = await releaseAttachedSchedule(stripe, sub.id);
+  const restore = async (why: string) => {
+    if (!booked && !held) return;
+    try {
+      await restoreBooking(organizationId, r, booked);
+    } catch (err) {
+      console.error(`[planChange] ${sub.id} (org ${organizationId}): the booked switch could not be put back after ${why}:`, err);
+    }
+  };
+
+  let done: PlanChangeDone;
+  try {
+    done = await changeNow(organizationId, r, prorationDate, deps);
+  } catch (err) {
+    console.warn(`[planChange] ${sub.id} (org ${organizationId}): change failed:`, err);
+    await restore("an error");
+    return { ok: false, error: "Couldn't switch the plan. Try again." };
   }
+  if (!done.ok) {
+    await restore(done.code ?? "a refusal");
+    return done;
+  }
+  await db.syncState.deleteMany({ where: { key: switchKey(organizationId) } }).catch(() => {});
+  return done;
+}
 
+/** The price is changed on the subscription now (charge, free, trial). */
+async function changeNow(organizationId: string, r: Resolved, prorationDate: number | null, deps?: PlanChangeDeps): Promise<PlanChangeDone> {
+  const { stripe, sub } = r;
   let updated: Stripe.Subscription;
   let chargedCents = 0;
   if (r.route === "charge") {
@@ -335,7 +419,14 @@ export async function applyPlanChange(
       return { ok: false, error: CARD_DECLINED, code: "card_declined" };
     }
     if (inv && (inv.created ?? 0) >= startedAt) chargedCents = inv.amount_paid ?? 0;
-    updated = await stripe.subscriptions.update(sub.id, { metadata: metadataFor(r, organizationId) });
+    /* FROM HERE THE CHANGE IS MADE AND PAID (2026-10-12). Nothing below may
+       turn it into an error for the customer: a failed write is logged and
+       our row is brought to Stripe's state (alignRow). */
+    try {
+      updated = await stripe.subscriptions.update(sub.id, { metadata: metadataFor(r, organizationId) });
+    } catch (err) {
+      console.error(`[planChange] ${sub.id} (org ${organizationId}): paid ${chargedCents}¢, but the metadata write failed:`, err);
+    }
   } else {
     const year = await discountsForYear(r);
     try {
@@ -352,18 +443,125 @@ export async function applyPlanChange(
     }
   }
 
-  await db.subscription.update({
-    where: { organizationId },
-    data: {
-      plan: r.plan.slug.toUpperCase(),
-      status: updated.status === "trialing" ? SubscriptionStatus.TRIALING : SubscriptionStatus.ACTIVE,
-      stripePriceId: r.priceId,
-      trialEndsAt: updated.trial_end ? new Date(updated.trial_end * 1000) : null,
-      currentPeriodEnd: subscriptionPeriodEndDate(updated),
-    },
-  });
-  return { ok: true, mode: "switched", route: r.route, planName: r.plan.name, interval: r.interval, chargedCents };
+  try {
+    await deps?.onRowWrite?.();
+    await db.subscription.update({
+      where: { organizationId },
+      data: {
+        plan: r.plan.slug.toUpperCase(),
+        status: updated.status === "trialing" ? SubscriptionStatus.TRIALING : SubscriptionStatus.ACTIVE,
+        stripePriceId: r.priceId,
+        trialEndsAt: updated.trial_end ? new Date(updated.trial_end * 1000) : null,
+        currentPeriodEnd: subscriptionPeriodEndDate(updated),
+      },
+    });
+  } catch (err) {
+    console.error(`[planChange] ${sub.id} (org ${organizationId}): changed at Stripe (${chargedCents}¢ charged), but our row write failed:`, err);
+    await alignRow(stripe, sub.id, organizationId, "the row write failed");
+  }
+  return { ok: true, mode: "switched", route: r.route as "charge" | "free" | "trial", planName: r.plan.name, interval: r.interval, chargedCents };
 }
+
+/**
+ * Our row brought to Stripe's state by the webhook's own function
+ * (stripeSync.syncSubscriptionFromStripe), with one more try. Logged either
+ * way; the reconcile cron is the last backstop.
+ */
+async function alignRow(stripe: Stripe, subId: string, organizationId: string, why: string): Promise<boolean> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const fresh = await stripe.subscriptions.retrieve(subId);
+      const res = await syncSubscriptionFromStripe(fresh, stripe);
+      if (res.synced) return true;
+      console.error(`[planChange] ${subId} (org ${organizationId}): align after ${why}, try ${attempt}: not synced (${res.reason})`);
+    } catch (err) {
+      console.error(`[planChange] ${subId} (org ${organizationId}): align after ${why}, try ${attempt} failed:`, err);
+    }
+  }
+  return false;
+}
+
+/* ── THE BOOKED SWITCH (YEAR → MONTH) ──────────────────────────────────── */
+
+/** Book (or re-book) the switch on the subscription's schedule. A schedule
+ *  made here and left without its phases is released at once: nothing stays
+ *  attached to the subscription if the booking fails. */
+async function bookSwitch(organizationId: string, r: Resolved): Promise<PlanChangeDone> {
+  const { stripe, sub } = r;
+  const end = subscriptionPeriodEnd(sub);
+  if (!end) return { ok: false, error: "Couldn't read the end of your paid year. Try again." };
+  const booked = await writeSchedule(stripe, sub, end, r.priceId, metadataFor(r, organizationId));
+  if (!booked.ok) return { ok: false, error: "Couldn't book the switch. Try again." };
+  const record: ScheduledSwitch = { scheduleId: booked.scheduleId, subId: sub.id, planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, at: new Date(end * 1000).toISOString(), priceId: r.priceId };
+  await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(record) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(record) } });
+  return { ok: true, mode: "scheduled", planName: r.plan.name, interval: r.interval, switchAt: record.at };
+}
+
+async function writeSchedule(
+  stripe: Stripe,
+  sub: Stripe.Subscription,
+  end: number,
+  priceId: string,
+  metadata: Record<string, string>,
+): Promise<{ ok: true; scheduleId: string } | { ok: false }> {
+  const fresh = await stripe.subscriptions.retrieve(sub.id);
+  const existing = typeof fresh.schedule === "string" ? fresh.schedule : fresh.schedule?.id;
+  let schedule: Stripe.SubscriptionSchedule;
+  let made = false;
+  try {
+    schedule = existing ? await stripe.subscriptionSchedules.retrieve(existing) : await stripe.subscriptionSchedules.create({ from_subscription: sub.id });
+    made = !existing;
+  } catch (err) {
+    console.warn(`[planChange] ${sub.id}: no schedule could be made:`, err);
+    return { ok: false };
+  }
+  try {
+    const now = schedule.phases[0];
+    await stripe.subscriptionSchedules.update(schedule.id, {
+      end_behavior: "release",
+      phases: [
+        {
+          items: fresh.items.data.map((i) => ({ price: i.price.id, quantity: i.quantity ?? 1 })),
+          start_date: now?.start_date ?? end - 365 * DAY,
+          end_date: end,
+          proration_behavior: "none",
+        },
+        { items: [{ price: priceId, quantity: 1 }], proration_behavior: "none", metadata },
+      ],
+    });
+    return { ok: true, scheduleId: schedule.id };
+  } catch (err) {
+    console.warn(`[planChange] ${sub.id}: the schedule's phases were refused${made ? " — the new schedule is released" : ""}:`, err);
+    if (made) await stripe.subscriptionSchedules.release(schedule.id).catch((e) => console.error(`[planChange] ${sub.id}: could not release ${schedule.id}:`, e));
+    return { ok: false };
+  }
+}
+
+/** Put a booking back as it was (after another change did not go through). */
+async function restoreBooking(organizationId: string, r: Resolved, booked: ScheduledSwitch | null): Promise<void> {
+  if (!booked) return;
+  const { stripe } = r;
+  const plan = await getPlanBySlug(booked.planSlug, { includeInactive: true });
+  const priceId = booked.priceId ?? (plan ? await priceFor({ stripe, mode: r.mode }, plan, booked.interval) : null);
+  if (!priceId) throw new Error(`no price for ${booked.planSlug}/${booked.interval}`);
+  const end = Math.floor(Date.parse(booked.at) / 1000);
+  const metadata = { ...(r.sub.metadata ?? {}), organizationId, planSlug: booked.planSlug, interval: booked.interval, customPages: "" };
+  const done = await writeSchedule(stripe, r.sub, end, priceId, metadata);
+  if (!done.ok) throw new Error("the schedule could not be written again");
+  const record: ScheduledSwitch = { ...booked, scheduleId: done.scheduleId, priceId };
+  await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(record) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(record) } });
+}
+
+async function readSwitchRecord(organizationId: string): Promise<ScheduledSwitch | null> {
+  const row = await db.syncState.findUnique({ where: { key: switchKey(organizationId) } }).catch(() => null);
+  if (!row) return null;
+  try {
+    return JSON.parse(row.cursor) as ScheduledSwitch;
+  } catch {
+    return null;
+  }
+}
+
 
 /** The booked switch, while it is still ahead. */
 export async function readScheduledSwitch(organizationId: string): Promise<ScheduledSwitch | null> {
@@ -372,7 +570,7 @@ export async function readScheduledSwitch(organizationId: string): Promise<Sched
   try {
     const s = JSON.parse(row.cursor) as ScheduledSwitch;
     if (Date.parse(s.at) <= Date.now()) {
-      await db.syncState.delete({ where: { key: switchKey(organizationId) } }).catch(() => {});
+      await db.syncState.deleteMany({ where: { key: switchKey(organizationId) } }).catch(() => {});
       return null;
     }
     const sub = await db.subscription.findUnique({ where: { organizationId }, select: { externalSubId: true } });
@@ -382,18 +580,23 @@ export async function readScheduledSwitch(organizationId: string): Promise<Sched
   }
 }
 
-/** Cancel a booked switch: the schedule is released, the subscription goes on as it is. */
+/** Cancel a booked switch: the schedule is released, the subscription goes on as it is.
+ *  Releases the record's schedule and any other Stripe holds on the subscription. */
 export async function releaseScheduledSwitch(organizationId: string, stripe?: Stripe): Promise<boolean> {
-  const row = await db.syncState.findUnique({ where: { key: switchKey(organizationId) } }).catch(() => null);
-  if (!row) return false;
-  const s = JSON.parse(row.cursor) as ScheduledSwitch;
   const client = stripe ?? (await getStripeClient()).stripe;
-  const schedule = await client.subscriptionSchedules.retrieve(s.scheduleId).catch(() => null);
-  if (schedule && (schedule.status === "active" || schedule.status === "not_started")) {
-    await client.subscriptionSchedules.release(s.scheduleId);
+  const s = await readSwitchRecord(organizationId);
+  let released = false;
+  if (s) {
+    const schedule = await client.subscriptionSchedules.retrieve(s.scheduleId).catch(() => null);
+    if (schedule && (schedule.status === "active" || schedule.status === "not_started")) {
+      await client.subscriptionSchedules.release(s.scheduleId);
+    }
+    released = true;
   }
-  await db.syncState.delete({ where: { key: switchKey(organizationId) } }).catch(() => {});
-  return true;
+  const row = await db.subscription.findUnique({ where: { organizationId }, select: { externalSubId: true } }).catch(() => null);
+  if (row?.externalSubId && (await releaseAttachedSchedule(client, row.externalSubId).catch(() => null))) released = true;
+  await db.syncState.deleteMany({ where: { key: switchKey(organizationId) } }).catch(() => {});
+  return released;
 }
 
 /** What the plan pages need: the term the shop pays on now, and a booked switch. */

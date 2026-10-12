@@ -21,6 +21,7 @@ import { db } from "@/lib/db";
 import { signOutEverywhereFor } from "@/lib/sessions";
 import { mergeMatrixSave, parseNotificationPrefs } from "@/lib/notificationPrefsShared";
 import { getStripe, isStripeEnabled } from "@/lib/sdk/stripe";
+import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
 import { markSubscriptionCanceled } from "@/lib/stripeSync";
 import { disconnectSquareFor, disconnectStripeConnectFor } from "@/lib/payments/connections";
 import { ActivityKind } from "@/lib/prismaEnums";
@@ -175,6 +176,7 @@ export async function deleteOrganization(raw: unknown) {
   const warnings: string[] = [];
   if (org.subscription?.externalSubId && isStripeEnabled()) {
     try {
+      await releaseAttachedSchedule(getStripe(), org.subscription.externalSubId).catch(() => null);
       const canceled = await getStripe().subscriptions.cancel(org.subscription.externalSubId);
       await markSubscriptionCanceled(canceled);
     } catch (err) {
@@ -255,6 +257,7 @@ export async function deleteMyAccount(raw: unknown) {
     if (org._count.memberships > 1) continue; // others remain — membership cascades with the user
     if (org.subscription?.externalSubId && isStripeEnabled()) {
       try {
+        await releaseAttachedSchedule(getStripe(), org.subscription.externalSubId).catch(() => null);
         const canceled = await getStripe().subscriptions.cancel(org.subscription.externalSubId);
         await markSubscriptionCanceled(canceled);
       } catch (err) {

@@ -22,6 +22,7 @@
 // how a "trial → active" edit left the trial billing beside a comp.
 
 import type Stripe from "stripe";
+import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getStripeClient, isStripeEnabled } from "@/lib/sdk/stripe";
@@ -552,6 +553,8 @@ export async function applySubscriptionChange(raw: unknown, admin: EditorActor):
   if (sub) {
     const cancelsNow = sub.status === "trialing" || data.cancelNow;
     try {
+      // A booked plan switch (lib/planChange) or any other schedule is let go first.
+      await releaseAttachedSchedule(s.stripe!, sub.id);
       if (cancelsNow) {
         await s.stripe!.subscriptions.cancel(sub.id, { prorate: false, invoice_now: false });
         replaced = { subId: sub.id, status: sub.status, action: "canceled_now", endsAt: null };
