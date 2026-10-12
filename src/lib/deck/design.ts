@@ -144,7 +144,7 @@ export type RoofDeck = "sheathing" | "purlins";
  * the thrust), or none (hips meet at a king post or a steel ring). "auto"
  * lets the roof's shape decide.
  */
-export type RidgeKind = "auto" | "beam" | "board" | "none";
+export type RidgeKind = "auto" | "beam" | "board" | "none" | "trusses";
 export type CeilingKind = "none" | "tongue-groove" | "beadboard";
 export const CEILING_LABEL: Record<CeilingKind, string> = { none: "Open — rafters showing", "tongue-groove": "Tongue-and-groove boards", beadboard: "Beadboard panels" };
 export type FasciaFinish = "wood" | "pvc" | "aluminum-wrap";
@@ -797,7 +797,7 @@ export function normalizeRoof(raw: unknown, structure: Structure, floor: Floor, 
     rafter: rafterRaw,
     rafterSpacingIn: oneOf(num(r.rafterSpacingIn, 0), SPACINGS, d.rafterSpacingIn) as SpacingIn,
     header,
-    ridge: oneOf(r.ridge, ["auto", "beam", "board", "none"] as const, d.ridge),
+    ridge: oneOf(r.ridge, ["auto", "beam", "board", "none", "trusses"] as const, d.ridge),
     roofing,
     roofDeck: metal ? oneOf(r.roofDeck, ["sheathing", "purlins"] as const, d.roofDeck) : "sheathing",
     ceiling: kind === "pergola" ? "none" : oneOf(r.ceiling, ["none", "tongue-groove", "beadboard"] as const, d.ceiling),

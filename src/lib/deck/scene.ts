@@ -310,6 +310,7 @@ const ROOF_MEMBER_LAYER: Record<RoofMember["role"], SceneLayer> = {
   jack: "rafter",
   fly: "rafter",
   tie: "rafter",
+  truss: "rafter",
   purlin: "rafter",
   slat: "rafter",
   hip: "ridge",
@@ -624,6 +625,12 @@ export function deckScene(s: DeckStructure): DeckScene {
           return "4x4 king post under the ridge beam, in a post bracket on the gable-end header.";
         case "tie":
           return roof.kind === "gambrel" ? "2x6 tie across at the gambrel's break, through-bolted to the rafter pair with plywood gussets." : "2x6 rafter tie at the header line, every 4 ft, three 16d nails each end — it takes the rafters' thrust (IRC R802.5.2).";
+        case "truss":
+          return m.of === "truss-bc"
+            ? `${m.nominal} of a manufactured truss, bearing on the headers 24 in. on center: the truss carries its own thrust — no ridge beam, no ties, nothing in the middle.`
+            : m.of === "truss-web"
+              ? "2x4 web of a manufactured truss, plated at both ends by the truss maker."
+              : `${m.nominal} of a manufactured truss, designed and stamped by the truss maker for this roof's loads (IRC R802.10); a hurricane tie at each bearing.`;
         case "header":
           return m.nominal.startsWith("LVL") ? `Engineered LVL header post to post: the sawn tables did not reach, so a ${m.nominal.replace("LVL1.75x", "1¾ × ")}-in. ply beam is sized by the usual LVL figures; on post caps, plies bolted.` : `${m.nominal} header (beam) on the posts, in post caps${roof.ring.length > 4 ? `, mitred ${Math.round(180 / roof.ring.length)}° where two meet at a corner post` : ", square-cut"}; the rafters bear on it.`;
         case "roof-ledger":

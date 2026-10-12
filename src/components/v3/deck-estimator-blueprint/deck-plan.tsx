@@ -55,7 +55,7 @@ export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all"
   const dimY = maxY + font * 2.6;
   const dimX = maxX + font * 2.6;
   const joistNote = frame ? `${frame.joistSize} joists @ ${frame.spacingIn}" o.c.` : "";
-  const roofNote = roof ? `${roof.rafters.size} rafters @ ${roof.rafters.spacingIn}" o.c.` : "";
+  const roofNote = roof ? (roof.trusses ? `trusses @ ${roof.trusses.spacingIn}" o.c. · ${ftIn(roof.trusses.spanIn)} span` : `${roof.rafters.size} rafters @ ${roof.rafters.spacingIn}" o.c.`) : "";
   const vb = `${minX - pad} ${minY - pad - (onHouse ? houseBand : 0)} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2 + (onHouse ? houseBand : 0)}`;
   const roofMembers = (roles: string[]) => (roof ? roof.members.filter((m) => roles.includes(m.role)) : []);
 
@@ -200,6 +200,9 @@ export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all"
         <g className={s.planRoof}>
           {roof.slab ? <rect x={Math.min(...roof.ring.map((p) => p.x)) - 12} y={Math.min(...roof.ring.map((p) => p.y)) - 12} width={Math.max(...roof.ring.map((p) => p.x)) - Math.min(...roof.ring.map((p) => p.x)) + 24} height={Math.max(...roof.ring.map((p) => p.y)) - Math.min(...roof.ring.map((p) => p.y)) + 24} fill="var(--paper)" stroke="var(--muted)" strokeWidth={lw} /> : null}
           <polygon points={roof.eaveRing.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="var(--blueprint)" strokeWidth={lw * 1.2} strokeDasharray={`${lw * 5} ${lw * 3}`} />
+          {roofMembers(["truss"]).filter((m) => m.of === "truss-tc").map((m, i) => (
+            <line key={`tr${i}`} x1={m.x0} y1={m.y0} x2={m.x1} y2={m.y1} stroke="var(--blueprint)" strokeWidth={lw * 0.9} opacity={0.9} />
+          ))}
           {roofMembers(["rafter", "jack", "fly", "purlin", "slat", "tie"]).map((m, i) => (
             <line key={`rf${i}`} x1={m.x0} y1={m.y0} x2={m.x1} y2={m.y1} stroke="var(--blueprint)" strokeWidth={m.role === "slat" ? lw * 0.4 : lw * 0.7} opacity={m.role === "slat" || m.role === "purlin" ? 0.5 : 0.85} />
           ))}
@@ -228,13 +231,19 @@ export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all"
               {`${roof.kind} ${roof.roof.pitch}:12 · ${ftIn(roof.roof.overhangIn)} overhang`}
             </text>
           ) : null}
+          {show === "roof" && roof.trusses ? (
+            <text x={roof.centreX} y={roof.centreY + font * 1.6} fontSize={font * 0.8} textAnchor="middle" className={s.planNote}>
+              {`${roof.trusses.count} trusses · ${roof.trusses.chord} chords · no ridge beam`}
+            </text>
+          ) : null}
           {show === "roof" && roof.ridge ? (
             <text x={roof.centreX} y={roof.centreY + font * 1.6} fontSize={font * 0.8} textAnchor="middle" className={s.planNote}>
               {`${roof.ridge.kind === "beam" ? `${roof.ridge.spec?.size ?? roof.ridge.nominal} ridge beam` : `${roof.ridge.nominal} ridge board`} · ${ftIn(roof.ridge.lengthIn)}`}
             </text>
           ) : null}
           {roof.headers[0] ? (
-            <text x={roof.headers[0].x0 + font * 0.6} y={roof.headers[0].y0 - font * 0.6} fontSize={font * 0.85} className={s.planNote}>
+            // Below everything drawn, above the width's dimension line — clear of the eave's dashed line it used to sit on.
+            <text x={Math.min(...roof.eaveRing.map((p) => p.x)) + font * 0.2} y={maxY + font * 1.3} fontSize={font * 0.85} className={s.planNote}>
               {`${[...new Set(roof.headers.map((h) => h.spec.size))].join("/")} headers · ${roof.posts.length} posts`}
             </text>
           ) : null}

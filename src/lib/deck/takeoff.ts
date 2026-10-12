@@ -104,6 +104,7 @@ const ROOF_ROLE_LABEL: Record<RoofRole, string> = {
   ridge: "ridge",
   king: "king posts",
   tie: "rafter ties",
+  truss: "trusses",
   purlin: "purlins",
   slat: "slats",
   "roof-brace": "knee braces",
@@ -132,6 +133,7 @@ const ROOF_ROLE_STEP: Partial<Record<RoofRole, BomStep>> = {
   ridge: "roof-frame",
   king: "roof-frame",
   tie: "roof-frame",
+  truss: "roof-frame",
   purlin: "roof-frame",
   slat: "roof-frame",
   ring: "roof-frame",
@@ -481,6 +483,19 @@ export function deckTakeoff(s: DeckStructure): DeckTakeoff {
     oneEach("hip", 6);
     oneEach("ridge");
     oneEach("tie");
+    // Manufactured trusses (2026-10-11): bought by the truss, priced by the foot of span; the two gable ends carry studs
+    // for the siding; permanent bracing per the truss drawings and BCSI-B3 — a row along the bottom chords and the webs,
+    // diagonals at the ends.
+    if (roof.trusses && roof.trusses.count > 0) {
+      const T = roof.trusses;
+      const spanFt = T.spanIn / 12;
+      const commonsN = Math.max(0, T.count - T.gableEnds);
+      push({ id: "trusses-common", step: "roof-frame", kind: "lumber", label: `Roof trusses, common — ${ftIn(T.spanIn)} span, ${r.pitch}:12, ${T.chord} chords`, qty: commonsN, unit: "ea", note: "designed and stamped by the truss maker (IRC R802.10) · 24 in. on center", rateKey: "lf.truss", rateQty: Math.round(commonsN * spanFt * 10) / 10, factor: 1 });
+      push({ id: "trusses-gable", step: "roof-frame", kind: "lumber", label: `Roof trusses, gable end — ${ftIn(T.spanIn)} span`, qty: T.gableEnds, unit: "ea", note: "studs at 24 in. for the gable's siding", rateKey: "lf.truss", rateQty: Math.round(T.gableEnds * spanFt * 10) / 10, factor: 1.35 });
+      const alongFt = Math.max(0, T.count - 1) * (T.spacingIn / 12);
+      const braceLf = 3 * alongFt + 4 * Math.hypot(alongFt / 2, spanFt / 4);
+      lumber("roof-frame", "truss bracing", "2x4", 12, Math.ceil(braceLf / 12), false, "permanent bracing per the truss drawings and BCSI-B3");
+    }
     oneEach("ring");
     oneEach("slat");
     shortsOf("king", [8, 10]);

@@ -37,6 +37,7 @@
 
 import {
   BEAM_CANTILEVER_SHARE,
+  BEAM_TABLE_LAST_EFF_FT,
   BRACE_ABOVE_IN,
   DRESSED_DEPTH_IN,
   FOOTING_MIN_DEPTH_IN,
@@ -424,7 +425,8 @@ function layoutZone(zone: Zone, back: "ledger" | "beam", cIn: number, middle: nu
   return { zone, back, beamYs, spansIn, backCantIn: back === "beam" ? c - BEARING_HALF_IN : 0, frontCantIn: c - BEARING_HALF_IN };
 }
 
-function zoneInsideTable(l: Omit<ZoneFrame, "ok">, size: JoistSize, spacing: SpacingIn, group: SpeciesGroup, load: LoadPsf, extraFrontIn = 0): boolean {
+/** Inside the joist table; with a beam style, also every beam it lands on inside a beam table. */
+function zoneInsideTable(l: Omit<ZoneFrame, "ok">, size: JoistSize, spacing: SpacingIn, group: SpeciesGroup, load: LoadPsf, extraFrontIn = 0, beamsOf: BeamStyle | null = null): boolean {
   if (l.spansIn.length === 0 || l.spansIn.some((s) => !(s > 0))) return false;
   const max = joistMaxSpanIn(load, group, size, spacing);
   if (l.spansIn.some((s) => s > max)) return false;
@@ -432,6 +434,19 @@ function zoneInsideTable(l: Omit<ZoneFrame, "ok">, size: JoistSize, spacing: Spa
   const last = l.spansIn[l.spansIn.length - 1] / 12;
   if (l.frontCantIn + extraFrontIn > joistMaxCantileverIn(load, group, size, last)) return false;
   if (l.backCantIn > joistMaxCantileverIn(load, group, size, first)) return false;
+  if (!beamsOf) return true;
+  // Every beam the joists land on must read on a beam table (2026-10-11): an effective joist span past its last column
+  // (18 ft) is a beam no table sizes — the layout takes another beam line instead of leaving it to an engineer. The
+  // same readings beamLines makes: an end beam from its span and overhang, a middle one from the strip it carries.
+  const supports = l.back === "ledger" ? [l.zone.y0 + THICK_2X_IN, ...l.beamYs] : [...l.beamYs];
+  const whole = supportShares(supports, l.zone.y0, l.zone.y1, beamsOf === "dropped");
+  const offset = l.back === "ledger" ? 1 : 0;
+  for (let i = 0; i < l.beamYs.length; i++) {
+    const isBack = l.back === "beam" && i === 0;
+    const isFront = i === l.beamYs.length - 1;
+    const eff = isBack ? effectiveJoistSpanFt(first, l.backCantIn / 12) : isFront ? effectiveJoistSpanFt(last, l.frontCantIn / 12) : effectiveSpanFromTributaryFt(whole[i + offset] / 12);
+    if (eff > BEAM_TABLE_LAST_EFF_FT + 1e-6) return false;
+  }
   return true;
 }
 
@@ -453,6 +468,8 @@ interface JoistPlan {
   zones: ZoneFrame[];
   middle: number;
   inside: boolean;
+  /** The beams it lands on read on a beam table too (2026-10-11). */
+  beamsInside: boolean;
 }
 
 /**
@@ -465,26 +482,32 @@ function planJoists(zones: Zone[], backs: Array<"ledger" | "beam">, style: BeamS
   const want = style === "flush" ? 0 : overhang === "auto" ? autoOverhangIn(shallow) : Math.round(overhang * 12);
   // A bowed front hangs farther at its middle: the beam comes in until the whole bow is inside the table.
   const tries = style === "flush" ? [want] : overhang !== "auto" && extraFrontIn === 0 ? [want] : overhangTries(want);
-  let best: JoistPlan | null = null;
-  for (const c of tries) {
-    const fitted: ZoneFrame[] = [];
-    let total = 0;
-    let all = true;
-    zones.forEach((zone, i) => {
-      let found: ZoneFrame | null = null;
-      for (let k = 0; k <= MAX_MIDDLE_BEAMS && !found; k++) {
-        const l = layoutZone(zone, backs[i], c, k);
-        if (zoneInsideTable(l, size, spacing, group, load, extraFrontIn)) {
-          found = { ...l, ok: true };
-          total += k;
+  // The fewest middle beams with the joists AND every beam inside their tables; failing that (a bow can ask more
+  // cantilever than a short last span allows), the joists inside as before and the beam said as past its table.
+  const search = (withBeams: boolean): JoistPlan | null => {
+    let found0: JoistPlan | null = null;
+    for (const c of tries) {
+      const fitted: ZoneFrame[] = [];
+      let total = 0;
+      let all = true;
+      zones.forEach((zone, i) => {
+        let found: ZoneFrame | null = null;
+        for (let k = 0; k <= MAX_MIDDLE_BEAMS && !found; k++) {
+          const l = layoutZone(zone, backs[i], c, k);
+          if (zoneInsideTable(l, size, spacing, group, load, extraFrontIn, withBeams ? style : null)) {
+            found = { ...l, ok: true };
+            total += k;
+          }
         }
-      }
-      if (found) fitted.push(found);
-      else all = false;
-    });
-    if (all && (!best || total < best.middle)) best = { size, zones: fitted, middle: total, inside: true };
-    if (best && best.middle === 0) break;
-  }
+        if (found) fitted.push(found);
+        else all = false;
+      });
+      if (all && (!found0 || total < found0.middle)) found0 = { size, zones: fitted, middle: total, inside: true, beamsInside: withBeams };
+      if (found0 && found0.middle === 0) break;
+    }
+    return found0;
+  };
+  const best = search(true) ?? search(false);
   if (best) return best;
   // Nothing inside the table: draw the nearest thing — the overhang asked
   // for, and middle beams until the spans (if not the overhang) are in.
@@ -496,7 +519,7 @@ function planJoists(zones: Zone[], backs: Array<"ledger" | "beam">, style: BeamS
     middle += l.beamYs.length - (backs[i] === "beam" ? 2 : 1);
     return { ...l, ok: zoneInsideTable(l, size, spacing, group, load, extraFrontIn) };
   });
-  return { size, zones: drawn, middle, inside: false };
+  return { size, zones: drawn, middle, inside: false, beamsInside: false };
 }
 
 /* ------------------------------------------------------------------ */
@@ -713,8 +736,10 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
     let plan: JoistPlan | null = null;
     for (const size of sizes) {
       const p = planJoists(zones, backs, style, size, spacingIn, group, load, design.framing.overhangFt, bulgeIn);
-      if (!plan || (p.inside && !plan.inside) || (p.inside === plan.inside && p.middle < plan.middle)) plan = p;
-      if (plan.inside && plan.middle === 0) break;
+      // Inside both tables beats inside the joist table alone beats neither; then the fewest middle beams.
+      const rank = (q: JoistPlan) => (q.inside ? (q.beamsInside ? 2 : 1) : 0);
+      if (!plan || rank(p) > rank(plan) || (rank(p) === rank(plan) && p.middle < plan.middle)) plan = p;
+      if (rank(plan) === 2 && plan.middle === 0) break;
     }
     if (!plan) return null;
     const joistSize = plan.size;
