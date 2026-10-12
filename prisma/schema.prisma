@@ -348,6 +348,13 @@ model User {
   tradeJobConvAuthored TradeJobConversation[] @relation("TradeJobConvAuthor")
   tradeJobConvReceived TradeJobConversation[] @relation("TradeJobConvRecipient")
   tradeJobMessages     TradeJobMessage[]      @relation("TradeJobMessageAuthor")
+
+  // Admin task tracker (/admin/tasks, 2026-10-11) — back-relations only.
+  adminTasksAssigned    AdminTask[]        @relation("AdminTaskAssignee")
+  adminTasksAuthored    AdminTask[]        @relation("AdminTaskAuthor")
+  adminSubtasksAssigned AdminTaskSubtask[] @relation("AdminSubtaskAssignee")
+  adminTaskComments     AdminTaskComment[] @relation("AdminTaskCommentAuthor")
+  adminTaskEvents       AdminTaskEvent[]   @relation("AdminTaskEventActor")
 }
 
 model Account {
@@ -1595,6 +1602,89 @@ model SupportTicket {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+// ── Admin task tracker (/admin/tasks, 2026-10-11) ───────────────────────────
+// The platform admins' own to-do list. Only platform admins read or write it
+// (requirePlatformAdmin in every action and in /api/admin/tasks/changes).
+// Vocabularies are free Strings validated in lib/adminTasks/model.ts, like
+// SupportTicket.status. A task is never deleted: Canceled sends it to Archive.
+// Every write to a subtask or comment touches the task's updatedAt, which is
+// what the live "changed since" poll reads.
+model AdminTask {
+  id              String    @id @default(cuid())
+  title           String
+  description     String    @default("")
+  priority        String    @default("NORMAL") // URGENT | HIGH | NORMAL | LOW
+  status          String    @default("TODO") // TODO | IN_PROGRESS | BLOCKED | DONE | CANCELED
+  category        String    @default("OTHER") // BUG | FEATURE | SUPPORT | BILLING | MARKETING | OTHER
+  assigneeId      String?
+  authorId        String?
+  dueDate         String? // "2026-10-14" — a calendar day, no clock and no zone
+  linkUrl         String? // the related object: an app path ("/admin/support?ticket=…") or a URL
+  // The ticket a "Create task" on /admin/support made this from. A plain
+  // column, not a relation, so SupportTicket itself is untouched.
+  supportTicketId String?   @unique
+  closedAt        DateTime? // set on Done / Canceled, cleared on reopen
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  assignee User?              @relation("AdminTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  author   User?              @relation("AdminTaskAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  subtasks AdminTaskSubtask[]
+  comments AdminTaskComment[]
+  events   AdminTaskEvent[]
+
+  @@index([updatedAt])
+  @@index([status])
+  @@index([assigneeId, status])
+}
+
+model AdminTaskSubtask {
+  id         String   @id @default(cuid())
+  taskId     String
+  title      String
+  done       Boolean  @default(false)
+  assigneeId String?
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  task     AdminTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee User?     @relation("AdminSubtaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, position])
+}
+
+model AdminTaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String?
+  body      String
+  createdAt DateTime @default(now())
+
+  task   AdminTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User?     @relation("AdminTaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+}
+
+// The journal: who changed what, when. `from` / `to` are the values as they
+// read at the time ("High", "Dana", "Oct 14"), so a later rename of a person
+// or a subtask never rewrites history.
+model AdminTaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  actorId   String?
+  kind      String // CREATED | TITLE | STATUS | PRIORITY | ASSIGNEE | DUE | CATEGORY | DESCRIPTION | LINK | SUBTASK_ADDED | SUBTASK_DONE | SUBTASK_REOPENED | SUBTASK_RENAMED | SUBTASK_REMOVED | SUBTASK_ASSIGNED
+  from      String?
+  to        String?
+  createdAt DateTime @default(now())
+
+  task  AdminTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User?     @relation("AdminTaskEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
 }
 
 model Specialty {
