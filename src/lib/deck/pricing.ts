@@ -33,7 +33,7 @@ import { isExampleSource, deckRate, type ResolvedRate } from "./rates";
 import { railType } from "./catalog";
 import { GUARD_REQUIRED_ABOVE_IN, LEDGER_FASTENER_LABEL, RISER_MAX_IN, ftIn } from "./codeTables";
 import { codeWords } from "./stateCodes";
-import { CEILING_LABEL, FASCIA_FINISH_LABEL, FIXTURE_LABEL, GUTTER_LABEL, PLACEMENT_LABEL, ROOFING_LABEL, ROOF_KIND_LABEL, WALL_FILL_LABEL, sizeWords, structureWords, type DeckDesign } from "./design";
+import { type CustomSlot, CEILING_LABEL, FASCIA_FINISH_LABEL, FIXTURE_LABEL, GUTTER_LABEL, PLACEMENT_LABEL, ROOFING_LABEL, ROOF_KIND_LABEL, WALL_FILL_LABEL, sizeWords, structureWords, type DeckDesign } from "./design";
 import { RULE_RAFTER } from "./roofTables";
 import { TERMITE_LABEL } from "./site";
 import { railWords } from "./rails";
@@ -115,7 +115,23 @@ export function priceDeckFrame(frame: DeckFrame, opts: DeckPriceOptions = {}): D
 export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): DeckPackage {
   const { design, frame, roof } = s;
   const takeoff = deckTakeoff(s);
-  const rate = (key: string) => deckRate(key, opts.rates, opts.market);
+  // A product or an item of the contractor's own is priced as typed — their own number, like a price in their book.
+  const ownRate = (key: string): ResolvedRate | null => {
+    if (key.startsWith("custom.fixture.")) {
+      const f = design.electrical.fixtures.find((x) => x.id === key.slice("custom.fixture.".length));
+      return f?.custom ? { price: f.custom.price, source: "book" } : null;
+    }
+    if (key.startsWith("custom.")) {
+      const c = design.custom[key.slice("custom.".length) as CustomSlot];
+      return c ? { price: c.price, source: "book" } : null;
+    }
+    if (key.startsWith("own.")) {
+      const it = design.extras.items.find((x) => x.id === key.slice("own.".length));
+      return it ? { price: it.price, source: "book" } : null;
+    }
+    return null;
+  };
+  const rate = (key: string) => ownRate(key) ?? deckRate(key, opts.rates, opts.market);
   let exampleMoney = 0;
 
   const bom: PricedBomLine[] = takeoff.lines.map((l) => {
@@ -263,7 +279,7 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
     const t = railType(design.rail.type);
     if (rails.system === "custom") {
       const each = design.rail.customPerFt;
-      line({ id: "deck-rail", name: "Railing — custom", description: `${railWords(rails)}; your installed price by the foot`, quantity: railFt, unit: "ln ft", material: each * railFt * 0.6, labor: each * railFt * 0.4, exampleMaterial: 0, exampleLabor: 0 });
+      line({ id: "deck-rail", name: `Railing — ${design.rail.customName || "custom"}`, description: `${railWords(rails)}; your installed price by the foot`, quantity: railFt, unit: "ln ft", material: each * railFt * 0.6, labor: each * railFt * 0.4, exampleMaterial: 0, exampleLabor: 0 });
     } else {
       const l = work(`rail.${t.id}.labor`, railFt);
       line({ id: "deck-rail", name: `Railing — ${t.label.toLowerCase()}, ${rails.heightIn} in.`, description: `${plural(rails.posts + rails.stairPosts, "post")} bolted through the rim with tension ties; ${rails.infill === "balusters" ? `${rails.balusters} ${rails.system === "wood" ? "2x2 balusters" : "pickets"} at 5 in.` : rails.infill === "cable" ? `${rails.cableLf} ft of cable` : rails.infill === "glass" ? `${rails.panels} glass panels` : rails.infill === "panel" ? `${rails.panels} panels` : "horizontal rails"}${rails.capLf ? "; a flat 2x6 cap" : ""}${rails.stairLf ? `; ${Math.round(rails.stairLf)} ft on the stairs` : ""}`, quantity: railFt, unit: "ln ft", material: stepMaterial("rails"), labor: l.amount, exampleMaterial: stepExample("rails"), exampleLabor: l.example });
@@ -306,24 +322,24 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
       {
         const metalRoof = r.roofing === "metal-panel" || r.roofing === "standing-seam";
         const w = metalRoof ? work("labor.metal", areaR) : work("labor.shingles", roof.squares);
-        line({ id: "roofing", name: `Roofing — ${ROOFING_LABEL[r.roofing].toLowerCase()}`, description: `${roof.squares} squares with waste; ${Math.round(roof.hipFt + roof.ridgeFt)} ft of hip and ridge${metalRoof ? "; eave, rake and ridge trim" : "; starter strip and cap"}`, quantity: areaR, unit: "sqft", material: stepMaterial("roofing"), labor: w.amount, exampleMaterial: stepExample("roofing"), exampleLabor: w.example });
+        line({ id: "roofing", name: `Roofing — ${design.custom.roofing?.name ?? ROOFING_LABEL[r.roofing].toLowerCase()}`, description: `${roof.squares} squares with waste; ${Math.round(roof.hipFt + roof.ridgeFt)} ft of hip and ridge${metalRoof ? "; eave, rake and ridge trim" : "; starter strip and cap"}`, quantity: areaR, unit: "sqft", material: stepMaterial("roofing"), labor: w.amount, exampleMaterial: stepExample("roofing"), exampleLabor: w.example });
       }
       {
         const trimFt = Math.round(((r.fascia.eave ? roof.eaveFt : 0) + (r.fascia.rake ? roof.rakeFt : 0)) * 10) / 10;
         const w = sum(work("labor.trim", trimFt), roof.soffitSqFt ? work("labor.soffit", roof.soffitSqFt) : none);
         if (trimFt > 0 || roof.soffitSqFt > 0) {
           const parts = [r.fascia.eave ? `${Math.round(roof.eaveFt)} ft of eave` : null, r.fascia.rake && roof.rakeFt ? `${Math.round(roof.rakeFt)} ft of rake` : null].filter(Boolean).join(", ");
-          line({ id: "roof-trim", name: `Fascia${roof.soffitSqFt ? " and soffit" : ""} — ${FASCIA_FINISH_LABEL[r.fascia.finish].toLowerCase()}`, description: `2x sub-fascia across the rafter tails; ${parts}${roof.soffitSqFt ? `; ${roof.soffitSqFt} sq ft of vented soffit` : ""}`, quantity: trimFt || roof.soffitSqFt, unit: trimFt ? "ln ft" : "sqft", material: stepMaterial("trim"), labor: w.amount, exampleMaterial: stepExample("trim"), exampleLabor: w.example });
+          line({ id: "roof-trim", name: `Fascia${roof.soffitSqFt ? " and soffit" : ""} — ${design.custom.roofFascia?.name ?? FASCIA_FINISH_LABEL[r.fascia.finish].toLowerCase()}`, description: `2x sub-fascia across the rafter tails; ${parts}${roof.soffitSqFt ? `; ${roof.soffitSqFt} sq ft of vented soffit` : ""}`, quantity: trimFt || roof.soffitSqFt, unit: trimFt ? "ln ft" : "sqft", material: stepMaterial("trim"), labor: w.amount, exampleMaterial: stepExample("trim"), exampleLabor: w.example });
         }
       }
       if (roof.ceilingSqFt > 0) {
         const w = work("labor.ceiling", roof.ceilingSqFt);
-        line({ id: "roof-ceiling", name: `Ceiling — ${CEILING_LABEL[r.ceiling].toLowerCase()}`, description: "On the undersides of the rafters, inside the headers", quantity: roof.ceilingSqFt, unit: "sqft", material: stepMaterial("ceiling"), labor: w.amount, exampleMaterial: stepExample("ceiling"), exampleLabor: w.example });
+        line({ id: "roof-ceiling", name: `Ceiling — ${design.custom.ceiling?.name ?? CEILING_LABEL[r.ceiling].toLowerCase()}`, description: "On the undersides of the rafters, inside the headers", quantity: roof.ceilingSqFt, unit: "sqft", material: stepMaterial("ceiling"), labor: w.amount, exampleMaterial: stepExample("ceiling"), exampleLabor: w.example });
       }
       if (roof.gutters) {
         const g = roof.gutters;
         const w = sum(work("labor.gutters", g.lf), work("labor.downspout", g.downspouts));
-        line({ id: "roof-gutters", name: `Gutters — ${GUTTER_LABEL[g.kind].toLowerCase()}`, description: `${plural(g.downspouts, "downspout")}${g.downspoutSize ? ` (${g.kind === "half-round-copper" ? "round copper" : g.downspoutSize})` : ""} to splash blocks; hidden hangers every ${roof.roofLoad >= 30 ? 18 : 24} in.${g.guardsLf ? "; gutter guards" : ""}`, quantity: Math.round(g.lf), unit: "ln ft", material: stepMaterial("gutters"), labor: w.amount, exampleMaterial: stepExample("gutters"), exampleLabor: w.example });
+        line({ id: "roof-gutters", name: `Gutters — ${design.custom.gutters?.name ?? GUTTER_LABEL[g.kind].toLowerCase()}`, description: `${plural(g.downspouts, "downspout")}${g.downspoutSize ? ` (${g.kind === "half-round-copper" ? "round copper" : g.downspoutSize})` : ""} to splash blocks; hidden hangers every ${roof.roofLoad >= 30 ? 18 : 24} in.${g.guardsLf ? "; gutter guards" : ""}`, quantity: Math.round(g.lf), unit: "ln ft", material: stepMaterial("gutters"), labor: w.amount, exampleMaterial: stepExample("gutters"), exampleLabor: w.example });
       }
       if (r.cupola) {
         const w = work("labor.cupola", 1);
@@ -332,7 +348,7 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
     }
     if (roof.walls) {
       const w = work("labor.walls", roof.walls.sqFt);
-      line({ id: "roof-walls", name: `Walls between the posts — ${WALL_FILL_LABEL[roof.walls.fill].toLowerCase()}`, description: `${plural(roof.walls.segments.length, "side")}${roof.walls.fill === "screen" ? `, screen over a 36-in. kneewall${roof.walls.doors ? `, ${plural(roof.walls.doors, "screen door")}` : ""}` : ", floor to header, framed in 2x4"}`, quantity: roof.walls.sqFt, unit: "sqft", material: stepMaterial("walls"), labor: w.amount, exampleMaterial: stepExample("walls"), exampleLabor: w.example });
+      line({ id: "roof-walls", name: `Walls between the posts — ${design.custom.walls?.name ?? WALL_FILL_LABEL[roof.walls.fill].toLowerCase()}`, description: `${plural(roof.walls.segments.length, "side")}${roof.walls.fill === "screen" ? `, screen over a 36-in. kneewall${roof.walls.doors ? `, ${plural(roof.walls.doors, "screen door")}` : ""}` : ", floor to header, framed in 2x4"}`, quantity: roof.walls.sqFt, unit: "sqft", material: stepMaterial("walls"), labor: w.amount, exampleMaterial: stepExample("walls"), exampleLabor: w.example });
     }
   }
 
@@ -364,12 +380,20 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
     if (ours.length) {
       const hang = work("labor.elec.hang", ours.filter((f) => f.kind === "chandelier" || f.kind === "fan" || f.kind === "heater").reduce((a, f) => a + f.qty, 0));
       const count = ours.reduce((a, f) => a + (f.kind === "led-strip" ? 1 : f.qty), 0);
-      line({ id: "elec-fixtures", name: `Fixtures — ${plural(count, "fixture")} supplied and hung`, description: [...new Set(ours.map((f) => FIXTURE_LABEL[f.kind].toLowerCase()))].join(", "), quantity: count, unit: "ea", material: stepMaterial("electrical", isFixture) - stepMaterial("electrical", (l) => isFixture(l) && !!l.byClient), labor: hang.amount, exampleMaterial: stepExample("electrical", (l) => isFixture(l) && !l.byClient), exampleLabor: hang.example });
+      line({ id: "elec-fixtures", name: `Fixtures — ${plural(count, "fixture")} supplied and hung`, description: [...new Set(ours.map((f) => design.electrical.fixtures.find((x) => x.id === f.designId)?.custom?.name ?? FIXTURE_LABEL[f.kind].toLowerCase()))].join(", "), quantity: count, unit: "ea", material: stepMaterial("electrical", isFixture) - stepMaterial("electrical", (l) => isFixture(l) && !!l.byClient), labor: hang.amount, exampleMaterial: stepExample("electrical", (l) => isFixture(l) && !l.byClient), exampleLabor: hang.example });
     }
     if (el.byClient.length) {
       const hang = work("labor.elec.hang", el.byClient.filter((f) => f.kind === "chandelier" || f.kind === "fan" || f.kind === "heater").reduce((a, f) => a + f.qty, 0));
       const count = el.byClient.reduce((a, f) => a + (f.kind === "led-strip" ? 1 : f.qty), 0);
       line({ id: "elec-client", name: `Fixtures by the client — ${plural(count, "fixture")}, to be determined`, description: `${[...new Set(el.byClient.map((f) => FIXTURE_LABEL[f.kind].toLowerCase()))].join(", ")}: shown in place as a sample; the fixtures are the client's to buy and are not priced here. Their boxes, wire and switches are in the electrical line; the hanging is below.`, quantity: count, unit: "ea", material: 0, labor: hang.amount, exampleMaterial: 0, exampleLabor: hang.example, tbd: true });
+    }
+  }
+
+  /* ── Items of the contractor's own (2026-10-12) ─────────────────────── */
+  {
+    const own = bom.filter((l) => l.step === "own");
+    if (own.length) {
+      line({ id: "own-items", name: `Other materials — ${plural(own.length, "item")}`, description: own.map((l) => `${l.qty} ${l.unit} ${l.label}`).join("; "), quantity: 1, unit: "lot", material: own.reduce((a, l) => a + l.cost, 0), labor: 0, exampleMaterial: 0, exampleLabor: 0 });
     }
   }
 
@@ -432,10 +456,10 @@ export function deckScope(pkg: DeckPackage, where?: string | null): string[] {
     } else {
       const kindName = ROOF_KIND_LABEL[roof.kind].split(" — ")[0].toLowerCase();
       out.push(`${roof.attach === "wall" ? "A" : "A free-standing"} ${kindName} roof over it, ${r.pitch}:12 pitch, ${ftIn(r.eaveHeightIn)} to the headers${roof.floor === "deck" ? " above the deck" : ""}: ${plural(roof.posts.length, `${r.post} post`)}${roof.floor === "deck" ? " from their own footings through the deck" : ""}, ${[...new Set(roof.headers.map((h) => h.spec.size))].join(" and ")} headers, ${roof.trusses ? `manufactured trusses 24 in. on center spanning ${ftIn(roof.trusses.spanIn)} (the truss maker's stamped drawings go with the permit)` : `${roof.rafters.size} rafters ${roof.rafters.spacingIn} in. on center`}${roof.hips.count ? ` with ${roof.hips.nominal} hips` : ""}${roof.ridge ? (roof.ridge.kind === "beam" ? `, a ${roof.ridge.spec?.size ?? roof.ridge.nominal} ridge beam` : `, a ${roof.ridge.nominal} ridge board${roof.ties ? " and rafter ties" : ""}`) : ""}${roof.ledger ? `, a ${roof.ledger.nominal} ledger on the house, flashed` : ""}; ${ftIn(r.overhangIn)} overhang.`);
-      out.push(`${ROOFING_LABEL[r.roofing]} over ${roof.sheets > 0 ? "1/2-in. sheathing and synthetic underlayment" : "2x4 purlins"}, drip edge on every edge${roof.wallFt ? ", step and counter flashing where the roof meets the house" : ""}${r.fascia.eave || r.fascia.rake ? `; ${FASCIA_FINISH_LABEL[r.fascia.finish].toLowerCase()} fascia${r.fascia.rake && roof.rakeFt ? " and rake boards" : ""}` : ""}${roof.soffitSqFt ? "; vented soffit under the eaves" : ""}${roof.ceilingSqFt ? `; ${CEILING_LABEL[r.ceiling].toLowerCase()} ceiling` : ""}${r.cupola ? "; a cupola at the peak" : ""}.`);
-      if (roof.gutters) out.push(`${GUTTER_LABEL[roof.gutters.kind]} gutters on the eaves (${Math.round(roof.gutters.lf)} ft) with ${plural(roof.gutters.downspouts, "downspout")} to splash blocks${roof.gutters.guardsLf ? ", with gutter guards" : ""}.`);
+      out.push(`${design.custom.roofing?.name ?? ROOFING_LABEL[r.roofing]} over ${roof.sheets > 0 ? "1/2-in. sheathing and synthetic underlayment" : "2x4 purlins"}, drip edge on every edge${roof.wallFt ? ", step and counter flashing where the roof meets the house" : ""}${r.fascia.eave || r.fascia.rake ? `; ${FASCIA_FINISH_LABEL[r.fascia.finish].toLowerCase()} fascia${r.fascia.rake && roof.rakeFt ? " and rake boards" : ""}` : ""}${roof.soffitSqFt ? "; vented soffit under the eaves" : ""}${roof.ceilingSqFt ? `; ${CEILING_LABEL[r.ceiling].toLowerCase()} ceiling` : ""}${r.cupola ? "; a cupola at the peak" : ""}.`);
+      if (roof.gutters) out.push(`${design.custom.gutters?.name ?? `${GUTTER_LABEL[roof.gutters.kind]} gutters`} on the eaves (${Math.round(roof.gutters.lf)} ft) with ${plural(roof.gutters.downspouts, "downspout")} to splash blocks${roof.gutters.guardsLf ? ", with gutter guards" : ""}.`);
     }
-    if (roof.walls) out.push(`${WALL_FILL_LABEL[roof.walls.fill]} on ${plural(roof.walls.segments.length, "side")}${roof.walls.doors ? ", with a screen door" : ""}.`);
+    if (roof.walls) out.push(`${design.custom.walls?.name ?? WALL_FILL_LABEL[roof.walls.fill]} on ${plural(roof.walls.segments.length, "side")}${roof.walls.doors ? ", with a screen door" : ""}.`);
   }
   if (pkg.railFt > 0) out.push(`${railWords(s.rails).replace(/^(\d)/, "$1")}.`);
   for (const st of s.stairs) out.push(st.kind === "box" ? `Box steps wrapping ${st.design.wrapSides === 4 ? "all four sides" : st.design.wrapSides === 3 ? "three sides" : "the front"}, ${plural(st.risers, "riser")} of ${st.riserIn.toFixed(2)} in.` : `A ${st.widthIn / 12}-ft-wide stair down the ${st.design.side}: ${plural(st.risers, "riser")} of ${st.riserIn.toFixed(2)} in., treads ${st.runIn + 1} in. deep${st.lands === "lower-deck" ? ", onto the lower level" : st.design.landing === "pad" ? ", onto a new concrete pad" : st.design.landing === "patio" ? ", onto the existing patio" : ", onto pavers"}${st.rail.sides ? `, ${st.rail.sides === 2 ? "rails on both sides" : "a handrail"}` : ""}.`);

@@ -49,6 +49,13 @@ function randomDesign(r: Rng): unknown {
   d.structure = pick(r, STRUCTURES); d.floor = pick(r, FLOORS);
   d.roof = { kind: pick(r, ROOF_KINDS), attach: pick(r, ["wall", "free"]), plan: { shape: pick(r, ROOF_PLAN_SHAPES), widthFt: odd(r, 6, 40), depthFt: odd(r, 6, 40), acrossFt: odd(r, 8, 30), offsetFt: odd(r, -30, 30) }, pitch: odd(r, 2, 12), eaveHeightIn: int(r, 84, 144), overhangIn: int(r, 0, 36), load: pick(r, ["auto", 20, 30, 50, 70]), post: pick(r, ["4x4", "6x6", "8x8"]), rafter: pick(r, ["auto", "2x6", "2x8", "2x10", "2x12"]), rafterSpacingIn: pick(r, [12, 16, 24]), header: pick(r, ["auto", "lvl", "4x8", "4x12", "2-2x10", "3-2x12"]), ridge: pick(r, ["auto", "beam", "board", "none"]), roofing: pick(r, ROOFINGS), roofDeck: pick(r, ["sheathing", "purlins"]), ceiling: pick(r, ["none", "tongue-groove", "beadboard"]), cupola: bool(r), fascia: { eave: bool(r), rake: bool(r), finish: pick(r, ["wood", "pvc", "aluminum-wrap"]) }, soffit: bool(r), gutters: { kind: pick(r, GUTTER_KINDS), guards: bool(r) }, braces: bool(r), slats: { size: pick(r, ["2x2", "2x4", "2x6"]), spacingIn: int(r, 3, 24) }, pergolaStyle: pick(r, ["flat", "louvered", "arched"]), walls: { fill: pick(r, ["none", "screen", "lattice", "solid"]), sides: int(r, 1, 16) }, extras: { fan: bool(r), lights: int(r, 0, 12) } };
   d.photo = r() < 0.8 ? null : { url: "inline:abc", w: 640, h: 480, placed: { x: 0.1, y: 0.9, w: 0.8 }, fit: null };
+  // Products of the shop's own (2026-10-12): any slot now and then, long and odd names and prices included.
+  const NAMES = ["Trex Transcend Lineage Rainier", "TimberTech AZEK Vintage Weathered Teak", "  Fiberon   Concordia  ", "x".repeat(120), "Ü-Deck ½″ ⌀ ‘quoted’ & <b>", "", "   "];
+  d.custom = {};
+  for (const slot of ["decking", "fastening", "fascia", "roofing", "ceiling", "roofFascia", "gutters", "walls", "species", "bogus"]) if (r() < 0.2) d.custom[slot] = { name: pick(r, NAMES), price: odd(r, -5, 2000) };
+  d.extras.items = r() < 0.7 ? [] : Array.from({ length: int(r, 1, 45) }, (_, i) => ({ id: r() < 0.9 ? `o${i}` : pick(r, ["", "BAD ID", "o1"]), name: pick(r, NAMES), qty: odd(r, -1, 500), unit: pick(r, ["ea", "pcs", "ft", "sq ft", "bags", "yd"]), price: odd(r, -1, 5000) }));
+  d.rail.customName = r() < 0.3 ? pick(r, NAMES) : "";
+  for (const f of d.electrical.fixtures) if (r() < 0.2) f.custom = { name: pick(r, NAMES), price: odd(r, 0, 3000) };
   return d;
 }
 
@@ -78,6 +85,10 @@ function diffPath(a: any, b: any, p = ""): string | null {
 const fin = (xs: unknown[]) => xs.every((x) => typeof x === "number" && Number.isFinite(x));
 const stats = { maxBoxes: 0, maxBytes: 0, maxLines: 0, maxScope: 0, maxNotes: 0, maxMs: 0, maxBoxesTag: "", maxSubtotal: 0 };
 
+/** A shop's own product's key points at something the design holds (lib/deck/pricing ownRate). */
+const ownKey = (k: string, d: DeckDesign) =>
+  k.startsWith("custom.fixture.") ? !!d.electrical.fixtures.find((f) => f.id === k.slice("custom.fixture.".length))?.custom : k.startsWith("custom.") ? !!(d.custom as any)[k.slice("custom.".length)] : k.startsWith("own.") ? d.extras.items.some((it) => it.id === k.slice("own.".length)) : false;
+
 function exercise(d: DeckDesign, tag: string, out: string[]) {
   const t0 = Date.now();
   const d2 = normalizeDeckDesign(JSON.parse(JSON.stringify(d)));
@@ -95,7 +106,7 @@ function exercise(d: DeckDesign, tag: string, out: string[]) {
   }
   for (const b of pkg.bom) {
     if (!fin([b.qty, b.cost, b.unitPrice]) || !(b.qty > 0) || b.cost < 0) { out.push(`bom numbers bad: ${b.id} qty ${b.qty} cost ${b.cost}  [${tag}]`); break; }
-    if (!(b as any).byClient && !rateKeys.has(b.rateKey) && b.rateKey !== "rail.custom.material") { out.push(`bom off the book: ${b.id} → ${b.rateKey}  [${tag}]`); break; }
+    if (!(b as any).byClient && !rateKeys.has(b.rateKey) && b.rateKey !== "rail.custom.material" && !ownKey(b.rateKey, d)) { out.push(`bom off the book: ${b.id} → ${b.rateKey}  [${tag}]`); break; }
   }
   if (!fin([pkg.areaSqFt, pkg.pricePerSqFt, pkg.exampleShare, pkg.railFt, pkg.stairSteps]) || pkg.areaSqFt < 0 || pkg.exampleShare < 0 || pkg.exampleShare > 1 || pkg.railFt < 0 || pkg.stairSteps < 0 || pkg.stairSteps !== Math.round(pkg.stairSteps)) out.push(`package figures bad: area ${pkg.areaSqFt} $/sf ${pkg.pricePerSqFt} share ${pkg.exampleShare} rail ${pkg.railFt} steps ${pkg.stairSteps}  [${tag}]`);
   if (priceDeck(d).subtotal !== pkg.subtotal) out.push(`not deterministic: ${pkg.subtotal} vs ${priceDeck(d).subtotal}  [${tag}]`);

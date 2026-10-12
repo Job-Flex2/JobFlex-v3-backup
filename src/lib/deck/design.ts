@@ -249,6 +249,8 @@ export interface RailDesign {
   lighting: RailLighting;
   /** A custom system's installed price per foot. */
   customPerFt: number;
+  /** A custom system's name ("" = none given). */
+  customName: string;
   /** Rail on the lower level too (where its height asks for one it is always on). */
   lowerLevel: boolean;
 }
@@ -314,7 +316,36 @@ export interface Fixture {
   at: { x: number; y: number; z: number; on: MountKind } | null;
   /** Heaters: 240-volt (4 kW) instead of a plug-in-sized 120-volt (1.5 kW). */
   volts240?: boolean;
+  /** A fixture of the contractor's own choosing: its name and price each; it works like `kind`. */
+  custom?: CustomProduct | null;
 }
+
+/**
+ * A PRODUCT OF THE CONTRACTOR'S OWN (2026-10-12; owner: "always an option custom, in case the contractor didn't find it
+ * in what we have"): its name and its price, in the unit of the list it stands in. The list's own choice stays what it
+ * WORKS LIKE — the engine frames, weighs and draws it as that; the name and the price are the contractor's.
+ */
+export interface CustomProduct {
+  name: string;
+  /** In the slot's unit (CUSTOM_SLOT_UNIT); a species' name carries no price. */
+  price: number;
+}
+export type CustomSlot = "decking" | "fastening" | "fascia" | "roofing" | "ceiling" | "roofFascia" | "gutters" | "walls" | "species";
+export const CUSTOM_SLOTS: readonly CustomSlot[] = ["decking", "fastening", "fascia", "roofing", "ceiling", "roofFascia", "gutters", "walls", "species"];
+/** What one custom price buys, per slot. */
+export const CUSTOM_SLOT_UNIT: Record<CustomSlot, string> = { decking: "ft", fastening: "sq ft", fascia: "ft", roofing: "sq", ceiling: "sq ft", roofFascia: "ft", gutters: "ft", walls: "sq ft", species: "" };
+/** An item of the contractor's own, outside every list: on the material list and in the price as typed. */
+export interface OwnItem {
+  id: string;
+  name: string;
+  qty: number;
+  unit: OwnUnit;
+  /** Per unit. */
+  price: number;
+}
+export type OwnUnit = "ea" | "pcs" | "ft" | "sq ft" | "bags";
+export const OWN_UNITS: readonly OwnUnit[] = ["ea", "pcs", "ft", "sq ft", "bags"];
+export const CUSTOM_LIMITS = { name: 80, price: { min: 0, max: 100000 }, qty: { min: 0, max: 100000 }, items: 40 } as const;
 
 export interface ElectricalDesign {
   fixtures: Fixture[];
@@ -405,6 +436,8 @@ export interface DeckDesign {
     stainless: boolean;
     /** A drainage system under the joists, for a dry space below a high deck (M3). */
     underDeckDrain: boolean;
+    /** Items of the contractor's own, outside every list (2026-10-12). */
+    items: OwnItem[];
   };
   /** The railing (M3) — "none" leaves the edges open. */
   rail: RailDesign;
@@ -423,6 +456,8 @@ export interface DeckDesign {
   photo: DeckPhoto | null;
   /** The house drawn behind it (lib/deck/house): storeys, roof, how far its back wall runs past the deck, and the steps in that wall. */
   house: HouseDesign;
+  /** Products of the contractor's own, by list (2026-10-12): a slot set here names and prices that list's material. */
+  custom: Partial<Record<CustomSlot, CustomProduct>>;
 }
 
 /** The rails every number is held inside. */
@@ -492,7 +527,7 @@ export function defaultRoofDesign(structure: Structure = "covered-deck"): RoofDe
 
 /** The railing a deck starts with: none chosen — the checks ask for one where the height requires it. */
 export function defaultRailDesign(): RailDesign {
-  return { type: "none", heightIn: 36, infill: "auto", postSpacingFt: 6, cap: true, lighting: "none", customPerFt: 0, lowerLevel: true };
+  return { type: "none", heightIn: 36, infill: "auto", postSpacingFt: 6, cap: true, lighting: "none", customPerFt: 0, customName: "", lowerLevel: true };
 }
 
 /** A flight of stairs where a contractor usually puts one: down the front, in the middle, 4 ft wide, onto a new pad. */
@@ -515,7 +550,7 @@ export function defaultElectrical(): ElectricalDesign {
 }
 
 export function defaultFixture(id: string, kind: FixtureKind): Fixture {
-  return { id, kind, supply: "we", qty: 1, at: null, volts240: false };
+  return { id, kind, supply: "we", qty: 1, at: null, volts240: false, custom: null };
 }
 
 /** A new deck for a shop in `state`: the owner's standards, the region's lumber. */
@@ -546,7 +581,7 @@ export function defaultDeckDesign(opts: { state?: string | null; frostIn?: numbe
     ledger: { fastener: "lag", lateral: "two" },
     footing: { type: "poured", aboveGradeIn: 3, frostAlways: false },
     decking: { product: defaultDecking(opts.state), diagonal: false, pattern: "straight", border: 0, fastening: "auto", fascia: "auto", wastePct: 10 },
-    extras: { railFt: "auto", demoSqFt: 0, stainless: false, underDeckDrain: false },
+    extras: { railFt: "auto", demoSqFt: 0, stainless: false, underDeckDrain: false, items: [] },
     // The guard's height the state asks for (42 in. in California), from the start.
     rail: { ...defaultRailDesign(), heightIn: deckCodeFor(stateCode(opts.state)).guardIn },
     stairs: [],
@@ -558,6 +593,7 @@ export function defaultDeckDesign(opts: { state?: string | null; frostIn?: numbe
     roof: defaultRoofDesign("covered-deck"),
     photo: null,
     house: defaultHouse(),
+    custom: {},
   };
 }
 
@@ -688,6 +724,7 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
       demoSqFt: Math.round(clamp(num(ex.demoSqFt, 0), DECK_LIMITS.demoSqFt.min, DECK_LIMITS.demoSqFt.max)),
       stainless: ex.stainless === true,
       underDeckDrain: ex.underDeckDrain === true && heightIn >= 84,
+      items: normalizeOwnItems(ex.items),
     },
     rail,
     stairs,
@@ -699,7 +736,41 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
     roof,
     photo,
     house: normalizeHouse(r.house, shape),
+    custom: normalizeCustom(r.custom),
   };
+}
+
+const round2c = (n: number) => Math.round(n * 100) / 100;
+const cleanName = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, CUSTOM_LIMITS.name) : "");
+/** A product of the contractor's own read back: a name it must have, a price inside its rails; null without a name. */
+export function normalizeCustomProduct(raw: unknown): CustomProduct | null {
+  const o = obj(raw);
+  const name = cleanName(o.name);
+  if (!name) return null;
+  return { name, price: round2c(clamp(num(o.price, 0), CUSTOM_LIMITS.price.min, CUSTOM_LIMITS.price.max)) };
+}
+function normalizeCustom(raw: unknown): DeckDesign["custom"] {
+  const o = obj(raw);
+  const out: DeckDesign["custom"] = {};
+  for (const slot of CUSTOM_SLOTS) {
+    const c = normalizeCustomProduct(o[slot]);
+    if (c) out[slot] = slot === "species" ? { name: c.name, price: 0 } : c;
+  }
+  return out;
+}
+function normalizeOwnItems(raw: unknown): OwnItem[] {
+  const out: OwnItem[] = [];
+  const seen = new Set<string>();
+  (Array.isArray(raw) ? raw : []).slice(0, CUSTOM_LIMITS.items).forEach((v, i) => {
+    const o = obj(v);
+    const name = cleanName(o.name);
+    if (!name) return;
+    let id = typeof o.id === "string" && /^[a-z0-9-]{1,14}$/.test(o.id) && !seen.has(o.id) ? o.id : "";
+    for (let n = i + 1; !id; n++) if (!seen.has(`i${n}`)) id = `i${n}`;
+    seen.add(id);
+    out.push({ id, name, qty: round2c(clamp(num(o.qty, 1), CUSTOM_LIMITS.qty.min, CUSTOM_LIMITS.qty.max)), unit: oneOf(o.unit, OWN_UNITS, "ea"), price: round2c(clamp(num(o.price, 0), CUSTOM_LIMITS.price.min, CUSTOM_LIMITS.price.max)) });
+  });
+  return out;
 }
 
 function normalizeElectrical(raw: unknown, rail: RailDesign, legacyRoof: Record<string, unknown>): ElectricalDesign {
@@ -715,14 +786,14 @@ function normalizeElectrical(raw: unknown, rail: RailDesign, legacyRoof: Record<
     const at = typeof a.x === "number" && typeof a.y === "number" ? { x: clamp(num(a.x, 0), -600, 1200), y: clamp(num(a.y, 0), -600, 1200), z: clamp(num(a.z, 0), -60, 400), on: oneOf(a.on, ["post", "header", "rail", "deck", "ceiling", "wall", "stair", "peak"] as const, "deck") } : null;
     const id = typeof f.id === "string" && /^[a-z0-9-]{1,14}$/.test(f.id) ? f.id : `e${i + 1}`;
     if (out.some((o) => o.id === id)) return;
-    out.push({ id, kind, supply: oneOf(f.supply, ["we", "client"] as const, "we"), qty: Math.round(clamp(num(f.qty, 1), ELECTRICAL_LIMITS.qty.min, ELECTRICAL_LIMITS.qty.max)), at, volts240: kind === "heater" && f.volts240 === true });
+    out.push({ id, kind, supply: oneOf(f.supply, ["we", "client"] as const, "we"), qty: Math.round(clamp(num(f.qty, 1), ELECTRICAL_LIMITS.qty.min, ELECTRICAL_LIMITS.qty.max)), at, volts240: kind === "heater" && f.volts240 === true, custom: normalizeCustomProduct(f.custom) });
   });
   // Older designs said "lit post caps" on the rail and a fan or lights on the roof: they become fixtures.
-  if (rail.lighting !== "none" && !out.some((f) => f.kind === "post-cap")) out.push({ id: "e-caps", kind: "post-cap", supply: "we", qty: 1, at: null, volts240: false });
-  if (rail.lighting === "post-caps-risers" && !out.some((f) => f.kind === "step-light")) out.push({ id: "e-steps", kind: "step-light", supply: "we", qty: 1, at: null, volts240: false });
+  if (rail.lighting !== "none" && !out.some((f) => f.kind === "post-cap")) out.push({ id: "e-caps", kind: "post-cap", supply: "we", qty: 1, at: null, volts240: false, custom: null });
+  if (rail.lighting === "post-caps-risers" && !out.some((f) => f.kind === "step-light")) out.push({ id: "e-steps", kind: "step-light", supply: "we", qty: 1, at: null, volts240: false, custom: null });
   const lx = obj(legacyRoof.extras);
-  if (lx.fan === true && !out.some((f) => f.kind === "fan")) out.push({ id: "e-fan", kind: "fan", supply: "we", qty: 1, at: null, volts240: false });
-  if (num(lx.lights, 0) > 0 && !out.some((f) => f.kind === "ceiling-light")) out.push({ id: "e-lights", kind: "ceiling-light", supply: "we", qty: Math.round(clamp(num(lx.lights, 0), 1, 12)), at: null, volts240: false });
+  if (lx.fan === true && !out.some((f) => f.kind === "fan")) out.push({ id: "e-fan", kind: "fan", supply: "we", qty: 1, at: null, volts240: false, custom: null });
+  if (num(lx.lights, 0) > 0 && !out.some((f) => f.kind === "ceiling-light")) out.push({ id: "e-lights", kind: "ceiling-light", supply: "we", qty: Math.round(clamp(num(lx.lights, 0), 1, 12)), at: null, volts240: false, custom: null });
   return {
     // The cap holds after the legacy fixtures too, so a design at the limit reads back the same every time.
     fixtures: out.slice(0, ELECTRICAL_LIMITS.fixtures),
@@ -834,6 +905,7 @@ function normalizeRail(raw: unknown, legacyExtras: Record<string, unknown>): Rai
     cap: typeof r.cap === "boolean" ? r.cap : d.cap,
     lighting: oneOf(r.lighting, ["none", "post-caps", "post-caps-risers"] as const, d.lighting),
     customPerFt: Math.round(clamp(num(r.customPerFt, num(legacyExtras.railCustomPerFt, 0)), DECK_LIMITS.railCustomPerFt.min, DECK_LIMITS.railCustomPerFt.max) * 100) / 100,
+    customName: cleanName(r.customName),
     lowerLevel: typeof r.lowerLevel === "boolean" ? r.lowerLevel : d.lowerLevel,
   };
 }

@@ -21,6 +21,7 @@
 // here is an EXAMPLE (the owner asked for placeholders he can replace). The
 // shop's own numbers live in its price book (rates.ts) and win over these.
 
+import { regionalPicks } from "./regional";
 import type { LedgerFastener, SpeciesGroup } from "./codeTables";
 import type { MarketBasis } from "../fence/market";
 
@@ -62,10 +63,10 @@ export function framingSpecies(id: string | null | undefined): FramingSpecies {
   return FRAMING_SPECIES.find((s) => s.id === id) ?? FRAMING_SPECIES[0];
 }
 
-/** States where the yards stock western species; everywhere else frames in Southern pine. */
-const WESTERN_STATES = new Set(["AK", "AZ", "CA", "CO", "HI", "ID", "MT", "NV", "NM", "OR", "UT", "WA", "WY"]);
+/** The treated lumber the state's yards stock (lib/deck/regional): Southern pine east of the Rockies, hem-fir in the
+ *  West, Douglas fir in California and Hawaii. */
 export function defaultFramingSpecies(state: string | null | undefined): FramingSpeciesId {
-  return WESTERN_STATES.has((state ?? "").toUpperCase()) ? "hem-fir" : "southern-pine";
+  return regionalPicks(state)?.framing ?? "southern-pine";
 }
 
 /* ------------------------------------------------------------------ */
@@ -89,10 +90,18 @@ export const DECKING_FAMILY_ORDER: readonly DeckingFamily[] = ["treated", "softw
 /** How a crew's time on the boards differs — the labor rate's key. */
 export type DeckingLaborClass = "wood" | "hardwood" | "composite" | "pvc" | "aluminum";
 
+/** The makers whose own lines are on the list (2026-10-12): the brands contractors buy most, in the order of their
+ *  share of composite and PVC decking. Any other brand goes in as a custom board. */
+export type DeckingBrand = "Trex" | "TimberTech" | "Fiberon" | "Deckorators" | "MoistureShield";
+export const DECKING_BRAND_ORDER: readonly DeckingBrand[] = ["Trex", "TimberTech", "Fiberon", "Deckorators", "MoistureShield"];
+export const DECKING_BRAND_LABEL: Record<DeckingBrand, string> = { Trex: "Trex", TimberTech: "TimberTech and AZEK", Fiberon: "Fiberon", Deckorators: "Deckorators", MoistureShield: "MoistureShield" };
+
 export interface DeckingProduct {
   id: string;
   label: string;
   family: DeckingFamily;
+  /** A maker's own line; none for the generic boards ("Capped composite — mid line"). */
+  brand?: DeckingBrand;
   /** As the yard sells it: "5/4x6", "2x6", "1x6". */
   nominal: string;
   /** Face width and thickness as it measures, inches. */
@@ -129,6 +138,13 @@ const COMPOSITE_LENGTHS = [12, 16, 20] as const;
 const CODE_54 = "IRC Table R507.7 — 1 1/4-in. wood on three joists or more";
 const CODE_2X = "IRC Table R507.7 — 2-in. wood";
 const YARD = "The yard's usual span for this board — confirm it with your supplier";
+const TREX = "Trex installation guide: 16 in. on center, 12 in. at 45°; air must move under the deck";
+const TIMBERTECH = "TimberTech composite guide: 16 in., 12 in. at 45°; joists doubled at butt seams";
+const AZEK = "TimberTech Advanced PVC guide: 16 in., 12 in. at 45°; solid blocking rows every 4–6 ft";
+const FIBERON = "Fiberon guide: 16 in., 12 in. at 45°; 1½ in. of open air under the joists";
+const VISTA = "Deckorators Vista guide: 16 in., 12 in. at 45°; blocking every 4–6 ft, 2 in. of air under the joists";
+const SURESTONE = "Deckorators Surestone guide: 16 in., 12 in. at 45°; rated for ground contact";
+const MOISTURESHIELD = "MoistureShield guide: 16 in., 12 in. at 45°; rated for ground and water contact";
 
 const wood54 = { nominal: "5/4x6", widthIn: 5.5, thickIn: 1, gapIn: 0.125, maxSpacingIn: { square: 16, diagonal: 12 }, source: "code", sourceNote: CODE_54, hiddenFasteners: false } as const;
 const wood2x6 = { nominal: "2x6", widthIn: 5.5, thickIn: 1.5, gapIn: 0.125, maxSpacingIn: { square: 24, diagonal: 24 }, source: "code", sourceNote: CODE_2X, hiddenFasteners: false } as const;
@@ -175,15 +191,50 @@ export const DECKING: readonly DeckingProduct[] = [
   { id: "mineral", label: "Mineral-based composite", family: "mineral", ...capped, maxSpacingIn: { square: 16, diagonal: 12 }, source: "trade", sourceNote: "The usual 16 in. — check this maker's guide", color: "#7b756c", labor: "composite", pricePerLf: 6.5 },
   // Aluminum
   { id: "aluminum", label: "Aluminum plank", family: "aluminum", nominal: "1x6", widthIn: 6, thickIn: 1, gapIn: 0, maxSpacingIn: { square: 24, diagonal: 16 }, source: "trade", sourceNote: "The usual 24 in. — check this maker's guide", lengthsFt: [12, 16, 20, 24], hiddenFasteners: true, color: "#a9adb0", labor: "aluminum", basis: "metal", pricePerLf: 9 },
+  // ── THE BRANDS' OWN LINES (2026-10-12): the lines contractors buy most, with each maker's spacing and air rules from
+  // its installation guide. Every one sits on joists 16 in. apart, 12 in. on a 45° board. The example price is the
+  // board's listed price per foot (Home Depot's where it sells it — lib/deck/storePrices — else a dealer's or Lowe's).
+  // Trex — about half of composite decking; Enhance Naturals is Home Depot's best-selling board.
+  { id: "trex-enhance-basics", label: "Trex Enhance Basics", brand: "Trex", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TREX, color: "#8a6a4c", labor: "composite", pricePerLf: 2 },
+  { id: "trex-enhance-naturals", label: "Trex Enhance Naturals", brand: "Trex", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TREX, color: "#7b746a", labor: "composite", pricePerLf: 2.6 },
+  { id: "trex-select", label: "Trex Select", brand: "Trex", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.82, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TREX, color: "#9a968f", labor: "composite", pricePerLf: 5 },
+  { id: "trex-transcend", label: "Trex Transcend", brand: "Trex", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TREX, color: "#7a4b36", labor: "composite", pricePerLf: 6.31 },
+  { id: "trex-transcend-lineage", label: "Trex Transcend Lineage", brand: "Trex", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TREX, color: "#6a5848", labor: "composite", pricePerLf: 6.31 },
+  // TimberTech (composite) and its AZEK PVC — the second brand, about a quarter of the market.
+  { id: "timbertech-prime", label: "TimberTech Prime", brand: "TimberTech", family: "composite", ...capped, widthIn: 5.36, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TIMBERTECH, minClearanceIn: 1.5, color: "#6b4e3a", labor: "composite", pricePerLf: 3.32 },
+  { id: "timbertech-prime-plus", label: "TimberTech Prime+", brand: "TimberTech", family: "composite", ...capped, widthIn: 5.36, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TIMBERTECH, minClearanceIn: 1.5, color: "#8c6b50", labor: "composite", pricePerLf: 3.19 },
+  { id: "timbertech-reserve", label: "TimberTech PRO Reserve", brand: "TimberTech", family: "composite", ...capped, widthIn: 5.36, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: TIMBERTECH, minClearanceIn: 1.5, color: "#4f3b2f", labor: "composite", pricePerLf: 5.89 },
+  { id: "timbertech-azek-harvest", label: "TimberTech AZEK Harvest (PVC)", brand: "TimberTech", family: "pvc", ...capped, widthIn: 5.5, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: AZEK, blockingRowsMaxFt: 6, minClearanceIn: 1.5, color: "#79593f", labor: "pvc", pricePerLf: 5.13 },
+  { id: "timbertech-azek-vintage", label: "TimberTech AZEK Vintage (PVC)", brand: "TimberTech", family: "pvc", ...capped, widthIn: 5.5, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: AZEK, blockingRowsMaxFt: 6, minClearanceIn: 1.5, color: "#9e7a55", labor: "pvc", pricePerLf: 5.27 },
+  { id: "timbertech-azek-landmark", label: "TimberTech AZEK Landmark (PVC)", brand: "TimberTech", family: "pvc", ...capped, widthIn: 5.5, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: AZEK, blockingRowsMaxFt: 6, minClearanceIn: 1.5, color: "#5c4434", labor: "pvc", pricePerLf: 7.63 },
+  // Fiberon — the third brand; ArmorGuard is sold only at Home Depot (a best seller there).
+  { id: "fiberon-armorguard", label: "Fiberon ArmorGuard", brand: "Fiberon", family: "composite", ...capped, widthIn: 5.2, thickIn: 0.92, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: FIBERON, minClearanceIn: 1.5, color: "#8a867f", labor: "composite", pricePerLf: 2.25 },
+  { id: "fiberon-good-life", label: "Fiberon Good Life", brand: "Fiberon", family: "composite", ...capped, widthIn: 5.4, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: FIBERON, minClearanceIn: 1.5, color: "#6f5440", labor: "composite", pricePerLf: 2.97 },
+  { id: "fiberon-sanctuary", label: "Fiberon Sanctuary", brand: "Fiberon", family: "composite", ...capped, widthIn: 5.4, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: FIBERON, minClearanceIn: 1.5, color: "#8e6d50", labor: "composite", pricePerLf: 5.2 },
+  { id: "fiberon-concordia", label: "Fiberon Concordia", brand: "Fiberon", family: "composite", ...capped, widthIn: 5.4, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: FIBERON, minClearanceIn: 1.5, color: "#4a4845", labor: "composite", pricePerLf: 6.27 },
+  { id: "fiberon-paramount", label: "Fiberon Paramount (PVC)", brand: "Fiberon", family: "pvc", ...capped, widthIn: 5.5, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: FIBERON, minClearanceIn: 1.5, color: "#b39c7e", labor: "pvc", pricePerLf: 4.12 },
+  // Deckorators (UFP): Vista is wood composite; Summit and Voyage are its mineral-based Surestone boards.
+  { id: "deckorators-summit", label: "Deckorators Summit (mineral-based)", brand: "Deckorators", family: "mineral", ...capped, widthIn: 5.5, thickIn: 0.875, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: SURESTONE, color: "#7c6551", labor: "composite", pricePerLf: 2.5 },
+  { id: "deckorators-vista", label: "Deckorators Vista", brand: "Deckorators", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.875, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: VISTA, blockingRowsMaxFt: 6, minClearanceIn: 2, color: "#5b4636", labor: "composite", pricePerLf: 5.41 },
+  { id: "deckorators-voyage", label: "Deckorators Voyage (mineral-based)", brand: "Deckorators", family: "mineral", ...capped, widthIn: 5.5, thickIn: 0.875, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: SURESTONE, color: "#8b5b40", labor: "composite", pricePerLf: 7.63 },
+  // MoistureShield — rated for ground and water contact.
+  { id: "moistureshield-vision", label: "MoistureShield Vision", brand: "MoistureShield", family: "composite", ...capped, widthIn: 5.4, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: MOISTURESHIELD, color: "#4b3a2f", labor: "composite", pricePerLf: 5.72 },
 ];
 
 export function deckingProduct(id: string | null | undefined): DeckingProduct {
   return DECKING.find((d) => d.id === id) ?? DECKING[0];
 }
 
-/** The board a new deck starts on: the region's treated 2x6 in the West, 5/4 pine elsewhere. */
+/** The board a new deck starts on (lib/deck/regional): the region's treated board — 5/4 pine in the East, a treated
+ *  2x6 in the Mountain states and Alaska — and capped composite on the Pacific coast and in Hawaii, where treated
+ *  decking is a small share of what is built. */
 export function defaultDecking(state: string | null | undefined): string {
-  return WESTERN_STATES.has((state ?? "").toUpperCase()) ? "pt-hemfir-2x6" : "pt-pine-54";
+  return regionalPicks(state)?.defaultBoard ?? "pt-pine-54";
+}
+
+/** The region's treated deck board: the Good tier. */
+export function treatedDecking(state: string | null | undefined): string {
+  return regionalPicks(state)?.treatedBoard ?? "pt-pine-54";
 }
 
 /* ------------------------------------------------------------------ */

@@ -27,11 +27,14 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { resolveMarket, parseStateZip, type MarketSnapshot } from "@/lib/fence/market";
-import { DECKING, DECKING_FAMILY_LABEL, DECKING_FAMILY_ORDER, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, wallType } from "@/lib/deck/catalog";
+import { DECKING, DECKING_BRAND_LABEL, DECKING_BRAND_ORDER, DECKING_FAMILY_LABEL, DECKING_FAMILY_ORDER, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, treatedDecking, wallType, type DeckingFamily, type DeckingProduct } from "@/lib/deck/catalog";
+import { regionalPicks, regionalWords } from "@/lib/deck/regional";
 import { LEDGER_FASTENER_LABEL, LOADS, POST_SIZES, SOLID_BEAMS, ftIn, solidBeamTabulated, type LoadPsf, type SoilPsf } from "@/lib/deck/codeTables";
 import {
   BUILT_UP_CHOICES,
   CEILING_LABEL,
+  CUSTOM_LIMITS,
+  OWN_UNITS,
   DECK_LIMITS,
   ELECTRICAL_LIMITS,
   FASCIA_FINISH_LABEL,
@@ -78,6 +81,10 @@ import {
   type StairDesign,
   type Structure,
   type DeckPhoto,
+  type CustomProduct,
+  type CustomSlot,
+  type OwnItem,
+  type OwnUnit,
   normalizeDeckDesign,
 } from "@/lib/deck/design";
 import { priceDeck, deckNotes, deckScope, type DeckPackage } from "@/lib/deck/pricing";
@@ -88,7 +95,7 @@ import { siteFromAddress, SLOPE_LIMITS, TERMITE_LABEL } from "@/lib/deck/site";
 import { applyDeckPatch, checkSummary, deckChecks, type DeckCheck, type DeckPatch } from "@/lib/deck/checks";
 import { deckScene, sceneBuildLayers, SCENE_LAYER_LABEL, type SceneLegend } from "@/lib/deck/scene";
 import { deckElevation, defaultPlacement } from "@/lib/deck/elevation";
-import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
+import { BOM_STEP_LABEL, FIXTURE_RATE, type BomStep } from "@/lib/deck/takeoff";
 import { STORE_SURVEY, storePrice } from "@/lib/deck/storePrices";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
@@ -201,6 +208,86 @@ function Seg<T extends string | number>({ value, options, onChange, label, small
   );
 }
 
+/** A price typed with or without the dollar sign and the commas. */
+const priceText = (t: string) => {
+  const c = t.replace(/[$,\s]/g, "");
+  if (c === "") return null;
+  const n = Number(c);
+  return Number.isFinite(n) ? n : null;
+};
+const priceShow = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
+/**
+ * A name typed freely: committed while it has letters in it, the draft shown until the field is left (so the spaces
+ * survive the typing). An emptied field keeps the last name unless `allowEmpty`. `focusNow` puts the cursor in it, the
+ * text selected, so a product picked a moment ago is typed over.
+ */
+function NameInput({ value, onCommit, label, placeholder, allowEmpty, focusNow, onDone }: { value: string; onCommit: (v: string) => void; label: string; placeholder?: string; allowEmpty?: boolean; focusNow?: boolean; onDone?: () => void }) {
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const ref = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (!focusNow || !ref.current) return;
+    ref.current.focus({ preventScroll: true });
+    ref.current.select();
+  }, [focusNow]);
+  return (
+    <input
+      ref={ref}
+      className={s.in}
+      aria-label={label}
+      placeholder={placeholder}
+      maxLength={CUSTOM_LIMITS.name}
+      value={draft ?? value}
+      onChange={(e) => {
+        const text = e.target.value;
+        setDraft(text);
+        const clean = text.replace(/\s+/g, " ").trim();
+        if (clean || allowEmpty) onCommit(clean);
+      }}
+      onBlur={() => {
+        setDraft(null);
+        onDone?.();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+    />
+  );
+}
+
+/** The last choice on every material list (owner, 2026-10-12: "always an option custom in case the contractor didn't find it"). */
+const CUSTOM = "__custom";
+const CUSTOM_LABEL = "Custom — type your own…";
+
+/**
+ * A product the list doesn't carry: its name and the shop's price for it, in the list's unit. `children` say what it is
+ * built like — the engine still frames, spaces and wires it as that, so the code checks keep working.
+ */
+function CustomBox({ slot, title, product, unit, onChange, onBack, children, note, fresh, onDone }: { slot: string; title: string; product: CustomProduct; unit: string | null; onChange: (p: CustomProduct) => void; onBack: () => void; children?: React.ReactNode; note?: React.ReactNode; fresh?: boolean; onDone?: () => void }) {
+  return (
+    <div className={s.customBox} data-deck-custom={slot}>
+      <div className={s.customHead}>
+        <span className={s.customTag}>Your own · {title}</span>
+        <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={onBack} data-deck-custom-back={slot}>
+          Back to the list
+        </button>
+      </div>
+      <div className={s.customGrid}>
+        <Field label="Product" wide={!unit}>
+          <NameInput label={`${title}: your product's name`} value={product.name} placeholder="Brand, line, size" focusNow={fresh} onDone={onDone} onCommit={(name) => onChange({ ...product, name })} />
+        </Field>
+        {unit ? (
+          <Field label="Your price" aside={`$ per ${unit}`}>
+            <NumberInput label={`${title}: your price per ${unit}`} value={product.price} parse={priceText} format={priceShow} min={CUSTOM_LIMITS.price.min} max={CUSTOM_LIMITS.price.max} onCommit={(price) => onChange({ ...product, price })} />
+          </Field>
+        ) : null}
+        {children}
+      </div>
+      {note ? <p className={s.hint}>{note}</p> : null}
+    </div>
+  );
+}
+
 function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
     <label className={s.toggle}>
@@ -297,7 +384,7 @@ const FIXTURE_CHIPS: FixtureKind[] = ["led-strip", "post-cap", "step-light", "st
 const FIXTURE_SHORT: Record<FixtureKind, string> = { "led-strip": "LED strip", "post-cap": "Post caps", "step-light": "Step lights", "string-light": "String lights", sconce: "Sconce", "ceiling-light": "Ceiling light", chandelier: "Chandelier", fan: "Fan", outlet: "Outlet", heater: "Heater", flood: "Security light" };
 /** Good / Better / Best: the boards and the rail each tier stands on. */
 const TIERS: ReadonlyArray<{ id: "good" | "better" | "best"; name: string; decking: (state: string | null) => string; rail: DeckDesign["rail"]["type"]; words: string }> = [
-  { id: "good", name: "Good", decking: (st) => defaultDecking(st), rail: "treated", words: "Treated wood boards and rail — the working deck." },
+  { id: "good", name: "Good", decking: (st) => treatedDecking(st), rail: "treated", words: "Treated wood boards and rail — the working deck." },
   { id: "better", name: "Better", decking: () => "composite-better", rail: "composite", words: "Capped composite boards and a composite rail — no staining, ever." },
   { id: "best", name: "Best", decking: () => "composite-best", rail: "aluminum", words: "Premium composite and an aluminum rail — the thin profile, the long warranty." },
 ];
@@ -403,6 +490,14 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     dirty.current = true;
     setDesign((d) => applyDeckPatch(d, { electrical: { ...d.electrical, fixtures: fn(d.electrical.fixtures) } }));
   }, []);
+  /** The items of the shop's own on the material list (2026-10-12). */
+  const setOwnItems = React.useCallback((fn: (list: OwnItem[]) => OwnItem[]) => {
+    dirty.current = true;
+    setDesign((d) => applyDeckPatch(d, { extras: { items: fn(d.extras.items) } }));
+  }, []);
+  const [ownDraft, setOwnDraft] = React.useState<{ name: string; qty: string; unit: OwnUnit; price: string }>({ name: "", qty: "1", unit: "ea", price: "" });
+  /** The custom product picked a moment ago: its name field takes the cursor. */
+  const [freshCustom, setFreshCustom] = React.useState<string | null>(null);
 
   const commitAddress = (text: string) => {
     const next = text.trim();
@@ -472,9 +567,9 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     if (!withDeck) return null;
     const st = market.state || homeState;
     return TIERS.map((t) => {
-      const variant = applyDeckPatch(design, { decking: { product: t.decking(st) }, rail: { type: design.rail.type === "none" && !structure.rails.required ? "none" : t.rail } });
+      const variant = applyDeckPatch(design, { decking: { product: t.decking(st) }, rail: { type: design.rail.type === "none" && !structure.rails.required ? "none" : t.rail }, custom: { decking: undefined } });
       const p = priceDeck(variant, { rates: book, market });
-      return { ...t, product: t.decking(st), subtotal: p.subtotal, perSqFt: p.pricePerSqFt, current: design.decking.product === t.decking(st) && (design.rail.type === t.rail || design.rail.type === "none") };
+      return { ...t, product: t.decking(st), subtotal: p.subtotal, perSqFt: p.pricePerSqFt, current: !design.custom.decking && design.decking.product === t.decking(st) && (design.rail.type === t.rail || design.rail.type === "none") };
     });
   }, [design, book, market, homeState, withDeck, structure.rails.required]);
 
@@ -1045,6 +1140,140 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     for (const l of pkg.bom) out.set(l.step, [...(out.get(l.step) ?? []), l]);
     return out;
   }, [pkg]);
+
+  // ── PRODUCTS OF THE SHOP'S OWN (2026-10-12, owner: "always an option custom in case the contractor didn't find it
+  // from what we have"). Every material list ends with Custom: the list's choice stays as what it is built like, and the
+  // typed name and price stand in for it on the material list and the proposal (lib/deck/takeoff, lib/deck/pricing).
+  const setCustom = (slot: CustomSlot, p: CustomProduct | undefined) => patch({ custom: { [slot]: p } as DeckDesign["custom"] });
+  const dropCustom = (slot: CustomSlot) => {
+    if (design.custom[slot]) setCustom(slot, undefined);
+  };
+  /** What the list's choice costs now, in the slot's unit: where the shop's own product starts. */
+  const slotPrice = (slot: CustomSlot): number => {
+    const ids: Record<CustomSlot, (id: string, step: BomStep) => boolean> = {
+      decking: (id, step) => (step === "decking" && id.startsWith("boards-")) || (step === "stairs" && id.startsWith("tread-boards-")),
+      fastening: (id) => id === "deck-fasteners",
+      fascia: (id) => id === "fascia" || id === "riser-boards",
+      roofing: (id) => id === "shingles" || id === "shakes" || id === "metal-panels",
+      ceiling: (id) => id === "ceiling",
+      roofFascia: (id) => id === "fascia-boards" || id === "fascia-wrap",
+      gutters: (id) => id === "gutter",
+      walls: (id) => id === "screen-panels" || id === "wall-panels",
+      species: () => false,
+    };
+    const lines = pkg.bom.filter((l) => !l.byClient && ids[slot](l.id, l.step));
+    const cost = lines.reduce((a, l) => a + l.cost, 0);
+    const per = slot === "roofing" ? (roof?.squares ?? 0) : lines.reduce((a, l) => a + l.rateQty, 0);
+    if (lines.length && per > 0) return Math.round((cost / per) * 100) / 100;
+    const fallback: Record<CustomSlot, string> = { decking: `deck.${design.decking.product}`, fastening: "fast.screws", fascia: "fascia.wood", roofing: "roof.shingle.arch", ceiling: "trim.ceiling.tg", roofFascia: "trim.fascia.wood", gutters: "gut.k5", walls: "trim.screen", species: "" };
+    return fallback[slot] ? deckRate(fallback[slot], book, market).price : 0;
+  };
+  /** The list's own name for what is chosen now: typed over in a moment. */
+  const slotName = (slot: CustomSlot): string => {
+    switch (slot) {
+      case "species":
+        return FRAMING_SPECIES.find((f) => f.id === design.framing.species)?.label ?? "Framing lumber";
+      case "decking":
+        return DECKING.find((d) => d.id === design.decking.product)?.label ?? "Deck boards";
+      case "fastening":
+        return pkg.takeoff.surface?.fastening === "hidden" ? "Hidden clips and screws" : "Deck screws";
+      case "fascia":
+        return pkg.takeoff.surface?.fascia.kind === "composite" ? "Composite fascia" : "Wood fascia";
+      case "roofing":
+        return ROOFING_LABEL[r.roofing];
+      case "ceiling":
+        return CEILING_LABEL[r.ceiling === "none" ? "tongue-groove" : r.ceiling];
+      case "roofFascia":
+        return FASCIA_FINISH_LABEL[r.fascia.finish];
+      case "gutters":
+        return GUTTER_LABEL[r.gutters.kind === "none" ? "k5" : r.gutters.kind];
+      case "walls":
+        return WALL_FILL_LABEL[r.walls.fill === "none" ? "screen" : r.walls.fill].split(",")[0];
+    }
+  };
+  const pickCustom = (slot: CustomSlot) => {
+    const surface = pkg.takeoff.surface;
+    // The list's line has to be there for the shop's product to stand in for it.
+    const make: DeckPatch =
+      slot === "fascia" && !surface?.fascia.on
+        ? { decking: { fascia: "match" } }
+        : slot === "ceiling" && r.ceiling === "none"
+          ? { roof: { ceiling: "tongue-groove" } }
+          : slot === "roofFascia" && !r.fascia.eave && !r.fascia.rake
+            ? { roof: { fascia: { ...r.fascia, eave: true } } }
+            : slot === "gutters" && r.gutters.kind === "none"
+              ? { roof: { gutters: { ...r.gutters, kind: "k5" } } }
+              : slot === "walls" && r.walls.fill === "none"
+                ? { roof: { walls: { ...r.walls, fill: "screen" } } }
+                : {};
+    setFreshCustom(slot);
+    patch({ ...make, custom: { [slot]: { name: slotName(slot), price: slotPrice(slot) } } as DeckDesign["custom"] }, slot === "species" || slot === "decking" ? [slot] : []);
+  };
+  const fixturePrice = (f: Fixture) => deckRate(f.kind === "heater" && f.volts240 ? "elec.heater240" : FIXTURE_RATE[f.kind], book, market).price;
+  const setFixtureCustom = (id: string, c: CustomProduct | null) => setFixtures((list) => list.map((x) => (x.id === id ? { ...x, custom: c } : x)));
+  const addOwnItem = () => {
+    const name = ownDraft.name.replace(/\s+/g, " ").trim();
+    if (!name) return;
+    const qty = priceText(ownDraft.qty);
+    const price = priceText(ownDraft.price);
+    const id = `o${Date.now().toString(36).slice(-6)}`;
+    setOwnItems((list) => [...list, { id, name, qty: qty !== null && qty > 0 ? qty : 1, unit: ownDraft.unit, price: price !== null && price > 0 ? price : 0 }]);
+    setOwnDraft((d) => ({ name: "", qty: "1", unit: d.unit, price: "" }));
+  };
+  const setOwnItem = (id: string, p: Partial<OwnItem>) => setOwnItems((list) => list.map((it) => (it.id === id ? { ...it, ...p } : it)));
+  const speciesOptions = (
+    <>
+      <optgroup label="Pressure-treated">
+        {FRAMING_SPECIES.filter((f) => f.treated).map((f) => (
+          <option key={f.id} value={f.id}>{f.label}</option>
+        ))}
+      </optgroup>
+      <optgroup label="Naturally durable, not treated">
+        {FRAMING_SPECIES.filter((f) => !f.treated).map((f) => (
+          <option key={f.id} value={f.id}>{f.label}</option>
+        ))}
+      </optgroup>
+    </>
+  );
+  // THE BOARD LIST (2026-10-12, owner: "the most popular materials, brands for decking, and what is most popular per
+  // state"): the boards most used in the job's region first (lib/deck/regional), then the woods, the brands' own lines,
+  // and the generic composite, PVC, mineral-based and aluminum boards — any brand. Custom closes it.
+  const regional = regionalPicks(market.state || homeState);
+  const boardOption = (d: DeckingProduct, key = d.id) => (
+    <option key={key} value={d.id}>{d.label}</option>
+  );
+  const woodFamily = (fam: DeckingFamily) => fam === "treated" || fam === "softwood" || fam === "hardwood" || fam === "modified";
+  const deckingOptions = (
+    <>
+      {regional ? (
+        <optgroup label={`Most used in ${regional.name}`}>
+          {regional.decking.flatMap((id) => DECKING.filter((d) => d.id === id)).map((d) => boardOption(d, `most-${d.id}`))}
+        </optgroup>
+      ) : null}
+      {DECKING_FAMILY_ORDER.filter(woodFamily).map((fam) => (
+        <optgroup key={fam} label={DECKING_FAMILY_LABEL[fam]}>
+          {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
+        </optgroup>
+      ))}
+      {DECKING_BRAND_ORDER.map((b) => (
+        <optgroup key={b} label={DECKING_BRAND_LABEL[b]}>
+          {DECKING.filter((d) => d.brand === b).map((d) => boardOption(d))}
+        </optgroup>
+      ))}
+      {DECKING_FAMILY_ORDER.filter((fam) => !woodFamily(fam)).map((fam) => (
+        <optgroup key={fam} label={fam === "aluminum" ? DECKING_FAMILY_LABEL[fam] : `${DECKING_FAMILY_LABEL[fam]} — any brand`}>
+          {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
+        </optgroup>
+      ))}
+    </>
+  );
+  const roofingOptions = ROOFINGS.filter((x) => x !== "none").map((x) => (
+    <option key={x} value={x}>{ROOFING_LABEL[x]}</option>
+  ));
+  const fixtureOptions = FIXTURE_KINDS.map((k) => (
+    <option key={k} value={k}>{FIXTURE_LABEL[k]}</option>
+  ));
+  const freshDone = () => setFreshCustom(null);
 
   const issues = checks.filter((c) => c.level === "fail" || c.level === "warn");
   const ordered = [...checks].sort((a, b) => ["fail", "warn", "info", "pass"].indexOf(a.level) - ["fail", "warn", "info", "pass"].indexOf(b.level));
@@ -1644,20 +1873,22 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {withDeck && frame ? (
             <Step n={next()} title="Frame" summary={frameSummary}>
               <Field label="Framing lumber" wide>
-                <select className={s.sel} value={design.framing.species} onChange={(e) => patch({ framing: { species: e.target.value as DeckDesign["framing"]["species"] } }, ["species"])}>
-                  <optgroup label="Pressure-treated">
-                    {FRAMING_SPECIES.filter((f) => f.treated).map((f) => (
-                      <option key={f.id} value={f.id}>{f.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Naturally durable, not treated">
-                    {FRAMING_SPECIES.filter((f) => !f.treated).map((f) => (
-                      <option key={f.id} value={f.id}>{f.label}</option>
-                    ))}
-                  </optgroup>
+                <select className={s.sel} value={design.custom.species ? CUSTOM : design.framing.species} onChange={(e) => (e.target.value === CUSTOM ? pickCustom("species") : patch({ framing: { species: e.target.value as DeckDesign["framing"]["species"] }, custom: { species: undefined } }, ["species"]))} data-deck-pick="species">
+                  {speciesOptions}
+                  <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                 </select>
               </Field>
-              <p className={s.hint}>{frame.species.note}</p>
+              {design.custom.species ? (
+                <CustomBox slot="species" title="Framing lumber" product={design.custom.species} unit={null} fresh={freshCustom === "species"} onDone={freshDone} onChange={(p) => setCustom("species", p)} onBack={() => setCustom("species", undefined)} note={`Named as typed on the plans and the material list. It spans by the code's tables for ${(FRAMING_SPECIES.find((f) => f.id === design.framing.species)?.label ?? "the lumber below").toLowerCase()} and is priced as that — your own lumber prices go under Your prices.`}>
+                  <Field label="Spans and prices as" wide>
+                    <select className={s.sel} value={design.framing.species} onChange={(e) => patch({ framing: { species: e.target.value as DeckDesign["framing"]["species"] } }, ["species"])} data-deck-like="species">
+                      {speciesOptions}
+                    </select>
+                  </Field>
+                </CustomBox>
+              ) : (
+                <p className={s.hint}>{frame.species.note}</p>
+              )}
               <Field label="Joists" aside={design.framing.joist === "auto" ? `picked: ${frame.joistSize}` : undefined} wide>
                 <Seg small label="Joists" value={design.framing.joist} onChange={(v) => patch({ framing: { joist: v } })} options={[{ value: "auto", label: "Auto" }, ...(["2x6", "2x8", "2x10", "2x12"] as const).map((j) => ({ value: j, label: j }))]} />
               </Field>
@@ -1736,19 +1967,28 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {withDeck && frame && pkg.takeoff.surface ? (
             <Step n={next()} title="Surface" summary={surfaceSummary}>
               <Field label="Deck boards" wide>
-                <select className={s.sel} value={design.decking.product} onChange={(e) => patch({ decking: { product: e.target.value } }, ["decking"])}>
-                  {DECKING_FAMILY_ORDER.map((fam) => (
-                    <optgroup key={fam} label={DECKING_FAMILY_LABEL[fam]}>
-                      {DECKING.filter((d) => d.family === fam).map((d) => (
-                        <option key={d.id} value={d.id}>{d.label}</option>
-                      ))}
-                    </optgroup>
-                  ))}
+                <select className={s.sel} value={design.custom.decking ? CUSTOM : design.decking.product} onChange={(e) => (e.target.value === CUSTOM ? pickCustom("decking") : patch({ decking: { product: e.target.value }, custom: { decking: undefined } }, ["decking"]))} data-deck-pick="decking">
+                  {deckingOptions}
+                  <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                 </select>
               </Field>
+              {design.custom.decking ? (
+                <CustomBox slot="decking" title="Deck boards" product={design.custom.decking} unit="ft of board" fresh={freshCustom === "decking"} onDone={freshDone} onChange={(p) => setCustom("decking", p)} onBack={() => setCustom("decking", undefined)} note="Priced at your number per foot of board, the stair treads too. The joist spacing, the gaps and the clips follow the board it is laid like.">
+                  <Field label="Laid like" wide>
+                    <select className={s.sel} value={design.decking.product} onChange={(e) => patch({ decking: { product: e.target.value } }, ["decking"])} data-deck-like="decking">
+                      {deckingOptions}
+                    </select>
+                  </Field>
+                </CustomBox>
+              ) : null}
               <p className={s.hint}>
                 Joists no more than {frame.decking.maxSpacingIn.square} in. apart ({frame.decking.maxSpacingIn.diagonal} in. on the diagonal) — {frame.decking.sourceNote}.
               </p>
+              {regional ? (
+                <p className={s.hint} data-deck-regional={regional.region}>
+                  {regionalWords(regional)} Builder surveys by region; remodels still lean on wood.
+                </p>
+              ) : null}
               <Field label="Pattern" wide>
                 <Seg small label="Pattern" value={design.decking.pattern} onChange={(v) => patch({ decking: { pattern: v, diagonal: v !== "straight" } })} options={(["straight", "diagonal", "herringbone"] as const).map((v) => ({ value: v, label: PATTERN_LABEL[v] }))} />
               </Field>
@@ -1757,23 +1997,37 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </Field>
               <div className={s.grid2}>
                 <Field label="Fastened with">
-                  <select className={s.sel} value={design.decking.fastening} onChange={(e) => patch({ decking: { fastening: e.target.value as DeckDesign["decking"]["fastening"] } })}>
+                  <select className={s.sel} value={design.custom.fastening ? CUSTOM : design.decking.fastening} onChange={(e) => (e.target.value === CUSTOM ? pickCustom("fastening") : patch({ decking: { fastening: e.target.value as DeckDesign["decking"]["fastening"] }, custom: { fastening: undefined } }))} data-deck-pick="fastening">
                     <option value="auto">Auto — {pkg.takeoff.surface.fastening === "hidden" ? "hidden clips" : "screws"}</option>
                     <option value="screws">Deck screws</option>
                     {frame.decking.hiddenFasteners ? <option value="hidden">Hidden clips</option> : null}
+                    <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                   </select>
                 </Field>
                 <Field label="Fascia">
-                  <select className={s.sel} value={design.decking.fascia} onChange={(e) => patch({ decking: { fascia: e.target.value as DeckDesign["decking"]["fascia"] } })}>
+                  <select className={s.sel} value={design.custom.fascia && pkg.takeoff.surface.fascia.on ? CUSTOM : design.decking.fascia} onChange={(e) => (e.target.value === CUSTOM ? pickCustom("fascia") : patch({ decking: { fascia: e.target.value as DeckDesign["decking"]["fascia"] }, custom: { fascia: undefined } }))} data-deck-pick="fascia">
                     <option value="auto">Auto — {pkg.takeoff.surface.fascia.on ? "on" : "none"}</option>
                     <option value="match">Fascia on the open edges</option>
                     <option value="none">No fascia</option>
+                    <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                   </select>
                 </Field>
                 <Field label="Waste" aside="%">
                   <NumberInput label="Waste allowance on the boards, percent" value={design.decking.wastePct} parse={intText} format={String} min={0} max={30} onCommit={(n2) => patch({ decking: { wastePct: n2 } })} />
                 </Field>
               </div>
+              {design.custom.fastening ? (
+                <CustomBox slot="fastening" title="Fastening" product={design.custom.fastening} unit="sq ft of deck" fresh={freshCustom === "fastening"} onDone={freshDone} onChange={(p) => setCustom("fastening", p)} onBack={() => setCustom("fastening", undefined)} note="Priced per square foot of deck — screws or clips and their bits, all in.">
+                  {frame.decking.hiddenFasteners ? (
+                    <Field label="Counted as" wide>
+                      <Seg small label="Fastening counted as" value={pkg.takeoff.surface.fastening} onChange={(v) => patch({ decking: { fastening: v } })} options={[{ value: "screws", label: "Face screws" }, { value: "hidden", label: "Hidden clips" }]} />
+                    </Field>
+                  ) : null}
+                </CustomBox>
+              ) : null}
+              {design.custom.fascia && pkg.takeoff.surface.fascia.on ? (
+                <CustomBox slot="fascia" title="Fascia" product={design.custom.fascia} unit="ft" fresh={freshCustom === "fascia"} onDone={freshDone} onChange={(p) => setCustom("fascia", p)} onBack={() => setCustom("fascia", undefined)} note="Priced per foot of fascia board, the stair risers too, bought in 12-ft lengths." />
+              ) : null}
             </Step>
           ) : null}
 
@@ -1836,8 +2090,25 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </div>
                 <Toggle checked={r.braces} onChange={(v) => rp({ braces: v })}>Knee braces at the posts</Toggle>
                 <Field label="Walls between the posts" wide>
-                  <Seg small label="Walls between the posts" value={r.walls.fill} onChange={(v) => rp({ walls: { ...r.walls, fill: v } })} options={(["none", "screen", "lattice", "solid"] as const).map((v) => ({ value: v, label: WALL_FILL_LABEL[v].split(",")[0] }))} />
+                  <Seg
+                    small
+                    label="Walls between the posts"
+                    value={design.custom.walls && r.walls.fill !== "none" ? "custom" : r.walls.fill}
+                    onChange={(v) => {
+                      if (v === "custom") return pickCustom("walls");
+                      rp({ walls: { ...r.walls, fill: v } });
+                      dropCustom("walls");
+                    }}
+                    options={[...(["none", "screen", "lattice", "solid"] as const).map((v) => ({ value: v, label: WALL_FILL_LABEL[v].split(",")[0] })), { value: "custom" as const, label: "Custom" }]}
+                  />
                 </Field>
+                {design.custom.walls && r.walls.fill !== "none" ? (
+                  <CustomBox slot="walls" title="Walls" product={design.custom.walls} unit="sq ft of wall" fresh={freshCustom === "walls"} onDone={freshDone} onChange={(p) => setCustom("walls", p)} onBack={() => setCustom("walls", undefined)} note="Priced per square foot of wall, framed, as the list's panels are.">
+                    <Field label="Built like" wide>
+                      <Seg small label="Walls built like" value={r.walls.fill} onChange={(v) => rp({ walls: { ...r.walls, fill: v } })} options={(["screen", "lattice", "solid"] as const).map((v) => ({ value: v, label: WALL_FILL_LABEL[v].split(",")[0] }))} />
+                    </Field>
+                  </CustomBox>
+                ) : null}
                 {r.walls.fill !== "none" ? (
                   <Field label="On how many sides" aside={`of ${roof.ring.length - (roof.attach === "wall" ? 1 : 0)} open`} wide>
                     <NumberInput label="How many sides get walls" value={r.walls.sides} parse={intText} format={String} min={1} max={Math.max(1, roof.ring.length - (roof.attach === "wall" ? 1 : 0))} onCommit={(n2) => rp({ walls: { ...r.walls, sides: n2 } })} />
@@ -1894,10 +2165,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     <div className={s.subTitle}>Roofing and ceiling</div>
                     <div className={s.grid2}>
                       <Field label="Roofing">
-                        <select className={s.sel} value={r.roofing} onChange={(e) => rp({ roofing: e.target.value as RoofDesign["roofing"] })}>
-                          {ROOFINGS.filter((x) => x !== "none").map((x) => (
-                            <option key={x} value={x}>{ROOFING_LABEL[x]}</option>
-                          ))}
+                        <select
+                          className={s.sel}
+                          value={design.custom.roofing ? CUSTOM : r.roofing}
+                          onChange={(e) => {
+                            if (e.target.value === CUSTOM) return pickCustom("roofing");
+                            rp({ roofing: e.target.value as RoofDesign["roofing"] });
+                            dropCustom("roofing");
+                          }}
+                          data-deck-pick="roofing"
+                        >
+                          {roofingOptions}
+                          <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                         </select>
                       </Field>
                       {metalRoof ? (
@@ -1906,13 +2185,39 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                         </Field>
                       ) : null}
                       <Field label="Ceiling">
-                        <select className={s.sel} value={r.ceiling} onChange={(e) => rp({ ceiling: e.target.value as RoofDesign["ceiling"] })}>
+                        <select
+                          className={s.sel}
+                          value={design.custom.ceiling && r.ceiling !== "none" ? CUSTOM : r.ceiling}
+                          onChange={(e) => {
+                            if (e.target.value === CUSTOM) return pickCustom("ceiling");
+                            rp({ ceiling: e.target.value as RoofDesign["ceiling"] });
+                            dropCustom("ceiling");
+                          }}
+                          data-deck-pick="ceiling"
+                        >
                           {(["none", "tongue-groove", "beadboard"] as const).map((c) => (
                             <option key={c} value={c}>{CEILING_LABEL[c]}</option>
                           ))}
+                          <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                         </select>
                       </Field>
                     </div>
+                    {design.custom.roofing ? (
+                      <CustomBox slot="roofing" title="Roofing" product={design.custom.roofing} unit="square" fresh={freshCustom === "roofing"} onDone={freshDone} onChange={(p) => setCustom("roofing", p)} onBack={() => setCustom("roofing", undefined)} note={`Priced per square — 100 sq ft of roof; this roof is ${roof.squares} squares. The underlayment, the flashing and the nails follow what it goes on like.`}>
+                        <Field label="Goes on like" wide>
+                          <select className={s.sel} value={r.roofing} onChange={(e) => rp({ roofing: e.target.value as RoofDesign["roofing"] })} data-deck-like="roofing">
+                            {roofingOptions}
+                          </select>
+                        </Field>
+                      </CustomBox>
+                    ) : null}
+                    {design.custom.ceiling && r.ceiling !== "none" ? (
+                      <CustomBox slot="ceiling" title="Ceiling" product={design.custom.ceiling} unit="sq ft of ceiling" fresh={freshCustom === "ceiling"} onDone={freshDone} onChange={(p) => setCustom("ceiling", p)} onBack={() => setCustom("ceiling", undefined)} note="Priced per square foot of ceiling, 10% waste on top.">
+                        <Field label="Looks like" wide>
+                          <Seg small label="Ceiling looks like" value={r.ceiling} onChange={(v) => rp({ ceiling: v })} options={(["tongue-groove", "beadboard"] as const).map((c) => ({ value: c, label: CEILING_LABEL[c] }))} />
+                        </Field>
+                      </CustomBox>
+                    ) : null}
                     {r.kind !== "shed" ? <Toggle checked={r.cupola} onChange={(v) => rp({ cupola: v })}>Cupola at the peak</Toggle> : null}
                   </div>
                   <div className={s.sub}>
@@ -1924,20 +2229,54 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     </div>
                     <div className={s.grid2}>
                       <Field label="Fascia finish">
-                        <select className={s.sel} value={r.fascia.finish} onChange={(e) => rp({ fascia: { ...r.fascia, finish: e.target.value as RoofDesign["fascia"]["finish"] } })}>
+                        <select
+                          className={s.sel}
+                          value={design.custom.roofFascia && (r.fascia.eave || r.fascia.rake) ? CUSTOM : r.fascia.finish}
+                          onChange={(e) => {
+                            if (e.target.value === CUSTOM) return pickCustom("roofFascia");
+                            rp({ fascia: { ...r.fascia, finish: e.target.value as RoofDesign["fascia"]["finish"] } });
+                            dropCustom("roofFascia");
+                          }}
+                          data-deck-pick="roofFascia"
+                        >
                           {(["wood", "pvc", "aluminum-wrap"] as const).map((f) => (
                             <option key={f} value={f}>{FASCIA_FINISH_LABEL[f]}</option>
                           ))}
+                          <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                         </select>
                       </Field>
                       <Field label="Gutters" aside={roof.gutters ? `${Math.round(roof.gutters.lf)} ft · ${roof.gutters.downspouts} downspouts` : undefined}>
-                        <select className={s.sel} value={r.gutters.kind} onChange={(e) => rp({ gutters: { ...r.gutters, kind: e.target.value as RoofDesign["gutters"]["kind"] } })}>
+                        <select
+                          className={s.sel}
+                          value={design.custom.gutters && r.gutters.kind !== "none" ? CUSTOM : r.gutters.kind}
+                          onChange={(e) => {
+                            if (e.target.value === CUSTOM) return pickCustom("gutters");
+                            rp({ gutters: { ...r.gutters, kind: e.target.value as RoofDesign["gutters"]["kind"] } });
+                            dropCustom("gutters");
+                          }}
+                          data-deck-pick="gutters"
+                        >
                           {GUTTER_KINDS.map((g) => (
                             <option key={g} value={g}>{GUTTER_LABEL[g]}</option>
                           ))}
+                          <option value={CUSTOM}>{CUSTOM_LABEL}</option>
                         </select>
                       </Field>
                     </div>
+                    {design.custom.roofFascia && (r.fascia.eave || r.fascia.rake) ? (
+                      <CustomBox slot="roofFascia" title="Fascia finish" product={design.custom.roofFascia} unit="ft" fresh={freshCustom === "roofFascia"} onDone={freshDone} onChange={(p) => setCustom("roofFascia", p)} onBack={() => setCustom("roofFascia", undefined)} note="Priced per foot of fascia and rake board." />
+                    ) : null}
+                    {design.custom.gutters && r.gutters.kind !== "none" ? (
+                      <CustomBox slot="gutters" title="Gutters" product={design.custom.gutters} unit="ft of gutter" fresh={freshCustom === "gutters"} onDone={freshDone} onChange={(p) => setCustom("gutters", p)} onBack={() => setCustom("gutters", undefined)} note="Priced per foot of gutter. The downspouts and their elbows stay as the kind it hangs like.">
+                        <Field label="Hangs like" wide>
+                          <select className={s.sel} value={r.gutters.kind} onChange={(e) => rp({ gutters: { ...r.gutters, kind: e.target.value as RoofDesign["gutters"]["kind"] } })} data-deck-like="gutters">
+                            {GUTTER_KINDS.filter((g) => g !== "none").map((g) => (
+                              <option key={g} value={g}>{GUTTER_LABEL[g]}</option>
+                            ))}
+                          </select>
+                        </Field>
+                      </CustomBox>
+                    ) : null}
                     {r.gutters.kind !== "none" ? <Toggle checked={r.gutters.guards} onChange={(v) => rp({ gutters: { ...r.gutters, guards: v } })}>Gutter guards</Toggle> : null}
                   </div>
                 </>
@@ -1972,6 +2311,11 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                       <Field label="Posts apart" aside="ft">
                         <Seg small label="Rail posts apart" value={design.rail.postSpacingFt} onChange={(v) => patch({ rail: { postSpacingFt: v } })} options={[{ value: 4, label: "4" }, { value: 6, label: "6" }, { value: 8, label: "8" }]} />
                       </Field>
+                      {design.rail.type === "custom" ? (
+                        <Field label="Your railing" wide>
+                          <NameInput label="Your railing's name" value={design.rail.customName} placeholder="Brand, line, colour" allowEmpty onCommit={(name) => patch({ rail: { customName: name } })} />
+                        </Field>
+                      ) : null}
                       {design.rail.type === "custom" ? (
                         <Field label="Your rail price, installed" aside="$/ft">
                           <NumberInput label="Custom rail price per foot, installed" value={design.rail.customPerFt} parse={intText} format={String} min={0} max={1000} onCommit={(n2) => patch({ rail: { customPerFt: n2 } })} />
@@ -2071,15 +2415,26 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 return (
                   <div key={f.id} className={s.row} data-deck-fixture={f.id}>
                     <div className={s.rowHead}>
-                      <span className={s.rowTitle}>{FIXTURE_SHORT[f.kind]}{f.supply === "client" ? <span className={s.tbd}>by the client · TBD</span> : null}</span>
+                      <span className={s.rowTitle}>{f.custom ? f.custom.name : FIXTURE_SHORT[f.kind]}{f.supply === "client" ? <span className={s.tbd}>by the client · TBD</span> : null}</span>
                       <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setFixtures((list) => list.filter((x) => x.id !== f.id))}>Remove</button>
                     </div>
                     <div className={s.rowGrid}>
                       <Field label="What">
-                        <select className={s.sel} value={f.kind} onChange={(e) => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, kind: e.target.value as FixtureKind, at: null } : x)))}>
-                          {FIXTURE_KINDS.map((k) => (
-                            <option key={k} value={k}>{FIXTURE_LABEL[k]}</option>
-                          ))}
+                        <select
+                          className={s.sel}
+                          value={f.custom ? CUSTOM : f.kind}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === CUSTOM) {
+                              setFreshCustom(`fx:${f.id}`);
+                              return setFixtureCustom(f.id, { name: FIXTURE_LABEL[f.kind], price: fixturePrice(f) });
+                            }
+                            setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, kind: v as FixtureKind, at: x.kind === v ? x.at : null, custom: null } : x)));
+                          }}
+                          data-deck-pick="fixture"
+                        >
+                          {fixtureOptions}
+                          <option value={CUSTOM}>Custom — a fixture of your own…</option>
                         </select>
                       </Field>
                       <Field label="Who buys the fixture" aside={f.supply === "client" ? "wiring and hanging stay in the price" : undefined}>
@@ -2096,6 +2451,25 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                         </Field>
                       ) : null}
                     </div>
+                    {f.custom ? (
+                      <CustomBox
+                        slot={`fixture-${f.id}`}
+                        title="Fixture"
+                        product={f.custom}
+                        unit={f.supply === "client" ? null : f.kind === "led-strip" ? "ft" : f.kind === "string-light" ? "48-ft strand" : "fixture"}
+                        fresh={freshCustom === `fx:${f.id}`}
+                        onDone={freshDone}
+                        onChange={(p) => setFixtureCustom(f.id, p)}
+                        onBack={() => setFixtureCustom(f.id, null)}
+                        note={f.supply === "client" ? "The client buys it: named on the list, not priced. Its box, its wire and the hanging are." : "Priced at your number. The box, the wire, the switch and the circuit follow what it is wired like."}
+                      >
+                        <Field label="Wired like" wide>
+                          <select className={s.sel} value={f.kind} onChange={(e) => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, kind: e.target.value as FixtureKind, at: null } : x)))} data-deck-like="fixture">
+                            {fixtureOptions}
+                          </select>
+                        </Field>
+                      </CustomBox>
+                    ) : null}
                     <div className={s.rowActs}>
                       <button type="button" className={cx(s.btn, s.btnSm, placing?.kind === "fixture" && placing.id === f.id && s.btnOn)} onClick={() => { setPlacing(placing?.kind === "fixture" && placing.id === f.id ? null : { kind: "fixture", id: f.id }); setView("3d"); }} data-deck-place-fixture={f.id}>
                         {placing?.kind === "fixture" && placing.id === f.id ? "Click the 3D…" : f.at ? "Move it in 3D" : "Place in 3D"}
@@ -2209,7 +2583,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <div className={s.tierName}>{t.name}{t.current ? " · this one" : ""}</div>
                 <div className={s.tierV}>{money(t.subtotal)}</div>
                 <div className={s.tierH}>{t.words} {money(t.perSqFt, true)} a square foot.</div>
-                {!t.current ? <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch({ decking: { product: t.product }, rail: { type: design.rail.type === "none" && !structure.rails.required ? "none" : t.rail } }, ["decking"])}>Use this</button> : null}
+                {!t.current ? <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch({ decking: { product: t.product }, rail: { type: design.rail.type === "none" && !structure.rails.required ? "none" : t.rail }, custom: { decking: undefined } }, ["decking"])}>Use this</button> : null}
               </div>
             ))}
           </div>
@@ -2357,6 +2731,67 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </tbody>
             ))}
           </table>
+        </div>
+        {/* Anything no list carries (owner, 2026-10-12: "always an option custom"): on the material list and in the price as typed. */}
+        <div className={s.ownBox} data-deck-own-items>
+          <div className={s.customHead}>
+            <span className={s.subTitle}>Not on the list? Add your own</span>
+            {design.extras.items.length ? <span className={s.mono}>{design.extras.items.length} of {CUSTOM_LIMITS.items}</span> : null}
+          </div>
+          {design.extras.items.map((it) => (
+            <div key={it.id} className={s.ownRow} data-deck-own={it.id}>
+              <Field label="Item">
+                <NameInput label="Item name" value={it.name} onCommit={(name) => setOwnItem(it.id, { name })} />
+              </Field>
+              <Field label="Qty">
+                <NumberInput label={`${it.name}: quantity`} value={it.qty} parse={priceText} format={priceShow} min={CUSTOM_LIMITS.qty.min} max={CUSTOM_LIMITS.qty.max} onCommit={(qty) => setOwnItem(it.id, { qty })} />
+              </Field>
+              <Field label="Unit">
+                <select className={s.sel} value={it.unit} onChange={(e) => setOwnItem(it.id, { unit: e.target.value as OwnUnit })} aria-label={`${it.name}: unit`}>
+                  {OWN_UNITS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Price" aside={`$ per ${it.unit}`}>
+                <NumberInput label={`${it.name}: price per ${it.unit}`} value={it.price} parse={priceText} format={priceShow} min={CUSTOM_LIMITS.price.min} max={CUSTOM_LIMITS.price.max} onCommit={(price) => setOwnItem(it.id, { price })} />
+              </Field>
+              <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setOwnItems((list) => list.filter((x) => x.id !== it.id))} aria-label={`Remove ${it.name}`}>
+                Remove
+              </button>
+            </div>
+          ))}
+          {design.extras.items.length < CUSTOM_LIMITS.items ? (
+            <form
+              className={s.ownRow}
+              onSubmit={(e) => {
+                e.preventDefault();
+                addOwnItem();
+              }}
+              data-deck-own-new
+            >
+              <Field label="Item">
+                <input className={s.in} placeholder="A brand or a part no list here carries" maxLength={CUSTOM_LIMITS.name} value={ownDraft.name} onChange={(e) => setOwnDraft((d) => ({ ...d, name: e.target.value }))} aria-label="New item's name" />
+              </Field>
+              <Field label="Qty">
+                <input className={cx(s.in, s.num)} inputMode="decimal" value={ownDraft.qty} onChange={(e) => setOwnDraft((d) => ({ ...d, qty: e.target.value }))} aria-label="New item's quantity" />
+              </Field>
+              <Field label="Unit">
+                <select className={s.sel} value={ownDraft.unit} onChange={(e) => setOwnDraft((d) => ({ ...d, unit: e.target.value as OwnUnit }))} aria-label="New item's unit">
+                  {OWN_UNITS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Price" aside={`$ per ${ownDraft.unit}`}>
+                <input className={cx(s.in, s.num)} inputMode="decimal" placeholder="0.00" value={ownDraft.price} onChange={(e) => setOwnDraft((d) => ({ ...d, price: e.target.value }))} aria-label="New item's price per unit" />
+              </Field>
+              <button type="submit" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={!ownDraft.name.trim()}>
+                + Add
+              </button>
+            </form>
+          ) : null}
+          <p className={s.hint}>Goes on the material list under Your own items and into the price as typed. Every list above ends with Custom too — for a board, a roofing or a fixture the lists don&rsquo;t carry.</p>
         </div>
       </section>
 

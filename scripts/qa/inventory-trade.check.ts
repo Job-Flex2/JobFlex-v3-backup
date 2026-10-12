@@ -18,7 +18,8 @@ check("roof lines whose names drifted from the estimator's still read as roofing
 check("a fence package line is a fence", proposalTrade({ trade: null, title: "Backyard", lines: [L("Cedar privacy — 6' fence package", 104), L("Single gate", 1)] }) === "fence");
 check("HVAC equipment lines are HVAC", proposalTrade({ trade: null, title: "Replacement", lines: [L("Starter G96V-040 — 40k BTU furnace · 97% AFUE", 1), L("Line set, insulated copper", 30), L("Permit", 1)] }) === "hvac");
 check("with no lines, the title decides: a roof replacement is roofing", proposalTrade({ trade: null, title: "Roof replacement — 32 sq architectural", lines: [] }) === "roof");
-check("a deck with a gate on it is not a fence", proposalTrade({ trade: null, title: "Deck rebuild", description: "Composite deck with a gate at the stairs", lines: [L("Composite deck boards", 400), L("Joist hangers", 40), L("Gate hinge + latch sets", 1), L("Stair stringers", 6)] }) === null);
+// Decks became a trade of their own with the deck inventory (2026-10-10, M3): such a proposal is a deck now.
+check("a deck with a gate on it is not a fence — it is a deck", proposalTrade({ trade: null, title: "Deck rebuild", description: "Composite deck with a gate at the stairs", lines: [L("Composite deck boards", 400), L("Joist hangers", 40), L("Gate hinge + latch sets", 1), L("Stair stringers", 6)] }) === "deck");
 check("a kitchen is nobody's", proposalTrade({ trade: null, title: "Kitchen backsplash", lines: [L("Ceramic tile", 40), L("Thinset", 2)] }) === null);
 check("one drifted roof line on a two-line repair is enough", proposalTrade({ trade: null, title: "Repair", lines: [L("Shingles, bundle", 6), L("Sealant", 1)] }) === "roof");
 check("a fence proposal with one lumber line among many is still a fence by its words",

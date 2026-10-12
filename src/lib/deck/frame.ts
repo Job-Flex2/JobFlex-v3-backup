@@ -680,8 +680,11 @@ export function splitRun(from: number, to: number, breaks: readonly number[]): A
 /** A design → its frame. Never throws: what cannot be done inside the tables is drawn and flagged. */
 export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFrame {
   const design = normalizeDeckDesign(raw);
-  const species = framingSpecies(design.framing.species);
-  const decking = deckingProduct(design.decking.product);
+  // A board or a species of the contractor's own is named as they name it; it is framed as what it works like (2026-10-12).
+  const species0 = framingSpecies(design.framing.species);
+  const species = design.custom.species ? { ...species0, label: design.custom.species.name, short: design.custom.species.name } : species0;
+  const decking0 = deckingProduct(design.decking.product);
+  const decking = design.custom.decking ? { ...decking0, label: design.custom.decking.name } : decking0;
   const wall = wallType(design.wall);
   const group = species.group;
   const load = design.loadPsf;

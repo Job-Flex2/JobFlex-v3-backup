@@ -564,3 +564,20 @@
 /* The material list's two doors (2026-10-11). */
 :global(.jf-blueprint .content) .materialActs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 @media (max-width: 768px) { :global(.jf-blueprint .content) .materialActs .btn { flex: 1 1 100%; } }
+
+/* Products of the shop's own (2026-10-12, owner: "always an option custom"): a dashed panel in the step's colour under
+   the list it stands in for, and the add-your-own rows under the material package. */
+:global(.jf-blueprint .content) .customBox { display: grid; gap: 10px; padding: 10px 12px 12px; border: 1.5px dashed color-mix(in srgb, var(--step-c, var(--blueprint)) 55%, transparent); border-radius: var(--radius); background: var(--step-soft, var(--paper)); container-type: inline-size; }
+:global(.jf-blueprint .content) .customHead { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .customTag { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--step-c, var(--blueprint)); }
+/* One column in the studio's narrow controls; the name and the price side by side only where the panel has room. */
+:global(.jf-blueprint .content) .customGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px 12px; align-items: end; }
+@container (min-width: 460px) { :global(.jf-blueprint .content) .customGrid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); } }
+:global(.jf-blueprint .content) .customBox .hint { margin: 0; }
+:global(.jf-blueprint .content) .ownBox { display: grid; gap: 10px; margin-top: 14px; padding: 12px; border: 1.5px dashed var(--hair); border-radius: var(--radius); background: var(--paper); }
+:global(.jf-blueprint .content) .ownBox .hint { margin: 0; }
+:global(.jf-blueprint .content) .ownRow { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 0.7fr) minmax(0, 0.8fr) minmax(0, 1fr) auto; gap: 8px 10px; align-items: end; margin: 0; }
+@media (max-width: 768px) {
+  :global(.jf-blueprint .content) .ownRow { grid-template-columns: repeat(3, minmax(0, 1fr)); padding-bottom: 10px; border-bottom: 1px solid var(--hair-soft); }
+  :global(.jf-blueprint .content) .ownRow > :first-child, :global(.jf-blueprint .content) .ownRow > button { grid-column: 1 / -1; }
+}

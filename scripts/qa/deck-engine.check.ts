@@ -152,11 +152,16 @@ check("decking: every board has a width, a price above zero, stock lengths and a
 check("decking ids are unique, and an unknown id falls back to the first board", new Set(DECKING.map((d) => d.id)).size === DECKING.length && deckingProduct("no-such-board").id === DECKING[0].id);
 check("sawn wood reads the code's table: 5/4 → 16 / 12 in., 2x6 → 24 in.", deckingProduct("pt-pine-54").maxSpacingIn.square === 16 && deckingProduct("pt-pine-54").maxSpacingIn.diagonal === 12 && deckingProduct("cedar-2x6").maxSpacingIn.square === 24 && deckingProduct("pt-pine-54").source === "code");
 check("PVC carries its maker's blocking rule (rows no more than 6 ft apart)", deckingProduct("pvc").blockingRowsMaxFt === 6);
-check("the West decks in treated 2x6 by default, the rest in 5/4 pine", defaultDecking("OR") === "pt-hemfir-2x6" && defaultDecking("GA") === "pt-pine-54");
+// 2026-10-12 (lib/deck/regional): the Pacific coast and Hawaii start on capped composite — treated decking is a small
+// share of what is built there; the Mountain states and Alaska keep the treated 2x6, the East the 5/4 pine.
+check("a new deck starts on the region's board: treated 2x6 in the Mountain states, composite on the Pacific coast, 5/4 pine in the East", defaultDecking("UT") === "pt-hemfir-2x6" && defaultDecking("OR") === "composite-better" && defaultDecking("GA") === "pt-pine-54" && defaultDecking(null) === "pt-pine-54");
 check("ten walls: a ledger on wood or concrete, none on veneer, hollow block, an overhang, truss ribbons, SIPs, or framing nobody can see", WALL_TYPES.length === 10 && WALL_TYPES.filter((w) => w.ledger).map((w) => w.id).join() === "wood-rim,engineered-rim,foam-sheathing,concrete" && WALL_TYPES.filter((w) => w.ledger).every((w) => w.fasteners.length > 0));
 
 console.log("── a design, brought inside its rails");
-const WA = defaultDeckDesign({ state: "WA", frostIn: 18 });
+// The worked examples below were figured on treated hem-fir 2x6 boards — Washington's starting board until 2026-10-12,
+// when the Pacific coast began on composite (lib/deck/regional; checked in deck-brands-regional). The board is pinned.
+const WA0 = defaultDeckDesign({ state: "WA", frostIn: 18 });
+const WA = { ...WA0, decking: { ...WA0.decking, product: "pt-hemfir-2x6" } };
 const TX = defaultDeckDesign({ state: "TX", frostIn: 6 });
 check("a new deck: 16 x 12, on the house, 36 in. up, 40 psf, the owner's standards (6x6 posts, doubled rim, joist tape, solid beams, lags, poured footings)", WA.shape.kind === "rect" && WA.shape.widthFt === 16 && WA.shape.depthFt === 12 && WA.placement === "attached" && WA.heightIn === 36 && WA.loadPsf === 40 && WA.framing.post === "6x6" && WA.framing.doubleRim && WA.framing.joistTape && WA.framing.beamKind === "solid" && WA.ledger.fastener === "lag" && WA.footing.type === "poured" && WA.decking.diagonal === false);
 check("garbage in, a buildable deck out", JSON.stringify(normalizeDeckDesign(null)) === JSON.stringify(defaultDeckDesign()) && normalizeDeckDesign({ shape: { kind: "rect", widthFt: "abc", depthFt: -4 }, heightIn: NaN, loadPsf: 45, framing: { joist: "2x14", post: "9x9" } }).framing.post === "6x6");

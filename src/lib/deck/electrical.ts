@@ -57,6 +57,8 @@ export type WireKind = "12/2" | "10/2" | "14/2" | "lv";
 
 export interface PlacedFixture {
   id: string;
+  /** The design's fixture this piece is (a fixture placed at several spots is several pieces). */
+  designId: string;
   kind: FixtureKind;
   label: string;
   supply: "we" | "client";
@@ -167,7 +169,7 @@ export function buildElectrical(input: ElectricalInput): ElectricalBuild {
   const ceilingZ = roof ? roof.headerBottomIn + (roof.peakIn - roof.headerBottomIn) * 0.45 : floorIn + 96;
   const centre: [number, number] = roof ? [roof.centreX, roof.centreY] : [W / 2, D / 2];
 
-  const place = (f: Fixture): Array<Omit<PlacedFixture, "id" | "kind" | "label" | "supply" | "qty" | "watts" | "lv" | "volts240" | "placed" | "glow">> => {
+  const place = (f: Fixture): Array<Omit<PlacedFixture, "id" | "designId" | "kind" | "label" | "supply" | "qty" | "watts" | "lv" | "volts240" | "placed" | "glow">> => {
     const [sx, sy, sz] = SIZE[f.kind];
     const one = (x: number, y: number, z: number, on: MountKind, yaw = 0, runFt = 0, size: [number, number, number] = [sx, sy, sz]) => ({ x, y, z, on, sx: size[0], sy: size[1], sz: size[2], yaw, runFt });
     if (f.at) return [one(f.at.x, f.at.y, f.at.z, f.at.on)];
@@ -262,7 +264,7 @@ export function buildElectrical(input: ElectricalInput): ElectricalBuild {
     const perSpot = f.kind === "led-strip" || f.kind === "string-light" || f.kind === "post-cap" || f.kind === "step-light" ? 1 : f.qty > spots.length ? Math.ceil(f.qty / spots.length) : 1;
     spots.forEach((sp, i) => {
       const watts = f.kind === "heater" && f.volts240 ? HEATER_240_WATTS : f.kind === "led-strip" ? FIXTURE_WATTS["led-strip"] * Math.max(1, sp.runFt) : FIXTURE_WATTS[f.kind];
-      fixtures.push({ id: spots.length > 1 ? `${f.id}-${i + 1}` : f.id, kind: f.kind, label: FIXTURE_LABEL[f.kind], supply: f.supply, qty: perSpot, ...sp, watts, lv: LOW_VOLTAGE.has(f.kind), volts240: f.kind === "heater" && !!f.volts240, placed: !!f.at, glow: GLOW[f.kind] });
+      fixtures.push({ id: spots.length > 1 ? `${f.id}-${i + 1}` : f.id, designId: f.id, kind: f.kind, label: f.custom?.name ?? FIXTURE_LABEL[f.kind], supply: f.supply, qty: perSpot, ...sp, watts, lv: LOW_VOLTAGE.has(f.kind), volts240: f.kind === "heater" && !!f.volts240, placed: !!f.at, glow: GLOW[f.kind] });
     });
   }
 

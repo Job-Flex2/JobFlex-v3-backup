@@ -23,14 +23,14 @@ import type { DeckSurface } from "./surface";
 import { LEDGER_FASTENER_LABEL, ftIn, type LedgerFastener } from "./codeTables";
 import { POST_HARDWARE_FACTOR, STAINLESS_FACTOR, lumberKey, tubeFactor } from "./rates";
 import type { RoofMember, RoofRole } from "./roof";
-import { ROOFING_LABEL, type DeckDesign } from "./design";
+import { type CustomSlot, ROOFING_LABEL, type DeckDesign } from "./design";
 import type { DeckStructure } from "./structure";
 import { structureLevels } from "./structure";
 import { BOX_FRAME_NOMINAL, STRINGER_NOMINAL } from "./stairs";
 import { BALUSTER_NOMINAL, RAIL_CAP_NOMINAL, RAIL_POST_NOMINAL, RAIL_TOP_NOMINAL } from "./rails";
 import { FIXTURE_LABEL, type FixtureKind } from "./design";
 
-export type BomStep = "footings" | "ledger" | "framing" | "decking" | "fascia" | "stairs" | "rails" | "drainage" | "slab" | "roof-posts" | "roof-frame" | "roof-deck" | "roofing" | "trim" | "ceiling" | "gutters" | "walls" | "cupola" | "electrical";
+export type BomStep = "footings" | "ledger" | "framing" | "decking" | "fascia" | "stairs" | "rails" | "drainage" | "slab" | "roof-posts" | "roof-frame" | "roof-deck" | "roofing" | "trim" | "ceiling" | "gutters" | "walls" | "cupola" | "electrical" | "own";
 export const BOM_STEP_LABEL: Record<BomStep, string> = {
   footings: "Footings and posts",
   ledger: "Ledger and flashing",
@@ -51,8 +51,9 @@ export const BOM_STEP_LABEL: Record<BomStep, string> = {
   walls: "Walls between the posts",
   cupola: "Cupola",
   electrical: "Electrical and accessories",
+  own: "Your own items",
 };
-export const BOM_STEP_ORDER: readonly BomStep[] = ["slab", "footings", "ledger", "framing", "decking", "fascia", "stairs", "rails", "drainage", "roof-posts", "roof-frame", "roof-deck", "roofing", "trim", "ceiling", "gutters", "walls", "cupola", "electrical"];
+export const BOM_STEP_ORDER: readonly BomStep[] = ["slab", "footings", "ledger", "framing", "decking", "fascia", "stairs", "rails", "drainage", "roof-posts", "roof-frame", "roof-deck", "roofing", "trim", "ceiling", "gutters", "walls", "cupola", "electrical", "own"];
 
 export interface BomLine {
   id: string;
@@ -142,7 +143,7 @@ const ROOF_ROLE_STEP: Partial<Record<RoofRole, BomStep>> = {
   subfascia: "trim",
   kneewall: "walls",
 };
-const FIXTURE_RATE: Record<FixtureKind, string> = { "led-strip": "elec.ledStrip", "post-cap": "elec.postCap", "step-light": "elec.stepLight", "string-light": "elec.string", sconce: "elec.sconce", "ceiling-light": "elec.ceilingLight", chandelier: "elec.chandelier", fan: "elec.fan", outlet: "elec.gfci", heater: "elec.heater120", flood: "elec.flood" };
+export const FIXTURE_RATE: Record<FixtureKind, string> = { "led-strip": "elec.ledStrip", "post-cap": "elec.postCap", "step-light": "elec.stepLight", "string-light": "elec.string", sconce: "elec.sconce", "ceiling-light": "elec.ceilingLight", chandelier: "elec.chandelier", fan: "elec.fan", outlet: "elec.gfci", heater: "elec.heater120", flood: "elec.flood" };
 
 /** The shortest stock a stick comes out of. */
 export function stockFor(lengthIn: number): number {
@@ -605,20 +606,53 @@ export function deckTakeoff(s: DeckStructure): DeckTakeoff {
     e("breakers-20", "20-A breakers", el.breakers20, "elec.breaker20");
     e("breakers-30", "30-A two-pole breakers", el.breakers30, "elec.breaker30");
     // The fixtures: grouped by kind and by who buys them.
-    const groups = new Map<string, { kind: FixtureKind; byClient: boolean; qty: number; volts240: boolean }>();
+    const groups = new Map<string, { kind: FixtureKind; byClient: boolean; qty: number; volts240: boolean; custom: { name: string; price: number } | null; name: string | null; firstId: string }>();
     for (const f of el.fixtures) {
-      const key = `${f.kind}:${f.supply}:${f.volts240 ? 240 : 120}`;
-      const g = groups.get(key) ?? { kind: f.kind, byClient: f.supply === "client", qty: 0, volts240: f.volts240 };
+      // A fixture of the contractor's own is its own line: its name, its price (2026-10-12). One the client buys keeps
+      // its name when it has one, never a price.
+      const mine = design.electrical.fixtures.find((x) => x.id === f.designId)?.custom ?? null;
+      const own = f.supply === "we" ? mine : null;
+      const name = mine?.name ?? null;
+      const key = `${f.kind}:${f.supply}:${f.volts240 ? 240 : 120}${own ? `:${own.name}:${own.price}` : name ? `:${name}` : ""}`;
+      const g = groups.get(key) ?? { kind: f.kind, byClient: f.supply === "client", qty: 0, volts240: f.volts240, custom: own, name, firstId: f.designId };
       g.qty += f.kind === "led-strip" ? Math.ceil(f.runFt) : f.kind === "string-light" ? Math.max(1, Math.ceil(f.runFt / 48)) : f.qty;
       groups.set(key, g);
     }
     for (const [key, g] of groups) {
       fixtureCount += g.kind === "led-strip" ? 1 : g.qty;
-      const rate = g.kind === "heater" && g.volts240 ? "elec.heater240" : FIXTURE_RATE[g.kind];
+      const rate = g.custom ? `custom.fixture.${g.firstId}` : g.kind === "heater" && g.volts240 ? "elec.heater240" : FIXTURE_RATE[g.kind];
       const unit: BomLine["unit"] = g.kind === "led-strip" ? "ft" : "ea";
-      const label = `${FIXTURE_LABEL[g.kind]}${g.kind === "heater" ? (g.volts240 ? ", 4 kW 240 V" : ", 1.5 kW 120 V") : ""}`;
+      const label = g.name ? g.name : `${FIXTURE_LABEL[g.kind]}${g.kind === "heater" ? (g.volts240 ? ", 4 kW 240 V" : ", 1.5 kW 120 V") : ""}`;
       e(`fixture-${key.replace(/[^a-z0-9]+/gi, "-")}`, g.byClient ? `${label} — supplied by the client` : label, g.qty, rate, unit, g.byClient ? "to be determined: drawn as a sample, not priced; its box, wire and hanging are" : undefined, g.byClient, "fixture");
     }
+  }
+
+  // PRODUCTS OF THE CONTRACTOR'S OWN (2026-10-12, owner: "always an option custom"): a list's custom product names and
+  // prices that list's lines (the engine still frames and weighs it as what it works like), and items outside every
+  // list go on as typed. Their rate keys point at the design: `custom.<slot>`, `own.<id>` (lib/deck/pricing).
+  const cu = design.custom;
+  for (const l of lines) {
+    const own = (slot: CustomSlot, label?: string) => {
+      l.rateKey = `custom.${slot}`;
+      l.factor = 1;
+      if (label !== undefined) l.label = label;
+    };
+    if (cu.decking && ((l.step === "decking" && l.id.startsWith("boards-")) || (l.step === "stairs" && l.id.startsWith("tread-boards-")))) own("decking");
+    else if (cu.fastening && l.id === "deck-fasteners") own("fastening", cu.fastening.name);
+    else if (cu.fascia && (l.id === "fascia" || l.id === "riser-boards")) own("fascia", `${cu.fascia.name} × 12 ft${l.id === "riser-boards" ? " — risers" : ""}`);
+    else if (cu.roofing && roof && (l.id === "shingles" || l.id === "shakes" || l.id === "metal-panels")) {
+      own("roofing", cu.roofing.name);
+      l.qty = roof.squares;
+      l.unit = "sq";
+      l.rateQty = roof.squares;
+      l.note = undefined;
+    } else if (cu.ceiling && l.id === "ceiling") own("ceiling", cu.ceiling.name);
+    else if (cu.roofFascia && (l.id === "fascia-boards" || l.id === "fascia-wrap")) own("roofFascia", cu.roofFascia.name);
+    else if (cu.gutters && l.id === "gutter") own("gutters", cu.gutters.name);
+    else if (cu.walls && (l.id === "screen-panels" || l.id === "wall-panels")) own("walls", cu.walls.name);
+  }
+  for (const it of design.extras.items) {
+    if (it.qty > 0) lines.push({ id: `own-${it.id}`, step: "own", kind: "hardware", label: it.name, qty: it.qty, unit: it.unit, rateKey: `own.${it.id}`, rateQty: it.qty, factor: 1 });
   }
 
   lines.sort((a, b) => BOM_STEP_ORDER.indexOf(a.step) - BOM_STEP_ORDER.indexOf(b.step));

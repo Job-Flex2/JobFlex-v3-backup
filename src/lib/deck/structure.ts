@@ -125,7 +125,8 @@ export function stairOpenings(design: DeckDesign, W: number, riserMaxIn: number)
 export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): DeckStructure {
   const design = normalizeDeckDesign(raw);
   const code = deckCodeFor(design.site.state);
-  const species = framingSpecies(design.framing.species);
+  const species0 = framingSpecies(design.framing.species);
+  const species = design.custom.species ? { ...species0, label: design.custom.species.name, short: design.custom.species.name } : species0;
   const withDeck = hasDeck(design);
   const zones = shapeZones(design.shape);
   const W = Math.max(...zones.map((z) => z.x1));
