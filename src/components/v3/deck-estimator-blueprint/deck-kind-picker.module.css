@@ -33,6 +33,9 @@
 :global(.jf-blueprint .content) .fig { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius); background: #fff; overflow: hidden; }
 :global(.jf-blueprint .content) .figSmall { aspect-ratio: 5 / 3.4; }
 :global(.jf-blueprint .content) .svg { display: block; width: 100%; height: 100%; }
+/* The picture is replayed on every hover (it is keyed by its play count), so a press on the old picture and a release on
+   the new one was never a click — the card did not take it (2026-10-12). The picture lets the pointer through to the card. */
+:global(.jf-blueprint .content) .svg, :global(.jf-blueprint .content) .svg * { pointer-events: none; }
 :global(.jf-blueprint .content) .svg path { stroke: rgba(10, 10, 10, 0.22); stroke-width: 0.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 :global(.jf-blueprint .content) .layer { transform-box: view-box; }
 /* The build-up: each step of the build fades in and settles down, one after the other. */

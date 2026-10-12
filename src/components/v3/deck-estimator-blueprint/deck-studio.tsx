@@ -108,6 +108,7 @@ import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { autoFixDesign, autoFixable, resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick, SceneHighlight } from "@/components/estimator/deck/DeckModel3D";
+import { fieldLight, type FieldFocus } from "@/lib/deck/fieldParts";
 import { DeckPlan, type PlanEdgeHit, nearestStairEdge } from "./deck-plan";
 import { DeckPhotoView, cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "./deck-photo";
 import s from "./deck-studio.module.css";
@@ -156,7 +157,40 @@ const ago = (iso: string) => {
 /*  Small controls                                                     */
 /* ------------------------------------------------------------------ */
 
-function Field({ label, aside, children, wide, lights }: { label: string; aside?: React.ReactNode; children: React.ReactNode; wide?: boolean; lights?: { on: (how: "focus" | "hover") => void; off: (how: "focus" | "hover") => void } }) {
+/**
+ * WHAT EVERY FIELD IS, IN 3D (owner, 2026-10-12: "highlight all fields to show on 3D what it is — make it smart"): a
+ * field knows where it sits — its step, the stair or fixture card it is in, the lower level — and, in or over it, lights
+ * what it sets in the 3D (lib/deck/fieldParts). The studio holds the light; a Scope adds where.
+ */
+interface FieldScopeValue {
+  where: Omit<FieldFocus, "label">;
+  light: ((f: FieldFocus, how: "focus" | "hover") => void) | null;
+  unlight: ((f: FieldFocus, how: "focus" | "hover") => void) | null;
+}
+const FieldScope = React.createContext<FieldScopeValue>({ where: {}, light: null, unlight: null });
+function Scope({ step, stair, fixture, level, children }: { step?: string; stair?: string; fixture?: string; level?: "lower"; children: React.ReactNode }) {
+  const parent = React.useContext(FieldScope);
+  const value = React.useMemo<FieldScopeValue>(
+    () => ({ ...parent, where: { ...parent.where, ...(step ? { step } : {}), ...(stair ? { stair } : {}), ...(fixture ? { fixture } : {}), ...(level ? { level } : {}) } }),
+    [parent, step, stair, fixture, level],
+  );
+  return <FieldScope.Provider value={value}>{children}</FieldScope.Provider>;
+}
+
+type Lights = { on: (how: "focus" | "hover") => void; off: (how: "focus" | "hover") => void };
+/** A field's (or a tick's) lights: its own, or lit by its label where it sits. */
+function useFieldLights(label: string, own?: Lights): Lights | undefined {
+  const scope = React.useContext(FieldScope);
+  const { light: lightOn, unlight } = scope;
+  if (own) return own;
+  if (!lightOn || !unlight || !label) return undefined;
+  return { on: (how) => lightOn({ ...scope.where, label }, how), off: (how) => unlight({ ...scope.where, label }, how) };
+}
+/** A label's words, from children that mix words and numbers ("Fascia on the eaves (", 42, " ft)"). */
+const wordsOf = (n: React.ReactNode): string => (typeof n === "string" || typeof n === "number" ? String(n) : Array.isArray(n) ? n.map(wordsOf).join("") : "");
+
+function Field({ label, aside, children, wide, lights: own }: { label: string; aside?: React.ReactNode; children: React.ReactNode; wide?: boolean; lights?: Lights }) {
+  const lights = useFieldLights(label, own);
   return (
     <label
       className={cx(s.field, wide && s.fieldWide)}
@@ -295,8 +329,15 @@ function CustomBox({ slot, title, product, unit, onChange, onBack, children, not
 }
 
 function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
+  const lights = useFieldLights(wordsOf(children).trim());
   return (
-    <label className={s.toggle}>
+    <label
+      className={s.toggle}
+      onFocus={lights ? () => lights.on("focus") : undefined}
+      onBlur={lights ? () => lights.off("focus") : undefined}
+      onMouseEnter={lights ? () => lights.on("hover") : undefined}
+      onMouseLeave={lights ? () => lights.off("hover") : undefined}
+    >
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className={s.toggleBox} aria-hidden="true" />
       <span>{children}</span>
@@ -352,7 +393,7 @@ function Step({ n, title, summary, children, id }: { n: number; title: string; s
         <span className={s.stepSum}>{summary}</span>
       </summary>
       <div className={s.stepBody}>
-        {children}
+        <Scope step={id ?? title}>{children}</Scope>
         <div className={s.stepFoot}>
           <button ref={nextRef} type="button" className={s.stepNext} style={stepTone(n + 1)} onClick={goNext} hidden data-step-next>
             Next: <span ref={nextTitleRef} /> <span aria-hidden="true">↓</span>
@@ -574,11 +615,26 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   // house (lib/deck/house wallHighlight): the wall past an end of the deck, a step, the stretch of wall a step moves.
   const [wallFocus, setWallFocus] = React.useState<WallFocus | null>(null);
   const [wallHover, setWallHover] = React.useState<WallFocus | null>(null);
+  const [fieldFocus, setFieldFocus] = React.useState<FieldFocus | null>(null);
+  const [fieldHover, setFieldHover] = React.useState<FieldFocus | null>(null);
+  const sameField = (a: FieldFocus | null, b: FieldFocus) => !!a && JSON.stringify(a) === JSON.stringify(b);
+  const rootScope = React.useMemo<FieldScopeValue>(
+    () => ({
+      where: {},
+      light: (f, how) => (how === "focus" ? setFieldFocus(f) : setFieldHover(f)),
+      unlight: (f, how) => (how === "focus" ? setFieldFocus((x) => (sameField(x, f) ? null : x)) : setFieldHover((x) => (sameField(x, f) ? null : x))),
+    }),
+    [],
+  );
   const lightsFor = (f: WallFocus) => ({
     on: (how: "focus" | "hover") => (how === "focus" ? setWallFocus(f) : setWallHover(f)),
     off: (how: "focus" | "hover") => (how === "focus" ? setWallFocus((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x)) : setWallHover((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x))),
   });
   const scene = React.useMemo(() => deckScene(structure), [structure]);
+  const fieldLit = React.useMemo<SceneHighlight | null>(() => {
+    const f = fieldFocus ?? fieldHover;
+    return f ? fieldLight(scene, structure, f) : null;
+  }, [fieldFocus, fieldHover, scene, structure]);
   const wallLit = React.useMemo<SceneHighlight | null>(() => {
     const f = wallFocus ?? wallHover;
     const hs = scene.house;
@@ -1435,7 +1491,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </div>
             ) : view === "3d" ? (
               <>
-                <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} highlight={wallLit} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+                <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} highlight={wallLit ?? fieldLit} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                 {editing && !placing ? (
                   <div className={s.placeBanner} data-deck-editing>
                     <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge and its width at its side, the house&apos;s two corners and every step in its wall. Everything re-frames and re-prices as you drag.</span>
@@ -1636,6 +1692,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         </section>
 
         {/* ── the steps ──────────────────────────────────────────── */}
+        <FieldScope.Provider value={rootScope}>
         <div className={s.steps}>
           <Step n={next()} title="What to build" summary={structureSummary} id="step-structure">
             {/* THE KINDS AS PICTURES (owner, 2026-10-11): the engine's own drawings of each kind, and samples to start from (deck-kind-picker). */}
@@ -1793,7 +1850,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <div className={s.sub}>
                     <Toggle checked={design.lower.on} onChange={(v) => patch({ lower: { on: v } })}>A lower level in front, a step down</Toggle>
                     {design.lower.on ? (
-                      <>
+                      <Scope level="lower">
                         <div className={s.grid2}>
                           <Field label="Along the house" aside="ft">
                             <NumberInput label="Lower level width, feet" value={design.lower.widthFt} parse={parseFeet} format={feetText} min={LOWER_LIMITS.widthFt.min} max={design.shape.widthFt} onCommit={(n2) => patch({ lower: { widthFt: n2 } })} />
@@ -1809,7 +1866,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                           </Field>
                         </div>
                         <p className={s.hint}>One riser (up to 7¾ in.) is a step the lower deck itself makes; more than that wants a stair between the levels — the checks offer one.</p>
-                      </>
+                      </Scope>
                     ) : null}
                   </div>
                 </>
@@ -2390,7 +2447,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     const built = structure.stairs.find((b) => b.design.id === st.id);
                     const sideLen = st.level === "lower" ? (st.side === "front" ? design.lower.widthFt : design.lower.depthFt) : st.side === "front" ? design.shape.widthFt : design.shape.depthFt;
                     return (
-                      <div key={st.id} className={s.row} data-deck-stair={st.id}>
+                      <Scope key={st.id} stair={st.id}><div className={s.row} data-deck-stair={st.id}>
                         <div className={s.rowHead}>
                           <span className={s.rowTitle}>{st.wrap ? "Box steps" : `Stair ${i + 1}`}{built ? ` · ${built.risers} risers of ${built.riserIn.toFixed(2)} in.${built.lands === "lower-deck" ? " to the lower level" : ""}` : ""}</span>
                           <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setStairs((list) => list.filter((x) => x.id !== st.id))}>Remove</button>
@@ -2432,7 +2489,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                             {st.wrap ? <Seg small label="Wrap how many sides" value={st.wrapSides} onChange={(v) => setStairs((list) => list.map((x) => (x.id === st.id ? { ...x, wrapSides: v } : x)))} options={[{ value: 1, label: "Front" }, { value: 3, label: "Three sides" }, ...(design.placement === "detached" ? [{ value: 4 as const, label: "All four" }] : [])]} /> : null}
                           </div>
                         ) : null}
-                      </div>
+                      </div></Scope>
                     );
                   })}
                 </div>
@@ -2463,7 +2520,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               {design.electrical.fixtures.map((f) => {
                 const placedOnes = structure.electrical.fixtures.filter((pf) => pf.id === f.id || pf.id.startsWith(`${f.id}-`));
                 return (
-                  <div key={f.id} className={s.row} data-deck-fixture={f.id}>
+                  <Scope key={f.id} fixture={f.id}><div className={s.row} data-deck-fixture={f.id}>
                     <div className={s.rowHead}>
                       <span className={s.rowTitle}>{f.custom ? f.custom.name : FIXTURE_SHORT[f.kind]}{f.supply === "client" ? <span className={s.tbd}>by the client · TBD</span> : null}</span>
                       <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setFixtures((list) => list.filter((x) => x.id !== f.id))}>Remove</button>
@@ -2527,7 +2584,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                       {f.at ? <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => setFixtures((list) => list.map((x) => (x.id === f.id ? { ...x, at: null } : x)))}>Back to the usual spot</button> : null}
                       <span className={s.mono}>{f.at ? `on the ${f.at.on}` : placedOnes.length ? `${placedOnes.length === 1 ? "placed" : `${placedOnes.length} placed`} where it usually goes` : ""}</span>
                     </div>
-                  </div>
+                  </div></Scope>
                 );
               })}
             </div>
@@ -2565,6 +2622,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           </Step>
           ) : null}
         </div>
+        </FieldScope.Provider>
       </div>
 
       {/* ── the price ─────────────────────────────────────────────── */}
