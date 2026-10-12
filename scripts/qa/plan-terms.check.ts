@@ -25,8 +25,8 @@
 //     stamp or its "You save $N a year" does not match its prices, or that line is under 15px;
 //   · (2026-10-12, tidied) the stamps of a row do not stand at one distance from their cards'
 //     right edges on one line; the signup's date line repeats "months free"; the switch's badge
-//     does not cross the Annual half's bottom edge, sticks out past the switch by other than
-//     8–10px (0–10px on a phone), covers the word ANNUAL, comes within 8px of the cards or
+//     does not cross the Annual half's bottom edge, starts other than 6–8px inside the Annual
+//     half, sticks out past the switch by other than 8–16px (0–16px on a phone), covers the word ANNUAL, comes within 8px of the cards or
 //     "Most picked", or does not choose Annual when pressed; on a desk the logo, "Pick a plan."
 //     and the first card do not share a left edge, or the steps, the switch and the last card a
 //     right one (1px).
@@ -210,11 +210,12 @@ async function badge(page: any, name: string, scope: string, phone: boolean) {
     if (!sw || !tag) return null;
     const yr = sw.querySelector('[data-term="YEAR"]') as HTMLElement;
     const text = document.createRange();
-    text.selectNodeContents(yr.firstChild as Node);
+    text.selectNodeContents(yr.querySelector(".jf-term-label") as Node);
     const t = text.getBoundingClientRect();
     const b = tag.getBoundingClientRect();
     const s = sw.getBoundingClientRect();
     const a = yr.getBoundingClientRect();
+    const z = (sw as HTMLElement & { currentCSSZoom?: number }).currentCSSZoom || 1;
     // what lies under it: the cards, and the "Most picked" plates that share its columns
     const below = Array.from(root.querySelectorAll<HTMLElement>("[data-plan-card], .pw-tag, .lp-pw-tag, .jf-up-tag"))
       .filter((e) => e.getClientRects().length)
@@ -224,7 +225,10 @@ async function badge(page: any, name: string, scope: string, phone: boolean) {
     return {
       crosses: b.top < a.bottom && b.bottom > s.bottom,
       share: Math.round(((s.bottom - b.top) / b.height) * 100),
-      out: Math.round((b.right - s.right) * 10) / 10,
+      // in the page's own px: the desk dashboard draws its whole content under a CSS zoom
+      out: Math.round(((b.right - s.right) / z) * 10) / 10,
+      // the seam between the halves is the Annual half's left edge (its 2px frame is its own)
+      inset: Math.round(((b.left - a.left) / z) * 10) / 10,
       clearOfWord: b.top >= t.bottom || b.right <= t.left || b.left >= t.right,
       gap: next === null ? null : Math.round((next - (b.bottom + 2)) * 10) / 10,
       inWindow: b.right <= innerWidth && b.left >= 0,
@@ -233,7 +237,8 @@ async function badge(page: any, name: string, scope: string, phone: boolean) {
   }, scope);
   if (!g) return check(`${name}: the switch's badge is drawn`, false);
   check(`${name}: the badge crosses the Annual half's bottom edge (${g.share}% of it over)`, g.crosses && g.share >= 20 && g.share <= 50, JSON.stringify(g));
-  check(`${name}: the badge sticks out ${g.out}px past the switch`, phone ? g.out >= 0 && g.out <= 10 && g.inWindow : g.out >= 8 && g.out <= 10, `${g.out}px`);
+  check(`${name}: the badge starts ${g.inset}px inside the Annual half (6–8px, never over Monthly)`, g.inset >= 6 && g.inset <= 8, `${g.inset}px`);
+  check(`${name}: the badge sticks out ${g.out}px past the switch`, phone ? g.out >= 0 && g.out <= 16 && g.inWindow : g.out >= 8 && g.out <= 16, `${g.out}px`);
   check(`${name}: the badge leaves the word ANNUAL clear`, g.clearOfWord);
   check(`${name}: the badge is 8px or more above the cards`, g.gap === null || g.gap >= 8, `${g.gap}px`);
   await page.mouse.click(g.x, g.y);

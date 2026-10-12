@@ -7,6 +7,7 @@
 
 /* ── Monthly | Annual ─────────────────────────────────────────────────── */
 .jf-term {
+  --tpad: 18px;
   display: inline-flex;
   flex: 0 0 auto;
   align-self: flex-start;
@@ -30,7 +31,7 @@
   gap: 8px;
   min-height: 40px;
   margin: 0;
-  padding: 0 18px;
+  padding: 0 var(--tpad);
   border: none;
   border-radius: 0;
   background: transparent;
@@ -62,7 +63,10 @@
 .jf-term .jf-term-badge {
   position: absolute;
   top: calc(100% - 4px);
-  right: -11px;
+  /* 7px inside the Monthly | Annual seam (the half's 2px left frame + 5px) —
+     never over Monthly; its right end then lands ~10px past the switch,
+     because the half is made as wide as the badge asks (the sizer below) */
+  left: 5px;
   z-index: 2;
   padding: 4px 8px;
   border-radius: 2px;
@@ -78,6 +82,29 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* THE SIZER: the badge's own box, laid in the half's flow at no height and
+   unpainted; its right margin takes back the 7px inset and both paddings, so
+   the half is the badge's width less 5px — the badge, starting 7px in, then
+   ends 10px past the switch's outer edge — and the word stays centred in it.
+   A half already wider (a short badge) simply keeps its own width. */
+.jf-term .jf-term-b.has-badge { display: inline-grid; justify-items: center; align-content: center; }
+/* only the word and the sizer take the column: the badge itself stays placed on
+   the half's padding box (an absolutely placed grid child given a column would
+   be placed on that column instead) */
+.jf-term .jf-term-b.has-badge > .jf-term-label,
+.jf-term .jf-term-b.has-badge > .jf-term-badge-size { grid-column: 1; }
+.jf-term .jf-term-badge.jf-term-badge-size {
+  position: static;
+  display: block;
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  visibility: hidden;
+  box-shadow: none;
+  margin-right: calc(-1 * (7px + 2 * var(--tpad)));
+  justify-self: start;
+}
 
 /* On the landing's ink band: a white frame, the chosen half white on ink. */
 .jf-term--ink { border-color: #fff; background: transparent; }
@@ -91,7 +118,8 @@
 }
 
 @media (max-width: 768px) {
-  .jf-term .jf-term-b { min-height: 44px; padding: 0 16px; }
+  .jf-term { --tpad: 16px; }
+  .jf-term .jf-term-b { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .jf-term .jf-term-b { transition: none; }

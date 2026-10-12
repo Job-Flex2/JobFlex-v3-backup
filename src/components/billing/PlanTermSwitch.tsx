@@ -63,7 +63,7 @@ export function PlanTermSwitch({
             aria-checked={on}
             aria-label={badge ? `${t.label}, ${badge}` : undefined}
             tabIndex={on ? 0 : -1}
-            className={"jf-term-b" + (on ? " is-on" : "")}
+            className={"jf-term-b" + (on ? " is-on" : "") + (badge ? " has-badge" : "")}
             data-term={t.term}
             onClick={() => onChange(t.term)}
             onKeyDown={(e) => {
@@ -82,11 +82,19 @@ export function PlanTermSwitch({
               }
             }}
           >
-            {t.label}
+            <span className="jf-term-label">{t.label}</span>
             {badge ? (
-              <span className="jf-term-badge" data-term-badge aria-hidden="true">
-                {badge}
-              </span>
+              <>
+                {/* The badge's own width, unpainted and not text: it widens the Annual
+                    half so the badge starts 7px inside it and still ends ~10px past
+                    the switch (plan-term-switch.css). */}
+                <span className="jf-term-badge jf-term-badge-size" aria-hidden="true">
+                  <Ghost text={badge} />
+                </span>
+                <span className="jf-term-badge" data-term-badge aria-hidden="true">
+                  {badge}
+                </span>
+              </>
             ) : null}
           </button>
         );
