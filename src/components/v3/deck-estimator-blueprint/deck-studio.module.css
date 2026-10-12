@@ -683,3 +683,6 @@
 @media (max-width: 768px) {
   :global(.jf-blueprint .content) .step { scroll-margin-top: 58px; }
 }
+
+/* The wall drawing's quiet wrapper (2026-10-12): it only carries the press that puts the 3D's lights out — no box of its own. */
+.quiet { display: contents; }

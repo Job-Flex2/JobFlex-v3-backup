@@ -90,9 +90,17 @@ check("a fixture's \"How many\": that fixture's own lights", !!f1 && !!f2 && f1.
 // Nothing to show
 for (const label of ["Unit", "Qty", "Price", "Your price", "Job address", "Item"]) check(`"${label}": nothing lit`, lit({ label, step: "step-photo" }) === null && lit({ label }) === null);
 
+// The house step stays plain (owner, 2026-10-12: "don't show in blue on 3D when working in the shape"): its look, its
+// shape and the drawing light nothing — a blue box over the house hid what was being chosen.
+const HOUSE_PLAIN = ["Storeys", "Roof", "Siding", "Roof colour", "The wall's shape", "The back wall and the deck, seen from above — drag anything"];
+const houseLit = HOUSE_PLAIN.filter((label) => lit({ label, step: "step-house" }) !== null);
+check(`the house step's look, shape and drawing light nothing (${HOUSE_PLAIN.length} fields)`, houseLit.length === 0, houseLit.join(", ") || "all plain");
+// …while the same words elsewhere still light their parts: the roof step's "Posts", the deck's "Along the house".
+check("…the words are not dark everywhere: the roof step's \"Posts\" and the deck's \"Along the house\" still light", !!lit({ label: "Posts", step: "step-roof" }) && !!lit({ label: "Along the house", step: "step-shape" }));
+
 // Every label the studio shows, in its step: lit, or one of the few with nothing in the 3D.
 const STUDIO: Array<[string, string, Partial<FieldFocus>?]> = [
-  ["Where it stands", "step-structure"], ["It stands", "step-roof"], ["Storeys", "step-house"], ["Roof", "step-house"], ["Siding", "step-house"], ["Roof colour", "step-house"], ["The wall's shape", "step-house"],
+  ["Where it stands", "step-structure"], ["It stands", "step-roof"],
   ["Along the house", "step-shape"], ["Out from the house", "step-shape"], ["The front edge", "step-shape"],
   ["How it meets the house", "step-site"], ["The house wall there", "step-site"], ["Deck height", "step-site"], ["Frost depth", "step-site"], ["Footings stand above grade", "step-site"], ["Design load", "step-site"], ["Soil bears", "step-site"], ["Falls away from the house", "step-site"], ["Falls left to right", "step-site"],
   ["Framing lumber", "Frame"], ["Spans and prices as", "Frame"], ["Joists", "Frame"], ["Joist spacing", "Frame"], ["Beams", "Frame"], ["Beam made of", "Frame"], ["Beam size", "Frame"], ["Posts", "Frame"], ["Joists past the beam", "Frame"], ["Ledger fastened with", "Frame"], ["Ties to the house", "Frame"], ["Footings", "Frame"],

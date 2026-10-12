@@ -136,17 +136,14 @@ const RULES: Rule[] = [
       return light(c, { boxIdx: [...partsOf(c.sc, ["roof-post"]), ...partsOf(c.sc, ["header"], /roof ledger/)], polyIdx: facesOf(c.sc, ["slab"]), footings: c.d.floor === "ground" }, `It stands ${on}${c.d.roof.attach === "wall" ? ", hung on the house" : ""} · ${plural(r.posts.length, "post")}`);
     },
   },
-  /* The house (its look) */
+  /* The house (its look and its shape) — PLAIN, on the owner's word (2026-10-12: "don't show in blue on 3D when working
+     in the shape"). A box over the whole house said nothing the house doesn't, and it hid what was being chosen: the
+     storeys, the roof, the siding's colour, the wall's shape, the drawing being dragged. The wall-part boxes still
+     light their own part (lib/deck/house wallHighlight). */
   {
     when: (f) => isStep(f, "step-house") && named(f, "Storeys", "Roof", "Siding", "Roof colour", "The wall's shape", /^The back wall and the deck/),
-    run: (c) => {
-      const h = c.sc.house;
-      if (!h) return null;
-      const boxes = h.blocks.map((b) => [b[0], b[1], 0, b[2], b[3], b[4] ?? h.heightFt]);
-      return light(c, { boxes }, `The house · ${plural(c.d.house.storeys, "storey")} · ${c.d.house.roof} roof`);
-    },
+    run: () => null,
   },
-  /* A roof's or a gazebo's footprint */
   {
     when: (f) => isStep(f, "step-footprint") && named(f, "Outline", "Across the flats", "Across", "Along the house", "Out from the house", "Shift along the house"),
     run: (c) => {

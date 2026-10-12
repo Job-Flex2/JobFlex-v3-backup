@@ -190,14 +190,17 @@ function useFieldLights(label: string, own?: Lights): Lights | undefined {
 /** A label's words, from children that mix words and numbers ("Fascia on the eaves (", 42, " ft)"). */
 const wordsOf = (n: React.ReactNode): string => (typeof n === "string" || typeof n === "number" ? String(n) : Array.isArray(n) ? n.map(wordsOf).join("") : "");
 
-function Field({ label, aside, children, wide, lights: own }: { label: string; aside?: React.ReactNode; children: React.ReactNode; wide?: boolean; lights?: Lights }) {
-  const lights = useFieldLights(label, own);
+/** `lights={null}`: the field lights nothing (the drawing of the wall — working in it, the 3D stays plain). A pointer
+ *  that crosses a field with a button held is a drag passing over it, not a look at it: no light. */
+function Field({ label, aside, children, wide, lights: own }: { label: string; aside?: React.ReactNode; children: React.ReactNode; wide?: boolean; lights?: Lights | null }) {
+  const lit = useFieldLights(label, own ?? undefined);
+  const lights = own === null ? undefined : lit;
   return (
     <label
       className={cx(s.field, wide && s.fieldWide)}
       onFocus={lights ? () => lights.on("focus") : undefined}
       onBlur={lights ? () => lights.off("focus") : undefined}
-      onMouseEnter={lights ? () => lights.on("hover") : undefined}
+      onMouseEnter={lights ? (e) => { if (!e.buttons) lights.on("hover"); } : undefined}
       onMouseLeave={lights ? () => lights.off("hover") : undefined}
     >
       <span className={s.lbl}>
@@ -336,7 +339,7 @@ function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (
       className={s.toggle}
       onFocus={lights ? () => lights.on("focus") : undefined}
       onBlur={lights ? () => lights.off("focus") : undefined}
-      onMouseEnter={lights ? () => lights.on("hover") : undefined}
+      onMouseEnter={lights ? (e) => { if (!e.buttons) lights.on("hover"); } : undefined}
       onMouseLeave={lights ? () => lights.off("hover") : undefined}
     >
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
@@ -653,6 +656,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     on: (how: "focus" | "hover") => (how === "focus" ? setWallFocus(f) : setWallHover(f)),
     off: (how: "focus" | "hover") => (how === "focus" ? setWallFocus((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x)) : setWallHover((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x))),
   });
+  // WORKING IN THE SHAPE IS QUIET (owner, 2026-10-12: "don't show in blue on 3D when working in the shape"): the
+  // drawing of the wall lights nothing, and a press in it puts out whatever light is still on. A box typed in a moment
+  // ago would keep its light through the drag — the drawing holds the pointer and keeps the focus where it was — so it
+  // is let go of first (its number is committed on the way out).
+  const quiet = (e: React.PointerEvent<HTMLElement>) => {
+    const a = document.activeElement;
+    if (a instanceof HTMLElement && a.matches("input, textarea, select") && !e.currentTarget.contains(a) && !a.closest("[data-deck-wall-full]")) a.blur();
+    setFieldFocus(null);
+    setFieldHover(null);
+    setWallFocus(null);
+    setWallHover(null);
+  };
   const scene = React.useMemo(() => deckScene(structure), [structure]);
   const fieldLit = React.useMemo<SceneHighlight | null>(() => {
     const f = fieldFocus ?? fieldHover;
@@ -1553,7 +1568,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           </div>
           <div className={cx(s.viewBox, view === "wall" && s.viewBoxWall)}>
             {view === "wall" ? (
-              <div className={cx(s.planWrap, s.wallWrap)} data-deck-wall-large-view>
+              <div className={cx(s.planWrap, s.wallWrap)} onPointerDownCapture={quiet} data-deck-wall-large-view>
                 <HouseWallPlan size="large" shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} />
               </div>
             ) : view === "3d" ? (
@@ -1799,8 +1814,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <Seg small label="Roof" value={design.house.roof} onChange={(v: HouseRoof) => setHouse({ roof: v })} options={HOUSE_ROOFS.map((r) => ({ value: r, label: HOUSE_ROOF_LABEL[r] }))} />
                 </Field>
               </div>
-              <Field label="The back wall and the deck, seen from above — drag anything" wide>
-                <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} onOpenLarge={openWallLarge} />
+              <Field label="The back wall and the deck, seen from above — drag anything" wide lights={null}>
+                <div className={s.quiet} onPointerDownCapture={quiet} data-deck-wall-quiet>
+                  <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} onOpenLarge={openWallLarge} />
+                </div>
               </Field>
               <div className={s.rowGrid}>
                 <Field label="Siding">
