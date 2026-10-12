@@ -102,6 +102,10 @@ const named = (f: FieldFocus, ...labels: Array<string | RegExp>) => labels.some(
 const FRAMING: Layer[] = ["post", "beam", "ledger", "joist", "rim", "blocking", "brace"];
 
 const RULES: Rule[] = [
+  /* Stairs and railing — PLAIN, on the owner's word (2026-10-12: "from rails and stairs remove blue colouring on 3D"),
+     like the house before them: every field and tick of the step, each stair's card too, lights nothing. First, so the
+     ticks matched by their words alone never reach their rules. */
+  { when: (f) => isStep(f, "step-stairs"), run: () => null },
   /* The ticks (a checkbox's words are its label) */
   {
     when: (f) => named(f, /^A lower level in front/),
@@ -122,9 +126,6 @@ const RULES: Rule[] = [
   { when: (f) => named(f, /^Rake boards/), run: (c) => light(c, { boxIdx: partsOf(c.sc, ["trim"], /^fascia rake$/) }, "Rake boards on the gable ends") },
   { when: (f) => named(f, /^Vented soffit/), run: (c) => light(c, { boxIdx: partsOf(c.sc, ["trim"]), polyIdx: facesOf(c.sc, ["ceiling"]) }, "The soffit under the overhang") },
   { when: (f) => named(f, /^Gutter guards/), run: (c) => light(c, { boxIdx: partsOf(c.sc, ["gutter"]) }, "Gutter guards on the gutters") },
-  { when: (f) => named(f, /drink cap/), run: (c) => light(c, { boxIdx: partsOf(c.sc, ["rail"], /^rail (cap|top)$/, "any") }, c.d.rail.cap ? "The drink cap on the rail" : "The top rail — a cap goes on it") },
-  { when: (f) => named(f, /^Rail on the lower level/), run: (c) => light(c, { boxIdx: partsOf(c.sc, ["rail"], /^(?!stair )/, "any") }, "The railing, the lower level's too") },
-  { when: (f) => named(f, /^Stainless connectors/), run: (c) => light(c, { boxIdx: partsOf(c.sc, ["hardware"], undefined, "any") }, "Every connector, hanger and tie") },
   { when: (f) => named(f, /^A timer or photocell/), run: (c) => light(c, { boxIdx: partsOf(c.sc, ["light"], undefined, "any") }, "The lights, on a timer or a photocell") },
   /* What to build: where a roof or a gazebo stands */
   {
@@ -382,43 +383,6 @@ const RULES: Rule[] = [
       const r = c.s.roof;
       if (!r) return null;
       return light(c, { boxIdx: [...partsOf(c.sc, ["rafter"]), ...partsOf(c.sc, ["ridge"])], polyIdx: facesOf(c.sc, ["roofing"]) }, `Roof · ${ROOF_KIND_LABEL[r.kind] ?? r.kind}${c.d.structure === "pergola" ? "" : ` · ${c.d.roof.pitch}:12`}`);
-    },
-  },
-  /* Stairs and railing */
-  {
-    when: (f) => isStep(f, "step-stairs") && !!f.stair,
-    run: (c) => {
-      const st = c.s.stairs.find((x) => x.design.id === c.f.stair);
-      if (!st) return null;
-      // Its parts: what stands inside its footprint (a little round it), the treads and stringers, its rails and posts.
-      const ring = st.footprint.map((p) => ({ x: p.x / 12, y: p.y / 12 }));
-      const inside = (x: number, y: number) => {
-        let ins = false;
-        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-          const a = ring[i];
-          const b = ring[j];
-          if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) ins = !ins;
-        }
-        if (ins) return true;
-        // A rail post or a stringer's top just outside the footprint's edge still belongs to it.
-        return ring.some((a, i) => {
-          const b = ring[(i + 1) % ring.length];
-          const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-          const t = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / (L * L)));
-          return Math.hypot(a.x + (b.x - a.x) * t - x, a.y + (b.y - a.y) * t - y) < 0.7;
-        });
-      };
-      const mine = [...partsOf(c.sc, ["stair"], undefined, "any"), ...partsOf(c.sc, ["rail"], /^stair /, "any"), ...partsOf(c.sc, ["hardware"], /^stringer connector$/, "any")].filter((i) => inside(c.sc.boxes[i][1], c.sc.boxes[i][2]));
-      const n = c.s.stairs.indexOf(st) + 1;
-      return light(c, { boxIdx: mine }, `Stair ${n} · ${st.risers ? `${st.risers} risers of ${st.riserIn.toFixed(1)} in.` : "no rise"} · ${feetWords(st.design.widthFt * 12)} wide`);
-    },
-  },
-  {
-    when: (f) => isStep(f, "step-stairs") && named(f, "Railing", "Height", "Infill", "Posts apart", "Your railing", "Your rail price, installed", /^Rail/),
-    run: (c) => {
-      const r = c.s.rails;
-      const parts = [...partsOf(c.sc, ["rail"], /^(?!stair )/, "any"), ...partsOf(c.sc, ["hardware"], /^rail post tie$/, "any")];
-      return light(c, { boxIdx: parts }, r.on ? `Railing · ${r.label} · ${Math.round(r.lf)} ft · ${r.heightIn} in. high` : "No railing in this price");
     },
   },
   /* Lights, outlets and heaters */
