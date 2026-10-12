@@ -17,7 +17,10 @@
 //   · a verification text: +1 US / Canada only, and only with an open plan;
 //   · a parcel tile: only with an open plan;
 //   · after the plan ends: nameplate, photo and receipt reading, and texts
-//     from the company's own number, are closed.
+//     from the company's own number, are closed;
+//   · the plan matrix: every way a company holds a plan (card-less trial,
+//     trial, each paid plan, past due, grant, comp, platform admin, booked
+//     cancellation) passes; an ended one is refused.
 import { actAs, check, outcome, summary } from "./_actionHarness";
 import { randomBytes } from "node:crypto";
 import { db } from "../../src/lib/db";
@@ -63,6 +66,90 @@ async function holdsAtN(name: string, n: number, take: () => Promise<{ ok: boole
   const over = await take();
   check(`${name}: ${n} pass`, passed === n, `${passed} of ${n} passed`);
   check(`${name}: call ${n + 1} is refused with a reason`, !over.ok && typeof over.error === "string" && over.error.length > 20, over);
+}
+
+// ── THE PLAN MATRIX (2026-10-12): every way a company holds — or held — a plan ──
+// "Действующий план" must mean what it means everywhere else in the app
+// (lib/planStatus over lib/subscriptionAccess, grants read, a platform admin
+// in their own company exempt as in lib/limitsEngine): cases 1–8 pass the
+// phone code and the parcel tiles, case 9 is refused. The roof and Cool Calc
+// ceilings answer within their limits in 1–8, and the card-less trial's own
+// ceilings (lib/trialMeter takeTrialCap) stand as they were.
+type Setup = (orgId: string, userId: string) => Promise<void>;
+const day = 864e5;
+const stripeRow = (organizationId: string, status: string, plan: string, extra: Record<string, unknown> = {}) =>
+  db.subscription.create({ data: { organizationId, plan, status, provider: "STRIPE", currentPeriodEnd: new Date(Date.now() + 20 * day), ...extra } as never });
+const cardless = (orgId: string, subId: string, extra: Record<string, unknown> = {}) =>
+  db.syncState.create({ data: { key: `cardlessTrial:${orgId}`, cursor: JSON.stringify({ subId, customerId: "cus_qa", planSlug: "professional", interval: "MONTH", customPages: [], mode: "test", trialDays: 7, startedAt: new Date(Date.now() - 2 * day).toISOString(), endsAt: new Date(Date.now() + 5 * day).toISOString(), ...extra }) } });
+const grant = (orgId: string, endsAt: string | null) =>
+  db.syncState.create({ data: { key: `planGrant:${orgId}`, cursor: JSON.stringify({ plan: "PROFESSIONAL", grantedAt: new Date().toISOString(), endsAt, fallback: "free", reason: "qa" }) } });
+
+const CASES: Array<{ n: string; name: string; open: boolean; trialCapped?: boolean; setup: Setup }> = [
+  { n: "1", name: "card-less trial, running, no card", open: true, trialCapped: true, setup: async (o) => { const s = `sub_qa_${rid()}`; await stripeRow(o, "TRIALING", "PROFESSIONAL", { externalSubId: s, trialEndsAt: new Date(Date.now() + 5 * day) }); await cardless(o, s); } },
+  { n: "2", name: "card-less trial, card added", open: true, setup: async (o) => { const s = `sub_qa_${rid()}`; await stripeRow(o, "TRIALING", "PROFESSIONAL", { externalSubId: s, trialEndsAt: new Date(Date.now() + 5 * day) }); await cardless(o, s, { cardAt: new Date().toISOString() }); } },
+  { n: "3", name: "trial with a card (TRIALING)", open: true, setup: async (o) => { await stripeRow(o, "TRIALING", "PROFESSIONAL", { trialEndsAt: new Date(Date.now() + 5 * day) }); } },
+  { n: "4a", name: "paid ACTIVE — Starter", open: true, setup: async (o) => { await stripeRow(o, "ACTIVE", "STARTER"); } },
+  { n: "4b", name: "paid ACTIVE — Professional", open: true, setup: async (o) => { await stripeRow(o, "ACTIVE", "PROFESSIONAL"); } },
+  { n: "4c", name: "paid ACTIVE — Advanced", open: true, setup: async (o) => { await stripeRow(o, "ACTIVE", "ENTERPRISE"); } },
+  { n: "4d", name: "paid ACTIVE — Custom (roof + HVAC pages)", open: true, setup: async (o) => { await stripeRow(o, "ACTIVE", "CUSTOM"); await db.syncState.create({ data: { key: `orgPages:${o}`, cursor: JSON.stringify(["roof-estimator", "hvac-estimator"]) } }); } },
+  { n: "5", name: "PAST_DUE while Stripe retries", open: true, setup: async (o) => { await stripeRow(o, "PAST_DUE", "PROFESSIONAL", { currentPeriodEnd: new Date(Date.now() + 10 * day) }); } },
+  { n: "6a", name: "admin grant with an end date", open: true, setup: async (o) => { const end = new Date(Date.now() + 30 * day); await db.subscription.create({ data: { organizationId: o, plan: "PROFESSIONAL", status: "ACTIVE", provider: "MANUAL", currentPeriodEnd: end } }); await grant(o, end.toISOString()); } },
+  { n: "6b", name: "admin grant, no end date (row's old date in the past)", open: true, setup: async (o) => { await db.subscription.create({ data: { organizationId: o, plan: "PROFESSIONAL", status: "ACTIVE", provider: "MANUAL", currentPeriodEnd: new Date(Date.now() - 10 * day) } }); await grant(o, null); } },
+  { n: "6c", name: "comp: MANUAL ACTIVE, no end, no grant record", open: true, setup: async (o) => { await db.subscription.create({ data: { organizationId: o, plan: "ENTERPRISE", status: "ACTIVE", provider: "MANUAL", currentPeriodEnd: null } }); } },
+  { n: "7", name: "platform admin in their own company (no subscription)", open: true, setup: async (_o, u) => { await db.user.update({ where: { id: u }, data: { isPlatformAdmin: true } }); } },
+  { n: "8", name: "cancelled, paid period still running", open: true, setup: async (o) => { await stripeRow(o, "ACTIVE", "PROFESSIONAL", { canceledAt: new Date(), currentPeriodEnd: new Date(Date.now() + 10 * day) }); } },
+  { n: "9a", name: "cancelled, period over", open: false, setup: async (o) => { await stripeRow(o, "CANCELED", "PROFESSIONAL", { canceledAt: new Date(Date.now() - 15 * day), currentPeriodEnd: new Date(Date.now() - 10 * day) }); } },
+  { n: "9b", name: "card-less trial ended without a card (TRIAL_ENDED)", open: false, setup: async (o) => { const s = `sub_qa_${rid()}`; await stripeRow(o, "TRIAL_ENDED", "PROFESSIONAL", { externalSubId: s, trialEndsAt: new Date(Date.now() - day), currentPeriodEnd: new Date(Date.now() - day) }); await cardless(o, s, { endsAt: new Date(Date.now() - day).toISOString(), endedAt: new Date().toISOString() }); } },
+  { n: "9c", name: "card-less trial past its end, no card, webhook not in yet", open: false, setup: async (o) => { const s = `sub_qa_${rid()}`; await stripeRow(o, "TRIALING", "PROFESSIONAL", { externalSubId: s, trialEndsAt: new Date(Date.now() - 3600e3), currentPeriodEnd: new Date(Date.now() - 3600e3) }); await cardless(o, s, { endsAt: new Date(Date.now() - 3600e3).toISOString() }); } },
+];
+
+/** What an estimator call answered: the provider was reached (refused here only by the network), or which gate stopped it. */
+function gateOf(v: unknown): "reached" | "plan" | "trial-cap" | "ceiling" {
+  const o = (v ?? {}) as { ok?: boolean; error?: string; capped?: boolean; trialCap?: string };
+  if (o.ok) return "reached";
+  if (o.capped) return "ceiling";
+  if (o.trialCap) return "trial-cap";
+  if (/plan has ended|isn't in your plan|needs an active plan/i.test(o.error ?? "")) return "plan";
+  return "reached";
+}
+
+async function planMatrix() {
+  process.env.EAGLEVIEW_CLIENT_ID = "qa-dummy";
+  process.env.EAGLEVIEW_CLIENT_SECRET = "qa-dummy";
+  process.env.COOLCALC_CLIENT_ID = "qa-dummy";
+  process.env.COOLCALC_API_KEY = "qa-dummy";
+  process.env.COOLCALC_DEALER_ID = "qa-dummy";
+  const rows: string[] = [];
+  try {
+    for (const c of CASES) {
+      const co = await company(`M${c.n}`);
+      await c.setup(co.org.id, co.owner.id);
+      const est = await db.hvacEstimate.create({ data: { organizationId: co.org.id, createdById: co.owner.id, address: `${c.n} Plan St, Springfield, IL 62701`, siteFactsJson: "{}", modelJson: "{}", engineJson: "{}", draftJson: "{}" } });
+      as(co);
+      const phone = await outcome(() => startPhoneVerification("(206) 555-0142"));
+      const tileStatus = (await tiles.GET(new Request("http://local/api/parcel-tiles/18/1/1"), { params: Promise.resolve({ z: "18", x: "1", y: "1" }) })).status;
+      const tilePass = tileStatus !== 401 && tileStatus !== 402;
+      const roof = await outcome(() => measureRoofInstant({ address: `${c.n}00 Matrix Ave`, city: "Springfield", state: "IL", zip: "62701" }));
+      const hvac = await outcome(() => requestHvacPermitReport({ estimateId: est.id }));
+      const roofGate = gateOf(roof.value ?? { ok: false, error: roof.text });
+      const hvacGate = gateOf(hvac.value ?? { ok: false, error: hvac.text });
+      rows.push(`${c.n.padEnd(3)} ${c.name.padEnd(58)} phone ${phone.refused ? "REFUSES" : "passes "}  tiles ${tilePass ? "passes " : "REFUSES"} (${tileStatus})  roof ${roofGate.padEnd(9)} coolcalc ${hvacGate}`);
+      check(`plan ${c.n} (${c.name}): phone code ${c.open ? "passes" : "is refused"}`, c.open ? !phone.refused : phone.refused && /active plan/.test(phone.text), phone.text);
+      check(`plan ${c.n} (${c.name}): parcel tiles ${c.open ? "pass" : "are refused"}`, c.open ? tilePass : tileStatus === 402, tileStatus);
+      if (c.open) {
+        // Within the limits: the provider is reached — but for the card-less trial's own ceilings, unchanged.
+        check(`plan ${c.n}: a new roof measurement reaches the provider`, roofGate === "reached", roof.text);
+        const hvacWant = c.trialCapped ? "trial-cap" : "reached";
+        check(`plan ${c.n}: a Cool Calc report ${c.trialCapped ? "stays behind the card-less trial's own ceiling (0 without a card)" : "reaches the provider"}`, hvacGate === hvacWant, hvac.text);
+      } else {
+        check(`plan ${c.n}: a new roof measurement is closed`, roofGate === "plan" || roofGate === "trial-cap", roof.text);
+        check(`plan ${c.n}: a Cool Calc report is closed`, hvacGate === "plan" || hvacGate === "trial-cap", hvac.text);
+      }
+    }
+  } finally {
+    for (const k of ["EAGLEVIEW_CLIENT_ID", "EAGLEVIEW_CLIENT_SECRET", "COOLCALC_CLIENT_ID", "COOLCALC_API_KEY", "COOLCALC_DEALER_ID"]) process.env[k] = "";
+    console.log("── the plan matrix ──\n" + rows.join("\n"));
+  }
 }
 
 async function main() {
@@ -181,6 +268,8 @@ async function main() {
     await setPlan(V.org.id, "ACTIVE");
     const txt2 = await sendText({ organizationId: V.org.id, to: `+1206555${String(Math.floor(Math.random() * 9000) + 1000)}`, body: `qa ${rid()}`, kind: "test" });
     check("control, an open plan: the text is not stopped for the plan", txt2.ok || txt2.reason !== "plan-ended", txt2);
+
+    await planMatrix();
   } finally {
     const del = async (fn: () => Promise<unknown>) => { try { await fn(); } catch { /* next */ } };
     for (const orgId of made.orgs) {

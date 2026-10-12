@@ -36,7 +36,7 @@ export async function GET(
     if (err instanceof UnauthorizedError || err instanceof NoOrgError) return new NextResponse(null, { status: 401, headers: { "Cache-Control": "no-store" } });
     throw err;
   }
-  if (!(await planOpen(organizationId))) {
+  if (!(await planOpen(organizationId, userId))) {
     return new NextResponse(PLAN_NEEDED_MESSAGE, { status: 402, headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" } });
   }
   const gate = await rateLimitShared(`tiles:${userId}`, 600, 10 * MINUTE);

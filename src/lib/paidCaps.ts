@@ -14,6 +14,7 @@
 import { DAY, HOUR, RateLimitError, enforceRateLimit, retryInWords } from "@/lib/rateLimit";
 import { planLapsed } from "@/lib/planStatus";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
+import { isPlanLimitExempt } from "@/lib/limitsEngine";
 
 export type PaidRefusal = { ok: false; error: string; capped: true };
 
@@ -104,7 +105,11 @@ export async function planEnded(organizationId: string): Promise<boolean> {
   return planLapsed(await readAccessSubscription(organizationId));
 }
 
-export async function planOpen(organizationId: string): Promise<boolean> {
+//                   A platform admin in their own company (an OWNER seat)
+//                   passes whatever the row says — the rule lib/limitsEngine
+//                   keeps for the plan's caps (isPlanLimitExempt).
+export async function planOpen(organizationId: string, userId?: string | null): Promise<boolean> {
+  if (userId && (await isPlanLimitExempt(organizationId, userId))) return true;
   const sub = await readAccessSubscription(organizationId);
   return !!sub && sub.status !== "FREE" && !planLapsed(sub);
 }

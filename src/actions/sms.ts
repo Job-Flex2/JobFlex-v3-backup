@@ -60,7 +60,7 @@ export async function startPhoneVerification(raw: string): Promise<SmsActionResu
   // Caribbean +1 — and only for a company that holds an open plan.
   const phone = toE164(raw);
   if (!phone || !isUsCanadaNumber(phone)) return { ok: false, error: "That doesn't look like a US or Canadian mobile number." };
-  if (!(await planOpen(organizationId))) return { ok: false, error: PLAN_NEEDED_MESSAGE };
+  if (!(await planOpen(organizationId, user.id))) return { ok: false, error: PLAN_NEEDED_MESSAGE };
   try {
     await enforceRateLimit(`sms-verify:${user.id}`, 5, HOUR, "verification texts");
   } catch (err) {
