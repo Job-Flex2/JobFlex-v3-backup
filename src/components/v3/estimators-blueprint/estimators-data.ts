@@ -83,7 +83,7 @@ export const ENGINES: Engine[] = [
   },
   {
     // Added 2026-08-22 with the Video estimator port. It sits after Fence
-    // because that is where the sidebar's Automation section puts it.
+    // because that is where the sidebar's Estimating tools section puts it.
     //
     // Catalogue number 08, not 05: 05–07 are already spent on the queued stubs,
     // and those are the only entries that PRINT their number. Renumbering three
@@ -101,7 +101,7 @@ export const ENGINES: Engine[] = [
   {
     // Added 2026-09-15. Catalogue 09 for the same reason Video is 08: the
     // printed numbers belong to the queued stubs. Sits after Video, where the
-    // sidebar's Automation section puts it.
+    // sidebar's Estimating tools section puts it.
     id: "hvac",
     no: "09",
     title: "HVAC",

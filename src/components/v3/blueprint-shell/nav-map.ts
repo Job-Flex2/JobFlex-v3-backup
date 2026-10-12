@@ -35,7 +35,18 @@ export type NavItem = {
   /** Coming soon (2026-10-04): the row is shown with a "Soon" mark; the page
    *  itself says so to everyone but the admins who are testing it. */
   soon?: boolean;
+  /** AN ESTIMATING TOOL (owner, 2026-10-12: "make it look advanced … so it
+   *  doesn't look like all the buttons in a sidebar"). The desktop sidebar
+   *  draws a run of these in one framed bay: a tile in the tool's own colour
+   *  and a mono line under the name that says what it turns into what — the
+   *  engine's input → output, the same spec the New Estimate picker prints
+   *  (estimators-blueprint/estimators-data). The drawer and the palette list
+   *  them as ordinary rows. */
+  tool?: NavTool;
 };
+/** The tile colours (blueprint-global.css `[data-tone]`). One per tool. */
+export type ToolTone = "violet" | "blue" | "spruce" | "berry" | "teal" | "cedar";
+export type NavTool = { tone: ToolTone; from: string; to: string };
 export type NavSection = { label: string; items: NavItem[] };
 
 /** A section's rows in reading order, children after their parent. */
@@ -90,14 +101,18 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Automation",
+    // THE TOOLS GET THEIR OWN SECTION (owner, 2026-10-12): they were the first
+    // six rows of Automation, drawn like every other row. The sidebar draws a
+    // section made only of tools as one framed bay with this label on its
+    // frame (sidebar.tsx); Automation keeps the rest.
+    label: "Estimating tools",
     items: [
       // No "Estimators" item, deliberately: picking an engine is done in the
       // topbar's New Estimate dialog (estimators-blueprint/estimator-picker),
       // reachable from every page, so a nav entry would be a second door to a
       // decision you make on your way somewhere else. The engines themselves
       // keep their items below.
-      { label: "Smart Proposal", icon: "i-bulb", href: "/dashboard/advanced-ai" },
+      { label: "Smart Proposal", icon: "i-bulb", href: "/dashboard/advanced-ai", tool: { tone: "violet", from: "Words", to: "priced lines" } },
       // Each estimator folds its own inventory under it (owner, 2026-10-10:
       // "a roofer doesn't have to see the other inventories"). The three
       // shared one page with a trade switch from 2026-09-29; before that they
@@ -106,12 +121,14 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Roof estimator",
         icon: "i-roof",
         href: "/dashboard/roof-estimator",
+        tool: { tone: "blue", from: "Aerial", to: "squares" },
         children: [{ label: "Roofing inventory", icon: "i-folder", href: "/dashboard/roof-estimator/inventory" }],
       },
       {
         label: "Fence estimator",
         icon: "i-fence",
         href: "/dashboard/fence-estimator",
+        tool: { tone: "spruce", from: "Map", to: "linear feet" },
         children: [{ label: "Fence inventory", icon: "i-folder", href: "/dashboard/fence-estimator/inventory" }],
       },
       // Added 2026-08-22 with the Video estimator port. Its position — directly
@@ -120,7 +137,7 @@ export const NAV_SECTIONS: NavSection[] = [
       // ROLE_NAV plan below: that plan mirrors the production sidebar, which
       // does not list this surface, so adding it here would be inventing a
       // grant rather than reflecting one.
-      { label: "Video estimator", icon: "i-video", href: "/dashboard/video-estimator" },
+      { label: "Video estimator", icon: "i-video", href: "/dashboard/video-estimator", tool: { tone: "berry", from: "Walkthrough", to: "scope" } },
       // Added 2026-09-15; the heat pump glyph on 2026-09-18 (until then the
       // item asked for `i-bolt`, which only the Financials sprite carries, so
       // the sidebar drew a blank beside it on every other page).
@@ -128,6 +145,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "HVAC estimator",
         icon: "i-heatpump",
         href: "/dashboard/hvac-estimator",
+        tool: { tone: "teal", from: "House", to: "load · unit" },
         // The HVAC service menu is a tab of it.
         children: [{ label: "HVAC inventory", icon: "i-folder", href: "/dashboard/hvac-estimator/inventory" }],
       },
@@ -138,9 +156,15 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: "i-deck",
         href: "/dashboard/deck-estimator",
         soon: true,
+        tool: { tone: "cedar", from: "Size", to: "3D · permits" },
         // Its inventory (the deck price book and stock, 2026-10-10) folds under it like the others'; the same Coming-soon door guards it.
         children: [{ label: "Deck inventory", icon: "i-folder", href: "/dashboard/deck-estimator/inventory", soon: true }],
       },
+    ],
+  },
+  {
+    label: "Automation",
+    items: [
       { label: "Phone", icon: "i-phone", href: "/dashboard/phone" },
       { label: "Messages", icon: "i-msg", href: "/dashboard/messages" },
       { label: "Reviews", icon: "i-thumb", href: "/dashboard/reviews" },
