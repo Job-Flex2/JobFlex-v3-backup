@@ -45,7 +45,7 @@ import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
 import { isEditionPlan, type EditionId } from "@/lib/editions";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, termFromParam, BILLING_PARAM, type BillingTerm } from "@/lib/planDeal";
 import { firstBillCents } from "@/lib/firstMonthDiscount";
-import { PlanDealSlot, PlanPrice, PlanTermSwitch, planWhenDeal, recalledBillingTerm, rememberBillingTerm } from "@/components/billing/PlanTermSwitch";
+import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch, recalledBillingTerm, rememberBillingTerm } from "@/components/billing/PlanTermSwitch";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
@@ -364,32 +364,20 @@ export function RegisterContent({
     const v = firstBillCents(per === "/yr" ? "YEAR" : "MONTH", cents, monthlyCents, promo?.percentOff ?? 0) / 100;
     return `Free until ${freeUntil}, then $${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2)}${per}`;
   };
-  /** The card's "Free until Oct 19, then $405/yr — 3 months free" (2026-10-12: the
-   *  free months ride the line on a year; with a card only — the card-less line has
-   *  no price). It breaks at the dash, never inside a part, and the other term's line
-   *  lies in the same cell unpainted, so the row is one height on either side of the
-   *  switch. */
+  /** The card's "Free until Oct 19, then $405/yr" — the date and the price only (the
+   *  free months are the head's stamp and the saving line, owner 2026-10-12). The
+   *  other term's line lies in the same cell unpainted, so the row is one height on
+   *  either side of the switch. */
   const whenLine = (monthlyCents: number, yearlyCents: number | null | undefined) => {
     const lineFor = (t: BillingTerm) => {
       const y = planTerm(t, yearlyCents) === "YEAR";
-      const base = freeUntilLine(y ? (yearlyCents ?? 0) : monthlyCents, y ? "/yr" : "/mo", monthlyCents) ?? "";
-      return { base, deal: requiresCard ? planWhenDeal(t, monthlyCents, yearlyCents) : "" };
+      return freeUntilLine(y ? (yearlyCents ?? 0) : monthlyCents, y ? "/yr" : "/mo", monthlyCents) ?? "";
     };
-    const now = lineFor(interval);
-    const other = lineFor(interval === "YEAR" ? "MONTH" : "YEAR");
     return (
       <span className="pw-when">
-        <span className="pw-when-now">
-          <span className="pw-when-part">{now.base}</span>
-          {now.deal ? (
-            <>
-              {" "}
-              <span className="pw-when-part">{now.deal.trim()}</span>
-            </>
-          ) : null}
-        </span>
+        <span className="pw-when-now">{lineFor(interval)}</span>
         <span className="pw-when-ghost" aria-hidden="true">
-          <span className="jf-ghost-t" data-c={other.base + other.deal} />
+          <span className="jf-ghost-t" data-c={lineFor(interval === "YEAR" ? "MONTH" : "YEAR")} />
         </span>
       </span>
     );
@@ -1850,7 +1838,13 @@ export function RegisterContent({
       </main>
 
       <section className={step === 3 ? "plan-sheet is-in" : "plan-sheet"} aria-hidden={step !== 3}>
-        <div className="plan-sheet-in">
+        {/* ONE COLUMN (owner, 2026-10-12): the sheet is as wide as the row of cards
+            (`--pw-cols`), so the logo, the steps, the head, the cards and the foot
+            share one left and one right edge. */}
+        <div
+          className="plan-sheet-in"
+          style={{ "--pw-cols": Math.max(1, orderedPlans.length + (offerCustom && plans.length > 0 ? 1 : 0)) } as React.CSSProperties}
+        >
           {brand}
           {stepper}
 
@@ -1872,7 +1866,6 @@ export function RegisterContent({
           <div
             className={step === 3 ? "step" : "step is-hidden"}
             id="stepPlan"
-            style={{ "--pw-cols": Math.max(1, orderedPlans.length + (offerCustom && plans.length > 0 ? 1 : 0)) } as React.CSSProperties}
           >
             {/* Title and the billing switch on ONE line: the switch is the
                 control that rewrites every price under it, so it belongs beside
@@ -1943,7 +1936,7 @@ export function RegisterContent({
                 deal, the free-until line and the code's line when there are any, the full feature list,
                 the start button — so prices and first rows stand on one line and every card is the
                 row's height. Nothing folds: every list is drawn whole. As many columns as cards
-                (`--pw-cols`, set on #stepPlan so the head lines up with the row), the row centred,
+                (`--pw-cols`, set on the sheet so every edge lines up with the row), the row centred,
                 a card no wider than the stylesheet's cap. */}
             <div
               className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")}
@@ -1976,9 +1969,15 @@ export function RegisterContent({
                     }}
                   >
                     {p.highlight ? <span className="pw-tag">Most picked</span> : null}
-                    <span className="pw-plan-n">{p.name}</span>
-                    {/* The price with its "N MONTHS FREE" stamp on a year (PlanPrice); under it
-                        "You save $N a year", or "Billed monthly" (PlanDealSlot, lib/planDeal). */}
+                    {/* The name, and the "N MONTHS FREE" stamp at the card's right edge on a year
+                        (PlanCardHead); the price alone on its line; under it "You save $N a year",
+                        or "Billed monthly" (PlanDealSlot, lib/planDeal). */}
+                    <PlanCardHead
+                      term={interval}
+                      monthlyCents={p.priceCents}
+                      yearlyCents={p.yearlyPriceCents}
+                      name={<span className="pw-plan-n">{p.name}</span>}
+                    />
                     <PlanPrice term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} figureClassName="pw-price" />
                     <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
                     {freeUntil ? whenLine(p.priceCents, p.yearlyPriceCents) : null}
@@ -2070,7 +2069,12 @@ export function RegisterContent({
                   }
                 }}
               >
-                <span className="pw-plan-n">Custom</span>
+                <PlanCardHead
+                  term={interval}
+                  monthlyCents={customPriceCents(customPages)}
+                  yearlyCents={customPriceCents(customPages, "YEAR")}
+                  name={<span className="pw-plan-n">Custom</span>}
+                />
                 <PlanPrice term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} figureClassName="pw-price" />
                 <PlanDealSlot term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} />
                 {freeUntil ? whenLine(customPriceCents(customPages), customPriceCents(customPages, "YEAR")) : null}
@@ -2201,10 +2205,9 @@ export function RegisterContent({
               {" "}and acknowledge our{" "}
               <Link href="/privacy" target="_blank" rel="noopener noreferrer"><u>Privacy policy</u></Link>.
             </p>
-            </div>
 
-            {/* The testing exit. Small, quiet, cornered — an escape, not an
-                offer. Development builds only: the server refuses the
+            {/* The testing exit. Small, quiet, at the right end of the terms' row — an
+                escape, not an offer. Development builds only: the server refuses the
                 no-subscription path in production regardless (see
                 completePendingSignup), so the button is not drawn there. */}
             {process.env.NODE_ENV !== "production" ? (
@@ -2212,6 +2215,7 @@ export function RegisterContent({
                 Skip for now
               </button>
             ) : null}
+            </div>
 
             {/* THE PAGE PICKER. Hand-rolled (no Radix here, same as every other
                 dialog in this fleet): a scrim, one panel, Escape closes it. The

@@ -105,16 +105,10 @@ function Ghost({ text }: { text: string }) {
   return <span className="jf-ghost-t" data-c={text} />;
 }
 
-/** THE PRICE ROW (owner, 2026-10-12): the price, and on a year with whole free
- *  months the filled "3 MONTHS FREE" stamp beside it — under it when the card
- *  is too narrow for both (flex-wrap). The other term's price is laid in the
- *  same cell, unpainted, and the stamp keeps its box on a month, unpainted, so
- *  the row has one size whichever way the switch stands: no card grows or
- *  shrinks on the switch and the rows of a row stay on one line. Neither the
- *  unpainted price nor the unpainted stamp is text on the page (Ghost), so on
- *  Monthly a card says nothing about the year. `figureClassName` is the
- *  surface's own price class (`lp-pw-price`, `pw-price`, `jf-up-price`,
- *  `mu-price-row`); the shown figure carries `data-plan-price`. */
+/** THE PRICE (2026-10-12): the price on the switch's term, alone on its line —
+ *  the free months are the stamp in the card's head (PlanCardHead).
+ *  `figureClassName` is the surface's own price class (`lp-pw-price`,
+ *  `pw-price`, `jf-up-price`, `mu-price-row`); it carries `data-plan-price`. */
 export function PlanPrice({
   term,
   monthlyCents,
@@ -133,43 +127,68 @@ export function PlanPrice({
   figureClassName: string;
   figure?: PriceFigure;
 }) {
-  const billed = planTerm(term, yearlyCents);
-  const deal = yearlyCents ? annualDeal(monthlyCents, yearlyCents) : null;
-  const stamp = dealWords(deal);
-  const shown = billed === "YEAR" ? { c: yearlyCents ?? 0, per: "/yr" } : { c: monthlyCents, per: "/mo" };
-  const other = billed === "YEAR" ? { c: monthlyCents, per: "/mo" } : yearlyCents ? { c: yearlyCents, per: "/yr" } : null;
+  const year = planTerm(term, yearlyCents) === "YEAR";
   return (
-    <span className="jf-price" data-plan-price-row>
-      <span className="jf-price-fig">
-        <span className={`${figureClassName} jf-price-now`} data-plan-price>
-          {figure(dealDollars(shown.c), shown.per)}
-        </span>
-        {other ? (
-          <span className={`${figureClassName} jf-price-ghost`} aria-hidden="true">
-            {figure(<Ghost text={dealDollars(other.c)} />, <Ghost text={other.per} />)}
-          </span>
-        ) : null}
-      </span>
-      {stamp ? (
-        billed === "YEAR" ? (
-          <span className="jf-price-stamp" data-plan-stamp>
-            {stamp}
-          </span>
-        ) : (
-          <span className="jf-price-stamp is-off" aria-hidden="true">
-            <Ghost text={stamp} />
-          </span>
-        )
-      ) : null}
+    <span className={`${figureClassName} jf-price`} data-plan-price>
+      {figure(dealDollars(year ? (yearlyCents ?? 0) : monthlyCents), year ? "/yr" : "/mo")}
     </span>
   );
 }
 
-/** The deal line under a card's price, the same on every plan surface — ONE
- *  line of one height (owner, 2026-10-12): on a year "You save $135 a year",
- *  green, bold, 15px (the free months are the stamp beside the price,
- *  PlanPrice); "Billed yearly" for a year that saves nothing; a quiet "Billed
- *  monthly" on a month or for a plan with no yearly price. */
+/** THE CARD'S HEAD (owner, 2026-10-12): the plan's name on the left and, on a
+ *  year with whole free months, the filled "3 MONTHS FREE" stamp pressed to the
+ *  card's right edge — the same place and the same line in every card of a
+ *  row. On a month the stamp keeps its box, unpainted and not text (Ghost), so
+ *  the head is one height on either side of the switch; a plan whose year is
+ *  not whole months has no stamp. When the name and the stamp do not fit on
+ *  one line (a phone), the stamp drops under the name, on the left. `name` is
+ *  the surface's own name element; `aside` is anything else that lives at the
+ *  head's right (the phone's "Most picked" / "Current" tags). */
+export function PlanCardHead({
+  term,
+  monthlyCents,
+  yearlyCents,
+  name,
+  aside = null,
+  className = "",
+}: {
+  term: BillingTerm;
+  monthlyCents: number;
+  yearlyCents: number | null | undefined;
+  name: ReactNode;
+  aside?: ReactNode;
+  className?: string;
+}) {
+  const stamp = yearlyCents ? dealWords(annualDeal(monthlyCents, yearlyCents)) : "";
+  const on = planTerm(term, yearlyCents) === "YEAR";
+  return (
+    <div className={"jf-card-head" + (className ? ` ${className}` : "")} data-plan-head>
+      {name}
+      {stamp || aside ? (
+        <span className="jf-card-head-r">
+          {stamp ? (
+            on ? (
+              <span className="jf-stamp" data-plan-stamp>
+                {stamp}
+              </span>
+            ) : (
+              <span className="jf-stamp is-off" aria-hidden="true">
+                <Ghost text={stamp} />
+              </span>
+            )
+          ) : null}
+          {aside}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** The deal line straight under a card's price, the same on every plan surface
+ *  — ONE line of one height (owner, 2026-10-12): on a year "You save $135 a
+ *  year", green, bold, 15px (the free months are the stamp in the card's head,
+ *  PlanCardHead); "Billed yearly" for a year that saves nothing; a quiet
+ *  "Billed monthly" on a month or for a plan with no yearly price. */
 export function PlanDealSlot({
   term,
   monthlyCents,
@@ -192,14 +211,6 @@ export function PlanDealSlot({
       )}
     </span>
   );
-}
-
-/** " — 3 months free" for the signup's "Free until Oct 19, then $405/yr" line on a
- *  year with whole free months, else "". */
-export function planWhenDeal(term: BillingTerm, monthlyCents: number, yearlyCents: number | null | undefined): string {
-  if (planTerm(term, yearlyCents) !== "YEAR") return "";
-  const words = dealWords(annualDeal(monthlyCents, yearlyCents));
-  return words ? ` — ${words}` : "";
 }
 
 /* THE CHOICE, KEPT FOR THIS TAB (sessionStorage): the signup plan step reopens

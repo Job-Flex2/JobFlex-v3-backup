@@ -22,7 +22,14 @@
 //   · (2026-10-12, the year's saving shown louder) the Annual badge on the switch is missing on
 //     either side of it, or does not read what the cards' catalogue gives ("2–3 months free",
 //     "Save up to $N"); on Monthly a card says "months free"; on Annual a card's "N MONTHS FREE"
-//     stamp or its "You save $N a year" does not match its prices, or that line is under 15px.
+//     stamp or its "You save $N a year" does not match its prices, or that line is under 15px;
+//   · (2026-10-12, tidied) the stamps of a row do not stand at one distance from their cards'
+//     right edges on one line; the signup's date line repeats "months free"; the switch's badge
+//     does not cross the Annual half's bottom edge, sticks out past the switch by other than
+//     8–10px (0–10px on a phone), covers the word ANNUAL, comes within 8px of the cards or
+//     "Most picked", or does not choose Annual when pressed; on a desk the logo, "Pick a plan."
+//     and the first card do not share a left edge, or the steps, the switch and the last card a
+//     right one (1px).
 // Pure half: lib/planDeal (months free in whole months only, never a percentage).
 // The plan step is reached the way signup-flow.check.ts reaches it (its own made-up IP, mail
 // keys blank, its pending signups and brake rows removed after). The upgrade page signs in
@@ -64,7 +71,7 @@ function pure() {
   check("a plan with no yearly price bills MONTH on Annual", planTerm("YEAR", null) === "MONTH" && planTerm("YEAR", 29000) === "YEAR" && planTerm("MONTH", 29000) === "MONTH");
 }
 
-type CardRead = { slug: string; top: number; left: number; height: number; priceTop: number; featTop: number; text: string; deal: string; dealPx: number; stamp: string | null; price: string; monthly: number; yearly: number | null; overflow: boolean; cut: boolean };
+type CardRead = { slug: string; top: number; left: number; height: number; priceTop: number; featTop: number; text: string; deal: string; dealPx: number; stamp: string | null; stampRight: number | null; stampTop: number | null; when: string; price: string; monthly: number; yearly: number | null; overflow: boolean; cut: boolean };
 type RowRead = { cards: CardRead[]; more: string[]; scrollX: number; vw: number; switches: number; halves: number[]; badge: string | null; badgeLabel: string | null };
 
 /** Every plan card on the page (data-plan-card), measured. */
@@ -93,6 +100,9 @@ async function read(page: any, scope: string): Promise<RowRead> {
           deal: (c.querySelector(".jf-deal")?.textContent || "").replace(/\s+/g, " ").trim(),
           dealPx: parseFloat(getComputedStyle(c.querySelector(".jf-deal-save") || c.querySelector(".jf-deal") || c).fontSize),
           stamp: c.querySelector("[data-plan-stamp]")?.textContent?.trim() ?? null,
+          stampRight: (() => { const st = c.querySelector("[data-plan-stamp]"); return st ? Math.round((box.right - st.getBoundingClientRect().right) * 10) / 10 : null; })(),
+          stampTop: (() => { const st = c.querySelector("[data-plan-stamp]"); return st ? Math.round(st.getBoundingClientRect().top * 10) / 10 : null; })(),
+          when: ((c.querySelector(".pw-when-now") as HTMLElement | null)?.innerText || "").replace(/\s+/g, " ").trim(),
           price: (c.querySelector("[data-plan-price]")?.textContent || "").replace(/\s+/g, ""),
           monthly: Number(c.dataset.monthlyCents || 0),
           yearly: c.dataset.yearlyCents ? Number(c.dataset.yearlyCents) : null,
@@ -136,6 +146,11 @@ function judgeRow(name: string, r: RowRead, term: "MONTH" | "YEAR") {
     check(`${name}: ${ids} one height`, spread(row.map((c) => c.height)) <= 1, row.map((c) => c.height).join(" · "));
     check(`${name}: ${ids} prices on one line`, spread(row.map((c) => c.priceTop)) <= 1, row.map((c) => c.priceTop).join(" · "));
     check(`${name}: ${ids} first feature rows on one line`, spread(row.map((c) => c.featTop)) <= 1, row.map((c) => c.featTop).join(" · "));
+    const stamped = row.filter((c) => c.stampRight !== null);
+    if (stamped.length > 1) {
+      check(`${name}: ${ids} stamps at one distance from the right edge`, spread(stamped.map((c) => c.stampRight!)) <= 1, stamped.map((c) => `${c.slug} ${c.stampRight}`).join(" · "));
+      check(`${name}: ${ids} stamps on one line`, spread(stamped.map((c) => c.stampTop!)) <= 1, stamped.map((c) => `${c.slug} ${c.stampTop}`).join(" · "));
+    }
   }
   for (const c of r.cards) {
     if (c.slug === "custom" && !c.monthly) continue;
@@ -149,6 +164,7 @@ function judgeRow(name: string, r: RowRead, term: "MONTH" | "YEAR") {
         check(`${name}: ${c.slug} Annual price is the year`, c.price === `$${c.yearly / 100}/yr`.replace(/\.(\d)$/, ".$10"), c.price);
         check(`${name}: ${c.slug} "${savedYearWords(d) || "Billed yearly"}"${dealWords(d) ? " + stamp " + dealWords(d) : ""}`, (d ? c.deal === savedYearWords(d) : /Billed yearly/.test(c.deal)) && (dealWords(d) ? c.stamp === dealWords(d) : c.stamp === null), `${c.deal} · stamp ${c.stamp}`);
         if (d) check(`${name}: ${c.slug} the saving line is 15px or more`, c.dealPx >= 15, `${c.dealPx}px`);
+        if (c.when) check(`${name}: ${c.slug} the date line does not repeat the months`, !/months? free/i.test(c.when), c.when);
       }
     }
   }
@@ -182,6 +198,50 @@ async function surface(page: any, name: string, scope: string, phone: boolean, v
   const jumped = a.cards.filter((c, i) => Math.abs(c.height - (m.cards[i]?.height ?? c.height)) > 1).map((c, i) => `${c.slug} ${m.cards[i]?.height}→${c.height}`);
   check(`${name}: no card changes height on the switch`, !jumped.length, jumped.join(", "));
   await flip(page, name, scope, "MONTH", phone, false);
+  await badge(page, name, scope, phone);
+}
+
+/** The switch's badge, a sticker on the Annual half's bottom-right corner. Leaves Monthly on. */
+async function badge(page: any, name: string, scope: string, phone: boolean) {
+  const g = await page.evaluate((scope: string) => {
+    const root = document.querySelector(scope) || document.body;
+    const sw = root.querySelector(".jf-term") as HTMLElement | null;
+    const tag = sw?.querySelector("[data-term-badge]") as HTMLElement | null;
+    if (!sw || !tag) return null;
+    const yr = sw.querySelector('[data-term="YEAR"]') as HTMLElement;
+    const text = document.createRange();
+    text.selectNodeContents(yr.firstChild as Node);
+    const t = text.getBoundingClientRect();
+    const b = tag.getBoundingClientRect();
+    const s = sw.getBoundingClientRect();
+    const a = yr.getBoundingClientRect();
+    // what lies under it: the cards, and the "Most picked" plates that share its columns
+    const below = Array.from(root.querySelectorAll<HTMLElement>("[data-plan-card], .pw-tag, .lp-pw-tag, .jf-up-tag"))
+      .filter((e) => e.getClientRects().length)
+      .map((e) => e.getBoundingClientRect())
+      .filter((r) => r.top >= s.bottom - 1 && r.right > b.left && r.left < b.right);
+    const next = below.length ? Math.min(...below.map((r) => r.top)) : null;
+    return {
+      crosses: b.top < a.bottom && b.bottom > s.bottom,
+      share: Math.round(((s.bottom - b.top) / b.height) * 100),
+      out: Math.round((b.right - s.right) * 10) / 10,
+      clearOfWord: b.top >= t.bottom || b.right <= t.left || b.left >= t.right,
+      gap: next === null ? null : Math.round((next - (b.bottom + 2)) * 10) / 10,
+      inWindow: b.right <= innerWidth && b.left >= 0,
+      x: b.left + b.width / 2, y: b.bottom - 3,
+    };
+  }, scope);
+  if (!g) return check(`${name}: the switch's badge is drawn`, false);
+  check(`${name}: the badge crosses the Annual half's bottom edge (${g.share}% of it over)`, g.crosses && g.share >= 20 && g.share <= 50, JSON.stringify(g));
+  check(`${name}: the badge sticks out ${g.out}px past the switch`, phone ? g.out >= 0 && g.out <= 10 && g.inWindow : g.out >= 8 && g.out <= 10, `${g.out}px`);
+  check(`${name}: the badge leaves the word ANNUAL clear`, g.clearOfWord);
+  check(`${name}: the badge is 8px or more above the cards`, g.gap === null || g.gap >= 8, `${g.gap}px`);
+  await page.mouse.click(g.x, g.y);
+  await page.waitForTimeout(300);
+  const on = await page.locator(`${scope} .jf-term [aria-checked="true"]`).first().getAttribute("data-term");
+  check(`${name}: a press on the badge chooses Annual`, on === "YEAR", String(on));
+  await page.locator(`${scope} .jf-term [data-term="MONTH"]`).first().click();
+  await page.waitForTimeout(300);
 }
 
 async function visit(browser: any, width: number) {
@@ -255,6 +315,18 @@ async function fitDesk(page: any, name: string, scope: string, cards: number) {
         centre: Math.round(((Math.min(...box.map((r) => r.left)) + Math.max(...box.map((r) => r.right))) / 2 - (sw.left + sw.right) / 2) * 10) / 10,
         pageCentre: Math.round(((Math.min(...box.map((r) => r.left)) + Math.max(...box.map((r) => r.right))) / 2 - innerWidth / 2) * 10) / 10,
         shadow: getComputedStyle(list.find((c) => !c.classList.contains("pw-plan--hero")) || list[0]).boxShadow,
+        // one column: the logo's ink, the heading and the first card on the left; the last step,
+        // the switch and the last card on the right
+        lefts: [
+          (document.querySelector("section.plan-sheet.is-in .jf-pmark") as HTMLElement).getBoundingClientRect().left + 0.5,
+          sheet.querySelector("#stepPlan .auth-h1")!.getBoundingClientRect().left,
+          Math.min(...box.map((r) => r.left)),
+        ].map((x) => Math.round(x * 10) / 10),
+        rights: [
+          (() => { const items = sheet.querySelectorAll(".stepper .st-item"); return items[items.length - 1].getBoundingClientRect().right; })(),
+          sheet.querySelector(".jf-term")!.getBoundingClientRect().right,
+          Math.max(...box.map((r) => r.right)),
+        ].map((x) => Math.round(x * 10) / 10),
       };
     }, scope);
     const at = `${name} @${w}×${h}`;
@@ -264,6 +336,8 @@ async function fitDesk(page: any, name: string, scope: string, cards: number) {
     check(`${at}: every start button wholly in the window`, m.goOut === 0, `lowest button ends at ${m.maxBottom}px of ${h}`);
     check(`${at}: the row is centred`, Math.abs(m.centre) <= 1 && Math.abs(m.pageCentre) <= 1, `${m.centre}px off its rail, ${m.pageCentre}px off the window`);
     check(`${at}: a card's hard offset is 3px`, /3px 3px 0px/.test(m.shadow), m.shadow);
+    check(`${at}: the logo, the heading and the first card share a left edge`, spread(m.lefts) <= 1, m.lefts.join(" · "));
+    check(`${at}: the steps, the switch and the last card share a right edge`, spread(m.rights) <= 1, m.rights.join(" · "));
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(400);

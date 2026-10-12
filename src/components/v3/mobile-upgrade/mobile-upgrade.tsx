@@ -57,7 +57,7 @@ import {
 } from "@/lib/customPlan";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import { dealDollars, offersYearly, planTerm, sharedDealWords, annualDeal, type BillingTerm } from "@/lib/planDeal";
-import { PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
+import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import "./mobile-upgrade.css";
 
 /** How long the sheets take to leave. Must match the transition in the CSS. */
@@ -556,20 +556,29 @@ export function MobileUpgradeContent({
         data-monthly-cents={p.priceCents}
         data-yearly-cents={p.yearlyPriceCents ?? undefined}
       >
-        <div className="mu-card-top">
-          <div className="mu-card-id">
-            <span className="mu-name">{p.name}</span>
-            {p.description ? <span className="mu-desc">{p.description}</span> : null}
-          </div>
-          {/* Badges stack in a column beside the name (owner, 2026-09-04):
-              side by side they squeezed "Professional" into a two-line break. */}
-          {p.highlight || isCur ? (
-            <span className="mu-tags">
-              {p.highlight ? <span className="mu-tag">Most picked</span> : null}
-              {isCur ? <span className="mu-tag is-cur">Current</span> : null}
-            </span>
-          ) : null}
-        </div>
+        {/* Badges stack in a column beside the name (owner, 2026-09-04):
+            side by side they squeezed "Professional" into a two-line break.
+            The year's "N MONTHS FREE" stamp heads that column (PlanCardHead). */}
+        <PlanCardHead
+          className="mu-card-top"
+          term={interval}
+          monthlyCents={p.priceCents}
+          yearlyCents={p.yearlyPriceCents}
+          name={
+            <div className="mu-card-id">
+              <span className="mu-name">{p.name}</span>
+              {p.description ? <span className="mu-desc">{p.description}</span> : null}
+            </div>
+          }
+          aside={
+            p.highlight || isCur ? (
+              <>
+                {p.highlight ? <span className="mu-tag">Most picked</span> : null}
+                {isCur ? <span className="mu-tag is-cur">Current</span> : null}
+              </>
+            ) : null
+          }
+        />
 
         <div className="mu-price">
           <PlanPrice
@@ -964,15 +973,21 @@ export function MobileUpgradeContent({
             data-yearly-cents={customPriceCents(customPagesNow, "YEAR")}
           >
 
-            <div className="mu-card-top">
-              <div className="mu-card-id">
-                <span className="mu-name">{onCustom ? "Custom" : "Build your plan"}</span>
-                <span className="mu-desc">
-                  {dollars(CUSTOM_BASE_CENTS)} base · {dollars(CUSTOM_PAGE_CENTS)} per page
-                </span>
-              </div>
-              {onCustom ? <span className="mu-tag is-cur">Current</span> : null}
-            </div>
+            <PlanCardHead
+              className="mu-card-top"
+              term={interval}
+              monthlyCents={customPriceCents(customPagesNow)}
+              yearlyCents={customPriceCents(customPagesNow, "YEAR")}
+              name={
+                <div className="mu-card-id">
+                  <span className="mu-name">{onCustom ? "Custom" : "Build your plan"}</span>
+                  <span className="mu-desc">
+                    {dollars(CUSTOM_BASE_CENTS)} base · {dollars(CUSTOM_PAGE_CENTS)} per page
+                  </span>
+                </div>
+              }
+              aside={onCustom ? <span className="mu-tag is-cur">Current</span> : null}
+            />
 
             <div className="mu-price">
               <PlanPrice

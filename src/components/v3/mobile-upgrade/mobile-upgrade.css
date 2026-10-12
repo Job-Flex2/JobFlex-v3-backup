@@ -1097,3 +1097,8 @@ body:has(.jf-mobile-upgrade.mu-shell) .jf-blueprint > .jfsup {
 /* A row the plan does not include is always on screen now, so its words
    clear 4.5:1 (#555 on white); the dash beside them stays faint. */
 .jf-mobile-upgrade .mu-f.is-no { color: var(--muted); }
+/* The head (PlanCardHead, 2026-10-12): the year's "N MONTHS FREE" stamp tops
+   the right-hand column, above "Most picked" / "Current", at the same place in
+   every card; under the name when the two do not fit. */
+.jf-mobile-upgrade .mu-card-top.jf-card-head { align-items: flex-start; flex-wrap: nowrap; }
+.jf-mobile-upgrade .mu-card-top.jf-card-head > .mu-card-id { flex: 1 1 0; }

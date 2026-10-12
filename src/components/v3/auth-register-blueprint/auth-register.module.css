@@ -1667,13 +1667,11 @@
   .bp :global(.jf-pmark) { --pmark-h: 22px; }
 }
 
-/* "Free until Oct 19, then $405/yr — 3 months free" (owner, 2026-10-12): it
-   breaks at the dash, never inside a part; the other term's line lies in the
-   same cell unpainted, so the row keeps one height on either side of the
-   switch. */
+/* "Free until Oct 19, then $405/yr" (owner, 2026-10-12): the other term's
+   line lies in the same cell unpainted, so the row keeps one height on either
+   side of the switch. */
 .bp :global(.pw-when) { display: grid; }
 .bp :global(.pw-when) > * { grid-area: 1 / 1; }
-.bp :global(.pw-when-part) { white-space: nowrap; }
 .bp :global(.pw-when-ghost) { visibility: hidden; }
 
 /* FOUR CARDS ON A DESK (CUSTOM_PLAN_ENABLED): narrower cards wrap more feature
@@ -1681,4 +1679,29 @@
    up a little — never the saving — and the step still fits 1280×800. */
 @media (min-width: 1101px) {
   .bp :global(.pw-plans:has(> .pw-plan:nth-child(4))) :global(.pw-f) { padding: clamp(1.5px, 0.28vh, 6px) 0; line-height: 1.2; }
+}
+
+/* ONE COLUMN ON A DESK (owner, 2026-10-12): the sheet is exactly as wide as
+   the row of cards (`--pw-cols` × 360px and its gaps, written on
+   .plan-sheet-in by register-content, plus the sheet's own 48px gutters), so
+   the logo, the steps, "Pick a plan.", the switch, the cards, the code and
+   the terms share one left and one right edge; only the switch's badge
+   reaches past it. "Skip for now" ends the terms' row. */
+@media (min-width: 1101px) {
+  .bp :global(.plan-sheet-in) {
+    box-sizing: border-box;
+    width: min(100%, calc(var(--pw-cols, 3) * 360px + (var(--pw-cols, 3) - 1) * 14px + 96px));
+    max-width: none;
+    margin: 0 auto;
+  }
+  .bp :global(.plan-sheet) :global(#stepPlan) { width: 100%; margin-left: 0; margin-right: 0; }
+  .bp :global(.pw-bottom) :global(.pw-skip) { position: static; flex: 0 0 auto; align-self: flex-start; margin: 0; padding: 2px 0; }
+}
+
+/* The switch's badge on a desk (2026-10-12): the head stays one centred row —
+   the switch keeps no margin of its own there — and the head as a whole gives
+   the badge's hanging part its room, 8px clear of the cards. */
+@media (min-width: 1101px) {
+  .bp :global(.pw-head-r) :global(.jf-term.jf-term.has-badge) { margin-bottom: 0; }
+  .bp :global(.pw-head:has(.jf-term.has-badge)) { margin-bottom: 8px; }
 }
