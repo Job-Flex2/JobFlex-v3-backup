@@ -12,6 +12,7 @@ import { priceStructure } from "../../src/lib/deck/pricing";
 import { designHip, sizeLvl } from "../../src/lib/deck/roof";
 import { SCENE_LAYERS, deckScene } from "../../src/lib/deck/scene";
 import { buildStructure } from "../../src/lib/deck/structure";
+import { DECK_SAMPLES, sampleDesign } from "../../src/lib/deck/samples";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -146,6 +147,40 @@ check("…and every LVL header on these roofs' 6x6 posts is three plies (5¼ in.
 const deep = build({ shape: { kind: "rect", widthFt: 39.5, depthFt: 25 } });
 const deepF = deep.frame!;
 check("a 39'-6\" × 25' deck: two middle beams and a front one, every beam and post inside its table", deepF.beams.filter((b) => b.role === "middle").length >= 2 && !deckChecks(deep).some((c) => c.level === "fail"), `${deepF.beams.map((b) => `${b.role}:${b.spec.size}`).join(" ")} · ${deckChecks(deep).filter((c) => c.level === "fail").map((c) => c.id).join(",")}`);
+
+// ── roof posts clear of the stairs (2026-10-12: the covered samples set a post in the middle of the stair on the front)
+const sampleBase = defaultDeckDesign({ state: "WA", frostIn: 18 });
+const stairDesign = (side: "front" | "left" | "right", atFt: number, widthFt: number) => [{ id: "s1", side, atFt, widthFt, level: "upper" as const, wrap: false, wrapSides: 1 as const, landing: "pad" as const, handrail: "auto" as const }];
+const opening = (st: { side: string; atFt: number; widthFt: number }) => [st.atFt * 12 - (st.widthFt * 12) / 2, st.atFt * 12 + (st.widthFt * 12) / 2];
+const postsIn = (s: ReturnType<typeof buildStructure>) =>
+  (s.roof?.posts ?? []).filter((p) =>
+    s.design.stairs.some((st) => {
+      if (st.level !== "upper" || st.wrap) return false;
+      const [a, b] = opening(st);
+      const half = (s.roof!.roof.post === "4x4" ? 3.5 : 5.5) / 2;
+      const D = Math.max(...(s.frame?.zones ?? []).map((z) => z.zone.y1));
+      const W = Math.max(...(s.frame?.zones ?? []).map((z) => z.zone.x1));
+      return st.side === "front" ? Math.abs(p.y - D) < 24 && p.x + half > a && p.x - half < b : st.side === "left" ? Math.abs(p.x) < 24 && p.y + half > a && p.y - half < b : Math.abs(p.x - W) < 24 && p.y + half > a && p.y - half < b;
+    }),
+  );
+for (const id of ["covered-gable", "covered-shed", "covered-hip"]) {
+  const sample = DECK_SAMPLES.find((x) => x.id === id)!;
+  const s = buildStructure(sampleDesign(sample, sampleBase));
+  check(`the ${id} sample: no roof post in the stair's opening, the front header sized for the spans it has`, s.stairs.length > 0 && postsIn(s).length === 0 && s.roof!.headers.every((h) => h.maxSpanIn === 0 || h.spanIn <= h.maxSpanIn + 0.5) && !deckChecks(s).some((c) => c.id.startsWith("roof-post-stair")), s.roof!.posts.map((p) => `(${(p.x / 12).toFixed(1)}, ${(p.y / 12).toFixed(1)})`).join(" "));
+}
+const kingStair = build(covered(22.5, 20, { kind: "gable", ridge: "beam" } as never, { stairs: stairDesign("front", 11.25, 4) as never }));
+const kingFront = kingStair.roof!.headers.find((h) => h.kingPost)!;
+const kingLimit = POST_TABLE_MAX_AREA * (base.loadPsf + 10);
+check("a 22'-6\" × 20' gable on a ridge beam with a 4-ft stair under its king post: the post stands beside the stair, the header carries the king post across it", !!kingFront && postsIn(kingStair).length === 0 && kingFront.postAt.length >= 3 && kingFront.spanIn <= kingFront.maxSpanIn + 0.5 && kingStair.roof!.posts.every((p) => p.loadLb <= kingLimit) && !deckChecks(kingStair).some((c) => c.level === "fail" && /roof|header|ridge/i.test(c.part)), kingFront ? `${kingFront.spec.size}, posts at ${kingFront.postAt.map((a) => (a / 12).toFixed(2)).join(" ")} ft, span ${(kingFront.spanIn / 12).toFixed(1)} of ${(kingFront.maxSpanIn / 12).toFixed(1)}` : "no king header");
+const kingPlain = build(covered(22.5, 20, { kind: "gable", ridge: "beam" } as never));
+const plainFront = kingPlain.roof!.headers.find((h) => h.kingPost)!;
+check("…and with no stair there, the post still stands right under the king post", !!plainFront && plainFront.postAt.some((a) => Math.abs(a - plainFront.lengthIn / 2) < 0.5));
+let corner = applyDeckPatch(base, covered(16, 12, { kind: "gable" }, { stairs: stairDesign("front", 2, 4) as never }));
+const cornerCheck = deckChecks(buildStructure(corner)).find((c) => c.id.startsWith("roof-post-stair"));
+check("a stair run into the corner post: a failing check that says the corner cannot move, with a fix that slides the stair", !!cornerCheck && cornerCheck.level === "fail" && /cannot move/.test(cornerCheck.text) && !!cornerCheck.fix, cornerCheck?.text ?? "no check");
+if (cornerCheck?.fix) corner = applyDeckPatch(corner, cornerCheck.fix.patch);
+const cornerFixed = buildStructure(corner);
+check("…and after the fix the stair clears it", postsIn(cornerFixed).length === 0 && cornerFixed.roof!.postsInStair.length === 0 && !deckChecks(cornerFixed).some((c) => c.id.startsWith("roof-post-stair")), `stair at ${corner.stairs[0].atFt.toFixed(2)} ft`);
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

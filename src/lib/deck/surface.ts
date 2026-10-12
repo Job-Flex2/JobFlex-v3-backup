@@ -27,6 +27,7 @@
 import type { DeckFrame } from "./frame";
 import type { DeckingProduct } from "./catalog";
 import { frontEdgeAt, shapeOutline } from "./design";
+import { ringEdges, type RingEdge } from "./ringEdges";
 
 /** One board, or one piece of a spliced row, inches. */
 export interface BoardPiece {
@@ -183,10 +184,11 @@ export function deckSurface(frame: DeckFrame): DeckSurface {
   const outline = shapeOutline(design.shape);
   const frontAt = (x: number) => (shaped ? frontEdgeAt(design.shape, x) : depth);
   const farthest = depth + bulgeIn;
-  // A quarter inch off the wall, so water and the siding have room.
-  const first = againstHouse ? 0.25 : 0;
   const borderBoards = design.shape.kind === "rect" ? design.decking.border : 0;
   const borderIn = borderBoards * pitch;
+  // A quarter inch off the wall, so water and the siding have room; a free-standing deck's border runs along its back
+  // too, and the field starts behind it.
+  const first = againstHouse ? 0.25 : borderIn;
   const rows = Math.max(1, Math.ceil((farthest - first + product.gapIn) / pitch - 1e-9));
   const wastePct = design.decking.wastePct + (diagonal ? 5 : 0) + (pattern === "herringbone" ? 5 : 0) + (borderBoards ? 3 : 0);
   const joistXs = frame.joists.filter((j) => !j.sister).map((j) => j.x);
@@ -203,6 +205,9 @@ export function deckSurface(frame: DeckFrame): DeckSurface {
   const fieldX0 = open("left") ? borderIn : 0;
   const fieldX1 = W - (open("right") ? borderIn : 0);
   const fieldFront = (x: number) => frontAt(x) - borderIn;
+  // What a cut row of the field is clipped to: the outline with its front let down by the border's depth (the border
+  // fills the rest; 2026-10-11 — clipped to the outline itself, a cut row ran on under the border's boards).
+  const fieldOutline = borderIn > 0 ? outline.map((p) => (p.y < 0.5 ? p : { x: p.x, y: p.y - borderIn })) : outline;
 
   /** Where the field's row at depth y0 (its near edge) runs, on a shaped front: the x range where the front is still past it. */
   const rowRange = (y0: number): [number, number] | null => {
@@ -262,7 +267,7 @@ export function deckSurface(frame: DeckFrame): DeckSurface {
         let at = g.x0;
         for (const c of cuts) {
           if (row.cut) {
-            const ring = clipToOutline(at, row.y - row.w / 2, at + c, row.y + row.w / 2, outline);
+            const ring = clipToOutline(at, row.y - row.w / 2, at + c, row.y + row.w / 2, fieldOutline);
             if (ring.length >= 3 && ringArea(ring) > 4) shapedPieces.push(ring.flatMap((p) => [p[0], p[1]]));
           } else pieces.push({ cx: at + c / 2, cy: row.y, sx: c, sy: row.w });
           at += c;
@@ -278,24 +283,71 @@ export function deckSurface(frame: DeckFrame): DeckSurface {
     buy.set(longest, Math.ceil(netIn / (longest * 12) - 1e-9));
   }
 
-  // The border: boards along every open edge, each piece the edge's length, one or two deep.
+  // The border: boards along every open edge, one or two deep, INSIDE the outline (2026-10-11). They were laid on the
+  // yard's side of each edge — outside the deck — and the pieces along the sides lay across the field instead of along
+  // their edge, crossing the field's boards in one plane (the 3D flickered). Square edges get boards butted at a square
+  // corner: the longer edge's run through and the shorter one's stop against them. A clipped or bowed front's pieces
+  // are cut to fit, as flat rings that follow the front straight down by the border's depth (as the field's cut does)
+  // and start above a side's boards where those run up to the corner.
   if (borderBoards > 0) {
-    for (let i = 0; i < outline.length; i++) {
-      const A = outline[i];
-      const B = outline[(i + 1) % outline.length];
-      const house = (A.y < 0.5 && B.y < 0.5 && againstHouse) || frame.edges.some((e) => e.house && Math.abs((A.x + B.x) / 2 - (e.x0 + e.x1) / 2) < 0.6 && Math.abs((A.y + B.y) / 2 - (e.y0 + e.y1) / 2) < 0.6);
-      if (house) continue;
-      const L = Math.hypot(B.x - A.x, B.y - A.y);
-      if (L < 2) continue;
-      const yaw = Math.atan2(B.y - A.y, B.x - A.x);
-      const nx = Math.sin(yaw);
-      const ny = -Math.cos(yaw);
+    const edges = ringEdges(outline);
+    const n = edges.length;
+    const isHouse = (e: RingEdge) => (e.A.y < 0.5 && e.B.y < 0.5 && againstHouse) || frame.edges.some((fe) => fe.house && Math.abs((e.A.x + e.B.x) / 2 - (fe.x0 + fe.x1) / 2) < 0.6 && Math.abs((e.A.y + e.B.y) / 2 - (fe.y0 + fe.y1) / 2) < 0.6);
+    const on = edges.map((e) => e.length >= 2 && !isHouse(e));
+    const square = edges.map((e) => Math.abs(e.ux) < 1e-6 || Math.abs(e.uy) < 1e-6);
+    const trimA = edges.map(() => 0);
+    const trimB = edges.map(() => 0);
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      if (!on[i] || !on[j] || !square[i] || !square[j] || edges[i].turnAtB <= 0) continue;
+      if (edges[i].length >= edges[j].length) trimA[j] = borderIn;
+      else trimB[i] = borderIn;
+    }
+    // The sides' boards, as rectangles, for the front's pieces to start above.
+    const sideRects: Array<{ x0: number; x1: number; y0: number; y1: number }> = [];
+    for (let i = 0; i < n; i++) {
+      if (!on[i]) continue;
+      const e = edges[i];
+      borderLf += (borderBoards * e.length) / 12;
+      crossings += borderBoards * Math.round(e.length / frame.spacingIn);
+      if (!square[i]) continue;
+      const len = e.length - trimA[i] - trimB[i];
+      if (!(len > 1)) continue;
+      const mid = trimA[i] + len / 2;
+      const alongX = Math.abs(e.uy) < 1e-6;
       for (let k = 0; k < borderBoards; k++) {
         const off = (k + 0.5) * pitch;
-        const square = Math.abs(Math.sin(yaw)) < 1e-6 || Math.abs(Math.cos(yaw)) < 1e-6;
-        pieces.push({ cx: (A.x + B.x) / 2 + nx * off, cy: (A.y + B.y) / 2 + ny * off, sx: L, sy: product.widthIn, yaw: square ? undefined : yaw, border: true });
-        borderLf += L / 12;
-        crossings += Math.round(L / frame.spacingIn);
+        pieces.push({ cx: e.A.x + e.ux * mid - e.outX * off, cy: e.A.y + e.uy * mid - e.outY * off, sx: alongX ? len : product.widthIn, sy: alongX ? product.widthIn : len, border: true });
+      }
+      if (!alongX) {
+        const ya = e.A.y + e.uy * trimA[i];
+        const yb = e.A.y + e.uy * (e.length - trimB[i]);
+        sideRects.push({ x0: Math.min(e.A.x, e.A.x - e.outX * borderIn), x1: Math.max(e.A.x, e.A.x - e.outX * borderIn), y0: Math.min(ya, yb), y1: Math.max(ya, yb) });
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      if (!on[i] || square[i]) continue;
+      const e = edges[i];
+      const xa = Math.min(e.A.x, e.B.x);
+      const xb = Math.max(e.A.x, e.B.x);
+      if (!(xb - xa > 0.5)) continue;
+      const g = (x: number) => e.A.y + ((x - e.A.x) * (e.B.y - e.A.y)) / (e.B.x - e.A.x);
+      for (let k = 0; k < borderBoards; k++) {
+        const top = k * pitch + product.gapIn / 2;
+        const bot = (k + 1) * pitch - product.gapIn / 2;
+        let parts: Array<Array<[number, number]>> = [[[xa, g(xa) - bot], [xb, g(xb) - bot], [xb, g(xb) - top], [xa, g(xa) - top]]];
+        for (const r of sideRects) {
+          const next: Array<Array<[number, number]>> = [];
+          for (const ring of parts) {
+            const right = r.x1 >= W - 0.5;
+            // Clear of the side's boards: across them (x past their inner edge), or above their last board.
+            const across = right ? clipHalf(ring, 1, 0, r.x0) : clipHalf(ring, -1, 0, -r.x1);
+            const above = clipHalf(right ? clipHalf(ring, -1, 0, -r.x0) : clipHalf(ring, 1, 0, r.x1), 0, -1, -r.y1);
+            for (const q of [across, above]) if (q.length >= 3 && ringArea(q) > 0.5) next.push(q);
+          }
+          parts = next;
+        }
+        for (const q of parts) shapedPieces.push(q.flatMap((pt) => [pt[0], pt[1]]));
       }
     }
     const longest = Math.max(...product.lengthsFt);

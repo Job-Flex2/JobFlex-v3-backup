@@ -137,7 +137,7 @@ const STAIR = layerIndex("stair");
  *  show (owner, 2026-10-11: "the X-ray doesn't x-ray the steps"). Legend roles, dashes as spaces. */
 const STAIR_SKIN = /^(tread|riser|landing tread|box tread)$/;
 /** Legend roles whose ends are plumb cuts (sheared boxes). */
-const PLUMB_CUT = /^(rafter|jack|fly|hip|fascia rake|stringer|stair rail|roof brace|brace)$/;
+const PLUMB_CUT = /^(rafter|jack|fly|hip|fascia rake|stringer|stair rail|roof brace|brace|truss top chord)$/;
 const MOUNT_OF: Partial<Record<SceneLayer, DeckPick["mount"]>> = { post: "post", "roof-post": "post", header: "header", beam: "header", rail: "rail", glass: "rail", decking: "deck", fascia: "deck", rim: "deck", joist: "deck", ceiling: "ceiling", rafter: "ceiling", sheathing: "ceiling", roofing: "ceiling", ridge: "peak", stair: "stair", wall: "wall", screen: "wall", ledger: "wall", light: "deck", wire: "deck" };
 
 const CONCRETE = 0xb9b6ad;
@@ -834,7 +834,10 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
             if (plumb) shear.elements[4] = Math.tan(tilt) * (b[6] / b[4]);
             scale.makeScale(b[4], b[6], b[5]);
             trans.makeTranslation(b[1] - ox, b[3], b[2] - oz);
-            m4.copy(trans).multiply(basis).multiply(shear).multiply(scale);
+            // The shear is written for the unit box (tan × depth ÷ length), so it goes on before the scale: applied after
+            // it (as it was), a cut slid by depth²÷length — a few hundredths of an inch — and the ends stood square, so two
+            // rafters or top chords meeting at the ridge overlapped and flickered (2026-10-11).
+            m4.copy(trans).multiply(basis).multiply(scale).multiply(shear);
             mesh.setMatrixAt(k, m4);
             mesh.setColorAt(k, L === LIGHT && s.glows.some((g) => Math.abs(g[0] - b[1]) < 0.05 && Math.abs(g[1] - b[2]) < 0.05 && Math.abs(g[2] - b[3]) < 0.05) ? new THREE.Color(s.glows.find((g) => Math.abs(g[0] - b[1]) < 0.05 && Math.abs(g[1] - b[2]) < 0.05 && Math.abs(g[2] - b[3]) < 0.05)![3]).lerp(new THREE.Color(0xffffff), 0.45) : jitter(base, bi + L * 97, L === DECKING ? 0.045 : L === TRIM || L === GUTTER || L === HARDWARE ? 0.01 : 0.03));
             centres[bi] = [new THREE.Vector3(b[1] - ox, b[3], b[2] - oz), Math.max(b[4], b[5], b[6])];

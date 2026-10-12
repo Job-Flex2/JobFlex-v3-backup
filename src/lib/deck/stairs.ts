@@ -42,6 +42,14 @@ export const TREAD_RUN_IN = 10.5;
 export const TREAD_NOSING_IN = 1;
 export const STRINGER_NOMINAL = "2x12";
 export const STRINGER_DEPTH_IN = 11.25;
+/** How far the treads and risers run past the outer stringers, in. (drawn; a face of each never shares a plane). */
+const TREAD_PAST_STRINGER_IN = 1;
+/** Risers are drawn this much shorter than the treads (an eighth at each end), in., so their ends are not in the treads' or the kicker's. */
+const RISER_SHORT_IN = 0.25;
+/** The kicker is set this far back from the bottom riser's face, in. (flush, the two faces flickered). */
+const KICKER_BACK_IN = 0.25;
+/** The stair's balusters sit this far in from the middle of the rails, in.: against the rails' inner face, not in their plane. */
+const STAIR_BALUSTER_IN_IN = 0.25;
 /** AWC DCA 6: a cut 2x12 stringer spans 6 ft at most before it needs a support. */
 export const STRINGER_MAX_SPAN_IN = 72;
 /** IRC R311.7.3: a flight climbs no more than 12 ft 3 in. (the 2015 figure; later editions print 12-7 — the stricter kept) before a landing. */
@@ -287,7 +295,9 @@ export function buildStair(input: StairInput): StairBuild {
     const count = Math.max(narrow ? 2 : 3, Math.floor((w - THICK_2X_IN) / stringerSpacing) + 1);
     stringers.count = count * flights;
     const stringerAt: number[] = [];
-    for (let i = 0; i < count; i++) stringerAt.push(THICK_2X_IN / 2 + ((w - THICK_2X_IN) * i) / (count - 1));
+    // The outer stringers an inch in from the treads' ends, the treads and risers running past them (2026-10-11: flush,
+    // a tread's end lay in the stringer's face and the 3D flickered between them).
+    for (let i = 0; i < count; i++) stringerAt.push(TREAD_PAST_STRINGER_IN + THICK_2X_IN / 2 + ((w - THICK_2X_IN - 2 * TREAD_PAST_STRINGER_IN) * i) / (count - 1));
 
     /** One flight: `r` risers, its top riser face at (b0, zTop), landing on something at zTop − r·riser. */
     const flight = (tag: string, r: number, b0: number, zTop: number, lastTreadIsLanding: boolean) => {
@@ -317,13 +327,13 @@ export function buildStair(input: StairInput): StairBuild {
         treadBoardLf += (boardsPerTread * w) / 12;
         // The riser board under this tread's nosing, closing the step below.
         const zr0 = zk - riserIn;
-        member("riser", "1x8", w, P(w / 2, bk + runIn - 0.375), (zk - treadThick + zr0) / 2, w, 0.75, zk - treadThick - zr0, yawU);
+        member("riser", "1x8", w, P(w / 2, bk + runIn - 0.375), (zk - treadThick + zr0) / 2, w - RISER_SHORT_IN, 0.75, zk - treadThick - zr0, yawU);
         riserBoardLf += w / 12;
         if (rail.lighting === "post-caps-risers") hardware.riserLights += 1;
       }
       // The top riser board hangs off the deck's rim; the bottom one meets the pad.
       riserBoardLf += w / 12;
-      member("riser", "1x8", w, P(w / 2, b0 + 0.375), zTop - treadThick - riserIn / 2, w, 0.75, riserIn - treadThick, yawU);
+      member("riser", "1x8", w, P(w / 2, b0 + 0.375), zTop - treadThick - riserIn / 2, w - RISER_SHORT_IN, 0.75, riserIn - treadThick, yawU);
       hardware.treadScrewsSqFt += Math.round(((t + 1) * w * (runIn + TREAD_NOSING_IN)) / 144);
       // A mid-flight support when the cut stringers would span past 6 ft.
       if (runF > STRINGER_MAX_SPAN_IN) {
@@ -390,7 +400,7 @@ export function buildStair(input: StairInput): StairBuild {
         member("pad", "pavers", padLengthIn, P(w / 2, bFoot - PAD_APRON_IN + padLengthIn / 2), groundIn + PAVER_TOP_IN - 1.2, padWidthIn, padLengthIn, 2.4, yawU);
       }
     }
-    member("kicker", "2x4", w, P(w / 2, bFoot - 1.75), landingTopIn + 0.75, w, 3.5, 1.5, yawU);
+    member("kicker", "2x4", w, P(w / 2, bFoot - 1.75 - KICKER_BACK_IN), landingTopIn + 0.75, w, 3.5, 1.5, yawU);
 
     // Rails: a handrail from four risers; guards on both open sides where the deck is more than 30 in. up.
     const want = stair.handrail === "auto" ? (risers >= HANDRAIL_FROM_RISERS ? (guard ? 2 : 1) : 0) : stair.handrail === "both" ? 2 : stair.handrail === "one" ? 1 : 0;
@@ -413,12 +423,15 @@ export function buildStair(input: StairInput): StairBuild {
           member("stair-rail-post", input.postSize === "8x8" ? "6x6" : "4x4", h, P(a, b), zn - STRINGER_DEPTH_IN + h / 2, 3.5, 3.5, h, 0);
           hardware.railPostTies += 1;
         }
-        member("stair-rail", "2x4", sloped, P(a, totalRunIn / 2), level.surfaceIn - riseIn / 2 + HANDRAIL_HEIGHT_IN, sloped, 1.5, 3.5, yawN, -slopeT);
-        member("stair-rail", "2x4", sloped, P(a, totalRunIn / 2), level.surfaceIn - riseIn / 2 + 4, sloped, 1.5, 3.5, yawN, -slopeT);
+        // The rails drawn an inch past each end (their ends clear the top and bottom risers' faces); the balusters a
+        // quarter inch toward the stair's middle, so no face of theirs lies in a rail's (both flickered, 2026-10-11).
+        member("stair-rail", "2x4", sloped, P(a, totalRunIn / 2), level.surfaceIn - riseIn / 2 + HANDRAIL_HEIGHT_IN, sloped + 2, 1.5, 3.5, yawN, -slopeT);
+        member("stair-rail", "2x4", sloped, P(a, totalRunIn / 2), level.surfaceIn - riseIn / 2 + 4, sloped + 2, 1.5, 3.5, yawN, -slopeT);
+        const inward = a < w / 2 ? STAIR_BALUSTER_IN_IN : -STAIR_BALUSTER_IN_IN;
         for (let k = 1; k < perSide; k++) {
           const b = (sloped * k) / perSide * Math.cos(slopeT);
           const zn = level.surfaceIn - (riseIn * b) / Math.max(1, totalRunIn);
-          member("stair-baluster", "2x2", HANDRAIL_HEIGHT_IN - 4, P(a, b), zn + 4 + (HANDRAIL_HEIGHT_IN - 4) / 2, 1.5, 1.5, HANDRAIL_HEIGHT_IN - 4, 0);
+          member("stair-baluster", "2x2", HANDRAIL_HEIGHT_IN - 4, P(a + inward, b), zn + 4 + (HANDRAIL_HEIGHT_IN - 4) / 2, 1.5, 1.5, HANDRAIL_HEIGHT_IN - 4, 0);
         }
       }
     }

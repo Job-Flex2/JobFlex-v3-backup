@@ -39,12 +39,12 @@ import {
 } from "./codeTables";
 import { GROUND_CONTACT_WITHIN_IN, MIN_FRAME_CLEAR_IN, PIER_BLOCK, footingDepthIn, type DeckFrame } from "./frame";
 import { FIXTURE_LABEL, GUTTER_LABEL, ROOFING_LABEL, WALL_FILL_LABEL, defaultStair, frontRadiusFt, normalizeDeckDesign, type DeckDesign } from "./design";
-import type { RoofFrame } from "./roof";
+import { STAIR_POST_CLEAR_IN, type RoofFrame } from "./roof";
 import { RULE_HIP, RULE_RAFTER, RULE_RIDGE, RULE_ROOF_LOAD, RULE_TIES } from "./roofTables";
 import { BETWEEN_LEVELS_STAIR_ID, betweenLevelsStair, type DeckStructure } from "./structure";
 import { stairRules } from "./stairs";
 import { SNOW_TABLE_MAX_PSF, TERMITE_LABEL, deckLoadForSnow, roofLoadForSnow } from "./site";
-import { STAIR_MIN_WIDTH_IN } from "./codeTables";
+import { POST_ACTUAL_IN, STAIR_MIN_WIDTH_IN } from "./codeTables";
 import { FRAMING_SPECIES, defaultFramingSpecies } from "./catalog";
 import { cite, codeWords, inFrac, stateName } from "./stateCodes";
 
@@ -439,6 +439,28 @@ function roofChecks(roof: RoofFrame, design: DeckDesign, frame: DeckFrame | null
     if (roof.flags.postBeyondTable) add({ id: "roof-post-height", level: "fail", part: "Roof posts", text: `A ${r.post} post ${ftIn(r.eaveHeightIn)} tall under ${heaviest.loadLb.toLocaleString("en-US")} lb of roof: the post table allows ${ftIn(heaviest.maxHeightIn)} for that weight.`, rule: RULE.post, fix: r.post === "4x4" ? { label: "Use 6x6 posts", patch: { roof: { ...r, post: "6x6" } } } : r.post === "6x6" ? { label: "Use 8x8 posts", patch: { roof: { ...r, post: "8x8" } } } : undefined });
     else add({ id: "roof-post-height", level: "pass", part: "Roof posts", text: `${plural(n, `${r.post} post`)}, ${ftIn(r.eaveHeightIn)} from the ${roof.floor === "deck" ? "deck" : roof.floor === "slab" ? "slab" : "footings"} to the headers; the busiest carries about ${heaviest.loadLb.toLocaleString("en-US")} lb of roof, read on the post table as ${heaviest.tributarySqFt} sq ft of deck — it allows ${ftIn(heaviest.maxHeightIn)}.`, rule: RULE.post });
     if (roof.flags.postSpliced) add({ id: "roof-post-splice", level: "info", part: "Roof posts", text: "Footing to header is longer than a 20-ft post: the roof posts are spliced at the deck, bolted through the rim and the beam." });
+    // A roof post in a stair's opening (2026-10-12). The posts a header's spans set stand beside the stairs on their own
+    // (lib/deck/roof, CLEAR OF THE STAIRS); a ring corner carries the roof's corner and cannot move, so the stair slides.
+    roof.postsInStair.forEach((p, i) => {
+      const along = p.side === "front" ? p.x : p.y;
+      const sideLen = p.side === "front" ? (frame ? Math.max(...frame.zones.map((z) => z.zone.x1)) : 0) : frame ? Math.max(...frame.zones.map((z) => z.zone.y1)) : 0;
+      const pw = POST_ACTUAL_IN[r.post][0];
+      const st = design.stairs.find((sd) => sd.level === "upper" && !sd.wrap && sd.side === p.side && along > sd.atFt * 12 - (sd.widthFt * 12) / 2 - pw / 2 && along < sd.atFt * 12 + (sd.widthFt * 12) / 2 + pw / 2);
+      if (!st) return;
+      const half = (st.widthFt * 12) / 2;
+      const clear = pw / 2 + STAIR_POST_CLEAR_IN;
+      // Away from the post: past it toward the side's middle.
+      const atIn = along < sideLen / 2 ? Math.ceil(along + clear + half) : Math.floor(along - clear - half);
+      const fits = sideLen > 0 && atIn - half >= 0 && atIn + half <= sideLen;
+      const where = p.side === "front" ? "front" : `${p.side} side`;
+      add({
+        id: `roof-post-stair-${i + 1}`,
+        level: "fail",
+        part: "Roof posts",
+        text: `A roof post stands in the stair's opening on the ${where}${p.corner ? ": the corner post carries the roof's corner and cannot move" : ""}. ${fits ? `Slide the stair ${Math.abs(Math.round(atIn - st.atFt * 12))} in. along the ${where} to clear it.` : "Move the stair along the side, or make it narrower, to clear it."}`,
+        ...(fits ? { fix: { label: "Slide the stair clear of the post", patch: { stairs: design.stairs.map((sd) => (sd.id === st.id ? { ...sd, atFt: atIn / 12 } : sd)) } } } : {}),
+      });
+    });
     if (roof.floor === "slab") add({ id: "roof-post-slab", level: "info", part: "Roof posts", text: `Posts on stand-off bases, two wedge anchors each, into a 4-in. slab; the slab is a foot wider than the posts all round. Where the frost line is deep, the building office may want footings under the slab's corners.`, rule: RULE.footingDepth });
     if (roof.floor === "ground") {
       const fts = roof.posts.map((p) => p.footing).filter((f): f is NonNullable<typeof f> => !!f);

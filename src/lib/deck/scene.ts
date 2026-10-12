@@ -26,6 +26,7 @@ import type { DeckFrame } from "./frame";
 import type { DeckSurface } from "./surface";
 import type { RoofMember, RoofPlane } from "./roof";
 import { ROOFING_LABEL, hasDeck, shapeOutline, sizeWords, structureWords, type DeckDesign } from "./design";
+import { outsideRunOn, ringEdges } from "./ringEdges";
 import type { DeckStructure } from "./structure";
 import { BETWEEN_LEVELS_STAIR_ID, structureLevels } from "./structure";
 import type { StairMember } from "./stairs";
@@ -438,8 +439,9 @@ export function deckScene(s: DeckStructure): DeckScene {
         box("hardware", x + ox, l.y + oy + 1.9, k % 2 === 0 ? zTop : zBot, 1.2, 0.8, 1.2, lagTag);
         box("hardware", x + ox + 0.5 * l.spacingIn * 0.5, l.y + oy + 1.9, k % 2 === 0 ? zBot : zTop, 1.2, 0.8, 1.2, lagTag);
       }
-      // Flashing over the ledger's top, up behind the siding.
-      box("hardware", (l.x0 + l.x1) / 2 + ox, l.y + oy + 0.75, f.joistTopIn + 0.15, l.lengthIn + 8, 2.2, 0.3, hwTag("ledger flashing", "metal cap flashing", "Cap flashing over the ledger, 4 in. past each end, tucked behind the siding; self-adhered membrane behind the ledger and over its top. No aluminum against copper-treated lumber."));
+      // Flashing over the ledger's top, up behind the siding — set 0.1 in. into the ledger so its underside is not in the
+      // plane of the boards' undersides beside it (the two flickered from below, 2026-10-11).
+      box("hardware", (l.x0 + l.x1) / 2 + ox, l.y + oy + 0.75, f.joistTopIn + 0.05, l.lengthIn + 8, 2.2, 0.3, hwTag("ledger flashing", "metal cap flashing", "Cap flashing over the ledger, 4 in. past each end, tucked behind the siding; self-adhered membrane behind the ledger and over its top. No aluminum against copper-treated lumber."));
       // Hold-downs at each end.
       const hdTag = hwTag("hold-down", f.hardware.lateralTies === 4 ? "750-lb tension tie" : "1,500-lb hold-down with ½-in. rod", f.hardware.lateralTies === 4 ? "Four 750-lb tension ties, screwed to the joists and the house framing (IRC R507.9.2)." : "Two 1,500-lb hold-downs within 2 ft of each end of the ledger, a ½-in. rod through to the house's floor joists (IRC R507.9.2).");
       for (const x of [l.x0 + 18, l.x1 - 18]) box("hardware", x + ox, l.y + oy + 6, f.joistBottomIn + f.joistTopIn > 0 ? (f.joistBottomIn + f.joistTopIn) / 2 : 0, 2.5, 9, 3, hdTag);
@@ -506,19 +508,22 @@ export function deckScene(s: DeckStructure): DeckScene {
       const h = surface.fascia.heightIn;
       const z = f.joistBottomIn + h / 2;
       const fasciaTag = tagFor(`${lvl}fascia`, surface.fascia.kind === "composite" ? "composite 1x" : "wood 1x", 0, "Fascia over the rim, mitred at the corners, screwed every 16 in.");
-      const ring = shapeOutline(f.design.shape);
-      for (let i = 0; i < ring.length; i++) {
-        const A = ring[i];
-        const B = ring[(i + 1) % ring.length];
-        const house = f.edges.some((e) => e.house && Math.abs((A.x + B.x) / 2 - (e.x0 + e.x1) / 2) < 0.6 && Math.abs((A.y + B.y) / 2 - (e.y0 + e.y1) / 2) < 0.6) || (A.y < 0.5 && B.y < 0.5 && f.design.placement !== "detached") || (level.id === "lower" && A.y < 0.5 && B.y < 0.5);
-        if (house) continue;
-        const L = Math.hypot(B.x - A.x, B.y - A.y);
-        if (L < 1) continue;
-        const yaw = Math.atan2(B.y - A.y, B.x - A.x);
-        const nx = -Math.sin(yaw);
-        const ny = Math.cos(yaw);
-        box("fascia", (A.x + B.x) / 2 + ox + nx * (t / 2), (A.y + B.y) / 2 + oy + ny * (t / 2), z, L, t, h, fasciaTag, 0, yaw, 0);
-      }
+      // OUTSIDE the rim (owner, 2026-10-11: "fix flickering on the 3D around the rim joist fascia"). It was laid on the
+      // deck's side of each edge — inside the rim, its face in the rim's own plane, and the 3D flickered between the
+      // two. Now on the yard's side (lib/deck/ringEdges), 1/32 in. clear of the rim so no face shares a plane with it.
+      // At a corner the board coming in runs on to close the corner (or stops short of an inside one); the next
+      // board starts at the corner, so no two boards overlap either.
+      const clear = 1 / 32;
+      const edges = ringEdges(shapeOutline(f.design.shape));
+      const isHouse = (A: { x: number; y: number }, B: { x: number; y: number }) => f.edges.some((e) => e.house && Math.abs((A.x + B.x) / 2 - (e.x0 + e.x1) / 2) < 0.6 && Math.abs((A.y + B.y) / 2 - (e.y0 + e.y1) / 2) < 0.6) || (A.y < 0.5 && B.y < 0.5 && f.design.placement !== "detached") || (level.id === "lower" && A.y < 0.5 && B.y < 0.5);
+      const on = edges.map((e) => e.length >= 1 && !isHouse(e.A, e.B));
+      edges.forEach((e, i) => {
+        if (!on[i]) return;
+        const runOn = on[(i + 1) % edges.length] ? outsideRunOn(e.turnAtB, t + clear) : 0;
+        const len = e.length + runOn;
+        const off = clear + t / 2;
+        box("fascia", e.A.x + e.ux * (len / 2) + e.outX * off + ox, e.A.y + e.uy * (len / 2) + e.outY * off + oy, z, len, t, h, fasciaTag, 0, e.yaw, 0);
+      });
     }
     for (const p of f.posts) footings.push([r3(p.x + ox), r3(p.y + oy), r3(p.footing.padIn), r3(p.footing.padThickIn), r3(p.footing.pierIn), r3(p.footing.depthIn - p.footing.groundIn), r3(p.footing.topIn + p.footing.groundIn)]);
   }
@@ -667,7 +672,47 @@ export function deckScene(s: DeckStructure): DeckScene {
           return m.role;
       }
     };
-    for (const m of roof.members) box(ROOF_MEMBER_LAYER[m.role], m.cx, m.cy, m.cz, m.sx, m.sy, m.sz, tagFor(m.role.replace(/-/g, " "), m.nominal, m.lengthIn, noteFor(m)), 0, m.yaw, m.tilt);
+    // A truss's parts all lie in one plane, lapping at the plates: the bottom chord is drawn a little thinner than the
+    // top chords and the webs thinner still, so no two of their faces share a plane where they lap (they flickered,
+    // 2026-10-11). Named by part, so the 3D cuts the top chords plumb at the peak as it does rafters.
+    const TRUSS_PART: Record<string, { role: string; lessIn: number }> = { "truss-tc": { role: "truss top chord", lessIn: 0 }, "truss-bc": { role: "truss bottom chord", lessIn: 0.2 }, "truss-web": { role: "truss web", lessIn: 0.4 } };
+    // Two webs meeting at a panel point lap there too: every second web is drawn a tenth thinner again.
+    let webs = 0;
+    // A roof post standing through a deck is drawn in two, under the boards and above them: through them, its sides
+    // and the boards' edges could lie in one plane (a 6x6 is a deck board wide) and flicker (2026-10-11).
+    const deckAt = (x: number, y: number, z0: number, z1: number): { under: number; over: number } | null => {
+      for (const lv of levels) {
+        if (!lv.surface) continue;
+        const top = lv.frame.surfaceIn;
+        if (!(top > z0 + 1 && top < z1 - 1)) continue;
+        const ring = shapeOutline(lv.frame.design.shape).map((q) => ({ x: q.x + lv.offsetXIn, y: q.y + lv.offsetYIn }));
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const a = ring[i];
+          const b = ring[j];
+          if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+        }
+        if (inside) return { under: top - lv.surface.product.thickIn, over: top };
+      }
+      return null;
+    };
+    for (const m of roof.members) {
+      const part = m.role === "truss" ? TRUSS_PART[m.of ?? ""] : undefined;
+      const less = (part?.lessIn ?? 0) + (m.of === "truss-web" && webs++ % 2 === 1 ? 0.2 : 0);
+      // A roof post is drawn a quarter inch slimmer than the lumber: a 6x6 is as wide as a deck board, and where one
+      // stands through the boards their sides lay in one plane (2026-10-11).
+      const slim = m.role === "roof-post" ? 0.25 : 0;
+      const tag = tagFor(part?.role ?? m.role.replace(/-/g, " "), m.nominal, m.lengthIn, noteFor(m));
+      const cut = m.role === "roof-post" ? deckAt(m.cx, m.cy, m.cz - m.sz / 2, m.cz + m.sz / 2) : null;
+      if (cut) {
+        const bottom = m.cz - m.sz / 2;
+        const top = m.cz + m.sz / 2;
+        box(ROOF_MEMBER_LAYER[m.role], m.cx, m.cy, (bottom + cut.under) / 2, m.sx - slim, m.sy - slim, cut.under - bottom, tag, 0, m.yaw, m.tilt);
+        box(ROOF_MEMBER_LAYER[m.role], m.cx, m.cy, (cut.over + top) / 2, m.sx - slim, m.sy - slim, top - cut.over, tag, 0, m.yaw, m.tilt);
+        continue;
+      }
+      box(ROOF_MEMBER_LAYER[m.role], m.cx, m.cy, m.cz, m.sx - slim, m.sy - less - slim, m.sz, tag, 0, m.yaw, m.tilt);
+    }
     for (const p of roof.planes) poly(ROOF_PLANE_LAYER[p.kind], p.ring, tagFor(p.kind, p.kind === "roofing" ? ROOFING_LABEL[r.roofing] : p.kind === "sheathing" ? "½-in. sheathing" : p.kind === "ceiling" ? "ceiling boards" : p.kind === "soffit" ? "vented soffit" : p.kind === "slab" ? "4-in. concrete" : p.kind === "screen" ? "screen" : p.kind === "louver" ? "louver blade" : "wall panel", 0, p.kind === "roofing" ? `${ROOFING_LABEL[r.roofing]} over synthetic underlayment, drip edge at the eaves and rakes.` : p.kind === "sheathing" ? "½-in. sheathing, H-clips between the rafters, 8d nails at 6 in. edges / 12 in. field." : p.kind === "ceiling" ? "Ceiling boards nailed to the undersides of the rafters." : p.kind === "soffit" ? "Vented soffit panels in J-channel under the eaves." : p.kind === "slab" ? "4-in. slab on a gravel base with wire mesh." : p.kind === "screen" ? "Fiberglass screen in a spline-framed panel." : p.kind === "louver" ? "Aluminum louver blade on a pivot bar; the set turns together." : p.kind === "wall" ? "Framed panel between the posts." : p.kind));
     // Hardware: hurricane ties at every rafter over the header, caps on the posts, hangers at the ridge beam, step flashing on the house.
     const hTie = tagFor("hurricane tie", "H2.5A", 0, "Galvanized tie, rafter to header, five 8d nails each leg — against wind uplift (IRC R802.11).");
@@ -676,7 +721,11 @@ export function deckScene(s: DeckStructure): DeckScene {
       const t = Math.min(0.9, (r.overhangIn + 2) / Math.max(1, m.sx * Math.cos(m.tilt)));
       const x = m.x0 + (m.x1 - m.x0) * t;
       const y = m.y0 + (m.y1 - m.y0) * t;
-      box("hardware", x, y, roof.headerTopIn + 1.5, 1.5, 2.5, 3, hTie);
+      // On the rafter's side, as an H2.5A is nailed: centred in the rafter it was as wide as the rafter, both its sides
+      // in the rafter's own faces, and flickered (2026-10-11).
+      const across = { x: -Math.sin(m.yaw), y: Math.cos(m.yaw) };
+      const sheet = 0.12;
+      box("hardware", x + across.x * (m.sy / 2 + sheet / 2), y + across.y * (m.sy / 2 + sheet / 2), roof.headerTopIn + 1.5, 2.5, sheet, 3, hTie, 0, m.yaw, 0);
     }
     const rcap = tagFor("post cap", `${r.post} cap`, 0, "Galvanized post cap, header to post, nailed both ways.");
     for (const p of roof.posts) box("hardware", p.x, p.y, p.topIn - 0.6, 6, 6, 2, rcap);

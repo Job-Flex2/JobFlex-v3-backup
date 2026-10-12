@@ -68,6 +68,7 @@ import {
 } from "./codeTables";
 import { deckingProduct, framingSpecies, wallType, type DeckingProduct, type FramingSpecies, type WallType } from "./catalog";
 import { BUILT_UP_CHOICES, frontEdgeAt, isSolidBeam, normalizeDeckDesign, shapeAreaSqFt, shapeEdges, shapeOutline, shapeZones, type BeamKind, type BeamSize, type BeamStyle, type DeckDesign, type DeckEdge, type Zone } from "./design";
+import { ringEdges } from "./ringEdges";
 import { deckRate, lumberKey, type DeckRateBook } from "./rates";
 import type { MarketSnapshot } from "../fence/market";
 
@@ -983,23 +984,20 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
           hardware.rimScrews += 3 * mine.length;
         };
         if (shaped) {
-          // The front rim follows the outline: short straight pieces along a clip or around the bow (bent plies).
-          const ring = shapeOutline(design.shape);
+          // The front rim follows the outline: short straight pieces along a clip or around the bow (bent plies), laid
+          // INSIDE it, against the joist ends cut a rim's thickness back (2026-10-11). The ring runs counter-clockwise in
+          // plan, so the deck is on each edge's left (lib/deck/ringEdges): the plies were laid outside the outline — the
+          // fascia then sat in their plane and the 3D flickered — and the right side, whose edge joist is its rim (as on
+          // the left), took a rim of its own besides.
           const plies = rimPlies(frontExposed);
-          for (let i = 1; i + 1 < ring.length; i++) {
-            const A = ring[i];
-            const B = ring[i + 1];
-            if (A.y < 0.5 && B.y < 0.5) continue;
-            const L = Math.hypot(B.x - A.x, B.y - A.y);
-            if (L < 1) continue;
-            const yaw = Math.atan2(B.y - A.y, B.x - A.x);
-            // Inward is to the right of the ring's direction (the ring runs clockwise in plan).
-            const nx = Math.sin(yaw);
-            const ny = -Math.cos(yaw);
-            const curved = front?.kind === "curve" && !(Math.abs(A.y - z.y1) < 0.01 && Math.abs(B.y - z.y1) < 0.01 && Math.abs(Math.sin(yaw)) < 1e-6);
+          for (const e of ringEdges(shapeOutline(design.shape))) {
+            if (e.A.y < 0.5 && e.B.y < 0.5) continue;
+            if (Math.abs(e.ux) < 1e-6) continue;
+            if (e.length < 1) continue;
+            const curved = front?.kind === "curve" && !(Math.abs(e.A.y - z.y1) < 0.01 && Math.abs(e.B.y - z.y1) < 0.01 && Math.abs(e.uy) < 1e-6);
             for (let p = 0; p < plies; p++) {
               const off = (p + 0.5) * THICK_2X_IN;
-              sticks.push({ role: "rim", nominal: joistSize, lengthIn: L, cx: (A.x + B.x) / 2 + nx * off, cy: (A.y + B.y) / 2 + ny * off, cz: joistBottomIn + joistDepth / 2, sx: L, sy: THICK_2X_IN, sz: joistDepth, ground: joistGround, of: z.id, yaw, curved });
+              sticks.push({ role: "rim", nominal: joistSize, lengthIn: e.length, cx: (e.A.x + e.B.x) / 2 - e.outX * off, cy: (e.A.y + e.B.y) / 2 - e.outY * off, cz: joistBottomIn + joistDepth / 2, sx: e.length, sy: THICK_2X_IN, sz: joistDepth, ground: joistGround, of: z.id, yaw: e.yaw, curved });
             }
           }
           hardware.rimScrews += 3 * mine.length;

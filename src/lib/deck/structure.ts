@@ -14,7 +14,7 @@
 // time.
 
 import { buildDeckFrame, type BuildOptions, type DeckFrame, PIER_BLOCK } from "./frame";
-import { buildRoofFrame, roofPostsForDeck, type RoofFrame } from "./roof";
+import { buildRoofFrame, roofPostsForDeck, type RoofFrame, type StairOpening } from "./roof";
 import { deckSurface, type DeckSurface } from "./surface";
 import { buildStair, type StairBuild, type StairLevel } from "./stairs";
 import { buildRails, type RailBuild, type RailLevel } from "./rails";
@@ -98,6 +98,29 @@ function railLevelOf(id: "upper" | "lower", frame: DeckFrame, offsetX: number, o
   return { id, surfaceIn: frame.surfaceIn, joistBottomIn: frame.joistBottomIn, sides, lowestGroundIn, stepDown };
 }
 
+/**
+ * Where stairs leave the main deck, along its sides (plan in.): the roof's posts keep clear of them (2026-10-12). The
+ * contractor's flights from the main deck, and the steps the engine builds down to a lower level when none go there.
+ * Box steps run the whole side, outside the posts, and are left out.
+ */
+export function stairOpenings(design: DeckDesign, W: number, riserMaxIn: number): StairOpening[] {
+  const out: StairOpening[] = [];
+  const add = (st: StairDesign) => {
+    if (st.level !== "upper" || st.wrap) return;
+    const half = (st.widthFt * 12) / 2;
+    const at = st.atFt * 12;
+    out.push({ side: st.side, fromIn: at - half, toIn: at + half });
+  };
+  for (const st of design.stairs) add(st);
+  if (hasLowerLevel(design) && design.lower.dropIn > riserMaxIn) {
+    const lw = Math.round(design.lower.widthFt * 12);
+    const offsetXIn = design.lower.align === "left" ? 0 : design.lower.align === "right" ? W - lw : Math.round((W - lw) / 2);
+    const toLower = design.stairs.some((st) => st.level === "upper" && st.side === "front" && !st.wrap && st.atFt * 12 > offsetXIn && st.atFt * 12 < offsetXIn + lw);
+    if (!toLower) add(betweenLevelsStair(design, offsetXIn));
+  }
+  return out;
+}
+
 /** The design, built. Never throws: what cannot be done is flagged on the parts. */
 export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): DeckStructure {
   const design = normalizeDeckDesign(raw);
@@ -113,7 +136,7 @@ export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): De
   const footingTopIn = design.footing.type === "pier-block" ? PIER_BLOCK.topIn : design.footing.aboveGradeIn;
 
   const deckUnder = withDeck ? { zones, footingTopIn } : null;
-  const roof = hasRoof(design) ? buildRoofFrame(design, species, species.group, deckUnder, { ...opts, groundAt }) : null;
+  const roof = hasRoof(design) ? buildRoofFrame(design, species, species.group, deckUnder, { ...opts, groundAt, stairOpenings: withDeck ? stairOpenings(design, W, code.riserMaxIn) : [] }) : null;
   const frame = withDeck ? buildDeckFrame(design, { ...opts, groundAt, extraPosts: roof ? roofPostsForDeck(roof) : undefined }) : null;
   const surface = frame ? deckSurface(frame) : null;
 

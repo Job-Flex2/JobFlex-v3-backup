@@ -153,6 +153,8 @@ export function buildRails(input: RailInput): RailBuild {
   const empty: RailBuild = { on: false, required, type: rail.type, label: type.label, heightIn: H, infill, system, segments: [], lf: 0, stairLf: 0, totalLf: 0, posts: 0, stairPosts: 0, topRailLf: 0, bottomRailLf: 0, capLf: 0, balusters: 0, cableLf: 0, panels: 0, litCaps: 0, riserLights: 0, members: [], panelsOut: [], hardware };
   if (rail.type === "none") return empty;
 
+  /** Posts the other level set: two levels meeting at a corner would set two posts in one place (2026-10-11). */
+  const otherLevelPosts: Array<[number, number]> = [];
   for (const level of levels) {
     if (level.id === "lower" && !rail.lowerLevel && level.surfaceIn - level.lowestGroundIn <= GUARD_REQUIRED_ABOVE_IN) continue;
     const postTop = level.surfaceIn + H;
@@ -162,6 +164,7 @@ export function buildRails(input: RailInput): RailBuild {
     const wraps = stairs.filter((s) => s.level === level.id && s.kind === "box");
     /** Posts already set on this level: a corner post serves both sides that meet there. */
     const postsSet: Array<[number, number]> = [];
+    const fromOtherLevels = otherLevelPosts.slice();
     for (const side of level.sides) {
       if (side.house) continue;
       // Box steps wrap this side: no rail there (the deck is low by definition).
@@ -208,13 +211,24 @@ export function buildRails(input: RailInput): RailBuild {
         const nx = -uy;
         const ny = ux;
         for (let k = 0; k < n; k++) {
-          const t = a + inset + ((len - 2 * inset) * k) / (n - 1);
-          const cx = side.x0 + ux * t - nx * 2.25;
-          const cy = side.y0 + uy * t - ny * 2.25;
+          let t = a + inset + ((len - 2 * inset) * k) / (n - 1);
+          let cx = side.x0 + ux * t - nx * 2.25;
+          let cy = side.y0 + uy * t - ny * 2.25;
+          // The other level already set a post right here: this one stands 4 in. along its own run (drawn in one place,
+          // the two posts flickered).
+          if (fromOtherLevels.some(([px, py]) => Math.hypot(px - cx, py - cy) < 4)) {
+            t += k === n - 1 ? -4 : 4;
+            cx = side.x0 + ux * t - nx * 2.25;
+            cy = side.y0 + uy * t - ny * 2.25;
+          }
           if (postsSet.some(([px, py]) => Math.hypot(px - cx, py - cy) < 8)) continue;
           postsSet.push([cx, cy]);
+          otherLevelPosts.push([cx, cy]);
           posts += 1;
-          members.push({ role: "rail-post", nominal: system === "wood" ? RAIL_POST_NOMINAL : "post", lengthIn: postLen, cx, cy, cz: postBottom + postLen / 2, sx: 3.5, sy: 3.5, sz: postLen, yaw: 0, tilt: 0, of: `${level.id}-${side.side}` });
+          // Drawn a quarter inch proud of the top rail where no cap covers them (flush, the post's top and the rail's lay
+          // in one plane and flickered, 2026-10-11); the length bought is the post's.
+          const proud = rail.cap && system === "wood" ? 0 : 0.25;
+          members.push({ role: "rail-post", nominal: system === "wood" ? RAIL_POST_NOMINAL : "post", lengthIn: postLen, cx, cy, cz: postBottom + (postLen + proud) / 2, sx: 3.5, sy: 3.5, sz: postLen + proud, yaw: 0, tilt: 0, of: `${level.id}-${side.side}` });
           hardware.postTies += 1;
           hardware.postCaps += 1;
         }
@@ -260,6 +274,37 @@ export function buildRails(input: RailInput): RailBuild {
         }
       }
     }
+  }
+
+  // Rails and caps meeting at a corner (2026-10-11). A cap ran 1¾ in. past its run's end, so two lapped over a corner post
+  // with their tops in one plane (flickering) and left the post's outer corner bare: the cap coming in now runs on to
+  // the other's outer edge and the one going out starts against its inner edge. At an inside corner the rails' lines
+  // cross: the one coming in stops against the other. Drawn only — what is bought is the same.
+  const runners = members.filter((m) => m.role === "rail-cap" || m.role === "rail-top" || m.role === "rail-bottom");
+  const ends = runners.map((m) => {
+    const u = { x: Math.cos(m.yaw), y: Math.sin(m.yaw) };
+    const past = m.role === "rail-cap" ? 1.75 : 0;
+    const half = m.sx / 2 - past;
+    return { m, u, past, S: { x: m.cx - u.x * half, y: m.cy - u.y * half }, E: { x: m.cx + u.x * half, y: m.cy + u.y * half }, startExt: past, endExt: past };
+  });
+  for (const A of ends) {
+    for (const B of ends) {
+      if (A === B || A.m.role !== B.m.role || Math.abs(A.m.cz - B.m.cz) > 0.5) continue;
+      if (Math.hypot(A.E.x - B.S.x, A.E.y - B.S.y) > 4) continue;
+      const turn = A.u.x * B.u.y - A.u.y * B.u.x;
+      if (turn > 0.5 && A.m.role === "rail-cap") {
+        A.endExt = 2.25 + B.m.sy / 2;
+        B.startExt = 2.25 - A.m.sy / 2;
+      } else if (turn < -0.5) A.endExt = -(2.25 + B.m.sy / 2);
+    }
+  }
+  for (const c of ends) {
+    if (c.startExt === c.past && c.endExt === c.past) continue;
+    const a = { x: c.S.x - c.u.x * c.startExt, y: c.S.y - c.u.y * c.startExt };
+    const b = { x: c.E.x + c.u.x * c.endExt, y: c.E.y + c.u.y * c.endExt };
+    c.m.cx = (a.x + b.x) / 2;
+    c.m.cy = (a.y + b.y) / 2;
+    c.m.sx = Math.hypot(b.x - a.x, b.y - a.y);
   }
 
   // The stairs' rails, counted by the stairs; summed here so the price has one figure.

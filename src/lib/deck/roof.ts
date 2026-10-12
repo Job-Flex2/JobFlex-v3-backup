@@ -374,6 +374,8 @@ export interface RoofFrame {
   /** Any header or the ridge is an engineered beam. */
   engineered: boolean;
   hardware: { hurricaneTies: number; rafterHangers: number; postBases: number; postCaps: number; slabAnchors: number; braces: number; ledgerScrews: number; ringPlate: number; kingBrackets: number; wallHangers: number; gussets: number };
+  /** Posts left standing in a stair's opening — a ring corner, or one no header could be laid to clear (the checks say to move the stair). */
+  postsInStair: Array<{ x: number; y: number; side: StairOpening["side"]; corner: boolean }>;
   flags: {
     rafterBeyondTable: boolean;
     headerBeyondTable: string[];
@@ -396,7 +398,19 @@ export interface RoofBuildOptions {
   market?: MarketSnapshot;
   /** The ground under a point of the plan, inches (the site's slope). */
   groundAt?: (x: number, y: number) => number;
+  /** Where stairs leave the deck: the roof's posts keep clear of them (lib/deck/structure stairOpenings). */
+  stairOpenings?: StairOpening[];
 }
+
+/** A stair's opening on the deck's edge, plan inches along that side (x on the front, y on a side). */
+export interface StairOpening {
+  side: "front" | "left" | "right";
+  fromIn: number;
+  toIn: number;
+}
+
+/** How far a roof post's face stands clear of a stair's opening, in. */
+export const STAIR_POST_CLEAR_IN = 0.5;
 
 /** What the roof needs to know about the deck it stands on: its rectangles and where its footings top out. */
 export interface DeckUnder {
@@ -1106,9 +1120,94 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const minSegs = new Map<string, number>();
   const engineeredBeforeHeaders = engineered;
   const engineeredBeyondBeforeHeaders = engineeredBeyond;
+
+  // CLEAR OF THE STAIRS (2026-10-12): roof posts were set by the spans alone, so a covered deck's middle post — and a
+  // gable's post under its king post — stood in the middle of a stair centred on the front. A post a header's spans would
+  // set in a stair's opening now stands just beside it (STAIR_POST_CLEAR_IN past the stair's edge); the header is sized
+  // for the spans it really has — the king post's load in the span over the stair when no post can stand under it — and
+  // takes another post when a span grows past what any header reaches. A ring corner cannot move: the checks say so.
+  const openings = opts.stairOpenings ?? [];
+  const deckW = deck ? Math.max(...deck.zones.map((z) => z.x1)) : 0;
+  const deckD = deck ? Math.max(...deck.zones.map((z) => z.y1)) : 0;
+  /** The stretches along a header (in. from its start) where a post's centre may not stand. */
+  const keepOutAlong = (A: V2, B: V2, L: number): Array<[number, number]> => {
+    if (!openings.length || !deck) return [];
+    const u = unit(sub(B, A));
+    const horiz = Math.abs(A.y - B.y) < 0.5;
+    const vert = Math.abs(A.x - B.x) < 0.5;
+    const pad = pw / 2 + STAIR_POST_CLEAR_IN;
+    const out: Array<[number, number]> = [];
+    for (const o of openings) {
+      const along = o.side === "front" ? horiz && Math.abs(A.y - deckD) <= 24 : o.side === "left" ? vert && Math.abs(A.x) <= 24 : vert && Math.abs(A.x - deckW) <= 24;
+      if (!along) continue;
+      const toS = (v: number) => (o.side === "front" ? (v - A.x) * u.x : (v - A.y) * u.y);
+      const s0 = Math.min(toS(o.fromIn), toS(o.toIn));
+      const s1 = Math.max(toS(o.fromIn), toS(o.toIn));
+      if (s1 < -pad || s0 > L + pad) continue;
+      out.push([s0 - pad, s1 + pad]);
+    }
+    return out;
+  };
+  const inKeep = (keep: Array<[number, number]>, at: number) => keep.some(([k0, k1]) => at > k0 + 1e-6 && at < k1 - 1e-6);
+  /** A header's posts at `segs` equal spans, each moved out of an opening to its nearer side where a post fits there. */
+  const placeClear = (L: number, segs: number, keep: Array<[number, number]>): number[] => {
+    const room = (v: number) => v >= pw + 1 && v <= L - pw - 1;
+    const out: number[] = [];
+    for (let i = 1; i < segs; i++) {
+      let at = (L * i) / segs;
+      for (let guard = 0; guard < 4 && Number.isFinite(at); guard++) {
+        const hit = keep.find(([k0, k1]) => at > k0 + 1e-6 && at < k1 - 1e-6);
+        if (!hit) break;
+        const [lo, hi] = hit;
+        at = room(lo) && (!room(hi) || at - lo <= hi - at) ? lo : room(hi) ? hi : NaN;
+      }
+      if (!Number.isFinite(at) || inKeep(keep, at)) continue;
+      if (out.some((o) => Math.abs(o - at) < pw + 1)) continue;
+      out.push(at);
+    }
+    return out.sort((a, b) => a - b);
+  };
+  /** The lightest header that spans every one of these spans at its own load (lb/ft, and the beam table's column), or none. */
+  const headerForSpans = (spans: number[], ws: number[]): { spec: BeamSpec; maxSpanIn: number; eq: number } | null => {
+    const eqs = ws.map((w) => Math.round(((2 * w) / 50) * 10) / 10);
+    if (r.header !== "lvl") {
+      let best: { spec: BeamSpec; maxSpanIn: number; eq: number; cost: number } | null = null;
+      for (const size of headerCandidates) {
+        const spec = beamSpec(size);
+        let ok = true;
+        let govern = { margin: Infinity, max: 0, eq: eqs[0] ?? 0 };
+        spans.forEach((sp, i) => {
+          const m = headerMaxSpan(size, eqs[i]);
+          if (!(m > 0) || m < sp) ok = false;
+          else if (m - sp < govern.margin) govern = { margin: m - sp, max: m, eq: eqs[i] };
+        });
+        if (!ok) continue;
+        const cost = spec.plies * price(lumberKey(spec.stock));
+        if (!best || cost < best.cost - 0.005 || (Math.abs(cost - best.cost) <= 0.005 && spec.depthIn < best.spec.depthIn)) best = { spec, maxSpanIn: govern.max, eq: govern.eq, cost };
+      }
+      if (best) return { spec: best.spec, maxSpanIn: best.maxSpanIn, eq: best.eq };
+    }
+    let spec: BeamSpec | null = null;
+    let govern = 0;
+    for (let i = 0; i < spans.length; i++) {
+      const lv = sizeLvl(spans[i], ws[i], lvlMinPlies);
+      if (!lv) return null;
+      if (!spec || lv.depthIn > spec.depthIn || (lv.depthIn === spec.depthIn && lv.plies > spec.plies)) {
+        spec = lv;
+        govern = i;
+      }
+    }
+    if (!spec) return null;
+    engineered = true;
+    return { spec, maxSpanIn: Math.ceil(Math.max(...spans)), eq: eqs[govern] };
+  };
+  /** Posts that could not be cleared (each laying of the headers starts the list again). */
+  const stuckPosts: V2[] = [];
+
   const layHeaders = () => {
     headers.length = 0;
     extraPosts.length = 0;
+    stuckPosts.length = 0;
     pergolaMidYs.length = 0;
     headerBeyond.length = 0;
     headerLoad.clear();
@@ -1148,7 +1247,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       let pick = pickHeader(lengthIn, eq, tribFt * totalPsf, minSegs.get(`h${k + 1}`) ?? 1);
       if (king && pick.segments > 1) {
         // A king post's load does not ride mid-bay (its equivalent load was for ONE span): a post goes right under it — an
-        // even number of spans — and between the posts the header carries only the rake's own weight.
+        // even number of spans — and between the posts the header carries only the rake's own weight. Where a stair's
+        // opening is under it, the post stands beside the stair and the header carries the king post across (below).
         eqUsed = Math.round(((2 * totalPsf) / 50) * 10) / 10;
         const m0 = Math.max(2, minSegs.get(`h${k + 1}`) ?? 2);
         pick = pickHeader(lengthIn, eqUsed, totalPsf, m0 % 2 ? m0 + 1 : m0);
@@ -1157,17 +1257,42 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       const wallEnd = wall && (Math.abs(A.y - y0) < 0.01 || Math.abs(B.y - y0) < 0.01);
       const id = `h${k + 1}`;
       // What it really carries: a gable end with a king post holds the rake's own weight plus the post's point load.
-      headerLoad.set(id, { w: (king ? 1 : tribFt) * totalPsf, P: king ? kingP : 0 });
-      if (pick.maxSpanIn === 0) headerBeyond.push(id);
-      const postAt: number[] = [0, lengthIn];
-      for (let s = 1; s < pick.segments; s++) {
-        const at = (lengthIn * s) / pick.segments;
-        postAt.splice(postAt.length - 1, 0, at);
-        const u = unit(sub(B, A));
-        extraPosts.push({ x: A.x + u.x * at, y: A.y + u.y * at, edge: k });
+      const wLb = (king ? 1 : tribFt) * totalPsf;
+      headerLoad.set(id, { w: wLb, P: king ? kingP : 0 });
+      const u = unit(sub(B, A));
+      let inner = Array.from({ length: pick.segments - 1 }, (_, i) => (lengthIn * (i + 1)) / pick.segments);
+      let spec = pick.spec;
+      let maxSpanIn = pick.maxSpanIn;
+      let eqHeader = eqUsed;
+      const keep = keepOutAlong(A, B, lengthIn);
+      if (keep.length && inner.some((at) => inKeep(keep, at))) {
+        // The cheapest that works, as pickHeader weighs it — the header's lumber against another post — over a few
+        // layings; past those, the first that works at all.
+        const perFt = (sp: BeamSpec) => sp.plies * (sp.kind === "lvl" ? sp.depthIn * price("lf.lvl") : price(lumberKey(sp.stock)));
+        let cleared: { inner: number[]; spec: BeamSpec; maxSpanIn: number; eq: number; cost: number } | null = null;
+        for (let segs = pick.segments; segs <= 8 && (!cleared || segs <= pick.segments + 2); segs++) {
+          const at = placeClear(lengthIn, segs, keep);
+          const cuts = [0, ...at, lengthIn];
+          const spans = cuts.slice(1).map((v, i) => v - cuts[i]);
+          // The span over the stair holds the king post when no post stands under it: its load as an even load that bends the header as much.
+          const ws = spans.map((sp, i) => wLb + (king && lengthIn / 2 > cuts[i] + 0.5 && lengthIn / 2 < cuts[i + 1] - 0.5 ? (2 * kingP) / Math.max(1, sp / 12) : 0));
+          const sized = headerForSpans(spans, ws);
+          if (!sized) continue;
+          const cost = (lengthIn / 12) * perFt(sized.spec) + at.length * postSetCost;
+          if (!cleared || cost < cleared.cost - 0.005) cleared = { inner: at, ...sized, cost };
+        }
+        if (cleared) {
+          inner = cleared.inner;
+          spec = cleared.spec;
+          maxSpanIn = cleared.maxSpanIn;
+          eqHeader = cleared.eq;
+        } else for (const at of inner) if (inKeep(keep, at)) stuckPosts.push({ x: A.x + u.x * at, y: A.y + u.y * at });
       }
+      if (maxSpanIn === 0) headerBeyond.push(id);
+      const postAt: number[] = [0, ...inner, lengthIn];
+      for (const at of inner) extraPosts.push({ x: A.x + u.x * at, y: A.y + u.y * at, edge: k });
       const spanIn = postAt.slice(1).reduce((m, v, i) => Math.max(m, v - postAt[i]), 0);
-      headers.push({ id, x0: A.x, y0: A.y, x1: B.x, y1: B.y, lengthIn, spec: pick.spec, postAt, spanIn, eqJoistSpanFt: eqUsed, maxSpanIn: pick.maxSpanIn, kingPost: king, wallEnd });
+      headers.push({ id, x0: A.x, y0: A.y, x1: B.x, y1: B.y, lengthIn, spec, postAt, spanIn, eqJoistSpanFt: eqHeader, maxSpanIn, kingPost: king, wallEnd });
     }
     if (pergola && pergolaBays > 1) {
       for (let k = 1; k < pergolaBays; k++) {
@@ -1285,6 +1410,27 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     return Math.min(...mine.map((h) => headerTopAt(y) - h.spec.depthIn));
   };
 
+  // Posts left in a stair's opening: a ring corner the stair runs into, or one no header could be laid to clear.
+  const postsInStair: RoofFrame["postsInStair"] = [];
+  if (openings.length && deck) {
+    const inOpening = (p: V2) =>
+      openings.find((o) =>
+        o.side === "front"
+          ? Math.abs(p.y - deckD) <= 24 && p.x > o.fromIn - pw / 2 && p.x < o.toIn + pw / 2
+          : o.side === "left"
+            ? Math.abs(p.x) <= 24 && p.y > o.fromIn - pw / 2 && p.y < o.toIn + pw / 2
+            : Math.abs(p.x - deckW) <= 24 && p.y > o.fromIn - pw / 2 && p.y < o.toIn + pw / 2,
+      );
+    for (const c of cornerPosts) {
+      const o = inOpening(c);
+      if (o) postsInStair.push({ x: c.x, y: c.y, side: o.side, corner: true });
+    }
+    for (const sp of stuckPosts) {
+      const o = inOpening(sp);
+      if (o) postsInStair.push({ x: sp.x, y: sp.y, side: o.side, corner: false });
+    }
+  }
+
   // All posts: corners and the ones the headers needed.
   const allPostPts: Array<{ x: number; y: number; corner: boolean }> = [...cornerPosts.map((p) => ({ x: p.x, y: p.y, corner: true })), ...extraPosts.map((p) => ({ x: p.x, y: p.y, corner: false }))];
   const groundAt = opts.groundAt ?? (() => 0);
@@ -1310,8 +1456,18 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     members.push({ role: "roof-post", nominal: r.post, lengthIn: heightIn, cx: p.x, cy: p.y, cz: postBottomIn + heightIn / 2, sx: pw, sy: pd, sz: heightIn, yaw: 0, tilt: 0, x0: p.x, y0: p.y, x1: p.x, y1: p.y, ground: design.floor !== "deck" });
   });
 
-  // Headers as lumber: post centre to post centre, plus half a post at each free end.
-  for (const h of headers) {
+  // Headers as lumber: post centre to post centre, plus half a post at each free end. Two headers meeting on a corner
+  // post would both be drawn over it, their tops in one plane (they flickered, 2026-10-11): the one laid first runs
+  // over the post, the other is drawn stopping against its inside face (the lumber bought is the same).
+  const cornerTrim = headers.map((h, i) => {
+    const hu = unit({ x: h.x1 - h.x0, y: h.y1 - h.y0 });
+    const at = (P: V2) => {
+      const g = headers.find((gg, k) => k < i && [{ x: gg.x0, y: gg.y0 }, { x: gg.x1, y: gg.y1 }].some((Q) => Math.hypot(Q.x - P.x, Q.y - P.y) < 0.5) && Math.abs(hu.x * (gg.y1 - gg.y0) - hu.y * (gg.x1 - gg.x0)) > 0.5 * Math.hypot(gg.x1 - gg.x0, gg.y1 - gg.y0));
+      return g ? pw / 2 + g.spec.thickIn / 2 : 0;
+    };
+    return [at({ x: h.x0, y: h.y0 }), at({ x: h.x1, y: h.y1 })];
+  });
+  headers.forEach((h, hi) => {
     const u = unit({ x: h.x1 - h.x0, y: h.y1 - h.y0 });
     const yaw = Math.atan2(u.y, u.x);
     const ext0 = h.wallEnd && Math.abs(h.y0 - y0) < 0.01 ? 0 : pw / 2;
@@ -1321,20 +1477,27 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const bx = h.x1 + u.x * ext1;
     const by = h.y1 + u.y * ext1;
     const L = Math.hypot(bx - ax, by - ay);
+    // Drawn from here to there: the lumber's ends, less any corner it gives way at.
+    const [t0, t1] = ext0 > 0 || ext1 > 0 ? cornerTrim[hi] : [0, 0];
+    const dax = ax + u.x * (ext0 > 0 ? t0 : 0);
+    const day = ay + u.y * (ext0 > 0 ? t0 : 0);
+    const dbx = bx - u.x * (ext1 > 0 ? t1 : 0);
+    const dby = by - u.y * (ext1 > 0 ? t1 : 0);
+    const Ld = Math.hypot(dbx - dax, dby - day);
     const top = headerTopIn;
     // A free shed's back header rides up the slope; its side headers tilt.
-    const zA = top + (kind === "shed" && !wall ? (y1 - Math.min(Math.max(ay, y0), y1)) * slope : 0);
-    const zB = top + (kind === "shed" && !wall ? (y1 - Math.min(Math.max(by, y0), y1)) * slope : 0);
-    const tilt = Math.atan2(zB - zA, L);
+    const zA = top + (kind === "shed" && !wall ? (y1 - Math.min(Math.max(day, y0), y1)) * slope : 0);
+    const zB = top + (kind === "shed" && !wall ? (y1 - Math.min(Math.max(dby, y0), y1)) * slope : 0);
+    const tilt = Math.atan2(zB - zA, Ld);
     const ply = h.spec.kind === "solid" ? h.spec.thickIn : THICK_2X_IN;
     for (let p = 0; p < h.spec.plies; p++) {
       const off = -h.spec.thickIn / 2 + (p + 0.5) * ply;
       // Plies are side by side across the header (toward the roof's inside).
       const nx = -u.y;
       const ny = u.x;
-      members.push({ role: "header", nominal: h.spec.stock, lengthIn: L, cx: (ax + bx) / 2 + nx * off, cy: (ay + by) / 2 + ny * off, cz: (zA + zB) / 2 - h.spec.depthIn / 2, sx: L / Math.cos(tilt), sy: ply, sz: h.spec.depthIn, yaw, tilt, x0: ax, y0: ay, x1: bx, y1: by, of: h.id });
+      members.push({ role: "header", nominal: h.spec.stock, lengthIn: L, cx: (dax + dbx) / 2 + nx * off, cy: (day + dby) / 2 + ny * off, cz: (zA + zB) / 2 - h.spec.depthIn / 2, sx: Ld / Math.cos(tilt), sy: ply, sz: h.spec.depthIn, yaw, tilt, x0: ax, y0: ay, x1: bx, y1: by, of: h.id });
     }
-  }
+  });
 
   // ── Rafters on every face.
   const faces: RoofFace[] = [];
@@ -1368,9 +1531,12 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   let peakSeen = -Infinity;
 
   /** The rafters' places along a face's eave, from its start: `sp` apart, the last one at the far end. */
+  // The end rafters an eighth in from the ring's ends: flush, their faces lay in the side headers' (and a roof ledger's
+  // end) where the seat dips into the header, and the 3D flickered there (2026-10-11).
+  const END_RAFTER_IN = 0.125;
   const faceLayout = (f: FaceSpec, sp: number): number[] => {
-    const start = f.ringU0 + (f.sideA === "hip" ? sp : THICK_2X_IN / 2);
-    const end = f.ringU1 - (f.sideB === "hip" ? 1 : THICK_2X_IN / 2);
+    const start = f.ringU0 + (f.sideA === "hip" ? sp : THICK_2X_IN / 2 + END_RAFTER_IN);
+    const end = f.ringU1 - (f.sideB === "hip" ? 1 : THICK_2X_IN / 2 + END_RAFTER_IN);
     const out: number[] = [];
     for (let uu = start; uu <= end + 1e-6; uu += sp) out.push(uu);
     if (f.sideB !== "hip" && (out.length === 0 || end - out[out.length - 1] > 3)) out.push(end);
@@ -1683,9 +1849,18 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const ply = ridge.spec && ridge.spec.kind === "solid" ? thick : THICK_2X_IN;
     const nx = -Math.sin(yaw);
     const ny = Math.cos(yaw);
+    // Drawn to a fly rafter's inner face where the rake has one (run on to the fly's outer face, the ridge's end lay in
+    // its plane and flickered, 2026-10-11); the length bought is the whole run.
+    const flyAt = (P: V2) => members.some((m) => m.role === "fly" && m.x1 !== undefined && m.y1 !== undefined && Math.hypot(m.x1 - P.x, m.y1 - P.y) < THICK_2X_IN);
+    const rdir = unit(sub(ridgeTo, ridgeFrom));
+    const dFrom = flyAt(ridgeFrom) ? THICK_2X_IN : 0;
+    const dTo = flyAt(ridgeTo) ? THICK_2X_IN : 0;
+    const drawnLen = Math.max(1, ridge.lengthIn - dFrom - dTo);
+    const rmx = (ridgeFrom.x + ridgeTo.x) / 2 + (rdir.x * (dFrom - dTo)) / 2;
+    const rmy = (ridgeFrom.y + ridgeTo.y) / 2 + (rdir.y * (dFrom - dTo)) / 2;
     for (let p = 0; ridge.lengthIn >= 1 && p < plies; p++) {
       const off = -thick / 2 + (p + 0.5) * ply;
-      members.push({ role: "ridge", nominal: ridge.spec ? ridge.spec.stock : ridge.nominal, lengthIn: ridge.lengthIn, cx: (ridgeFrom.x + ridgeTo.x) / 2 + nx * off, cy: (ridgeFrom.y + ridgeTo.y) / 2 + ny * off, cz: peakIn - depth / 2, sx: ridge.lengthIn, sy: ply, sz: depth, yaw, tilt: 0, x0: ridgeFrom.x, y0: ridgeFrom.y, x1: ridgeTo.x, y1: ridgeTo.y });
+      members.push({ role: "ridge", nominal: ridge.spec ? ridge.spec.stock : ridge.nominal, lengthIn: ridge.lengthIn, cx: rmx + nx * off, cy: rmy + ny * off, cz: peakIn - depth / 2, sx: drawnLen, sy: ply, sz: depth, yaw, tilt: 0, x0: ridgeFrom.x, y0: ridgeFrom.y, x1: ridgeTo.x, y1: ridgeTo.y });
     }
     if (kingPosts > 0) {
       const kingAt = (P: V2) => {
@@ -1740,8 +1915,10 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const L = eaveY1 - eaveY0;
     const zR = headerTopIn + rafterDepth / 2;
     const placed: number[] = [];
-    for (let x = x0 + THICK_2X_IN / 2; x <= x1 - THICK_2X_IN / 2 + 1e-6; x += spacing) placed.push(x);
-    if (x1 - THICK_2X_IN / 2 - placed[placed.length - 1] > 3) placed.push(x1 - THICK_2X_IN / 2);
+    // The end rafters an eighth in, as on the other roofs (flush, they lay in the roof ledger's ends and flickered).
+    const pe = THICK_2X_IN / 2 + END_RAFTER_IN;
+    for (let x = x0 + pe; x <= x1 - pe + 1e-6; x += spacing) placed.push(x);
+    if (x1 - pe - placed[placed.length - 1] > 3) placed.push(x1 - pe);
     // One piece front to back when it comes out of stock; otherwise cut over the header rows.
     const cuts: Array<[number, number]> = L <= STOCK_MAX_IN ? [[eaveY0, eaveY1]] : [eaveY0, ...pergolaMidYs, eaveY1].slice(0, -1).map((a, i, arr) => [a, i + 1 < arr.length ? arr[i + 1] : eaveY1] as [number, number]);
     /** An arched rafter's top at `y` within its bay: a shallow arc rising archRiseIn at the middle. */
@@ -2073,6 +2250,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     gablets,
     engineered,
     hardware,
+    postsInStair,
     flags: {
       rafterBeyondTable: !trusses && commonSpanIn > rafterMax + 0.01,
       headerBeyondTable: headerBeyond,
