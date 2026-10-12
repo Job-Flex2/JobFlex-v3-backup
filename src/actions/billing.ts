@@ -280,9 +280,19 @@ export async function resumeSubscription(): Promise<CancelSubscriptionResult> {
    A shop with no subscription yet (or a cancelled one) is sent through
    checkout as before — the caller handles `mode: "checkout"`. */
 export type ChangePlanResult =
-  | { ok: true; mode: "switched"; direction: "up" | "down"; planName: string }
+  | { ok: true; mode: "switched"; direction: "up" | "down"; planName: string; chargedCents: number }
   | { ok: true; mode: "checkout" }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code?: "card_declined" | "past_due" };
+
+/* PAID BEFORE IT IS APPLIED (owner, 2026-10-12). An upgrade in place used
+   Stripe's default `allow_incomplete`: on a declined card the new price was
+   applied anyway, the subscription went past_due with the difference left on
+   an open invoice, and our row was written ACTIVE on the dearer plan — the
+   plan for free through the whole dunning window. Now the charge is
+   `pending_if_incomplete`: Stripe applies the change only once the invoice is
+   paid; otherwise nothing changes, the attempt's invoice is voided (no open
+   invoice, nothing retried) and the owner is sent to a new card. */
+const CARD_DECLINED = "Card declined — update your card.";
 
 export async function changePlan(
   planSlug: string,
@@ -314,6 +324,10 @@ export async function changePlan(
   if (current.status === "canceled" || current.status === "incomplete_expired") {
     return { ok: true, mode: "checkout" };
   }
+  // An unpaid subscription is paid first: a dearer plan is not stacked on a debt.
+  if (current.status !== "active" && current.status !== "trialing") {
+    return { ok: false, error: "Your last payment didn't go through. Update your card first, then change the plan.", code: "past_due" };
+  }
   const item = current.items.data[0];
   if (!item) return { ok: true, mode: "checkout" };
 
@@ -341,16 +355,33 @@ export async function changePlan(
   const currentCents = ctx.plan?.priceCents ?? 0;
   const direction: "up" | "down" = plan.priceCents > currentCents ? "up" : "down";
 
+  const charging = direction === "up" && current.status !== "trialing";
+  let chargedCents = 0;
   try {
-    const updated = await stripe.subscriptions.update(current.id, {
+    const startedAt = Math.floor(Date.now() / 1000) - 5;
+    let updated = await stripe.subscriptions.update(current.id, {
       // Any other line goes: a custom plan's page quantity (lib/customBilling)
       // must not keep billing under a catalog plan.
       items: [{ id: item.id, price: priceId }, ...current.items.data.slice(1).map((i) => ({ id: i.id, deleted: true as const }))],
-      proration_behavior: direction === "up" ? "always_invoice" : "none",
-      // A trial in progress keeps its end date either way.
+      // A trial in progress keeps its end date either way; nothing is charged in it.
       ...(current.status === "trialing" ? { trial_end: current.trial_end ?? undefined } : {}),
-      metadata: { ...(current.metadata ?? {}), organizationId, planSlug: plan.slug, interval, customPages: "" },
+      ...(charging
+        ? { proration_behavior: "always_invoice" as const, payment_behavior: "pending_if_incomplete" as const, expand: ["latest_invoice"] }
+        : { proration_behavior: "none" as const, metadata: { ...(current.metadata ?? {}), organizationId, planSlug: plan.slug, interval, customPages: "" } }),
     });
+    if (charging) {
+      const inv = updated.latest_invoice && typeof updated.latest_invoice !== "string" ? updated.latest_invoice : null;
+      if (updated.pending_update) {
+        if (inv?.id && inv.status === "open") {
+          await stripe.invoices.voidInvoice(inv.id).catch((err) => console.warn("[billing] void after a declined upgrade failed:", err));
+        }
+        return { ok: false, error: CARD_DECLINED, code: "card_declined" };
+      }
+      if (inv && (inv.created ?? 0) >= startedAt) chargedCents = inv.amount_paid ?? 0;
+      updated = await stripe.subscriptions.update(current.id, {
+        metadata: { ...(current.metadata ?? {}), organizationId, planSlug: plan.slug, interval, customPages: "" },
+      });
+    }
     const trialEnd = updated.trial_end ? new Date(updated.trial_end * 1000) : null;
     const periodEnd = subscriptionPeriodEndDate(updated);
     const planWas = await planSnapshot(organizationId);
@@ -368,17 +399,14 @@ export async function changePlan(
   } catch (err) {
     logServerError("billing.changePlan", err, { kind: "action", organizationId });
     const msg = err instanceof Error ? err.message : "";
-    return {
-      ok: false,
-      error: /payment|card|declined/i.test(msg)
-        ? "The card on file was declined for the difference. Update it in Stripe and try again."
-        : "Couldn't switch the plan. Try again.",
-    };
+    return /payment|card|declined/i.test(msg)
+      ? { ok: false, error: CARD_DECLINED, code: "card_declined" }
+      : { ok: false, error: "Couldn't switch the plan. Try again." };
   }
   revalidatePlanSurfaces();
   revalidatePath("/dashboard/subscription");
   await billingSaved(organizationId, user.id, `Updated billing settings — plan ${direction === "up" ? "upgraded" : "downgraded"} to ${plan.name}`, { plan: plan.slug, interval, direction });
-  return { ok: true, mode: "switched", direction, planName: plan.name };
+  return { ok: true, mode: "switched", direction, planName: plan.name, chargedCents };
 }
 
 /* ── CHANGE A CUSTOM PLAN'S PAGES (owner, 2026-10-06) ─────────────────

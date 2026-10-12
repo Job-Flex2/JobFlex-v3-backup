@@ -36,6 +36,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { expandPlanFeatures } from "@/lib/planCatalog";
 import { changePlan, updateCustomPages } from "@/actions/billing";
+import { CardDeclinedNote } from "@/components/billing/PlanChangeNotes";
 import { CustomChangeNote } from "./custom-change-note";
 import { ConfirmPlanChange } from "@/components/billing/ConfirmPlanChange";
 import { toast } from "@/components/ui/Toast";
@@ -132,6 +133,8 @@ export function UpgradeContent({
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /** "Card declined — update your card" after a change the card did not pay for. */
+  const [declined, setDeclined] = useState<string | null>(null);
   // The current plan as the page knows it; moved locally after an in-place
   // switch so the labels flip before the refresh lands.
   // Overrides win until the refreshed props catch up (they then agree).
@@ -240,13 +243,20 @@ export function UpgradeContent({
       setBusy(p.slug);
       try {
         const res = await changePlan(p.slug, termFor(p.slug));
-        if (!res.ok) throw new Error(res.error);
+        if (!res.ok) {
+          // A card that did not pay changes nothing; the way to a new card stays on the page.
+          if (res.code === "card_declined" || res.code === "past_due") {
+            setDeclined(res.error);
+            return;
+          }
+          throw new Error(res.error);
+        }
         if (res.mode === "checkout") {
           await checkout(p.slug);
           return; // navigating away
         }
         setCur(p.slug);
-        toast.success(`Moved to ${res.planName}`, "Nothing was charged. The lower price starts now.");
+        toast.success(`Moved to ${res.planName}`, res.chargedCents > 0 ? `${dollarsOf(res.chargedCents)} charged today.` : "Nothing was charged. The lower price starts now.");
         // The layout re-renders with the new plan's locks and quota pills.
         router.refresh();
       } catch (e) {
@@ -434,11 +444,12 @@ export function UpgradeContent({
         </div>
       ) : null}
 
+      {declined ? <CardDeclinedNote message={declined} /> : null}
       {focusWords ? <p className="jf-up-focus" data-upgrade-focus-words>{focusWords}</p> : null}
       {showTerms ? (
         <PlanTermSwitch className="jf-up-termsw" value={interval} onChange={setInterval} tag={termTag} />
       ) : null}
-      <div className="jf-up-plans has-custom">
+      <div className="jf-up-plans has-custom" style={{ "--up-cols": plans.length + (onCustom || customOffered ? 1 : 0) } as React.CSSProperties}>
         {plans.map((p) => {
           const term = planTerm(interval, p.yearlyPriceCents);
           const cents = term === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents;

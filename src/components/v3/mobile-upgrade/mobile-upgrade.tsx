@@ -45,6 +45,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
 import { expandPlanFeatures } from "@/lib/planCatalog";
 import { changePlan, updateCustomPages } from "@/actions/billing";
+import { CardDeclinedNote } from "@/components/billing/PlanChangeNotes";
 import { CustomChangeNote } from "@/components/v3/upgrade-blueprint/custom-change-note";
 import { toast } from "@/components/ui/Toast";
 import {
@@ -136,6 +137,8 @@ export function MobileUpgradeContent({
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /** "Card declined — update your card" after a change the card did not pay for. */
+  const [declined, setDeclined] = useState<string | null>(null);
 
   // The current plan as the page knows it; moved locally after an in-place
   // switch so the labels flip before the refresh lands. Overrides win until the
@@ -352,13 +355,20 @@ export function MobileUpgradeContent({
       setBusy(p.slug);
       try {
         const res = await changePlan(p.slug, termFor(p.slug));
-        if (!res.ok) throw new Error(res.error);
+        if (!res.ok) {
+          // A card that did not pay changes nothing; the way to a new card stays on the page.
+          if (res.code === "card_declined" || res.code === "past_due") {
+            setDeclined(res.error);
+            return;
+          }
+          throw new Error(res.error);
+        }
         if (res.mode === "checkout") {
           await checkout(p.slug);
           return; // navigating away
         }
         setCur(p.slug);
-        toast.success(`Moved to ${res.planName}`, "Nothing was charged. The lower price starts now.");
+        toast.success(`Moved to ${res.planName}`, res.chargedCents > 0 ? `${dollars(res.chargedCents)} charged today.` : "Nothing was charged. The lower price starts now.");
         // The layout re-renders with the new plan's locks and quota pills.
         router.refresh();
       } catch (e) {
@@ -917,6 +927,7 @@ export function MobileUpgradeContent({
           <div className="mu-embed-lbl">Plans</div>
           {termSwitch}
         </div>
+        {declined ? <CardDeclinedNote className="mu-pcn" message={declined} /> : null}
         {err ? (
           <div className="mu-note is-bad" role="alert">
             <b>That didn&rsquo;t go through</b>
@@ -994,6 +1005,7 @@ export function MobileUpgradeContent({
               <span>Nothing changed.</span>
             </div>
           ) : null}
+          {declined ? <CardDeclinedNote className="mu-pcn" message={declined} /> : null}
           {err ? (
             <div className="mu-note is-bad" role="alert">
               <b>That didn&rsquo;t go through</b>

@@ -1,0 +1,66 @@
+/* THE MONEY LINES OF A PLAN CHANGE — see PlanChangeNotes.tsx. Self-scoped,
+   doubled class selectors so the shells' globals cannot restyle them; tokens
+   only, the info-banner rule (a 6px edge, no frame, no shadow). */
+.jf-pcn.jf-pcn {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 6px solid var(--blueprint, #1854a0);
+  background: var(--paper, #f6f4ef);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink, #0a0a0a);
+}
+.jf-pcn.jf-pcn b {
+  font-weight: 700;
+}
+.jf-pcn-switch.jf-pcn-switch,
+.jf-pcn-declined.jf-pcn-declined {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 6px solid var(--blueprint, #1854a0);
+  background: var(--paper, #f6f4ef);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink, #0a0a0a);
+}
+.jf-pcn-declined.jf-pcn-declined {
+  border-left-color: var(--danger, var(--rose, #a83232));
+  background: #fff;
+}
+.jf-pcn-switch.jf-pcn-switch > span,
+.jf-pcn-declined.jf-pcn-declined > span {
+  flex: 1 1 220px;
+}
+.jf-pcn-btn.jf-pcn-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 2px solid var(--ink, #0a0a0a);
+  border-radius: var(--radius, 2px);
+  background: #fff;
+  color: var(--ink, #0a0a0a);
+  font: 700 12px/1 var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: box-shadow 0.12s var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+.jf-pcn-btn.jf-pcn-btn:hover:not(:disabled) {
+  box-shadow: 3px 3px 0 var(--ink, #0a0a0a);
+}
+.jf-pcn-btn.jf-pcn-btn:focus-visible {
+  outline: 2px solid var(--blueprint, #1854a0);
+  outline-offset: 2px;
+}
+.jf-pcn-btn.jf-pcn-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.jf-pcn-err.jf-pcn-err {
+  flex-basis: 100%;
+  color: var(--danger, var(--rose, #a83232));
+  font-size: 12px;
+}
