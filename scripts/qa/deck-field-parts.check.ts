@@ -76,13 +76,16 @@ const roofPosts = lit({ label: "Posts", step: "step-roof" });
 check("\"Posts\" in the Roof: the roof's posts, not the deck's", !!roofPosts && layerCount(roofPosts.boxIdx, "roof-post") > 0 && layerCount(roofPosts.boxIdx, "post") === 0, roofPosts?.tag?.text);
 const pitch = lit({ label: "Pitch", step: "step-roof" });
 check("\"Pitch\": the roof, tagged with its pitch", !!pitch && /:12$/.test(pitch.tag?.text ?? ""), pitch?.tag?.text);
-// Stairs and railing
-const s1 = lit({ label: "Width", step: "step-stairs", stair: "s1" });
-const s2 = lit({ label: "Width", step: "step-stairs", stair: "s2" });
-const nStairParts = sc.boxes.filter((b) => b[0] === SCENE_LAYERS.indexOf("stair")).length;
-check("a stair's \"Width\": that stair's own parts, not the other stair's", !!s1 && !!s2 && s1.boxIdx.length > 0 && s2.boxIdx.length > 0 && s1.boxIdx.every((i) => !s2.boxIdx.includes(i)) && layerCount(s1.boxIdx, "stair") + layerCount(s2.boxIdx, "stair") === nStairParts, `${s1?.tag?.text} | ${s2?.tag?.text}`);
-const rail = lit({ label: "Railing", step: "step-stairs" });
-check("\"Railing\": the deck's railing, not the stairs' rails", !!rail && rail.boxIdx.length > 0 && rail.boxIdx.every((i) => !/^stair /.test(sc.legend[sc.tags[i]].role)) && /^Railing · /.test(rail.tag?.text ?? ""), rail?.tag?.text);
+// Stairs and railing — PLAIN (owner, 2026-10-12: "from rails and stairs remove blue colouring on 3D"): every field and
+// tick of the step lights nothing, each stair's card too.
+const STAIRS_PLAIN: Array<[string, Partial<FieldFocus>?]> = [
+  ["Railing"], ["Height"], ["Infill"], ["Posts apart"], ["Your railing"], ["Your rail price, installed"], ["Tear out an old deck"],
+  ["A flat 2x6 drink cap"], ["Rail on the lower level too"], ["Stainless connectors — within 300 ft of salt water"],
+  ["Down the", { stair: "s1" }], ["Centred at", { stair: "s1" }], ["Width", { stair: "s1" }], ["Width", { stair: "s2" }], ["Lands on", { stair: "s1" }], ["Handrail", { stair: "s1" }],
+  ["Box steps wrapping the deck (three risers at most)", { stair: "s1" }],
+];
+const stairsLit = STAIRS_PLAIN.filter(([label, more]) => lit({ label, step: "step-stairs", ...(more ?? {}) }) !== null);
+check(`the stairs and railing step lights nothing (${STAIRS_PLAIN.length} fields and ticks)`, stairsLit.length === 0, stairsLit.map(([l]) => l).join(", ") || "all plain");
 // Lights
 const f1 = lit({ label: "How many", step: "step-electrical", fixture: "f1" });
 const f2 = lit({ label: "How many", step: "step-electrical", fixture: "f2" });
@@ -106,13 +109,11 @@ const STUDIO: Array<[string, string, Partial<FieldFocus>?]> = [
   ["Framing lumber", "Frame"], ["Spans and prices as", "Frame"], ["Joists", "Frame"], ["Joist spacing", "Frame"], ["Beams", "Frame"], ["Beam made of", "Frame"], ["Beam size", "Frame"], ["Posts", "Frame"], ["Joists past the beam", "Frame"], ["Ledger fastened with", "Frame"], ["Ties to the house", "Frame"], ["Footings", "Frame"],
   ["Deck boards", "Surface"], ["Laid like", "Surface"], ["Pattern", "Surface"], ["Picture-frame border", "Surface"], ["Fastened with", "Surface"], ["Fascia", "Surface"], ["Waste", "Surface"], ["Counted as", "Surface"],
   ["Roof shape", "step-roof"], ["Height to the headers", "step-roof"], ["Posts", "step-roof"], ["Headers (beams on the posts)", "step-roof"], ["Overhang past the posts", "step-roof"], ["Pitch", "step-roof"], ["Rafters", "step-roof"], ["Rafter spacing", "step-roof"], ["At the ridge", "step-roof"], ["Roofing", "step-roof"], ["Ceiling", "step-roof"], ["Fascia finish", "step-roof"], ["Gutters", "step-roof"], ["Roof load", "step-roof"],
-  ["Railing", "step-stairs"], ["Height", "step-stairs"], ["Infill", "step-stairs"], ["Posts apart", "step-stairs"], ["Your railing", "step-stairs"],
-  ["Down the", "step-stairs", { stair: "s1" }], ["Centred at", "step-stairs", { stair: "s1" }], ["Width", "step-stairs", { stair: "s1" }], ["Lands on", "step-stairs", { stair: "s1" }], ["Handrail", "step-stairs", { stair: "s1" }],
   ["What", "step-electrical", { fixture: "f1" }], ["Who buys the fixture", "step-electrical", { fixture: "f1" }], ["How many", "step-electrical", { fixture: "f2" }], ["Panel to the structure", "step-electrical"], ["The feed comes from the", "step-electrical"],
   // the ticks, by their words
   ["A lower level in front, a step down", "step-shape"], ["Dig to the frost line anyway", "step-site"], ["Doubled rim and outside joists", "Frame"], ["Joist tape on every top", "Frame"], ["Knee braces at corner posts over 2 ft", "Frame"], ["Mid-span blocking on spans over 8 ft", "Frame"], ["Under-deck drainage — a dry room below", "Surface"],
   ["Knee braces at the posts", "step-roof"], ["Cupola at the peak", "step-roof"], ["Fascia on the eaves (42 ft)", "step-roof"], ["Rake boards on the gable ends (28 ft)", "step-roof"], ["Vented soffit under the overhang", "step-roof"], ["Gutter guards", "step-roof"],
-  ["A flat 2x6 drink cap", "step-stairs"], ["Rail on the lower level too", "step-stairs"], ["Box steps wrapping the deck (three risers at most)", "step-stairs", { stair: "s1" }], ["Stainless connectors — within 300 ft of salt water", "step-stairs"], ["A timer or photocell on the lights", "step-electrical"],
+  ["A timer or photocell on the lights", "step-electrical"],
 ];
 const dark = STUDIO.filter(([label, step, more]) => !lit({ label, step, ...(more ?? {}) }));
 // The lower level's fields, on a deck that has one: its own parts, tagged.
