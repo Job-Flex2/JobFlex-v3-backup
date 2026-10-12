@@ -7,7 +7,7 @@
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-state-codes.check.ts
 import { CODES_AS_OF, DECK_STATE_CODES, IRC_CODE, codeWords, deckCodeFor, inFrac, stateName } from "../../src/lib/deck/stateCodes";
 import { defaultDeckDesign, defaultStair, normalizeDeckDesign } from "../../src/lib/deck/design";
-import { buildStructure } from "../../src/lib/deck/structure";
+import { BETWEEN_LEVELS_STAIR_ID, buildStructure } from "../../src/lib/deck/structure";
 import { deckChecks, applyDeckPatch } from "../../src/lib/deck/checks";
 import { priceDeck, deckNotes } from "../../src/lib/deck/pricing";
 import { siteFromAddress } from "../../src/lib/deck/site";
@@ -57,7 +57,7 @@ check("the California one in 7¾ and 10, citing the CRC", !!caRiser && /7¾ in\.
 check("the riser count itself does not change by state (aimed at 7½ in. everywhere)", nj.stairs[0].risers === sCA.stairs[0].risers);
 const njStep = buildStructure(base("NJ", { lower: { on: true, widthFt: 10, depthFt: 6, dropIn: 8, align: "centre" }, stairs: [] }));
 const caStep = buildStructure(base("CA", { lower: { on: true, widthFt: 10, depthFt: 6, dropIn: 8, align: "centre" }, stairs: [] }));
-check("an 8-in. step down to the lower level is one riser in New Jersey but wants a stair in California", !!njStep.stepDown && !njStep.stepDown.stairWanted && !!caStep.stepDown && caStep.stepDown.stairWanted);
+check("an 8-in. step down to the lower level is one riser in New Jersey but takes a stair in California — the engine builds it there", !!njStep.stepDown && !njStep.stepDown.stairWanted && !njStep.stairs.some((b) => b.design.id === BETWEEN_LEVELS_STAIR_ID) && caStep.stairs.some((b) => b.design.id === BETWEEN_LEVELS_STAIR_ID && b.lands === "lower-deck"));
 const codeCheck = deckChecks(sCA).find((c) => c.id === "code");
 check("the code check tells the edition, as information for a statewide code", !!codeCheck && codeCheck.level === "info" && /California Residential Code/.test(codeCheck.text) && /42 in\./.test(codeCheck.text), codeCheck?.text);
 const txCode = deckChecks(buildStructure(base("TX"))).find((c) => c.id === "code");

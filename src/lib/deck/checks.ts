@@ -41,7 +41,7 @@ import { GROUND_CONTACT_WITHIN_IN, MIN_FRAME_CLEAR_IN, PIER_BLOCK, footingDepthI
 import { FIXTURE_LABEL, GUTTER_LABEL, ROOFING_LABEL, WALL_FILL_LABEL, defaultStair, frontRadiusFt, normalizeDeckDesign, type DeckDesign } from "./design";
 import type { RoofFrame } from "./roof";
 import { RULE_HIP, RULE_RAFTER, RULE_RIDGE, RULE_ROOF_LOAD, RULE_TIES } from "./roofTables";
-import type { DeckStructure } from "./structure";
+import { BETWEEN_LEVELS_STAIR_ID, betweenLevelsStair, type DeckStructure } from "./structure";
 import { stairRules } from "./stairs";
 import { SNOW_TABLE_MAX_PSF, TERMITE_LABEL, deckLoadForSnow, roofLoadForSnow } from "./site";
 import { STAIR_MIN_WIDTH_IN } from "./codeTables";
@@ -521,6 +521,10 @@ function guardAndStairChecks(s: DeckStructure, add: (c: DeckCheck) => void): voi
   if (s.lower && s.stepDown?.stairWanted) {
     const atFt = Math.round(((s.lower.offsetXIn + (design.lower.widthFt * 12) / 2) / 12) * 10) / 10;
     add({ id: "lower-step", level: "warn", part: "Lower level", text: `The lower level is ${ftIn(s.stepDown.dropIn)} down — more than one riser. A stair between the levels is needed.`, rule: SR.riser, fix: { label: "Add a stair between the levels", patch: { stairs: [...design.stairs, { ...defaultStair(`s${design.stairs.length + 1}`, "front", atFt), widthFt: Math.min(6, design.lower.widthFt), landing: "patio" }] } } });
+  } else if (s.lower && s.stepDown && s.stairs.some((b) => b.design.id === BETWEEN_LEVELS_STAIR_ID)) {
+    // The engine built the steps between the levels (lib/deck/structure): said, and one tap makes them the contractor's to move.
+    const between = s.stairs.find((b) => b.design.id === BETWEEN_LEVELS_STAIR_ID)!;
+    add({ id: "lower-step", level: "info", part: "Lower level", text: `The lower level is ${ftIn(s.stepDown.dropIn)} down: ${between.risers} risers between the levels are built in the middle of it. Make them one of your stairs to move or resize them.`, rule: SR.riser, fix: { label: "Make it one of my stairs", patch: { stairs: [...design.stairs, betweenLevelsStair(design, s.lower.offsetXIn, `s${design.stairs.length + 1}`)] } } });
   } else if (s.lower && s.stepDown) add({ id: "lower-step", level: "info", part: "Lower level", text: `The lower level is one step down (${ftIn(s.stepDown.dropIn)}); where it stands less than 30 in. up no guard is needed between the levels.`, rule: guardRule });
   const risers = risersFor(H);
   if (stairs.length === 0 && risers > 1) add({ id: "stairs", level: "info", part: "Guard and stairs", text: `Reaching the ground takes ${risers} risers. No stairs are in the price yet.`, rule: RULE.stairs, fix: { label: "Add a flight down the front", patch: { stairs: [defaultStair("s1", "front", design.shape.widthFt / 2)] } } });

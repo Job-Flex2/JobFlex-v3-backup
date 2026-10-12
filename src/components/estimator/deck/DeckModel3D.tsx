@@ -132,6 +132,10 @@ const LIGHT = layerIndex("light");
 const WIRE = layerIndex("wire");
 /** Layers the x-ray fades. */
 const FADES = new Set([DECKING, FASCIA, SHEATHING, ROOFING, CEILING, TRIM, GLASS, SCREEN, WALL]);
+const STAIR = layerIndex("stair");
+/** The stair's skin — the boards a foot touches — fades in the x-ray like the deck's boards, so the stringers under it
+ *  show (owner, 2026-10-11: "the X-ray doesn't x-ray the steps"). Legend roles, dashes as spaces. */
+const STAIR_SKIN = /^(tread|riser|landing tread|box tread)$/;
 /** Legend roles whose ends are plumb cuts (sheared boxes). */
 const PLUMB_CUT = /^(rafter|jack|fly|hip|fascia rake|stringer|stair rail|roof brace|brace)$/;
 const MOUNT_OF: Partial<Record<SceneLayer, DeckPick["mount"]>> = { post: "post", "roof-post": "post", header: "header", beam: "header", rail: "rail", glass: "rail", decking: "deck", fascia: "deck", rim: "deck", joist: "deck", ceiling: "ceiling", rafter: "ceiling", sheathing: "ceiling", roofing: "ceiling", ridge: "peak", stair: "stair", wall: "wall", screen: "wall", ledger: "wall", light: "deck", wire: "deck" };
@@ -794,11 +798,23 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         s.boxes.forEach((b, i) => {
           if (b[0] === L && b[7] === 0) idx.push(i);
         });
-        if (idx.length) {
-          const mesh = new THREE.InstancedMesh(unitBox, mats[L], idx.length);
+        // The stairs: the treads and risers on a material of their own that the x-ray fades, the framing on the layer's.
+        const groups: Array<{ idx: number[]; mat: THREE.MeshStandardMaterial }> = [];
+        if (L === STAIR && idx.some((bi) => STAIR_SKIN.test(legendOf(bi)?.role ?? ""))) {
+          const skinMat = mats[L].clone();
+          skinMat.userData.base = mats[L].userData.base;
+          owned.push(skinMat);
+          fade.push(skinMat);
+          const skin = idx.filter((bi) => STAIR_SKIN.test(legendOf(bi)?.role ?? ""));
+          const rest = idx.filter((bi) => !STAIR_SKIN.test(legendOf(bi)?.role ?? ""));
+          if (rest.length) groups.push({ idx: rest, mat: mats[L] });
+          groups.push({ idx: skin, mat: skinMat });
+        } else if (idx.length) groups.push({ idx, mat: mats[L] });
+        for (const { idx, mat } of groups) {
+          const mesh = new THREE.InstancedMesh(unitBox, mat, idx.length);
           mesh.castShadow = L !== HARDWARE && L !== WIRE && L !== LIGHT && L !== GLASS && L !== SCREEN;
           mesh.receiveShadow = true;
-          const base = mats[L].userData.base as THREE.Color;
+          const base = mat.userData.base as THREE.Color;
           idx.forEach((bi, k) => {
             const b = s.boxes[bi];
             const turned = b.length >= 10 && (b[8] !== 0 || b[9] !== 0);

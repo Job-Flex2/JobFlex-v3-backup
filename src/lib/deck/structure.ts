@@ -21,7 +21,7 @@ import { buildRails, type RailBuild, type RailLevel } from "./rails";
 import { buildElectrical, type ElectricalBuild } from "./electrical";
 import { framingSpecies } from "./catalog";
 import { groundAt as slopeGroundAt, slopeGradePct } from "./site";
-import { frontEdgeAt, hasDeck, hasLowerLevel, hasRoof, normalizeDeckDesign, shapeOutline, shapeZones, type DeckDesign, type DeckEdge } from "./design";
+import { defaultStair, frontEdgeAt, hasDeck, hasLowerLevel, hasRoof, normalizeDeckDesign, shapeOutline, shapeZones, type DeckDesign, type DeckEdge, type StairDesign } from "./design";
 import { deckCodeFor, type DeckStateCode } from "./stateCodes";
 
 /** The lower level: its own frame and boards, placed in front of the main deck. */
@@ -55,6 +55,15 @@ export interface DeckStructure {
 }
 
 export type StructureOptions = BuildOptions;
+
+/** The stair the engine builds between the levels when the design has none to the lower one (see buildDeckStructure). */
+export const BETWEEN_LEVELS_STAIR_ID = "between-levels";
+
+/** The stair a contractor would put between the levels: from the main deck's front, centred on the lower level, up to 6 ft wide, onto it. */
+export function betweenLevelsStair(design: DeckDesign, lowerOffsetXIn: number, id = BETWEEN_LEVELS_STAIR_ID): StairDesign {
+  const atFt = Math.round(((lowerOffsetXIn + (design.lower.widthFt * 12) / 2) / 12) * 10) / 10;
+  return { ...defaultStair(id, "front", atFt), widthFt: Math.min(6, design.lower.widthFt), landing: "patio" };
+}
 
 /** Which straight edge of the frame an outline segment lies on, if any. */
 function edgeFor(edges: readonly DeckEdge[], A: { x: number; y: number }, B: { x: number; y: number }): DeckEdge | null {
@@ -136,9 +145,16 @@ export function buildStructure(raw: DeckDesign, opts: StructureOptions = {}): De
   if (frame && surface) {
     const upper: StairLevel = { id: "upper", surfaceIn: frame.surfaceIn, joistBottomIn: frame.joistBottomIn, x0: 0, y0: 0, widthIn: W, depthIn: D, frontAt: (x) => frontEdgeAt(design.shape, x) };
     const lowerLevel: StairLevel | null = lower ? { id: "lower", surfaceIn: lower.frame.surfaceIn, joistBottomIn: lower.frame.joistBottomIn, x0: lower.offsetXIn, y0: lower.offsetYIn, widthIn: Math.round(design.lower.widthFt * 12), depthIn: Math.round(design.lower.depthFt * 12), frontAt: () => Math.round(design.lower.depthFt * 12) } : null;
-    for (const st of design.stairs) {
-      const level = st.level === "lower" && lowerLevel ? lowerLevel : upper;
-      stairs.push(buildStair({ design, stair: st, level, lowerLevel: level.id === "upper" ? lowerLevel : null, product: frame.decking, rail: design.rail, groundAt, riserMaxIn: code.riserMaxIn, postSize: design.framing.post === "8x8" ? "6x6" : design.framing.post === "4x6" ? "4x4" : design.framing.post }));
+    const build = (st: StairDesign, level: StairLevel) =>
+      buildStair({ design, stair: st, level, lowerLevel: level.id === "upper" ? lowerLevel : null, product: frame.decking, rail: design.rail, groundAt, riserMaxIn: code.riserMaxIn, postSize: design.framing.post === "8x8" ? "6x6" : design.framing.post === "4x6" ? "4x4" : design.framing.post });
+    for (const st of design.stairs) stairs.push(build(st, st.level === "lower" && lowerLevel ? lowerLevel : upper));
+    // THE STEPS BETWEEN THE LEVELS (owner, 2026-10-11: "the double deck, one deck lower than the other — the missing
+    // steps"). A lower level more than one riser down cannot be reached without a stair; when the design has none from
+    // the main deck to it, the engine builds one — centred on the lower level, the warning's own fix — so the 3D, the
+    // framing plan, the takeoff, the price and the permit set all carry it. A stair the contractor puts there replaces it.
+    if (lower && lowerLevel && lower.dropIn > code.riserMaxIn && !stairs.some((b) => b.level === "upper" && b.lands === "lower-deck")) {
+      const between = build(betweenLevelsStair(design, lower.offsetXIn), upper);
+      if (between.lands === "lower-deck") stairs.push(between);
     }
   }
 

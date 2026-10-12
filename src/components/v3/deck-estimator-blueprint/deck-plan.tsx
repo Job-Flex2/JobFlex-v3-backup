@@ -26,6 +26,33 @@ export interface PlanEdgeHit {
   atFt: number;
 }
 
+/**
+ * The nearest open edge of a level to a point in the plan (inches, the main deck's coordinates), and where along it —
+ * the front and the open ends of each level. `maxIn` caps the distance (the plan's click: 3 ft; the 3D's: any, so a
+ * click anywhere on the deck takes its nearest edge — owner, 2026-10-11).
+ */
+export function nearestStairEdge(structure: DeckStructure, xIn: number, yIn: number, maxIn = 36): PlanEdgeHit | null {
+  let best: { d: number; hit: PlanEdgeHit } | null = null;
+  for (const l of structureLevels(structure)) {
+    const W = Math.max(...l.frame.zones.map((z) => z.zone.x1));
+    const D = Math.max(...l.frame.zones.map((z) => z.zone.y1));
+    const ox = l.offsetXIn;
+    const oy = l.offsetYIn;
+    const clampX = Math.min(Math.max(xIn, ox), ox + W);
+    const clampY = Math.min(Math.max(yIn, oy), oy + D);
+    const edges: Array<{ side: StairSide; d: number; at: number; open: boolean }> = [
+      { side: "front", d: Math.hypot(yIn - (oy + D), xIn - clampX), at: clampX - ox, open: true },
+      { side: "left", d: Math.hypot(xIn - ox, yIn - clampY), at: clampY - oy, open: l.frame.edges.some((ed) => ed.side === "left" && !ed.house) },
+      { side: "right", d: Math.hypot(xIn - (ox + W), yIn - clampY), at: clampY - oy, open: l.frame.edges.some((ed) => ed.side === "right" && !ed.house) },
+    ];
+    for (const ed of edges) {
+      if (!ed.open || ed.d > maxIn) continue;
+      if (!best || ed.d < best.d) best = { d: ed.d, hit: { level: l.id, side: ed.side, atFt: Math.round((ed.at / 12) * 2) / 2 } };
+    }
+  }
+  return best?.hit ?? null;
+}
+
 const FIXTURE_MARK: Record<string, string> = { "led-strip": "L", "post-cap": "c", "step-light": "s", "string-light": "S", sconce: "W", "ceiling-light": "L", chandelier: "C", fan: "F", outlet: "O", heater: "H", flood: "F" };
 
 /**
@@ -65,23 +92,8 @@ export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all"
     const ctm = svgRef.current.getScreenCTM();
     if (!ctm) return;
     const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
-    let best: { d: number; hit: PlanEdgeHit } | null = null;
-    for (const l of levels) {
-      const W = Math.max(...l.frame.zones.map((z) => z.zone.x1));
-      const D = Math.max(...l.frame.zones.map((z) => z.zone.y1));
-      const ox = l.offsetXIn;
-      const oy = l.offsetYIn;
-      const edges: Array<{ side: StairSide; d: number; at: number; open: boolean }> = [
-        { side: "front", d: Math.abs(pt.y - (oy + D)), at: pt.x - ox, open: pt.x >= ox && pt.x <= ox + W },
-        { side: "left", d: Math.abs(pt.x - ox), at: pt.y - oy, open: pt.y >= oy && pt.y <= oy + D && l.frame.edges.some((ed) => ed.side === "left" && !ed.house) },
-        { side: "right", d: Math.abs(pt.x - (ox + W)), at: pt.y - oy, open: pt.y >= oy && pt.y <= oy + D && l.frame.edges.some((ed) => ed.side === "right" && !ed.house) },
-      ];
-      for (const ed of edges) {
-        if (!ed.open || ed.d > 36) continue;
-        if (!best || ed.d < best.d) best = { d: ed.d, hit: { level: l.id, side: ed.side, atFt: Math.round((ed.at / 12) * 2) / 2 } };
-      }
-    }
-    if (best) onPlaceStair(best.hit);
+    const hit = nearestStairEdge(structure, pt.x, pt.y);
+    if (hit) onPlaceStair(hit);
   };
 
   const levelDrawing = (f: DeckFrame, ox: number, oy: number, lower: boolean) => {

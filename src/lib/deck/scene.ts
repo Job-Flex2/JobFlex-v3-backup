@@ -27,7 +27,7 @@ import type { DeckSurface } from "./surface";
 import type { RoofMember, RoofPlane } from "./roof";
 import { ROOFING_LABEL, hasDeck, shapeOutline, sizeWords, structureWords, type DeckDesign } from "./design";
 import type { DeckStructure } from "./structure";
-import { structureLevels } from "./structure";
+import { BETWEEN_LEVELS_STAIR_ID, structureLevels } from "./structure";
 import type { StairMember } from "./stairs";
 import type { RailMember } from "./rails";
 import { railWords } from "./rails";
@@ -790,6 +790,8 @@ export function deckScene(s: DeckStructure): DeckScene {
   for (const st of s.stairs) {
     const [a, b] = st.footprint;
     if (!a || !b) continue;
+    // The engine's steps between the levels are not the design's: no knob (the checks' fix makes them editable).
+    if (st.design.id === BETWEEN_LEVELS_STAIR_ID) continue;
     const top = (st.level === "lower" && s.lower ? s.lower.frame.surfaceIn : frame?.surfaceIn ?? 0) + 2;
     handles.push({ kind: "stair", id: st.design.id, x: r3((a.x + b.x) / 2), y: r3((a.y + b.y) / 2), z: r3(top), axis: st.design.side === "front" ? "x" : "y", value: st.design.atFt, perUnit: 1, label: `Stairs along the ${st.design.side}` });
     // The width: a knob on the flight's far side, half-way down — drag it along the edge and the stairs widen that way
