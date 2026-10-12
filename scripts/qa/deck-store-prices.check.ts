@@ -18,7 +18,7 @@ const check = (name: string, ok: boolean, extra = "") => {
 const keys = Object.keys(STORE_PRICES);
 const def = (k: string) => DECK_RATES.find((r) => r.key === k);
 check("the survey names its store and date", STORE_SURVEY.store === "Home Depot" && /^\d{4}-\d{2}-\d{2}$/.test(STORE_SURVEY.asOf));
-check("a good share of the material rows carry a Home Depot price", keys.length >= 80, `${keys.length} of ${DECK_RATES.filter((r) => r.basis !== "labor").length}`);
+check("most material rows carry a Home Depot price (what it sells, surveyed in two rounds)", keys.length >= 130, `${keys.length} of ${DECK_RATES.filter((r) => r.basis !== "labor").length}`);
 const unknown = keys.filter((k) => !def(k));
 check("every surveyed key is a row of the price book", unknown.length === 0, unknown.join(", "));
 const labor = keys.filter((k) => def(k)?.basis === "labor");
@@ -28,8 +28,11 @@ check("every store price is positive and inside its row's rails", rails.length =
 const noSource = keys.filter((k) => !/^https:\/\/(www\.)?homedepot\.com\//.test(STORE_PRICES[k].url) || STORE_PRICES[k].product.trim().length < 6);
 check("every store price names its listing and links homedepot.com", noSource.length === 0, noSource.join(", "));
 // Checked by hand on 2026-10-12: the plies of a curved rim are a $44 sheet of ground-contact plywood ÷ 40 ft; an ABU66Z
-// post base showed $62.98 on three listings (steel); a 10-square underlayment roll is $119. The old examples were off.
-const REVIEWED = new Set(["rim.curved", "hw.postBase", "roof.underlayment"]);
+// post base showed $62.98 on three listings (steel); a 10-square underlayment roll is $119; Simpson's LSC stringer
+// connector is $2.45–$2.98; Screen Tight's strips and screen, bordered vinyl lattice, vinyl privacy panels and
+// beadboard panels are what Home Depot sells for those walls and ceilings; its only glass railing is PEAK's framed panels.
+// The old examples were off.
+const REVIEWED = new Set(["rim.curved", "hw.postBase", "roof.underlayment", "hw.stringerConnector", "trim.screen", "trim.lattice", "trim.privacy", "trim.ceiling.bead", "rail.glass.material"]);
 const slips = keys.filter((k) => { const d = def(k)!; const r = STORE_PRICES[k].price / d.price; return !REVIEWED.has(k) && (r > 3 || r < 1 / 3); });
 check("no store price is 3× off its old example (a unit slip), but the three checked by hand", slips.length === 0, slips.map((k) => `${k}: $${STORE_PRICES[k].price} vs example $${def(k)!.price}`).join(" | "));
 
@@ -52,8 +55,9 @@ check("the price book's rows show the store price as the default, the example ke
 // A real deck
 const d = applyDeckPatch(defaultDeckDesign({ state: "TX" }), { heightIn: 48, rail: { type: "composite" }, stairs: [defaultStair("s1", "front", 8)] });
 const pkg = priceDeck(d);
-// Composite boards, railings, concrete and fasteners are not surveyed yet (the search limit, 2026-10-12): the framing is.
-check("a railed deck with stairs: its framing lumber at Home Depot prices, a real share of its materials", pkg.bom.filter((l) => l.step === "framing" && l.kind === "lumber").every((l) => l.source === "store") && pkg.storeShare >= 0.3, `${Math.round(pkg.storeShare * 100)}% of materials`);
+check("a railed deck with stairs: its framing lumber at Home Depot prices, and nearly all of its materials", pkg.bom.filter((l) => l.step === "framing" && l.kind === "lumber").every((l) => l.source === "store") && pkg.storeShare >= 0.85, `${Math.round(pkg.storeShare * 100)}% of materials`);
+const compositeDeck = priceDeck(applyDeckPatch(d, { decking: { product: "composite-better" } }));
+check("a composite deck: its boards, railing, concrete and fasteners at Home Depot prices", ["decking", "rails", "footings"].every((st) => compositeDeck.bom.filter((l) => l.step === st && !l.byClient).every((l) => l.source === "store")), compositeDeck.bom.filter((l) => ["decking", "rails", "footings"].includes(l.step) && l.source !== "store").map((l) => `${l.step}:${l.rateKey}`).join(", "));
 check("…the example share now counts labor and the unsurveyed only", pkg.exampleShare < 1 && pkg.exampleShare >= 0, `${Math.round(pkg.exampleShare * 100)}% of the price on examples`);
 const list = materialList(pkg);
 check("…the material list marks the store's lines apart from the examples", list.groups.flatMap((g) => g.lines).some((l) => l.store && !l.example));
