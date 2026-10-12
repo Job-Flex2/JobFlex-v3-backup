@@ -9,7 +9,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { clientIp, enforceRateLimit, MINUTE, rateLimitShared } from "@/lib/rateLimit";
-import { availabilityFor, bookingByToken, cancelBooking, createBooking, loadBookingDashboard, orgBySlug, rescheduleBooking, saveSettings, settingsOf, type BookingReceipt } from "@/lib/bookingBook";
+import { availabilityFor, bookingByToken, cancelBooking, createBooking, orgBySlug, rescheduleBooking, saveSettings, settingsOf, type BookingReceipt } from "@/lib/bookingBook";
 import { defaultServicesFor, slotLabel, type BookingService, type BookingSettings } from "@/lib/booking";
 import { parseTradeTypes } from "@/lib/tradeTypes";
 import { recordTextConsent } from "@/lib/sms/consent";
@@ -223,4 +223,6 @@ export async function cancelBookingOffice(id: string): Promise<void> {
 }
 
 export type { BookingDashboard } from "@/lib/bookingBook";
-export { loadBookingDashboard };
+// The office's booking book is read by its page (lib/bookingBook) and never
+// exported from here: every export of a "use server" file is a callable
+// endpoint, and this one took an organizationId (2026-10-12).

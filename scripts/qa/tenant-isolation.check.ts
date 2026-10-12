@@ -33,6 +33,7 @@ import * as expenses from "../../src/actions/expenses";
 import * as messages from "../../src/actions/messages";
 import * as homeFiles from "../../src/actions/homeFiles";
 import * as deck from "../../src/actions/deckEstimator";
+import * as bookingActions from "../../src/actions/booking";
 import { loadClientDetail } from "../../src/components/v3/client-detail-blueprint/client-detail-load";
 import { loadJobDetail } from "../../src/components/v3/job-detail-blueprint/job-detail-load";
 import { loadProjectDetail } from "../../src/components/v3/project-detail-blueprint/project-detail-load";
@@ -222,6 +223,10 @@ async function main() {
     const recUrl = `https://abc123.private.blob.vercel-storage.com/receipts/${A.job.id}/receipt-${rid()}.jpg`;
     const rec = await outcome(() => expenses.addJobExpense({ jobId: B.job.id, category: "Materials", amount: 1, receiptUrl: recUrl }));
     check("B cannot file a receipt URL from A's receipts folder on B's own job (server action)", rec.refused, rec.text);
+
+    // Every export of a "use server" file is a callable endpoint: none may
+    // take an organizationId (the booking book's re-export did, 2026-10-12).
+    check("actions/booking exports no organizationId-taking loadBookingDashboard", !("loadBookingDashboard" in bookingActions));
 
     // ── the file rules, door by door ──
     const blob = (p: string) => `https://abc123.private.blob.vercel-storage.com/${p}`;
