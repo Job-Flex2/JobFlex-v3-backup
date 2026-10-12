@@ -11,6 +11,7 @@ import { getPlanBySlug } from "@/lib/planCatalogServer";
 import { planComingSoon } from "@/lib/editions";
 import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { ensureReferralCoupon } from "@/lib/referralDiscount";
+import { trialDaysFor } from "@/lib/trialEligibility";
 import { CUSTOM_PLAN_SLUG, customPriceCents, normalizeCustomPages } from "@/lib/customPlan";
 import { getCustomPlanTrialDays } from "@/lib/customPlanConfig";
 import { customLineItems, customMetadata } from "@/lib/customBilling";
@@ -260,6 +261,12 @@ export async function POST(req: Request) {
     sub?.externalSubId && (sub.status === "ACTIVE" || sub.status === "TRIALING")
       ? sub.externalSubId
       : null;
+  /* ONE TRIAL PER COMPANY (owner, 2026-10-12; lib/trialEligibility). A
+     company that has had any subscription — paid, trialing, cancelled, ended
+     for non-payment, a grant — or a card-less trial pays at once when it buys
+     again. Until this, "Restart subscription" after a cancellation (even one
+     for not paying) opened Checkout with the catalog's trial again. */
+  const trialDays = replacesSubId ? 0 : await trialDaysFor(organizationId, plan.trialDays);
   const baseParams = {
     mode: "subscription" as const,
     line_items: lineItems,
@@ -270,7 +277,7 @@ export async function POST(req: Request) {
       // The custom plan's pages ride the SUBSCRIPTION (lib/customBilling):
       // the return leg reads them from there, matched to its page quantity.
       metadata: isCustom ? customMetadata(organizationId, pages) : { organizationId },
-      ...(plan.trialDays && !replacesSubId ? { trial_period_days: plan.trialDays } : {}),
+      ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
     },
     // planSlug/interval ride the session so the upgrade page can verify the
     // return and write the plan change itself — the live webhook cannot see
