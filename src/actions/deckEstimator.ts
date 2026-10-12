@@ -35,7 +35,7 @@ import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { sanitizeDeckRateBook, type DeckRateBook } from "@/lib/deck/rates";
 import { deckBookKey as bookKey } from "@/lib/deck/rateBookStore";
 import { DECK_PLAN_EVENT, DECK_PLAN_VERSION, deckConvertSchema, firstIssue, type DeckConvertInput } from "@/lib/deck/convertSchema";
-import { putPrivate } from "@/lib/media/privateStore";
+import { isPrivateFileUnder, putPrivate } from "@/lib/media/privateStore";
 import { mediaHref } from "@/lib/media/signedLink";
 import { normalizeDeckDesign, structureWords, type DeckDesign } from "@/lib/deck/design";
 import { fitGround } from "@/lib/deck/site";
@@ -138,11 +138,19 @@ export async function readDeckPhoto(form: FormData): Promise<DeckPhotoRead> {
   }
 }
 
+/** The shop's own photo: a private file whose path BEGINS with its folder
+ *  (never "contains" — a query string could carry the folder name past a
+ *  substring test, security audit 1.2), or an inline picture. */
+function ownDeckPhoto(url: unknown, organizationId: string): boolean {
+  if (typeof url !== "string") return false;
+  return isPrivateFileUnder(url, `deck-photos/${organizationId}/`) || /^data:image\//i.test(url);
+}
+
 /** A fresh read link for a photo the design already holds (the stored URL never goes to the browser as is). */
 export async function deckPhotoHref(url: string): Promise<string | null> {
   const g = await gate();
   if (!g.ok) return null;
-  if (typeof url !== "string" || !url.includes(`deck-photos/${g.organizationId}/`)) return null;
+  if (typeof url !== "string" || !isPrivateFileUnder(url, `deck-photos/${g.organizationId}/`)) return null;
   return mediaHref(url);
 }
 
@@ -227,7 +235,7 @@ async function writeProposal(organizationId: string, userId: string, role: strin
     try {
       const plan: { v: number; design: typeof data.plan.design; scene: typeof data.plan.scene; address: string | null } = { v: DECK_PLAN_VERSION, design: data.plan.design, scene: data.plan.scene, address };
       // A photo from another shop's folder never rides along.
-      if (plan.design.photo && !plan.design.photo.url.includes(`deck-photos/${organizationId}/`) && !plan.design.photo.url.startsWith("data:")) plan.design = { ...plan.design, photo: null };
+      if (plan.design.photo && !ownDeckPhoto(plan.design.photo.url, organizationId)) plan.design = { ...plan.design, photo: null };
       await db.activityEvent.create({ data: { organizationId, actorId: userId, proposalId: proposal.id, kind: DECK_PLAN_EVENT, summary: `Deck designed for the proposal — ${data.plan.scene.facts}`, meta: JSON.stringify(plan) } });
     } catch {
       /* the picture never blocks the proposal */
@@ -354,7 +362,7 @@ export async function loadDeckFromProposal(proposalId: string): Promise<{ ok: tr
     if (!raw) return { ok: false, error: "That proposal has no deck design saved with it." };
     const design = normalizeDeckDesign(raw.design);
     // A photo from another shop's folder never comes along.
-    if (design.photo && !design.photo.url.includes(`deck-photos/${g.organizationId}/`) && !design.photo.url.startsWith("data:")) design.photo = null;
+    if (design.photo && !ownDeckPhoto(design.photo.url, g.organizationId)) design.photo = null;
     return { ok: true, design, address: proposal.address ?? (typeof raw.address === "string" ? raw.address : null), title: proposal.title };
   } catch {
     return { ok: false, error: "The saved deck could not be read." };

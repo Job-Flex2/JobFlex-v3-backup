@@ -14,7 +14,9 @@ import { isBlobEnabled, uploadBlob } from "@/lib/sdk/blob";
 import { findClientForLead } from "@/lib/leadClient";
 import { parseProposalPhotos } from "@/components/v3/proposals-c/types";
 import { MAX_INLINE_PHOTO_BYTES, fileSize, isImageType } from "@/lib/jobMediaShared";
-import { deleteStored, kindOfUrl, pathnameOf, readStoredAsDataUrl, storageMode } from "@/lib/media/privateStore";
+import { isPrivateFileUnder, kindOfUrl, readStoredAsDataUrl, storageMode } from "@/lib/media/privateStore";
+import { deleteStoredUnlessReferenced } from "@/lib/media/ownedFiles";
+import { IMAGE_DATA_URL } from "@/lib/safeHref";
 import { FOLDER_MAX_FILES, FOLDER_TYPES, contractorFolder, homeownerFolder, mediaOfType, orgMayReadFolder, tellHomeownerFilesAsked, tellShopFilesAdded } from "@/lib/home/files";
 
 export type HomeFilesResult = { ok: true; note: string; id?: string } | { ok: false; error: string };
@@ -53,9 +55,7 @@ export async function registerHomeFile(raw: unknown): Promise<HomeFilesResult> {
   if (!FOLDER_TYPES.includes(type)) return { ok: false, error: "Pictures, videos and PDFs only." };
   // Only a file under this request's own folder in the store is accepted —
   // the browser names what it uploaded, never what it would like to claim.
-  const kind = kindOfUrl(data.url);
-  const path = pathnameOf(data.url) ?? "";
-  if ((kind !== "private-blob" && kind !== "local") || !path.startsWith(`home/${door.home.id}/${door.lead.id}/`)) return { ok: false, error: "That file isn't in this project's folder." };
+  if (!isPrivateFileUnder(data.url, `home/${door.home.id}/${door.lead.id}/`)) return { ok: false, error: "That file isn't in this project's folder." };
   return record(door, { url: data.url, name: data.name, contentType: type, bytes: data.bytes, note: data.note ?? null }, data.notify ?? null);
 }
 
@@ -103,7 +103,7 @@ export async function deleteHomeFile(raw: unknown): Promise<HomeFilesResult> {
   const file = await db.homeFile.findFirst({ where: { id: data.id, homeId: home.id, deletedAt: null } });
   if (!file) return { ok: true, note: "Already gone." };
   await db.homeFile.update({ where: { id: file.id }, data: { deletedAt: new Date() } });
-  await deleteStored(file.url).catch(() => null);
+  await deleteStoredUnlessReferenced(file.url).catch(() => null);
   return { ok: true, note: "Removed." };
 }
 
@@ -135,6 +135,10 @@ export async function attachHomeFileToProposal(raw: unknown): Promise<HomeFilesR
   if (!file) return { ok: false, error: "That file is gone." };
   if (!(await orgMayReadFolder(organizationId, file.platformLeadId))) return { ok: false, error: "Not your folder." };
   if (file.media !== "photo") return { ok: false, error: "Only pictures go on a proposal — download the video or the PDF instead." };
+  // The picture is read from the store only when it lives in this request's
+  // own folder (or rides inline) — the same rule the homeowner's upload met
+  // (security audit 1.1, 2026-10-12).
+  if (!IMAGE_DATA_URL.test(file.url) && !isPrivateFileUnder(file.url, `home/${file.homeId}/${file.platformLeadId}/`)) return { ok: false, error: "That file isn't in this project's folder." };
   const proposal = await db.proposal.findFirst({ where: { id: data.proposalId, organizationId }, select: { id: true, beforePhotos: true } });
   if (!proposal) return { ok: false, error: "That proposal isn't yours." };
   const dataUrl = kindOfUrl(file.url) === "data" ? file.url : await readStoredAsDataUrl(file.url, 8 * 1024 * 1024);

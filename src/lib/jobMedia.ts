@@ -18,9 +18,18 @@ import { db } from "@/lib/db";
 import { afterResponse } from "@/lib/server-events";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { isLimitedRole, requireOrg } from "@/lib/orgContext";
-import { mediaMetaJson, type MediaKind, type MediaMeta } from "@/lib/jobMediaShared";
+import { isJobBlobUrl, mediaMetaJson, type MediaKind, type MediaMeta } from "@/lib/jobMediaShared";
 import { openDayOf } from "@/lib/workDays";
-import { deleteStored } from "@/lib/media/privateStore";
+import { isPrivateJobFile } from "@/lib/media/privateStore";
+import { deleteStoredUnlessReferenced } from "@/lib/media/ownedFiles";
+import { IMAGE_DATA_URL } from "@/lib/safeHref";
+
+/** A file a client names for this job: one in the job's own folder in the
+ *  store (private, or the older public one), or an inline picture — never
+ *  another company's stored file (security audit 1.1, 2026-10-12). */
+export function isJobMediaFile(url: string, jobId: string): boolean {
+  return isPrivateJobFile(url, "jobs", jobId) || isJobBlobUrl(url, jobId) || IMAGE_DATA_URL.test(url);
+}
 
 export interface MediaCaller {
   organizationId: string;
@@ -164,7 +173,8 @@ export async function deleteJobMediaFor(actor: MediaActor, photoId: string): Pro
   await db.jobPhoto.delete({ where: { id: photoId } });
   // The file goes with its row (stage B): the private store, the local
   // fallback or the older public store — a data URL has nothing to remove.
-  await deleteStored(p.url);
+  // Not while another row still names the same file (lib/media/ownedFiles).
+  await deleteStoredUnlessReferenced(p.url);
   await logActivity({
     organizationId: actor.organizationId,
     actorId: actor.userId,

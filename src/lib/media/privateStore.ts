@@ -86,12 +86,24 @@ export function pathnameOf(url: string): string | null {
   return null;
 }
 
-/** True when the URL is a private file (blob or local) under `<folder>/<jobId>/`. */
-export function isPrivateJobFile(url: string, folder: "jobs" | "receipts", jobId: string): boolean {
+/** True when the URL is a private file (blob or local) whose path BEGINS with
+ *  `prefix` — a folder that belongs to one company (`jobs/<jobId>/`,
+ *  `deck-photos/<orgId>/`). The start of the path, never "contains": a query
+ *  or a nested folder cannot smuggle another company's file past it, and a
+ *  path that is not already safe (`..`, an encoded slash) is refused outright
+ *  (security audit 1.1/1.2, 2026-10-12). */
+export function isPrivateFileUnder(url: string, prefix: string): boolean {
+  if (typeof url !== "string" || !prefix.endsWith("/")) return false;
   const k = kindOfUrl(url);
   if (k !== "private-blob" && k !== "local") return false;
+  if (k === "local" && url.slice(LOCAL_PREFIX.length) !== safePathname(url.slice(LOCAL_PREFIX.length))) return false;
   const p = pathnameOf(url);
-  return !!p && p.startsWith(`${folder}/${jobId}/`);
+  return !!p && p === safePathname(p) && p.startsWith(prefix);
+}
+
+/** True when the URL is a private file (blob or local) under `<folder>/<jobId>/`. */
+export function isPrivateJobFile(url: string, folder: "jobs" | "receipts", jobId: string): boolean {
+  return isPrivateFileUnder(url, `${folder}/${jobId}/`);
 }
 
 function localFile(pathname: string): string {

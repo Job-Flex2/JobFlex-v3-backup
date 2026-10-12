@@ -14,7 +14,9 @@ import { db } from "@/lib/db";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { isLimitedRole } from "@/lib/orgContext";
 import { ExpensePaidBy, ExpenseStatus } from "@/lib/prismaEnums";
-import { deleteStored } from "@/lib/media/privateStore";
+import { isPrivateJobFile } from "@/lib/media/privateStore";
+import { deleteStoredUnlessReferenced } from "@/lib/media/ownedFiles";
+import { IMAGE_DATA_URL } from "@/lib/safeHref";
 
 export interface ExpenseActor {
   organizationId: string;
@@ -53,6 +55,22 @@ async function stampStockCost(ex: { purpose: string; stockItemId: string | null;
   await db.inventoryItem.updateMany({ where: { id: ex.stockItemId, organizationId }, data: { lastCost: unit } });
 }
 
+// ── THE RECEIPT'S FILE (security audit 1.1, 2026-10-12) ──────────────────
+// A receipt picture is a file in the job's own receipts folder in the store,
+// or an inline picture — the rule the crew's upload routes already kept. Any
+// other address (another company's stored file decoded out of a read link)
+// is refused here, so every door — the dashboard's actions, the portal's
+// routes, the QA — meets the same rule. A purchase for stock has no job, so
+// only an inline picture.
+
+/** True when `url` may be stored as this row's receipt. */
+export function receiptFileAllowed(url: string, jobId: string | null): boolean {
+  if (IMAGE_DATA_URL.test(url)) return true;
+  return !!jobId && isPrivateJobFile(url, "receipts", jobId);
+}
+
+const RECEIPT_REFUSED = "That receipt file is not in this job's folder — upload the picture again.";
+
 /** May this actor see and add to this job's expenses? A manager: any job of
  *  the company. A limited role: only a job they hold a live assignment on. */
 export async function expenseJobAccess(actor: ExpenseActor, jobId: string): Promise<{ access: ExpenseAccess; job: { id: string; title: string; proposalId: string | null; clientId: string | null } } | null> {
@@ -83,6 +101,7 @@ export interface NewExpense {
 export async function createJobExpense(actor: ExpenseActor, input: NewExpense) {
   const gate = await expenseJobAccess(actor, input.jobId);
   if (!gate) throw new Error("Not found");
+  if (input.receiptUrl && !receiptFileAllowed(input.receiptUrl, input.jobId)) throw new Error(RECEIPT_REFUSED);
   const manager = gate.access === "manager";
   const amount = Number.isFinite(input.amount) ? Math.min(Math.max(input.amount, 0), 1_000_000) : 0;
   const category = (input.category?.trim() || "Materials").slice(0, 60);
@@ -136,6 +155,7 @@ export interface NewStockPurchase {
 /** A purchase for the warehouse: the office's, APPROVED at once, no job. */
 export async function createStockPurchase(actor: ExpenseActor, input: NewStockPurchase) {
   if (isLimitedRole(actor.role) || actor.role === "WORKER_TOKEN") throw new Error("Manager access required");
+  if (input.receiptUrl && !receiptFileAllowed(input.receiptUrl, null)) throw new Error(RECEIPT_REFUSED);
   const amount = Number.isFinite(input.amount) ? Math.min(Math.max(input.amount, 0), 1_000_000) : 0;
   const category = (input.category?.trim() || "Materials").slice(0, 60);
   let stockItemId: string | null = null;
@@ -236,6 +256,8 @@ export async function editJobExpense(actor: ExpenseActor, id: string, patch: Exp
     if (ex.submittedById !== actor.userId) throw new Error("You can only edit your own receipts");
     if (ex.status !== ExpenseStatus.SUBMITTED && ex.status !== ExpenseStatus.REJECTED) throw new Error("An approved receipt can no longer be edited");
   }
+  // The row's own receipt may be sent back as it is; a new one follows the rule.
+  if (patch.receiptUrl && patch.receiptUrl !== ex.receiptUrl && !receiptFileAllowed(patch.receiptUrl, ex.jobId)) throw new Error(RECEIPT_REFUSED);
   const data: Record<string, unknown> = { editedAt: new Date() };
   if (patch.category !== undefined) data.category = patch.category.trim().slice(0, 60) || ex.category;
   if (patch.amount !== undefined) data.amount = Number.isFinite(patch.amount) ? Math.min(Math.max(patch.amount, 0), 1_000_000) : ex.amount;
@@ -250,7 +272,8 @@ export async function editJobExpense(actor: ExpenseActor, id: string, patch: Exp
   // An approved stock purchase whose amount moved re-prices its item.
   if (manager && row.status === ExpenseStatus.APPROVED) await stampStockCost(row, actor.organizationId);
   // A replaced receipt picture leaves the store with the edit (stage B).
-  if (patch.receiptUrl !== undefined && ex.receiptUrl && ex.receiptUrl !== patch.receiptUrl) await deleteStored(ex.receiptUrl);
+  // Not while another row still names the same file (lib/media/ownedFiles).
+  if (patch.receiptUrl !== undefined && ex.receiptUrl && ex.receiptUrl !== patch.receiptUrl) await deleteStoredUnlessReferenced(ex.receiptUrl);
   await logActivity({
     organizationId: actor.organizationId,
     actorId: actor.userId,
@@ -273,7 +296,7 @@ export async function deleteJobExpense(actor: ExpenseActor, id: string) {
     if (ex.status === ExpenseStatus.APPROVED || ex.status === ExpenseStatus.REIMBURSED) throw new Error("An approved receipt can no longer be deleted");
   }
   await db.jobExpense.delete({ where: { id } });
-  await deleteStored(ex.receiptUrl);
+  await deleteStoredUnlessReferenced(ex.receiptUrl);
   await logActivity({
     organizationId: actor.organizationId,
     actorId: actor.userId,

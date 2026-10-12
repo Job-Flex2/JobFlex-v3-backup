@@ -7,7 +7,7 @@ import { putPrivate } from "@/lib/media/privateStore";
 import { enforcePlanLimit } from "@/lib/limitsEngine";
 import { IMAGE_DATA_URL, safeFilename } from "@/lib/safeHref";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
-import { authorizeJobMedia, deleteJobMediaFor, editJobMediaCaption, recordJobMedia } from "@/lib/jobMedia";
+import { authorizeJobMedia, deleteJobMediaFor, editJobMediaCaption, isJobMediaFile, recordJobMedia } from "@/lib/jobMedia";
 import { createJobExpense, deleteJobExpense as deleteExpenseFor } from "@/lib/jobExpenses";
 
 // The expense pair here is the older twin of src/actions/expenses.ts (no
@@ -95,6 +95,9 @@ async function requireJobPhotoAccess(jobId: string) {
 export async function createJobPhoto(jobId: string, raw: unknown) {
   const { organizationId, user, job } = await requireJobPhotoAccess(jobId);
   const data = photoInput.parse(raw);
+  // Only a file in this job's own folder, or an inline picture: a stored
+  // address of another company's file is not "a photo" (security audit 1.1).
+  if (!isJobMediaFile(data.url, jobId)) throw new Error("That file is not in this job's folder.");
   const photo = await db.jobPhoto.create({
     data: {
       jobId,
