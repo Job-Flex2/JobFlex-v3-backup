@@ -100,14 +100,14 @@ import { STORE_SURVEY, storePrice } from "@/lib/deck/storePrices";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
-import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
 import { DeckKindPicker } from "./deck-kind-picker";
 import { DeckClientLink } from "./deck-client-link";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { autoFixDesign, autoFixable, resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
-import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
+import type { DeckBackdrop, DeckEdit, DeckPick, SceneHighlight } from "@/components/estimator/deck/DeckModel3D";
 import { DeckPlan, type PlanEdgeHit, nearestStairEdge } from "./deck-plan";
 import { DeckPhotoView, cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "./deck-photo";
 import s from "./deck-studio.module.css";
@@ -156,9 +156,15 @@ const ago = (iso: string) => {
 /*  Small controls                                                     */
 /* ------------------------------------------------------------------ */
 
-function Field({ label, aside, children, wide }: { label: string; aside?: React.ReactNode; children: React.ReactNode; wide?: boolean }) {
+function Field({ label, aside, children, wide, lights }: { label: string; aside?: React.ReactNode; children: React.ReactNode; wide?: boolean; lights?: { on: (how: "focus" | "hover") => void; off: (how: "focus" | "hover") => void } }) {
   return (
-    <label className={cx(s.field, wide && s.fieldWide)}>
+    <label
+      className={cx(s.field, wide && s.fieldWide)}
+      onFocus={lights ? () => lights.on("focus") : undefined}
+      onBlur={lights ? () => lights.off("focus") : undefined}
+      onMouseEnter={lights ? () => lights.on("hover") : undefined}
+      onMouseLeave={lights ? () => lights.off("hover") : undefined}
+    >
       <span className={s.lbl}>
         <span>{label}</span>
         {aside ? <span className={s.lblAside}>{aside}</span> : null}
@@ -313,42 +319,10 @@ function stepTone(n: number): React.CSSProperties {
 const PHOTO_ENABLED = false;
 
 /**
- * EDIT IN 3D, until it is tried (owner, 2026-10-12: "make the Edit in 3D button slowly blink, to attract the contractor —
- * let him know he can edit the deck and the house in 3D"). The button breathes until this browser has opened the 3D
- * edit once; then it is a button like the others. Kept in localStorage (a private window forgets it: it breathes again).
+ * EDIT IN 3D BREATHES (owner, 2026-10-12: "make the Edit in 3D button slowly blink, to attract the contractor"; then "I
+ * don't see the Edit in 3D button blinking" — it had stopped for good once tried): a slow breath whenever the 3D edit is
+ * off, every visit; still while editing.
  */
-const EDIT_TRIED_KEY = "jf-deck-edit3d-tried";
-const editTried = (() => {
-  let triedHere = false;
-  const listeners = new Set<() => void>();
-  return {
-    subscribe(cb: () => void) {
-      listeners.add(cb);
-      return () => {
-        listeners.delete(cb);
-      };
-    },
-    get(): boolean {
-      if (triedHere) return true;
-      try {
-        return window.localStorage.getItem(EDIT_TRIED_KEY) === "1";
-      } catch {
-        return false;
-      }
-    },
-    /** The server draws it still; the browser decides once it is running. */
-    server: () => true,
-    mark() {
-      triedHere = true;
-      try {
-        window.localStorage.setItem(EDIT_TRIED_KEY, "1");
-      } catch {
-        // a private window: this visit remembers it
-      }
-      listeners.forEach((l) => l());
-    },
-  };
-})();
 
 function Step({ n, title, summary, children, id }: { n: number; title: string; summary: string; children: React.ReactNode; id?: string }) {
   const ref = React.useRef<HTMLDetailsElement>(null);
@@ -595,7 +569,23 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     }
     setFixReport({ fixed: r.fixes, left: r.left.map((c) => `${c.part}: ${c.text.split(/(?<=\.)\s/)[0]}`) });
   };
+  // THE WALL FIELD, SHOWN IN 3D (owner, 2026-10-12: "when I click a box to type in, show in the 3D which one it is —
+  // make it smart"): the field being typed in — or, failing that, the one the pointer is over — lights its part of the
+  // house (lib/deck/house wallHighlight): the wall past an end of the deck, a step, the stretch of wall a step moves.
+  const [wallFocus, setWallFocus] = React.useState<WallFocus | null>(null);
+  const [wallHover, setWallHover] = React.useState<WallFocus | null>(null);
+  const lightsFor = (f: WallFocus) => ({
+    on: (how: "focus" | "hover") => (how === "focus" ? setWallFocus(f) : setWallHover(f)),
+    off: (how: "focus" | "hover") => (how === "focus" ? setWallFocus((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x)) : setWallHover((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x))),
+  });
   const scene = React.useMemo(() => deckScene(structure), [structure]);
+  const wallLit = React.useMemo<SceneHighlight | null>(() => {
+    const f = wallFocus ?? wallHover;
+    const hs = scene.house;
+    if (!f || !hs) return null;
+    const heightOf = (x0: number, x1: number) => hs.blocks.find((b) => Math.abs(b[0] - x0) < 0.01 && Math.abs(b[2] - x1) < 0.01)?.[4] ?? hs.heightFt;
+    return wallHighlight(design.shape, design.house, f, heightOf);
+  }, [wallFocus, wallHover, scene, design.shape, design.house]);
   const elevation = React.useMemo(() => deckElevation(scene), [scene]);
   const wall = wallType(design.wall);
   const withDeck = hasDeck(design);
@@ -631,7 +621,6 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const [focus, setFocus] = React.useState<[number, number, number] | null>(null);
   const [placing, setPlacing] = React.useState<Placing>(null);
   const [editing, setEditing] = React.useState(false);
-  const editTriedHere = React.useSyncExternalStore(editTried.subscribe, editTried.get, editTried.server);
   /** A handle dragged in the 3D: the design number it stands for takes the dragged value, inside its rails. */
   const onEdit = React.useCallback(
     (e: DeckEdit) => {
@@ -1446,7 +1435,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </div>
             ) : view === "3d" ? (
               <>
-                <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+                <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} highlight={wallLit} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                 {editing && !placing ? (
                   <div className={s.placeBanner} data-deck-editing>
                     <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge and its width at its side, the house&apos;s two corners and every step in its wall. Everything re-frames and re-prices as you drag.</span>
@@ -1525,15 +1514,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </button>
                 <button
                   type="button"
-                  className={cx(s.btn, s.btnSm, editing && s.btnOn, !editing && !editTriedHere && s.btnBreath)}
+                  className={cx(s.btn, s.btnSm, editing && s.btnOn, !editing && s.btnBreath)}
                   aria-pressed={editing}
                   title="Drag the deck, the stairs and the house's walls right in the 3D"
-                  onClick={() => {
-                    setEditing((x) => !x);
-                    editTried.mark();
-                  }}
+                  onClick={() => setEditing((x) => !x)}
                   data-deck-edit
-                  data-deck-edit-breathing={!editing && !editTriedHere ? "" : undefined}
+                  data-deck-edit-breathing={!editing ? "" : undefined}
                 >
                   Edit in 3D
                 </button>
@@ -1724,10 +1710,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </div>
               </Field>
               <div className={s.rowGrid}>
-                <Field label="Wall past the deck's left end" aside="ft">
+                <Field label="Wall past the deck's left end" aside="ft" lights={lightsFor({ kind: "left" })}>
                   <NumberInput label="Wall past the left end, feet" value={design.house.leftFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ leftFt: n2 })} />
                 </Field>
-                <Field label="Wall past the deck's right end" aside="ft">
+                <Field label="Wall past the deck's right end" aside="ft" lights={lightsFor({ kind: "right" })}>
                   <NumberInput label="Wall past the right end, feet" value={design.house.rightFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.extendFt.min} max={HOUSE_LIMITS.extendFt.max} onCommit={(n2) => setHouse({ rightFt: n2 })} />
                 </Field>
               </div>
@@ -1739,13 +1725,13 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                       <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => setHouse({ jogs: design.house.jogs.filter((x) => x.id !== j.id) })} data-deck-house-jog-remove>Remove</button>
                     </div>
                     <div className={s.rowGrid}>
-                      <Field label="Where, from the deck's left end" aside="ft">
+                      <Field label="Where, from the deck's left end" aside="ft" lights={lightsFor({ kind: "step", id: j.id })}>
                         <NumberInput label="Step at, feet from the deck's left end" value={j.atFt} parse={parseFeet} format={feetText} min={-design.house.leftFt + 1} max={design.shape.widthFt + design.house.rightFt - 1} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, atFt: n2 } : x)) })} />
                       </Field>
-                      <Field label="The wall to its right">
+                      <Field label="The wall to its right" lights={lightsFor({ kind: "part", id: j.id })}>
                         <Seg small label="The wall to its right" value={j.dir} onChange={(v: HouseJog["dir"]) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, dir: v } : x)) })} options={[{ value: "toward", label: "Comes out" }, { value: "away", label: "Steps back" }]} />
                       </Field>
-                      <Field label="By" aside="ft">
+                      <Field label="By" aside="ft" lights={lightsFor({ kind: "part", id: j.id })}>
                         <NumberInput label="By, feet" value={j.depthFt} parse={parseFeet} format={feetText} min={HOUSE_LIMITS.depthFt.min} max={HOUSE_LIMITS.depthFt.max} onCommit={(n2) => setHouse({ jogs: design.house.jogs.map((x) => (x.id === j.id ? { ...x, depthFt: n2 } : x)) })} />
                       </Field>
                     </div>
@@ -2185,8 +2171,22 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </Field>
                 {r.kind === "gable" || r.kind === "hip" || r.kind === "gambrel" ? (
                   <Field label="At the ridge" aside={r.ridge === "auto" ? (roof.trusses ? "picked: trusses" : roof.ridge ? `picked: ${roof.ridge.kind === "beam" ? "ridge beam" : "ridge board"}` : undefined) : undefined} wide>
-                    <Seg small label="At the ridge" value={r.ridge} onChange={(v) => rp({ ridge: v })} options={[{ value: "auto", label: "Auto" }, { value: "beam", label: "Ridge beam", title: "The rafters bear on a beam; the ceiling stays open" }, { value: "board", label: "Ridge board + ties", title: "A board between the rafters, with rafter ties every 4 ft" }, ...(r.kind === "gable" ? [{ value: "trusses" as const, label: "Trusses", title: "Manufactured trusses 24 in. on center, one piece header to header — designed and stamped by the truss maker" }] : [])]} />
+                    <Seg small label="At the ridge" value={r.ridge} onChange={(v) => rp({ ridge: v })} options={[{ value: "auto", label: "Auto" }, { value: "beam", label: "Ridge beam", title: r.kind === "hip" ? "A beam on two king posts, each standing on a cross beam from eave header to eave header; the ceiling stays open" : "The rafters bear on a beam; the ceiling stays open" }, { value: "board", label: "Ridge board + ties", title: "A board between the rafters, with rafter ties every 4 ft" }, ...(r.kind === "gable" ? [{ value: "trusses" as const, label: "Trusses", title: "Manufactured trusses 24 in. on center, one piece header to header — designed and stamped by the truss maker" }] : [])]} />
                   </Field>
+                ) : null}
+                {/* CROSS BEAMS (2026-10-12, owner: "selections of beams for cross roof beams and supports"): under a gable's
+                    ridge beam, each from eave header to eave header with a king post under the ridge — the ridge spans
+                    shorter, and a post stands under each end. A free hip's ridge beam always stands on two. */}
+                {roof.kind === "gable" && roof.ridge?.kind === "beam" && !roof.trusses ? (
+                  <Field label="Cross beams under the ridge" aside={roof.crossBeams ? `the ridge spans ${ftIn(roof.ridge.spanIn)} between king posts` : "the ridge spans end to end"} wide>
+                    <Seg small label="Cross beams under the ridge" value={r.crossBeams} onChange={(v) => rp({ crossBeams: v })} options={[0, 1, 2, 3].map((v) => ({ value: v, label: v === 0 ? "None" : String(v), title: v === 0 ? "The ridge beam spans from one end to the other on king posts" : `${v} cross beam${v > 1 ? "s" : ""} from eave to eave, each with a king post under the ridge and a post under each end` }))} />
+                  </Field>
+                ) : null}
+                {roof.kind === "hip" && roof.attach === "free" && roof.ridge?.kind === "beam" ? (
+                  <p className={s.hint} data-deck-hip-cross>The ridge beam stands on two king posts, each on a cross beam from eave header to eave header, with a post under each end of the cross beams. Nothing pushes the headers apart, so no ties.</p>
+                ) : null}
+                {roof.ringTensionLb > 0 ? (
+                  <p className={s.hint} data-deck-ring>The hips push the corners out — about {roof.ringTensionLb.toLocaleString("en-US")} lb at each header joint. A tension strap across every joint holds the headers as a ring; they are in the material list.</p>
                 ) : null}
                 {design.structure === "pergola" && r.pergolaStyle !== "louvered" ? (
                   <div className={s.grid2}>

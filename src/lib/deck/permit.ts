@@ -320,7 +320,10 @@ export function detailDrawings(s: DeckStructure): DetailDrawing[] {
         roof.trusses
           ? `${roof.trusses.count} manufactured trusses @ 24 in. o.c. span ${ftIn(roof.trusses.spanIn)} bearing to bearing at ${roof.roof.pitch}:12, designed and stamped by the truss maker for ${roof.roofLoad} psf ${roof.roofLoad === 20 ? "roof live load" : "ground snow"} and ${roof.deadPsf} psf dead; the truss design drawings are submitted with the permit. IRC R802.10.1; permanent bracing per those drawings and BCSI-B3, IRC R802.10.3.`
           : `${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. o.c. span ${ftIn(roof.rafters.spanIn)} (the table allows ${ftIn(roof.rafters.maxSpanIn)}) at ${roof.roof.pitch}:12. ${RULE_RAFTER[roof.roofLoad]}.`,
-        `Each ${roof.trusses ? "truss bears on the header with a hurricane tie at each end" : "rafter seat-cut over the header with a hurricane tie"}; headers ${[...new Set(roof.headers.map((h) => h.spec.size))].join(" / ")} in post caps. ${RULE.beam}.`,
+        `Each ${roof.trusses ? "truss bears on the header with a hurricane tie at each end" : "rafter seat-cut over the header with a hurricane tie"}; headers ${[...new Set(roof.headers.filter((h) => !h.cross).map((h) => h.spec.size))].join(" / ")} in post caps. ${RULE.beam}.`,
+        // 2026-10-12: the cross beams under the ridge and the ring's straps.
+        ...(roof.crossBeams ? [`${roof.crossBeams === 1 ? "A cross beam" : `${roof.crossBeams} cross beams`} (${[...new Set(roof.headers.filter((h) => h.cross).map((h) => h.spec.size))].join(" / ")}) hung on the headers in beam hangers over a post at each end, each carrying a king post under the ridge beam.`] : []),
+        ...(roof.ringTensionLb > 0 ? [`A tension strap across every header joint, rated for at least ${roof.ringTensionLb.toLocaleString("en-US")} lb: the hips push the corners out.`] : []),
         roof.attach === "wall" ? `Roof ledger on the house with structural screws, flashed. ${RULE.ledgerBoard}.` : `Free-standing: knee braces at the posts hold the roof square. ${RULE.bracing}.`,
       ],
     });

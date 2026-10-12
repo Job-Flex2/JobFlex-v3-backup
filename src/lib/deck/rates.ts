@@ -197,6 +197,8 @@ export const DECK_RATES: readonly DeckRateDef[] = [
   hw("ringPlate", "Steel compression ring for a polygon roof", 140, "ea", 2000),
   hw("kingBracket", "Post-to-beam bracket at a king post or wall", 22),
   hw("beamHanger", "Beam hanger to the house", 38),
+  // 2026-10-12: across every header joint of a hip or a gazebo ring — the hips push the corners out (lib/deck/roof).
+  hw("cornerStrap", "Tension strap across a header joint", 14),
   hw("roofScrew", "Structural screw, roof ledger to the house", 1.1),
   roof("sheathing", "Roof sheathing, 1/2-in. 4x8 sheet", "ea", 24),
   roof("underlayment", "Synthetic underlayment", "sq", 42),

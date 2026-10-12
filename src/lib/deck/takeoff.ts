@@ -509,7 +509,10 @@ export function deckTakeoff(s: DeckStructure): DeckTakeoff {
     hw("wall-hangers", "roof-frame", "Beam hangers at the house wall", roof.hardware.wallHangers, "hw.beamHanger");
     hw("ring-plate", "roof-frame", "Steel compression ring at the peak", roof.hardware.ringPlate, "hw.ringPlate");
     hw("gussets", "roof-frame", "Plywood gussets at the gambrel's break", roof.hardware.gussets, "hw.connectorFasteners", 4);
-    hw("roof-connector-fasteners", "roof-frame", "Connector nails and screws", roof.hardware.hurricaneTies + roof.hardware.rafterHangers + roof.hardware.postCaps + roof.hardware.kingBrackets + roof.hardware.wallHangers, "hw.connectorFasteners", 1, "ea", "one set per connector");
+    // 2026-10-12: the hips push the corners out (a strap across every header joint); cross beams hang on the headers.
+    hw("corner-straps", "roof-frame", "Tension straps across the header joints", roof.hardware.cornerStraps, "hw.cornerStrap", 1, "ea", `each rated for at least ${roof.ringTensionLb.toLocaleString("en-US")} lb — the hips push the corners out`);
+    hw("cross-hangers", "roof-frame", "Beam hangers, cross beams into the headers", roof.hardware.crossHangers, "hw.beamHanger", 1, "ea", "over the posts under each cross beam's ends");
+    hw("roof-connector-fasteners", "roof-frame", "Connector nails and screws", roof.hardware.hurricaneTies + roof.hardware.rafterHangers + roof.hardware.postCaps + roof.hardware.kingBrackets + roof.hardware.wallHangers + roof.hardware.cornerStraps + roof.hardware.crossHangers, "hw.connectorFasteners", 1, "ea", "one set per connector");
     hw("roof-framing-fasteners", "roof-frame", "Framing nails and screws", Math.round(pergola ? roof.footprintSqFt : roof.roofAreaSqFt), "fast.framing", 1, "sq ft");
     if (roof.louvers) push({ id: "louvers", step: "roof-frame", kind: "roofing", label: "Louvered slats, manual, with hardware", qty: roof.louvers.sqFt, unit: "sq ft", note: `${roof.louvers.blades} blades that turn`, rateKey: "trim.louverKit", rateQty: roof.louvers.sqFt, factor: 1 });
 

@@ -315,6 +315,67 @@ export function houseScene(shape: DeckShape, house: HouseDesign, ctx: { deckHeig
   return { blocks, heightFt: mainH, door, storeys: house.storeys, roof: house.roof, windows: windows.slice(0, 60), siding: sidingHex(house.siding), roofColour: roofHex(house.roofColour) };
 }
 
+/* ── A field of the House step, shown in the 3D ─────────────────────── */
+
+/** Which wall field the contractor is in or over (owner, 2026-10-12: "when I click a box to type in, show in the 3D which one it is — make it smart"). */
+export type WallFocus = { kind: "left" } | { kind: "right" } | { kind: "step"; id: string } | { kind: "part"; id: string };
+
+/** A length as the House step says it: "11 ft", or 7'-6". */
+const feetWords = (n: number) => {
+  const i = Math.round(Math.abs(n) * 12);
+  return i % 12 ? `${Math.floor(i / 12)}'-${i % 12}"` : `${i / 12} ft`;
+};
+
+/**
+ * What that field stands for, lit up in the 3D: boxes [x0, y0, z0, x1, y1, z1] in the scene's feet (x along the house
+ * from the deck's left end, y out from the house line, z up) laid on the wall's own faces, and a tag over them. The wall
+ * past either end of the deck; a step — the return wall where the wall steps (a marker where the two faces line up); a
+ * step's "the wall to its right" and "by" — that stretch of wall and its step. `heightOf` reads a part's wall height off
+ * the 3D's own house blocks.
+ */
+export function wallHighlight(shape: DeckShape, house: HouseDesign, focus: WallFocus, heightOf: (x0: number, x1: number) => number): { boxes: number[][]; tag: { x: number; y: number; z: number; text: string } } | null {
+  const W = shape.widthFt;
+  const parts = wallParts(house, shape);
+  if (!parts.length) return null;
+  const T = 0.22;
+  const face = (p: WallPart, x0: number, x1: number) => [x0, p.depthFt - 0.05, 0, x1, p.depthFt + 0.45, heightOf(p.x0, p.x1)];
+  if (focus.kind === "left" || focus.kind === "right") {
+    const isLeft = focus.kind === "left";
+    const a = isLeft ? -house.leftFt : W;
+    const b = isLeft ? 0 : W + house.rightFt;
+    const boxes: number[][] = [];
+    for (const p of parts) {
+      const x0 = Math.max(p.x0, a);
+      const x1 = Math.min(p.x1, b);
+      if (x1 - x0 > 0.05) boxes.push(face(p, x0, x1));
+    }
+    const at = isLeft ? 0 : W;
+    const edge = parts.find((p) => p.x0 <= at + 1e-6 && p.x1 >= at - 1e-6) ?? parts[0];
+    if (!boxes.length) boxes.push([at - T, edge.depthFt - 0.05, 0, at + T, edge.depthFt + 0.45, heightOf(edge.x0, edge.x1)]);
+    const top = Math.max(...boxes.map((bx) => bx[5]));
+    const mid = (Math.min(...boxes.map((bx) => bx[0])) + Math.max(...boxes.map((bx) => bx[3]))) / 2;
+    const extra = isLeft ? house.leftFt : house.rightFt;
+    const end = isLeft ? "left" : "right";
+    const text = extra > 0 ? `${feetWords(extra)} of wall past the deck's ${end} end` : `The wall ends at the deck's ${end} end`;
+    return { boxes, tag: { x: mid, y: Math.max(...boxes.map((bx) => bx[4])) + 0.3, z: top + 1.2, text } };
+  }
+  const n = house.jogs.findIndex((j) => j.id === focus.id);
+  if (n < 0) return null;
+  const j = house.jogs[n];
+  const right = parts.find((p) => Math.abs(p.x0 - j.atFt) < 0.01);
+  const left = parts.find((p) => Math.abs(p.x1 - j.atFt) < 0.01);
+  if (!right || !left) return null;
+  const hStep = Math.max(heightOf(left.x0, left.x1), heightOf(right.x0, right.x1));
+  const y0 = Math.min(left.depthFt, right.depthFt);
+  const y1 = Math.max(left.depthFt, right.depthFt);
+  const step = [j.atFt - T, y0 - 0.05, 0, j.atFt + T, Math.max(y1, y0 + 0.4) + 0.45, hStep];
+  const where = j.atFt < 0 ? `${feetWords(-j.atFt)} past the deck's left end` : j.atFt > W ? `${feetWords(j.atFt - W)} past the deck's right end` : `${feetWords(j.atFt)} from the deck's left end`;
+  if (focus.kind === "step") return { boxes: [step], tag: { x: j.atFt, y: y1 + 0.8, z: hStep + 1.2, text: `Step ${n + 1} · ${where}` } };
+  const moves = j.dir === "toward" ? `comes out ${feetWords(j.depthFt)}` : `steps back ${feetWords(j.depthFt)}`;
+  const hRight = heightOf(right.x0, right.x1);
+  return { boxes: [face(right, right.x0, right.x1), step], tag: { x: (right.x0 + right.x1) / 2, y: right.depthFt + 0.8, z: hRight + 1.2, text: `Step ${n + 1} · the wall to its right ${moves}` } };
+}
+
 /** A back notch on a wall with no steps at all (an older design, or the Shape step ahead of the house) is drawn as the bump-out it wraps. */
 function impliedParts(parts: WallPart[], shape: DeckShape, house: HouseDesign): WallPart[] {
   if (house.jogs.length || shape.kind !== "L" || !shape.notch.corner.startsWith("back") || parts.length !== 1) return parts;

@@ -79,6 +79,18 @@ export interface DeckModel3DProps {
   onEdit?: (edit: DeckEdit) => void;
   /** The house's own wall from the contractor's photo, standing where the house is (null: the drawn house). */
   backdrop?: DeckBackdrop | null;
+  /** A part lit up for the contractor — the wall field being typed in (lib/deck/house wallHighlight). */
+  highlight?: SceneHighlight | null;
+}
+
+/**
+ * A PART LIT UP (owner, 2026-10-12: "when I click a box to type in, show in the 3D which one it is — make it smart"):
+ * boxes in the scene's feet [x0, y0, z0, x1, y1, z1] drawn in blueprint blue through everything in front of them,
+ * breathing while they stand, and a tag above them.
+ */
+export interface SceneHighlight {
+  boxes: number[][];
+  tag?: { x: number; y: number; z: number; text: string } | null;
 }
 
 /**
@@ -435,7 +447,7 @@ interface Built {
   dispose: () => void;
 }
 
-export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = false, night = false, connections = false, placing = false, className, label, resetToken = 0, onPick, focus = null, edit = false, onEdit, backdrop = null }: DeckModel3DProps) {
+export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = false, night = false, connections = false, placing = false, className, label, resetToken = 0, onPick, focus = null, edit = false, onEdit, backdrop = null , highlight = null }: DeckModel3DProps) {
   const mountRef = React.useRef<HTMLDivElement>(null);
   const [supported] = React.useState(webglSupported);
   const sceneRef = React.useRef(scene);
@@ -453,7 +465,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     editCbRef.current = onEdit;
   }, [onPick, onEdit]);
   /** Set by the mount effect: rebuild from the scene, re-apply what is standing, go back to the first view, fly somewhere. */
-  const api = React.useRef<{ rebuild: () => void; apply: () => void; reset: () => void; flyTo: (p: [number, number, number], size?: number) => void } | null>(null);
+  const api = React.useRef<{ rebuild: () => void; apply: () => void; reset: () => void; flyTo: (p: [number, number, number], size?: number) => void; highlight: () => void } | null>(null);
 
   React.useEffect(() => {
     if (resetToken) api.current?.reset();
@@ -468,6 +480,14 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
   React.useEffect(() => {
     if (focus) api.current?.flyTo(focus, 4);
   }, [focus]);
+  // The lit part follows its value, not the parent's fresh object.
+  const highlightRef = React.useRef(highlight);
+  const highlightKey = highlight ? JSON.stringify(highlight) : "";
+  React.useEffect(() => {
+    highlightRef.current = highlight;
+    api.current?.highlight();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is the highlight's value
+  }, [highlightKey]);
   React.useEffect(() => {
     sceneRef.current = scene;
     api.current?.rebuild();
@@ -1466,10 +1486,79 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const resized = !fitted || fitted.w !== s.widthFt || fitted.d !== s.depthFt || fitted.h !== peak;
       if (resized && !drag) frame(false);
       apply();
+      api.current?.highlight();
     };
 
-    api.current = { rebuild, apply, reset: () => frame(true), flyTo };
+    // THE FIELD BEING TYPED IN, SHOWN (2026-10-12): its part of the house in blueprint blue, through whatever stands in
+    // front of it, breathing (still, for reduced motion), with a tag that keeps its size on the screen.
+    const calm = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    let lit: { group: THREE.Group; fill: THREE.MeshBasicMaterial; dispose: () => void } | null = null;
+    const highlight = () => {
+      if (lit) {
+        world.remove(lit.group);
+        lit.dispose();
+        lit = null;
+      }
+      const h = highlightRef.current;
+      mount.dataset.deck3dHighlight = h && h.boxes.length ? h.tag?.text ?? "on" : "";
+      if (!h || !h.boxes.length) {
+        dirty = true;
+        return;
+      }
+      const s = sceneRef.current;
+      const ox = s.widthFt / 2;
+      const oz = s.depthFt / 2;
+      const group = new THREE.Group();
+      const fill = new THREE.MeshBasicMaterial({ color: 0x2a6fd6, transparent: true, opacity: 0.32, depthTest: false, depthWrite: false });
+      const line = new THREE.LineBasicMaterial({ color: 0x1854a0, transparent: true, opacity: 0.95, depthTest: false });
+      const edges: THREE.BufferGeometry[] = [];
+      for (const b of h.boxes) {
+        const [x0, y0, z0, x1, y1, z1] = b;
+        const sx = Math.max(0.05, x1 - x0);
+        const sy = Math.max(0.05, y1 - y0);
+        const sz = Math.max(0.05, z1 - z0);
+        const at = new THREE.Vector3((x0 + x1) / 2 - ox, (z0 + z1) / 2, (y0 + y1) / 2 - oz);
+        const m = new THREE.Mesh(unitBox, fill);
+        m.position.copy(at);
+        m.scale.set(sx, sz, sy);
+        m.renderOrder = 30;
+        group.add(m);
+        const solid = new THREE.BoxGeometry(sx, sz, sy);
+        const eg = new THREE.EdgesGeometry(solid);
+        solid.dispose();
+        edges.push(eg);
+        const e = new THREE.LineSegments(eg, line);
+        e.position.copy(at);
+        e.renderOrder = 31;
+        group.add(e);
+      }
+      let tag: ReturnType<typeof tagSprite> | null = null;
+      if (h.tag) {
+        tag = tagSprite(h.tag.text, true);
+        tag.sprite.position.set(h.tag.x - ox, h.tag.z, h.tag.y - oz);
+        tag.sprite.userData.dim = true;
+        // Read at a glance: half again the size of a dimension's tag.
+        tag.sprite.userData.boost = 1.6;
+        tag.sprite.renderOrder = 32;
+        group.add(tag.sprite);
+      }
+      world.add(group);
+      lit = {
+        group,
+        fill,
+        dispose: () => {
+          fill.dispose();
+          line.dispose();
+          for (const g of edges) g.dispose();
+          tag?.dispose();
+        },
+      };
+      dirty = true;
+    };
+
+    api.current = { rebuild, apply, reset: () => frame(true), flyTo, highlight };
     rebuild();
+    highlight();
 
     // Picking: a touch names the part, a click flies to it (or places a fixture there).
     const ray = new THREE.Raycaster();
@@ -1704,16 +1793,23 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     let raf = 0;
     const tick = () => {
       raf = requestAnimationFrame(tick);
+      if (lit && !calm) {
+        lit.fill.opacity = 0.2 + 0.22 * (0.5 + 0.5 * Math.sin((performance.now() / 1600) * Math.PI * 2));
+        dirty = true;
+      }
       const moved = orbit.update();
       if (!moved && !dirty) return;
       dirty = false;
       // A tag keeps its size on the screen's scale of the deck, wherever the camera stands.
-      if (content) {
+      if (content || lit) {
         const dist = camera.position.distanceTo(orbit.target);
         const size = Math.max(0.3, Math.min(span * 0.035, dist * 0.045));
-        content.group.traverse((o) => {
-          if (o instanceof THREE.Sprite && o.userData.dim) o.scale.set(size * (o.userData.aspect as number), size, 1);
-        });
+        const fit = (o: THREE.Object3D) => {
+          const k = (o.userData.boost as number | undefined) ?? 1;
+          if (o instanceof THREE.Sprite && o.userData.dim) o.scale.set(size * k * (o.userData.aspect as number), size * k, 1);
+        };
+        content?.group.traverse(fit);
+        lit?.group.traverse(fit);
       }
       renderer.render(world, camera);
       if (content && editRef.current) placeKnobs();
@@ -1748,6 +1844,10 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       if (content) {
         world.remove(content.group);
         content.dispose();
+      }
+      if (lit) {
+        world.remove(lit.group);
+        lit.dispose();
       }
       unitBox.dispose();
       unitCyl.dispose();
