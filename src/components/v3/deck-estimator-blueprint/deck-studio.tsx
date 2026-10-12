@@ -28,7 +28,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { resolveMarket, parseStateZip, type MarketSnapshot } from "@/lib/fence/market";
 import { DECKING, DECKING_FAMILY_LABEL, DECKING_FAMILY_ORDER, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, wallType } from "@/lib/deck/catalog";
-import { LEDGER_FASTENER_LABEL, LOADS, POST_SIZES, SOLID_BEAMS, ftIn, type LoadPsf, type SoilPsf } from "@/lib/deck/codeTables";
+import { LEDGER_FASTENER_LABEL, LOADS, POST_SIZES, SOLID_BEAMS, ftIn, solidBeamTabulated, type LoadPsf, type SoilPsf } from "@/lib/deck/codeTables";
 import {
   BUILT_UP_CHOICES,
   CEILING_LABEL,
@@ -97,9 +97,9 @@ import { HouseWallPlan } from "./house-wall-plan";
 import { DeckKindPicker } from "./deck-kind-picker";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
-import { resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
+import { autoFixDesign, autoFixable, resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
 import type { DeckBackdrop, DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
-import { DeckPlan, type PlanEdgeHit } from "./deck-plan";
+import { DeckPlan, type PlanEdgeHit, nearestStairEdge } from "./deck-plan";
 import { DeckPhotoView, cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "./deck-photo";
 import s from "./deck-studio.module.css";
 
@@ -448,6 +448,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const roof = pkg.roof;
   const checks = React.useMemo(() => deckChecks(structure), [structure]);
   const summary = checkSummary(checks);
+  // AUTO-FIX (owner, 2026-10-11: "offer fixes or auto fix"): every failure's fix and the warnings the code answers, in
+  // one tap (lib/deck/settle autoFixDesign); what was done and what is left for a person is said under the header.
+  const fixableCount = React.useMemo(() => autoFixable(checks), [checks]);
+  const [fixReport, setFixReport] = React.useState<{ fixed: string[]; left: string[] } | null>(null);
+  const runAutoFix = () => {
+    const r = autoFixDesign(design, { rates: book, market });
+    if (r.design !== design) {
+      dirty.current = true;
+      setDesign(r.design);
+    }
+    setFixReport({ fixed: r.fixes, left: r.left.map((c) => `${c.part}: ${c.text.split(/(?<=\.)\s/)[0]}`) });
+  };
   const scene = React.useMemo(() => deckScene(structure), [structure]);
   const elevation = React.useMemo(() => deckElevation(scene), [scene]);
   const wall = wallType(design.wall);
@@ -465,7 +477,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   }, [design, book, market, homeState, withDeck, structure.rails.required]);
 
   /* ── the 3D's build-up, night, connections, picking ── */
-  const [view, setView] = React.useState<"3d" | "plan" | "photo">("3d");
+  const [view, setView] = React.useState<"3d" | "plan" | "wall" | "photo">("3d");
+  // THE DRAWING, LARGE (owner, 2026-10-11: "more space for drawing"): the House step's wall-and-deck drawing in the viewer.
+  const openWallLarge = React.useCallback(() => {
+    setView("wall");
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1100px)").matches) document.querySelector("[data-deck-viewer]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const buildLayers = React.useMemo(() => sceneBuildLayers(scene), [scene]);
   const LAYERS = buildLayers.length;
   const [built, setBuilt] = React.useState<number>(Number.POSITIVE_INFINITY);
@@ -574,6 +591,15 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         setHoverPick(pick);
         return;
       }
+      if (placing?.kind === "stair") {
+        // A click anywhere on the deck takes its nearest open edge (owner, 2026-10-11: "on the 3D, click anywhere to add steps").
+        if (!pick) return;
+        const hit = nearestStairEdge(structure, pick.point[0] * 12, pick.point[1] * 12, Number.POSITIVE_INFINITY);
+        if (!hit) return;
+        setStairs((list) => [...list, { ...defaultStair(`s${list.length + 1}-${Date.now().toString(36).slice(-3)}`, hit.side, hit.atFt), level: hit.level }]);
+        setPlacing(null);
+        return;
+      }
       if (placing?.kind === "fixture") {
         if (!pick) return;
         const id = placing.id;
@@ -584,7 +610,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       if (pick?.legend) setPicked({ legend: pick.legend, point: pick.point });
       else setPicked(null);
     },
-    [placing, setFixtures],
+    [placing, setFixtures, setStairs, structure],
   );
   const placeStair = (hit: PlanEdgeHit) => {
     setStairs((list) => [...list, { ...defaultStair(`s${list.length + 1}-${Date.now().toString(36).slice(-3)}`, hit.side, hit.atFt), level: hit.level }]);
@@ -967,6 +993,15 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     }
     setBusy(false);
   };
+  // THE MATERIAL LIST (owner, 2026-10-11): the takeoff for the lumber yard's quote or the installer's purchase, on its own page.
+  const materialsHref = React.useCallback((forWhom: "yard" | "installer") => {
+    try {
+      const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ design, address, title: draftTitle.trim() || undefined }))));
+      return `/deck-materials?d=${encodeURIComponent(payload)}&for=${forWhom}`;
+    } catch {
+      return null;
+    }
+  }, [design, address, draftTitle]);
   const permitHref = React.useMemo(() => {
     try {
       const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ design, address }))));
@@ -1123,18 +1158,22 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
 
       <div className={s.layout}>
         {/* ── the structure ─────────────────────────────────────── */}
-        <section className={cx(s.card, s.viewer)} aria-label={`The ${what.toLowerCase()}`}>
+        <section className={cx(s.card, s.viewer)} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
           <div className={s.viewHead}>
             <div className={s.viewTitle}>
               <span className={s.cardTitle}>The {what.toLowerCase()}</span>
               <span className={s.mono}>{scene.facts}</span>
             </div>
-            <Seg small label="View" value={view} onChange={setView} options={PHOTO_ENABLED ? [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }, { value: "photo" as const, label: "Photo" }] : [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }]} />
+            <Seg small label="View" value={view} onChange={setView} options={PHOTO_ENABLED ? [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }, { value: "wall" as const, label: "House & deck" }, { value: "photo" as const, label: "Photo" }] : [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }, { value: "wall" as const, label: "House & deck" }]} />
           </div>
-          <div className={s.viewBox}>
-            {view === "3d" ? (
+          <div className={cx(s.viewBox, view === "wall" && s.viewBoxWall)}>
+            {view === "wall" ? (
+              <div className={cx(s.planWrap, s.wallWrap)} data-deck-wall-large-view>
+                <HouseWallPlan size="large" shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} />
+              </div>
+            ) : view === "3d" ? (
               <>
-                <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+                <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                 {editing && !placing ? (
                   <div className={s.placeBanner} data-deck-editing>
                     <span>Drag the blue knobs: the deck&apos;s width, depth and height, the roof&apos;s height and its pitch at the peak, the lower level, each stair along its edge and its width at its side, the house&apos;s two corners and every step in its wall. Everything re-frames and re-prices as you drag.</span>
@@ -1145,6 +1184,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <div className={s.pickTag} data-deck-hover>
                     <b>{hoverPick.legend.role}{hoverPick.legend.nominal ? ` · ${hoverPick.legend.nominal}` : ""}{hoverPick.legend.lengthFt ? ` · ${ftIn(hoverPick.legend.lengthFt * 12)}` : ""}</b>
                     {hoverPick.legend.note.split(/(?<=\.)\s/)[0]} {hoverPick.layer !== null ? <span className={s.mono}>click to zoom</span> : null}
+                  </div>
+                ) : null}
+                {placing?.kind === "stair" ? (
+                  <div className={s.placeBanner} data-deck-placing="stair-3d">
+                    <span>Click the deck where the stairs go — they take the nearest open edge, on whichever level you click.</span>
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setPlacing(null)}>Cancel</button>
                   </div>
                 ) : null}
                 {placingFixture ? (
@@ -1189,6 +1234,11 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <button type="button" className={cx(s.btn, s.btnSm, xray && s.btnOn)} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
                   X-ray
                 </button>
+                {structure.frame ? (
+                  <button type="button" className={cx(s.btn, s.btnSm, placing?.kind === "stair" && s.btnOn)} aria-pressed={placing?.kind === "stair"} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => setPlacing(placing?.kind === "stair" ? null : { kind: "stair" })} data-deck-3d-add-stair>
+                    {placing?.kind === "stair" ? "Click the deck…" : "+ Stairs"}
+                  </button>
+                ) : null}
                 {PHOTO_ENABLED && design.photo?.placed ? (
                   <button type="button" className={cx(s.btn, s.btnSm, showHouse && s.btnOn)} aria-pressed={showHouse} onClick={() => setShowHouse((v) => !v)} data-deck-house-toggle>
                     House photo
@@ -1355,7 +1405,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </Field>
               </div>
               <Field label="The back wall and the deck, seen from above — drag anything" wide>
-                <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} />
+                <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} onOpenLarge={openWallLarge} />
               </Field>
               <div className={s.rowGrid}>
                 <Field label="Siding">
@@ -1614,10 +1664,14 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </Field>
               <div className={s.grid2}>
                 <Field label="Beam made of">
-                  <select className={s.sel} value={design.framing.beamKind} onChange={(e) => patch({ framing: { beamKind: e.target.value as DeckDesign["framing"]["beamKind"], beam: "auto" } })}>
-                    <option value="solid">Solid 4x</option>
+                  {/* What is built, not only what was asked (owner, 2026-10-11: "it says 4x but shows the 2-ply ones"): solid 4x
+                      beams have no code span table for every lumber and load, and then the frame builds them up from 2x — the
+                      select says so and the sizes below follow it. */}
+                  <select className={s.sel} value={frame.beamKind} onChange={(e) => patch({ framing: { beamKind: e.target.value as DeckDesign["framing"]["beamKind"], beam: "auto" } })} data-deck-beam-kind={frame.beamKind}>
+                    <option value="solid" disabled={!solidBeamTabulated(frame.load, frame.group)}>{solidBeamTabulated(frame.load, frame.group) ? "Solid 4x" : "Solid 4x — not in the code's tables for this lumber and load"}</option>
                     <option value="built-up">Built up from 2x</option>
                   </select>
+                  {frame.beamKindNote ? <p className={cx(s.call, s.callWarn)} data-deck-beam-note>{frame.beamKindNote}</p> : null}
                 </Field>
                 <Field label="Beam size" aside={design.framing.beam === "auto" ? `picked: ${[...new Set(frame.beams.map((b) => b.spec.size))].join(", ")}` : undefined}>
                   <select className={s.sel} value={design.framing.beam} onChange={(e) => patch({ framing: { beam: e.target.value as DeckDesign["framing"]["beam"] } })}>
@@ -1797,15 +1851,15 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     <Seg small label="Pergola top" value={r.pergolaStyle} onChange={(v) => rp({ pergolaStyle: v })} options={(["flat", "louvered", "arched"] as const).map((v) => ({ value: v, label: PERGOLA_STYLE_LABEL[v] }))} />
                   </Field>
                 )}
-                <Field label="Rafters" aside={r.rafter === "auto" ? `picked: ${roof.rafters.size}` : undefined} wide>
+                <Field label="Rafters" aside={roof.trusses ? "trusses frame this roof" : r.rafter === "auto" ? `picked: ${roof.rafters.size}` : undefined} wide>
                   <Seg small label="Rafters" value={r.rafter} onChange={(v) => rp({ rafter: v })} options={[{ value: "auto", label: "Auto" }, ...(["2x6", "2x8", "2x10", "2x12"] as const).map((j) => ({ value: j, label: j }))]} />
                 </Field>
                 <Field label="Rafter spacing" aside="on center" wide>
                   <Seg small label="Rafter spacing" value={r.rafterSpacingIn} onChange={(v) => rp({ rafterSpacingIn: v })} options={[{ value: 12, label: '12"' }, { value: 16, label: '16"' }, { value: 24, label: '24"' }]} />
                 </Field>
                 {r.kind === "gable" || r.kind === "hip" || r.kind === "gambrel" ? (
-                  <Field label="At the ridge" aside={r.ridge === "auto" && roof.ridge ? `picked: ${roof.ridge.kind === "beam" ? "ridge beam" : "ridge board"}` : undefined} wide>
-                    <Seg small label="At the ridge" value={r.ridge} onChange={(v) => rp({ ridge: v })} options={[{ value: "auto", label: "Auto" }, { value: "beam", label: "Ridge beam", title: "The rafters bear on a beam; the ceiling stays open" }, { value: "board", label: "Ridge board + ties", title: "A board between the rafters, with rafter ties every 4 ft" }]} />
+                  <Field label="At the ridge" aside={r.ridge === "auto" ? (roof.trusses ? "picked: trusses" : roof.ridge ? `picked: ${roof.ridge.kind === "beam" ? "ridge beam" : "ridge board"}` : undefined) : undefined} wide>
+                    <Seg small label="At the ridge" value={r.ridge} onChange={(v) => rp({ ridge: v })} options={[{ value: "auto", label: "Auto" }, { value: "beam", label: "Ridge beam", title: "The rafters bear on a beam; the ceiling stays open" }, { value: "board", label: "Ridge board + ties", title: "A board between the rafters, with rafter ties every 4 ft" }, ...(r.kind === "gable" ? [{ value: "trusses" as const, label: "Trusses", title: "Manufactured trusses 24 in. on center, one piece header to header — designed and stamped by the truss maker" }] : [])]} />
                   </Field>
                 ) : null}
                 {design.structure === "pergola" && r.pergolaStyle !== "louvered" ? (
@@ -1985,7 +2039,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </div>
                 <div className={s.chips}>
                   <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => setStairs((list) => [...list, defaultStair(`s${list.length + 1}-${Date.now().toString(36).slice(-3)}`, "front", design.shape.widthFt / 2)])} data-deck-add-stair>Add stairs down the front</button>
-                  <button type="button" className={cx(s.btn, s.btnSm, placing?.kind === "stair" && s.btnOn)} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => { setPlacing(placing?.kind === "stair" ? null : { kind: "stair" }); setView("plan"); }} data-deck-place-stair>{placing?.kind === "stair" ? "Click the plan…" : "Place by clicking the plan"}</button>
+                  <button type="button" className={cx(s.btn, s.btnSm, placing?.kind === "stair" && s.btnOn)} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => { setPlacing(placing?.kind === "stair" ? null : { kind: "stair" }); if (view !== "3d" && view !== "plan") setView("3d"); }} data-deck-place-stair>{placing?.kind === "stair" ? (view === "plan" ? "Click the plan…" : "Click the deck…") : "Place by clicking the deck"}</button>
                 </div>
                 <div className={s.grid2}>
                   <Field label="Tear out an old deck" aside="sq ft">
@@ -2194,8 +2248,31 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             {summary.fail ? <span className={cx(s.stamp, s.stampBad)}>{summary.fail} fix</span> : null}
             {summary.warn ? <span className={cx(s.stamp, s.stampWarn)}>{summary.warn} check</span> : null}
             <span className={cx(s.stamp, s.stampPass)}>{summary.pass} pass</span>
+            {fixableCount ? (
+              <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={runAutoFix} data-deck-autofix>
+                Auto-fix {fixableCount === 1 ? "1 item" : `${fixableCount} items`}
+              </button>
+            ) : null}
           </div>
         </div>
+        {fixReport ? (
+          <div className={cx(s.call, fixReport.left.length ? s.callWarn : null, s.fixReport)} role="status" data-deck-fix-report>
+            <button type="button" className={s.fixReportClose} onClick={() => setFixReport(null)} aria-label="Close">×</button>
+            {fixReport.fixed.length ? (
+              <p><b>Fixed:</b> {fixReport.fixed.join(" · ")}.</p>
+            ) : (
+              <p><b>Nothing the studio can change on its own.</b></p>
+            )}
+            {fixReport.left.length ? (
+              <>
+                <p><b>Still for you, an engineer or the building office:</b></p>
+                <ul>{fixReport.left.slice(0, 8).map((l, i) => <li key={i}>{l}</li>)}</ul>
+              </>
+            ) : (
+              <p>Every check passes or is a note.</p>
+            )}
+          </div>
+        ) : null}
         <ul className={s.checks}>
           {ordered.map((c) => (
             <li key={c.id} className={cx(s.check, s[`level_${c.level}`])} data-check={c.id}>
@@ -2206,10 +2283,19 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </div>
                 {c.rule ? <div className={s.checkRule}>{c.rule}</div> : null}
               </div>
-              {c.fix ? (
-                <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch(c.fix!.patch)}>
-                  {c.fix.label}
-                </button>
+              {c.fix || c.alts?.length ? (
+                <div className={s.checkFixes}>
+                  {c.fix ? (
+                    <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch(c.fix!.patch)} data-check-fix="primary">
+                      {c.fix.label}
+                    </button>
+                  ) : null}
+                  {(c.alts ?? []).map((a) => (
+                    <button key={a.label} type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => patch(a.patch)} data-check-fix="alt">
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
               ) : null}
             </li>
           ))}
@@ -2222,6 +2308,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           <div>
             <div className={s.cardTitle}>Material package</div>
             <div className={s.cardSub}>What to load on the truck, in the lengths the yard sells. Lumber near the soil is ordered ground-contact. A fixture the client buys is listed, not priced.</div>
+            <div className={s.materialActs}>
+              {materialsHref("yard") ? <a className={cx(s.btn, s.btnSm, s.btnPrimary)} href={materialsHref("yard")! as Route} target="_blank" rel="noopener" data-deck-materials="yard">Material list for the lumber yard ↗</a> : null}
+              {materialsHref("installer") ? <a className={cx(s.btn, s.btnSm)} href={materialsHref("installer")! as Route} target="_blank" rel="noopener" data-deck-materials="installer">For the installer to buy ↗</a> : null}
+            </div>
           </div>
           <div className={s.mono}>
             {Math.round(pkg.takeoff.framingLf)} ft of framing · {pkg.takeoff.concreteBags} bags · {pkg.takeoff.footings} footings{pkg.takeoff.roofSquares ? ` · ${pkg.takeoff.roofSquares} squares of roof` : ""}{pkg.takeoff.stairRisers ? ` · ${pkg.takeoff.stairRisers} risers` : ""}{pkg.takeoff.railLf ? ` · ${Math.round(pkg.takeoff.railLf)} ft of rail` : ""}

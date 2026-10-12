@@ -154,6 +154,7 @@ export const DECK_RATES: readonly DeckRateDef[] = [
   trim("underDeckDrain", "Under-deck drainage system (troughs, gutter, downspout)", "sq ft", 9, "vinyl"),
   trim("louverKit", "Louvered pergola slats, manual, per square foot of cover", "sq ft", 38, "metal", 400),
   { key: "lf.lvl", label: "LVL beam, 1 3/4-in. ply, per foot per inch of depth", unit: "ft·in", price: 0.95, group: "lumber", basis: "vinyl", min: 0.05, max: 20 },
+  { key: "lf.truss", label: "Manufactured roof truss, per foot of span", unit: "ft", price: 8.5, group: "lumber", basis: "vinyl", min: 0.05, max: 20 },
   { key: "lf.archRafter", label: "Arched rafter, cut from 2x12 stock (two boards each)", unit: "ft", price: 6.4, group: "lumber", basis: "vinyl", min: 0.2, max: 80 },
   roofLabor("walls", "Framing and hanging wall panels", "sq ft", 5.5, 400),
   roofLabor("underDeckDrain", "Hang the under-deck drainage", "sq ft", 3.8, 400),

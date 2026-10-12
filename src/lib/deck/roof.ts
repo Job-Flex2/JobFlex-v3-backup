@@ -45,7 +45,7 @@
 // up from the ground. A member has an axis in plan (`yaw`) and a rise along
 // it (`tilt`); its box is `sx` long along that axis, `sy` wide, `sz` deep.
 
-import { POST_ACTUAL_IN, THICK_2X_IN, DRESSED_DEPTH_IN, JOIST_SIZES, SOLID_BEAMS, builtUpBeamMaxSpanIn, solidBeamMaxSpanIn, solidBeamTabulated, joistDepthIn, postMaxHeightIn, type JoistSize, type PostSize, type SpeciesGroup } from "./codeTables";
+import { POST_ACTUAL_IN, THICK_2X_IN, DRESSED_DEPTH_IN, JOIST_SIZES, SOLID_BEAMS, builtUpBeamMaxSpanIn, solidBeamMaxSpanIn, solidBeamTabulated, joistDepthIn, postMaxHeightIn, POST_TABLE_MAX_AREA, type JoistSize, type PostSize, type SpeciesGroup } from "./codeTables";
 import { CEILING_FACTOR, ROOF_DEAD_PSF, RW_FACTOR, rafterMaxSpanIn, roofLoadFor, type RafterGroup, type RoofLoad } from "./roofTables";
 import { beamSpec, footingFor, type BeamSpec, type Footing } from "./frame";
 import { BUILT_UP_CHOICES, isPolygonShape, isSolidBeam, type BeamSize, type DeckDesign, type RoofDesign, type RoofKind, type WallFill, type Zone } from "./design";
@@ -64,6 +64,12 @@ const HEEL_SHARE = 0.65;
 const POST_INSET_IN = 4.5;
 /** Rafter ties on a ridge board, inches on centre (R802.5.2 allows 4 ft). */
 const TIE_SPACING_IN = 48;
+/** Manufactured trusses (2026-10-11): 24 in. on center; a common truss spans this far before it is an engineer's girder or needs a bearing in the middle; 2x6 chords past 30 ft or under heavy snow. */
+const TRUSS_SPACING_IN = 24;
+const TRUSS_MAX_SPAN_IN = 40 * 12;
+const TRUSS_2X4_MAX_IN = 30 * 12;
+/** Framing lumber and LVL, pounds per cubic foot — a header's own weight on its posts. */
+const WOOD_PCF = 35;
 /** A roof ledger: two structural screws per 16 in. of wall (one per stud, two rows). */
 const LEDGER_SCREW_SPACING_IN = 16;
 /** A gutter run gets another downspout every this many feet. */
@@ -129,6 +135,7 @@ export type RoofRole =
   | "ridge"
   | "king"
   | "tie"
+  | "truss"
   | "purlin"
   | "slat"
   | "roof-brace"
@@ -325,9 +332,18 @@ export interface RoofFrame {
     estimated: boolean;
   };
   ridge: { kind: "beam" | "board" | "none"; nominal: string; lengthIn: number; spec: BeamSpec | null; spanIn: number; maxSpanIn: number; eqJoistSpanFt: number; /** "auto" wanted a beam and the table had none this long. */ fellBack: boolean } | null;
-  hips: { count: number; nominal: string; totalIn: number };
+  /** The hips: how many, their size, and (2026-10-11) what each was designed for — its span corner post to ridge, the load of the jacks on it, sawn or LVL, and whether nothing in the list carries it. */
+  hips: { count: number; nominal: string; totalIn: number; spanIn?: number; loadLb?: number; kind?: "sawn" | "lvl"; beyond?: boolean };
   kingPosts: number;
   ties: number;
+  /**
+   * Manufactured trusses in place of rafters on a gable (2026-10-11): how many, the two gable ends among them, the span
+   * bearing to bearing, the spacing, the chords — and why (asked for; the rafters ran past the table; no beam spans the
+   * ridge and ties would be longer than stock). Designed and stamped by the truss maker (IRC R802.10).
+   */
+  /** Across the ridge, bearing to bearing: what a tie or a truss spans, inches (0 without a ridge). */
+  ridgeAcrossIn: number;
+  trusses: { count: number; gableEnds: number; spanIn: number; spacingIn: number; chord: "2x4" | "2x6"; why: "asked" | "rafters" | "ridge" | "post"; ridgeSpanIn?: number; kingLoadLb?: number } | null;
   slats: { count: number; nominal: string; totalIn: number } | null;
   members: RoofMember[];
   planes: RoofPlane[];
@@ -368,6 +384,10 @@ export interface RoofFrame {
     postSpliced: boolean;
     /** No engineered beam in the list carries it either. */
     engineeredBeyond: boolean;
+    /** Rafter ties across a gable longer than stock lumber (a board asked for on a wide roof). */
+    tiesBeyondStock: boolean;
+    /** Trusses asked for, but the span is past what a common truss does here. */
+    trussesBeyond: boolean;
   };
 }
 
@@ -515,13 +535,14 @@ interface FaceSpec {
  * `wLbPerFt` over `spanIn` in bending, shear and deflection (L/240), on the
  * usual 2.0E figures. An ESTIMATE the maker's software confirms.
  */
-export function sizeLvl(spanIn: number, wLbPerFt: number): BeamSpec | null {
+export function sizeLvl(spanIn: number, wLbPerFt: number, minPlies = 1): BeamSpec | null {
   const Lft = spanIn / 12;
   const w = Math.max(50, wLbPerFt);
   const Mlbin = ((w * Lft * Lft) / 8) * 12;
   const V = (w * Lft) / 2;
   const options: Array<{ plies: number; d: number }> = [];
-  for (const d of LVL_DEPTHS_IN) for (const plies of [1, 2, 3]) options.push({ plies, d });
+  // At least `minPlies` (2026-10-11): a header as wide as the post cap it sits in — never a lone 1¾-in. ply.
+  for (const d of LVL_DEPTHS_IN) for (const plies of [1, 2, 3]) if (plies >= minPlies) options.push({ plies, d });
   options.sort((a, b) => a.plies * a.d - b.plies * b.d);
   for (const o of options) {
     const b = LVL_PLY_IN * o.plies;
@@ -537,6 +558,76 @@ export function sizeLvl(spanIn: number, wLbPerFt: number): BeamSpec | null {
     }
   }
   return null;
+}
+
+/**
+ * NDS 2018 Supplement reference values for No. 2 2x lumber (Tables 4A/4B): Fb with its size factor taken in, psi, by
+ * nominal depth; E, psi. Southern pine's values are printed by size. Western cedar stands in for "RW".
+ */
+const NO2_FB: Record<RafterGroup | "RW", Record<string, number>> = {
+  DF: { "2x6": 1170, "2x8": 1080, "2x10": 990, "2x12": 900 },
+  HF: { "2x6": 1105, "2x8": 1020, "2x10": 935, "2x12": 850 },
+  SPF: { "2x6": 1138, "2x8": 1050, "2x10": 963, "2x12": 875 },
+  SP: { "2x6": 1000, "2x8": 925, "2x10": 800, "2x12": 750 },
+  RW: { "2x6": 910, "2x8": 840, "2x10": 770, "2x12": 700 },
+};
+const NO2_E: Record<RafterGroup | "RW", number> = { DF: 1_600_000, HF: 1_300_000, SPF: 1_400_000, SP: 1_400_000, RW: 1_000_000 };
+
+export interface HipDesign {
+  /** "2x10", "2-2x12", "2-ply LVL 1¾×14". */
+  nominal: string;
+  /** One ply as the yard sells it: "2x12", "LVL1.75x14". */
+  stock: string;
+  plies: number;
+  plyIn: number;
+  depthIn: number;
+  kind: "sawn" | "lvl";
+  /** Corner post to the ridge, plan, inches; the jacks' load on it, lb. */
+  spanIn: number;
+  loadLb: number;
+  beyond: boolean;
+}
+
+/**
+ * A hip designed as a beam (2026-10-11; IRC R802.3: a hip is "supported at the ridge by a brace to a bearing partition
+ * or designed to carry and distribute the specific load at that point" — an open roof has no partition). It spans from
+ * its corner post to the ridge and carries half of every jack on both sides: on faces whose corners are `halfAngle`
+ * either side of it (45° on a rectangle, 180°/n on an n-sided gazebo) that is a load growing from nothing at the corner
+ * to its most at the ridge, W = psf · R² · tan(halfAngle) / 2 for a run R. Bending (M = 0.1283 W L) and deflection
+ * (0.02608 W L³ / E I, held to L/180, or L/240 under a ceiling) on No. 2 values — snow load duration 1.15, roof live
+ * 1.25, built-up plies 1.15 — one size deeper than the commons first, then deeper singles, built-up pairs and threes,
+ * then a 2- or 3-ply LVL. An ESTIMATE in the code's own terms; an engineer or the LVL maker confirms a big one.
+ */
+export function designHip(runIn: number, ovhIn: number, halfAngle: number, commons: JoistSize, group: RafterGroup | "RW", totalPsf: number, snow: boolean, ceiling: boolean): HipDesign {
+  const spanIn = Math.max(12, (runIn - ovhIn) / Math.cos(halfAngle));
+  const loadLb = (totalPsf * (runIn / 12) ** 2 * Math.tan(halfAngle)) / 2;
+  const M = 0.1283 * loadLb * spanIn;
+  const cd = snow ? 1.15 : 1.25;
+  const limit = spanIn / (ceiling ? 240 : 180);
+  const defl = (E: number, I: number) => (0.02608 * loadLb * spanIn ** 3) / (E * I);
+  const sizes = JOIST_SIZES.slice(JOIST_SIZES.indexOf(oneDeeper(commons)));
+  for (const plies of [1, 2, 3]) {
+    for (const z of sizes) {
+      const d = DRESSED_DEPTH_IN[Number(z.split("x")[1])] ?? 5.5;
+      const b = THICK_2X_IN * plies;
+      const S = (b * d * d) / 6;
+      const I = (b * d * d * d) / 12;
+      const fbAllow = (NO2_FB[group][z] ?? 850) * cd * (plies >= 2 ? 1.15 : 1);
+      if (M / S <= fbAllow && defl(NO2_E[group], I) <= limit) return { nominal: plies === 1 ? z : `${plies}-${z}`, stock: z, plies, plyIn: THICK_2X_IN, depthIn: d, kind: "sawn", spanIn: Math.round(spanIn), loadLb: Math.round(loadLb), beyond: false };
+    }
+  }
+  for (const plies of [2, 3]) {
+    for (const d of LVL_DEPTHS_IN) {
+      const b = LVL_PLY_IN * plies;
+      const S = (b * d * d) / 6;
+      const I = (b * d * d * d) / 12;
+      if (M / S <= LVL_FB_PSI * cd && defl(LVL_E_PSI, I) <= limit) {
+        const dName = d === 11.875 ? "11⅞" : String(d);
+        return { nominal: `${plies}-ply LVL 1¾×${dName}`, stock: `LVL1.75x${d}`, plies, plyIn: LVL_PLY_IN, depthIn: d, kind: "lvl", spanIn: Math.round(spanIn), loadLb: Math.round(loadLb), beyond: false };
+      }
+    }
+  }
+  return { nominal: "3-ply LVL 1¾×18", stock: "LVL1.75x18", plies: 3, plyIn: LVL_PLY_IN, depthIn: 18, kind: "lvl", spanIn: Math.round(spanIn), loadLb: Math.round(loadLb), beyond: true };
 }
 
 export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, group: SpeciesGroup, deck: DeckUnder | null, opts: RoofBuildOptions = {}): RoofFrame {
@@ -846,13 +937,15 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     return Math.floor(base * stretch);
   };
   const postSetCost = price("labor.roofPost") + price("hw.postBase") + price("hw.postCap") + (r.eaveHeightIn / 12) * price(lumberKey(r.post));
-  const pickHeader = (lengthIn: number, eqJoistSpanFt: number, wLbPerFt: number): { spec: BeamSpec; maxSpanIn: number; segments: number } => {
+  /** An LVL header sits in the post's cap: three plies (5¼ in.) on a 6x6 or 8x8, two (3½ in.) on a 4x. */
+  const lvlMinPlies = r.post === "6x6" || r.post === "8x8" ? 3 : 2;
+  const pickHeader = (lengthIn: number, eqJoistSpanFt: number, wLbPerFt: number, minSegments = 1): { spec: BeamSpec; maxSpanIn: number; segments: number } => {
     type Opt = { spec: BeamSpec; maxSpanIn: number; segments: number; cost: number };
     // An engineered beam, asked for or as the way out when no sawn header reaches: one piece post to post when it can, else the fewest posts an LVL needs.
     const lvl = (): { spec: BeamSpec; maxSpanIn: number; segments: number } | null => {
-      for (let segments = 1; segments <= 4; segments++) {
+      for (let segments = Math.max(1, minSegments); segments <= Math.max(4, minSegments); segments++) {
         const span = lengthIn / segments;
-        const spec = sizeLvl(span, wLbPerFt);
+        const spec = sizeLvl(span, wLbPerFt, lvlMinPlies);
         if (spec) {
           engineered = true;
           return { spec, maxSpanIn: Math.ceil(span), segments };
@@ -868,7 +961,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const options: Opt[] = headerCandidates.map((size) => {
       const spec = beamSpec(size);
       const maxSpanIn = headerMaxSpan(size, eqJoistSpanFt);
-      const segments = maxSpanIn > 0 ? Math.max(1, Math.ceil(lengthIn / maxSpanIn - 1e-9)) : 1;
+      const segments = maxSpanIn > 0 ? Math.max(minSegments, Math.ceil(lengthIn / maxSpanIn - 1e-9)) : 1;
       return { spec, maxSpanIn, segments, cost: (lengthIn / 12) * spec.plies * price(lumberKey(spec.stock)) + (segments - 1) * postSetCost };
     });
     const tabulated = options.filter((o) => o.maxSpanIn > 0);
@@ -889,12 +982,40 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   let ties = 0;
   let ridgeBeyond = false;
   let ridgeLengthIn = 0;
+  // TRUSSES (2026-10-11; owner: "a 40-ft span on the roof with no supports is bad engineering — check the rafters and the
+  // trusses to code"): a gable whose rafters run past the table, or whose ridge no beam spans while ties across it would
+  // be longer than stock, is framed with manufactured trusses 24 in. on center — designed and stamped by the truss maker
+  // for this roof's loads (IRC R802.10) — and so is any gable asked to. Past TRUSS_MAX_SPAN_IN it is an engineer's.
+  let trusses: RoofFrame["trusses"] = null;
+  let trussesBeyond = false;
+  let ridgeAcrossIn = 0;
+  let tiesBeyondStock = false;
+  const trussPlan = (spanIn: number, why: NonNullable<RoofFrame["trusses"]>["why"]): NonNullable<RoofFrame["trusses"]> => ({ count: 0, gableEnds: 0, spanIn: Math.round(spanIn), spacingIn: TRUSS_SPACING_IN, chord: spanIn > TRUSS_2X4_MAX_IN || roofLoad >= 50 ? "2x6" : "2x4", why });
+  // A trial beam for the ridge may raise the engineered flags; a ridge that ends as a board or trusses gives them back.
+  const engineeredBeforeRidge = engineered;
+  const engineeredBeyondBeforeRidge = engineeredBeyond;
   if (ridgeFrom && ridgeTo) {
     ridgeLengthIn = len(sub(ridgeTo, ridgeFrom));
+    // Across the ridge: what a tie or a truss would span, bearing to bearing.
+    const acrossRidge = Math.abs(ridgeTo.x - ridgeFrom.x) > Math.abs(ridgeTo.y - ridgeFrom.y) ? y1 - y0 : x1 - x0;
+    ridgeAcrossIn = Math.round(acrossRidge);
+    const trussFits = kind === "gable" && acrossRidge <= TRUSS_MAX_SPAN_IN;
+    const trussWhy: "asked" | "rafters" | null = kind !== "gable" ? null : r.ridge === "trusses" ? "asked" : r.ridge === "auto" && commonSpanIn > rafterMax + 0.01 ? "rafters" : null;
+    if (trussWhy && trussFits) trusses = trussPlan(acrossRidge, trussWhy);
+    if (trussWhy === "asked" && !trussFits) trussesBeyond = true;
+    // A ridge BEAM ends on king posts: when one would bring down more than a footing table reads, and a tie across the
+    // roof would be longer than stock, the gable is trussed instead — nothing heavy on one post.
+    const footingLimitLb = design.floor === "slab" ? Infinity : POST_TABLE_MAX_AREA * (design.loadPsf + 10);
+    if (!trusses && r.ridge === "auto" && kind === "gable" && trussFits && acrossRidge > STOCK_MAX_IN && faceSpecs[0]) {
+      const kingLoadLb = totalPsf * (faceSpecs[0].runIn / 12) * (ridgeSpanIn / 12) * 0.5;
+      if (kingLoadLb > footingLimitLb) trusses = { ...trussPlan(acrossRidge, "post"), ridgeSpanIn: Math.round(ridgeSpanIn), kingLoadLb: Math.round(kingLoadLb) };
+    }
     const auto: "beam" | "board" | "none" = kind === "gable" ? "beam" : "board";
-    const asked = r.ridge === "auto" ? auto : r.ridge;
+    const asked = r.ridge === "auto" || r.ridge === "trusses" ? auto : r.ridge;
     const rk: "beam" | "board" | "none" = kind === "hip" && asked === "none" ? "board" : kind === "gable" && asked === "none" ? "board" : asked;
-    if (rk === "beam" && (kind === "gable" || kind === "gambrel")) {
+    if (trusses) {
+      // Framed after the headers: no ridge member, no king posts, no ties — every truss is one piece across.
+    } else if (rk === "beam" && (kind === "gable" || kind === "gambrel")) {
       const runFt = (kind === "gambrel" ? (gambrel ? faceSpecs[0].runIn + faceSpecs[1].runIn : faceSpecs[0].runIn) : faceSpecs[0].runIn) / 12;
       const eq = (2 * runFt * totalPsf) / 50;
       const wRidge = runFt * totalPsf;
@@ -903,7 +1024,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       const tieAcross = Math.abs(ridgeTo.x - ridgeFrom.x) > Math.abs(ridgeTo.y - ridgeFrom.y) ? y1 - y0 : x1 - x0;
       // Asked for a beam that no sawn size spans: an engineered ridge instead of a flag.
       if (beyond && (r.ridge === "beam" || tieAcross > STOCK_MAX_IN || kind === "gambrel")) {
-        const lvlSpec = sizeLvl(ridgeSpanIn, wRidge);
+        const lvlSpec = sizeLvl(ridgeSpanIn, wRidge, 2);
         if (lvlSpec) {
           pick = { spec: lvlSpec, maxSpanIn: ridgeSpanIn, segments: 1 };
           beyond = false;
@@ -915,6 +1036,9 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
         const nominal = oneDeeper(rafterSize);
         ridge = { kind: "board", nominal, lengthIn: ridgeLengthIn, spec: null, spanIn: ridgeSpanIn, maxSpanIn: pick.maxSpanIn, eqJoistSpanFt: Math.round(eq * 10) / 10, fellBack: true };
         ties = Math.floor(ridgeSpanIn / TIE_SPACING_IN) + 1;
+      } else if (beyond && r.ridge === "auto" && trussFits) {
+        // No beam spans it and a tie across would be longer than stock: trusses, one piece header to header.
+        trusses = trussPlan(acrossRidge, "ridge");
       } else {
         ridgeBeyond = beyond;
         ridge = { kind: "beam", nominal: pick.spec.stock, lengthIn: ridgeLengthIn, spec: pick.spec, spanIn: ridgeSpanIn, maxSpanIn: pick.maxSpanIn, eqJoistSpanFt: Math.round(eq * 10) / 10, fellBack: false };
@@ -927,8 +1051,15 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     } else {
       const nominal = oneDeeper(rafterSize);
       ridge = { kind: "board", nominal, lengthIn: ridgeLengthIn, spec: null, spanIn: 0, maxSpanIn: 0, eqJoistSpanFt: 0, fellBack: false };
-      if (kind === "gable") ties = Math.floor(ridgeSpanIn / TIE_SPACING_IN) + 1;
+      if (kind === "gable") {
+        ties = Math.floor(ridgeSpanIn / TIE_SPACING_IN) + 1;
+        if (acrossRidge > STOCK_MAX_IN) tiesBeyondStock = true;
+      }
     }
+  }
+  if (ridge?.kind !== "beam") {
+    engineered = engineeredBeforeRidge;
+    engineeredBeyond = engineeredBeyondBeforeRidge;
   }
 
   // ── Posts and headers around the ring.
@@ -939,8 +1070,6 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const footprintSqFt = ringArea(eaveRing) / 144;
   const ringAreaSqFt = ringArea(ring) / 144;
   const [pw, pd] = POST_ACTUAL_IN[r.post];
-  const postCount0 = wall ? n - 2 : n;
-  const shareLb = (totalPsf * footprintSqFt * (wall ? 0.5 : 1)) / Math.max(1, postCount0);
   const headerTopOf = new Map<string, number>();
 
   const edgeIsWall = (k: number) => wall && Math.abs(ring[k].y - y0) < 0.01 && Math.abs(ring[(k + 1) % n].y - y0) < 0.01;
@@ -967,68 +1096,166 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     cornerPosts.push({ k, x: p.x, y: p.y });
   }
 
-  // Headers edge by edge (post to post), with the posts their spans need.
+  // Headers edge by edge (post to post), with the posts their spans need — laid again with more posts on a header whose
+  // post would bring down more than the footing table reads (2026-10-11).
   const extraPosts: Array<{ x: number; y: number; edge: number }> = [];
-  for (let k = 0; k < n; k += postEvery) {
-    if (edgeIsWall(k)) continue;
-    const A = ring[k];
-    const B = ring[(k + postEvery) % n];
-    const lengthIn = len(sub(B, A));
-    const face = faceOfEdge(k);
-    // What this header carries: half the rafters' run on its face (eave side), or a king post on a gable end.
-    let tribFt = 0;
-    let king = false;
-    if (pergola) tribFt = (y1 - y0) / 2 / 12 + ovh / 12;
-    else if (face && (kind === "gambrel" || kind === "dutch-gable")) {
-      // The whole slope's weight comes down the lower rafters to the header (the tie or the cap carries the rest across).
-      const whole = kind === "gambrel" && gambrel ? (gambrel.alongY ? (eaveX1 - eaveX0) / 2 : (eaveY1 - eaveY0) / 2) : Math.min(eaveX1 - eaveX0, eaveY1 - eaveY0) / 2;
-      tribFt = whole / 2 / 12 + face.ovhIn / 12;
-    } else if (face) tribFt = (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
-    else if (kind === "gable") {
-      // A gable end: the rakes bear on nothing; the king post does, when the ridge is a beam.
-      const runFt = faceSpecs[0].runIn / 12;
-      if (ridge?.kind === "beam") {
-        const P = totalPsf * runFt * (ridgeSpanIn / 12) * 0.5;
-        const wEq = (2 * P) / Math.max(1, lengthIn / 12);
-        tribFt = wEq / totalPsf;
-        king = true;
-      } else tribFt = 1;
-    } else if (kind === "shed") tribFt = (y1 - y0) / 2 / 12 + ovh / 12;
-    const eq = Math.round(((2 * tribFt * totalPsf) / 50) * 10) / 10;
-    const pick = pickHeader(lengthIn, eq, tribFt * totalPsf);
-    const wallEnd = wall && (Math.abs(A.y - y0) < 0.01 || Math.abs(B.y - y0) < 0.01);
-    const id = `h${k + 1}`;
-    if (pick.maxSpanIn === 0) headerBeyond.push(id);
-    const postAt: number[] = [0, lengthIn];
-    for (let s = 1; s < pick.segments; s++) {
-      const at = (lengthIn * s) / pick.segments;
-      postAt.splice(postAt.length - 1, 0, at);
-      const u = unit(sub(B, A));
-      extraPosts.push({ x: A.x + u.x * at, y: A.y + u.y * at, edge: k });
-    }
-    const spanIn = postAt.slice(1).reduce((m, v, i) => Math.max(m, v - postAt[i]), 0);
-    headers.push({ id, x0: A.x, y0: A.y, x1: B.x, y1: B.y, lengthIn, spec: pick.spec, postAt, spanIn, eqJoistSpanFt: eq, maxSpanIn: pick.maxSpanIn, kingPost: king, wallEnd });
-  }
   const pergolaMidYs: number[] = [];
-  if (pergola && pergolaBays > 1) {
-    for (let k = 1; k < pergolaBays; k++) {
-      const yk = y0 + ((y1 - y0) * k) / pergolaBays;
-      pergolaMidYs.push(yk);
-      const lengthIn = x1 - x0;
-      const tribFt = (y1 - y0) / pergolaBays / 12;
+  /** What each header carries: lb per foot along it, and a king post's point load at its middle. */
+  const headerLoad = new Map<string, { w: number; P: number }>();
+  /** The fewest segments (spans) a header is laid in — raised when one of its posts reads past the footing table. */
+  const minSegs = new Map<string, number>();
+  const engineeredBeforeHeaders = engineered;
+  const engineeredBeyondBeforeHeaders = engineeredBeyond;
+  const layHeaders = () => {
+    headers.length = 0;
+    extraPosts.length = 0;
+    pergolaMidYs.length = 0;
+    headerBeyond.length = 0;
+    headerLoad.clear();
+    engineered = engineeredBeforeHeaders;
+    engineeredBeyond = engineeredBeyondBeforeHeaders;
+    for (let k = 0; k < n; k += postEvery) {
+      if (edgeIsWall(k)) continue;
+      const A = ring[k];
+      const B = ring[(k + postEvery) % n];
+      const lengthIn = len(sub(B, A));
+      const face = faceOfEdge(k);
+      // What this header carries: half the rafters' run on its face (eave side), or a king post on a gable end.
+      let tribFt = 0;
+      let king = false;
+      let kingP = 0;
+      if (pergola) tribFt = (y1 - y0) / 2 / 12 + ovh / 12;
+      else if (face && (kind === "gambrel" || kind === "dutch-gable")) {
+        // The whole slope's weight comes down the lower rafters to the header (the tie or the cap carries the rest across).
+        const whole = kind === "gambrel" && gambrel ? (gambrel.alongY ? (eaveX1 - eaveX0) / 2 : (eaveY1 - eaveY0) / 2) : Math.min(eaveX1 - eaveX0, eaveY1 - eaveY0) / 2;
+        tribFt = whole / 2 / 12 + face.ovhIn / 12;
+      // An eave header carries half its face's run and the overhang when a ridge BEAM takes the other half; under a ridge
+      // board with ties, or trusses, nothing at the ridge carries anything — the whole face comes down on this header.
+      } else if (face) tribFt = kind === "gable" && ridge?.kind !== "beam" ? face.vTopIn / 12 : (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
+      else if (kind === "gable") {
+        // A gable end: the rakes bear on nothing; the king post does, when the ridge is a beam.
+        const runFt = faceSpecs[0].runIn / 12;
+        if (ridge?.kind === "beam") {
+          const P = totalPsf * runFt * (ridgeSpanIn / 12) * 0.5;
+          kingP = P;
+          const wEq = (2 * P) / Math.max(1, lengthIn / 12);
+          tribFt = wEq / totalPsf;
+          king = true;
+        } else tribFt = 1;
+      } else if (kind === "shed") tribFt = Math.abs(B.x - A.x) > Math.abs(B.y - A.y) ? (y1 - y0) / 2 / 12 + ovh / 12 : 1;
       const eq = Math.round(((2 * tribFt * totalPsf) / 50) * 10) / 10;
-      const pick = pickHeader(lengthIn, eq, tribFt * totalPsf);
-      const id = `hm${k}`;
+      let eqUsed = eq;
+      let pick = pickHeader(lengthIn, eq, tribFt * totalPsf, minSegs.get(`h${k + 1}`) ?? 1);
+      if (king && pick.segments > 1) {
+        // A king post's load does not ride mid-bay (its equivalent load was for ONE span): a post goes right under it — an
+        // even number of spans — and between the posts the header carries only the rake's own weight.
+        eqUsed = Math.round(((2 * totalPsf) / 50) * 10) / 10;
+        const m0 = Math.max(2, minSegs.get(`h${k + 1}`) ?? 2);
+        pick = pickHeader(lengthIn, eqUsed, totalPsf, m0 % 2 ? m0 + 1 : m0);
+        if (pick.segments % 2) pick = pickHeader(lengthIn, eqUsed, totalPsf, pick.segments + 1);
+      }
+      const wallEnd = wall && (Math.abs(A.y - y0) < 0.01 || Math.abs(B.y - y0) < 0.01);
+      const id = `h${k + 1}`;
+      // What it really carries: a gable end with a king post holds the rake's own weight plus the post's point load.
+      headerLoad.set(id, { w: (king ? 1 : tribFt) * totalPsf, P: king ? kingP : 0 });
       if (pick.maxSpanIn === 0) headerBeyond.push(id);
       const postAt: number[] = [0, lengthIn];
-      for (let sgm = 1; sgm < pick.segments; sgm++) {
-        const at = (lengthIn * sgm) / pick.segments;
+      for (let s = 1; s < pick.segments; s++) {
+        const at = (lengthIn * s) / pick.segments;
         postAt.splice(postAt.length - 1, 0, at);
-        extraPosts.push({ x: x0 + at, y: yk, edge: -1 });
+        const u = unit(sub(B, A));
+        extraPosts.push({ x: A.x + u.x * at, y: A.y + u.y * at, edge: k });
       }
-      extraPosts.push({ x: x0, y: yk, edge: -1 }, { x: x1, y: yk, edge: -1 });
       const spanIn = postAt.slice(1).reduce((m, v, i) => Math.max(m, v - postAt[i]), 0);
-      headers.push({ id, x0, y0: yk, x1, y1: yk, lengthIn, spec: pick.spec, postAt, spanIn, eqJoistSpanFt: eq, maxSpanIn: pick.maxSpanIn, kingPost: false, wallEnd: false });
+      headers.push({ id, x0: A.x, y0: A.y, x1: B.x, y1: B.y, lengthIn, spec: pick.spec, postAt, spanIn, eqJoistSpanFt: eqUsed, maxSpanIn: pick.maxSpanIn, kingPost: king, wallEnd });
+    }
+    if (pergola && pergolaBays > 1) {
+      for (let k = 1; k < pergolaBays; k++) {
+        const yk = y0 + ((y1 - y0) * k) / pergolaBays;
+        pergolaMidYs.push(yk);
+        const lengthIn = x1 - x0;
+        const tribFt = (y1 - y0) / pergolaBays / 12;
+        const eq = Math.round(((2 * tribFt * totalPsf) / 50) * 10) / 10;
+        const pick = pickHeader(lengthIn, eq, tribFt * totalPsf, minSegs.get(`hm${k}`) ?? 1);
+        const id = `hm${k}`;
+        headerLoad.set(id, { w: tribFt * totalPsf, P: 0 });
+        if (pick.maxSpanIn === 0) headerBeyond.push(id);
+        const postAt: number[] = [0, lengthIn];
+        for (let sgm = 1; sgm < pick.segments; sgm++) {
+          const at = (lengthIn * sgm) / pick.segments;
+          postAt.splice(postAt.length - 1, 0, at);
+          extraPosts.push({ x: x0 + at, y: yk, edge: -1 });
+        }
+        extraPosts.push({ x: x0, y: yk, edge: -1 }, { x: x1, y: yk, edge: -1 });
+        const spanIn = postAt.slice(1).reduce((m, v, i) => Math.max(m, v - postAt[i]), 0);
+        headers.push({ id, x0, y0: yk, x1, y1: yk, lengthIn, spec: pick.spec, postAt, spanIn, eqJoistSpanFt: eq, maxSpanIn: pick.maxSpanIn, kingPost: false, wallEnd: false });
+      }
+    }
+  };
+  layHeaders();
+
+  /**
+   * What each post brings down, lb (2026-10-11 — it was the whole roof shared by the corner posts, so an added post never
+   * lightened one): every header's load and its own weight split span by span to the posts at its ends, a king post's
+   * point load by the lever rule between the two posts around it. A header end on the house gives its share to the wall.
+   */
+  const postLoads = (pts: ReadonlyArray<{ x: number; y: number }>): number[] => {
+    const loads = pts.map(() => 0);
+    const give = (q: V2, lb: number) => {
+      let best = -1;
+      let d = 1;
+      pts.forEach((pt, i) => {
+        const e = Math.hypot(pt.x - q.x, pt.y - q.y);
+        if (e < d) {
+          d = e;
+          best = i;
+        }
+      });
+      if (best >= 0) loads[best] += lb;
+    };
+    for (const h of headers) {
+      const L = headerLoad.get(h.id) ?? { w: 0, P: 0 };
+      const w = L.w + (WOOD_PCF * h.spec.thickIn * h.spec.depthIn) / 144;
+      const ux = (h.x1 - h.x0) / Math.max(1, h.lengthIn);
+      const uy = (h.y1 - h.y0) / Math.max(1, h.lengthIn);
+      const at = (s0: number): V2 => ({ x: h.x0 + ux * s0, y: h.y0 + uy * s0 });
+      for (let i = 0; i + 1 < h.postAt.length; i++) {
+        const s0 = h.postAt[i];
+        const s1 = h.postAt[i + 1];
+        const lb = (w * (s1 - s0)) / 12;
+        give(at(s0), lb / 2);
+        give(at(s1), lb / 2);
+        const m = h.lengthIn / 2;
+        if (L.P > 0 && m >= s0 && m <= s1 && (m < s1 || i + 2 === h.postAt.length)) {
+          const t = (m - s0) / Math.max(1, s1 - s0);
+          give(at(s0), L.P * (1 - t));
+          give(at(s1), L.P * t);
+        }
+      }
+    }
+    return loads;
+  };
+  // A footing reads up to POST_TABLE_MAX_AREA of deck at the deck's load: past that, more posts on that post's headers.
+  if (design.floor !== "slab") {
+    const limitLb = POST_TABLE_MAX_AREA * (design.loadPsf + 10);
+    for (let round = 0; round < 8; round++) {
+      const pts = [...cornerPosts, ...extraPosts];
+      const loads = postLoads(pts);
+      let grew = false;
+      pts.forEach((pt, i) => {
+        if (loads[i] <= limitLb) return;
+        for (const h of headers) {
+          const ux = (h.x1 - h.x0) / Math.max(1, h.lengthIn);
+          const uy = (h.y1 - h.y0) / Math.max(1, h.lengthIn);
+          if (!h.postAt.some((s0) => Math.hypot(h.x0 + ux * s0 - pt.x, h.y0 + uy * s0 - pt.y) < 1)) continue;
+          const segs = h.postAt.length - 1;
+          if (segs >= 8 || (minSegs.get(h.id) ?? 1) > segs) continue;
+          minSegs.set(h.id, segs + 1);
+          grew = true;
+        }
+      });
+      if (!grew) break;
+      layHeaders();
     }
   }
   const headerDepth = headers.length ? Math.max(...headers.map((h) => h.spec.depthIn)) : 9.25;
@@ -1064,9 +1291,10 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const designForFootings: DeckDesign = design.floor === "ground" ? { ...design, placement: wall ? "attached" : "detached" } : design;
   let postBeyond = false;
   let postSpliced = false;
+  const finalLoads = postLoads(allPostPts);
   allPostPts.forEach((p, i) => {
     const topIn = undersideAt(p.x, p.y);
-    const loadLb = Math.round(shareLb * (p.corner ? 1 : 1.3));
+    const loadLb = Math.round(finalLoads[i]);
     const tributarySqFt = Math.round((loadLb / 50) * 10) / 10;
     const maxHeightIn = postMaxHeightIn(40, group, r.post, Math.min(160, tributarySqFt));
     if (r.eaveHeightIn > maxHeightIn) postBeyond = true;
@@ -1122,8 +1350,15 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   let soffitSqFt = 0;
   let hipTotal = 0;
   let hipCount = 0;
-  const hipNominal = oneDeeper(rafterSize);
-  const hipDepth = depthOf(hipNominal);
+  // The hips designed as beams for the jacks they carry (designHip): from the first face with a hip corner, whose run
+  // every hip of this roof shares; an n-sided ring's faces meet a hip at 180°/n, a rectangle's at 45°.
+  const hipFace = faceSpecs.find((fs) => fs.tier === 1 && (fs.sideA === "hip" || fs.sideB === "hip"));
+  const hipDesign = hipFace ? designHip(hipFace.vTopIn, hipFace.ovhIn, regular ? Math.PI / n : Math.PI / 4, rafterSize, rafterGroup, totalPsf, roofLoad >= 30, ceilingOn) : null;
+  if (hipDesign?.kind === "lvl") engineered = true;
+  const hipNominal = hipDesign ? hipDesign.stock : oneDeeper(rafterSize);
+  const hipDepth = hipDesign ? hipDesign.depthIn : depthOf(hipNominal);
+  const hipPlies = hipDesign ? hipDesign.plies : 1;
+  const hipPly = hipDesign ? hipDesign.plyIn : THICK_2X_IN;
   const seenHips = new Set<string>();
   const subfasciaNominal = rafterDepth > 7.5 ? "2x8" : "2x6";
   const fasciaBoardIn = rafterDepth > 7.5 ? 10 : 8;
@@ -1132,7 +1367,17 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const zTopAt = (v: number, ovhIn: number, hTop: number, sl = slope) => hTop + heel + (v - ovhIn) * sl;
   let peakSeen = -Infinity;
 
-  const layFace = (f: FaceSpec, hTop: number, roleTag: string) => {
+  /** The rafters' places along a face's eave, from its start: `sp` apart, the last one at the far end. */
+  const faceLayout = (f: FaceSpec, sp: number): number[] => {
+    const start = f.ringU0 + (f.sideA === "hip" ? sp : THICK_2X_IN / 2);
+    const end = f.ringU1 - (f.sideB === "hip" ? 1 : THICK_2X_IN / 2);
+    const out: number[] = [];
+    for (let uu = start; uu <= end + 1e-6; uu += sp) out.push(uu);
+    if (f.sideB !== "hip" && (out.length === 0 || end - out[out.length - 1] > 3)) out.push(end);
+    return out;
+  };
+  const trussChordIn = trusses?.chord === "2x6" ? 5.5 : 3.5;
+  const layFace = (f: FaceSpec, hTop: number, roleTag: string, positions?: number[]) => {
     const sl = f.slope ?? slope;
     const th = Math.atan(sl);
     const cT = Math.cos(th);
@@ -1145,25 +1390,25 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const rafterAt = (uu: number, role: RoofRole) => {
       const v1 = vMax(uu);
       if (!(v1 > 10)) return;
+      // On a truss roof the commons are the trusses' top chords (bought as trusses); the rake's fly rafters stay 2x6.
+      const chord = !!trusses && role !== "fly";
+      const dpt = trusses ? (chord ? trussChordIn : 5.5) : rafterDepth;
       const p0 = at(uu, 0);
       const p1 = at(uu, v1);
-      const z0 = zTopAt(0, f.ovhIn, hTop, sl) - rafterDepth / 2 / cT;
-      const z1 = zTopAt(v1, f.ovhIn, hTop, sl) - rafterDepth / 2 / cT;
+      const z0 = zTopAt(0, f.ovhIn, hTop, sl) - dpt / 2 / cT;
+      const z1 = zTopAt(v1, f.ovhIn, hTop, sl) - dpt / 2 / cT;
       const L = v1 / cT;
-      members.push({ role, nominal: rafterSize, lengthIn: L, cx: (p0.x + p1.x) / 2, cy: (p0.y + p1.y) / 2, cz: (z0 + z1) / 2, sx: L, sy: THICK_2X_IN, sz: rafterDepth, yaw, tilt: th, x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, of: f.id });
+      members.push({ role: chord ? "truss" : role, nominal: chord ? `${trusses!.chord} top chord` : trusses ? "2x6" : rafterSize, lengthIn: L, cx: (p0.x + p1.x) / 2, cy: (p0.y + p1.y) / 2, cz: (z0 + z1) / 2, sx: L, sy: THICK_2X_IN, sz: dpt, yaw, tilt: th, x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y, of: chord ? "truss-tc" : f.id });
       longest = Math.max(longest, L);
       if (role === "fly") flies++;
+      else if (chord) return;
       else if (v1 >= f.vTopIn - 0.5) commons++;
       else jacks++;
     };
     // The fly rafters at a rake overhang, then the layout from the header's start.
     if (f.sideA === "rake" && f.ringU0 > 2) rafterAt(THICK_2X_IN / 2, "fly");
     if (f.sideB === "rake" && Lu - f.ringU1 > 2) rafterAt(Lu - THICK_2X_IN / 2, "fly");
-    const start = f.ringU0 + (f.sideA === "hip" ? spacing : THICK_2X_IN / 2);
-    const end = f.ringU1 - (f.sideB === "hip" ? 1 : THICK_2X_IN / 2);
-    const placed: number[] = [];
-    for (let uu = start; uu <= end + 1e-6; uu += spacing) placed.push(uu);
-    if (f.sideB !== "hip" && (placed.length === 0 || end - placed[placed.length - 1] > 3)) placed.push(end);
+    const placed = positions ?? faceLayout(f, spacing);
     for (const uu of placed) rafterAt(uu, roleTag === "jack" ? "jack" : "rafter");
 
     // The face's corners and figures.
@@ -1244,7 +1489,12 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       const tiltH = Math.atan2(rise, hz);
       const z0 = zTopAt(0, f.ovhIn, hTop, sl) - hipDepth / 2 / Math.cos(tiltH);
       const z1 = zTopAt(f.vTopIn, f.ovhIn, hTop, sl) - hipDepth / 2 / Math.cos(tiltH);
-      members.push({ role: "hip", nominal: hipNominal, lengthIn: L, cx: (E.x + T.x) / 2, cy: (E.y + T.y) / 2, cz: (z0 + z1) / 2, sx: L, sy: THICK_2X_IN, sz: hipDepth, yaw: Math.atan2(T.y - E.y, T.x - E.x), tilt: tiltH, x0: E.x, y0: E.y, x1: T.x, y1: T.y, of: f.id });
+      // A built-up or LVL hip: its plies side by side, each its own piece.
+      const hu = unit(sub(T, E));
+      for (let pl = 0; pl < hipPlies; pl++) {
+        const off = -(hipPlies * hipPly) / 2 + (pl + 0.5) * hipPly;
+        members.push({ role: "hip", nominal: hipNominal, lengthIn: L, cx: (E.x + T.x) / 2 - hu.y * off, cy: (E.y + T.y) / 2 + hu.x * off, cz: (z0 + z1) / 2, sx: L, sy: hipPly, sz: hipDepth, yaw: Math.atan2(T.y - E.y, T.x - E.x), tilt: tiltH, x0: E.x, y0: E.y, x1: T.x, y1: T.y, of: f.id });
+      }
       hipTotal += L;
       hipCount++;
     };
@@ -1285,7 +1535,60 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       if (lower) f.baseTopIn = zTopAt(lower.vTopIn, lower.ovhIn, headerTopIn, lower.slope ?? slope) - heel;
     }
   }
-  for (const f of faceSpecs.filter((f) => f.tier === 1)) layFace(f, f.baseTopIn ?? headerTopIn, (f.top === "cap" || f.sideA === "hip") && kind !== "gambrel" ? "jack" : "rafter");
+  // A gable's two faces share one layout read from the same end, so every rafter meets its partner at the ridge (IRC
+  // R802.3: opposite each other, or within 1½ in.) and every truss is one piece across (2026-10-11).
+  const tier1 = faceSpecs.filter((f) => f.tier === 1);
+  const gablePair = kind === "gable" && tier1.length === 2;
+  const firstFace = tier1[0];
+  const shared: V2[] = gablePair
+    ? (() => {
+        const u0 = unit(sub(firstFace.B, firstFace.A));
+        return faceLayout(firstFace, trusses ? TRUSS_SPACING_IN : spacing).map((uu) => ({ x: firstFace.A.x + u0.x * uu, y: firstFace.A.y + u0.y * uu }));
+      })()
+    : [];
+  for (const f of tier1) {
+    const u = unit(sub(f.B, f.A));
+    const positions = gablePair ? shared.map((P) => (P.x - f.A.x) * u.x + (P.y - f.A.y) * u.y).sort((m1, m2) => m1 - m2) : undefined;
+    layFace(f, f.baseTopIn ?? headerTopIn, (f.top === "cap" || f.sideA === "hip") && kind !== "gambrel" ? "jack" : "rafter", positions);
+  }
+  // The trusses' bottom chords on the headers and their webs (a Fink, the W): from the bottom chord's third points up to
+  // the top chords' quarter points and to the peak.
+  if (trusses && gablePair && ridgeFrom && ridgeTo) {
+    const T = trusses;
+    const alongX = Math.abs(ridgeTo.x - ridgeFrom.x) >= Math.abs(ridgeTo.y - ridgeFrom.y);
+    const a0 = alongX ? y0 : x0;
+    const a1 = alongX ? y1 : x1;
+    const e0 = alongX ? eaveY0 : eaveX0;
+    const e1 = alongX ? eaveY1 : eaveX1;
+    const peakC = (e0 + e1) / 2;
+    const cT1 = Math.cos(Math.atan(slope));
+    const zc = (c: number) => zTopAt(Math.min(c - e0, e1 - c), firstFace.ovhIn, headerTopIn) - trussChordIn / 2 / cT1;
+    const zb = headerTopIn + trussChordIn / 2;
+    const span = a1 - a0;
+    const piece = (A: { x: number; y: number; z: number }, B: { x: number; y: number; z: number }, d: number, what: "bottom chord" | "web") => {
+      const dx = B.x - A.x;
+      const dy = B.y - A.y;
+      const dz = B.z - A.z;
+      const h = Math.hypot(dx, dy);
+      const L = Math.hypot(h, dz);
+      members.push({ role: "truss", nominal: what === "web" ? "2x4 web" : `${T.chord} bottom chord`, lengthIn: L, cx: (A.x + B.x) / 2, cy: (A.y + B.y) / 2, cz: (A.z + B.z) / 2, sx: L, sy: THICK_2X_IN, sz: d, yaw: h > 1e-6 ? Math.atan2(dy, dx) : 0, tilt: Math.atan2(dz, h), x0: A.x, y0: A.y, x1: B.x, y1: B.y, of: what === "web" ? "truss-web" : "truss-bc" });
+    };
+    for (const P of shared) {
+      const s0 = alongX ? P.x : P.y;
+      const pt = (c: number, z: number) => (alongX ? { x: s0, y: c, z } : { x: c, y: s0, z });
+      piece(pt(a0 - 1.75, zb), pt(a1 + 1.75, zb), trussChordIn, "bottom chord");
+      const b1 = a0 + span / 3;
+      const b2 = a0 + (2 * span) / 3;
+      const t1 = a0 + span / 4;
+      const t2 = a0 + (3 * span) / 4;
+      piece(pt(b1, zb), pt(t1, zc(t1)), 3.5, "web");
+      piece(pt(b1, zb), pt(peakC, zc(peakC)), 3.5, "web");
+      piece(pt(b2, zb), pt(peakC, zc(peakC)), 3.5, "web");
+      piece(pt(b2, zb), pt(t2, zc(t2)), 3.5, "web");
+    }
+    T.count = shared.length;
+    T.gableEnds = Math.min(2, shared.length);
+  }
   // A gambrel's ties at the break: one 2x6 across at every rafter, the pair gusseted.
   if (gambrel && kind === "gambrel") {
     const lowerFace = faceSpecs.find((f) => f.id.endsWith("1"))!;
@@ -1695,7 +1998,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
 
   const rafterCount = commons + jacks + flies;
   const hardware = {
-    hurricaneTies: pergola ? 0 : rafterCount,
+    // A truss is tied down at both bearings; the rake's fly rafters sit on outlookers.
+    hurricaneTies: pergola ? 0 : trusses ? 2 * trusses.count : rafterCount,
     rafterHangers: pergola ? 0 : (ridge?.kind === "beam" ? commons : 0) + (ledger ? commons + flies : 0) + jacks + hipCount,
     postBases: posts.length,
     postCaps: posts.length,
@@ -1738,11 +2042,13 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     posts,
     headers,
     ledger,
-    rafters: { size: rafterSize, spacingIn: spacing, count: rafterCount, commons, jacks, flies, longestIn: longest, spanIn: Math.round(commonSpanIn), maxSpanIn: rafterMax, estimated: rafterGroup === "RW" || ceilingOn },
+    rafters: { size: rafterSize, spacingIn: trusses ? TRUSS_SPACING_IN : spacing, count: rafterCount, commons, jacks, flies, longestIn: longest, spanIn: Math.round(commonSpanIn), maxSpanIn: rafterMax, estimated: rafterGroup === "RW" || ceilingOn },
     ridge,
-    hips: { count: hipCount, nominal: hipNominal, totalIn: hipTotal },
+    hips: { count: hipCount, nominal: hipDesign ? hipDesign.nominal : hipNominal, totalIn: hipTotal, spanIn: hipDesign?.spanIn, loadLb: hipDesign?.loadLb, kind: hipDesign?.kind, beyond: hipDesign?.beyond },
     kingPosts,
     ties,
+    ridgeAcrossIn,
+    trusses,
     slats,
     members,
     planes,
@@ -1768,7 +2074,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     engineered,
     hardware,
     flags: {
-      rafterBeyondTable: commonSpanIn > rafterMax + 0.01,
+      rafterBeyondTable: !trusses && commonSpanIn > rafterMax + 0.01,
       headerBeyondTable: headerBeyond,
       ridgeBeyondTable: ridgeBeyond,
       postBeyondTable: postBeyond,
@@ -1776,6 +2082,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       tooWideForHip,
       postSpliced,
       engineeredBeyond,
+      tiesBeyondStock,
+      trussesBeyond,
     },
   };
 }
@@ -1791,7 +2099,7 @@ export function roofWords(roof: RoofFrame): string {
   const r = roof.roof;
   if (roof.kind === "pergola") return `Pergola${roof.archRafters ? ", arched" : ""} · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. · ${roof.louvers ? "louvers" : `${r.slats.size} slats @ ${r.slats.spacingIn} in.`} · ${roof.posts.length} posts`;
   const name = roof.kind === "double-tier" ? "Double-tier" : roof.kind === "dutch-gable" ? "Dutch gable" : roof.kind.charAt(0).toUpperCase() + roof.kind.slice(1);
-  return `${name} ${r.pitch}:12 · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. · ${roof.posts.length} ${roof.posts.length === 1 ? "post" : "posts"}`;
+  return `${name} ${r.pitch}:12 · ${roof.trusses ? `trusses @ ${roof.trusses.spacingIn} in.` : `${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in.`} · ${roof.posts.length} ${roof.posts.length === 1 ? "post" : "posts"}`;
 }
 
 export { CEILING_FACTOR, RW_FACTOR };

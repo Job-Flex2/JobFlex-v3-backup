@@ -27,7 +27,7 @@ import type { DeckSurface } from "./surface";
 import type { RoofMember, RoofPlane } from "./roof";
 import { ROOFING_LABEL, hasDeck, shapeOutline, sizeWords, structureWords, type DeckDesign } from "./design";
 import type { DeckStructure } from "./structure";
-import { structureLevels } from "./structure";
+import { BETWEEN_LEVELS_STAIR_ID, structureLevels } from "./structure";
 import type { StairMember } from "./stairs";
 import type { RailMember } from "./rails";
 import { railWords } from "./rails";
@@ -310,6 +310,7 @@ const ROOF_MEMBER_LAYER: Record<RoofMember["role"], SceneLayer> = {
   jack: "rafter",
   fly: "rafter",
   tie: "rafter",
+  truss: "rafter",
   purlin: "rafter",
   slat: "rafter",
   hip: "ridge",
@@ -624,6 +625,12 @@ export function deckScene(s: DeckStructure): DeckScene {
           return "4x4 king post under the ridge beam, in a post bracket on the gable-end header.";
         case "tie":
           return roof.kind === "gambrel" ? "2x6 tie across at the gambrel's break, through-bolted to the rafter pair with plywood gussets." : "2x6 rafter tie at the header line, every 4 ft, three 16d nails each end — it takes the rafters' thrust (IRC R802.5.2).";
+        case "truss":
+          return m.of === "truss-bc"
+            ? `${m.nominal} of a manufactured truss, bearing on the headers 24 in. on center: the truss carries its own thrust — no ridge beam, no ties, nothing in the middle.`
+            : m.of === "truss-web"
+              ? "2x4 web of a manufactured truss, plated at both ends by the truss maker."
+              : `${m.nominal} of a manufactured truss, designed and stamped by the truss maker for this roof's loads (IRC R802.10); a hurricane tie at each bearing.`;
         case "header":
           return m.nominal.startsWith("LVL") ? `Engineered LVL header post to post: the sawn tables did not reach, so a ${m.nominal.replace("LVL1.75x", "1¾ × ")}-in. ply beam is sized by the usual LVL figures; on post caps, plies bolted.` : `${m.nominal} header (beam) on the posts, in post caps${roof.ring.length > 4 ? `, mitred ${Math.round(180 / roof.ring.length)}° where two meet at a corner post` : ", square-cut"}; the rafters bear on it.`;
         case "roof-ledger":
@@ -783,6 +790,8 @@ export function deckScene(s: DeckStructure): DeckScene {
   for (const st of s.stairs) {
     const [a, b] = st.footprint;
     if (!a || !b) continue;
+    // The engine's steps between the levels are not the design's: no knob (the checks' fix makes them editable).
+    if (st.design.id === BETWEEN_LEVELS_STAIR_ID) continue;
     const top = (st.level === "lower" && s.lower ? s.lower.frame.surfaceIn : frame?.surfaceIn ?? 0) + 2;
     handles.push({ kind: "stair", id: st.design.id, x: r3((a.x + b.x) / 2), y: r3((a.y + b.y) / 2), z: r3(top), axis: st.design.side === "front" ? "x" : "y", value: st.design.atFt, perUnit: 1, label: `Stairs along the ${st.design.side}` });
     // The width: a knob on the flight's far side, half-way down — drag it along the edge and the stairs widen that way

@@ -6,7 +6,7 @@
 // sources, not copied from the engine.
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-m3.check.ts
 import { defaultDeckDesign, defaultFixture, defaultStair, normalizeDeckDesign, frontEdgeAt, frontRadiusFt, shapeAreaSqFt, type DeckDesign } from "../../src/lib/deck/design";
-import { buildStructure } from "../../src/lib/deck/structure";
+import { BETWEEN_LEVELS_STAIR_ID, buildStructure } from "../../src/lib/deck/structure";
 import { priceDeck, deckScope, deckNotes } from "../../src/lib/deck/pricing";
 import { deckChecks, applyDeckPatch } from "../../src/lib/deck/checks";
 import { deckScene, parseDeckScene, SCENE_LAYERS, sceneBuildLayers } from "../../src/lib/deck/scene";
@@ -116,7 +116,11 @@ console.log("── a lower level, a bowed front, clipped corners, patterns");
   check("the two levels price as one deck: footings, framing and decking carry both (240 + 96 = 336 sq ft), one package", pkg2.areaSqFt === 336 && pkg2.lines.filter((l) => l.id === "deck-framing").length === 1 && pkg2.lines.find((l) => l.id === "deck-framing")!.quantity === 336 && /two levels/.test(pkg2.lines.find((l) => l.id === "deck-framing")!.name));
   const deep = buildStructure(base({ heightIn: 60, shape: { kind: "rect", widthFt: 20, depthFt: 12 }, lower: { on: true, widthFt: 12, depthFt: 8, dropIn: 24, align: "left" } }));
   const want = deckChecks(deep).find((c) => c.id === "lower-step");
-  check("24 in. down wants a stair between the levels; the fix adds one that lands on the lower deck", !!(want?.level === "warn" && !!want.fix && (() => { const after = buildStructure(applyDeckPatch(deep.design, want!.fix!.patch)); return after.stairs.length === 1 && after.stairs[0].lands === "lower-deck" && after.stairs[0].risers === stairRisers(24); })()));
+  // 2026-10-11 (owner: "the double deck — the missing steps"): the engine builds the steps between the levels itself.
+  const between = deep.stairs.find((b) => b.design.id === BETWEEN_LEVELS_STAIR_ID);
+  check("24 in. down: the engine builds the steps between the levels — onto the lower deck, the right risers — and no stair is still wanted", !!between && between.lands === "lower-deck" && between.risers === stairRisers(24) && !!deep.stepDown && !deep.stepDown.stairWanted);
+  check("the check says so, and its fix makes them the contractor's own stair, which takes the engine's place", !!(want?.level === "info" && !!want.fix && (() => { const after = buildStructure(applyDeckPatch(deep.design, want!.fix!.patch)); return after.stairs.length === 1 && after.stairs[0].design.id !== BETWEEN_LEVELS_STAIR_ID && after.stairs[0].lands === "lower-deck" && after.stairs[0].risers === stairRisers(24); })()));
+  check("one riser down, the engine builds nothing between the levels", !two.stairs.some((b) => b.design.id === BETWEEN_LEVELS_STAIR_ID));
   const bow = base({ heightIn: 36, shape: { kind: "rect", widthFt: 16, depthFt: 12, front: { kind: "curve", bulgeFt: 2, clipFt: 2 } } });
   check("a 2-ft bow on a 16-ft front: a 17-ft radius, the front edge 12 ft deep at the corners and 14 at the middle, 18 sq ft more deck", near(frontRadiusFt(bow.shape), 17, 0.01) && near(frontEdgeAt(bow.shape, 0), 144, 0.01) && near(frontEdgeAt(bow.shape, 96), 168, 0.01) && near(shapeAreaSqFt(bow.shape), 192 + 21.6, 0.05), `${frontRadiusFt(bow.shape)} ${shapeAreaSqFt(bow.shape)}`);
   const bs = buildStructure(bow);

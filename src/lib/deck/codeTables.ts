@@ -188,6 +188,8 @@ export function effectiveSpanFromTributaryFt(tributaryFt: number): number {
 }
 
 const EFFECTIVE_SPANS_FT = [6, 8, 10, 12, 14, 16, 18] as const;
+/** The beam tables' last column: no beam is read past an effective joist span of 18 ft. */
+export const BEAM_TABLE_LAST_EFF_FT = EFFECTIVE_SPANS_FT[EFFECTIVE_SPANS_FT.length - 1];
 
 /** The plies and the depth of a built-up beam. */
 export function builtUpParts(beam: BuiltUpBeam): { plies: number; nominalDepth: number } {

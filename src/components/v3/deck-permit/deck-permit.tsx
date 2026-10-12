@@ -110,7 +110,7 @@ export function DeckPermitSheet({ design, address, title, shop }: { design: Deck
             <div className={s.drawing}>
               <DeckPlan structure={structure} show="roof" />
             </div>
-            {foot(`${roof.kind} ${roof.roof.pitch}:12 · ${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. · ${[...new Set(roof.headers.map((h) => h.spec.size))].join(", ")} headers · ${roof.posts.length} posts${roof.attach === "wall" ? " and a ledger on the house" : ""}`)}
+            {foot(`${roof.kind} ${roof.roof.pitch}:12 · ${roof.trusses ? `${roof.trusses.count} trusses @ ${roof.trusses.spacingIn} in., ${ftIn(roof.trusses.spanIn)} span` : `${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in.`} · ${[...new Set(roof.headers.map((h) => h.spec.size))].join(", ")} headers · ${roof.posts.length} posts${roof.attach === "wall" ? " and a ledger on the house" : ""}`)}
           </section>
         ) : null}
 
@@ -215,7 +215,8 @@ export function DeckPermitSheet({ design, address, title, shop }: { design: Deck
                 <table className={s.table}>
                   <thead><tr><th>Member</th><th>Size</th><th className={s.r}>Spacing / span</th><th>Read on</th></tr></thead>
                   <tbody>
-                    <tr><td>Rafters</td><td>{roof.rafters.size}</td><td className={s.r}>{roof.rafters.spacingIn} in. o.c. · span {ftIn(roof.rafters.spanIn)} (allows {ftIn(roof.rafters.maxSpanIn)})</td><td className={s.rule}>{RULE_RAFTER[roof.roofLoad]}</td></tr>
+                    {roof.trusses ? <tr><td>Trusses</td><td>{roof.trusses.count} · {roof.trusses.chord} chords</td><td className={s.r}>{roof.trusses.spacingIn} in. o.c. · span {ftIn(roof.trusses.spanIn)}</td><td className={s.rule}>IRC R802.10 · the truss maker&apos;s stamped drawings</td></tr> : null}
+                    {roof.trusses ? null : <tr><td>Rafters</td><td>{roof.rafters.size}</td><td className={s.r}>{roof.rafters.spacingIn} in. o.c. · span {ftIn(roof.rafters.spanIn)} (allows {ftIn(roof.rafters.maxSpanIn)})</td><td className={s.rule}>{RULE_RAFTER[roof.roofLoad]}</td></tr>}
                     {roof.headers.map((h) => (
                       <tr key={h.id}><td>Header {h.id.replace("h", "")}</td><td>{h.spec.size}</td><td className={s.r}>{ftIn(h.lengthIn)} · supports {ftIn(h.spanIn)} apart</td><td className={s.rule}>{h.spec.kind === "lvl" ? "LVL maker's tables" : `${RULE.beam} at the roof's load`}</td></tr>
                     ))}

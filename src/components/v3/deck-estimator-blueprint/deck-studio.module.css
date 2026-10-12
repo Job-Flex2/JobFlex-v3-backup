@@ -469,3 +469,98 @@
 .wallPlus:focus-visible { outline: none; }
 .swatchChip { display: inline-flex; align-items: center; gap: 6px; }
 .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.25); flex: none; }
+
+/* ── The wall drawing, smart and large (2026-10-11 afternoon): the grid, the words on it, what is picked, the pad under it ── */
+.wallPlan { padding: 0; overflow: hidden; }
+.wallPlanSvg { max-height: 320px; display: block; }
+.wallYard { fill: #eef1e8; }
+.wallBody { fill: #ece7dc; }
+.wallPart { fill: transparent; cursor: ns-resize; outline: none; }
+.wallPartLocked { cursor: pointer; }
+.wallPartHover { fill: rgba(24, 84, 160, 0.07); }
+.wallPartOn { fill: rgba(24, 84, 160, 0.14); }
+.wallPart:focus-visible { fill: rgba(24, 84, 160, 0.14); }
+.wallDeck { cursor: ew-resize; outline: none; transition: fill 0.12s; }
+.wallDeckHover { fill: rgba(24, 84, 160, 0.2); }
+.wallDeckOn, .wallDeck:focus-visible { fill: rgba(24, 84, 160, 0.24); stroke-width: 2.4; }
+.wallDim line { stroke: var(--ink-soft); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.wallDimText { fill: var(--ink-soft); font-family: var(--font-mono); font-weight: 700; }
+.wallPartText text { fill: var(--ink-soft); font-family: var(--font-mono); font-weight: 700; pointer-events: none; }
+.wallPartText .wallNote { fill: var(--blueprint); }
+.wallLabel, .wallNote, .wallDimText { pointer-events: none; }
+.wallSel { stroke: var(--ink) !important; stroke-width: 3 !important; }
+.wallGrip, .wallDeckHandle, .wallHandle { outline: none; }
+/* The pad */
+.wallPad, :global(.jf-blueprint .content) .wallPad { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--hair-soft); background: #fff; }
+.wallPadTitle, :global(.jf-blueprint .content) .wallPadTitle { flex: 1 1 100%; font-size: 12.5px; font-weight: 800; line-height: 1.35; }
+.wallPadHint, :global(.jf-blueprint .content) .wallPadHint { flex: 1 1 100%; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+.wallPadSep { flex: 1 1 100%; height: 0; }
+.wallPadBtn, :global(.jf-blueprint .content) .wallPadBtn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 11px; cursor: pointer;
+  border: 1.5px solid var(--hair); border-radius: 999px; background: #fff; color: var(--ink);
+  font-family: var(--font); font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; user-select: none; touch-action: manipulation;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.wallPadBtn:hover, :global(.jf-blueprint .content) .wallPadBtn:hover { border-color: var(--step-c, var(--blueprint)); color: var(--step-c, var(--blueprint)); }
+.wallPadBtn:active, :global(.jf-blueprint .content) .wallPadBtn:active { background: color-mix(in srgb, var(--step-c, var(--blueprint)) 12%, #fff); }
+.wallPadBtn:focus-visible, :global(.jf-blueprint .content) .wallPadBtn:focus-visible { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: 2px; }
+.wallPadBtn[disabled], :global(.jf-blueprint .content) .wallPadBtn[disabled] { opacity: 0.4; cursor: default; pointer-events: none; }
+.wallPadBtnPrimary, :global(.jf-blueprint .content) .wallPadBtnPrimary { background: var(--step-c, var(--blueprint)); border-color: var(--step-c, var(--blueprint)); color: #fff; }
+.wallPadBtnPrimary:hover, :global(.jf-blueprint .content) .wallPadBtnPrimary:hover { color: #fff; background: color-mix(in srgb, var(--step-c, var(--blueprint)) 82%, #000); }
+.wallFix, :global(.jf-blueprint .content) .wallFix { flex: 1 1 100%; display: grid; gap: 6px; margin-top: 4px; padding: 8px 10px; border-left: 3px solid var(--warning); background: var(--warning-soft); font-size: 12px; line-height: 1.45; color: var(--ink-soft); }
+.wallFixBtns, :global(.jf-blueprint .content) .wallFixBtns { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Large, in the viewer's "House & deck" view: the drawing takes the room, the pad sits under it. */
+.wallWrap { display: flex; flex-direction: column; padding: 0; }
+.wallPlanLarge { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border: 0; border-radius: 0; }
+/* Pinned inside its frame: the large drawing's size must never follow its viewBox, which follows its size (a resize loop). */
+.wallPlanSvgLarge { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; }
+:global(.jf-blueprint .content) .viewBoxWall { height: min(78vh, 760px); }
+.wallStage { position: relative; min-height: 0; }
+.wallPlanLarge .wallStage { flex: 1 1 auto; min-height: 0; position: relative; }
+.wallYardPan { cursor: grab; }
+.wallYardPan:active { cursor: grabbing; }
+.wallPart { cursor: move; }
+/* Zoom, on the large drawings */
+.wallZoom, :global(.jf-blueprint .content) .wallZoom { position: absolute; right: 8px; top: 8px; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--hair); border-radius: 999px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 4px 14px -8px rgba(10, 10, 10, 0.35); }
+.wallZoomBtn, :global(.jf-blueprint .content) .wallZoomBtn { min-width: 30px; height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 800; cursor: pointer; }
+.wallZoomBtn:hover, :global(.jf-blueprint .content) .wallZoomBtn:hover { background: color-mix(in srgb, var(--blueprint) 10%, #fff); color: var(--blueprint); }
+.wallZoomBtn[disabled], :global(.jf-blueprint .content) .wallZoomBtn[disabled] { opacity: 0.35; cursor: default; }
+.wallZoomBtn:focus-visible, :global(.jf-blueprint .content) .wallZoomBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 1px; }
+.wallZoomOn, .wallZoomOn:hover, :global(.jf-blueprint .content) .wallZoomOn, :global(.jf-blueprint .content) .wallZoomOn:hover { background: var(--blueprint); color: #fff; }
+.wallPlanHand, .wallPlanHand * { cursor: grab !important; }
+.wallPlanHand:active, .wallPlanHand:active * { cursor: grabbing !important; }
+.wallZoomLevel, :global(.jf-blueprint .content) .wallZoomLevel { min-width: 42px; text-align: center; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Full screen: a layer over the page (portalled to <body>, so it carries the tokens it uses) */
+.wallFullLayer {
+  --ink: #0a0a0a; --ink-soft: #2a2a2a; --muted: #555; --muted-light: #888; --paper: #f2f0eb; --blueprint: #1854a0; --blueprint-dark: #0e3d7a;
+  --hair: rgba(10, 10, 10, 0.12); --hair-soft: rgba(10, 10, 10, 0.08); --warning: #b88420; --warning-soft: rgba(184, 132, 32, 0.1); --radius: 2px;
+  --font: var(--font-inter), "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif; --font-mono: var(--font-jbmono), "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+  position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); font-family: var(--font);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+.wallFullHead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1.5px solid var(--hair); background: #fff; }
+.wallFullTitle { font-size: 14px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; }
+.wallFullFacts { flex: 1 1 260px; min-width: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--muted); }
+.wallPlanFull { flex: 1 1 auto; min-height: 0; }
+.wallFullHold, :global(.jf-blueprint .content) .wallFullHold { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px; border: 1px dashed var(--hair); border-radius: var(--radius); font-size: 12.5px; color: var(--muted); }
+@media (max-width: 768px) {
+  .wallPadBtn, :global(.jf-blueprint .content) .wallPadBtn { min-height: 44px; padding: 0 12px; font-size: 12px; }
+  .wallPad, :global(.jf-blueprint .content) .wallPad { padding: 8px 8px 10px; }
+  :global(.jf-blueprint .content) .viewBoxWall { height: 600px; }
+  .wallPlanSvg:not(.wallPlanSvgLarge) { max-height: 260px; }
+}
+
+/* Auto-fix (2026-10-11): the report under the checks' header, and a check's choices side by side. */
+:global(.jf-blueprint .content) .fixReport { position: relative; margin: 10px 18px 0; padding-right: 36px; display: grid; gap: 4px; }
+:global(.jf-blueprint .content) .fixReport p { margin: 0; }
+:global(.jf-blueprint .content) .fixReport ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+:global(.jf-blueprint .content) .fixReportClose { position: absolute; right: 8px; top: 6px; width: 26px; height: 26px; border: 0; background: none; font-size: 18px; line-height: 1; color: var(--muted); cursor: pointer; }
+:global(.jf-blueprint .content) .checkFixes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+@media (max-width: 768px) {
+  :global(.jf-blueprint .content) .fixReport { margin: 10px 14px 0; }
+  :global(.jf-blueprint .content) .check .checkFixes { grid-column: 2; justify-content: flex-start; }
+}
+
+/* The material list's two doors (2026-10-11). */
+:global(.jf-blueprint .content) .materialActs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+@media (max-width: 768px) { :global(.jf-blueprint .content) .materialActs .btn { flex: 1 1 100%; } }

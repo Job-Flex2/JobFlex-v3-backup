@@ -310,15 +310,17 @@ export function detailDrawings(s: DeckStructure): DetailDrawing[] {
     const rz = 37 + hd;
     items.push({ t: "poly", pts: [-16, rz - 16 * slope + 0.5, 24, rz + 24 * slope + 0.5, 24, rz + 24 * slope + 0.5 + 7.25, -16, rz - 16 * slope + 0.5 + 7.25], cls: "wood", closed: true });
     const hiTop = rz + 24 * slope + 0.5 + 7.25;
-    items.push({ t: "text", x: -20, z: hiTop + 8, s: `${roof.rafters.size} rafter @ ${roof.rafters.spacingIn} in. o.c.`, cls: "note" });
-    items.push({ t: "text", x: -20, z: hiTop + 4, s: "seat cut on the header, a hurricane tie", cls: "note" });
+    items.push({ t: "text", x: -20, z: hiTop + 8, s: roof.trusses ? `truss @ 24 in. o.c., ${roof.trusses.chord} chords` : `${roof.rafters.size} rafter @ ${roof.rafters.spacingIn} in. o.c.`, cls: "note" });
+    items.push({ t: "text", x: -20, z: hiTop + 4, s: roof.trusses ? "bears on the header, a hurricane tie each end" : "seat cut on the header, a hurricane tie", cls: "note" });
     items.push({ t: "text", x: 2.75, z: 18, s: `${roof.roof.post} post`, anchor: "middle", rot: -90, cls: "label" });
     out.push({
-      title: "Rafter to header to post",
+      title: roof.trusses ? "Truss to header to post" : "Rafter to header to post",
       drawing: { box: { x: -22, z: -6, w: 56, h: hiTop + 18 }, items },
       notes: [
-        `${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. o.c. span ${ftIn(roof.rafters.spanIn)} (the table allows ${ftIn(roof.rafters.maxSpanIn)}) at ${roof.roof.pitch}:12. ${RULE_RAFTER[roof.roofLoad]}.`,
-        `Each rafter seat-cut over the header with a hurricane tie; headers ${[...new Set(roof.headers.map((h) => h.spec.size))].join(" / ")} in post caps. ${RULE.beam}.`,
+        roof.trusses
+          ? `${roof.trusses.count} manufactured trusses @ 24 in. o.c. span ${ftIn(roof.trusses.spanIn)} bearing to bearing at ${roof.roof.pitch}:12, designed and stamped by the truss maker for ${roof.roofLoad} psf ${roof.roofLoad === 20 ? "roof live load" : "ground snow"} and ${roof.deadPsf} psf dead; the truss design drawings are submitted with the permit. IRC R802.10.1; permanent bracing per those drawings and BCSI-B3, IRC R802.10.3.`
+          : `${roof.rafters.size} rafters @ ${roof.rafters.spacingIn} in. o.c. span ${ftIn(roof.rafters.spanIn)} (the table allows ${ftIn(roof.rafters.maxSpanIn)}) at ${roof.roof.pitch}:12. ${RULE_RAFTER[roof.roofLoad]}.`,
+        `Each ${roof.trusses ? "truss bears on the header with a hurricane tie at each end" : "rafter seat-cut over the header with a hurricane tie"}; headers ${[...new Set(roof.headers.map((h) => h.spec.size))].join(" / ")} in post caps. ${RULE.beam}.`,
         roof.attach === "wall" ? `Roof ledger on the house with structural screws, flashed. ${RULE.ledgerBoard}.` : `Free-standing: knee braces at the posts hold the roof square. ${RULE.bracing}.`,
       ],
     });

@@ -75,7 +75,9 @@ const base = (over: Over): DeckDesign => {
   if (roof && frame) {
     const run = roof.faces[0].runIn;
     check("the eave faces run half the width plus the overhang: (16·12 − 9 + 24)/2 in.", near(run, (16 * 12 - 2 * 4.5 + 2 * 12) / 2), `${run}`);
-    check("two front posts, two side headers to the house, one front header", roof.posts.length === 2 && roof.headers.length === 3 && roof.headers.filter((h) => h.wallEnd).length === 2);
+    // Under a ridge BOARD with ties nothing at the ridge carries anything (2026-10-11): each side header takes its whole
+    // slope, so the two front corners get the posts the side headers' spans need on top.
+    check("two front corner posts, two side headers to the house (each with the posts its whole slope needs), one front header", roof.posts.filter((p) => p.corner).length === 2 && roof.headers.length === 3 && roof.headers.filter((h) => h.wallEnd).length === 2 && roof.posts.length === 2 + roof.headers.filter((h) => h.wallEnd).reduce((a, h) => a + h.postAt.length - 2, 0), `${roof.posts.length} posts`);
     check("the rafters' horizontal span is the run less the overhang", near(roof.rafters.spanIn, run - 12, 0.03), `${roof.rafters.spanIn}`);
     check("2x6 at 16 in. carries an 8-ft span in Southern pine at 20 psf (table 17-1)", roof.rafters.size === "2x6" && roof.rafters.maxSpanIn === fi(13, 6));
     const perSide = Math.floor((12 * 12 - 12) / 16) + 1;
@@ -87,7 +89,7 @@ const base = (over: Over): DeckDesign => {
     check("roof area: two faces, 13 ft by the sloped run", near(roof.roofAreaSqFt, area, 0.03), `${roof.roofAreaSqFt} vs ${Math.round(area)}`);
     check("squares with 10% waste, sheets by 32 sq ft", near(roof.squares, Math.ceil((area * 1.1) / 100 * 10) / 10, 0.05) && roof.sheets === Math.ceil((roof.roofAreaSqFt * 1.1) / 32 - 1e-9));
     check("eaves: two sides of 13 ft; rakes: two sloped runs at the front; 2 downspouts on 5-in. gutters", near(roof.eaveFt, 26, 0.03) && near(roof.rakeFt, (2 * run) / 12 / Math.cos(Math.atan(0.5)), 0.03) && roof.gutters?.downspouts === 2 && roof.gutters.kind === "k5");
-    check("the roof's posts stand on their own footings in the deck", frame.posts.filter((p) => p.roof).length === 2 && frame.posts.filter((p) => p.roof).every((p) => p.footing.required !== null));
+    check("the roof's posts stand on their own footings in the deck", frame.posts.filter((p) => p.roof).length === roof.posts.length && frame.posts.filter((p) => p.roof).every((p) => p.footing.required !== null));
     const pkg = priceDeck(d);
     check("the roof's lines: posts, framing, deck, roofing, trim, gutters", ["roof-posts", "roof-frame", "roof-deck", "roofing", "roof-trim", "roof-gutters"].every((id) => pkg.lines.some((l) => l.id === id)), pkg.lines.map((l) => l.id).join(","));
     check("every material line is on a price-book row", pkg.bom.every((l) => rateKeys.has(l.rateKey)), pkg.bom.filter((l) => !rateKeys.has(l.rateKey)).map((l) => l.rateKey).join(","));
@@ -186,11 +188,12 @@ console.log("── a sweep: every structure, shape and size the studio offers")
         const pkg = priceDeck(d);
         const roof = pkg.roof!;
         const stock = STOCK_LENGTHS_FT[STOCK_LENGTHS_FT.length - 1] * 12;
-        const badMember = roof.members.find((m) => ![m.cx, m.cy, m.cz, m.sx, m.sy, m.sz, m.yaw, m.tilt, m.lengthIn].every(Number.isFinite) || m.sx <= 0 || m.sy <= 0 || m.sz <= 0 || m.lengthIn <= 0 || (m.lengthIn > stock && !["slat", "ridge", "header", "roof-ledger", "subfascia", "fascia-eave", "gutter", "roof-post"].includes(m.role)));
+        const badMember = roof.members.find((m) => ![m.cx, m.cy, m.cz, m.sx, m.sy, m.sz, m.yaw, m.tilt, m.lengthIn].every(Number.isFinite) || m.sx <= 0 || m.sy <= 0 || m.sz <= 0 || m.lengthIn <= 0 || (m.lengthIn > stock && !["slat", "ridge", "header", "roof-ledger", "subfascia", "fascia-eave", "gutter", "roof-post", "truss"].includes(m.role)));
         if (badMember) trouble.push(`${tag}: ${badMember.role} ${badMember.nominal} ${Math.round(badMember.lengthIn)} in.`);
         if (!(roof.posts.length >= 2) || !roof.headers.length) trouble.push(`${tag}: no posts or headers`);
         if (roof.kind !== "pergola" && !(roof.roofAreaSqFt > roof.footprintSqFt * 0.99)) trouble.push(`${tag}: roof area ${roof.roofAreaSqFt} under its footprint ${roof.footprintSqFt}`);
-        if (roof.kind !== "pergola" && roof.rafters.count < 4) trouble.push(`${tag}: ${roof.rafters.count} rafters`);
+        // A trussed roof is framed by its trusses (2026-10-11); the rest by their rafters.
+        if (roof.kind !== "pergola" && (roof.trusses ? roof.trusses.count : roof.rafters.count) < 4) trouble.push(`${tag}: ${roof.trusses ? `${roof.trusses.count} trusses` : `${roof.rafters.count} rafters`}`);
         const offBook = pkg.bom.filter((l) => !rateKeys.has(l.rateKey) || !(l.qty > 0) || !Number.isFinite(l.cost));
         if (offBook.length) trouble.push(`${tag}: material lines off the book: ${offBook.map((l) => l.id).join(",")}`);
         if (!(pkg.subtotal > 0) || pkg.lines.length > 60) trouble.push(`${tag}: ${pkg.lines.length} lines, $${pkg.subtotal}`);
