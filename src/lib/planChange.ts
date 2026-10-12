@@ -194,14 +194,17 @@ export async function previewPlanChange(organizationId: string, planSlug: string
       subscription_details: {
         items: itemsFor(r),
         proration_behavior: "always_invoice",
-        proration_date: prorationDate,
-        ...(r.anchorNow ? { billing_cycle_anchor: "now" as const } : {}),
+        // Stripe takes no proration date with a cycle restarted "now": it
+        // prorates to the second it applies the change (a term change).
+        ...(r.anchorNow ? { billing_cycle_anchor: "now" as const } : { proration_date: prorationDate }),
       },
     });
     out.dueNowCents = Math.max(0, pre.amount_due ?? 0);
     out.creditCents = Math.max(0, -pre.lines.data.filter((l) => (l.amount ?? 0) < 0).reduce((n, l) => n + l.amount, 0));
-    out.prorationDate = prorationDate;
-    out.nextBillAt = iso(r.anchorNow ? addTerm(prorationDate, r.interval) : periodEnd);
+    out.prorationDate = r.anchorNow ? null : prorationDate;
+    // The new period's end as Stripe drew it (a test clock's "now" is not ours).
+    const newEnd = Math.max(0, ...pre.lines.data.map((l) => l.period?.end ?? 0));
+    out.nextBillAt = iso(r.anchorNow ? newEnd || addTerm(prorationDate, r.interval) : periodEnd);
   }
   return out;
 }
@@ -258,9 +261,8 @@ export async function applyPlanChange(
       updated = await stripe.subscriptions.update(sub.id, {
         items: itemsFor(r),
         proration_behavior: "always_invoice",
-        proration_date: when,
         payment_behavior: "pending_if_incomplete",
-        ...(r.anchorNow ? { billing_cycle_anchor: "now" as const } : {}),
+        ...(r.anchorNow ? { billing_cycle_anchor: "now" as const } : { proration_date: when }),
         expand: ["latest_invoice"],
       });
     } catch (err) {
