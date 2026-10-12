@@ -2,8 +2,9 @@
 
 import { useTrialOffer } from "@/components/providers/trial-offer";
 import { useEffect, useRef, useState } from "react";
-import { expandPlanFeatures, formatPlanPrice, priceCadence, type PlanDTO } from "@/lib/planCatalog";
-import { annualDeal, dealWords } from "@/lib/planDeal";
+import { expandPlanFeatures, formatPlanPrice, type PlanDTO } from "@/lib/planCatalog";
+import { annualDeal, offersYearly, planTerm, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
+import { PlanDealSlot, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import "./pricing-faq.css";
 
 /* THE REGISTER'S PLAN CARDS ON THE LANDING (owner, 2026-09-26). A port of
@@ -19,9 +20,17 @@ import "./pricing-faq.css";
 
    On a phone (≤768px) the row is the register's swipe carousel: cards
    min(84vw, 340px), snap centre, the MOST-PICKED card centred on arrival,
-   lists cut to six whole rows with "Show all N", and square dots under it. */
+   and square dots under it.
+
+   MONTHLY | ANNUAL (owner, 2026-10-12): one switch over the row
+   (components/billing/PlanTermSwitch), Monthly first. Annual prints the
+   year's price, its "N months free" stamp when the saving is whole months
+   and "You save $N" in green (lib/planDeal); a plan with no yearly price
+   keeps its month and says "Billed monthly". The choice rides the start
+   link as ?billing=annual, so the signup plan step opens on it. Every card
+   lists every row — nothing folds — and the cards are one subgrid, so the
+   prices and the first rows stand on one line across the row. */
 const PHONE = "(max-width: 768px)";
-const CUT = 6;
 
 function Check() {
   return (
@@ -41,9 +50,12 @@ function Minus() {
 export function PricingPlans({
   plans,
   registerHref,
+  tone = "paper",
 }: {
   plans: PlanDTO[];
   registerHref: string;
+  /** "ink" on the landing's dark pricing band — the switch's colours. */
+  tone?: "paper" | "ink";
 }) {
   const { days } = useTrialOffer();
   const { rows, included } = expandPlanFeatures(plans);
@@ -51,15 +63,10 @@ export function PricingPlans({
   const railRef = useRef<HTMLDivElement>(null);
   const touched = useRef(false);
   const [active, setActive] = useState(heroIndex);
-  const [open, setOpen] = useState<Set<string>>(() => new Set());
-
-  const toggle = (slug: string) =>
-    setOpen((cur) => {
-      const next = new Set(cur);
-      if (next.has(slug)) next.delete(slug);
-      else next.add(slug);
-      return next;
-    });
+  const [term, setTerm] = useState<BillingTerm>("MONTH");
+  const yearly = offersYearly(plans);
+  const tag = sharedDealWords(plans.filter((p) => p.yearlyPriceCents).map((p) => annualDeal(p.priceCents, p.yearlyPriceCents)));
+  const startHref = withBillingTerm(registerHref, yearly ? term : "MONTH");
 
   /* The rail is `position: relative` (pricing-faq.css), so a card's
      offsetLeft is measured from the rail itself, in its scroll space. */
@@ -152,26 +159,31 @@ export function PricingPlans({
 
   return (
     <>
+      {yearly ? (
+        <div className="lp-pw-termrow">
+          <PlanTermSwitch value={term} onChange={setTerm} tag={tag} tone={tone} />
+        </div>
+      ) : null}
       <div className="lp-pw-plans" ref={railRef}>
         {plans.map((p) => {
           const has = included.get(p.slug) ?? new Set<string>();
-          const isOpen = open.has(p.slug);
-          const listId = `lp-pw-feats-${p.slug}`;
+          const billed = planTerm(term, p.yearlyPriceCents);
           return (
-            <article key={p.slug} className={"lp-pw-plan" + (p.highlight ? " lp-pw-plan--hero" : "")}>
+            <article
+              key={p.slug}
+              className={"lp-pw-plan" + (p.highlight ? " lp-pw-plan--hero" : "")}
+              data-plan-card={p.slug}
+              data-monthly-cents={p.priceCents}
+              data-yearly-cents={p.yearlyPriceCents ?? undefined}
+            >
               {p.highlight ? <span className="lp-pw-tag">Most picked</span> : null}
               <h3 className="lp-pw-plan-n">{p.name}</h3>
-              <p className="lp-pw-price">
-                {formatPlanPrice(p.priceCents)}
-                <i>{priceCadence(true)}</i>
+              <p className="lp-pw-price" data-plan-price>
+                {formatPlanPrice(billed === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents)}
+                <i>{billed === "YEAR" ? "/yr" : "/mo"}</i>
               </p>
-              {/* The year's price as the trade reads it (owner, 2026-10-11): months free, never a percentage. */}
-              {p.yearlyPriceCents && annualDeal(p.priceCents, p.yearlyPriceCents) ? (
-                <p className="lp-pw-annual" data-plan-annual={p.slug}>
-                  or {formatPlanPrice(p.yearlyPriceCents)}/yr — {dealWords(annualDeal(p.priceCents, p.yearlyPriceCents))}
-                </p>
-              ) : null}
-              <ul id={listId} className={"lp-pw-feats" + (isOpen ? " is-open" : "")}>
+              <PlanDealSlot term={term} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
+              <ul className="lp-pw-feats" data-plan-feats>
                 {rows.map((f) => {
                   const on = has.has(f.toLowerCase());
                   return (
@@ -183,18 +195,7 @@ export function PricingPlans({
                   );
                 })}
               </ul>
-              {rows.length > CUT ? (
-                <button
-                  type="button"
-                  className="lp-pw-more"
-                  aria-expanded={isOpen}
-                  aria-controls={listId}
-                  onClick={() => toggle(p.slug)}
-                >
-                  {isOpen ? "Show less" : `Show all ${rows.length}`}
-                </button>
-              ) : null}
-              <a href={registerHref} className="lp-pw-go" data-cta="pricing">
+              <a href={startHref} className="lp-pw-go" data-cta="pricing">
                 Start {days}-day free trial
                 <span className="sr-only"> on {p.name}</span>
               </a>

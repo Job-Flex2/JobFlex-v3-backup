@@ -10,8 +10,13 @@
 //     down is free — checkout only when there is no subscription yet. The old
 //     build opened a fresh Checkout for every click, which minted a SECOND
 //     subscription beside the first.
-//   · Cards are one fixed height; the benefit list scrolls inside them and
-//     the button sits at the foot of every card, full width, blueprint blue.
+//   · Cards are one row's height (a subgrid since 2026-10-12: prices and
+//     first rows on one line); every benefit is listed, nothing scrolls or
+//     folds inside a card, and the button sits at the foot of every card,
+//     full width, blueprint blue.
+//   · MONTHLY | ANNUAL (owner, 2026-10-12): one switch over the row
+//     (components/billing/PlanTermSwitch). A plan with no yearly price is
+//     shown and bought monthly whatever the switch says (lib/planDeal).
 //   · Only the clicked button goes busy. `disabled={Boolean(busy)}` used to
 //     dim all three the moment one was pressed.
 //   · A downgrade asks first ("Are you sure…?").
@@ -23,7 +28,8 @@
 //     next cycle bills the new total — no second charge for the base.
 
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
-import { annualDeal, dealWords } from "@/lib/planDeal";
+import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, type BillingTerm } from "@/lib/planDeal";
+import { PlanDealSlot, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import { DEV_EVENT, type DevUpgradeEvent } from "@/lib/devSimulation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -115,8 +121,15 @@ export function UpgradeContent({
   /* MONTHLY ONLY for now (owner, 2026-09-04): the yearly tier is unreviewed,
      so the billing switch is gone from every plan surface. The type is kept
      wide so the price math below stays ready for the day it comes back. */
-  /* ANNUAL IS BACK (owner, 2026-10-11): a plan with a yearly price shows both terms on its card, "2 months free" in words (lib/planDeal). */
-  const [interval, setInterval] = useState<"MONTH" | "YEAR">("MONTH");
+  /* ANNUAL IS BACK (owner, 2026-10-11), as one switch over the row (2026-10-12): "2 months free" in words,
+     never a percentage (lib/planDeal). Monthly until it is flipped. */
+  const [interval, setInterval] = useState<BillingTerm>("MONTH");
+  /** The term a card is billed on: the switch's, or the month for a plan with no yearly price. */
+  const termFor = useCallback(
+    (slug: string): BillingTerm =>
+      slug === CUSTOM_PLAN_SLUG ? interval : planTerm(interval, plans.find((p) => p.slug === slug)?.yearlyPriceCents),
+    [interval, plans],
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // The current plan as the page knows it; moved locally after an in-place
@@ -192,13 +205,13 @@ export function UpgradeContent({
       const res = await fetch("/api/checkout/subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planSlug: slug, interval, customPages: customPagesToBuy }),
+        body: JSON.stringify({ planSlug: slug, interval: termFor(slug), customPages: customPagesToBuy }),
       });
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !body.url) throw new Error(body.error ?? "Couldn't open checkout.");
       window.location.assign(body.url);
     },
-    [interval],
+    [termFor],
   );
 
   /* An upgrade (or a custom plan) is PAID on Stripe: confirm, then checkout.
@@ -216,8 +229,7 @@ export function UpgradeContent({
         setConfirm(null);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busy, interval],
+    [busy, checkout],
   );
 
   /* A downgrade is switched in place, free. */
@@ -227,7 +239,7 @@ export function UpgradeContent({
       setErr(null);
       setBusy(p.slug);
       try {
-        const res = await changePlan(p.slug, interval);
+        const res = await changePlan(p.slug, termFor(p.slug));
         if (!res.ok) throw new Error(res.error);
         if (res.mode === "checkout") {
           await checkout(p.slug);
@@ -245,7 +257,7 @@ export function UpgradeContent({
       }
     },
      
-    [busy, checkout, interval, router],
+    [busy, checkout, termFor, router],
   );
 
   function onPick(p: UpgradePlan) {
@@ -288,7 +300,17 @@ export function UpgradeContent({
   const adds = picked.filter((id) => !owned.includes(id));
   const removes = onCustom ? owned.filter((id) => !picked.includes(id)) : [];
   const nextMonthlyCents = customPriceCents(picked);
-
+  /* What a new Custom plan costs on the switch's term (an existing one is
+     managed page by page, monthly, below). */
+  const pickedTermCents = customPriceCents(picked, interval);
+  const termPer = interval === "YEAR" ? "/yr" : "/mo";
+  /* The switch: drawn when a card has a year to show; its "N months free"
+     tag only when every yearly card gives the same whole months. */
+  const showTerms = offersYearly(plans) || onCustom || customOffered;
+  const termTag = sharedDealWords([
+    ...plans.filter((p) => p.yearlyPriceCents).map((p) => annualDeal(p.priceCents, p.yearlyPriceCents)),
+    ...(onCustom || customOffered ? [annualDeal(customPriceCents(onCustom ? owned : picked), customPriceCents(onCustom ? owned : picked, "YEAR"))] : []),
+  ]);
   /* A change to the pages of a Custom plan — added, removed or both — is made
      on the subscription the shop already has (actions/billing.updateCustomPages,
      lib/customBilling): added pages are charged now, prorated (nothing in a
@@ -413,12 +435,13 @@ export function UpgradeContent({
       ) : null}
 
       {focusWords ? <p className="jf-up-focus" data-upgrade-focus-words>{focusWords}</p> : null}
+      {showTerms ? (
+        <PlanTermSwitch className="jf-up-termsw" value={interval} onChange={setInterval} tag={termTag} />
+      ) : null}
       <div className="jf-up-plans has-custom">
         {plans.map((p) => {
-          const yearly = interval === "YEAR" ? p.yearlyPriceCents : null;
-          const cents = yearly ?? p.priceCents;
-          const listCents = yearly ? p.priceCents * 12 : 0;
-          const deal = annualDeal(p.priceCents, p.yearlyPriceCents);
+          const term = planTerm(interval, p.yearlyPriceCents);
+          const cents = term === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents;
           const isCur = cur === p.slug;
           const dir = direction(p);
           return (
@@ -426,28 +449,18 @@ export function UpgradeContent({
               key={p.slug}
               className={"jf-up-plan" + (p.highlight ? " hero" : "") + (isCur ? " cur" : "") + (focusSlug === p.slug ? " focus" : "")}
               data-upgrade-focus={focusSlug === p.slug ? "" : undefined}
+              data-plan-card={p.slug}
+              data-monthly-cents={p.priceCents}
+              data-yearly-cents={p.yearlyPriceCents ?? undefined}
             >
               {focusSlug === p.slug ? <span className="jf-up-tag">Includes Deck Studio</span> : p.highlight ? <span className="jf-up-tag">Most picked</span> : null}
               <span className="jf-up-n">{p.name}</span>
-              <span className="jf-up-price">
-                ${(cents / 100).toFixed(0)}
-                <i>{yearly ? "/yr" : "/mo"}</i>
+              <span className="jf-up-price" data-plan-price>
+                {dealDollars(cents)}
+                <i>{term === "YEAR" ? "/yr" : "/mo"}</i>
               </span>
-              {p.yearlyPriceCents ? (
-                <span className="pw-terms" role="group" aria-label={`${p.name} billing`} data-plan-terms={p.slug}>
-                  {(["MONTH", "YEAR"] as const).map((t) => (
-                    <button key={t} type="button" className={"pw-term" + (interval === t ? " on" : "")} aria-pressed={interval === t} onClick={() => setInterval(t)}>
-                      {t === "MONTH" ? `Monthly $${(p.priceCents / 100).toFixed(0)}/mo` : `Annual $${((p.yearlyPriceCents ?? 0) / 100).toFixed(0)}/yr${deal ? ` — ${dealWords(deal)}` : ""}`}
-                    </button>
-                  ))}
-                </span>
-              ) : null}
-              {yearly && deal ? (
-                <span className="jf-up-save">
-                  <s>${(listCents / 100).toFixed(0)}</s> {dealWords(deal)}
-                </span>
-              ) : null}
-              <span className="jf-up-feats">
+              <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
+              <span className="jf-up-feats" data-plan-feats>
                 {featureRows.map((f) => {
                   const has = included.get(p.slug)?.has(f.toLowerCase()) ?? false;
                   return (
@@ -479,19 +492,29 @@ export function UpgradeContent({
         })}
 
         {onCustom || customOffered ? (
-          <div className={"jf-up-plan custom" + (onCustom ? " cur" : "")}>
+          <div
+            className={"jf-up-plan custom" + (onCustom ? " cur" : "")}
+            data-plan-card={CUSTOM_PLAN_SLUG}
+            data-monthly-cents={onCustom ? curCents : customPriceCents(picked)}
+            data-yearly-cents={customPriceCents(onCustom ? owned : picked, "YEAR")}
+          >
             <span className="jf-up-n">{onCustom ? "Custom" : "Build your plan"}</span>
-            <span className="jf-up-price">
-              ${((onCustom ? curCents : customPriceCents(picked)) / 100).toFixed(0)}
-              <i>/mo</i>
+            <span className="jf-up-price" data-plan-price>
+              {dealDollars(customPriceCents(onCustom ? owned : picked, interval))}
+              <i>{termPer}</i>
             </span>
-            <span className="jf-up-save">
-              ${(CUSTOM_BASE_CENTS / 100).toFixed(0)} base · ${(CUSTOM_PAGE_CENTS / 100).toFixed(0)}{" "}
-              per page
-            </span>
+            <PlanDealSlot
+              term={interval}
+              monthlyCents={customPriceCents(onCustom ? owned : picked)}
+              yearlyCents={customPriceCents(onCustom ? owned : picked, "YEAR")}
+            />
             {/* ON THE PLAN: only the pages it holds — nothing when it holds
-                none (owner, 2026-09-04). OFF it: every page, ticked as picked. */}
-            <span className="jf-up-feats">
+                none (owner, 2026-09-04). OFF it: every page, ticked as picked.
+                The base and the page price head the list. */}
+            <span className="jf-up-feats" data-plan-feats>
+              <span className="jf-up-f jf-up-f--base">
+                ${(CUSTOM_BASE_CENTS / 100).toFixed(0)} base · ${(CUSTOM_PAGE_CENTS / 100).toFixed(0)} per page a month
+              </span>
               {onCustom
                 ? CUSTOM_PAGES.filter((pg) => owned.includes(pg.id)).map((pg) => (
                     <span key={pg.id} className="jf-up-f">
@@ -554,7 +577,11 @@ export function UpgradeContent({
                   confirm.from ??
                   plans.find((p) => p.slug === cur) ??
                   (onCustom ? { slug: cur, name: "Custom plan", priceCents: customPriceCents(owned), features: [] } : null),
-                to: confirm.plan,
+                to:
+                  termFor(confirm.plan.slug) === "YEAR"
+                    ? { ...confirm.plan, priceCents: confirm.plan.yearlyPriceCents ?? confirm.plan.priceCents }
+                    : confirm.plan,
+                toPer: termFor(confirm.plan.slug) === "YEAR" ? "/yr" : "/mo",
                 direction: confirm.kind,
                 how: confirm.kind === "up" ? "checkout" : "switch",
               }
@@ -586,7 +613,12 @@ export function UpgradeContent({
           confirm?.kind === "down" ? (
             <>
               You&rsquo;ll move to <b>{confirm.plan.name}</b> at{" "}
-              <b>${(confirm.plan.priceCents / 100).toFixed(0)}/mo</b> right away. Nothing is
+              <b>
+                {termFor(confirm.plan.slug) === "YEAR"
+                  ? `${dealDollars(confirm.plan.yearlyPriceCents ?? 0)}/yr`
+                  : `${dealDollars(confirm.plan.priceCents)}/mo`}
+              </b>{" "}
+              right away. Nothing is
               charged today; pages and limits that plan does not include close as soon as you
               confirm.
             </>
@@ -595,12 +627,9 @@ export function UpgradeContent({
               You&rsquo;ll be taken to Stripe to pay{" "}
               <b>
                 $
-                {(
-                  (interval === "YEAR"
-                    ? (confirm.plan.yearlyPriceCents ?? confirm.plan.priceCents * 12)
-                    : confirm.plan.priceCents) / 100
-                ).toFixed(0)}
-                {interval === "YEAR" ? "/yr" : "/mo"}
+                {termFor(confirm.plan.slug) === "YEAR"
+                  ? `${dealDollars(confirm.plan.yearlyPriceCents ?? 0)}/yr`
+                  : `${dealDollars(confirm.plan.priceCents)}/mo`}
               </b>{" "}
               for <b>{confirm.plan.name}</b>. Your current plan is replaced the moment the payment
               goes through.
@@ -713,7 +742,7 @@ export function UpgradeContent({
             </div>
             <div className="jf-up-pick-foot">
               <span className="jf-up-pick-total">
-                <b>${(nextMonthlyCents / 100).toFixed(0)}</b>
+                <b>{dealDollars(onCustom ? nextMonthlyCents : pickedTermCents)}</b>
                 <i>
                   {onCustom
                     ? adds.length > 0
@@ -721,7 +750,9 @@ export function UpgradeContent({
                       : removes.length > 0
                         ? "per month from the next bill"
                         : "per month · your plan today"
-                    : "per month · paid on Stripe"}
+                    : interval === "YEAR"
+                      ? "per year · paid on Stripe"
+                      : "per month · paid on Stripe"}
                 </i>
               </span>
               {onCustom ? (
@@ -750,7 +781,7 @@ export function UpgradeContent({
                     setConfirm({ kind: "custom", pages: picked });
                   }}
                 >
-                  {`Switch to Custom · $${(nextMonthlyCents / 100).toFixed(0)}/mo`}
+                  {`Switch to Custom · ${dealDollars(pickedTermCents)}${termPer}`}
                 </button>
               )}
             </div>

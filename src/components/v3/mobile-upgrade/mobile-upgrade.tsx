@@ -15,9 +15,10 @@
 //     column of full-width cards. A card is a decision, and on a phone a
 //     decision gets the whole width.
 //   · The feature list does not scroll inside a fixed-height card — it cannot,
-//     at 390px. Three included rows are shown outright and the rest sit behind
-//     a per-card "All N features" disclosure, so five cards stay scannable in
-//     one thumb sweep and the detail is one tap away.
+//     at 390px — and since 2026-10-12 it does not fold either: every row is
+//     listed, ticked or dashed in the catalog's order, as on the desk. The
+//     cards are one swiped row (a subgrid: the prices and first rows stand on
+//     one line, every card is the row's height).
 //   · The confirmation and the page picker are BOTTOM SHEETS, hand-rolled and
 //     portalled to <body>. Portalled because this page renders inside the desk
 //     shell's content column on /dashboard/upgrade, which is a stacking
@@ -26,8 +27,9 @@
 //   · Every control clears the 44px touch floor and the primary action of each
 //     card sits at its foot, where the thumb already is.
 //
-// Behaviour kept, one for one, from the desktop build: the monthly/yearly
-// switch with its Save tag; up = confirm then Stripe Checkout; down = confirm
+// Behaviour kept, one for one, from the desktop build: the Monthly | Annual
+// switch over the cards (components/billing/PlanTermSwitch, "N months free",
+// never a percentage — 2026-10-12); up = confirm then Stripe Checkout; down = confirm
 // then the in-place `changePlan` (falling back to checkout when the org has no
 // subscription yet); only the PRESSED button goes busy; the custom-plan picker,
 // including the `?custom=1` deep link and the "add pages" variant for an org
@@ -53,6 +55,8 @@ import {
   customPriceCents,
 } from "@/lib/customPlan";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
+import { dealDollars, offersYearly, planTerm, sharedDealWords, annualDeal, type BillingTerm } from "@/lib/planDeal";
+import { PlanDealSlot, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import "./mobile-upgrade.css";
 
 /** How long the sheets take to leave. Must match the transition in the CSS. */
@@ -122,10 +126,14 @@ export function MobileUpgradeContent({
   customOffered = false,
 }: MobileUpgradeProps) {
   const router = useRouter();
-  /* MONTHLY ONLY for now (owner, 2026-09-04): the yearly tier is unreviewed,
-     so the billing switch is gone from every plan surface. The type is kept
-     wide so the price math below stays ready for the day it comes back. */
-  const interval = "MONTH" as "MONTH" | "YEAR"; // cast, not annotation: TS narrows an annotated const to its literal
+  /* MONTHLY | ANNUAL (owner, 2026-10-12): the desk build's switch, over the
+     rail. A plan with no yearly price is shown and bought monthly. */
+  const [interval, setInterval] = useState<BillingTerm>("MONTH");
+  const termFor = useCallback(
+    (slug: string): BillingTerm =>
+      slug === CUSTOM_PLAN_SLUG ? interval : planTerm(interval, plans.find((p) => p.slug === slug)?.yearlyPriceCents),
+    [interval, plans],
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -260,7 +268,18 @@ export function MobileUpgradeContent({
   const adds = picked.filter((id) => !owned.includes(id));
   const removes = onCustom ? owned.filter((id) => !picked.includes(id)) : [];
   const nextMonthlyCents = customPriceCents(picked);
-
+  /* A new Custom plan on the switch's term (an existing one is managed page
+     by page, monthly). */
+  const pickedTermCents = customPriceCents(picked, interval);
+  const termPer = interval === "YEAR" ? "/yr" : "/mo";
+  const showTerms = offersYearly(plans) || onCustom || customOffered;
+  const termTag = sharedDealWords([
+    ...plans.filter((p) => p.yearlyPriceCents).map((p) => annualDeal(p.priceCents, p.yearlyPriceCents)),
+    ...(onCustom || customOffered ? [annualDeal(customPriceCents(onCustom ? owned : picked), customPriceCents(onCustom ? owned : picked, "YEAR"))] : []),
+  ]);
+  const termSwitch = showTerms ? (
+    <PlanTermSwitch className="mu-termsw" value={interval} onChange={setInterval} tag={termTag} />
+  ) : null;
   /* A change to the pages of a Custom plan — added, removed or both — is made
      on the subscription the shop already has (actions/billing.updateCustomPages,
      lib/customBilling): added pages are charged now, prorated (nothing in a
@@ -299,7 +318,7 @@ export function MobileUpgradeContent({
     const res = await fetch("/api/checkout/subscription", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planSlug: slug, interval, customPages: customPagesToBuy }),
+      body: JSON.stringify({ planSlug: slug, interval: termFor(slug), customPages: customPagesToBuy }),
     });
     const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
     if (!res.ok || !body.url) throw new Error(body.error ?? "Couldn't open checkout.");
@@ -322,7 +341,7 @@ export function MobileUpgradeContent({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busy, interval, closeConfirm],
+    [busy, termFor, closeConfirm],
   );
 
   /* A downgrade is switched in place, free. */
@@ -332,7 +351,7 @@ export function MobileUpgradeContent({
       setErr(null);
       setBusy(p.slug);
       try {
-        const res = await changePlan(p.slug, interval);
+        const res = await changePlan(p.slug, termFor(p.slug));
         if (!res.ok) throw new Error(res.error);
         if (res.mode === "checkout") {
           await checkout(p.slug);
@@ -350,7 +369,7 @@ export function MobileUpgradeContent({
       }
     },
      
-    [busy, interval, router, closeConfirm],
+    [busy, termFor, router, closeConfirm],
   );
 
   function onPick(p: UpgradePlan) {
@@ -362,11 +381,6 @@ export function MobileUpgradeContent({
     : !checkoutReady
       ? "Checkout is not configured"
       : null;
-
-  /* ── FEATURE DISCLOSURE ────────────────────────────────────────────────
-     One open card at a time is deliberate: five expanded lists is a page you
-     scroll for a minute, and the point of this surface is comparison. */
-  const [openList, setOpenList] = useState<string | null>(null);
 
   /* ── MOTION: reveal on mount ───────────────────────────────────────────
      Applied ONCE, to the blocks that exist then, by the component. Never via a
@@ -416,7 +430,7 @@ export function MobileUpgradeContent({
   const onRootClick = useCallback((e: React.MouseEvent) => {
     if (prefersReducedMotion()) return;
     const el = (e.target as HTMLElement | null)?.closest<HTMLElement>(
-      ".mu-cta, .mu-seg-b, .mu-more, .mu-row",
+      ".mu-cta, .mu-row",
     );
     if (!el) return;
     el.classList.remove("mu-pressed");
@@ -445,23 +459,20 @@ export function MobileUpgradeContent({
   /* ── CARD ──────────────────────────────────────────────────────────────── */
 
   const planCard = (p: UpgradePlan) => {
-    const yearly = interval === "YEAR" ? p.yearlyPriceCents : null;
-    const cents = yearly ?? p.priceCents;
-    const listCents = yearly ? p.priceCents * 12 : 0;
-    const savePct = yearly && listCents > yearly ? Math.round((1 - yearly / listCents) * 100) : 0;
+    const term = planTerm(interval, p.yearlyPriceCents);
+    const cents = term === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents;
     const isCur = cur === p.slug;
     const dir = direction(p);
     const has = included.get(p.slug);
-    const mine = featureRows.filter((f) => has?.has(f.toLowerCase()));
-    const rest = featureRows.filter((f) => !has?.has(f.toLowerCase()));
-    const open = openList === p.slug;
-    const preview = mine.slice(0, 3);
 
     return (
       <section
         key={p.slug}
         className={`mu-card${p.highlight ? " is-hero" : ""}${isCur ? " is-cur" : ""}`}
         aria-label={p.name}
+        data-plan-card={p.slug}
+        data-monthly-cents={p.priceCents}
+        data-yearly-cents={p.yearlyPriceCents ?? undefined}
       >
         <div className="mu-card-top">
           <div className="mu-card-id">
@@ -479,53 +490,26 @@ export function MobileUpgradeContent({
         </div>
 
         <div className="mu-price">
-          <b>{dollars(cents)}</b>
-          <i>{yearly ? "/yr" : "/mo"}</i>
-          {savePct > 0 ? (
-            <span className="mu-save">
-              <s>{dollars(listCents)}</s> save {savePct}%
-            </span>
-          ) : null}
+          <span className="mu-price-row" data-plan-price>
+            <b>{dealDollars(cents)}</b>
+            <i>{term === "YEAR" ? "/yr" : "/mo"}</i>
+          </span>
+          <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
         </div>
 
-        <ul className="mu-feats">
-          {preview.map((f) => (
-            <li key={f} className="mu-f">
-              <Tick on />
-              <span>{f}</span>
-            </li>
-          ))}
-          {open
-            ? [
-                ...mine.slice(3).map((f) => (
-                  <li key={f} className="mu-f">
-                    <Tick on />
-                    <span>{f}</span>
-                  </li>
-                )),
-                ...rest.map((f) => (
-                  <li key={f} className="mu-f is-no">
-                    <Tick on={false} />
-                    <span>{f}</span>
-                  </li>
-                )),
-              ]
-            : null}
+        {/* EVERY ROW, OPEN (owner, 2026-10-12): the catalog's whole list in its
+            own order, ticked or dashed — the rows line up card to card. */}
+        <ul className="mu-feats" data-plan-feats>
+          {featureRows.map((f) => {
+            const on = has?.has(f.toLowerCase()) ?? false;
+            return (
+              <li key={f} className={`mu-f${on ? "" : " is-no"}`}>
+                <Tick on={on} />
+                <span>{f}</span>
+              </li>
+            );
+          })}
         </ul>
-
-        {featureRows.length > preview.length ? (
-          <button
-            type="button"
-            className={`mu-more${open ? " is-open" : ""}`}
-            aria-expanded={open}
-            onClick={() => setOpenList(open ? null : p.slug)}
-          >
-            {open ? "Hide the list" : `What's included · ${mine.length} of ${featureRows.length}`}
-            <svg className="mu-chev" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-        ) : null}
 
         <div className="mu-foot">
           {isCur ? (
@@ -611,7 +595,12 @@ export function MobileUpgradeContent({
                   {confirm.kind === "down" ? (
                     <>
                       You&rsquo;ll move to <b>{confirm.plan.name}</b> at{" "}
-                      <b>{dollars(confirm.plan.priceCents)}/mo</b> right away. Nothing is charged
+                      <b>
+                        {termFor(confirm.plan.slug) === "YEAR"
+                          ? `${dealDollars(confirm.plan.yearlyPriceCents ?? 0)}/yr`
+                          : `${dealDollars(confirm.plan.priceCents)}/mo`}
+                      </b>{" "}
+                      right away. Nothing is charged
                       today; pages and limits that plan does not include close as soon as you
                       confirm.
                     </>
@@ -619,12 +608,9 @@ export function MobileUpgradeContent({
                     <>
                       You&rsquo;ll be taken to Stripe to pay{" "}
                       <b>
-                        {dollars(
-                          interval === "YEAR"
-                            ? (confirm.plan.yearlyPriceCents ?? confirm.plan.priceCents * 12)
-                            : confirm.plan.priceCents,
-                        )}
-                        {interval === "YEAR" ? "/yr" : "/mo"}
+                        {termFor(confirm.plan.slug) === "YEAR"
+                          ? `${dealDollars(confirm.plan.yearlyPriceCents ?? 0)}/yr`
+                          : `${dealDollars(confirm.plan.priceCents)}/mo`}
                       </b>{" "}
                       for <b>{confirm.plan.name}</b>. Your current plan is replaced the moment the
                       payment goes through.
@@ -703,7 +689,11 @@ export function MobileUpgradeContent({
                 confirm.from ??
                 plans.find((p) => p.slug === cur) ??
                 (onCustom ? { slug: cur, name: "Custom plan", priceCents: customPriceCents(owned), features: [] } : null),
-              to: confirm.plan,
+              to:
+                termFor(confirm.plan.slug) === "YEAR"
+                  ? { ...confirm.plan, priceCents: confirm.plan.yearlyPriceCents ?? confirm.plan.priceCents }
+                  : confirm.plan,
+              toPer: termFor(confirm.plan.slug) === "YEAR" ? "/yr" : "/mo",
               direction: confirm.kind,
               how: confirm.kind === "up" ? "checkout" : "switch",
             }
@@ -787,7 +777,7 @@ export function MobileUpgradeContent({
                 </div>
                 <div className="mu-list-foot">
                   <span className="mu-total">
-                    <b>{dollars(nextMonthlyCents)}</b>
+                    <b>{dealDollars(onCustom ? nextMonthlyCents : pickedTermCents)}</b>
                     <i>
                       {onCustom
                         ? adds.length > 0
@@ -795,7 +785,9 @@ export function MobileUpgradeContent({
                           : removes.length > 0
                             ? "per month from the next bill"
                             : "per month · your plan today"
-                        : "per month · paid on Stripe"}
+                        : interval === "YEAR"
+                          ? "per year · paid on Stripe"
+                          : "per month · paid on Stripe"}
                     </i>
                   </span>
                   {onCustom ? (
@@ -824,7 +816,7 @@ export function MobileUpgradeContent({
                         setConfirm({ kind: "custom", pages: picked });
                       }}
                     >
-                      {`Switch to Custom · ${dollars(nextMonthlyCents)}/mo`}
+                      {`Switch to Custom · ${dealDollars(pickedTermCents)}${termPer}`}
                     </button>
                   )}
                 </div>
@@ -837,15 +829,18 @@ export function MobileUpgradeContent({
 
   /* ── PAGE ──────────────────────────────────────────────────────────────── */
 
-  const customOpen = openList === CUSTOM_PLAN_SLUG;
-  const customPreview = CUSTOM_PAGES.slice(0, 3);
-
   /* THE CUSTOM CARD. On the plan already: add or remove pages. Not on it:
-     build one — pick pages, confirm, pay on Stripe like any other plan. */
+     build one — pick pages, confirm, pay on Stripe like any other plan. Its
+     year is CUSTOM_YEAR_MULTIPLIER months (lib/customPlan), read like any
+     other plan's deal; its list is open like every other card's. */
+  const customPagesNow = onCustom ? owned : picked;
   const customCard = (
           <section
             className={`mu-card is-custom${onCustom ? " is-cur" : ""}`}
             aria-label={onCustom ? "Custom plan" : "Build your plan"}
+            data-plan-card={CUSTOM_PLAN_SLUG}
+            data-monthly-cents={customPriceCents(customPagesNow)}
+            data-yearly-cents={customPriceCents(customPagesNow, "YEAR")}
           >
 
             <div className="mu-card-top">
@@ -859,13 +854,20 @@ export function MobileUpgradeContent({
             </div>
 
             <div className="mu-price">
-              <b>{dollars(onCustom ? curCents : customPriceCents(picked))}</b>
-              <i>/mo</i>
+              <span className="mu-price-row" data-plan-price>
+                <b>{dealDollars(customPriceCents(customPagesNow, interval))}</b>
+                <i>{termPer}</i>
+              </span>
+              <PlanDealSlot
+                term={interval}
+                monthlyCents={customPriceCents(customPagesNow)}
+                yearlyCents={customPriceCents(customPagesNow, "YEAR")}
+              />
             </div>
 
             {/* ON THE PLAN: only the pages it holds, nothing when none
                 (owner, 2026-09-04). OFF it: the add-on list, ticked as picked. */}
-            <ul className="mu-feats">
+            <ul className="mu-feats" data-plan-feats>
               {onCustom
                 ? CUSTOM_PAGES.filter((pg) => owned.includes(pg.id)).map((pg) => (
                     <li key={pg.id} className="mu-f">
@@ -873,7 +875,7 @@ export function MobileUpgradeContent({
                       <span>{pg.label}</span>
                     </li>
                   ))
-                : (customOpen ? CUSTOM_PAGES : customPreview).map((pg) => {
+                : CUSTOM_PAGES.map((pg) => {
                     const has = picked.includes(pg.id);
                     return (
                       <li key={pg.id} className={`mu-f${has ? "" : " is-no"}`}>
@@ -886,20 +888,6 @@ export function MobileUpgradeContent({
                 <li className="mu-f is-no mu-f--none">No add-on pages yet</li>
               ) : null}
             </ul>
-
-            {!onCustom ? (
-              <button
-                type="button"
-                className={`mu-more${customOpen ? " is-open" : ""}`}
-                aria-expanded={customOpen}
-                onClick={() => setOpenList(customOpen ? null : CUSTOM_PLAN_SLUG)}
-              >
-                {customOpen ? "Hide the list" : `Add-on pages · ${picked.length} of ${CUSTOM_PAGES.length}`}
-                <svg className="mu-chev" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </button>
-            ) : null}
 
             <div className="mu-foot">
               <button
@@ -927,6 +915,7 @@ export function MobileUpgradeContent({
       <div className="jf-mobile-upgrade mu-embed" onClick={onRootClick} onAnimationEnd={onRootAnimEnd}>
         <div className="mu-embed-head">
           <div className="mu-embed-lbl">Plans</div>
+          {termSwitch}
         </div>
         {err ? (
           <div className="mu-note is-bad" role="alert">
@@ -1013,7 +1002,9 @@ export function MobileUpgradeContent({
           ) : null}
 
           {/* ONE ROW, swiped (owner, 2026-09-04) — the same rail the
-              subscription page embeds, instead of a tall stack of cards. */}
+              subscription page embeds, instead of a tall stack of cards —
+              under the one Monthly | Annual switch (2026-10-12). */}
+          {termSwitch}
           <div className="mu-rail">
             {plans.map(planCard)}
             {onCustom || customOffered ? customCard : null}

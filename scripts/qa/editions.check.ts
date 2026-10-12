@@ -5,7 +5,7 @@
 // drops, and the sign-up link each door writes. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json scripts/qa/editions.check.ts
 import { EDITIONS, EDITION_OPEN, canSwitch, editionOnly, featureLineForSale, hasEdition, homeFor, isEditionPlan, navAllowed, parseDoor, planComingSoon, registerHref, unlockedByEdition, upgradeTargetFrom, workspaceFor, type AccessFacts } from "../../src/lib/editions";
-import { annualDeal, dealWords } from "../../src/lib/planDeal";
+import { annualDeal, dealWords, savedWords } from "../../src/lib/planDeal";
 import { NAV_SECTIONS, navSectionsFor, flattenNavItems } from "../../src/components/v3/blueprint-shell/nav-map";
 
 let bad = 0;
@@ -62,10 +62,10 @@ check("the platform door's link is plain", registerHref("platform") === "/auth/r
 check("the editions name their homes and landings", EDITIONS.deck.homeHref === "/dashboard/deck-estimator" && EDITIONS.deck.landingPath === "/deck" && EDITIONS.platform.homeHref === "/dashboard");
 
 
-console.log("── the annual deal in words (owner, 2026-10-11: months free, never a percentage)");
-check("$890 a year on $89 a month is 2 months free", dealWords(annualDeal(8900, 89000)) === "2 months free" && annualDeal(8900, 89000)?.kind === "months");
+console.log("── the annual deal in words (owner, 2026-10-11: months free, never a percentage; 2026-10-12: whole months or no stamp)");
+check("$890 a year on $89 a month is 2 months free", dealWords(annualDeal(8900, 89000)) === "2 months free" && annualDeal(8900, 89000)?.monthsFree === 2);
 check("$1,000 a year on $100 a month is 2 months free; $1,100 is one month", dealWords(annualDeal(10000, 100000)) === "2 months free" && dealWords(annualDeal(10000, 110000)) === "1 month free");
-check("a year that is not a whole number of months off says a percentage", annualDeal(8900, 95000)?.kind === "percent" && dealWords(annualDeal(8900, 95000)) === "Save 11%");
+check("a year that is not a whole number of months off gets no stamp, not a percentage — only the dollars", annualDeal(8900, 95000)?.monthsFree === null && dealWords(annualDeal(8900, 95000)) === "" && savedWords(annualDeal(8900, 95000)) === "You save $118");
 check("no yearly price, a dearer year, or a free plan: no deal", annualDeal(8900, null) === null && annualDeal(8900, 106800) === null && annualDeal(8900, 120000) === null && annualDeal(0, 1000) === null);
 
 console.log("── the plan an existing customer upgrades to (no separate add-on)");

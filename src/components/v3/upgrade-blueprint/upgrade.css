@@ -148,12 +148,9 @@
 /* Cards rest on the muted system shadow, whatever their standing: the hero
    plan keeps its deeper paper, the current plan keeps its blueprint frame,
    and neither borrows the solid imprint that means "hover me". */
-/* The plan an edition's upgrade points at (2026-10-11, lib/editions), and the two terms on a plan with a yearly price. */
+/* The plan an edition's upgrade points at (2026-10-11, lib/editions). */
 .jf-upgrade .jf-up-plan.focus { outline: 3px solid var(--blueprint, #1854a0); outline-offset: 2px; }
 .jf-upgrade .jf-up-focus { margin: 0 0 14px; padding: 10px 14px; border: 1.5px solid var(--blueprint, #1854a0); border-radius: 6px; background: rgba(24, 84, 160, 0.06); font: 600 14px/1.4 inherit; color: var(--ink, #111); }
-.jf-upgrade .pw-terms { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
-.jf-upgrade .pw-term { appearance: none; border: 1.5px solid var(--hair, #cfd5dd); background: #fff; color: var(--ink, #111); border-radius: 999px; padding: 6px 10px; font: 600 12px/1.15 var(--font-mono, ui-monospace, Menlo, monospace); cursor: pointer; text-align: left; }
-.jf-upgrade .pw-term.on { background: var(--ink, #111); border-color: var(--ink, #111); color: #fff; }
 .jf-upgrade .jf-up-plan.hero {
   background: var(--paper-deep, #eceae3);
   box-shadow: 3px 3px 0 var(--shadow, rgba(10, 10, 10, 0.06));
@@ -663,3 +660,47 @@
 .jf-upgrade .jf-up-pick-row.drop .jf-up-pick-n { text-decoration: line-through; color: var(--muted, #6b6b6b); }
 .jf-upgrade .jf-up-pick-row.drop .jf-up-pick-p { color: var(--danger, #b3261e); }
 .jf-upgrade .jf-up-pick-row.add .jf-up-pick-p { color: var(--blueprint, #1854a0); }
+
+/* ── ONE SWITCH, ONE GRID, OPEN LISTS (owner, 2026-10-12) ───────────────
+   Monthly | Annual is one switch over the row (components/billing/
+   plan-term-switch.css). Every card is a subgrid of the row's five tracks —
+   name, price, deal, the whole feature list, the action — so the prices,
+   the deal lines and the first rows stand on one line, every card is the
+   row's height and its button sits at the foot. Nothing scrolls or folds
+   inside a card any more: the fixed card heights are gone. */
+.jf-upgrade .jf-up-termsw { margin: 0; }
+.jf-upgrade .jf-up-plans,
+.jf-upgrade .jf-up-plans.has-custom {
+  grid-template-rows: repeat(5, auto);
+  grid-auto-rows: auto;
+  row-gap: 18px;
+}
+.jf-upgrade .jf-up-plan,
+.jf-upgrade .jf-up-plan.hero {
+  display: grid;
+  grid-row: span 5;
+  grid-template-rows: subgrid;
+  row-gap: 8px;
+  align-content: start;
+  height: auto;
+  min-width: 0;
+}
+.jf-upgrade .jf-up-feats {
+  flex: none;
+  min-height: auto;
+  margin-top: 0;
+  overflow: visible;
+  padding-right: 0;
+}
+.jf-upgrade .jf-up-f { overflow-wrap: anywhere; }
+.jf-upgrade .jf-up-go,
+.jf-upgrade .jf-up-curlbl { margin-top: 0; align-self: end; }
+/* the custom card's base and page price, at the head of its list */
+.jf-upgrade .jf-up-f--base {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #57534b);
+}

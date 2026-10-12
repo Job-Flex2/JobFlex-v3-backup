@@ -43,7 +43,8 @@ import { checkEmailAvailable, completeCompanySetup } from "@/actions/auth";
 import type { GooglePrefill, SetupPrefill } from "@/app/(auth)/auth/register/register-responsive";
 import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
 import { isEditionPlan, type EditionId } from "@/lib/editions";
-import { annualDeal, dealWords } from "@/lib/planDeal";
+import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, termFromParam, BILLING_PARAM, type BillingTerm } from "@/lib/planDeal";
+import { PlanDealSlot, PlanTermSwitch, recalledBillingTerm, rememberBillingTerm } from "@/components/billing/PlanTermSwitch";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
@@ -82,7 +83,6 @@ import {
   CUSTOM_PAGES,
   CUSTOM_PAGE_CENTS,
   CUSTOM_PLAN_SLUG,
-  CUSTOM_YEAR_MULTIPLIER,
   customPriceCents,
 } from "@/lib/customPlan";
 import styles from "./auth-register.module.css";
@@ -309,29 +309,37 @@ export function RegisterContent({
       window.clearTimeout(t2);
     };
   }, [step, plans.length]);
-  /* Feature lists a phone shows in full — the rest are cut at ~9 rows with a
-     "Show all" toggle, so a card is never a scroll container of its own. */
-  const [openFeats, setOpenFeats] = React.useState<Set<string>>(() => new Set());
   const isClient = React.useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
   );
-  const toggleFeats = (slug: string) =>
-    setOpenFeats((cur) => {
-      const next = new Set(cur);
-      if (next.has(slug)) next.delete(slug);
-      else next.add(slug);
-      return next;
-    });
   const [planSlug, setPlanSlug] = React.useState<string | null>(null);
   /* MONTHLY ONLY for now (owner, 2026-09-04): the yearly tier is unreviewed,
      so the billing switch is gone from every plan surface. The type is kept
      wide so the price math below stays ready for the day it comes back. */
-  /* ANNUAL IS BACK (owner, 2026-10-11): a plan with a yearly price shows both terms on its card — "Monthly $89/mo"
-     and "Annual $890/yr — 2 months free" (lib/planDeal: months, never a percentage) — and the checkout bills the one
-     picked. Monthly until a term is chosen. */
-  const [interval, setInterval] = React.useState<"MONTH" | "YEAR">("MONTH");
+  /* ANNUAL IS BACK (owner, 2026-10-11), AS ONE SWITCH (owner, 2026-10-12): Monthly | Annual over the
+     cards (components/billing/PlanTermSwitch), the same switch the landing, /pricing and the upgrade page
+     draw. Monthly unless the visitor picked Annual on the landing or /pricing — the start link carries
+     ?billing=annual — or earlier in this tab (sessionStorage, so the Google return, the emailed code and
+     a cancelled Checkout come back to it). The checkout bills the term the card shows: a plan with no
+     yearly price bills monthly (lib/planDeal planTerm). */
+  const [interval, setIntervalState] = React.useState<BillingTerm>(() => termFromParam(searchParams?.get(BILLING_PARAM)) ?? "MONTH");
+  const setInterval = React.useCallback((t: BillingTerm) => {
+    setIntervalState(t);
+    rememberBillingTerm(t);
+  }, []);
+  React.useEffect(() => {
+    const fromLink = termFromParam(searchParams?.get(BILLING_PARAM));
+    if (fromLink) rememberBillingTerm(fromLink);
+    else {
+      const kept = recalledBillingTerm();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage exists only in the browser; this is the one read of it
+      if (kept) setIntervalState(kept);
+    }
+    // once, as the page opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [plansErr, setPlansErr] = React.useState<string | null>(
     ret?.cancelled ? "Checkout was cancelled — your account has not been created yet." : null,
   );
@@ -491,6 +499,16 @@ export function RegisterContent({
       ? customTrialDays
       : plans.find((p) => p.slug === planSlug)?.trialDays || offer.days;
   const customCents = customPriceCents(customPages, interval);
+  /** The term a card is billed on: the switch's, or the month for a plan with no yearly price. */
+  const termFor = (slug: string): BillingTerm =>
+    slug === CUSTOM_PLAN_SLUG ? interval : planTerm(interval, plans.find((p) => p.slug === slug)?.yearlyPriceCents);
+  /* The switch is drawn only when a card has a year to show; its "N months free" tag only when every
+     yearly card (the custom one included, when drawn) gives the same whole months. */
+  const showTerms = offersYearly(plans);
+  const termTag = sharedDealWords([
+    ...plans.filter((p) => p.yearlyPriceCents).map((p) => annualDeal(p.priceCents, p.yearlyPriceCents)),
+    ...(offerCustom && plans.length > 0 ? [annualDeal(customPriceCents(customPages), customPriceCents(customPages, "YEAR"))] : []),
+  ]);
   /* Every feature any plan lists, in the order the catalog gives them, and
      de-duplicated case-insensitively ("Everything in Starter" is a plan's own
      roll-up line and is dropped — it describes the column, not a feature). */
@@ -529,37 +547,6 @@ export function RegisterContent({
     }
     return map;
   }, [plans]);
-
-  /* THE FADE IS A CLAIM — "there is more below" — so it must come OFF when
-     there is not: a list short enough to fit, or one scrolled to its end,
-     otherwise the LAST benefit prints permanently greyed-out as if disabled
-     (owner's screenshot, 2026-08-31). CSS cannot know scroll position, so
-     each card's list reports it via data-cut; the stylesheet only draws the
-     mask while data-cut is not "0". */
-  React.useEffect(() => {
-    if (step !== 3) return;
-    const root = rootRef.current;
-    if (!root) return;
-    const els = Array.from(root.querySelectorAll<HTMLElement>(".pw-feats"));
-    if (!els.length) return;
-    const update = (el: HTMLElement) => {
-      el.dataset.cut = el.scrollHeight - el.clientHeight - el.scrollTop > 4 ? "1" : "0";
-    };
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) update(e.target as HTMLElement);
-    });
-    const handlers = els.map((el) => {
-      const h = () => update(el);
-      el.addEventListener("scroll", h, { passive: true });
-      ro.observe(el);
-      update(el);
-      return h;
-    });
-    return () => {
-      els.forEach((el, i) => el.removeEventListener("scroll", handlers[i]));
-      ro.disconnect();
-    };
-  }, [step, plans, customPages, interval]);
 
   const [name, setName] = React.useState(setup?.name ?? googlePrefill?.name ?? "");
   const [biz, setBiz] = React.useState(setup?.businessName ?? "");
@@ -770,11 +757,12 @@ export function RegisterContent({
     const clickedTrialDays = slug === CUSTOM_PLAN_SLUG
       ? customTrialDays
       : plans.find((p) => p.slug === slug)?.trialDays ?? 0;
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval, intent: clickedTrialDays > 0 ? "trial" : "purchase", flow: trafficFlow });
+    const term = termFor(slug);
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval: term, intent: clickedTrialDays > 0 ? "trial" : "purchase", flow: trafficFlow });
     if (!initiateSent.current) {
       initiateSent.current = true;
       const plan = plans.find((p) => p.slug === slug);
-      const cents = slug === CUSTOM_PLAN_SLUG ? customPriceCents(customPages, interval) : interval === "YEAR" ? (plan?.yearlyPriceCents ?? 0) : (plan?.priceCents ?? 0);
+      const cents = slug === CUSTOM_PLAN_SLUG ? customPriceCents(customPages, term) : term === "YEAR" ? (plan?.yearlyPriceCents ?? 0) : (plan?.priceCents ?? 0);
       metaTrack("InitiateCheckout", { content_category: industry ?? "default", plan: slug, value: cents / 100, currency: "USD" }, metaIds.current.checkout);
     }
     setPayBusy(true);
@@ -804,11 +792,11 @@ export function RegisterContent({
       const res = await fetch("/api/checkout/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, planSlug: slug, interval, customPages }),
+        body: JSON.stringify({ token, planSlug: slug, interval: term, customPages }),
       });
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (res.ok && body.url) {
-        trackTraffic(TRAFFIC_EVENTS.opened, { plan: slug, interval, flow: trafficFlow });
+        trackTraffic(TRAFFIC_EVENTS.opened, { plan: slug, interval: term, flow: trafficFlow });
         leavingRef.current = true;
         window.location.href = body.url;
         /* A hand-off that never happens (blocked, cancelled) must not leave
@@ -883,7 +871,7 @@ export function RegisterContent({
   const resendIn = Math.max(0, Math.ceil((resendAt - nowTick) / 1000));
   async function onStartCardless(slug: string | null = planSlug) {
     if (payBusy || !slug || !token) return;
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval, intent: "trial", flow: trafficFlow, card: false });
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false });
     setPayBusy(true);
     setStartingSlug(slug);
     setPlansErr(null);
@@ -1232,7 +1220,7 @@ export function RegisterContent({
      StartTrial carry the ids the server's copies used. */
   async function onStartCardlessVerified(slug: string | null = planSlug) {
     if (payBusy || !slug || !token) return;
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval, intent: "trial", flow: trafficFlow, card: false, mode: signupMode });
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false, mode: signupMode });
     setPayBusy(true);
     setStartingSlug(slug);
     setPlansErr(null);
@@ -1904,17 +1892,25 @@ export function RegisterContent({
               </div>
             ) : null}
 
-            <div className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")} ref={plansRef}>
+            {/* MONTHLY | ANNUAL (owner, 2026-10-12): one switch over the row, the landing's and the upgrade
+                page's own (components/billing/PlanTermSwitch). Not drawn when no plan prices a year. */}
+            {showTerms && !confirmSentTo ? (
+              <PlanTermSwitch className="pw-termsw" value={interval} onChange={setInterval} tag={termTag} />
+            ) : null}
+
+            {/* ONE GRID (owner, 2026-10-12): each card is a subgrid of the row's tracks — name, price,
+                deal, the free-until line and the code's line when there are any, the full feature list,
+                the start button — so prices and first rows stand on one line and every card is the
+                row's height. Nothing folds: every list is drawn whole. */}
+            <div
+              className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")}
+              ref={plansRef}
+              style={{ "--pw-rows": 5 + (freeUntil ? 1 : 0) + (promo?.percentOff ? 1 : 0) } as React.CSSProperties}
+            >
               {orderedPlans.map((p) => {
-                const yearly = interval === "YEAR" ? p.yearlyPriceCents : null;
-                const cents = yearly ?? p.priceCents;
-                const per = yearly ? "/yr" : "/mo";
-                /* What twelve months at the monthly rate would have cost, and
-                   the saving against it. Only drawn when the annual price is
-                   genuinely cheaper — a struck price that is not a discount is
-                   a lie, not a decoration. */
-                const listCents = yearly ? p.priceCents * 12 : 0;
-                const deal = annualDeal(p.priceCents, p.yearlyPriceCents);
+                const term = planTerm(interval, p.yearlyPriceCents);
+                const cents = term === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents;
+                const per = term === "YEAR" ? "/yr" : "/mo";
                 const on = planSlug === p.slug;
                 const has = includedBySlug.get(p.slug) ?? new Set<string>();
                 return (
@@ -1924,8 +1920,12 @@ export function RegisterContent({
                     tabIndex={0}
                     className={"pw-plan" + (on ? " on" : "") + (p.highlight || (!!edition && isEditionPlan(p.slug, edition)) ? " pw-plan--hero" : "")}
                     aria-pressed={on}
+                    data-plan-card={p.slug}
+                    data-monthly-cents={p.priceCents}
+                    data-yearly-cents={p.yearlyPriceCents ?? undefined}
                     onClick={() => setPlanSlug(p.slug)}
                     onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setPlanSlug(p.slug);
@@ -1934,42 +1934,20 @@ export function RegisterContent({
                   >
                     {p.highlight ? <span className="pw-tag">Most picked</span> : null}
                     <span className="pw-plan-n">{p.name}</span>
-                    <span className="pw-price">
-                      ${(cents / 100).toFixed(0)}
+                    <span className="pw-price" data-plan-price>
+                      {dealDollars(cents)}
                       <i>{per}</i>
                     </span>
+                    {/* "N months free" + "You save $N" on a year, "Billed monthly" otherwise (lib/planDeal). */}
+                    <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
                     {freeUntil ? <span className="pw-when">{freeUntilLine(cents, per)}</span> : null}
-                    {p.yearlyPriceCents ? (
-                      <span className="pw-terms" role="group" aria-label={`${p.name} billing`} data-plan-terms={p.slug}>
-                        {(["MONTH", "YEAR"] as const).map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            className={"pw-term" + (interval === t ? " on" : "")}
-                            aria-pressed={interval === t}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setInterval(t);
-                              setPlanSlug(p.slug);
-                            }}
-                          >
-                            {t === "MONTH" ? `Monthly $${(p.priceCents / 100).toFixed(0)}/mo` : `Annual $${((p.yearlyPriceCents ?? 0) / 100).toFixed(0)}/yr${deal ? ` — ${dealWords(deal)}` : ""}`}
-                          </button>
-                        ))}
-                      </span>
-                    ) : null}
-                    {yearly && deal ? (
-                      <span className="pw-save">
-                        <s>${(listCents / 100).toFixed(0)}</s> {dealWords(deal)}
-                      </span>
-                    ) : null}
                     {/* THE CODE'S EFFECT ON THIS PRICE. "Code applied" over an
                         unchanged number read as nothing happening (owner,
                         2026-09-02); the same percent checkout applies is
                         shown here, against the price it applies to. */}
                     {promo?.percentOff ? (
                       <span className="pw-save pw-save--code">
-                        <s>${(cents / 100).toFixed(0)}</s> {promo.percentOff}% off · $
+                        <s>{dealDollars(cents)}</s> {promo.percentOff}% off · $
                         {(() => {
                           // Stripe's own number, to the cent: $22.50, not $23.
                           const v = Math.round(cents * (1 - promo.percentOff / 100)) / 100;
@@ -1978,10 +1956,7 @@ export function RegisterContent({
                         {per}
                       </span>
                     ) : null}
-                    <span
-                      className={"pw-feats" + (openFeats.has(p.slug) ? " is-open" : "")}
-                      data-cut={openFeats.has(p.slug) ? "0" : undefined}
-                    >
+                    <span className="pw-feats" data-plan-feats>
                       {featureRows.map((f) => {
                         const included = has.has(f.toLowerCase());
                         return (
@@ -1994,52 +1969,30 @@ export function RegisterContent({
                         );
                       })}
                     </span>
-                    {featureRows.length > 9 ? (
-                      <span
-                        className="pw-more"
-                        role="button"
-                        tabIndex={0}
+                    {/* THE START BUTTON LIVES IN THE CARD (owner, 2026-09-05):
+                        choosing and committing are one reach. Starting from a
+                        card that is not yet the selection selects it first. The
+                        card is a div-as-button for this reason — a button
+                        cannot hold a button. */}
+                    <span className="pw-acts">
+                      <button
+                        type="button"
+                        className={"btn pw-go" + (startingSlug === p.slug ? " is-busy" : "")}
+                        aria-busy={startingSlug === p.slug || undefined}
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleFeats(p.slug);
+                          setPlanSlug(p.slug);
+                          onStartPlan(p.slug);
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleFeats(p.slug);
-                          }
-                        }}
+                        disabled={payBusy || !checkoutReady}
                       >
-                        {openFeats.has(p.slug) ? "Show less" : `Show all ${featureRows.length}`}
-                      </span>
-                    ) : null}
-                    {/* No Choose / Selected plate (owner, 2026-09-05): the
-                        frame and shadow say which card is picked; the button
-                        below is the card's only control. */}
-                    {/* THE START BUTTON LIVES IN THE CARD (owner, 2026-09-05):
-                        directly under the card's own state plate, so choosing
-                        and committing are one reach. Starting from a card that
-                        is not yet the selection selects it first. The card is a
-                        div-as-button for this reason — a button cannot hold
-                        a button. */}
-                    <button
-                      type="button"
-                      className={"btn pw-go" + (startingSlug === p.slug ? " is-busy" : "")}
-                      aria-busy={startingSlug === p.slug || undefined}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPlanSlug(p.slug);
-                        onStartPlan(p.slug);
-                      }}
-                      disabled={payBusy || !checkoutReady}
-                    >
-                      {startingSlug === p.slug
-                        ? busyLabel
-                        : !checkoutReady
-                          ? "Checkout is not configured"
-                          : `Start ${trialDays}-day free trial`}
-                    </button>
+                        {startingSlug === p.slug
+                          ? busyLabel
+                          : !checkoutReady
+                            ? "Checkout is not configured"
+                            : `Start ${trialDays}-day free trial`}
+                      </button>
+                    </span>
                   </div>
                 );
               })}
@@ -2049,7 +2002,8 @@ export function RegisterContent({
                   once the catalogue has answered: drawn alone before it, it
                   was the card the phone carousel snapped to, and on a desk it
                   jumped from the first column to the last when the rest
-                  arrived. */}
+                  arrived. A year is CUSTOM_YEAR_MULTIPLIER months of its own
+                  price (lib/customPlan); its deal is read like the catalog's. */}
               {offerCustom && plans.length > 0 ? (
               <div
                 role="button"
@@ -2058,11 +2012,15 @@ export function RegisterContent({
                   "pw-plan pw-plan--custom" + (planSlug === CUSTOM_PLAN_SLUG ? " on" : "")
                 }
                 aria-pressed={planSlug === CUSTOM_PLAN_SLUG}
+                data-plan-card={CUSTOM_PLAN_SLUG}
+                data-monthly-cents={customPriceCents(customPages)}
+                data-yearly-cents={customPriceCents(customPages, "YEAR")}
                 onClick={() => {
                   setPlanSlug(CUSTOM_PLAN_SLUG);
                   openPicker();
                 }}
                 onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     setPlanSlug(CUSTOM_PLAN_SLUG);
@@ -2071,24 +2029,15 @@ export function RegisterContent({
                 }}
               >
                 <span className="pw-plan-n">Custom</span>
-                <span className="pw-price">
-                  ${(customCents / 100).toFixed(0)}
+                <span className="pw-price" data-plan-price>
+                  {dealDollars(customCents)}
                   <i>{interval === "YEAR" ? "/yr" : "/mo"}</i>
                 </span>
+                <PlanDealSlot term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} />
                 {freeUntil ? <span className="pw-when">{freeUntilLine(customCents, interval === "YEAR" ? "/yr" : "/mo")}</span> : null}
-                {/* The same saving the catalog plans show, off the same
-                    arithmetic: a year here is CUSTOM_YEAR_MULTIPLIER months. */}
-                {interval === "YEAR" ? (
-                  <span className="pw-save">
-                    <s>${((customPriceCents(customPages) * 12) / 100).toFixed(0)}</s> Save{" "}
-                    {Math.round((1 - CUSTOM_YEAR_MULTIPLIER / 12) * 100)}% · $
-                    {((customPriceCents(customPages) * 12 - customCents) / 100).toFixed(0)}
-                  </span>
-                ) : null}
-                <span
-                  className={"pw-feats" + (openFeats.has(CUSTOM_PLAN_SLUG) ? " is-open" : "")}
-                  data-cut={openFeats.has(CUSTOM_PLAN_SLUG) ? "0" : undefined}
-                >
+                {/* the code's line has a row in this grid; the custom card keeps it empty */}
+                {promo?.percentOff ? <span aria-hidden="true" /> : null}
+                <span className="pw-feats" data-plan-feats>
                   {CUSTOM_BASE_FEATURES.map((f) => (
                     <span key={f} className="pw-f">
                       <svg className="ic">
@@ -2117,62 +2066,39 @@ export function RegisterContent({
                     ) : null;
                   })}
                 </span>
-                {/* A phone cuts every list at six whole rows; the custom list
-                    grows with each page ticked, so it gets the same "Show all"
-                    as the catalogue cards once it passes six. */}
-                {CUSTOM_BASE_FEATURES.length + 1 + customPages.length > 6 ? (
-                  <span
-                    className="pw-more"
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFeats(CUSTOM_PLAN_SLUG);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleFeats(CUSTOM_PLAN_SLUG);
-                      }
-                    }}
-                  >
-                    {openFeats.has(CUSTOM_PLAN_SLUG)
-                      ? "Show less"
-                      : `Show all ${CUSTOM_BASE_FEATURES.length + 1 + customPages.length}`}
-                  </span>
-                ) : null}
                 {/* TWO CONTROLS, two looks (owner, 2026-09-04): the page
                     picker is the ghost, the plan's state label is the blue
                     plate every other card ends on. */}
-                <span
-                  className="pw-edit"
-                  role="presentation"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPlanSlug(CUSTOM_PLAN_SLUG);
-                    openPicker();
-                  }}
-                >
-                  Select pages
+                <span className="pw-acts">
+                  <span
+                    className="pw-edit"
+                    role="presentation"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPlanSlug(CUSTOM_PLAN_SLUG);
+                      openPicker();
+                    }}
+                  >
+                    Select pages
+                  </span>
+                  <button
+                    type="button"
+                    className={"btn pw-go" + (startingSlug === CUSTOM_PLAN_SLUG ? " is-busy" : "")}
+                    aria-busy={startingSlug === CUSTOM_PLAN_SLUG || undefined}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPlanSlug(CUSTOM_PLAN_SLUG);
+                      onStartPlan(CUSTOM_PLAN_SLUG);
+                    }}
+                    disabled={payBusy || !checkoutReady}
+                  >
+                    {startingSlug === CUSTOM_PLAN_SLUG
+                      ? busyLabel
+                      : !checkoutReady
+                        ? "Checkout is not configured"
+                        : `Start ${trialDays}-day free trial`}
+                  </button>
                 </span>
-                <button
-                  type="button"
-                  className={"btn pw-go" + (startingSlug === CUSTOM_PLAN_SLUG ? " is-busy" : "")}
-                  aria-busy={startingSlug === CUSTOM_PLAN_SLUG || undefined}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPlanSlug(CUSTOM_PLAN_SLUG);
-                    onStartPlan(CUSTOM_PLAN_SLUG);
-                  }}
-                  disabled={payBusy || !checkoutReady}
-                >
-                  {startingSlug === CUSTOM_PLAN_SLUG
-                    ? busyLabel
-                    : !checkoutReady
-                      ? "Checkout is not configured"
-                      : `Start ${trialDays}-day free trial`}
-                </button>
               </div>
               ) : null}
 

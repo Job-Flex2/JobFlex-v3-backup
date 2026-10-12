@@ -1,0 +1,123 @@
+/* THE BILLING SWITCH AND THE DEAL SLOT (owner, 2026-10-12) — one look on every
+   plan surface: the landing (inside `.jf-lp`, which has no app tokens), /pricing,
+   the signup plan step (`.bp`), the upgrade page and its handheld build. Plain
+   CSS, self-scoped; tokens are read with the Blueprint's own values as
+   fallbacks, never re-declared. Green is the system's success token
+   (`--emerald`, #3a7d44: 5.0:1 on white). */
+
+/* ── Monthly | Annual ─────────────────────────────────────────────────── */
+.jf-term {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  max-width: 100%;
+  border: 2px solid var(--ink, #0a0a0a);
+  border-radius: 2px;
+  background: #fff;
+  overflow: hidden;
+}
+.jf-term .jf-term-b {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 18px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft, #2a2a2a);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.14s cubic-bezier(0.22, 0.61, 0.36, 1), color 0.14s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.jf-term .jf-term-b + .jf-term-b { border-left: 2px solid var(--ink, #0a0a0a); }
+.jf-term .jf-term-b.is-on { background: var(--ink, #0a0a0a); color: #fff; }
+.jf-term .jf-term-b:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: -5px; }
+.jf-term .jf-term-b.is-on:focus-visible { outline-color: #fff; }
+@media (hover: hover) and (pointer: fine) {
+  .jf-term .jf-term-b:not(.is-on):hover { background: var(--paper, #f2f0eb); color: var(--ink, #0a0a0a); }
+}
+/* The deal every yearly plan shares — a small stamp on the Annual half. */
+.jf-term .jf-term-tag {
+  padding: 3px 6px;
+  border: 1.5px solid var(--emerald, #3a7d44);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--emerald, #3a7d44);
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* On the landing's ink band: a white frame, the chosen half white on ink. */
+.jf-term--ink { border-color: #fff; background: transparent; }
+.jf-term--ink .jf-term-b { color: rgba(255, 255, 255, 0.86); }
+.jf-term--ink .jf-term-b + .jf-term-b { border-left-color: #fff; }
+.jf-term--ink .jf-term-b.is-on { background: #fff; color: #0a0a0a; }
+.jf-term--ink .jf-term-b:focus-visible { outline-color: #fff; }
+.jf-term--ink .jf-term-b.is-on:focus-visible { outline-color: var(--blueprint, #1854a0); }
+@media (hover: hover) and (pointer: fine) {
+  .jf-term--ink .jf-term-b:not(.is-on):hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+}
+
+@media (max-width: 768px) {
+  .jf-term .jf-term-b { min-height: 44px; padding: 0 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jf-term .jf-term-b { transition: none; }
+}
+
+/* ── The deal slot under a card's price ─────────────────────────────────
+   Always drawn and always the same height (stamp + one line), so switching
+   Monthly ↔ Annual never moves the feature list, and a card with a stamp
+   never pushes its neighbours' rows out of line. */
+.jf-deal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 5px;
+  min-height: 44px;
+  min-width: 0;
+}
+.jf-deal .jf-deal-stamp {
+  display: inline-block;
+  padding: 3px 7px;
+  border: 1.5px solid var(--emerald, #3a7d44);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--emerald, #3a7d44);
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.jf-deal .jf-deal-save {
+  color: var(--emerald, #3a7d44);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.jf-deal .jf-deal-billed {
+  color: var(--ink-muted, #5b6470);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}

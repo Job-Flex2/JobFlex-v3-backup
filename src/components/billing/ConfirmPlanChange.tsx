@@ -44,6 +44,9 @@ export interface ConfirmPlanChangeProps {
     /** Null when the org has no catalog plan (nothing yet, or the Custom plan). */
     from: PlanLike | null;
     to: PlanLike;
+    /** The term the "after" price is for — "/yr" when the plan is bought on
+     *  the year (its priceCents then the year's); "/mo" by default. */
+    toPer?: "/mo" | "/yr";
     direction: "up" | "down";
     /** How the change is carried out — decides the payment line. */
     how: "checkout" | "switch";
@@ -97,7 +100,7 @@ function Compare({ c }: { c: NonNullable<ConfirmPlanChangeProps["compare"]> }) {
           <span className="jf-confirm-tile-n">{c.to.name}</span>
           <span className="jf-confirm-tile-p is-big">
             {dollars(c.to.priceCents)}
-            <i>/mo</i>
+            <i>{c.toPer ?? "/mo"}</i>
           </span>
         </div>
       </div>

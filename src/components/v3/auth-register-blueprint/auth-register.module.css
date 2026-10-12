@@ -664,11 +664,6 @@
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--success, #1f7a52);
 }
 .bp :global(.pw-save s) { color: var(--muted-light, #8a8a8a); text-decoration-thickness: 1.5px; }
-/* The two terms on a plan with a yearly price (owner, 2026-10-11): Monthly $89/mo · Annual $890/yr — 2 months free. */
-.bp :global(.pw-terms) { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
-.bp :global(.pw-term) { appearance: none; border: 1.5px solid var(--hair, #cfd5dd); background: #fff; color: var(--ink, #111); border-radius: 999px; padding: 6px 10px; font: 600 12px/1.15 var(--font-mono, ui-monospace, Menlo, monospace); cursor: pointer; text-align: left; }
-.bp :global(.pw-term.on) { background: var(--ink, #111); border-color: var(--ink, #111); color: #fff; }
-.bp :global(.pw-term:focus-visible) { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
 /* The card's own state, drawn where a button would be — the whole card is the
    control, so this reads as a label, not a second target. */
 .bp :global(.pw-pick) {
@@ -1234,8 +1229,6 @@
 .bp :global(.pw-edit:hover) { background: var(--paper-deep); color: var(--ink); border-style: solid; }
 .bp :global(.pw-edit) + :global(.pw-pick) { margin-top: 8px; }
 .bp :global(.pw-feats) { margin-bottom: 10px; }
-/* "Show all" — drawn only on a phone; the desk list scrolls itself. */
-.bp :global(.pw-more) { display: none; }
 
 @media (max-width: 768px) {
   /* THE SHEET SCROLLS, NOTHING INSIDE IT DOES. The plan lists used to be
@@ -1281,14 +1274,7 @@
     max-height: 250px; margin-bottom: 4px;
     -webkit-mask-image: none; mask-image: none;
   }
-  .bp :global(.pw-feats.is-open) { max-height: none; }
   .bp :global(.pw-f) { padding: 5px 0; font-size: 12px; }
-  .bp :global(.pw-more) {
-    display: inline-block; align-self: flex-start; margin: 0 0 10px;
-    font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
-    letter-spacing: 0.1em; text-transform: uppercase; color: var(--blueprint);
-    text-decoration: underline; text-underline-offset: 3px;
-  }
   .bp :global(.pw-plan) :global(.pw-pick), .bp :global(.pw-plan) :global(.pw-edit) { min-height: 44px; }
 
   /* the foot: hidden until a plan is chosen. Then the promo row stays in
@@ -1383,11 +1369,8 @@
      rest it goes, and the button attaches to the viewport again. */
   .bp :global(.plan-sheet.is-in) { will-change: auto; }
   .bp :global(.pw-head) { gap: 8px; }
-  /* CARDS SIZE TO THEIR CONTENT. A forced ~514px height at 844px pushed the
-     promo field and the terms below the fold; with the list capped at 176px
-     (+ "Show all") a card is ~380px and the foot is in view on arrival. */
+  /* CARDS SIZE TO THEIR CONTENT — the whole list (2026-10-12). */
   .bp :global(.pw-plan) { height: auto; min-height: 0; max-height: none; padding: 16px 16px 14px; }
-  .bp :global(.pw-feats) { max-height: 176px; }
   .bp :global(.pw-foot.is-armed) { margin-top: 12px; }
 }
 @media (max-width: 768px) {
@@ -1400,8 +1383,6 @@
      reserves a second band for the pinned button — .plan-sheet-in's 140px
      bottom padding already does, so the terms sat 100px below the promo. */
   .bp :global(.pw-foot.is-armed) { margin-left: 18px; margin-right: 18px; padding-bottom: 0; }
-  /* Whole rows only: six of them, no half-cut seventh above "Show all". */
-  .bp :global(.pw-feats) { max-height: 162px; }
 }
 @media (max-width: 560px) {
   /* Three items across 354px: the connector lines go, the boxes and type
@@ -1483,11 +1464,7 @@
      for a finger to leave behind. */
   .bp :global(.pw-toggle) { width: 44px; height: 44px; right: 1px; }
   .bp :global(.pw-toggle):hover { background: none; }
-  /* "Show all" keeps its place and look but takes a 44px-tall target: the
-     negative margins give back exactly the height the target adds. */
-  .bp :global(.pw-more) { display: inline-flex; align-items: center; min-height: 44px; margin: -14px 0 -4px; }
 }
-.bp :global(.pw-more:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .bp :global(.pw-plan), .bp :global(.pw-plan) :global(.pw-go.pw-go) { transition: none; }
@@ -1547,3 +1524,60 @@
 /* THE FIRST CHARGE'S DATE under every price (owner, 2026-10-10): "Free until
    Oct 13, then $95/mo", or "… No card needed." on the card-less trial. */
 .bp :global(.pw-when) { margin-top: 2px; font-size: 13px; font-weight: 700; line-height: 1.35; color: var(--ink-soft); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ONE SWITCH, ONE GRID, OPEN LISTS — owner, 2026-10-12.
+   · Monthly | Annual is one switch over the row (components/billing/
+     PlanTermSwitch + plan-term-switch.css); the per-card term pills went.
+   · Every card is a subgrid of the row's tracks (`--pw-rows`, written by
+     register-content: name, price, deal, free-until, the code's line,
+     features, actions), so prices, deal lines and first feature rows stand
+     on one line across a row and every card is the row's height.
+   · Nothing folds and nothing scrolls inside a card: every list is drawn
+     whole, so the sheet scrolls at every width (it is `overflow-y: auto`).
+   Last in the file so it outranks the blocks above at equal specificity.
+   ══════════════════════════════════════════════════════════════════════ */
+.bp :global(.plan-sheet-in) { height: auto; min-height: 100%; }
+.bp :global(.pw-termsw) { margin: 0; }
+.bp :global(.pw-plans) {
+  grid-template-rows: repeat(var(--pw-rows, 5), auto);
+  grid-auto-rows: auto;
+  gap: 14px;
+  flex: 0 0 auto; min-height: auto;
+}
+.bp :global(.pw-plan) {
+  display: grid;
+  grid-row: span var(--pw-rows, 5);
+  grid-template-rows: subgrid;
+  row-gap: clamp(6px, 1vh, 10px);
+  align-content: start;
+  height: auto; min-height: 0; max-height: none;
+}
+.bp :global(.pw-feats) {
+  margin-top: 0; margin-bottom: 4px;
+  min-height: auto; max-height: none;
+  overflow: visible;
+  -webkit-mask-image: none; mask-image: none;
+}
+.bp :global(.pw-f) { overflow-wrap: anywhere; }
+/* The card's controls share the last track: the start button at its foot,
+   the custom card's page picker just above it. */
+.bp :global(.pw-acts) { display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; min-width: 0; }
+.bp :global(.pw-acts) :global(.pw-edit) { margin-top: 0; }
+.bp :global(.pw-plan) :global(.pw-acts) :global(.pw-go.pw-go) { margin-top: 0; }
+.bp :global(.pw-plan) :global(.jf-deal) { margin-top: -2px; }
+
+@media (max-width: 768px) {
+  .bp :global(.pw-termsw) { margin: 0 18px; }
+  /* The carousel is the same grid, its columns a card wide, swiped. */
+  .bp :global(.pw-plans) {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: min(84vw, 340px);
+    column-gap: 12px;
+    padding: 14px 18px 8px;
+  }
+  .bp :global(.pw-plan) { flex: none; }
+  .bp :global(.pw-feats) { overflow: visible !important; max-height: none; }
+}

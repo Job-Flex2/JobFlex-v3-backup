@@ -1055,3 +1055,45 @@ body:has(.jf-mobile-upgrade.mu-shell) .jf-blueprint > .jfsup {
 .jf-mobile-upgrade .mu-shell .mu-rail > .mu-card { scroll-snap-align: start; }
 /* The Monthly / Yearly segment is gone from the markup; the rule stays inert. */
 .jf-mobile-upgrade .mu-seg { display: none; }
+
+/* ── ONE SWITCH, ONE GRID, OPEN LISTS (owner, 2026-10-12) ───────────────
+   Monthly | Annual over the rail (components/billing/plan-term-switch.css;
+   the old .mu-seg stays inert above). The rail is one grid of four tracks —
+   head, price + deal, the whole feature list, the foot — and every card is
+   a subgrid of them, so prices and first rows stand on one line card to
+   card, every card is the rail's height and its action sits at the foot.
+   The disclosure is gone: every list is open. */
+.jf-mobile-upgrade .mu-termsw { margin: 0; }
+.jf-mobile-upgrade .mu-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: min(82vw, 330px);
+  grid-template-rows: repeat(4, auto);
+  column-gap: 12px;
+  row-gap: 0;
+  align-items: stretch;
+}
+.jf-mobile-upgrade .mu-rail > .mu-card {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  flex: none;
+}
+.jf-mobile-upgrade .mu-price {
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.jf-mobile-upgrade .mu-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.jf-mobile-upgrade .mu-feats { margin: 0; }
+.jf-mobile-upgrade .mu-foot { align-self: end; }
+/* A row the plan does not include is always on screen now, so its words
+   clear 4.5:1 (#555 on white); the dash beside them stays faint. */
+.jf-mobile-upgrade .mu-f.is-no { color: var(--muted); }
