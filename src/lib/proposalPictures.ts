@@ -12,9 +12,10 @@
 //               a plan, the only 3D there is when a proposal predates plans;
 //   fence-plan  the traced layout (an ActivityEvent FENCE_PLAN), drawn on
 //               request by /api/public-quote/[publicId]/fence-plan;
-//   roof-photo  the aerial (EagleView ortho, else Google satellite) with the
-//               measured outline overlaid, when a key is on the server;
-//   roof-plan   the measured outline as a plan, when there is no aerial;
+//   roof-photo  the aerial (EagleView ortho, else Google satellite) with ONE
+//               PIN on the roof, when a key is on the server — never the
+//               measured outline (owner, 2026-10-12: "remove it and never
+//               send any outlines for the roof"); no aerial, no roof picture;
 //   deck-scene  the Deck Studio's deck in 3D (2026-10-04): the scene frozen
 //               with the proposal (an ActivityEvent DECK_PLAN), served by
 //               /api/public-quote/[publicId]/deck-scene, mounted by
@@ -28,7 +29,7 @@ import { isEagleViewEnabled, type InstantRoofData } from "@/lib/eagleview";
 import { FENCE_PLAN_EVENT, parseFencePlan } from "@/lib/fence/planSvg";
 import { DECK_PLAN_EVENT, parseDeckPlan } from "@/lib/deck/convertSchema";
 import { deckElevation, defaultPlacement, elevationOverlay } from "@/lib/deck/elevation";
-import { roofFactsLine, roofFrameFor, roofOverlayPoints, roofRings, type RoofFacts } from "@/lib/roofPictures";
+import { roofFactsLine, roofFrameFor, roofPinOnFrame, roofPinPoint, type RoofFacts } from "@/lib/roofPictures";
 import type { PortalPicture } from "@/components/v3/mobile-proposal-client/portal-view";
 
 const measuredOn = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -96,14 +97,12 @@ export async function proposalPictures(p: { id: string; publicId: string; trade?
     if (row) {
       let instant: InstantRoofData | null = null;
       try { instant = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null; } catch { instant = null; }
-      const rings = roofRings(instant);
       const facts: RoofFacts = { areaSqft: row.areaSqft, squares: row.squares, pitch: row.predominantPitch, facetCount: row.facetCount, measuredOn: measuredOn(row.createdAt) };
       const factsLine = roofFactsLine(facts);
-      const frame = roofFrameFor(instant, row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null, { ortho: isEagleViewEnabled(), satellite: Boolean(process.env.GOOGLE_MAPS_API_KEY) });
+      const pin = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
+      const frame = roofFrameFor(instant, pin, { ortho: isEagleViewEnabled(), satellite: Boolean(process.env.GOOGLE_MAPS_API_KEY) });
       if (frame) {
-        out.push({ kind: "roof-photo", src: `${base}/roof-photo`, alt: "Your roof from the air, with the measured outline", caption: frame.kind === "ortho" ? "Your roof, as measured from the air" : "Your roof, from the air", facts: factsLine || null, overlay: rings.length ? roofOverlayPoints(rings, frame) : null });
-      } else if (rings.length) {
-        out.push({ kind: "roof-plan", src: `${base}/roof-plan`, alt: "Your roof, as measured", caption: "Your roof, as measured", facts: factsLine || null, overlay: null });
+        out.push({ kind: "roof-photo", src: `${base}/roof-photo`, alt: "Your roof from the air, a pin on the house", caption: frame.kind === "ortho" ? "Your roof, as measured from the air" : "Your roof, from the air", facts: factsLine || null, overlay: null, pin: roofPinOnFrame(roofPinPoint(instant, pin), frame) });
       }
     }
   } catch {

@@ -2,15 +2,16 @@ import { db } from "@/lib/db";
 import { rateLimitShared, ipFromRequest, HOUR } from "@/lib/rateLimit";
 import { fetchPropertyImage, isEagleViewEnabled, type InstantRoofData } from "@/lib/eagleview";
 import { satellitePhotoPng } from "@/lib/staticMapPhoto";
-import { roofFactsLine, roofFrameFor, roofFrameSvg, roofRings } from "@/lib/roofPictures";
+import { roofFactsLine, roofFrameFor, roofStandInSvg } from "@/lib/roofPictures";
 
 export const runtime = "nodejs";
 
 // The client's roof from the air (2026-09-23): EagleView's clear ortho when
 // the measurement carried imagery, else Google's satellite tile at the pin.
-// The page draws the measured outline over it (lib/roofPictures projects
-// both the same way). If the aerial cannot be fetched right now, the same
-// frame is drawn as an outline instead, so the picture is never broken.
+// The page puts one pin on the roof (lib/roofPictures) — never the outline
+// (owner, 2026-10-12). If the aerial cannot be fetched right now, a plain
+// stand-in with the facts is sent (the page's pin lands on it the same), so
+// the picture is never broken.
 export async function GET(req: Request, ctx: { params: Promise<{ publicId: string }> }) {
   const { publicId } = await ctx.params;
   const gate = await rateLimitShared(`roof-photo:${ipFromRequest(req)}`, 120, HOUR);
@@ -39,8 +40,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ publicId: strin
     const photo = await satellitePhotoPng(row);
     if (photo.ok) return new Response(new Uint8Array(photo.bytes), { headers: { "Content-Type": "image/png", ...cache } });
   } catch {
-    /* the aerial is unavailable right now — the outline stands in below */
+    /* the aerial is unavailable right now — the stand-in below */
   }
   const facts = roofFactsLine({ areaSqft: row.areaSqft, squares: row.squares, pitch: row.predominantPitch, facetCount: row.facetCount, measuredOn: row.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) });
-  return new Response(roofFrameSvg(roofRings(instant), frame, facts), { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=600" } });
+  return new Response(roofStandInSvg(facts), { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=600" } });
 }
