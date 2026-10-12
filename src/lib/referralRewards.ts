@@ -7,6 +7,15 @@
 //
 // Lifecycle: PENDING (signup recorded) → CONVERTED (referred org's first real
 // paid invoice) → PAID (credit landed on the referrer's Stripe balance).
+//
+// THE CREDIT WAITS FOR THE FIRST REAL PAYMENT (owner, 2026-10-12). From
+// 2026-09-02 it was paid when the referred shop's subscription STARTED — a
+// card-first trial is a subscription, so a "referral" that cancelled inside
+// its free week paid nothing and still earned the referrer half a month, as
+// many times as anyone cared to sign up. Now nothing converts or pays until
+// the referred organization has paid an invoice of more than $0: the
+// invoice.paid webhook records that (`referralPaid:<conversionId>`), and the
+// credit is applied from there. Credits already given are left as they were.
 // CONVERTED with rewardAppliedAt=null means the credit is still owed — usually
 // because the referrer has no Stripe customer yet (FREE plan). It self-heals on
 // the referrer's own first invoice, and admins can retry from /admin/referrals.
@@ -40,7 +49,9 @@ export async function processReferralEffectsForInvoice(invoice: Stripe.Invoice):
   if (!mirror) return;
   const orgId = mirror.organizationId;
 
-  // (a) This org was a referred signup → its first real payment converts the referral.
+  // (a) This org was a referred signup → its first real payment converts the
+  // referral, and the payment is written down for the credit's own check.
+  await markReferredPaid(orgId, invoice.id ?? "invoice");
   await db.referralConversion.updateMany({
     where: { signupOrgId: orgId, status: "PENDING" },
     data: { status: "CONVERTED", convertedAt: new Date() },
@@ -86,6 +97,8 @@ export async function applyReferralReward(
   // Rows with no signupOrgId come from the public homeowner intake and can be
   // fabricated by anyone against any code — they must never turn into money.
   if (!conversion.signupOrgId) return { applied: false, reason: "no-signup-org" };
+  // Only for a referred organization that has really paid (owner, 2026-10-12).
+  if (!(await referredOrgPaid(conversion.signupOrgId))) return { applied: false, reason: "referred-not-paid" };
 
   const referrerOrgId = conversion.code.organizationId;
   const referrerSub = await db.subscription.findUnique({
@@ -145,18 +158,55 @@ async function referrerMonthlyPriceCents(plan: string): Promise<number> {
   return Math.round((PLAN_MONTHLY_USD[plan.toUpperCase()] ?? 0) * 100);
 }
 
+const paidKey = (conversionId: string) => `referralPaid:${conversionId}`;
+
+/** The referred organization paid an invoice of more than $0: written once per conversion. */
+async function markReferredPaid(orgId: string, invoiceId: string): Promise<void> {
+  const rows = await db.referralConversion.findMany({ where: { signupOrgId: orgId }, select: { id: true } });
+  for (const r of rows) {
+    await db.syncState
+      .upsert({ where: { key: paidKey(r.id) }, update: {}, create: { key: paidKey(r.id), cursor: invoiceId } })
+      .catch(() => {});
+  }
+}
+
 /**
- * THE REFERRAL COUNTS WHEN THE REFERRED SHOP'S SUBSCRIPTION STARTS (owner's
- * rule, 2026-09-02) — not when its first non-zero invoice is paid, which with
- * a 14-day trial left every conversion PENDING for two weeks, and in the
- * sandbox (whose events the live webhook never sees) forever. Called from the
- * signup return leg once the Subscription row carries a Stripe subscription;
- * also run for a referrer's code from the subscription page, so a conversion
- * that predates this rule catches up on the next visit. Idempotent: the
- * status flip matches zero rows on re-runs and the credit is keyed per
- * conversion.
+ * Has the referred organization paid a real invoice? The webhook's record
+ * first; failing that (a conversion from before 2026-10-12, or an event this
+ * deployment never saw — the sandbox), Stripe's own list of its paid invoices.
+ * Read-only.
+ */
+export async function referredOrgPaid(orgId: string): Promise<boolean> {
+  const conversions = await db.referralConversion.findMany({ where: { signupOrgId: orgId }, select: { id: true } });
+  if (conversions.length) {
+    const marked = await db.syncState.count({ where: { key: { in: conversions.map((c) => paidKey(c.id)) } } });
+    if (marked > 0) return true;
+  }
+  const sub = await db.subscription.findUnique({ where: { organizationId: orgId }, select: { externalCustomerId: true } });
+  if (!sub?.externalCustomerId || !isStripeEnabled()) return false;
+  try {
+    const { stripe } = await getStripeClient();
+    const invoices = await stripe.invoices.list({ customer: sub.externalCustomerId, status: "paid", limit: 24 });
+    const paid = invoices.data.find((inv) => (inv.amount_paid ?? 0) > 0);
+    if (paid) await markReferredPaid(orgId, paid.id ?? "invoice");
+    return Boolean(paid);
+  } catch (err) {
+    console.warn(`[referral] could not read paid invoices for ${orgId}:`, err);
+    return false;
+  }
+}
+
+/**
+ * THE REFERRAL COUNTS WHEN THE REFERRED SHOP FIRST PAYS (owner, 2026-10-12;
+ * it counted at the subscription's start from 2026-09-02). Called from the
+ * signup return leg and, per referrer code, from the subscription page — a
+ * catch-up for a payment whose webhook this deployment did not see. Until
+ * the referred organization has paid more than $0 it does nothing.
+ * Idempotent: the status flip matches zero rows on re-runs and the credit is
+ * keyed per conversion.
  */
 export async function settleReferralsForSignupOrg(orgId: string): Promise<void> {
+  if (!(await referredOrgPaid(orgId))) return;
   await db.referralConversion.updateMany({
     where: { signupOrgId: orgId, status: "PENDING" },
     data: { status: "CONVERTED", convertedAt: new Date() },
@@ -174,8 +224,8 @@ export async function settleReferralsForSignupOrg(orgId: string): Promise<void> 
   }
 }
 
-/** Catch-up for one referrer's code: every PENDING conversion whose shop now
- *  holds a Stripe subscription is settled. Cheap (one query, usually empty). */
+/** Catch-up for one referrer's code: every PENDING conversion whose shop holds
+ *  a Stripe subscription is settled — once that shop has paid. */
 export async function settleReferralsForCode(codeId: string): Promise<void> {
   const pending = await db.referralConversion.findMany({
     where: { codeId, status: "PENDING", signupOrgId: { not: null } },
@@ -184,7 +234,8 @@ export async function settleReferralsForCode(codeId: string): Promise<void> {
   if (pending.length === 0) return;
   const orgIds = Array.from(new Set(pending.map((p) => p.signupOrgId as string)));
   const live = await db.subscription.findMany({
-    where: { organizationId: { in: orgIds }, externalSubId: { not: null }, status: { in: ["ACTIVE", "TRIALING"] } },
+    // A trialing shop has not paid yet; only a paying one is worth the Stripe read.
+    where: { organizationId: { in: orgIds }, externalSubId: { not: null }, status: { in: ["ACTIVE", "PAST_DUE"] } },
     select: { organizationId: true },
   });
   for (const s of live) await settleReferralsForSignupOrg(s.organizationId);
