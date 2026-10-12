@@ -11,13 +11,14 @@
 import { createHash, randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireManager, requireRouteAccess } from "@/lib/orgContext";
-import { toE164 } from "@/lib/phone";
+import { UnauthorizedError, requireManager, requireRouteAccess } from "@/lib/orgContext";
+import { isUsCanadaNumber, toE164 } from "@/lib/phone";
+import { PLAN_NEEDED_MESSAGE, planOpen } from "@/lib/paidCaps";
 import { enforceRateLimit, HOUR, RateLimitError } from "@/lib/rateLimit";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { leadTextsOnText, testText, welcomeText } from "@/lib/sms/format";
 import { checkVerifyCode, sendVerifyCode } from "@/lib/sms/verify";
-import { sendText, TRIAL_TEXT_MESSAGE } from "@/lib/sms/send";
+import { PLAN_ENDED_TEXT_MESSAGE, sendText, TRIAL_TEXT_MESSAGE } from "@/lib/sms/send";
 import { refreshRegistration, releaseRegistration, submitRegistration } from "@/lib/sms/registration";
 import type { SmsRegistrationDetails } from "@/lib/sms/registrationShared";
 import { SMS_GROUPS, audienceForRole, parseNotificationPrefs, textEventsFor, type PrefCells, type PrefKey, type SmsGroupKey } from "@/lib/notificationPrefsShared";
@@ -46,9 +47,20 @@ function pretty(e164: string): string {
 
 /** Step one: text a code to the number the member typed. */
 export async function startPhoneVerification(raw: string): Promise<SmsActionResult> {
-  const { user } = await requireRouteAccess("/dashboard/settings");
+  let user: { id: string };
+  let organizationId: string;
+  try {
+    ({ user, organizationId } = await requireRouteAccess("/dashboard/settings"));
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return { ok: false, error: "Phone texts are set up in Settings, which your role doesn't open." };
+    throw err;
+  }
+  // A verification text is a paid Twilio call (2026-10-12, money audit
+  // P0-8): a US or Canadian number only — never another country's, nor a
+  // Caribbean +1 — and only for a company that holds an open plan.
   const phone = toE164(raw);
-  if (!phone) return { ok: false, error: "That doesn't look like a US or Canadian mobile number." };
+  if (!phone || !isUsCanadaNumber(phone)) return { ok: false, error: "That doesn't look like a US or Canadian mobile number." };
+  if (!(await planOpen(organizationId))) return { ok: false, error: PLAN_NEEDED_MESSAGE };
   try {
     await enforceRateLimit(`sms-verify:${user.id}`, 5, HOUR, "verification texts");
   } catch (err) {
@@ -164,7 +176,7 @@ export async function sendTestText(): Promise<SmsActionResult> {
   if (!await isTwilioEnabled()) return { ok: false, error: "Texting is not set up on this server." };
   const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
   const r = await sendText({ organizationId, to: me.smsPhone, body: testText(org?.name ?? null), kind: "test" });
-  if (!r.ok) return { ok: false, error: r.reason === "duplicate" ? "A test just went out — give it a minute." : r.reason === "opted-out" ? "That number replied STOP." : r.reason === "trial" ? TRIAL_TEXT_MESSAGE : "Couldn't send. Try again in a moment." };
+  if (!r.ok) return { ok: false, error: r.reason === "duplicate" ? "A test just went out — give it a minute." : r.reason === "opted-out" ? "That number replied STOP." : r.reason === "trial" ? TRIAL_TEXT_MESSAGE : r.reason === "plan-ended" ? PLAN_ENDED_TEXT_MESSAGE : "Couldn't send. Try again in a moment." };
   return { ok: true, note: `Test text sent to ${pretty(me.smsPhone)}.` };
 }
 

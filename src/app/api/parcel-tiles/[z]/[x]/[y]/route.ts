@@ -8,9 +8,10 @@
 // with 204 so a stray zoom level cannot spend quota.
 
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { NoOrgError, UnauthorizedError, requireOrg } from "@/lib/orgContext";
 import { rateLimitShared, MINUTE } from "@/lib/rateLimit";
 import { notePaidCall } from "@/lib/trialMeter";
+import { PLAN_NEEDED_MESSAGE, planOpen } from "@/lib/paidCaps";
 
 export const runtime = "nodejs";
 
@@ -22,9 +23,23 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ z: string; x: string; y: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) return new NextResponse(null, { status: 401 });
-  const gate = await rateLimitShared(`tiles:${session.user.id}`, 600, 10 * MINUTE);
+  // A tile is paid (ReportAll): for a member of a company that holds an open
+  // plan (2026-10-12, money audit P0-7) — not any session, not after the
+  // plan ended. The refusal is never cached, so a renewed plan sees tiles.
+  let organizationId: string;
+  let userId: string;
+  try {
+    const ctx = await requireOrg();
+    organizationId = ctx.organizationId;
+    userId = ctx.user.id;
+  } catch (err) {
+    if (err instanceof UnauthorizedError || err instanceof NoOrgError) return new NextResponse(null, { status: 401, headers: { "Cache-Control": "no-store" } });
+    throw err;
+  }
+  if (!(await planOpen(organizationId))) {
+    return new NextResponse(PLAN_NEEDED_MESSAGE, { status: 402, headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  const gate = await rateLimitShared(`tiles:${userId}`, 600, 10 * MINUTE);
   if (!gate.ok) return new NextResponse(null, { status: 429 });
   const key = process.env.REPORTALL_CLIENT_KEY;
   if (!key) return new NextResponse(null, { status: 503 });
@@ -53,7 +68,7 @@ export async function GET(
     });
     if (!res.ok) return new NextResponse(null, { status: 502 });
     // A tile spends the tile allowance — the trial meter's (lib/trialMeter).
-    await notePaidCall("reportall", "tile", { orgId: session.user.activeOrgId ?? null });
+    await notePaidCall("reportall", "tile", { orgId: organizationId });
     const body = await res.arrayBuffer();
     return new NextResponse(body, {
       headers: {

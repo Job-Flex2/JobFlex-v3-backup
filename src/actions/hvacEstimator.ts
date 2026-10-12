@@ -56,6 +56,7 @@ import { US_CATALOG, US_CATALOG_VERIFIED_ON } from "@/lib/hvac/data/usCatalog";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { fileEquipmentFromModel } from "@/lib/visitBook";
 import { notePaidCall, takeTrialCap } from "@/lib/trialMeter";
+import { planEndedRefusal, takeHvacReportCap } from "@/lib/paidCaps";
 import { requirePage } from "@/lib/customPageAccess";
 
 type Fail = { ok: false; error: string; code?: "PLAN_LIMIT_REACHED"; resource?: LimitKey };
@@ -286,6 +287,9 @@ export async function readHvacNameplate(raw: unknown): Promise<{ ok: true; read:
   }
   const blocked = await runBlocked(organizationId);
   if (blocked) return blocked;
+  // A paid vision read: closed once the plan has ended (lib/paidCaps).
+  const ended = await planEndedRefusal(organizationId, "nameplate reading");
+  if (ended) return ended;
   if (!isOpenAIEnabled()) return { ok: false, error: "Nameplate reading needs OPENAI_API_KEY — type the plate's model number instead." };
   // The card-less trial's AI ceiling (lib/trialMeter): one plate, one use.
   const trial = await takeTrialCap(organizationId, "aiCalls");
@@ -669,7 +673,6 @@ export async function requestHvacPermitReport(raw: unknown): Promise<{ ok: true;
   if (!parsed.success) return { ok: false, error: "Save the estimate first." };
   const { organizationId } = await requireEstimatorOrManager();
   await requirePage(organizationId, "hvac-estimator");
-  await enforceRateLimit(`coolcalc:${organizationId}`, 20, HOUR, "Cool Calc requests");
   const cfg = coolCalcConfig();
   if (!cfg) return { ok: false, error: "Cool Calc isn't connected — set COOLCALC_CLIENT_ID, COOLCALC_API_KEY and COOLCALC_DEALER_ID on the server." };
   let row: { id: string; address: string; state: string | null; county: string | null; draftJson: string; permitJson: string | null; engineJson: string } | null;
@@ -682,6 +685,11 @@ export async function requestHvacPermitReport(raw: unknown): Promise<{ ok: true;
   const existing = parseJson<HvacPermit>(row.permitJson);
   const { COOLCALC_APP_URL } = await import("@/lib/hvac/coolcalc");
   if (existing?.projectId && existing.systemId) return { ok: true, permit: existing, appUrl: COOLCALC_APP_URL };
+  // THE CEILINGS (lib/paidCaps, 2026-10-12): a new report is a paid credit —
+  // 20 an hour and 30 a day per company; the answer above (a report already
+  // made) is free and never counted. A refusal is said, not thrown.
+  const cap = await takeHvacReportCap(organizationId);
+  if (!cap.ok) return cap;
   // A new system is a Cool Calc report credit: the card-less trial's own
   // ceiling (lib/trialMeter) — none without a card.
   const trial = await takeTrialCap(organizationId, "hvacReports");

@@ -71,6 +71,7 @@ import { foreignIndices, footprintRead, pickMainStructure, rowFigures } from "@/
 import { toDTO, toSummary, type StoredProvenance } from "@/lib/roofDiagram/dto";
 import type { MeasurementProvenance, MeasurementSource, RoofMeasurementDTO, RoofMeasurementSummary } from "@/lib/roofDiagram/types";
 import { takeTrialCap } from "@/lib/trialMeter";
+import { takeRoofOrderCap } from "@/lib/paidCaps";
 import { requirePage } from "@/lib/customPageAccess";
 
 type MeasureResult =
@@ -97,6 +98,8 @@ type MeasureResult =
       canReorder?: boolean;
       /** Typed access refusal before an order was accepted; allows provider fallback. */
       providerAccessDenied?: boolean;
+      /** The company's daily ceiling on paid orders (lib/paidCaps): nothing was ordered. */
+      capped?: boolean;
       debug?: Record<string, unknown>;
     };
 
@@ -247,6 +250,14 @@ const areaFirst = (parts: InstantRoofData[]): InstantRoofData[] =>
   [...parts].sort((a, b) => Number(b.structures.some((s) => s.areaSqft != null)) - Number(a.structures.some((s) => s.areaSqft != null)));
 
 /** The aerial provider answered, and the answer holds no roof. Kept, never re-billed by a plain click. */
+/** The company's daily ceiling on paid orders (lib/paidCaps) — said, not thrown at the page. */
+class RoofCapError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RoofCapError";
+  }
+}
+
 class NoRoofError extends Error {
   constructor(requestId: string | null) {
     super(
@@ -388,6 +399,12 @@ async function obtainInstant(input: EvOrderInput, organizationId: string, forceN
   // together. A re-measure on an address that has every pack is the one case
   // that orders everything again.
   const hasAll = PD_DIAGRAM_PACKS.every((p) => have.includes(p));
+  // THE DAILY CEILINGS (2026-10-12, lib/paidCaps): an order is placed below,
+  // and it is paid — 30 a day per company, a "measure again" 5 of those.
+  // Everything above (a roof already measured, an order collected) is free
+  // and never reaches this line.
+  const cap = await takeRoofOrderCap(organizationId, forceNewOrder);
+  if (!cap.ok) throw new RoofCapError(cap.error);
   const skip = forceNewOrder && hasAll ? [] : [...have, ...stillPending];
   const base = skip.length && parts.length ? mergeInstantResults(parts) : null;
   // The area order is waited for under this budget; the other packs are placed
@@ -925,6 +942,12 @@ export async function measureRoofInstant(
     packs = got.packs;
     if (reuse) await trial.refund();
   } catch (err) {
+    // Over the company's daily ceiling: nothing was ordered, the trial's
+    // allowance goes back, and the person reads why.
+    if (err instanceof RoofCapError) {
+      await trial.refund();
+      return { ok: false, error: err.message, capped: true };
+    }
     const debug = { ...eagleViewIdentity(), stage: "instant order", error: errorMessage(err, String(err)) };
     console.warn("[roofMeasurement] instant failed", debug);
     // Only submission/auth refusals are safe to refund or switch providers.

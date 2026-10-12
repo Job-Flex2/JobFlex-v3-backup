@@ -37,6 +37,7 @@ import { brand, clip, heldDigestText, SMS_MAX, unbrand } from "./format";
 import { trialBlocksText } from "@/lib/trialMeter";
 import { hasTextConsent, isTeamPhone } from "./consent";
 import { jobflexSender } from "./jobflexSender";
+import { orgMayText } from "@/lib/paidCaps";
 
 const CAP_PER_NUMBER_PER_DAY = 25;
 const CAP_PER_ORG_PER_DAY = 500;
@@ -57,10 +58,13 @@ export type SendTextResult =
   | { ok: true; id: string; status: "SENT" | "HELD" }
   /** `why`: "no-number" (the company has no registered number), "no-consent", "not-configured" (no Twilio here). */
   | { ok: true; id: string; status: "SKIPPED"; why: string }
-  | { ok: false; reason: "invalid-number" | "opted-out" | "duplicate" | "cap" | "trial" | "limiter-down" | "failed" };
+  | { ok: false; reason: "invalid-number" | "opted-out" | "duplicate" | "cap" | "trial" | "plan-ended" | "limiter-down" | "failed" };
 
 /** What a member reads when the card-less trial held a text back (lib/trialCaps). */
 export const TRIAL_TEXT_MESSAGE = "The free trial without a card sends no texts except the verification code. Add a card to unlock full limits.";
+
+/** What a member reads when the company's plan has ended (lib/paidCaps). */
+export const PLAN_ENDED_TEXT_MESSAGE = "Your plan has ended, so texts from your company's number are paused. Choose a plan on Subscription to send them again.";
 
 /** Send one text (or hold it). Never throws. */
 export async function sendText(input: SendTextInput): Promise<SendTextResult> {
@@ -104,6 +108,12 @@ async function dispatch(m: { organizationId: string | null; to: string; body: st
     const jobflexOwn = !m.organizationId && m.kind.startsWith("jobflex-");
     const org = !jobflexOwn && m.organizationId ? await db.organization.findUnique({ where: { id: m.organizationId }, select: { smsFromNumber: true } }) : null;
     own = jobflexOwn ? await jobflexSender() : org?.smsFromNumber ?? null;
+    // A company whose plan has ended sends nothing from its own number
+    // (2026-10-12, money audit P1-8): every text costs JobFlex money.
+    if (!jobflexOwn && m.organizationId && own && !(await orgMayText(m.organizationId))) {
+      await db.smsMessage.create({ data: { organizationId: m.organizationId, direction: "OUT", to: m.to, body: m.body, kind: m.kind, status: "SKIPPED", error: "plan-ended" } }).catch(() => null);
+      return { ok: false, reason: "plan-ended" };
+    }
     let blocked: string | null = null;
     if (!own) blocked = "no-number";
     else if (!jobflexOwn && m.kind !== "help" && m.organizationId && !(await isTeamPhone(m.organizationId, m.to)) && !(await hasTextConsent(m.organizationId, m.to))) blocked = "no-consent";

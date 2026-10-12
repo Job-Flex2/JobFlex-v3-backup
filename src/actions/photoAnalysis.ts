@@ -7,6 +7,7 @@ import { isOpenAIEnabled } from "@/lib/sdk/openai";
 import { runVisionJson } from "@/lib/sdk/openaiVision";
 import { enforceRateLimit, HOUR } from "@/lib/rateLimit";
 import { takeTrialCap } from "@/lib/trialMeter";
+import { planEndedRefusal } from "@/lib/paidCaps";
 
 export interface PhotoAnalysis {
   materials?: string[];
@@ -30,6 +31,9 @@ export async function analyzeJobPhoto(photoId: string): Promise<
   if (!photo || photo.job.organizationId !== organizationId) {
     return { ok: false, error: "Photo not found" };
   }
+  // A paid vision read: closed once the plan has ended (lib/paidCaps).
+  const ended = await planEndedRefusal(organizationId, "photo analysis");
+  if (ended) return ended;
   if (!isOpenAIEnabled()) {
     const stub: PhotoAnalysis = {
       materials: ["Shingles (asphalt)", "Underlayment"],

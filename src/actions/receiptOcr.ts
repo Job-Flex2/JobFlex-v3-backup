@@ -10,6 +10,7 @@ import { friendlyAIError, isOpenAIEnabled } from "@/lib/sdk/openai";
 import { runVisionJson } from "@/lib/sdk/openaiVision";
 import { enforceRateLimit, HOUR } from "@/lib/rateLimit";
 import { takeTrialCap } from "@/lib/trialMeter";
+import { planEndedRefusal } from "@/lib/paidCaps";
 
 export interface OcrResult {
   vendor?: string;
@@ -79,6 +80,9 @@ export async function scanReceipt(input: {
     return { ok: false, error: `That photo is ${(bytes / 1048576).toFixed(1)} MB — too large to read. Try a closer shot of just the receipt.` };
   }
 
+  // A paid vision read: closed once the plan has ended (lib/paidCaps).
+  const ended = await planEndedRefusal(organizationId, "receipt reading");
+  if (ended) return ended;
   if (!isOpenAIEnabled()) return { ok: true, ocr: STUB, disabled: true };
   // The card-less trial's AI ceiling (lib/trialMeter): one read, one use.
   const trial = await takeTrialCap(organizationId, "aiCalls");
