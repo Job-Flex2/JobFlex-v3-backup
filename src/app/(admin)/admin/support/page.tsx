@@ -16,7 +16,7 @@ import {
   AdminSupportContent,
   type SupportTicketDTO,
 } from "@/components/v3/admin-support/admin-support-content";
-import { tasksForTickets } from "@/lib/adminTasks/service";
+import { tasksForTicketsSafe } from "@/lib/adminTasks/service";
 import { MarkSupportSeen } from "./mark-seen";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +53,8 @@ export default async function AdminSupportPage({
   ]);
 
   // The task made from each ticket, if any (/admin/tasks, "Create task").
-  const tasks = await tasksForTickets(rows.map((t) => t.id));
+  // Without the task tables the tickets show as before and "Create task" hides.
+  const { available: tasksAvailable, tasks } = await tasksForTicketsSafe(rows.map((t) => t.id));
 
   const tickets: SupportTicketDTO[] = rows.map((t) => ({
     id: t.id,
@@ -79,6 +80,7 @@ export default async function AdminSupportPage({
         tickets={tickets}
         counts={{ open, inProgress, resolved, closed }}
         initialTicketId={openTicketId}
+        tasksAvailable={tasksAvailable}
         // One clock, read on the server, so every age renders identically here
         // and after hydration.
         now={new Date().toISOString()}

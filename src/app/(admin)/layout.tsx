@@ -24,7 +24,7 @@ import { db } from "@/lib/db";
 import { readAdminCookie } from "@/lib/adminAuth";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { unreadSupportCount } from "@/actions/support";
-import { myOpenTaskCount } from "@/lib/adminTasks/service";
+import { myOpenTaskCountSafe } from "@/lib/adminTasks/service";
 import { NavRoleProvider } from "@/components/v3/blueprint-shell/nav-role";
 import { AdminShell } from "@/components/v3/admin-shell/admin-shell";
 import { ContractorMailProvider } from "@/components/v3/admin-mail/contractor-mail";
@@ -54,8 +54,9 @@ export default async function AdminRootLayout({ children }: { children: React.Re
     // as a new request waits on Approve, so both light the badge.
     db.payoutRequest.count({ where: { status: { in: ["PENDING", "REVERSED"] } } }),
     db.platformLead.count({ where: { status: "MANUAL_QUEUE", isTest: false } }),
-    // Open tasks given to whoever is signed in (/admin/tasks).
-    myOpenTaskCount(admin.id),
+    // Open tasks given to whoever is signed in (/admin/tasks); 0, never a
+    // 500, if the task tables are not there yet.
+    myOpenTaskCountSafe(admin.id),
   ]);
 
   const badges: Record<string, number> = {

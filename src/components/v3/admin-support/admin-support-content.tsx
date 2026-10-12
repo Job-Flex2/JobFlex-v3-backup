@@ -137,11 +137,14 @@ export function AdminSupportContent({
   counts,
   now,
   initialTicketId = null,
+  tasksAvailable = true,
 }: {
   tickets: SupportTicketDTO[];
   counts: SupportCounts;
   /** ?ticket=<id> — open this ticket on arrival (a task's related link). */
   initialTicketId?: string | null;
+  /** False when the task tables can't be read: no "Create task" then. */
+  tasksAvailable?: boolean;
   /** ISO clock read in the server page — the anchor for every age. */
   now: string;
 }) {
@@ -366,6 +369,7 @@ export function AdminSupportContent({
             ticket={selected}
             task={madeTasks[selected.id] ?? selected.task}
             onTask={(t) => setMadeTasks((m) => ({ ...m, [selected.id]: t }))}
+            tasksAvailable={tasksAvailable}
           />
         ) : null}
       </Sheet>
@@ -382,10 +386,12 @@ function TicketDetail({
   ticket,
   task,
   onTask,
+  tasksAvailable,
 }: {
   ticket: SupportTicketDTO;
   task: SupportTicketDTO["task"];
   onTask: (t: NonNullable<SupportTicketDTO["task"]>) => void;
+  tasksAvailable: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(ticket.status);
@@ -448,23 +454,26 @@ function TicketDetail({
 
         <div className={cx("msg")}>{ticket.body}</div>
 
-        <div className={cx("taskBar")}>
-          {task ? (
-            <Link href={taskPath(task.id) as Route} className={cx("btn", "btn-ghost", "btn-sm", "taskLink")}>
-              <svg className={cx("ic")} aria-hidden="true" focusable="false">
-                <use href="#i-board" />
-              </svg>
-              <span className={cx("taskLinkTxt")}>Task: {task.title}</span>
-            </Link>
-          ) : (
-            <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} onClick={makeTask} disabled={making}>
-              <svg className={cx("ic")} aria-hidden="true" focusable="false">
-                <use href="#i-plus" />
-              </svg>
-              {making ? "Creating…" : "Create task"}
-            </button>
-          )}
-        </div>
+        {/* Without the task tables (not set up yet) there is nothing to link or make. */}
+        {tasksAvailable ? (
+          <div className={cx("taskBar")}>
+            {task ? (
+              <Link href={taskPath(task.id) as Route} className={cx("btn", "btn-ghost", "btn-sm", "taskLink")}>
+                <svg className={cx("ic")} aria-hidden="true" focusable="false">
+                  <use href="#i-board" />
+                </svg>
+                <span className={cx("taskLinkTxt")}>Task: {task.title}</span>
+              </Link>
+            ) : (
+              <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} onClick={makeTask} disabled={making}>
+                <svg className={cx("ic")} aria-hidden="true" focusable="false">
+                  <use href="#i-plus" />
+                </svg>
+                {making ? "Creating…" : "Create task"}
+              </button>
+            )}
+          </div>
+        ) : null}
 
         {error ? <Note tone="danger">{error}</Note> : null}
       </SheetBody>

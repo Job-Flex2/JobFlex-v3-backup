@@ -22,9 +22,15 @@
 //   8. from a support ticket: Support task with a link back; twice at once → one
 //   9. access: every action and the changes route ask requirePlatformAdmin
 //  10. the production SQL only adds
+//  11. without the task tables (production before the SQL, a dev server's old
+//      client): the nav badge reads 0, /admin/support keeps its tickets and
+//      hides "Create task", /admin/tasks says it is not set up — on a real copy
+//      of dev.db with the four tables dropped, and on a stand-in old client
 import "./_server-only";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PrismaClient } from "@prisma/client";
 
 for (const k of ["SMTP_HOST", "SMTP_USER", "RESEND_API_KEY"]) process.env[k] = "";
 
@@ -238,11 +244,65 @@ async function main() {
   const route = readFileSync(join(ROOT, "src/app/api/admin/tasks/changes/route.ts"), "utf8");
   check("the changes route asks before reading", route.indexOf("requirePlatformAdmin()") > -1 && route.indexOf("requirePlatformAdmin()") < route.indexOf("changesSince(") && /status: forbidden \? 403 : 401/.test(route));
   const page = readFileSync(join(ROOT, "src/app/(admin)/admin/tasks/page.tsx"), "utf8");
-  check("the page asks too", page.indexOf("requirePlatformAdmin()") > -1 && page.indexOf("requirePlatformAdmin()") < page.indexOf("listTasks()"));
+  check("the page asks too", page.indexOf("requirePlatformAdmin()") > -1 && page.indexOf("requirePlatformAdmin()") < page.indexOf("loadTasksPage("));
+
+  // ── 11. no task tables: the console keeps working ──
+  await withoutTaskTables(page);
 
   // ── 10. the production SQL only adds ──
   const sql = readFileSync(join(ROOT, "prisma/sql/prod-2026-10-11-admin-tasks.sql"), "utf8").replace(/--.*$/gm, "");
   check("prod SQL: no DROP, no RENAME, no ALTER COLUMN, no UPDATE/DELETE, only AdminTask* tables touched", !/\bDROP\b|\bRENAME\b|ALTER\s+COLUMN|\bUPDATE\s+"|DELETE\s+FROM|TRUNCATE/i.test(sql) && [...sql.matchAll(/(?:TABLE(?: IF NOT EXISTS)?|ON|ALTER TABLE)\s+"(\w+)"/g)].every((m) => m[1].startsWith("AdminTask")));
+}
+
+async function withoutTaskTables(tasksPage: string) {
+  const err = (code: string | undefined, message: string, meta?: unknown) => Object.assign(new Error(message), { code, meta });
+  check("missing-table errors are recognised: Prisma P2021, SQLite, Postgres, an old client", svc.trackerMissing(err("P2021", "The table `main.AdminTask` does not exist in the current database.", { table: "main.AdminTask" })) && svc.trackerMissing(new Error("no such table: main.AdminTaskEvent")) && svc.trackerMissing(new Error('relation "AdminTask" does not exist')) && svc.trackerMissing(new TypeError("Cannot read properties of undefined (reading 'count')")));
+  check("other errors are not mistaken for it", !svc.trackerMissing(err("P2021", "The table `main.User` does not exist", { table: "main.User" })) && !svc.trackerMissing(new Error("Can't reach database server")) && !svc.trackerMissing(new TypeError("x is not a function")));
+
+  // A real database without the tables: a copy of dev.db, the four dropped.
+  const dir = mkdtempSync(join(tmpdir(), "jf-admin-tasks-"));
+  const copy = join(dir, "no-tasks.db").replace(/\\/g, "/");
+  await db.$executeRawUnsafe(`VACUUM INTO '${copy}'`);
+  const bare = new PrismaClient({ datasources: { db: { url: `file:${copy}` } } });
+  try {
+    for (const t of ["AdminTaskEvent", "AdminTaskComment", "AdminTaskSubtask", "AdminTask"]) await bare.$executeRawUnsafe(`DROP TABLE IF EXISTS "${t}"`);
+    const client = bare as unknown as typeof db;
+    const anyAdmin = await bare.user.findFirst({ where: { isPlatformAdmin: true }, select: { id: true } });
+    const quiet = console.error;
+    console.error = () => {};
+    try {
+      check("no tables: the nav badge reads 0", (await svc.myOpenTaskCountSafe(anyAdmin?.id ?? "x", client)) === 0);
+      const sup = await svc.tasksForTicketsSafe(["t1"], client);
+      check("no tables: support gets no task links and hides Create task", sup.available === false && Object.keys(sup.tasks).length === 0);
+      check("no tables: /admin/tasks reads 'missing', not an error", (await svc.loadTasksPage(null, client)).status === "missing" && (await svc.loadTasksPage("some-id", client)).status === "missing");
+      // An old generated client: no `adminTask` on it at all.
+      const old = { user: bare.user } as unknown as typeof db;
+      check("old client: badge 0, support unavailable, page missing", (await svc.myOpenTaskCountSafe("x", old)) === 0 && (await svc.tasksForTicketsSafe([], old)).available === false && (await svc.loadTasksPage(null, old)).status === "missing");
+      // Anything else still surfaces.
+      const down = { adminTask: { findMany: () => Promise.reject(new Error("Can't reach database server")), findUnique: () => Promise.resolve(null) }, user: bare.user } as unknown as typeof db;
+      let threw = false;
+      try {
+        await svc.loadTasksPage(null, down);
+      } catch {
+        threw = true;
+      }
+      check("a database that is down is not dressed up as 'not set up'", threw);
+    } finally {
+      console.error = quiet;
+    }
+    check("with the tables: ready, badge counts, support available", (await svc.loadTasksPage(null)).status === "ready" && (await svc.tasksForTicketsSafe([])).available === true);
+  } finally {
+    await bare.$disconnect();
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // The three places use the safe readers.
+  const layout = readFileSync(join(ROOT, "src/app/(admin)/layout.tsx"), "utf8");
+  const support = readFileSync(join(ROOT, "src/app/(admin)/admin/support/page.tsx"), "utf8");
+  const supportUi = readFileSync(join(ROOT, "src/components/v3/admin-support/admin-support-content.tsx"), "utf8");
+  check("the admin layout counts with myOpenTaskCountSafe", /myOpenTaskCountSafe\(admin\.id\)/.test(layout) && !/myOpenTaskCount\(/.test(layout));
+  check("/admin/support reads with tasksForTicketsSafe and gates Create task on it", /tasksForTicketsSafe\(/.test(support) && /tasksAvailable=\{tasksAvailable\}/.test(support) && /\{tasksAvailable \? \(/.test(supportUi));
+  check("/admin/tasks shows TasksUnavailable when missing", /status === "missing"\) return <TasksUnavailable \/>/.test(tasksPage));
 }
 
 main()

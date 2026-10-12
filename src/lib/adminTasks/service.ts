@@ -70,6 +70,8 @@ export interface TaskWrite {
 }
 
 type Tx = Prisma.TransactionClient;
+/** The app's client, a transaction, or (in the check) a stand-in. */
+type Client = Tx | typeof db;
 
 const PERSON = { select: { id: true, email: true, name: true } } as const;
 
@@ -111,12 +113,12 @@ function toRow(t: RowRecord): TaskRowDTO {
 
 // ── Reads ──────────────────────────────────────────────────────────
 
-export async function listTasks(): Promise<TaskRowDTO[]> {
-  const rows = await db.adminTask.findMany({ include: ROW_INCLUDE, orderBy: { updatedAt: "desc" }, take: LIST_CAP });
+export async function listTasks(client: Client = db): Promise<TaskRowDTO[]> {
+  const rows = await client.adminTask.findMany({ include: ROW_INCLUDE, orderBy: { updatedAt: "desc" }, take: LIST_CAP });
   return rows.map(toRow);
 }
 
-export async function getTaskDetail(id: string, client: Tx | typeof db = db): Promise<TaskDetailDTO | null> {
+export async function getTaskDetail(id: string, client: Client = db): Promise<TaskDetailDTO | null> {
   const t = await client.adminTask.findUnique({
     where: { id },
     include: {
@@ -168,8 +170,8 @@ export async function changesSince(since: Date, openId: string | null): Promise<
 
 /** Who a task can be given to: platform admins with a real address. The
  *  console's shared login (…@platform.jobflex.local) is nobody to assign to. */
-export async function assignableAdmins(): Promise<AdminPersonDTO[]> {
-  const users = await db.user.findMany({
+export async function assignableAdmins(client: Client = db): Promise<AdminPersonDTO[]> {
+  const users = await client.user.findMany({
     where: { isPlatformAdmin: true, NOT: { email: { endsWith: CONSOLE_EMAIL_DOMAIN } } },
     select: { id: true, email: true, name: true },
   });
@@ -179,20 +181,79 @@ export async function assignableAdmins(): Promise<AdminPersonDTO[]> {
 }
 
 /** The nav badge: open tasks given to this admin. */
-export async function myOpenTaskCount(userId: string): Promise<number> {
-  return db.adminTask.count({ where: { assigneeId: userId, status: { in: [...ACTIVE_STATUSES] } } });
+export async function myOpenTaskCount(userId: string, client: Client = db): Promise<number> {
+  return client.adminTask.count({ where: { assigneeId: userId, status: { in: [...ACTIVE_STATUSES] } } });
 }
 
 /** ticketId → its task, for the support sheet's "Create task" / "Open task". */
-export async function tasksForTickets(ticketIds: string[]): Promise<Record<string, { id: string; title: string; status: string }>> {
+export async function tasksForTickets(ticketIds: string[], client: Client = db): Promise<Record<string, { id: string; title: string; status: string }>> {
   if (ticketIds.length === 0) return {};
-  const tasks = await db.adminTask.findMany({
+  const tasks = await client.adminTask.findMany({
     where: { supportTicketId: { in: ticketIds } },
     select: { id: true, title: true, status: true, supportTicketId: true },
   });
   const out: Record<string, { id: string; title: string; status: string }> = {};
   for (const t of tasks) if (t.supportTicketId) out[t.supportTicketId] = { id: t.id, title: t.title, status: t.status };
   return out;
+}
+
+// ── When the tracker's tables are not there ────────────────────────
+// The tables are added to production by hand (prisma/sql/prod-2026-10-11-
+// admin-tasks.sql), and a dev server started before `prisma generate` keeps a
+// client that has never heard of them. Either way the rest of the console
+// must keep working: the nav badge reads 0, /admin/support works without
+// "Create task", and /admin/tasks says it is not set up — never a 500.
+
+/** The error means the AdminTask* tables, or a client that knows them, are missing. */
+export function trackerMissing(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  const msg = err instanceof Error ? err.message : String(err);
+  const names = /AdminTask/.test(msg) || /AdminTask/.test(JSON.stringify((err as { meta?: unknown } | null)?.meta ?? ""));
+  if ((code === "P2021" || code === "P2022") && names) return true;
+  if (/no such table:\s*(main\.)?"?AdminTask/i.test(msg)) return true;
+  if (/relation "AdminTask\w*" does not exist/i.test(msg)) return true;
+  // An old generated client: `db.adminTask` is undefined.
+  return err instanceof TypeError && /reading '(count|findMany|findUnique|findFirst|create)'/.test(msg);
+}
+
+/** The nav badge, never in the way: 0 (and a log line) when the count fails. */
+export async function myOpenTaskCountSafe(userId: string, client: Client = db): Promise<number> {
+  try {
+    return await myOpenTaskCount(userId, client);
+  } catch (err) {
+    console.error(`[adminTasks] nav badge unavailable${trackerMissing(err) ? " (task tables missing)" : ""}:`, err instanceof Error ? err.message.slice(0, 200) : err);
+    return 0;
+  }
+}
+
+/** The support page's ticket → task map, or `available: false` when it can't be read. */
+export async function tasksForTicketsSafe(
+  ticketIds: string[],
+  client: Client = db,
+): Promise<{ available: boolean; tasks: Record<string, { id: string; title: string; status: string }> }> {
+  try {
+    // Asked even with no tickets, so "available" is a real answer.
+    await client.adminTask.count({ where: { id: "" } });
+    return { available: true, tasks: await tasksForTickets(ticketIds, client) };
+  } catch (err) {
+    console.error(`[adminTasks] support → task links unavailable${trackerMissing(err) ? " (task tables missing)" : ""}:`, err instanceof Error ? err.message.slice(0, 200) : err);
+    return { available: false, tasks: {} };
+  }
+}
+
+/** Everything /admin/tasks reads, or `missing` when the tracker isn't set up. Other errors throw. */
+export async function loadTasksPage(
+  openId: string | null,
+  client: Client = db,
+): Promise<{ status: "ready"; rows: TaskRowDTO[]; people: AdminPersonDTO[]; detail: TaskDetailDTO | null } | { status: "missing" }> {
+  try {
+    const [rows, people, detail] = await Promise.all([listTasks(client), assignableAdmins(client), openId ? getTaskDetail(openId, client) : Promise.resolve(null)]);
+    return { status: "ready", rows, people, detail };
+  } catch (err) {
+    if (!trackerMissing(err)) throw err;
+    console.error("[adminTasks] /admin/tasks: task tables missing —", err instanceof Error ? err.message.slice(0, 200) : err);
+    return { status: "missing" };
+  }
 }
 
 // ── Validation ─────────────────────────────────────────────────────

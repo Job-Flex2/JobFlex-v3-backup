@@ -9,10 +9,11 @@
 
 import type { Metadata } from "next";
 import { requirePlatformAdmin } from "@/lib/orgContext";
-import { assignableAdmins, getTaskDetail, listTasks } from "@/lib/adminTasks/service";
+import { loadTasksPage } from "@/lib/adminTasks/service";
 import { isConsoleEmail } from "@/lib/adminTasks/model";
 import { parseFilters } from "@/lib/adminTasks/filters";
 import { AdminTasksContent } from "@/components/v3/admin-tasks/admin-tasks-content";
+import { TasksUnavailable } from "@/components/v3/admin-tasks/tasks-unavailable";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,11 @@ export default async function AdminTasksPage({ searchParams }: { searchParams: P
   const now = new Date();
   const openId = typeof sp.task === "string" && sp.task.length <= 64 ? sp.task : null;
 
-  const [rows, people, detail] = await Promise.all([
-    listTasks(),
-    assignableAdmins(),
-    openId ? getTaskDetail(openId) : Promise.resolve(null),
-  ]);
+  // Without the task tables (not applied yet, or a dev server's old client)
+  // the page says so instead of a 500. Any other error still throws.
+  const data = await loadTasksPage(openId);
+  if (data.status === "missing") return <TasksUnavailable />;
+  const { rows, people, detail } = data;
 
   return (
     <AdminTasksContent
