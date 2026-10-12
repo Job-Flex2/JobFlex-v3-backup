@@ -8,6 +8,8 @@
 // the price module. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-client-design.check.ts
 import { readFileSync } from "node:fs";
+import { STRETCH_MAX, centreOn, houseFromSheet, parseLength, sheetWords, wallSheet } from "../../src/lib/deck/wallMeasure";
+import { deckShapeForHouse, defaultHouse } from "../../src/lib/deck/house";
 import { renderEmail } from "../../src/lib/email/renderEmail";
 import { applyDeckPatch, deckChecks } from "../../src/lib/deck/checks";
 import { defaultDeckDesign, normalizeDeckDesign, structureWords, type DeckDesign } from "../../src/lib/deck/design";
@@ -68,7 +70,11 @@ check("the contractor's lumber stands", merged.framing.species === contractor.fr
 check("the contractor's footings and ledger stand", same(merged.footing, contractor.footing) && same(merged.ledger, contractor.ledger));
 check("the contractor's site, frost and state stand", same(merged.site, contractor.site) && merged.frostIn === contractor.frostIn);
 check("the contractor's rail height, waste and tear-out stand", merged.rail.heightIn === 42 && merged.decking.wastePct === contractor.decking.wastePct && merged.extras.demoSqFt === 180);
-check("the contractor's house and photo stand", same(merged.house, contractor.house) && same(merged.photo, contractor.photo));
+check("the contractor's photo stands", same(merged.photo, contractor.photo));
+// The house is the client's (2026-10-12): they measured it.
+const measured = applyDeckPatch(contractor, { house: { leftFt: 6, rightFt: 10, jogs: [{ id: "j1", atFt: 22, dir: "toward", depthFt: 3 }], storeys: 2 } });
+const mergedHouse = mergeClientDesign(contractor, measured, { settle: false });
+check("the client's measured house comes back", mergedHouse.house.leftFt === 6 && mergedHouse.house.rightFt === 10 && mergedHouse.house.jogs.length === 1 && mergedHouse.house.storeys === 2, JSON.stringify(mergedHouse.house.jogs));
 
 // Settled: the contractor's hand-picked 2x10 at 12 in. may not reach a deeper deck — the tables fix it.
 const deep = applyDeckPatch(contractor, { shape: { kind: "rect", widthFt: 24, depthFt: 22 } });
@@ -156,6 +162,38 @@ check("the email's measure-on-site row is the last", doc.box?.[doc.box.length - 
 check("the email carries no price", !/\$\s?\d/.test(mail.text));
 const again = returnedEmailDoc({ org: { name: "D", logoUrl: null, phone: null }, name: "Jane", phone: null, note: "", unsure: [], words: "deck", changes: [], href: "x", again: true });
 check("a second send says so, and no note leaves no quote", again.subject === "Jane sent their deck design again" && again.prose === undefined && !again.box?.some((r) => r.type === "cond"));
+
+// The wall as a tape reads it (lib/deck/wallMeasure).
+{
+  const shape = { kind: "rect" as const, widthFt: 16, depthFt: 12 };
+  const h0 = { ...defaultHouse(), leftFt: 4, rightFt: 4, jogs: [] };
+  const sh0 = wallSheet(h0, shape);
+  check("a straight wall reads as one stretch", sh0.stretches.length === 1 && sh0.stretches[0].lengthFt === 24 && sh0.deckStartFt === 4 && sh0.totalFt === 24 && sh0.mainIndex === 0, JSON.stringify(sh0));
+  // Walked outside: 4 ft, then 16 ft (the deck's wall), then 6 ft sticking out 3 ft. The deck starts 4 ft in.
+  const r1 = houseFromSheet(h0, shape, { stretches: [{ lengthFt: 4, offsetFt: 0 }, { lengthFt: 16, offsetFt: 0 }, { lengthFt: 6, offsetFt: 3 }], deckStartFt: 4 });
+  check("a bump-out past the deck's right end: one step at 16 ft, the wall 26 ft", r1.note === null && r1.house.jogs.length === 1 && r1.house.jogs[0].atFt === 16 && r1.house.jogs[0].dir === "toward" && r1.house.jogs[0].depthFt === 3 && r1.house.leftFt === 4 && r1.house.rightFt === 6, JSON.stringify(r1.house));
+  const back1 = wallSheet(r1.house, shape);
+  check("and it reads back the same (in-line stretches merge)", back1.stretches.length === 2 && back1.stretches[0].lengthFt === 20 && back1.stretches[1].lengthFt === 6 && back1.stretches[1].offsetFt === 3 && back1.totalFt === 26, sheetWords(back1));
+  // The bump-out under the deck's right end: the deck notches around it.
+  const r2 = houseFromSheet(h0, shape, { stretches: [{ lengthFt: 16, offsetFt: 0 }, { lengthFt: 8, offsetFt: 4 }], deckStartFt: 4 });
+  const fit2 = deckShapeForHouse(shape, r2.house);
+  check("a bump-out at the deck's right end notches it", fit2.shape.kind === "L" && fit2.shape.notch.corner === "back-right" && fit2.shape.notch.widthFt === 4 && fit2.shape.notch.depthFt === 4, JSON.stringify(fit2.shape));
+  // A set-back part left of the deck.
+  const r3 = houseFromSheet(h0, shape, { stretches: [{ lengthFt: 5, offsetFt: -2 }, { lengthFt: 20, offsetFt: 0 }], deckStartFt: 7 });
+  check("a part set back left of the deck: a step at -2 ft", r3.house.jogs.length === 1 && r3.house.jogs[0].atFt === -2 && r3.house.jogs[0].dir === "toward" && r3.house.jogs[0].depthFt === 2 && r3.house.rightFt === 2, JSON.stringify(r3.house));
+  // A wall typed shorter than the deck's run: the length stands, the deck slides back onto the wall.
+  const r4 = houseFromSheet(h0, shape, { stretches: [{ lengthFt: 18, offsetFt: 0 }], deckStartFt: 4 });
+  check("a deck running past the corner slides back, the typed length stands", !!r4.note && /now starts 2 ft/.test(r4.note) && r4.house.leftFt === 2 && r4.house.rightFt === 0 && wallSheet(r4.house, shape).totalFt === 18, r4.note ?? "");
+  // A deck wider than the whole wall: the wall is drawn to the deck's end, and it is said.
+  const r5 = houseFromSheet(h0, shape, { stretches: [{ lengthFt: 12, offsetFt: 0 }], deckStartFt: 2 });
+  check("a deck wider than the wall is said, the wall drawn to its end", !!r5.note && /wider|but the wall is 12 ft/.test(r5.note) && r5.house.leftFt === 0 && r5.house.rightFt === 0, r5.note ?? "");
+  check("five stretches at most", houseFromSheet(h0, shape, { stretches: Array.from({ length: 8 }, (_, i) => ({ lengthFt: 4, offsetFt: i % 2 ? 2 : 0 })), deckStartFt: 0 }).house.jogs.length <= STRETCH_MAX - 1);
+  check("a step deeper than 12 ft is held and said", (() => { const r = houseFromSheet(h0, shape, { stretches: [{ lengthFt: 20, offsetFt: 0 }, { lengthFt: 6, offsetFt: 15 }], deckStartFt: 2 }); return r.house.jogs[0]?.depthFt === 12 && !!r.note; })());
+  const c1 = centreOn(back1, 0, 16);
+  check("centre the deck on its wall", c1 === 2, String(c1));
+  check("a tape's words read", parseLength("12") === 12 && parseLength("12.5") === 12.5 && parseLength("12'6") === 12.5 && parseLength("12 ft 6 in") === 12.5 && parseLength("12 6") === 12.5 && parseLength("abc") === null && parseLength("") === null);
+  check("the house's wall change is named for the contractor", changesFrom(contractor, measured).some((c) => /^house wall measured: /.test(c)) && changesFrom(contractor, measured).includes("two-storey house"), changesFrom(contractor, measured).join("; "));
+}
 
 // The client's page never prices.
 const page = readFileSync("src/components/v3/deck-client-design/deck-client-designer.tsx", "utf8");

@@ -51,7 +51,7 @@ import {
   type Structure,
   type WallFill,
 } from "@/lib/deck/design";
-import { deckShapeForHouse } from "@/lib/deck/house";
+import { HOUSE_LIMITS, deckShapeForHouse, houseForShape, houseWords, moveJogTo } from "@/lib/deck/house";
 import { buildStructure, type DeckStructure } from "@/lib/deck/structure";
 import { deckScene, sceneBuildLayers } from "@/lib/deck/scene";
 import { kindSample, type DeckSample } from "@/lib/deck/samples";
@@ -60,6 +60,8 @@ import type { DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D
 import { nearestStairEdge } from "@/components/v3/deck-estimator-blueprint/deck-plan";
 import { DeckKindPicker } from "@/components/v3/deck-estimator-blueprint/deck-kind-picker";
 import { markDeckClientOpened, saveDeckClientWork, sendDeckClientDesign } from "@/actions/deckClientDesign";
+import { Chips, Section, Stepper, clamp, cx, ftWords, half, inWords } from "./parts";
+import { ClientHouse } from "./client-house";
 import s from "./deck-client-designer.module.css";
 
 const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3D").then((m) => m.DeckModel3D), {
@@ -67,20 +69,9 @@ const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3
   loading: () => <div className={s.wait}>Setting up the 3D view…</div>,
 });
 
-const cx = (...names: Array<string | false | null | undefined>) => names.filter(Boolean).join(" ");
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-const half = (v: number) => Math.round(v * 2) / 2;
-/** 16 → "16 ft", 16.5 → "16 ft 6 in". */
-const ftWords = (ft: number) => {
-  const inches = Math.round(ft * 12);
-  const f = Math.floor(inches / 12);
-  const i = inches % 12;
-  return i === 0 ? `${f} ft` : f === 0 ? `${i} in` : `${f} ft ${i} in`;
-};
-const inWords = (inches: number) => ftWords(inches / 12);
 
-/** The knobs a homeowner may drag: sizes, heights, stairs and the roof — never the house. */
-const CLIENT_HANDLES = new Set<string>(["width", "depth", "height", "eave", "stair", "stair-width", "lower-depth", "roof-width", "roof-depth", "pitch"]);
+/** The knobs a homeowner may drag: sizes, heights, stairs, the roof — and their own house's steps and corners (2026-10-12). */
+const CLIENT_HANDLES = new Set<string>(["width", "depth", "height", "eave", "stair", "stair-width", "lower-depth", "roof-width", "roof-depth", "pitch", "jog", "house-left", "house-right"]);
 
 /* ── the words a homeowner reads ────────────────────────────────────── */
 
@@ -198,12 +189,26 @@ const STAIR_WIDTHS = [3, 4, 5, 6, 8] as const;
 
 /* ── the design, kept sound as it changes ──────────────────────────── */
 
-/** After any change: the deck keeps clear of the house's bump-outs, and a deck that needs a railing gets one back. */
+/**
+ * After any change, the house and the deck agree the way they do in the studio: a wall changed → the deck notches
+ * itself around a bump-out at its end; a deck resized → the same; a deck shape picked without a resize → the wall
+ * gets (or loses) the step that shape means. And a deck that needs a railing gets one back.
+ */
 function finish(prev: DeckDesign, next: DeckDesign, fallbackRail: RailTypeId): DeckDesign {
   let d = next;
-  if (d.shape !== prev.shape) {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const fitShape = () => {
     const fit = deckShapeForHouse(d.shape, d.house);
-    if (JSON.stringify(fit.shape) !== JSON.stringify(d.shape)) d = applyDeckPatch(d, { shape: fit.shape });
+    if (!same(fit.shape, d.shape)) d = applyDeckPatch(d, { shape: fit.shape });
+  };
+  if (!same(prev.house, d.house)) fitShape();
+  else if (!same(prev.shape, d.shape)) {
+    const resized = prev.shape.widthFt !== d.shape.widthFt || prev.shape.depthFt !== d.shape.depthFt;
+    if (resized) fitShape();
+    else {
+      const h2 = houseForShape(d.house, d.shape);
+      if (h2 !== d.house) d = applyDeckPatch(d, { house: h2 });
+    }
   }
   if (d.rail.type === "none" && hasDeck(d) && prev.rail.type === d.rail.type && buildStructure(d).rails.required) d = applyDeckPatch(d, { rail: { type: fallbackRail } });
   return d;
@@ -213,6 +218,7 @@ function finish(prev: DeckDesign, next: DeckDesign, fallbackRail: RailTypeId): D
 function pickedLines(d: DeckDesign): string[] {
   const out: string[] = [structureWords(d)];
   if (hasDeck(d)) out.push(`${inWords(d.heightIn)} off the ground · ${Math.round(shapeAreaSqFt(d.shape))} sq ft`);
+  if (d.placement !== "detached") out.push(`House: ${houseWords(d.house).toLowerCase()}, ${d.house.leftFt + d.shape.widthFt + d.house.rightFt} ft corner to corner`);
   if (hasDeck(d)) {
     out.push(d.stairs.length ? `${d.stairs.length === 1 ? "Stairs" : `${d.stairs.length} sets of stairs`}: ${d.stairs.map((st) => `${STAIR_SIDE_LABEL[st.side].toLowerCase()}, ${ftWords(st.widthFt)} wide`).join("; ")}` : "No stairs");
     out.push(d.rail.type === "none" ? "No railing" : `${RAIL_CHOICES.find((r) => r.id === d.rail.type)?.name ?? railType(d.rail.type).label} railing`);
@@ -227,70 +233,6 @@ function pickedLines(d: DeckDesign): string[] {
     if (d.structure === "gazebo" && r.walls.fill !== "none") out.push(WALL_FILL_LABEL[r.walls.fill]);
   }
   return out;
-}
-
-/* ── small parts ───────────────────────────────────────────────────── */
-
-function Section({ n, title, sub, children, id }: { n: number; title: string; sub?: React.ReactNode; children: React.ReactNode; id?: string }) {
-  return (
-    <section className={s.card} id={id} aria-labelledby={`${id ?? `sec${n}`}-h`}>
-      <header className={s.cardHead}>
-        <span className={s.num} aria-hidden="true">{n}</span>
-        <div>
-          <h2 className={s.cardTitle} id={`${id ?? `sec${n}`}-h`}>{title}</h2>
-          {sub ? <p className={s.cardSub}>{sub}</p> : null}
-        </div>
-      </header>
-      <div className={s.cardBody}>{children}</div>
-    </section>
-  );
-}
-
-function Chips<T extends string | number>({ label, value, options, onChange, disabled }: { label: string; value: T | null; options: ReadonlyArray<{ value: T; name: string; words?: string }>; onChange: (v: T) => void; disabled?: (v: T) => boolean }) {
-  return (
-    <div className={s.chips} role="radiogroup" aria-label={label}>
-      {options.map((o) => {
-        const on = o.value === value;
-        const off = disabled?.(o.value) ?? false;
-        return (
-          <button key={String(o.value)} type="button" role="radio" aria-checked={on} disabled={off} className={cx(s.chip, on && s.chipOn, o.words && s.chipTall)} onClick={() => onChange(o.value)}>
-            <span className={s.chipName}>{o.name}</span>
-            {o.words ? <span className={s.chipWords}>{o.words}</span> : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Stepper({ label, value, min, max, step = 1, words, onChange, data }: { label: string; value: number; min: number; max: number; step?: number; words: (v: number) => string; onChange: (v: number) => void; data?: string }) {
-  const [text, setText] = React.useState<string | null>(null);
-  const commit = (t: string) => {
-    setText(null);
-    const n = Number(t.replace(/[^\d.]/g, ""));
-    if (t.trim() && Number.isFinite(n)) onChange(clamp(n, min, max));
-  };
-  return (
-    <div className={s.stepper} data-client-stepper={data}>
-      <span className={s.stepLbl}>{label}</span>
-      <div className={s.stepRow}>
-        <button type="button" className={s.stepBtn} aria-label={`${label}: less`} disabled={value <= min} onClick={() => onChange(clamp(value - step, min, max))}>−</button>
-        <input
-          className={s.stepIn}
-          inputMode="decimal"
-          aria-label={label}
-          value={text ?? String(Math.round(value * 10) / 10)}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={(e) => commit(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
-          }}
-        />
-        <button type="button" className={s.stepBtn} aria-label={`${label}: more`} disabled={value >= max} onClick={() => onChange(clamp(value + step, min, max))}>+</button>
-      </div>
-      <span className={s.stepWords}>{words(value)}</span>
-    </div>
-  );
 }
 
 /* ── the page ──────────────────────────────────────────────────────── */
@@ -458,6 +400,15 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
         case "pitch":
           change(applyDeckPatch(d, { roof: { ...d.roof, pitch: clamp(Math.round(e.value), ROOF_LIMITS.pitch.min, ROOF_LIMITS.pitch.max) } }));
           break;
+        case "jog":
+          change(applyDeckPatch(d, { house: moveJogTo(d.house, d.shape, e.id, e.value) }));
+          break;
+        case "house-left":
+          change(applyDeckPatch(d, { house: { leftFt: clamp(-half(e.value), HOUSE_LIMITS.extendFt.min, HOUSE_LIMITS.extendFt.max) } }));
+          break;
+        case "house-right":
+          change(applyDeckPatch(d, { house: { rightFt: clamp(half(e.value) - d.shape.widthFt, HOUSE_LIMITS.extendFt.min, HOUSE_LIMITS.extendFt.max) } }));
+          break;
       }
     },
     [design, change],
@@ -584,7 +535,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
                 </div>
               ) : editing ? (
                 <div className={s.banner} data-client-editing>
-                  <span>Drag the blue knobs to change the size, the height and the stairs.</span>
+                  <span>Drag the blue knobs: the deck&apos;s size, height and stairs — and your house&apos;s corners and the steps in its wall.</span>
                   <button type="button" className={s.bannerBtn} onClick={() => setEditing(false)}>Done</button>
                 </div>
               ) : null}
@@ -623,6 +574,12 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
                 <button type="button" className={s.linkBtn} onClick={startOver}>{start === "mine" ? `Back to ${shopName}'s design` : "Start over"}</button>
               </div>
             </Section>
+
+            {design.placement !== "detached" ? (
+              <Section n={next()} id="step-house" title="Your house's back wall" sub={<>Go outside with a tape and shape the wall the deck goes on — its corners, the parts that stick out or sit back. The deck fits itself around them.</>}>
+                <ClientHouse shape={design.shape} house={design.house} shopName={shopName} onChange={(n2) => change(applyDeckPatch(design, { ...(n2.house ? { house: n2.house } : {}), ...(n2.shape ? { shape: n2.shape } : {}) }))} />
+              </Section>
+            ) : null}
 
             <Section n={next()} id="step-size" title="Size and shape" sub={withDeck ? (design.placement === "detached" ? "Width and depth of the deck." : "Width runs along the house; depth goes out into the yard.") : "How big it is on the ground."}>
               {withDeck ? (

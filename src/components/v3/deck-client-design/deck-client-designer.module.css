@@ -208,3 +208,52 @@
   .card { scroll-margin-top: 16px; }
   .dock { display: none; }
 }
+
+/* ── The client's house (2026-10-12): the measuring guide, the wall walked stretch by stretch, the drawing, the look ── */
+.house { display: grid; gap: 10px; min-width: 0; }
+.guide { border: 1.5px solid var(--blueprint); border-radius: var(--radius); background: color-mix(in srgb, var(--blueprint) 4%, #fff); }
+.guideSum { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 13.5px; font-weight: 800; color: var(--blueprint); }
+.guideSum::-webkit-details-marker { display: none; }
+.guideSum::before { content: "📏"; font-size: 16px; }
+.guideSum::after { content: "▾"; margin-left: auto; font-size: 12px; }
+.guide[open] .guideSum::after { content: "▴"; }
+.guideBody { display: grid; gap: 8px; padding: 0 12px 12px; }
+.guideFig { display: block; width: 100%; max-width: 420px; height: auto; background: #fff; border: 1px solid var(--hair-soft); }
+.guideHouse { fill: #d9d5cb; stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.guideHouseText { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; fill: var(--muted); }
+.guideDeck { fill: #c9a978; fill-opacity: 0.55; stroke: #8a6a3a; stroke-width: 1.2; stroke-dasharray: 4 3; }
+.guideDeckText { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; fill: #6b4f26; text-anchor: middle; }
+.guideDim { stroke: var(--blueprint); stroke-width: 1.3; }
+.guideInk { fill: var(--blueprint); }
+.guideTick { stroke: var(--blueprint); stroke-width: 1; stroke-dasharray: 2 2; }
+.guideBadge { fill: var(--blueprint); }
+.guideBadgeText { font-family: var(--font); font-size: 10px; font-weight: 900; fill: #fff; text-anchor: middle; }
+.guideNote { font-family: var(--font); font-size: 9.5px; font-weight: 700; fill: var(--blueprint); }
+.guideNoteMid { font-family: var(--font); font-size: 9.5px; font-weight: 700; fill: var(--blueprint); text-anchor: middle; }
+.guideYou { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.guideYouLine { stroke: var(--ink); stroke-width: 1.4; fill: none; }
+.guideSteps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 13.5px; line-height: 1.45; color: var(--ink-soft); }
+
+.stretches { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.stretch { display: grid; gap: 8px; padding: 10px 12px 12px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; }
+.stretchMain { border-color: #8a6a3a; background: color-mix(in srgb, #c9a978 10%, #fff); }
+.stretchHead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stretchHead b { font-size: 13.5px; font-weight: 900; }
+.stretchSpacer { flex: 1; }
+.tag { padding: 2px 7px; border: 1.5px solid #8a6a3a; border-radius: var(--radius); font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b4f26; background: #fff; }
+.stretchGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.leanBox { display: grid; gap: 6px; }
+.centreBox { display: flex; align-items: flex-end; }
+.centreBox .ghostBtn { width: 100%; }
+.warn { margin: 0; padding: 8px 10px; border-left: 3px solid var(--warning-dark); background: var(--warning-soft); font-size: 13px; line-height: 1.45; color: var(--ink); }
+.fixes { display: flex; flex-wrap: wrap; gap: 6px; }
+.drawing { min-width: 0; }
+.lookGrid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.chipSmall { min-height: 40px; padding: 6px 10px; }
+.chipSmall .chipName { font-size: 12.5px; }
+.chipName { display: inline-flex; align-items: center; gap: 6px; }
+.dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(10, 10, 10, 0.25); }
+.stepperCompact .stepRow { grid-template-columns: 44px minmax(0, 120px) 44px; }
+@media (min-width: 560px) {
+  .stretchGrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: start; }
+}

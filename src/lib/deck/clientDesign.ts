@@ -10,10 +10,12 @@
 // row, `deckclients:<orgId>`, newest first.
 //
 // What the client may change is a short list: the kind, the shape and size,
-// the height, the stairs, the railing's style, the boards, a lower level and
-// the roof's look. The engineering stays the contractor's — the lumber and
-// member sizes, the footings, the ledger, the site, the house, the wiring,
-// the rail's height — and is put back from `base` whatever the browser sends
+// the height, the stairs, the railing's style, the boards, a lower level, the
+// roof's look — and their own house (2026-10-12: they measure its back wall
+// outside, its steps and corners, its storeys and colours; lib/deck/
+// wallMeasure). The engineering stays the contractor's — the lumber and
+// member sizes, the footings, the ledger, the site, the wiring, the rail's
+// height — and is put back from `base` whatever the browser sends
 // (mergeClientDesign). The frame is then settled to the tables, so what lands
 // in the studio is a deck the tables carry. The client's page never prices.
 
@@ -161,7 +163,8 @@ export function clientCopyOf(design: DeckDesign): DeckDesign {
 
 /** A blank start: the stock deck, on the contractor's site, house and lumber. */
 export function blankFor(base: DeckDesign): DeckDesign {
-  return mergeClientDesign(base, defaultDeckDesign({ state: base.site.state, frostIn: base.frostIn }), { settle: false });
+  // The house the contractor drew stays: a blank deck, not a blank house.
+  return mergeClientDesign(base, { ...defaultDeckDesign({ state: base.site.state, frostIn: base.frostIn }), house: base.house }, { settle: false });
 }
 
 /** The roof's numbers that are the contractor's to choose: its load, members and how it is framed. */
@@ -188,14 +191,15 @@ export function mergeClientDesign(base: DeckDesign, raw: unknown, opts: { settle
     footing: base.footing,
     extras: base.extras,
     site: base.site,
-    house: base.house,
+    // The house is the client's: they stand in front of it with a tape.
+    house: c.house,
     photo: base.photo,
     electrical: base.electrical,
     rail: { ...c.rail, heightIn: base.rail.heightIn, postSpacingFt: base.rail.postSpacingFt, customPerFt: base.rail.customPerFt, type: c.rail.type === "custom" && base.rail.type !== "custom" ? base.rail.type : c.rail.type },
     decking: { ...c.decking, fastening: base.decking.fastening, fascia: base.decking.fascia, wastePct: base.decking.wastePct },
     roof,
   });
-  // The deck and the contractor's house agree: a step in the wall under the deck notches it.
+  // The deck and the house agree: a step in the wall under the deck notches it.
   const fit = deckShapeForHouse(merged.shape, merged.house);
   if (JSON.stringify(fit.shape) !== JSON.stringify(merged.shape)) merged = applyDeckPatch(merged, { shape: fit.shape });
   return opts.settle === false ? merged : settleDesign(merged).design;
@@ -226,6 +230,12 @@ export function changesFrom(base: DeckDesign, next: DeckDesign): string[] {
   if (base.decking.product !== next.decking.product) out.push(`boards: ${deckingProduct(next.decking.product).label}`);
   if (base.lower.on !== next.lower.on) out.push(next.lower.on ? "a lower level" : "no lower level");
   if (base.roof.kind !== next.roof.kind && next.structure !== "deck") out.push(`${ROOF_KIND_LABEL[next.roof.kind].split(" — ")[0].toLowerCase()} roof`);
+  const wall = (d: DeckDesign) => JSON.stringify([d.house.leftFt, d.house.rightFt, d.house.jogs.map((j) => [j.atFt, j.dir, j.depthFt])]);
+  if (wall(base) !== wall(next)) {
+    const total = next.house.leftFt + next.shape.widthFt + next.house.rightFt;
+    out.push(`house wall measured: ${total} ft${next.house.jogs.length ? `, ${next.house.jogs.length} ${next.house.jogs.length === 1 ? "step" : "steps"}` : ", straight"}`);
+  }
+  if (base.house.storeys !== next.house.storeys) out.push(next.house.storeys === 2 ? "two-storey house" : "one-storey house");
   return out;
 }
 
