@@ -11,7 +11,7 @@
 import { createHash, randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireManager, requireOrg } from "@/lib/orgContext";
+import { requireManager, requireRouteAccess } from "@/lib/orgContext";
 import { toE164 } from "@/lib/phone";
 import { enforceRateLimit, HOUR, RateLimitError } from "@/lib/rateLimit";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
@@ -46,7 +46,7 @@ function pretty(e164: string): string {
 
 /** Step one: text a code to the number the member typed. */
 export async function startPhoneVerification(raw: string): Promise<SmsActionResult> {
-  const { user } = await requireOrg();
+  const { user } = await requireRouteAccess("/dashboard/settings");
   const phone = toE164(raw);
   if (!phone) return { ok: false, error: "That doesn't look like a US or Canadian mobile number." };
   try {
@@ -78,7 +78,7 @@ export async function startPhoneVerification(raw: string): Promise<SmsActionResu
 
 /** Step two: the code came back — the number is verified, and that is the opt-in. */
 export async function confirmPhoneVerification(rawCode: string): Promise<SmsActionResult> {
-  const { user } = await requireOrg();
+  const { user } = await requireRouteAccess("/dashboard/settings");
   const code = (rawCode ?? "").replace(/\D/g, "");
   if (code.length !== 6) return { ok: false, error: "Enter the six digits from the text." };
   const v = await db.phoneVerification.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
@@ -113,7 +113,7 @@ export async function confirmPhoneVerification(rawCode: string): Promise<SmsActi
 
 /** Drop the mobile: no more texts to this member. */
 export async function removeSmsPhone(): Promise<SmsActionResult> {
-  const { user } = await requireOrg();
+  const { user } = await requireRouteAccess("/dashboard/settings");
   await db.user.update({ where: { id: user.id }, data: { smsPhone: null, smsVerifiedAt: null } });
   await db.phoneVerification.deleteMany({ where: { userId: user.id } });
   revalidatePath(SETTINGS_PATH);
@@ -158,7 +158,7 @@ export async function removeNotificationPhone(id: string): Promise<SmsActionResu
 
 /** "Send me a test text" — to the member's own verified mobile. */
 export async function sendTestText(): Promise<SmsActionResult> {
-  const { organizationId, user } = await requireOrg();
+  const { organizationId, user } = await requireRouteAccess("/dashboard/settings");
   const me = await db.user.findUnique({ where: { id: user.id }, select: { smsPhone: true, smsVerifiedAt: true } });
   if (!me?.smsPhone || !me.smsVerifiedAt) return { ok: false, error: "Verify a mobile first." };
   if (!await isTwilioEnabled()) return { ok: false, error: "Texting is not set up on this server." };

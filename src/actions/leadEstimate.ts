@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { isEstimatorRole, requireEstimatorOrManager } from "@/lib/orgContext";
+import { isEstimatorRole, requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { ESTIMATOR_PATH, writeProfessionalScope, type EstimatorId } from "@/lib/leadScope";
 import { writeEstimateSeed } from "@/lib/estimateSeed";
 import { ensureClientForLead } from "@/lib/leadClient";
@@ -78,6 +78,7 @@ export async function startEstimateFromLead(leadId: string, estimator: string): 
  */
 export async function writeLeadScope(leadId: string): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/leads");
   await requirePage(organizationId, "leads");
   const lead = await db.lead.findFirst({
     where: { id: leadId, organizationId },

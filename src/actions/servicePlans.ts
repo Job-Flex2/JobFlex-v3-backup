@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireEstimatorOrManager } from "@/lib/orgContext";
+import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { activatePlan, cancelPlan, markPlanInvoicePaid, markVisitDone, renewPlan, sendPlan } from "@/lib/servicePlanBook";
 import { STARTER_PLANS, type Billing } from "@/lib/servicePlans";
 import { enforceRateLimit, clientIp, MINUTE } from "@/lib/rateLimit";
@@ -46,6 +46,7 @@ function fromForm(fd: FormData): Record<string, unknown> {
 /** A plan the shop sells, new or edited. Form-driven. */
 export async function saveServicePlanTemplate(fd: FormData): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/service-plans");
   const raw = fromForm(fd);
   const data = templateInput.parse({ ...raw, priorityScheduling: raw.priorityScheduling === "on", waivedDiagnostic: raw.waivedDiagnostic === "on", description: raw.description || null });
   const benefits = (data.benefits ?? "").split("\n").map((s) => s.replace(/^[-*•]\s*/, "").trim()).filter(Boolean).slice(0, 12);
@@ -72,6 +73,7 @@ export async function saveServicePlanTemplate(fd: FormData): Promise<void> {
 
 export async function archiveServicePlanTemplate(id: string): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/service-plans");
   await db.servicePlanTemplate.updateMany({ where: { id, organizationId }, data: { active: false } });
   refresh();
 }
@@ -79,6 +81,7 @@ export async function archiveServicePlanTemplate(id: string): Promise<void> {
 /** The three starter plans, once. */
 export async function seedStarterPlans(): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/service-plans");
   const have = await db.servicePlanTemplate.count({ where: { organizationId } });
   if (!have) {
     await db.servicePlanTemplate.createMany({
@@ -95,6 +98,7 @@ export async function seedStarterPlans(): Promise<void> {
  */
 export async function enrollClientInPlan(input: { clientId: string; templateId: string; send?: boolean; activate?: boolean } | FormData): Promise<void> {
   const { organizationId, user } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/client-detail", "/dashboard/service-plans");
   const raw = input instanceof FormData ? { clientId: String(input.get("clientId") ?? ""), templateId: String(input.get("templateId") ?? ""), send: input.get("then") === "send", activate: input.get("then") === "activate" } : input;
   const data = z.object({ clientId: z.string().min(1), templateId: z.string().min(1), send: z.boolean().optional(), activate: z.boolean().optional() }).parse(raw);
   const [client, t] = await Promise.all([
@@ -134,6 +138,7 @@ export async function enrollClientInPlan(input: { clientId: string; templateId: 
 
 export async function sendServicePlan(planId: string): Promise<void> {
   const { organizationId, user } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/client-detail", "/dashboard/service-plans");
   const plan = await db.servicePlan.findFirst({ where: { id: planId, organizationId }, select: { clientId: true } });
   if (!plan) return;
   await sendPlan(planId, user.id);
@@ -143,6 +148,7 @@ export async function sendServicePlan(planId: string): Promise<void> {
 /** Signed on paper or by phone: the plan starts today. */
 export async function activateServicePlan(planId: string): Promise<void> {
   const { organizationId, user } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/client-detail", "/dashboard/service-plans");
   const plan = await db.servicePlan.findFirst({ where: { id: planId, organizationId }, select: { clientId: true } });
   if (!plan) return;
   await activatePlan(planId, { acceptedName: "Signed with the office", actorId: user.id });
@@ -151,6 +157,7 @@ export async function activateServicePlan(planId: string): Promise<void> {
 
 export async function renewServicePlan(planId: string): Promise<void> {
   const { organizationId, user } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/client-detail", "/dashboard/service-plans");
   const plan = await db.servicePlan.findFirst({ where: { id: planId, organizationId }, select: { clientId: true } });
   if (!plan) return;
   await renewPlan(planId, user.id);
@@ -159,6 +166,7 @@ export async function renewServicePlan(planId: string): Promise<void> {
 
 export async function cancelServicePlan(planId: string): Promise<void> {
   const { organizationId, user } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/client-detail", "/dashboard/service-plans");
   const plan = await db.servicePlan.findFirst({ where: { id: planId, organizationId }, select: { clientId: true } });
   if (!plan) return;
   await cancelPlan(planId, user.id);
@@ -167,18 +175,21 @@ export async function cancelServicePlan(planId: string): Promise<void> {
 
 export async function setPlanAutoRenew(planId: string, autoRenew: boolean): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/service-plans");
   await db.servicePlan.updateMany({ where: { id: planId, organizationId }, data: { autoRenew } });
   refresh();
 }
 
 export async function completePlanVisit(visitId: string): Promise<void> {
   const { organizationId, user } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/service-plans");
   await markVisitDone(visitId, organizationId, user.id);
   refresh();
 }
 
 export async function markServicePlanInvoicePaid(invoiceId: string): Promise<void> {
   const { organizationId, user } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/service-plans");
   await markPlanInvoicePaid(invoiceId, organizationId, "CHECK", user.id);
   refresh();
   revalidatePath("/dashboard/financials");

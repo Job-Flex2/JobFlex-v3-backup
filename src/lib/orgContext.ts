@@ -4,6 +4,7 @@ import { readAdminCookie } from "@/lib/adminAuth";
 import { isServerActionRequest, noteTrialLock } from "@/lib/trialLock";
 import { isTrialWriteLocked } from "@/lib/trialState";
 import { noteRequestOrg } from "@/lib/trialMeter";
+import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
 
 export class UnauthorizedError extends Error {
   constructor(message = "Unauthorized") {
@@ -254,6 +255,28 @@ export async function requireProposalStaff() {
   const ownProposalsOnly = isSalesRole(ctx.role) || isEstimatorRole(ctx.role);
   const proposalScope: { ownerId?: string } = ownProposalsOnly ? { ownerId: ctx.user.id } : {};
   return { ...ctx, ownProposalsOnly, proposalScope };
+}
+
+// THE PAGE'S RULE, ON THE ACTION (security audit 2.1, 2026-10-12). A server
+// action is open to a role exactly when a page that calls it is: the same
+// route allow-lists the middleware and the (dashboard) / (mobile) layouts
+// apply (lib/roleRoutes, which the role cards in lib/roleAccess describe).
+// Actions are reached by a POST to any page the role may open, so the page
+// gate alone never stopped a crafted call. Pass every page the action is
+// called from; full office roles have no gate and always pass.
+export async function requireRouteAccess(...routes: string[]) {
+  const ctx = await requireOrg();
+  const gate = ROLE_ROUTE_GATES[ctx.role];
+  if (gate && !routes.some((r) => isPathAllowed(gate, r))) {
+    throw new UnauthorizedError("Your role doesn't open this page");
+  }
+  return ctx;
+}
+
+/** True when this role may open one of these pages (lib/roleRoutes). */
+export function roleMayOpen(role: string | null | undefined, ...routes: string[]): boolean {
+  const gate = role ? ROLE_ROUTE_GATES[role] : undefined;
+  return !gate || routes.some((r) => isPathAllowed(gate, r));
 }
 
 // Owner-only guard for billing/subscription surfaces. Strictly OWNER — managers

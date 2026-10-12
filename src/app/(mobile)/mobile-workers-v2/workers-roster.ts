@@ -21,7 +21,7 @@
 // taken from the client.
 
 import { db } from "@/lib/db";
-import { requireOrg } from "@/lib/orgContext";
+import { requireRouteAccess } from "@/lib/orgContext";
 import type { InviteStatus, WorkerEntry } from "./workers-data";
 import { lastActiveLabel, laterOf } from "@/components/v3/workers-blueprint/workers-data";
 import { requirePage } from "@/lib/customPageAccess";
@@ -50,7 +50,7 @@ function joinedLabel(d: Date): string {
  * contractor's crew is a roster rather than a table of millions.
  */
 export async function loadRoster(): Promise<WorkerEntry[]> {
-  const { organizationId } = await requireOrg();
+  const { organizationId } = await requireRouteAccess("/dashboard/workers");
   await requirePage(organizationId, "workers");
 
   const workers = await db.workerProfile.findMany({

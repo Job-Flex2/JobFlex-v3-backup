@@ -21,7 +21,7 @@
 // client.
 
 import { db } from "@/lib/db";
-import { requireOrg, isWorkerRole, isOwnerOrManager } from "@/lib/orgContext";
+import { requireRouteAccess, isWorkerRole, isOwnerOrManager } from "@/lib/orgContext";
 import {
   siteOf,
   toDay,
@@ -44,7 +44,7 @@ import {
  * which looks across the whole board rather than the visible page.
  */
 export async function loadJobsBoard(): Promise<JobsBoard> {
-  const { organizationId, role, user } = await requireOrg();
+  const { organizationId, role, user } = await requireRouteAccess("/dashboard/jobs");
 
   const isWorker = isWorkerRole(role);
   const canManage = isOwnerOrManager(role);

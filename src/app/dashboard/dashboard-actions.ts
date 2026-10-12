@@ -13,7 +13,7 @@
 // the org scope and the sales-rep lead slice are enforced on this path too —
 // the action takes no arguments, so there is nothing a caller could widen.
 
-import { NoOrgError, UnauthorizedError } from "@/lib/orgContext";
+import { NoOrgError, UnauthorizedError, requireOrg, roleMayOpen } from "@/lib/orgContext";
 import { buildDashboardData } from "./dashboard-data";
 import type { DashboardData } from "@/components/v3/dashboard-blueprint/blueprint-data";
 
@@ -24,10 +24,15 @@ import type { DashboardData } from "@/components/v3/dashboard-blueprint/blueprin
  *  screen. A genuine failure still throws. */
 export type DashboardRead =
   | { ok: true; data: DashboardData }
-  | { ok: false; reason: "no-org" | "signed-out" };
+  | { ok: false; reason: "no-org" | "signed-out" | "no-access" };
 
 export async function getDashboardData(): Promise<DashboardRead> {
   try {
+    // The Overview's KPIs and pipeline money: for whoever may open the
+    // Overview (lib/roleRoutes). A limited role is sent to its own home by
+    // the page gate; a crafted call gets the same answer (2026-10-12).
+    const { role } = await requireOrg();
+    if (!roleMayOpen(role, "/dashboard")) return { ok: false, reason: "no-access" };
     return { ok: true, data: await buildDashboardData() };
   } catch (err) {
     if (err instanceof NoOrgError) return { ok: false, reason: "no-org" };

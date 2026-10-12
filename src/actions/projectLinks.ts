@@ -16,7 +16,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireEstimatorOrManager } from "@/lib/orgContext";
+import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { enforcePlanLimit } from "@/lib/limitsEngine";
 
@@ -50,6 +50,7 @@ export type ClientProjectOptions = {
 /** Everything the "Add to project" sheet shows, in one read. */
 export async function clientProjectOptions(clientId: string): Promise<ClientProjectOptions> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/clients", "/dashboard/client-detail");
   const client = await db.client.findFirst({
     where: { id: clientId, organizationId, deletedAt: null },
     select: { id: true, name: true, address: true, city: true },

@@ -257,7 +257,9 @@ export function MobileDashboard({ data: seed, notice }: { data?: DashboardData; 
         setLoadError(
           res.reason === "no-org"
             ? "This account isn't a member of any company yet, so there's nothing to show. Sign in with the address you registered, or ask for a new invite."
-            : "Your session has expired. Sign in again to continue.",
+            : res.reason === "no-access"
+              ? "The Overview isn't part of your role — your own pages are in the menu."
+              : "Your session has expired. Sign in again to continue.",
         );
       })
       .catch((err) => {

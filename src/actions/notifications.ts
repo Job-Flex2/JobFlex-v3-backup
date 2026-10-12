@@ -1,6 +1,6 @@
 "use server";
 import { db } from "@/lib/db";
-import { requireManager, requireOrg } from "@/lib/orgContext";
+import { requireManager, requireOrg, requireRouteAccess } from "@/lib/orgContext";
 import { SEEN_SURFACES, countNewForSurface, type SeenKey } from "@/lib/badgeCounts";
 import { allowsInApp, loadPrefs, prefKeyForEvent } from "@/lib/notificationPrefs";
 import { ActivityKind } from "@/lib/prismaEnums";
@@ -225,7 +225,7 @@ export type TestNotificationResult = {
  * proves the settings as saved.
  */
 export async function sendTestNotification(): Promise<TestNotificationResult> {
-  const { organizationId, user } = await requireOrg();
+  const { organizationId, user } = await requireRouteAccess("/dashboard/settings");
   const [org, prefs] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId }, select: { name: true, logoUrl: true } }),
     loadPrefs(user.id),

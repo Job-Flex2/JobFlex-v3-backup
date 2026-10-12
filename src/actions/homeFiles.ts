@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireOrg } from "@/lib/orgContext";
+import { UnauthorizedError, requireProposalStaff, requireRouteAccess } from "@/lib/orgContext";
 import { enforceRateLimit, HOUR, RateLimitError } from "@/lib/rateLimit";
 import { isBlobEnabled, uploadBlob } from "@/lib/sdk/blob";
 import { findClientForLead } from "@/lib/leadClient";
@@ -112,7 +112,8 @@ export async function deleteHomeFile(raw: unknown): Promise<HomeFilesResult> {
 /** "Could you send pictures of …" — asked from the lead; the homeowner gets an email and a row on their dashboard. */
 export async function requestHomeFiles(raw: unknown): Promise<HomeFilesResult> {
   const data = z.object({ leadId: z.string().min(1).max(60), note: z.string().trim().max(500).optional() }).parse(raw);
-  const { organizationId, user } = await requireOrg();
+  // Asked from the lead's page: for whoever may open Leads (lib/roleRoutes).
+  const { organizationId, user } = await requireRouteAccess("/dashboard/leads");
   const door = await contractorFolder(organizationId, data.leadId);
   if (!door) return { ok: false, error: "This lead has no homeowner dashboard to ask on." };
   const braked = await brake(`home-ask:${door.pl.id}`, 6, "requests");
@@ -130,7 +131,18 @@ export async function requestHomeFiles(raw: unknown): Promise<HomeFilesResult> {
  *  else inline (small pictures only). */
 export async function attachHomeFileToProposal(raw: unknown): Promise<HomeFilesResult> {
   const data = z.object({ fileId: z.string().min(1).max(60), proposalId: z.string().min(1).max(60) }).parse(raw);
-  const { organizationId } = await requireOrg();
+  // From the lead's folder onto a proposal: proposal staff who may open the
+  // lead (never the crew), and a rep only onto a proposal of their own
+  // (security audit 2.2, 2026-10-12).
+  let organizationId: string;
+  let proposalScope: { ownerId?: string };
+  try {
+    ({ organizationId, proposalScope } = await requireProposalStaff());
+    await requireRouteAccess("/dashboard/leads");
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return { ok: false, error: "Your role doesn't put pictures on proposals." };
+    throw err;
+  }
   const file = await db.homeFile.findFirst({ where: { id: data.fileId, deletedAt: null } });
   if (!file) return { ok: false, error: "That file is gone." };
   if (!(await orgMayReadFolder(organizationId, file.platformLeadId))) return { ok: false, error: "Not your folder." };
@@ -139,7 +151,7 @@ export async function attachHomeFileToProposal(raw: unknown): Promise<HomeFilesR
   // own folder (or rides inline) — the same rule the homeowner's upload met
   // (security audit 1.1, 2026-10-12).
   if (!IMAGE_DATA_URL.test(file.url) && !isPrivateFileUnder(file.url, `home/${file.homeId}/${file.platformLeadId}/`)) return { ok: false, error: "That file isn't in this project's folder." };
-  const proposal = await db.proposal.findFirst({ where: { id: data.proposalId, organizationId }, select: { id: true, beforePhotos: true } });
+  const proposal = await db.proposal.findFirst({ where: { id: data.proposalId, organizationId, ...proposalScope }, select: { id: true, beforePhotos: true } });
   if (!proposal) return { ok: false, error: "That proposal isn't yours." };
   const dataUrl = kindOfUrl(file.url) === "data" ? file.url : await readStoredAsDataUrl(file.url, 8 * 1024 * 1024);
   if (!dataUrl) return { ok: false, error: "Couldn't read the picture from the store." };
@@ -162,11 +174,13 @@ export async function attachHomeFileToProposal(raw: unknown): Promise<HomeFilesR
 
 /** The proposals a shop could put a picture on: this client's, newest first. */
 export async function proposalsForLeadFolder(leadId: string): Promise<Array<{ id: string; title: string; status: string }>> {
-  const { organizationId } = await requireOrg();
+  const { organizationId, role, user } = await requireRouteAccess("/dashboard/leads");
   const door = await contractorFolder(organizationId, leadId);
   if (!door) return [];
+  // A rep picks among their own proposals only, like everywhere else.
+  const own = role === "SALES" || role === "ESTIMATOR" ? { ownerId: user.id } : {};
   const client = await findClientForLead(organizationId, { email: door.lead.email, phone: door.lead.phone });
   if (!client) return [];
-  const rows = await db.proposal.findMany({ where: { organizationId, clientId: client.id }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, title: true, status: true } });
+  const rows = await db.proposal.findMany({ where: { organizationId, clientId: client.id, ...own }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, title: true, status: true } });
   return rows;
 }

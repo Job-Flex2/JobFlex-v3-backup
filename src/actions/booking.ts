@@ -7,7 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireEstimatorOrManager } from "@/lib/orgContext";
+import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { clientIp, enforceRateLimit, MINUTE, rateLimitShared } from "@/lib/rateLimit";
 import { availabilityFor, bookingByToken, cancelBooking, createBooking, loadBookingDashboard, orgBySlug, rescheduleBooking, saveSettings, settingsOf, type BookingReceipt } from "@/lib/bookingBook";
 import { defaultServicesFor, slotLabel, type BookingService, type BookingSettings } from "@/lib/booking";
@@ -115,6 +115,7 @@ const hoursInput = z.object({ open: z.string().regex(/^\d{2}:\d{2}$/), close: z.
 /** Hours, slots, lead time, crews, arrival window, intro. Form-driven. */
 export async function saveBookingSettings(fd: FormData): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/booking");
   const cur = await currentSettings(organizationId);
   const hours = cur.hours.map((_, i) => {
     if (fd.get(`closed_${i}`) === "on") return null;
@@ -156,6 +157,7 @@ const serviceInput = z.object({
 /** One bookable service, new or edited: "Question? | option, option" lines become its questions. Form-driven. */
 export async function saveBookingService(fd: FormData): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/booking");
   const raw: Record<string, unknown> = {};
   fd.forEach((v, k) => {
     if (typeof v === "string") raw[k] = v;
@@ -181,6 +183,7 @@ export async function saveBookingService(fd: FormData): Promise<void> {
 
 export async function removeBookingService(key: string): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/booking");
   const cur = await currentSettings(organizationId);
   await saveSettings(organizationId, { ...cur, services: cur.services.filter((s) => s.key !== key) });
   revalidatePath("/dashboard/booking");
@@ -189,6 +192,7 @@ export async function removeBookingService(key: string): Promise<void> {
 /** Back to the smart defaults for the shop's trades. */
 export async function resetBookingServices(): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/booking");
   const org = await db.organization.findUnique({ where: { id: organizationId }, select: { tradeTypesJson: true, bookingSettingsJson: true } });
   if (!org) return;
   const cur = settingsOf(org);
@@ -198,6 +202,7 @@ export async function resetBookingServices(): Promise<void> {
 
 export async function markBookingDone(id: string): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/booking");
   const b = await db.booking.findFirst({ where: { id, organizationId }, select: { id: true, appointmentId: true } });
   if (!b) return;
   await db.$transaction(async (tx) => {
@@ -209,6 +214,7 @@ export async function markBookingDone(id: string): Promise<void> {
 
 export async function cancelBookingOffice(id: string): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/booking");
   const b = await db.booking.findFirst({ where: { id, organizationId }, select: { manageToken: true } });
   if (!b) return;
   await cancelBooking(b.manageToken);

@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireManager, requireOrg } from "@/lib/orgContext";
+import { requireManager, requireOrg, requireRouteAccess } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { TRADE_TYPES, parseTradeTypes } from "@/lib/tradeTypes";
 import { geocodeOrgAddress } from "@/lib/leadCenter/eligibility";
@@ -199,7 +199,8 @@ export async function leadProfileGaps(): Promise<{
 }
 
 export async function getCompanySeed() {
-  const { organizationId } = await requireOrg();
+  // Company settings and the team's log: for whoever may open Company.
+  const { organizationId } = await requireRouteAccess("/dashboard/company");
   await requirePage(organizationId, "company");
   const [org, activity] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId } }),

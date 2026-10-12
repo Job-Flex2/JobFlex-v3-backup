@@ -12,7 +12,7 @@
 // nothing here writes. Writes go through the existing actions in
 // src/actions/followUps.ts and src/actions/leads.ts.
 
-import { requireOrg } from "@/lib/orgContext";
+import { UnauthorizedError, requireOrg, roleMayOpen } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { longDate, relative } from "@/lib/format";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
@@ -55,11 +55,16 @@ function deriveTopStatus(statuses: string[]): string {
 
 export async function getCrmSnapshot(): Promise<CrmSnapshotResult> {
   let organizationId: string;
+  let role: string;
   try {
-    ({ organizationId } = await requireOrg());
-  } catch {
+    ({ organizationId, role } = await requireOrg());
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return { ok: false, error: "Sign in to see the CRM." };
     return { ok: false, error: "Sign in to an organization to see the CRM." };
   }
+  // Leads, clients and their conversations: for whoever may open the CRM
+  // (lib/roleRoutes) — a crafted call from another page gets nothing.
+  if (!roleMayOpen(role, "/dashboard/crm")) return { ok: false, error: "Your role doesn't include the CRM." };
 
   const now = new Date();
 

@@ -7,7 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireEstimatorOrManager, requireOrg } from "@/lib/orgContext";
+import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { EQUIPMENT_KINDS, type VisitKind } from "@/lib/equipment";
 import { saveVisitReport, sendVisitReport } from "@/lib/visitBook";
 
@@ -41,6 +41,7 @@ function fromForm(fd: FormData): Record<string, unknown> {
 /** A unit on file, typed or read off a nameplate. Form-driven. */
 export async function saveClientEquipment(fd: FormData): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/client-detail");
   const data = equipmentInput.parse(fromForm(fd));
   const client = await db.client.findFirst({ where: { id: data.clientId, organizationId, deletedAt: null }, select: { id: true } });
   if (!client) return;
@@ -52,13 +53,14 @@ export async function saveClientEquipment(fd: FormData): Promise<void> {
 
 export async function deleteClientEquipment(id: string): Promise<void> {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/client-detail");
   await db.clientEquipment.deleteMany({ where: { id, organizationId } });
   revalidatePath("/dashboard/client-detail");
 }
 
 /** The crew's report on a visit; workers write it too (their own visits). Form-driven. */
 export async function saveVisitReportForm(fd: FormData): Promise<void> {
-  const { organizationId, user } = await requireOrg();
+  const { organizationId, user } = await requireRouteAccess("/dashboard/visits");
   const appointmentId = String(fd.get("appointmentId") ?? "");
   const kind = String(fd.get("kind") ?? "both") as VisitKind;
   if (!appointmentId || !["cooling", "heating", "both", "other"].includes(kind)) return;

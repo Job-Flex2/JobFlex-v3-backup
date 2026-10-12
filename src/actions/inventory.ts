@@ -22,7 +22,7 @@ import { presetItems } from "@/lib/inventoryPresets";
 import { explodeLines } from "@/lib/inventoryBom";
 import { recordStockPolicy, stockItemsOf, stockPolicyOf } from "@/lib/inventoryPolicy";
 import { defaultStocked } from "@/lib/inventoryStockDefaults";
-import { NoOrgError, requireManager, requireOrg, UnauthorizedError, isWorkerRole } from "@/lib/orgContext";
+import { NoOrgError, requireManager, requireRouteAccess, UnauthorizedError, isWorkerRole } from "@/lib/orgContext";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 
 type Fail = { ok: false; error: string };
@@ -264,7 +264,7 @@ export async function sendPurchaseOrder(input: { trade: string; supplierId: stri
  */
 export async function loadJobMaterials(jobId: string): Promise<{ ok: true; taken: number; untracked: number } | Fail> {
   try {
-    const ctx = await requireOrg();
+    const ctx = await requireRouteAccess("/dashboard/jobs");
     const { organizationId } = ctx;
     const job = await db.job.findFirst({
       where: { id: jobId, organizationId },
@@ -333,7 +333,7 @@ export async function loadJobMaterials(jobId: string): Promise<{ ok: true; taken
  */
 export async function returnJobMaterials(jobId: string, lines: Array<{ itemId: string; quantity: number }>): Promise<{ ok: true; returned: number } | Fail> {
   try {
-    const ctx = await requireOrg();
+    const ctx = await requireRouteAccess("/dashboard/jobs");
     const job = await db.job.findFirst({ where: { id: jobId, organizationId: ctx.organizationId }, select: { id: true, title: true, proposalId: true, clientId: true, materialsLoadedAt: true, assignments: { select: { worker: { select: { userId: true } } } } } });
     if (!job) return { ok: false, error: "Job not found" };
     if (isWorkerRole(ctx.role) && !job.assignments.some((a) => a.worker.userId === ctx.user.id)) return { ok: false, error: "You are not on this job" };

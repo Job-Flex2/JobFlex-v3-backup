@@ -14,10 +14,11 @@
 // would be an org-picker for anyone with a cookie; that is why this file has
 // exactly one export and no arguments.
 
-import { requireOrg } from "@/lib/orgContext";
+import { requireRouteAccess } from "@/lib/orgContext";
 import { getFinancialsSnapshot, type FinancialsSnapshot } from "@/lib/financialsSnapshot";
 
 export async function loadFinancials(): Promise<FinancialsSnapshot> {
-  const { organizationId } = await requireOrg();
+  // The company's money: for whoever may open Financials (lib/roleRoutes).
+  const { organizationId } = await requireRouteAccess("/dashboard/financials");
   return getFinancialsSnapshot(organizationId);
 }

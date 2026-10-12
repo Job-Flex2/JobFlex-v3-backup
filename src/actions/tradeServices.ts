@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { z } from "zod";
-import { requireUser, requireManager, requireOrg, isLimitedRole } from "@/lib/orgContext";
+import { requireUser, requireManager, requireRouteAccess, isLimitedRole } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import type {
   TradeJob,
@@ -113,7 +113,7 @@ export type DiscoverProfileDTO = {
 };
 
 export async function discoverTradeProfiles(): Promise<DiscoverProfileDTO[]> {
-  const { organizationId } = await requireOrg();
+  const { organizationId } = await requireRouteAccess("/dashboard/hire", "/dashboard/trade");
   const rows = await db.tradeNetworkProfile.findMany({
     where: { optIn: true },
     orderBy: { updatedAt: "desc" },
@@ -154,7 +154,7 @@ export async function discoverTradeProfiles(): Promise<DiscoverProfileDTO[]> {
  *  contractor gets an email and a bell notice naming the interested company;
  *  nothing else is written — the conversation happens wherever they take it. */
 export async function contactTalentProfile(profileId: string): Promise<{ ok: true }> {
-  const { user, organizationId } = await requireOrg();
+  const { user, organizationId } = await requireRouteAccess("/dashboard/hire", "/dashboard/trade");
   const prof = await db.tradeNetworkProfile.findUnique({
     where: { id: profileId },
     select: { optIn: true, userId: true },
@@ -449,7 +449,7 @@ async function reviewSummaries(orgIds: string[]): Promise<Map<string, ReviewSumm
  *  posted, from any account"). Bodies and contact details are public to the
  *  network by design: a post exists to be read and answered by strangers. */
 export async function listOpenTradeJobs(): Promise<NetworkJobDTO[]> {
-  const { user, organizationId } = await requireOrg();
+  const { user, organizationId } = await requireRouteAccess("/dashboard/hire", "/dashboard/trade");
   const jobs = await db.tradeJob.findMany({
     where: { status: "OPEN" },
     orderBy: { createdAt: "desc" },
@@ -888,7 +888,7 @@ export type HireViewerDTO = {
 };
 
 export async function getHireViewer(): Promise<HireViewerDTO> {
-  const { user, organizationId, role } = await requireOrg();
+  const { user, organizationId, role } = await requireRouteAccess("/dashboard/hire", "/dashboard/trade");
   const [me, org, reviews] = await Promise.all([
     db.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } }),
     db.organization.findUnique({
@@ -914,7 +914,7 @@ export async function getHireViewer(): Promise<HireViewerDTO> {
  *  created on the spot, the same conversation slot opens, and the poster hears
  *  it: bell awaited, mail after the response. A second press is a no-op. */
 export async function expressInterest(jobId: string): Promise<{ ok: true; already: boolean }> {
-  const { user, organizationId } = await requireOrg();
+  const { user, organizationId } = await requireRouteAccess("/dashboard/hire", "/dashboard/trade");
   const job = await db.tradeJob.findUnique({
     where: { id: jobId },
     select: { authorId: true, authorOrgId: true, status: true },
@@ -1120,7 +1120,7 @@ export type HireOwnPostDTO = OwnPost & {
 };
 
 export async function getMyHirePosts(): Promise<HireOwnPostDTO[]> {
-  const { user, organizationId } = await requireOrg();
+  const { user, organizationId } = await requireRouteAccess("/dashboard/hire", "/dashboard/trade");
   const jobs = await db.tradeJob.findMany({
     where: { authorId: user.id, ...NOT_DELETED },
     orderBy: { createdAt: "desc" },
@@ -1167,7 +1167,7 @@ export async function getMyHirePosts(): Promise<HireOwnPostDTO[]> {
  *  Author-only, checked against the row. */
 export async function markPostInterestSeen(jobId: string): Promise<HireResult> {
   try {
-    const { user, organizationId } = await requireOrg();
+    const { user, organizationId } = await requireRouteAccess("/dashboard/hire", "/dashboard/trade");
     const job = await db.tradeJob.findUnique({
       where: { id: jobId },
       select: { authorId: true },

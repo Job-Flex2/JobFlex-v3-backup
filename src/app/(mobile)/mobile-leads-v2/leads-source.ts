@@ -14,7 +14,7 @@
 // shared lead actions (@/actions/leads, @/actions/leadOffers); nothing is
 // mutated here.
 
-import { requireOrg, isSalesRole } from "@/lib/orgContext";
+import { requireRouteAccess, isSalesRole } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { relative } from "@/lib/format";
 import { contactsLocked } from "@/lib/leadCenter/contacts";
@@ -34,7 +34,7 @@ export type MobileLeadsSnapshot = {
 };
 
 export async function loadMobileLeads(): Promise<MobileLeadsSnapshot> {
-  const { organizationId, role, user } = await requireOrg();
+  const { organizationId, role, user } = await requireRouteAccess("/dashboard/leads");
   await requirePage(organizationId, "leads");
 
   const [leadRows, offerRows] = await Promise.all([

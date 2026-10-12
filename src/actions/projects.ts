@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 // Projects are open to estimators as well as managers (full access — projects
 // aren't per-user scoped, so estimators manage all org projects).
-import { requireEstimatorOrManager, requireOrg } from "@/lib/orgContext";
+import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { enforcePlanLimit } from "@/lib/limitsEngine";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
@@ -39,18 +39,18 @@ export type ProjectBookRow = Project;
  * mounted by the responsive shell with no props, so it reads the book itself
  * and re-reads it after every write. One loader with the desktop page
  * (projects-blueprint/project-book-load), so the two never disagree.
- * `requireOrg`: every role that can open the page may read it; the writes
- * below keep their stricter guard.
+ * Every role that can open the page may read it (lib/roleRoutes — 2026-10-12,
+ * before which any member could); the writes below keep their stricter guard.
  */
 export async function listProjects(): Promise<ProjectBookRow[]> {
-  const { organizationId } = await requireOrg();
+  const { organizationId } = await requireRouteAccess("/dashboard/projects");
   return loadProjectBook(organizationId);
 }
 
 /** The org's clients for a New Project form that loads its own data (the
  *  handheld projects page is mounted with no props). Read-only. */
 export async function listProjectClients(): Promise<Array<{ id: string; name: string; street: string }>> {
-  const { organizationId } = await requireOrg();
+  const { organizationId } = await requireRouteAccess("/dashboard/projects");
   const rows = await db.client.findMany({
     where: { organizationId, deletedAt: null },
     orderBy: { name: "asc" },

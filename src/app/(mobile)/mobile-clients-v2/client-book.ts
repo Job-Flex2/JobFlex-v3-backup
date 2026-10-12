@@ -19,7 +19,7 @@
 // client.
 
 import { db } from "@/lib/db";
-import { requireOrg } from "@/lib/orgContext";
+import { requireRouteAccess } from "@/lib/orgContext";
 import type { Client } from "./clients-data";
 
 /** Proposal states that are no longer in play. Same list the desktop page and
@@ -41,7 +41,8 @@ function updatedLabel(d: Date): string {
  * looks across the whole book and not across the visible page.
  */
 export async function loadClientBook(): Promise<Client[]> {
-  const { organizationId } = await requireOrg();
+  // Every client with its pipeline money: for whoever may open Clients.
+  const { organizationId } = await requireRouteAccess("/dashboard/clients");
 
   const rows = await db.client.findMany({
     where: { organizationId, deletedAt: null },

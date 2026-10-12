@@ -18,7 +18,7 @@ import { db } from "@/lib/db";
 import { INVENTORY_PATH, isTradeId, type TradeId } from "@/lib/inventory";
 import { inventoryLinkOf, pickForProposal, recordInventoryLink } from "@/lib/inventoryPick";
 import { stockPolicyOf } from "@/lib/inventoryPolicy";
-import { NoOrgError, requireEstimatorOrManager, requireOrg, UnauthorizedError } from "@/lib/orgContext";
+import { NoOrgError, requireEstimatorOrManager, requireProposalStaff, UnauthorizedError } from "@/lib/orgContext";
 
 type Fail = { ok: false; error: string };
 const fail = (err: unknown): Fail =>
@@ -29,7 +29,8 @@ const BOARDS: Record<TradeId, string> = INVENTORY_PATH;
 
 export async function inventoryLinkDefault(trade?: string | null): Promise<{ linked: boolean; items: number; /** Of those, bought per job (lib/inventoryPolicy); 0 when the trade is not known. */ perJob: number }> {
   try {
-    const { organizationId } = await requireOrg();
+    // Read from the proposal builders: proposal staff, never the crew.
+    const { organizationId } = await requireProposalStaff();
     const rows = await db.inventoryItem.findMany({ where: { organizationId, ...(isTradeId(trade) ? { trade } : {}) }, select: { key: true } });
     const policy = isTradeId(trade) ? await stockPolicyOf(organizationId, trade) : null;
     return { linked: rows.length > 0, items: rows.length, perJob: policy ? rows.filter((r) => policy.perJob.has(r.key)).length : 0 };
@@ -59,9 +60,10 @@ export type PickLine = { name: string; unit: string; quantity: number; tracked: 
 
 export async function proposalPickList(proposalId: string): Promise<{ ok: true; linked: boolean; trade: TradeId | null; explicit: boolean | null; rows: PickLine[] } | Fail> {
   try {
-    const { organizationId } = await requireOrg();
+    // A proposal's pick list: proposal staff, a rep only on their own proposal.
+    const { organizationId, proposalScope } = await requireProposalStaff();
     const p = await db.proposal.findFirst({
-      where: { id: proposalId, organizationId },
+      where: { id: proposalId, organizationId, ...proposalScope },
       select: { title: true, description: true, trade: true, lineItems: { where: { materialCost: { gt: 0 } }, select: { name: true, quantity: true, measurementType: true } } },
     });
     if (!p) return { ok: false, error: "Proposal not found" };

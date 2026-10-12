@@ -58,6 +58,10 @@ const DESKTOP_TWIN: Record<string, string> = {
   "/mobile-reports-v2": "/dashboard/reports",
   "/mobile-manual-builder-v2": "/dashboard/estimators/manual",
   "/mobile-subscription-v2": "/dashboard/subscription",
+  // The handheld Settings and Plans pages (2026-10-12): closed to the crew
+  // and the other limited roles exactly as their desktop twins are.
+  "/mobile-settings-v1": "/dashboard/settings",
+  "/mobile-upgrade-v1": "/dashboard/upgrade",
 };
 
 function desktopTwin(pathname: string): string | null {

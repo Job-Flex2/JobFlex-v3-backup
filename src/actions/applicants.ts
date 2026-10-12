@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireManager, requireOrg } from "@/lib/orgContext";
+import { requireManager, requireRouteAccess } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { relative } from "@/lib/format";
 import { ApplicantStatus } from "@/lib/prismaEnums";
@@ -120,7 +120,8 @@ function asColumn(v: string): HireColumnKey {
  *  surfaces render — the desktop /dashboard/hire page and the mobile twin both
  *  seed their boards from this one query. */
 export async function getHireSeed(): Promise<Applicant[]> {
-  const { organizationId } = await requireOrg();
+  // Applicants' names, emails and phones: the Hire page's people only.
+  const { organizationId } = await requireRouteAccess("/dashboard/hire");
   const rows = await db.applicant.findMany({
     where: { organizationId },
     orderBy: { createdAt: "desc" },

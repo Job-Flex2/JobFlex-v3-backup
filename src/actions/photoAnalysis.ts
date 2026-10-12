@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { requireEstimatorOrManager } from "@/lib/orgContext";
+import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { readStoredAsDataUrl } from "@/lib/media/privateStore";
 import { isOpenAIEnabled } from "@/lib/sdk/openai";
@@ -21,6 +21,7 @@ export async function analyzeJobPhoto(photoId: string): Promise<
   | { ok: false; error: string }
 > {
   const { organizationId } = await requireEstimatorOrManager();
+  await requireRouteAccess("/dashboard/jobs");
   await enforceRateLimit(`vision:${organizationId}`, 60, HOUR, "photo analyses");
   const photo = await db.jobPhoto.findUnique({
     where: { id: photoId },

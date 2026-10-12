@@ -12,10 +12,10 @@
 // The organization comes from the SESSION and nowhere else — this file has one
 // export and no arguments, for the same reason actions/financialsMobile.ts does.
 
-import { requireOrg } from "@/lib/orgContext";
+import { requireRouteAccess } from "@/lib/orgContext";
 import { getFinancialsWho, type FinancialsWho } from "@/app/dashboard/financials/financials-who";
 
 export async function loadFinancialsWho(): Promise<FinancialsWho> {
-  const { organizationId } = await requireOrg();
+  const { organizationId } = await requireRouteAccess("/dashboard/financials");
   return getFinancialsWho(organizationId);
 }
