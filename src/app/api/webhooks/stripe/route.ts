@@ -21,6 +21,7 @@ import { trackActivation } from "@/lib/activation-events";
 import { finishCardCheckout, noteCardlessTrialEnded } from "@/lib/cardlessTrial";
 import { CARD_UPDATE_PURPOSE, finishCardUpdate, sendDunningEmail } from "@/lib/cardUpdate";
 import { completeFromCheckoutSession, completeFromPaymentIntent } from "@/lib/leadCenter/purchase";
+import { cancelReplacedSubscription } from "@/lib/checkoutReturn";
 
 export const runtime = "nodejs";
 
@@ -81,6 +82,11 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
           typeof session.subscription === "string" ? session.subscription : session.subscription.id,
         );
         await syncSubscriptionFromStripe(sub, stripe);
+        // A plan checkout that replaces a subscription ends the old one here
+        // too — the customer may never reach the return page (lib/checkoutReturn).
+        if (sub.status === "active" || sub.status === "trialing") {
+          await cancelReplacedSubscription(stripe, session, sub.id, "webhook");
+        }
         // Meta StartTrial when the checkout came back trialing (lib/metaSignupEvents).
         await metaOnCheckoutCompleted(session, sub).catch((err) => console.warn("[meta:capi] StartTrial failed", err));
       } else {

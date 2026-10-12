@@ -16,6 +16,7 @@
 //     lib/customBilling keeps current), checked against the page quantity it
 //     bills — never from the session alone.
 
+import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/sdk/stripe";
 import { subscriptionPeriodEndDate } from "@/lib/stripeCompat";
@@ -25,6 +26,40 @@ import { billedPageCount, writeOrgPages } from "@/lib/customBilling";
 import { recordPlanChange } from "@/lib/subscriptionRecord";
 
 const claimKey = (sessionId: string) => `checkoutReturn:${sessionId}`;
+
+/**
+ * THE SUBSCRIPTION A PLAN CHECKOUT REPLACES ENDS — from the return page AND
+ * from the webhook (owner, 2026-10-12). The checkout route names it in the
+ * session's `replacesSubId`; until this was also run by
+ * checkout.session.completed, a customer who paid and closed the tab before
+ * Stripe sent them back kept BOTH subscriptions billing. Idempotent: an
+ * already-ended subscription is left alone, so whichever leg comes second
+ * does nothing. Never cancels the subscription the session itself made, and
+ * only one the same organisation's checkout named.
+ */
+export async function cancelReplacedSubscription(
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+  newSubId: string,
+  tag = "checkout",
+): Promise<"canceled" | "already-ended" | "none"> {
+  const replaces = (session.metadata?.replacesSubId as string | undefined) || null;
+  if (!replaces || replaces === newSubId) return "none";
+  try {
+    const old = await stripe.subscriptions.retrieve(replaces);
+    if (old.status === "canceled" || old.status === "incomplete_expired") return "already-ended";
+    const org = session.metadata?.organizationId;
+    if (org && old.metadata?.organizationId && old.metadata.organizationId !== org) {
+      console.warn(`[${tag}] replaced subscription ${replaces} belongs to another organization — left alone`);
+      return "none";
+    }
+    await stripe.subscriptions.cancel(replaces, { prorate: false, invoice_now: false });
+    return "canceled";
+  } catch (err) {
+    console.warn(`[${tag}] could not cancel replaced subscription ${replaces}:`, err);
+    return "none";
+  }
+}
 
 /** True the first time a session is claimed; false on every later visit. */
 async function claimSession(sessionId: string, organizationId: string): Promise<boolean> {
@@ -69,12 +104,7 @@ export async function applyCheckoutReturn(organizationId: string, sessionId: str
        purchase replaces (a plan switch); it is cancelled at once, so the org
        never bills twice. Best-effort: a failure here leaves the old sub for
        the admin's reconcile, it never blocks the change that was paid for. */
-    const replaces = (session.metadata?.replacesSubId as string | undefined) || null;
-    if (replaces && replaces !== sub.id) {
-      await stripe.subscriptions
-        .cancel(replaces, { prorate: false, invoice_now: false })
-        .catch((err) => console.warn(`[${tag}] could not cancel replaced subscription:`, err));
-    }
+    await cancelReplacedSubscription(stripe, session, sub.id, tag);
     // A custom plan's pages: what the subscription bills, by its own record.
     if (planSlug === CUSTOM_PLAN_SLUG) {
       const qty = billedPageCount(sub);

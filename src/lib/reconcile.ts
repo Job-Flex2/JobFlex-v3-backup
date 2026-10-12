@@ -3,6 +3,7 @@
 // webhook. Safe to re-run: syncSubscriptionFromStripe upserts, and accrual is
 // guarded by the unique `accrue:<invoiceId>` ledger key.
 
+import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { getStripe, isStripeEnabled } from "@/lib/sdk/stripe";
 import { syncSubscriptionFromStripe, accrueForInvoice } from "@/lib/stripeSync";
@@ -15,6 +16,56 @@ export async function clearDueCommissions() {
     data: { state: "CLEARED" },
   });
   return { cleared: res.count };
+}
+
+/** An organization billed by more than one live subscription — reported, never cancelled here. */
+export type DuplicateSubscriptions = {
+  organizationId: string;
+  subscriptions: { id: string; status: string; customer: string; created: string; mirrored: boolean }[];
+};
+
+const LIVE = ["active", "trialing", "past_due"] as const;
+
+/**
+ * TWO LIVE SUBSCRIPTIONS FOR ONE COMPANY (owner, 2026-10-12): a plan checkout
+ * whose replaced subscription was never cancelled — before the webhook ran
+ * that cancel too, a customer who closed the tab after paying kept both — or
+ * anything else that left two billing. Every live subscription is read (all
+ * pages, not the 100 newest), mapped to its organization by metadata, then by
+ * the mirror's subscription or customer, and any organization with two or
+ * more is reported in the log and in the cron's answer. Nothing is cancelled:
+ * which one goes is a person's call.
+ */
+export async function findDuplicateSubscriptions(stripe: Stripe): Promise<DuplicateSubscriptions[]> {
+  const live: Stripe.Subscription[] = [];
+  for (const status of LIVE) {
+    for await (const sub of stripe.subscriptions.list({ status, limit: 100 })) {
+      live.push(sub);
+      if (live.length >= 5000) break;
+    }
+  }
+  if (live.length < 2) return [];
+  const subIds = live.map((s) => s.id);
+  const customers = Array.from(new Set(live.map((s) => (typeof s.customer === "string" ? s.customer : s.customer.id))));
+  const rows = await db.subscription.findMany({
+    where: { OR: [{ externalSubId: { in: subIds } }, { externalCustomerId: { in: customers } }] },
+    select: { organizationId: true, externalSubId: true, externalCustomerId: true },
+  });
+  const bySub = new Map(rows.filter((r) => r.externalSubId).map((r) => [r.externalSubId as string, r.organizationId]));
+  const byCustomer = new Map(rows.filter((r) => r.externalCustomerId).map((r) => [r.externalCustomerId as string, r.organizationId]));
+  const mirrored = new Set(rows.map((r) => r.externalSubId).filter(Boolean) as string[]);
+  const groups = new Map<string, DuplicateSubscriptions["subscriptions"]>();
+  for (const sub of live) {
+    const customer = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+    const org = sub.metadata?.organizationId || bySub.get(sub.id) || byCustomer.get(customer);
+    if (!org) continue;
+    const list = groups.get(org) ?? [];
+    list.push({ id: sub.id, status: sub.status, customer, created: new Date(sub.created * 1000).toISOString(), mirrored: mirrored.has(sub.id) });
+    groups.set(org, list);
+  }
+  return Array.from(groups.entries())
+    .filter(([, list]) => list.length > 1)
+    .map(([organizationId, subscriptions]) => ({ organizationId, subscriptions }));
 }
 
 /** A subscription that names an organization which no longer exists. */
@@ -65,6 +116,18 @@ export async function reconcileStripe() {
     }
   }
 
+  const duplicateSubscriptions = await findDuplicateSubscriptions(stripe).catch((err) => {
+    console.error("[reconcile] duplicate-subscription scan failed:", err);
+    failed.push({ id: "duplicate-scan", error: errorText(err) });
+    return [] as DuplicateSubscriptions[];
+  });
+  if (duplicateSubscriptions.length) {
+    console.warn(
+      `[reconcile] ${duplicateSubscriptions.length} organization(s) with more than one live subscription: ` +
+        duplicateSubscriptions.map((d) => `${d.organizationId} → ${d.subscriptions.map((s) => `${s.id} (${s.status})`).join(", ")}`).join("; "),
+    );
+  }
+
   if (missingOrganization.length) {
     console.warn(
       `[reconcile] skipped ${missingOrganization.length} subscription(s) whose organization no longer exists: ` +
@@ -78,5 +141,5 @@ export async function reconcileStripe() {
     create: { key: "reconcile-stripe", cursor: String(Math.floor(Date.now() / 1000)) },
   });
 
-  return { subscriptions, invoices, missingOrganization, failed };
+  return { subscriptions, invoices, missingOrganization, duplicateSubscriptions, failed };
 }
