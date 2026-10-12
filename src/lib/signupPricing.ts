@@ -35,7 +35,8 @@ export type SignupPrice =
       isCustom: boolean;
       /** What the plan costs per interval, in cents. */
       cents: number;
-      /** The term billed. */
+      /** The term actually billed — MONTH for a plan with no yearly price,
+       *  whatever was asked (owner, 2026-10-12). */
       interval: SignupInterval;
       /** One month of the plan, in cents: what a first-month code is a
        *  percent of on a yearly bill (lib/firstMonthDiscount). */
@@ -65,9 +66,10 @@ export async function resolveSignupPrice(opts: {
   customPages: string[];
   trialOffer?: TrialOffer;
 }): Promise<SignupPrice> {
-  const { stripe, mode, interval } = opts;
+  const { stripe, mode } = opts;
   const trialDays = storedTrialOffer(opts.trialOffer).days;
   if (opts.planSlug === CUSTOM_PLAN_SLUG) {
+    const interval = opts.interval;
     const cents = customPriceCents(opts.customPages, interval);
     const lineItems = await customLineItems(stripe, mode, interval, opts.customPages);
     return { ok: true, lineItems, trialDays, planLabel: CUSTOM_PLAN_SLUG, isCustom: true, cents, interval, monthlyCents: customPriceCents(opts.customPages) };
@@ -76,6 +78,10 @@ export async function resolveSignupPrice(opts: {
   if (!plan || !plan.active || plan.isFree) {
     return { ok: false, status: 404, error: "That plan is not available." };
   }
+  /* A YEAR asked for a plan with no yearly price is billed MONTHLY (owner,
+     2026-10-12) — not refused ("That plan is not available"), and never the
+     archived yearly price a PlanPrice row may still hold on live. */
+  const interval: SignupInterval = opts.interval === "YEAR" && plan.yearlyPriceCents ? "YEAR" : "MONTH";
   const cents = interval === "YEAR" ? (plan.yearlyPriceCents ?? 0) : plan.priceCents;
   if (mode === "live") {
     const row = await db.planPrice.findFirst({

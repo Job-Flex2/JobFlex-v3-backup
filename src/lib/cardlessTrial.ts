@@ -82,7 +82,7 @@ export async function createCardlessSubscription(opts: {
   const meta: Record<string, string> = {
     signupToken: opts.token,
     planSlug: priced.planLabel,
-    interval: opts.interval,
+    interval: priced.interval,
     jf_cardless: "1",
     ...trialOfferMetadata(opts.trialOffer),
     ...(priced.isCustom ? { customPages: opts.customPages.join(",") } : {}),
@@ -123,7 +123,7 @@ export async function createCardlessSubscription(opts: {
       subscription,
       customerId: customer.id,
       planLabel: priced.planLabel,
-      interval: opts.interval,
+      interval: priced.interval,
       customPages: priced.isCustom ? opts.customPages : [],
       mode,
     };
@@ -217,7 +217,7 @@ export async function openCardCheckout(orgId: string, origin: string): Promise<{
       metadata: {
         organizationId: orgId,
         planSlug: priced.planLabel,
-        interval: plan.interval,
+        interval: priced.interval,
         jf_after_trial: "1",
         ...(priced.isCustom ? { customPages: plan.customPages.join(",") } : {}),
       },

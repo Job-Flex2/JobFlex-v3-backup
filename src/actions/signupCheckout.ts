@@ -145,7 +145,7 @@ export type PendingRecord = z.infer<typeof pendingSchema> extends infer T
       trialOffer?: TrialOffer;
       /** Set by requestCardlessTrial: the plan the card-less trial is for, and
        *  when the confirmation link went out (the intent then lives 24 hours). */
-      cardless?: { planSlug: string; requestedAt: number };
+      cardless?: { planSlug: string; interval?: "MONTH" | "YEAR"; requestedAt: number };
       /** When Meta's InitiateCheckout went out (sendSignupInitiateCheckout). */
       checkoutSentAt?: number;
       /** The passwordless sign-up (lib/signupOtp, 2026-10-10): when the address
@@ -529,6 +529,10 @@ export async function completePendingSignup(
 export async function requestCardlessTrial(
   token: string,
   planSlug: string,
+  /** The term picked on the plan step (owner, 2026-10-12): kept with the
+   *  trial, so a card added later starts the plan on it. Monthly when absent
+   *  (a page loaded before the term was sent) or the plan has no yearly price. */
+  interval: "MONTH" | "YEAR" = "MONTH",
 ): Promise<{ ok: true; email: string; resendAt: number } | { ok: false; error: string; resendAt?: number; requiresCard?: true }> {
   // THE ONE ANSWER (lib/trialPolicyServer), read fresh: the switch, else the
   // deployment's default, and the day's ceiling on card-less trials. "card"
@@ -578,7 +582,7 @@ export async function requestCardlessTrial(
   const hash = createHash("sha256").update(secret).digest("hex");
   const prev = await db.syncState.findUnique({ where: { key: confirmIndexKey(token) } }).catch(() => null);
   if (prev) await db.syncState.delete({ where: { key: confirmKey(prev.cursor) } }).catch(() => {});
-  const next: PendingRecord = { ...rec, cardless: { planSlug, requestedAt: Date.now() } };
+  const next: PendingRecord = { ...rec, cardless: { planSlug, interval: interval === "YEAR" ? "YEAR" : "MONTH", requestedAt: Date.now() } };
   await db.syncState.upsert({ where: { key: key(token) }, update: { cursor: JSON.stringify(next) }, create: { key: key(token), cursor: JSON.stringify(next) } });
   await db.syncState.upsert({ where: { key: confirmKey(hash) }, update: { cursor: token }, create: { key: confirmKey(hash), cursor: token } });
   await db.syncState.upsert({ where: { key: confirmIndexKey(token) }, update: { cursor: hash }, create: { key: confirmIndexKey(token), cursor: hash } });
@@ -615,6 +619,8 @@ const RESEND_MAX = 3;
 export async function startVerifiedCardlessTrial(
   token: string,
   planSlug: string,
+  /** The term picked on the plan step — see requestCardlessTrial. */
+  interval: "MONTH" | "YEAR" = "MONTH",
 ): Promise<
   | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null; signupMode: string | null }
   | { ok: false; error: string; requiresCard?: true; done?: boolean; email?: string }
@@ -641,7 +647,7 @@ export async function startVerifiedCardlessTrial(
       const plan = await getPlanBySlug(planSlug);
       if (!plan || !plan.active || plan.isFree) return { ok: false, error: "That plan is not available." };
     }
-    const next: PendingRecord = { ...rec, cardless: { planSlug, requestedAt: Date.now() } };
+    const next: PendingRecord = { ...rec, cardless: { planSlug, interval: interval === "YEAR" ? "YEAR" : "MONTH", requestedAt: Date.now() } };
     await db.syncState.upsert({ where: { key: key(token) }, update: { cursor: JSON.stringify(next) }, create: { key: key(token), cursor: JSON.stringify(next) } });
     const res = await finishCardlessTrial(token);
     if (!res.ok) return { ok: false, error: res.error, done: res.done, email: res.email, ...(res.cardHref ? { requiresCard: true as const } : {}) };
@@ -712,14 +718,16 @@ async function finishCardlessTrial(
   if (await cardlessTrialsPaused()) return { ok: false, error: TRIALS_PAUSED_MESSAGE, cardHref: `/auth/register?signup=${encodeURIComponent(token)}` };
 
   const planSlug = rec.cardless.planSlug;
-  const interval = "MONTH" as const;
+  // The term picked on the plan step; lib/signupPricing bills a plan with no
+  // yearly price monthly whatever this says (started.interval is the truth).
+  const asked = rec.cardless.interval === "YEAR" ? ("YEAR" as const) : ("MONTH" as const);
   const customPages = planSlug === CUSTOM_PLAN_SLUG ? normalizeCustomPages(rec.customPages) : [];
   const started = await createCardlessSubscription({
     token,
     email: rec.email,
     businessName: rec.businessName,
     planSlug,
-    interval,
+    interval: asked,
     customPages,
     attribution: rec.attribution ?? null,
     trialOffer: rec.trialOffer,
@@ -757,7 +765,7 @@ async function finishCardlessTrial(
     subId: sub.id,
     customerId: started.customerId,
     planSlug: started.planLabel,
-    interval,
+    interval: started.interval,
     customPages: started.customPages,
     mode: started.mode,
     trialDays: storedTrialOffer(rec.trialOffer).days,

@@ -890,7 +890,7 @@ export function RegisterContent({
         setPlansErr(stamped.error);
         return;
       }
-      const res = await requestCardlessTrial(token, slug);
+      const res = await requestCardlessTrial(token, slug, termFor(slug));
       if (!res.ok) {
         trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected" });
         // The day's card-less trials are taken: the same plan step now opens
@@ -1239,7 +1239,7 @@ export function RegisterContent({
         setPlansErr(stamped.error);
         return;
       }
-      const res = await startVerifiedCardlessTrial(token, slug);
+      const res = await startVerifiedCardlessTrial(token, slug, termFor(slug));
       if (!res.ok) {
         trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected", mode: signupMode });
         if (res.requiresCard) setRequiresCard(true);

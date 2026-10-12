@@ -123,7 +123,7 @@ export async function POST(req: Request) {
         ...trialOfferMetadata(pending.trialOffer),
         signupToken: String(token),
         planSlug: planLabel,
-        interval,
+        interval: priced.interval,
         ...(isCustom ? { customPages: pending.customPages.join(",") } : {}),
       },
       success_url: `${origin}/auth/register?signup=${encodeURIComponent(String(token))}&session_id={CHECKOUT_SESSION_ID}`,
