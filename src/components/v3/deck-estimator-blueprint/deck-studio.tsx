@@ -465,7 +465,12 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   }, [design, book, market, homeState, withDeck, structure.rails.required]);
 
   /* ── the 3D's build-up, night, connections, picking ── */
-  const [view, setView] = React.useState<"3d" | "plan" | "photo">("3d");
+  const [view, setView] = React.useState<"3d" | "plan" | "wall" | "photo">("3d");
+  // THE DRAWING, LARGE (owner, 2026-10-11: "more space for drawing"): the House step's wall-and-deck drawing in the viewer.
+  const openWallLarge = React.useCallback(() => {
+    setView("wall");
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1100px)").matches) document.querySelector("[data-deck-viewer]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const buildLayers = React.useMemo(() => sceneBuildLayers(scene), [scene]);
   const LAYERS = buildLayers.length;
   const [built, setBuilt] = React.useState<number>(Number.POSITIVE_INFINITY);
@@ -1123,16 +1128,20 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
 
       <div className={s.layout}>
         {/* ── the structure ─────────────────────────────────────── */}
-        <section className={cx(s.card, s.viewer)} aria-label={`The ${what.toLowerCase()}`}>
+        <section className={cx(s.card, s.viewer)} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
           <div className={s.viewHead}>
             <div className={s.viewTitle}>
               <span className={s.cardTitle}>The {what.toLowerCase()}</span>
               <span className={s.mono}>{scene.facts}</span>
             </div>
-            <Seg small label="View" value={view} onChange={setView} options={PHOTO_ENABLED ? [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }, { value: "photo" as const, label: "Photo" }] : [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }]} />
+            <Seg small label="View" value={view} onChange={setView} options={PHOTO_ENABLED ? [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }, { value: "wall" as const, label: "House & deck" }, { value: "photo" as const, label: "Photo" }] : [{ value: "3d" as const, label: "3D" }, { value: "plan" as const, label: "Framing plan" }, { value: "wall" as const, label: "House & deck" }]} />
           </div>
-          <div className={s.viewBox}>
-            {view === "3d" ? (
+          <div className={cx(s.viewBox, view === "wall" && s.viewBoxWall)}>
+            {view === "wall" ? (
+              <div className={cx(s.planWrap, s.wallWrap)} data-deck-wall-large-view>
+                <HouseWallPlan size="large" shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} />
+              </div>
+            ) : view === "3d" ? (
               <>
                 <DeckModel3D scene={scene} built={built} xray={xray} backdrop={backdrop} night={night} connections={connections} placing={placing?.kind === "fixture"} edit={editing} onEdit={onEdit} resetToken={resetToken} focus={focus} onPick={onPick} className={s.canvas} label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                 {editing && !placing ? (
@@ -1355,7 +1364,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </Field>
               </div>
               <Field label="The back wall and the deck, seen from above — drag anything" wide>
-                <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} />
+                <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} onOpenLarge={openWallLarge} />
               </Field>
               <div className={s.rowGrid}>
                 <Field label="Siding">

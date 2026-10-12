@@ -483,3 +483,145 @@ export function resizeDeckLeft(house: HouseDesign, shape: DeckShape, newWidthFt:
   return { house: moved, shape: { ...shape, widthFt: w2 } };
 }
 
+
+/* ------------------------------------------------------------------ */
+/*  Shifting a part sideways, levelling it, and the one-tap fixes       */
+/*  (2026-10-11 afternoon; owner: "make it smart to shift the walls     */
+/*  back, front, right, left — easier")                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A part of the wall moved sideways as one piece by `deltaFt` (+ to the right), keeping its width: a middle part's two
+ * steps move together; the first or last part moves its one step and the house's end with it. Held a foot clear of the
+ * neighbouring steps, the house's ends inside their reach (0–60 ft past the deck). A straight wall has nothing to shift.
+ */
+export function shiftWallPart(house: HouseDesign, shape: DeckShape, part: number, deltaFt: number): HouseDesign {
+  const W = shape.widthFt;
+  const n = house.jogs.length;
+  if (part < 0 || part > n || n === 0) return house;
+  const d0 = half(deltaFt);
+  if (d0 === 0) return house;
+  const L = HOUSE_LIMITS.extendFt;
+  const leftI = part - 1; // the step at the part's left end, if any
+  const rightI = part; // the step at its right end, if any
+  let lo = -Infinity;
+  let hi = Infinity;
+  if (leftI >= 0) {
+    const j = house.jogs[leftI];
+    lo = Math.max(lo, (leftI > 0 ? house.jogs[leftI - 1].atFt + 1 : -house.leftFt + 1) - j.atFt);
+  } else {
+    // The first part: the house's left end moves with it, between 0 and the most a wall reaches past the deck.
+    lo = Math.max(lo, -(L.max - house.leftFt));
+    hi = Math.min(hi, house.leftFt - L.min);
+  }
+  if (rightI < n) {
+    const j = house.jogs[rightI];
+    hi = Math.min(hi, (rightI + 1 < n ? house.jogs[rightI + 1].atFt - 1 : W + house.rightFt - 1) - j.atFt);
+  } else {
+    // The last part: the house's right end moves with it.
+    lo = Math.max(lo, -(house.rightFt - L.min));
+    hi = Math.min(hi, L.max - house.rightFt);
+  }
+  const d = half(clamp(d0, lo, hi));
+  if (d === 0 || !Number.isFinite(d)) return house;
+  return {
+    ...house,
+    leftFt: leftI < 0 ? half(house.leftFt - d) : house.leftFt,
+    rightFt: rightI >= n ? half(house.rightFt + d) : house.rightFt,
+    jogs: house.jogs.map((j, i) => (i === leftI || i === rightI ? { ...j, atFt: half(j.atFt + d) } : j)),
+  };
+}
+
+/** The part set level with the house line: its steps shrink by its depth (one driven to nothing is dropped on the read-back). Null for the house line itself. */
+export function levelWallPart(house: HouseDesign, shape: DeckShape, part: number): HouseDesign | null {
+  const parts = wallParts(house, shape);
+  const p = parts[part];
+  if (!p || part === referencePartIndex(parts, shape)) return null;
+  if (Math.abs(p.depthFt) < 0.01) return house;
+  return moveWallPart(house, shape, part, -p.depthFt);
+}
+
+/** The deck ended at `widthFt` with the house left where it is: the wall past its right end grows by what the deck gave up. */
+function endDeckAt(house: HouseDesign, shape: DeckShape, widthFt: number): { house: HouseDesign; shape: DeckShape } {
+  const w = half(widthFt);
+  return { house: { ...house, rightFt: half(clamp(house.rightFt + (shape.widthFt - w), HOUSE_LIMITS.extendFt.min, HOUSE_LIMITS.extendFt.max)) }, shape: { ...shape, widthFt: w } };
+}
+
+/** One tap that answers the wall's note: what it does, and the house and the deck after it. */
+export interface WallFix {
+  id: string;
+  label: string;
+  house: HouseDesign;
+  shape: DeckShape;
+}
+
+/**
+ * The fixes for a wall the deck cannot frame around, each one tried and kept only when the note goes away: a recess
+ * under the deck brought out level, the deck slid or ended clear of it; a second bump-out levelled; a bump-out inside
+ * the deck levelled, or the deck slid so it sits at an end, or the step moved to that end.
+ */
+export function wallFixes(shape: DeckShape, house: HouseDesign, limits: { minWidthFt: number; maxWidthFt: number }): WallFix[] {
+  const fit = deckShapeForHouse(shape, house);
+  if (!fit.note) return [];
+  const W = shape.widthFt;
+  const parts = wallParts(house, shape);
+  const under = parts.map((p, i) => ({ i, x0: Math.max(p.x0, 0), x1: Math.min(p.x1, W), depthFt: p.depthFt })).filter((p) => p.x1 - p.x0 > 0.5);
+  const out = under.filter((p) => p.depthFt > 0.5);
+  const back = under.filter((p) => p.depthFt < -0.5);
+  const fixes: WallFix[] = [];
+  const offer = (id: string, label: string, change: { house?: HouseDesign | null; shape?: DeckShape }) => {
+    if (change.house === null) return;
+    const h = change.house ?? house;
+    const s = change.shape ?? shape;
+    if (h === house && s === shape) return;
+    if (deckShapeForHouse(s, h).note) return;
+    if (fixes.some((f) => f.id === id)) return;
+    fixes.push({ id, label, house: h, shape: s });
+  };
+  if (back.length) {
+    const b = back[0];
+    offer("level", `Bring that part of the wall out level with the house (${ftWords(-b.depthFt)})`, { house: levelWallPart(house, shape, b.i) });
+    if (b.x0 <= 0.01) offer("slide-right", `Slide the deck ${ftWords(b.x1)} to the right, clear of the recess`, { house: slideDeck(house, b.x1) });
+    if (b.x1 >= W - 0.01) offer("slide-left", `Slide the deck ${ftWords(W - b.x0)} to the left, clear of the recess`, { house: slideDeck(house, -(W - b.x0)) });
+    if (b.x0 >= limits.minWidthFt) offer("end-at", `End the deck where the wall steps back — ${ftWords(b.x0)} wide`, endDeckAt(house, shape, b.x0));
+    if (W - b.x1 >= limits.minWidthFt) offer("start-after", `Start the deck past the recess — ${ftWords(W - b.x1)} wide`, resizeDeckLeft(house, shape, W - b.x1, limits.minWidthFt, limits.maxWidthFt));
+  } else if (out.length > 1) {
+    const atEnd = out.find((p) => p.x0 <= 0.01 || p.x1 >= W - 0.01);
+    const keep = atEnd ?? out.reduce((a, b) => (b.x1 - b.x0 > a.x1 - a.x0 ? b : a));
+    let h: HouseDesign | null = house;
+    for (const p of out) if (p !== keep && h) h = levelWallPart(h, shape, p.i);
+    offer("level-others", `Level the other bump-out${out.length > 2 ? "s" : ""} with the house — keep the one at ${keep.x0 <= 0.01 ? "the left end" : keep.x1 >= W - 0.01 ? "the right end" : ftWords(keep.x0)}`, { house: h });
+    let all: HouseDesign | null = house;
+    for (const p of out) if (all) all = levelWallPart(all, shape, p.i);
+    offer("level-all", `Level every bump-out under the deck with the house`, { house: all });
+    const first = out[0];
+    const last = out[out.length - 1];
+    if (last.x1 >= W - 0.01 && first.x0 >= limits.minWidthFt) offer("end-at", `End the deck at the first bump-out — ${ftWords(first.x0)} wide`, endDeckAt(house, shape, first.x0));
+    if (first.x0 <= 0.01 && W - last.x1 >= limits.minWidthFt) offer("start-after", `Start the deck past the last bump-out — ${ftWords(W - last.x1)} wide`, resizeDeckLeft(house, shape, W - last.x1, limits.minWidthFt, limits.maxWidthFt));
+  } else if (out.length === 1) {
+    const t = out[0];
+    const toRight = t.x0;
+    const toLeft = W - t.x1;
+    if (toRight > 0.01 && toLeft > 0.01) {
+      // Slid the shorter way first; the house stays put, so a slide the wall's reach cannot give is not offered (the note would stay).
+      const ways: Array<["slide-right" | "slide-left", number, string]> = [["slide-right", toRight, `Slide the deck ${ftWords(toRight)} to the right, so the bump-out is at its left end`], ["slide-left", -toLeft, `Slide the deck ${ftWords(toLeft)} to the left, so the bump-out is at its right end`]];
+      if (toRight > toLeft) ways.reverse();
+      for (const [id, by, label] of ways) offer(id, label, { house: slideDeck(house, by) });
+      // The bump-out moved whole (its width kept) to the deck's nearer end, where the deck notches around it; the far end if the near one has no room.
+      const shifts: Array<[number, string]> = [[-toRight, "left"], [toLeft, "right"]];
+      if (toRight > toLeft) shifts.reverse();
+      for (const [by, end] of shifts) offer("shift-to-end", `Shift the bump-out to the deck's ${end} end — the deck notches around it`, { house: shiftWallPart(house, shape, t.i, by) });
+    }
+    offer("level", `Level the bump-out with the house`, { house: levelWallPart(house, shape, t.i) });
+    if (toRight >= limits.minWidthFt) offer("end-at", `End the deck at the bump-out — ${ftWords(toRight)} wide`, endDeckAt(house, shape, toRight));
+    if (toLeft >= limits.minWidthFt) offer("start-after", `Start the deck past the bump-out — ${ftWords(toLeft)} wide`, resizeDeckLeft(house, shape, toLeft, limits.minWidthFt, limits.maxWidthFt));
+  }
+  return fixes;
+}
+
+/** One part of the wall in words: "8 ft wide · comes out 4 ft" / "the house line" / "steps back 2 ft". */
+export function wallPartWords(p: WallPart): string {
+  const width = ftWords(p.x1 - p.x0);
+  if (Math.abs(p.depthFt) < 0.01) return `${width} wide · the house line`;
+  return `${width} wide · ${p.depthFt > 0 ? "comes out" : "steps back"} ${ftWords(Math.abs(p.depthFt))}`;
+}
