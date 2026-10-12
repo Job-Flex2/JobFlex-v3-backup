@@ -21,6 +21,10 @@ const s = StyleSheet.create({
     fontSize: 10,
     lineHeight: 1.5,
   },
+  // The shop's logo above the title: whole and in proportion inside a band
+  // one line of title tall, left-aligned with everything under it.
+  logoRow: { marginBottom: 18 },
+  logo: { height: 46, maxWidth: 170, objectFit: "contain", objectPosition: "left" },
   eyebrow: {
     fontSize: 8,
     letterSpacing: 1.6,
@@ -208,6 +212,8 @@ export interface ProposalPdfData {
   validUntil?: Date | null;
   publicId: string;
   orgName: string;
+  /** The shop's logo as a PNG/JPEG data URL (lib/orgLogoServer pdfLogoSrc); absent = no logo printed. */
+  logoSrc?: string | null;
   /** Approved change orders, printed under the original total with the contract value. */
   changeOrders?: Array<{ label: string; total: number }>;
   contractTotal?: number;
@@ -279,6 +285,12 @@ export function ProposalPdfDocument({ data }: { data: ProposalPdfData }) {
       producer="JobFlex"
     >
       <Page size="LETTER" style={s.page}>
+        {data.logoSrc ? (
+          <View style={s.logoRow}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image has no alt prop */}
+            <Image src={data.logoSrc} style={s.logo} />
+          </View>
+        ) : null}
         <View>
           <Text style={s.eyebrow}>Prepared for {data.clientName ?? "client"}</Text>
           <Text style={s.title}>{data.title}</Text>

@@ -171,10 +171,10 @@
      rules. Browser chrome outside the page box; every sibling port left them,
      and diverging here would be the odd one out. Nothing on this page scrolls
      internally except a sheet body, where a thin thumb is correct anyway.
-   · preflight's `img, video { max-width: 100% }`. This page renders no <img>
-     and no <video> — org.logoUrl is not rendered, the identity mark is the
-     42px ink monogram (a deviation inherited from the desktop port). Checked,
-     not copied blindly.
+   · preflight's `img, video { max-width: 100% }`. The only <img> is the
+     shop's logo in the header (`.mpc-logo`, sized below, far under 100%), and
+     there is no <video>; without a logo the mark is the 42px ink monogram.
+     Checked, not copied blindly.
    · preflight's `svg { display: block; vertical-align: middle }`. Rather than
      restore the bare-browser `display: inline`, `.mpc-ic` declares
      `display: block` outright below, which is deterministic whether or not
@@ -287,6 +287,18 @@ body:has(.jf-mobile-proposal-client)::before { content: none; }
   border-radius: var(--radius);
   font-size: 17px;
   font-weight: 900;
+}
+/* The shop's logo in place of the letter box: whole, never cropped or
+   stretched, one header row tall and no wider than a third of the phone. */
+.jf-mobile-proposal-client .mpc-logo {
+  display: block;
+  flex: 0 0 auto;
+  height: 46px;
+  width: auto;
+  max-width: 34%;
+  object-fit: contain;
+  object-position: left center;
+  border-radius: var(--radius);
 }
 /* Zero basis, not `auto`: the header wraps (for the rating plate), and a
    wrapping row breaks lines on each item's HYPOTHETICAL size — for an `auto`
@@ -1064,7 +1076,7 @@ body:has(.jf-mobile-proposal-client)::before { content: none; }
   border: var(--border-thin);
   border-color: var(--blueprint);
   border-radius: var(--radius);
-  background: rgba(24, 84, 160, 0.1);
+  background: var(--blueprint-tint, rgba(24, 84, 160, 0.1));
   color: var(--blueprint);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1109,7 +1121,7 @@ body:has(.jf-mobile-proposal-client)::before { content: none; }
 .jf-mobile-proposal-client .mpc-ta:focus {
   outline: none;
   border-color: var(--blueprint);
-  box-shadow: 0 0 0 2px rgba(24, 84, 160, 0.25);
+  box-shadow: 0 0 0 2px var(--blueprint-ring, rgba(24, 84, 160, 0.25));
 }
 .jf-mobile-proposal-client .mpc-err {
   margin-top: 8px;

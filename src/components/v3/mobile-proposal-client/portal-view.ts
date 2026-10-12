@@ -26,6 +26,7 @@
 
 import type { PortalPayModel } from "@/lib/payments/portalModel";
 import { clientSplit, splitCaption } from "@/lib/pricing/markup";
+import { proposalLogoHref } from "@/lib/orgLogo";
 
 /** Donor rule: "roof_squares" → "roof squares", empty → null. */
 function measurementLabel(t: string | null | undefined) {
@@ -91,6 +92,8 @@ export type PortalView = {
   total: number;
   orgName: string;
   monogram: string;
+  /** The shop's logo (Company → Branding) via /api/public-quote/<id>/logo; null = draw the monogram. */
+  logoHref: string | null;
   clientName: string;
   refCode: string;
   title: string;
@@ -131,7 +134,7 @@ type ProposalRow = {
   createdAt: Date;
   validUntil: Date | null;
   client: { name: string | null } | null;
-  organization: { name: string | null; phone: string | null };
+  organization: { name: string | null; phone: string | null; logoUrl?: string | null };
   /** "Show to client" (saved on the row); absent on an older caller = shown. */
   showBreakdown?: boolean | null;
   marginOnLabor?: boolean | null;
@@ -182,6 +185,7 @@ export function buildPortalView(
     total: proposal.total,
     orgName: org.name ?? "",
     monogram: (org.name?.trim()?.[0] ?? "J").toUpperCase(),
+    logoHref: proposalLogoHref(publicId, org.logoUrl),
     clientName: proposal.client?.name?.trim() || "you",
     // Same derivation as the desktop page: there is no proposal-number column
     // and adding one is a schema change, so this is the last four characters

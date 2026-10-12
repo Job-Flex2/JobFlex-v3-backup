@@ -298,9 +298,14 @@ export function MobileProposalClient({ view }: { view: PortalView }) {
     <div className="jf-mobile-proposal-client" ref={rootRef}>
       <div className="mpc-doc">
         <header className="mpc-head rv">
-          <span className="mpc-mark" aria-hidden="true">
-            {view.monogram}
-          </span>
+          {view.logoHref ? (
+            // eslint-disable-next-line @next/next/no-img-element -- the shop's own logo, served by /api/public-quote/[publicId]/logo
+            <img className="mpc-logo" src={view.logoHref} alt={view.orgName ? `${view.orgName} logo` : "Company logo"} />
+          ) : (
+            <span className="mpc-mark" aria-hidden="true">
+              {view.monogram}
+            </span>
+          )}
           <span className="mpc-org">
             <b className="mpc-org-n" title={view.orgName}>{view.orgName}</b>
             <span className="mpc-org-r">{`№ ${view.refCode} · ${view.createdOn}`}</span>

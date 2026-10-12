@@ -38,6 +38,8 @@ import { contractTotal } from "@/lib/contractTotal";
 import { money, longDate } from "@/lib/format";
 import { parseProposalSettings } from "@/lib/settings";
 import { buildPortalView, type PortalRating } from "@/components/v3/mobile-proposal-client/portal-view";
+import { proposalLogoHref } from "@/lib/orgLogo";
+import { BrandAccentStyle } from "@/components/portal/brand-accent-style";
 import { proposalPictures } from "@/lib/proposalPictures";
 import { FenceSceneFigure } from "@/components/v3/fence-scene/fence-scene-figure";
 import { DeckSceneFigure } from "@/components/v3/deck-scene/deck-scene-figure";
@@ -103,6 +105,7 @@ export default async function PublicProposalPortal({
           name: true,
           slug: true,
           logoUrl: true,
+          primaryColor: true,
           phone: true,
           address: true,
           deletedAt: true,
@@ -200,6 +203,9 @@ export default async function PublicProposalPortal({
   const approvedChangesTotal = Math.round((contractValue - proposal.total) * 100) / 100;
   const orgTerms = parseProposalSettings(org.proposalSettingsJson).terms?.trim() || "";
   const monogram = (org.name?.trim()?.[0] ?? "J").toUpperCase();
+  // The logo from Company → Branding, when the shop has set one; the letter
+  // box is only the stand-in for a shop without a logo.
+  const logoHref = proposalLogoHref(publicId, org.logoUrl);
   const clientName = proposal.client?.name?.trim() || "you";
 
   // The donor stamps "Proposal № 2851". There is NO proposal-number column on
@@ -232,6 +238,9 @@ export default async function PublicProposalPortal({
   });
 
   return (
+    <>
+    {/* The shop's brand colour (Company → Branding) as the page's accent. */}
+    <BrandAccentStyle color={org.primaryColor} />
     <PortalViewport view={view}>
     <div className="jf-proposal-portal">
       <div className="pv">
@@ -239,7 +248,12 @@ export default async function PublicProposalPortal({
         {/* ШАПКА */}
         {/* (RU: "Header") */}
         <header className="pv-head rv">
-          <span className="pv-mono">{monogram}</span>
+          {logoHref ? (
+            // eslint-disable-next-line @next/next/no-img-element -- the shop's own logo, served by /api/public-quote/[publicId]/logo
+            <img className="pv-logo" src={logoHref} alt={org.name ? `${org.name} logo` : "Company logo"} />
+          ) : (
+            <span className="pv-mono">{monogram}</span>
+          )}
           {/* Identity only — the name and the reference. The row reads
               mark · identity · stamps; a long name truncates (the full
               string rides in `title`) so the stamps never leave the row. */}
@@ -458,5 +472,6 @@ export default async function PublicProposalPortal({
       />
     </div>
     </PortalViewport>
+    </>
   );
 }

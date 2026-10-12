@@ -168,6 +168,11 @@ body:has(.jf-proposal-portal)::before { content: none; }
 .jf-proposal-portal .pv-mono { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center;
   background: var(--ink); color: var(--paper); border-radius: var(--radius);
   font-size: 17px; font-weight: 900; }
+/* The shop's own logo in place of the letter box. Logos come in every shape —
+   a square badge, a wide wordmark — so it keeps its proportions inside a box
+   one row tall and no wider than a short name; it never crops or stretches. */
+.jf-proposal-portal .pv-logo { display: block; flex-shrink: 0; height: 52px; width: auto; max-width: 168px;
+  object-fit: contain; object-position: left center; border-radius: var(--radius); }
 /* `.pv-org` takes the row's slack (in the donor `.pv-pdf { margin-left: auto }`
    did that alone) so the rating plate and the PDF stamp sit together at the
    right edge. Both lines truncate rather than wrap: the header is two lines

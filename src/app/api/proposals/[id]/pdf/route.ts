@@ -5,6 +5,7 @@ import { renderToStream } from "@react-pdf/renderer";
 import { db } from "@/lib/db";
 import { requireProposalStaff } from "@/lib/orgContext";
 import { ProposalPdfDocument, money, type ProposalPdfData } from "@/lib/pdf/ProposalPdf";
+import { pdfLogoSrc } from "@/lib/orgLogoServer";
 import { satellitePhotoPng } from "@/lib/staticMapPhoto";
 import { contractTotal } from "@/lib/contractTotal";
 
@@ -24,7 +25,7 @@ export async function GET(
       installments: { orderBy: { position: "asc" } },
       changeOrders: { where: { status: "APPROVED" }, orderBy: { createdAt: "asc" }, select: { number: true, title: true, status: true, total: true, amount: true } },
       client: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, logoUrl: true } },
     },
   });
   if (!proposal) {
@@ -85,6 +86,7 @@ export async function GET(
     validUntil: proposal.validUntil,
     publicId: proposal.publicId,
     orgName: proposal.organization.name,
+    logoSrc: await pdfLogoSrc(proposal.organization.logoUrl),
     clientName: proposal.client?.name,
     clientAddress: proposal.client?.address,
     previewImageUrl,

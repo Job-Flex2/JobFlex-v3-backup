@@ -4,6 +4,7 @@ import { clientSplit, splitCaption } from "@/lib/pricing/markup";
 import { renderToStream } from "@react-pdf/renderer";
 import { db } from "@/lib/db";
 import { ProposalPdfDocument, money, type ProposalPdfData } from "@/lib/pdf/ProposalPdf";
+import { pdfLogoSrc } from "@/lib/orgLogoServer";
 import { rateLimitShared, ipFromRequest, HOUR } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
@@ -22,7 +23,7 @@ export async function GET(
       lineItems: { orderBy: { position: "asc" } },
       installments: { orderBy: { position: "asc" } },
       client: true,
-      organization: { select: { name: true, deletedAt: true } },
+      organization: { select: { name: true, deletedAt: true, logoUrl: true } },
     },
   });
   if (!proposal || proposal.organization.deletedAt) {
@@ -44,6 +45,7 @@ export async function GET(
     validUntil: proposal.validUntil,
     publicId: proposal.publicId,
     orgName: proposal.organization.name,
+    logoSrc: await pdfLogoSrc(proposal.organization.logoUrl),
     clientName: proposal.client?.name,
     clientAddress: proposal.client?.address,
     showScope: proposal.showScope,

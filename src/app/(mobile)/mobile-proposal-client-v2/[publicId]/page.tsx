@@ -36,6 +36,7 @@ import { buildPortalView, type PortalRating } from "@/components/v3/mobile-propo
 import { buildPortalPayModel } from "@/lib/payments/portalModel";
 import { formatAvg, orgPublicRating, publicReviewsPath } from "@/lib/reviews/publicSummary";
 import { MobileProposalClient } from "@/components/v3/mobile-proposal-client/mobile-proposal-client";
+import { BrandAccentStyle } from "@/components/portal/brand-accent-style";
 import { proposalPictures } from "@/lib/proposalPictures";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export default async function MobileProposalClientPage({
           name: true,
           slug: true,
           logoUrl: true,
+          primaryColor: true,
           phone: true,
           address: true,
           deletedAt: true,
@@ -95,8 +97,11 @@ export default async function MobileProposalClientPage({
   const pictures = await proposalPictures({ id: proposal.id, publicId, trade: proposal.trade, beforePhotos: proposal.beforePhotos }).catch(() => []);
 
   return (
+    <>
+    <BrandAccentStyle color={proposal.organization.primaryColor} />
     <MobileProposalClient
       view={buildPortalView(publicId, proposal, { money, longDate }, { pay, terms: "", rating, pictures })}
     />
+    </>
   );
 }
