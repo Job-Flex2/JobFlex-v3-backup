@@ -231,7 +231,6 @@ export interface TaskDetailDTO extends TaskRowDTO {
 
 /** The list row a detail implies — the open sheet and its row never disagree. */
 export function rowFromDetail(d: TaskDetailDTO): TaskRowDTO {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { subtasks, feed, ...row } = d;
   return {
     ...row,

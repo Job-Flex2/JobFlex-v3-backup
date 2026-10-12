@@ -1,0 +1,320 @@
+/* ============================================================
+   ADMIN · TASKS — /admin/tasks
+   The platform team's task list and the task sheet.
+
+   Like /admin/support, almost nothing lives here. The page draws
+   from the published sets and adds only what neither says:
+     · the donor globals the admin shell applies to page content —
+       page-head, page-actions, kicker, page-title, card, kpi-grid,
+       kpi, kpi-lbl, kpi-val;
+     · components/v3/admin-users/admin-shared.module.css — buttons,
+       search, the estimate-style table, status badges, the sheet,
+       fields;
+     · admin-influencers/admin-ui.module.css — the segmented control
+       the tabs use.
+   NEVER name a shared class (btn, st, tbl, in …) in a selector here:
+   it would mint a page-local hash and strip the shared treatment
+   (admin-users.module.css, top note).
+
+   SCOPING. `:global(.jf-blueprint .content) .cls` ⇒ (0,3,0), as the
+   kit. No @keyframes: Lightning CSS rejects them in modules; the row
+   highlight is a transition instead.
+   ============================================================ */
+
+/* ── Head, tiles ──────────────────────────────────────────── */
+:global(.jf-blueprint .content) .kpiBad { color: var(--danger); }
+
+/* ── Live indicator ───────────────────────────────────────── */
+:global(.jf-blueprint .content) .live {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 40px; padding: 0 12px;
+  border: 1.5px solid var(--hair); border-radius: var(--radius);
+  background: #fff;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+:global(.jf-blueprint .content) .liveMark { width: 8px; height: 8px; flex-shrink: 0; background: var(--success); }
+:global(.jf-blueprint .content) .liveOff { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+:global(.jf-blueprint .content) .liveOff .liveMark { background: var(--danger); }
+:global(.jf-blueprint .content) .liveWait .liveMark { background: var(--muted-faint); }
+
+/* ── Filter bar ───────────────────────────────────────────── */
+:global(.jf-blueprint .content) .filters { display: grid; gap: 12px; }
+:global(.jf-blueprint .content) .fRow {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+:global(.jf-blueprint .content) .fRow > * { min-width: 0; }
+:global(.jf-blueprint .content) .fSearch { flex: 1 1 280px; }
+:global(.jf-blueprint .content) .fSel { flex: 0 1 170px; }
+:global(.jf-blueprint .content) .fDates { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; }
+:global(.jf-blueprint .content) .fDate { width: 148px; }
+:global(.jf-blueprint .content) .fDash { font-family: var(--font-mono); font-size: 11px; color: var(--muted-light); }
+:global(.jf-blueprint .content) .fDatesLbl {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
+}
+/* The drawer toggle exists for the handheld layer only. */
+:global(.jf-blueprint .content) .fToggle { display: none; }
+:global(.jf-blueprint .content) .fMore { display: contents; }
+:global(.jf-blueprint .content) .fSort { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+:global(.jf-blueprint .content) .dirBtn { width: 38px; padding: 0; }
+:global(.jf-blueprint .content) .dirIc { transform: rotate(90deg); transition: transform 0.15s var(--ease); }
+:global(.jf-blueprint .content) .dirAsc { transform: rotate(-90deg); }
+:global(.jf-blueprint .content) .mine[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+:global(.jf-blueprint .content) .fN {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  background: var(--blueprint); color: #fff;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0;
+}
+
+/* ── List head: tabs + count ──────────────────────────────── */
+:global(.jf-blueprint .content) .listHead {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1.5px solid var(--ink);
+}
+:global(.jf-blueprint .content) .tabs { width: auto; flex: 0 0 auto; }
+:global(.jf-blueprint .content) .tabs button { padding: 0 16px; gap: 8px; display: inline-flex; align-items: center; }
+:global(.jf-blueprint .content) .tabN { font-family: var(--font-mono); font-weight: 600; letter-spacing: 0; opacity: 0.75; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Table geometry ───────────────────────────────────────── */
+:global(.jf-blueprint .content) .cPri { width: 100px; }
+:global(.jf-blueprint .content) .cTask { width: auto; }
+:global(.jf-blueprint .content) .cWho { width: 128px; }
+:global(.jf-blueprint .content) .cStatus { width: 128px; }
+:global(.jf-blueprint .content) .cProg { width: 136px; }
+:global(.jf-blueprint .content) .cDue { width: 84px; }
+:global(.jf-blueprint .content) .cCreated { width: 80px; }
+:global(.jf-blueprint .content) .cCmt { width: 52px; }
+/* A title gets two lines before it is cut; the full text is in its tooltip and the sheet. */
+:global(.jf-blueprint .content) .tdTask > div:first-child {
+  white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+:global(.jf-blueprint .content) .taskTbl th :global(svg) { width: 13px; height: 13px; vertical-align: -2px; }
+:global(.jf-blueprint .content) .taskTbl tbody tr.taskRow { cursor: pointer; transition: background 0.9s var(--ease); }
+:global(.jf-blueprint .content) .taskTbl tbody tr.taskRow:hover { transition: background 0.12s; }
+/* Someone else changed this row — a short wash of blueprint, then gone. */
+:global(.jf-blueprint .content) .taskTbl tbody tr.rowFlash { background: rgba(24, 84, 160, 0.12); transition: none; }
+:global(.jf-blueprint .content) .taskTbl tbody tr.rowTemp { opacity: 0.6; cursor: progress; }
+:global(.jf-blueprint .content) .taskTbl tbody tr.rowOpen { background: var(--paper-deep); box-shadow: inset 4px 0 0 var(--blueprint); }
+
+:global(.jf-blueprint .content) .who { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+:global(.jf-blueprint .content) .whoNone { font-size: 13px; font-weight: 500; color: var(--muted-light); }
+:global(.jf-blueprint .content) .overdue { color: var(--danger); font-weight: 800; }
+:global(.jf-blueprint .content) .overdueTag {
+  display: inline-block; margin-left: 6px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+}
+:global(.jf-blueprint .content) .cmt { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .cmt :global(svg) { width: 13px; height: 13px; }
+:global(.jf-blueprint .content) .cmtNone { color: var(--muted-faint); }
+/* Visually hidden, read aloud. */
+:global(.jf-blueprint .content) .sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Priority: Low reads quieter than Normal; Canceled reads struck through. */
+:global(.jf-blueprint .content) .priLow { color: var(--muted-light); border-style: dashed; }
+:global(.jf-blueprint .content) .stCanceled { color: var(--muted-light); text-decoration: line-through; }
+
+/* ── Progress ─────────────────────────────────────────────── */
+:global(.jf-blueprint .content) .prog { display: flex; align-items: center; gap: 9px; min-width: 0; }
+:global(.jf-blueprint .content) .progTrack {
+  position: relative; flex: 1 1 auto; min-width: 40px; height: 8px;
+  border: 1.5px solid var(--ink); border-radius: var(--radius);
+  background: #fff; overflow: hidden;
+}
+:global(.jf-blueprint .content) .progFill {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--blueprint);
+  transition: width 0.25s var(--ease);
+}
+:global(.jf-blueprint .content) .progDone { background: var(--success); }
+:global(.jf-blueprint .content) .progLbl {
+  flex-shrink: 0;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+:global(.jf-blueprint .content) .progCompact .progLbl { min-width: 0; }
+
+/* ── User text with links ─────────────────────────────────── */
+:global(.jf-blueprint .content) .txtLink { color: var(--blueprint); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .txtLink:hover { color: var(--blueprint-dark); }
+
+/* ── A form inside a sheet keeps the sheet's column ───────── */
+:global(.jf-blueprint .content) .formFrame { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+
+/* ============================================================
+   THE TASK SHEET
+   ============================================================ */
+:global(.jf-blueprint .content) .tsTitle {
+  width: 100%;
+  font-family: var(--font); font-size: 18px; font-weight: 800; line-height: 1.25; color: var(--ink);
+  border: 1.5px solid transparent; border-radius: var(--radius);
+  padding: 6px 8px; margin: -6px -8px 0;
+  background: transparent; resize: none; overflow: hidden;
+  transition: border-color 0.12s, background 0.12s;
+}
+:global(.jf-blueprint .content) .tsTitle:hover { border-color: var(--hair); }
+:global(.jf-blueprint .content) .tsTitle:focus { outline: none; border-color: var(--blueprint); background: #fff; box-shadow: 2px 2px 0 rgba(24, 84, 160, 0.25); }
+:global(.jf-blueprint .content) .tsGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+:global(.jf-blueprint .content) .tsLinkRow { display: flex; gap: 8px; align-items: center; }
+:global(.jf-blueprint .content) .tsLinkRow > :first-child { flex: 1 1 auto; min-width: 0; }
+:global(.jf-blueprint .content) .tsOpenLink { flex-shrink: 0; }
+:global(.jf-blueprint .content) .tsHint { color: var(--warning-dark); }
+
+:global(.jf-blueprint .content) .desc {
+  border: 1.5px solid var(--hair); border-radius: var(--radius);
+  background: var(--paper);
+  padding: 11px 13px;
+  font-size: 13.5px; font-weight: 500; line-height: 1.5; color: var(--ink);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+:global(.jf-blueprint .content) .descEmpty { color: var(--muted-light); font-style: italic; }
+:global(.jf-blueprint .content) .rowBtns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Subtasks */
+:global(.jf-blueprint .content) .subs { display: grid; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; }
+:global(.jf-blueprint .content) .sub {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 150px auto; gap: 8px; align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1.5px solid var(--hair-soft);
+}
+:global(.jf-blueprint .content) .sub:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .subDone .subIn { color: var(--muted); text-decoration: line-through; }
+:global(.jf-blueprint .content) .subIn {
+  width: 100%; min-width: 0; height: 32px; padding: 4px 6px;
+  border: 1.5px solid transparent; border-radius: var(--radius);
+  background: transparent;
+  font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--ink);
+  transition: border-color 0.12s, background 0.12s;
+}
+:global(.jf-blueprint .content) .subIn:hover { border-color: var(--hair); }
+:global(.jf-blueprint .content) .subIn:focus { outline: none; border-color: var(--blueprint); background: #fff; text-decoration: none; color: var(--ink); }
+:global(.jf-blueprint .content) .subTools { display: inline-flex; gap: 2px; }
+:global(.jf-blueprint .content) .iconBtn {
+  width: 30px; height: 30px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid transparent; border-radius: var(--radius);
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+:global(.jf-blueprint .content) .iconBtn:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); background: var(--paper-deep); }
+:global(.jf-blueprint .content) .iconBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 1px; }
+:global(.jf-blueprint .content) .iconBtn:disabled { opacity: 0.35; cursor: default; }
+:global(.jf-blueprint .content) .iconBtn :global(svg) { width: 14px; height: 14px; }
+:global(.jf-blueprint .content) .iconDanger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+:global(.jf-blueprint .content) .up :global(svg) { transform: rotate(-90deg); }
+:global(.jf-blueprint .content) .down :global(svg) { transform: rotate(90deg); }
+:global(.jf-blueprint .content) .subAdd { display: flex; gap: 8px; }
+:global(.jf-blueprint .content) .subAdd > :first-child { flex: 1 1 auto; min-width: 0; }
+:global(.jf-blueprint .content) .subsEmpty { padding: 12px; font-size: 12.5px; color: var(--muted); text-align: center; }
+
+/* Activity: comments + journal, one column of time */
+:global(.jf-blueprint .content) .feed { display: grid; gap: 0; }
+:global(.jf-blueprint .content) .fItem { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1.5px dashed var(--hair); }
+:global(.jf-blueprint .content) .fItem:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .fMeta {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted-light);
+}
+:global(.jf-blueprint .content) .fWho { color: var(--ink); font-family: var(--font); font-size: 12.5px; font-weight: 800; letter-spacing: 0; }
+:global(.jf-blueprint .content) .fBody { font-size: 13.5px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .fEvent { font-size: 12.5px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .fEvent b { color: var(--ink-soft); font-weight: 700; }
+:global(.jf-blueprint .content) .fPending { opacity: 0.6; }
+:global(.jf-blueprint .content) .compose { display: grid; gap: 8px; }
+:global(.jf-blueprint .content) .confirm { display: grid; gap: 10px; flex: 1 1 100%; }
+:global(.jf-blueprint .content) .footGrow { flex: 1 1 auto; min-width: 0; }
+
+/* ============================================================
+   MOBILE LAYER — last in the cascade. The admin console's one
+   breakpoint (860px, the shell's drawer) — every admin page uses it.
+   ============================================================ */
+@media (max-width: 860px) {
+  :global(.jf-blueprint .content) .live { height: 44px; }
+
+  /* Filters fold into a drawer behind one button; search stays out. */
+  :global(.jf-blueprint .content) .fToggle { display: inline-flex; }
+  :global(.jf-blueprint .content) .fMore { display: none; }
+  :global(.jf-blueprint .content) .fMoreOpen { display: grid; gap: 10px; width: 100%; }
+  :global(.jf-blueprint .content) .fSearch { flex: 1 1 100%; }
+  :global(.jf-blueprint .content) .fSel,
+  :global(.jf-blueprint .content) .fDates,
+  :global(.jf-blueprint .content) .fSort { flex: 1 1 100%; width: 100%; margin-left: 0; }
+  :global(.jf-blueprint .content) .fSort > :first-child { flex: 1 1 auto; }
+  :global(.jf-blueprint .content) .fDates { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .fDatesLbl { grid-column: 1 / -1; }
+  :global(.jf-blueprint .content) .fDate { width: 100%; }
+  :global(.jf-blueprint .content) .dirBtn { width: 44px; }
+
+  :global(.jf-blueprint .content) .listHead { padding: 10px 12px; }
+  :global(.jf-blueprint .content) .tabs { flex: 1 1 auto; }
+  :global(.jf-blueprint .content) .tabs button { flex: 1; justify-content: center; }
+  :global(.jf-blueprint .content) .count { margin-left: 0; width: 100%; }
+
+  /* Rows become cards: stamps on top, the title, the bar, the facts. */
+  :global(.jf-blueprint .content) .taskTbl thead { display: none; }
+  :global(.jf-blueprint .content) .taskTbl,
+  :global(.jf-blueprint .content) .taskTbl tbody { display: block; }
+  :global(.jf-blueprint .content) .taskTbl tbody tr.taskRow {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    padding: 12px 14px 13px;
+    border-bottom: 1.5px solid var(--hair-soft);
+    min-height: 44px;
+  }
+  :global(.jf-blueprint .content) .taskTbl tbody tr.taskRow:last-child { border-bottom: none; }
+  :global(.jf-blueprint .content) .taskTbl tbody tr.taskRow > td { display: block; padding: 0; border: none; min-width: 0; }
+  :global(.jf-blueprint .content) .tdPri { order: 1; }
+  :global(.jf-blueprint .content) .tdStatus { order: 2; margin-left: auto; }
+  :global(.jf-blueprint .content) .tdTask { order: 3; flex: 1 1 100%; }
+  :global(.jf-blueprint .content) .tdTask > div { white-space: normal; }
+  :global(.jf-blueprint .content) .tdProg { order: 4; flex: 1 1 100%; }
+  :global(.jf-blueprint .content) .tdWho { order: 5; flex: 1 1 100%; }
+  :global(.jf-blueprint .content) .tdDue { order: 6; }
+  :global(.jf-blueprint .content) .tdCreated { order: 7; }
+  :global(.jf-blueprint .content) .tdCmt { order: 8; margin-left: auto; }
+  :global(.jf-blueprint .content) .taskTbl td[data-l]::before {
+    content: attr(data-l);
+    display: inline-block; margin-right: 6px;
+    font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted-light);
+  }
+  :global(.jf-blueprint .content) .who { display: inline; }
+
+  /* The sheet: one column of fields, 44px everywhere a finger lands. */
+  :global(.jf-blueprint .content) .tsGrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .sub { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "box title tools" ". who who"; padding: 6px 6px 8px; }
+  :global(.jf-blueprint .content) .subBox { grid-area: box; }
+  :global(.jf-blueprint .content) .subTitle { grid-area: title; min-width: 0; }
+  :global(.jf-blueprint .content) .subWho { grid-area: who; }
+  :global(.jf-blueprint .content) .subTools { grid-area: tools; }
+  :global(.jf-blueprint .content) .subIn { height: 44px; font-size: 14px; }
+  :global(.jf-blueprint .content) .iconBtn { width: 44px; height: 44px; }
+  :global(.jf-blueprint .content) .tsTitle { font-size: 17px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .taskTbl tbody tr.taskRow,
+  :global(.jf-blueprint .content) .progFill,
+  :global(.jf-blueprint .content) .dirIc,
+  :global(.jf-blueprint .content) .iconBtn,
+  :global(.jf-blueprint .content) .subIn,
+  :global(.jf-blueprint .content) .tsTitle { transition: none !important; }
+}
