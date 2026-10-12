@@ -16,6 +16,7 @@ import {
   AdminSupportContent,
   type SupportTicketDTO,
 } from "@/components/v3/admin-support/admin-support-content";
+import { tasksForTickets } from "@/lib/adminTasks/service";
 import { MarkSupportSeen } from "./mark-seen";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +26,15 @@ export const metadata: Metadata = {
   description: "Every support ticket raised across the platform, and its status.",
 };
 
-export default async function AdminSupportPage() {
+export default async function AdminSupportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ticket?: string | string[] }>;
+}) {
   await requirePlatformAdmin();
+  // ?ticket=<id> opens that ticket — the link a task made from it carries.
+  const sp = await searchParams;
+  const openTicketId = typeof sp.ticket === "string" ? sp.ticket : null;
 
   const [rows, open, inProgress, resolved, closed, unread] = await Promise.all([
     db.supportTicket.findMany({
@@ -44,6 +52,9 @@ export default async function AdminSupportPage() {
     db.supportTicket.count({ where: { adminReadAt: null } }),
   ]);
 
+  // The task made from each ticket, if any (/admin/tasks, "Create task").
+  const tasks = await tasksForTickets(rows.map((t) => t.id));
+
   const tickets: SupportTicketDTO[] = rows.map((t) => ({
     id: t.id,
     ref: supportTicketRef(t.id),
@@ -56,6 +67,7 @@ export default async function AdminSupportPage() {
     submitterEmail: t.user?.email ?? null,
     createdAt: t.createdAt.toISOString(),
     unread: t.adminReadAt === null,
+    task: tasks[t.id] ?? null,
   }));
 
   return (
@@ -66,6 +78,7 @@ export default async function AdminSupportPage() {
       <AdminSupportContent
         tickets={tickets}
         counts={{ open, inProgress, resolved, closed }}
+        initialTicketId={openTicketId}
         // One clock, read on the server, so every age renders identically here
         // and after hydration.
         now={new Date().toISOString()}

@@ -16,10 +16,14 @@
 // status badges, same hand-rolled sheet as /admin/users and /admin/plans.
 // decisions.md — "never create parallel style sets for identical blocks".
 
-import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { updateTicketStatus } from "@/actions/admin";
+import { createTaskFromSupportTicket } from "@/actions/adminTasks";
+import { taskPath } from "@/lib/adminTasks/model";
 import shared from "@/components/v3/admin-users/admin-shared.module.css";
 import {
   makeCx,
@@ -52,6 +56,8 @@ export interface SupportTicketDTO {
   createdAt: string;
   /** No adminReadAt yet — the ticket arrived since the last inbox visit. */
   unread: boolean;
+  /** The task made from this ticket on /admin/tasks, if any. */
+  task: { id: string; title: string; status: string } | null;
 }
 
 export interface SupportCounts {
@@ -130,9 +136,12 @@ export function AdminSupportContent({
   tickets,
   counts,
   now,
+  initialTicketId = null,
 }: {
   tickets: SupportTicketDTO[];
   counts: SupportCounts;
+  /** ?ticket=<id> — open this ticket on arrival (a task's related link). */
+  initialTicketId?: string | null;
   /** ISO clock read in the server page — the anchor for every age. */
   now: string;
 }) {
@@ -141,7 +150,12 @@ export function AdminSupportContent({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [category, setCategory] = useState("");
-  const [selected, setSelected] = useState<SupportTicketDTO | null>(null);
+  // A task's "related link" lands here with ?ticket=<id>: that ticket starts selected.
+  const [selected, setSelected] = useState<SupportTicketDTO | null>(() =>
+    initialTicketId ? (tickets.find((x) => x.id === initialTicketId) ?? null) : null,
+  );
+  /** Tasks made from tickets on this visit (the rows themselves are not re-read). */
+  const [madeTasks, setMadeTasks] = useState<Record<string, NonNullable<SupportTicketDTO["task"]>>>({});
   const sheet = useSheet();
 
   /** Only the categories actually present, so the filter can never offer a
@@ -175,6 +189,14 @@ export function AdminSupportContent({
     [sheet],
   );
   const closeSheet = useCallback(() => sheet.close(() => setSelected(null)), [sheet]);
+
+  // …and its sheet opens once, on arrival.
+  const linked = useRef(false);
+  useEffect(() => {
+    if (linked.current) return;
+    linked.current = true;
+    if (selected) sheet.open();
+  }, [selected, sheet]);
 
   const onRowKey = (e: KeyboardEvent<HTMLTableRowElement>, t: SupportTicketDTO) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -338,7 +360,14 @@ export function AdminSupportContent({
         title={selected?.subject ?? "Ticket"}
         onClose={closeSheet}
       >
-        {selected ? <TicketDetail key={selected.id} ticket={selected} /> : null}
+        {selected ? (
+          <TicketDetail
+            key={selected.id}
+            ticket={selected}
+            task={madeTasks[selected.id] ?? selected.task}
+            onTask={(t) => setMadeTasks((m) => ({ ...m, [selected.id]: t }))}
+          />
+        ) : null}
       </Sheet>
     </>
   );
@@ -349,11 +378,37 @@ export function AdminSupportContent({
 // and no effect syncs state — the sheet stays mounted through its 190ms exit
 // with the last ticket's values still in place (admin-kit's contract).
 
-function TicketDetail({ ticket }: { ticket: SupportTicketDTO }) {
+function TicketDetail({
+  ticket,
+  task,
+  onTask,
+}: {
+  ticket: SupportTicketDTO;
+  task: SupportTicketDTO["task"];
+  onTask: (t: NonNullable<SupportTicketDTO["task"]>) => void;
+}) {
   const router = useRouter();
   const [status, setStatus] = useState(ticket.status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [making, setMaking] = useState(false);
+
+  // "Create task" (2026-10-11): a Support task on /admin/tasks with the
+  // ticket's subject and message and a link back here. A second press — or a
+  // second admin — gets the task already made, never a duplicate.
+  async function makeTask() {
+    setMaking(true);
+    setError(null);
+    try {
+      const r = await createTaskFromSupportTicket(ticket.id);
+      if (r.ok) onTask({ id: r.task.id, title: r.task.title, status: r.task.status });
+      else setError(r.error);
+    } catch {
+      setError("Couldn't create the task. Check your connection and try again.");
+    } finally {
+      setMaking(false);
+    }
+  }
 
   async function change(next: string) {
     const previous = status;
@@ -392,6 +447,24 @@ function TicketDetail({ ticket }: { ticket: SupportTicketDTO }) {
         </div>
 
         <div className={cx("msg")}>{ticket.body}</div>
+
+        <div className={cx("taskBar")}>
+          {task ? (
+            <Link href={taskPath(task.id) as Route} className={cx("btn", "btn-ghost", "btn-sm", "taskLink")}>
+              <svg className={cx("ic")} aria-hidden="true" focusable="false">
+                <use href="#i-board" />
+              </svg>
+              <span className={cx("taskLinkTxt")}>Task: {task.title}</span>
+            </Link>
+          ) : (
+            <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} onClick={makeTask} disabled={making}>
+              <svg className={cx("ic")} aria-hidden="true" focusable="false">
+                <use href="#i-plus" />
+              </svg>
+              {making ? "Creating…" : "Create task"}
+            </button>
+          )}
+        </div>
 
         {error ? <Note tone="danger">{error}</Note> : null}
       </SheetBody>
