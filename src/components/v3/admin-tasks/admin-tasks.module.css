@@ -162,16 +162,6 @@
 /* ============================================================
    THE TASK SHEET
    ============================================================ */
-:global(.jf-blueprint .content) .tsTitle {
-  width: 100%;
-  font-family: var(--font); font-size: 18px; font-weight: 800; line-height: 1.25; color: var(--ink);
-  border: 1.5px solid transparent; border-radius: var(--radius);
-  padding: 6px 8px; margin: -6px -8px 0;
-  background: transparent; resize: none; overflow: hidden;
-  transition: border-color 0.12s, background 0.12s;
-}
-:global(.jf-blueprint .content) .tsTitle:hover { border-color: var(--hair); }
-:global(.jf-blueprint .content) .tsTitle:focus { outline: none; border-color: var(--blueprint); background: #fff; box-shadow: 2px 2px 0 rgba(24, 84, 160, 0.25); }
 :global(.jf-blueprint .content) .tsGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
 :global(.jf-blueprint .content) .tsLinkRow { display: flex; gap: 8px; align-items: center; }
 :global(.jf-blueprint .content) .tsLinkRow > :first-child { flex: 1 1 auto; min-width: 0; }
@@ -307,7 +297,6 @@
   :global(.jf-blueprint .content) .subTools { grid-area: tools; }
   :global(.jf-blueprint .content) .subIn { height: 44px; font-size: 14px; }
   :global(.jf-blueprint .content) .iconBtn { width: 44px; height: 44px; }
-  :global(.jf-blueprint .content) .tsTitle { font-size: 17px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -315,6 +304,5 @@
   :global(.jf-blueprint .content) .progFill,
   :global(.jf-blueprint .content) .dirIc,
   :global(.jf-blueprint .content) .iconBtn,
-  :global(.jf-blueprint .content) .subIn,
-  :global(.jf-blueprint .content) .tsTitle { transition: none !important; }
+  :global(.jf-blueprint .content) .subIn { transition: none !important; }
 }

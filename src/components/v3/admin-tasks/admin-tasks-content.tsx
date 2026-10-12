@@ -9,16 +9,17 @@
 // Canceled, with the day each was closed). The tiles count what the page
 // holds, so they move with every change the page learns of.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Sheet, useSheet, KIT_BTN_CLASS } from "@/components/v3/admin-users/admin-kit";
 import { useAdminMotion } from "@/components/v3/admin-users/use-admin-motion";
 import ui from "@/components/v3/admin-influencers/admin-ui.module.css";
 import { toast } from "@/components/ui/Toast";
-import { createAdminTask } from "@/actions/adminTasks";
+import { createAdminTask, getAdminTask } from "@/actions/adminTasks";
 import {
   categoryLabel,
   dayLabel,
   isOverdue,
+  rowFromDetail,
   taskRef,
   type AdminPersonDTO,
   type TaskDetailDTO,
@@ -28,7 +29,8 @@ import { DEFAULT_DIR, applyFilters, countTasks, defaultSort, serializeFilters, s
 import { useTaskStore } from "./use-task-store";
 import { EMPTY_DRAFT, NewTaskForm, type NewTaskDraft } from "./new-task-sheet";
 import { TaskFilterBar } from "./task-filter-bar";
-import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, useDayOf, useToday } from "./task-bits";
+import { TaskSheetContent, sheetKicker } from "./task-sheet";
+import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, useDayOf, useHydrated, useToday } from "./task-bits";
 
 export interface AdminTasksProps {
   initialRows: TaskRowDTO[];
@@ -67,14 +69,64 @@ export function AdminTasksContent(props: AdminTasksProps) {
       return { ...f, tab, st: "", sort, dir: onDefault ? DEFAULT_DIR[sort] : f.dir };
     });
 
-  // The address carries the filters (and the open task), so a reload or a
+  // ── The open task ──
+  const taskSheet = useSheet();
+  const hydrated = useHydrated();
+  const [openId, setOpenId] = useState<string | null>(props.initialDetail?.id ?? null);
+  const openSeq = useRef(0);
+  const openTask = useCallback(
+    async (id: string) => {
+      if (id.startsWith("tmp-")) return;
+      const seq = ++openSeq.current;
+      setOpenId(id);
+      if (store.detail?.id !== id) store.setDetail(null);
+      taskSheet.open();
+      const r = await getAdminTask(id);
+      if (seq !== openSeq.current) return;
+      if (r.ok) store.ingestDetail(r.task, { open: true });
+      else {
+        toast.error("Couldn't open the task", r.error);
+        taskSheet.close(() => setOpenId(null));
+      }
+    },
+    [store, taskSheet],
+  );
+  const closeTask = useCallback(() => {
+    openSeq.current++;
+    taskSheet.close(() => {
+      setOpenId(null);
+      store.setDetail(null);
+    });
+  }, [store, taskSheet]);
+
+  // A ?task= link opens its task on arrival (the page read it on the server).
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current) return;
+    deepLinked.current = true;
+    if (props.initialDetail) taskSheet.open();
+    else if (props.missingTask) toast.error("That task doesn't exist", "It may have been opened from an old link.");
+  }, [props.initialDetail, props.missingTask, taskSheet]);
+
+  const openRow = store.rows.find((r) => r.id === openId) ?? null;
+  const sheetTask = store.detail && store.detail.id === openId ? store.detail : null;
+  const sheetHead = sheetTask ? rowFromDetail(sheetTask) : openRow;
+
+  const onRowKey = (e: KeyboardEvent<HTMLTableRowElement>, id: string) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      void openTask(id);
+    }
+  };
+
+  // The address carries the filters and the open task, so a reload or a
   // shared link shows the same list. replaceState with a null state: Next
   // skips its own sync when handed window.history.state.
   useEffect(() => {
-    const qs = serializeFilters(filters);
+    const qs = serializeFilters(filters, { task: openId });
     const next = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
     if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", next);
-  }, [filters]);
+  }, [filters, openId]);
 
   // ── New task ──
   const newSheet = useSheet();
@@ -228,7 +280,15 @@ export function AdminTasksContent(props: AdminTasksProps) {
                   const overdue = isOverdue(t, today);
                   const temp = t.id.startsWith("tmp-");
                   return (
-                    <tr key={t.id} className={cx("taskRow", !!store.flash[t.id] && "rowFlash", temp && "rowTemp")}>
+                    <tr
+                      key={t.id}
+                      className={cx("taskRow", !!store.flash[t.id] && "rowFlash", temp && "rowTemp", t.id === openId && "rowOpen")}
+                      tabIndex={temp ? -1 : 0}
+                      role="button"
+                      aria-label={`Open task: ${t.title}`}
+                      onClick={() => void openTask(t.id)}
+                      onKeyDown={(e) => onRowKey(e, t.id)}
+                    >
                       <td className={cx("tdPri")}>
                         <PriorityStamp priority={t.priority} />
                       </td>
@@ -270,6 +330,24 @@ export function AdminTasksContent(props: AdminTasksProps) {
           </div>
         )}
       </section>
+
+      <Sheet
+        handle={taskSheet}
+        wide
+        kicker={sheetHead ? sheetKicker(sheetHead, taskRef(sheetHead.id), hydrated) : "Task"}
+        title={sheetHead?.title ?? "Task"}
+        onClose={closeTask}
+      >
+        {sheetTask ? (
+          <TaskSheetContent key={sheetTask.id} task={sheetTask} people={people} me={me} store={store} today={today} />
+        ) : (
+          <div className={cx("sheet-body")}>
+            <div className={cx("tbl-empty")} role="status">
+              Loading the task…
+            </div>
+          </div>
+        )}
+      </Sheet>
 
       <Sheet handle={newSheet} kicker="Tasks" title="New task" onClose={closeNew}>
         <NewTaskForm key={draft.key} initial={draft.value} error={draft.error} people={people} onSubmit={submitNew} onCancel={closeNew} />
