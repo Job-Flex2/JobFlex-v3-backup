@@ -312,7 +312,8 @@ export async function applyPlanChange(
     const when = prorationDate && Math.abs(Date.now() / 1000 - prorationDate) < 3600 ? prorationDate : Math.floor(Date.now() / 1000);
     const startedAt = Math.floor(Date.now() / 1000) - 5;
     const year = await discountsForYear(r);
-    if (year.changed) await stripe.subscriptions.update(sub.id, { discounts: year.discounts });
+    // An empty list is not "none" to Stripe — the empty string clears them.
+    if (year.changed) await stripe.subscriptions.update(sub.id, { discounts: year.discounts.length ? year.discounts : "" });
     try {
       updated = await stripe.subscriptions.update(sub.id, {
         items: itemsFor(r),
@@ -340,7 +341,7 @@ export async function applyPlanChange(
     try {
       updated = await stripe.subscriptions.update(sub.id, {
         items: itemsFor(r),
-        ...(year.changed ? { discounts: year.discounts } : {}),
+        ...(year.changed ? { discounts: year.discounts.length ? year.discounts : "" } : {}),
         proration_behavior: "none",
         ...(r.route === "trial" ? { trial_end: sub.trial_end ?? undefined } : {}),
         metadata: metadataFor(r, organizationId),
