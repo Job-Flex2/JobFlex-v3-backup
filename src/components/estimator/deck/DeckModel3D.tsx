@@ -90,6 +90,11 @@ export interface DeckModel3DProps {
  */
 export interface SceneHighlight {
   boxes: number[][];
+  /** The scene's own parts lit (indexes into its boxes and its flat polygons), its footings, its shaped boards. */
+  boxIdx?: number[];
+  polyIdx?: number[];
+  footings?: boolean;
+  diagonal?: boolean;
   tag?: { x: number; y: number; z: number; text: string } | null;
 }
 
@@ -150,6 +155,36 @@ const STAIR = layerIndex("stair");
 const STAIR_SKIN = /^(tread|riser|landing tread|box tread)$/;
 /** Legend roles whose ends are plumb cuts (sheared boxes). */
 const PLUMB_CUT = /^(rafter|jack|fly|hip|fascia rake|stringer|stair rail|roof brace|brace|truss top chord)$/;
+
+/**
+ * A scene box's place in the 3D's world — shared by the parts and their highlight, so a lit part lies exactly on its
+ * part. A turned member's axis points `yaw` from +x in plan and rises `tilt`; a sloped member's ends are plumb cuts
+ * (the shear is written for the unit box — tan × depth ÷ length — so it goes on before the scale).
+ */
+const bmBasis = new THREE.Matrix4();
+const bmShear = new THREE.Matrix4();
+const bmScale = new THREE.Matrix4();
+const bmTrans = new THREE.Matrix4();
+const bmX = new THREE.Vector3();
+const bmY = new THREE.Vector3();
+const bmZ = new THREE.Vector3();
+function boxMatrix(b: readonly number[], role: string | null, ox: number, oz: number, out: THREE.Matrix4): THREE.Matrix4 {
+  const turned = b.length >= 10 && (b[8] !== 0 || b[9] !== 0);
+  const yaw = turned ? b[8] : 0;
+  const tilt = turned ? b[9] : 0;
+  if (turned) {
+    bmX.set(Math.cos(yaw) * Math.cos(tilt), Math.sin(tilt), Math.sin(yaw) * Math.cos(tilt));
+    bmY.set(-Math.cos(yaw) * Math.sin(tilt), Math.cos(tilt), -Math.sin(yaw) * Math.sin(tilt));
+    bmZ.set(-Math.sin(yaw), 0, Math.cos(yaw));
+    bmBasis.makeBasis(bmX, bmY, bmZ);
+  } else bmBasis.identity();
+  const plumb = turned && Math.abs(tilt) > 0.02 && Math.abs(tilt) < 1.45 && !!role && PLUMB_CUT.test(role);
+  bmShear.identity();
+  if (plumb) bmShear.elements[4] = Math.tan(tilt) * (b[6] / b[4]);
+  bmScale.makeScale(b[4], b[6], b[5]);
+  bmTrans.makeTranslation(b[1] - ox, b[3], b[2] - oz);
+  return out.copy(bmTrans).multiply(bmBasis).multiply(bmScale).multiply(bmShear);
+}
 const MOUNT_OF: Partial<Record<SceneLayer, DeckPick["mount"]>> = { post: "post", "roof-post": "post", header: "header", beam: "header", rail: "rail", glass: "rail", decking: "deck", fascia: "deck", rim: "deck", joist: "deck", ceiling: "ceiling", rafter: "ceiling", sheathing: "ceiling", roofing: "ceiling", ridge: "peak", stair: "stair", wall: "wall", screen: "wall", ledger: "wall", light: "deck", wire: "deck" };
 
 const CONCRETE = 0xb9b6ad;
@@ -801,14 +836,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
 
       const layers: Built["layers"] = SCENE_LAYERS.map(() => []);
       const braces: THREE.Mesh[] = [];
-      const basis = new THREE.Matrix4();
-      const shear = new THREE.Matrix4();
-      const scale = new THREE.Matrix4();
-      const trans = new THREE.Matrix4();
       const m4 = new THREE.Matrix4();
-      const ax = new THREE.Vector3();
-      const ay = new THREE.Vector3();
-      const az = new THREE.Vector3();
       // The wiring is priced and listed, never drawn: a cable hanging through the frame reads as a mistake, not a feature
       // (owner, 2026-10-10: "don't show those wires — show the features and price it out").
       mount.dataset.deck3dWires = s.boxes.some((b) => b[0] === WIRE) ? "hidden" : "none";
@@ -837,27 +865,9 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const base = mat.userData.base as THREE.Color;
           idx.forEach((bi, k) => {
             const b = s.boxes[bi];
-            const turned = b.length >= 10 && (b[8] !== 0 || b[9] !== 0);
-            const yaw = turned ? b[8] : 0;
-            const tilt = turned ? b[9] : 0;
-            if (turned) {
-              // A turned member: its axis points `yaw` from +x in plan and rises `tilt`.
-              ax.set(Math.cos(yaw) * Math.cos(tilt), Math.sin(tilt), Math.sin(yaw) * Math.cos(tilt));
-              ay.set(-Math.cos(yaw) * Math.sin(tilt), Math.cos(tilt), -Math.sin(yaw) * Math.sin(tilt));
-              az.set(-Math.sin(yaw), 0, Math.cos(yaw));
-              basis.makeBasis(ax, ay, az);
-            } else basis.identity();
-            // A sloped member's ends are plumb cuts: shear the box so each end face stands vertical in the world.
-            const lg = legendOf(bi);
-            const plumb = turned && Math.abs(tilt) > 0.02 && Math.abs(tilt) < 1.45 && !!lg && PLUMB_CUT.test(lg.role);
-            shear.identity();
-            if (plumb) shear.elements[4] = Math.tan(tilt) * (b[6] / b[4]);
-            scale.makeScale(b[4], b[6], b[5]);
-            trans.makeTranslation(b[1] - ox, b[3], b[2] - oz);
-            // The shear is written for the unit box (tan × depth ÷ length), so it goes on before the scale: applied after
-            // it (as it was), a cut slid by depth²÷length — a few hundredths of an inch — and the ends stood square, so two
-            // rafters or top chords meeting at the ridge overlapped and flickered (2026-10-11).
-            m4.copy(trans).multiply(basis).multiply(scale).multiply(shear);
+            // Placed by boxMatrix (plumb-cut ends; the shear before the scale — applied after it, as it once was, a cut
+            // slid by depth²÷length and the ends stood square, so rafters met at the ridge overlapping, 2026-10-11).
+            boxMatrix(b, legendOf(bi)?.role ?? null, ox, oz, m4);
             mesh.setMatrixAt(k, m4);
             mesh.setColorAt(k, L === LIGHT && s.glows.some((g) => Math.abs(g[0] - b[1]) < 0.05 && Math.abs(g[1] - b[2]) < 0.05 && Math.abs(g[2] - b[3]) < 0.05) ? new THREE.Color(s.glows.find((g) => Math.abs(g[0] - b[1]) < 0.05 && Math.abs(g[1] - b[2]) < 0.05 && Math.abs(g[2] - b[3]) < 0.05)![3]).lerp(new THREE.Color(0xffffff), 0.45) : jitter(base, bi + L * 97, L === DECKING ? 0.045 : L === TRIM || L === GUTTER || L === HARDWARE ? 0.01 : 0.03));
             centres[bi] = [new THREE.Vector3(b[1] - ox, b[3], b[2] - oz), Math.max(b[4], b[5], b[6])];
@@ -1500,8 +1510,9 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         lit = null;
       }
       const h = highlightRef.current;
-      mount.dataset.deck3dHighlight = h && h.boxes.length ? h.tag?.text ?? "on" : "";
-      if (!h || !h.boxes.length) {
+      const any = !!h && (h.boxes.length > 0 || !!h.boxIdx?.length || !!h.polyIdx?.length || !!h.footings || !!h.diagonal || !!h.tag);
+      mount.dataset.deck3dHighlight = h && any ? h.tag?.text ?? "on" : "";
+      if (!h || !any) {
         dirty = true;
         return;
       }
@@ -1509,7 +1520,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const ox = s.widthFt / 2;
       const oz = s.depthFt / 2;
       const group = new THREE.Group();
-      const fill = new THREE.MeshBasicMaterial({ color: 0x2a6fd6, transparent: true, opacity: 0.32, depthTest: false, depthWrite: false });
+      const fill = new THREE.MeshBasicMaterial({ color: 0x2a6fd6, transparent: true, opacity: 0.32, depthTest: false, depthWrite: false, side: THREE.DoubleSide });
       const line = new THREE.LineBasicMaterial({ color: 0x1854a0, transparent: true, opacity: 0.95, depthTest: false });
       const edges: THREE.BufferGeometry[] = [];
       for (const b of h.boxes) {
@@ -1532,6 +1543,83 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         e.renderOrder = 31;
         group.add(e);
       }
+      // The scene's own parts: the same matrices the parts stand on, filled through everything in front of them.
+      const sc = sceneRef.current;
+      const idx = (h.boxIdx ?? []).filter((i) => i >= 0 && i < sc.boxes.length && sc.boxes[i][7] === 0);
+      const extraGeos: THREE.BufferGeometry[] = [];
+      if (idx.length) {
+        const legendRole = (i: number) => (sc.tags.length === sc.boxes.length && sc.tags[i] >= 0 ? sc.legend[sc.tags[i]]?.role ?? null : null);
+        const inst = new THREE.InstancedMesh(unitBox, fill, idx.length);
+        const mm = new THREE.Matrix4();
+        idx.forEach((bi, k) => inst.setMatrixAt(k, boxMatrix(sc.boxes[bi], legendRole(bi), ox, oz, mm)));
+        inst.instanceMatrix.needsUpdate = true;
+        inst.renderOrder = 30;
+        group.add(inst);
+      }
+      // A knee brace is drawn as its box's diagonal: lit as a slim box along it.
+      for (const bi of (h.boxIdx ?? []).filter((i) => i >= 0 && i < sc.boxes.length && sc.boxes[i][7] !== 0)) {
+        const b = sc.boxes[bi];
+        const alongX = b[7] === 1 || b[7] === 2;
+        const run = alongX ? b[4] : b[5];
+        const len = Math.hypot(run, b[6]);
+        const ang = Math.atan2(b[6], run);
+        const m = new THREE.Mesh(unitBox, fill);
+        m.position.set(b[1] - ox, b[3], b[2] - oz);
+        if (alongX) {
+          m.scale.set(len, 3.5 / 12, 1.5 / 12);
+          m.rotation.z = b[7] === 1 ? ang : -ang;
+        } else {
+          m.scale.set(1.5 / 12, 3.5 / 12, len);
+          m.rotation.x = b[7] === 3 ? -ang : ang;
+        }
+        m.renderOrder = 30;
+        group.add(m);
+      }
+      // Flat faces (the roofing, a ceiling, a slab, walls): fans, both sides.
+      const rings: number[][] = (h.polyIdx ?? []).filter((i) => i >= 0 && i < sc.polys.length).map((i) => sc.polys[i]);
+      const fan = (pts: Array<[number, number, number]>, out: number[]) => {
+        for (let k = 1; k + 1 < pts.length; k++) out.push(...pts[0], ...pts[k], ...pts[k + 1]);
+      };
+      const flat: number[] = [];
+      for (const r of rings) {
+        const pts: Array<[number, number, number]> = [];
+        for (let k = 1; k + 2 < r.length; k += 3) pts.push([r[k] - ox, r[k + 2] + 0.02, r[k + 1] - oz]);
+        fan(pts, flat);
+      }
+      // Shaped and diagonal boards: their tops.
+      if (h.diagonal && sc.diagonal) {
+        sc.diagonal.boards.forEach((ring, bi) => {
+          const top = (sc.diagonal!.zs?.[bi] ?? sc.heightFt) + 0.02;
+          const pts: Array<[number, number, number]> = [];
+          for (let k = 0; k + 1 < ring.length; k += 2) pts.push([ring[k] - ox, top, ring[k + 1] - oz]);
+          fan(pts, flat);
+        });
+      }
+      if (flat.length) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(flat, 3));
+        extraGeos.push(geo);
+        const sheet = new THREE.Mesh(geo, fill);
+        sheet.renderOrder = 30;
+        group.add(sheet);
+      }
+      // The footings: their piers, from the pad up to the top.
+      if (h.footings && sc.footings.length) {
+        const piers = new THREE.InstancedMesh(unitCyl, fill, sc.footings.length);
+        const dummy = new THREE.Object3D();
+        sc.footings.forEach((f, i) => {
+          const [x, y, pad, thick, pier, depth, top] = f;
+          const hgt = Math.max(0.05, depth + top);
+          dummy.position.set(x - ox, top - hgt / 2, y - oz);
+          dummy.scale.set(Math.max(pier, pad * 0.8), hgt, Math.max(pier, pad * 0.8));
+          dummy.updateMatrix();
+          piers.setMatrixAt(i, dummy.matrix);
+          void thick;
+        });
+        piers.instanceMatrix.needsUpdate = true;
+        piers.renderOrder = 30;
+        group.add(piers);
+      }
       let tag: ReturnType<typeof tagSprite> | null = null;
       if (h.tag) {
         tag = tagSprite(h.tag.text, true);
@@ -1550,6 +1638,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           fill.dispose();
           line.dispose();
           for (const g of edges) g.dispose();
+          for (const g of extraGeos) g.dispose();
           tag?.dispose();
         },
       };
