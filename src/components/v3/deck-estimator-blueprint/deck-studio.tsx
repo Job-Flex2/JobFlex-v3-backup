@@ -89,6 +89,7 @@ import { applyDeckPatch, checkSummary, deckChecks, type DeckCheck, type DeckPatc
 import { deckScene, sceneBuildLayers, SCENE_LAYER_LABEL, type SceneLegend } from "@/lib/deck/scene";
 import { deckElevation, defaultPlacement } from "@/lib/deck/elevation";
 import { BOM_STEP_LABEL, type BomStep } from "@/lib/deck/takeoff";
+import { STORE_SURVEY, storePrice } from "@/lib/deck/storePrices";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
@@ -1128,6 +1129,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         <div className={s.jobFacts}>
           <span className={s.mono}>{(frame ?? roof)?.species.region} lumber: {(frame ?? roof)?.species.short}</span>
           {exampleShare > 0 ? <span className={cx(s.stamp, s.stampWarn)}>{exampleShare}% example prices</span> : <span className={cx(s.stamp, s.stampPass)}>Your prices</span>}
+          {pkg.storeShare > 0 ? <span className={cx(s.stamp, s.stampPass)} title={`Materials at ${STORE_SURVEY.store}'s listed prices, surveyed once (${STORE_SURVEY.asOf}) — your own prices win`} data-deck-store-share>Materials: {STORE_SURVEY.store}, {new Date(STORE_SURVEY.asOf + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span> : null}
           <div className={s.draftBar} data-deck-drafts>
             <span className={s.draftState} data-deck-save={saveState}>
               {saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `Saved ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : opened?.from === "proposal" ? "Opened from the proposal" : "Saves itself as you work"}
@@ -2344,7 +2346,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     </td>
                     <td className={cx(s.r, s.nums)}>
                       {l.byClient ? "—" : money(l.unitPrice, true)}
-                      {l.source !== "book" && !l.byClient ? <span className={s.example} title="An example price — set yours under Your prices">ex</span> : null}
+                      {l.source === "store" && !l.byClient ? <span className={s.example} title={`${STORE_SURVEY.label} — set yours under Your prices`} data-price-source="store">{STORE_SURVEY.short}</span> : l.source !== "book" && !l.byClient ? <span className={s.example} title="An example price — set yours under Your prices" data-price-source="example">ex</span> : null}
                     </td>
                     <td className={cx(s.r, s.nums)}>{l.byClient ? "TBD" : money(l.cost, true)}</td>
                   </tr>
@@ -2383,7 +2385,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   return (
                     <label key={rt.key} className={s.rateRow}>
                       <span className={s.rateLabel}>{rt.label}</span>
-                      <span className={s.rateUnit}>per {rt.unit}</span>
+                      <span className={s.rateUnit}>per {rt.unit}{rt.basis !== "labor" && storePrice(rt.key) ? ` · ${STORE_SURVEY.short} ${STORE_SURVEY.asOf.slice(0, 7)}` : ""}</span>
                       <input className={cx(s.in, s.num, s.rateIn)} inputMode="decimal" placeholder={example.toFixed(2)} value={drafts2[rt.key] ?? ""} onChange={(e) => setDrafts2((d) => ({ ...d, [rt.key]: e.target.value }))} />
                     </label>
                   );

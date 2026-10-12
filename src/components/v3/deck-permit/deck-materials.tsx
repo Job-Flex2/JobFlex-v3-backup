@@ -11,6 +11,7 @@ import { structureWords, type DeckDesign } from "@/lib/deck/design";
 import { materialList, materialListCsv, materialListText, listAsk, type ListFor } from "@/lib/deck/materialList";
 import type { DeckRateBook } from "@/lib/deck/rates";
 import { parseStateZip, resolveMarket } from "@/lib/fence/market";
+import { STORE_SURVEY } from "@/lib/deck/storePrices";
 import s from "./deck-materials.module.css";
 
 const cx = (...names: Array<string | false | null | undefined>) => names.filter(Boolean).join(" ");
@@ -145,7 +146,7 @@ export function DeckMaterialSheet({ design, address, title, shop, book, homeStat
                       <div className={s.item}>{l.label}</div>
                       {l.note ? <div className={s.note}>{l.note}</div> : null}
                     </td>
-                    {withPrices ? <td className={cx(s.r, s.num)}>{money(l.unitPrice)}{l.example ? <span className={s.ex} title="An example price — set yours under Your prices in the studio">ex</span> : null}</td> : null}
+                    {withPrices ? <td className={cx(s.r, s.num)}>{money(l.unitPrice)}{l.store ? <span className={s.ex} title={`${STORE_SURVEY.label} — set yours under Your prices in the studio`}>{STORE_SURVEY.short}</span> : l.example ? <span className={s.ex} title="An example price — set yours under Your prices in the studio">ex</span> : null}</td> : null}
                     {withPrices ? <td className={cx(s.r, s.num)}>{money(l.cost)}</td> : <td className={s.blank} />}
                   </tr>
                 ))}

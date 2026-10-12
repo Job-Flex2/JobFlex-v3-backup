@@ -374,10 +374,11 @@ const seattle = resolveMarket({ state: "WA", zip: "98052" });
   check("each line's halves add up to its unit price, to the cent", p.lines.every((l) => Math.abs(l.materialCost + l.laborCost - l.unitPrice) < 0.005));
   check("the package's total IS the sum of its lines (the proposal will show the same number)", Math.abs(p.subtotal - p.lines.reduce((a, l) => a + l.quantity * l.unitPrice, 0)) < 0.005 && Math.abs(p.materialSubtotal + p.laborSubtotal - p.subtotal) < 0.05);
   check("the lines' material is the material list's cost, within a cent a unit", Math.abs(p.materialSubtotal - p.bom.reduce((a, l) => a + l.cost, 0)) < 0.01 * p.lines.reduce((a, l) => a + l.quantity, 0));
-  check("with no price book, everything stands on example prices — and says so", p.exampleShare === 1 && p.bom.every((l) => l.source !== "book"));
+  // Since 2026-10-12 a default is Home Depot's surveyed price where it sells the item (lib/deck/storePrices), else an example.
+  check("with no price book, nothing is the shop's own: every default is a store price or an example, and the share says so", p.bom.every((l) => l.source !== "book") && p.exampleShare > 0 && p.exampleShare + p.storeShare * (p.materialSubtotal / p.subtotal) > 0.999, `examples ${Math.round(p.exampleShare * 100)}%, store ${Math.round(p.storeShare * 100)}% of materials`);
   check("a plain treated deck prices between $20 and $60 a square foot on the examples", p.pricePerSqFt > 20 && p.pricePerSqFt < 60, `$${p.pricePerSqFt}/sq ft, $${p.subtotal}`);
   const national = priceDeck(WA);
-  check("the job's market moves the examples: Seattle labor is dearer than the national figure", p.laborSubtotal > national.laborSubtotal * 1.2 && national.bom.every((l) => l.source === "example"));
+  check("the job's market moves the examples: Seattle labor is dearer than the national figure", p.laborSubtotal > national.laborSubtotal * 1.2 && national.bom.every((l) => l.source === "example" || l.source === "store"));
   const book = sanitizeDeckRateBook({ "labor.framing": 12, "lf.2x8": 1.8, "deck.pt-hemfir-2x6": 1.2, nonsense: 5, "labor.footing": 999999, "hw.tie": "abc" });
   check("the shop's book keeps what it changed: unknown rows, numbers past their rails and restated defaults are dropped", JSON.stringify(book) === JSON.stringify({ "labor.framing": 12, "lf.2x8": 1.8 }));
   const own = priceDeck(WA, { market: seattle, rates: book });

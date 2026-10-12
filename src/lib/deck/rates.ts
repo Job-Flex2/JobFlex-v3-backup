@@ -21,6 +21,7 @@
 
 import { DECKING, RAIL_TYPES } from "./catalog";
 import { laborFactor, type MarketBasis, type MarketSnapshot } from "../fence/market";
+import { storePrice } from "./storePrices";
 
 export type DeckRateGroup = "lumber" | "decking" | "hardware" | "concrete" | "roof" | "trim" | "gutters" | "labor" | "roofLabor" | "allowance" | "electrical";
 export const DECK_RATE_GROUP_LABEL: Record<DeckRateGroup, string> = {
@@ -281,8 +282,11 @@ export function sanitizeDeckRateBook(raw: unknown): DeckRateBook {
 
 export interface ResolvedRate {
   price: number;
-  /** "book": the shop typed it. "market": the example, scaled to the job's market. "example": the example as is. */
-  source: "book" | "market" | "example";
+  /**
+   * "book": the shop typed it. "store": Home Depot's listed price, surveyed once (lib/deck/storePrices), scaled to the
+   * job's market. "market": the example, scaled to the job's market. "example": the example as is.
+   */
+  source: "book" | "store" | "market" | "example";
 }
 
 /** What one row prices at on this job. An unknown key prices at zero. */
@@ -292,6 +296,9 @@ export function deckRate(key: string, book?: DeckRateBook, market?: MarketSnapsh
   const own = book?.[key];
   if (typeof own === "number" && Number.isFinite(own) && own >= def.min && own <= def.max) return { price: own, source: "book" };
   const factor = !market || def.basis === null ? 1 : def.basis === "labor" ? laborFactor(market) : (market.material[def.basis] ?? 1);
+  // The store's price where it sells the item (labor never), else the example — either scaled to the job's market.
+  const store = def.basis === "labor" ? null : storePrice(key);
+  if (store) return { price: factor === 1 ? store.price : Math.round(store.price * factor * 100) / 100, source: "store" };
   return factor === 1 ? { price: def.price, source: "example" } : { price: Math.round(def.price * factor * 100) / 100, source: "market" };
 }
 
@@ -300,9 +307,16 @@ export function deckRateDef(key: string): DeckRateDef | undefined {
 }
 
 /** The whole book as rows, for the rate card: every row, the shop's number where it set one. */
-export function deckRateRows(book?: DeckRateBook): Array<DeckRateDef & { own: number | null }> {
-  return DECK_RATES.map((r) => ({ ...r, own: typeof book?.[r.key] === "number" ? book[r.key] : null }));
+/** Every row with the shop's own number, and its default: the store's price where it sells the item, else the example (`example` keeps the original figure, `store` says which). */
+export function deckRateRows(book?: DeckRateBook): Array<DeckRateDef & { own: number | null; example: number; store: boolean }> {
+  return DECK_RATES.map((r) => {
+    const store = r.basis === "labor" ? null : storePrice(r.key);
+    return { ...r, price: store ? store.price : r.price, example: r.price, store: !!store, own: typeof book?.[r.key] === "number" ? book[r.key] : null };
+  });
 }
+
+/** A price that is neither the shop's own nor a store's: an example (as is, or scaled to the market). */
+export const isExampleSource = (s: ResolvedRate["source"]) => s === "example" || s === "market";
 
 /** The lumber row a member is bought on: "2-2x10" and "2x10" are both 2x10 stock. */
 export function lumberKey(nominal: string): string {

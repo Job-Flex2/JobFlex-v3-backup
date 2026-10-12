@@ -10,6 +10,7 @@
 // copy carries no prices — the yard quotes; the installer's may carry the
 // studio's estimated prices (the shop's own price book, else example prices).
 import type { DeckPackage } from "./pricing";
+import { isExampleSource } from "./rates";
 import { BOM_STEP_LABEL, BOM_STEP_ORDER, type BomStep } from "./takeoff";
 
 export type ListFor = "yard" | "installer";
@@ -24,8 +25,10 @@ export interface MaterialListLine {
   /** The studio's estimate, per unit and for the line (0 for a client's fixture). */
   unitPrice: number;
   cost: number;
-  /** The price is an example, not the shop's own. */
+  /** The price is an example, not the shop's own nor a store's. */
   example: boolean;
+  /** The price is the store's surveyed listing (lib/deck/storePrices). */
+  store: boolean;
 }
 
 export interface MaterialListGroup {
@@ -55,7 +58,7 @@ export function materialList(pkg: DeckPackage): MaterialList {
     const g = groups.get(l.step) ?? { step: l.step, label: BOM_STEP_LABEL[l.step] ?? l.step, lines: [], cost: 0 };
     const byClient = !!l.byClient;
     const cost = byClient ? 0 : round2(l.cost);
-    g.lines.push({ label: l.label, qty: l.qty, unit: l.unit, note: l.note ?? null, byClient, unitPrice: byClient ? 0 : round2(l.unitPrice), cost, example: !byClient && l.source !== "book" });
+    g.lines.push({ label: l.label, qty: l.qty, unit: l.unit, note: l.note ?? null, byClient, unitPrice: byClient ? 0 : round2(l.unitPrice), cost, example: !byClient && isExampleSource(l.source), store: !byClient && l.source === "store" });
     g.cost = round2(g.cost + cost);
     groups.set(l.step, g);
   }

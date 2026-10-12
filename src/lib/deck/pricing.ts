@@ -29,7 +29,7 @@ import { footingDepthIn, type BuildOptions, type DeckFrame } from "./frame";
 import { roofWords, type RoofFrame } from "./roof";
 import { buildStructure, structureLevels, type DeckStructure } from "./structure";
 import { deckTakeoff, type BomLine, type BomStep, type DeckTakeoff } from "./takeoff";
-import { deckRate, type ResolvedRate } from "./rates";
+import { isExampleSource, deckRate, type ResolvedRate } from "./rates";
 import { railType } from "./catalog";
 import { GUARD_REQUIRED_ABOVE_IN, LEDGER_FASTENER_LABEL, RISER_MAX_IN, ftIn } from "./codeTables";
 import { codeWords } from "./stateCodes";
@@ -90,6 +90,8 @@ export interface DeckPackage {
   pricePerSqFt: number;
   /** The share of the subtotal that still stands on example prices, 0–1. */
   exampleShare: number;
+  /** The share of the materials priced at the store's surveyed prices (lib/deck/storePrices), 0–1. */
+  storeShare: number;
   /** Feet of railing and stair risers in the price (0 when none). */
   railFt: number;
   stairSteps: number;
@@ -122,7 +124,7 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
     return { ...l, unitPrice: l.qty > 0 ? round2(cost / l.qty) : 0, cost, source: l.byClient ? "book" : r.source };
   });
   const stepMaterial = (step: BomStep, filter: (l: PricedBomLine) => boolean = () => true) => bom.filter((l) => l.step === step && filter(l)).reduce((a, l) => a + l.cost, 0);
-  const stepExample = (step: BomStep, filter: (l: PricedBomLine) => boolean = () => true) => bom.filter((l) => l.step === step && filter(l) && l.source !== "book").reduce((a, l) => a + l.cost, 0);
+  const stepExample = (step: BomStep, filter: (l: PricedBomLine) => boolean = () => true) => bom.filter((l) => l.step === step && filter(l) && isExampleSource(l.source)).reduce((a, l) => a + l.cost, 0);
 
   const lines: DeckPackageLine[] = [];
   /** One line: the totals for its step, spread over its quantity, the halves adding up to the cent. */
@@ -137,7 +139,7 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
   const work = (key: string, qty: number) => {
     const r = rate(key);
     const amount = r.price * qty;
-    return { amount, example: r.source === "book" ? 0 : amount };
+    return { amount, example: isExampleSource(r.source) ? amount : 0 };
   };
   const none = { amount: 0, example: 0 };
   const sum = (...ws: Array<{ amount: number; example: number }>) => ({ amount: ws.reduce((a, w) => a + w.amount, 0), example: ws.reduce((a, w) => a + w.example, 0) });
@@ -394,6 +396,7 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
     areaSqFt: area,
     pricePerSqFt: area > 0 ? round2(subtotal / area) : 0,
     exampleShare: subtotal > 0 ? Math.min(1, Math.max(0, Math.round((exampleMoney / subtotal) * 1000) / 1000)) : 0,
+    storeShare: materialSubtotal > 0 ? Math.min(1, Math.round((bom.filter((l) => l.source === "store").reduce((a, l) => a + l.cost, 0) / materialSubtotal) * 1000) / 1000) : 0,
     railFt,
     stairSteps,
     market: opts.market,

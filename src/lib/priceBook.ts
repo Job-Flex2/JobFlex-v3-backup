@@ -349,7 +349,7 @@ export function deckBookRows(book: DeckRateBook): BookRow[] {
     id: r.key,
     group: DECK_RATE_GROUP_LABEL[r.group],
     name: r.label,
-    specs: `example $${r.price} per ${r.unit}`,
+    specs: r.store ? `Home Depot $${r.price} per ${r.unit} (Oct 2026)` : `example $${r.price} per ${r.unit}`,
     unit: r.unit,
     price: r.own ?? r.price,
     labor: null,
