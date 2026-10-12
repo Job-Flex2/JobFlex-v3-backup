@@ -44,6 +44,7 @@ import type { GooglePrefill, SetupPrefill } from "@/app/(auth)/auth/register/reg
 import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
 import { isEditionPlan, type EditionId } from "@/lib/editions";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, termFromParam, BILLING_PARAM, type BillingTerm } from "@/lib/planDeal";
+import { firstBillCents } from "@/lib/firstMonthDiscount";
 import { PlanDealSlot, PlanTermSwitch, recalledBillingTerm, rememberBillingTerm } from "@/components/billing/PlanTermSwitch";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
@@ -355,10 +356,11 @@ export function RegisterContent({
   const freeUntil = firstChargeAt ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(firstChargeAt)) : null;
   /** "Free until Oct 13, then $95/mo" — the price after a code's discount, to
    *  the cent as Stripe charges it; without a card, "… No card needed." */
-  const freeUntilLine = (cents: number, per: string) => {
+  const freeUntilLine = (cents: number, per: string, monthlyCents: number) => {
     if (!freeUntil) return null;
     if (!requiresCard) return `Free until ${freeUntil}. No card needed.`;
-    const v = Math.round(cents * (1 - (promo?.percentOff ?? 0) / 100)) / 100;
+    // A first-month code takes one month's worth off a yearly bill (lib/firstMonthDiscount).
+    const v = firstBillCents(per === "/yr" ? "YEAR" : "MONTH", cents, monthlyCents, promo?.percentOff ?? 0) / 100;
     return `Free until ${freeUntil}, then $${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2)}${per}`;
   };
   /* True from the first frame when Stripe has just sent them back: the account
@@ -1940,17 +1942,18 @@ export function RegisterContent({
                     </span>
                     {/* "N months free" + "You save $N" on a year, "Billed monthly" otherwise (lib/planDeal). */}
                     <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
-                    {freeUntil ? <span className="pw-when">{freeUntilLine(cents, per)}</span> : null}
+                    {freeUntil ? <span className="pw-when">{freeUntilLine(cents, per, p.priceCents)}</span> : null}
                     {/* THE CODE'S EFFECT ON THIS PRICE. "Code applied" over an
                         unchanged number read as nothing happening (owner,
                         2026-09-02); the same percent checkout applies is
                         shown here, against the price it applies to. */}
                     {promo?.percentOff ? (
                       <span className="pw-save pw-save--code">
-                        <s>{dealDollars(cents)}</s> {promo.percentOff}% off · $
+                        <s>{dealDollars(cents)}</s> {promo.percentOff}% off{term === "YEAR" ? " your first month" : ""} · $
                         {(() => {
-                          // Stripe's own number, to the cent: $22.50, not $23.
-                          const v = Math.round(cents * (1 - promo.percentOff / 100)) / 100;
+                          // Stripe's own number, to the cent: $22.50, not $23. On a year,
+                          // one month's percent off the year (lib/firstMonthDiscount).
+                          const v = firstBillCents(term, cents, p.priceCents, promo.percentOff) / 100;
                           return Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2);
                         })()}
                         {per}
@@ -2034,7 +2037,7 @@ export function RegisterContent({
                   <i>{interval === "YEAR" ? "/yr" : "/mo"}</i>
                 </span>
                 <PlanDealSlot term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} />
-                {freeUntil ? <span className="pw-when">{freeUntilLine(customCents, interval === "YEAR" ? "/yr" : "/mo")}</span> : null}
+                {freeUntil ? <span className="pw-when">{freeUntilLine(customCents, interval === "YEAR" ? "/yr" : "/mo", customPriceCents(customPages))}</span> : null}
                 {/* the code's line has a row in this grid; the custom card keeps it empty */}
                 {promo?.percentOff ? <span aria-hidden="true" /> : null}
                 <span className="pw-feats" data-plan-feats>

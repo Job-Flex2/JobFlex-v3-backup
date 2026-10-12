@@ -76,6 +76,8 @@ export async function createCardlessSubscription(opts: {
     attribution: opts.attribution,
     trialDays: priced.trialDays,
     where: "cardless-trial",
+    interval: priced.interval,
+    monthlyCents: priced.monthlyCents,
   });
   const meta: Record<string, string> = {
     signupToken: opts.token,

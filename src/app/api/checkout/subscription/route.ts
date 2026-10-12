@@ -10,7 +10,8 @@ import { checkoutDiscount } from "@/lib/checkoutDiscount";
 import { getPlanBySlug } from "@/lib/planCatalogServer";
 import { planComingSoon } from "@/lib/editions";
 import { ensureRecurringPrice } from "@/lib/stripePriceCache";
-import { ensureReferralCoupon } from "@/lib/referralDiscount";
+import { REFERRAL_DISCOUNT_PCT, ensureReferralCoupon, referralCouponMonths } from "@/lib/referralDiscount";
+import { ensureYearFirstMonthCoupon, promoPercentOff } from "@/lib/yearDiscount";
 import { trialDaysFor } from "@/lib/trialEligibility";
 import { CUSTOM_PLAN_SLUG, customPriceCents, normalizeCustomPages } from "@/lib/customPlan";
 import { getCustomPlanTrialDays } from "@/lib/customPlanConfig";
@@ -298,10 +299,30 @@ export async function POST(req: Request) {
   // pre-applied discount (deactivated or expired on their side) the first bill
   // falls back to manual code entry, and says so in the log: silently dropping
   // the discount the plan step promised was the bug the owner reported.
+  /* A FIRST-MONTH CODE ON A YEARLY BILL (owner, 2026-10-12): the percent of
+     ONE month of this plan, as a fixed amount (lib/yearDiscount) — Stripe would
+     take a percent coupon off the whole year. No code field on a yearly
+     checkout for the same reason. */
+  const monthlyCents = isCustom ? customPriceCents(pages) : plan.priceCents;
+  let yearCoupon: string | null = null;
+  if (interval === "YEAR" && !everSubscribed && (autoApplyPromotionCode || referralCoupon)) {
+    try {
+      if (autoApplyPromotionCode && promoForCheckout) {
+        const pct = await promoPercentOff(stripe, autoApplyPromotionCode, promoForCheckout.customerPercentOff);
+        if (pct) yearCoupon = await ensureYearFirstMonthCoupon(stripe, mode, { kind: "promo", pct, monthlyCents, months: referralCouponMonths(trialDays), promoCodeId: promoForCheckout.id, code: promoForCheckout.code });
+      } else if (referralCoupon) {
+        yearCoupon = await ensureYearFirstMonthCoupon(stripe, mode, { kind: "referral", pct: REFERRAL_DISCOUNT_PCT, monthlyCents, months: referralCouponMonths(trialDays) });
+      }
+    } catch (err) {
+      console.warn("[checkout/subscription] yearly first-month coupon unavailable:", err);
+    }
+  }
   const discount = checkoutDiscount({
     everSubscribed,
     promotionCode: autoApplyPromotionCode,
     referralCoupon,
+    year: interval === "YEAR",
+    yearCoupon,
   });
   let session;
   try {
@@ -309,7 +330,7 @@ export async function POST(req: Request) {
   } catch (err) {
     if (discount.kind !== "promo" && discount.kind !== "referral") throw err;
     console.warn(`[checkout/subscription] Stripe refused the ${discount.kind} discount, falling back to manual entry:`, err);
-    session = await stripe.checkout.sessions.create({ ...baseParams, allow_promotion_codes: true });
+    session = await stripe.checkout.sessions.create({ ...baseParams, ...(interval === "MONTH" ? { allow_promotion_codes: true } : {}) });
   }
 
   return NextResponse.json({ url: session.url });

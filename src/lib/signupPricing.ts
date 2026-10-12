@@ -16,7 +16,8 @@ import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { customLineItems } from "@/lib/customBilling";
 import { validateAttribution } from "@/lib/attribution";
 import { promotionCodeIdForMode } from "@/lib/influencerPromoMode";
-import { ensureReferralCoupon, referralCouponMonths } from "@/lib/referralDiscount";
+import { REFERRAL_DISCOUNT_PCT, ensureReferralCoupon, referralCouponMonths } from "@/lib/referralDiscount";
+import { ensureYearFirstMonthCoupon, promoPercentOff } from "@/lib/yearDiscount";
 import type { StripeMode } from "@/lib/stripeMode";
 
 export type SignupInterval = "MONTH" | "YEAR";
@@ -34,6 +35,11 @@ export type SignupPrice =
       isCustom: boolean;
       /** What the plan costs per interval, in cents. */
       cents: number;
+      /** The term billed. */
+      interval: SignupInterval;
+      /** One month of the plan, in cents: what a first-month code is a
+       *  percent of on a yearly bill (lib/firstMonthDiscount). */
+      monthlyCents: number;
     }
   | { ok: false; status: number; error: string };
 
@@ -64,7 +70,7 @@ export async function resolveSignupPrice(opts: {
   if (opts.planSlug === CUSTOM_PLAN_SLUG) {
     const cents = customPriceCents(opts.customPages, interval);
     const lineItems = await customLineItems(stripe, mode, interval, opts.customPages);
-    return { ok: true, lineItems, trialDays, planLabel: CUSTOM_PLAN_SLUG, isCustom: true, cents };
+    return { ok: true, lineItems, trialDays, planLabel: CUSTOM_PLAN_SLUG, isCustom: true, cents, interval, monthlyCents: customPriceCents(opts.customPages) };
   }
   const plan = await getPlanBySlug(opts.planSlug);
   if (!plan || !plan.active || plan.isFree) {
@@ -78,7 +84,7 @@ export async function resolveSignupPrice(opts: {
     if (!row) {
       return { ok: false, status: 404, error: "That plan isn't available for checkout yet." };
     }
-    return { ok: true, lineItems: [{ price: row.stripePriceId, quantity: 1 }], trialDays, planLabel: plan.slug, isCustom: false, cents };
+    return { ok: true, lineItems: [{ price: row.stripePriceId, quantity: 1 }], trialDays, planLabel: plan.slug, isCustom: false, cents, interval, monthlyCents: plan.priceCents };
   }
   if (cents <= 0) {
     return { ok: false, status: 404, error: "That plan is not available." };
@@ -91,7 +97,7 @@ export async function resolveSignupPrice(opts: {
     interval,
     cents,
   });
-  return { ok: true, lineItems: [{ price, quantity: 1 }], trialDays, planLabel: plan.slug, isCustom: false, cents };
+  return { ok: true, lineItems: [{ price, quantity: 1 }], trialDays, planLabel: plan.slug, isCustom: false, cents, interval, monthlyCents: plan.priceCents };
 }
 
 /** The discount a signup's stored code earns: an influencer promo becomes its
@@ -117,8 +123,13 @@ export async function resolveSignupDiscount(opts: {
   trialDays: number;
   /** For the log line. */
   where: string;
+  /** A yearly bill takes a first-month code as one month's worth (lib/yearDiscount). */
+  interval?: SignupInterval;
+  monthlyCents?: number;
 }): Promise<SignupDiscount | null> {
   const { stripe, mode, attribution: attr } = opts;
+  const year = opts.interval === "YEAR" && (opts.monthlyCents ?? 0) > 0;
+  const months = referralCouponMonths(opts.trialDays);
   if (attr?.kind === "promo") {
     const v = await validateAttribution("promo", attr.code);
     if (v?.kind === "promo") {
@@ -129,6 +140,19 @@ export async function resolveSignupDiscount(opts: {
         stripePromotionCodeId: v.stripePromotionCodeId,
         customerPercentOff: v.percentOff,
       });
+      if (promotionCode && year) {
+        const pct = await promoPercentOff(stripe, promotionCode, v.percentOff);
+        const coupon = pct
+          ? await ensureYearFirstMonthCoupon(stripe, mode, { kind: "promo", pct, monthlyCents: opts.monthlyCents!, months, promoCodeId: v.promoId, code: v.code }).catch((err) => {
+              console.warn(`[${opts.where}] yearly first-month coupon unavailable:`, err);
+              return null;
+            })
+          : null;
+        if (coupon) return { coupon };
+        // No percent to scale: no discount rather than the percent off a whole year.
+        console.warn(`[${opts.where}] promo ${v.code}: no percent known — not applied to a yearly bill`);
+        return null;
+      }
       if (promotionCode) return { promotion_code: promotionCode };
       // Never silently: the plan step has already shown this visitor a price
       // with the discount in it, so a drop here is a promise being broken and
@@ -139,7 +163,11 @@ export async function resolveSignupDiscount(opts: {
     const v = await validateAttribution("ref", attr.code);
     if (v) {
       try {
-        return { coupon: await ensureReferralCoupon(stripe, mode, referralCouponMonths(opts.trialDays)) };
+        if (year) {
+          const coupon = await ensureYearFirstMonthCoupon(stripe, mode, { kind: "referral", pct: REFERRAL_DISCOUNT_PCT, monthlyCents: opts.monthlyCents!, months });
+          return coupon ? { coupon } : null;
+        }
+        return { coupon: await ensureReferralCoupon(stripe, mode, months) };
       } catch (err) {
         console.warn(`[${opts.where}] referral coupon unavailable:`, err);
       }

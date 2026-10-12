@@ -25,7 +25,7 @@
 // credit, lib/referralRewards).
 
 export type CheckoutDiscount =
-  | { kind: "promo"; params: { discounts: { promotion_code: string }[] } }
+  | { kind: "promo"; params: { discounts: ({ promotion_code: string } | { coupon: string })[] } }
   | { kind: "referral"; params: { discounts: { coupon: string }[] } }
   | { kind: "open"; params: { allow_promotion_codes: true } }
   | { kind: "none"; params: Record<string, never> };
@@ -37,8 +37,19 @@ export function checkoutDiscount(opts: {
   promotionCode: string | null;
   /** The member-referral coupon, when this is a referred shop's first bill. */
   referralCoupon: string | null;
+  /** A yearly checkout (owner, 2026-10-12): the code is one month's worth
+   *  (lib/yearDiscount, `yearCoupon`) and Stripe's code field stays closed —
+   *  a typed percent code would come off the whole year. */
+  year?: boolean;
+  yearCoupon?: string | null;
 }): CheckoutDiscount {
   if (opts.everSubscribed) return { kind: "none", params: {} };
+  if (opts.year) {
+    if (!opts.yearCoupon) return { kind: "none", params: {} };
+    return opts.promotionCode
+      ? { kind: "promo", params: { discounts: [{ coupon: opts.yearCoupon }] } }
+      : { kind: "referral", params: { discounts: [{ coupon: opts.yearCoupon }] } };
+  }
   if (opts.promotionCode) return { kind: "promo", params: { discounts: [{ promotion_code: opts.promotionCode }] } };
   if (opts.referralCoupon) return { kind: "referral", params: { discounts: [{ coupon: opts.referralCoupon }] } };
   return { kind: "open", params: { allow_promotion_codes: true } };

@@ -77,7 +77,15 @@ export async function POST(req: Request) {
   // The saved offer determines the duration; then Stripe charges the selected price.
   const { trialDays, planLabel, isCustom, cents } = priced;
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = priced.lineItems;
-  const discount = await resolveSignupDiscount({ stripe, mode, attribution: pending.attribution, trialDays, where: "checkout/signup" });
+  const discount = await resolveSignupDiscount({
+    stripe,
+    mode,
+    attribution: pending.attribution,
+    trialDays,
+    where: "checkout/signup",
+    interval: priced.interval,
+    monthlyCents: priced.monthlyCents,
+  });
   // `discounts` and `allow_promotion_codes` are mutually exclusive at Stripe,
   // so a session with a discount attached has no promo field.
   const discounts: Stripe.Checkout.SessionCreateParams.Discount[] | null = discount ? [discount] : null;
@@ -107,7 +115,10 @@ export async function POST(req: Request) {
               metadata: { ...(isCustom ? customMetadata(null, pending.customPages) : {}), ...trialOfferMetadata(pending.trialOffer) },
             }
           : undefined,
-      ...(discounts ? { discounts } : { allow_promotion_codes: true }),
+      // A yearly bill takes no code typed at Stripe: a percent "first month"
+      // code there would come off the whole year (lib/firstMonthDiscount) —
+      // codes are applied on our plan step, as one month's worth.
+      ...(discounts ? { discounts } : priced.interval === "MONTH" ? { allow_promotion_codes: true } : {}),
       metadata: {
         ...trialOfferMetadata(pending.trialOffer),
         signupToken: String(token),
