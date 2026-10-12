@@ -22,6 +22,7 @@ import { finishCardCheckout, noteCardlessTrialEnded } from "@/lib/cardlessTrial"
 import { CARD_UPDATE_PURPOSE, finishCardUpdate, sendDunningEmail } from "@/lib/cardUpdate";
 import { completeFromCheckoutSession, completeFromPaymentIntent } from "@/lib/leadCenter/purchase";
 import { cancelReplacedSubscription } from "@/lib/checkoutReturn";
+import { invoiceSubscriptionId } from "@/lib/stripeCompat";
 
 export const runtime = "nodejs";
 
@@ -144,6 +145,20 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
     }
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
+      /* A FAILED PAYMENT IS A MISSED BILL ONLY WHILE STRIPE SAYS SO (2026-10-12).
+         A plan change or an added page is all or nothing on the card
+         (pending_if_incomplete, lib/planChange, lib/customBilling): when the
+         card declines, the change is simply not made — yet Stripe still sends
+         this event, and it used to turn a paying shop PAST_DUE and mail its
+         owner the "final" dunning letter. An old failure delivered after the
+         invoice was paid did the same. The subscription is read: active or
+         trialing means nothing is owed on it. */
+      const failedSub = invoiceSubscriptionId(invoice);
+      const live = failedSub ? await stripe.subscriptions.retrieve(failedSub).catch(() => null) : null;
+      if (live && (live.status === "active" || live.status === "trialing")) {
+        console.info(`[webhook] ${invoice.id}: payment failed, but ${failedSub} is ${live.status} — not a missed bill`);
+        break;
+      }
       await markSubscriptionPastDue(invoice);
       // The owner's two emails: the first failure, and Stripe's last try.
       await sendDunningEmail(invoice).catch((err) => console.warn("[webhook] dunning email failed:", err));
