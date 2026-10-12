@@ -19,7 +19,7 @@ const STATE_LABEL: Record<SignupState, string> = {
   trial: "on trial", paying: "paying", lapsed: "lapsed", free: "free plan", unknown: "no plan row",
 };
 
-export function SignupLedgerPanel({ initial, timezone, fullHistory = false }: { initial: SignupLedger; timezone: string; fullHistory?: boolean }) {
+export function SignupLedgerPanel({ initial, timezone, fullHistory = false, title = "Signups", intro }: { initial: SignupLedger; timezone: string; fullHistory?: boolean; title?: string; intro?: string }) {
   const [ledger, setLedger] = useState(initial);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -72,8 +72,8 @@ export function SignupLedgerPanel({ initial, timezone, fullHistory = false }: { 
     <section className={s.ledger} aria-label="Every signup" aria-busy={pending}>
       <div className={s.ledgerHead}>
         <div>
-          <h2>Signups</h2>
-          <span className={s.micro}>Every account made in the span, and what it is now — this list keeps them; the live view above only holds the last half hour.</span>
+          <h2>{title}</h2>
+          <span className={s.micro}>{intro ?? "Every account made in the span, and what it is now — this list keeps them; the live view above only holds the last half hour."}</span>
         </div>
         <div className={s.ledgerTools}>
           <div className={s.dimensionTabs} style={{ margin: 0 }}>

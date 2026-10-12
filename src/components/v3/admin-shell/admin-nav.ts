@@ -20,6 +20,9 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Overview", icon: "i-grid", href: "/admin" },
       { label: "Traffic", icon: "i-chart", href: "/admin/traffic" },
+      // Added 2026-10-12: the signups section of the traffic page, on its own page under it — the trials with a card
+      // and without, in the order they end, the seven-day calendar, who started paying and how, what each trial did.
+      { label: "Signups & trials", icon: "i-hourglass", href: "/admin/traffic/signups" },
       { label: "A/B testing", icon: "i-chart", href: "/admin/ab-testing" },
       // Added 2026-09-18: what each member did — proposals created and sent,
       // estimates made — counted per user, with the trail beneath.

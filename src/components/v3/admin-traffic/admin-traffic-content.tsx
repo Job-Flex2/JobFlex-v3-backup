@@ -19,7 +19,6 @@ import { LivePanel } from "./live-panel";
 import { AnalystPanel } from "./analyst-panel";
 import { AnalystTrend } from "./analyst-trend";
 import { DigestToggle } from "./digest-toggle";
-import { SignupLedgerPanel } from "./signup-ledger";
 import { AdLinks } from "./ad-links";
 import type { LiveReport, SignupLedger } from "@/lib/traffic-live";
 import s from "./traffic.module.css";
@@ -186,8 +185,8 @@ export function AdminTrafficContent({ data, deferred = false, signups: initialSi
     <AnalystPanel timezone={filters.timezone}/>
     {/* One saved reading a day, and what changed (2026-10-04, lib/traffic-digest). */}
     <AnalystTrend/>
-    {/* Every signup, kept — the live view above only holds half an hour. */}
-    {ledger && <SignupLedgerPanel initial={ledger} timezone={filters.timezone} fullHistory={filters.fullHistory}/>}
+    {/* The signups have their own page under Traffic now (owner, 2026-10-12); here, their numbers and the door. */}
+    {ledger && <SignupsMoved ledger={ledger}/>}
     {/* The tagged link for every ad and post, so the cards above tell them apart (2026-09-29). */}
     <AdLinks/>
 
@@ -301,4 +300,30 @@ export function AdminTrafficContent({ data, deferred = false, signups: initialSi
     </Sheet>
     <details className={s.methodology}><summary><Info size={15}/>Measurement notes</summary><div><DigestToggle timezone={filters.timezone}/><p><b>Counting since {TRAFFIC_SINCE_LABEL}</b> — {TRAFFIC_SINCE_WHY} (and the ad launch), from midnight America/Los_Angeles. Every visitor figure on this page counts from that date: the cards, &ldquo;visitors since {TRAFFIC_SINCE_SHORT}&rdquo;, today, the funnel, the platform cards, the map and the signup lists; the date range works inside it.</p><p><b>In-app browsers.</b> In Facebook and Instagram&apos;s in-app browsers a visitor is a click: each ad tap can arrive with a fresh cookie, so one person counts again. <b>People (est.)</b> counts address + browser ($ip + $raw_user_agent) instead, unique per day — an estimate: a household on one Wi-Fi with the same phone model counts once, a phone that changes network counts twice.</p><p><b>Visitors</b> are distinct PostHog person IDs, not guaranteed distinct humans. Separate devices or cleared cookies can count again.</p><p><b>New</b> means first observed in the selected range. <b>Returning</b> means first observed before it. <b>Repeat</b> means 2+ recorded sessions within the range, and can include new visitors.</p><p><b>Coverage</b> begins {report.firstTrackedAt?.slice(0, 10) || "when the first event arrives"}. Admin pages are excluded. Visitors are counted on www.jobflex.app and jobflex.app only (localhost when chosen); Vercel previews, pages with no hostname and bots (PostHog&apos;s bot flag, an empty or known bot user agent) never count. &ldquo;From ads&rdquo; means the visit carried utm_source or fbclid. Google signup skips the account step. Filters never reconstruct unrecorded historical events.</p><p><b>Freshness</b> Reports are cached for up to 60 seconds; ingestion may take additional time. Today, in the header and the live view alike, is the day in America/Los_Angeles, visitors and signups both; the report&apos;s dates follow the displayed timezone. All-time and today ignore page, audience, source and device filters.</p></div></details>
   </div>;
+}
+
+/** Where the signups list stood (2026-10-12): the span's numbers and the door to /admin/traffic/signups, where the list,
+ *  the trials in the order they end, the seven-day calendar and the payers now live. */
+function SignupsMoved({ ledger }: { ledger: SignupLedger }) {
+  const sum = ledger.summary;
+  return (
+    <section className={s.ledger} aria-label="Signups and trials" data-signups-moved>
+      <div className={s.ledgerHead}>
+        <div>
+          <h2>Signups &amp; trials</h2>
+          <span className={s.micro}>Every signup, the trials in the order they end — card or no card — who started paying and how, and what each trial did, on their own page now.</span>
+        </div>
+        <div className={s.ledgerTools}>
+          <Link className={s.button} href="/admin/traffic/signups" data-signups-open>Open Signups &amp; trials<ChevronRight size={15}/></Link>
+        </div>
+      </div>
+      <div className={s.ledgerSummary}>
+        <div><span>Signups · {ledger.days === 1 ? "today" : `${ledger.days} days`}</span><strong>{sum.total.toLocaleString("en-US")}</strong><small>{sum.fromAds > 0 ? `${sum.fromAds} from ads` : "none from ads"}</small></div>
+        <div data-state="trial"><span>On trial</span><strong>{sum.trial}</strong><small>still deciding</small></div>
+        <div data-state="paying"><span>Paying</span><strong>{sum.paying}</strong><small>subscription active</small></div>
+        <div data-state="lapsed"><span>Lapsed</span><strong>{sum.lapsed}</strong><small>canceled, expired or failed</small></div>
+        <div data-state="free"><span>Free plan</span><strong>{sum.free + sum.unknown}</strong><small>never upgraded</small></div>
+      </div>
+    </section>
+  );
 }
