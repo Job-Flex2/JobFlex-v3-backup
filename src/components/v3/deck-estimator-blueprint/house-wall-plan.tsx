@@ -32,7 +32,9 @@ import {
   levelWallPart,
   moveJogTo,
   moveWallPart,
+  pullSectionAt,
   referencePartIndex,
+  setSectionDepth,
   resizeDeckLeft,
   shiftWallPart,
   slideDeck,
@@ -41,6 +43,7 @@ import {
   wallParts,
   type HouseDesign,
   type WallPart,
+  type WallSection,
 } from "@/lib/deck/house";
 import s from "./deck-studio.module.css";
 
@@ -85,6 +88,8 @@ interface Drag {
   moved: boolean;
   /** A wall part locks to the way it is first pulled. */
   axis: "x" | "y" | null;
+  /** The house line pulled out or pushed in where it was grabbed: the section that made, followed to the end of the drag. */
+  section?: WallSection;
   before: { house: HouseDesign; shape: DeckShape };
   pan0: { x: number; y: number };
 }
@@ -316,6 +321,8 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
   const gridId = React.useId().replace(/:/g, "");
 
   const [pick, setPick] = React.useState<WallPick | null>(null);
+  /** A word on a drag that could not do what it was asked (no steps left, no room). */
+  const [notice, setNotice] = React.useState<string | null>(null);
   const [hover, setHover] = React.useState<WallPick | null>(null);
   const [undoN, setUndoN] = React.useState(0);
   const history = React.useRef<Array<{ house: HouseDesign; shape: DeckShape }>>([]);
@@ -422,6 +429,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
     const f = feetAt(rect, vb, e.clientX, e.clientY);
     drag.current = { kind, id: extra.id, part: extra.part, parts: parts.length, rect, vb, x0: e.clientX, y0: e.clientY, fx0: f.x, fy0: f.y, appliedX: 0, appliedY: 0, moved: false, axis: null, before: { house, shape }, pan0: { x: px, y: py } };
     if (pickHere) setPick(pickHere);
+    setNotice(null);
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     // Focus follows the pointer, so the arrow keys move what was just picked.
@@ -451,6 +459,37 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
       const rightFt = clamp(half(p.x - W), HOUSE_LIMITS.extendFt.min, HOUSE_LIMITS.extendFt.max);
       if (rightFt !== house.rightFt) onChange({ house: { ...house, rightFt } });
     } else if (d.kind === "part" && d.part !== undefined) {
+      // DRAG THE WALL ANYWHERE (owner, 2026-10-12: "just drag the back wall in or out at any place to make the shape of
+      // the house you want — make it smart"). The house line — the part the deck stands on — does not move as a whole:
+      // pulled out or pushed in, a section of it comes with the pointer right where it was grabbed (lib/deck/house
+      // pullSectionAt: 8 ft wide, run on to the house's end when grabbed near it, snapped to the deck's ends), its depth
+      // following the drag; back to nothing, the wall is straight again.
+      if (d.axis === "y" && (d.part === refIdx || d.section) && d.before) {
+        const want = half(p.y - d.fy0);
+        if (want === d.appliedY) return;
+        d.appliedY = want;
+        if (!d.section) {
+          if (Math.abs(want) < 0.5) return;
+          const made = pullSectionAt(house, shape, d.fx0, want);
+          if ("why" in made) {
+            setNotice(
+              made.why === "steps"
+                ? `The wall takes ${HOUSE_LIMITS.jogs} steps at most — level a part (or press Straight wall) to pull another.`
+                : made.why === "line"
+                  ? "Pulled there, the deck would no longer stand on the house line — grab the wall beside the deck, or level a part first."
+                  : "No room for a section there — grab the wall further from a step.",
+            );
+            return;
+          }
+          d.section = made.section;
+          setNotice(null);
+          onChange({ house: made.house });
+        } else {
+          onChange({ house: setSectionDepth(house, d.section, want) });
+          if (Math.abs(want) < 0.5) d.section = undefined;
+        }
+        return;
+      }
       // A step dropped to nothing merges two parts and the indexes shift: that ends the drag.
       if (parts.length !== d.parts) {
         drag.current = null;
@@ -566,7 +605,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
     padBody = (
       <>
         <span className={s.wallPadTitle} data-deck-wall-picked="part">Wall part {index + 1} of {parts.length} · {wallPartWords(part)}</span>
-        {locked ? <span className={s.wallPadHint}>The deck stands on this part — it is the house line, so it does not move back or front. Shift it left or right, or move the other parts.</span> : null}
+        {locked ? <span className={s.wallPadHint}>The deck stands on this part — the house line. Drag it in or out anywhere: that stretch of the wall comes with you, a bump-out or a nook right there.</span> : null}
         {padBtn("▲ Back 6 in.", { kind: "part-move", index, by: -0.5 }, { disabled: locked })}
         {padBtn("▼ Front 6 in.", { kind: "part-move", index, by: 0.5 }, { disabled: locked })}
         {padBtn("◀ Left 6 in.", { kind: "part-shift", index, by: -0.5 }, { disabled: parts.length === 1 })}
@@ -609,7 +648,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
       </>
     );
   } else {
-    padBody = <span className={s.wallPadHint} data-deck-wall-picked="none">Tap a part of the wall, a step, a house end or the deck — then move it with these buttons (hold to keep going), drag it, or use the arrow keys.</span>;
+    padBody = <span className={s.wallPadHint} data-deck-wall-picked="none">Drag the wall in or out anywhere to shape the house — a bump-out or a nook comes with you. Or tap a part, a step, a house end or the deck and move it with these buttons (hold to keep going) or the arrow keys.</span>;
   }
 
   const strip = (p: WallPart, i: number) => {
@@ -730,7 +769,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
         const a = partPick(i);
         return (
           <rect key={`g${i}`} x={cxp - w / 2} y={p.depthFt - handleR * 0.55} width={w} height={handleR * 1.1} rx={handleR * 0.5} className={cx(locked ? s.wallGripLocked : s.wallGrip, picked(a) && s.wallSel)} onPointerDown={(e) => start(e, "part", a, { part: i })} data-deck-wall-grip={i} aria-hidden="true">
-            <title>{locked ? "The deck stands on this part of the wall — shift it sideways, or move the others" : "Drag in or out, or sideways"}</title>
+            <title>{locked ? "The house line: drag in or out anywhere to pull a section of it with you" : "Drag in or out, or sideways"}</title>
           </rect>
         );
       })}
@@ -802,6 +841,11 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
       </div>
       <div className={s.wallPad} data-deck-wall-pad>
         {padBody}
+        {notice ? (
+          <span className={s.wallPadHint} role="status" data-deck-wall-notice>
+            {notice}
+          </span>
+        ) : null}
         <span className={s.wallPadSep} aria-hidden="true" />
         {padBtn("+ Add a step", { kind: "add-step", atFt: plusX }, { hold: false, disabled: !canAdd, test: "add-step" })}
         {padBtn("Straight wall", { kind: "straight" }, { hold: false, disabled: !house.jogs.length, test: "straight" })}

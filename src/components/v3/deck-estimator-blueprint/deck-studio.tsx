@@ -312,6 +312,44 @@ function stepTone(n: number): React.CSSProperties {
 /** The photo of the house is out (owner, 2026-10-11: "let's not use that picture at all — the 3D model, and you draw the house"); its flow stays here, dormant. */
 const PHOTO_ENABLED = false;
 
+/**
+ * EDIT IN 3D, until it is tried (owner, 2026-10-12: "make the Edit in 3D button slowly blink, to attract the contractor —
+ * let him know he can edit the deck and the house in 3D"). The button breathes until this browser has opened the 3D
+ * edit once; then it is a button like the others. Kept in localStorage (a private window forgets it: it breathes again).
+ */
+const EDIT_TRIED_KEY = "jf-deck-edit3d-tried";
+const editTried = (() => {
+  let triedHere = false;
+  const listeners = new Set<() => void>();
+  return {
+    subscribe(cb: () => void) {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    get(): boolean {
+      if (triedHere) return true;
+      try {
+        return window.localStorage.getItem(EDIT_TRIED_KEY) === "1";
+      } catch {
+        return false;
+      }
+    },
+    /** The server draws it still; the browser decides once it is running. */
+    server: () => true,
+    mark() {
+      triedHere = true;
+      try {
+        window.localStorage.setItem(EDIT_TRIED_KEY, "1");
+      } catch {
+        // a private window: this visit remembers it
+      }
+      listeners.forEach((l) => l());
+    },
+  };
+})();
+
 function Step({ n, title, summary, children, id }: { n: number; title: string; summary: string; children: React.ReactNode; id?: string }) {
   const ref = React.useRef<HTMLDetailsElement>(null);
   const nextRef = React.useRef<HTMLButtonElement>(null);
@@ -593,6 +631,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const [focus, setFocus] = React.useState<[number, number, number] | null>(null);
   const [placing, setPlacing] = React.useState<Placing>(null);
   const [editing, setEditing] = React.useState(false);
+  const editTriedHere = React.useSyncExternalStore(editTried.subscribe, editTried.get, editTried.server);
   /** A handle dragged in the 3D: the design number it stands for takes the dragged value, inside its rails. */
   const onEdit = React.useCallback(
     (e: DeckEdit) => {
@@ -1484,7 +1523,18 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 <button type="button" className={cx(s.btn, s.btnSm, night && s.btnOn)} aria-pressed={night} onClick={() => setNight((x) => !x)} data-deck-night>
                   Night
                 </button>
-                <button type="button" className={cx(s.btn, s.btnSm, editing && s.btnOn)} aria-pressed={editing} onClick={() => setEditing((x) => !x)} data-deck-edit>
+                <button
+                  type="button"
+                  className={cx(s.btn, s.btnSm, editing && s.btnOn, !editing && !editTriedHere && s.btnBreath)}
+                  aria-pressed={editing}
+                  title="Drag the deck, the stairs and the house's walls right in the 3D"
+                  onClick={() => {
+                    setEditing((x) => !x);
+                    editTried.mark();
+                  }}
+                  data-deck-edit
+                  data-deck-edit-breathing={!editing && !editTriedHere ? "" : undefined}
+                >
                   Edit in 3D
                 </button>
                 <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => { setResetToken((t) => t + 1); setPicked(null); }}>

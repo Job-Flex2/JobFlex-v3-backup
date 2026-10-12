@@ -58,7 +58,7 @@ export const sidingHex = (id: SidingId) => SIDINGS.find((c) => c.id === id)?.hex
 export const roofHex = (id: RoofColourId) => ROOF_COLOURS.find((c) => c.id === id)?.hex ?? ROOF_COLOURS[0].hex;
 
 /** A step shallower than half a foot is no step: it is dropped, which is how a wall dragged level loses its step. */
-export const HOUSE_LIMITS = { extendFt: { min: 0, max: 60 }, depthFt: { min: 0.5, max: 12 }, jogs: 4 } as const;
+export const HOUSE_LIMITS = { extendFt: { min: 0, max: 60 }, depthFt: { min: 0.5, max: 12 }, jogs: 6 } as const;
 /** Floor to floor. */
 export const STOREY_FT = 9.5;
 /** How deep the house is drawn behind its back wall. */
@@ -433,6 +433,92 @@ export function addStepAt(house: HouseDesign, shape: DeckShape, xFt: number): Ho
   const dir: JogDir = x <= 0.01 ? "away" : "toward";
   const jogs = [...house.jogs, { id: nextJogId(house.jogs), atFt: x, dir, depthFt: 2 }].sort((a, b) => a.atFt - b.atFt);
   return { ...house, jogs };
+}
+
+/** How wide a section pulled from the wall starts, ft; how near the house's own end it runs on to it; how near the deck's end its edge snaps there. */
+const SECTION_FT = 8;
+const SECTION_TO_END_FT = 4;
+const SECTION_SNAP_FT = 2.5;
+
+/** A section pulled from the wall: its steps, and which of its edges they are (a section run on to the house's end has one). */
+export interface WallSection {
+  ids: string[];
+  edge: "both" | "left" | "right";
+}
+
+/**
+ * A section of the wall pulled out (+, toward the yard) or pushed in (−) right where it was grabbed (owner, 2026-10-12:
+ * "just drag the back wall in or out at any place to make the shape of the house you want — make it smart"). On the
+ * part under `xFt`: a section SECTION_FT wide centred there, its edges snapped to the deck's ends when near them and kept
+ * a foot clear of the part's own steps; grabbed within SECTION_TO_END_FT of the house's own end, it runs on to that end
+ * (one step). Behind the deck it is kept narrow enough that the deck still stands mostly on the house line (it never
+ * jumps onto the section, or onto a nook made before, mid-drag). When it cannot be pulled: why — no steps left, no room
+ * between the steps there, or the house line would no longer be the house line.
+ */
+export function pullSectionAt(house: HouseDesign, shape: DeckShape, xFt: number, depthFt: number): { house: HouseDesign; section: WallSection } | { why: "steps" | "room" | "line" } {
+  const W = shape.widthFt;
+  const parts = wallParts(house, shape);
+  const i = parts.findIndex((p) => xFt >= p.x0 - 1e-6 && xFt <= p.x1 + 1e-6);
+  if (i < 0) return { why: "room" };
+  const p = parts[i];
+  const first = i === 0;
+  const last = i === parts.length - 1;
+  const lo = p.x0 + (first ? 0 : 1);
+  const hi = p.x1 - (last ? 0 : 1);
+  if (hi - lo < 2) return { why: "room" };
+  const x = clamp(xFt, lo, hi);
+  const toLeft = first && x - p.x0 <= SECTION_TO_END_FT;
+  const toRight = last && p.x1 - x <= SECTION_TO_END_FT;
+  if (toLeft && toRight) return { why: "room" };
+  if (house.jogs.length + (toLeft || toRight ? 1 : 2) > HOUSE_LIMITS.jogs) return { why: "steps" };
+  const build = (width: number): { a: number; b: number } | null => {
+    let a = half(x - width / 2);
+    let b = half(x + width / 2);
+    for (const e of [0, W]) {
+      if (Math.abs(a - e) <= SECTION_SNAP_FT && e < x) a = e;
+      if (Math.abs(b - e) <= SECTION_SNAP_FT && e > x) b = e;
+    }
+    a = toLeft ? p.x0 : Math.max(a, lo);
+    b = toRight ? p.x1 : Math.min(b, hi);
+    return b - a >= 1.5 ? { a, b } : null;
+  };
+  const d = clamp(Math.abs(depthFt), HOUSE_LIMITS.depthFt.min, HOUSE_LIMITS.depthFt.max) * (depthFt < 0 ? -1 : 1);
+  const refBefore = referencePartIndex(parts, shape);
+  const oldRef = parts[refBefore];
+  for (let width = SECTION_FT; width >= 1.5; width -= 0.5) {
+    const span = build(width);
+    if (!span) return { why: "room" };
+    const { a, b } = span;
+    const jogs = [...house.jogs];
+    const ids: string[] = [];
+    const add = (atFt: number, signed: number) => {
+      const id = nextJogId(jogs);
+      jogs.push({ id, atFt, dir: signed >= 0 ? "toward" : "away", depthFt: half(Math.abs(signed)) });
+      ids.push(id);
+    };
+    if (!toLeft) add(a, d);
+    if (!toRight) add(b, -d);
+    const next = { ...house, jogs: jogs.sort((m, n) => m.atFt - n.atFt) };
+    // The house line stays the house line: the deck keeps standing on what is left of the part it stood on. A section
+    // that would leave itself — or another part, a nook made before — carrying more of the deck's back edge is made
+    // narrower (round the grab) until it does not; the deck never jumps onto another part mid-drag.
+    const after = wallParts(next, shape);
+    const ref = after[referencePartIndex(after, shape)];
+    const keepsLine = i === refBefore ? ref.x0 >= p.x0 - 1e-6 && ref.x1 <= p.x1 + 1e-6 && (ref.x1 <= a + 1e-6 || ref.x0 >= b - 1e-6) : Math.abs(ref.x0 - oldRef.x0) < 1e-6 && Math.abs(ref.x1 - oldRef.x1) < 1e-6;
+    if (!keepsLine) continue;
+    return { house: next, section: { ids, edge: toLeft ? "right" : toRight ? "left" : "both" } };
+  }
+  return { why: "line" };
+}
+
+/** A pulled section set to `depthFt` out (+) or in (−) of the wall it came from; at nothing its steps go and the wall is straight again. */
+export function setSectionDepth(house: HouseDesign, section: WallSection, depthFt: number): HouseDesign {
+  const d = clamp(Math.abs(depthFt), 0, HOUSE_LIMITS.depthFt.max) * (depthFt < 0 ? -1 : 1);
+  if (Math.abs(d) < HOUSE_LIMITS.depthFt.min) return { ...house, jogs: house.jogs.filter((j) => !section.ids.includes(j.id)) };
+  const mine = house.jogs.filter((j) => section.ids.includes(j.id)).sort((m, n) => m.atFt - n.atFt);
+  // The step at the section's left edge raises the wall to its right by d; the one at its right edge brings it back.
+  const signedOf = (j: HouseJog) => (section.edge === "both" ? (j === mine[0] ? d : -d) : section.edge === "left" ? d : -d);
+  return { ...house, jogs: house.jogs.map((j) => (section.ids.includes(j.id) ? fromSigned(j, signedOf(j)) : j)) };
 }
 
 /** A step moved along the wall: kept a foot clear of its neighbours and the wall's ends, snapped to the deck's ends when near them. */

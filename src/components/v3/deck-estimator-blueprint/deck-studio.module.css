@@ -47,6 +47,17 @@
 :global(.jf-blueprint .content) .btnPrimary { background: var(--step-c, var(--blueprint)); border-color: var(--step-c, var(--ink)); color: #fff; }
 :global(.jf-blueprint .content) .btnPrimary:hover { background: color-mix(in srgb, var(--step-c, var(--blueprint-dark)) 82%, #000); }
 :global(.jf-blueprint .content) .btnOn { background: var(--step-c, var(--ink)); border-color: var(--step-c, var(--ink)); color: var(--step-ink, #fff); }
+/* EDIT IN 3D until it is tried (2026-10-12): a slow breath — a blueprint ring swells out and fades while the face takes a
+   blueprint tint — every 2.6 s. Hover stills it; reduced motion gets a steady ring instead. */
+@keyframes editBreath {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--blueprint) 55%, transparent); background: #fff; border-color: var(--ink); color: var(--ink); }
+  55% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--blueprint) 0%, transparent); background: color-mix(in srgb, var(--blueprint) 16%, #fff); border-color: var(--blueprint); color: var(--blueprint); }
+}
+:global(.jf-blueprint .content) .btnBreath { animation: editBreath 2.6s ease-in-out infinite; }
+:global(.jf-blueprint .content) .btnBreath:hover { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .btnBreath { animation: none; border-color: var(--blueprint); color: var(--blueprint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blueprint) 30%, transparent); }
+}
 :global(.jf-blueprint .content) .link {
   padding: 0; border: 0; background: none; cursor: pointer; justify-self: start;
   font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--blueprint);

@@ -305,9 +305,11 @@ export function buildStair(input: StairInput): StairBuild {
       const runF = (lastTreadIsLanding ? r : t) * runIn;
       const L = Math.hypot(r * riserIn, runF) + 8;
       stringers.lengthIn = Math.max(stringers.lengthIn, L);
-      // The stringer's top line runs under the tread backs; the box hangs below it.
-      const zA = zTop - treadThick;
-      const zB = zTop - treadThick - r * riserIn + (lastTreadIsLanding ? 0 : riserIn);
+      // The stringer's top line runs under the tread backs; the box hangs below it. (2026-10-12, owner: "the stairs in 3D
+      // don't look like treads and risers": the line ran one riser higher — along the treads' fronts — so every stringer
+      // stood up through every tread, 6 in. at its back, and a wide flight read as a ramp ribbed by its stringers.)
+      const zA = zTop - treadThick - riserIn;
+      const zB = zTop - treadThick - r * riserIn + (lastTreadIsLanding ? 0 : riserIn) - riserIn;
       const bA = b0;
       const bB = b0 + runF;
       const midB = (bA + bB) / 2 - (STRINGER_DEPTH_IN / 2) * sinT;
@@ -322,7 +324,9 @@ export function buildStair(input: StairInput): StairBuild {
         for (let j = 0; j < boardsPerTread; j++) {
           const bw = Math.min(product.widthIn, runIn + TREAD_NOSING_IN - j * boardPitch);
           if (!(bw > 1)) continue;
-          member("tread", product.nominal, w, P(w / 2, bk - TREAD_NOSING_IN + j * boardPitch + bw / 2), zk - treadThick / 2, w, bw, treadThick, yawU);
+          // From the riser behind out past the riser below: the nosing is in front (it was laid behind, under the riser above,
+          // and the treads ended flush with the risers below them — no shadow line, nothing to read as a step).
+          member("tread", product.nominal, w, P(w / 2, bk + j * boardPitch + bw / 2), zk - treadThick / 2, w, bw, treadThick, yawU);
         }
         treadBoardLf += (boardsPerTread * w) / 12;
         // The riser board under this tread's nosing, closing the step below.
@@ -339,7 +343,7 @@ export function buildStair(input: StairInput): StairBuild {
       if (runF > STRINGER_MAX_SPAN_IN) {
         midSupport = true;
         const bm = b0 + runF / 2;
-        const zUnder = zTop - treadThick - (runF / 2 / runIn) * riserIn - STRINGER_DEPTH_IN / cosT;
+        const zUnder = zTop - treadThick - riserIn - (runF / 2 / runIn) * riserIn - STRINGER_DEPTH_IN / cosT;
         member("stair-beam", "2x8", w, P(w / 2, bm), zUnder - 7.25 / 2, w, THICK_2X_IN, 7.25, yawU);
         for (const a of [THICK_2X_IN / 2 + 1, w - THICK_2X_IN / 2 - 1]) {
           const q = P(a, bm);
