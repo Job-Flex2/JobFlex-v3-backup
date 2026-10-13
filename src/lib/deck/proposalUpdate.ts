@@ -66,6 +66,8 @@ export function deckUpdatePayload(
   before: { written: DeckWritten | null; oldWords: string | null },
   data: DeckUpdateInput,
   org: { defaultTaxRate: number | null; materialMarkupPct: number | null; laborMarkupPct: number | null } | null,
+  /** The unit words → measurement types. The roof estimator's update (2026-10-13) passes its own; the deck's by default. */
+  unitType: (unit: string | undefined) => string = deckUnitType,
 ): { payload: DeckUpdatePayload; written: DeckWritten; kept: number; titleKept: boolean; scopeKept: boolean; subtotal: number } {
   const scope = (data.scope ?? "").trim();
   const text = deckTextAfter({ title: row.title, scope: row.scopeOfWork }, before.written, { title: data.title, scope }, before.oldWords);
@@ -108,7 +110,7 @@ export function deckUpdatePayload(
   // The deck's lines first, as the convert writes them (selling prices, the halves adding up to the unit price) …
   const studio: PayloadLine[] = data.lines.map((l) => {
     const unitPrice = round2(l.materialCost + l.laborCost);
-    return { name: l.name.trim(), description: l.description || undefined, measurementType: deckUnitType(l.unit), quantity: l.quantity, unitPrice, materialCost: l.materialCost, laborCost: round2(unitPrice - l.materialCost) };
+    return { name: l.name.trim(), description: l.description || undefined, measurementType: unitType(l.unit) as PayloadLine["measurementType"], quantity: l.quantity, unitPrice, materialCost: l.materialCost, laborCost: round2(unitPrice - l.materialCost) };
   });
   // … then the builder's own, with the store links its draft does not carry.
   const own: PayloadLine[] = payload.lineItems.map((l, i) => ({ ...l, store: kept[i]?.store ?? null, productUrl: kept[i]?.productUrl ?? null, imageUrl: kept[i]?.imageUrl ?? null, dimensions: kept[i]?.dimensions ?? null }));

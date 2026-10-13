@@ -34,7 +34,10 @@ import {
   measureRoof,
   measureRoofInstant,
 } from "@/actions/roofMeasurement";
-import { estimateRoof, convertRoofEstimateToProposal } from "@/actions/roofEstimator";
+import { estimateRoof, convertRoofEstimateToProposal, loadRoofFromProposal, updateRoofProposal } from "@/actions/roofEstimator";
+import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
+// The card's own key for "this roof" (it counts the existing material and storeys too).
+import { factsKey } from "./roof-package-builder";
 import {
   reportPlanLimit,
   reportPlanLimitResult,
@@ -265,7 +268,7 @@ function shotDateLabel(v: string | undefined): string | null {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string } = {}) {
+export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string } = {}) {
   const router = useRouter();
 
   // ── Screen ──
@@ -609,6 +612,17 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // The pitch the contractor typed when EagleView had none (pack 002 not
   // bought). Nothing is priced on a pitch nobody stated.
   const [pitchEntered, setPitchEntered] = React.useState<string | null>(null);
+  // ── A saved roof proposal opened again (owner, 2026-10-13: "get back to the
+  // roofing edit to rebuild it") — ?proposal=<id> from the builder's "Edit the
+  // roof estimate". The page comes back with its measurement, choices and
+  // lines; Convert becomes "Update PRO-XXXX" and re-prices THAT proposal.
+  const [linked, setLinked] = React.useState<LinkedDeckProposal | null>(null);
+  const [linkInfo, setLinkInfo] = React.useState<{ others: number; older: boolean; missing: boolean; loading: boolean } | null>(proposalId ? { others: 0, older: false, missing: false, loading: true } : null);
+  const [seedSpec, setSeedSpec] = React.useState<{ spec: RoofPackageSpec; key: string } | null>(null);
+  // A sent proposal asks once before its client's copy changes.
+  const [askUpdate, setAskUpdate] = React.useState<{ go: () => void } | null>(null);
+  // The package choices the lines came from — kept with the proposal.
+  const lastSpecRef = React.useRef<RoofPackageSpec | null>(null);
 
   // Legacy recon rows remain unpriceable. Google estimates have a separate
   // source and require the contractor's review before pricing.
@@ -1014,7 +1028,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   }
 
   // Reopen a saved measurement — no lookup, nothing billed.
-  async function openRecent(id: string) {
+  async function openRecent(id: string): Promise<boolean> {
     setOpeningId(id);
     try {
       const m = await getRoofMeasurement(id);
@@ -1023,12 +1037,58 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       showMeasurement(m, false);
       // A saved row IS a stored answer: the paid re-order is offered the same way.
       setReusedInstant(m.instant && m.source !== "solar" ? "stored" : null);
+      return true;
     } catch (err) {
       toast.error("Couldn't open measurement", errMsg(err));
+      return false;
     } finally {
       setOpeningId(null);
     }
   }
+
+  // The proposal's roof, opened once on arrival: nothing is measured or
+  // billed — the stored measurement (or hand takeoff) comes back, then the
+  // proposal's own lines and the package choices they were built with.
+  const openedProposalRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!proposalId || openedProposalRef.current === proposalId) return;
+    openedProposalRef.current = proposalId;
+    void (async () => {
+      const r = await loadRoofFromProposal(proposalId).catch((err: unknown) => ({ ok: false as const, error: errMsg(err) }));
+      if (!r.ok) {
+        setLinkInfo(null);
+        toast.error("Couldn't open that proposal here", r.error);
+        return;
+      }
+      setLinked(r.proposal);
+      let opened = false;
+      if (r.manual) {
+        runManual(r.manual);
+        opened = true;
+      } else if (r.measurementId) {
+        opened = await openRecent(r.measurementId);
+      }
+      if (opened) {
+        setExtra(new Set(r.extra));
+        setPitchEntered(r.pitchEntered);
+        const toLine = (l: { name: string; quantity: number; unitPrice: number; unit: string }): EditableLine => ({ id: nanoid(6), name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, unit: l.unit });
+        setMaterials(r.materials.map(toLine));
+        setLabor(r.labor.map(toLine));
+        setTitle(r.title);
+        setScopeText(r.scope);
+        setAssumptions(r.assumptions);
+        setTablesEdited(false);
+        setSampleEstimate(false);
+        if (r.spec && r.factsKey) {
+          lastSpecRef.current = r.spec;
+          setSeedSpec({ spec: r.spec, key: r.factsKey });
+        }
+      }
+      setLinkInfo({ others: r.others, older: r.older, missing: !opened, loading: false });
+    })();
+    // openRecent/runManual are this render's handlers; the proposal opens once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalId]);
 
   async function generate() {
     const t = totals;
@@ -1168,6 +1228,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     });
   }
   function applyPackage(pkg: RoofPackage, spec: RoofPackageSpec, quiet = false) {
+    lastSpecRef.current = spec;
     if (!pitchForEstimate) {
       toast.error("Enter the roof pitch first");
       return null;
@@ -1210,6 +1271,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // case THOSE lines are the estimate and the card's button converts them
   // (review 2026-09-17: a qty edited 15 → 99 was silently dropped).
   function convertPackage(pkg: RoofPackage, spec: RoofPackageSpec) {
+    lastSpecRef.current = spec;
     if (hasEstimate && tablesEdited) {
       void convert();
       return;
@@ -1282,7 +1344,18 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
 
   // Convert THESE lines — the tables' state, or a package just built, which
   // React would not have committed to state yet ("convert as is").
-  async function convertWith(input: { title: string; materials: EditableLine[]; labor: EditableLine[]; assumptions: string[]; scope: string }) {
+  /** What the estimator was looking at, kept with the proposal so it opens here again (ROOF_PLAN). */
+  function planNow(assumptionsNow: string[]) {
+    return {
+      spec: (lastSpecRef.current as unknown as Record<string, unknown> | null) ?? null,
+      factsKey: roofFacts ? factsKey(roofFacts) : null,
+      manual: manual ? { squares: manual.squares, pitchLabel: manual.pitchLabel, address: manual.address } : null,
+      extra: [...extra],
+      pitchEntered,
+      assumptions: assumptionsNow,
+    };
+  }
+  async function convertWith(input: { title: string; materials: EditableLine[]; labor: EditableLine[]; assumptions: string[]; scope: string }, opts: { asNew?: boolean; confirmed?: boolean } = {}) {
     if (!measurement && !manual) return;
     if (isRecon) {
       toast.error("Estimated measurements can’t become a proposal", "Use Measure this roof on this address first.");
@@ -1294,6 +1367,42 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     }
     if (!input.materials.length && !input.labor.length) {
       toast.error("Nothing to convert", "Build the estimate first.");
+      return;
+    }
+    // Working on a saved proposal: THAT one is re-priced, unless it is signed
+    // or paid (then a new proposal), or the contractor chose a new one.
+    if (linked && !linked.lock && !opts.asNew) {
+      if (linked.seen && !opts.confirmed) {
+        setAskUpdate({ go: () => void convertWith(input, { confirmed: true }) });
+        document.querySelector("[data-roof-linked]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      setAskUpdate(null);
+      setConvertBusy(true);
+      try {
+        const r = await updateRoofProposal({
+          proposalId: linked.id,
+          title: input.title || `Roof · ${siteAddress || "site"}`,
+          scope: input.scope,
+          materials: input.materials.map(stripId),
+          labor: input.labor.map(stripId),
+          measurementId: savedId,
+          address: siteAddress ?? null,
+          plan: planNow(input.assumptions),
+        });
+        if (!r.ok) {
+          setConvertBusy(false);
+          if (r.code === "LOCKED") setLinked({ ...linked, lock: r.lock });
+          toast.error(`Couldn't update ${linked.ref}`, r.error);
+          return;
+        }
+        const kept = [r.kept ? `${r.kept} line${r.kept === 1 ? "" : "s"} you added in the proposal stayed` : "", r.titleKept ? "your title stayed" : "", r.scopeKept ? "your scope stayed" : ""].filter(Boolean).join(" · ");
+        toast.success(`${linked.ref} updated`, kept || "The proposal now carries this estimate.");
+        router.push(`/dashboard/proposals/${r.id}` as Parameters<typeof router.push>[0]);
+      } catch (err) {
+        setConvertBusy(false);
+        toast.error(`Couldn't update ${linked.ref}`, errMsg(err));
+      }
       return;
     }
     if (!(await ensureWithinLimit("proposalsCreated"))) return;
@@ -1310,6 +1419,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         // The job address rides with the proposal (and sets the state's sales
         // tax); the server prefers the saved measurement's own when there is one.
         address: siteAddress ?? undefined,
+        plan: planNow(input.assumptions),
       });
       toast.success("Proposal created");
       router.push(`/dashboard/proposals/${res.id}` as Parameters<typeof router.push>[0]);
@@ -1587,8 +1697,51 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   const photoShown = view === "satellite" ? satPhoto : orthoPhoto;
   const photoError = view === "satellite" ? satErr : orthoErr;
 
+  // The strip over the page while it works on a saved proposal.
+  const linkedStrip = linked ? (
+    <div className={"rf-linked" + (linked.lock ? " is-locked" : "")} data-roof-linked={linked.lock ? "locked" : "open"}>
+      <div className="rf-linked-main">
+        <span className="rf-linked-k">Editing</span>
+        <b>{linked.ref}</b>
+        <span className="rf-linked-t">{linked.title}</span>
+        <span className="rf-linked-st">{PROPOSAL_STATUS_WORDS[linked.status] ?? linked.status}</span>
+      </div>
+      <p className="rf-linked-say">
+        {linked.lock
+          ? `This proposal is ${DECK_LOCK_WORDS[linked.lock]}, so its price stays as it is. Change anything here and Convert makes a new proposal.`
+          : linkInfo?.loading
+            ? "Opening its roof…"
+            : linkInfo?.missing
+              ? "Its measurement couldn't be opened — measure the address again (or open one from Recent), then Update puts the new lines on this proposal."
+              : `Change anything — the roof, the choices, the lines — then Update ${linked.ref} re-prices this proposal.${linkInfo?.others ? ` ${linkInfo.others} line${linkInfo.others === 1 ? "" : "s"} you added in the proposal stay${linkInfo.others === 1 ? "s" : ""}.` : ""}${linkInfo?.older ? " It was made before choices were kept, so the builder starts from your usual ones; the lines are the proposal's." : ""}`}
+      </p>
+      {askUpdate ? (
+        <div className="rf-linked-ask" role="alert" data-roof-update-confirm>
+          <span>The client already has this proposal{linked.status === "VIEWED" ? " and opened it" : ""}. Updating changes what they see.</span>
+          <button type="button" className="btn btn-primary btn--sm" data-roof-update-yes onClick={() => askUpdate.go()} disabled={convertBusy}>
+            {convertBusy ? "Updating…" : `Update ${linked.ref}`}
+          </button>
+          <button type="button" className="btn btn-ghost btn--sm" onClick={() => setAskUpdate(null)} disabled={convertBusy}>
+            Not now
+          </button>
+        </div>
+      ) : null}
+      <div className="rf-linked-acts">
+        <a className="btn btn-ghost btn--sm" href={`/dashboard/proposals/${encodeURIComponent(linked.id)}`} data-roof-linked-back>
+          Back to the proposal
+        </a>
+        {!linked.lock && hasEstimate ? (
+          <button type="button" className="btn btn-ghost btn--sm" data-roof-convert-new disabled={convertBusy || isRecon || sampleEstimate} onClick={() => void convertWith({ title, materials, labor, assumptions, scope: scopeText }, { asNew: true })}>
+            Save as a new proposal
+          </button>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
+      {linkedStrip}
       {/* ===== INTAKE: measure a roof ===== */}
       <section className={"ppanel" + (panel === "intake" ? "" : " is-hidden")} data-panel="intake">
         <div className="card rf-card">
@@ -2209,6 +2362,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               converting={convertBusy}
               onBuild={applyPackage}
               onConvert={convertPackage}
+              seedSpec={seedSpec}
+              convertLabel={linked && !linked.lock ? `Update ${linked.ref}` : undefined}
               hasEstimate={hasEstimate}
               output={
                 <div className={"build-out" + (hasEstimate ? "" : " is-hidden")} id="buildOut">
@@ -2241,11 +2396,11 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                             type="button"
                             id="convertBtn"
                             disabled={convertBusy || isRecon || sampleEstimate}
-                            title={sampleEstimate ? "Sample lines (AI is off) can’t become a proposal — build the package instead." : "Create a draft proposal from these lines"}
+                            title={sampleEstimate ? "Sample lines (AI is off) can’t become a proposal — build the package instead." : linked && !linked.lock ? `Put these lines on ${linked.ref}` : "Create a draft proposal from these lines"}
                             onClick={() => void convert()}
                           >
                             <svg className="ic"><use href="#i-file" /></svg>
-                            {convertBusy ? "Creating…" : "Convert to proposal"}
+                            {linked && !linked.lock ? (convertBusy ? "Updating…" : `Update ${linked.ref}`) : convertBusy ? "Creating…" : "Convert to proposal"}
                           </button>
                         </span>
                       </div>

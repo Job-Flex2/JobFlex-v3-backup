@@ -78,6 +78,11 @@ export interface BuildEstimateCardProps {
   converting: boolean;
   onBuild: (pkg: RoofPackage, spec: RoofPackageSpec) => void;
   onConvert: (pkg: RoofPackage, spec: RoofPackageSpec) => void;
+  /** A saved proposal opened again (2026-10-13): the package choices it was converted with, and the roof
+   *  (factsKey) they were fitted to. The builder starts from them whenever that roof is the one open. */
+  seedSpec?: { spec: RoofPackageSpec; key: string } | null;
+  /** The convert button's words — "Update PRO-XXXX" while the page works on a saved proposal. */
+  convertLabel?: string;
   /** The estimate tables (Materials, Labor, assumptions, total, Convert) once
    *  lines exist. The data form renders them; the card only places them. The
    *  node carries `.is-hidden` until `hasEstimate`. */

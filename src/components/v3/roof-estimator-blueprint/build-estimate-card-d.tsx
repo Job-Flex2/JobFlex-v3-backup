@@ -440,8 +440,12 @@ function PackageLedger({
   needsPitch = false,
   blockedReason = "Enter pitch to price.",
   onBuildingUse,
+  seedSpec = null,
+  convertLabel,
 }: {
   facts: RoofFacts;
+  seedSpec?: { spec: RoofPackageSpec; key: string } | null;
+  convertLabel?: string;
   onBuildingUse?: (use: "residential" | "commercial") => void;
   onBuild: (pkg: RoofPackage, spec: RoofPackageSpec) => void;
   onConvert: (pkg: RoofPackage, spec: RoofPackageSpec) => void;
@@ -465,16 +469,25 @@ function PackageLedger({
   );
   const [spec, setSpec] = React.useState<RoofPackageSpec>(() => {
     const l = (typeof window === "undefined" ? null : saneLists(readLocal<CatalogLists>(LISTS_KEY))) ?? BUILTIN_LISTS;
+    // A saved proposal opened again (2026-10-13): its own choices, on the roof they were made for.
+    if (seedSpec && seedSpec.key === key) return reconcile({ ...defaultSpec(facts, l), ...seedSpec.spec }, l);
     const saved = typeof window === "undefined" ? null : readLocal<Prefs>(PREFS_KEY);
     return familyFit(reconcile(applyPrefs(defaultSpec(facts, l, saved?.lowSlopeSystemId), saved), l), facts, l, saved);
   });
   // A different roof opened: the per-roof entries start over from its facts,
-  // the preferences stay. Adjusted during render, not in an effect.
+  // the preferences stay. Adjusted during render, not in an effect. The
+  // proposal's own choices come back when its roof is the one now open, or
+  // when they arrive after the roof did.
   const [seenKey, setSeenKey] = React.useState(key);
-  if (key !== seenKey) {
+  const [seenSeed, setSeenSeed] = React.useState(seedSpec);
+  if (key !== seenKey || seedSpec !== seenSeed) {
     setSeenKey(key);
-    const saved = readLocal<Prefs>(PREFS_KEY);
-    setSpec(familyFit(reconcile(applyPrefs(defaultSpec(facts, lists, saved?.lowSlopeSystemId), saved), lists), facts, lists, saved));
+    setSeenSeed(seedSpec);
+    if (seedSpec && seedSpec.key === key) setSpec(reconcile({ ...defaultSpec(facts, lists), ...seedSpec.spec }, lists));
+    else if (key !== seenKey) {
+      const saved = readLocal<Prefs>(PREFS_KEY);
+      setSpec(familyFit(reconcile(applyPrefs(defaultSpec(facts, lists, saved?.lowSlopeSystemId), saved), lists), facts, lists, saved));
+    }
   }
   // The contractor answered residential or commercial (the report panel asks
   // when the roof reads commercial). Applied IN PLACE: the job-class defaults
@@ -505,6 +518,11 @@ function PackageLedger({
     factsRef.current = facts;
   });
 
+  const seedRef = React.useRef(seedSpec);
+  React.useEffect(() => {
+    seedRef.current = seedSpec;
+  });
+
   // The org's saved catalog, when the table exists and a save has happened:
   // its lists and prices win over the browser's copy.
   const [source, setSource] = React.useState<"loading" | "org" | "browser">("loading");
@@ -522,7 +540,13 @@ function PackageLedger({
         if (doc) {
           const l = saneLists({ systems: doc.systems, underlayments: doc.underlayments }) ?? BUILTIN_LISTS;
           setLists(l);
-          setSpec((s) => familyFit(reconcile(applyPrefs(s, doc.prefs), l), factsRef.current, l, doc.prefs as Prefs));
+          // A proposal's own choices (seedSpec) stay what they were: the company's usual ones are for a new roof.
+          const seed = seedRef.current;
+          setSpec((s) =>
+            seed && seed.key === factsKey(factsRef.current)
+              ? reconcile({ ...defaultSpec(factsRef.current, l), ...seed.spec }, l)
+              : familyFit(reconcile(applyPrefs(s, doc.prefs), l), factsRef.current, l, doc.prefs as Prefs),
+          );
           writeLocal(LISTS_KEY, l);
           writeLocal(PREFS_KEY, doc.prefs);
           setSource("org");
@@ -960,7 +984,7 @@ function PackageLedger({
       title={needsPitch ? blockedReason : "Straight to a proposal with these lines — lines you already edited below are what gets converted"}
     >
       <svg className="ic" aria-hidden="true"><use href="#i-file" /></svg>
-      {converting ? "Creating…" : "Convert to proposal"}
+      {converting ? (convertLabel ? "Updating…" : "Creating…") : (convertLabel ?? "Convert to proposal")}
     </button>
   );
 
@@ -1927,6 +1951,8 @@ export default function BuildEstimateCardD({
   onBuildingUse,
   aiEnabled = true,
   waiting = null,
+  seedSpec = null,
+  convertLabel,
 }: BuildEstimateCardProps) {
   // Nothing is priced while the aerial provider is still delivering the
   // packs pricing needs, nor on a pitch nobody stated.
@@ -2014,6 +2040,8 @@ export default function BuildEstimateCardD({
             converting={converting}
             onBuild={onBuild}
             onConvert={onConvert}
+            seedSpec={seedSpec}
+            convertLabel={convertLabel}
             lead={pitchSel}
             needsPitch={needsPitch}
             blockedReason={blockedReason}

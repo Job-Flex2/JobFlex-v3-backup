@@ -29,9 +29,12 @@ export function RoofEstimatorContent({
   aiEnabled,
   drawingEnabled = true,
   initialAddress,
+  proposalId,
 }: {
   /** A lead's address, typed into the search field on arrival (lib/estimateSeed). */
   initialAddress?: string;
+  /** A saved roof proposal to open again and update (2026-10-13). */
+  proposalId?: string;
   /** EagleView credentials present — read on the server, in page.tsx. */
   evEnabled: boolean;
   /** The configured measurement service is available. */
@@ -61,7 +64,7 @@ export function RoofEstimatorContent({
         drawingEnabled && evEnabled ? (
           <RoofEstimatorBlueprintForm aiEnabled={aiEnabled} />
         ) : (
-          <RoofEstimatorDataForm aiEnabled={aiEnabled} evEnabled={evEnabled} measurementEnabled={measurementEnabled} initialAddress={initialAddress} />
+          <RoofEstimatorDataForm aiEnabled={aiEnabled} evEnabled={evEnabled} measurementEnabled={measurementEnabled} initialAddress={initialAddress} proposalId={proposalId} />
         )
       ) : (
         <div className="card rf-card">

@@ -47,7 +47,7 @@ export const metadata: Metadata = {
     "Roof estimator — order a measurement report, read the facets and linear footage, then price the takeoff.",
 };
 
-export default async function RoofEstimatorPage() {
+export default async function RoofEstimatorPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const gate = await customPageGate("roof-estimator");
   if (gate) return gate;
   const session = await auth();
@@ -72,6 +72,10 @@ export default async function RoofEstimatorPage() {
   // address only (2026-09-26). A lead with just a town or a ZIP opens here too
   // now; its field starts empty for the street, and the strip shows the rest.
   const seed = await readRoofSeed();
+  // A saved roof proposal opened again from the proposal builder (2026-10-13):
+  // the estimator loads it (loadRoofFromProposal checks it is this company's).
+  const raw = (await searchParams).proposal;
+  const proposalId = (Array.isArray(raw) ? raw[0] : raw)?.slice(0, 64) || undefined;
 
   return (
     <>
@@ -82,6 +86,7 @@ export default async function RoofEstimatorPage() {
         aiEnabled={isOpenAIEnabled()}
         drawingEnabled={drawingEnabled}
         initialAddress={seed?.address && looksLikeStreetAddress(seed.address) ? seed.address : undefined}
+        proposalId={proposalId}
       />
     </>
   );

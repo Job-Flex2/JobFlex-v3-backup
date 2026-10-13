@@ -36,7 +36,8 @@
 
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { NoOrgError, UnauthorizedError, isLimitedRole, requireOrg } from "@/lib/orgContext";
+import { NoOrgError, UnauthorizedError, isLimitedRole, isSalesRole, isWorkerRole, requireOrg } from "@/lib/orgContext";
+import { isPageLocked } from "@/lib/customPageAccess";
 import { canUseDeckEstimator } from "@/lib/deck/access";
 import { clientLinksByProposal } from "@/lib/deck/clientLinksServer";
 import { clientStanding, standingLine } from "@/lib/deck/clientDesign";
@@ -94,6 +95,12 @@ export default async function ManualBlueprintPage({
     // The client's design link on it (2026-10-13), for the drawing card's line.
     const link = (await clientLinksByProposal(ctx.organizationId).catch(() => null))?.get(data.proposal.id);
     if (link) data.proposal.clientDesign = { line: standingLine(link, (iso) => agoLabel(new Date(iso)), { sentAt: link.sentAt, workAt: link.workAt, openedAt: link.openedAt, createdAt: link.createdAt }), standing: clientStanding(link), draftId: link.draftId, unseen: link.unseen };
+  }
+
+  // A roof made in the roof estimator opens there again to be rebuilt (owner, 2026-10-13) — for whoever may use
+  // the estimator (estimators and managers; the add-on not locked). The estimator itself checks the rest.
+  if (data.proposal?.trade === "roof" && !isWorkerRole(ctx.role) && !isSalesRole(ctx.role)) {
+    data.proposal.roofEditable = !(await isPageLocked(ctx.organizationId, "roof-estimator").catch(() => true));
   }
 
   return <ManualBlueprintContent data={data} />;

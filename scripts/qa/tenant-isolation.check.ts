@@ -33,6 +33,7 @@ import * as expenses from "../../src/actions/expenses";
 import * as messages from "../../src/actions/messages";
 import * as homeFiles from "../../src/actions/homeFiles";
 import * as deck from "../../src/actions/deckEstimator";
+import * as roof from "../../src/actions/roofEstimator";
 import { defaultDeckDesign } from "../../src/lib/deck/design";
 import { deckScope, priceDeck } from "../../src/lib/deck/pricing";
 import { deckScene } from "../../src/lib/deck/scene";
@@ -293,6 +294,22 @@ async function main() {
       check("control B → B: updateDeckProposal re-prices B's own proposal", !ownUpd.refused && (await db.lineItem.count({ where: { proposalId: B.proposal.id } })) === pkg.lines.length, ownUpd.text);
     } finally {
       await db.user.update({ where: { id: B.owner.id }, data: { isPlatformAdmin: false } });
+    }
+
+    // A roof proposal opened again in the roof estimator and updated in place (2026-10-13): never another company's.
+    {
+      const roofLines = { materials: [{ name: "Shingles", quantity: 20, unitPrice: 120, unit: "sq" }], labor: [{ name: "Install", quantity: 20, unitPrice: 90, unit: "sq" }] };
+      await db.proposal.update({ where: { id: A.proposal.id }, data: { trade: "roof" } });
+      const roofLinesOfA = () => db.lineItem.count({ where: { proposalId: A.proposal.id } });
+      const nRoofA = await roofLinesOfA();
+      as(B);
+      const openRoofA = await outcome(() => roof.loadRoofFromProposal(A.proposal.id));
+      check("roof: B cannot open A's proposal in the roof estimator (loadRoofFromProposal)", openRoofA.refused, openRoofA.text);
+      await denied("updateRoofProposal (re-price A's proposal from B's roof)", B, () => roof.updateRoofProposal({ proposalId: A.proposal.id, title: "Roof", ...roofLines }), async () => (await roofLinesOfA()) === nRoofA && (await db.proposal.findUnique({ where: { id: A.proposal.id } }))?.title === A.proposal.title);
+      await db.proposal.update({ where: { id: B.proposal.id }, data: { trade: "roof" } });
+      as(B);
+      const ownRoof = await outcome(() => roof.updateRoofProposal({ proposalId: B.proposal.id, title: "Roof", ...roofLines }));
+      check("control B → B: updateRoofProposal re-prices B's own roof proposal", !ownRoof.refused && (await db.lineItem.count({ where: { proposalId: B.proposal.id } })) === 2, ownRoof.text);
     }
 
     // A delete leaves the bytes while another row still names them.

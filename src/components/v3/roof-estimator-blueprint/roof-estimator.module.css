@@ -2049,3 +2049,18 @@
 .bp :global(.content .rf-eave-grid dd span) { font-size: 12px; font-weight: 500; }
 .bp :global(.content .rf-detail-use) { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
 .bp :global(.content .rf-detail-use button) { min-height: 44px; }
+
+/* A saved proposal opened again (2026-10-13): the strip over the page while
+   the estimator works on it — what it is, what Update does, the way back. */
+.bp :global(.content .rf-linked) { display: grid; gap: 8px; margin-bottom: 16px; padding: 12px 14px; border: 1.5px solid var(--blueprint); border-left-width: 4px; border-radius: var(--radius); background: rgba(24, 84, 160, 0.06); }
+.bp :global(.content .rf-linked.is-locked) { border-color: var(--warning); background: var(--warning-soft); }
+.bp :global(.content .rf-linked-main) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.bp :global(.content .rf-linked-k) { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blueprint); }
+.bp :global(.content .rf-linked.is-locked .rf-linked-k) { color: var(--warning-dark); }
+.bp :global(.content .rf-linked-main b) { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.04em; color: var(--ink); }
+.bp :global(.content .rf-linked-t) { font-size: 14px; font-weight: 700; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.bp :global(.content .rf-linked-st) { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 2px 7px; border: 1.5px solid var(--ink); color: var(--ink); }
+.bp :global(.content .rf-linked-say) { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-soft); max-width: 75ch; }
+.bp :global(.content .rf-linked-ask) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 10px; border: 1.5px solid var(--warning); background: #fff; font-size: 13px; color: var(--ink); }
+.bp :global(.content .rf-linked-ask span) { flex: 1 1 240px; }
+.bp :global(.content .rf-linked-acts) { display: flex; flex-wrap: wrap; gap: 8px; }

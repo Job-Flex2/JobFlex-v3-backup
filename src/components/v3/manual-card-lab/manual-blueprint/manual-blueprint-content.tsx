@@ -811,6 +811,17 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
             overflow, so it must not get a scroll container: `wide` also clips,
             and the row's unit <select> hangs its popup outside the body. */}
         <Card num="03" title="Line items" id="q-03" wide={!handheld}>
+          {/* Made in the roof estimator (owner, 2026-10-13: "when open, get back to the roofing edit to rebuild it"):
+              the estimator opens with this roof, its choices and lines, and Update re-prices THIS proposal. */}
+          {data.proposal?.roofEditable ? (
+            <div className={cx(styles.drawingEdit, styles.roofEdit)} data-roof-edit>
+              <a className={cx(styles.btn, styles.btnPrimary)} href={`/dashboard/roof-estimator?proposal=${encodeURIComponent(data.proposal.id)}`}>
+                <Ic name="pen" />
+                Edit the roof estimate
+              </a>
+              <span>Opens the roof estimator with this roof, its choices and lines. Change anything, then Update re-prices this proposal — lines you added here stay.{note === NOTE_EDITED ? " Save first — changes not saved here are not carried over." : ""}</span>
+            </div>
+          ) : null}
           <Lines
             lines={draft.lines}
             openIds={openLines}
