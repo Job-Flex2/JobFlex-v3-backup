@@ -109,7 +109,7 @@ export function TrialBoardContent({ initial, ledger }: { initial: TrialBoard; le
         </p>
       )}
 
-      <div className="kpi-grid">
+      <div className={`kpi-grid ${b.kpi5}`}>
         <div className="kpi" data-kpi="on-trial">
           <div className="kpi-lbl">On a trial now</div>
           <div className="kpi-val">{t.total}</div>
@@ -118,6 +118,13 @@ export function TrialBoardContent({ initial, ledger }: { initial: TrialBoard; le
             {t.card} with a card · <span className={b.dot} data-tone="warn" />
             {t.nocard} without
           </div>
+        </div>
+        {/* SET TO CANCEL (owner, 2026-10-12): trials whose owner pressed Cancel — they end with the trial and are
+            charged nothing, card or not, unless they resume. */}
+        <div className="kpi" data-kpi="set-to-cancel">
+          <div className="kpi-lbl">Set to cancel at trial end</div>
+          <div className={t.setToCancel > 0 ? `kpi-val ${b.kpiBad}` : "kpi-val"}>{t.setToCancel}</div>
+          <div className={b.kpiSub}>{t.setToCancelCard} with a card · nothing is charged unless they resume</div>
         </div>
         <div className="kpi" data-kpi="ending">
           <div className="kpi-lbl">Trials ending today</div>
@@ -320,6 +327,11 @@ function TrialCard({ r, now }: { r: BoardRow; now: number }) {
         <span className={b.chip} data-tone={r.cardNow ? "good" : "warn"} data-board-card>
           {card}
         </span>
+        {r.cancelsAtEnd && (
+          <span className={b.chip} data-tone="bad" data-board-cancel>
+            Set to cancel{r.canceledAt !== null ? ` ${dayInline(r.canceledAt, now)}` : ""} — ends with the trial
+          </span>
+        )}
         {planPrice(r) && <span className={b.chip}>{planPrice(r)}</span>}
         {r.trialDays !== null && r.dayOfTrial !== null && <TrialDays day={r.dayOfTrial} of={r.trialDays} />}
         {r.chance !== null && (
@@ -566,7 +578,7 @@ function Calendar({ days, byId, now }: { days: CohortDay[]; byId: Map<string, Bo
                               <b>{r.orgName}</b>
                               <span>{r.kind === "card" ? "card at signup" : r.cardNow ? "added a card" : "no card"}</span>
                               <span className={b.chip} data-tone={r.phase === "paying" ? "good" : r.phase === "trial" ? "info" : r.phase === "failed" ? "bad" : "muted"}>
-                                {r.phase === "paying" ? "paying" : r.phase === "trial" ? `on trial · ends ${r.trialEnd !== null ? dayInline(r.trialEnd, now) : "—"}` : r.phase === "failed" ? "card failed" : "left"}
+                                {r.phase === "paying" ? "paying" : r.phase === "trial" ? `on trial · ends ${r.trialEnd !== null ? dayInline(r.trialEnd, now) : "—"}${r.cancelsAtEnd ? " · set to cancel" : ""}` : r.phase === "failed" ? "card failed" : "left"}
                               </span>
                               <span className={b.muted}>{workWords(r.work)}</span>
                             </li>

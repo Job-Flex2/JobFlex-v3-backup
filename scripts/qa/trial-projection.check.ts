@@ -15,6 +15,7 @@ const t = (p: Partial<TrialSignals>) => trialTier({ ...base, ...p });
 
 console.log("── tiers");
 check("a card on file wins over everything, even an expired date", t({ hasCard: true, over: true }) === "card");
+check("set to cancel wins over a card on file — nothing is charged unless they resume", t({ hasCard: true, canceling: true }) === "canceling" && trialChance("canceling", 2.5) === 0.05);
 check("a trial over without a card is 'over', whatever it did", t({ over: true, proposals: 5 }) === "over");
 check("one proposal, three records or three active days is 'working'", t({ proposals: 1 }) === "working" && t({ records: 3 }) === "working" && t({ activeDays: 3 }) === "working");
 check("one record, a second day or ten screens is 'trying'", t({ records: 1 }) === "trying" && t({ activeDays: 2 }) === "trying" && t({ views: 10 }) === "trying");

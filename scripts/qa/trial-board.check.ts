@@ -125,5 +125,15 @@ check("a card-first trial past its end but not yet charged stays a trial, counte
   return late.phase === "trial" && b2.onTrial.endsToday === 1;
 })());
 
+// SET TO CANCEL (owner, 2026-10-12): a card-first trial whose owner pressed Cancel — still running, counted apart.
+const withCancel = buildTrialBoard([...accounts, acct("C1", { createdAt: now - 3 * DAY, trialEndsAt: now + 4 * DAY, canceledAt: now - DAY })], now);
+const c1 = withCancel.rows.find((r) => r.orgId === "C1")!;
+check("a trial set to cancel still runs, marked to end with the trial", c1.phase === "trial" && c1.cancelsAtEnd && c1.cardNow);
+check("…counted: 1 set to cancel, 1 of them with a card; still among the 4 on a trial", withCancel.onTrial.setToCancel === 1 && withCancel.onTrial.setToCancelCard === 1 && withCancel.onTrial.total === 4, JSON.stringify(withCancel.onTrial));
+check("…and the headline says so", /— 3 with a card, 1 without one; 1 of those with a card is set to cancel when the trial ends\./.test(withCancel.headline), withCancel.headline);
+check("a paying account with an old cancel date is not 'set to cancel'", !buildTrialBoard([acct("P", { status: "ACTIVE", trialEndsAt: now - 2 * DAY, canceledAt: now - 5 * DAY })], now).rows[0].cancelsAtEnd);
+check("none today but one tomorrow reads as words, not a zero", /None ends today, 1 tomorrow\./.test(buildTrialBoard([acct("T", { createdAt: now - 6 * DAY, trialEndsAt: Date.parse("2026-10-13T09:00:00-07:00") })], now).headline));
+check("no cancel pressed: nothing said about it", board.onTrial.setToCancel === 0 && !/cancel when/.test(board.headline));
+
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

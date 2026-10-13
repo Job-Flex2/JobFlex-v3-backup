@@ -89,7 +89,7 @@ export async function readTrialBoard(now = Date.now()): Promise<TrialBoard> {
           createdAt: o.createdAt,
           state: signupState(o.subscription?.status ?? ""),
           sub: o.subscription
-            ? { plan: o.subscription.plan, status: o.subscription.status, trialEndsAt: o.subscription.trialEndsAt, stripePriceId: o.subscription.stripePriceId, externalSubId: o.subscription.externalSubId, provider: o.subscription.provider }
+            ? { plan: o.subscription.plan, status: o.subscription.status, trialEndsAt: o.subscription.trialEndsAt, stripePriceId: o.subscription.stripePriceId, externalSubId: o.subscription.externalSubId, provider: o.subscription.provider, canceledAt: o.subscription.canceledAt }
             : null,
         })),
         now,

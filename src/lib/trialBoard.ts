@@ -78,6 +78,8 @@ export interface BoardRow extends BoardAccount {
   cardNow: boolean;
   /** When a card-less trial added one. */
   cardAddedAt: number | null;
+  /** Running, and set to cancel when it ends — the owner pressed Cancel (Subscription.canceledAt; Resume clears it). */
+  cancelsAtEnd: boolean;
   paidFrom: number | null;
   paidHow: PaidHow | null;
   /** When the trial was decided — paid, left or failed; null while it runs, and for an account that never had one. */
@@ -122,6 +124,7 @@ export function classify(a: BoardAccount, now: number): BoardRow {
     phase === "trial" && trialStart !== null && trialDays !== null ? Math.min(trialDays, Math.max(1, Math.floor((now - trialStart) / DAY_MS) + 1)) : null;
   const cardAddedAt = kind === "nocard" ? c?.cardAt ?? c?.restartedAt ?? null : null;
   const cardNow = kind === "card" || (kind === "nocard" && cardAddedAt !== null);
+  const cancelsAtEnd = phase === "trial" && a.canceledAt !== null;
 
   let paidFrom: number | null = null;
   let paidHow: PaidHow | null = null;
@@ -150,7 +153,7 @@ export function classify(a: BoardAccount, now: number): BoardRow {
         : phase === "failed"
           ? past ?? a.subUpdatedAt
           : null;
-  return { ...a, kind, phase, test: !!c?.test, trialStart, trialEnd, trialDays, dayOfTrial, cardNow, cardAddedAt, paidFrom, paidHow, decidedAt };
+  return { ...a, kind, phase, test: !!c?.test, trialStart, trialEnd, trialDays, dayOfTrial, cardNow, cardAddedAt, cancelsAtEnd, paidFrom, paidHow, decidedAt };
 }
 
 /** Local midnight (TRAFFIC_TZ) of the day after / before the one starting at `start` — DST-safe. */
@@ -191,7 +194,20 @@ export interface Outcome {
 export interface TrialBoard {
   now: number;
   rows: BoardRow[];
-  onTrial: { total: number; card: number; nocard: number; cardAdded: number; endsToday: number; endsTomorrow: number; monthlyCents: number; likelyCents: number; priced: number };
+  onTrial: {
+    total: number;
+    card: number;
+    nocard: number;
+    cardAdded: number;
+    /** Set to cancel when the trial ends (owner, 2026-10-12) — all of them, and those with a card on file. */
+    setToCancel: number;
+    setToCancelCard: number;
+    endsToday: number;
+    endsTomorrow: number;
+    monthlyCents: number;
+    likelyCents: number;
+    priced: number;
+  };
   /** Trials started in the last RECENT_DAYS signup days (today included), card at signup or not. */
   started: { trials: number; card: number; nocard: number };
   /** Every running trial, the one ending first first. */
@@ -240,6 +256,8 @@ export function buildTrialBoard(accounts: readonly BoardAccount[], now: number):
     card: running.filter((r) => r.cardNow).length,
     nocard: running.filter((r) => !r.cardNow).length,
     cardAdded: running.filter((r) => r.kind === "nocard" && r.cardNow).length,
+    setToCancel: running.filter((r) => r.cancelsAtEnd).length,
+    setToCancelCard: running.filter((r) => r.cancelsAtEnd && r.cardNow).length,
     endsToday: running.filter((r) => r.trialEnd !== null && r.trialEnd < tomorrow).length,
     endsTomorrow: running.filter((r) => r.trialEnd !== null && r.trialEnd >= tomorrow && r.trialEnd < dayAfter).length,
     monthlyCents: running.reduce((sum, r) => sum + (r.monthlyCents ?? 0), 0),
@@ -324,9 +342,15 @@ export function boardHeadline(b: Pick<TrialBoard, "onTrial" | "decided">): strin
   else {
     const card = t.card === 0 ? "none with a card" : t.card === t.total ? (t.total === 1 ? "with a card" : "all with a card") : `${t.card} with a card`;
     const without = t.nocard === 0 || t.card === t.total ? "" : `, ${t.nocard} without one`;
-    parts.push(`${plural(t.total, "account")} on a trial now — ${card}${without}.`);
+    const cancel =
+      t.setToCancel === 0
+        ? ""
+        : t.setToCancel === t.setToCancelCard
+          ? `; ${t.setToCancel} of those with a card ${t.setToCancel === 1 ? "is" : "are"} set to cancel when the trial ends`
+          : `; ${t.setToCancel} ${t.setToCancel === 1 ? "is" : "are"} set to cancel when the trial ends (${t.setToCancelCard} with a card)`;
+    parts.push(`${plural(t.total, "account")} on a trial now — ${card}${without}${cancel}.`);
     if (t.endsToday + t.endsTomorrow === 0) parts.push("None ends today or tomorrow.");
-    else parts.push(`${t.endsToday} ${t.endsToday === 1 ? "ends" : "end"} today, ${t.endsTomorrow} tomorrow.`);
+    else parts.push(t.endsToday === 0 ? `None ends today, ${t.endsTomorrow} tomorrow.` : `${t.endsToday} ${t.endsToday === 1 ? "ends" : "end"} today, ${t.endsTomorrow} tomorrow.`);
   }
   const w = b.decided.week;
   if (w.total === 0) parts.push("No trial has ended in the last 7 days yet.");

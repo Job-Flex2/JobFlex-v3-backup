@@ -25,7 +25,7 @@ export interface ValueInput {
   orgId: string;
   createdAt: Date;
   state: "trial" | "paying" | "lapsed" | "free" | "unknown";
-  sub: { plan: string; status: string; trialEndsAt: Date | null; stripePriceId: string | null; externalSubId: string | null; provider: string } | null;
+  sub: { plan: string; status: string; trialEndsAt: Date | null; stripePriceId: string | null; externalSubId: string | null; provider: string; canceledAt?: Date | null } | null;
 }
 
 export type SignupValue = { monthlyCents: number | null; tier?: TrialValue["tier"]; chance?: number; expectedCents?: number };
@@ -146,6 +146,8 @@ export async function valueSignups(rows: readonly ValueInput[], now = Date.now()
     const tier = trialTier({
       hasCard,
       over,
+      // Cancel pressed during the trial (billing.cancelSubscription stamps canceledAt; Resume clears it).
+      canceling: !!r.sub?.canceledAt,
       ageHours: Math.max(0, (now - r.createdAt.getTime()) / 3_600_000),
       proposals: proposalsBy.get(r.orgId) ?? 0,
       records: (clientsBy.get(r.orgId) ?? 0) + (jobsBy.get(r.orgId) ?? 0) + (leadsBy.get(r.orgId) ?? 0),

@@ -28,10 +28,12 @@
 //
 // List prices: a promo code or a referral discount is not taken off.
 
-export type TrialTier = "card" | "working" | "trying" | "new" | "quiet" | "over";
-export const TRIAL_TIERS: readonly TrialTier[] = ["card", "working", "trying", "new", "quiet", "over"];
+export type TrialTier = "card" | "working" | "trying" | "new" | "quiet" | "canceling" | "over";
+export const TRIAL_TIERS: readonly TrialTier[] = ["card", "working", "trying", "new", "quiet", "canceling", "over"];
 
-export const TIER_CHANCE: Record<TrialTier, number> = { card: 0.9, working: 0.45, trying: 0.2, new: 0.15, quiet: 0.06, over: 0.05 };
+// "canceling" (owner, 2026-10-12): the shop pressed Cancel during the trial — it ends with the trial and nothing is
+// charged unless they resume, card or no card; counted like a trial that is over.
+export const TIER_CHANCE: Record<TrialTier, number> = { card: 0.9, working: 0.45, trying: 0.2, new: 0.15, quiet: 0.06, canceling: 0.05, over: 0.05 };
 /** What the panel calls each tier — plain words about the trial, no billing
  *  talk (owner, 2026-10-05: "just revenue from the trials"). */
 export const TIER_LABEL: Record<TrialTier, string> = {
@@ -40,6 +42,7 @@ export const TIER_LABEL: Record<TrialTier, string> = {
   trying: "trying it",
   new: "just started",
   quiet: "quiet so far",
+  canceling: "set to cancel",
   over: "trial ended",
 };
 
@@ -55,6 +58,8 @@ export interface TrialSignals {
   hasCard: boolean;
   /** The trial is over without a card (ended, or its end has passed). */
   over: boolean;
+  /** Set to cancel when the trial ends (the owner pressed Cancel; Resume undoes it). */
+  canceling?: boolean;
   /** Hours since the account was made. */
   ageHours: number;
   proposals: number;
@@ -67,6 +72,8 @@ export interface TrialSignals {
 }
 
 export function trialTier(s: TrialSignals): TrialTier {
+  // Before the card: a card on file is not charged once the trial is set to cancel.
+  if (s.canceling) return "canceling";
   if (s.hasCard) return "card";
   if (s.over) return "over";
   if (s.proposals >= 1 || s.records >= 3 || s.activeDays >= 3) return "working";
@@ -102,7 +109,7 @@ export function calibrate(h: TrialHistory): TrialCalibration {
 /** The chance one trial pays: the tier's starting chance, scaled by the shop's record where the tier is uncertain. */
 export function trialChance(tier: TrialTier, factor = 1): number {
   const base = TIER_CHANCE[tier];
-  if (tier === "card" || tier === "over") return base;
+  if (tier === "card" || tier === "over" || tier === "canceling") return base;
   return Math.min(CHANCE_CAP, Math.round(base * factor * 1000) / 1000);
 }
 

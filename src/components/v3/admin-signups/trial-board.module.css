@@ -19,11 +19,23 @@
 }
 :global(.jf-blueprint .content) .error { margin: 0; font-weight: 600; color: var(--danger); }
 
-:global(.jf-blueprint .content) .kpiSub { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+/* Plain text that wraps like a sentence; each dot stays with the words after it. */
+:global(.jf-blueprint .content) .kpiSub { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
 :global(.jf-blueprint .content) .kpiOf { margin-left: 6px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--muted-light); }
-:global(.jf-blueprint .content) .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted-light); }
+:global(.jf-blueprint .content) .dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; vertical-align: 0; background: var(--muted-light); }
 :global(.jf-blueprint .content) .dot[data-tone="good"] { background: var(--success); }
 :global(.jf-blueprint .content) .dot[data-tone="warn"] { background: var(--warning); }
+:global(.jf-blueprint .content) .dot[data-tone="bad"] { background: var(--danger); }
+:global(.jf-blueprint .content) .kpiBad { color: var(--danger); }
+/* Five tiles: one row on a desk; two columns below 1280px with the fifth across the whole row. */
+:global(.jf-blueprint .content) .kpi5 { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 1280px) {
+  :global(.jf-blueprint .content) .kpi5 { grid-template-columns: repeat(2, 1fr); }
+  :global(.jf-blueprint .content) .kpi5 > :global(.kpi) { border-bottom: 1.5px solid var(--ink); }
+  :global(.jf-blueprint .content) .kpi5 > :global(.kpi):nth-child(odd) { border-right: 1.5px solid var(--ink); }
+  :global(.jf-blueprint .content) .kpi5 > :global(.kpi):nth-child(even) { border-right: none; }
+  :global(.jf-blueprint .content) .kpi5 > :global(.kpi):nth-child(5) { grid-column: 1 / -1; border-right: none; border-bottom: none; }
+}
 
 /* ── a section ── */
 :global(.jf-blueprint .content) .card { min-width: 0; border: 2px solid var(--ink); border-radius: var(--radius); background: var(--paper-deep); }
