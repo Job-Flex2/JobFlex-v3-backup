@@ -110,9 +110,21 @@ export interface RoofFacts {
   existingMaterial?: string | null;
   /**
    * The aerial provider's own 0..1 score for facetCount, when it scored one.
-   * The valley estimate refuses a facet count scored under 0.5.
+   * The valley estimate's facet model refuses a facet count scored under 0.5.
    */
   facetConfidence?: number | null;
+  /**
+   * The building outlines (the main structure and any ticked outbuilding) as
+   * lat/lng rings — pack 007's polygons. The valley estimate reads its inside
+   * corners first (2026-10-13): every inside corner of a footprint is a valley.
+   */
+  outlines?: ReadonlyArray<ReadonlyArray<{ lat: number; lng: number }>> | null;
+  /**
+   * A roof-plane count that is only an estimate (the Google fallback's
+   * segments), never a measured fact: the valley estimate reads it when there
+   * is no measured facet count.
+   */
+  facetCountEstimated?: number | null;
   /**
    * How the contractor said this building is used — the only thing that
    * turns commercial pricing on. Null until they answer; the aerial data has
@@ -347,6 +359,12 @@ export function underlaymentForFamily(family: RoofFamily, lists: CatalogLists): 
  * the shape's own base, no outline, or a body too small or too large for the
  * one-rectangle-with-wings model.
  *
+ * Since 2026-10-13 the OUTLINE is read first (valleysFromOutline): an inside
+ * corner of the footprint is a valley whatever the facet count says, so an
+ * L- or T-shaped house gets its valleys even when the facet count is missing
+ * or scored low. The facet model stands for footprints with no inside corner
+ * (dormers, cross gables) and for roofs with no outline at all.
+ *
  * A DELIVERED report's valley footage always wins over this (defaultSpecWith
  * takes `facts.measured` first). The 20-facet ceiling this once carried is
  * gone (audit 2026-09-17): a 22-facet roof with no report priced ZERO valleys
@@ -357,9 +375,19 @@ export function underlaymentForFamily(family: RoofFamily, lists: CatalogLists): 
  */
 export function estimateValleys(facts: RoofFacts): { count: number; ftEach: number; totalFt: number } | null {
   if (isFlatRoof(facts)) return { count: 0, ftEach: 0, totalFt: 0 };
-  const fc = facts.facetCount;
+  const main = facts.pitchFamilies.filter((f) => f.share > 0).reduce<{ pitch12: number; share: number } | null>((a, f) => (a == null || f.share > a.share ? f : a), null);
+  const t = Math.max(0, Math.min(20, main?.pitch12 ?? 5)) / 12;
+  const factor = Math.sqrt(2 + t * t);
+  // THE OUTLINE FIRST (owner, 2026-10-13: "the roofing estimator never
+  // calculates valleys"): every inside corner of the footprint is a valley,
+  // whatever the facet count or its score. A footprint with no inside corner
+  // says nothing about dormers and cross gables — the facet model below does.
+  const fromOutline = valleysFromOutlines(facts.outlines, t);
+  if (fromOutline && fromOutline.count > 0) return fromOutline;
+
+  const fc = facts.facetCount ?? facts.facetCountEstimated ?? null;
   if (fc == null || !Number.isFinite(fc) || fc < 1) return null;
-  if (facts.facetConfidence != null && facts.facetConfidence < 0.5) return null;
+  if (facts.facetCount != null && facts.facetConfidence != null && facts.facetConfidence < 0.5) return null;
   const A = facts.footprintSqft != null && facts.footprintSqft > 0 ? facts.footprintSqft : null;
   const P = facts.perimeterFt != null && facts.perimeterFt > 0 ? facts.perimeterFt : A != null ? 4 * Math.sqrt(A) * 1.05 : null;
   if (A == null && P == null) return null;
@@ -381,9 +409,6 @@ export function estimateValleys(facts: RoofFacts): { count: number; ftEach: numb
   const n = Math.max(0, Math.min(12, body.pairs ? 2 * Math.round(extra / 2.5) : Math.round(extra * body.rate)));
   if (n === 0) return { count: 0, ftEach: 0, totalFt: 0 };
 
-  const main = facts.pitchFamilies.filter((f) => f.share > 0).reduce<{ pitch12: number; share: number } | null>((a, f) => (a == null || f.share > a.share ? f : a), null);
-  const t = Math.max(0, Math.min(20, main?.pitch12 ?? 5)) / 12;
-  const factor = Math.sqrt(2 + t * t);
   const primaries = Math.min(2, n - (n % 2));
   const secondaries = n - primaries;
   let plan = primaries * (Math.min(0.3 * W, 15) + 1.5) + secondaries * (Math.min(0.16 * W, 8) + 0.5);
@@ -392,6 +417,113 @@ export function estimateValleys(facts: RoofFacts): { count: number; ftEach: numb
   const totalFt = r1(n * ftEach);
   if (!Number.isFinite(ftEach) || !Number.isFinite(totalFt)) return null;
   return { count: n, ftEach, totalFt };
+}
+
+/* ── Valleys read off the footprint (2026-10-13) ─────────────────────── */
+
+const EARTH_FT = 20925646.3;
+const D2R = Math.PI / 180;
+type Pt = [number, number];
+
+/** A lat/lng ring in local feet about its first point (east, north); a closing repeat of the first point dropped. */
+export function outlineFeet(ring: ReadonlyArray<{ lat: number; lng: number }>): Pt[] {
+  if (ring.length < 3) return [];
+  const lat0 = ring[0].lat, lng0 = ring[0].lng;
+  const k = Math.cos(lat0 * D2R);
+  const pts: Pt[] = ring.map((p) => [(p.lng - lng0) * D2R * k * EARTH_FT, (p.lat - lat0) * D2R * EARTH_FT]);
+  const a = pts[0], b = pts[pts.length - 1];
+  if (pts.length > 3 && Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.5) pts.pop();
+  return pts;
+}
+
+/**
+ * The footprint with its noise taken out: no edge under `minEdgeFt` (a jog in
+ * a traced outline is not a wing), no corner that turns less than
+ * `minTurnDeg` (a bend in a straight wall is not a corner).
+ */
+export function simplifyOutline(pts: Pt[], minEdgeFt = 2.5, minTurnDeg = 10): Pt[] {
+  const out = pts.slice();
+  const len = (a: Pt, b: Pt) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  for (let guard = 0; guard < 200 && out.length > 3; guard++) {
+    let changed = false;
+    // The shortest edge under the floor goes: its far end is dropped.
+    let shortest = -1, shortLen = minEdgeFt;
+    for (let i = 0; i < out.length; i++) {
+      const l = len(out[i], out[(i + 1) % out.length]);
+      if (l < shortLen) { shortLen = l; shortest = i; }
+    }
+    if (shortest >= 0) { out.splice((shortest + 1) % out.length, 1); changed = true; }
+    if (!changed) {
+      // The straightest corner under the floor goes.
+      let straightest = -1, straightDeg = minTurnDeg;
+      for (let i = 0; i < out.length; i++) {
+        const a = out[(i - 1 + out.length) % out.length], b = out[i], c = out[(i + 1) % out.length];
+        const d1: Pt = [b[0] - a[0], b[1] - a[1]], d2: Pt = [c[0] - b[0], c[1] - b[1]];
+        const deg = Math.abs(Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1])) / D2R;
+        if (deg < straightDeg) { straightDeg = deg; straightest = i; }
+      }
+      if (straightest >= 0) { out.splice(straightest, 1); changed = true; }
+    }
+    if (!changed) break;
+  }
+  return out.length >= 3 ? out : [];
+}
+
+/**
+ * The valleys one footprint makes. A valley forms at every INSIDE corner of
+ * the outline — where a wing meets the body — and runs up from the eave at
+ * that corner to where the narrower of the two ridges dies into the other
+ * slope: a plan run of half the narrower width (the edges one step past the
+ * corner on each side), plus a foot of eave, along the hip-and-valley
+ * diagonal √(2 + (pitch/12)²). A corner the outline turns less than 25°, or
+ * a notch under 4 ft, is not a wing. At most twelve.
+ */
+export function valleysFromOutline(ring: ReadonlyArray<{ lat: number; lng: number }>, pitch12 = 5): { count: number; ftEach: number; totalFt: number; runs: number[] } | null {
+  const pts = simplifyOutline(outlineFeet(ring));
+  if (pts.length < 4) return pts.length >= 3 ? { count: 0, ftEach: 0, totalFt: 0, runs: [] } : null;
+  const n = pts.length;
+  let area2 = 0;
+  for (let i = 0; i < n; i++) area2 += pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1];
+  if (Math.abs(area2) < 50) return null;
+  const ccw = area2 > 0;
+  const t = Math.max(0, Math.min(20, pitch12)) / 12;
+  const factor = Math.sqrt(2 + t * t);
+  const at = (i: number) => pts[((i % n) + n) % n];
+  const len = (a: Pt, b: Pt) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const runs: number[] = [];
+  for (let i = 0; i < n && runs.length < 12; i++) {
+    const a = at(i - 1), b = at(i), c = at(i + 1);
+    const d1: Pt = [b[0] - a[0], b[1] - a[1]], d2: Pt = [c[0] - b[0], c[1] - b[1]];
+    const cross = d1[0] * d2[1] - d1[1] * d2[0];
+    const deg = Math.abs(Math.atan2(cross, d1[0] * d2[0] + d1[1] * d2[1])) / D2R;
+    const inside = ccw ? cross < 0 : cross > 0;
+    if (!inside || deg < 25) continue;
+    // The two bodies meeting here: the edge beyond the incoming one, and the edge beyond the outgoing one.
+    const w1 = len(at(i - 2), at(i - 1));
+    const w2 = len(at(i + 1), at(i + 2));
+    const w = Math.min(w1, w2);
+    if (w < 4) continue;
+    runs.push(Math.min(30, w / 2) + 1);
+  }
+  const lengths = runs.map((r) => r1(r * factor));
+  const totalFt = r1(lengths.reduce((s, v) => s + v, 0));
+  return { count: lengths.length, ftEach: lengths.length ? r1(totalFt / lengths.length) : 0, totalFt, runs: lengths };
+}
+
+/** Every outline's valleys together (the house and its ticked outbuildings). Null without a usable outline. */
+export function valleysFromOutlines(rings: ReadonlyArray<ReadonlyArray<{ lat: number; lng: number }>> | null | undefined, t: number): { count: number; ftEach: number; totalFt: number } | null {
+  if (!rings || !rings.length) return null;
+  let count = 0, totalFt = 0, any = false;
+  for (const ring of rings) {
+    const v = valleysFromOutline(ring, t * 12);
+    if (!v) continue;
+    any = true;
+    count += v.count;
+    totalFt += v.totalFt;
+  }
+  if (!any) return null;
+  count = Math.min(12, count);
+  return { count, ftEach: count ? r1(totalFt / count) : 0, totalFt: r1(totalFt) };
 }
 
 /**

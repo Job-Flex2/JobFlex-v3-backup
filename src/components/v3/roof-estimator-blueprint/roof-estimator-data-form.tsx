@@ -1071,7 +1071,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           : `MEASURED lengths from the aerial report #${mf.reportId}: eave ${Math.round(mf.eaveFt)} ft, rake ${Math.round(mf.rakeFt)} ft, ridge ${Math.round(mf.ridgeFt)} ft, hip ${Math.round(mf.hipFt)} ft, valley ${Math.round(mf.valleyFt)} ft, step flashing ${Math.round(mf.stepFlashFt)} ft — use these for drip edge, starter, cap, ridge vent, valley metal and step flashing`
           : est
           ? isSolar
-            ? `linear quantities ESTIMATED from building footprint and assumed roof shape: eave ${Math.round(est.eaveFt)} ft, rake ${Math.round(est.rakeFt)} ft, ridge ${Math.round(est.ridgeFt)} ft, hip ${Math.round(est.hipFt)} ft — verify every run on site`
+            ? `linear quantities ESTIMATED from building footprint and assumed roof shape: eave ${Math.round(est.eaveFt)} ft, rake ${Math.round(est.rakeFt)} ft, ridge ${Math.round(est.ridgeFt)} ft, hip ${Math.round(est.hipFt)} ft${est.valleyFt != null && est.valleyFt > 0 ? `, valley ${Math.round(est.valleyFt)} ft` : ""} — verify every run on site`
           : roofFacts && isFlatRoof(roofFacts)
             ? `flat roof perimeter ESTIMATED from the outline: ${Math.round(est.eaveFt)} ft — split it between parapet (coping) and open edge (edge metal) from the photo`
             : `edge lengths ESTIMATED from the outline and shape: eave ${Math.round(est.eaveFt)} ft, rake ${Math.round(est.rakeFt)} ft, ridge ${Math.round(est.ridgeFt)} ft, hip ${Math.round(est.hipFt)} ft${est.valleyFt != null && est.valleyFt > 0 ? `, valley ${Math.round(est.valleyFt)} ft (from the facet count)` : ""} — use these unless the photo says otherwise`
@@ -1513,6 +1513,10 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           measured: manual || isSolar ? null : report.state === "measured" ? report.footage ?? null : null,
           existingMaterial: manual || isSolar ? null : structure?.material ?? null,
           facetConfidence: manual || isSolar ? null : structure?.confidence?.facetCount ?? null,
+          // The footprints the valleys are read off (every inside corner is one, 2026-10-13); the fallback's roof-plane
+          // count stands in for a facet count there — an estimate, never a measured fact.
+          outlines: manual || isSolar ? null : includedStructures.map((s) => s.outline).filter((r): r is Array<{ lat: number; lng: number }> => !!r && r.length >= 4),
+          facetCountEstimated: isSolar ? solarFacetCount : null,
           buildingUse: manual ? null : buildingUse,
         }
       : null;
@@ -1535,7 +1539,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // these are MEASURED only when the full aerial report exists for the
   // address (ridge, hip, valley, eave and rake as flown); otherwise eave,
   // rake, ridge and hip are ESTIMATED from the outline and the roof shape,
-  // and valleys stay unknown until the report is ordered.
+  // and the valleys from the outline's inside corners (2026-10-13) — a dash
+  // only when there is nothing to read them from.
   // The hero says the figure and its unit — nothing else. The first cut wrote
   // the provenance under each number ("estimated from outline", "not in
   // instant data"), and a contractor turning the screen to a client was
@@ -1913,7 +1918,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               />
               <HeroCell l="Eaves + rakes" v={edgeTiles.edges} h={isSolar ? "linear ft · estimated" : "linear ft"} />
               <HeroCell l="Ridge + hips" v={edgeTiles.ridge} h={isSolar ? "linear ft · estimated" : "linear ft"} />
-              <HeroCell l="Valleys" v={edgeTiles.valley} h={isSolar ? "not measured" : "linear ft"} />
+              <HeroCell l="Valleys" v={edgeTiles.valley} h={isSolar ? "linear ft · estimated" : "linear ft"} />
             </div>
             {measurement && (
             <div className="rf-grid">
