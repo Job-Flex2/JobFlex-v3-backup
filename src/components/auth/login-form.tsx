@@ -9,7 +9,8 @@
 // the worker, partner and admin sign-ins are other pages.
 //
 // THE CODE is lib/signupOtp's "login" draft: the page says the same for every
-// address, the email says whether there is an account. In Instagram / Facebook
+// address, the email says whether there is an account. Its field is the
+// register page's six squares (otp-code-field, 2026-10-12). In Instagram / Facebook
 // webviews Google hands the page to Safari / Chrome with `google=1`, where
 // Google starts at once — the register page's rule (open-in-browser).
 //
@@ -29,6 +30,7 @@ import { HandoffHelp, useBrowserHandoff } from "@/components/auth/open-in-browse
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
 import { resendOtpCode, startOtpLogin, verifyOtpCode } from "@/actions/signupOtp";
 import { rememberOtpDraft } from "@/lib/signupMode";
+import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/otp-code-field";
 import s from "./login-form.module.css";
 
 const SERVER_TROUBLE = "Something went wrong on our side. Try again in a minute.";
@@ -95,6 +97,10 @@ export function LoginForm({
   const [now, setNow] = React.useState(() => Date.now());
   const pwRef = React.useRef<HTMLInputElement>(null);
   const codeRef = React.useRef<HTMLInputElement>(null);
+  const bridgeRef = React.useRef<HTMLInputElement>(null);
+  const leadRef = React.useRef<HTMLParagraphElement>(null);
+  const goRef = React.useRef<HTMLButtonElement>(null);
+  useKeepInView(leadRef, goRef, Boolean(draft) && !usePassword);
   const checking = React.useRef(false);
 
   React.useEffect(() => {
@@ -194,10 +200,14 @@ export function LoginForm({
     }
     setBusy(true);
     setErr(null);
+    // In the tap, so the phone's keyboard is up (numeric) when the code field takes over.
+    bridgeRef.current?.focus({ preventScroll: true });
+    const backToEmail = () => document.getElementById("loginEmail")?.focus({ preventScroll: true });
     try {
       const res = await startOtpLogin({ email: em });
       if (!res.ok) {
         setErr(res.error);
+        backToEmail();
         return;
       }
       rememberOtpDraft(res.draft);
@@ -210,6 +220,7 @@ export function LoginForm({
       window.setTimeout(() => codeRef.current?.focus(), 60);
     } catch {
       setErr(SERVER_TROUBLE);
+      backToEmail();
     } finally {
       setBusy(false);
     }
@@ -244,8 +255,7 @@ export function LoginForm({
     }
   }
 
-  function onCode(v: string) {
-    const digits = v.replace(/\D/g, "").slice(0, 6);
+  function onCode(digits: string) {
     setCode(digits);
     if (err && digits.length) setErr(null);
     if (digits.length === 6) void checkCode(digits);
@@ -358,41 +368,30 @@ export function LoginForm({
 
         {!usePassword && draft ? (
           <div className={s.codeBox}>
-            <p className={s.lead}>
-              If <b>{sentTo}</b> has a JobFlex account, a 6-digit code is on its way. It works for 10 minutes.
+            <p className={s.lead} ref={leadRef}>
+              If <b>{sentTo}</b> has a JobFlex account, a 6-digit code is on its way.
             </p>
-            <label className={s.fld}>
-              <span className={s.lbl}>6-digit code</span>
-              <input
-                ref={codeRef}
-                className={`${s.in} ${s.code}`}
-                id="loginCode"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]*"
-                maxLength={6}
-                placeholder="••••••"
-                value={code}
-                aria-invalid={err ? true : undefined}
-                onChange={(e) => onCode(e.target.value)}
-                onPaste={(e) => {
-                  const t = e.clipboardData.getData("text");
-                  if (!t) return;
-                  e.preventDefault();
-                  onCode(t);
-                }}
-              />
-            </label>
+            {/* The register page's six squares (OtpCodeField); its line under them carries this form's code errors. */}
+            <OtpCodeField
+              id="loginCode"
+              ref={codeRef}
+              labelClassName={s.lbl}
+              value={code}
+              onChange={onCode}
+              message={err}
+              invalid={Boolean(err)}
+              disabled={busy && code.length === 6}
+            />
             {note ? <p className={s.note} role="status">{note}</p> : null}
           </div>
         ) : null}
 
-        <button className={s.primary} type="submit" id={usePassword ? "signInBtn" : draft ? "codeSignInBtn" : "emailCodeBtn"} disabled={busy || signedIn || (Boolean(draft) && !usePassword && code.length !== 6)}>
+        <button className={s.primary} ref={goRef} type="submit" id={usePassword ? "signInBtn" : draft ? "codeSignInBtn" : "emailCodeBtn"} disabled={busy || signedIn || (Boolean(draft) && !usePassword && code.length !== 6)}>
           {signedIn ? "Signed in" : usePassword ? (busy ? "Signing in…" : "Sign in") : draft ? (busy && code.length === 6 ? "Checking…" : "Sign in") : busy ? "Sending…" : "Email me a code"}
         </button>
+        <KeyboardBridge ref={bridgeRef} />
 
-        <div className={err ? s.err : s.errHidden} role="alert">
+        <div className={err && (usePassword || !draft) ? s.err : s.errHidden} role="alert">
           {err}
         </div>
 

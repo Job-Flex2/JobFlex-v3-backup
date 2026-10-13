@@ -5,9 +5,13 @@
 //   form  — "Start Your Free Trial": Google on top, then name and email; the
 //           trial's terms under Continue, in the words of signupTrialMode and
 //           the trial offer this visitor was assigned.
-//   code  — "Check your email": one six-digit field (numeric keypad, the
-//           phone's one-time-code fill, paste), sent by itself on the sixth
-//           digit; Resend after 30 s; Use a different email.
+//   code  — "We sent a 6-digit code to your email" (owner, 2026-10-12): the
+//           address and Use a different email, six squares that are one
+//           field (OtpCodeField: numeric keypad, the phone's one-time-code
+//           fill, paste), sent by itself on the sixth digit, Continue; a line
+//           under the squares only for an error; at the foot Resend after
+//           30 s and "Check spam". Top-anchored under the stepper, so the
+//           heading, squares and Continue clear a phone's keyboard.
 //   google— back from Google: nothing left to ask, the plan step follows.
 //
 // NOTHING IS LOST on the way to the mail app and back (Meta's in-app browser
@@ -46,6 +50,7 @@ import {
   startOtpSignup,
   verifyOtpCode,
 } from "@/actions/signupOtp";
+import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/otp-code-field";
 import css from "./passwordless.module.css";
 
 type Screen = "form" | "code" | "google" | "done";
@@ -158,10 +163,16 @@ export function PasswordlessStep({
   const [err, setErr] = React.useState<string | null>(initialError);
   const [codeErr, setCodeErr] = React.useState<string | null>(restore?.burned ? "That code can't be used any more. Send a new code." : null);
   const [note, setNote] = React.useState<string | null>(null);
+  /* Read out, not shown: a new code went out (the countdown starting again is the visible sign). */
+  const [said, setSaid] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [code, setCode] = React.useState("");
   const [now, setNow] = React.useState(() => Date.now());
   const codeRef = React.useRef<HTMLInputElement>(null);
+  const bridgeRef = React.useRef<HTMLInputElement>(null);
+  const headRef = React.useRef<HTMLHeadingElement>(null);
+  const goRef = React.useRef<HTMLButtonElement>(null);
+  useKeepInView(headRef, goRef, screen === "code");
   const verifying = React.useRef(false);
   const handoff = useBrowserHandoff(inApp ?? "instagram");
   const track = (outcome: string, reason = "") =>
@@ -348,6 +359,9 @@ export function PasswordlessStep({
     }
     setErr(null);
     setBusy(true);
+    // In the tap, so the phone's keyboard is up (numeric) when the code field takes over.
+    bridgeRef.current?.focus({ preventScroll: true });
+    const backToEmail = () => document.getElementById("email")?.focus({ preventScroll: true });
     try {
       const res = await startOtpSignup({
         name: n,
@@ -361,6 +375,7 @@ export function PasswordlessStep({
       });
       if (!res.ok) {
         setErr(res.error);
+        backToEmail();
         track("error", /temporary|throwaway|disposable/i.test(res.error) ? "email_disposable" : /Too many/.test(res.error) ? "rate_limited" : /valid email/.test(res.error) ? "email_invalid" : "start_rejected");
         return;
       }
@@ -375,11 +390,13 @@ export function PasswordlessStep({
       setCode("");
       setCodeErr(null);
       setNote(null);
+      setSaid("");
       setScreen("code");
       setDraftInUrl(res.draft);
       window.setTimeout(() => codeRef.current?.focus(), 60);
     } catch {
       setErr(SERVER_TROUBLE);
+      backToEmail();
       track("error", "start_failed");
     } finally {
       setBusy(false);
@@ -428,8 +445,7 @@ export function PasswordlessStep({
     }
   }
 
-  function onCodeChange(v: string) {
-    const digits = v.replace(/\D/g, "").slice(0, 6);
+  function onCodeChange(digits: string) {
     setCode(digits);
     if (codeErr && digits.length) setCodeErr(null);
     if (digits.length === 6) void submitCode(digits);
@@ -440,6 +456,7 @@ export function PasswordlessStep({
     setBusy(true);
     setCodeErr(null);
     setNote(null);
+    setSaid("");
     try {
       const res = await resendOtpCode(draft);
       if (!res.ok) {
@@ -452,9 +469,9 @@ export function PasswordlessStep({
       setNow(Date.now());
       setBurned(false);
       setCode("");
-      setNote(`A new code is on its way to ${sentTo}. The one before it no longer works.`);
+      setSaid(`A new code is on its way to ${sentTo}. The one before it no longer works.`);
       track("code_resent");
-      codeRef.current?.focus();
+      window.setTimeout(() => codeRef.current?.focus(), 30);
     } catch {
       setCodeErr(SERVER_TROUBLE);
     } finally {
@@ -469,6 +486,7 @@ export function PasswordlessStep({
     setCode("");
     setCodeErr(null);
     setNote(null);
+    setSaid("");
     setScreen("form");
     track("change_email");
     window.setTimeout(() => document.getElementById("email")?.focus(), 30);
@@ -476,122 +494,131 @@ export function PasswordlessStep({
 
   const trialText = `${trialDays}-day free trial · ${requiresCard ? "Card required" : "No card needed"} · Cancel anytime`;
 
-  if (screen === "done") return <div className={css.otp} data-otp-screen="done" />;
+  // The keyboard bridge stays put across the screens: the form hands the focus to it, the code field takes it.
+  const view = (() => {
+    if (screen === "done") return <div className={css.otp} data-otp-screen="done" />;
 
-  if (screen === "google") {
-    return (
-      <div className={css.otp} data-otp-screen="google">
-        <h1 className="auth-h1">Start Your Free Trial</h1>
-        <p className="auth-lede" role="status">
-          Signed in with Google as <b>{google?.email}</b>. Setting up your plan…
-        </p>
-      </div>
-    );
-  }
+    if (screen === "google") {
+      return (
+        <div className={css.otp} data-otp-screen="google">
+          <h1 className="auth-h1">Start Your Free Trial</h1>
+          <p className="auth-lede" role="status">
+            Signed in with Google as <b>{google?.email}</b>. Setting up your plan…
+          </p>
+        </div>
+      );
+    }
 
-  if (screen === "code") {
-    return (
-      <div className={css.otp} data-otp-screen="code">
-        <h1 className="auth-h1">Check your email</h1>
-        <p className="auth-lede">
-          Enter the code we sent to <b className={css.addr}>{sentTo}</b>
-        </p>
-        <form id="otpForm" className={css.codeForm} noValidate onSubmit={(e) => { e.preventDefault(); void submitCode(code); }}>
-          <label className="fld">
-            <span className="fld-lbl">6-digit code</span>
-            <input
-              ref={codeRef}
-              className={`fld-in ${css.codeIn}`}
+    if (screen === "code") {
+      const checking = busy && code.length === 6;
+      return (
+        <div className={css.otp} data-otp-screen="code">
+          <h1 className="auth-h1" ref={headRef}>
+            We sent a 6-digit code to your email
+          </h1>
+          <p className={`auth-lede ${css.sentTo}`}>
+            <b className={css.addr} id="otpAddr">
+              {sentTo}
+            </b>
+            <button type="button" className={css.change} id="otpChange" onClick={onDifferentEmail} disabled={checking}>
+              Use a different email
+            </button>
+          </p>
+          <form
+            id="otpForm"
+            className={css.codeForm}
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitCode(code);
+            }}
+          >
+            <OtpCodeField
               id="otpCode"
-              name="otp"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]*"
-              maxLength={6}
-              placeholder="••••••"
-              aria-invalid={codeErr ? true : undefined}
-              aria-describedby="otpNote"
+              ref={codeRef}
+              labelClassName="fld-lbl"
+              messageId="otpNote"
               value={code}
-              disabled={busy && code.length === 6}
-              onChange={(e) => onCodeChange(e.target.value)}
-              onPaste={(e) => {
-                const pasted = e.clipboardData.getData("text");
-                if (!pasted) return;
-                e.preventDefault();
-                onCodeChange(pasted);
-              }}
+              onChange={onCodeChange}
+              message={codeErr ?? (burned ? "Send a new code to carry on." : note)}
+              invalid={Boolean(codeErr) || burned}
+              disabled={checking}
               autoFocus
             />
-            <span className={codeErr ? "fld-note fld-note--err" : "fld-note"} id="otpNote" aria-live="polite">
-              {codeErr ?? (burned ? "Send a new code to carry on." : "It works for 10 minutes. Pasting it works too.")}
+            <button className="btn" type="submit" id="otpBtn" ref={goRef} disabled={busy || code.length !== 6}>
+              {checking ? "Checking…" : "Continue"}
+              <svg className="ic" aria-hidden="true">
+                <use href="#i-arrow-r" />
+              </svg>
+            </button>
+          </form>
+          <div className={css.codeRow}>
+            <button type="button" className={css.quiet} id="otpResend" onClick={() => void onResend()} disabled={busy || resendIn > 0} data-armed={burned || undefined}>
+              {resendIn > 0 ? `Resend code in ${resendIn} s` : "Resend code"}
+            </button>
+            <span className={css.spam} id="otpSpam">
+              Didn&apos;t get it? Check spam.
             </span>
+          </div>
+          <p className={css.srOnly} role="status">
+            {said}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className={css.otp} data-otp-screen="form">
+        <h1 className="auth-h1">Start Your Free Trial</h1>
+        <p className="auth-lede">Create your account in seconds. No password needed.</p>
+
+        <button className={`btn btn--ghost ${css.google}`} type="button" id="googleBtn" onClick={googleTap}>
+          <svg className="ic ic--brand" aria-hidden="true">
+            <use href="#i-google" />
+          </svg>
+          Continue with Google
+        </button>
+        {inApp ? <HandoffHelp handoff={handoff} /> : null}
+
+        <div className="divider">
+          <span className="kpi-lbl">or continue with email</span>
+        </div>
+
+        <form id="step1Form" className={css.form} noValidate onSubmit={(e) => void onContinue(e)}>
+          <label className="fld">
+            <span className="fld-lbl">Your name</span>
+            <input className="fld-in" id="name" placeholder="First and last" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
-          <button className="btn" type="submit" id="otpBtn" disabled={busy || code.length !== 6}>
-            {busy && code.length === 6 ? "Checking…" : "Continue"}
+          <label className="fld">
+            <span className="fld-lbl">Email</span>
+            <input className="fld-in" type="email" id="email" placeholder="you@yourshop.com" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <button className="btn" type="submit" id="nextBtn" disabled={busy}>
+            {busy ? "Sending code…" : "Continue"}
             <svg className="ic" aria-hidden="true">
               <use href="#i-arrow-r" />
             </svg>
           </button>
+          <p className={css.trial} id="otpTrial">{trialText}</p>
+          <div className={err ? "err" : "err is-hidden"} id="err1" role="alert">
+            {err}
+          </div>
         </form>
-        {note ? <p className={css.note} role="status">{note}</p> : null}
-        <div className={css.codeRow}>
-          <button type="button" className={css.quiet} id="otpResend" onClick={() => void onResend()} disabled={busy || resendIn > 0} data-armed={burned || undefined}>
-            {resendIn > 0 ? `Resend code in ${resendIn} s` : "Resend code"}
-          </button>
-          <button type="button" className={css.quiet} id="otpChange" onClick={onDifferentEmail} disabled={busy && code.length === 6}>
-            Use a different email
-          </button>
+
+        <div className="foot">
+          Already have an account?{" "}
+          <Link className="link-ink" href={"/auth/login" as Route}>
+            Sign in
+          </Link>
         </div>
-        <p className={css.hint}>No email? Check spam or promotions — it comes from JobFlex.</p>
       </div>
     );
-  }
+  })();
 
   return (
-    <div className={css.otp} data-otp-screen="form">
-      <h1 className="auth-h1">Start Your Free Trial</h1>
-      <p className="auth-lede">Create your account in seconds. No password needed.</p>
-
-      <button className={`btn btn--ghost ${css.google}`} type="button" id="googleBtn" onClick={googleTap}>
-        <svg className="ic ic--brand" aria-hidden="true">
-          <use href="#i-google" />
-        </svg>
-        Continue with Google
-      </button>
-      {inApp ? <HandoffHelp handoff={handoff} /> : null}
-
-      <div className="divider">
-        <span className="kpi-lbl">or continue with email</span>
-      </div>
-
-      <form id="step1Form" className={css.form} noValidate onSubmit={(e) => void onContinue(e)}>
-        <label className="fld">
-          <span className="fld-lbl">Your name</span>
-          <input className="fld-in" id="name" placeholder="First and last" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="fld">
-          <span className="fld-lbl">Email</span>
-          <input className="fld-in" type="email" id="email" placeholder="you@yourshop.com" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <button className="btn" type="submit" id="nextBtn" disabled={busy}>
-          {busy ? "Sending code…" : "Continue"}
-          <svg className="ic" aria-hidden="true">
-            <use href="#i-arrow-r" />
-          </svg>
-        </button>
-        <p className={css.trial} id="otpTrial">{trialText}</p>
-        <div className={err ? "err" : "err is-hidden"} id="err1" role="alert">
-          {err}
-        </div>
-      </form>
-
-      <div className="foot">
-        Already have an account?{" "}
-        <Link className="link-ink" href={"/auth/login" as Route}>
-          Sign in
-        </Link>
-      </div>
-    </div>
+    <>
+      {view}
+      <KeyboardBridge ref={bridgeRef} />
+    </>
   );
 }

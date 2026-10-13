@@ -121,6 +121,10 @@ plate under the row.
   form: field labels 12px JetBrains Mono caps, about .05em tracking, ink;
   notes under fields 12.5px Inter in `--ink-soft`; inputs white. The older
   9.5–10.5px mono labels read badly on a phone; new auth forms use this.
+  An emailed code (owner, 2026-10-12) is always six white squares, one per
+  digit — 2px ink, the 3px hard offset, the next square framed blue with a
+  caret, all six red on an error — drawn over ONE real field
+  ([OtpCodeField](src/components/auth/otp-code-field.tsx)); no copy of it.
 
 ## Layout, frames and controls
 

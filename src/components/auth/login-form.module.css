@@ -62,12 +62,11 @@
 .lf.lf .quietLink { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; color: var(--muted, var(--ink-muted)); text-decoration: underline; text-decoration-color: var(--hair-soft, #d5d1c8); text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
 .lf.lf .quietLink:hover { color: var(--ink); text-decoration-color: var(--ink); }
 
-.lf.lf .codeBox { margin: 2px 0 6px; }
+/* The six squares (otp-code-field) stand clear of Sign in under them. */
+.lf.lf .codeBox { margin: 2px 0 18px; }
 .lf.lf .lead { margin: 0 0 12px; font-size: 14px; line-height: 1.45; color: var(--ink); }
 .lf.lf .lead b { font-weight: 800; overflow-wrap: anywhere; }
-.lf.lf .code { height: 56px; padding: 0 0 0 0.32em; font-size: 26px; font-weight: 800; letter-spacing: 0.32em; text-align: center; font-variant-numeric: tabular-nums; }
-.lf.lf .code::placeholder { letter-spacing: 0.32em; }
-.lf.lf .note { margin: -6px 0 8px; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft, var(--ink)); }
+.lf.lf .note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft, var(--ink)); }
 
 .lf.lf .err { margin-top: 12px; padding: 11px 13px; border: 1.5px solid var(--danger, var(--rose)); border-left-width: 5px; border-radius: var(--radius, var(--r-sm)); background: var(--danger-soft, #f7e9e9); font-size: 13px; line-height: 1.5; color: var(--danger, var(--rose)); }
 .lf.lf .errHidden { display: none; }

@@ -11,6 +11,11 @@
 //   · Instagram's webview (iOS): Google stays on top and hands the page to Safari with google=1;
 //   · an address that has an account (qa@acme.test) — the register page's code and the sign-in
 //     page's "Email me a code" both sign it in (QA Co only, CLAUDE.md);
+//   · the six squares (otp-code-field, 2026-10-12) at 360 and 1440 in Chromium and 390 in
+//     WebKit: one one-time-code field under them, focused; digit by digit, a letter ignored,
+//     Backspace, select-and-replace, a whole code pasted with a space, a wrong code (red,
+//     cleared, focused), an expired one, Resend after the countdown, sent on the sixth digit;
+//     Use a different email; the old small print gone; the sign-in page's squares too;
 //   · on every step: no console error, no page error, no 4xx/5xx from this server.
 // A production build sends no mail here (mail keys blank) and keeps the code only as a salted
 // hash, so the check writes its own code into the draft (the same hash lib/signupOtp keeps) and
@@ -45,9 +50,11 @@ const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 type Kind = "phone" | "desk" | "ig-ios";
 const UA: Record<Kind, string> = { phone: IPHONE, desk: DESK, "ig-ios": IG_IOS };
 
-async function visitor(browser: any, kind: Kind, ip = newIp()) {
+async function visitor(browser: any, kind: Kind, ip = newIp(), size?: { width: number; height: number }) {
   const phone = kind !== "desk";
-  const ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, deviceScaleFactor: phone ? 2 : 1, userAgent: UA[kind], locale: "en-US" });
+  // isMobile is Chromium's; WebKit takes the phone's size, touch and User-Agent.
+  const mobile = phone && browser.browserType().name() === "chromium";
+  const ctx = await browser.newContext({ viewport: size ?? (phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }), isMobile: mobile, hasTouch: phone, deviceScaleFactor: phone ? 2 : 1, userAgent: UA[kind], locale: "en-US" });
   const host = new URL(BASE).hostname;
   await ctx.addCookies([{ name: "jf_consent", value: encodeURIComponent(JSON.stringify({ v: 1, at: new Date().toISOString(), analytics: false, marketing: false, ack: true })), domain: host, path: "/" }]);
   const handoff: { checkout?: string } = {};
@@ -63,7 +70,8 @@ async function visitor(browser: any, kind: Kind, ip = newIp()) {
   const log = { step: "", errs: [] as string[] };
   const push = (what: string) => log.errs.push(`[${log.step}] ${what.replace(/\s+/g, " ").slice(0, 220)}`);
   // A custom-scheme hand-off (x-safari-https) cannot open in a desktop Chrome; that one line is expected.
-  page.on("console", (m: any) => { if (m.type() === "error" && !/does not have a registered handler/.test(m.text())) push("console: " + m.text()); });
+  // WebKit also logs the report-only CSP (no report-to) and what it would refuse; report-only blocks nothing.
+  page.on("console", (m: any) => { if (m.type() === "error" && !/does not have a registered handler|^\[Report Only\]|delivered in report-only mode/.test(m.text())) push("console: " + m.text()); });
   page.on("pageerror", (e: any) => push("pageerror: " + String(e?.message || e)));
   page.on("response", (r: any) => { if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(BASE.length)}`); });
   return { ctx, page, handoff, step: (s: string) => { log.step = s; }, take: () => log.errs.splice(0).join(" | ") };
@@ -119,6 +127,151 @@ async function toCode(v: V, email: string, query = "") {
 
 async function codeNote(v: V) {
   return (await v.page.locator("#otpNote").innerText().catch(() => "")).trim();
+}
+
+/* THE SIX SQUARES (otp-code-field, 2026-10-12): one real field under six drawn squares. */
+type Squares = { value: string; shown: string; current: number; selected: number; invalid: boolean; red: boolean; focused: boolean; msg: string; live: string | null; cells: number; fields: number; cw: number; ch: number; gap: number; overflow: boolean };
+type Page = V["page"];
+type Browser = Parameters<typeof visitor>[0];
+async function squares(page: Page, id: string): Promise<Squares> {
+  return page.evaluate((id: string) => {
+    const inp = document.getElementById(id) as HTMLInputElement;
+    const cells = [...inp.parentElement!.querySelectorAll<HTMLElement>("[data-cell]")];
+    const boxes = cells.map((c) => c.getBoundingClientRect());
+    const field = inp.parentElement!.parentElement!;
+    const msg = document.getElementById(inp.getAttribute("aria-describedby") || "");
+    const danger = getComputedStyle(field).getPropertyValue("--danger").trim() || "#a83232";
+    const probe = document.createElement("i");
+    probe.style.color = danger;
+    document.body.appendChild(probe);
+    const red = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      value: inp.value,
+      shown: cells.map((c) => c.textContent).join(""),
+      current: cells.findIndex((c) => c.hasAttribute("data-current")),
+      selected: cells.filter((c) => c.hasAttribute("data-selected")).length,
+      invalid: field.hasAttribute("data-invalid"),
+      red: cells.every((c) => getComputedStyle(c).borderTopColor === red),
+      focused: document.activeElement === inp,
+      msg: (msg?.textContent || "").trim(),
+      live: msg?.getAttribute("aria-live") ?? null,
+      cells: cells.length,
+      fields: document.querySelectorAll('input[autocomplete="one-time-code"]').length,
+      cw: Math.min(...boxes.map((b) => b.width)),
+      ch: Math.min(...boxes.map((b) => b.height)),
+      gap: Math.round(boxes[1].left - boxes[0].right),
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  }, id);
+}
+const sq = (s: Squares) => JSON.stringify({ value: s.value, shown: s.shown, current: s.current, invalid: s.invalid, red: s.red, focused: s.focused, msg: s.msg });
+async function keys(page: Page, text: string) {
+  for (const ch of text) { await page.keyboard.type(ch); await page.waitForTimeout(50); }
+}
+/** A paste as the phone's or the desk's clipboard delivers it. */
+async function pasteInto(page: Page, id: string, text: string) {
+  await page.evaluate(({ id, text }: { id: string; text: string }) => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", text);
+    document.getElementById(id)!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, { id, text });
+}
+async function settle(page: Page, id: string, until: RegExp) {
+  await page.waitForFunction(({ id, src }: { id: string; src: string }) => new RegExp(src).test(document.getElementById(id)?.textContent || ""), { id, src: until.source }, { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(250); // the squares' 140ms colour change
+}
+const GONE_PHRASES = [/Check your email/, /Enter the code we sent to/, /It works for 10 minutes/, /Pasting it works too/, /No email\? Check spam/];
+
+/** The register page's code screen, every way a code gets in — at one width in one engine. */
+async function codeSquares(browser: Browser, width: number) {
+  const engine = browser.browserType().name();
+  const name = `squares ${engine} ${width}`;
+  const v = await visitor(browser, width > 768 ? "desk" : "phone", newIp(), { width, height: width > 768 ? 900 : width < 380 ? 640 : 844 });
+  const { page } = v;
+  try {
+    const s1 = await toCode(v, `otp.sq.${engine}.${width}.${STAMP}@${MAIL_DOMAIN}`);
+    if (!s1.ok) return check(`${name}: code screen`, false, s1.err);
+    // "Use a different email" goes back to the address, then Continue asks again.
+    await page.click("#otpChange");
+    await page.waitForTimeout(400);
+    const back = await page.evaluate(() => ({ form: !!document.getElementById("email"), focus: document.activeElement?.id, d: new URL(location.href).searchParams.has("d") }));
+    check(`${name}: "Use a different email" → the email screen, its field focused, no draft in the address`, back.form && back.focus === "email" && !back.d, JSON.stringify(back));
+    await page.click("#nextBtn");
+    await page.locator("#otpCode").waitFor({ timeout: 60000 });
+    await page.waitForTimeout(500);
+    await plantCode(page.url());
+
+    const text = await page.locator("#step1").innerText();
+    const h1 = (await page.locator("#step1 h1").innerText()).trim();
+    const label = (await page.locator('label[for="otpCode"]').textContent())?.trim();
+    const stale = GONE_PHRASES.filter((re) => re.test(text)).map(String);
+    check(`${name}: the words — heading, address, label, one quiet foot line; the old phrases gone`, h1 === "We sent a 6-digit code to your email" && label === "Enter 6-digit code" && /Resend code in \d+ s/.test(text) && /Didn.t get it\? Check spam\./.test(text) && !stale.length, [h1, label, ...stale].join(" · "));
+    let s = await squares(page, "otpCode");
+    check(`${name}: six empty squares over ONE one-time-code field, focused, the first current, nothing under them`, s.cells === 6 && s.fields === 1 && s.shown === "" && s.focused && s.current === 0 && s.msg === "" && s.live === "polite" && (await page.locator("#otpBtn").isDisabled()), sq(s));
+    check(`${name}: squares ≥44×52, 8px apart, no sideways scroll`, s.cw >= 44 && s.ch >= 52 && s.gap === 8 && !s.overflow, JSON.stringify({ cw: s.cw, ch: s.ch, gap: s.gap, overflow: s.overflow }));
+
+    await keys(page, "1a2");
+    s = await squares(page, "otpCode");
+    check(`${name}: digit by digit, one per square; a letter is ignored`, s.value === "12" && s.shown === "12" && s.current === 2, sq(s));
+    await page.keyboard.press("Backspace");
+    s = await squares(page, "otpCode");
+    check(`${name}: Backspace takes the last digit`, s.value === "1" && s.current === 1, sq(s));
+    await keys(page, "23");
+    await page.keyboard.press("Control+A");
+    await page.waitForTimeout(100);
+    const all = (await squares(page, "otpCode")).selected;
+    await keys(page, "7");
+    s = await squares(page, "otpCode");
+    check(`${name}: select all shows on the squares, a digit replaces it`, all === 3 && s.value === "7", `${all} selected → ${s.value}`);
+    await page.keyboard.press("Backspace");
+
+    // A whole code pasted with a space goes by itself; a wrong one: red, cleared, focus on the first.
+    await pasteInto(page, "otpCode", "000 000");
+    await settle(page, "otpNote", /tries left/);
+    s = await squares(page, "otpCode");
+    check(`${name}: "000 000" pasted → sent on its own; wrong: all six red, cleared, focused, the reason under them`, s.invalid && s.red && s.value === "" && s.focused && s.current === 0 && /^That code isn't right\. 4 tries left\.$/.test(s.msg), sq(s));
+    await pasteInto(page, "otpCode", "Code: 12");
+    s = await squares(page, "otpCode");
+    check(`${name}: "Code: 12" pasted → 12, the red gone with the first digit`, s.value === "12" && !s.invalid && s.msg === "", sq(s));
+    await page.keyboard.press("Control+A");
+    await page.keyboard.press("Backspace");
+
+    // An expired code.
+    const d = new URL(page.url()).searchParams.get("d")!;
+    const row = await db.syncState.findUnique({ where: { key: `otp:${d}` } });
+    const draft = JSON.parse(row!.cursor);
+    draft.code.exp = Date.now() - 1000;
+    draft.lastSentAt = Date.now() - 31_000; // and the resend countdown over: the screen's next look at the draft arms Resend
+    await db.syncState.update({ where: { key: `otp:${d}` }, data: { cursor: JSON.stringify(draft) } });
+    await keys(page, CODE);
+    await settle(page, "otpNote", /expired/);
+    s = await squares(page, "otpCode");
+    check(`${name}: an expired code — red, cleared, says so`, s.invalid && s.red && s.value === "" && /expired/.test(s.msg), sq(s));
+
+    // Resend once the countdown is over: a new code, the countdown again, the red gone.
+    const armed = await page.waitForFunction(() => document.getElementById("otpResend")?.textContent?.trim() === "Resend code", null, { timeout: 15000 }).then(() => true).catch(() => false);
+    await page.click("#otpResend");
+    await page.waitForFunction(() => /Resend code in \d+ s/.test(document.getElementById("otpResend")?.textContent || ""), null, { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    s = await squares(page, "otpCode");
+    const again = (await page.locator("#otpResend").innerText()).trim();
+    check(`${name}: after the countdown "Resend code" → the countdown again, the squares clear and focused`, armed && /Resend code in \d+ s/.test(again) && !s.invalid && s.msg === "" && s.focused, [again, sq(s)].join(" · "));
+    await plantCode(page.url());
+
+    // The sixth digit sends it: five keep Continue off.
+    await keys(page, CODE.slice(0, 5));
+    const five = await page.locator("#otpBtn").isDisabled();
+    await page.keyboard.type(CODE[5]);
+    const plan = await page.locator("section.plan-sheet.is-in").waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
+    check(`${name}: five digits keep Continue off; the sixth sends the code → the plan step`, five && plan, page.url().slice(BASE.length));
+    const e = v.take();
+    check(`${name}: no console / page / HTTP errors`, !e, e);
+  } catch (e) {
+    check(`${name}: ran through`, false, `${String((e as Error)?.message || e).split("\n")[0]} · ${v.take()}`);
+  } finally {
+    await v.ctx.close();
+  }
 }
 
 async function newAddress(browser: any, kind: Kind, industry: string, toStripe: boolean) {
@@ -267,19 +420,33 @@ async function existing(browser: any) {
   const l = await visitor(browser, "desk");
   try {
     l.step("sign-in page");
-    await l.page.goto(`${BASE}/auth/login`, { waitUntil: "load", timeout: 180000 });
+    // ?email= names the address in every mode: a dev server otherwise prefills
+    // the owner's, and a fill before hydration would ask a code for it.
+    await l.page.goto(`${BASE}/auth/login?email=${encodeURIComponent(QA_EMAIL)}`, { waitUntil: "load", timeout: 180000 });
     await l.page.locator("#emailCodeBtn").waitFor({ timeout: 120000 });
+    await l.page.waitForTimeout(800);
     await l.page.fill('input[type="email"]', QA_EMAIL);
+    if ((await l.page.inputValue('input[type="email"]')) !== QA_EMAIL) throw new Error(`the sign-in field does not hold ${QA_EMAIL}`);
     await l.page.click("#emailCodeBtn");
     await l.page.locator("#loginCode").waitFor({ timeout: 60000 });
+    await l.page.waitForTimeout(500);
     // The sign-in draft is not in the address: the newest one for this address.
     const row = await db.syncState.findFirst({ where: { key: { startsWith: "otp:" }, cursor: { contains: `"email":"${QA_EMAIL}"` } }, orderBy: { updatedAt: "desc" } });
     const d = row!.key.slice(4);
     await plantCode(`${BASE}/?d=${d}`);
-    await l.page.fill("#loginCode", CODE);
+    // The same six squares as the register page (otp-code-field).
+    const form = await l.page.locator("form").first().innerText();
+    const label = (await l.page.locator('label[for="loginCode"]').textContent())?.trim();
+    let s = await squares(l.page, "loginCode");
+    check("/auth/login: the six squares over one one-time-code field, focused; the account line kept, \"It works for 10 minutes.\" gone", s.cells === 6 && s.fields === 1 && s.focused && s.current === 0 && label === "Enter 6-digit code" && /If\s+qa@acme\.test\s+has a JobFlex account, a 6-digit code is on its way\./.test(form) && !/It works for 10 minutes/.test(form), [label, sq(s)].join(" · "));
+    await pasteInto(l.page, "loginCode", "999 999");
+    await settle(l.page, "loginCodeMsg", /isn't right/);
+    s = await squares(l.page, "loginCode");
+    check("/auth/login: a wrong code pasted — red, cleared, focused, the reason under the squares", s.invalid && s.red && s.value === "" && s.focused && /isn't right/.test(s.msg), sq(s));
+    await keys(l.page, CODE);
     const ok = await l.page.waitForURL(/\/dashboard/, { timeout: 60000 }).then(() => true).catch(() => false);
     const e = l.take();
-    check("/auth/login → Email me a code → signed in", ok && !e, [l.page.url().slice(BASE.length), e].filter(Boolean).join(" · "));
+    check("/auth/login → Email me a code → the code digit by digit → signed in", ok && !e, [l.page.url().slice(BASE.length), e].filter(Boolean).join(" · "));
   } finally {
     await l.ctx.close();
   }
@@ -304,8 +471,20 @@ async function main() {
       await brake(browser);
       await instagram(browser);
       await existing(browser);
+      await codeSquares(browser, 360);
+      await codeSquares(browser, 1440);
     } finally {
       await browser.close();
+    }
+    // The squares in Safari's engine too, when Playwright's WebKit is installed.
+    const wk = await pw.webkit.launch().catch(() => null);
+    if (!wk) note("WebKit", "not installed (npx playwright install webkit) — the squares ran in Chromium only");
+    else {
+      try {
+        await codeSquares(wk, 390);
+      } finally {
+        await wk.close();
+      }
     }
   } finally {
     stopServer(server);

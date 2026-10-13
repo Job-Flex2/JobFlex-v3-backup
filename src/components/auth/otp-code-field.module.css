@@ -1,0 +1,80 @@
+/* THE SIX-DIGIT CODE FIELD (otp-code-field.tsx, 2026-10-12). Mounted inside
+   the register page's `.bp` scope and the sign-in pages' scopes; each defines
+   --ink / --blueprint / --danger, the global Blueprint tokens are the
+   fallback. The squares wear the page's field frame — 2px ink, near-square,
+   white — with the 3px hard offset of its buttons. `.f.f` restates what the
+   scopes reset (they zero every margin and padding). */
+
+.f.f { display: block; width: 100%; }
+
+/* The label when the page passes none: the auth forms' 12px mono caps. */
+.f.f .lbl {
+  display: block; margin-bottom: 7px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ink);
+}
+
+.f.f .row {
+  position: relative;
+  display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr));
+  /* 8px; narrower only where a column cannot hold six 44px squares and 8px
+     gaps (the handheld sign-in card is 292px wide on a 360px phone). */
+  gap: clamp(4px, calc((100% - 264px) / 5), 8px);
+  max-width: 360px;
+  margin-top: 2px;
+}
+
+/* The one real field: over the whole row, its own text, caret and selection
+   invisible — the squares draw them. 16px so iOS does not zoom on focus. */
+.f.f .in {
+  position: absolute; inset: 0; z-index: 1;
+  width: 100%; height: 100%; margin: 0; padding: 0;
+  border: 0; outline: none; background: transparent; box-shadow: none;
+  font-size: 16px; letter-spacing: 0;
+  color: transparent; -webkit-text-fill-color: transparent; caret-color: transparent;
+  cursor: text; appearance: none; -webkit-tap-highlight-color: transparent;
+}
+.f.f .in::selection { background: transparent; color: transparent; }
+.f.f .in:-webkit-autofill, .f.f .in:autofill { transition: background-color 600000s 0s; -webkit-text-fill-color: transparent; }
+.f.f .in[readonly] { cursor: default; }
+
+.f.f .cell {
+  position: relative;
+  display: grid; place-items: center;
+  height: 56px; min-width: 0;
+  border: 2px solid var(--ink); border-radius: var(--radius, var(--r-sm));
+  background: var(--sheet, #fff);
+  box-shadow: 3px 3px 0 var(--ink);
+  font-family: var(--font, var(--font-sans)); font-size: 26px; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+}
+/* Where the next digit lands: the blue frame and a blinking caret. */
+.f.f .cell[data-current] { border-color: var(--blueprint, var(--accent)); box-shadow: 3px 3px 0 var(--blueprint, var(--accent)); }
+.f.f .cell[data-current]::after {
+  content: ""; width: 2px; height: 26px; background: var(--blueprint, var(--accent));
+  animation: jf-otp-caret 1.06s steps(1, end) infinite;
+}
+@keyframes jf-otp-caret { 0% { opacity: 1; } 50% { opacity: 0; } }
+.f.f .cell[data-selected] { background: color-mix(in srgb, var(--blueprint, var(--accent)) 14%, var(--sheet, #fff)); }
+
+/* A wrong or spent code: all six in red, the line under them says why. */
+.f.f[data-invalid] .cell { border-color: var(--danger, var(--rose)); box-shadow: 3px 3px 0 var(--danger, var(--rose)); }
+.f.f[data-invalid] .cell[data-current]::after { background: var(--danger, var(--rose)); }
+/* Checking: the squares hold still and dim, like the disabled button. */
+.f.f[data-disabled] .cell { opacity: 0.6; }
+
+.f.f .msg { margin: 10px 0 0; font-size: 13px; font-weight: 700; line-height: 1.45; color: var(--ink-soft, var(--ink)); overflow-wrap: anywhere; }
+.f.f[data-invalid] .msg { color: var(--danger, var(--rose)); }
+.f.f .msg:empty { margin: 0; }
+
+/* KeyboardBridge: in the page, out of sight, never under a finger. */
+.bridge {
+  position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; border: 0;
+  opacity: 0; pointer-events: none; font-size: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f.f .cell { transition: none; }
+  .f.f .cell[data-current]::after { animation: none; }
+}
