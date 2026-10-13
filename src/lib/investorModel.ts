@@ -29,10 +29,16 @@ export interface SpendDay {
   date: string;
   cents: number;
 }
+/** How a trial started (owner, 2026-10-13): with a card up front, or with no card (lib/trialState's record). */
+export type TrialCohort = "card" | "nocard";
+export const COHORT_LABEL: Record<TrialCohort, string> = { card: "With a card", nocard: "No card" };
 export interface PayingAccount {
   /** The day it started paying, YYYY-MM-DD. */
   startedAt: string;
   monthlyCents: number;
+  /** The day the account signed up (for the cohort split); defaults to startedAt. */
+  signedUpAt?: string;
+  cohort?: TrialCohort;
 }
 export interface TrialAccount {
   createdAt: string;
@@ -42,6 +48,12 @@ export interface TrialAccount {
   monthlyCents: number | null;
   /** The behaviour model's chance (lib/trialProjection), for the "by behaviour" reading. */
   chance: number;
+  cohort?: TrialCohort;
+}
+/** One flip of the owner's switch: from this day on, new signups got this. */
+export interface PolicySpan {
+  from: string;
+  mode: TrialCohort;
 }
 export interface InvestorAssumptions {
   /** The share of trials that will pay, 0–100. The owner's number. */
@@ -70,6 +82,15 @@ export interface ModelInput {
   assumptions: InvestorAssumptions;
   /** Unique visitors since the launch, when the analytics answered. */
   visitors: number | null;
+  /** The cohort split (owner, 2026-10-13): lapsed trials by how they started, the signups' days by cohort, the
+   *  switch's recorded flips, and what a new signup gets today. */
+  cohorts?: {
+    lapsed: Record<TrialCohort, number>;
+    /** Every counted signup — a trial, a paying account, a lapsed trial — by the day it signed up. */
+    signups: Array<{ date: string; cohort: TrialCohort }>;
+    policy: PolicySpan[];
+    current: TrialCohort;
+  };
 }
 
 export interface CurvePoint {
@@ -267,6 +288,102 @@ export function investorFigures(input: ModelInput): InvestorFigures {
     },
     breakEven,
     curve,
+  };
+}
+
+/* ── THE TWO COHORTS (owner, 2026-10-13: "the statistics with all the signups with a card, and with no card: how
+   much budget was spent on each, and where we are now") ──────────────────────────────────────────────────────
+   A day's ad spend went to whichever kind of trial a visitor could start that day. Where the owner's switch is
+   recorded (lib/trialPolicyServer keeps its flips from 2026-10-13), the day follows the switch; before that, the
+   day follows who signed up on it — all no-card signups, the whole day; a mix, in proportion — and a day with
+   no signups follows the nearest day that had some (earlier first). Each cohort then gets its own figures on its
+   own trials, paying accounts, lapsed trials and attributed spend; only the cohort a new signup gets TODAY keeps
+   spending forward, the other's spend stands still, so each has its own break-even. Visitors cannot be split. */
+
+/** The share (0–1) of each day's spend that went to no-card trials. */
+export function noCardShareByDay(days: readonly string[], signups: ReadonlyArray<{ date: string; cohort: TrialCohort }>, policy: readonly PolicySpan[]): Map<string, number> {
+  const spans = [...policy].filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.from)).sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+  const byDay = new Map<string, { card: number; nocard: number }>();
+  for (const x of signups) {
+    const c = byDay.get(x.date) ?? { card: 0, nocard: 0 };
+    c[x.cohort] += 1;
+    byDay.set(x.date, c);
+  }
+  const ofSignups = (d: string): number | null => {
+    const c = byDay.get(d);
+    if (!c || c.card + c.nocard === 0) return null;
+    return c.nocard / (c.card + c.nocard);
+  };
+  const sorted = [...days].sort();
+  const out = new Map<string, number>();
+  for (const d of sorted) {
+    const span = spans.filter((p) => p.from <= d).at(-1);
+    if (span) {
+      out.set(d, span.mode === "nocard" ? 1 : 0);
+      continue;
+    }
+    const own = ofSignups(d);
+    if (own !== null) {
+      out.set(d, own);
+      continue;
+    }
+    // The nearest day with signups: earlier first, then later; nothing at all = the card (the only kind before the switch).
+    const known = [...byDay.keys()].sort();
+    const earlier = known.filter((k) => k < d).at(-1);
+    const later = known.find((k) => k > d);
+    const near = earlier ?? later;
+    out.set(d, near ? (ofSignups(near) ?? 0) : 0);
+  }
+  return out;
+}
+
+export interface CohortFigures {
+  cohort: TrialCohort;
+  figures: InvestorFigures;
+  /** The ad spend attributed to this cohort, and over how many days any of it fell. */
+  attributedCents: number;
+  attributedDays: number;
+  firstDay: string | null;
+  lastDay: string | null;
+  /** New signups get this today: its spend keeps running forward. */
+  current: boolean;
+  signups: number;
+}
+
+/** The figures for one cohort, cut from the whole: its accounts, its share of each day's spend. */
+export function cohortFigures(input: ModelInput, cohort: TrialCohort, whole: InvestorFigures = investorFigures(input)): CohortFigures {
+  const c = input.cohorts ?? { lapsed: { card: 0, nocard: 0 }, signups: [], policy: [], current: "card" as TrialCohort };
+  const booked = whole.curve.filter((p) => !p.projected && p.date <= whole.today);
+  const share = noCardShareByDay(booked.map((p) => p.date), c.signups, c.policy);
+  const spend: SpendDay[] = [];
+  for (const p of booked) {
+    const sh = share.get(p.date) ?? 0;
+    const cents = Math.round(p.spendDayCents * (cohort === "nocard" ? sh : 1 - sh));
+    if (cents > 0) spend.push({ date: p.date, cents });
+  }
+  const current = c.current === cohort;
+  const mine: ModelInput = {
+    ...input,
+    spend,
+    paying: input.paying.filter((p) => (p.cohort ?? "card") === cohort),
+    trials: input.trials.filter((t) => (t.cohort ?? "card") === cohort),
+    lapsed: c.lapsed[cohort] ?? 0,
+    // The whole's spend is already filled by the budget; from tomorrow only today's cohort spends.
+    assumptions: { ...input.assumptions, dailyBudgetCents: null, budgetFrom: null, spendPerDayCents: current ? whole.spend.perDayProjectedCents : 0 },
+    visitors: null,
+    cohorts: undefined,
+  };
+  const figures = investorFigures(mine);
+  const dates = spend.map((d) => d.date);
+  return {
+    cohort,
+    figures,
+    attributedCents: spend.reduce((x, d) => x + d.cents, 0),
+    attributedDays: dates.length,
+    firstDay: dates[0] ?? null,
+    lastDay: dates.at(-1) ?? null,
+    current,
+    signups: figures.signups,
   };
 }
 

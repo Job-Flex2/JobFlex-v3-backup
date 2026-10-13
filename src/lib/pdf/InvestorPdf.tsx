@@ -49,6 +49,17 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
     [`Realistic · ${a.realisticPct}% of trials`, dollars(f.projected.mrrRealisticCents), "the share used for the break-even", true],
     ["By behaviour", dollars(f.projected.mrrByBehaviourCents), `${pct(f.trials.byBehaviourPct)} of trials, from what each account has done`],
   ];
+  // The two kinds of trial (2026-10-13): the same figures for each, side by side.
+  const co = report.cohorts;
+  const kinds: Array<[string, string, string]> = [
+    ["Ad spend attributed", `${dollars(co.card.attributedCents)} · ${co.card.attributedDays}d`, `${dollars(co.nocard.attributedCents)} · ${co.nocard.attributedDays}d`],
+    ["Signed up", String(co.card.signups), String(co.nocard.signups)],
+    ["On free trial · paying · lapsed", `${co.card.figures.trials.count} · ${co.card.figures.paying.count} · ${co.card.figures.lapsed}`, `${co.nocard.figures.trials.count} · ${co.nocard.figures.paying.count} · ${co.nocard.figures.lapsed}`],
+    ["Observed pay rate", pct(co.card.figures.observed.pct), pct(co.nocard.figures.observed.pct)],
+    ["Cost per signup", money(co.card.figures.unit.costPerSignupCents), money(co.nocard.figures.unit.costPerSignupCents)],
+    ["Realistic MRR", dollars(co.card.figures.projected.mrrRealisticCents), dollars(co.nocard.figures.projected.mrrRealisticCents)],
+    ["Break-even", co.card.figures.breakEven.date ? longDate(co.card.figures.breakEven.date) : "not within the horizon", co.nocard.figures.breakEven.date ? longDate(co.nocard.figures.breakEven.date) : "not within the horizon"],
+  ];
   const costs: Array<[string, string, string, boolean?]> = [
     ["Per visitor", money(f.unit.costPerVisitorCents), f.visitors === null ? "no visitor count" : `${f.visitors.toLocaleString("en-US")} visitors`],
     ["Per signup", money(f.unit.costPerSignupCents), `${f.signups} signed up`],
@@ -95,6 +106,11 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
             ))}
           </View>
         </View>
+        <Text style={s.h2}>The two kinds of trial · a new signup now gets {co.current === "nocard" ? "no card" : "a card"}{co.currentSince ? ` (since ${longDate(co.currentSince)})` : ""}</Text>
+        <View style={s.row}><Text style={[s.c1, { fontFamily: "Helvetica-Bold" }]}> </Text><Text style={[s.c2, { fontFamily: "Helvetica-Bold" }]}>With a card</Text><Text style={[s.c2, { fontFamily: "Helvetica-Bold" }]}>No card</Text></View>
+        {kinds.map(([l, c1, c2]) => (
+          <View key={l} style={s.row}><Text style={s.c1}>{l}</Text><Text style={s.c2}>{c1}</Text><Text style={s.c2}>{c2}</Text></View>
+        ))}
         <Text style={s.h2}>The ad spend by period{report.meta.lastPulledAt ? " (Meta's own figures)" : ""}</Text>
         {report.periods.map((p) => (
           <View key={p.key} style={s.row}><Text style={s.c1}>{p.label}</Text><Text style={s.c2}>{dollars(p.cents)}</Text><Text style={s.c3}>{p.days === 0 ? "nothing yet" : `${dollars(p.perDayCents)}/day over ${p.days} ${p.days === 1 ? "day" : "days"}`}</Text></View>

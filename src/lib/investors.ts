@@ -20,7 +20,9 @@ import { signupState } from "@/lib/traffic-live";
 import { TRAFFIC_SINCE, TRAFFIC_SINCE_MS, TRAFFIC_TZ } from "@/lib/traffic-visitor";
 import { fetchInvestorVisitors } from "@/lib/traffic-server";
 import { valueSignups } from "@/lib/trialProjectionRead";
-import { investorFigures, dayOf, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type InvestorAssumptions, type InvestorFigures, type SpendDay, type SpendPlatform, type SpendPeriod } from "@/lib/investorModel";
+import { investorFigures, cohortFigures, dayOf, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type CohortFigures, type InvestorAssumptions, type InvestorFigures, type PolicySpan, type SpendDay, type SpendPlatform, type SpendPeriod, type TrialCohort } from "@/lib/investorModel";
+import { cardlessKey } from "@/lib/trialState";
+import { readTrialPolicyHistory, signupTrialState } from "@/lib/trialPolicyServer";
 
 export const AD_SPEND_KEY = "adSpend";
 export const INVESTOR_SETTINGS_KEY = "investorSettings";
@@ -246,6 +248,17 @@ export interface InvestorReport {
   campaigns: Array<{ id: string; name: string; spendCents: number; impressions: number; clicks: number; cpcCents: number | null; signups: number; costPerSignupCents: number | null }>;
   /** The last 30 days, one row each: what was spent (any source) and who signed up. */
   dailyRows: Array<{ date: string; spendCents: number; source: "booked" | "budget" | "none"; clicks: number | null; signups: number }>;
+  /** THE TWO COHORTS (owner, 2026-10-13): the same figures for the trials that started with a card and the ones
+   *  that started with none, each with the ad spend that went to it; which one a new signup gets today. */
+  cohorts: {
+    card: CohortFigures;
+    nocard: CohortFigures;
+    current: TrialCohort;
+    /** When the current policy began, YYYY-MM-DD, when known. */
+    currentSince: string | null;
+    /** How the spend was split: by the recorded switch from this day on (null = no flip recorded yet). */
+    recordedFrom: string | null;
+  };
   /** When this was read. */
   at: string;
 }
@@ -308,16 +321,51 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
     values = new Map();
   }
 
+  // HOW EACH TRIAL STARTED (2026-10-13): a card-less trial leaves its record (lib/trialState); everything else took a card.
+  const nocardIds = new Set<string>();
+  try {
+    const ids = rows.map((r) => r.orgId);
+    const recs = ids.length ? await db.syncState.findMany({ where: { key: { in: ids.map(cardlessKey) } }, select: { key: true, cursor: true } }) : [];
+    for (const rec of recs) {
+      const r = parse<{ subId?: unknown }>(rec.cursor);
+      if (r?.subId) nocardIds.add(rec.key.slice("cardlessTrial:".length));
+    }
+  } catch {
+    /* no records read: every trial counts as a card trial */
+  }
+  const cohortOf = (orgId: string): TrialCohort => (nocardIds.has(orgId) ? "nocard" : "card");
+
   const paying = rows.filter((r) => r.state === "paying").map((r) => {
     // Paying from the trial's end when there was one, else from the subscription.
     const ends = r.trialEndsAt && r.trialEndsAt.getTime() < Date.now() ? r.trialEndsAt : r.subCreatedAt;
-    return { startedAt: dayOf(ends.toISOString()), monthlyCents: values.get(r.orgId)?.monthlyCents ?? 0 };
+    return { startedAt: dayOf(ends.toISOString()), monthlyCents: values.get(r.orgId)?.monthlyCents ?? 0, signedUpAt: dayOf(r.createdAt.toISOString()), cohort: cohortOf(r.orgId) };
   });
   const trials = rows.filter((r) => r.state === "trial").map((r) => {
     const v = values.get(r.orgId);
-    return { createdAt: dayOf(r.createdAt.toISOString()), endsAt: r.trialEndsAt ? dayOf(r.trialEndsAt.toISOString()) : null, monthlyCents: v?.monthlyCents ?? null, chance: v?.chance ?? 0.2 };
+    return { createdAt: dayOf(r.createdAt.toISOString()), endsAt: r.trialEndsAt ? dayOf(r.trialEndsAt.toISOString()) : null, monthlyCents: v?.monthlyCents ?? null, chance: v?.chance ?? 0.2, cohort: cohortOf(r.orgId) };
   });
-  const lapsed = rows.filter((r) => r.state === "lapsed").length;
+  const lapsedRows = rows.filter((r) => r.state === "lapsed");
+  const lapsed = lapsedRows.length;
+  // The switch's recorded flips (from 2026-10-13), and what a new signup gets today.
+  let policy: PolicySpan[] = [];
+  let current: TrialCohort = "card";
+  let currentSince: string | null = null;
+  try {
+    const [flips, state] = await Promise.all([readTrialPolicyHistory(), signupTrialState({ fresh: true })]);
+    policy = flips.map((f) => ({ from: dayOf(f.at), mode: f.requiresCard ? "card" : "nocard" }));
+    current = state.requiresCard ? "card" : "nocard";
+    currentSince = state.at ? dayOf(state.at) : policy.at(-1)?.from ?? null;
+    // The switch's own stamp stands in for the last flip when the history began after it.
+    if (state.source === "admin" && state.at && !policy.some((p) => p.from === dayOf(state.at as string) && p.mode === current)) policy.push({ from: dayOf(state.at), mode: current });
+  } catch {
+    /* the deployment's default: a card */
+  }
+  const cohortInput = {
+    lapsed: { card: lapsedRows.filter((r) => cohortOf(r.orgId) === "card").length, nocard: lapsedRows.filter((r) => cohortOf(r.orgId) === "nocard").length },
+    signups: rows.filter((r) => r.state === "trial" || r.state === "paying" || r.state === "lapsed").map((r) => ({ date: dayOf(r.createdAt.toISOString()), cohort: cohortOf(r.orgId) })),
+    policy,
+    current,
+  };
   const payingUnpriced = rows.filter((r) => r.state === "paying" && values.get(r.orgId)?.monthlyCents == null).length;
 
   const before = { paying: beforeRows.length, mrrCents: beforeRows.reduce((a, r) => a + (values.get(r.orgId)?.monthlyCents ?? 0), 0) };
@@ -333,7 +381,15 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   }
 
   const spend: SpendDay[] = entries.map((e) => ({ date: e.date, cents: e.cents }));
-  const figures = investorFigures({ since, today, spend, paying, trials, lapsed, assumptions: settings, visitors });
+  const modelInput = { since, today, spend, paying, trials, lapsed, assumptions: settings, visitors, cohorts: cohortInput };
+  const figures = investorFigures(modelInput);
+  const cohorts = {
+    card: cohortFigures(modelInput, "card", figures),
+    nocard: cohortFigures(modelInput, "nocard", figures),
+    current,
+    currentSince,
+    recordedFrom: policy.length ? [...policy].sort((a, b) => a.from.localeCompare(b.from))[0].from : null,
+  };
   const byPlatform = PLATFORMS.map((platform) => {
     const mine = entries.filter((e) => e.platform === platform && e.date >= since && e.date <= today);
     return { platform, label: PLATFORM_LABEL[platform], cents: mine.reduce((a, e) => a + e.cents, 0), days: new Set(mine.map((e) => e.date)).size };
@@ -357,5 +413,5 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
     const signups = orgs.filter((o) => { if (!counted.has(o.id)) return false; const t = tagOf(o.utmCampaign); return t !== "" && (t === id || t === name); }).length;
     return { id: c.id, name: c.name || c.id, spendCents: c.spendCents, impressions: c.impressions, clicks: c.clicks, cpcCents: c.clicks > 0 ? Math.round(c.spendCents / c.clicks) : null, signups, costPerSignupCents: signups > 0 && c.spendCents > 0 ? Math.round(c.spendCents / signups) : null };
   }).sort((a, b) => b.spendCents - a.spendCents);
-  return { figures, settings, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, campaigns, dailyRows, at: new Date().toISOString() };
+  return { figures, settings, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, campaigns, cohorts, dailyRows, at: new Date().toISOString() };
 }
