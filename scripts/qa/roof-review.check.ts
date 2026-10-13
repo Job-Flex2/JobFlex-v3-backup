@@ -18,6 +18,7 @@ import type { PackRecord, PackStatus } from "../../src/lib/eagleviewEntitlements
 import { BUILTIN_LISTS, EXISTING_STEEP, FASCIA_OPTIONS, storeyLaborFactor, tearOffRatesFor, VENT_TYPES } from "../../src/lib/roofPackage/catalog";
 import {
   buildRoofPackage,
+  plywoodRate,
   checkVentilation,
   defaultSpec,
   estimateEdges,
@@ -403,6 +404,34 @@ const short = (packs: readonly string[]) => packs.map((p) => p.slice(-3)).join("
       const built = buildRoofPackage(defaultSpec(house({ existingMaterial: null }), custom), house({ existingMaterial: null }));
       check("…and a package on it has no NaN", [...built.materials, ...built.labor].every((l) => Number.isFinite(l.quantity * l.unitPrice)));
     }
+  }
+
+  console.log("── plywood replacement, said plainly (owner, 2026-10-13)");
+  {
+    const facts = house();
+    const base = defaultSpec(facts, L);
+    const lines = (p: RoofPackage) => [...p.materials, ...p.labor].filter((l) => /^Plywood replacement/.test(l.name));
+    check("a new roof quotes the plywood rate by default, and prices none", base.plywoodQuote === true && lines(buildRoofPackage(base, facts)).length === 0);
+    const r = plywoodRate(base);
+    const quoted = buildRoofPackage(base, facts);
+    const sentence = quoted.scope.find((s) => /Damaged decking found once the old roof is off/.test(s)) ?? "";
+    check("…the client reads the rate per sheet AND per sq ft, installed, not in the price", sentence.includes(`per 4x8 sheet`) && sentence.includes("per sq ft") && /not in the price above/.test(sentence) && Math.abs(r.sqft - r.sheet / 32) < 0.011, sentence);
+    check("…and the contractor's notes say it is not in the total", quoted.assumptions.some((a) => /Plywood is not in the total/.test(a)));
+    check("an overlay (no tear-off) quotes no plywood rate — the deck stays covered", !buildRoofPackage({ ...base, tearOffLayers: 0 }, facts).scope.some((s) => /decking/.test(s)));
+    check("Leave it out: no lines, no sentence", (() => { const p = buildRoofPackage({ ...base, plywoodQuote: false }, facts); return lines(p).length === 0 && !p.scope.some((s) => /decking/.test(s)); })());
+    const six = buildRoofPackage({ ...base, plywoodSheets: 6 }, facts);
+    const six6 = lines(six);
+    check("6 sheets known: plywood and fitting lines, 6 each at the sheet prices", six6.length === 2 && six6.every((l) => l.quantity === 6 && l.unit === "each") && six6.some((l) => l.unitPrice === base.plywoodEach) && six6.some((l) => l.unitPrice === base.plywoodLabor), JSON.stringify(six6.map((l) => [l.name, l.quantity, l.unit, l.unitPrice])));
+    check("…the client reads what is included and the rate for any more", six.scope.some((s) => /6 sheets \(192 sq ft\) included/.test(s)) && six.scope.some((s) => /Any more damaged decking/.test(s)));
+    const sq = buildRoofPackage({ ...base, plywoodUnit: "sqft", plywoodSqft: 100 }, facts);
+    const sq2 = lines(sq);
+    check("100 sq ft known: priced by the sq ft at the sheet price / 32", sq2.length === 2 && sq2.every((l) => l.quantity === 100 && l.unit === "sq ft") && Math.abs(sq2.reduce((a, l) => a + l.quantity * l.unitPrice, 0) - 100 * r.sqft) < 0.01, JSON.stringify(sq2.map((l) => [l.quantity, l.unitPrice])));
+    check("…and says about how many sheets that is", sq.scope.some((s) => /100 sq ft \(about 3\.1 sheets\) included/.test(s)));
+    check("a count without the quote: the count only", (() => { const p = buildRoofPackage({ ...base, plywoodSheets: 2, plywoodQuote: false }, facts); return p.scope.some((s) => /2 sheets/.test(s)) && !p.scope.some((s) => /Any more/.test(s)); })());
+    const flat = house({ pitchFamilies: [{ pitch12: 0.5, share: 1 }], shape: "Flat", facetCount: 1, existingMaterial: "Flat", squares: 22, footprintSqft: 2200, perimeterFt: 196 });
+    const fs = defaultSpec(flat, L);
+    const fp = buildRoofPackage({ ...fs, tearOffLayers: 1 }, flat);
+    check("a flat roof torn off quotes the rate too", fp.scope.some((s) => /Damaged decking found once the old roof is off/.test(s)), fp.scope.join(" | "));
   }
 
   console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");

@@ -81,7 +81,7 @@ export const PREF_KEYS = [
   "valleyTypeId", "valleyMatPerFt", "valleyLaborPerFt", "stepSizeId", "stepPerPiece", "stepLaborPerFt",
   "apronPerFt", "apronLaborPerFt", "counterPerFt", "counterLaborPerFt", "pipeBootPrices",
   "chimneySizeId", "chimneyEach", "chimneyLabor", "curbEach", "curbLabor", "ventBalanced",
-  "tearOffPerSqLayer", "disposalPerSqLayer", "plywoodEach", "plywoodLabor",
+  "tearOffPerSqLayer", "disposalPerSqLayer", "plywoodEach", "plywoodLabor", "plywoodQuote", "plywoodUnit",
   "nailsPerSq", "sealantPerSq", "cleanupLump", "safetyLump", "permitLump", "deliveryLump",
   // Fascia & gutters (2026-09-19): the board this shop fits and its rates,
   // and what they do with the gutters. The LENGTHS are per roof, never saved.

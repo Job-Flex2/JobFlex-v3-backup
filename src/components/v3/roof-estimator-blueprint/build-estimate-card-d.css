@@ -1038,3 +1038,35 @@
   .jf-blueprint .content .rbd .rbd-sel-btn,
   .jf-blueprint .content .rbd .rbd-sel-caret { transition: none; }
 }
+
+/* ── PLYWOOD REPLACEMENT (2026-10-13) — named plainly, three picks, the price both ways, a count in a tap, and the
+   client's own sentence under it. ── */
+.jf-blueprint .content .rbd-ply { display: grid; gap: 12px; padding: 14px; border: 1.5px solid var(--ink); border-radius: var(--r-sm); background: var(--paper); }
+.jf-blueprint .content .rbd-ply-h { display: grid; gap: 3px; }
+.jf-blueprint .content .rbd-ply-t { font-size: 14px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+.jf-blueprint .content .rbd-ply-sub { font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+.jf-blueprint .content .rbd-ply .rbd-tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.jf-blueprint .content .rbd-ply-rate { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; align-items: end; }
+.jf-blueprint .content .rbd-ply-split { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+.jf-blueprint .content .rbd-ply-count { display: grid; gap: 10px; }
+.jf-blueprint .content .rbd-ply-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.jf-blueprint .content .rbd-ply-row > .rbd-f { flex: 0 1 150px; }
+.jf-blueprint .content .rbd-seg { display: inline-flex; border: 1.5px solid var(--ink); border-radius: var(--r-sm); overflow: hidden; }
+.jf-blueprint .content .rbd-seg-b { min-height: 40px; padding: 0 14px; border: 0; background: var(--paper-deep); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); cursor: pointer; }
+.jf-blueprint .content .rbd-seg-b + .rbd-seg-b { border-left: 1.5px solid var(--ink); }
+.jf-blueprint .content .rbd-seg-b.is-on { background: var(--accent); color: var(--paper-deep); }
+.jf-blueprint .content .rbd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.jf-blueprint .content .rbd-chip { min-width: 44px; min-height: 40px; padding: 0 10px; border: 1.5px solid var(--ink); border-radius: var(--r-sm); background: var(--paper-deep); font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums; }
+.jf-blueprint .content .rbd-chip.is-on { border-color: var(--accent); background: var(--accent); color: var(--paper-deep); }
+@media (hover: hover) {
+  .jf-blueprint .content .rbd-chip:not(.is-on):not(:disabled):hover, .jf-blueprint .content .rbd-seg-b:not(.is-on):not(:disabled):hover { background: var(--paper); }
+}
+.jf-blueprint .content .rbd-chip:focus-visible, .jf-blueprint .content .rbd-seg-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.jf-blueprint .content .rbd-ply-sum { margin: 0; font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.jf-blueprint .content .rbd-ply-says { display: grid; gap: 4px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--paper-deep); }
+.jf-blueprint .content .rbd-ply-says > span { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-ink, var(--accent)); }
+.jf-blueprint .content .rbd-ply-says p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+@media (max-width: 520px) {
+  .jf-blueprint .content .rbd-ply-rate { grid-template-columns: 1fr; }
+  .jf-blueprint .content .rbd-ply-row > .rbd-f { flex: 1 1 100%; }
+}
