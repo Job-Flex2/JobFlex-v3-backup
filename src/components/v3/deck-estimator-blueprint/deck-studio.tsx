@@ -85,8 +85,7 @@ import {
   type CustomSlot,
   type OwnItem,
   type OwnUnit,
-  normalizeDeckDesign,
-} from "@/lib/deck/design";
+  normalizeDeckDesign, SPA_LIMITS } from "@/lib/deck/design";
 import { priceDeck, deckNotes, deckScope, type DeckPackage } from "@/lib/deck/pricing";
 import { roofWords } from "@/lib/deck/roof";
 import { railWords } from "@/lib/deck/rails";
@@ -2160,6 +2159,27 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                       </Scope>
                     ) : null}
                   </div>
+                  {design.shape.kind === "rect" ? (
+                    <div className={s.sub}>
+                      <Toggle checked={design.spa.on} onChange={(v) => patch({ spa: { on: v } })}>A hot-tub spot — the frame under it doubled</Toggle>
+                      {design.spa.on ? (
+                        <>
+                          <div className={s.grid2}>
+                            <Field label="Tub, along the house" aside="ft">
+                              <NumberInput label="Hot tub width, feet" value={design.spa.widthFt} parse={parseFeet} format={feetText} min={SPA_LIMITS.widthFt.min} max={Math.min(SPA_LIMITS.widthFt.max, design.shape.widthFt - 1)} onCommit={(n2) => patch({ spa: { widthFt: n2 } })} />
+                            </Field>
+                            <Field label="Tub, out from the house" aside="ft">
+                              <NumberInput label="Hot tub depth, feet" value={design.spa.depthFt} parse={parseFeet} format={feetText} min={SPA_LIMITS.depthFt.min} max={Math.min(SPA_LIMITS.depthFt.max, design.shape.depthFt - 1)} onCommit={(n2) => patch({ spa: { depthFt: n2 } })} />
+                            </Field>
+                            <Field label="Set">
+                              <Seg small label="Where the tub stands" value={design.spa.align} onChange={(a) => patch({ spa: { align: a } })} options={[{ value: "left", label: "Left" }, { value: "centre", label: "Centre" }, { value: "right", label: "Right" }]} />
+                            </Field>
+                          </div>
+                          <p className={s.hint}>Every joist under the tub is doubled and the checks read the frame at the filled weight (≈100 psf). The tub itself is by others — its pad drawing governs.</p>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </>
               )}
             </Step>

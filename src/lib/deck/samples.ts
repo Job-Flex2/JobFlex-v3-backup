@@ -67,6 +67,29 @@ export const DECK_SAMPLES: readonly DeckSample[] = [
     },
   },
   {
+    id: "deck-spa",
+    structure: "deck",
+    name: "Hot-tub deck, two levels",
+    facts: "16 × 14 ft · 7 × 7 ft tub spot on doubled joists · a 10 × 8 ft level one step down",
+    patch: {
+      structure: "deck", floor: "deck", placement: "attached", shape: { kind: "rect", widthFt: 16, depthFt: 14 }, heightIn: 24,
+      rail: { type: "composite", infill: "auto" }, lower: { on: true, widthFt: 10, depthFt: 8, dropIn: 8, align: "right" },
+      spa: { on: true, widthFt: 7, depthFt: 7, align: "left" },
+      stairs: [{ ...defaultStair("s1", "front", 5), level: "lower" }],
+    },
+  },
+  {
+    id: "deck-second-story",
+    structure: "deck",
+    name: "Second-story walk-out",
+    facts: "16 × 12 ft · 9 ft up at the second floor · long stairs with a landing · composite rails",
+    patch: {
+      structure: "deck", floor: "deck", placement: "attached", shape: { kind: "rect", widthFt: 16, depthFt: 12 }, heightIn: 110,
+      rail: { type: "composite", infill: "auto" }, lower: { on: false },
+      stairs: [defaultStair("s1", "right", 4)],
+    },
+  },
+  {
     id: "deck-wrap",
     structure: "deck",
     name: "L-shaped wrap-around",
@@ -108,6 +131,17 @@ export const DECK_SAMPLES: readonly DeckSample[] = [
       structure: "covered-deck", floor: "deck", placement: "attached", shape: { kind: "rect", widthFt: 18, depthFt: 14 }, heightIn: 36,
       rail: { type: "composite", infill: "auto" }, stairs: [defaultStair("s1", "front", 9)], lower: { on: false },
       roof: roof("covered-deck", { kind: "hip", attach: "free", pitch: 5, ceiling: "beadboard", extras: { fan: true, lights: 2 } }),
+    },
+  },
+  {
+    id: "covered-second-story",
+    structure: "covered-deck",
+    name: "Covered second-story deck",
+    facts: "16 × 12 ft at the second floor · shed roof, 3:12 · 9 ft up · stairs with a landing",
+    patch: {
+      structure: "covered-deck", floor: "deck", placement: "attached", shape: { kind: "rect", widthFt: 16, depthFt: 12 }, heightIn: 110,
+      rail: { type: "composite", infill: "auto" }, stairs: [defaultStair("s1", "right", 4)], lower: { on: false },
+      roof: roof("covered-deck", { kind: "shed", attach: "wall", pitch: 3 }),
     },
   },
   // ── gazebos ──

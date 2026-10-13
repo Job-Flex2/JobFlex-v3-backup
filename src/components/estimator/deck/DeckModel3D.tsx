@@ -30,7 +30,7 @@ import * as React from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
-import { SCENE_LAYERS, sceneBuildLayers, type DeckScene, type SceneHandle, type SceneLayer, type SceneLegend } from "@/lib/deck/scene";
+import { SCENE_LAYERS, sceneBuildLayers, memberBoxCorners, memberIsSawn, MEMBER_BOX_FACES, type DeckScene, type SceneHandle, type SceneLayer, type SceneLegend } from "@/lib/deck/scene";
 
 /** A drag on a handle: the design number it moves, and the value it should take now (feet for sizes, inches for heights). */
 export interface DeckEdit {
@@ -185,6 +185,31 @@ function boxMatrix(b: readonly number[], role: string | null, ox: number, oz: nu
   bmTrans.makeTranslation(b[1] - ox, b[3], b[2] - oz);
   return out.copy(bmTrans).multiply(bmBasis).multiply(bmScale).multiply(bmShear);
 }
+/**
+ * Real sawn geometry for the members a sheared unit box cannot draw: the
+ * knee braces (plumb against the post, LEVEL under the beam — the owner:
+ * "braces connections not cut at right angle") and mitred fascia runs.
+ * Built from the same `memberBoxCorners` the blueprint pictures use, so
+ * the two renderers can never disagree about a cut.
+ */
+function sawnGeometry(b: readonly number[], role: string | null, ox: number, oz: number): THREE.BufferGeometry | null {
+  const c = memberBoxCorners(b, role);
+  if (!c) return null;
+  const pos: number[] = [];
+  for (const f of MEMBER_BOX_FACES) {
+    const q = f.map((i) => c[i]);
+    // Scene (x, y, z-up) → three (x, z-up→y, y→z), offset to the model's centre.
+    const v = (p: readonly number[]): [number, number, number] => [p[0] - ox, p[2], p[1] - oz];
+    const [a0, a1, a2, a3] = [v(q[0]), v(q[1]), v(q[2]), v(q[3])];
+    // The y/z swap mirrors handedness — wind the triangles back out.
+    pos.push(...a0, ...a2, ...a1, ...a0, ...a3, ...a2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 const MOUNT_OF: Partial<Record<SceneLayer, DeckPick["mount"]>> = { post: "post", "roof-post": "post", header: "header", beam: "header", rail: "rail", glass: "rail", decking: "deck", fascia: "deck", rim: "deck", joist: "deck", ceiling: "ceiling", rafter: "ceiling", sheathing: "ceiling", roofing: "ceiling", ridge: "peak", stair: "stair", wall: "wall", screen: "wall", ledger: "wall", light: "deck", wire: "deck" };
 
 const CONCRETE = 0xb9b6ad;
@@ -465,6 +490,9 @@ interface Built {
   polys: Array<{ mesh: THREE.Mesh; ends: number[]; polyIdx: number[] } | null>;
   /** Braces, drawn one mesh each. */
   braces: THREE.Mesh[];
+  /** Members with real sawn geometry (mitred fascia, turned braces):
+   *  shown with their layer's share of the build-up, like instances. */
+  sawn: THREE.Mesh[];
   /** Boards cut to a shape: one geometry, a range of it per board. */
   diagonal: { mesh: THREE.Mesh; ends: number[] } | null;
   /** Each layer's step in this scene's build-up (−1 = not in the scene). */
@@ -783,6 +811,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
             return new THREE.Color(0xbfe0ef);
           case "screen":
             return new THREE.Color(0x30343a);
+          case "spa":
+            return new THREE.Color(0x4c4a45);
           case "wall":
             return new THREE.Color(SIDING);
           case "hardware":
@@ -844,7 +874,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         if (L === FOOTING || L === WIRE) continue;
         const idx: number[] = [];
         s.boxes.forEach((b, i) => {
-          if (b[0] === L && b[7] === 0) idx.push(i);
+          if (b[0] === L && b[7] === 0 && !memberIsSawn(b, legendOf(i)?.role ?? null)) idx.push(i);
         });
         // The stairs: the treads and risers on a material of their own that the x-ray fades, the framing on the layer's.
         const groups: Array<{ idx: number[]; mat: THREE.MeshStandardMaterial }> = [];
@@ -879,32 +909,36 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           layers[L].push({ mesh, total: idx.length, boxIdx: idx });
         }
       }
-      // Knee braces: a 2x4 on the diagonal of its box.
+      // Members with REAL sawn ends — knee braces cut plumb at the post
+      // and level under the beam, fascia mitred where two eaves meet —
+      // drawn from the same corners the blueprint pictures use. The old
+      // path drew a brace as a rotated box with square ends shoved
+      // through the beam.
       const braceMat = new THREE.MeshStandardMaterial({ color: tone(frameColor, -0.02), roughness: 0.9, map: grain });
       owned.push(braceMat);
+      const sawn: THREE.Mesh[] = [];
+      const sawnPerLayer = new Map<number, number>();
       s.boxes.forEach((b, bi) => {
-        if (b[0] !== BRACE || b[7] === 0) return;
-        const alongX = b[7] === 1 || b[7] === 2;
-        const run = alongX ? b[4] : b[5];
-        const rise = b[6];
-        const length = Math.hypot(run, rise);
-        const angle = Math.atan2(rise, run);
-        const mesh = new THREE.Mesh(unitBox, braceMat);
-        mesh.castShadow = true;
-        mesh.position.set(b[1] - ox, b[3], b[2] - oz);
-        if (alongX) {
-          mesh.scale.set(length, 3.5 / 12, 1.5 / 12);
-          mesh.rotation.z = b[7] === 1 ? angle : -angle;
-        } else {
-          mesh.scale.set(1.5 / 12, 3.5 / 12, length);
-          mesh.rotation.x = b[7] === 3 ? -angle : angle;
-        }
-        mesh.userData.layer = BRACE;
+        const role = legendOf(bi)?.role ?? null;
+        if (!memberIsSawn(b, role)) return;
+        const geo = sawnGeometry(b, role, ox, oz);
+        if (!geo) return;
+        const L = b[0];
+        const mesh = new THREE.Mesh(geo, L === BRACE || /brace/i.test(role ?? "") ? braceMat : mats[L] ?? braceMat);
+        mesh.castShadow = L !== HARDWARE && L !== GLASS;
+        mesh.receiveShadow = true;
+        mesh.userData.layer = L;
         mesh.userData.boxIdx = bi;
-        centres[bi] = [mesh.position.clone(), length];
+        const k = sawnPerLayer.get(L) ?? 0;
+        sawnPerLayer.set(L, k + 1);
+        mesh.userData.cohort = k;
+        centres[bi] = [new THREE.Vector3(b[1] - ox, b[3], b[2] - oz), Math.max(b[4], b[5], b[6])];
         group.add(mesh);
-        braces.push(mesh);
+        if (L === BRACE) braces.push(mesh);
+        else sawn.push(mesh);
+        owned.push(geo);
       });
+      sawn.forEach((m) => (m.userData.cohortOf = sawnPerLayer.get(m.userData.layer as number) ?? 1));
 
       // Footings: the pad at the bottom of the hole, the pier up to its top.
       if (s.footings.length) {
@@ -1032,12 +1066,15 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const p = s.polys[pi];
           const pts: Array<[number, number, number]> = [];
           for (let k = 1; k + 2 < p.length; k += 3) pts.push([p[k] - ox, p[k + 2], p[k + 1] - oz]);
-          return { pts, color: jitter(base, i + L * 31, L === ROOFING ? 0.03 : 0.015) };
+          // The spa's water pane is the one poly that is not its layer's
+          // colour: still, blue, a touch glossy.
+          const water = SCENE_LAYERS[L] === "spa";
+          return { pts, color: water ? new THREE.Color(0x6fb3cb) : jitter(base, i + L * 31, L === ROOFING ? 0.03 : 0.015) };
         });
         const { geo, ends } = fanGeometry(rings, L === ROOFING ? (metalRoof ? 1 / 3 : 1 / 2.7) : L === SLAB ? 0.5 : 0.25);
         const mat = new THREE.MeshStandardMaterial({
           vertexColors: true,
-          roughness: L === ROOFING ? (metalRoof ? 0.45 : 0.9) : L === GLASS ? 0.1 : 0.9,
+          roughness: L === ROOFING ? (metalRoof ? 0.45 : 0.9) : L === GLASS ? 0.1 : SCENE_LAYERS[L] === "spa" ? 0.15 : 0.9,
           metalness: L === ROOFING && metalRoof ? 0.4 : L === GLASS ? 0.2 : 0,
           flatShading: true,
           side: THREE.DoubleSide,
@@ -1377,6 +1414,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       return {
         group,
         layers,
+        sawn,
         polys,
         braces,
         diagonal,
@@ -1411,6 +1449,11 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       });
       const braceShare = share(BRACE);
       content.braces.forEach((m, i) => (m.visible = i < Math.round(braceShare * content!.braces.length)));
+      for (const m of content.sawn) {
+        const f = share(m.userData.layer as number);
+        const n = (m.userData.cohortOf as number) || 1;
+        m.visible = Math.round(f * n) > (m.userData.cohort as number);
+      }
       if (content.diagonal) {
         const f = share(DECKING);
         const boards = Math.round(f * content.diagonal.ends.length);
@@ -1545,10 +1588,11 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       }
       // The scene's own parts: the same matrices the parts stand on, filled through everything in front of them.
       const sc = sceneRef.current;
-      const idx = (h.boxIdx ?? []).filter((i) => i >= 0 && i < sc.boxes.length && sc.boxes[i][7] === 0);
+      const legendRole = (i: number) => (sc.tags.length === sc.boxes.length && sc.tags[i] >= 0 ? sc.legend[sc.tags[i]]?.role ?? null : null);
+      const all = (h.boxIdx ?? []).filter((i) => i >= 0 && i < sc.boxes.length);
+      const idx = all.filter((i) => sc.boxes[i][7] === 0 && !memberIsSawn(sc.boxes[i], legendRole(i)));
       const extraGeos: THREE.BufferGeometry[] = [];
       if (idx.length) {
-        const legendRole = (i: number) => (sc.tags.length === sc.boxes.length && sc.tags[i] >= 0 ? sc.legend[sc.tags[i]]?.role ?? null : null);
         const inst = new THREE.InstancedMesh(unitBox, fill, idx.length);
         const mm = new THREE.Matrix4();
         idx.forEach((bi, k) => inst.setMatrixAt(k, boxMatrix(sc.boxes[bi], legendRole(bi), ox, oz, mm)));
@@ -1556,22 +1600,14 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         inst.renderOrder = 30;
         group.add(inst);
       }
-      // A knee brace is drawn as its box's diagonal: lit as a slim box along it.
-      for (const bi of (h.boxIdx ?? []).filter((i) => i >= 0 && i < sc.boxes.length && sc.boxes[i][7] !== 0)) {
-        const b = sc.boxes[bi];
-        const alongX = b[7] === 1 || b[7] === 2;
-        const run = alongX ? b[4] : b[5];
-        const len = Math.hypot(run, b[6]);
-        const ang = Math.atan2(b[6], run);
-        const m = new THREE.Mesh(unitBox, fill);
-        m.position.set(b[1] - ox, b[3], b[2] - oz);
-        if (alongX) {
-          m.scale.set(len, 3.5 / 12, 1.5 / 12);
-          m.rotation.z = b[7] === 1 ? ang : -ang;
-        } else {
-          m.scale.set(1.5 / 12, 3.5 / 12, len);
-          m.rotation.x = b[7] === 3 ? -ang : ang;
-        }
+      // Sawn members (braces, mitred trim) light up as the exact shapes
+      // they are — the lit copy used to be a square-ended stand-in that
+      // did not lie on its part.
+      for (const bi of all.filter((i) => memberIsSawn(sc.boxes[i], legendRole(i)))) {
+        const geo = sawnGeometry(sc.boxes[bi], legendRole(bi), ox, oz);
+        if (!geo) continue;
+        extraGeos.push(geo);
+        const m = new THREE.Mesh(geo, fill);
         m.renderOrder = 30;
         group.add(m);
       }
