@@ -77,6 +77,13 @@ export interface ClientDesignLink {
   sends: number;
   /** The studio draft it came back into — the same one on a second send. */
   draftId: string | null;
+  /** The proposal this design belongs to (2026-10-13): made from the studio while it was on one, or tied
+   *  when the returned design was priced. The proposal's row and its builder show the link's standing. */
+  proposalId: string | null;
+  /** The member who made the link, by name — the "designer" the folder names. */
+  byName: string | null;
+  /** When the contractor last opened what came back; null = not yet. Older than sentAt = a new return. */
+  seenAt: string | null;
 }
 
 /** The row the contractor's list shows. */
@@ -95,6 +102,13 @@ export interface ClientLinkRow {
   draftId: string | null;
   note: string;
   expired: boolean;
+  proposalId: string | null;
+  byName: string | null;
+  seenAt: string | null;
+  /** Sent back and not opened since: the one that blooms. */
+  unseen: boolean;
+  /** What the client designed, in words ("16 × 12 ft deck"), once they have worked on it. */
+  words: string | null;
 }
 
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -131,6 +145,9 @@ export function parseClientLink(cursor: string): ClientDesignLink | null {
       sentAt: iso(raw.sentAt),
       sends: typeof raw.sends === "number" && raw.sends >= 0 ? Math.floor(raw.sends) : 0,
       draftId: typeof raw.draftId === "string" && /^[a-f0-9-]{8,40}$/i.test(raw.draftId) ? raw.draftId : null,
+      proposalId: typeof raw.proposalId === "string" && /^[\w-]{1,64}$/.test(raw.proposalId) ? raw.proposalId : null,
+      byName: strOrNull(raw.byName, 120),
+      seenAt: iso(raw.seenAt),
     };
   } catch {
     return null;
@@ -153,7 +170,51 @@ export function clientLinkRow(l: ClientDesignLink, now: number): ClientLinkRow {
     draftId: l.draftId,
     note: l.note,
     expired: Date.parse(l.expiresAt) < now,
+    proposalId: l.proposalId,
+    byName: l.byName,
+    seenAt: l.seenAt,
+    unseen: isUnseenReturn(l),
+    words: l.work ? structureWords(l.work) : null,
   };
+}
+
+/** Sent back, and the contractor has not opened it since. */
+export function isUnseenReturn(l: Pick<ClientDesignLink, "status" | "sentAt" | "seenAt">): boolean {
+  if (l.status !== "sent" || !l.sentAt) return false;
+  return !l.seenAt || Date.parse(l.seenAt) < Date.parse(l.sentAt);
+}
+
+/** Where a client's link stands, in the words every surface uses (the studio folder, the proposal row, the builder). */
+export type ClientStanding = "closed" | "returned" | "designing" | "opened" | "waiting";
+export function clientStanding(l: Pick<ClientLinkRow, "expired" | "status" | "workAt" | "openedAt">): ClientStanding {
+  if (l.status === "sent") return "returned";
+  if (l.expired) return "closed";
+  if (l.workAt) return "designing";
+  if (l.openedAt) return "opened";
+  return "waiting";
+}
+export const STANDING_WORDS: Readonly<Record<ClientStanding, string>> = {
+  closed: "Link closed",
+  returned: "Sent back",
+  designing: "Designing",
+  opened: "Opened the link",
+  waiting: "Not opened yet",
+};
+/** "Jane sent back a design · 2 h ago" / "Jane is designing" / "Design link sent to Jane · not opened yet". */
+export function standingLine(l: Pick<ClientLinkRow, "clientName" | "expired" | "status" | "workAt" | "openedAt">, ago: (iso: string) => string, at: { sentAt: string | null; workAt: string | null; openedAt: string | null; createdAt: string }): string {
+  const first = l.clientName.trim().split(/\s+/)[0] || "The client";
+  switch (clientStanding(l)) {
+    case "returned":
+      return `${first} sent back a design${at.sentAt ? ` · ${ago(at.sentAt)}` : ""}`;
+    case "designing":
+      return `${first} is designing${at.workAt ? ` · ${ago(at.workAt)}` : ""}`;
+    case "opened":
+      return `${first} opened the design link${at.openedAt ? ` · ${ago(at.openedAt)}` : ""}`;
+    case "closed":
+      return `${first}'s design link closed`;
+    default:
+      return `Design link sent to ${first} · not opened yet`;
+  }
 }
 
 /** The contractor's design as the client gets it: no photo of the house (it is the shop's private file). */

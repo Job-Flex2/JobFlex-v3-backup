@@ -227,7 +227,13 @@ export function Sidebar({
                   {/* CUSTOM-PLAN LOCK — the page is not in this org's plan.
                       Still a live link on purpose: the route renders the
                       upgrade offer, so the padlock is a door, not a wall. */}
-                  {soonMark ? (
+                  {/* News outranks "Soon" (2026-10-13): a coming-soon tool an admin works in still gets its badge
+                      — a client's deck design sent back, say. */}
+                  {soonMark && (badges[item.href] ?? 0) > 0 ? (
+                    <span className="sb-badge" aria-label={`${badges[item.href]} new`}>
+                      {badges[item.href] > 99 ? "99+" : badges[item.href]}
+                    </span>
+                  ) : soonMark ? (
                     tool ? null : <span className="sb-soon" aria-label="Coming soon">Soon</span>
                   ) : item.locked ? (
                     <svg className="sb-lock-ic" viewBox="0 0 24 24" aria-label="Not in your plan">

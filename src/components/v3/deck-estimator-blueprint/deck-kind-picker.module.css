@@ -10,7 +10,7 @@
 /* The four kinds */
 :global(.jf-blueprint .content) .kinds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 :global(.jf-blueprint .content) .kind {
-  position: relative; display: grid; grid-template-rows: auto auto auto 1fr; align-content: start; gap: 6px; min-width: 0;
+  position: relative; display: grid; grid-template-rows: auto auto auto 1fr; align-content: start; gap: 6px; min-width: 0; width: 100%;
   padding: 10px 10px 12px; text-align: left; cursor: pointer;
   border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; color: var(--ink);
   transition: border-color 0.15s, box-shadow 0.18s var(--ease), transform 0.18s var(--ease), background 0.15s;
@@ -29,15 +29,36 @@
   background: var(--step-c, var(--blueprint)); color: #fff; font-size: 12px; font-weight: 900; line-height: 1; box-shadow: 0 0 0 2px #fff;
 }
 
-/* The picture */
-:global(.jf-blueprint .content) .fig { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius); background: #fff; overflow: hidden; }
+/* The picture: a sky above, the ground's own fade below (2026-10-13 — the drawing is lit and drawn in its materials). */
+:global(.jf-blueprint .content) .fig {
+  position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden;
+  background: linear-gradient(180deg, #e9f0f6 0%, #f4f4f0 55%, #f1efe9 100%);
+}
 :global(.jf-blueprint .content) .figSmall { aspect-ratio: 5 / 3.4; }
-:global(.jf-blueprint .content) .svg { display: block; width: 100%; height: 100%; }
-/* The picture is replayed on every hover (it is keyed by its play count), so a press on the old picture and a release on
-   the new one was never a click — the card did not take it (2026-10-12). The picture lets the pointer through to the card. */
-:global(.jf-blueprint .content) .svg, :global(.jf-blueprint .content) .svg * { pointer-events: none; }
-:global(.jf-blueprint .content) .svg path { stroke: rgba(10, 10, 10, 0.22); stroke-width: 0.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-:global(.jf-blueprint .content) .layer { transform-box: view-box; }
+:global(.jf-blueprint .content) .svg { display: block; width: 100%; height: 100%; touch-action: pan-y; }
+/* The picture's parts never take the pointer (a press on one part and a release on another was never a click); the
+   picture itself does, for the mouse that turns it. */
+:global(.jf-blueprint .content) .svg * { pointer-events: none; }
+:global(.jf-blueprint .content) .svg path { stroke-width: 0.45; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+:global(.jf-blueprint .content) .layer, :global(.jf-blueprint .content) .still { transform-box: view-box; }
+/* The card and its ↻: the button is outside the card, in its corner. */
+:global(.jf-blueprint .content) .kindWrap, :global(.jf-blueprint .content) .sampleWrap { position: relative; min-width: 0; display: grid; }
+:global(.jf-blueprint .content) .kindWrap > .kind, :global(.jf-blueprint .content) .sampleWrap > .sample { height: 100%; }
+:global(.jf-blueprint .content) .turn {
+  position: absolute; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  border: 1.5px solid rgba(10, 10, 10, 0.18); background: rgba(255, 255, 255, 0.92); color: var(--ink-soft);
+  font-family: var(--font); font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer; opacity: 0; transition: opacity 0.15s, border-color 0.15s, transform 0.18s var(--ease);
+}
+:global(.jf-blueprint .content) .kindWrap .turn { right: 16px; top: 16px; }
+:global(.jf-blueprint .content) .sampleWrap .turn { right: 14px; top: 14px; }
+:global(.jf-blueprint .content) .kindWrap:hover .turn, :global(.jf-blueprint .content) .sampleWrap:hover .turn, :global(.jf-blueprint .content) .turn:focus-visible { opacity: 1; }
+:global(.jf-blueprint .content) .turn:hover { border-color: var(--step-c, var(--blueprint)); color: var(--step-c, var(--blueprint)); transform: rotate(-30deg); }
+:global(.jf-blueprint .content) .turn:focus-visible { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: 1px; }
+:global(.jf-blueprint .content) .turnSmall { width: 24px; height: 24px; font-size: 13px; }
+:global(.jf-blueprint .content) .kindOn ~ .turn { right: 16px; top: 44px; }
+@media (hover: none) {
+  :global(.jf-blueprint .content) .turn { opacity: 0.9; }
+}
 /* The build-up: each step of the build fades in and settles down, one after the other. */
 :global(.jf-blueprint .content) .play .layer { animation: deckRise 0.42s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
 @keyframes deckRise {
@@ -52,7 +73,7 @@
 :global(.jf-blueprint .content) .samplesHint { font-size: 11px; line-height: 1.4; color: var(--muted); max-width: 60ch; }
 :global(.jf-blueprint .content) .sampleRow { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; min-width: 0; }
 :global(.jf-blueprint .content) .sample {
-  display: grid; gap: 4px; align-content: start; min-width: 0; padding: 8px; text-align: left; cursor: pointer;
+  display: grid; gap: 4px; align-content: start; min-width: 0; width: 100%; padding: 8px; text-align: left; cursor: pointer;
   border: 1.5px solid var(--hair-soft); border-radius: var(--radius); background: #fff; color: var(--ink);
   transition: border-color 0.15s, background 0.15s, transform 0.18s var(--ease);
 }
@@ -77,7 +98,7 @@
   :global(.jf-blueprint .content) .kindBlurb { display: none; }
   :global(.jf-blueprint .content) .kindName { font-size: 12px; }
   :global(.jf-blueprint .content) .sampleRow { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
-  :global(.jf-blueprint .content) .sample { flex: 0 0 74%; max-width: 280px; scroll-snap-align: start; }
+  :global(.jf-blueprint .content) .sampleWrap { flex: 0 0 74%; max-width: 280px; scroll-snap-align: start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

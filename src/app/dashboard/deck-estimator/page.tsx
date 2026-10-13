@@ -22,7 +22,7 @@ import { readDeckRateBook } from "@/lib/deck/rateBookStore";
 import { parseStateZip } from "@/lib/fence/market";
 import { DeckStudio } from "@/components/v3/deck-estimator-blueprint/deck-studio";
 import { DeckComingSoon } from "@/components/v3/deck-estimator-blueprint/deck-coming-soon";
-import { loadDeckDraft, loadDeckFromProposal } from "@/actions/deckEstimator";
+import { loadDeckDraft, loadDeckFromProposal, type ReturnedClientDesign } from "@/actions/deckEstimator";
 import type { DeckDesign } from "@/lib/deck/design";
 import type { LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 
@@ -67,15 +67,15 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
   const homeState = parseStateZip(org?.address).state;
   // Opened again (M3): a saved draft (`?draft=`) or the deck a proposal carries (`?proposal=`).
   // Either way the proposal it is on comes along: the studio updates that one in place (2026-10-12).
-  let opened: { design: DeckDesign; address: string | null; title: string; draftId: string | null; from: "draft" | "proposal"; proposal: LinkedDeckProposal | null } | null = null;
+  let opened: { design: DeckDesign; address: string | null; title: string; draftId: string | null; from: "draft" | "proposal"; proposal: LinkedDeckProposal | null; client: ReturnedClientDesign | null } | null = null;
   const draftId = one(params.draft);
   const proposalId = one(params.proposal);
   if (draftId) {
     const res = await loadDeckDraft(draftId);
-    if (res.ok) opened = { design: res.draft.design, address: res.draft.address, title: res.draft.title, draftId: res.draft.id, from: "draft", proposal: res.proposal };
+    if (res.ok) opened = { design: res.draft.design, address: res.draft.address, title: res.draft.title, draftId: res.draft.id, from: "draft", proposal: res.proposal, client: res.client };
   } else if (proposalId) {
     const res = await loadDeckFromProposal(proposalId);
-    if (res.ok) opened = { design: res.design, address: res.address, title: res.title, draftId: null, from: "proposal", proposal: res.proposal };
+    if (res.ok) opened = { design: res.design, address: res.address, title: res.title, draftId: null, from: "proposal", proposal: res.proposal, client: null };
   }
   return <DeckStudio initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={!viaEdition} opened={opened} />;
 }

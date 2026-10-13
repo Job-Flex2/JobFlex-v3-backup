@@ -3548,6 +3548,15 @@
 .drawingEdit a { text-decoration: none; }
 .drawingEdit span { flex: 1 1 260px; min-width: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted, #6b6b6b); }
 @media (max-width: 640px) { .drawingEdit a { width: 100%; } }
+/* The client's design link on this proposal (2026-10-13): where it stands; the unopened return blooms. */
+.drawingClient { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding: 8px 12px; border: 1.5px solid var(--hair, rgba(10, 10, 10, 0.55)); border-radius: 2px; font-size: 13px; font-weight: 600; color: var(--muted, #6b6b6b); }
+.drawingClient :global(.ic) { width: 14px; height: 14px; flex: 0 0 auto; }
+.drawingClient a { margin-left: auto; color: var(--blueprint, #1854a0); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
+.drawingClientBack { border-color: var(--success, #3a7d44); color: var(--success-dark, #2c5f34); }
+.drawingClientNew { border-color: var(--success, #3a7d44); background: var(--success-soft, #e8f0e9); color: var(--success-dark, #2c5f34); animation: drawingBloom 1.6s ease-out 4; }
+.drawingClientNew a { color: #fff; background: var(--success, #3a7d44); padding: 3px 10px; border-radius: 2px; text-decoration: none; }
+@keyframes drawingBloom { 0% { box-shadow: 0 0 0 0 rgba(58, 125, 68, 0.55); } 70% { box-shadow: 0 0 0 10px rgba(58, 125, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(58, 125, 68, 0); } }
+@media (prefers-reduced-motion: reduce) { .drawingClientNew { animation: none; } }
 @media (max-width: 900px) { .drawing { grid-template-columns: 1fr; } }
 
 /* FROM THE CREW (2026-09-27): the job's photos and videos under the staged

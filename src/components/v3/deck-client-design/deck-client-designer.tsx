@@ -20,7 +20,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
-import { deckingProduct, defaultDecking, railType, type RailTypeId } from "@/lib/deck/catalog";
+import { deckingProduct, railType, treatedDecking, type RailTypeId } from "@/lib/deck/catalog";
 import { applyDeckPatch } from "@/lib/deck/checks";
 import {
   DECK_LIMITS,
@@ -94,7 +94,9 @@ interface BoardChoice {
   family: string[];
 }
 const BOARD_CHOICES: readonly BoardChoice[] = [
-  { key: "treated", name: "Pressure-treated wood", words: "The classic. Stain it any colour.", product: (st, cur) => (deckingProduct(cur).family === "treated" ? cur : defaultDecking(st)), family: ["treated"] },
+  { key: "treated", name: "Pressure-treated wood", words: "The classic. Stain it any colour.", // The REGION'S TREATED board, never its default board (fixed 2026-10-13: on the West Coast the default is a
+  // composite, so this button changed nothing there).
+  product: (st, cur) => (deckingProduct(cur).family === "treated" ? cur : treatedDecking(st)), family: ["treated"] },
   { key: "cedar", name: "Cedar", words: "Soft, warm, smells like cedar.", product: () => "cedar-54", family: ["cedar-54", "cedar-2x6"] },
   { key: "redwood", name: "Redwood", words: "Deep red heartwood.", product: () => "redwood-54", family: ["redwood-54", "redwood-2x6"] },
   { key: "ipe", name: "Ipe hardwood", words: "Dense tropical wood that lasts decades.", product: () => "ipe-54", family: ["ipe-54", "ipe-1x6"] },
@@ -250,6 +252,8 @@ export interface DeckClientDesignerProps {
   unsure: ClientUnsure[];
   sentAt: string | null;
   expired: boolean;
+  /** The proposal this design became, once the contractor has sent it (2026-10-13): the client's own page. */
+  proposal?: { url: string; status: string; sentAt: string | null; acceptedAt: string | null } | null;
 }
 
 export function DeckClientDesigner(props: DeckClientDesignerProps) {
@@ -785,7 +789,17 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
               {sendError ? <p className={s.error} role="alert">{sendError}</p> : null}
               {sent && !changedSinceSent ? (
                 <div className={s.sentBox} data-client-sent>
-                  <b>Sent ✓</b> {shopName} has your design and will be in touch with the price. Change anything and send it again any time.
+                  {props.proposal ? (
+                    <>
+                      <b>{props.proposal.status === "ACCEPTED" || props.proposal.status === "COMPLETED" || props.proposal.status === "PAID" ? "Accepted ✓" : "Your proposal is ready ✓"}</b> {shopName} priced your design.{" "}
+                      <a href={props.proposal.url} data-client-proposal>{props.proposal.status === "ACCEPTED" || props.proposal.status === "COMPLETED" || props.proposal.status === "PAID" ? "See your signed proposal" : "Open your proposal"}</a>
+                      {props.proposal.status === "ACCEPTED" || props.proposal.status === "COMPLETED" || props.proposal.status === "PAID" ? null : " — changing the design here and sending it again asks for a new price."}
+                    </>
+                  ) : (
+                    <>
+                      <b>Sent ✓</b> {shopName} has your design and will be in touch with the price. Change anything and send it again any time.
+                    </>
+                  )}
                 </div>
               ) : null}
               <button type="button" className={s.sendBtn} onClick={() => void send()} disabled={sending} data-client-send>

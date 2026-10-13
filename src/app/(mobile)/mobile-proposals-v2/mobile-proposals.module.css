@@ -1088,3 +1088,16 @@
 .bankedSummary { padding: var(--card-pad); border-top: 1px solid var(--ink-line); }
 .bankedSummary .psheetBanklbl { color: var(--ink); font-weight: 700; }
 .bankedSummary .pjobTotalV { color: var(--emerald); }
+
+/* The client's deck design on the row + accepted/declined on the line (2026-10-13). */
+.prowAccepted { color: var(--success-dark, #2c5f34); font-weight: 700; }
+.prowDeclined { color: var(--danger, #a83232); font-weight: 700; }
+.prowClient { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 6px; padding: 5px 9px; border: 1.5px solid var(--hair, rgba(10, 10, 10, 0.12)); border-radius: 2px; font-size: 12.5px; font-weight: 600; color: var(--muted, #555); background: #fff; }
+.prowClient svg { width: 14px; height: 14px; flex: 0 0 auto; }
+/* The link is a bar of its own under the words — a thumb target, never a word stranded at the right. */
+.prowClient a { flex: 1 1 100%; display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1.5px solid currentColor; border-radius: 2px; color: var(--blueprint, #1854a0); font-weight: 800; text-decoration: none; }
+.prowClientBack { border-color: var(--success, #3a7d44); color: var(--success-dark, #2c5f34); }
+.prowClientNew { border-color: var(--success, #3a7d44); background: var(--success-soft, #e8f0e9); color: var(--success-dark, #2c5f34); animation: prowBloom 1.6s ease-out 4; }
+.prowClientNew a { color: #fff; background: var(--success, #3a7d44); border-color: var(--success, #3a7d44); }
+@keyframes prowBloom { 0% { box-shadow: 0 0 0 0 rgba(58, 125, 68, 0.55); } 70% { box-shadow: 0 0 0 10px rgba(58, 125, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(58, 125, 68, 0); } }
+@media (prefers-reduced-motion: reduce) { .prowClientNew { animation: none; } }

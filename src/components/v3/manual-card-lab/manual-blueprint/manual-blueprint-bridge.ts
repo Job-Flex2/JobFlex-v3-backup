@@ -166,6 +166,8 @@ export type ManualProposal = {
   deckDrawing?: boolean;
   /** This member may open that deck in the studio and update the proposal from it (2026-10-12). */
   deckEditable?: boolean;
+  /** The client's design link on this proposal (2026-10-13): one line on where it stands, Open when it came back. */
+  clientDesign?: { line: string; standing: string; draftId: string | null; unseen: boolean } | null;
   /** Made by an estimator (fence, roof, HVAC — `Proposal.trade`): its lines
    *  carry the estimator's INSTALLED prices, profit already inside, with no
    *  cost of the contractor's under them — so there is no margin to grade

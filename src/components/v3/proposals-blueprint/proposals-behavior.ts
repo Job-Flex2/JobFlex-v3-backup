@@ -114,6 +114,10 @@ function esc(v: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Stamps that bloomed in this page's lifetime (see bloomOnce inside the init). */
+const BLOOM_KEY = "jf-pbloom";
+const bloomedNow = new Set<string>();
+
 export function initProposalsContent(
   content: HTMLElement,
   options: ProposalsContentOptions = {},
@@ -569,10 +573,17 @@ export function initProposalsContent(
       (p.co && p.co.count
         ? ' · <span class="pt-co' + (p.co.pending ? " pt-co--wait" : "") + '">' + p.co.count + " change order" + (p.co.count === 1 ? "" : "s") + (p.co.pending ? " · " + p.co.pending + " awaiting approval" : "") + "</span>"
         : "") +
-      "</div></td>" +
+      // Accepted or declined, said on the line itself (owner, 2026-10-13: "if it accepts it or not, put it in the line").
+      (p.decided ? ' · <span class="pt-decided' + (p.status === "DECLINED" ? " pt-decided--no" : "") + '">' + esc(p.decided) + "</span>" : "") +
+      "</div>" +
+      clientDesignHtml(p) +
+      "</td>" +
       '<td><span class="pstatus ' +
       st.cls +
-      '">' +
+      (p.fresh && bloomOnce(p.id, p.fresh.accepted ? "accepted" : "declined", p.fresh.accepted ?? p.fresh.declined) ? " pstatus--fresh" : "") +
+      '"' +
+      (p.fresh && p.fresh.accepted ? ' title="Accepted ' + esc(p.accepted ?? "") + '"' : p.fresh && p.fresh.declined ? ' title="Declined"' : "") +
+      ">" +
       esc(st.label) +
       "</span></td>" +
       '<td class="c pt-total"><span class="pt-money">' +
@@ -589,12 +600,57 @@ export function initProposalsContent(
       '<td class="td-owner">' +
       (p.mine ? "" : p.ownerWho ? whoHtml(p.ownerWho) : '<span class="pt-mono">' + esc(p.owner) + "</span>") +
       "</td>" +
-      '<td class="num"><button class="pt-open" type="button" data-menu="' +
+      // THE ROW'S OWN ACTIONS (owner, 2026-10-13: "I don't like the three dots at the end with a whole bunch of
+      // options; add Client view on the line"): Open and Client view sit on the row as plain links; the dots keep
+      // only what is rarer — share, bill, the rest.
+      '<td class="num td-acts"><div class="pacts">' +
+      '<a class="pact pact--open" href="' + proposalHref(p.id) + '" title="Open the proposal"><svg class="ic"><use href="#i-pen"/></svg><span>Open</span></a>' +
+      '<a class="pact pact--view" href="/portal/q/' + encodeURIComponent(p.publicId) + '" target="_blank" rel="noopener noreferrer" title="Client view — the page the client gets, in a new tab"><svg class="ic"><use href="#i-eye"/></svg><span>Client view</span></a>' +
+      '<button class="pt-open" type="button" data-menu="' +
       esc(p.id) +
-      '" aria-label="Actions for ' +
+      '" aria-label="More for ' +
       esc(p.title) +
-      '"><svg class="ic"><use href="#i-dots"/></svg></button></td>' +
+      '" title="Share, bill, more"><svg class="ic"><use href="#i-dots"/></svg></button>' +
+      "</div></td>" +
       "</tr>"
+    );
+  }
+  /** A stamp blooms ONCE in this browser (2026-10-13): the render that shows it records it a moment later, so
+   *  the next one (a later visit; in development, StrictMode's second mount) draws it calm — and a mount torn
+   *  down inside that moment still blooms, because the memory of it lives at module scope, outside this init.
+   *  Cosmetic: no storage means it blooms every time, never that it fails to. */
+  function bloomOnce(id: string, kind: string, at: string | undefined): boolean {
+    if (!at) return false;
+    const key = id + ":" + kind + ":" + at;
+    if (bloomedNow.has(key)) return true;
+    try {
+      if ((JSON.parse(localStorage.getItem(BLOOM_KEY) ?? "[]") as string[]).includes(key)) return false;
+    } catch {
+      /* no storage: it blooms */
+    }
+    bloomedNow.add(key);
+    setTimeout(() => {
+      try {
+        const seen = JSON.parse(localStorage.getItem(BLOOM_KEY) ?? "[]") as string[];
+        if (!seen.includes(key)) localStorage.setItem(BLOOM_KEY, JSON.stringify([key, ...seen].slice(0, 200)));
+      } catch {
+        /* no storage */
+      }
+    }, 1500);
+    return true;
+  }
+  /** The client's deck design on this proposal (2026-10-13): where it stands, and Open when it came back. Blooms unopened. */
+  function clientDesignHtml(p: ProposalRow): string {
+    const cd = p.clientDesign;
+    if (!cd) return "";
+    const open = cd.draftId ? '/dashboard/deck-estimator?draft=' + encodeURIComponent(cd.draftId) : "";
+    const tone = cd.standing === "returned" ? (cd.unseen ? " pt-cd--new" : " pt-cd--back") : cd.standing === "designing" || cd.standing === "opened" ? " pt-cd--live" : "";
+    return (
+      '<div class="pt-cd' + tone + '" data-client-design="' + cd.standing + (cd.unseen ? "-new" : "") + '">' +
+      '<svg class="ic"><use href="#i-deck"/></svg>' +
+      '<span>' + esc(cd.line) + "</span>" +
+      (open ? '<a class="pt-cd-open" href="' + open + '">' + (cd.unseen ? "Open the design" : "Open design") + "</a>" : "") +
+      "</div>"
     );
   }
   /** Chrome only — pager + empty state. Never touches the tbody, so it is safe
@@ -1139,14 +1195,7 @@ export function initProposalsContent(
       '</div><div class="pmenu-sub">' +
       esc(subLine(p)) +
       "</div></div>" +
-      '<div class="pmenu-grp">Open</div>' +
-      menuItem("i-pen", "pmi--bp-solid", "Edit proposal", "Open editor", "edit", {
-        href: proposalHref(p.id),
-      }) +
-      menuItem("i-ext", "pmi--bp", "View public page", "What the client sees · new tab", "view", {
-        href: "/portal/q/" + encodeURIComponent(p.publicId),
-        blank: true,
-      }) +
+      // Open and Client view sit on the row itself (2026-10-13); the menu keeps the rarer actions.
       '<div class="pmenu-grp">Share with client</div>' +
       menuItem(
         "i-send",

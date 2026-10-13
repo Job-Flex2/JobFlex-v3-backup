@@ -22,7 +22,9 @@ import { contractSchedule, contractTotal } from "@/lib/contractTotal";
 import { fromMinor, resolveSchedule } from "@/lib/paymentSchedule";
 import { parseProposalPhotos } from "@/components/v3/proposals-c/types";
 import { describeAddress, zillowSearchUrl } from "@/lib/zillow";
-import type { Installment, ProposalRow } from "./proposals-data";
+import type { ClientDesignState, Installment, ProposalRow } from "./proposals-data";
+import { clientStanding, standingLine, type ClientLinkRow } from "@/lib/deck/clientDesign";
+import { clientLinksByProposal } from "@/lib/deck/clientLinksServer";
 
 /** The donor prints "25m ago" / "3d ago"; anything older gets a coarser unit. */
 export function agoLabel(d: Date): string {
@@ -62,6 +64,23 @@ function mapsUrl(c: {
  */
 export async function readProposalBook(): Promise<ProposalRow[]> {
   const { organizationId, proposalScope, user } = await requireProposalStaff();
+  // WHAT HAPPENED LATELY (2026-10-13, owner: "make something blooming on the proposal when it is accepted,
+  // and when the client's design comes back"): the newest acceptance or decline of the last two weeks, stamped,
+  // and the client's design link — the row blooms once per stamp in a browser (proposals-behavior).
+  const since = new Date(Date.now() - 14 * 864e5);
+  const [freshEvents, clientLinks] = await Promise.all([
+    db.activityEvent.findMany({ where: { organizationId, kind: { in: ["ACCEPTED", "DECLINED"] }, createdAt: { gt: since }, proposalId: { not: null } }, orderBy: { createdAt: "desc" }, select: { proposalId: true, kind: true, createdAt: true } }).catch(() => []),
+    clientLinksByProposal(organizationId).catch(() => new Map<string, ClientLinkRow>()),
+  ]);
+  const freshBy = new Map<string, { accepted?: string; declined?: string }>();
+  for (const e of freshEvents) {
+    if (!e.proposalId) continue;
+    const f = freshBy.get(e.proposalId) ?? {};
+    // Newest first: the first stamp of a kind is the one that counts.
+    if (e.kind === "ACCEPTED" && !f.accepted) f.accepted = e.createdAt.toISOString();
+    else if (e.kind === "DECLINED" && !f.declined) f.declined = e.createdAt.toISOString();
+    freshBy.set(e.proposalId, f);
+  }
 
   const proposals = await db.proposal.findMany({
     where: { organizationId, ...proposalScope },
@@ -188,6 +207,18 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
       maps: mapsUrl(addr),
       accepted: plateDate(p.acceptedAt),
       paid: plateDate(p.paidAt),
+      decided: p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID" ? (p.acceptedAt ? `accepted ${plateDate(p.acceptedAt)}` : "accepted") : p.status === "DECLINED" ? "declined" : null,
+      clientDesign: clientDesignState(clientLinks.get(p.id)),
+      fresh: (() => {
+        const f = freshBy.get(p.id);
+        const link = clientLinks.get(p.id);
+        // A returned design blooms while nobody has opened it, however long ago it came.
+        const design = !!link?.unseen;
+        // An acceptance that is still the proposal's state: an undone one has nothing to show.
+        const accepted = p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID" ? f?.accepted : undefined;
+        const declined = p.status === "DECLINED" ? f?.declined : undefined;
+        return accepted || declined || design ? { accepted, declined, design } : null;
+      })(),
       inst: inst.length ? inst : undefined,
       materials,
       // Completion photos — the tear-sheet's Before / After boxes render these
@@ -196,4 +227,16 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
       after: parseProposalPhotos(p.afterPhotos),
     } satisfies ProposalRow;
   });
+}
+
+/** The client's design link on a proposal, as its row says it (lib/deck/clientDesign standingLine). */
+function clientDesignState(l: ClientLinkRow | undefined): ClientDesignState | null {
+  if (!l) return null;
+  return {
+    name: l.clientName.trim().split(/\s+/)[0] || "The client",
+    standing: clientStanding(l),
+    line: standingLine(l, (iso) => agoLabel(new Date(iso)), { sentAt: l.sentAt, workAt: l.workAt, openedAt: l.openedAt, createdAt: l.createdAt }),
+    draftId: l.draftId,
+    unseen: l.unseen,
+  };
 }

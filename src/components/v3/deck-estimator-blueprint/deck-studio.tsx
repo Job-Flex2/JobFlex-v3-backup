@@ -98,7 +98,9 @@ import { deckElevation, defaultPlacement } from "@/lib/deck/elevation";
 import { BOM_STEP_LABEL, FIXTURE_RATE, type BomStep } from "@/lib/deck/takeoff";
 import { STORE_SURVEY, storePrice } from "@/lib/deck/storePrices";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
-import { convertDeckEstimateToProposal, updateDeckProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
+import { convertDeckEstimateToProposal, updateDeckProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow, type ReturnedClientDesign } from "@/actions/deckEstimator";
+import { deckClientInbox } from "@/actions/deckClientDesign";
+import type { ClientLinkRow } from "@/lib/deck/clientDesign";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
 import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
@@ -457,6 +459,8 @@ export interface OpenedDesign {
   from: "draft" | "proposal";
   /** The saved proposal this design is on: the studio updates it in place (2026-10-12). */
   proposal?: LinkedDeckProposal | null;
+  /** A design the client sent back through their link (2026-10-13): their words ride over it. */
+  client?: ReturnedClientDesign | null;
 }
 
 export function DeckStudio({ initialBook, homeState, initialAddress, clientId, adminPreview = false, opened = null }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null }) {
@@ -862,6 +866,41 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const [actAt, setActAt] = React.useState<"top" | "bottom">("bottom");
   /** The design differs from the one on the proposal. */
   const behind = !!linked && designSig !== proposalSig;
+  // THE CLIENT'S RETURN (owner, 2026-10-13: "show that it came back in the studio, with a flash, while you're
+  // designing somebody else"): the design on screen may be one a client sent back (its words ride over it), and
+  // the studio asks every half minute for returns nobody has opened yet — those bloom at the top until opened.
+  const [fromClient, setFromClient] = React.useState<ReturnedClientDesign | null>(opened?.client ?? null);
+  const clientToken = fromClient?.token ?? null;
+  const [inbox, setInbox] = React.useState<Array<ClientLinkRow & { url: string }>>([]);
+  const [inboxSeen, setInboxSeen] = React.useState<Set<string>>(() => new Set());
+  React.useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const ask = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const res = await deckClientInbox();
+        if (alive && res.ok) setInbox(res.unseen);
+      } catch {
+        /* the next tick asks again */
+      }
+    };
+    const tick = () => {
+      timer = setTimeout(() => {
+        void ask().finally(tick);
+      }, 30000);
+    };
+    void ask().finally(tick);
+    const onShow = () => document.visibilityState === "visible" && void ask();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+  }, []);
+  /** Returns to show: not the one on screen, not one dismissed here. */
+  const inboxNew = inbox.filter((l) => l.token !== clientToken && !inboxSeen.has(l.token));
   React.useEffect(() => {
     if (!dirty.current) return;
     const t = setTimeout(async () => {
@@ -871,7 +910,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       } catch {
         /* the server copy is the one that counts */
       }
-      const res = await saveDeckDraft({ id: draftId, title: draftTitle || null, design, address, proposalId: linkedId });
+      const res = await saveDeckDraft({ id: draftId, title: draftTitle || null, design, address, proposalId: linkedId, clientToken });
       if (res.ok) {
         setDraftId(res.id);
         setSavedAt(res.updatedAt);
@@ -879,7 +918,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       } else setSaveState("failed");
     }, 1500);
     return () => clearTimeout(t);
-  }, [design, address, draftId, draftTitle, linkedId]);
+  }, [design, address, draftId, draftTitle, linkedId, clientToken]);
   const refreshDrafts = async () => {
     const res = await listDeckDrafts();
     setDrafts(res.ok ? res.drafts : []);
@@ -899,6 +938,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     setProposalSig(null);
     setUpdated(null);
     setConfirmAt(null);
+    setFromClient(res.client);
+    if (res.client) setInbox((list) => list.filter((l) => l.token !== res.client?.token));
   };
   const removeDraft = async (id: string) => {
     await deleteDeckDraft(id);
@@ -919,6 +960,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     setLinked(null);
     setUpdated(null);
     setConfirmAt(null);
+    setFromClient(null);
   };
 
   /* ── the site: reading the ground ── */
@@ -1222,6 +1264,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     lines: pkg.lines.map((l) => ({ name: l.name.slice(0, 200), description: l.description?.slice(0, 400), quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })),
     address: address || null,
     plan: { design, scene },
+    clientToken,
   });
   const convert = async () => {
     setActAt("bottom");
@@ -1585,6 +1628,52 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         </div>
       </div>
 
+      {/* A client's design came back while you were here (2026-10-13): it blooms until opened or put aside. */}
+      {inboxNew.length ? (
+        <section className={cx(s.card, s.inbox)} aria-live="polite" aria-label="Designs sent back by clients" data-deck-inbox={inboxNew.length}>
+          {inboxNew.slice(0, 3).map((l) => (
+            <div key={l.token} className={s.inboxRow} data-deck-inbox-row={l.token}>
+              <span className={s.inboxDot} aria-hidden="true" />
+              <div className={s.inboxText}>
+                <b>{l.clientName} sent back {/s$/i.test(l.clientName.trim()) ? "their" : "a"} deck design</b>
+                {l.sentAt ? <span className={s.inboxWhen}> · {ago(l.sentAt)}</span> : null}
+                {l.words ? <span className={s.inboxWords}> · {l.words}</span> : null}
+                {l.note ? <span className={s.inboxNote}> · “{l.note.length > 90 ? `${l.note.slice(0, 90)}…` : l.note}”</span> : null}
+              </div>
+              <div className={s.rowActs}>
+                {l.draftId ? (
+                  <a className={cx(s.btn, s.btnSm, s.btnPrimary)} href={`/dashboard/deck-estimator?draft=${l.draftId}` as Route} data-deck-inbox-open>
+                    Open it
+                  </a>
+                ) : null}
+                <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => setInboxSeen((set) => new Set(set).add(l.token))} aria-label={`Put ${l.clientName}'s design aside for now`}>
+                  Later
+                </button>
+              </div>
+            </div>
+          ))}
+          {inboxNew.length > 3 ? <div className={s.inboxMore}>and {inboxNew.length - 3} more in Client designs</div> : null}
+        </section>
+      ) : null}
+
+      {/* The client's words over the design they sent back (2026-10-13). */}
+      {fromClient ? (
+        <section className={cx(s.card, s.fromClient)} aria-label="What the client sent" data-deck-from-client>
+          <div className={s.linkedText}>
+            <div className={s.linkedKicker}>{fromClient.name}&apos;s design{fromClient.sends > 1 ? ` · sent ${fromClient.sends} times` : ""}{fromClient.sentAt ? ` · ${ago(fromClient.sentAt)}` : ""}</div>
+            <p className={s.linkedSub}>
+              {fromClient.note ? <>“{fromClient.note}” </> : <>No note with it. </>}
+              {fromClient.unsure.includes("height") ? <b>Not sure of the height — measure it on site. </b> : null}
+              {linked ? "Price it, then update the proposal below." : "Price it, then convert it to a proposal — the client's link follows it."}
+            </p>
+          </div>
+          <div className={s.linkedActs}>
+            {fromClient.phone ? <a className={cx(s.btn, s.btnSm)} href={`tel:${fromClient.phone}`}>Call {fromClient.name.split(/\s+/)[0]}</a> : null}
+            <a className={cx(s.btn, s.btnSm, s.btnGhost)} href={fromClient.url} target="_blank" rel="noopener">Their page ↗</a>
+          </div>
+        </section>
+      ) : null}
+
       {/* The proposal this design is on (2026-10-12): what it holds, and the one button that brings it up to date. */}
       {linked ? (
         <section className={cx(s.card, s.linkedBar)} aria-label="The proposal this design is on" data-deck-linked={linked.lock ? "locked" : behind ? "behind" : "even"}>
@@ -1659,7 +1748,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <div key={d.id} className={s.draftRow} data-deck-draft={d.id}>
                     <div>
                       <div className={s.draftName}>{d.title}{d.id === draftId ? " · open" : ""}</div>
-                      <div className={s.draftMeta}>{ago(d.updatedAt)}{d.proposalId ? " · changes to a saved proposal" : ""}{d.address ? ` · ${d.address}` : ""}{d.by ? ` · ${d.by}` : ""}</div>
+                      <div className={s.draftMeta}>{ago(d.updatedAt)}{d.fromClient ? ` · from ${d.fromClient}` : ""}{d.proposalId ? " · changes to a saved proposal" : ""}{d.address ? ` · ${d.address}` : ""}{d.by && !d.fromClient ? ` · ${d.by}` : ""}</div>
                     </div>
                     <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => void openDraft(d.id)} disabled={d.id === draftId}>Open</button>
                     <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => void removeDraft(d.id)} aria-label={`Delete the draft ${d.title}`}>×</button>
@@ -1668,7 +1757,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </div>
             </details>
             {/* The client designs it (2026-10-11): a link to their own page, no prices; it comes back as a draft. */}
-            <DeckClientLink design={design} address={address} title={draftTitle || structureWords(design)} clientId={clientId} />
+            <DeckClientLink design={design} address={address} title={draftTitle || structureWords(design)} clientId={clientId} proposalId={linkedId} unseen={inbox.length} onOpened={(token) => setInbox((list) => list.filter((l) => l.token !== token))} />
           </div>
         </div>
       </section>

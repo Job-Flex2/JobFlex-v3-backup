@@ -3,6 +3,7 @@
 // (organizationId, userId, role) and must never be client-invokable, or any
 // caller could read another tenant's counts. The layout calls them directly.
 import { db } from "@/lib/db";
+import { unseenClientReturns } from "@/lib/deck/clientLinksServer";
 import { lowStockCounts } from "@/lib/inventoryBoard";
 
 // Nav surfaces whose badge clears on view. `key` is the NavSeen row key; `href`
@@ -146,7 +147,11 @@ export async function getBadgeCounts(
   ]);
 
   const low = await lowStockCounts(organizationId).catch(() => ({ fence: 0, roof: 0, hvac: 0 }));
+  // Deck designs clients sent back that nobody has opened (2026-10-13, lib/deck/clientLinksServer): one index
+  // read, nothing more for a shop with no links. Cosmetic like every badge.
+  const deckReturns = await unseenClientReturns(organizationId).then((l) => l.length).catch(() => 0);
   return {
+    "/dashboard/deck-estimator": deckReturns,
     "/dashboard/messages": messagesUnread,
     "/dashboard/leads": leads,
     "/dashboard/proposals": proposalsUnscheduled,
