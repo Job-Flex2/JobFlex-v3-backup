@@ -11,7 +11,7 @@ import { AI_SPECIALTIES } from "../estimate/legacy/specialties";
 import { detectSpecialty } from "../estimate/legacy/specialtyDetector";
 import { effectiveProcedure } from "../estimate/legacy-estimate";
 import { detectTrade } from "../estimate/trade-knowledge";
-import type { JobScope, MeasureAsk, SheetLite } from "./ask";
+import { pagesAbout, type JobScope, type MeasureAsk, type SheetLite } from "./ask";
 import type { PlanTrade, TakeoffUnit } from "./takeoff";
 
 const NOT_A_BUILD_TRADE =
@@ -128,11 +128,15 @@ export function scopeBySpecialty(request: string, sheets: SheetLite[]): JobScope
     combine: "sum",
     how: `measure, from the dimension strings, what this sheet draws of: «${request.trim().slice(0, 200)}» — in ${unit}; 0 or not found when the sheet does not show it`,
   };
+  // The sheets whose contents speak of it — its long words found in what they show.
+  const words = request.toLowerCase().match(/[a-z]{5,}/g) ?? [];
+  const specPages = pagesAbout(sheets, (line) => words.some((w) => line.toLowerCase().includes(w)), new Set(pages));
   return {
     title: name,
     summary: `${name} from the plans, measured on the sheets that show it.`,
     itemIds: [],
     measure: [measure],
+    specPages,
     specialties: { [trade]: id },
     labels: { [trade]: name },
     notIncluded: [],

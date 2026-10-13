@@ -18,7 +18,15 @@ import { round } from "./dims";
 import type { SheetRead } from "./sheet";
 
 /** A sheet as the job planner needs it: what it is and the rooms it names. */
-export type SheetLite = { page: number; kind: SheetRead["kind"]; title: string | null; level: string | null; rooms: Array<{ name: string }> };
+export type SheetLite = {
+  page: number;
+  kind: SheetRead["kind"];
+  title: string | null;
+  level: string | null;
+  rooms: Array<{ name: string }>;
+  /** What the first look found on the sheet: its drawings, schedules, the notes that specify work. */
+  contents?: string[];
+};
 
 export function sheetLite(s: SheetRead): SheetLite {
   return { page: s.page, kind: s.kind, title: s.title || null, level: s.level, rooms: s.rooms.slice(0, 80).map((r) => ({ name: r.name.slice(0, 80) })) };
@@ -50,6 +58,11 @@ export type JobScope = {
   /** Build-list lines that belong to the job as they stand — the work and its materials. */
   itemIds: string[];
   measure: MeasureAsk[];
+  /**
+   * Sheets whose notes, schedules or details specify the job's materials and methods
+   * ("countertops 3cm quartz, eased edge") — looked at closely for those, whatever their kind.
+   */
+  specPages: number[];
   /**
    * The estimator specialty that prices a group of the job's lines when the group's own
    * trade is not the one (countertops: the countertop installer; a fence: fencing).
@@ -316,6 +329,7 @@ export function scopeByRules(request: string, items: TakeoffItem[], sheets: Shee
       summary: "Every trade of the house, from the site work to the final clean, as the plans show it.",
       itemIds: items.map((i) => i.id),
       measure: [],
+      specPages: [],
       specialties: {},
       notIncluded: [],
       wholeHouse: true,
@@ -340,6 +354,9 @@ export function scopeByRules(request: string, items: TakeoffItem[], sheets: Shee
   // A job that is all one trade's specialty work keeps it; a countertop job beside a
   // cabinet job is priced by the cabinet trade's own specialty.
   if (jobs.some((j) => j.key === "cabinets")) delete specialties.cabinets;
+  // The sheets whose contents speak of the job (a countertop edge detail, a finish schedule).
+  const measured = new Set(measure.flatMap((m) => m.pages));
+  const specPages = pagesAbout(sheets, (line) => jobs.some((j) => j.words.test(line.toLowerCase())), measured);
   const titles = jobs.map((j) => j.title);
   const title = primeOnly ? titles.map((t) => (t === "Interior paint" ? "Primer" : t)).join(", ") : titles.join(", ");
   return {
@@ -347,6 +364,7 @@ export function scopeByRules(request: string, items: TakeoffItem[], sheets: Shee
     summary: `${sentenceCase(title)} from the plans${ONLY.test(r) ? " — nothing else" : ""}.`,
     itemIds: Array.from(ids),
     measure,
+    specPages,
     specialties,
     notIncluded: jobs.flatMap((j) => j.notIncluded ?? []),
     wholeHouse: false,
@@ -377,6 +395,14 @@ export function scopeExtras(request: string, scope: JobScope, items: TakeoffItem
   return out;
 }
 
+/** Up to three sheets whose first-look contents mention the job — beside the ones measured. */
+export function pagesAbout(sheets: SheetLite[], about: (line: string) => boolean, besides: Set<number> = new Set()): number[] {
+  return sheets
+    .filter((s) => !besides.has(s.page) && (s.contents ?? []).some(about))
+    .map((s) => s.page)
+    .slice(0, 3);
+}
+
 function withPages(m: MeasureTemplate, sheets: SheetLite[]): MeasureAsk {
   const ofKind = sheets.filter((s) => m.kinds.includes(s.kind));
   const named = m.rooms ? ofKind.filter((s) => s.rooms.some((r) => m.rooms!.test(r.name))) : ofKind;
@@ -405,7 +431,8 @@ export function sheetIndex(sheets: SheetLite[]): string {
   return sheets
     .map((s) => {
       const rooms = s.rooms.map((r) => r.name).slice(0, 24);
-      return `  p.${s.page} · ${s.kind}${s.title ? ` · "${s.title}"` : ""}${s.level ? ` · ${s.level}` : ""}${rooms.length ? ` · rooms: ${rooms.join(", ")}` : ""}`;
+      const shows = (s.contents ?? []).slice(0, 16);
+      return `  p.${s.page} · ${s.kind}${s.title ? ` · "${s.title}"` : ""}${s.level ? ` · ${s.level}` : ""}${rooms.length ? ` · rooms: ${rooms.join(", ")}` : ""}${shows.length ? ` · shows: ${shows.join("; ")}` : ""}`;
     })
     .join("\n");
 }
@@ -434,7 +461,7 @@ export function askPlanPrompt(input: {
     "",
     `THE HOUSE: ${input.houseFacts}.`,
     "",
-    "THE SHEETS (page · kind · title · floor · rooms):",
+    "THE SHEETS (page · kind · title · floor · rooms · what a first look found on each):",
     sheetIndex(input.sheets),
     "",
     "THE BUILD LIST (id · work/material · line · quantity · where it came from; ASSUMED = a rule of thumb, not drawn):",
@@ -443,7 +470,7 @@ export function askPlanPrompt(input: {
     guess,
     "",
     "Answer with JSON:",
-    `{"title": "the job in 2-5 words", "summary": "one sentence: what will be priced", "itemIds": ["ids from the build list"], "measure": [{"label": "", "unit": "sq ft|linear ft|each|cu yards", "replaces": "an id from the build list or null", "trade": "${PLAN_TRADES.join("|")}", "role": "labor|material|both", "pages": [page numbers], "combine": "sum|best", "how": "how to measure it on the sheet"}], "specialties": {"trade": "specialty id"}, "notIncluded": ["what this job leaves out that the client might expect"], "wholeHouse": false}`,
+    `{"title": "the job in 2-5 words", "summary": "one sentence: what will be priced", "itemIds": ["ids from the build list"], "measure": [{"label": "", "unit": "sq ft|linear ft|each|cu yards", "replaces": "an id from the build list or null", "trade": "${PLAN_TRADES.join("|")}", "role": "labor|material|both", "pages": [page numbers], "combine": "sum|best", "how": "how to measure it on the sheet"}], "specPages": [pages whose notes, schedules or details specify the job], "specialties": {"trade": "specialty id"}, "notIncluded": ["what this job leaves out that the client might expect"], "wholeHouse": false}`,
     "",
     "RULES:",
     "1. Only the job asked for. \"Just\" or \"only\" means nothing beyond it. A job named by its finish takes the work that makes it and that work's materials (granite countertops: the tops, template, fabrication, install, cutouts — not the cabinets; drywall with texture: hang, tape, finish, texture and the board, mud, tape and screws — not paint unless asked).",
@@ -454,6 +481,7 @@ export function askPlanPrompt(input: {
     "6. specialties: for each trade whose lines are priced by a specialty other than that trade's own, the specialty id that does the job (granite countertops → \"cabinets\": \"countertop-installer\"; a cedar fence filed under sitework → \"sitework\": \"fencing\"). Only ids from this list:",
     `   ${input.specialties.map((x) => x.id).join(", ")}`,
     "7. wholeHouse is true only when the contractor asks for the whole house; then itemIds is every id and measure is [].",
+    "8. Go by what each sheet shows, not only its kind: a detail sheet with the kitchen's interior elevations is where counter heights, backsplashes and cutouts are drawn — measure there too. specPages: up to 4 sheets whose notes, schedules or details specify this job's materials, finishes or methods (\"note: countertops 3cm quartz\", a finish schedule, a countertop edge detail) — they are read for those specs, so the job is priced as the plans call for it.",
   ].join("\n");
 }
 
@@ -499,6 +527,8 @@ export function cleanScope(raw: unknown, items: TakeoffItem[], sheets: SheetLite
     if (replaces && !itemIds.includes(replaces)) itemIds.push(replaces);
   }
   if (!itemIds.length && !measure.length) return null;
+  const measuredPages = new Set(measure.flatMap((m) => m.pages));
+  const specPages = Array.from(new Set((Array.isArray(o.specPages) ? o.specPages : []).map(Number).filter((p) => pagesKnown.has(p) && !measuredPages.has(p)))).slice(0, 4);
   const specialties: Partial<Record<PlanTrade, string>> = {};
   if (o.specialties && typeof o.specialties === "object") {
     for (const [t, sp] of Object.entries(o.specialties as Record<string, unknown>)) {
@@ -510,6 +540,7 @@ export function cleanScope(raw: unknown, items: TakeoffItem[], sheets: SheetLite
     summary: str(o.summary, 300),
     itemIds,
     measure: wholeHouse ? [] : measure,
+    specPages: wholeHouse ? [] : specPages,
     specialties,
     notIncluded: (Array.isArray(o.notIncluded) ? o.notIncluded : []).map((x) => str(x, 200)).filter(Boolean).slice(0, 8),
     wholeHouse,
@@ -527,8 +558,11 @@ export function focusPrompt(input: { request: string; title: string; page: numbe
     `THE CONTRACTOR ASKS: «${input.request.trim()}» — the job: ${input.title}.`,
     `This is sheet ${input.page} of ${input.pages}${input.sheetTitle ? ` ("${input.sheetTitle}")` : ""}. The first picture is the whole sheet${input.tiles ? `; the next ${input.tiles} are close-ups of it, left to right, top to bottom` : ""}.`,
     "",
-    "MEASURE ON THIS SHEET:",
-    ...input.asks.map(({ n, m }) => `  ${n}. ${m.label} — in ${m.unit}. How: ${m.how || "from the dimension strings"}`),
+    ...(input.asks.length
+      ? ["MEASURE ON THIS SHEET:", ...input.asks.map(({ n, m }) => `  ${n}. ${m.label} — in ${m.unit}. How: ${m.how || "from the dimension strings"}`)]
+      : ["NOTHING TO MEASURE HERE — this sheet is read for what it SPECIFIES about the job (answers: [])."]),
+    "",
+    "SPECS: every note, schedule entry, callout or detail on this sheet that specifies this job's materials, sizes, finishes or methods — quoted short, with its note or detail number (\"Note 12: countertops 3cm quartz, eased edge, undermount sinks\", \"Detail 4/A3: 4\" full-height backsplash\"). Only what is written here; none → [].",
     "",
     "HOW:",
     "- Read every dimension string you use exactly as written (12'-6\", 3'-0 1/2\") and show the arithmetic in asWritten.",
@@ -536,14 +570,14 @@ export function focusPrompt(input: { request: string; title: string; page: numbe
     "- A run that turns a corner is two runs; count the corner once.",
     "- extra: anything else on this sheet the job clearly needs that the list above misses (a bar counter, a window seat top) — with its quantity.",
     "",
-    'Answer: {"answers": [{"n": 1, "found": true, "qty": 0, "unit": "", "asWritten": "the strings and the arithmetic", "where": "the room", "confidence": "high|medium|low"}], "extra": [{"label": "", "qty": 0, "unit": "", "asWritten": "", "where": ""}], "notes": [""]}',
+    'Answer: {"answers": [{"n": 1, "found": true, "qty": 0, "unit": "", "asWritten": "the strings and the arithmetic", "where": "the room", "confidence": "high|medium|low"}], "extra": [{"label": "", "qty": 0, "unit": "", "asWritten": "", "where": ""}], "specs": [""], "notes": [""]}',
     ...(input.textLayer.trim() ? ["", "TEXT LAYER (the sheet's own words and numbers, where its CAD export kept them):", input.textLayer.slice(0, 12_000)] : []),
   ].join("\n");
 }
 
 export type FocusAnswer = { n: number; qty: number; unit: TakeoffUnit; asWritten: string; where: string; confidence: "high" | "medium" | "low" };
 export type FocusExtra = { label: string; qty: number; unit: TakeoffUnit; asWritten: string; where: string };
-export type FocusRead = { page: number; answers: FocusAnswer[]; extra: FocusExtra[]; notes: string[] };
+export type FocusRead = { page: number; answers: FocusAnswer[]; extra: FocusExtra[]; notes: string[]; specs: string[] };
 
 export function cleanFocus(page: number, raw: unknown, askedN: number[]): FocusRead {
   const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -571,7 +605,13 @@ export function cleanFocus(page: number, raw: unknown, askedN: number[]): FocusR
     const unit = unitWord(x.unit);
     if (label && qty && unit) extra.push({ label, qty, unit, asWritten: str(x.asWritten, 300), where: str(x.where, 80) });
   }
-  return { page, answers, extra, notes: (Array.isArray(o.notes) ? o.notes : []).map((x) => str(x, 200)).filter(Boolean).slice(0, 4) };
+  return {
+    page,
+    answers,
+    extra,
+    notes: (Array.isArray(o.notes) ? o.notes : []).map((x) => str(x, 200)).filter(Boolean).slice(0, 4),
+    specs: (Array.isArray(o.specs) ? o.specs : []).map((x) => str(x, 200)).filter(Boolean).slice(0, 8),
+  };
 }
 
 // ── the measurements back into the build list ───────────────────────────────
@@ -593,7 +633,10 @@ export type FoundRow = {
   confidence: "high" | "medium" | "low" | null;
 };
 
-export function applyFocus(scope: JobScope, reads: FocusRead[], items: TakeoffItem[]): { measured: Record<string, Measured>; added: TakeoffItem[]; rows: FoundRow[] } {
+/** What the plans specify for the job, sheet by sheet, each once. */
+export type JobSpec = { text: string; page: number };
+
+export function applyFocus(scope: JobScope, reads: FocusRead[], items: TakeoffItem[]): { measured: Record<string, Measured>; added: TakeoffItem[]; rows: FoundRow[]; specs: JobSpec[] } {
   const measured: Record<string, Measured> = {};
   const added: TakeoffItem[] = [];
   const rows: FoundRow[] = [];
@@ -630,7 +673,14 @@ export function applyFocus(scope: JobScope, reads: FocusRead[], items: TakeoffIt
       }),
     );
   }
-  return { measured, added, rows };
+  const specs: JobSpec[] = [];
+  for (const r of [...reads].sort((a, b) => a.page - b.page)) {
+    for (const text of r.specs ?? []) {
+      const key = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (key && !specs.some((x) => x.text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() === key)) specs.push({ text, page: r.page });
+    }
+  }
+  return { measured, added, rows, specs: specs.slice(0, 14) };
 }
 
 /** The countertop finishes a request can name, the longer word first ("quartzite" before "quartz"). */

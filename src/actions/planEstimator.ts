@@ -12,6 +12,8 @@
 //                     the build-list lines it takes, what to measure on which sheets, the
 //                     specialty that prices it (lib/plans/ask)
 //   measurePlanSheet  one sheet looked at again for exactly what the job measures
+//   skimPlanSheet     a first look at a sheet — what kind it is, from its title block —
+//                     so the set is read in the order jobs need it (lib/plans/readOrder)
 //
 // Pricing a trade is the Smart estimate's own pipeline: advancedEstimator.pricePlanTrade.
 import { enforceRateLimit, HOUR } from "@/lib/rateLimit";
@@ -25,7 +27,8 @@ import { issuePlanPass, readPlanPass } from "@/lib/plans/planToken";
 import { PLAN_READ_SYSTEM, planReadPrompt } from "@/lib/plans/readPrompt";
 import { cleanSheetRead, type SheetRead } from "@/lib/plans/sheet";
 import { planPriceChecks, type PriceChecks } from "@/lib/plans/priceChecks";
-import { askPlanInput, MAX_SHEET_IMAGE_CHARS, measureSheetInput, priceChecksInput, sheetReadInput } from "@/lib/plans/wire";
+import { askPlanInput, MAX_SHEET_IMAGE_CHARS, measureSheetInput, priceChecksInput, sheetReadInput, skimSheetInput } from "@/lib/plans/wire";
+import { cleanSkim, SKIM_SYSTEM, skimPrompt, type SheetSkim } from "@/lib/plans/readOrder";
 import { ASK_SYSTEM, askPlanPrompt, cleanFocus, cleanScope, FOCUS_SYSTEM, focusPrompt, scopeByRules, scopeExtras, unitWord, type FocusRead, type JobScope, type MeasureAsk } from "@/lib/plans/ask";
 import { houseFacts } from "@/lib/plans/tradeBrief";
 import { BUILD_SPECIALTIES, isBuildSpecialty, scopeBySpecialty, settleSpecialties } from "@/lib/plans/specialties";
@@ -115,11 +118,13 @@ export async function readPlanSheet(raw: unknown): Promise<{ ok: true; sheet: Sh
     { type: "text" as const, text: planReadPrompt({ page: input.page, pages: input.pages, textLayer: input.textLayer, tiles: input.images.length - 1, grid: input.grid ?? null, fileName: input.fileName }) },
     ...input.images.map((i) => ({ type: "image_url" as const, image_url: { url: i.url, detail: "high" as const } })),
   ];
+  // Temperature 0: the same sheet reads the same way twice (a reasoning model takes none).
+  const sampling = await samplingOptions(0);
   const ask = () =>
     client.chat.completions.create(
       {
         model,
-        ...samplingOptions(0),
+        ...sampling,
         messages: [
           { role: "system", content: PLAN_READ_SYSTEM },
           { role: "user", content },
@@ -163,12 +168,13 @@ export async function getPlanPriceChecks(raw: unknown): Promise<{ ok: true; data
 }
 
 /** One JSON answer from the vision model, with one patient retry on a rate limit or a 5xx. */
-async function askJson(system: string, content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } }>): Promise<unknown> {
+async function askJson(system: string, content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" | "low" } }>): Promise<unknown> {
   const client = getOpenAI();
   const model = getVisionModel();
+  const sampling = await samplingOptions(0);
   const ask = () =>
     client.chat.completions.create(
-      { model, ...samplingOptions(0), messages: [{ role: "system", content: system }, { role: "user", content }], response_format: { type: "json_object" } },
+      { model, ...sampling, messages: [{ role: "system", content: system }, { role: "user", content }], response_format: { type: "json_object" } },
       { maxRetries: 0 },
     );
   let completion: Awaited<ReturnType<typeof ask>>;
@@ -260,5 +266,38 @@ export async function measurePlanSheet(raw: unknown): Promise<{ ok: true; read: 
   } catch (err) {
     console.warn(`[planEstimator] measure p.${input.page} failed: ${err instanceof Error ? err.message : String(err)}`);
     return { ok: false, error: friendlyAIError(err, "measuring this sheet") };
+  }
+}
+
+/**
+ * A first look at a sheet: what kind of sheet it is, from its title block and a small
+ * view — a few seconds, so the set can be read in the order a job needs it.
+ */
+export async function skimPlanSheet(raw: unknown): Promise<{ ok: true; skim: SheetSkim } | Fail> {
+  const parsed = skimSheetInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "This sheet could not be sent." };
+  const input = parsed.data;
+  let organizationId: string;
+  try {
+    ({ organizationId } = await requireEstimatorOrManager());
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Sign in again." };
+  }
+  const pass = readPlanPass(input.token, organizationId);
+  if (!pass) return { ok: false, error: EXPIRED };
+  try {
+    await enforceRateLimit(`plan-skim:${pass.nonce}`, 75, 6 * HOUR, "sheet looks");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Too many sheet looks." };
+  }
+  try {
+    // The sheet small at low detail; its title block sharp.
+    const answer = await askJson(SKIM_SYSTEM, [
+      { type: "text", text: skimPrompt(input.page, input.pages, input.images.length) },
+      ...input.images.map((i, k) => ({ type: "image_url" as const, image_url: { url: i.url, detail: k === 0 ? ("low" as const) : ("high" as const) } })),
+    ]);
+    return { ok: true, skim: cleanSkim(answer) };
+  } catch (err) {
+    return { ok: false, error: friendlyAIError(err, "looking at this sheet") };
   }
 }

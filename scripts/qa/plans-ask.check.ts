@@ -6,8 +6,8 @@
 // list, the sheets' measurements folded back in (materials following them), and the
 // trade brief the estimator gets for one job.
 import { readBrief } from "../../src/lib/estimate/brief";
-import { applyFocus, cleanFocus, cleanScope, finishAsked, jobItems, partialTrades, scopeByRules, scopeExtras, sheetLite, withFinish, type JobScope } from "../../src/lib/plans/ask";
-import { isBuildSpecialty } from "../../src/lib/plans/specialties";
+import { applyFocus, cleanFocus, cleanScope, finishAsked, focusPrompt, jobItems, partialTrades, scopeByRules, scopeExtras, sheetIndex, sheetLite, withFinish, type JobScope, type SheetLite } from "../../src/lib/plans/ask";
+import { isBuildSpecialty, scopeBySpecialty } from "../../src/lib/plans/specialties";
 import { cleanSheetRead } from "../../src/lib/plans/sheet";
 import { computeTakeoff } from "../../src/lib/plans/takeoff";
 import { houseBriefOf, tradeBrief, wordsOnly } from "../../src/lib/plans/tradeBrief";
@@ -141,6 +141,26 @@ const run = planTradeRun({ trade: "cabinets", house, items: lines, alsoPriced: [
 ok("priced by the countertop installer, no whole-trade benchmark", run.setup.specialtyId === "countertop-installer" && run.benchmarkQty === null);
 ok("a whole trade keeps its own specialty", planTradeRun({ trade: "roofing", house, items, alsoPriced: ["roofing"] }).setup.specialtyId === "roofing");
 ok("words only: \"12' island, 3cm\" keeps the words", wordsOnly("granite 12' island and 45 sq ft of vanity tops") === "granite island and of vanity tops", wordsOnly("granite 12' island and 45 sq ft of vanity tops"));
+
+// ── 4b. the first look kept in mind: what each sheet shows, and the notes that specify a job
+const detailPage = sheets.find((x) => x.kind === "detail")!.page;
+const indexed: SheetLite[] = lite.map((x) =>
+  x.page === detailPage ? { ...x, contents: ["KITCHEN INTERIOR ELEVATIONS", "COUNTERTOP EDGE DETAIL", "note: countertops 3cm quartz, eased edge, undermount sinks"] } : x.kind === "structural" ? { ...x, contents: ["SHEAR WALL SCHEDULE", "note: HDU8 hold-downs"] } : x,
+);
+ok("the planner sees what each sheet shows", sheetIndex(indexed).includes(`p.${detailPage} · detail`) && /shows: KITCHEN INTERIOR ELEVATIONS; COUNTERTOP EDGE DETAIL/.test(sheetIndex(indexed)));
+const withNotes = scopeByRules("granite countertops", items, indexed)!;
+ok("a countertop job goes back to the details sheet that speaks of counters", withNotes.specPages.includes(detailPage) && !withNotes.specPages.some((pg) => indexed.find((x) => x.page === pg)?.kind === "structural"), JSON.stringify(withNotes.specPages));
+const plan2 = cleanScope({ title: "Countertops", itemIds: ["cabinets.tops-kitchen"], measure: [{ label: "Kitchen countertops", unit: "sq ft", replaces: "cabinets.tops-kitchen", trade: "cabinets", pages: [mainFloor] }], specPages: [detailPage, mainFloor, 999] }, items, indexed, isBuildSpecialty);
+ok("the model's spec pages: known sheets only, not the ones already measured", JSON.stringify(plan2?.specPages) === JSON.stringify([detailPage]), JSON.stringify(plan2?.specPages));
+ok("a sheet with nothing to measure is read for what it specifies", /NOTHING TO MEASURE HERE/.test(focusPrompt({ request: "granite countertops", title: "Countertops", page: detailPage, pages: 18, sheetTitle: "A3", asks: [], textLayer: "", tiles: 4 })));
+const specRead = cleanFocus(detailPage, { answers: [], specs: ["Note 12: countertops 3cm quartz, eased edge, undermount sinks", "Detail 4/A3: 4\" full-height backsplash", ""] }, []);
+const again = cleanFocus(mainFloor, { answers: [], specs: ["NOTE 12: Countertops 3cm quartz, eased edge, undermount sinks"] }, []);
+const specFold = applyFocus(withNotes, [again, specRead], items);
+ok("the specs, each once, in sheet order (the same note on a later sheet is not repeated)", specFold.specs.length === 2 && specFold.specs.every((x) => x.page === Math.min(detailPage, mainFloor)) && /full-height backsplash/.test(specFold.specs[1].text), JSON.stringify(specFold.specs));
+const tbSpecs = tradeBrief("cabinets", house, lines, ["cabinets"], { request: "granite countertops", title: "Countertops", specs: specFold.specs.map((x) => `${x.text} (p. ${x.page})`) });
+ok("the estimator is told what the plans specify, to price it as called for", /WHAT THE PLANS SPECIFY FOR THIS JOB[\s\S]*3cm quartz, eased edge, undermount sinks \(p\. \d+\)/.test(tbSpecs.takeoffBlock));
+const fenceNotes = scopeBySpecialty("cedar fence along the property line", indexed.map((x) => (x.kind === "site" ? { ...x, contents: ["SITE PLAN", "note: 6' cedar fence at the property line"] } : x)));
+ok("a job no rule knows still finds the sheets that speak of it", !!fenceNotes && fenceNotes.specPages.length === 0 && fenceNotes.measure[0].pages.length > 0);
 
 // ── 5. on the wire
 ok("the ask goes over the wire", askPlanInput.safeParse({ token: "x", request: "granite countertops", house, sheets: lite, items }).success);

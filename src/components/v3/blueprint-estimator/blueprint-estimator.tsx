@@ -15,11 +15,11 @@
 //                Create proposal, or Edit in Smart Proposal (lib/plans/handoff)
 //
 // A tool of its own in the sidebar, apart from Smart Proposal (owner, 2026-10-13).
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import s from "./blueprint-estimator.module.css";
 import { clientErrorText } from "@/lib/staleDeploy";
-import { askPlan, getPlanPriceChecks, measurePlanSheet, readPlanSheet, startPlanSession } from "@/actions/planEstimator";
+import { askPlan, getPlanPriceChecks, measurePlanSheet, readPlanSheet, skimPlanSheet, startPlanSession } from "@/actions/planEstimator";
 import { convertEstimateToProposal, pricePlanTrade, saveEstimate } from "@/actions/advancedEstimator";
 import { MAX_PLAN_PAGES, openPlanFiles, type PlanPage } from "@/lib/plans/pdfClient";
 import { formatTextLayer, pageWorthReading } from "@/lib/plans/readPrompt";
@@ -27,7 +27,8 @@ import { SHEET_KINDS, type SheetRead } from "@/lib/plans/sheet";
 import { computeTakeoff, PLAN_TRADES, TRADE_LABEL, type PlanTrade, type Takeoff, type TakeoffItem } from "@/lib/plans/takeoff";
 import { houseBriefOf, type HouseBrief } from "@/lib/plans/tradeBrief";
 import { mergePlanEstimate, type PlanEstimate, type TradeResult } from "@/lib/plans/merge";
-import { applyFocus, jobItems, partialTrades, sheetLite, withFinish, type FocusRead, type FoundRow, type JobScope, type SheetLite } from "@/lib/plans/ask";
+import { applyFocus, jobItems, partialTrades, scopeByRules, sheetLite, withFinish, type FocusRead, type FoundRow, type JobScope, type JobSpec, type SheetLite } from "@/lib/plans/ask";
+import { BASE_KINDS, kindsFor, readRank, readsAtAll, readsLight, type SheetSkim } from "@/lib/plans/readOrder";
 import { MAX_SHEET_IMAGE_CHARS } from "@/lib/plans/wire";
 import { buildListCsv, downloadText, SOURCE_LABEL } from "@/lib/plans/csv";
 import { handPlanEstimate } from "@/lib/plans/handoff";
@@ -44,6 +45,8 @@ type Result = {
   request: string;
   scope: JobScope;
   rows: FoundRow[];
+  /** What the plans' notes, schedules and details specify for the job. */
+  specs: JobSpec[];
   /** The job's lines, as priced (measurements in them). */
   items: TakeoffItem[];
   takeoff: Takeoff;
@@ -52,9 +55,12 @@ type Result = {
   failed: Array<{ trade: PlanTrade; error: string }>;
   merged: PlanEstimate;
   location: string;
+  /** How long each step took, for the line under the answer. */
+  timing: Array<[string, number]>;
 };
 
-/** Sheets read at once, sheets measured at once, trades priced at once. */
+/** First looks at once (tiny calls), sheets read at once, sheets measured at once, trades priced at once. */
+const SKIM_AT_ONCE = 6;
 const READ_AT_ONCE = 3;
 const MEASURE_AT_ONCE = 3;
 const PRICE_AT_ONCE = 3;
@@ -101,6 +107,13 @@ const UNIT_SHORT: Record<TakeoffItem["unit"], string> = {
 };
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+/** The wall clock, read only in handlers and timers (never while rendering). */
+const nowMs = () => Date.now();
+/** 95 s → "1:35". */
+const clockText = (ms: number) => {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+};
 const qtyText = (n: number) => (Number.isInteger(n) ? n.toLocaleString("en-US") : (Math.round(n * 10) / 10).toLocaleString("en-US"));
 
 async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>): Promise<void> {
@@ -132,6 +145,13 @@ function guessKind(p: PlanPage): SheetRead["kind"] {
   return (SHEET_KINDS as readonly string[]).includes(g) ? (g as SheetRead["kind"]) : "other";
 }
 
+/** What a sheet's own text says it is — null for a scan or CAD lettering drawn as lines. */
+function textKind(p: PlanPage): SheetRead["kind"] | null {
+  if (!p.text.trim()) return null;
+  const g = guessKind(p);
+  return g === "other" ? null : g;
+}
+
 export function BlueprintEstimator() {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("upload");
@@ -143,7 +163,13 @@ export function BlueprintEstimator() {
   const [request, setRequest] = useState("");
   const [locEdit, setLocEdit] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-  const [working, setWorking] = useState<{ title?: string; measuring?: string[] }>({});
+  /** What each sheet is, from its text or a first look (lib/plans/readOrder). */
+  const [kinds, setKinds] = useState<Record<number, SheetSkim | null>>({});
+  /** The sheets every job rests on are read: a job can be asked without waiting on the rest. */
+  const [baseReady, setBaseReady] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [clock, setClock] = useState(0);
+  const [working, setWorking] = useState<{ title?: string; measuring?: string[]; notes?: number[] }>({});
   const [result, setResult] = useState<Result | null>(null);
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [saving, setSaving] = useState<null | "saving" | "opening">(null);
@@ -155,6 +181,11 @@ export function BlueprintEstimator() {
   const pagesRef = useRef<PlanPage[]>([]);
   const readsRef = useRef<Record<number, ReadState>>({});
   const tokenRef = useRef<string | null>(null);
+  const kindsRef = useRef<Record<number, SheetSkim | null>>({});
+  /** Each sheet in the reading queue: settled when it is read (or could not be). */
+  const settledRef = useRef<Map<number, Promise<void>>>(new Map());
+  /** The first looks, all done. */
+  const skimRef = useRef<Promise<void> | null>(null);
   /** The background reading of the set, awaited when a job is asked. */
   const readingRef = useRef<Promise<void> | null>(null);
   /** Bumped by a new plan set or a new ask: a late answer from the old one is dropped. */
@@ -179,9 +210,14 @@ export function BlueprintEstimator() {
       }
       pagesRef.current = kept;
       readsRef.current = {};
+      kindsRef.current = {};
+      settledRef.current = new Map();
+      skimRef.current = null;
       tokenRef.current = null;
       setPages(kept);
       setReads({});
+      setKinds({});
+      setBaseReady(false);
       setResult(null);
       setSkipped([...why, ...(opened.length > MAX_PLAN_PAGES ? [`Only the first ${MAX_PLAN_PAGES} pages are kept.`] : [])]);
       setStage("ask");
@@ -204,17 +240,20 @@ export function BlueprintEstimator() {
     return res.token;
   }
 
-  async function readOne(p: PlanPage, tok: string, total: number, run: number) {
+  async function readOne(p: PlanPage, tok: string, total: number, run: number, light: boolean) {
     const mark = (state: ReadState) => {
       if (run !== setRun.current) return;
       readsRef.current = { ...readsRef.current, [p.page]: state };
       setReads(readsRef.current);
     };
     mark({ status: "run" });
-    // One quiet second try — the contractor never sees a sheet's hiccup.
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // One quiet second try — the contractor never sees a sheet's hiccup. A sheet read
+    // light that turns out to be one jobs measure on (a floor plan the first look took for
+    // something else) is read again, close.
+    let lightNow = light;
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const { overview, tiles, grid } = await p.render();
+        const { overview, tiles, grid } = await p.render({ light: lightNow });
         const images = fitImages(overview, tiles);
         const res = await readPlanSheet({
           token: tok,
@@ -225,6 +264,10 @@ export function BlueprintEstimator() {
           images: images.map((url) => ({ url })),
           grid: grid && images.length === tiles.length + 1 ? grid : null,
         });
+        if (res.ok && lightNow && !readsLight(res.sheet.kind) && res.sheet.kind !== "detail") {
+          lightNow = false;
+          continue;
+        }
         if (res.ok) return mark({ status: "ok", sheet: res.sheet });
       } catch {
         // tried again below
@@ -233,16 +276,118 @@ export function BlueprintEstimator() {
     mark({ status: "fail" });
   }
 
+  /** A first look at one sheet: what kind it is, from its title block. Null when it could not be told. */
+  async function skimOne(p: PlanPage, tok: string, total: number, run: number) {
+    const known = kindsRef.current[p.page] ?? null;
+    let look: SheetSkim | null = null;
+    try {
+      const images = await p.glance();
+      const res = await skimPlanSheet({ token: tok, page: p.page, pages: total, images: images.map((url) => ({ url })) });
+      if (res.ok) look = res.skim;
+    } catch {
+      // the sheet keeps what its text said, or nothing
+    }
+    if (run !== setRun.current) return;
+    // A look that could not tell (no kind, nothing on it) is no look: the sheet is read in full.
+    if (look && look.kind === "other" && !look.contents.length && !look.title) look = null;
+    // A sheet whose own text named it keeps that kind; the look adds what is on it.
+    const next = look ? (known ? { ...look, kind: known.kind, title: known.title ?? look.title } : look) : known;
+    kindsRef.current = { ...kindsRef.current, [p.page]: next };
+    setKinds(kindsRef.current);
+  }
+
+  /**
+   * The set, read in the background from the moment it opens. Every sheet gets a first
+   * look (lib/plans/readOrder): what kind it is and everything on it — kept in mind, so a
+   * job can come back to any sheet that bears on it. As the looks come in, the sheets
+   * most jobs rest on are read closely first (floor plans, schedules, the cover, the site
+   * plan); elevations, sections and structural notes after, lighter; details are only
+   * indexed (a job that needs one looks at it closely then).
+   */
   async function readAll(list: PlanPage[], run: number) {
     const tok = await ensureToken();
     if (!tok || run !== setRun.current) return;
-    const todo = list.filter((p) => pageWorthReading(p.text, p.titleText).read);
-    setReadTotal(todo.length);
-    await pool(todo, READ_AT_ONCE, (p) => readOne(p, tok, list.length, run));
+    let skimmed: () => void = () => {};
+    skimRef.current = new Promise<void>((r) => (skimmed = r));
+    const kindOf = (p: PlanPage) => kindsRef.current[p.page]?.kind ?? null;
+    const queue: PlanPage[] = [];
+    const done = new Map<number, () => void>();
+    const enqueue = (p: PlanPage) => {
+      if (settledRef.current.has(p.page) || !readsAtAll(kindOf(p))) return;
+      settledRef.current.set(p.page, new Promise<void>((r) => done.set(p.page, r)));
+      queue.push(p);
+      setReadTotal(settledRef.current.size);
+    };
+    let looking = list.length;
+    const wake: Array<() => void> = [];
+    const nudge = () => wake.splice(0).forEach((f) => f());
+    // A sheet whose own text names it is queued at once.
+    for (const p of list) {
+      const k = textKind(p);
+      if (!k) continue;
+      kindsRef.current = { ...kindsRef.current, [p.page]: { kind: k, title: p.titleText.split("\n")[0]?.slice(0, 120) || null, level: null, contents: [] } };
+      enqueue(p);
+    }
+    const looks = pool(list, SKIM_AT_ONCE, async (p) => {
+      await skimOne(p, tok, list.length, run);
+      looking--;
+      enqueue(p);
+      nudge();
+    }).then(() => {
+      if (run !== setRun.current) return;
+      skimmed();
+      void waitFor(new Set(BASE_KINDS)).then(() => {
+        if (run === setRun.current) setBaseReady(true);
+      });
+    });
+    // The most useful sheet looked at so far. While looks are still coming in, only the
+    // sheets every job rests on start (floor plans, schedules, the cover); the rest wait
+    // their turn in the order.
+    const early = (p: PlanPage) => (BASE_KINDS as readonly string[]).includes(kindOf(p) ?? "");
+    const reader = async () => {
+      for (;;) {
+        if (run !== setRun.current) return;
+        queue.sort((a, b) => readRank(kindOf(a)) - readRank(kindOf(b)) || a.page - b.page);
+        const next = queue[0];
+        if (next && (looking === 0 || early(next))) {
+          queue.shift();
+          await readOne(next, tok, list.length, run, readsLight(kindOf(next)));
+          done.get(next.page)?.();
+          continue;
+        }
+        if (!next && looking === 0) return;
+        await new Promise<void>((r) => wake.push(r));
+      }
+    };
+    await Promise.all([looks, ...Array.from({ length: READ_AT_ONCE }, reader)]);
   }
 
+  /**
+   * Until the sheets of these kinds are read — a sheet the first look could not place
+   * counts as any kind. "all": the whole queue.
+   */
+  async function waitFor(want: Set<SheetRead["kind"]> | "all") {
+    await skimRef.current;
+    const list = Array.from(settledRef.current.entries())
+      .filter(([pg]) => {
+        const k = kindsRef.current[pg]?.kind ?? null;
+        return want === "all" || k === null || want.has(k);
+      })
+      .map(([, p]) => p);
+    await Promise.all(list);
+  }
+
+  const readSheets = () => Object.values(readsRef.current).filter((r) => r.status === "ok" && r.sheet).map((r) => r.sheet!);
+
+  // The clock on the working screen — set by the interval, never by the effect itself.
+  useEffect(() => {
+    if (stage !== "work") return;
+    const id = setInterval(() => setClock(nowMs()), 1000);
+    return () => clearInterval(id);
+  }, [stage]);
+
   const readDone = Object.values(reads).filter((r) => r.status === "ok" || r.status === "fail").length;
-  const ready = stage !== "upload" && readTotal > 0 && readDone >= readTotal;
+  const ready = stage !== "upload" && (baseReady || (readTotal > 0 && readDone >= readTotal));
   const sheetsRead = useMemo(() => Object.values(reads).filter((r) => r.status === "ok" && r.sheet).map((r) => r.sheet!), [reads]);
   const planName = useMemo(() => sheetsRead.map((x) => x.project.name).find(Boolean) ?? null, [sheetsRead]);
   const planAddress = useMemo(() => sheetsRead.map((x) => x.project.address).find(Boolean) ?? null, [sheetsRead]);
@@ -260,22 +405,47 @@ export function BlueprintEstimator() {
     setStage("work");
     setStep(0);
     setWorking({});
+    const began = nowMs();
+    setStartedAt(began);
+    setClock(began);
+    const timing: Array<[string, number]> = [];
+    let lapAt = began;
+    const lap = (label: string) => {
+      const now = nowMs();
+      timing.push([label, now - lapAt]);
+      lapAt = now;
+    };
     const run = ++askRun.current;
     const alive = () => run === askRun.current;
     try {
-      // 1. the plans, read in the background since they were opened
-      await readingRef.current;
+      // 1. the plans: the sheets every job rests on, and the kinds this job's words point to —
+      // not the whole set (a countertop job does not wait for the structural sheets)
       const tok = tokenRef.current ?? (await ensureToken());
       if (!alive()) return;
       if (!tok) throw new Error("The plans could not be opened for reading.");
-      const sheets = Object.values(readsRef.current).filter((r) => r.status === "ok" && r.sheet).map((r) => r.sheet!);
-      const base = computeTakeoff(sheets);
+      await waitFor(new Set(BASE_KINDS));
+      let sheets = readSheets();
+      let base = computeTakeoff(sheets);
+      const liteNow = () => sheets.map(sheetLite);
+      const guess = base.house.levels.length ? scopeByRules(req, base.items, liteNow()) : null;
+      if (!base.house.levels.length || guess?.wholeHouse) await waitFor("all");
+      else if (guess) await waitFor(kindsFor(new Set(base.items.filter((i) => guess.itemIds.includes(i.id)).map((i) => i.trade))));
+      if (!alive()) return;
+      sheets = readSheets();
+      base = computeTakeoff(sheets);
       if (!base.house.levels.length) throw new Error("No floor plan could be read from these sheets. Add the floor plans and ask again.");
+      lap("Reading the plans");
       const house = houseBriefOf(base.house);
       const readPages = new Set(sheets.map((x) => x.page));
       const lite: SheetLite[] = [
-        ...sheets.map(sheetLite),
-        ...pagesRef.current.filter((p) => !readPages.has(p.page)).map((p) => ({ page: p.page, kind: guessKind(p), title: p.titleText.split("\n")[0]?.slice(0, 120) || null, level: null, rooms: [] })),
+        ...sheets.map((x) => ({ ...sheetLite(x), contents: kindsRef.current[x.page]?.contents ?? [] })),
+        // Sheets not read yet (or never: details) — what the first look found them to be.
+        ...pagesRef.current
+          .filter((p) => !readPages.has(p.page))
+          .map((p) => {
+            const k = kindsRef.current[p.page];
+            return { page: p.page, kind: k?.kind ?? guessKind(p), title: k?.title ?? (p.titleText.split("\n")[0]?.slice(0, 120) || null), level: k?.level ?? null, rooms: [], contents: k?.contents ?? [] };
+          }),
       ].sort((a, b) => a.page - b.page);
 
       // 2. the job
@@ -284,12 +454,15 @@ export function BlueprintEstimator() {
       if (!alive()) return;
       if (!job.ok) throw new Error(failText(job));
       const scope = job.scope;
-      setWorking({ title: scope.title, measuring: scope.measure.map((m) => m.label) });
+      setWorking({ title: scope.title, measuring: scope.measure.map((m) => m.label), notes: scope.specPages });
+      lap("Working out the job");
 
       // 3. measured on the sheets that show it
       setStep(2);
       const asks = new Map<number, Array<{ n: number; label: string; unit: string; how: string }>>();
       scope.measure.forEach((m, k) => m.pages.forEach((pg) => asks.set(pg, [...(asks.get(pg) ?? []), { n: k + 1, label: m.label, unit: m.unit, how: m.how }])));
+      // …and the sheets whose notes specify the job, read for what they specify.
+      for (const pg of scope.specPages) if (!asks.has(pg)) asks.set(pg, []);
       const focus: FocusRead[] = [];
       await pool(Array.from(asks.entries()), MEASURE_AT_ONCE, async ([pg, list]) => {
         const p = pagesRef.current.find((x) => x.page === pg);
@@ -315,8 +488,17 @@ export function BlueprintEstimator() {
         }
       });
       if (!alive()) return;
+      lap("Measuring on the sheets");
+      // Every kind of sheet the job's lines rest on, read before they are priced — usually
+      // done by now; the build list is made again from them, with the measurements in it.
       const found = applyFocus(scope, focus, base.items);
-      const takeoff = Object.keys(found.measured).length ? computeTakeoff(sheets, {}, {}, found.measured) : base;
+      const jobTrades = new Set<PlanTrade>([...base.items.filter((i) => scope.itemIds.includes(i.id)).map((i) => i.trade), ...scope.measure.map((m) => m.trade)]);
+      await waitFor(scope.wholeHouse ? "all" : kindsFor(jobTrades));
+      if (!alive()) return;
+      sheets = readSheets();
+      const takeoff = computeTakeoff(sheets, {}, {}, found.measured);
+      const houseNow = houseBriefOf(takeoff.house);
+      if (nowMs() - lapAt > 1500) lap("Finishing the plans");
       const items = withFinish(scope.wholeHouse ? takeoff.items : jobItems(scope, takeoff.items, [...job.extra, ...found.added]), req);
       if (!items.length) throw new Error("Nothing on these plans matches that job. Try naming the trade or the finish.");
 
@@ -327,15 +509,16 @@ export function BlueprintEstimator() {
       const results: TradeResult[] = [];
       const failed: Result["failed"] = [];
       await pool(trades, PRICE_AT_ONCE, async (trade) => {
-        const out = await priceTrade({ tok, trade, house, items, trades, scope, req, partial: partial.has(trade), location: loc });
+        const out = await priceTrade({ tok, trade, house: houseNow, items, trades, scope, req, partial: partial.has(trade), location: loc, specs: found.specs });
         if (out.ok) results.push({ trade, est: out.est });
         else failed.push({ trade, error: out.error });
       });
       if (!alive()) return;
       if (!results.length) throw new Error(failed[0]?.error ?? "The job could not be priced.");
-      const checks = scope.wholeHouse ? await getPlanPriceChecks({ house, items: takeoff.items, location: loc || null }).catch(() => null) : null;
-      const merged = mergeJob({ house, results, takeoff, scope, rows: found.rows, priceChecks: checks && checks.ok ? checks.data : null });
-      setResult({ request: req, scope, rows: found.rows, items, takeoff, house, results, failed, merged, location: loc });
+      const checks = scope.wholeHouse ? await getPlanPriceChecks({ house: houseNow, items: takeoff.items, location: loc || null }).catch(() => null) : null;
+      const merged = mergeJob({ house: houseNow, results, takeoff, scope, rows: found.rows, specs: found.specs, priceChecks: checks && checks.ok ? checks.data : null });
+      lap("Pricing");
+      setResult({ request: req, scope, rows: found.rows, specs: found.specs, items, takeoff, house: houseNow, results, failed, merged, location: loc, timing });
       setLines(merged.lines);
       setStage("result");
     } catch (e) {
@@ -345,7 +528,7 @@ export function BlueprintEstimator() {
     }
   }
 
-  async function priceTrade(a: { tok: string; trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; trades: PlanTrade[]; scope: JobScope; req: string; partial: boolean; location: string }) {
+  async function priceTrade(a: { tok: string; trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; trades: PlanTrade[]; scope: JobScope; req: string; partial: boolean; location: string; specs: JobSpec[] }) {
     try {
       const res = await pricePlanTrade({
         token: a.tok,
@@ -354,7 +537,7 @@ export function BlueprintEstimator() {
         house: a.house,
         items: a.items.filter((i) => i.trade === a.trade),
         alsoPriced: a.trades,
-        ask: a.scope.wholeHouse ? null : { request: a.req, title: a.scope.title, partial: a.partial, specialtyId: a.scope.specialties[a.trade] ?? null, label: a.scope.labels?.[a.trade] ?? null },
+        ask: a.scope.wholeHouse ? null : { request: a.req, title: a.scope.title, partial: a.partial, specialtyId: a.scope.specialties[a.trade] ?? null, label: a.scope.labels?.[a.trade] ?? null, specs: a.specs.map((x) => `${x.text} (p. ${x.page})`) },
       });
       if (res.ok) return { ok: true as const, est: res.data };
       return { ok: false as const, error: res.code === "PLAN_LIMIT_REACHED" ? failText(res as Failure) : res.error };
@@ -363,7 +546,7 @@ export function BlueprintEstimator() {
     }
   }
 
-  function mergeJob(a: { house: HouseBrief; results: TradeResult[]; takeoff: Takeoff; scope: JobScope; rows: FoundRow[]; priceChecks: Parameters<typeof mergePlanEstimate>[0]["priceChecks"] }) {
+  function mergeJob(a: { house: HouseBrief; results: TradeResult[]; takeoff: Takeoff; scope: JobScope; rows: FoundRow[]; specs: JobSpec[]; priceChecks: Parameters<typeof mergePlanEstimate>[0]["priceChecks"] }) {
     return mergePlanEstimate({
       house: a.house,
       results: a.results,
@@ -371,7 +554,9 @@ export function BlueprintEstimator() {
       priceChecks: a.priceChecks,
       wholeHouse: a.scope.wholeHouse,
       labels: a.scope.labels,
-      job: a.scope.wholeHouse ? null : { title: a.scope.title, notIncluded: a.scope.notIncluded, unmeasured: a.rows.filter((r) => r.status !== "measured").map((r) => `${r.label} — ${r.asWritten}`) },
+      job: a.scope.wholeHouse
+        ? null
+        : { title: a.scope.title, notIncluded: a.scope.notIncluded, unmeasured: a.rows.filter((r) => r.status !== "measured").map((r) => `${r.label} — ${r.asWritten}`), specs: a.specs.map((x) => `${x.text} (p. ${x.page})`) },
     });
   }
 
@@ -379,14 +564,14 @@ export function BlueprintEstimator() {
     if (!result || !tokenRef.current) return;
     setRetrying(trade);
     const trades = PLAN_TRADES.filter((t) => result.items.some((i) => i.trade === t));
-    const out = await priceTrade({ tok: tokenRef.current, trade, house: result.house, items: result.items, trades, scope: result.scope, req: result.request, partial: partialTrades(result.scope, result.takeoff.items).has(trade), location: result.location });
+    const out = await priceTrade({ tok: tokenRef.current, trade, house: result.house, items: result.items, trades, scope: result.scope, req: result.request, partial: partialTrades(result.scope, result.takeoff.items).has(trade), location: result.location, specs: result.specs });
     setRetrying(null);
     if (!out.ok) {
       toast.error(`${TRADE_LABEL[trade]} could not be priced`, out.error);
       return;
     }
     const results = [...result.results, { trade, est: out.est }];
-    const merged = mergeJob({ house: result.house, results, takeoff: result.takeoff, scope: result.scope, rows: result.rows, priceChecks: null });
+    const merged = mergeJob({ house: result.house, results, takeoff: result.takeoff, scope: result.scope, rows: result.rows, specs: result.specs, priceChecks: null });
     setResult({ ...result, results, failed: result.failed.filter((f) => f.trade !== trade), merged });
     // The new trade's lines join the ones already edited.
     setLines((now) => [...now, ...merged.lines.filter((l) => !now.some((x) => x.id === l.id))]);
@@ -519,6 +704,8 @@ export function BlueprintEstimator() {
   function kindOf(page: number): string {
     const r = reads[page]?.sheet;
     if (r) return r.title || KIND_WORD[r.kind] || "Sheet";
+    const k = kinds[page];
+    if (k) return k.title || KIND_WORD[k.kind] || "Sheet";
     const p = pages.find((x) => x.page === page);
     return (p && KIND_WORD[guessKind(p)]) || "Drawing";
   }
@@ -581,14 +768,22 @@ export function BlueprintEstimator() {
       <div className={s.be}>
         {head(working.title ?? "Working on it", `“${request.trim()}”`)}
         <section className={`${s.card} ${s.work}`} aria-live="polite">
+          <div className={s.clock} aria-label="Time so far">
+            {clockText(clock - (startedAt ?? clock))}
+          </div>
           <ol className={s.steps}>
             {STEPS.map((label, i) => (
               <li key={label} className={i < step ? s.stepDone : i === step ? s.stepNow : undefined}>
                 <span className={s.stepMark} aria-hidden="true" />
                 <span className={s.stepLabel}>
                   {label}
-                  {i === 0 && i === step && readTotal ? <span className={s.stepNote}> · {Math.round((readDone / readTotal) * 100)}%</span> : null}
-                  {i === 2 && working.measuring?.length ? <span className={s.stepNote}> · {working.measuring.slice(0, 4).join(", ").toLowerCase()}</span> : null}
+                  {i === 0 && i === step ? <span className={s.stepNote}> · {baseReady ? "the sheets this job needs" : "floor plans and schedules first"}</span> : null}
+                  {i === 2 && (working.measuring?.length || working.notes?.length) ? (
+                    <span className={s.stepNote}>
+                      {" "}
+                      · {[...(working.measuring ?? []).slice(0, 4).map((x) => x.toLowerCase()), ...(working.notes?.length ? [`the notes on p. ${working.notes.join(", ")}`] : [])].join(", ")}
+                    </span>
+                  ) : null}
                 </span>
               </li>
             ))}
@@ -716,6 +911,17 @@ export function BlueprintEstimator() {
           <b>{money(total)}</b>
         </div>
       </div>
+      {result.timing.length > 0 && (
+        <p className={s.timing}>
+          Took {clockText(result.timing.reduce((a, [, ms]) => a + ms, 0))}
+          {result.timing.map(([label, ms]) => (
+            <span key={label}>
+              {" "}
+              · {label.toLowerCase()} {clockText(ms)}
+            </span>
+          ))}
+        </p>
+      )}
       <div className={s.resGrid}>
         <section className={`${s.card} ${s.found}`}>
           <h2 className={s.h2}>Found on your plans</h2>
@@ -742,6 +948,21 @@ export function BlueprintEstimator() {
             </ul>
           ) : (
             <p className={s.p}>Every quantity of this job comes straight from the plans&apos; build list below.</p>
+          )}
+          {result.specs.length > 0 && (
+            <div className={s.specs}>
+              <h3 className={s.h3}>From the plans&apos; notes</h3>
+              <ul>
+                {result.specs.map((x) => (
+                  <li key={`${x.page}:${x.text}`}>
+                    <span>{x.text}</span>
+                    <button type="button" className={s.pageLink} onClick={() => void openViewer(x.page)}>
+                      p. {x.page}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           <details className={s.more}>
             <summary>

@@ -62,6 +62,8 @@ const jobAsk = z.object({
   title: z.string().trim().min(1).max(80),
   /** Part of the trade, not all of it — no whole-trade benchmark. */
   partial: z.boolean(),
+  /** What the plans' notes and schedules specify for the job, with their sheets. */
+  specs: z.array(z.string().max(220)).max(14).nullish(),
   /** An estimator specialty id (checked against the catalog on the server). */
   specialtyId: z.string().regex(/^[a-z0-9-]{2,60}$/).nullish(),
   /** What the group's lines are headed with ("Fencing"). */
@@ -85,6 +87,16 @@ const sheetLite = z.object({
   title: z.string().max(200).nullable(),
   level: z.string().max(40).nullable(),
   rooms: z.array(z.object({ name: z.string().max(80) })).max(80),
+  /** What the first look found on the sheet (lib/plans/readOrder). */
+  contents: z.array(z.string().max(120)).max(16).optional(),
+});
+
+/** A first look at a sheet: the sheet small and its title block (lib/plans/readOrder). */
+export const skimSheetInput = z.object({
+  token: z.string().min(1).max(1024),
+  page: z.number().int().min(1).max(500),
+  pages: z.number().int().min(1).max(500),
+  images: z.array(z.object({ url: z.string().max(1_500_000).regex(IMAGE) })).min(1).max(5),
 });
 
 export const askPlanInput = z.object({
@@ -102,9 +114,9 @@ export const measureSheetInput = z.object({
   request: z.string().trim().min(2).max(600),
   title: z.string().trim().min(1).max(80),
   sheetTitle: z.string().max(200).nullish(),
+  // None on a sheet looked at only for what its notes specify.
   asks: z
     .array(z.object({ n: z.number().int().min(1).max(12), label: z.string().min(1).max(120), unit: z.string().min(1).max(20), how: z.string().max(300) }))
-    .min(1)
     .max(12),
   textLayer: z.string().max(16_000),
   images: z.array(z.object({ url: z.string().max(MAX_SHEET_IMAGE_CHARS).regex(IMAGE) })).min(1).max(17),

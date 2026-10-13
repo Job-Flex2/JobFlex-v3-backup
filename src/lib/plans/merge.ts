@@ -67,7 +67,7 @@ export function mergePlanEstimate(input: {
   priceChecks: PriceChecks | null;
   wholeHouse: boolean;
   /** One job asked of the plans (lib/plans/ask): its name heads the estimate, its own notes replace the house's. */
-  job?: { title: string; notIncluded: string[]; unmeasured: string[] } | null;
+  job?: { title: string; notIncluded: string[]; unmeasured: string[]; specs?: string[] } | null;
   /** What a group's lines are headed with when not its trade's name ("Fencing"). */
   labels?: Partial<Record<PlanTrade, string>>;
 }): PlanEstimate {
@@ -96,7 +96,7 @@ export function mergePlanEstimate(input: {
     // A job's notes are its own: what was not drawn, what it leaves out. The house's
     // warnings (rooms with no size) belong to a whole-house estimate.
     ...(job
-      ? [...job.unmeasured.map((u) => `Plans · ${u}`), ...job.notIncluded.map((n) => `Not in this estimate · ${n}`)]
+      ? [...(job.specs ?? []).map((x) => `The plans specify · ${x}`), ...job.unmeasured.map((u) => `Plans · ${u}`), ...job.notIncluded.map((n) => `Not in this estimate · ${n}`)]
       : input.checks.filter((c) => c.level === "warn").map((c) => `Plans · ${c.text}`)),
     ...tradeNotes,
   ].slice(0, 40);

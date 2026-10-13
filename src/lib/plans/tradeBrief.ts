@@ -184,7 +184,13 @@ const SOURCE_WORDS: Record<TakeoffItem["source"], string> = {
 };
 
 /** The job the contractor asked for (lib/plans/ask), when the estimate is one job and not whole trades. */
-export type JobAsk = { request: string; title: string; label?: string | null };
+export type JobAsk = {
+  request: string;
+  title: string;
+  label?: string | null;
+  /** What the plans' notes, schedules and details specify for the job ("countertops 3cm quartz (p. 4)"). */
+  specs?: string[] | null;
+};
 
 /** A request in words only: a number in the brief would be bound to every line (the takeoff carries them). */
 export function wordsOnly(s: string): string {
@@ -208,6 +214,12 @@ export function tradeBrief(trade: PlanTrade, house: HouseBrief, items: TakeoffIt
       ? [
           `THE CONTRACTOR'S REQUEST: «${ask.request.trim().slice(0, 600)}» — the job: ${ask.title}.`,
           "PRICE ONLY THIS JOB: the lines below are all of it. Write no line for work they do not list (no cabinets on a countertop job, no paint on a drywall-only job).",
+          ...(ask.specs?.length
+            ? [
+                "WHAT THE PLANS SPECIFY FOR THIS JOB (their notes, schedules and details — price the materials, sizes and finishes they call for, not a default):",
+                ...ask.specs.slice(0, 14).map((x) => `  - ${x}`),
+              ]
+            : []),
         ]
       : []),
     `THIS TRADE'S QUANTITIES (${ask?.label?.trim() || TRADE_LABEL[trade]}):`,
