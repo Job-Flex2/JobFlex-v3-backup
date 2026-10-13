@@ -294,6 +294,12 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
  * 1.6 — the typical house — so these are estimates and are labelled so.
  */
 export function estimateEdges(facts: RoofFacts): { eaveFt: number; rakeFt: number; ridgeFt: number; hipFt: number; valleyFt: number | null } | null {
+  const runs = edgeRuns(facts);
+  return runs ? { ...runs, valleyFt: estimateValleys(facts)?.totalFt ?? null } : null;
+}
+
+/** Eave, rake, ridge and hip from the footprint and the shape — the edges without the valleys (which read these). */
+function edgeRuns(facts: RoofFacts): { eaveFt: number; rakeFt: number; ridgeFt: number; hipFt: number } | null {
   // A zero footprint or perimeter is "not known", never a real zero — a 0
   // here once turned the whole estimate into NaN (review, 2026-09-14).
   const main = facts.pitchFamilies.filter((f) => f.share > 0).reduce<{ pitch12: number; share: number } | null>((a, f) => (a == null || f.share > a.share ? f : a), null);
@@ -329,7 +335,6 @@ export function estimateEdges(facts: RoofFacts): { eaveFt: number; rakeFt: numbe
     rakeFt: r1(rakePlan * rakeSlope),
     ridgeFt: r1(flat ? 0 : hip ? Math.max(0, L - W) : gable ? L : 0.7 * L),
     hipFt: r1(flat ? 0 : (hip ? 2.83 * W : gable ? 0 : 1.4 * W) * hipSlope),
-    valleyFt: estimateValleys(facts)?.totalFt ?? null,
   };
 }
 
@@ -373,7 +378,7 @@ export function underlaymentForFamily(family: RoofFamily, lists: CatalogLists): 
  * complex, so the count stays capped at 12 and the run at half the perimeter,
  * and the lines carry the "estimated" basis that says so.
  */
-export function estimateValleys(facts: RoofFacts): { count: number; ftEach: number; totalFt: number } | null {
+export function estimateValleys(facts: RoofFacts): { count: number; ftEach: number; totalFt: number; rough?: boolean } | null {
   if (isFlatRoof(facts)) return { count: 0, ftEach: 0, totalFt: 0 };
   const main = facts.pitchFamilies.filter((f) => f.share > 0).reduce<{ pitch12: number; share: number } | null>((a, f) => (a == null || f.share > a.share ? f : a), null);
   const t = Math.max(0, Math.min(20, main?.pitch12 ?? 5)) / 12;
@@ -387,7 +392,11 @@ export function estimateValleys(facts: RoofFacts): { count: number; ftEach: numb
 
   const fc = facts.facetCount ?? facts.facetCountEstimated ?? null;
   if (fc == null || !Number.isFinite(fc) || fc < 1) return null;
-  if (facts.facetCount != null && facts.facetConfidence != null && facts.facetConfidence < 0.5) return null;
+  // A count the provider scored low is still a count (owner, 2026-10-13: "at least you can make a rough estimate …
+  // it's about the length of the ridge and hips"). It used to give no valleys at all — a dash on a roof that plainly
+  // has them. Now it gives a ROUGH figure, kept no longer than the ridges and hips together: on a hipped house every
+  // wing adds about as much valley as hip.
+  const rough = facts.facetCount != null && facts.facetConfidence != null && facts.facetConfidence < 0.5;
   const A = facts.footprintSqft != null && facts.footprintSqft > 0 ? facts.footprintSqft : null;
   const P = facts.perimeterFt != null && facts.perimeterFt > 0 ? facts.perimeterFt : A != null ? 4 * Math.sqrt(A) * 1.05 : null;
   if (A == null && P == null) return null;
@@ -413,9 +422,18 @@ export function estimateValleys(facts: RoofFacts): { count: number; ftEach: numb
   const secondaries = n - primaries;
   let plan = primaries * (Math.min(0.3 * W, 15) + 1.5) + secondaries * (Math.min(0.16 * W, 8) + 0.5);
   if (P != null) plan = Math.min(plan, 0.5 * P);
-  const ftEach = r1((plan * factor) / n);
-  const totalFt = r1(n * ftEach);
+  let ftEach = r1((plan * factor) / n);
+  let totalFt = r1(n * ftEach);
   if (!Number.isFinite(ftEach) || !Number.isFinite(totalFt)) return null;
+  if (rough) {
+    const e = edgeRuns(facts);
+    const cap = e ? e.ridgeFt + e.hipFt : 0;
+    if (cap > 0 && totalFt > cap) {
+      ftEach = r1(cap / n);
+      totalFt = r1(n * ftEach);
+    }
+    return { count: n, ftEach, totalFt, rough: true };
+  }
   return { count: n, ftEach, totalFt };
 }
 

@@ -60,7 +60,14 @@ check("8-facet hip: 4 valleys, 50–65 ft", v8?.count === 4 && (v8?.totalFt ?? 0
 const v12 = estimateValleys(house({ facetCount: 12, shape: "Complex", footprintSqft: 3200, perimeterFt: 300, pitchFamilies: [{ pitch12: 8, share: 1 }] }));
 check("12-facet complex: 2–4 ft of valley per square", v12 != null && v12.totalFt / 32 >= 2 && v12.totalFt / 32 <= 4, JSON.stringify(v12));
 check("a zero footprint and no perimeter is no figure, never NaN", estimateValleys(house({ footprintSqft: 0, perimeterFt: null })) === null);
-check("a low facet confidence is no figure", estimateValleys(house({ facetConfidence: 0.19 })) === null);
+// A count the provider scored low still gives a ROUGH figure (owner, 2026-10-13: "at least a rough estimate … about
+// the length of the ridge and hips"), never longer than the ridges and hips together.
+const low = estimateValleys(house({ facetConfidence: 0.19 }));
+check("a low facet confidence gives a rough figure, not a dash", low?.rough === true && (low?.count ?? 0) > 0 && (low?.totalFt ?? 0) > 0, JSON.stringify(low));
+const lowBig = estimateValleys(house({ facetCount: 18, shape: "Complex", facetConfidence: 0.2, footprintSqft: 3300, perimeterFt: 260, pitchFamilies: [{ pitch12: 5, share: 0.7 }, { pitch12: 11, share: 0.3 }] }));
+const lowEdges = estimateEdges(house({ facetCount: 18, shape: "Complex", facetConfidence: 0.2, footprintSqft: 3300, perimeterFt: 260, pitchFamilies: [{ pitch12: 5, share: 0.7 }, { pitch12: 11, share: 0.3 }] }));
+check("an 18-facet two-pitch house scored low (the Sammamish roof): valleys, no longer than ridge + hips", !!lowBig && !!lowEdges && lowBig.totalFt > 0 && lowBig.totalFt <= lowEdges.ridgeFt + lowEdges.hipFt + 0.5 && lowEdges.valleyFt === lowBig.totalFt, `${JSON.stringify(lowBig)} · ridge+hip ${lowEdges ? lowEdges.ridgeFt + lowEdges.hipFt : "—"}`);
+check("a trusted score is not capped (not rough)", !estimateValleys(house({ facetConfidence: 0.8 }))?.rough);
 check("a trusted facet confidence gives a figure", estimateValleys(house({ facetConfidence: 0.8 }))?.count === 2);
 check("facets below the shape's base is no figure", estimateValleys(house({ facetCount: 3 })) === null);
 // THE 20-FACET CEILING IS GONE (audit 2026-09-17, documented on

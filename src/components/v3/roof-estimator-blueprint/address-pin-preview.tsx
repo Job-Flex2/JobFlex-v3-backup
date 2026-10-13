@@ -34,7 +34,7 @@ interface PinMarker {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type G = any;
 
-export function AddressPinPreview({ lat, lng, label }: { lat: number; lng: number; label: string }) {
+export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: number; lng: number; label: string; /** On the measuring screen (2026-10-13): a sweep over the map, no "wrong house?" note. */ scanning?: boolean }) {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const builtRef = React.useRef<{ host: HTMLDivElement; map: PinMap; marker: PinMarker } | null>(null);
   const [down, setDown] = React.useState(false);
@@ -89,12 +89,15 @@ export function AddressPinPreview({ lat, lng, label }: { lat: number; lng: numbe
   if (!enabled || down) return null;
 
   return (
-    <div className="rf-pin">
+    <div className={"rf-pin" + (scanning ? " is-scanning" : "")}>
       <div ref={hostRef} className="rf-pin-map" aria-label={`Map preview with a pin on ${label}`} />
-      <p className="rf-note rf-pin-note">
-        The pin marks <b>{label}</b> — the roof the measurement will read. Wrong house? Pick the address
-        again.
-      </p>
+      {scanning ? <span className="rf-pin-sweep" aria-hidden="true" /> : null}
+      {scanning ? null : (
+        <p className="rf-note rf-pin-note">
+          The pin marks <b>{label}</b> — the roof the measurement will read. Wrong house? Pick the address
+          again.
+        </p>
+      )}
       <style jsx global>{`
         .jf-blueprint .content .rf-pin {
           margin-top: 14px;

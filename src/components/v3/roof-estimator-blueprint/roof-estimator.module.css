@@ -1434,6 +1434,8 @@
 
 /* measurement */
 .bp :global(.content .measuring) { max-width: 520px; }
+/* With the address on the map beside the steps (2026-10-13), the card takes the room the two need. */
+.bp :global(.content .measuring.has-map) { max-width: 920px; }
 .bp :global(.content .ms-body) { padding: 26px 22px 24px; }
 .bp :global(.content .ms-num) { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: var(--muted); }
 .bp :global(.content .ms-head) { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 10px; }
@@ -2064,3 +2066,30 @@
 .bp :global(.content .rf-linked-ask) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 10px; border: 1.5px solid var(--warning); background: #fff; font-size: 13px; color: var(--ink); }
 .bp :global(.content .rf-linked-ask span) { flex: 1 1 240px; }
 .bp :global(.content .rf-linked-acts) { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The wait, made watchable (2026-10-13): the steps beside the address on the map with a sweep across it, the
+   seconds gone, and a tip at a time the dots can pick. */
+.bp :global(.content .ms-grid) { display: grid; gap: 16px; margin-top: 14px; }
+.bp :global(.content .ms-grid.has-map) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: start; }
+.bp :global(.content .ms-grid .ms-steps) { margin-top: 0; }
+@media (max-width: 760px) { .bp :global(.content .ms-grid.has-map) { grid-template-columns: 1fr; } }
+.bp :global(.content .ms-clock) { margin-top: 12px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.bp :global(.content .ms-clock span) { color: var(--ink); font-variant-numeric: tabular-nums; }
+.bp :global(.content .ms-map .rf-pin) { margin-top: 0; position: relative; }
+.bp :global(.content .ms-map .rf-pin-map) { height: clamp(200px, 22vw, 260px); }
+.bp :global(.content .rf-pin.is-scanning) { position: relative; overflow: hidden; }
+.bp :global(.content .rf-pin-sweep) { position: absolute; left: 0; right: 0; top: 0; height: 34%; pointer-events: none; background: linear-gradient(180deg, rgba(24, 84, 160, 0) 0%, rgba(24, 84, 160, 0.22) 85%, rgba(24, 84, 160, 0.75) 100%); border-bottom: 2px solid var(--blueprint); animation: roofSweep 2.6s linear infinite; }
+@keyframes roofSweep { from { transform: translateY(-100%); } to { transform: translateY(300%); } }
+.bp :global(.content .ms-tips) { display: grid; gap: 6px; margin-top: 16px; padding: 12px 14px; border: 1.5px dashed var(--hair); background: var(--paper); }
+.bp :global(.content .ms-tips-k) { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blueprint); }
+.bp :global(.content .ms-tip) { margin: 0; min-height: 2.9em; font-size: 13.5px; line-height: 1.45; color: var(--ink); animation: roofTipIn 0.35s ease-out; }
+@keyframes roofTipIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.bp :global(.content .ms-tip-dots) { display: flex; gap: 6px; }
+.bp :global(.content .ms-tip-dot) { width: 22px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; position: relative; }
+.bp :global(.content .ms-tip-dot::before) { content: ""; position: absolute; left: 6px; top: 6px; width: 10px; height: 10px; border: 1.5px solid var(--ink); background: #fff; }
+.bp :global(.content .ms-tip-dot.is-on::before) { background: var(--blueprint); border-color: var(--blueprint); }
+.bp :global(.content .ms-tip-dot:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .bp :global(.content .rf-pin-sweep), .bp :global(.content .ms-tip) { animation: none; }
+  .bp :global(.content .rf-pin-sweep) { display: none; }
+}
