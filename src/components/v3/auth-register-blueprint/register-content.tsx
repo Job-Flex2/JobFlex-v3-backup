@@ -88,6 +88,35 @@ import {
 } from "@/lib/customPlan";
 import styles from "./auth-register.module.css";
 import { ProductMark } from "@/components/brand/ProductMark";
+import { PlanBar, PlanDetail, PlanTiles, type DetailRow, type PhoneTile } from "./plan-phone";
+
+/* THE PLAN STEP'S PHONE BUILD (owner, 2026-10-12): at ≤768px the plan step is
+   tiles, the chosen plan whole and one pinned start button (./plan-phone); the
+   desk keeps its cards. A media query, never the user agent; the server draws
+   the desk's, the client corrects on its first frame (the plans arrive after). */
+const HANDHELD = "(max-width: 768px)";
+function subscribeHandheld(onChange: () => void) {
+  const mq = window.matchMedia(HANDHELD);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+/* The plan this tab last chose, so a cancelled Checkout (or the Google return)
+   reopens the phone's plan step on it; `?plan=<slug>` names one from a link. */
+const PLAN_KEY = "jf_signup_plan";
+function rememberPlan(slug: string | null) {
+  try {
+    if (slug) sessionStorage.setItem(PLAN_KEY, slug);
+  } catch {
+    /* storage blocked: the link alone decides */
+  }
+}
+function recalledPlan(): string | null {
+  try {
+    return sessionStorage.getItem(PLAN_KEY);
+  } catch {
+    return null;
+  }
+}
 
 // 1 account · 2 company · 3 THE PLAN (the paywall) · 4 done.
 /** The picker's exit, in step with the 0.22s transform in the stylesheet. */
@@ -286,31 +315,10 @@ export function RegisterContent({
   const orderedPlans = React.useMemo(() => (edition ? [...plans.filter((p) => isEditionPlan(p.slug, edition)), ...plans.filter((p) => !isEditionPlan(p.slug, edition))] : plans), [plans, edition]);
   /* Custom and catalog plans share the saved offer returned by signupPlans. */
   const [customTrialDays, setCustomTrialDays] = React.useState<number>(offer.days);
-  /* THE CAROUSEL STARTS AT THE FIRST CARD. With `scroll-snap-type: x
-     mandatory` Chrome picks its initial snap target while the plan sheet is
-     still sliding in, and lands on the LAST card (verified at 390×844: the
-     sheet arrived showing "Custom"). One reset after the cards exist and
-     the sheet has settled puts Starter first; a later swipe is untouched. */
+  /* The desk's row of cards. On a phone the step is tiles (./plan-phone) — the
+     swiped carousel and its snap-to-the-hero passes are gone (2026-10-12). */
   const plansRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (step !== 3 || plans.length === 0) return;
-    if (!window.matchMedia("(max-width: 768px)").matches) return;
-    /* …and the card it settles on is the MOST-PICKED one, centred (owner,
-       2026-09-04), not Starter: the same three passes, aimed at the hero. */
-    const settle = () => {
-      const rail = plansRef.current;
-      if (!rail) return;
-      const hero = rail.querySelector<HTMLElement>(".pw-plan--hero");
-      rail.scrollLeft = hero ? Math.max(0, hero.offsetLeft - (rail.clientWidth - hero.offsetWidth) / 2) : 0;
-    };
-    settle();
-    const t1 = window.setTimeout(settle, 120);
-    const t2 = window.setTimeout(settle, 520);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [step, plans.length]);
+  const handheld = React.useSyncExternalStore(subscribeHandheld, () => window.matchMedia(HANDHELD).matches, () => false);
   const isClient = React.useSyncExternalStore(
     () => () => {},
     () => true,
@@ -725,6 +733,11 @@ export function RegisterContent({
       .then((res) => {
         if (!live) return;
         setPlans(res.plans);
+        // A phone reopens on the plan named by the link (?plan=) or chosen before in this
+        // tab — a cancelled Checkout comes back to it (2026-10-12); the desk as before.
+        const asked = window.matchMedia(HANDHELD).matches ? (searchParams?.get("plan") ?? recalledPlan()) : null;
+        const known = asked && (res.plans.some((p) => p.slug === asked) || (asked === CUSTOM_PLAN_SLUG && offerCustom && res.plans.length > 0)) ? asked : null;
+        if (known) setPlanSlug((cur) => cur ?? known);
         // The edition's own plan, pre-selected (lib/editions) — the visitor can still pick another.
         if (edition) {
           const own = res.plans.find((p) => isEditionPlan(p.slug, edition));
@@ -736,8 +749,7 @@ export function RegisterContent({
         if (res.promo) setPromo(res.promo);
         // Pre-select what the catalog marks as the one to pick, else the first
         // — on every width now (owner, 2026-09-04: "arrive already looking at
-        // the most-picked plan"). On a phone the carousel is also scrolled so
-        // that card is the one in view.
+        // the most-picked plan").
         const pick = (res.plans.find((p) => p.highlight) ?? res.plans[0])?.slug ?? null;
         setPlanSlug((cur) => cur ?? pick);
       })
@@ -747,7 +759,13 @@ export function RegisterContent({
     return () => {
       live = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the link and the flag are read once, as the catalog arrives
   }, [step, token, edition]);
+
+  /* The phone's choice, kept for this tab (a cancelled Checkout reopens on it). */
+  React.useEffect(() => {
+    if (step === 3 && handheld) rememberPlan(planSlug);
+  }, [step, handheld, planSlug]);
 
   async function onApplyPromo() {
     if (promoBusy) return;
@@ -1355,6 +1373,58 @@ export function RegisterContent({
     </>
   );
 
+  /* THE PHONE'S PLAN STEP (./plan-phone): the tiles, the chosen plan and the pinned start. */
+  const money = dealDollars;
+  /** A code's effect on a price, as the bill shows it: "$95 $76/mo" (struck, then paid). */
+  const codeFigure = (term: BillingTerm, cents: number, monthlyCents: number) => {
+    if (!promo?.percentOff) return null;
+    const per = term === "YEAR" ? "/yr" : "/mo";
+    return (
+      <>
+        <s>{money(cents)}</s>{" "}
+        {money(firstBillCents(term, cents, monthlyCents, promo.percentOff))}
+        {per}
+      </>
+    );
+  };
+  const phoneTiles: PhoneTile[] = handheld
+    ? [
+        ...orderedPlans.map((p) => {
+          const t = planTerm(interval, p.yearlyPriceCents);
+          return {
+            slug: p.slug,
+            name: p.name,
+            monthlyCents: p.priceCents,
+            yearlyCents: p.yearlyPriceCents,
+            hero: p.highlight || (!!edition && isEditionPlan(p.slug, edition)),
+            tag: p.highlight ? "Most picked" : null,
+            code: codeFigure(t, t === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents, p.priceCents),
+          };
+        }),
+        ...(offerCustom && plans.length > 0
+          ? [{ slug: CUSTOM_PLAN_SLUG, name: "Custom", monthlyCents: customPriceCents(customPages), yearlyCents: customPriceCents(customPages, "YEAR"), hero: false, tag: null, from: customPages.length === 0 }]
+          : []),
+      ]
+    : [];
+  const chosen = phoneTiles.find((t) => t.slug === planSlug) ?? null;
+  const chosenTerm: BillingTerm = chosen ? termFor(chosen.slug) : interval;
+  const chosenCents = chosen ? (chosenTerm === "YEAR" ? (chosen.yearlyCents ?? 0) : chosen.monthlyCents) : 0;
+  const chosenPer = chosenTerm === "YEAR" ? "/yr" : "/mo";
+  const chosenRows: DetailRow[] = !chosen
+    ? []
+    : chosen.slug === CUSTOM_PLAN_SLUG
+      ? [
+          ...CUSTOM_BASE_FEATURES.map((f) => ({ label: f, on: true })),
+          { label: customPages.length === 0 ? `Add pages · $${(CUSTOM_PAGE_CENTS / 100).toFixed(0)} each` : `${customPages.length} page${customPages.length === 1 ? "" : "s"} added`, on: true, add: true },
+          ...customPages.flatMap((id) => {
+            const page = CUSTOM_PAGES.find((x) => x.id === id);
+            return page ? [{ label: page.label, on: true }] : [];
+          }),
+        ]
+      : featureRows.map((f) => ({ label: f, on: (includedBySlug.get(chosen.slug) ?? new Set<string>()).has(f.toLowerCase()) }));
+  // The bar shows the step's error while it stands; otherwise it is over the step's head.
+  const barUp = handheld && !!chosen && !confirmSentTo;
+
   const stepper = twoStep || otp ? (
     <div className="stepper" id="stepper" data-steps="2">
       <div className={stItem(0, step)} data-step="1">
@@ -1900,7 +1970,7 @@ export function RegisterContent({
               </div>
             </div>
 
-            {plansErr ? (
+            {plansErr && !barUp ? (
               <div className="err" role="alert">
                 {plansErr}
               </div>
@@ -1938,6 +2008,24 @@ export function RegisterContent({
                 row's height. Nothing folds: every list is drawn whole. As many columns as cards
                 (`--pw-cols`, set on the sheet so every edge lines up with the row), the row centred,
                 a card no wider than the stylesheet's cap. */}
+            {/* A PHONE (owner, 2026-10-12): every plan at once as tiles, the chosen one whole under
+                them, one pinned start button (./plan-phone) — the desk's row of cards is not drawn. */}
+            {handheld ? (
+              confirmSentTo ? null : (
+                <>
+                  {plans.length === 0 && !plansErr ? <div className="fld-note pw-note">Loading plans…</div> : null}
+                  {phoneTiles.length ? <PlanTiles tiles={phoneTiles} term={interval} selected={planSlug} onPick={setPlanSlug} /> : null}
+                  {chosen ? (
+                    <PlanDetail
+                      slug={chosen.slug}
+                      when={freeUntilLine(chosenCents, chosenPer, chosen.monthlyCents)}
+                      rows={chosenRows}
+                      onSelectPages={chosen.slug === CUSTOM_PLAN_SLUG ? openPicker : undefined}
+                    />
+                  ) : null}
+                </>
+              )
+            ) : (
             <div
               className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")}
               ref={plansRef}
@@ -2149,6 +2237,7 @@ export function RegisterContent({
                 <div className="fld-note">Loading plans…</div>
               ) : null}
             </div>
+            )}
 
             {/* The code and the terms share one row on a desk (2026-10-12): the field on the left,
                 the fine print beside it. On a phone the wrappers step aside (display: contents). */}
@@ -2216,6 +2305,29 @@ export function RegisterContent({
               </button>
             ) : null}
             </div>
+
+            {/* The phone's one start button, pinned: the chosen plan's, doing exactly what that
+                plan card's button does (onStartPlan), with its states. */}
+            {barUp && chosen ? (
+              <PlanBar
+                label={startingSlug === chosen.slug ? busyLabel : !checkoutReady ? "Checkout is not configured" : `Start ${trialDays}-day free trial`}
+                busy={startingSlug === chosen.slug}
+                disabled={payBusy || !checkoutReady}
+                error={plansErr}
+                onStart={() => onStartPlan(chosen.slug)}
+                sub={
+                  <>
+                    {chosen.name} ·{" "}
+                    {codeFigure(chosenTerm, chosenCents, chosen.monthlyCents) ?? (
+                      <>
+                        {dealDollars(chosenCents)}
+                        {chosenPer}
+                      </>
+                    )}
+                  </>
+                }
+              />
+            ) : null}
 
             {/* THE PAGE PICKER. Hand-rolled (no Radix here, same as every other
                 dialog in this fleet): a scrim, one panel, Escape closes it. The

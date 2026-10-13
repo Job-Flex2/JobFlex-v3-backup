@@ -100,6 +100,13 @@ the sidebar's and the landing's `/jobflex-mark.png`), not a drawn "J" square:
 the letters. The custom plan is a card in the row on the plan step and the
 upgrade page; on the landing and /pricing it stays the wide "Build your plan"
 plate under the row.
+The signup plan step on a phone (≤768px, owner 2026-10-12) shows every plan
+at once: a 2×2 grid of compact tiles (three plans: two over one full-width) —
+name, "Most picked", price, the stamp and saving or "Billed monthly", no list
+and no button; the tile is the choice (the cards' blue frame). The chosen
+plan's whole list sits under the tiles, and one start button is pinned to the
+bottom edge with the plan and term under it
+([plan-phone](src/components/v3/auth-register-blueprint/plan-phone.tsx)).
 
 ## Typography
 

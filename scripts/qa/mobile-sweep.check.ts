@@ -8,6 +8,7 @@
 //   · a sheet's body does not scroll to its last field;
 //   · the app's top bar is not 12px from both edges, or a badge hangs out of its button;
 //   · a phone-width root carries a zoom;
+//   · (2026-10-12) on the sign-up's plan step — tiles and one pinned start button — the same;
 //   · dev and prod draw the same page differently (stylesheet order) — when a dev server is up
 //     (QA_DEV_URL, else localhost:3001 / :3000); without one that half is reported, not failed.
 // Signs in only as qa@acme.test (QA Co); its records come from ./_world and ./_crewWorld and
@@ -87,6 +88,50 @@ async function withCrew(run: (crew: Awaited<ReturnType<typeof makeCrewWorld>>) =
   try { await run(crew); } finally { await crew.cleanup(); }
 }
 
+/** Playwright is resolved at run time (./_prod-server): its objects are untyped here. */
+type Loose = ReturnType<typeof playwright>;
+
+/** THE SIGN-UP'S PLAN STEP (2026-10-12): tiles, the chosen plan and one pinned start button
+ *  (plan-phone). Reached as a new visitor (its own made-up IP; its pending signup removed after),
+ *  judged like every page: no sideways scroll, the pinned button whole, the terms ending above it. */
+const SWEEP_MAIL = `sweep${Date.now()}.test`;
+async function planStep(webkit: Loose, H: number) {
+  const ip = `10.${1 + Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}`;
+  const ctx = await webkit.newContext({ viewport: { width: 390, height: H }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: UA });
+  await ctx.addCookies([{ name: "jf_consent", value: encodeURIComponent(JSON.stringify({ v: 1, at: new Date().toISOString(), analytics: false, marketing: false, ack: true })), domain: "localhost", path: "/" }]);
+  await ctx.route("**/*", (route: Loose) => (route.request().url().startsWith(BASE) ? route.continue({ headers: { ...route.request().headers(), "x-forwarded-for": ip } }) : route.continue()));
+  const page = await ctx.newPage();
+  try {
+    await page.goto(BASE + "/auth/register", { waitUntil: "load", timeout: 120000 });
+    await page.locator("#nextBtn").waitFor({ timeout: 60000 });
+    await sleep(800);
+    await page.getByPlaceholder("First and last").fill("Sweep Plan");
+    await page.getByPlaceholder("you@yourshop.com").fill(`plan.${H}@${SWEEP_MAIL}`);
+    const pw = page.locator('input[autocomplete="new-password"]');
+    for (let i = 0; i < (await pw.count()); i++) if (await pw.nth(i).isVisible()) await pw.nth(i).fill("SweepPlan-2026!");
+    await page.locator("#nextBtn").click();
+    await page.getByPlaceholder("Company name").waitFor({ state: "visible", timeout: 60000 });
+    await page.getByPlaceholder("Company name").fill("Sweep Plan Co");
+    await page.getByPlaceholder("Street, city, state, ZIP").fill("142 Alder Ridge Rd, Seattle, WA 98101");
+    await sleep(400);
+    await page.keyboard.press("Escape");
+    await page.getByPlaceholder("Phone number").fill("2065550123");
+    if (!(await page.locator("#step2 .chip.on").count())) await page.locator("#step2 .chip").first().click();
+    await page.locator("#createBtn").click();
+    await page.locator("section.plan-sheet.is-in [data-plan-card]").first().waitFor({ timeout: 60000 });
+    await sleep(1500);
+    const p = await page.evaluate(PAGE);
+    const issues = judge(p);
+    const bar = (p.bars || []).find((b: Loose) => /start/i.test(b.btns?.[0]?.l || ""));
+    check(`${H} /auth/register ▸ plan step`, !issues.filter((i: Loose) => !i.soft).length && !!bar && !bar.cut, `${say(issues)}${bar ? "" : " · no pinned start button"}`);
+  } catch (e) {
+    check(`${H} /auth/register ▸ plan step`, false, String((e as Error)?.message || e).split("\n")[0]);
+  } finally {
+    await ctx.close();
+    await db.syncState.deleteMany({ where: { OR: [{ key: { startsWith: "signup:" }, cursor: { contains: SWEEP_MAIL } }, { key: { startsWith: "rl:", endsWith: ":" + ip } }] } }).catch(() => {});
+  }
+}
+
 async function main() {
   const pw = playwright();
   ensureBuild(note);
@@ -134,6 +179,7 @@ async function main() {
           }
         }
         await ctx.close();
+        await planStep(webkit, H);
       }
       // DEV ↔ PROD — the same page drawn by both, when a dev server is up.
       const dev = await devBase();

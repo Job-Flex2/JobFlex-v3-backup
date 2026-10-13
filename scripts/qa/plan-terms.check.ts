@@ -30,6 +30,14 @@
 //     "Most picked", or does not choose Annual when pressed; on a desk the logo, "Pick a plan."
 //     and the first card do not share a left edge, or the steps, the switch and the last card a
 //     right one (1px).
+//   · (2026-10-12, the phone's plan step is tiles) at 360×640, 390×844 and 430×932 — Chromium,
+//     and WebKit at 360 and 390 — with three plans and with four (the custom one): a tile is cut,
+//     under the pinned start button or under 72px; the page scrolls sideways; a tap does not make
+//     that tile alone the choice, with its own list under the tiles and its name and price on the
+//     button's line; a list is the same for two plans; Annual does not price every tile a year or
+//     moves a tile; at the end the terms or the last row are under the button, or it is not pinned;
+//     the code field is out of sight with the window 300px shorter (the keyboard) or under the
+//     button; a cancelled Checkout does not come back to the plan chosen before it.
 // Pure half: lib/planDeal (months free in whole months only, never a percentage).
 // The plan step is reached the way signup-flow.check.ts reaches it (its own made-up IP, mail
 // keys blank, its pending signups and brake rows removed after). The upgrade page signs in
@@ -249,9 +257,11 @@ async function badge(page: any, name: string, scope: string, phone: boolean) {
   await page.waitForTimeout(300);
 }
 
-async function visit(browser: any, width: number) {
+async function visit(browser: any, width: number, height?: number) {
   const phone = width <= 768;
-  const ctx = await browser.newContext({ viewport: { width, height: phone ? 844 : 900 }, isMobile: phone, hasTouch: phone, deviceScaleFactor: phone ? 2 : 1, locale: "en-US" });
+  // isMobile is Chromium's; WebKit takes the phone's size and touch.
+  const mobile = phone && browser.browserType().name() === "chromium";
+  const ctx = await browser.newContext({ viewport: { width, height: height ?? (phone ? 844 : 900) }, isMobile: mobile, hasTouch: phone, deviceScaleFactor: phone ? 2 : 1, locale: "en-US" });
   // tsx names the helpers inside page.evaluate with esbuild's __name; the page has none.
   await ctx.addInitScript({ content: "window.__name = function (f) { return f; };" });
   const host = new URL(BASE).hostname;
@@ -405,6 +415,140 @@ async function planStep(browser: any, width: number, n: number, cards = 3) {
   }
 }
 
+/** /auth/register → step 1 → step 2 → the plan sheet (the password sign-up's three steps). */
+async function toPlanSheet(page: any, n: number, query = "") {
+  await page.goto(BASE + "/auth/register" + query, { waitUntil: "load", timeout: 180000 });
+  await page.locator("#nextBtn").waitFor({ timeout: 120000 });
+  await page.waitForTimeout(800);
+  await page.getByPlaceholder("First and last").fill("Plan Tiles");
+  await page.getByPlaceholder("you@yourshop.com").fill(`tiles.${n}@${MAIL_DOMAIN}`);
+  const pw = page.locator('input[autocomplete="new-password"]');
+  for (let i = 0; i < (await pw.count()); i++) if (await pw.nth(i).isVisible()) await pw.nth(i).fill("PlanTiles-2026!");
+  await page.locator("#nextBtn").click();
+  await page.getByPlaceholder("Company name").waitFor({ state: "visible", timeout: 60000 });
+  await page.getByPlaceholder("Company name").fill("Plan Tiles Co");
+  await page.getByPlaceholder("Street, city, state, ZIP").fill("142 Alder Ridge Rd, Seattle, WA 98101");
+  await page.waitForTimeout(400);
+  await page.keyboard.press("Escape");
+  await page.getByPlaceholder("Phone number").fill("2065550123");
+  if (!(await page.locator("#step2 .chip.on").count())) await page.locator("#step2 .chip").first().click();
+  await page.locator("#createBtn").click();
+  await page.locator("section.plan-sheet.is-in [data-plan-card]").first().waitFor({ timeout: 60000 });
+  await page.waitForTimeout(1500);
+}
+
+/** THE PHONE'S PLAN STEP (owner, 2026-10-12): every plan a tile on the first screen, the chosen
+ *  plan whole under them, one pinned start button. Fails when a tile is cut or under the button,
+ *  the page scrolls sideways, a tap does not change the list and the button's line, the switch
+ *  moves a tile, the button covers the terms at the end, the code field is not in sight with the
+ *  keyboard up (the window 300px shorter), or a cancelled Checkout does not come back to its plan. */
+async function phoneTiles(browser: any, width: number, height: number, n: number, cards = 3) {
+  const engine = browser.browserType().name();
+  const name = `phone plan step ${engine} ${width}×${height}${cards === 4 ? " (custom)" : ""}`;
+  const ctx = await visit(browser, width, height);
+  const page = await ctx.newPage();
+  const sheet = "section.plan-sheet.is-in";
+  const look = () =>
+    page.evaluate((sheet: string) => {
+      const root = document.querySelector(sheet)!;
+      const r = (e: Element | null) => (e ? e.getBoundingClientRect() : null);
+      const bar = document.querySelector("[data-plan-bar]");
+      const b = r(bar);
+      const tiles = Array.from(root.querySelectorAll<HTMLElement>("[data-plan-card]"));
+      return {
+        vw: innerWidth, vh: innerHeight, sw: document.scrollingElement!.scrollWidth,
+        cards: root.querySelectorAll(".pw-plans, .pw-dots").length,
+        tiles: tiles.map((t) => { const x = t.getBoundingClientRect(); return { slug: t.dataset.planCard!, top: x.top, bottom: x.bottom, left: x.left, right: x.right, h: Math.round(x.height * 10) / 10, on: t.getAttribute("aria-pressed") === "true", price: (t.querySelector("[data-plan-price]")?.textContent || "").replace(/\s+/g, "") }; }),
+        barTop: b ? b.top : null, barBottom: b ? b.bottom : null,
+        sub: (document.querySelector("[data-plan-sub]")?.textContent || "").replace(/\s+/g, " ").trim(),
+        go: (document.querySelector("[data-plan-go]")?.textContent || "").trim(),
+        detail: (document.querySelector("[data-plan-detail]") as HTMLElement | null)?.dataset.planDetail ?? null,
+        rows: Array.from(document.querySelectorAll("[data-plan-detail] [data-plan-feats] > *")).map((x) => `${x.classList.contains("pw-f--no") ? "-" : "+"}${(x.textContent || "").trim()}`),
+        when: (document.querySelector("[data-plan-detail] p")?.textContent || "").trim(),
+      };
+    }, sheet);
+  try {
+    await toPlanSheet(page, n);
+    await page.mouse.move(1, 1);
+    const m = await look();
+    check(`${name}: ${cards} tiles, no swiped row of cards`, m.tiles.length === cards && m.cards === 0, `${m.tiles.length} tiles · ${m.cards} card rows`);
+    check(`${name}: no sideways scroll`, m.sw <= m.vw + 1, `${m.sw} > ${m.vw}`);
+    const cut = m.tiles.filter((t) => t.top < 0 || t.bottom + 3 > (m.barTop ?? m.vh) || t.left < 0 || t.right + 3 > m.vw).map((t) => `${t.slug} ${Math.round(t.top)}..${Math.round(t.bottom)}`);
+    check(`${name}: every tile whole on the first screen, above the start button`, !cut.length && m.barTop !== null, `${cut.join(", ")} · button from ${Math.round(m.barTop ?? -1)}`);
+    check(`${name}: tiles ≥ 72px tall`, m.tiles.every((t) => t.h >= 72), m.tiles.map((t) => t.h).join(" · "));
+    if (cards % 2 === 1) { const last = m.tiles[m.tiles.length - 1], first = m.tiles[0]; check(`${name}: the odd tile takes the full width`, last.left - first.left < 1 && last.right - m.tiles[1].right > -1, `${Math.round(last.left)}..${Math.round(last.right)}`); }
+    const hero = m.tiles.find((t) => t.on);
+    check(`${name}: the "Most picked" plan is chosen on arrival`, !!hero && Boolean((await page.locator(`${sheet} [data-plan-card="${hero.slug}"]`).textContent())?.includes("Most picked")), hero?.slug ?? "none");
+    check(`${name}: the button is pinned to the bottom edge`, Math.abs((m.barBottom ?? 0) - m.vh) <= 1 && /^Start \d+-day free trial$/.test(m.go), `${m.barBottom} of ${m.vh} · ${m.go}`);
+    // Every tile: the list under the tiles and the button's line follow the tap; the page stays put.
+    const seen = new Set<string>();
+    for (const t of m.tiles) {
+      const before = await page.locator(sheet).evaluate((el: HTMLElement) => el.scrollTop);
+      await page.locator(`${sheet} [data-plan-card="${t.slug}"]`).click();
+      await page.waitForTimeout(250);
+      const a = await look();
+      const tile = a.tiles.find((x) => x.slug === t.slug)!;
+      const tileName = (await page.locator(`${sheet} [data-plan-card="${t.slug}"] [data-plan-head] > :first-child`).innerText()).trim().toLowerCase();
+      const after = await page.locator(sheet).evaluate((el: HTMLElement) => el.scrollTop);
+      seen.add(a.rows.join("|"));
+      check(`${name}: tap ${t.slug} — it alone is chosen; the list and the button's line are its own`, tile.on && a.tiles.filter((x) => x.on).length === 1 && a.detail === t.slug && a.rows.length > 0 && a.sub.toLowerCase().startsWith(tileName + " ·") && a.sub.endsWith(tile.price.replace(/^from/, "")) && Math.abs(after - before) <= 1, `${a.sub} · ${a.rows.length} rows · scroll ${before}→${after}`);
+    }
+    check(`${name}: each plan's list differs`, seen.size === m.tiles.length, `${seen.size} lists for ${m.tiles.length} tiles`);
+    // Monthly ↔ Annual: the prices change, no tile moves.
+    const heights = (await look()).tiles.map((t) => t.h);
+    await page.locator(`${sheet} .jf-term [data-term="YEAR"]`).click();
+    await page.waitForTimeout(350);
+    const y = await look();
+    check(`${name}: Annual — every tile prices a year, no tile changes height`, y.tiles.every((t) => /\/yr$/.test(t.price)) && y.tiles.every((t, i) => Math.abs(t.h - heights[i]) <= 1) && /\/yr$/.test(y.sub), `${y.tiles.map((t) => `${t.price} ${t.h}`).join(" · ")} · ${y.sub}`);
+    await page.locator(`${sheet} .jf-term [data-term="MONTH"]`).click();
+    await page.waitForTimeout(350);
+    const mo = await look();
+    check(`${name}: Monthly again — /mo, the same heights`, mo.tiles.every((t) => /\/mo$/.test(t.price)) && mo.tiles.every((t, i) => Math.abs(t.h - heights[i]) <= 1), mo.tiles.map((t) => `${t.price} ${t.h}`).join(" · "));
+    // The end of the sheet: the terms and the last row clear of the button, which is still there.
+    await page.locator(sheet).evaluate((el: HTMLElement) => { el.scrollTop = el.scrollHeight; });
+    await page.waitForTimeout(350);
+    const end = await page.evaluate(() => {
+      const bar = document.querySelector("[data-plan-bar]")!.getBoundingClientRect();
+      const terms = document.querySelector("#pwTerms")!.getBoundingClientRect();
+      const rows = Array.from(document.querySelectorAll("[data-plan-detail] [data-plan-feats] > *"));
+      const last = rows[rows.length - 1]?.getBoundingClientRect();
+      return { barTop: bar.top, barBottom: bar.bottom, terms: terms.bottom, last: last?.bottom ?? 0, vh: innerHeight };
+    });
+    check(`${name}: at the end the terms and the last row are above the button, still pinned`, end.terms <= end.barTop && end.last <= end.barTop && Math.abs(end.barBottom - end.vh) <= 1, JSON.stringify(end));
+    // The code field with the keyboard up: the window 300px shorter, the field in sight, uncovered.
+    const promo = page.locator(`${sheet} .pw-promo-in`);
+    await promo.scrollIntoViewIfNeeded();
+    await promo.focus();
+    await page.setViewportSize({ width, height: height - 300 });
+    await page.waitForTimeout(700);
+    const kb = await page.evaluate(() => {
+      const f = document.querySelector("section.plan-sheet.is-in .pw-promo-in")!.getBoundingClientRect();
+      const bar = document.querySelector("[data-plan-bar]") as HTMLElement;
+      const cs = getComputedStyle(bar), b = bar.getBoundingClientRect();
+      const hidden = cs.visibility === "hidden" || b.top >= innerHeight - 1;
+      return { top: f.top, bottom: f.bottom, vh: innerHeight, hidden, barTop: b.top };
+    });
+    check(`${name}: the code field in sight with the keyboard up, the button out of its way`, kb.top >= 0 && kb.bottom <= kb.vh && (kb.hidden || kb.barTop >= kb.bottom), JSON.stringify(kb));
+    await page.setViewportSize({ width, height });
+    // A cancelled Checkout comes back to the plan chosen before it (the tab's memory).
+    const pick = m.tiles[0].slug;
+    await page.locator(`${sheet} [data-plan-card="${pick}"]`).click();
+    const row = await db.syncState.findFirst({ where: { key: { startsWith: "signup:" }, cursor: { contains: `tiles.${n}@${MAIL_DOMAIN}` } }, select: { key: true } });
+    const tok = new URL(page.url()).searchParams.get("signup") ?? row?.key.slice("signup:".length) ?? null;
+    if (tok) {
+      await page.goto(`${BASE}/auth/register?signup=${encodeURIComponent(tok)}&checkout=cancelled`, { waitUntil: "load", timeout: 120000 });
+      await page.locator(`${sheet} [data-plan-card]`).first().waitFor({ timeout: 60000 });
+      await page.waitForTimeout(800);
+      const back = await look();
+      check(`${name}: back from a cancelled Checkout, ${pick} is still the choice`, back.tiles.find((t) => t.on)?.slug === pick, back.tiles.find((t) => t.on)?.slug ?? "none");
+    } else note(name, "no ?signup= in the address — the cancelled return was not tried");
+  } catch (e) {
+    check(`${name}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
+  } finally {
+    await ctx.close();
+  }
+}
+
 /** /dashboard/upgrade as qa@acme.test: the desk build at 1024 / 1440, the phone build at ≤768. */
 let qaCookies: any[] | null = null;
 async function upgrade(browser: any, widths = WIDTHS, cards = 3) {
@@ -481,11 +625,35 @@ async function main() {
     }
     const browser = await pw.chromium.launch({ channel: "chrome", args: ["--disable-blink-features=AutomationControlled"] }).catch(() => pw.chromium.launch());
     try {
+      // QA_TERMS_TILES=3|4: only the phone's tiles, against QA_TERMS_URL (a server with or without the custom plan).
+      if (process.env.QA_TERMS_TILES) {
+        const cards = Number(process.env.QA_TERMS_TILES) || 3;
+        for (const [w, h, k] of [[360, 640, 31], [390, 844, 32], [430, 932, 33]]) await phoneTiles(browser, w, h, k, cards);
+        const wk = await pw.webkit.launch().catch(() => null);
+        if (wk) {
+          try {
+            await phoneTiles(wk, 390, 844, 34, cards);
+          } finally {
+            await wk.close();
+          }
+        }
+      } else {
       console.log("── landing #pricing and /pricing");
       await marketing(browser);
       console.log("── the signup plan step");
       await planStep(browser, 390, 1);
       await planStep(browser, 1440, 2);
+      console.log("── the phone's plan step: tiles, the chosen plan, one pinned button");
+      for (const [w, h, k] of [[360, 640, 11], [390, 844, 12], [430, 932, 13]]) await phoneTiles(browser, w, h, k);
+      const wk = await pw.webkit.launch().catch(() => null);
+      if (!wk) note("WebKit", "not installed (npx playwright install webkit) — the tiles ran in Chromium only");
+      else {
+        try {
+          for (const [w, h, k] of [[360, 640, 14], [390, 844, 15]]) await phoneTiles(wk, w, h, k);
+        } finally {
+          await wk.close();
+        }
+      }
       console.log("── /dashboard/upgrade");
       await upgrade(browser);
       console.log("── the sign-in pages' mark");
@@ -498,7 +666,9 @@ async function main() {
         BASE = `http://localhost:${PORT + 1}`;
         await marketing(browser, [390, 1440], true);
         await planStep(browser, 1440, 3, 4);
+        for (const [w, h, k] of [[360, 640, 21], [390, 844, 22], [430, 932, 23]]) await phoneTiles(browser, w, h, k, 4);
         await upgrade(browser, [390, 1440], 4);
+      }
       }
     } finally {
       await browser.close();

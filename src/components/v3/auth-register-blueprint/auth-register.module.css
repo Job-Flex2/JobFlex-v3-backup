@@ -1705,3 +1705,22 @@
   .bp :global(.pw-head-r) :global(.jf-term.jf-term.has-badge) { margin-bottom: 0; }
   .bp :global(.pw-head:has(.jf-term.has-badge)) { margin-bottom: 8px; }
 }
+
+/* THE PLAN STEP ON A PHONE: EVERY PLAN ON THE FIRST SCREEN (owner, 2026-10-12).
+   The tiles (./plan-phone) replace the swiped cards at ≤768px; the head closes
+   up so that on 360×640 the steps, "Pick a plan.", the trial stamp, the switch
+   and every tile stand above the pinned start button without a scroll. The
+   desk (≥769px) is untouched. */
+@media (max-width: 768px) {
+  .bp :global(.plan-sheet-in) { padding-top: 12px; }
+  .bp :global(.plan-sheet .brand) { margin-bottom: 12px; }
+  .bp :global(.plan-sheet .stepper) { margin-bottom: 12px; }
+  .bp :global(#stepPlan:not(.is-hidden)) { gap: 12px; }
+  .bp :global(#stepPlan) :global(.auth-h1) { font-size: 26px; line-height: 1.05; }
+  .bp :global(.pw-head), .bp :global(.pw-head:has(.pw-trial)), .bp :global(.pw-head-r) { gap: 8px; }
+  .bp :global(.pw-trial) { font-size: 11px; letter-spacing: 0.05em; padding: 5px 8px; }
+  .bp :global(.pw-trial .ic) { width: 14px; height: 14px; margin-right: 6px; vertical-align: -3px; }
+  /* the switch's badge hangs 14px under it; 16px keeps it 8px clear of the
+     "Most picked" plate over the first row */
+  .bp :global(.pw-head-r) :global(.jf-term.jf-term.has-badge) { margin-bottom: 15px; }
+}
