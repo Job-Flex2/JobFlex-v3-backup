@@ -89,6 +89,12 @@ export type ConsoleLine = {
    */
   flag?: "auto" | "adjusted" | "suggested" | "computed";
   flagNote?: string;
+  /**
+   * The trade a line belongs to on an estimate priced from blueprints (lib/plans):
+   * the ledger heads each trade's lines with it, and the proposal's line name
+   * carries it ("Framing — Exterior walls…"), since a proposal has no sections.
+   */
+  group?: string;
 };
 
 /** Kept for callers that still name the two ledgers; nothing branches on it. */
@@ -317,7 +323,8 @@ export function estimateFromLines(
     const hasProduct = Boolean(l.store || l.productUrl || l.imageUrl || l.retailPrice != null);
     const hasMaterial = num(l.materialPrice) > 0 || hasProduct;
     const hasLabor = num(l.laborPrice) > 0;
-    const common = { id: l.id, name: l.name, quantity: l.qty, unit: l.unit || undefined, flag: l.flag, flagNote: l.flagNote };
+    const name = l.group && !l.name.startsWith(l.group) ? `${l.group} — ${l.name}` : l.name;
+    const common = { id: l.id, name, quantity: l.qty, unit: l.unit || undefined, flag: l.flag, flagNote: l.flagNote };
     if (hasMaterial || !hasLabor) {
       materials.push({
         ...common,

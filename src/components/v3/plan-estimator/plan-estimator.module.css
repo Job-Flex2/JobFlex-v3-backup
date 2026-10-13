@@ -1,0 +1,797 @@
+/* ============================================================
+   SMART PROPOSAL · FROM BLUEPRINTS
+   One surface, two hosts: the desktop console (inside the blueprint
+   shell's content column) and the handheld studio (the phone frame).
+
+   SPECIFICITY: every rule below is `.pe.pe .x` — (0,3,0). The shell's
+   page modules reset `.bp :global(.content button)` at (0,2,1) and
+   `.bp :global(.content *)` at (0,2,0); a (0,2,0) rule here would lose
+   its border, background and font on the desktop. (0,3,0) wins there
+   and costs nothing on the phone.
+
+   TOKENS: the shell's when present (desktop), the same values as
+   fallbacks (phone, where the frame declares its own set).
+   No @keyframes: Lightning CSS rejects them inside a module.
+   ============================================================ */
+.pe {
+  --pe-ink: var(--ink, #0a0a0a);
+  --pe-paper: var(--paper-deep, #ffffff);
+  --pe-paper-2: var(--paper, #f2f0eb);
+  --pe-blue: var(--blueprint, #1854a0);
+  --pe-blue-soft: rgba(24, 84, 160, 0.08);
+  --pe-muted: var(--muted, #555555);
+  --pe-faint: var(--muted-light, #888888);
+  --pe-hair: var(--hair, rgba(10, 10, 10, 0.12));
+  --pe-warn: var(--warning-dark, #96691a);
+  --pe-warn-soft: var(--warning-soft, rgba(184, 132, 32, 0.08));
+  --pe-bad: var(--danger, #a83232);
+  --pe-bad-soft: var(--danger-soft, rgba(168, 50, 50, 0.08));
+  --pe-ok: var(--success, #3a7d44);
+  --pe-ok-soft: var(--success-soft, rgba(58, 125, 68, 0.07));
+  --pe-mono: var(--font-mono, "JetBrains Mono", "SF Mono", ui-monospace, monospace);
+  --pe-border: 2px solid var(--pe-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  color: var(--pe-ink);
+}
+.pe[hidden] {
+  display: none !important;
+}
+
+/* ── head ─────────────────────────────────────────────────── */
+.pe.pe .head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.pe.pe .headTxt {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.pe.pe .kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pe-muted);
+  margin-bottom: 10px;
+}
+.pe.pe .kicker::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pe-blue);
+}
+.pe.pe .title {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+}
+.pe.pe .sub {
+  margin-top: 8px;
+  font-family: var(--pe-mono);
+  font-size: 12px;
+  color: var(--pe-muted);
+}
+.pe.pe .steps {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-wrap: wrap;
+}
+.pe.pe .steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px 0 5px;
+  border: 1.5px solid var(--pe-hair);
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pe-faint);
+  background: var(--pe-paper);
+}
+.pe.pe .steps .stepNow {
+  border-color: var(--pe-ink);
+  color: var(--pe-ink);
+}
+.pe.pe .steps .stepDone {
+  color: var(--pe-blue);
+  border-color: var(--pe-blue);
+}
+.pe.pe .stepN {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  font-family: var(--pe-mono);
+  font-size: 11px;
+  background: var(--pe-paper-2);
+}
+.pe.pe .stepNow .stepN {
+  background: var(--pe-ink);
+  color: var(--pe-paper);
+}
+.pe.pe .stepDone .stepN {
+  background: var(--pe-blue);
+  color: #fff;
+}
+
+/* ── cards ────────────────────────────────────────────────── */
+.pe.pe .card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 24px;
+  border: var(--pe-border);
+  border-radius: 2px;
+  background: var(--pe-paper);
+  min-width: 0;
+}
+.pe.pe .cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.pe.pe .cardHead > div:first-child {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+.pe.pe .h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+.pe.pe .p {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--pe-muted);
+}
+.pe.pe .quick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pe.pe .note {
+  font-family: var(--pe-mono);
+  font-size: 12px;
+  color: var(--pe-muted);
+}
+.pe.pe .err {
+  padding: 10px 12px;
+  border-left: 3px solid var(--pe-bad);
+  background: var(--pe-bad-soft);
+  font-size: 13px;
+  color: var(--pe-bad);
+}
+.pe.pe .warnList,
+.pe.pe .checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pe.pe .warnList li,
+.pe.pe .checkWarn,
+.pe.pe .checkInfo {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  border-left: 3px solid var(--pe-warn);
+  background: var(--pe-warn-soft);
+}
+.pe.pe .checkInfo {
+  border-left-color: var(--pe-hair);
+  background: var(--pe-paper-2);
+  color: var(--pe-muted);
+}
+
+/* ── buttons ──────────────────────────────────────────────── */
+.pe.pe .btnPrimary,
+.pe.pe .btnGhost,
+.pe.pe .btnSmall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border: var(--pe-border);
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--pe-ink);
+  background: var(--pe-paper);
+  transition: transform 0.12s var(--ease, ease), box-shadow 0.12s var(--ease, ease), background 0.12s;
+}
+.pe.pe .btnPrimary {
+  background: var(--pe-blue);
+  border-color: var(--pe-blue);
+  color: #fff;
+}
+.pe.pe .btnSmall {
+  height: 32px;
+  padding: 0 11px;
+  border-width: 1.5px;
+  font-size: 11px;
+}
+.pe.pe .btnPrimary:hover:not(:disabled),
+.pe.pe .btnGhost:hover:not(:disabled),
+.pe.pe .btnSmall:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 3px 3px 0 var(--pe-ink);
+}
+.pe.pe .btnPrimary:disabled,
+.pe.pe .btnGhost:disabled,
+.pe.pe .btnSmall:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pe.pe .bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--pe-hair);
+  flex-wrap: wrap;
+}
+.pe.pe .barNote {
+  flex: 1 1 auto;
+  text-align: right;
+  font-family: var(--pe-mono);
+  font-size: 12px;
+  color: var(--pe-muted);
+}
+.pe.pe .file {
+  display: none;
+}
+
+/* ── 1 · drop + pick ──────────────────────────────────────── */
+.pe.pe .drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  border: 2px dashed var(--pe-ink);
+  border-radius: 2px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--pe-paper-2);
+  transition: background 0.12s;
+}
+.pe.pe .dropOn,
+.pe.pe .drop:hover {
+  background: var(--pe-blue-soft);
+  border-color: var(--pe-blue);
+}
+.pe.pe .dropIc {
+  width: 48px;
+  height: 48px;
+  color: var(--pe-blue);
+}
+.pe.pe .dropH {
+  font-size: 20px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+.pe.pe .dropP {
+  max-width: 460px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--pe-muted);
+}
+.pe.pe .how {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: how;
+}
+.pe.pe .how li {
+  counter-increment: how;
+  padding: 12px 14px;
+  border: 1.5px solid var(--pe-hair);
+  border-radius: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pe-muted);
+}
+.pe.pe .how li::before {
+  content: counter(how);
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--pe-mono);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--pe-blue);
+}
+.pe.pe .how b {
+  color: var(--pe-ink);
+}
+.pe.pe .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.pe.pe .page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1.5px solid var(--pe-hair);
+  border-radius: 2px;
+  background: var(--pe-paper);
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.12s, border-color 0.12s;
+  font-family: inherit;
+  color: inherit;
+}
+.pe.pe .pageOn {
+  opacity: 1;
+  border: 2px solid var(--pe-blue);
+  padding: 7.5px;
+}
+.pe.pe .thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--pe-hair);
+}
+.pe.pe .pageMeta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.pe.pe .pageN {
+  font-family: var(--pe-mono);
+  font-size: 11px;
+  font-weight: 800;
+}
+.pe.pe .pageKind {
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pe.pe .tick {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  background: transparent;
+}
+.pe.pe .pageOn .tick {
+  background: var(--pe-blue);
+}
+
+/* ── 2 · progress rows (reading, pricing) ─────────────────── */
+.pe.pe .meter {
+  height: 6px;
+  border-radius: 2px;
+  background: var(--pe-paper-2);
+  overflow: hidden;
+}
+.pe.pe .meter span {
+  display: block;
+  height: 100%;
+  background: var(--pe-blue);
+  transition: width 0.4s var(--ease, ease);
+}
+.pe.pe .rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pe.pe .row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pe-hair);
+  min-width: 0;
+}
+.pe.pe .rowBad .rowSub {
+  color: var(--pe-bad);
+}
+.pe.pe .rowThumb {
+  flex: none;
+  width: 64px;
+  height: 48px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--pe-hair);
+}
+.pe.pe .rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.pe.pe .rowTitle {
+  font-size: 14px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.pe.pe .rowTitle em {
+  font-style: normal;
+  font-family: var(--pe-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pe-muted);
+}
+.pe.pe .rowSub {
+  font-size: 12.5px;
+  color: var(--pe-muted);
+  overflow-wrap: anywhere;
+}
+.pe.pe .rowMoney {
+  font-family: var(--pe-mono);
+  font-size: 14px;
+  font-weight: 800;
+}
+.pe.pe .live {
+  color: var(--pe-blue);
+  font-weight: 700;
+  animation: spPulse 1.4s ease-in-out infinite;
+}
+.pe.pe .chipWarn,
+.pe.pe .chipRule {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 2px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pe-warn);
+  background: var(--pe-warn-soft);
+  white-space: nowrap;
+}
+.pe.pe .chipRule {
+  margin-left: 8px;
+}
+
+/* ── 3 · the house + the takeoff ──────────────────────────── */
+.pe.pe .facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+.pe.pe .fact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--pe-hair);
+  border-radius: 2px;
+  min-width: 0;
+}
+.pe.pe .factL {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pe-muted);
+}
+.pe.pe .factV {
+  font-family: var(--pe-mono);
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.pe.pe .factF {
+  font-size: 11.5px;
+  color: var(--pe-faint);
+  overflow-wrap: anywhere;
+}
+.pe.pe .edit {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border: 1.5px dashed var(--pe-blue);
+  border-radius: 2px;
+  background: var(--pe-blue-soft);
+}
+.pe.pe .fldPair {
+  display: contents;
+}
+.pe.pe .fld,
+.pe.pe .loc {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.pe.pe .fld span,
+.pe.pe .loc span {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pe-muted);
+}
+.pe.pe .fld input,
+.pe.pe .fld select,
+.pe.pe .loc input,
+.pe.pe .itemQty {
+  height: 38px;
+  padding: 0 10px;
+  border: 1.5px solid var(--pe-ink);
+  border-radius: 2px;
+  font-family: var(--pe-mono);
+  font-size: 13.5px;
+  color: var(--pe-ink);
+  background: var(--pe-paper);
+  min-width: 0;
+}
+.pe.pe .editBar {
+  display: flex;
+  align-items: flex-end;
+}
+.pe.pe .trades {
+  display: flex;
+  flex-direction: column;
+  border-top: 1.5px solid var(--pe-hair);
+}
+.pe.pe .trade {
+  border-bottom: 1.5px solid var(--pe-hair);
+}
+.pe.pe .tradeOff .tradeName,
+.pe.pe .tradeOff .tradeMeta {
+  color: var(--pe-faint);
+}
+.pe.pe .tradeHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  min-width: 0;
+}
+.pe.pe .tradeTick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
+}
+.pe.pe .tradeTick input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pe-blue);
+  flex: none;
+}
+.pe.pe .tradeName {
+  font-size: 14.5px;
+  font-weight: 800;
+  overflow-wrap: break-word;
+}
+.pe.pe .tradeMeta {
+  font-family: var(--pe-mono);
+  font-size: 12px;
+  color: var(--pe-muted);
+  white-space: nowrap;
+}
+.pe.pe .items {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 12px 28px;
+}
+.pe.pe .item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 46px 108px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--pe-hair);
+}
+.pe.pe .itemName {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pe.pe .itemBasis {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--pe-faint);
+}
+.pe.pe .itemQty {
+  height: 34px;
+  text-align: right;
+  width: 100%;
+}
+.pe.pe .itemUnit {
+  font-family: var(--pe-mono);
+  font-size: 12px;
+  color: var(--pe-muted);
+}
+.pe.pe .src {
+  justify-self: start;
+  padding: 3px 7px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.pe.pe .src_plan {
+  color: var(--pe-ok);
+  background: var(--pe-ok-soft);
+}
+.pe.pe .src_derived {
+  color: var(--pe-blue);
+  background: var(--pe-blue-soft);
+}
+.pe.pe .src_rule {
+  color: var(--pe-warn);
+  background: var(--pe-warn-soft);
+}
+.pe.pe .src_entered {
+  color: #fff;
+  background: var(--pe-ink);
+}
+/* A trade's lines by step (Rough-in, Trim-out, Fixtures…), each tagged work or material. */
+.pe.pe .phase {
+  display: flex;
+  flex-direction: column;
+}
+.pe.pe .phaseHead {
+  padding: 12px 0 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pe-blue);
+}
+.pe.pe .role {
+  align-self: flex-start;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pe-faint);
+}
+.pe.pe .role_material {
+  color: var(--pe-muted);
+}
+.pe.pe .role_labor {
+  color: var(--pe-blue);
+}
+.pe.pe .loc {
+  max-width: 420px;
+}
+
+/* ── the phone ────────────────────────────────────────────── */
+.pe.phone {
+  gap: 14px;
+}
+.pe.pe.phone .title {
+  font-size: 28px;
+}
+.pe.pe.phone .steps li {
+  height: 26px;
+  padding: 0 8px 0 4px;
+  font-size: 10px;
+}
+.pe.pe.phone .card {
+  padding: 16px 14px;
+}
+.pe.pe.phone .how {
+  grid-template-columns: 1fr;
+}
+.pe.pe.phone .grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pe.pe.phone .items {
+  padding-left: 0;
+}
+/* A trade's name gets the whole first row; its count and button the next. */
+.pe.pe.phone .tradeHead {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.pe.pe.phone .tradeTick {
+  flex: 1 1 100%;
+}
+.pe.pe.phone .tradeMeta {
+  flex: 1 1 auto;
+  padding-left: 28px;
+}
+/* Only the step you are on is spelled out; the others are their numbers. */
+.pe.pe.phone .steps li:not(.stepNow) {
+  font-size: 0;
+  gap: 0;
+  padding: 0 3px;
+}
+.pe.pe.phone .facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pe.pe.phone .item {
+  grid-template-columns: minmax(0, 1fr) 84px 34px;
+}
+.pe.pe.phone .src {
+  grid-column: 1 / -1;
+}
+.pe.pe.phone .bar .btnPrimary {
+  flex: 1 1 100%;
+}
+.pe.pe.phone .barNote {
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .pe.pe .how {
+    grid-template-columns: 1fr;
+  }
+  .pe.pe .tradeHead {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .pe.pe .tradeTick {
+    flex: 1 1 100%;
+  }
+  .pe.pe .item {
+    grid-template-columns: minmax(0, 1fr) 84px 34px;
+  }
+  .pe.pe .src {
+    grid-column: 1 / -1;
+  }
+}

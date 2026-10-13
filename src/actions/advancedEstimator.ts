@@ -24,8 +24,8 @@ import { PRICING_RULES, UNIT_RULES } from "@/lib/estimate/master-prompt";
 import { normalizeUnit, pairEstimateLines } from "@/lib/estimate/console-model";
 import { applyRepairs, repairInstruction, validateEstimate } from "@/lib/estimate/validate-estimate";
 import { computeLines, computedPromptBlock, mergeComputed } from "@/lib/estimate/computed-lines";
-import { detectTrade } from "@/lib/estimate/trade-knowledge";
-import { buildLegacyEstimatePrompt, legacyEstimateFromText, LEGACY_SYSTEM_MESSAGE, specialtyFor } from "@/lib/estimate/legacy-estimate";
+import { detectTrade, GENERAL_TRADE, TRADES, type TradeProfile } from "@/lib/estimate/trade-knowledge";
+import { buildLegacyEstimatePrompt, effectiveProcedure, legacyEstimateFromText, LEGACY_SYSTEM_MESSAGE, specialtyFor } from "@/lib/estimate/legacy-estimate";
 import { costQuestionBlock, costQuestions } from "@/lib/estimate/intake-questions";
 import { isTradeId } from "@/lib/inventory";
 import { procedureFor } from "@/lib/estimate/procedures";
@@ -46,6 +46,10 @@ import { trackActivation, trackProposalCreated } from "@/lib/activation-events";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { takeTrialCap } from "@/lib/trialMeter";
 import { requirePage } from "@/lib/customPageAccess";
+import { readPlanPass } from "@/lib/plans/planToken";
+import { bindLinesToTakeoff } from "@/lib/plans/tradeBrief";
+import { GENERAL_CONDITIONS_PROCEDURE, newBuildPhases, newBuildProcedure, planTradeRun, type PlanTradeRun } from "@/lib/plans/tradeSetup";
+import { tradePriceInput } from "@/lib/plans/wire";
 
 /**
  * Quota gate for the AI *run* functions. Returned (not thrown) because these
@@ -115,8 +119,15 @@ interface GenerateInput {
    * Site photos from the intake step, as base64 data URLs (or https URLs).
    * Sent to the model as vision input, never stored. See `safePhotos`.
    */
-  photos?: string[];
+  photos?: SitePhoto[];
 }
+
+/**
+ * One site photo. The browser sends `{ url }`: React's server-action decoder refuses an
+ * ARRAY whose strings add up past a million characters ("Maximum array nesting
+ * exceeded"), which two phone photos do. A bare string is still read, for older pages.
+ */
+type SitePhoto = string | { url: string };
 
 /** How many times a rejected estimate is handed back to the model with its
  *  violations before the deterministic repair takes over (audit 2026-09-17). */
@@ -140,11 +151,12 @@ const MAX_PHOTO_CHARS = 8_000_000; // ~6MB binary once base64-decoded.
  * non-image data URL, an oversized frame — is dropped silently rather than
  * failing the estimate the contractor is waiting on.
  */
-function safePhotos(photos: string[] | undefined): string[] {
+function safePhotos(photos: SitePhoto[] | undefined): string[] {
   if (!photos?.length) return [];
   const clean: string[] = [];
   for (const p of photos) {
-    const v = typeof p === "string" ? p.trim() : "";
+    const raw = typeof p === "string" ? p : p && typeof p === "object" && typeof p.url === "string" ? p.url : "";
+    const v = raw.trim();
     if (!v || v.length > MAX_PHOTO_CHARS) continue;
     const inlineImage = /^data:image\/(png|jpe?g|webp|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/i.test(v);
     const httpsImage = /^https:\/\//i.test(v);
@@ -182,7 +194,7 @@ export async function analyzeEstimatePrompt(input: {
   location?: string;
   sqft?: number;
   /** Site photos as data/https URLs — a photo often answers a question the gate would otherwise ask. */
-  photos?: string[];
+  photos?: SitePhoto[];
 }): Promise<
   | { ok: true; data: PromptAnalysis }
   | { ok: false; error: string; code?: "PLAN_LIMIT_REACHED"; resource?: LimitKey }
@@ -318,11 +330,12 @@ Description: ${input.description}${stated.length ? `\n\nThe brief already states
  * book (owner, 2026-10-09: a shop list of the wrong products embarrassed the
  * contractor in front of the client).
  */
-export async function generateAdvancedEstimate(input: GenerateInput): Promise<
+type EstimateRun =
   | { ok: true; data: GeneratedEstimate; disabled?: false }
   | { ok: true; data: GeneratedEstimate; disabled: true }
-  | { ok: false; error: string; code?: "PLAN_LIMIT_REACHED"; resource?: LimitKey }
-> {
+  | { ok: false; error: string; code?: "PLAN_LIMIT_REACHED"; resource?: LimitKey };
+
+export async function generateAdvancedEstimate(input: GenerateInput): Promise<EstimateRun> {
   let organizationId: string;
   try {
     ({ organizationId } = await requireEstimatorOrManager());
@@ -343,7 +356,57 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
   }
   const trial = await takeTrialCap(organizationId, "aiCalls");
   if (!trial.ok) return trial.failure;
+  return runSmartEstimate(organizationId, input, null, trial.refund);
+}
 
+/**
+ * A trade of a house priced from its blueprint takeoff (lib/plans): the brief is
+ * written on the server from the takeoff, the specialty is pinned, and the trial cap
+ * was taken once when the plan set was opened (planEstimator.startPlanSession) — the
+ * signed pass that proves it rides with every trade.
+ */
+export async function pricePlanTrade(raw: unknown): Promise<EstimateRun> {
+  const parsed = tradePriceInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "This trade's takeoff could not be read — open the plans again." };
+  const input = parsed.data;
+  let organizationId: string;
+  try {
+    ({ organizationId } = await requireEstimatorOrManager());
+    await requirePage(organizationId, ["smart-proposal"]);
+    const { requireFeatureOrThrow } = await import("@/lib/entitlements");
+    const { getOrgPlanById } = await import("@/lib/orgPlan");
+    requireFeatureOrThrow(await getOrgPlanById(organizationId), "advanced_estimator");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Upgrade required" };
+  }
+  const pass = readPlanPass(input.token, organizationId);
+  if (!pass) return { ok: false, error: "This blueprint session has expired — open the plans again." };
+  try {
+    // One whole house is 18 trades: pricing it twice (after a takeoff change) with a
+    // few retries is fine, a loop is not — the whole plan set cost one trial use.
+    await enforceRateLimit(`plan-price:${pass.nonce}`, 40, 6 * HOUR, "trade estimates");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Too many trade estimates." };
+  }
+  const blocked = await estimatorRunBlocked(organizationId);
+  if (blocked) return blocked;
+  if (!isOpenAIEnabled()) return { ok: false, error: "Pricing needs the estimator's AI service, which is not set up on this workspace." };
+  const run = planTradeRun({ trade: input.trade, house: input.house, items: input.items, alsoPriced: input.alsoPriced });
+  if (!run.items.length) return { ok: false, error: `The takeoff has nothing for ${run.label.toLowerCase()}.` };
+  return runSmartEstimate(organizationId, { projectType: run.label, description: run.brief, location: input.location ?? undefined }, run, async () => {});
+}
+
+/** The validator's view of a blueprint trade: its profile without the remodel phases. */
+function planProfile(run: PlanTradeRun): TradeProfile {
+  const base = TRADES.find((t) => t.id === run.setup.profileId) ?? GENERAL_TRADE;
+  return { ...base, phases: newBuildPhases(base.phases), lineRange: run.setup.lineRange ?? base.lineRange };
+}
+
+/**
+ * The estimate itself, once the gates have passed — for a brief (generateAdvancedEstimate)
+ * or for one trade of a house off its plans (pricePlanTrade, `plan` set).
+ */
+async function runSmartEstimate(organizationId: string, input: GenerateInput, plan: PlanTradeRun | null, refund: () => Promise<void>): Promise<EstimateRun> {
   const qualityTier = input.qualityTier ?? "standard";
   // "Regenerate with AI" feeds the user's edited assumptions in as constraints.
   const cleanAssumptions = (input.assumptions ?? []).map((a) => a.trim()).filter(Boolean);
@@ -374,6 +437,21 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
     // the system message, a specialty's preamble or procedure. Defaults when
     // nothing was saved (or the table is not there yet).
     const overrides = await loadPromptOverrides();
+    // A trade off a blueprint prices from its specialty's procedure without the steps a
+    // new house never has (a tear-off, a removal, a patch), or — for the general
+    // conditions — from the builder's own list (lib/plans/tradeSetup).
+    const planProcedure = plan
+      ? plan.trade === "general"
+        ? GENERAL_CONDITIONS_PROCEDURE
+        : (() => {
+            const own = effectiveProcedure(plan.setup.specialtyId, overrides);
+            return own ? newBuildProcedure(own) : null;
+          })()
+      : null;
+    const promptOverrides =
+      plan && planProcedure
+        ? { ...overrides, specialties: { ...overrides.specialties, [plan.setup.specialtyId]: { ...overrides.specialties[plan.setup.specialtyId], procedure: planProcedure } } }
+        : overrides;
     const legacy = buildLegacyEstimatePrompt(
       {
         description: input.description,
@@ -384,7 +462,14 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
         assumptions: cleanAssumptions,
         qualityTier,
       },
-      { withTradeRules: !reasoningModel, overrides },
+      {
+        // The trade-rules block re-detects the trade and lists its remodel phases;
+        // a blueprint trade has its takeoff block instead.
+        withTradeRules: !reasoningModel && !plan,
+        overrides: promptOverrides,
+        specialtyId: plan?.setup.specialtyId,
+        newBuild: plan ? { permit: plan.setup.permit, benchmarkQty: plan.benchmarkQty } : null,
+      },
     );
     console.info(
       `[advancedEstimator] Step 1 (estimate) · specialty=${legacy.specialty.id} scope=${legacy.scope} method=${legacy.remodelDomains.join("+") || "none"} utility=${legacy.utilityJob ?? "none"} prices=${legacy.priced ? `${legacy.priced.steps}/${legacy.priced.of}` : "none"} range=${legacy.range ? `${legacy.range.low}-${legacy.range.high}` : "none"} procedure=${legacy.procedure} hvac=${legacy.hvac} tier=${qualityTier} photos=${photos.length} prompt=${legacy.prompt.length}ch`
@@ -403,7 +488,8 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
             // The platform admin's system message when one is saved on
             // /admin/prompts, the built-in one otherwise.
             { role: "system", content: overrides.system?.trim() || LEGACY_SYSTEM_MESSAGE },
-            { role: "user", content: withPhotos(`${prefix}${legacy.prompt}${extra}`, photos) },
+            // A blueprint trade's takeoff rides last of the prompt proper, on every ask.
+            { role: "user", content: withPhotos(`${prefix}${legacy.prompt}${plan ? `\n\n${plan.block}` : ""}${extra}`, photos) },
           ],
           response_format: { type: "json_object" },
         },
@@ -438,7 +524,7 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
     // Up to two re-asks with the violations listed; whatever is still wrong
     // after that is repaired here and said out loud on the estimate
     // (lib/estimate/validate-estimate).
-    const trade = detectTrade(`${input.projectType ?? ""} ${input.description}`);
+    const trade = plan ? planProfile(plan) : detectTrade(`${input.projectType ?? ""} ${input.description}`);
 
     // ── Step 1a · The lines the brief MEASURES, priced without the model ────
     // The audit of 2026-09-17 showed the spread is a quantity problem: asked
@@ -453,7 +539,8 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
     // (owner, 2026-10-09), so a computed line's material is always its anchor
     // — which also makes two runs of one brief agree to the cent.
     const computed = await computeLines({
-      description: input.description,
+      // A blueprint trade's quantities are the takeoff's, bound after the answer.
+      description: plan ? "" : input.description,
       trade,
       state: input.location,
       // No organization stores a labor rate today (schema check, 2026-09-18),
@@ -559,7 +646,10 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
     // still far under the job's range is not an estimate. Every line but the
     // pass-through fees rises by one share to the range's point for the tier
     // (lib/estimate/remodel-sanity).
-    const floored = floorToRange(called.items, legacy.range, qualityTier);
+    // Not on a blueprint trade: its benchmark is shown to the model, but a house's
+    // trade is held to the builder price book on the estimate's notes instead
+    // (lib/plans/priceChecks) — raising it silently would hide the question.
+    const floored = plan ? null : floorToRange(called.items, legacy.range, qualityTier);
     if (floored && legacy.range) {
       console.warn(
         `[advancedEstimator] raised to the range · total ${Math.round(floored.from)} → ${Math.round(floored.to)} (${legacy.range.job}, ${legacy.range.place}, ${qualityTier})`,
@@ -582,7 +672,9 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
     // lines add up to — after the org's markup, which the proposal applies.
     const scrub = scrubUnaskedWork(parsedItems, input.description, legacy.specialty.id);
     if (scrub.dropped.length) console.info(`[advancedEstimator] dropped work the brief did not ask for: ${scrub.dropped.join(" | ")}`);
-    const bound = bindLinesToBrief(scrub.lines, legacy.facts, resolveMarkupRates(null, org));
+    const bound = plan
+      ? { ...bindLinesToTakeoff(scrub.lines, plan.items), snapped: [] as ReturnType<typeof bindLinesToBrief>["snapped"], fitted: false, sellTotal: undefined }
+      : bindLinesToBrief(scrub.lines, legacy.facts, resolveMarkupRates(null, org));
     if (bound.snapped.length || bound.fitted) console.info(`[advancedEstimator] held to the brief · snapped ${bound.snapped.map((x) => `${x.from}→${x.to} ${x.unit}`).join(", ") || "none"} · fitted ${bound.fitted ? `$${bound.sellTotal}` : "no"}`);
     const items = bound.lines;
     const heldTitle = bindTextToBrief(scrubUnaskedText(called.title, input.description, legacy.specialty.id), bound.snapped);
@@ -637,7 +729,7 @@ export async function generateAdvancedEstimate(input: GenerateInput): Promise<
       console.error(`[advancedEstimator] generation failed: ${err.message}`);
       return { ok: false, error: err.message };
     }
-    await trial.refund();
+    await refund();
     return { ok: false, error: friendlyAIError(err, "estimate generation") };
   }
 }

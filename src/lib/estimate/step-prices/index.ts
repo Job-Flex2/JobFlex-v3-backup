@@ -167,11 +167,13 @@ export function specialtyRange(
   specialty: { id: string; name: string },
   facts: BriefFacts,
   location: string | null | undefined,
+  /** The quantity in the benchmark's own unit when the caller measured it (a blueprint takeoff), not the brief. */
+  measured?: number | null,
 ): SpecialtyRange | null {
   const book = pricesFor(specialty.id);
   if (!book) return null;
   const b = book.benchmark;
-  const qty = briefQuantity(b.unit, facts, b.measures);
+  const qty = measured ?? briefQuantity(b.unit, facts, b.measures);
   if (!qty || !(qty > 0)) return null;
   if (qty < b.typicalQty[0] / 4 || qty > b.typicalQty[1] * 4) return null;
   const idx = locationIndex(location);

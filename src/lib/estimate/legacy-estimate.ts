@@ -115,6 +115,13 @@ export type LegacyPromptOptions = {
   overrides?: PromptOverrideSet | null;
   /** Skip detection and build for this specialty (the admin's prompt preview). */
   specialtyId?: string | null;
+  /**
+   * A trade of a NEW house priced from its blueprint takeoff (lib/plans): no remodel
+   * method, partial scope or utility pricing (a new house has no rooms to tear out),
+   * the permit decided by the trade instead of read off the brief, the benchmark sized
+   * by the takeoff, and the old builder told it is new construction.
+   */
+  newBuild?: { permit: PermitCall | null; benchmarkQty: number | null } | null;
 };
 
 /** The override shape this module reads — the loader's type without the db. */
@@ -214,14 +221,15 @@ export function buildLegacyEstimatePrompt(
   // their units — rides in the old prompt's "extra admin" slot for every
   // model, ahead of the trade profile block when that is sent too.
   const briefText = `${input.projectType ?? ""} ${input.description}`;
-  const scope = briefScope(briefText, specialty.id);
+  const newBuild = opts.newBuild ?? null;
+  const scope: BriefScope = newBuild ? "full" : briefScope(briefText, specialty.id);
   // The remodel method — what this brief implies, the chains, the code
   // triggers, the never-forgotten lines and the sanity ranges — for the
   // rooms the brief's words reach (lib/estimate/remodel-method).
-  const remodelDomains = remodelDomainsFor(briefText, specialty.id);
+  const remodelDomains = newBuild ? [] : remodelDomainsFor(briefText, specialty.id);
   // Sewer, storm and water lines are civil work, priced at public bid prices
   // (lib/estimate/utility-work) — never as house plumbing.
-  const utility = remodelDomains.length ? null : utilityJob(briefText, specialty.id);
+  const utility = remodelDomains.length || newBuild ? null : utilityJob(briefText, specialty.id);
   // The price book's cost on every step (lib/estimate/step-prices) — unless
   // this is a utility job the specialty's book is the wrong scale for (a
   // side-sewer book on a street main): then the job's bid prices govern.
@@ -230,14 +238,14 @@ export function buildLegacyEstimatePrompt(
   // Not every job takes a permit (owner, 2026-10-09): decided here from the
   // brief, the permit step leaves the procedure of a job that writes none,
   // and the decision rides last so it outranks every earlier word on permits.
-  const permit = permitCall({ text: briefText, specialtyId: specialty.id, scope });
+  const permit = newBuild ? newBuild.permit : permitCall({ text: briefText, specialtyId: specialty.id, scope });
   const dropPermit = !!permit && permit.need !== "required";
   const procedureBlock = procedureBlockFor(specialty, opts.overrides, scope, prices, dropPermit);
   const remodelMethod = formatRemodelMethod(remodelDomains, opts.overrides?.remodel);
   // A whole remodel of a known kind carries its range, so the model sees the
   // number before it answers; the action asks again when the reply falls
   // under it (lib/estimate/remodel-sanity). A stated price has no range.
-  const remodel = remodelRange(remodelJob(briefText, facts, scope, specialty.id, remodelDomains), facts, input.location, briefText);
+  const remodel = newBuild ? null : remodelRange(remodelJob(briefText, facts, scope, specialty.id, remodelDomains), facts, input.location, briefText);
   const remodelBlock = remodelMethod ? (remodel ? `${remodelMethod}\n\n${rangeLine(remodel)}` : remodelMethod) : null;
   const utilityRun = utilityRange(utility, facts, input.location);
   // Any other whole job whose size the brief states in the unit the trade
@@ -246,8 +254,13 @@ export function buildLegacyEstimatePrompt(
   // too. Remodelers and general contractors keep the method's ranges. A
   // stated price is binding and has no range.
   const statedPrice = !!(facts.sellTotal || facts.sellPerUnit);
-  const benchmark =
-    !remodel && !utility && !inRemodelFamily(specialty.id) && scope === "full" && !statedPrice && !fallback ? specialtyRange(specialty, facts, input.location) : null;
+  const benchmark = newBuild
+    ? newBuild.benchmarkQty
+      ? specialtyRange(specialty, facts, input.location, newBuild.benchmarkQty)
+      : null
+    : !remodel && !utility && !inRemodelFamily(specialty.id) && scope === "full" && !statedPrice && !fallback
+      ? specialtyRange(specialty, facts, input.location)
+      : null;
   const range: JobRange | null = remodel ?? utilityRun ?? benchmark;
   const tradeRules = opts.withTradeRules
     ? buildTradeRulesBlock({
@@ -271,7 +284,7 @@ export function buildLegacyEstimatePrompt(
     specialty,
     summary,
     projectSize: input.sqft ? `${input.sqft} sqft` : undefined,
-    projectType: "remodel",
+    projectType: newBuild ? "new-construction" : "remodel",
     companyName: input.companyName ?? undefined,
     locale,
     includePricing: true,
@@ -331,6 +344,7 @@ export type LegacyItem = {
 };
 
 const money = (n: number) => Math.round(n * 100) / 100;
+const PACKAGE_WORD = /\b(bundles?|rolls?|coils?|box(es)?|cartons?|bags?|sheets?|pieces?|tubes?|buckets?|pails?|gallons?)\b/i;
 
 /**
  * One old line → one fused item.
@@ -348,7 +362,9 @@ export function legacyLineToItem(l: AiDraftPricingLineItem): LegacyItem | null {
   let unit = normalizeUnit(UNIT_OF_MEASUREMENT[mt] ?? mt ?? "unit");
   // The old shape filed roofing squares under 'unit' ("use 'unit' with
   // quantity in squares"); this picker has a word for them.
-  if (unit === "unit" && /\bshingle|roofing square|\bsquares?\b/i.test(name)) unit = "sq boards";
+  // A line that names its package ("shingles, 3 bundles a square", "10-square rolls") is
+  // counted in that package — a blueprint build list buys by the bundle — not in squares.
+  if (unit === "unit" && /\bshingle|roofing square|\bsquares?\b/i.test(name) && !PACKAGE_WORD.test(name)) unit = "sq boards";
   let qty =
     unit === "fixed"
       ? 1

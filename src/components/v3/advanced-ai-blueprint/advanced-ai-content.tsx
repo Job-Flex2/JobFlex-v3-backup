@@ -40,7 +40,7 @@ import { clientErrorText } from "@/lib/staleDeploy";
 // number. It costs eight lines and it makes remount-on-every-keystroke
 // unnecessary.
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import s from "./advanced-ai.module.css";
@@ -96,6 +96,7 @@ import {
 } from "./advanced-ai-data";
 import { InventoryLinkChoice } from "@/components/v3/inventory-link/inventory-link-choice";
 import { isTradeId } from "@/lib/inventory";
+import { PlanEstimator, type PlanEstimateDone } from "@/components/v3/plan-estimator/plan-estimator";
 
 /** Hashed module class, or the literal name when the module has none — which is
  *  how the fleet's global `rv` / `rv-in` / `pressed` pass through. */
@@ -139,8 +140,8 @@ function reducedMotion(): boolean {
   );
 }
 
-/** Which of the page's two panels is on screen. */
-type Panel = "intake" | "estimate";
+/** Which of the page's panels is on screen: the brief, the blueprint reader, the estimate. */
+type Panel = "intake" | "plans" | "estimate";
 type Photo = { id: string; name: string; size: number; dataUrl: string };
 
 const STATE_OPTIONS = STATES.map(([value, label]) => ({ value, label }));
@@ -222,6 +223,13 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   const [saveBusy, setSaveBusy] = useState<null | "saving" | "opening">(null);
   // Connected to the warehouse or an estimate only — null until the choice decides its default (2026-09-20).
   const [invLink, setInvLink] = useState<boolean | null>(null);
+  // ── From blueprints (lib/plans) ──────────────────────────────────
+  // The reader stays mounted once opened, hidden behind the estimate, so "Back to the
+  // takeoff" lands on the takeoff as it was. A new plan set remounts it (planKey).
+  const [planKey, setPlanKey] = useState(0);
+  const [planFiles, setPlanFiles] = useState<File[] | null>(null);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [fromPlans, setFromPlans] = useState(false);
 
   /** The one cell currently being typed into — see the header note. */
   const [field, setField] = useState<{ key: string; text: string } | null>(null);
@@ -359,7 +367,8 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
 
   async function generate() {
     if (!canGenerate) return;
-    const photoUrls = photos.map((p) => p.dataUrl);
+    // Each photo in its own object — see SitePhoto in actions/advancedEstimator.
+    const photoUrls = photos.map((p) => ({ url: p.dataUrl }));
     const typedBrief = brief.trim();
     setGenError("");
     setStageIdx(0);
@@ -454,8 +463,38 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     }
   }
 
+  // ══════════════ FROM BLUEPRINTS ══════════════
+  function openPlans(files: File[] | null) {
+    setPlanFiles(files);
+    setPlanKey((k) => k + 1);
+    setPlanOpen(true);
+    setPanel("plans");
+  }
+
+  /** The plan set's trades, merged, land in the same ledger a brief's estimate does. */
+  function landPlanEstimate(r: PlanEstimateDone) {
+    setLines(r.lines);
+    setCheckNotes(r.notes);
+    setTitle(r.title);
+    setScope(r.scope);
+    setAssumptions(r.assumptions);
+    setTimelineDays(r.timelineDays);
+    setDiscount(NO_DISCOUNT);
+    setDemoMode(false);
+    setBriefUsed(r.scope);
+    setTypeUsed("");
+    setLocationUsed(r.location);
+    // The job address: the one typed on the intake, else the plans' title block.
+    setAddrUsed(addr.trim() ? location : r.address || r.location);
+    setFromPlans(true);
+    setPanel("estimate");
+  }
+
   /** Back to the console, with the estimate discarded. */
   function startOver() {
+    setPlanOpen(false);
+    setPlanFiles(null);
+    setFromPlans(false);
     setPanel("intake");
     setLines([]);
     setAssumptions([]);
@@ -493,7 +532,8 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
         setSaveBusy(null);
         return;
       }
-      const data = estimateFromLines(lines, {
+      // A suggestion counts in no total until it is added, so it never reaches the proposal.
+      const data = estimateFromLines(lines.filter((l) => l.flag !== "suggested"), {
         title: title || projectType || "Estimate",
         scope: scope || briefUsed,
         assumptions: cleanAssumptions,
@@ -545,6 +585,12 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   async function takeFiles(files: FileList | null) {
     if (!files?.length) return;
     setPhotoErr("");
+    // A plan set dropped with the photos opens the blueprint reader.
+    const pdfs = Array.from(files).filter((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    if (pdfs.length) {
+      openPlans(pdfs);
+      return;
+    }
     const picked = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (picked.length !== files.length) setPhotoErr("Images only — other files were skipped.");
     const next: Photo[] = [];
@@ -659,6 +705,42 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     </div>
   );
 
+  /** An estimate from blueprints heads each trade's lines with the trade and its total. */
+  const groupedRows = (rows: ConsoleLine[]) => {
+    if (!rows.some((r) => r.group)) return rows.map(row);
+    const out: ReactNode[] = [];
+    let at: string | undefined;
+    for (const r of rows) {
+      if (r.group !== at) {
+        at = r.group;
+        const g = at;
+        const sum = rows.filter((x) => x.group === g).reduce((n, x) => n + lineTotal(x), 0);
+        out.push(
+          <div className={cx("sp-group")} key={`g:${g ?? "other"}`}>
+            <span>{g ?? "Other"}</span>
+            <span>{money(sum)}</span>
+          </div>,
+        );
+      }
+      out.push(row(r));
+    }
+    return out;
+  };
+
+  const planEl = planOpen ? (
+    <PlanEstimator
+      key={planKey}
+      variant="desk"
+      hidden={panel !== "plans"}
+      location={location}
+      initialFiles={planFiles}
+      onCancel={() => setPanel(fromPlans && lines.length ? "estimate" : "intake")}
+      onEstimate={landPlanEstimate}
+      onReturn={fromPlans && lines.length ? () => setPanel("estimate") : null}
+      onFail={fail}
+    />
+  ) : null;
+
   const ledger = (
     <section className={cx("card")}>
       <div className={cx("sp-h")}>
@@ -676,7 +758,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
         <span>Total</span>
         <span className={cx("sp-th-x")} aria-hidden="true" />
       </div>
-      <div>{lines.filter((l) => l.flag !== "suggested").map(row)}</div>
+      <div>{groupedRows(lines.filter((l) => l.flag !== "suggested"))}</div>
       {lines.length === 0 && <div className={cx("sp-empty")}>Nothing here yet.</div>}
       <button className={cx("sp-add")} type="button" onClick={addLine}>
         <svg className={cx("ic")}>
@@ -722,10 +804,15 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   );
 
   // ══════════════ PANEL 1 — INTAKE CONSOLE ══════════════
+  if (panel === "plans") {
+    return <>{planEl}</>;
+  }
+
   if (panel === "intake") {
     const totalPhotoMb = photos.reduce((n, p) => n + p.size, 0) / (1024 * 1024);
     return (
       <>
+        {planEl}
         <div className={cx("page-head")}>
           <div>
             <div className={cx("kicker")}>{INTAKE.kicker}</div>
@@ -928,6 +1015,27 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
           </div>
         </section>
 
+        {/* FROM BLUEPRINTS — a house (or any trade of one) priced off its plan set. */}
+        <section className={cx("card", "bp-entry")}>
+          <span className={cx("est-mark")}>
+            <svg className={cx("ic")}>
+              <use href="#i-file" />
+            </svg>
+          </span>
+          <div className={cx("bp-entry-txt")}>
+            <h2 className={cx("est-title")}>Building from plans?</h2>
+            <p className={cx("est-lede")}>
+              Drop the plan set — the estimator reads every sheet, takes off the quantities and prices the whole house or only your trades.
+            </p>
+          </div>
+          <button className={cx("btn", "btn-ghost")} type="button" onClick={() => openPlans(null)}>
+            <svg className={cx("ic")}>
+              <use href="#i-plus" />
+            </svg>
+            <span>From blueprints</span>
+          </button>
+        </section>
+
         {generating && (
           <GenerateOverlay stageIdx={stageIdx} done={genDone} exiting={genExit} />
         )}
@@ -939,6 +1047,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   // ══════════════ PANEL 2 — THE ESTIMATE ══════════════
   return (
     <>
+      {planEl}
       {/* PAGE HEAD */}
       <div className={cx("page-head")}>
         <div className={cx("page-head-txt")}>
@@ -962,6 +1071,14 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
             </svg>
             Start over
           </button>
+          {fromPlans && planOpen && (
+            <button className={cx("btn", "btn-ghost")} type="button" disabled={Boolean(saveBusy)} onClick={() => setPanel("plans")}>
+              <svg className={cx("ic")}>
+                <use href="#i-file" />
+              </svg>
+              Back to the takeoff
+            </button>
+          )}
           <button
             className={cx("btn", "btn-primary")}
             type="button"
