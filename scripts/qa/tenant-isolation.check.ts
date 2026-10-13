@@ -137,6 +137,9 @@ async function main() {
     await denied("updateClient", B, () => clients.updateClient(A.client.id, { name: "Hijacked" }), async () => (await db.client.findUnique({ where: { id: A.client.id } }))?.name === A.client.name);
     await denied("setClientEmail", B, () => clients.setClientEmail(A.client.id, "evil@qa.test"), async () => (await db.client.findUnique({ where: { id: A.client.id } }))?.email === A.client.email);
     await control("setClientEmail", A, () => clients.setClientEmail(A.client.id, A.client.email));
+    // The proposal's client card writes email/phone onto the record (2026-10-13).
+    await denied("saveClientContact", B, () => clients.saveClientContact(A.client.id, { email: "evil@qa.test", phone: "555" }), async () => { const c = await db.client.findUnique({ where: { id: A.client.id } }); return c?.email === A.client.email && c?.phone === A.client.phone; });
+    await control("saveClientContact", A, () => clients.saveClientContact(A.client.id, { email: A.client.email ?? undefined }));
 
     // ── proposals ──
     await denied("updateProposalStatus", B, () => proposals.updateProposalStatus(A.proposal.id, "ACCEPTED" as never), async () => (await db.proposal.findUnique({ where: { id: A.proposal.id } }))?.status === "DRAFT");
@@ -144,6 +147,8 @@ async function main() {
     await denied("bulkDeleteProposals", B, async () => { const r = await proposals.bulkDeleteProposals([A.proposal.id]); if (r.deleted) return r; throw new Error("0 deleted"); }, async () => !!(await db.proposal.findUnique({ where: { id: A.proposal.id } })));
     await denied("duplicateProposal", B, () => proposals.duplicateProposal(A.proposal.id), async () => (await db.proposal.count({ where: { organizationId: B.org.id } })) === 1);
     await denied("sendProposal", B, () => proposals.sendProposal(A.proposal.id), async () => (await db.proposal.findUnique({ where: { id: A.proposal.id } }))?.status === "DRAFT");
+    // The Send box takes an address and writes it onto the client (2026-10-13): never across companies.
+    await denied("sendProposal+email", B, () => proposals.sendProposal(A.proposal.id, { email: "evil@qa.test", name: "Evil" }), async () => { const p = await db.proposal.findUnique({ where: { id: A.proposal.id }, include: { client: true } }); return p?.status === "DRAFT" && p?.clientId === A.client.id && p?.client?.email === A.client.email && (await db.client.count({ where: { email: "evil@qa.test" } })) === 0; });
     await control("updateProposalStatus", A, () => proposals.updateProposalStatus(A.proposal.id, "DRAFT" as never));
 
     // ── payments (stages / invoices) ──

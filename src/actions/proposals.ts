@@ -24,7 +24,8 @@ import { parseProposalPhotos } from "@/components/v3/proposals-c/types";
 import { trackActivation, trackProposalCreated } from "@/lib/activation-events";
 import { logServerError } from "@/lib/server-events";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
-import { logActivity } from "@/lib/activityLog";
+import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
+import { findClientForLead } from "@/lib/leadClient";
 
 const lineItemSchema = z.object({
   name: z.string().min(1),
@@ -466,13 +467,86 @@ export async function saveProposal(raw: unknown) {
   return { id: created.id, publicId: created.publicId };
 }
 
-export async function sendProposal(id: string) {
+/** Who a send goes to, typed at the send (owner, 2026-10-13). Both optional: a
+ *  send with neither mails the client record's address, as it always did. */
+const sendToInput = z
+  .object({
+    email: z.string().trim().max(200).optional(),
+    name: z.string().trim().max(120).optional(),
+  })
+  .optional();
+
+/**
+ * THE ADDRESS TYPED AT THE SEND BECOMES THE CLIENT'S (owner, 2026-10-13: a roof
+ * proposal had the email typed in, and Send said "no email on the client record"
+ * with the box locked). The proposal email reads the CLIENT RECORD, so the typed
+ * address is written there first:
+ *   · a client on the proposal → its email is set (or corrected) to this one;
+ *   · no client ("Unassigned") → the client the shop already has under this email,
+ *     or a new one by the typed name — and the proposal is filed under it.
+ * Returns the address the send now goes to.
+ */
+async function settleRecipient(
+  ctx: { organizationId: string; userId: string },
+  p: { id: string; title: string; address: string | null; client: { id: string; name: string; email: string | null; deletedAt: Date | null } | null },
+  to: { email: string; name: string },
+): Promise<{ clientId: string; name: string }> {
+  const email = to.email.trim();
+  if (!z.string().email().safeParse(email).success) {
+    throw new Error("That email address doesn't look right — check it and send again.");
+  }
+  if (p.client && !p.client.deletedAt) {
+    if ((p.client.email ?? "").trim().toLowerCase() !== email.toLowerCase()) {
+      await db.client.update({ where: { id: p.client.id }, data: { email } });
+      await logActivity({
+        organizationId: ctx.organizationId,
+        actorId: ctx.userId,
+        kind: TRAIL_KINDS.CLIENT,
+        summary: `Set ${p.client.name}'s email to ${email} (sending "${p.title}")`,
+        clientId: p.client.id,
+        meta: { field: "email", from: "proposal-send" },
+      });
+    }
+    return { clientId: p.client.id, name: p.client.name };
+  }
+  const known = await findClientForLead(ctx.organizationId, { email, phone: null });
+  let client: { id: string; name: string };
+  if (known) {
+    client = { id: known.id, name: known.name };
+  } else {
+    const name = to.name.trim();
+    if (!name) throw new Error("Add the client's name — this proposal has no client yet.");
+    await enforcePlanLimit(ctx.organizationId, "clients");
+    client = await db.client.create({
+      data: { organizationId: ctx.organizationId, name, email, address: p.address?.trim() || null },
+      select: { id: true, name: true },
+    });
+    await logActivity({
+      organizationId: ctx.organizationId,
+      actorId: ctx.userId,
+      kind: TRAIL_KINDS.CLIENT,
+      summary: `Added client ${client.name} (${email}) while sending "${p.title}"`,
+      clientId: client.id,
+      meta: { from: "proposal-send" },
+    });
+  }
+  await db.proposal.update({ where: { id: p.id }, data: { clientId: client.id } });
+  return { clientId: client.id, name: client.name };
+}
+
+export async function sendProposal(id: string, rawTo?: unknown) {
   const { organizationId, user, proposalScope } = await requireProposalStaff();
-  const p = await db.proposal.findFirst({
+  const to = sendToInput.parse(rawTo);
+  let p = await db.proposal.findFirst({
     where: { id, organizationId, ...proposalScope },
     include: { client: true },
   });
   if (!p) throw new Error("Not found");
+  if (to?.email?.trim()) {
+    await settleRecipient({ organizationId, userId: user.id }, p, { email: to.email, name: to.name ?? "" });
+    p = await db.proposal.findFirst({ where: { id, organizationId }, include: { client: true } });
+    if (!p) throw new Error("Not found");
+  }
 
   // Send the client email FIRST — only record the proposal as SENT if it
   // actually went out (with the transport retry from emailRetry.ts). If the
@@ -520,7 +594,9 @@ export async function sendProposal(id: string) {
 
   revalidatePath("/dashboard/proposals");
   revalidatePath(`/dashboard/proposals/${id}`);
-  return { ok: true };
+  if (p.clientId) revalidatePath(`/dashboard/clients/${p.clientId}`);
+  // Where it went, so the screen can say it: null = marked sent, nothing mailed.
+  return { ok: true, to: p.client?.email ?? null, clientId: p.clientId, client: p.client?.name ?? null };
 }
 
 export type StatusResult =

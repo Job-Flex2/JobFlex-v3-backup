@@ -335,6 +335,9 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   const [pageDone, setPageDone] = useState(1);
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  // "Send to client" as a step in the sheet (owner, 2026-10-13): the client's
+  // email shown and editable — and a name for a proposal with no client yet.
+  const [sendAsk, setSendAsk] = useState<{ email: string; name: string; err: string } | null>(null);
   /** Guards a second write while one is on the wire. */
   const [writing, setWriting] = useState(false);
   /** One-line report for a write that succeeded or refused. */
@@ -528,6 +531,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       if (e.key !== "Escape") return;
       setSheetId(null);
       setConfirmDel(false);
+      setSendAsk(null);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -722,23 +726,36 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
     }
   }
 
-  async function runSend(p: ProposalRow) {
+  async function runSend(p: ProposalRow, to: { email: string; name: string }) {
     if (writing) return;
+    const email = to.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setSendAsk({ ...to, err: "That email address doesn't look right." });
+      return;
+    }
     // The first send to a client names the business first (lib/orgName).
     if (!(await ensureCompanyName())) return;
     setWriting(true);
     try {
-      await sendProposal(p.id);
-      patch(p.id, (x) => ({ ...x, status: "SENT", updated: "just now" }));
+      // The typed address goes onto the client record first (sendProposal), or
+      // makes the client for a proposal that has none.
+      const r = await sendProposal(p.id, email ? { email, name: to.name.trim() } : undefined);
+      patch(p.id, (x) => ({
+        ...x,
+        status: "SENT",
+        updated: "just now",
+        clientEmail: r.to ?? x.clientEmail,
+        ...(r.clientId ? { clientId: r.clientId, client: r.client ?? x.client } : {}),
+      }));
+      setSendAsk(null);
+      setSheetId(null);
       setNote({
         tone: "ok",
-        text: p.clientEmail
-          ? `Sent to ${p.clientEmail}.`
-          : "Marked sent — no email went out, the client has no address on file.",
+        text: r.to ? `Sent to ${r.to}.` : "Marked sent — no email went out, there is no client email.",
       });
       router.refresh();
     } catch (err) {
-      setNote({ tone: "bad", text: actionError(err) });
+      setSendAsk({ ...to, err: actionError(err) });
     } finally {
       setWriting(false);
     }
@@ -814,6 +831,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   const sheetDrag = useSheetDrag(sheetProposal !== null, () => {
     setSheetId(null);
     setConfirmDel(false);
+    setSendAsk(null);
   });
 
   const menuRows = useMemo<MenuRow[]>(() => {
@@ -828,7 +846,8 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       // "Client view" (owner, 2026-10-13): the page the client gets, by its own name.
       { act: "public", icon: "i-arrow", tone: styles.pmiBp, title: "Client view", sub: "The page the client gets" },
       { act: "send", icon: "i-send", tone: styles.pmiOkSolid, title: "Send to client",
-        sub: p.clientEmail ?? "No email on the client record", group: "Share with client" },
+        sub: p.clientEmail ?? (p.clientId ? "No email yet — add it when you send" : "No client yet — add them when you send"),
+        group: "Share with client" },
       // The client's link, copied or handed to the phone's messages (2026-09-24).
       { act: "copylink", icon: "i-out", tone: styles.pmiOk, title: "Copy client link", sub: "Paste it into a text" },
       { act: "accept", icon: "i-check", tone: styles.pmiWarnSolid,
@@ -857,6 +876,10 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       setConfirmDel(true);
       return;
     }
+    if (act === "send") {
+      setSendAsk({ email: p.clientEmail ?? "", name: "", err: "" });
+      return;
+    }
     setSheetId(null);
     if (act === "open") router.push(`/dashboard/proposals/${p.id}`);
     else if (act === "public") window.open(`/portal/q/${p.publicId}`, "_blank", "noopener,noreferrer");
@@ -868,7 +891,6 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       );
     } else if (act === "textlink") window.location.assign(smsHref(null, proposalTextMessage({ clientName: p.client, title: p.title, link: clientProposalUrl(p.publicId) })));
     else if (act === "dup") void runDuplicate(p);
-    else if (act === "send") void runSend(p);
     else if (act === "remind") void runReminder(p, "");
     else if (act === "accept") void runStatus(p, "ACCEPTED", `"${p.title}" moved into contracts.`);
     else if (act === "dir" && p.maps) window.open(p.maps, "_blank", "noopener,noreferrer");
@@ -1291,7 +1313,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
 
       {/* ============ ROW ACTIONS SHEET ============ */}
       <div className={`${styles.scrim} ${sheetProposal ? styles.on : ""}`}
-        onClick={() => { setSheetId(null); setConfirmDel(false); }} aria-hidden="true" />
+        onClick={() => { setSheetId(null); setConfirmDel(false); setSendAsk(null); }} aria-hidden="true" />
       <div className={`${styles.sheet} ${sheetProposal ? styles.on : ""}`} role="dialog" aria-modal="true"
         aria-label="Proposal actions" aria-hidden={!sheetProposal} {...sheetDrag.sheetProps}>
         <div className={styles.sheetGrab} {...sheetDrag.handleProps} />
@@ -1316,6 +1338,43 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
               </span>
             </button>
           </div>
+        ) : sendAsk && sheetProposal ? (
+          <form className={`${styles.sheetBody} ${styles.psend}`} data-send-step noValidate
+            onSubmit={(e) => { e.preventDefault(); void runSend(sheetProposal, sendAsk); }}>
+            {!sheetProposal.clientId ? (
+              <label className={styles.psendF}>
+                <span>Client name</span>
+                <input className={styles.psendIn} id="m-send-name" type="text" autoComplete="off" placeholder="Jane Cooper"
+                  value={sendAsk.name} onChange={(e) => setSendAsk({ ...sendAsk, name: e.target.value, err: "" })} />
+              </label>
+            ) : null}
+            <label className={styles.psendF}>
+              <span>Client email</span>
+              <input className={styles.psendIn} id="m-send-email" type="email" inputMode="email" autoComplete="off" placeholder="client@example.com"
+                value={sendAsk.email} onChange={(e) => setSendAsk({ ...sendAsk, email: e.target.value, err: "" })} />
+            </label>
+            <p className={styles.psendNote}>
+              {!sendAsk.email.trim()
+                ? sheetProposal.clientId
+                  ? `${sheetProposal.client} has no email on file. Add it and it is saved on their client record — or leave it empty to mark the proposal sent.`
+                  : "No client on this proposal yet. Add their name and email — they are added to your clients."
+                : sheetProposal.clientEmail && sendAsk.email.trim().toLowerCase() !== sheetProposal.clientEmail.toLowerCase()
+                  ? `This also changes ${sheetProposal.client}'s email on their client record.`
+                  : sheetProposal.clientEmail
+                    ? `The proposal email goes to ${sheetProposal.clientEmail}.`
+                    : sheetProposal.clientId
+                      ? `Saved on ${sheetProposal.client}'s client record, then sent.`
+                      : "Added to your clients, then sent."}
+            </p>
+            {sendAsk.err ? <p className={styles.psendErr} role="alert">{sendAsk.err}</p> : null}
+            <button className={styles.pmenuItem} type="submit" disabled={writing}>
+              <span className={`${styles.pmiIc} ${styles.pmiOkSolid}`}><Icon id="i-send" /></span>
+              <span>
+                <span className={styles.pmenuItemT}>{writing ? "Sending…" : sendAsk.email.trim() ? "Send proposal" : "Mark as sent"}</span>
+                <span className={styles.pmenuItemS}>{sheetProposal.title}</span>
+              </span>
+            </button>
+          </form>
         ) : (
           <div className={styles.sheetBody}>
             {menuRows.map((r) => (
@@ -1335,7 +1394,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
           </div>
         )}
         <button className={styles.sheetCancel} type="button"
-          onClick={() => { setSheetId(null); setConfirmDel(false); }}>Cancel</button>
+          onClick={() => { setSheetId(null); setConfirmDel(false); setSendAsk(null); }}>Cancel</button>
       </div>
     </div>
   );

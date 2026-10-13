@@ -187,9 +187,15 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
             </button>
           </div>
           <div className="mdl-body">
+            {/* A proposal with no client yet (owner, 2026-10-13): the send names
+                one — shown by the behavior module only for those. */}
+            <div className="mf is-hidden" id="sendNameRow">
+              <label className="mf-lbl" htmlFor="sendName">Client name</label>
+              <input className="mf-in" id="sendName" type="text" autoComplete="off" placeholder="Jane Cooper" />
+            </div>
             <div className="mf">
-              <label className="mf-lbl" htmlFor="sendEmail">Recipient</label>
-              <input className="mf-in" id="sendEmail" type="email" placeholder="client@example.com" />
+              <label className="mf-lbl" htmlFor="sendEmail">Client email</label>
+              <input className="mf-in" id="sendEmail" type="email" autoComplete="off" placeholder="client@example.com" />
             </div>
             {/* What the send actually does, in the drawing-annotation voice. */}
             <div className="mf-note" id="sendNote"></div>

@@ -267,7 +267,7 @@ export function ClientField({
             placeholder="Who is this for?"
           />
           <div className={styles.freeRow}>
-            <span className={styles.freeTag}>One-off name · no client record</span>
+            <span className={styles.freeTag}>New client · added to your clients when you save</span>
             <button
               type="button"
               className={styles.freeBack}
