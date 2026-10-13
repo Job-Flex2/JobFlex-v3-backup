@@ -103,6 +103,28 @@ export type ProposalRow = {
   /** Proposal.beforePhotos / afterPhotos, already parsed. */
   before: ProposalPhoto[];
   after: ProposalPhoto[];
+  /** A deck design link sent to the client for this proposal (2026-10-13, lib/deck/clientDesign): where it
+   *  stands, in one line, and the studio draft to open when it came back. Null when none was sent. */
+  clientDesign?: ClientDesignState | null;
+  /** What happened lately, stamped (ISO): an acceptance or a decline in the last two weeks, a returned design
+   *  nobody has opened. The row blooms once per stamp in a browser (proposals-behavior bloomOnce) — a stamp,
+   *  not a "seen" flag, because the page refreshes itself after it clears its nav badge and a flag would be
+   *  gone before the eye caught it. */
+  fresh?: { accepted?: string; declined?: string; design?: boolean } | null;
+  /** "accepted Sep 20" / "declined Sep 21" for the row's sub line. */
+  decided?: string | null;
+};
+
+export type ClientDesignState = {
+  /** The client's first name, for the line. */
+  name: string;
+  standing: "waiting" | "opened" | "designing" | "returned" | "closed";
+  /** "Jane sent back a design · 2 h ago". */
+  line: string;
+  /** The studio draft the design came back into, or null before it comes back. */
+  draftId: string | null;
+  /** Sent back and nobody has opened it. */
+  unseen: boolean;
 };
 
 /** How far the client has paid, for the hue of the paid bar. */

@@ -37,6 +37,8 @@ import { deckBookKey as bookKey } from "@/lib/deck/rateBookStore";
 import { DECK_PLAN_EVENT, DECK_PLAN_VERSION, deckConvertSchema, deckUpdateSchema, firstIssue, type DeckConvertInput } from "@/lib/deck/convertSchema";
 import { DECK_LOCK_WORDS, deckProposalLock, deckProposalSeen, readDeckWritten, type DeckProposalLock, type DeckWritten, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import { deckUpdatePayload } from "@/lib/deck/proposalUpdate";
+import { markClientLinkSeen, tieClientLinkToProposal } from "@/lib/deck/clientLinksServer";
+import { CLIENT_TOKEN_RE } from "@/lib/deck/clientDesign";
 import { saveProposal } from "@/actions/proposals";
 import { proposalRef } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-bridge";
 import { isPrivateFileUnder, putPrivate } from "@/lib/media/privateStore";
@@ -44,6 +46,7 @@ import { mediaHref } from "@/lib/media/signedLink";
 import { normalizeDeckDesign, structureWords, type DeckDesign } from "@/lib/deck/design";
 import { fitGround } from "@/lib/deck/site";
 import { geocode, isMapsEnabled } from "@/lib/maps";
+import { appBaseUrl } from "@/lib/appUrl";
 import { in3depCoverage, sample3depElevations } from "@/lib/elevation3dep";
 
 type Gate = { ok: true; organizationId: string; userId: string; role: string } | { ok: false; error: string };
@@ -248,6 +251,8 @@ async function writeProposal(organizationId: string, userId: string, role: strin
     }
   }
   await logActivity({ organizationId, actorId: userId, kind: TRAIL_KINDS.ESTIMATE, proposalId: proposal.id, summary: `Priced a deck — ${data.plan?.scene.facts ?? data.title}, $${Math.round(subtotal).toLocaleString("en-US")}`, meta: { trade: "deck", amount: Math.round(subtotal) } });
+  // A design that came back through a client's link: the link now belongs to this proposal (2026-10-13).
+  await tieClientLinkToProposal(data.clientToken, organizationId, proposal.id);
   if (filing) await clearFilingContext();
   if (projectId) revalidatePath(`/dashboard/projects/${projectId}`);
   revalidatePath("/dashboard/proposals");
@@ -276,6 +281,9 @@ export interface DeckDraftRow {
   by: string | null;
   /** Opened from a proposal: the draft keeps updating that one (2026-10-12). */
   proposalId: string | null;
+  /** Came back through a client's design link (2026-10-13): the token, and the client's name for the list. */
+  clientToken: string | null;
+  fromClient: string | null;
 }
 export interface DeckDraft extends DeckDraftRow {
   design: DeckDesign;
@@ -286,7 +294,11 @@ function readDraft(id: string, cursor: string): DeckDraft | null {
     const raw = JSON.parse(cursor) as Record<string, unknown>;
     const design = normalizeDeckDesign(raw.design);
     const proposalId = typeof raw.proposalId === "string" && /^[\w-]{1,64}$/.test(raw.proposalId) ? raw.proposalId : null;
-    return { id, title: typeof raw.title === "string" ? raw.title.slice(0, 120) : structureWords(design), address: typeof raw.address === "string" ? raw.address.slice(0, 300) : null, updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date(0).toISOString(), by: typeof raw.by === "string" ? raw.by : null, proposalId, design };
+    const clientToken = typeof raw.clientToken === "string" && CLIENT_TOKEN_RE.test(raw.clientToken) ? raw.clientToken : null;
+    const by = typeof raw.by === "string" ? raw.by : null;
+    // The returned draft is saved "by Jane Smith (client)" (actions/deckClientDesign).
+    const fromClient = clientToken && by ? by.replace(/\s*\(client\)\s*$/i, "") || null : null;
+    return { id, title: typeof raw.title === "string" ? raw.title.slice(0, 120) : structureWords(design), address: typeof raw.address === "string" ? raw.address.slice(0, 300) : null, updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date(0).toISOString(), by, proposalId, clientToken, fromClient, design };
   } catch {
     return null;
   }
@@ -295,7 +307,7 @@ function readDraft(id: string, cursor: string): DeckDraft | null {
 export type DraftSaveResult = { ok: true; id: string; updatedAt: string } | { ok: false; error: string };
 
 /** Save (or re-save) a draft. A new draft gets an id; the caller keeps it for the next save. */
-export async function saveDeckDraft(input: { id?: string | null; title?: string | null; design: unknown; address?: string | null; proposalId?: string | null }): Promise<DraftSaveResult> {
+export async function saveDeckDraft(input: { id?: string | null; title?: string | null; design: unknown; address?: string | null; proposalId?: string | null; clientToken?: string | null }): Promise<DraftSaveResult> {
   const g = await gate();
   if (!g.ok) return { ok: false, error: g.error };
   const id = input.id && /^[a-f0-9-]{8,40}$/i.test(input.id) ? input.id : randomUUID();
@@ -305,7 +317,10 @@ export async function saveDeckDraft(input: { id?: string | null; title?: string 
   const address = input.address?.trim().slice(0, 300) || null;
   const who = await db.user.findUnique({ where: { id: g.userId }, select: { name: true, email: true } }).catch(() => null);
   const proposalId = typeof input.proposalId === "string" && /^[\w-]{1,64}$/.test(input.proposalId) ? input.proposalId : null;
-  const body = JSON.stringify({ v: 1, title, address, updatedAt, by: who?.name ?? who?.email ?? null, proposalId, design });
+  const clientToken = typeof input.clientToken === "string" && CLIENT_TOKEN_RE.test(input.clientToken) ? input.clientToken : null;
+  // A returned design the contractor keeps working on stays the client's in the list ("Jane Smith (client)"), with its link.
+  const prior = clientToken ? await db.syncState.findUnique({ where: { key: draftKey(g.organizationId, id) }, select: { cursor: true } }).then((r) => (r ? readDraft(id, r.cursor) : null)).catch(() => null) : null;
+  const body = JSON.stringify({ v: 1, title, address, updatedAt, by: prior?.clientToken === clientToken && prior?.by ? prior.by : (who?.name ?? who?.email ?? null), proposalId, clientToken, design });
   try {
     // A shop keeps at most DRAFT_MAX drafts: the oldest goes when a new one arrives.
     const key = draftKey(g.organizationId, id);
@@ -335,7 +350,7 @@ export async function listDeckDrafts(): Promise<{ ok: true; drafts: DeckDraftRow
       .map((r) => readDraft(r.key.slice(`${DRAFT_PREFIX}${g.organizationId}:`.length), r.cursor))
       .filter((d): d is DeckDraft => !!d)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map(({ id, title, address, updatedAt, by, proposalId }) => ({ id, title, address, updatedAt, by, proposalId }));
+      .map(({ id, title, address, updatedAt, by, proposalId, clientToken, fromClient }) => ({ id, title, address, updatedAt, by, proposalId, clientToken, fromClient }));
     return { ok: true, drafts };
   } catch (err) {
     logServerError("deck-draft-list", err, { kind: "action", organizationId: g.organizationId });
@@ -343,15 +358,34 @@ export async function listDeckDrafts(): Promise<{ ok: true; drafts: DeckDraftRow
   }
 }
 
-export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: DeckDraft; proposal: LinkedDeckProposal | null } | { ok: false; error: string }> {
+/** What the client sent with their design, shown over the returned draft (2026-10-13). */
+export interface ReturnedClientDesign {
+  token: string;
+  name: string;
+  phone: string | null;
+  note: string;
+  unsure: string[];
+  sentAt: string | null;
+  sends: number;
+  url: string;
+}
+
+export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: DeckDraft; proposal: LinkedDeckProposal | null; client: ReturnedClientDesign | null } | { ok: false; error: string }> {
   const g = await gate();
   if (!g.ok) return { ok: false, error: g.error };
   if (!/^[a-f0-9-]{8,40}$/i.test(id)) return { ok: false, error: "No such draft." };
   const row = await db.syncState.findUnique({ where: { key: draftKey(g.organizationId, id) }, select: { cursor: true } }).catch(() => null);
   const draft = row ? readDraft(id, row.cursor) : null;
   if (!draft) return { ok: false, error: "That draft is gone." };
+  // A returned design: opening it is seeing it — it stops blooming — and the client's words come along.
+  let client: ReturnedClientDesign | null = null;
+  if (draft.clientToken) {
+    const link = await markClientLinkSeen(draft.clientToken, g.organizationId);
+    if (link) client = { token: link.token, name: link.clientName, phone: link.clientPhone, note: link.note, unsure: link.unsure, sentAt: link.sentAt, sends: link.sends, url: `${(await appBaseUrl()).replace(/\/$/, "")}/deck-design/${link.token}` };
+  }
   // A draft opened from a proposal goes on updating it, while the proposal is there.
-  return { ok: true, draft, proposal: draft.proposalId ? await linkedProposal(g, draft.proposalId) : null };
+  const proposalId = draft.proposalId ?? (client ? (await db.syncState.findUnique({ where: { key: `deckclient:${client.token}` }, select: { cursor: true } }).then((r) => (r ? (JSON.parse(r.cursor) as { proposalId?: unknown }).proposalId : null)).catch(() => null)) : null);
+  return { ok: true, draft, proposal: typeof proposalId === "string" && proposalId ? await linkedProposal(g, proposalId) : null, client };
 }
 
 export async function deleteDeckDraft(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -458,6 +492,7 @@ export async function updateDeckProposal(raw: unknown): Promise<DeckUpdateResult
       }
     }
     await logActivity({ organizationId: g.organizationId, actorId: g.userId, kind: TRAIL_KINDS.ESTIMATE, proposalId: row.id, summary: `Re-priced the deck from its design — ${data.plan?.scene.facts ?? data.title}, $${Math.round(next.subtotal).toLocaleString("en-US")}`, meta: { trade: "deck", amount: Math.round(next.subtotal) } });
+    await tieClientLinkToProposal(data.clientToken, g.organizationId, row.id);
     return { ok: true, id: row.id, kept: next.kept, titleKept: next.titleKept, scopeKept: next.scopeKept };
   } catch (err) {
     const message = err instanceof Error ? err.message : "";

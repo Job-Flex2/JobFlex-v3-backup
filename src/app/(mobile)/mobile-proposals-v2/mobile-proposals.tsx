@@ -825,7 +825,8 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
     // the client, the contract, the rest — the group's main action solid.
     return [
       { act: "open", icon: "i-file", tone: styles.pmiBpSolid, title: "Open proposal", sub: "Edit the full document", group: "Open" },
-      { act: "public", icon: "i-arrow", tone: styles.pmiBp, title: "View public page", sub: "What the client sees" },
+      // "Client view" (owner, 2026-10-13): the page the client gets, by its own name.
+      { act: "public", icon: "i-arrow", tone: styles.pmiBp, title: "Client view", sub: "The page the client gets" },
       { act: "send", icon: "i-send", tone: styles.pmiOkSolid, title: "Send to client",
         sub: p.clientEmail ?? "No email on the client record", group: "Share with client" },
       // The client's link, copied or handed to the phone's messages (2026-09-24).
@@ -1020,7 +1021,16 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                       <div className={styles.prowWho}>
                         {[p.client, p.city].filter(Boolean).join(" · ")}
                         {p.projectName && !inChain ? <span className={styles.prowProj}> · {p.projectName}</span> : null}
+                        {p.decided ? <span className={p.status === "DECLINED" ? styles.prowDeclined : styles.prowAccepted}> · {p.decided}</span> : null}
                       </div>
+                      {/* The client's deck design on this proposal (2026-10-13): where it stands; Open when it came back. */}
+                      {p.clientDesign ? (
+                        <div className={`${styles.prowClient}${p.clientDesign.unseen ? " " + styles.prowClientNew : p.clientDesign.standing === "returned" ? " " + styles.prowClientBack : ""}`} data-client-design={p.clientDesign.standing}>
+                          <Icon id="i-deck" />
+                          <span>{p.clientDesign.line}</span>
+                          {p.clientDesign.draftId ? <Link href={`/dashboard/deck-estimator?draft=${p.clientDesign.draftId}`} onClick={(e) => e.stopPropagation()}>Open design</Link> : null}
+                        </div>
+                      ) : null}
                       {/* Row 3 — badge leads, price closes at the far right. */}
                       <div className={styles.prowFoot}>
                         <span className={`${styles.pstatus} ${st.cls ? styles[st.cls] : ""}`}>{st.label}</span>

@@ -38,6 +38,9 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { NoOrgError, UnauthorizedError, isLimitedRole, requireOrg } from "@/lib/orgContext";
 import { canUseDeckEstimator } from "@/lib/deck/access";
+import { clientLinksByProposal } from "@/lib/deck/clientLinksServer";
+import { clientStanding, standingLine } from "@/lib/deck/clientDesign";
+import { agoLabel } from "@/components/v3/proposals-blueprint/proposals-query";
 import { ManualBlueprintContent } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-content";
 import { loadManualBuilder } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-load";
 import { readEstimateSeed } from "@/lib/estimateSeed";
@@ -88,6 +91,9 @@ export default async function ManualBlueprintPage({
   // A deck made in the Deck Studio opens there again to be changed — for whoever may use the studio (2026-10-12).
   if (data.proposal?.deckDrawing && !isLimitedRole(ctx.role)) {
     data.proposal.deckEditable = await canUseDeckEstimator(ctx.user, ctx.organizationId).catch(() => false);
+    // The client's design link on it (2026-10-13), for the drawing card's line.
+    const link = (await clientLinksByProposal(ctx.organizationId).catch(() => null))?.get(data.proposal.id);
+    if (link) data.proposal.clientDesign = { line: standingLine(link, (iso) => agoLabel(new Date(iso)), { sentAt: link.sentAt, workAt: link.workAt, openedAt: link.openedAt, createdAt: link.createdAt }), standing: clientStanding(link), draftId: link.draftId, unseen: link.unseen };
   }
 
   return <ManualBlueprintContent data={data} />;

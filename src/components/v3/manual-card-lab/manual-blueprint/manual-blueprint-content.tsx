@@ -814,6 +814,15 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
             <DeckSceneFigure className={styles.drawingScene} src={`/api/public-quote/${publicId}/deck-scene`} caption="In 3D" facts="Drag to look around · Build it stands it up layer by layer" />
             <p className={styles.drawingNote}>The client&apos;s page carries the same 3D, frozen as it was priced.</p>
             {/* Open it again (owner, 2026-10-12): the studio re-prices THIS proposal from the changed design. */}
+            {data.proposal?.clientDesign ? (
+              <div className={cx(styles.drawingClient, data.proposal.clientDesign.unseen && styles.drawingClientNew, data.proposal.clientDesign.standing === "returned" && styles.drawingClientBack)} data-deck-client-design={data.proposal.clientDesign.standing}>
+                <Ic name="deck" />
+                <span>{data.proposal.clientDesign.line}</span>
+                {data.proposal.clientDesign.draftId && data.proposal.deckEditable ? (
+                  <a href={`/dashboard/deck-estimator?draft=${encodeURIComponent(data.proposal.clientDesign.draftId)}`}>Open the client&apos;s design</a>
+                ) : null}
+              </div>
+            ) : null}
             {data.proposal?.deckEditable ? (
               <div className={styles.drawingEdit} data-deck-edit>
                 <a className={cx(styles.btn, styles.btnPrimary)} href={`/dashboard/deck-estimator?proposal=${encodeURIComponent(data.proposal.id)}`}>

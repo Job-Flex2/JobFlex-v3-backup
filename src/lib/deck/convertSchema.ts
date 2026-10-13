@@ -63,6 +63,8 @@ export const deckConvertSchema = z.object({
   // Pre-links the proposal to a client when converted from a client's page.
   clientId: z.string().optional().nullable(),
   inventoryLinked: z.boolean().optional().nullable(),
+  // The client's design link this deck came back through (lib/deck/clientDesign): the link follows the proposal.
+  clientToken: z.string().regex(/^[A-Za-z0-9_-]{20,64}$/).optional().nullable(),
 });
 
 export type DeckConvertInput = z.infer<typeof deckConvertSchema>;

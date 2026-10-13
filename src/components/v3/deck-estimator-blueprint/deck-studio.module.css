@@ -231,6 +231,35 @@
 :global(.jf-blueprint .content) .linkedBar .confirm, :global(.jf-blueprint .content) .linkedNote { flex: 1 1 100%; }
 :global(.jf-blueprint .content) .confirm { display: grid; gap: 8px; }
 
+/* A client's design came back (2026-10-13): the strip blooms until it is opened or put aside. */
+@keyframes deckBloom {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 55%, transparent); }
+  70% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--success) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent); }
+}
+:global(.jf-blueprint .content) .inbox { display: grid; gap: 0; border-left: 4px solid var(--success); background: var(--success-soft); animation: deckBloom 1.8s ease-out 3; }
+:global(.jf-blueprint .content) .inboxRow { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 12px 18px; }
+:global(.jf-blueprint .content) .inboxRow + .inboxRow { border-top: 1.5px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .inboxDot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: var(--success); animation: deckBloom 1.4s ease-out infinite; }
+:global(.jf-blueprint .content) .inboxText { flex: 1 1 320px; min-width: 0; font-size: 13px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .inboxText b { color: var(--ink); }
+:global(.jf-blueprint .content) .inboxWhen { color: var(--muted); }
+:global(.jf-blueprint .content) .inboxWords { color: var(--ink); }
+:global(.jf-blueprint .content) .inboxNote { font-style: italic; }
+:global(.jf-blueprint .content) .inboxMore { padding: 0 18px 12px; font-size: 12px; color: var(--muted); }
+:global(.jf-blueprint .content) .fromClient { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; padding: 12px 18px; border-left: 4px solid var(--success); }
+:global(.jf-blueprint .content) .fromClient .linkedKicker { color: var(--success-dark); }
+:global(.jf-blueprint .content) .btnBloom { border-color: var(--success); animation: deckBloom 1.8s ease-out 3; }
+:global(.jf-blueprint .content) .countPill { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; margin-left: 8px; padding: 0 6px; border-radius: 10px; background: var(--success); color: #fff; font-size: 11px; letter-spacing: 0; }
+:global(.jf-blueprint .content) .stampNew { color: #fff; background: var(--success); border-color: var(--success); }
+:global(.jf-blueprint .content) .draftRowNew { background: var(--success-soft); }
+:global(.jf-blueprint .content) .folderHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px 10px; border-bottom: 1px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .folderHead > div { min-width: 0; }
+:global(.jf-blueprint .content) .folderForm { display: grid; gap: 8px; padding: 8px 10px 10px; border-bottom: 1px solid var(--hair-soft); background: color-mix(in srgb, var(--blueprint) 4%, #fff); }
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .inbox, :global(.jf-blueprint .content) .inboxDot, :global(.jf-blueprint .content) .btnBloom { animation: none; }
+}
+
 /* Tables */
 :global(.jf-blueprint .content) .tableWrap { overflow-x: auto; }
 :global(.jf-blueprint .content) .table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -320,6 +349,8 @@
   :global(.jf-blueprint .content) .linkedText { flex-basis: 100%; }
   /* Two buttons side by side only when both labels fit (a 390 phone stacks them). */
   :global(.jf-blueprint .content) .linkedActs { flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  :global(.jf-blueprint .content) .inboxRow, :global(.jf-blueprint .content) .fromClient { padding: 12px 14px; }
+  :global(.jf-blueprint .content) .inboxRow .rowActs { flex: 1 1 100%; }
   :global(.jf-blueprint .content) .head { padding: 12px 14px; }
   :global(.jf-blueprint .content) .check { grid-template-columns: 48px minmax(0, 1fr); padding: 10px 14px; }
   :global(.jf-blueprint .content) .check .btn { grid-column: 2; justify-self: start; min-height: 44px; }

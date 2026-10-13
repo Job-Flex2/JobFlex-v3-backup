@@ -48,6 +48,7 @@ import {
   type ClientStart,
   type ClientUnsure,
 } from "@/lib/deck/clientDesign";
+import { markClientLinkSeen, unseenClientReturns } from "@/lib/deck/clientLinksServer";
 
 type Gate = { ok: true; organizationId: string; userId: string } | { ok: false; error: string };
 
@@ -116,6 +117,8 @@ export async function createDeckClientLink(input: {
   design: unknown;
   address?: string | null;
   title?: string | null;
+  /** The proposal the studio was on (2026-10-13): the link belongs to it, and what comes back updates it. */
+  proposalId?: string | null;
 }): Promise<ClientLinkMade> {
   const g = await gate();
   if (!g.ok) return g;
@@ -130,6 +133,9 @@ export async function createDeckClientLink(input: {
   try {
     // A client id from the browser must belong to this shop.
     const clientId = input.clientId ? ((await db.client.findFirst({ where: { id: input.clientId, organizationId: g.organizationId }, select: { id: true } }))?.id ?? null) : null;
+    // Likewise the proposal: this shop's, or none.
+    const proposalId = input.proposalId ? ((await db.proposal.findFirst({ where: { id: input.proposalId, organizationId: g.organizationId }, select: { id: true } }))?.id ?? null) : null;
+    const who = await db.user.findUnique({ where: { id: g.userId }, select: { name: true, email: true } }).catch(() => null);
     const now = new Date();
     const token = randomBytes(18).toString("base64url");
     const link: ClientDesignLink = {
@@ -156,6 +162,9 @@ export async function createDeckClientLink(input: {
       sentAt: null,
       sends: 0,
       draftId: null,
+      proposalId,
+      byName: who?.name?.trim() || who?.email || null,
+      seenAt: null,
     };
     await writeLink(link);
     // The shop's list, newest first; past the cap the oldest link closes.
@@ -201,6 +210,27 @@ export async function listDeckClientLinks(): Promise<{ ok: true; links: Array<Cl
     logServerError("deck-client-links", err, { kind: "action", organizationId: g.organizationId });
     return { ok: false, error: "The links could not be read." };
   }
+}
+
+/** Designs sent back that nobody has opened yet (2026-10-13): the studio polls this and blooms. */
+export async function deckClientInbox(): Promise<{ ok: true; unseen: Array<ClientLinkRow & { url: string }>; count: number } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  try {
+    const base = (await appBaseUrl()).replace(/\/$/, "");
+    const unseen = (await unseenClientReturns(g.organizationId)).map((l) => ({ ...l, url: `${base}/deck-design/${l.token}` }));
+    return { ok: true, unseen, count: unseen.length };
+  } catch (err) {
+    logServerError("deck-client-inbox", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The inbox could not be read." };
+  }
+}
+
+/** The contractor looked at what came back: it stops blooming everywhere. */
+export async function markDeckClientSeen(token: string): Promise<{ ok: boolean }> {
+  const g = await gate();
+  if (!g.ok) return { ok: false };
+  return { ok: !!(await markClientLinkSeen(token, g.organizationId)) };
 }
 
 /** Take a link back: the page stops opening. A design already sent stays in the drafts. */
@@ -306,7 +336,8 @@ export async function sendDeckClientDesign(
         if (oldest) await db.syncState.delete({ where: { key: oldest.key } }).catch(() => {});
       }
     }
-    const body = JSON.stringify({ v: 1, title: returnedTitle({ clientName: name, title: link.title }), address: link.address, updatedAt: at, by: `${name} (client)`, design: settled });
+    // The draft remembers the proposal it belongs to (the studio then updates that one) and the link it came through.
+    const body = JSON.stringify({ v: 1, title: returnedTitle({ clientName: name, title: link.title }), address: link.address, updatedAt: at, by: `${name} (client)`, proposalId: link.proposalId, clientToken: link.token, design: settled });
     await db.syncState.upsert({ where: { key }, create: { key, cursor: body }, update: { cursor: body } });
     const sent: ClientDesignLink = { ...link, clientName: name, clientPhone: phone, work, workAt: at, openedAt: link.openedAt ?? at, note, unsure, status: "sent", sentAt: at, sends: link.sends + 1, draftId };
     await writeLink(sent);
@@ -323,6 +354,7 @@ export async function sendDeckClientDesign(
     actorId: null,
     kind: DECK_DESIGN_RETURNED,
     clientId: link.clientId,
+    proposalId: link.proposalId,
     // The title already says the size; the rest of what changed follows it.
     summary: `${name} ${again ? "sent their deck design again" : "sent back their deck design"} — ${structureWords(settled)}${changes.filter((c) => !c.startsWith("size ")).length ? ` (${changes.filter((c) => !c.startsWith("size ")).join(", ")})` : ""}`,
     meta: { href, token, draftId },
