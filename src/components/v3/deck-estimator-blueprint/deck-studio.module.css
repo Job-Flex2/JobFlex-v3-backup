@@ -210,6 +210,26 @@
 :global(.jf-blueprint .content) .call a { color: var(--blueprint); text-decoration: underline; text-underline-offset: 2px; }
 :global(.jf-blueprint .content) .callWarn { border-left-color: var(--warning); background: var(--warning-soft); }
 :global(.jf-blueprint .content) .callBad { border-left-color: var(--danger); background: var(--danger-soft); }
+:global(.jf-blueprint .content) .callPass { border-left-color: var(--success); background: var(--success-soft); }
+:global(.jf-blueprint .content) .stampInfo { color: var(--blueprint-dark, var(--blueprint)); background: var(--blueprint-soft, color-mix(in srgb, var(--blueprint) 8%, #fff)); }
+
+/* The saved proposal this design is on (2026-10-12): a strip in the proposal's blue, above the job. */
+:global(.jf-blueprint .content) .linkedBar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap;
+  padding: 12px 18px; border-left: 4px solid var(--blueprint); background: color-mix(in srgb, var(--blueprint) 5%, #fff);
+}
+:global(.jf-blueprint .content) .linkedBar[data-deck-linked="locked"] { border-left-color: var(--warning); background: var(--warning-soft); }
+:global(.jf-blueprint .content) .linkedText { flex: 1 1 380px; min-width: 0; display: grid; gap: 4px; }
+:global(.jf-blueprint .content) .linkedKicker { font-size: 10.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--blueprint); }
+:global(.jf-blueprint .content) .linkedBar[data-deck-linked="locked"] .linkedKicker { color: var(--warning-dark); }
+:global(.jf-blueprint .content) .linkedTitle { display: flex; align-items: baseline; gap: 6px 10px; flex-wrap: wrap; min-width: 0; }
+:global(.jf-blueprint .content) .linkedRef { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink); }
+:global(.jf-blueprint .content) .linkedName { min-width: 0; font-size: 14px; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .linkedTitle .stamp { align-self: center; }
+:global(.jf-blueprint .content) .linkedSub { font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); max-width: 78ch; }
+:global(.jf-blueprint .content) .linkedActs { display: flex; gap: 8px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .linkedBar .confirm, :global(.jf-blueprint .content) .linkedNote { flex: 1 1 100%; }
+:global(.jf-blueprint .content) .confirm { display: grid; gap: 8px; }
 
 /* Tables */
 :global(.jf-blueprint .content) .tableWrap { overflow-x: auto; }
@@ -296,6 +316,10 @@
   :global(.jf-blueprint .content) .heroV { font-size: 22px; }
   :global(.jf-blueprint .content) .convert { padding: 12px 14px 14px; }
   :global(.jf-blueprint .content) .convertRow .btn { width: 100%; min-height: 48px; }
+  :global(.jf-blueprint .content) .linkedBar { padding: 12px 14px; }
+  :global(.jf-blueprint .content) .linkedText { flex-basis: 100%; }
+  /* Two buttons side by side only when both labels fit (a 390 phone stacks them). */
+  :global(.jf-blueprint .content) .linkedActs { flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   :global(.jf-blueprint .content) .head { padding: 12px 14px; }
   :global(.jf-blueprint .content) .check { grid-template-columns: 48px minmax(0, 1fr); padding: 10px 14px; }
   :global(.jf-blueprint .content) .check .btn { grid-column: 2; justify-self: start; min-height: 44px; }

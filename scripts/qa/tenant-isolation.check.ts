@@ -33,6 +33,9 @@ import * as expenses from "../../src/actions/expenses";
 import * as messages from "../../src/actions/messages";
 import * as homeFiles from "../../src/actions/homeFiles";
 import * as deck from "../../src/actions/deckEstimator";
+import { defaultDeckDesign } from "../../src/lib/deck/design";
+import { deckScope, priceDeck } from "../../src/lib/deck/pricing";
+import { deckScene } from "../../src/lib/deck/scene";
 import * as bookingActions from "../../src/actions/booking";
 import { loadClientDetail } from "../../src/components/v3/client-detail-blueprint/client-detail-load";
 import { loadJobDetail } from "../../src/components/v3/job-detail-blueprint/job-detail-load";
@@ -271,6 +274,18 @@ async function main() {
       as(B);
       check("deck: deckPhotoHref mints nothing for A's file behind B's folder name", (await deck.deckPhotoHref(`${fileOfA}?deck-photos/${B.org.id}/`)) === null);
       check("control deck: deckPhotoHref mints a link for B's own deck photo", typeof (await deck.deckPhotoHref(blob(`deck-photos/${B.org.id}/p.jpg`))) === "string");
+      // A saved proposal's deck opens again and is updated in place (2026-10-12): never another company's.
+      const d = defaultDeckDesign({ state: "TX" });
+      const pkg = priceDeck(d);
+      const deckInput = (proposalId: string) => ({ proposalId, title: "Deck", scope: deckScope(pkg, null).join("\n"), assumptions: [], lines: pkg.lines.map((l) => ({ name: l.name, description: l.description, quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })), address: null, plan: { design: d, scene: deckScene(pkg.structure) } });
+      const linesOfA = () => db.lineItem.count({ where: { proposalId: A.proposal.id } });
+      const nA = await linesOfA();
+      const openA = await outcome(() => deck.loadDeckFromProposal(A.proposal.id));
+      check("deck: B cannot open A's proposal in the studio (loadDeckFromProposal)", openA.refused, openA.text);
+      await denied("updateDeckProposal (re-price A's proposal from B's deck)", B, () => deck.updateDeckProposal(deckInput(A.proposal.id)), async () => (await linesOfA()) === nA && (await db.proposal.findUnique({ where: { id: A.proposal.id } }))?.title === A.proposal.title);
+      as(B);
+      const ownUpd = await outcome(() => deck.updateDeckProposal(deckInput(B.proposal.id)));
+      check("control B → B: updateDeckProposal re-prices B's own proposal", !ownUpd.refused && (await db.lineItem.count({ where: { proposalId: B.proposal.id } })) === pkg.lines.length, ownUpd.text);
     } finally {
       await db.user.update({ where: { id: B.owner.id }, data: { isPlatformAdmin: false } });
     }

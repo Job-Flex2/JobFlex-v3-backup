@@ -199,6 +199,7 @@ async function main() {
     // ── Deck Studio: an ordinary org owner (no Deck plan, not admin) is turned away ──
     await expectRefused("OWNER (no Deck plan)", owner, "saveDeckDraft", () => deck.saveDeckDraft({ design: {} }));
     await expectRefused("OWNER (no Deck plan)", owner, "listDeckDrafts", () => deck.listDeckDrafts());
+    await expectRefused("OWNER (no Deck plan)", owner, "updateDeckProposal", () => deck.updateDeckProposal({ proposalId: "x" }));
     await db.user.update({ where: { id: owner.u.id }, data: { isPlatformAdmin: true } });
     await expectAllowed("platform admin", owner, "listDeckDrafts", () => deck.listDeckDrafts());
     await db.user.update({ where: { id: owner.u.id }, data: { isPlatformAdmin: false } });

@@ -89,7 +89,7 @@ import {
   pct,
 } from "../manual-focus/manual-focus-math";
 import styles from "./manual-blueprint.module.css";
-import { Btn, Card, Field, Group, Pair, TextArea, TextField, cx } from "./bp-ui";
+import { Btn, Card, Field, Group, Ic, Pair, TextArea, TextField, cx } from "./bp-ui";
 import { clientProposalUrl, proposalTextMessage, smsHref } from "@/lib/proposalLink";
 import { ClientField, ProjectField, type NewClientInput } from "./bp-pickers";
 // The line table is the lines-v2 block — the reference format: one entry row
@@ -813,6 +813,16 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
           <Card num="04" title="The drawing" id="q-drawing">
             <DeckSceneFigure className={styles.drawingScene} src={`/api/public-quote/${publicId}/deck-scene`} caption="In 3D" facts="Drag to look around · Build it stands it up layer by layer" />
             <p className={styles.drawingNote}>The client&apos;s page carries the same 3D, frozen as it was priced.</p>
+            {/* Open it again (owner, 2026-10-12): the studio re-prices THIS proposal from the changed design. */}
+            {data.proposal?.deckEditable ? (
+              <div className={styles.drawingEdit} data-deck-edit>
+                <a className={cx(styles.btn, styles.btnPrimary)} href={`/dashboard/deck-estimator?proposal=${encodeURIComponent(data.proposal.id)}`}>
+                  <Ic name="pen" />
+                  Edit the deck design
+                </a>
+                <span>Opens it in the Deck Studio. Change anything, then Update the proposal re-prices this one — lines you added here stay.</span>
+              </div>
+            ) : null}
           </Card>
         ) : null}
         {fenceDrawing && publicId ? (

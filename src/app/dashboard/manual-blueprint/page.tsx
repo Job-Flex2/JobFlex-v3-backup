@@ -36,7 +36,8 @@
 
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { NoOrgError, UnauthorizedError, requireOrg } from "@/lib/orgContext";
+import { NoOrgError, UnauthorizedError, isLimitedRole, requireOrg } from "@/lib/orgContext";
+import { canUseDeckEstimator } from "@/lib/deck/access";
 import { ManualBlueprintContent } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-content";
 import { loadManualBuilder } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-load";
 import { readEstimateSeed } from "@/lib/estimateSeed";
@@ -83,6 +84,11 @@ export default async function ManualBlueprintPage({
     projectId: one(params.project),
     seed,
   });
+
+  // A deck made in the Deck Studio opens there again to be changed — for whoever may use the studio (2026-10-12).
+  if (data.proposal?.deckDrawing && !isLimitedRole(ctx.role)) {
+    data.proposal.deckEditable = await canUseDeckEstimator(ctx.user, ctx.organizationId).catch(() => false);
+  }
 
   return <ManualBlueprintContent data={data} />;
 }

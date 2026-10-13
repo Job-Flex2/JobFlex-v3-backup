@@ -67,6 +67,9 @@ export const deckConvertSchema = z.object({
 
 export type DeckConvertInput = z.infer<typeof deckConvertSchema>;
 
+/** The same deck, written over the proposal it was opened from (actions/deckEstimator updateDeckProposal). */
+export const deckUpdateSchema = deckConvertSchema.extend({ proposalId: z.string().min(1).max(64) });
+
 /** A stored deck, read back defensively: a bad shape is no deck, never a crash. */
 export function parseDeckPlan(raw: unknown): DeckPlan | null {
   const r = (raw && typeof raw === "object" ? raw : null) as Record<string, unknown> | null;

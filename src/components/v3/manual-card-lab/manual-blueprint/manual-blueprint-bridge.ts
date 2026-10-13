@@ -164,6 +164,8 @@ export type ManualProposal = {
   fenceDrawing?: boolean;
   /** A deck from the Deck Studio is kept with it (DECK_PLAN, 2026-10-04). */
   deckDrawing?: boolean;
+  /** This member may open that deck in the studio and update the proposal from it (2026-10-12). */
+  deckEditable?: boolean;
   /** Made by an estimator (fence, roof, HVAC — `Proposal.trade`): its lines
    *  carry the estimator's INSTALLED prices, profit already inside, with no
    *  cost of the contractor's under them — so there is no margin to grade

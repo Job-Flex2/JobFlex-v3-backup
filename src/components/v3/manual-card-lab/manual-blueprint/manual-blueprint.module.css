@@ -3543,6 +3543,11 @@
 .drawingPlan img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
 .drawingPlan figcaption { padding: 8px 12px; border-top: 1.5px solid var(--hair-soft, rgba(10, 10, 10, 0.3)); font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted, #6b6b6b); }
 .drawingNote { margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted, #6b6b6b); }
+/* The deck opens again in the studio (2026-10-12): the button, and what it does in one line beside it. */
+.drawingEdit { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1.5px solid var(--hair-soft, rgba(10, 10, 10, 0.3)); }
+.drawingEdit a { text-decoration: none; }
+.drawingEdit span { flex: 1 1 260px; min-width: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted, #6b6b6b); }
+@media (max-width: 640px) { .drawingEdit a { width: 100%; } }
 @media (max-width: 900px) { .drawing { grid-template-columns: 1fr; } }
 
 /* FROM THE CREW (2026-09-27): the job's photos and videos under the staged

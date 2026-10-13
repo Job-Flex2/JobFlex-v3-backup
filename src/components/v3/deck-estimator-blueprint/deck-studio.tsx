@@ -98,13 +98,14 @@ import { deckElevation, defaultPlacement } from "@/lib/deck/elevation";
 import { BOM_STEP_LABEL, FIXTURE_RATE, type BomStep } from "@/lib/deck/takeoff";
 import { STORE_SURVEY, storePrice } from "@/lib/deck/storePrices";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
-import { convertDeckEstimateToProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
+import { convertDeckEstimateToProposal, updateDeckProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow } from "@/actions/deckEstimator";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
 import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
 import { DeckKindPicker } from "./deck-kind-picker";
 import { DeckStepRail } from "./deck-step-rail";
 import { DeckClientLink } from "./deck-client-link";
+import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { autoFixDesign, autoFixable, resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
@@ -454,6 +455,8 @@ export interface OpenedDesign {
   title: string;
   draftId: string | null;
   from: "draft" | "proposal";
+  /** The saved proposal this design is on: the studio updates it in place (2026-10-12). */
+  proposal?: LinkedDeckProposal | null;
 }
 
 export function DeckStudio({ initialBook, homeState, initialAddress, clientId, adminPreview = false, opened = null }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null }) {
@@ -845,6 +848,20 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const [saveState, setSaveState] = React.useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [drafts, setDrafts] = React.useState<DeckDraftRow[] | null>(null);
+  // THE PROPOSAL IT WAS OPENED FROM (owner, 2026-10-12: "when a deck design proposal is saved, make an option to open
+  // and edit the design"): the proposal's drawing card opens the studio on it, and "Update the proposal" re-prices
+  // that one (actions/deckEstimator updateDeckProposal) rather than making a second. The draft remembers it too.
+  const [linked, setLinked] = React.useState<LinkedDeckProposal | null>(opened?.proposal ?? null);
+  const linkedId = linked?.id ?? null;
+  const designSig = React.useMemo(() => JSON.stringify([design, address]), [design, address]);
+  /** The design the proposal holds, as a signature; null when not known (a draft opened later may hold changes). */
+  const [proposalSig, setProposalSig] = React.useState<string | null>(() => (opened?.from === "proposal" ? designSig : null));
+  const [updated, setUpdated] = React.useState<{ at: string; kept: number; titleKept: boolean; scopeKept: boolean } | null>(null);
+  const [confirmAt, setConfirmAt] = React.useState<"top" | "bottom" | null>(null);
+  /** Where the last proposal action was asked from: its error shows there. */
+  const [actAt, setActAt] = React.useState<"top" | "bottom">("bottom");
+  /** The design differs from the one on the proposal. */
+  const behind = !!linked && designSig !== proposalSig;
   React.useEffect(() => {
     if (!dirty.current) return;
     const t = setTimeout(async () => {
@@ -854,7 +871,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       } catch {
         /* the server copy is the one that counts */
       }
-      const res = await saveDeckDraft({ id: draftId, title: draftTitle || null, design, address });
+      const res = await saveDeckDraft({ id: draftId, title: draftTitle || null, design, address, proposalId: linkedId });
       if (res.ok) {
         setDraftId(res.id);
         setSavedAt(res.updatedAt);
@@ -862,7 +879,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       } else setSaveState("failed");
     }, 1500);
     return () => clearTimeout(t);
-  }, [design, address, draftId, draftTitle]);
+  }, [design, address, draftId, draftTitle, linkedId]);
   const refreshDrafts = async () => {
     const res = await listDeckDrafts();
     setDrafts(res.ok ? res.drafts : []);
@@ -878,6 +895,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     setAddressDraft(res.draft.address ?? "");
     setSavedAt(res.draft.updatedAt);
     setSaveState("saved");
+    setLinked(res.proposal);
+    setProposalSig(null);
+    setUpdated(null);
+    setConfirmAt(null);
   };
   const removeDraft = async (id: string) => {
     await deleteDeckDraft(id);
@@ -895,6 +916,9 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     setSaveState("idle");
     setSavedAt(null);
     touched.current.clear();
+    setLinked(null);
+    setUpdated(null);
+    setConfirmAt(null);
   };
 
   /* ── the site: reading the ground ── */
@@ -1187,23 +1211,25 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   }, [opened]);
 
   /* ── the proposal ── */
-  const [busy, setBusy] = React.useState(false);
+  const [busy, setBusy] = React.useState<false | "convert" | "update">(false);
   const [error, setError] = React.useState<string | null>(null);
   const title = `${structureWords(design)} — ${frame ? frame.decking.label : ROOFING_LABEL[design.roof.roofing]}`;
+  // Every text inside the proposal's caps (lib/deck/convertSchema): a big design never fails convert over a long sentence.
+  const proposalPayload = () => ({
+    title: title.slice(0, 200),
+    scope: deckScope(pkg, address || null).join("\n").slice(0, 6000),
+    assumptions: deckNotes(pkg).slice(0, 20).map((n) => n.slice(0, 600)),
+    lines: pkg.lines.map((l) => ({ name: l.name.slice(0, 200), description: l.description?.slice(0, 400), quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })),
+    address: address || null,
+    plan: { design, scene },
+  });
   const convert = async () => {
-    setBusy(true);
+    setActAt("bottom");
+    setBusy("convert");
     setError(null);
+    setConfirmAt(null);
     try {
-      // Every text inside the proposal's caps (lib/deck/convertSchema): a big design never fails convert over a long sentence.
-      const res = await convertDeckEstimateToProposal({
-        title: title.slice(0, 200),
-        scope: deckScope(pkg, address || null).join("\n").slice(0, 6000),
-        assumptions: deckNotes(pkg).slice(0, 20).map((n) => n.slice(0, 600)),
-        lines: pkg.lines.map((l) => ({ name: l.name.slice(0, 200), description: l.description?.slice(0, 400), quantity: l.quantity, unit: l.unit, materialCost: l.materialCost, laborCost: l.laborCost })),
-        address: address || null,
-        plan: { design, scene },
-        clientId: clientId ?? null,
-      });
+      const res = await convertDeckEstimateToProposal({ ...proposalPayload(), clientId: clientId ?? null });
       if (res.ok) {
         router.push(`/dashboard/manual-blueprint?proposal=${res.id}` as Route);
         return;
@@ -1215,6 +1241,56 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     }
     setBusy(false);
   };
+  /** Re-price the proposal it was opened from with this design; the studio stays open on it. */
+  const update = async () => {
+    if (!linked) return;
+    setBusy("update");
+    setError(null);
+    setConfirmAt(null);
+    const sent = designSig;
+    try {
+      const res = await updateDeckProposal({ ...proposalPayload(), proposalId: linked.id });
+      if (res.ok) {
+        setProposalSig(sent);
+        setUpdated({ at: new Date().toISOString(), kept: res.kept, titleKept: res.titleKept, scopeKept: res.scopeKept });
+      } else {
+        if (res.code === "LOCKED") setLinked((l) => (l ? { ...l, lock: res.lock } : l));
+        if (res.code === "MISSING") setLinked(null);
+        setError(res.error);
+      }
+    } catch {
+      setError("The proposal could not be updated. Check the connection and try again.");
+    }
+    setBusy(false);
+  };
+  const askUpdate = (where: "top" | "bottom") => {
+    setActAt(where);
+    setError(null);
+    if (linked?.seen) setConfirmAt(where);
+    else void update();
+  };
+  const updatedWords = updated
+    ? [
+        updated.kept ? `${updated.kept === 1 ? "The line" : `The ${updated.kept} lines`} you added in the proposal stayed.` : "",
+        updated.titleKept ? "Your own title stayed." : "",
+        updated.scopeKept ? "Your own scope of work stayed — check it still describes this design." : "",
+      ].filter(Boolean).join(" ")
+    : "";
+  const confirmBox = linked ? (
+    <div className={cx(s.call, s.callWarn, s.confirm)} role="alertdialog" aria-label="Update a proposal the client has" data-deck-update-confirm>
+      <p>
+        <b>The client already has this proposal{linked.status === "VIEWED" ? " and has opened it" : ""}.</b> Updating it changes the price and the 3D on their link.
+      </p>
+      <div className={s.rowActs}>
+        <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} onClick={() => void update()} data-deck-update-yes>
+          Update it
+        </button>
+        <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => setConfirmAt(null)}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : null;
   // THE MATERIAL LIST (owner, 2026-10-11): the takeoff for the lumber yard's quote or the installer's purchase, on its own page.
   const materialsHref = React.useCallback((forWhom: "yard" | "installer") => {
     try {
@@ -1509,6 +1585,47 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         </div>
       </div>
 
+      {/* The proposal this design is on (2026-10-12): what it holds, and the one button that brings it up to date. */}
+      {linked ? (
+        <section className={cx(s.card, s.linkedBar)} aria-label="The proposal this design is on" data-deck-linked={linked.lock ? "locked" : behind ? "behind" : "even"}>
+          <div className={s.linkedText}>
+            <div className={s.linkedKicker}>Editing the deck of a saved proposal</div>
+            <div className={s.linkedTitle}>
+              <span className={s.linkedRef}>{linked.ref}</span>
+              <span className={s.linkedName}>{linked.title}</span>
+              <span className={cx(s.stamp, linked.lock ? s.stampWarn : linked.seen ? s.stampInfo : s.stampPass)} data-deck-linked-status>{PROPOSAL_STATUS_WORDS[linked.status] ?? linked.status}</span>
+            </div>
+            <p className={s.linkedSub}>
+              {linked.lock
+                ? `This proposal is ${DECK_LOCK_WORDS[linked.lock]}, so its price stays as it is — a new design goes on a new proposal.`
+                : behind
+                  ? updated
+                    ? "Changed since the last update — the proposal still has the earlier design."
+                    : "Your changes save here as a draft. The proposal keeps its price until you update it."
+                  : updated
+                    ? `Updated ${ago(updated.at)} — the proposal has this design.${updatedWords ? ` ${updatedWords}` : ""}`
+                    : "The proposal has this design. Change it here, then update the proposal."}
+            </p>
+          </div>
+          <div className={s.linkedActs}>
+            <a className={cx(s.btn, s.btnSm)} href={`/dashboard/manual-blueprint?proposal=${encodeURIComponent(linked.id)}`} data-deck-linked-back>
+              Back to the proposal
+            </a>
+            {!linked.lock && behind ? (
+              <button type="button" className={cx(s.btn, s.btnSm, s.btnPrimary)} disabled={!!busy} onClick={() => askUpdate("top")} data-deck-update="top">
+                {busy === "update" ? "Updating…" : "Update the proposal"}
+              </button>
+            ) : null}
+          </div>
+          {confirmAt === "top" ? confirmBox : null}
+          {error && actAt === "top" ? (
+            <p className={cx(s.call, s.callBad, s.linkedNote)} role="alert">
+              {error}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* The job: where it is decides the lumber, the frost line, the snow, the market's prices. */}
       <section className={cx(s.card, s.jobBar)} aria-label="Job">
         <form
@@ -1528,7 +1645,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {pkg.storeShare > 0 ? <span className={cx(s.stamp, s.stampPass)} title={`Materials at ${STORE_SURVEY.store}'s listed prices, surveyed once (${STORE_SURVEY.asOf}) — your own prices win`} data-deck-store-share>Materials: {STORE_SURVEY.store}, {new Date(STORE_SURVEY.asOf + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span> : null}
           <div className={s.draftBar} data-deck-drafts>
             <span className={s.draftState} data-deck-save={saveState}>
-              {saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `Saved ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : opened?.from === "proposal" ? "Opened from the proposal" : "Saves as you go"}
+              {saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `${linked ? "Draft saved" : "Saved"} ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : linked ? `Opened from ${linked.ref}` : "Saves as you go"}
             </span>
             <details className={s.drafts} onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && void refreshDrafts()}>
               <summary className={cx(s.btn, s.btnSm)}>Drafts</summary>
@@ -1542,7 +1659,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   <div key={d.id} className={s.draftRow} data-deck-draft={d.id}>
                     <div>
                       <div className={s.draftName}>{d.title}{d.id === draftId ? " · open" : ""}</div>
-                      <div className={s.draftMeta}>{ago(d.updatedAt)}{d.address ? ` · ${d.address}` : ""}{d.by ? ` · ${d.by}` : ""}</div>
+                      <div className={s.draftMeta}>{ago(d.updatedAt)}{d.proposalId ? " · changes to a saved proposal" : ""}{d.address ? ` · ${d.address}` : ""}{d.by ? ` · ${d.by}` : ""}</div>
                     </div>
                     <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => void openDraft(d.id)} disabled={d.id === draftId}>Open</button>
                     <button type="button" className={cx(s.btn, s.btnSm, s.btnDanger)} onClick={() => void removeDraft(d.id)} aria-label={`Delete the draft ${d.title}`}>×</button>
@@ -2815,7 +2932,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <b>{summary.fail === 1 ? "One check fails" : `${summary.fail} checks fail`}.</b> The proposal can be made, but fix the frame before the client sees it — see <a href="#deck-checks">the checks</a>.
             </p>
           ) : null}
-          {error ? <p className={cx(s.call, s.callBad)} role="alert">{error}</p> : null}
+          {error && actAt === "bottom" ? <p className={cx(s.call, s.callBad)} role="alert">{error}</p> : null}
           <div className={s.convertRow}>
             <div className={s.mono}>{title}</div>
             <div className={s.rowActs}>
@@ -2824,11 +2941,28 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                   Permit sheet
                 </a>
               ) : null}
-              <button type="button" className={cx(s.btn, s.btnPrimary)} disabled={busy} onClick={convert}>
-                {busy ? "Making the proposal…" : summary.fail ? "Convert anyway" : "Convert to proposal"}
-              </button>
+              {linked && !linked.lock ? (
+                <>
+                  <button type="button" className={cx(s.btn)} disabled={!!busy} onClick={convert} data-deck-convert-new>
+                    {busy === "convert" ? "Making the proposal…" : "Save as a new proposal"}
+                  </button>
+                  <button type="button" className={cx(s.btn, s.btnPrimary)} disabled={!!busy || !behind} onClick={() => askUpdate("bottom")} data-deck-update="bottom">
+                    {busy === "update" ? "Updating…" : !behind ? `${linked.ref} is up to date` : summary.fail ? "Update anyway" : `Update ${linked.ref}`}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className={cx(s.btn, s.btnPrimary)} disabled={!!busy} onClick={convert} data-deck-convert>
+                  {busy === "convert" ? "Making the proposal…" : linked ? "Save as a new proposal" : summary.fail ? "Convert anyway" : "Convert to proposal"}
+                </button>
+              )}
             </div>
           </div>
+          {confirmAt === "bottom" ? confirmBox : null}
+          {linked && updated && !behind ? (
+            <p className={cx(s.call, s.callPass)} role="status" data-deck-updated>
+              <b>{linked.ref} updated {ago(updated.at)}.</b> {updatedWords} <a href={`/dashboard/manual-blueprint?proposal=${encodeURIComponent(linked.id)}`}>Open the proposal</a>
+            </p>
+          ) : null}
         </div>
       </section>
 

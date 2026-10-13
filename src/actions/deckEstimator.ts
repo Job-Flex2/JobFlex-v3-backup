@@ -18,7 +18,7 @@
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { NoOrgError, UnauthorizedError, requireEstimatorOrManager } from "@/lib/orgContext";
+import { NoOrgError, UnauthorizedError, isEstimatorRole, isSalesRole, requireEstimatorOrManager } from "@/lib/orgContext";
 import { canUseDeckEstimator } from "@/lib/deck/access";
 import { checkPlanLimit } from "@/lib/limitsEngine";
 import { PLAN_LIMIT_MESSAGE, type LimitKey } from "@/lib/planLimits";
@@ -34,7 +34,11 @@ import { parseWallRead, WALL_READ_PROMPT, type WallRead } from "@/lib/deck/photo
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { sanitizeDeckRateBook, type DeckRateBook } from "@/lib/deck/rates";
 import { deckBookKey as bookKey } from "@/lib/deck/rateBookStore";
-import { DECK_PLAN_EVENT, DECK_PLAN_VERSION, deckConvertSchema, firstIssue, type DeckConvertInput } from "@/lib/deck/convertSchema";
+import { DECK_PLAN_EVENT, DECK_PLAN_VERSION, deckConvertSchema, deckUpdateSchema, firstIssue, type DeckConvertInput } from "@/lib/deck/convertSchema";
+import { DECK_LOCK_WORDS, deckProposalLock, deckProposalSeen, readDeckWritten, type DeckProposalLock, type DeckWritten, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
+import { deckUpdatePayload } from "@/lib/deck/proposalUpdate";
+import { saveProposal } from "@/actions/proposals";
+import { proposalRef } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-bridge";
 import { isPrivateFileUnder, putPrivate } from "@/lib/media/privateStore";
 import { mediaHref } from "@/lib/media/signedLink";
 import { normalizeDeckDesign, structureWords, type DeckDesign } from "@/lib/deck/design";
@@ -233,7 +237,9 @@ async function writeProposal(organizationId: string, userId: string, role: strin
   // The deck rides with the proposal: the design (to open it again) and the frozen 3D (for the client's page).
   if (data.plan) {
     try {
-      const plan: { v: number; design: typeof data.plan.design; scene: typeof data.plan.scene; address: string | null } = { v: DECK_PLAN_VERSION, design: data.plan.design, scene: data.plan.scene, address };
+      // `written`: what the studio put on the proposal, so an update from the studio knows its own lines (lib/deck/proposalEdit).
+      const written: DeckWritten = { title: data.title, scope: text.scopeOfWork, lines: lines.map((l) => l.name.trim()) };
+      const plan: { v: number; design: typeof data.plan.design; scene: typeof data.plan.scene; address: string | null; written: DeckWritten } = { v: DECK_PLAN_VERSION, design: data.plan.design, scene: data.plan.scene, address, written };
       // A photo from another shop's folder never rides along.
       if (plan.design.photo && !ownDeckPhoto(plan.design.photo.url, organizationId)) plan.design = { ...plan.design, photo: null };
       await db.activityEvent.create({ data: { organizationId, actorId: userId, proposalId: proposal.id, kind: DECK_PLAN_EVENT, summary: `Deck designed for the proposal — ${data.plan.scene.facts}`, meta: JSON.stringify(plan) } });
@@ -268,6 +274,8 @@ export interface DeckDraftRow {
   address: string | null;
   updatedAt: string;
   by: string | null;
+  /** Opened from a proposal: the draft keeps updating that one (2026-10-12). */
+  proposalId: string | null;
 }
 export interface DeckDraft extends DeckDraftRow {
   design: DeckDesign;
@@ -277,7 +285,8 @@ function readDraft(id: string, cursor: string): DeckDraft | null {
   try {
     const raw = JSON.parse(cursor) as Record<string, unknown>;
     const design = normalizeDeckDesign(raw.design);
-    return { id, title: typeof raw.title === "string" ? raw.title.slice(0, 120) : structureWords(design), address: typeof raw.address === "string" ? raw.address.slice(0, 300) : null, updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date(0).toISOString(), by: typeof raw.by === "string" ? raw.by : null, design };
+    const proposalId = typeof raw.proposalId === "string" && /^[\w-]{1,64}$/.test(raw.proposalId) ? raw.proposalId : null;
+    return { id, title: typeof raw.title === "string" ? raw.title.slice(0, 120) : structureWords(design), address: typeof raw.address === "string" ? raw.address.slice(0, 300) : null, updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date(0).toISOString(), by: typeof raw.by === "string" ? raw.by : null, proposalId, design };
   } catch {
     return null;
   }
@@ -286,7 +295,7 @@ function readDraft(id: string, cursor: string): DeckDraft | null {
 export type DraftSaveResult = { ok: true; id: string; updatedAt: string } | { ok: false; error: string };
 
 /** Save (or re-save) a draft. A new draft gets an id; the caller keeps it for the next save. */
-export async function saveDeckDraft(input: { id?: string | null; title?: string | null; design: unknown; address?: string | null }): Promise<DraftSaveResult> {
+export async function saveDeckDraft(input: { id?: string | null; title?: string | null; design: unknown; address?: string | null; proposalId?: string | null }): Promise<DraftSaveResult> {
   const g = await gate();
   if (!g.ok) return { ok: false, error: g.error };
   const id = input.id && /^[a-f0-9-]{8,40}$/i.test(input.id) ? input.id : randomUUID();
@@ -295,7 +304,8 @@ export async function saveDeckDraft(input: { id?: string | null; title?: string 
   const title = (input.title?.trim() || structureWords(design)).slice(0, 120);
   const address = input.address?.trim().slice(0, 300) || null;
   const who = await db.user.findUnique({ where: { id: g.userId }, select: { name: true, email: true } }).catch(() => null);
-  const body = JSON.stringify({ v: 1, title, address, updatedAt, by: who?.name ?? who?.email ?? null, design });
+  const proposalId = typeof input.proposalId === "string" && /^[\w-]{1,64}$/.test(input.proposalId) ? input.proposalId : null;
+  const body = JSON.stringify({ v: 1, title, address, updatedAt, by: who?.name ?? who?.email ?? null, proposalId, design });
   try {
     // A shop keeps at most DRAFT_MAX drafts: the oldest goes when a new one arrives.
     const key = draftKey(g.organizationId, id);
@@ -325,7 +335,7 @@ export async function listDeckDrafts(): Promise<{ ok: true; drafts: DeckDraftRow
       .map((r) => readDraft(r.key.slice(`${DRAFT_PREFIX}${g.organizationId}:`.length), r.cursor))
       .filter((d): d is DeckDraft => !!d)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map(({ id, title, address, updatedAt, by }) => ({ id, title, address, updatedAt, by }));
+      .map(({ id, title, address, updatedAt, by, proposalId }) => ({ id, title, address, updatedAt, by, proposalId }));
     return { ok: true, drafts };
   } catch (err) {
     logServerError("deck-draft-list", err, { kind: "action", organizationId: g.organizationId });
@@ -333,13 +343,15 @@ export async function listDeckDrafts(): Promise<{ ok: true; drafts: DeckDraftRow
   }
 }
 
-export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: DeckDraft } | { ok: false; error: string }> {
+export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: DeckDraft; proposal: LinkedDeckProposal | null } | { ok: false; error: string }> {
   const g = await gate();
   if (!g.ok) return { ok: false, error: g.error };
   if (!/^[a-f0-9-]{8,40}$/i.test(id)) return { ok: false, error: "No such draft." };
   const row = await db.syncState.findUnique({ where: { key: draftKey(g.organizationId, id) }, select: { cursor: true } }).catch(() => null);
   const draft = row ? readDraft(id, row.cursor) : null;
-  return draft ? { ok: true, draft } : { ok: false, error: "That draft is gone." };
+  if (!draft) return { ok: false, error: "That draft is gone." };
+  // A draft opened from a proposal goes on updating it, while the proposal is there.
+  return { ok: true, draft, proposal: draft.proposalId ? await linkedProposal(g, draft.proposalId) : null };
 }
 
 export async function deleteDeckDraft(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -350,12 +362,25 @@ export async function deleteDeckDraft(id: string): Promise<{ ok: true } | { ok: 
   return { ok: true };
 }
 
+/** The proposal the studio works on, as the studio shows it; null when it is gone or another shop's. */
+async function linkedProposal(g: { organizationId: string; userId: string; role: string }, proposalId: string): Promise<LinkedDeckProposal | null> {
+  const p = await db.proposal
+    .findFirst({ where: { id: proposalId, organizationId: g.organizationId }, select: { id: true, publicId: true, title: true, status: true, ownerId: true, installments: { select: { status: true, paidAmount: true } } } })
+    .catch(() => null);
+  if (!p) return null;
+  // An estimator or a salesperson changes their own proposals only (requireProposalStaff).
+  const theirs = (isSalesRole(g.role) || isEstimatorRole(g.role)) && p.ownerId !== g.userId;
+  return { id: p.id, ref: proposalRef(p.publicId), title: p.title, status: p.status, lock: deckProposalLock(p.status, p.installments) ?? (theirs ? "theirs" : null), seen: deckProposalSeen(p.status) };
+}
+
 /** The deck a saved proposal carries (its DECK_PLAN), to open it again in the studio. */
-export async function loadDeckFromProposal(proposalId: string): Promise<{ ok: true; design: DeckDesign; address: string | null; title: string } | { ok: false; error: string }> {
+export async function loadDeckFromProposal(proposalId: string): Promise<{ ok: true; design: DeckDesign; address: string | null; title: string; proposal: LinkedDeckProposal } | { ok: false; error: string }> {
   const g = await gate();
   if (!g.ok) return { ok: false, error: g.error };
   const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId: g.organizationId }, select: { id: true, title: true, address: true } }).catch(() => null);
   if (!proposal) return { ok: false, error: "No such proposal." };
+  const linked = await linkedProposal(g, proposal.id);
+  if (!linked) return { ok: false, error: "No such proposal." };
   try {
     const ev = await db.activityEvent.findFirst({ where: { proposalId: proposal.id, kind: DECK_PLAN_EVENT }, orderBy: { createdAt: "desc" }, select: { meta: true } });
     const raw = ev?.meta ? (JSON.parse(ev.meta) as Record<string, unknown>) : null;
@@ -363,9 +388,84 @@ export async function loadDeckFromProposal(proposalId: string): Promise<{ ok: tr
     const design = normalizeDeckDesign(raw.design);
     // A photo from another shop's folder never comes along.
     if (design.photo && !ownDeckPhoto(design.photo.url, g.organizationId)) design.photo = null;
-    return { ok: true, design, address: proposal.address ?? (typeof raw.address === "string" ? raw.address : null), title: proposal.title };
+    return { ok: true, design, address: proposal.address ?? (typeof raw.address === "string" ? raw.address : null), title: proposal.title, proposal: linked };
   } catch {
     return { ok: false, error: "The saved deck could not be read." };
+  }
+}
+
+/* ── Editing a saved deck proposal (2026-10-12) ──────────────────────────── */
+//
+// Owner: "when a decking design proposal is saved, make an option to open and edit the design." The proposal's
+// drawing card opens the studio on it; the studio's "Update the proposal" lands here. The update goes through the
+// builder's own save (actions/proposals saveProposal) — the row read the way the builder reads it
+// (draftFromProposal) and written the way the builder writes it (payloadFromDraft) — so the schedule, the open
+// checkouts and invoices, the discount, the markups and the "show to client" switches behave exactly as a save from
+// the builder. What changes (the rules: lib/deck/proposalEdit):
+//   · the studio's own lines (the names it last wrote) are replaced by the new design's; lines added in the builder
+//     stay, after them, with their store links;
+//   · the title and the scope follow the design while they are still the studio's; edited by hand, they stay;
+//   · a new address in another state brings that state's sales tax, as the convert does;
+//   · a signed, paid or finished proposal is refused — the design goes on a new proposal.
+// A new DECK_PLAN row carries the design, the 3D and what was written; every reader takes the newest.
+
+export type DeckUpdateResult =
+  | { ok: true; id: string; kept: number; titleKept: boolean; scopeKept: boolean }
+  | { ok: false; code: "LOCKED"; lock: DeckProposalLock; error: string }
+  | { ok: false; code: "MISSING" | "FORBIDDEN" | "INVALID" | "FAILED"; error: string };
+
+export async function updateDeckProposal(raw: unknown): Promise<DeckUpdateResult> {
+  const g = await gate();
+  if (!g.ok) return { ok: false, code: "FORBIDDEN", error: g.error };
+  const parsed = deckUpdateSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", error: firstIssue(parsed.error) };
+  const data = parsed.data;
+  const missing = { ok: false as const, code: "MISSING" as const, error: "That proposal is gone. Save the design as a new proposal." };
+  try {
+    const linked = await linkedProposal(g, data.proposalId);
+    if (!linked) return missing;
+    if (linked.lock) return { ok: false, code: "LOCKED", lock: linked.lock, error: `This proposal is ${DECK_LOCK_WORDS[linked.lock]}, so its price stays as it is. Save the new design as a new proposal.` };
+    const [row, org, ev] = await Promise.all([
+      db.proposal.findFirst({
+        where: { id: linked.id, organizationId: g.organizationId },
+        include: { lineItems: { orderBy: { position: "asc" } }, installments: { orderBy: { position: "asc" } }, discounts: true },
+      }),
+      db.organization.findUnique({ where: { id: g.organizationId }, select: { defaultTaxRate: true, materialMarkupPct: true, laborMarkupPct: true } }),
+      db.activityEvent.findFirst({ where: { proposalId: linked.id, kind: DECK_PLAN_EVENT }, orderBy: { createdAt: "desc" }, select: { meta: true } }),
+    ]);
+    if (!row) return missing;
+    let before: Record<string, unknown> | null = null;
+    try {
+      before = ev?.meta ? (JSON.parse(ev.meta) as Record<string, unknown>) : null;
+    } catch {
+      before = null;
+    }
+    const next = deckUpdatePayload(
+      row,
+      { written: readDeckWritten(before?.written), oldWords: before?.design ? structureWords(normalizeDeckDesign(before.design)) : null },
+      data,
+      org,
+    );
+    await saveProposal(next.payload);
+
+    if (data.plan) {
+      try {
+        const plan = { v: DECK_PLAN_VERSION, design: data.plan.design, scene: data.plan.scene, address: next.payload.address || null, written: next.written };
+        if (plan.design.photo && !ownDeckPhoto(plan.design.photo.url, g.organizationId)) plan.design = { ...plan.design, photo: null };
+        await db.activityEvent.create({ data: { organizationId: g.organizationId, actorId: g.userId, proposalId: row.id, kind: DECK_PLAN_EVENT, summary: `Deck design changed — ${data.plan.scene.facts}`, meta: JSON.stringify(plan) } });
+      } catch {
+        /* the picture never blocks the price */
+      }
+    }
+    await logActivity({ organizationId: g.organizationId, actorId: g.userId, kind: TRAIL_KINDS.ESTIMATE, proposalId: row.id, summary: `Re-priced the deck from its design — ${data.plan?.scene.facts ?? data.title}, $${Math.round(next.subtotal).toLocaleString("en-US")}`, meta: { trade: "deck", amount: Math.round(next.subtotal) } });
+    return { ok: true, id: row.id, kept: next.kept, titleKept: next.titleKept, scopeKept: next.scopeKept };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    // The builder's own refusals, said the builder's way: a paid stage, or a proposal this member may not change.
+    if (/already paid|being paid/.test(message)) return { ok: false, code: "LOCKED", lock: "paid", error: `${message}. Save the new design as a new proposal.` };
+    if (message === "Not found") return { ok: false, code: "LOCKED", lock: "theirs", error: `This proposal is ${DECK_LOCK_WORDS.theirs}. Save the design as a new proposal.` };
+    logServerError("deck-update", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, code: "FAILED", error: "The proposal could not be updated. Try again in a moment; if it keeps failing, tell support the time it happened." };
   }
 }
 
