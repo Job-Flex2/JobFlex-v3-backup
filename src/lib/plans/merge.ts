@@ -66,6 +66,10 @@ export function mergePlanEstimate(input: {
   checks: TakeoffCheck[];
   priceChecks: PriceChecks | null;
   wholeHouse: boolean;
+  /** One job asked of the plans (lib/plans/ask): its name heads the estimate, its own notes replace the house's. */
+  job?: { title: string; notIncluded: string[]; unmeasured: string[] } | null;
+  /** What a group's lines are headed with when not its trade's name ("Fencing"). */
+  labels?: Partial<Record<PlanTrade, string>>;
 }): PlanEstimate {
   const ordered = PLAN_TRADES.flatMap((t) => input.results.filter((r) => r.trade === t));
   const lines: ConsoleLine[] = [];
@@ -75,7 +79,7 @@ export function mergePlanEstimate(input: {
   const scopes: string[] = [];
   let days = 0;
   for (const r of ordered) {
-    const label = TRADE_LABEL[r.trade];
+    const label = input.labels?.[r.trade]?.trim() || TRADE_LABEL[r.trade];
     const mine = linesFromEstimate(r.est).map((l) => ({ ...l, id: `${r.trade}.${l.id}`, group: label }));
     lines.push(...mine);
     totals[r.trade] = Math.round(mine.filter(isBilled).reduce((a, l) => a + lineTotal(l), 0) * 100) / 100;
@@ -86,14 +90,20 @@ export function mergePlanEstimate(input: {
     days += r.est.estimatedTimelineDays ?? 0;
   }
   const trades = ordered.map((r) => r.trade);
+  const job = input.job && !input.wholeHouse ? input.job : null;
   const notes = [
     ...(input.priceChecks ? priceCheckNotes(input.priceChecks, totals, input.wholeHouse) : []),
-    ...input.checks.filter((c) => c.level === "warn").map((c) => `Plans · ${c.text}`),
+    // A job's notes are its own: what was not drawn, what it leaves out. The house's
+    // warnings (rooms with no size) belong to a whole-house estimate.
+    ...(job
+      ? [...job.unmeasured.map((u) => `Plans · ${u}`), ...job.notIncluded.map((n) => `Not in this estimate · ${n}`)]
+      : input.checks.filter((c) => c.level === "warn").map((c) => `Plans · ${c.text}`)),
     ...tradeNotes,
   ].slice(0, 40);
+  const stories = Math.max(1, input.house.levels.filter((l) => l.name !== "Basement").length);
   return {
     lines,
-    title: planTitle(input.house, trades, input.wholeHouse),
+    title: job ? `${job.title} — ${input.house.name?.trim() || `new ${stories}-story house, ${fmt(input.house.livingSqFt)} sq ft`}`.slice(0, 140) : planTitle(input.house, trades, input.wholeHouse),
     scope: scopes.join("\n\n"),
     assumptions: assumptions.slice(0, 40),
     notes,

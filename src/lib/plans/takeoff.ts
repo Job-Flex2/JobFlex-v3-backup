@@ -13,6 +13,7 @@ import { pitchOf, round } from "./dims";
 import { levelName, type PlanOpening, type PlanRoom, type SheetRead } from "./sheet";
 import { isBath, isGarage, isKitchen, isOverheadDoor, isPorch, isStairOrHall, isVoid, roomPerimeter, roomWeight } from "./rooms";
 import { addAssemblies } from "./assemblies";
+import type { Measured } from "./ask";
 
 export const PLAN_TRADES = [
   "general", "sitework", "foundation", "framing", "roofing", "gutters", "windows-doors", "siding",
@@ -70,6 +71,8 @@ export type TakeoffItem = {
   role?: TakeoffRole;
   /** The step of the trade it belongs to ("Rough-in", "Trim-out", "Fixtures"…), for grouping. */
   phase?: string;
+  /** Measured on the sheets for the job asked for (lib/plans/ask) — no rule of thumb in it. */
+  measured?: boolean;
 };
 
 export type TakeoffCheck = { level: "warn" | "info"; text: string; pages?: number[] };
@@ -454,8 +457,13 @@ export function buildHouse(sheets: SheetRead[], edits: HouseEdits = {}): { house
   return { house, checks };
 }
 
-/** The quantities, trade by trade, from the merged house. */
-export function computeTakeoff(sheets: SheetRead[], edits: HouseEdits = {}, qtyEdits: Record<string, number> = {}): Takeoff {
+/**
+ * The quantities, trade by trade, from the merged house. `measured` are lines measured on
+ * the sheets for a job (lib/plans/ask): each replaces its line's number where the line is
+ * made, so whatever is computed from it — the slabs from the countertops, the sheets from
+ * the walls — follows. The contractor's own numbers (`qtyEdits`) win over both.
+ */
+export function computeTakeoff(sheets: SheetRead[], edits: HouseEdits = {}, qtyEdits: Record<string, number> = {}, measured: Record<string, Measured> = {}): Takeoff {
   const { house: h, checks } = buildHouse(sheets, edits);
   const items: TakeoffItem[] = [];
   const allPages = uniq(sheets.map((s) => s.page));
@@ -470,6 +478,12 @@ export function computeTakeoff(sheets: SheetRead[], edits: HouseEdits = {}, qtyE
     }
     let id = `${trade}.${key}`;
     for (let n = 2; items.some((i) => i.id === id); n++) id = `${trade}.${key}-${n}`;
+    const m = measured[id];
+    if (m && m.qty > 0) {
+      // A measurement keeps its tenth: 62.5 sq ft of counters read off the dimension strings.
+      items.push({ id, trade, label, qty: round(m.qty, Math.max(d, 1)), unit, source: "plan", basis: m.basis, pages: uniq(m.pages), measured: true, ...(opts.role ? { role: opts.role } : {}), ...(opts.phase ? { phase: opts.phase } : {}) });
+      return;
+    }
     items.push({ id, trade, label, qty: round(qty, d), unit, source, basis, pages: uniq(pages), ...(opts.role ? { role: opts.role } : {}), ...(opts.phase ? { phase: opts.phase } : {}) });
   };
   if (!h.levels.length) return { house: h, items, checks, sheets: sheets.length };

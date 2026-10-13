@@ -48,7 +48,7 @@ export function addAssemblies(ctx: AssemblyContext): void {
   /** A measured count bought with waste — unless the contractor entered the number themselves. */
   const withWaste = (id: string, f: number) => {
     const i = items.find((x) => x.id === id);
-    if (i && i.source !== "entered") i.qty = C(i.qty * f);
+    if (i && i.source !== "entered" && !i.measured) i.qty = C(i.qty * f);
   };
   const line =
     (role: TakeoffRole) =>
@@ -322,7 +322,7 @@ export function addAssemblies(ctx: AssemblyContext): void {
   mat("siding", "trim-boards", "Trim boards 5/4 × 4 fiber cement/PVC, 12' pieces", pieces(q("siding.corners"), 12), "pieces", "derived", `${q("siding.corners")} LF`, "Trim");
   mat("siding", "z-flash", "Z-flashing and head flashing over openings, 10' pieces", pieces(headerLf, 10), "pieces", "derived", "over every window and door head", "Trim");
   const soffitLf = q("siding.soffit");
-  mat("siding", "soffit", `Vented soffit 4×8 sheets (${round(h.roof.overhangIn / 12, 1)}' overhang)`, C((soffitLf * (h.roof.overhangIn / 12) * 1.1) / 32), "sheets", "derived", `${soffitLf} LF × ${h.roof.overhangIn}"`, "Soffit & fascia");
+  mat("siding", "soffit-sheets", `Vented soffit 4×8 sheets (${round(h.roof.overhangIn / 12, 1)}' overhang)`, C((soffitLf * (h.roof.overhangIn / 12) * 1.1) / 32), "sheets", "derived", `${soffitLf} LF × ${h.roof.overhangIn}"`, "Soffit & fascia");
   mat("siding", "fascia", "Fascia 5/4 × 8, 12' pieces", pieces(soffitLf, 12), "pieces", "derived", `${soffitLf} LF`, "Soffit & fascia");
   if (h.porchSqFt) both("siding", "porch-ceiling", "Porch ceilings: T&G or soffit panel with trim", h.porchSqFt, "sq ft", "derived", `${h.porchSqFt} sq ft of covered porch`, "Porches");
   if (h.porchSqFt) both("siding", "columns", "Porch column wraps (12×12 trim boxes)", Math.max(2, C(h.porchSqFt / 60)), "each", "rule", "posts at the porch beams", "Porches");
@@ -466,7 +466,8 @@ export function addAssemblies(ctx: AssemblyContext): void {
   if (upperLf) mat("cabinets", "crown", "Cabinet crown and light rail", round(upperLf * 1.15), "linear ft", "derived", `${upperLf} LF of wall cabinets`, "Kitchen");
   const vanityTop = vanities * 2 * 3.5;
   if (vanities) mat("cabinets", "vanity-tops", "Vanity tops — quartz with backsplash", round(vanityTop), "sq ft", "rule", "~3.5' × 2' per vanity (double vanities longer)", "Countertops");
-  const topsSf = sumWhere((i) => i.id.startsWith("cabinets.tops-")) + (kitchenBig ? 34 : 0) + vanityTop;
+  // Every top as it stands now — a measured island or vanity top included.
+  const topsSf = sumWhere((i) => /^cabinets\.(tops-|island-top$|vanity-tops$)/.test(i.id));
   labor("cabinets", "template", "Template and install countertops", round(topsSf), "sq ft", "derived", "kitchen, island and vanity tops", "Countertops");
   both("cabinets", "cutouts", "Sink and cooktop cutouts, polished", (fx.kitchenSink ?? 0) + (fx.barSink ?? 0) + (fx.lavatory ?? 0) + kitchens.length, "each", "derived", "every sink and the cooktop", "Countertops");
   if (kitchens.length) {

@@ -1042,14 +1042,6 @@
    The intake's entry card, and the trade heads an estimate priced
    from a plan set carries in its ledger (lib/plans).
    ============================================================ */
-:global(.jf-blueprint .content) .bp-entry {
-  display: flex; align-items: center; gap: 16px;
-  padding: 18px 24px;
-  flex-wrap: wrap;
-}
-:global(.jf-blueprint .content) .bp-entry-txt { flex: 1 1 320px; min-width: 0; }
-:global(.jf-blueprint .content) .bp-entry .est-title { font-size: 20px; }
-:global(.jf-blueprint .content) .bp-entry .est-lede { margin-top: 4px; }
 :global(.jf-blueprint .content) .sp-group {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   padding: 14px 14px 6px;

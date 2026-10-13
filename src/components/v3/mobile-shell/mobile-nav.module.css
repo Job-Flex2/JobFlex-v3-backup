@@ -477,6 +477,7 @@
 .sbScroll [data-tone="berry"] { --tone: #b8406a; }
 .sbScroll [data-tone="teal"] { --tone: #0d7a8a; }
 .sbScroll [data-tone="cedar"] { --tone: #a0582a; }
+.sbScroll [data-tone="navy"] { --tone: #2f4a7a; }
 .sbScroll .sbLink.sbTool { min-height: 58px; padding: 8px 11px 8px 9px; }
 .sbScroll .sbTile {
   flex: 0 0 auto; width: 36px; height: 36px;

@@ -96,7 +96,7 @@ import {
 } from "./advanced-ai-data";
 import { InventoryLinkChoice } from "@/components/v3/inventory-link/inventory-link-choice";
 import { isTradeId } from "@/lib/inventory";
-import { PlanEstimator, type PlanEstimateDone } from "@/components/v3/plan-estimator/plan-estimator";
+import { takePlanEstimate, type PlanEstimateDone } from "@/lib/plans/handoff";
 
 /** Hashed module class, or the literal name when the module has none — which is
  *  how the fleet's global `rv` / `rv-in` / `pressed` pass through. */
@@ -140,8 +140,8 @@ function reducedMotion(): boolean {
   );
 }
 
-/** Which of the page's panels is on screen: the brief, the blueprint reader, the estimate. */
-type Panel = "intake" | "plans" | "estimate";
+/** Which of the page's panels is on screen: the brief or the estimate. */
+type Panel = "intake" | "estimate";
 type Photo = { id: string; name: string; size: number; dataUrl: string };
 
 const STATE_OPTIONS = STATES.map(([value, label]) => ({ value, label }));
@@ -223,13 +223,9 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   const [saveBusy, setSaveBusy] = useState<null | "saving" | "opening">(null);
   // Connected to the warehouse or an estimate only — null until the choice decides its default (2026-09-20).
   const [invLink, setInvLink] = useState<boolean | null>(null);
-  // ── From blueprints (lib/plans) ──────────────────────────────────
-  // The reader stays mounted once opened, hidden behind the estimate, so "Back to the
-  // takeoff" lands on the takeoff as it was. A new plan set remounts it (planKey).
-  const [planKey, setPlanKey] = useState(0);
-  const [planFiles, setPlanFiles] = useState<File[] | null>(null);
-  const [planOpen, setPlanOpen] = useState(false);
-  const [fromPlans, setFromPlans] = useState(false);
+  // Plan sets have their own tool, kept apart from this page (owner, 2026-10-13:
+  // /dashboard/blueprint-estimator). Its "Edit in Smart Proposal" hands an estimate here
+  // to be edited (lib/plans/handoff) — the only thing that crosses.
 
   /** The one cell currently being typed into — see the header note. */
   const [field, setField] = useState<{ key: string; text: string } | null>(null);
@@ -463,13 +459,6 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     }
   }
 
-  // ══════════════ FROM BLUEPRINTS ══════════════
-  function openPlans(files: File[] | null) {
-    setPlanFiles(files);
-    setPlanKey((k) => k + 1);
-    setPlanOpen(true);
-    setPanel("plans");
-  }
 
   /** The plan set's trades, merged, land in the same ledger a brief's estimate does. */
   function landPlanEstimate(r: PlanEstimateDone) {
@@ -486,15 +475,22 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     setLocationUsed(r.location);
     // The job address: the one typed on the intake, else the plans' title block.
     setAddrUsed(addr.trim() ? location : r.address || r.location);
-    setFromPlans(true);
     setPanel("estimate");
   }
 
+  // An estimate handed back from the blueprint estimator ("Edit in Smart Proposal")
+  // lands in the ledger on the first tick — the effect itself sets nothing.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const handed = takePlanEstimate();
+      if (handed) landPlanEstimate(handed);
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Back to the console, with the estimate discarded. */
   function startOver() {
-    setPlanOpen(false);
-    setPlanFiles(null);
-    setFromPlans(false);
     setPanel("intake");
     setLines([]);
     setAssumptions([]);
@@ -585,14 +581,10 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   async function takeFiles(files: FileList | null) {
     if (!files?.length) return;
     setPhotoErr("");
-    // A plan set dropped with the photos opens the blueprint reader.
-    const pdfs = Array.from(files).filter((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
-    if (pdfs.length) {
-      openPlans(pdfs);
-      return;
-    }
     const picked = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    if (picked.length !== files.length) setPhotoErr("Images only — other files were skipped.");
+    // A plan set is the blueprint estimator's, a tool of its own.
+    const pdfs = Array.from(files).some((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    if (picked.length !== files.length) setPhotoErr(pdfs ? "Photos only here — plan sets (PDF) go in the Blueprint estimator." : "Images only — other files were skipped.");
     const next: Photo[] = [];
     let bytes = photos.reduce((n, p) => n + p.size, 0);
     for (const f of picked) {
@@ -727,20 +719,6 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     return out;
   };
 
-  const planEl = planOpen ? (
-    <PlanEstimator
-      key={planKey}
-      variant="desk"
-      hidden={panel !== "plans"}
-      location={location}
-      initialFiles={planFiles}
-      onCancel={() => setPanel(fromPlans && lines.length ? "estimate" : "intake")}
-      onEstimate={landPlanEstimate}
-      onReturn={fromPlans && lines.length ? () => setPanel("estimate") : null}
-      onFail={fail}
-    />
-  ) : null;
-
   const ledger = (
     <section className={cx("card")}>
       <div className={cx("sp-h")}>
@@ -804,15 +782,10 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   );
 
   // ══════════════ PANEL 1 — INTAKE CONSOLE ══════════════
-  if (panel === "plans") {
-    return <>{planEl}</>;
-  }
-
   if (panel === "intake") {
     const totalPhotoMb = photos.reduce((n, p) => n + p.size, 0) / (1024 * 1024);
     return (
       <>
-        {planEl}
         <div className={cx("page-head")}>
           <div>
             <div className={cx("kicker")}>{INTAKE.kicker}</div>
@@ -1015,27 +988,6 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
           </div>
         </section>
 
-        {/* FROM BLUEPRINTS — a house (or any trade of one) priced off its plan set. */}
-        <section className={cx("card", "bp-entry")}>
-          <span className={cx("est-mark")}>
-            <svg className={cx("ic")}>
-              <use href="#i-file" />
-            </svg>
-          </span>
-          <div className={cx("bp-entry-txt")}>
-            <h2 className={cx("est-title")}>Building from plans?</h2>
-            <p className={cx("est-lede")}>
-              Drop the plan set — the estimator reads every sheet, takes off the quantities and prices the whole house or only your trades.
-            </p>
-          </div>
-          <button className={cx("btn", "btn-ghost")} type="button" onClick={() => openPlans(null)}>
-            <svg className={cx("ic")}>
-              <use href="#i-plus" />
-            </svg>
-            <span>From blueprints</span>
-          </button>
-        </section>
-
         {generating && (
           <GenerateOverlay stageIdx={stageIdx} done={genDone} exiting={genExit} />
         )}
@@ -1047,7 +999,6 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   // ══════════════ PANEL 2 — THE ESTIMATE ══════════════
   return (
     <>
-      {planEl}
       {/* PAGE HEAD */}
       <div className={cx("page-head")}>
         <div className={cx("page-head-txt")}>
@@ -1071,14 +1022,6 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
             </svg>
             Start over
           </button>
-          {fromPlans && planOpen && (
-            <button className={cx("btn", "btn-ghost")} type="button" disabled={Boolean(saveBusy)} onClick={() => setPanel("plans")}>
-              <svg className={cx("ic")}>
-                <use href="#i-file" />
-              </svg>
-              Back to the takeoff
-            </button>
-          )}
           <button
             className={cx("btn", "btn-primary")}
             type="button"

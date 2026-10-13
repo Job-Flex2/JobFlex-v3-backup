@@ -183,15 +183,34 @@ const SOURCE_WORDS: Record<TakeoffItem["source"], string> = {
   entered: "entered by the contractor — exact",
 };
 
-export function tradeBrief(trade: PlanTrade, house: HouseBrief, items: TakeoffItem[], alsoPriced: readonly PlanTrade[] = []): TradeBrief {
+/** The job the contractor asked for (lib/plans/ask), when the estimate is one job and not whole trades. */
+export type JobAsk = { request: string; title: string; label?: string | null };
+
+/** A request in words only: a number in the brief would be bound to every line (the takeoff carries them). */
+export function wordsOnly(s: string): string {
+  return s
+    .replace(/\d[\d,./'"\-\s]*(sq\.?\s*ft|sqft|sf|lf|linear\s*f(ee)?t|ft|feet|inch(es)?|in\b|cm|mm|"|'|x\b|×)?/gi, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .replace(/([,;])\s*(?=[,;.])/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function tradeBrief(trade: PlanTrade, house: HouseBrief, items: TakeoffItem[], alsoPriced: readonly PlanTrade[] = [], ask?: JobAsk | null): TradeBrief {
   const mine = items.filter((i) => i.trade === trade);
-  const work = TRADE_WORK[trade](house);
+  const work = ask ? `${ask.title} for a new house: ${wordsOnly(ask.request).replace(/[.\s]+$/, "")}` : TRADE_WORK[trade](house);
   const brief = `${work}. ${houseSentence(house)} Every quantity is in the blueprint takeoff below.`;
   const leaveOut = excludedWork(trade, alsoPriced);
   const takeoffBlock = [
     "BLUEPRINT TAKEOFF (BINDING — measured from this house's plans; it beats every anchor, default and typical quantity above):",
     `THE HOUSE: ${houseFacts(house)}.`,
-    `THIS TRADE'S QUANTITIES (${TRADE_LABEL[trade]}):`,
+    ...(ask
+      ? [
+          `THE CONTRACTOR'S REQUEST: «${ask.request.trim().slice(0, 600)}» — the job: ${ask.title}.`,
+          "PRICE ONLY THIS JOB: the lines below are all of it. Write no line for work they do not list (no cabinets on a countertop job, no paint on a drywall-only job).",
+        ]
+      : []),
+    `THIS TRADE'S QUANTITIES (${ask?.label?.trim() || TRADE_LABEL[trade]}):`,
     ...ROLE_HEAD.flatMap(([role, head]) => {
       const group = mine.filter((i) => (i.role ?? "both") === role);
       return group.length ? [head, ...group.map((i) => `  - ${i.label}: ${qtyWords(i)} (${SOURCE_WORDS[i.source]}: ${i.basis})`)] : [];

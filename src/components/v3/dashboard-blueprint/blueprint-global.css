@@ -74,6 +74,8 @@
    advanced-ai-blueprint/advanced-ai.module.css, which also disables it under
    prefers-reduced-motion. */
 @keyframes spPulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+/* The blueprint estimator's working step (blueprint-estimator.module.css) — global for the same reason as below. */
+@keyframes bePlanSpin { to { transform: rotate(360deg); } }
 
 /* The manual builder's total-changed highlight. Declared here because
    Lightning CSS rejects @keyframes inside a CSS module; the rule that uses it
@@ -707,7 +709,7 @@ body:has(.jf-blueprint) {
    line for work drawn but not built. Everything else in the rail is as it was. */
 .jf-blueprint .sb {
   --tone-violet: #6a4bd1; --tone-blue: #1854a0; --tone-spruce: #2c7a5a;
-  --tone-berry: #b8406a; --tone-teal: #0d7a8a; --tone-cedar: #a0582a;
+  --tone-berry: #b8406a; --tone-teal: #0d7a8a; --tone-cedar: #a0582a; --tone-navy: #2f4a7a;
 }
 .jf-blueprint .sb [data-tone="violet"] { --tone: var(--tone-violet); }
 .jf-blueprint .sb [data-tone="blue"] { --tone: var(--tone-blue); }
@@ -715,6 +717,7 @@ body:has(.jf-blueprint) {
 .jf-blueprint .sb [data-tone="berry"] { --tone: var(--tone-berry); }
 .jf-blueprint .sb [data-tone="teal"] { --tone: var(--tone-teal); }
 .jf-blueprint .sb [data-tone="cedar"] { --tone: var(--tone-cedar); }
+.jf-blueprint .sb [data-tone="navy"] { --tone: var(--tone-navy); }
 
 /* The bay. Not positioned on purpose: the plate sums offsets up through
    positioned wrappers and a positioned bay's frame would sit between them. */
@@ -779,6 +782,7 @@ body:has(.jf-blueprint) {
 .jf-blueprint .sb .sb-scroll:has(.sb-link.active[data-tone="berry"]) .sb-indicator { --plate-tone: var(--tone-berry); }
 .jf-blueprint .sb .sb-scroll:has(.sb-link.active[data-tone="teal"]) .sb-indicator { --plate-tone: var(--tone-teal); }
 .jf-blueprint .sb .sb-scroll:has(.sb-link.active[data-tone="cedar"]) .sb-indicator { --plate-tone: var(--tone-cedar); }
+.jf-blueprint .sb .sb-scroll:has(.sb-link.active[data-tone="navy"]) .sb-indicator { --plate-tone: var(--tone-navy); }
 
 /* An inventory under a tool: the guide line drops from the tile's centre. */
 .jf-blueprint .sb .sb-bay .sb-sub::before { left: 30px; }

@@ -35,6 +35,7 @@ export function MobileSprite() {
         <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></symbol>
         <symbol id="i-fence" viewBox="0 0 24 24"><path d="M4 21V8l2-3 2 3v13" /><path d="M10 21V8l2-3 2 3v13" /><path d="M16 21V8l2-3 2 3v13" /><path d="M2 12h20" /><path d="M2 17h20" /></symbol>
         <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8" /><path d="M16 17H8" /></symbol>
+        <symbol id="i-plans" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1" /><path d="M3 10h6" /><path d="M13 10h8" /><path d="M11 3v10" /><path d="M14 21v-6h7" /><path d="M6 15v3" /></symbol>
         <symbol id="i-fileplus" viewBox="0 0 24 24"> <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" /> <path d="M14 2v6h6" /> <path d="M12 18v-6" /> <path d="M9 15h6" /> </symbol>
         <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18" /><path d="M6 12h12" /><path d="M10 19h4" /></symbol>
         <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></symbol>
