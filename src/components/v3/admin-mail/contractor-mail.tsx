@@ -347,7 +347,7 @@ function stateChip(p: NonNullable<ContractorMailView["profile"]>): string {
     case "paying": return `Paying · ${a.plan}${a.price ? ` ${a.price}` : ""}`;
     case "trial-ended": return `Trial ended${a.endedAt ? ` ${DAY.format(new Date(a.endedAt))}` : ""} · no card`;
     case "past-due": return "Payment failed";
-    case "canceled": return "Canceled";
+    case "canceled": return `Free · was ${a.plan}`;
     case "free": return "Free plan";
     default: return accountWords(p);
   }

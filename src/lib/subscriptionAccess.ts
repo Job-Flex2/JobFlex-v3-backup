@@ -3,7 +3,6 @@ import type { Subscription } from "@prisma/client";
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { planLapsed } from "@/lib/planStatus";
-import { subscriptionPeriodEndDate } from "@/lib/stripeCompat";
 
 /** A grant's explicit null means no expiry, not "fall back to the old trial".
  * Legacy rows without recorded terms retain their dates: absence is not a grant. */
@@ -32,12 +31,12 @@ export async function refreshSubscriptionAccess(sub: Subscription): Promise<Stri
       (live.metadata.organizationId && live.metadata.organizationId !== sub.organizationId)) {
     throw new Error("Subscription ownership could not be verified.");
   }
-  const { mirrorStatusFor } = await import("@/lib/stripeSync");
+  const { mirrorPeriodEnd, mirrorStatusFor } = await import("@/lib/stripeStatus");
   await db.subscription.updateMany({
     where: { id: sub.id, provider: "STRIPE", externalSubId: sub.externalSubId, updatedAt: sub.updatedAt },
     data: {
       status: mirrorStatusFor(live),
-      currentPeriodEnd: subscriptionPeriodEndDate(live),
+      currentPeriodEnd: mirrorPeriodEnd(live),
       trialEndsAt: live.status === "trialing" && live.trial_end ? new Date(live.trial_end * 1000) : null,
       canceledAt: live.canceled_at ? new Date(live.canceled_at * 1000) : null,
     },

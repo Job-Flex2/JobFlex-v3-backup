@@ -144,12 +144,22 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
   // (a refused write redirects there), so the server's check alone left it up.
   const pathname = usePathname();
   const ended = view.kind === "ended";
+  // Cancelled during the trial (lib/freePlan): it ends on the Free plan, so
+  // nothing asks for a card — the ribbon says the date and the way back.
+  const toFree = !ended && view.toFree;
   // The early step (lib/trialNotice): nothing is due, so nothing is asked.
-  const early = !ended && !view.hasCard && view.daysLeft > TRIAL_NOTICE_DAYS;
-  const tone = ended ? s.isEnded : view.hasCard ? s.isCard : early ? s.isEarly : s.isSoon;
-  const stamp = ended ? "Trial ended" : view.hasCard ? "Card on file" : early ? freeText(view.daysLeft) : daysText(view.daysLeft);
+  const early = !ended && !toFree && !view.hasCard && view.daysLeft > TRIAL_NOTICE_DAYS;
+  const tone = ended ? s.isEnded : toFree || view.hasCard ? s.isCard : early ? s.isEarly : s.isSoon;
+  const stamp = ended ? "Trial ended" : toFree ? "Switching to Free" : view.hasCard ? "Card on file" : early ? freeText(view.daysLeft) : daysText(view.daysLeft);
+  const switchDay = DATE.format(new Date(view.endsAt));
   const action =
-    view.hasCard && !ended ? null : !isOwner ? null : early ? (
+    toFree ? (
+      isOwner ? (
+        <Link className={s.early} href={"/dashboard/settings?tab=billing" as Route}>
+          {`Keep ${view.planName}`}
+        </Link>
+      ) : null
+    ) : view.hasCard && !ended ? null : !isOwner ? null : early ? (
       <Link className={s.early} href={"/dashboard/trial" as Route}>
         Add a card early
       </Link>
@@ -165,7 +175,9 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
         <p className={s.dockText}>
           {ended
             ? "Read-only until a card is added"
-            : view.hasCard
+            : toFree
+              ? `Switches to Free on ${switchDay}`
+              : view.hasCard
               ? `${view.planName} starts ${DATE.format(new Date(view.endsAt))}`
               : early
                 ? "No card needed"
@@ -190,6 +202,10 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
           <>
             <b>Add a card to continue.</b> <span>Your workspace is read-only until then — nothing is lost.</span>
           </>
+        ) : toFree ? (
+          <>
+            <b>Your plan switches to Free on {switchDay}.</b> <span>Nothing is charged.</span>
+          </>
         ) : view.hasCard ? (
           <>
             <b>You&rsquo;re set.</b> <span>{view.planName} starts on {DATE.format(new Date(view.endsAt))} at {view.price}.</span>
@@ -204,7 +220,9 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
           </>
         )}
       </p>
-      {view.hasCard && !ended ? null : isOwner ? (
+      {toFree ? (
+        action
+      ) : view.hasCard && !ended ? null : isOwner ? (
         action
       ) : early ? null : (
         <span className={s.ribbonText}>
@@ -243,8 +261,11 @@ export function TrialSheet({
   const when = DATE.format(new Date(view.endsAt));
   // A ceiling was reached: the sheet leads with it (owner, 2026-10-02).
   const hit = !ended && !view.hasCard && caps ? capHit : null;
-  const title = ended ? "Add a card to continue" : view.hasCard ? "Your card is on file" : hit ? TRIAL_CAP_TITLE : "Add a card to keep access";
-  const lede = ended
+  const toFree = !ended && view.toFree;
+  const title = ended ? "Add a card to continue" : toFree ? "Your plan switches to Free" : view.hasCard ? "Your card is on file" : hit ? TRIAL_CAP_TITLE : "Add a card to keep access";
+  const lede = toFree
+    ? `You cancelled during the trial. On ${when} your account moves to the Free plan and nothing is charged — your work stays. Changed your mind? Keep ${view.planName} from Settings → Billing.`
+    : ended
     ? `Your trial ended on ${when}. Everything you made is still here and readable; add a card and ${view.planName} starts again today — no new trial.`
     : view.hasCard
       ? `Nothing to do. The trial runs until ${when}, then ${view.planName} begins and the card is charged.`
@@ -277,7 +298,11 @@ export function TrialSheet({
               <i>/{view.price.endsWith("/yr") ? "yr" : "mo"}</i>
             </span>
             <span className={s.planNote}>
-              {ended ? "Charged today, then monthly. Cancel any time from Subscription." : `First charge ${when}, then monthly. Cancel any time from Subscription.`}
+              {view.toFree && !ended
+                ? `Switches to Free on ${when} — nothing is charged.`
+                : ended
+                  ? "Charged today, then monthly. Cancel any time from Settings → Billing."
+                  : `First charge ${when}, then monthly. Cancel any time from Settings → Billing.`}
             </span>
           </div>
           {caps && !ended && !view.hasCard ? (
@@ -302,6 +327,17 @@ export function TrialSheet({
           ) : null}
           {view.hasCard && !ended ? (
             <div className={s.actions}>
+              <Link className={s.quiet} href={"/dashboard" as Route}>
+                Back to the dashboard
+              </Link>
+            </div>
+          ) : toFree ? (
+            <div className={s.actions}>
+              {isOwner ? (
+                <Link className={s.button} href={"/dashboard/settings?tab=billing" as Route}>
+                  {`Keep ${view.planName}`}
+                </Link>
+              ) : null}
               <Link className={s.quiet} href={"/dashboard" as Route}>
                 Back to the dashboard
               </Link>

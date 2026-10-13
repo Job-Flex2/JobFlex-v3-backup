@@ -32,6 +32,7 @@ import type { SubscriptionInvoice } from "@/actions/billing";
 import { readPlanGrant } from "@/lib/planGrant";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { planLapsed } from "@/lib/planStatus";
+import { FREE_PLAN_NAME, freeSince, freeSwitchBooked, freeSwitchDate, onFreePlan } from "@/lib/freePlan";
 import { trialCardLine, type TrialCardLine } from "@/lib/trialCardLine";
 import { planTermState } from "@/lib/planChange";
 
@@ -69,10 +70,15 @@ export interface SubscriptionViewProps {
   /** A cancellation is booked for the end of this cycle (billing.ts's
    *  cancelSubscription mirrors Stripe's cancel_at_period_end here). */
   cancelAtPeriodEnd: boolean;
-  /** A cancellation (owner, 2026-10-07): booked for the period's end while
-   *  the plan still runs, or done (CANCELED / EXPIRED). The page then reads
-   *  "Canceled · Access until <date>" and shows no next bill. Null otherwise. */
+  /** A plan that ended without moving to Free — a grant that expired
+   *  (EXPIRED): "Access ended <date>", no next bill. Null otherwise. */
   cancellation: { accessUntil: string | null; ended: boolean } | null;
+  /** The switch to Free is booked (owner, 2026-10-13; lib/freePlan): the plan
+   *  runs until `at`, then the company is on Free. "Keep <plan>" lifts it. */
+  freeSwitch?: { at: string | null } | null;
+  /** The company is on the Free plan (its subscription ended — CANCELED):
+   *  since when, and the plan it had. planName then reads "Free". */
+  freePlan?: { since: string | null; wasName: string } | null;
   /** The plan is a complimentary grant from JobFlex (lib/planGrant): nobody
    *  pays, nothing is billed, and it ends on `endsAt` (null = no end date). */
   complimentary: { endsAt: string | null; after: "free" | "expired" } | null;
@@ -270,15 +276,19 @@ export async function loadSubscriptionData(
     .map((r) => r.rewardCents ?? perReferralCents);
   const upcoming = invoiceResult.upcoming ?? null;
   const billable = ["ACTIVE", "TRIALING", "PAST_DUE"].includes(status.toUpperCase()) && !complimentary;
-  // Cancelled: nothing more is billed, whatever Stripe's preview or the list
-  // price would say — the page shows when access ends instead.
-  const endedStatus = ["CANCELED", "EXPIRED"].includes(status.toUpperCase());
-  const cancellation =
-    !complimentary && (endedStatus || (billable && sub?.canceledAt))
-      ? { accessUntil: (sub?.currentPeriodEnd ?? sub?.trialEndsAt)?.toISOString() ?? null, ended: endedStatus }
-      : null;
+  /* THE FREE PLAN (owner, 2026-10-13; lib/freePlan). Booked: the plan runs
+     to the end of the cycle and nothing more is billed — no next bill, the
+     date it switches instead. Ended (CANCELED): the company is on Free. A
+     grant that expired (EXPIRED) still reads "Access ended". */
+  const freeSwitch = !complimentary && freeSwitchBooked(sub) ? { at: freeSwitchDate(sub)?.toISOString() ?? null } : null;
+  const wasName = planDto?.name ?? titleCaseSlug(rawPlan);
+  const freePlan = !complimentary && onFreePlan(sub) ? { since: freeSince(sub)?.toISOString() ?? null, wasName } : null;
+  const endedStatus = status.toUpperCase() === "EXPIRED";
+  const cancellation = !complimentary && endedStatus
+    ? { accessUntil: (sub?.currentPeriodEnd ?? sub?.trialEndsAt)?.toISOString() ?? null, ended: true }
+    : null;
   let nextCharge: NextCharge | null = null;
-  if (complimentary || cancellation) {
+  if (complimentary || cancellation || freeSwitch || freePlan) {
     nextCharge = null;
   } else if (upcoming) {
     nextCharge = {
@@ -322,18 +332,21 @@ export async function loadSubscriptionData(
   }
 
   return {
-    planName: planDto?.name ?? titleCaseSlug(rawPlan),
-    priceCents,
-    interval: term.currentInterval,
-    scheduledSwitch: term.scheduledSwitch,
-    currentSlug: planDto?.slug ?? rawPlan.toLowerCase(),
+    planName: freePlan ? FREE_PLAN_NAME : wasName,
+    priceCents: freePlan ? 0 : priceCents,
+    interval: freePlan ? null : term.currentInterval,
+    scheduledSwitch: freePlan ? null : term.scheduledSwitch,
+    // On Free no plan card is "current": every one is an upgrade, paid at once.
+    currentSlug: freePlan ? "free" : (planDto?.slug ?? rawPlan.toLowerCase()),
     plans,
     status,
     accessBlocked: planLapsed(sub),
-    nextBill: !complimentary && sub?.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
+    nextBill: !complimentary && !freePlan && sub?.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
     trialEndsAt: sub?.trialEndsAt ? sub.trialEndsAt.toISOString() : null,
     cancelAtPeriodEnd: Boolean(sub?.canceledAt),
     cancellation,
+    freeSwitch,
+    freePlan,
     complimentary,
     usage,
     usageUnlimited,
@@ -341,7 +354,8 @@ export async function loadSubscriptionData(
     invoices: invoiceResult,
     nextCharge,
     customPages,
-    trialCard,
+    // The card line belongs to a running card-less trial, never to the Free plan.
+    trialCard: freePlan ? null : trialCard,
     checkoutReady: isStripeEnabled(),
     customOffered: customPlanOffered(),
     sandbox: stripeMode === "test",

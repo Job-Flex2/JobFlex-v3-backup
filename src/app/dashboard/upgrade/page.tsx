@@ -28,6 +28,8 @@ import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { getStripeMode } from "@/lib/stripeMode";
 import { isOwnerRole } from "@/lib/orgContext";
 import { normalizeCustomPages } from "@/lib/customPlan";
+import { FREE_PLAN_NAME, freeSwitchBooked, freeSwitchDate, onFreePlan } from "@/lib/freePlan";
+import { titleCaseSlug } from "@/lib/planCatalog";
 import { customPlanOffered } from "@/lib/customPlanFlag";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 // One URL, two designs: the desktop build above 768px, the handheld build in
@@ -77,7 +79,7 @@ export default async function UpgradePage({
     getPlanCatalog(),
     db.subscription.findUnique({
       where: { organizationId: ctx.organizationId },
-      select: { plan: true, status: true },
+      select: { plan: true, status: true, provider: true, canceledAt: true, currentPeriodEnd: true, trialEndsAt: true },
     }),
     getStripeMode(),
     planTermState(ctx.organizationId).catch(() => ({ currentInterval: null, scheduledSwitch: null })),
@@ -95,6 +97,14 @@ export default async function UpgradePage({
       customPages = [];
     }
   }
+
+  // On the Free plan (lib/freePlan) no card is current: each one is paid at once.
+  const onFree = sub?.provider !== "MANUAL" && onFreePlan(sub);
+  // Booked: the date it switches, and the way back (lib/freePlan).
+  const freeSwitch =
+    sub && sub.provider !== "MANUAL" && freeSwitchBooked(sub)
+      ? { at: freeSwitchDate(sub)?.toISOString() ?? null, planName: catalog.find((p) => p.slug.toLowerCase() === sub.plan.toLowerCase())?.name ?? titleCaseSlug(sub.plan) }
+      : null;
 
   const plans: UpgradePlan[] = catalog
     .filter((p) => !p.isFree)
@@ -116,8 +126,9 @@ export default async function UpgradePage({
       focusSlug={target?.slug ?? null}
       focusWords={target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? (isEditionOpen("deck") ? "No plan carries the Deck Studio yet — ask us to add it." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
       plans={plans}
-      currentPlan={sub?.plan ?? null}
-      currentInterval={term.currentInterval}
+      currentPlan={onFree ? FREE_PLAN_NAME : (sub?.plan ?? null)}
+      currentInterval={onFree ? null : term.currentInterval}
+      freeSwitch={freeSwitch}
       scheduledSwitch={term.scheduledSwitch}
       customPages={customPages}
       isOwner={isOwnerRole(ctx.role)}

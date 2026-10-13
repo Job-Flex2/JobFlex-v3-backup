@@ -23,7 +23,7 @@ import {
   isWithinCommissionWindow,
 } from "@/lib/commission";
 import { planSnapshot, reportPlanChange } from "@/lib/activation-events";
-import { isCardlessTrialLapse, mirrorStatusFor } from "@/lib/stripeStatus";
+import { isCardlessTrialLapse, mirrorPeriodEnd, mirrorStatusFor } from "@/lib/stripeStatus";
 import { mirrorSubAtKey, recordMirrorReference } from "@/lib/subscriptionRecord";
 import { patchCardlessRecord, readCardlessRecord } from "@/lib/trialState";
 import { mailChargeback, mailCommissionHeld } from "@/lib/influencerMail";
@@ -33,7 +33,6 @@ import {
   invoiceIsPaid,
   invoiceSubscriptionId,
   subscriptionDiscounts,
-  subscriptionPeriodEndDate,
   type DiscountRef,
 } from "@/lib/stripeCompat";
 
@@ -269,6 +268,19 @@ async function mirrorAccepts(organizationId: string, externalSubId: string, stat
   return mirror.externalSubId ? createdMs >= refMs : createdMs > refMs;
 }
 
+/** The organisation whose mirror holds THIS subscription as ended by Stripe
+ *  (CANCELED, or a card-less trial's TRIAL_ENDED) while the payload says it
+ *  is live — or null. Only the same subscription: a new one may always
+ *  replace an ended record (mirrorAccepts). */
+async function endedMirrorRevived(sub: Stripe.Subscription): Promise<string | null> {
+  if (sub.status === "canceled" || sub.status === "incomplete_expired") return null;
+  const row = await db.subscription.findFirst({
+    where: { externalSubId: sub.id, provider: "STRIPE", status: { in: [SubscriptionStatus.CANCELED, SubscriptionStatus.TRIAL_ENDED] } },
+    select: { organizationId: true },
+  });
+  return row?.organizationId ?? null;
+}
+
 // ── subscription lifecycle → Subscription mirror + Attribution ──
 /** `stripe` reads what a clover payload leaves as ids (the discounts, a
  *  coupon's metadata); every production caller passes the client it holds. */
@@ -313,6 +325,22 @@ export async function syncSubscriptionFromStripe(
     return { synced: false, reason: "organization-missing", organizationId };
   }
 
+  /* AN ENDED SUBSCRIPTION DOES NOT COME BACK (owner, 2026-10-13). Stripe
+     never revives a cancelled subscription, so a "live" payload for one the
+     mirror already holds as ended is an old event — delivered again, or
+     after the deletion. Written as it came it put a company that had moved
+     to the Free plan back on its paid plan. Stripe is asked what is true
+     now; with no client to ask, the ended row stands. */
+  const stale = await endedMirrorRevived(sub);
+  if (stale) {
+    const live = stripe ? await stripe.subscriptions.retrieve(sub.id).catch(() => null) : null;
+    if (!live || live.status === "canceled" || live.status === "incomplete_expired") {
+      console.info(`[stripe-sync] ${sub.id}: ${sub.status} payload for an ended subscription — not written`);
+      return { synced: true, organizationId: stale };
+    }
+    sub = live;
+  }
+
   const stripePriceId = sub.items.data[0]?.price?.id ?? null;
   const planSlug = await planSlugForPrice(sub.items.data[0]?.price);
   const discounts = await subscriptionDiscounts(sub, stripe);
@@ -322,7 +350,7 @@ export async function syncSubscriptionFromStripe(
     if (promo) break;
   }
   const discount = discounts[0] ?? null;
-  const currentPeriodEnd = subscriptionPeriodEndDate(sub);
+  const currentPeriodEnd = mirrorPeriodEnd(sub);
   const status = mirrorStatusFor(sub);
   // The trial's end, while it is one — Stripe moves it (an operator, a test
   // clock), and the card-less trial's banner and lock read it from the row.
@@ -509,9 +537,17 @@ export async function markSubscriptionCanceled(sub: Stripe.Subscription) {
   // plan_changed → "CANCELED" is per organization; a subscription never mirrored has none.
   const mirror = await db.subscription.findFirst({ where: { externalSubId }, select: { organizationId: true } });
   const planWas = mirror ? await planSnapshot(mirror.organizationId) : undefined;
+  /* CANCELED is the Free plan (lib/freePlan). The row keeps when the owner
+     asked (Stripe's canceled_at) and when it ended (currentPeriodEnd) — both
+     from Stripe, so a second delivery writes the same dates, not today's. */
+  const endedAt = mirrorPeriodEnd(sub);
   await db.subscription.updateMany({
     where: { externalSubId },
-    data: { status: mirrorStatusFor(sub) === SubscriptionStatus.TRIAL_ENDED ? SubscriptionStatus.TRIAL_ENDED : SubscriptionStatus.CANCELED, canceledAt: new Date() },
+    data: {
+      status: mirrorStatusFor(sub) === SubscriptionStatus.TRIAL_ENDED ? SubscriptionStatus.TRIAL_ENDED : SubscriptionStatus.CANCELED,
+      canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000) : new Date(),
+      ...(endedAt ? { currentPeriodEnd: endedAt } : {}),
+    },
   });
   if (mirror) reportPlanChange(mirror.organizationId, "stripe", planWas);
   await db.attribution.updateMany({

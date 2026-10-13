@@ -131,6 +131,8 @@ import {
   PLAN_ASK_OWNER,
   PLAN_CARD,
   PLAN_CARD_NOTE,
+  PLAN_CARD_SUB_FREE,
+  PLAN_CARD_SUB_SWITCHING,
   PLAN_META_PREFIX,
   PLAN_PRIMARY_ACTION,
   PREF_EVENTS,
@@ -163,6 +165,7 @@ import {
 import { ProviderKeyForm } from "@/components/v3/settings-blueprint/panes/stripe-key-form";
 import { MobileSettingsSprite } from "./sprite";
 import { PasswordControl } from "@/components/account-password/password-control";
+import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
@@ -875,7 +878,10 @@ function BillingPane({ data }: { data: SettingsData }) {
   return (
     <>
       <section className="mst-card">
-        <CardHeader card={PLAN_CARD} badge={b.planBadge} />
+        <CardHeader
+          card={b.onFree ? { ...PLAN_CARD, sub: PLAN_CARD_SUB_FREE } : b.freeSwitch ? { ...PLAN_CARD, sub: PLAN_CARD_SUB_SWITCHING } : PLAN_CARD}
+          badge={b.planBadge}
+        />
         <div className="mst-cardB">
           <div className="mst-planBig">{b.planName}</div>
           <div className="mst-planMeta">
@@ -916,6 +922,13 @@ function BillingPane({ data }: { data: SettingsData }) {
         </div>
         <SaveBar disabled={!b.canEditBilling} onSave={() => updateBusiness({ billingEmail })} />
       </section>
+
+      {/* The way out, and back (lib/freePlan) — the desktop pane's foot. */}
+      {b.freeSwitch ? (
+        <FreeSwitchNotice planName={b.freeSwitch.planName} at={b.freeSwitch.at} canKeep={b.isOwner} className="mst-freeSwitch" />
+      ) : b.cancel ? (
+        <CancelPlanLink offer={b.cancel} className="mst-cancelLink" />
+      ) : null}
     </>
   );
 }

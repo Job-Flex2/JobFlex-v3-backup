@@ -36,6 +36,7 @@
 // already on Custom; and the one-shot refresh on the ?session_id return leg so
 // the sidebar's locks and quota pills redraw.
 
+import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
 import { DEV_EVENT, type DevUpgradeEvent } from "@/lib/devSimulation";
 import { ConfirmPlanChange } from "@/components/billing/ConfirmPlanChange";
@@ -107,6 +108,8 @@ export type MobileUpgradeProps = {
   currentInterval?: "MONTH" | "YEAR" | null;
   /** A booked YEAR → MONTH switch (lib/planChange), drawn with its undo. */
   scheduledSwitch?: { at: string; planName: string; interval: "MONTH" | "YEAR" } | null;
+  /** The switch to Free is booked (lib/freePlan): the date and "Keep <plan>". */
+  freeSwitch?: { at: string | null; planName: string } | null;
 };
 
 function Tick({ on }: { on: boolean }) {
@@ -132,6 +135,7 @@ export function MobileUpgradeContent({
   customOffered = false,
   currentInterval = null,
   scheduledSwitch = null,
+  freeSwitch = null,
 }: MobileUpgradeProps) {
   const router = useRouter();
   /* MONTHLY | ANNUAL (owner, 2026-10-12): the desk build's switch, over the
@@ -201,8 +205,9 @@ export function MobileUpgradeContent({
   /* UP OR DOWN — by tier, not by price (owner, 2026-09-04): the catalog's
      own order is the ladder and Custom is the rung below Starter whatever
      its pages add up to. */
+  // The Free plan (lib/freePlan) is "no plan" here: every card is an upgrade.
   const rankOf = (slug: string): number =>
-    slug === CUSTOM_PLAN_SLUG ? -1 : slug ? plans.findIndex((p) => p.slug === slug) : -2;
+    slug === CUSTOM_PLAN_SLUG ? -1 : slug && slug !== "free" ? plans.findIndex((p) => p.slug === slug) : -2;
   const direction = (p: UpgradePlan): "up" | "down" => (rankOf(p.slug) > rankOf(cur) ? "up" : "down");
 
   const onCustom = cur === CUSTOM_PLAN_SLUG;
@@ -1143,6 +1148,7 @@ export function MobileUpgradeContent({
             </div>
           ) : null}
           {declined ? <CardDeclinedNote className="mu-pcn" message={declined} /> : null}
+          {freeSwitch ? <FreeSwitchNotice className="mu-pcn" planName={freeSwitch.planName} at={freeSwitch.at} canKeep={isOwner} /> : null}
           {scheduledSwitch ? (
             <ScheduledSwitchNote className="mu-pcn" at={scheduledSwitch.at} planName={scheduledSwitch.planName} interval={scheduledSwitch.interval} />
           ) : null}

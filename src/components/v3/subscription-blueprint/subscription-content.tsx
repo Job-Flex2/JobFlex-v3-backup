@@ -57,7 +57,7 @@ import { SubscriptionSprite } from "./subscription-sprite";
 // this client bundle.
 import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 import type { SubscriptionViewProps } from "@/app/(dashboard)/dashboard/subscription/subscription-load";
-import { CancelSubscription } from "@/components/billing/CancelSubscription";
+import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
 import { expandPlanFeatures } from "@/lib/planCatalog";
 import styles from "./subscription.module.css";
@@ -179,10 +179,17 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
 
   const comp = props.complimentary;
   const ended = props.cancellation;
+  // The Free plan (lib/freePlan): booked, or the company is on it.
+  const freeSwitch = props.freeSwitch ?? null;
+  const freePlan = props.freePlan ?? null;
   const statusLabel = comp
     ? "Complimentary"
-    : ended
-      ? "Canceled"
+    : freePlan
+      ? "Free"
+      : ended
+      ? "Ended"
+      : freeSwitch
+      ? "Switching to Free"
       : props.status
         ? props.status.charAt(0).toUpperCase() + props.status.slice(1).toLowerCase().replace(/_/g, " ")
         : "—";
@@ -285,9 +292,28 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
                   <b>{comp.after === "free" ? "Free plan" : "Choose a plan"}</b>
                 </div>
               </>
+            ) : freePlan ? (
+              /* On the Free plan (owner, 2026-10-13): since when, and the
+                 plan it had — nothing is billed. */
+              <>
+                <div>
+                  <span>On Free since</span>
+                  <b>{freePlan.since ? longDate(freePlan.since) : "—"}</b>
+                </div>
+                <div>
+                  <span>Was</span>
+                  <b>{freePlan.wasName}</b>
+                </div>
+              </>
+            ) : freeSwitch ? (
+              /* Booked: the plan runs to the end of the cycle, then Free —
+                 never a next bill, nothing more is charged. */
+              <div>
+                <span>Switches to Free</span>
+                <b>{freeSwitch.at ? longDate(freeSwitch.at) : "End of cycle"}</b>
+              </div>
             ) : ended ? (
-              /* Cancelled (owner, 2026-10-07): when access ends, never a
-                 next bill — nothing more is charged. */
+              /* A grant that expired: when access ended. */
               <div>
                 <span>{ended.ended ? "Access ended" : "Access until"}</span>
                 <b>{ended.accessUntil ? longDate(ended.accessUntil) : "—"}</b>
@@ -322,6 +348,12 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
           </div>
         </div>
       </section>
+
+      {/* THE SWITCH TO FREE, BOOKED (owner, 2026-10-13): the date and the
+          way back. Cancelling itself lives in Settings → Billing. */}
+      {freeSwitch && !comp ? (
+        <FreeSwitchNotice className={cx(RV)} planName={props.planName} at={freeSwitch.at} canKeep />
+      ) : null}
 
       {/* PLANS — the upgrade page's cards, embedded */}
       <section className={cx("plans-embed", RV)} id="plans">
@@ -567,18 +599,6 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
             : "Build your plan — base rows included, marked rows are $10/mo each"}
         </div>
       </section>
-
-      {/* CANCEL — the page's last row (owner, 2026-09-20). Shared with the
-          handheld build; renders nothing when there is no live subscription. */}
-      <div className={cx(RV)}>
-        <CancelSubscription
-          // A complimentary plan has no subscription to cancel; the row hides.
-          status={comp ? "COMPLIMENTARY" : props.status}
-          planName={props.planName}
-          endsAt={props.nextBill ?? props.trialEndsAt}
-          cancelAtPeriodEnd={props.cancelAtPeriodEnd}
-        />
-      </div>
 
       {/* Out of flow, so it is not a flex item and adds no gap. Last, so it
           cannot shift the reveal cascade's stagger indices. */}

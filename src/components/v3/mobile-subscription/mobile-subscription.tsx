@@ -87,7 +87,7 @@ import type { SubscriptionInvoice } from "@/actions/billing";
 import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 import type { SubscriptionViewProps } from "@/app/(dashboard)/dashboard/subscription/subscription-load";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
-import { CancelSubscription } from "@/components/billing/CancelSubscription";
+import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgrade";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import "./mobile-subscription.css";
@@ -170,8 +170,9 @@ export function MobileSubscription({
   accessBlocked,
   nextBill,
   trialEndsAt,
-  cancelAtPeriodEnd,
   cancellation,
+  freeSwitch,
+  freePlan,
   complimentary,
   usage,
   usageExempt,
@@ -352,10 +353,16 @@ export function MobileSubscription({
 
   /* A complimentary plan (lib/planGrant) shows when it ends, never a next
      bill — nothing is billed (owner, 2026-09-22). */
-  /* Cancelled (owner, 2026-10-07): when access ends, never a next bill. */
+  /* The Free plan (owner, 2026-10-13; lib/freePlan): on it since a date, or
+     switching on one — never a next bill. A grant that expired: when access
+     ended. */
   const billLabel = complimentary
     ? "Complimentary until"
-    : cancellation
+    : freePlan
+      ? "On Free since"
+      : freeSwitch
+        ? "Switches to Free"
+        : cancellation
       ? cancellation.ended
         ? "Access ended"
         : "Access until"
@@ -366,7 +373,15 @@ export function MobileSubscription({
     ? complimentary.endsAt
       ? longDate(complimentary.endsAt)
       : "No end date"
-    : cancellation
+    : freePlan
+      ? freePlan.since
+        ? longDate(freePlan.since)
+        : "—"
+      : freeSwitch
+        ? freeSwitch.at
+          ? longDate(freeSwitch.at)
+          : "End of cycle"
+        : cancellation
       ? cancellation.accessUntil
         ? longDate(cancellation.accessUntil)
         : "—"
@@ -432,8 +447,8 @@ export function MobileSubscription({
                   would collide, and here the row simply lays them out. */}
               <div className="jfms-heroHead">
                 <div className="jfms-heroMeta">Your plan</div>
-                <div className={`jfms-stamp ${complimentary ? "jfms-stOk" : stampTone(cancellation ? "CANCELED" : status)}`}>
-                  {complimentary ? "complimentary" : cancellation ? "canceled" : status.replace(/_/g, " ").toLowerCase()}
+                <div className={`jfms-stamp ${complimentary ? "jfms-stOk" : freePlan ? "jfms-stNeutral" : freeSwitch ? "jfms-stWarn" : stampTone(cancellation ? "EXPIRED" : status)}`}>
+                  {complimentary ? "complimentary" : freePlan ? "free" : freeSwitch ? "switching to free" : cancellation ? "ended" : status.replace(/_/g, " ").toLowerCase()}
                 </div>
               </div>
               <h2 className="jfms-heroName">{planName}</h2>
@@ -450,9 +465,9 @@ export function MobileSubscription({
                 <span className="jfms-heroFactV">{billValue}</span>
               </div>
               <div className="jfms-heroFact">
-                <span className="jfms-heroFactL">{complimentary ? "Then" : "Billing"}</span>
+                <span className="jfms-heroFactL">{complimentary ? "Then" : freePlan ? "Was" : "Billing"}</span>
                 <span className="jfms-heroFactV">
-                  {complimentary ? (complimentary.after === "free" ? "Free plan" : "Choose a plan") : priceCents === null ? "—" : interval === "YEAR" ? "Per year" : "Per month"}
+                  {complimentary ? (complimentary.after === "free" ? "Free plan" : "Choose a plan") : freePlan ? freePlan.wasName : freeSwitch ? "Nothing more" : priceCents === null ? "—" : interval === "YEAR" ? "Per year" : "Per month"}
                 </span>
               </div>
             </div>
@@ -472,6 +487,13 @@ export function MobileSubscription({
               </div>
             ) : null}
           </section>
+
+          {/* ============ THE SWITCH TO FREE, BOOKED ============
+              The date and the way back (lib/freePlan). Cancelling itself
+              lives in Settings → Billing. */}
+          {freeSwitch && !complimentary ? (
+            <FreeSwitchNotice planName={planName} at={freeSwitch.at} canKeep />
+          ) : null}
 
           {/* ============ USAGE ============ */}
           <section className="jfms-card" aria-labelledby="jfmsUsageT">
@@ -631,15 +653,6 @@ export function MobileSubscription({
             </div>
           </section>
 
-          {/* ============ CANCEL ============
-              The desktop page's last row, the same component and the same
-              money rule. Renders nothing without a live subscription. */}
-          <CancelSubscription
-            status={complimentary ? "COMPLIMENTARY" : status}
-            planName={planName}
-            endsAt={nextBill ?? trialEndsAt}
-            cancelAtPeriodEnd={cancelAtPeriodEnd}
-          />
         </div>
       </main>
 

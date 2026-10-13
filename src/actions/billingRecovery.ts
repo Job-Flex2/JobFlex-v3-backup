@@ -32,7 +32,7 @@ export async function checkBillingRecovery(): Promise<BillingRecoveryState> {
     canUpdateCard: Boolean(isOwner && live && ["active", "trialing", "past_due", "unpaid"].includes(live.status)),
   };
   if (kind === "canceled" && live?.cancellation_details?.reason === "payment_failed") {
-    result.reason = "Your subscription ended after payment could not be collected. Restart your subscription to choose a payment method and reopen your tools.";
+    result.reason = "Your subscription ended after payment could not be collected, so your account moved to the Free plan — your data is all here. Choose a plan to pay with another card and open your tools again.";
   }
   if (kind !== "payment" || !live || !isOwner) return result;
   try {

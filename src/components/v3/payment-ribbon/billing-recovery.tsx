@@ -16,7 +16,11 @@ export function BillingRecovery({ isOwner, pageLabel, status, blocked = false }:
 }) {
   const router = useRouter();
   const [state, setState] = useState<BillingRecoveryState | null>(null);
-  const needed = blocked || ["PAST_DUE", "UNPAID", "CANCELED", "EXPIRED", "TRIAL_ENDED"].includes(status ?? "");
+  // The Free plan (lib/freePlan) is a plan, not a problem: the subscription
+  // page says "Free" in its hero and offers the plans. The card still stands
+  // in front of a page Free does not open (the gate passes pageLabel).
+  const onFree = status === "CANCELED" && !pageLabel;
+  const needed = !onFree && (blocked || ["PAST_DUE", "UNPAID", "CANCELED", "EXPIRED", "TRIAL_ENDED"].includes(status ?? ""));
   const [busy, setBusy] = useState(needed);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
@@ -77,12 +81,12 @@ export function BillingRecoveryCard({ isOwner, state, pageLabel, busy, error, ca
   const owner = isOwner && state?.isOwner;
   const kind = state?.kind;
   const title = !state ? "Checking your subscription" : kind === "payment" ? "Payment needs attention" :
-    kind === "trial-ended" ? "Your trial has ended" : kind === "canceled" ? "Your subscription was canceled" :
+    kind === "trial-ended" ? "Your trial has ended" : kind === "canceled" ? "You're on the Free plan" :
     kind === "active" ? "Your plan is active" : "Your plan access has expired";
   const details = !state ? "We're checking the latest billing status before asking you to take action." :
     kind === "payment" ? (owner ? state.reason : "The payment for this workspace's plan did not go through. Ask the account owner to resolve it.") :
     kind === "trial-ended" ? "Choose a paid plan to continue using your tools. Your saved work is still here." :
-    kind === "canceled" ? state.reason || "This subscription has ended. Start a new subscription to reopen your tools." :
+    kind === "canceled" ? state.reason || `${pageLabel ? `${pageLabel} isn't on the Free plan. ` : ""}Your subscription ended and your account moved to the Free plan — your proposals, clients and jobs are all here. Choose a plan to open your tools again.` :
     kind === "active" ? "Your subscription is up to date. Your available tools will reopen when the page refreshes." :
     "The access period recorded for this plan has ended. If you already renewed or were given ongoing access, check the status again or contact JobFlex support.";
   const amount = state?.amountCents != null ? new Intl.NumberFormat("en-US", { style: "currency", currency: state.currency }).format(state.amountCents / 100) : null;
@@ -108,7 +112,7 @@ export function BillingRecoveryCard({ isOwner, state, pageLabel, busy, error, ca
         {owner && state.canUpdateCard && kind === "payment" && <button className={s.secondary} type="button" onClick={onUpdateCard} disabled={cardBusy || busy}>
           {cardBusy ? "Opening card form…" : "Update card"}
         </button>}
-        {owner && state.verified && ["canceled", "trial-ended", "expired"].includes(kind ?? "") && <Link className={s.primary} href="/dashboard/upgrade">{kind === "canceled" ? "Restart subscription" : "Choose a plan"}</Link>}
+        {owner && state.verified && ["canceled", "trial-ended", "expired"].includes(kind ?? "") && <Link className={s.primary} href="/dashboard/upgrade">Choose a plan</Link>}
         <button className={s.secondary} type="button" disabled={busy || cardBusy} onClick={onCheck}>{busy ? "Checking…" : "Check payment status"}</button>
         {pageLabel && isOwner && <Link className={s.secondary} href="/dashboard/subscription">Manage subscription</Link>}
       </div>

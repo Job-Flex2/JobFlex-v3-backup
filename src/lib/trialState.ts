@@ -74,7 +74,16 @@ export async function patchCardlessRecord(orgId: string, patch: Partial<Cardless
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type CardlessTrialState =
-  | { kind: "trialing"; endsAt: Date; daysLeft: number; hasCard: boolean; record: CardlessRecord }
+  | {
+      kind: "trialing";
+      endsAt: Date;
+      daysLeft: number;
+      hasCard: boolean;
+      /** The owner cancelled: the trial ends on the Free plan (lib/freePlan),
+       *  not in the trial lock — no "add a card" reminders on the way. */
+      toFree: boolean;
+      record: CardlessRecord;
+    }
   | { kind: "ended"; endedAt: Date; record: CardlessRecord };
 
 // The ribbon's steps over this state (the 2-day boundary, the dismissal
@@ -87,13 +96,14 @@ export { TRIAL_NOTICE_DAYS } from "@/lib/trialNotice";
  * a paid signup, a converted trial, a comp, a free account. Ended when the
  * mirror says TRIAL_ENDED, or when the trial's end has passed with no card
  * on file and the webhook has not landed yet: the lock does not wait for it.
+ * A trial the owner cancelled is past by then — it ends on the Free plan.
  */
 export async function cardlessTrialState(orgId: string, now = new Date()): Promise<CardlessTrialState | null> {
   const rec = await readCardlessRecord(orgId);
   if (!rec || rec.restartedAt) return null;
   const sub = await db.subscription.findUnique({
     where: { organizationId: orgId },
-    select: { status: true, trialEndsAt: true, externalSubId: true },
+    select: { status: true, trialEndsAt: true, externalSubId: true, canceledAt: true },
   });
   if (!sub || sub.externalSubId !== rec.subId) return null;
   const endsAt = sub.trialEndsAt ?? new Date(rec.endsAt);
@@ -102,14 +112,16 @@ export async function cardlessTrialState(orgId: string, now = new Date()): Promi
   }
   if (sub.status !== SubscriptionStatus.TRIALING) return null;
   const hasCard = Boolean(rec.cardAt);
+  // Cancelled during the trial: its end is the move to Free, never the lock.
+  const toFree = Boolean(sub.canceledAt);
   if (!hasCard && endsAt.getTime() <= now.getTime()) {
-    return { kind: "ended", endedAt: endsAt, record: rec };
+    return toFree ? null : { kind: "ended", endedAt: endsAt, record: rec };
   }
   // Whole days, rounded up — the first day reads "7 days left" — except the
   // last 24 hours, which read as the day it ends (daysLeft 0, "Ends today").
   const leftMs = endsAt.getTime() - now.getTime();
   const daysLeft = leftMs <= DAY_MS ? 0 : Math.ceil(leftMs / DAY_MS);
-  return { kind: "trialing", endsAt, daysLeft, hasCard, record: rec };
+  return { kind: "trialing", endsAt, daysLeft, hasCard, toFree, record: rec };
 }
 
 /** The same rule for a route handler (a POST that writes for the

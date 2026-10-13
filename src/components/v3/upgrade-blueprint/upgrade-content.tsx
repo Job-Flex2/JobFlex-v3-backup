@@ -27,6 +27,7 @@
 //     charged once now ($10 each), the subscription price steps up, and the
 //     next cycle bills the new total — no second charge for the base.
 
+import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
@@ -83,7 +84,10 @@ export function UpgradeContent({
   focusWords = null,
   currentInterval = null,
   scheduledSwitch = null,
+  freeSwitch = null,
 }: {
+  /** The switch to Free is booked (lib/freePlan): the date and "Keep <plan>". */
+  freeSwitch?: { at: string | null; planName: string } | null;
   /** The term the live subscription bills on (lib/trialPlan priceInterval); null when unknown or none. */
   currentInterval?: "MONTH" | "YEAR" | null;
   /** A booked YEAR → MONTH switch (lib/planChange), drawn with its undo. */
@@ -193,8 +197,9 @@ export function UpgradeContent({
      whatever its page count adds up to. So from Custom every catalog plan is
      an upgrade, and from any catalog plan Custom is a downgrade. No plan at
      all ranks below everything. */
+  // The Free plan (lib/freePlan) is "no plan" here: every card is an upgrade.
   const rankOf = (slug: string): number =>
-    slug === CUSTOM_PLAN_SLUG ? -1 : slug ? plans.findIndex((p) => p.slug === slug) : -2;
+    slug === CUSTOM_PLAN_SLUG ? -1 : slug && slug !== "free" ? plans.findIndex((p) => p.slug === slug) : -2;
   const direction = (p: UpgradePlan): "up" | "down" => (rankOf(p.slug) > rankOf(cur) ? "up" : "down");
 
   /* What is being asked. "up" and "custom" go to Stripe to be paid for (the
@@ -515,6 +520,9 @@ export function UpgradeContent({
       ) : null}
 
       {declined ? <CardDeclinedNote message={declined} /> : null}
+      {freeSwitch && !embedded ? (
+        <FreeSwitchNotice className="jf-up-free" planName={freeSwitch.planName} at={freeSwitch.at} canKeep={isOwner} />
+      ) : null}
       {scheduledSwitch ? (
         <ScheduledSwitchNote at={scheduledSwitch.at} planName={scheduledSwitch.planName} interval={scheduledSwitch.interval} />
       ) : null}

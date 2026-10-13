@@ -1,0 +1,227 @@
+/* THE MOVE TO FREE — see FreeSwitch.tsx. Plain CSS, namespaced `jffs-`, for
+   the reason the house dialog's is: it renders inside several pages' worlds
+   (Settings desktop and handheld, the subscription page's two builds) and in
+   a portal on <body>. Tokens only (globals.css); selectors carry two classes
+   because both hosts reset bare buttons at (0,1,1). */
+
+/* ── The notice: "Your plan switches to Free on <date>" + Keep ─────────── */
+.jffs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--amber, #b88420);
+  border-radius: var(--r-sm, 2px);
+  background: color-mix(in srgb, var(--amber, #b88420) 8%, var(--paper-deep, #fff));
+}
+.jffs .jffs-t {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink, #0a0a0a);
+}
+.jffs .jffs-keep {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--accent, #1854a0);
+  border-radius: var(--r-sm, 2px);
+  background: var(--accent, #1854a0);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.12s var(--ease-out, cubic-bezier(0.22, 0.61, 0.36, 1)),
+    box-shadow 0.12s var(--ease-out, cubic-bezier(0.22, 0.61, 0.36, 1));
+}
+.jffs .jffs-keep:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--ink, #0a0a0a);
+}
+.jffs .jffs-keep:focus-visible {
+  outline: 2px solid var(--ink, #0a0a0a);
+  outline-offset: 2px;
+}
+.jffs .jffs-keep:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+@media (max-width: 560px) {
+  .jffs .jffs-keep {
+    width: 100%;
+  }
+}
+
+/* ── The link: "Cancel subscription" / "Continue to cancel" ─────────────
+   An ordinary text link — never a button's frame. 44px tall to the touch. */
+.jffs-cancel {
+  display: flex;
+}
+.jffs-cancel .jffs-link,
+.jf-confirm.jffs-dlg .jffs-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft, #333);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.14s var(--ease-out, ease);
+}
+.jffs-cancel .jffs-link:hover,
+.jf-confirm.jffs-dlg .jffs-link:hover {
+  color: var(--ink, #0a0a0a);
+}
+.jffs-cancel .jffs-link:focus-visible,
+.jf-confirm.jffs-dlg .jffs-link:focus-visible {
+  outline: 2px solid var(--accent, #1854a0);
+  outline-offset: 2px;
+}
+
+.jffs-err,
+.jf-confirm.jf-confirm .jffs-err {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rose, #a83232);
+}
+
+/* ── Window 1, on the house dialog's frame ────────────────────────────── */
+.jf-confirm.jffs-dlg .jf-confirm-box {
+  padding-top: 24px;
+}
+.jf-confirm.jffs-dlg .jf-confirm-h {
+  padding-right: 44px;
+}
+.jf-confirm.jffs-dlg .jffs-x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--r-sm, 2px);
+  background: none;
+  color: var(--ink, #0a0a0a);
+  cursor: pointer;
+}
+.jf-confirm.jffs-dlg .jffs-x:hover {
+  background: var(--paper, #f2f0eb);
+}
+.jf-confirm.jffs-dlg .jffs-x:focus-visible {
+  outline: 2px solid var(--accent, #1854a0);
+  outline-offset: -2px;
+}
+.jf-confirm.jffs-dlg .jffs-x svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.jf-confirm.jffs-dlg .jffs-lead {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft, #333);
+}
+.jf-confirm.jffs-dlg .jffs-list {
+  list-style: none;
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.jf-confirm.jffs-dlg .jffs-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink, #0a0a0a);
+}
+.jf-confirm.jffs-dlg .jffs-li-t {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.jf-confirm.jffs-dlg .jffs-ic {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--accent, #1854a0);
+  border-radius: var(--r-sm, 2px);
+  color: var(--accent, #1854a0);
+}
+.jf-confirm.jffs-dlg .jffs-ic svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.jf-confirm.jffs-dlg .jffs-made {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent, #1854a0);
+  background: var(--accent-soft, rgba(24, 84, 160, 0.08));
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink, #0a0a0a);
+}
+.jf-confirm.jffs-dlg .jffs-keeps {
+  margin-top: 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft, #333);
+}
+.jf-confirm.jffs-dlg .jffs-acts {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.jf-confirm.jffs-dlg .jffs-acts .jf-confirm-btn {
+  flex: 0 1 auto;
+  padding: 0 22px;
+}
+@media (max-width: 600px) {
+  .jf-confirm.jffs-dlg .jffs-acts {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .jf-confirm.jffs-dlg .jffs-acts .jf-confirm-btn {
+    width: 100%;
+  }
+  .jf-confirm.jffs-dlg .jffs-go {
+    justify-content: center;
+  }
+}

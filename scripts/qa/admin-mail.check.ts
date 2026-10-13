@@ -60,6 +60,7 @@ check("a paying shop's offer: already applied, nothing to do, no button", op.bod
 const yearly = { can: true as const, how: "subscription" as const, pct: 10, months: 3, yearly: true };
 check("a yearly plan's offer is its next yearly charge — its first, on a trial with no card", offerSentence(base({ account: paying.account, offer: yearly }))!.includes("your next yearly charge") && offerSentence(base({ offer: yearly }))!.includes("your first yearly charge") && offerSentence(remodel) === null);
 check("after the dash the made-line reads on in lower case; a business name keeps its capital", topicDraft("come-back", ended, NOW).body.startsWith("Hi there — everything you set up for Northpeak") && topicDraft("come-back", base({ built: { clients: 0, proposals: 0, jobs: 0 }, account: ended.account }), NOW).body.startsWith("Hi Mike — Summit Roofing's workspace"));
+check("come-back to a canceled account speaks of coming back from the Free plan", topicDraft("come-back", canceled, NOW).body.includes("is on the Free plan now") && topicDraft("come-back", canceled, NOW).body.includes("straight from Free") && !topicDraft("come-back", ended, NOW).body.includes("Free plan"));
 check("come-back sends an ended trial to the trial page and a canceled one to choose a plan", topicDraft("come-back", ended, NOW).cta?.path === "/dashboard/trial" && topicDraft("come-back", canceled, NOW).cta?.path === "/dashboard/subscription");
 check("every button opens a dashboard page", drafts.every(({ d }) => !d.cta || /^\/dashboard(\/[\w-]+)*$/.test(d.cta.path)));
 
@@ -69,7 +70,7 @@ check("the prompt carries the account's facts, the sender's words and the no-inv
 const wpo = writePrompt({ p: trial, notes: "give him the discount", sender: "Dmitriy", topic: topicDraft("offer", trial, NOW), offer: true, now: NOW });
 check("with the offer on, the exact sentence goes in to be used word for word; with a topic, its draft is the start", wpo.user.includes(`Offer sentence (include word for word): ${offerSentence(trial)}`) && wpo.user.includes("The email starts from this draft"));
 check("an unknown name tells the AI to open with 'Hi there'", writePrompt({ p: ended, notes: "x y z", sender: "D", topic: null, offer: false, now: NOW }).user.includes('open with "Hi there"'));
-check("the account in words, for the AI", accountWords(paying) === "paying customer on Professional ($95/mo)" && accountWords(ended).startsWith("free trial of Professional ended") && accountWords(canceled) === "canceled Starter");
+check("the account in words, for the AI", accountWords(paying) === "paying customer on Professional ($95/mo)" && accountWords(ended).startsWith("free trial of Professional ended") && accountWords(canceled) === "on the Free plan since canceling Starter — nothing is billed");
 const good = parseWritten('```json\n{"subject":"Quick hello","paragraphs":["Hi Mike — one.","Two."]}\n```');
 check("the AI's answer is read, fences and all", good.ok && good.draft.subject === "Quick hello" && good.draft.body === "Hi Mike — one.\n\nTwo.");
 check("an answer with a placeholder, nothing in it, or not JSON is refused", !parseWritten('{"subject":"Hi","paragraphs":["Hi [Name] — x"]}').ok && !parseWritten('{"subject":"","paragraphs":[]}').ok && !parseWritten("Sure! Here is your email").ok && !parseWritten('{"subject":"x","paragraphs":["Hi {{first}}"]}').ok);

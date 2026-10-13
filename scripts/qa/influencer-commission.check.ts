@@ -373,6 +373,10 @@ async function main() {
       (await db.attribution.findUnique({ where: { stripeSubscriptionId: WIN } }))?.status === "ENDED");
 
     // THE REPAIR: a row the old rule already killed comes back on the next sync.
+    // The old rule ended it while the subscription was LIVE: the mirror is put
+    // back to that. (A subscription Stripe has ended never comes back — since
+    // 2026-10-13 a live payload for it is not written, lib/stripeSync.)
+    await db.subscription.updateMany({ where: { externalSubId: WIN }, data: { status: "ACTIVE" } });
     await db.attribution.update({ where: { stripeSubscriptionId: WIN }, data: { status: "ENDED" } });
     await syncSubscriptionFromStripe(subscription(WIN, qaOrg.id, null));
     ok("an attribution ENDED by the old rule is revived on the next sync",

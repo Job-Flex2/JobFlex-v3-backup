@@ -1,4 +1,5 @@
 "use server";
+import { onFreePlan } from "@/lib/freePlan";
 import type Stripe from "stripe";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
@@ -57,6 +58,10 @@ export interface SubscriberRow extends BillingFacts {
    *  for, Stripe was not read, or its subscription was not in the read —
    *  unknown, not "No card". */
   card: PaymentCard | null;
+  /** The organization is on the Free plan (lib/freePlan): this is its
+   *  current subscription, ended. The page lists it as "Free (was <plan>)";
+   *  any other ended subscription (one an upgrade replaced) stays hidden. */
+  onFree: boolean;
 }
 
 export interface SubscribersData {
@@ -569,6 +574,7 @@ async function fromStripe(withCards: boolean): Promise<SubscribersData> {
       changedAt: event.at,
       changeKind: event.kind,
       card: cardBook ? (cardBook.has(sub.id) ? cardBook.get(sub.id)! : paymentCardOf(sub, cust)) : null,
+      onFree: isFreeRecord(status, recordBySubId.get(sub.id), sub.id),
     };
   });
 
@@ -640,6 +646,7 @@ async function fromStripe(withCards: boolean): Promise<SubscribersData> {
       // list cannot see it (a sandbox subscription on a test clock is left out
       // of every list that does not name the clock or the customer).
       card: withCards && (comped || !r.externalSubId) ? NO_CARD : null,
+      onFree: !comped && onFreePlan(r),
     });
   }
 
@@ -673,6 +680,12 @@ async function accountDefaultCurrency(stripe: Stripe): Promise<string | null> {
   }
   currencyMemo = { at: Date.now(), value };
   return value;
+}
+
+/** A Stripe row is the org's Free plan when the org's own record still names
+ *  this very subscription and holds it as ended (lib/freePlan). */
+function isFreeRecord(status: string, record: { status: string; provider: string; externalSubId: string | null } | undefined, subId: string): boolean {
+  return status === "CANCELED" && !!record && record.provider === "STRIPE" && record.externalSubId === subId && onFreePlan(record);
 }
 
 // ── The platform's own record: dev without Stripe, or Stripe unreachable ───
@@ -784,6 +797,7 @@ async function fromRecord(
       changedAt: r.updatedAt,
       changeKind: "updated",
       card: null, // Stripe was not read
+      onFree: !comped && onFreePlan(r),
     };
   });
 

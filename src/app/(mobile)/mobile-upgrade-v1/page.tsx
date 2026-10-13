@@ -25,6 +25,8 @@ import { getPlanCatalog } from "@/lib/planCatalogServer";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { getStripeMode } from "@/lib/stripeMode";
 import { normalizeCustomPages } from "@/lib/customPlan";
+import { FREE_PLAN_NAME, freeSwitchBooked, freeSwitchDate, onFreePlan } from "@/lib/freePlan";
+import { titleCaseSlug } from "@/lib/planCatalog";
 import { customPlanOffered } from "@/lib/customPlanFlag";
 import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgrade";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
@@ -75,7 +77,7 @@ export default async function MobileUpgradeV1Page({
     getPlanCatalog(),
     db.subscription.findUnique({
       where: { organizationId: ctx.organizationId },
-      select: { plan: true, status: true },
+      select: { plan: true, status: true, provider: true, canceledAt: true, currentPeriodEnd: true, trialEndsAt: true },
     }),
     getStripeMode(),
     planTermState(ctx.organizationId).catch(() => ({ currentInterval: null, scheduledSwitch: null })),
@@ -94,6 +96,14 @@ export default async function MobileUpgradeV1Page({
     }
   }
 
+  // On the Free plan (lib/freePlan) no card is current: each one is paid at once.
+  const onFree = sub?.provider !== "MANUAL" && onFreePlan(sub);
+  // Booked: the date it switches, and the way back (lib/freePlan).
+  const freeSwitch =
+    sub && sub.provider !== "MANUAL" && freeSwitchBooked(sub)
+      ? { at: freeSwitchDate(sub)?.toISOString() ?? null, planName: catalog.find((p) => p.slug.toLowerCase() === sub.plan.toLowerCase())?.name ?? titleCaseSlug(sub.plan) }
+      : null;
+
   const plans: UpgradePlan[] = catalog
     .filter((p) => !p.isFree)
     .map((p) => ({
@@ -110,8 +120,9 @@ export default async function MobileUpgradeV1Page({
   return (
     <MobileUpgradeContent
       plans={plans}
-      currentPlan={sub?.plan ?? null}
-      currentInterval={term.currentInterval}
+      currentPlan={onFree ? FREE_PLAN_NAME : (sub?.plan ?? null)}
+      currentInterval={onFree ? null : term.currentInterval}
+      freeSwitch={freeSwitch}
       scheduledSwitch={term.scheduledSwitch}
       customPages={customPages}
       isOwner={isOwnerRole(ctx.role)}

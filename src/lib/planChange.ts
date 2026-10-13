@@ -552,6 +552,27 @@ async function restoreBooking(organizationId: string, r: Resolved, booked: Sched
   await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(record) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(record) } });
 }
 
+/** Book again a switch that the move to Free let go of (lib/freePlan): the
+ *  owner pressed "Keep", so the plan goes on exactly as it was — the same
+ *  price from the same day — while that day is still ahead. False when it
+ *  cannot be put back; the plan then simply goes on as it is. */
+export async function rebookScheduledSwitch(organizationId: string, held: ScheduledSwitch, deps?: PlanChangeDeps): Promise<boolean> {
+  const end = Math.floor(Date.parse(held.at) / 1000);
+  if (!Number.isFinite(end) || end * 1000 <= Date.now()) return false;
+  const d = await clientOf(deps);
+  const sub = await d.stripe.subscriptions.retrieve(held.subId);
+  if (sub.status === "canceled" || sub.status === "incomplete_expired" || sub.cancel_at_period_end) return false;
+  const plan = held.priceId ? null : await getPlanBySlug(held.planSlug, { includeInactive: true });
+  const priceId = held.priceId ?? (plan ? await priceFor(d, plan, held.interval) : null);
+  if (!priceId) return false;
+  const metadata = { ...(sub.metadata ?? {}), organizationId, planSlug: held.planSlug, interval: held.interval, customPages: "" };
+  const done = await writeSchedule(d.stripe, sub, end, priceId, metadata);
+  if (!done.ok) return false;
+  const record: ScheduledSwitch = { ...held, scheduleId: done.scheduleId, priceId };
+  await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(record) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(record) } });
+  return true;
+}
+
 async function readSwitchRecord(organizationId: string): Promise<ScheduledSwitch | null> {
   const row = await db.syncState.findUnique({ where: { key: switchKey(organizationId) } }).catch(() => null);
   if (!row) return null;

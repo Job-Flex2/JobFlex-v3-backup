@@ -14,6 +14,7 @@
 // plan on Stripe, or grant a complimentary plan with a term), and the usage
 // meters with the admin's reset in ./admin-usage-reset (actions/adminUsage).
 
+import { freeWasLabel, onFreePlan } from "@/lib/freePlan";
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Search, RefreshCw } from "lucide-react";
@@ -397,11 +398,16 @@ export function AdminUsersContent({
                         <span className={cx("au-plan-name")}>
                           {!u.plan || u.plan === "NONE" ? (
                             <span className={cx("au-dash")}>—</span>
+                          ) : onFreePlan({ status: u.planStatus }) && u.provider !== "MANUAL" ? (
+                            // Its subscription ended: the Free plan (lib/freePlan).
+                            freeWasLabel(planLabel(u.plan, plans))
                           ) : (
                             planLabel(u.plan, plans)
                           )}
                         </span>
-                        {u.planStatus !== "NONE" ? <StatusBadge status={u.planStatus} /> : null}
+                        {u.planStatus !== "NONE" ? (
+                          <StatusBadge status={onFreePlan({ status: u.planStatus }) && u.provider !== "MANUAL" ? "FREE" : u.planStatus} />
+                        ) : null}
                         {/* Where the plan on this row came from, but only when
                             it is not the ordinary case. A grant and a
                             Stripe-only subscription are read differently. */}

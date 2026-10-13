@@ -16,6 +16,8 @@
  * five "use client" panes, so it must stay free of Prisma and "use server".
  */
 
+import type { FreeLoss } from "@/lib/freePlan";
+
 /* ------------------------------------------------------------------ */
 /* Shared primitive types                                              */
 /* ------------------------------------------------------------------ */
@@ -532,6 +534,9 @@ export const PLAN_ASK_OWNER = {
   desc: 'Only the organization owner can change the plan or billing.',
 } as const;
 export const PLAN_CARD_NOTE = 'Plans, payment method and invoices live on the subscription page.' as const;
+/** The card's sub-line once the company is on Free, or is moving there. */
+export const PLAN_CARD_SUB_FREE = 'Free plan · nothing is billed';
+export const PLAN_CARD_SUB_SWITCHING = 'Switches to Free at the end of the cycle';
 
 export const BILLING_CONTACT_CARD: CardHead = {
   title: 'Billing contact',
@@ -1031,6 +1036,22 @@ export interface BillingData {
   canEditBilling: boolean;
   /** The real subscription page (owner-only). */
   subscriptionHref: string;
+  /** The company is on the Free plan (its subscription ended — lib/freePlan). */
+  onFree: boolean;
+  /** The switch to Free is booked (lib/freePlan): "Your plan switches to
+   *  Free on <date>" and "Keep <plan>" stand where the cancel link was. */
+  freeSwitch: { at: string | null; planName: string } | null;
+  /** The owner's "Cancel subscription" link and what its two windows say —
+   *  present only for the owner of a live, paid (not granted) subscription
+   *  with nothing booked yet. Null for every other role and state. */
+  cancel: {
+    planName: string;
+    /** ISO end of the paid cycle (or trial): what the plan is kept until. */
+    keepsUntil: string | null;
+    losses: FreeLoss[];
+    /** "You've sent N proposals and scheduled N jobs with JobFlex", or null. */
+    made: string | null;
+  } | null;
 }
 
 export interface GmailData {

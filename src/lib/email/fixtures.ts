@@ -12,7 +12,7 @@ import { buildOwnerAccepted, buildNewLead, buildLeadOffer, buildSupportTicket } 
 import { buildTrialConfirm, buildTrialReminder } from "./build/trial";
 import { buildOtpCode, buildOtpNoAccount } from "./build/otp";
 import { buildPasswordSet } from "./build/accountPassword";
-import { buildPaymentFailed } from "./build/billing";
+import { buildFreeSwitchBooked, buildPaymentFailed } from "./build/billing";
 import { buildJobAssignment, buildWorkerInvite, buildTeamInvite } from "./build/worker";
 import {
   buildPasswordReset,
@@ -582,6 +582,12 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
     label: "18g · buildPaymentFailed({ final: true })",
     note: "Stripe's last try was declined too: the plan is closed (UNPAID or CANCELED).",
     doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: null, href: "https://example.com/dashboard/subscription", final: true }),
+  },
+  {
+    id: "b-free-switch",
+    label: "18h · buildFreeSwitchBooked()",
+    note: "The owner cancelled from Settings → Billing: the plan switches to Free at the end of the paid cycle (actions/billing cancelSubscription).",
+    doc: buildFreeSwitchBooked({ name: "Jordan Rivera", planName: "Professional", switchAt: new Date("2026-11-12T17:00:00Z"), href: "https://example.com/dashboard/settings?tab=billing" }),
   },
   {
     id: "b-request-received",

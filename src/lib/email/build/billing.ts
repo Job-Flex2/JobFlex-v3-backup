@@ -72,3 +72,39 @@ export function buildPaymentFailed(i: PaymentFailedInput): EmailDoc {
     footer: PLATFORM_FOOTER,
   };
 }
+
+/* THE SWITCH TO FREE, BOOKED (owner, 2026-10-13; lib/freePlan): sent when
+   the owner cancels from Settings → Billing. It says the one date that
+   matters, that nothing more is billed and the data stays, and offers the
+   way back — "Keep <plan>" opens Settings → Billing, where it is one press. */
+export interface FreeSwitchBookedInput {
+  name: string | null;
+  planName: string;
+  /** The end of the paid cycle (or the trial): the day the plan switches. */
+  switchAt: Date | null;
+  /** Absolute link to /dashboard/settings?tab=billing. */
+  href: string;
+}
+
+export function buildFreeSwitchBooked(i: FreeSwitchBookedInput): EmailDoc {
+  const first = i.name?.trim().split(/\s+/)[0] || "there";
+  const when = i.switchAt ? DATE_FMT.format(i.switchAt) : null;
+  return {
+    subject: when ? `Your plan switches to Free on ${when}` : "Your plan switches to Free at the end of this cycle",
+    lockup: PLATFORM_LOCKUP,
+    kicker: { text: "Plan cancelled", tone: "warn" },
+    headline: when ? `Your plan switches to Free on ${when}` : "Your plan switches to Free",
+    prose: [
+      `Hi ${first} — you cancelled ${i.planName}. You keep it until ${when ?? "the end of the cycle you've already paid for"}, and you won't be billed again.`,
+      "Then your account moves to the Free plan. Your proposals, clients and jobs stay where they are. Nothing is refunded for the days you don't use.",
+    ],
+    box: [
+      { type: "field", label: "Plan", value: i.planName },
+      { type: "field", label: "Next charge", value: "None" },
+      { type: "cond", label: "Switches to Free", chip: when ?? "End of cycle", tone: "warn" },
+    ],
+    cta: { label: `Keep ${i.planName}`, href: i.href },
+    after: ["Changed your mind? Keep your plan any time before that date from Settings → Billing. Questions? Reply to this email."],
+    footer: PLATFORM_FOOTER,
+  };
+}

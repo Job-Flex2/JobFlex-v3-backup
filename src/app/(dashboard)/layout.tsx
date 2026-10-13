@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { FREE_PLAN_NAME, onFreePlan } from "@/lib/freePlan";
 import type { Route } from "next";
 import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth";
@@ -42,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     activeOrgId
       ? db.subscription.findUnique({
           where: { organizationId: activeOrgId },
-          select: { plan: true, status: true },
+          select: { plan: true, status: true, provider: true },
         })
       : Promise.resolve(null),
     activeOrgId
@@ -128,7 +129,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     : [{}, {}];
 
   // The sidebar's limit pill names the plan by its catalog name, never the slug.
-  const planName = subscription?.plan ? await getPlanDisplayName(subscription.plan) : undefined;
+  // An ended subscription is the Free plan (lib/freePlan).
+  const planName =
+    subscription && subscription.provider !== "MANUAL" && onFreePlan(subscription)
+      ? FREE_PLAN_NAME
+      : subscription?.plan
+        ? await getPlanDisplayName(subscription.plan)
+        : undefined;
   // The card-less trial's ribbon — the blueprint layout's, for this tree's pages.
   const trial = activeOrgId ? await trialView(activeOrgId).catch(() => null) : null;
   // Dismissed on this step (lib/trialNotice): left out, not painted and removed.

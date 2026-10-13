@@ -7,8 +7,11 @@ import { getPlanBySlug, revalidatePlanSurfaces } from "@/lib/planCatalogServer";
 import {
   applyPlanChange,
   previewPlanChange as previewPlanChangeFor,
+  rebookScheduledSwitch,
+  readScheduledSwitch,
   releaseScheduledSwitch,
   type PlanChangeDone,
+  type ScheduledSwitch,
   type PlanChangePreview,
   type PlanChangeRefusal,
 } from "@/lib/planChange";
@@ -24,6 +27,7 @@ import {
 import { planSnapshot, reportPlanChange } from "@/lib/activation-events";
 import { logServerError } from "@/lib/server-events";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
+import { FREE_SWITCH_META, LIVE_STATUSES, freeSwitchBooked, onFreePlan } from "@/lib/freePlan";
 
 const billingSaved = (organizationId: string, actorId: string, summary: string, meta?: Record<string, unknown>) =>
   logActivity({ organizationId, actorId, kind: TRAIL_KINDS.SETTINGS, summary, meta: { area: "billing", ...meta } });
@@ -157,7 +161,8 @@ export async function listSubscriptionInvoices(): Promise<{
        reward lands as a negative balance, so "$50 off" is visible here weeks
        before the charge. Best-effort: a preview failure leaves the history. */
     let upcoming: UpcomingInvoice | null = null;
-    if (sub.externalSubId) {
+    // Nothing comes next once the switch to Free is booked or done (lib/freePlan).
+    if (sub.externalSubId && !freeSwitchBooked(sub) && !onFreePlan(sub)) {
       try {
         const pre = await stripe.invoices.createPreview({
           customer: sub.externalCustomerId,
@@ -202,36 +207,55 @@ export async function listSubscriptionInvoices(): Promise<{
   }
 }
 
-/* ── CANCEL AT THE END OF THE CYCLE ──────────────────────────────────────
-   (owner, 2026-09-20) The subscription page's last row. Cancelling is booked,
-   not immediate: Stripe keeps `cancel_at_period_end`, the shop keeps every
-   paid day it already has, and nothing is refunded — the same money rule the
-   plan dialog states for a downgrade. The booking is mirrored locally on
-   `Subscription.canceledAt` (an existing column; no schema change), which is
-   what the page reads to show "cancelling on <date>" and offer the undo.
+/* ── THE MOVE TO FREE AT THE END OF THE CYCLE ────────────────────────────
+   (owner, 2026-09-20; Free since 2026-10-13 — lib/freePlan) Cancelling is
+   booked, not immediate: Stripe keeps `cancel_at_period_end`, the shop keeps
+   every paid day it already has, and nothing is refunded — the same money
+   rule the plan dialog states for a downgrade. When Stripe ends the
+   subscription the company is on the Free plan. The booking is mirrored
+   locally on `Subscription.canceledAt` (an existing column; no schema
+   change), which is what the screens read to show "Your plan switches to
+   Free on <date>" and offer "Keep <plan>".
 
-   Resuming clears the booking on both sides while the cycle is still running.
-   Once the period has actually ended Stripe has cancelled for real and there
-   is nothing here to resume — that shop checks out again. */
+   Owner only (requireOwner — the link sits in Settings → Billing): a manager
+   cannot book it. A complimentary plan (a grant, provider MANUAL) has no
+   subscription to end. A booked YEAR → MONTH switch is let go of first (a
+   scheduled subscription refuses cancel_at_period_end) and remembered, so
+   "Keep" books it again.
+
+   Keeping clears the booking on both sides while the cycle is still running.
+   Once the period has actually ended Stripe has ended the subscription and
+   there is nothing to keep — a plan card checks out again, paid at once. */
 export type CancelSubscriptionResult =
   | { ok: true; endsAt: string | null }
   | { ok: false; error: string };
 
+/** The booked switch the move to Free let go of, for "Keep" (SyncState). */
+const heldSwitchKey = (orgId: string) => `freeHeldSwitch:${orgId}`;
+
 export async function cancelSubscription(): Promise<CancelSubscriptionResult> {
   const { organizationId, user } = await requireOwner();
   const sub = await db.subscription.findUnique({ where: { organizationId } });
-  if (!sub) return { ok: false, error: "There's no subscription to cancel." };
-  if (sub.canceledAt) return { ok: false, error: "This subscription is already set to cancel." };
+  if (!sub || !(LIVE_STATUSES as readonly string[]).includes(sub.status)) return { ok: false, error: "There's no subscription to cancel." };
+  if (sub.provider === "MANUAL") return { ok: false, error: "Your plan is complimentary — there's nothing to cancel." };
+  if (sub.canceledAt) return { ok: false, error: "Your plan is already set to switch to Free." };
 
   let endsAt: Date | null = sub.currentPeriodEnd ?? sub.trialEndsAt ?? null;
   if (sub.externalSubId && isStripeEnabled()) {
     const { stripe } = await getStripeClient();
     try {
       // A booked YEAR → MONTH switch holds the subscription on a schedule,
-      // which refuses cancel_at_period_end: the switch goes first.
+      // which refuses cancel_at_period_end: the switch goes first, and is
+      // remembered for "Keep".
+      const held = await readScheduledSwitch(organizationId).catch(() => null);
+      if (held) {
+        const cursor = JSON.stringify(held);
+        await db.syncState.upsert({ where: { key: heldSwitchKey(organizationId) }, update: { cursor }, create: { key: heldSwitchKey(organizationId), cursor } });
+      }
       await releaseScheduledSwitch(organizationId, stripe);
       const updated = await stripe.subscriptions.update(sub.externalSubId, {
         cancel_at_period_end: true,
+        metadata: { [FREE_SWITCH_META]: "1" },
       });
       endsAt = subscriptionPeriodEndDate(updated) ?? endsAt;
     } catch (err) {
@@ -246,34 +270,52 @@ export async function cancelSubscription(): Promise<CancelSubscriptionResult> {
   });
   revalidatePlanSurfaces();
   revalidatePath("/dashboard/subscription");
-  await billingSaved(organizationId, user.id, `Updated billing settings — subscription set to cancel${endsAt ? ` on ${endsAt.toLocaleDateString("en-US")}` : ""}`, { canceled: true, endsAt: endsAt?.toISOString() });
+  revalidatePath("/dashboard/settings");
+  await billingSaved(organizationId, user.id, `Updated billing settings — subscription set to cancel${endsAt ? ` on ${endsAt.toLocaleDateString("en-US")}` : ""}, then the Free plan`, { canceled: true, endsAt: endsAt?.toISOString() });
+  await sendFreeSwitchEmail(organizationId, sub.plan, endsAt).catch((err) => console.warn("[billing] free-switch email failed:", err));
   return { ok: true, endsAt: endsAt ? endsAt.toISOString() : null };
 }
 
 export async function resumeSubscription(): Promise<CancelSubscriptionResult> {
   const { organizationId, user } = await requireOwner();
   const sub = await db.subscription.findUnique({ where: { organizationId } });
-  if (!sub) return { ok: false, error: "There's no subscription to resume." };
-  if (!sub.canceledAt) return { ok: false, error: "This subscription isn't cancelling." };
+  if (!sub) return { ok: false, error: "There's no subscription to keep." };
+  if (!sub.canceledAt || !(LIVE_STATUSES as readonly string[]).includes(sub.status)) {
+    return { ok: false, error: "Your plan isn't set to switch to Free." };
+  }
 
   let endsAt: Date | null = sub.currentPeriodEnd ?? null;
   if (sub.externalSubId && isStripeEnabled()) {
-    const { stripe } = await getStripeClient();
+    const { stripe, mode } = await getStripeClient();
     try {
       const current = await stripe.subscriptions.retrieve(sub.externalSubId);
-      // Already over: Stripe cancelled for real and nothing can be resumed.
+      // Already over: Stripe ended it and the company is on Free.
       if (current.status === "canceled" || current.status === "incomplete_expired") {
-        return { ok: false, error: "This subscription has already ended. Choose a plan to start again." };
+        return { ok: false, error: "Your plan has already switched to Free. Choose a plan to start again." };
       }
       const updated = await stripe.subscriptions.update(sub.externalSubId, {
         cancel_at_period_end: false,
+        metadata: { [FREE_SWITCH_META]: "" },
       });
       endsAt = subscriptionPeriodEndDate(updated) ?? endsAt;
     } catch (err) {
       console.warn("[billing] resumeSubscription failed:", err);
-      return { ok: false, error: "Couldn't resume the subscription. Try again." };
+      return { ok: false, error: "Couldn't keep the subscription. Try again." };
+    }
+    // Everything as it was: a YEAR → MONTH switch the cancel let go of is booked again.
+    const row = await db.syncState.findUnique({ where: { key: heldSwitchKey(organizationId) } }).catch(() => null);
+    if (row) {
+      try {
+        const held = JSON.parse(row.cursor) as ScheduledSwitch;
+        if (held.subId === sub.externalSubId && !(await rebookScheduledSwitch(organizationId, held, { stripe, mode }))) {
+          console.warn(`[billing] ${sub.externalSubId}: the booked switch could not be put back after Keep`);
+        }
+      } catch (err) {
+        console.warn("[billing] resumeSubscription: the booked switch could not be put back:", err);
+      }
     }
   }
+  await db.syncState.deleteMany({ where: { key: heldSwitchKey(organizationId) } }).catch(() => {});
 
   await db.subscription.update({
     where: { organizationId },
@@ -281,8 +323,34 @@ export async function resumeSubscription(): Promise<CancelSubscriptionResult> {
   });
   revalidatePlanSurfaces();
   revalidatePath("/dashboard/subscription");
+  revalidatePath("/dashboard/settings");
   await billingSaved(organizationId, user.id, "Updated billing settings — subscription resumed", { canceled: false });
   return { ok: true, endsAt: endsAt ? endsAt.toISOString() : null };
+}
+
+/** "Your plan switches to Free on <date>" — to the owner, after the booking,
+ *  with the way back ("Keep <plan>") one tap away in Settings → Billing. */
+async function sendFreeSwitchEmail(organizationId: string, plan: string, endsAt: Date | null): Promise<void> {
+  const owner = await db.membership.findFirst({
+    where: { organizationId, role: "OWNER", organization: { deletedAt: null } },
+    orderBy: { createdAt: "asc" },
+    select: { user: { select: { email: true, name: true } }, organization: { select: { billingEmail: true } } },
+  });
+  const email = owner?.organization.billingEmail || owner?.user.email;
+  if (!email) return;
+  const [{ appBaseUrl }, { renderEmail }, { sendEmail }, { buildFreeSwitchBooked }, { getPlanDisplayName }] = await Promise.all([
+    import("@/lib/appUrl"),
+    import("@/lib/email/renderEmail"),
+    import("@/lib/sdk/resend"),
+    import("@/lib/email/build/billing"),
+    import("@/lib/planCatalogServer"),
+  ]);
+  const base = (await appBaseUrl()).replace(/\/$/, "");
+  const planName = await getPlanDisplayName(plan).catch(() => plan);
+  const { subject, html } = renderEmail(
+    buildFreeSwitchBooked({ name: owner?.user.name ?? null, planName, switchAt: endsAt, href: `${base}/dashboard/settings?tab=billing` }),
+  );
+  await sendEmail({ to: email, subject, html });
 }
 
 /* ── CHANGE PLAN IN PLACE ────────────────────────────────────────────────

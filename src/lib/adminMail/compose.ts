@@ -293,7 +293,10 @@ export function topicDraft(key: TopicKey, p: ContractorProfile, now = Date.now()
     case "come-back":
       return {
         subject: `${p.business} is still here`,
-        body: join(`Hi ${first} — ${afterDash(madeLine(p))}`, `If you'd like to pick it back up, you can carry on right where you stopped${price}.`),
+        body: p.account.kind === "canceled"
+          // On the Free plan since the subscription ended (lib/freePlan): coming back is from Free.
+          ? join(`Hi ${first} — ${p.business} is on the Free plan now, and ${afterDash(madeLine(p))}`, `If you'd like ${p.account.plan} back, it picks up right where you stopped${price} — straight from Free, nothing to set up again.`)
+          : join(`Hi ${first} — ${afterDash(madeLine(p))}`, `If you'd like to pick it back up, you can carry on right where you stopped${price}.`),
         cta: p.account.kind === "trial-ended" ? { label: "Open my workspace", path: "/dashboard/trial" } : { label: "Choose a plan", path: "/dashboard/subscription" },
       };
     case "why-left":
@@ -355,7 +358,7 @@ export function accountWords(p: ContractorProfile): string {
     case "trial-ended": return `free trial of ${a.plan} ended with no card — the workspace is read-only`;
     case "paying": return `paying customer on ${a.plan}${a.price ? ` (${a.price})` : ""}`;
     case "past-due": return `subscription to ${a.plan} is past due — a payment failed`;
-    case "canceled": return `canceled ${a.plan}`;
+    case "canceled": return `on the Free plan since canceling ${a.plan} — nothing is billed`;
     case "free": return "on the free plan";
     default: return "no plan yet";
   }

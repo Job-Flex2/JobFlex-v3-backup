@@ -26,6 +26,18 @@ import { isOwnerOrManager, isOwnerRole, type requireOrg } from "@/lib/orgContext
 import { titleCaseSlug } from "@/lib/planCatalog";
 import { getOrgPlanContext } from "@/lib/planCatalogServer";
 import { getOrgLimitUsage } from "@/lib/limitsEngine";
+import { DEFAULT_FREE_LIMITS, isUnlimited, parsePlanLimits } from "@/lib/planLimits";
+import { readCustomPages } from "@/lib/customPageAccess";
+import { CUSTOM_PLAN_LIMITS_SLUG, CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
+import {
+  FREE_PLAN_NAME,
+  LIVE_STATUSES,
+  freePlanLosses,
+  freeSwitchBooked,
+  freeSwitchDate,
+  madeWithLine,
+  onFreePlan,
+} from "@/lib/freePlan";
 import { GMAIL_SCOPES, isGmailOAuthConfigured } from "@/lib/sdk/gmail";
 import { isStripeConnectConfigured } from "@/lib/sdk/integrations";
 import type { SmsRegistrationView } from "@/lib/sms/registrationShared";
@@ -38,7 +50,7 @@ import {
   parseGmailSettings,
   parsePaymentSettings,
 } from "@/lib/settings";
-import type { Badge, SettingsData, SmsRosterRow, SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
+import type { Badge, BillingData, SettingsData, SmsRosterRow, SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 
 /** Emails allowed to use the Gmail connector while the Google app is still in
  *  Testing — GMAIL_OAUTH_TEST_USERS, comma-separated, case-insensitive. */
@@ -120,12 +132,23 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
   if (!org) return null;
 
   /* ── plan + seats ── */
-  const planName = planContext.plan?.name ?? titleCaseSlug(planContext.rawPlan);
+  const wasName = planContext.plan?.name ?? titleCaseSlug(planContext.rawPlan);
+  // Ended (CANCELED) reads as the Free plan (lib/freePlan); a grant is not one.
+  const granted = sub?.provider === "MANUAL";
+  const onFree = !granted && onFreePlan(sub);
+  const planName = onFree ? FREE_PLAN_NAME : wasName;
   const seatStatus = usage.find((u) => u.resource === "teamSeats");
   const seatsUsed = seatStatus?.used ?? 0;
   const seats =
     seatStatus && seatStatus.limit !== null ? `${seatsUsed} of ${seatStatus.limit}` : `${seatsUsed}`;
-  const nextBillAt = sub?.currentPeriodEnd ?? sub?.trialEndsAt ?? null;
+  const booked = !granted && freeSwitchBooked(sub);
+  // Nothing more is billed once the switch to Free is booked, or on Free.
+  const nextBillAt = onFree || booked ? null : (sub?.currentPeriodEnd ?? sub?.trialEndsAt ?? null);
+  const isOwnerHere = isOwnerRole(role);
+  const cancel =
+    isOwnerHere && !granted && !booked && sub && (LIVE_STATUSES as readonly string[]).includes(sub.status)
+      ? await cancelOffer(organizationId, sub.plan, freeSwitchDate(sub), wasName)
+      : null;
 
   /* ── settings blobs ── */
   const payment = parsePaymentSettings(org.paymentSettingsJson);
@@ -171,13 +194,16 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
     },
     billing: {
       planName,
-      planBadge: statusBadge(sub?.status ?? null),
+      planBadge: onFree ? { label: FREE_PLAN_NAME, tone: "bg-off" } : statusBadge(sub?.status ?? null),
       nextBill: nextBillAt ? longDate(nextBillAt) : "",
       seats,
       billingEmail: org.billingEmail ?? "",
       isOwner,
       canEditBilling: isOwnerOrManager(role),
       subscriptionHref: "/dashboard/subscription",
+      onFree,
+      freeSwitch: booked ? { at: freeSwitchDate(sub)?.toISOString() ?? null, planName: wasName } : null,
+      cancel,
     },
     integrations: {
       gmail: {
@@ -386,4 +412,29 @@ async function loadRegistrationView(organizationId: string, myUserId: string | n
   } catch {
     return null;
   }
+}
+
+/** What the owner's two cancel windows say (lib/freePlan): the plan's lines
+ *  Free does not keep, and the company's own numbers. */
+async function cancelOffer(organizationId: string, plan: string, keepsUntil: Date | null, planName: string): Promise<NonNullable<BillingData["cancel"]>> {
+  const slug = plan.toLowerCase();
+  const [pages, catalog, sent, scheduled] = await Promise.all([
+    readCustomPages(organizationId, plan).catch(() => null),
+    db.pricingPlan.findMany({ select: { slug: true, limitsJson: true } }),
+    db.proposal.count({ where: { organizationId, sentAt: { not: null } } }),
+    db.job.count({ where: { organizationId, startsAt: { not: null }, status: { not: "CANCELED" } } }),
+  ]);
+  const limitsOf = (s: string) => {
+    const row = catalog.find((p) => p.slug.toLowerCase() === s);
+    return row ? parsePlanLimits(row.limitsJson) : null;
+  };
+  const cap = (n: number | null | undefined) => (isUnlimited(n) ? null : (n as number));
+  const own = limitsOf(slug === CUSTOM_PLAN_SLUG ? CUSTOM_PLAN_LIMITS_SLUG : slug);
+  const free = limitsOf("free") ?? DEFAULT_FREE_LIMITS;
+  return {
+    planName,
+    keepsUntil: keepsUntil?.toISOString() ?? null,
+    losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated) }),
+    made: madeWithLine(sent, scheduled),
+  };
 }

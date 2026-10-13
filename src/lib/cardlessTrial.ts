@@ -284,6 +284,8 @@ export type TrialView = {
   /** ISO — the trial's end (the first charge when a card is on file). */
   endsAt: string;
   hasCard: boolean;
+  /** The owner cancelled: the trial ends on the Free plan (lib/freePlan). */
+  toFree: boolean;
   planName: string;
   /** "$79/mo" */
   price: string;
@@ -301,10 +303,10 @@ export async function trialView(orgId: string): Promise<TrialView | null> {
   const price = `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}${plan.per}`;
   if (state.kind === "ended") {
     return {
-    offer, kind: "ended", daysLeft: 0, endsAt: state.endedAt.toISOString(), hasCard: false, planName: plan.name, price };
+    offer, kind: "ended", daysLeft: 0, endsAt: state.endedAt.toISOString(), hasCard: false, toFree: false, planName: plan.name, price };
   }
   return {
-    offer, kind: "trialing", daysLeft: state.daysLeft, endsAt: state.endsAt.toISOString(), hasCard: state.hasCard, planName: plan.name, price };
+    offer, kind: "trialing", daysLeft: state.daysLeft, endsAt: state.endsAt.toISOString(), hasCard: state.hasCard, toFree: state.toFree, planName: plan.name, price };
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -345,7 +347,8 @@ export async function runCardlessTrialSweep(now = new Date()): Promise<{ scanned
         }
         continue;
       }
-      if (state.hasCard) continue;
+      // A card on file, or a trial the owner cancelled: nothing to remind.
+      if (state.hasCard || state.toFree) continue;
       const left = state.endsAt.getTime() - now.getTime();
       const when = left <= 24 * HOUR_MS ? "today" : left <= 48 * HOUR_MS ? "soon" : null;
       if (!when) continue;

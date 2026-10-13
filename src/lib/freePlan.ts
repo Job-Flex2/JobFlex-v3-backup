@@ -1,0 +1,131 @@
+// THE FREE PLAN (owner, 2026-10-13) — what a cancelled company is.
+//
+// Cancelling no longer leaves a company "cancelled": at the end of the cycle
+// it has paid for, it moves to the Free plan. Nothing more is billed, nothing
+// is refunded, and every proposal, job and client stays where it is.
+//
+// FREE OPENS NOTHING A CANCELLED COMPANY COULD NOT OPEN. The mirror keeps the
+// status Stripe gives an ended subscription — CANCELED — and every door
+// (lib/planStatus: the page gate, the feature tier, the limits engine, the
+// paid services, texting, the parcel tiles) keeps answering it exactly as
+// before: closed, at the "free" catalog row's limits. Free is how that state
+// is NAMED — on the subscription page, the settings, the sidebar, the emails
+// and the admin — never a status of its own. The status FREE would not do: it
+// is "nothing to close" to lib/planStatus, so the paid pages would open.
+//
+// The plan the company had stays on the row (Subscription.plan), the day it
+// asked to leave on canceledAt and the day it moved to Free on
+// currentPeriodEnd — the churn reports read them ("Free (was Professional)").
+//
+// Database-free and client-safe: the screens and the server share it.
+
+export const FREE_PLAN_NAME = "Free";
+
+/** Statuses a subscription can still be cancelled from (or kept in). */
+export const LIVE_STATUSES = ["ACTIVE", "TRIALING", "PAST_DUE"] as const;
+
+/** Marked on the Stripe subscription while the switch to Free is booked:
+ *  its end is the company moving to Free, not a card-less trial running out
+ *  (lib/stripeStatus isCardlessTrialLapse). Cleared by "Keep". */
+export const FREE_SWITCH_META = "jf_to_free";
+
+export type FreePlanRow = {
+  status: string;
+  canceledAt: Date | string | null;
+  currentPeriodEnd: Date | string | null;
+  trialEndsAt?: Date | string | null;
+  provider?: string | null;
+};
+
+const at = (d: Date | string | null | undefined): Date | null => (d ? new Date(d) : null);
+
+/** The company is on the Free plan: its subscription has ended. */
+export function onFreePlan(sub: Pick<FreePlanRow, "status"> | null | undefined): boolean {
+  return (sub?.status ?? "").toUpperCase() === "CANCELED";
+}
+
+/** The switch to Free is booked: still live, set to end with the cycle. */
+export function freeSwitchBooked(sub: Pick<FreePlanRow, "status" | "canceledAt"> | null | undefined): boolean {
+  return !!sub && (LIVE_STATUSES as readonly string[]).includes(sub.status.toUpperCase()) && !!sub.canceledAt;
+}
+
+/** The day a booked switch happens: the end of the paid cycle (or of the trial). */
+export function freeSwitchDate(sub: Pick<FreePlanRow, "currentPeriodEnd" | "trialEndsAt"> | null | undefined): Date | null {
+  return at(sub?.currentPeriodEnd) ?? at(sub?.trialEndsAt);
+}
+
+/** The day the company moved to Free: the end of its last cycle, as the
+ *  mirror wrote it when Stripe ended the subscription. */
+export function freeSince(sub: Pick<FreePlanRow, "currentPeriodEnd" | "canceledAt"> | null | undefined): Date | null {
+  return at(sub?.currentPeriodEnd) ?? at(sub?.canceledAt);
+}
+
+/** "Free (was Professional)" — the admin's word for a company that left. */
+export function freeWasLabel(wasPlanName: string | null | undefined): string {
+  const was = (wasPlanName ?? "").trim();
+  return was && was.toLowerCase() !== "free" ? `${FREE_PLAN_NAME} (was ${was})` : FREE_PLAN_NAME;
+}
+
+/* ── "BEFORE YOU GO" — what the plan gives that Free does not ─────────────
+   Read from what the company actually holds and what Free actually closes
+   (lib/customPlan: a lapsed plan closes every add-on page; lib/paidCaps: no
+   texts once the plan has ended; the "free" catalog row's proposal cap) —
+   never a promise or a number typed here. A custom plan lists only the pages
+   it bought. Online payments are not on the list: Free keeps them. */
+
+export interface FreeLoss {
+  /** A symbol in the shell's sprite (desktop and handheld carry the same ids). */
+  icon: "i-roof" | "i-file" | "i-target" | "i-cal" | "i-msg";
+  text: string;
+}
+
+const ESTIMATORS: Array<[string, string]> = [
+  ["smart-proposal", "Smart Proposal"],
+  ["roof-estimator", "roof"],
+  ["fence-estimator", "fence"],
+  ["hvac-estimator", "HVAC"],
+  ["video-estimator", "video"],
+];
+
+const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+
+/**
+ * At most five lines, one each: estimators, proposals past Free's cap,
+ * leads, calendar and crews, texts.
+ *   pages          — the custom plan's pages, or null on a catalog plan (every page open);
+ *   planProposals  — the plan's own monthly proposal cap (null = none);
+ *   freeProposals  — the Free plan's (null = none, then nothing is lost there).
+ */
+export function freePlanLosses(opts: { pages: readonly string[] | null; planProposals: number | null; freeProposals: number | null }): FreeLoss[] {
+  const has = (id: string) => opts.pages === null || opts.pages.includes(id);
+  const out: FreeLoss[] = [];
+  const est = ESTIMATORS.filter(([id]) => has(id)).map(([, name]) => name);
+  if (est.length) {
+    const smart = est[0] === "Smart Proposal";
+    const trades = smart ? est.slice(1) : est;
+    out.push({
+      icon: "i-roof",
+      text: trades.length
+        ? `${smart ? "Smart Proposal and the " : "The "}${listWords(trades)} estimator${trades.length === 1 ? "" : "s"}`
+        : "Smart Proposal",
+    });
+  }
+  const free = opts.freeProposals;
+  if (free !== null && (opts.planProposals === null || opts.planProposals > free)) {
+    out.push({ icon: "i-file", text: `More than ${free} proposal${free === 1 ? "" : "s"} a month` });
+  }
+  if (has("leads")) out.push({ icon: "i-target", text: "Your leads inbox and lead matching" });
+  const cal = has("calendar"), crew = has("workers");
+  if (cal || crew) out.push({ icon: "i-cal", text: cal && crew ? "Calendar and crews" : cal ? "Calendar and scheduling" : "Crews and their portals" });
+  out.push({ icon: "i-msg", text: "Texts to your clients" });
+  return out.slice(0, 5);
+}
+
+/** "You've sent 12 proposals and scheduled 4 jobs with JobFlex" — or null
+ *  when there is nothing of its own to say. */
+export function madeWithLine(proposalsSent: number, jobsScheduled: number): string | null {
+  const p = proposalsSent > 0 ? `sent ${proposalsSent} proposal${proposalsSent === 1 ? "" : "s"}` : "";
+  const j = jobsScheduled > 0 ? `scheduled ${jobsScheduled} job${jobsScheduled === 1 ? "" : "s"}` : "";
+  if (!p && !j) return null;
+  return `You've ${[p, j].filter(Boolean).join(" and ")} with JobFlex.`;
+}
