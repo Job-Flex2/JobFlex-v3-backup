@@ -24,13 +24,13 @@ import {
   removeNotificationPhone,
   removeSmsPhone,
   sendTestText,
-  setClientTextsOn,
   setLeadTexts,
   setNotificationPhoneActive,
   startPhoneVerification,
   type SmsActionResult,
 } from "@/actions/sms";
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
+import { ClientTextsSwitch, TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
@@ -40,21 +40,51 @@ import { TEXTING_COPY, TEXTS_COPY } from "../settings-data";
 
 export function TextingPane({ data }: PaneProps) {
   const sms = data.notifications.sms;
+  // THE ORDER IS THE SETUP (owner, 2026-10-13: "make it understandable for contractors"): what is texted now and the
+  // steps, then each step in turn — the number (nothing goes out without it), the team, clients, your own texts —
+  // and the rest after.
   return (
     <>
-      {!sms.configured ? (
+      {sms.canManage ? (
+        <section className="sc" id="texting-overview">
+          <div className="sc-h">
+            <div>
+              <div className="sc-t">{TEXTING_COPY.overviewTitle}</div>
+              <div className="sc-s">{TEXTING_COPY.overviewSub}</div>
+            </div>
+            <span className="sc-badge" title={TEXTS_COPY.overage}>{TEXTS_COPY.usage(sms.monthCount, sms.allowance)}</span>
+          </div>
+          <div className="sc-b">
+            <TextingOverview sms={sms} />
+          </div>
+        </section>
+      ) : !sms.configured ? (
         <section className="sc" id="texting-status">
           <div className="sc-b">
             <p className="tx-note tx-note--warn" style={{ margin: 0 }}>{TEXTING_COPY.notConfiguredLong}</p>
           </div>
         </section>
       ) : null}
+      {sms.canManage ? (
+        <section className="sc" id="texting-own-number">
+          <div className="sc-h">
+            <div>
+              <div className="sc-t">1 · {REGISTRATION_COPY.title}</div>
+              <div className="sc-s">{REGISTRATION_COPY.sub}</div>
+            </div>
+          </div>
+          <div className="sc-b">
+            <OwnNumber view={sms.registration} configured={sms.configured} />
+          </div>
+        </section>
+      ) : null}
       {sms.canManage ? <PeopleCard sms={sms} /> : null}
+      {sms.canManage ? <ClientsCard sms={sms} /> : null}
       {sms.canManage ? (
         <section className="sc" id="texting-rules">
           <div className="sc-h">
             <div>
-              <div className="sc-t">{TEXTING_COPY.rulesTitle}</div>
+              <div className="sc-t">4 · {TEXTING_COPY.rulesTitle}</div>
               <div className="sc-s">{TEXTING_COPY.rulesSub}</div>
             </div>
           </div>
@@ -63,8 +93,9 @@ export function TextingPane({ data }: PaneProps) {
           </div>
         </section>
       ) : null}
+      {sms.canManage ? <ExtrasCard sms={sms} /> : null}
       <MobileCard sms={sms} />
-      {sms.canManage ? <CompanyCard sms={sms} /> : null}
+      {sms.canManage ? <LeadTextsCard sms={sms} /> : null}
     </>
   );
 }
@@ -108,10 +139,9 @@ function PeopleCard({ sms }: { sms: SmsSettingsData }) {
     <section className="sc" id="texting-roster" data-roster>
       <div className="sc-h">
         <div>
-          <div className="sc-t">{TEXTING_COPY.peopleTitle}</div>
+          <div className="sc-t">2 · {TEXTING_COPY.peopleTitle}</div>
           <div className="sc-s">{TEXTING_COPY.peopleSub}</div>
         </div>
-        <span className="sc-badge" title={TEXTS_COPY.overage}>{TEXTS_COPY.usage(sms.monthCount, sms.allowance)}</span>
       </div>
       <div className="sc-b">
         <TextingPeople roster={sms.roster} />
@@ -185,94 +215,104 @@ function MobileCard({ sms }: { sms: SmsSettingsData }) {
   );
 }
 
-/* ── the company: clients, own number, extra numbers ─────────────────── */
+/* ── 3 · clients (2026-10-13: its own card, with the same switch as the overview) ── */
 
-function CompanyCard({ sms }: { sms: SmsSettingsData }) {
+function ClientsCard({ sms }: { sms: SmsSettingsData }) {
+  return (
+    <section className="sc" id="texting-clients">
+      <div className="sc-h">
+        <div>
+          <div className="sc-t">3 · {TEXTS_COPY.clientsTitle}</div>
+          <div className="sc-s">{TEXTS_COPY.clientsSub}</div>
+        </div>
+      </div>
+      <div className="sc-b">
+        <ClientTextsSwitch on={sms.clientsOn} />
+        <p className="tx-note">{REGISTRATION_COPY.consent}</p>
+      </div>
+    </section>
+  );
+}
+
+/* ── numbers outside the team ──────────────────────────────────────── */
+
+function ExtrasCard({ sms }: { sms: SmsSettingsData }) {
   const { busy, run, notes } = useRun();
   const [extraName, setExtraName] = useState("");
   const [extraPhone, setExtraPhone] = useState("");
   return (
-    <section className="sc" id="texting-company">
+    <section className="sc" id="texting-extras">
       <div className="sc-h">
         <div>
-          <div className="sc-t">{TEXTING_COPY.companyTitle}</div>
-          <div className="sc-s">{TEXTING_COPY.companySub}</div>
+          <div className="sc-t">{TEXTS_COPY.extrasTitle}</div>
+          <div className="sc-s">{TEXTS_COPY.extrasSub}</div>
         </div>
       </div>
       <div className="sc-b">
-        <div className="tx-sub">
-          <div className="tx-sub-h">
-            <b>{TEXTS_COPY.clientsTitle}</b>
-            <span>{TEXTS_COPY.clientsSub}</span>
-          </div>
-          <div className="tx-row-a tx-row-a--left">
-            <button type="button" className={`btn btn-sm ${sms.clientsOn ? "btn-primary" : "btn-ghost"}`} disabled={busy !== null || sms.clientsOn} onClick={() => run("clients", () => setClientTextsOn(true))}>
-              {TEXTS_COPY.clientsOn}
-            </button>
-            <button type="button" className={`btn btn-sm ${sms.clientsOn ? "btn-ghost" : "btn-primary"}`} disabled={busy !== null || !sms.clientsOn} onClick={() => run("clients", () => setClientTextsOn(false))}>
-              {TEXTS_COPY.clientsOff}
-            </button>
-          </div>
+        {sms.extras.length ? (
+          <ul className="tx-list">
+            {sms.extras.map((x) => (
+              <li key={x.id} className={x.active ? "" : "is-paused"}>
+                <span className="tx-list-n">{x.name}</span>
+                <span className="tx-list-p">{x.phone}</span>
+                {x.stopped ? <span className="tx-tag tx-tag--warn">{TEXTS_COPY.stopped}</span> : !x.active ? <span className="tx-tag">paused</span> : null}
+                <span className="tx-list-a">
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={() => run("toggle", () => setNotificationPhoneActive(x.id, !x.active))}>
+                    {x.active ? TEXTS_COPY.pause : TEXTS_COPY.resume}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={() => run("drop", () => removeNotificationPhone(x.id))}>
+                    {TEXTS_COPY.removeExtra}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="fgrid">
+          <Field label={TEXTS_COPY.extraName} value={extraName} placeholder="Dispatch" onChange={setExtraName} />
+          <Field label={TEXTS_COPY.extraPhone} value={extraPhone} placeholder={TEXTS_COPY.mobilePlaceholder} onChange={setExtraPhone} />
         </div>
-        <div className="tx-sub" id="texting-lead-texts" data-lead-texts={sms.leadTexts.on ? "on" : "off"}>
-          <div className="tx-sub-h">
-            <b>{TEXTS_COPY.leadTitle}</b>
-            <span>{TEXTS_COPY.leadSub}</span>
-          </div>
-          <div className="tx-row-a tx-row-a--left">
-            <button type="button" className={`btn btn-sm ${sms.leadTexts.on ? "btn-primary" : "btn-ghost"}`} disabled={busy !== null || sms.leadTexts.on || !sms.leadTexts.phone} onClick={() => run("lead", () => setLeadTexts(true))}>
-              {TEXTS_COPY.clientsOn}
-            </button>
-            <button type="button" className={`btn btn-sm ${sms.leadTexts.on ? "btn-ghost" : "btn-primary"}`} disabled={busy !== null || !sms.leadTexts.on} onClick={() => run("lead", () => setLeadTexts(false))}>
-              {TEXTS_COPY.clientsOff}
-            </button>
-            <span className="tx-note" style={{ margin: 0, alignSelf: "center" }}>{sms.leadTexts.phone ? `To ${sms.leadTexts.phone}` : TEXTS_COPY.leadNoPhone}</span>
-          </div>
-          <p className="tx-note" data-lead-consent>
-            {TEXTS_COPY.leadConsent} <a href="/terms#sms">{TEXTS_COPY.terms}</a> · <a href="/privacy#sms">{TEXTS_COPY.privacy}</a>
-          </p>
+        <div className="tx-row-a">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={busy !== null || !extraName.trim() || extraPhone.replace(/\D/g, "").length < 10}
+            onClick={() => run("add", () => addNotificationPhone({ name: extraName, phone: extraPhone }), () => { setExtraName(""); setExtraPhone(""); })}
+          >
+            {busy === "add" ? "Adding…" : TEXTS_COPY.addExtra}
+          </button>
         </div>
-        <div className="tx-sub" id="texting-own-number">
-          <div className="tx-sub-h">
-            <b>{REGISTRATION_COPY.title}</b>
-            <span>{REGISTRATION_COPY.sub}</span>
-          </div>
-          <OwnNumber view={sms.registration} configured={sms.configured} />
+        {notes}
+      </div>
+    </section>
+  );
+}
+
+/* ── JobFlex's own lead texts to the company (a different number: JobFlex's) ── */
+
+function LeadTextsCard({ sms }: { sms: SmsSettingsData }) {
+  const { busy, run, notes } = useRun();
+  return (
+    <section className="sc" id="texting-lead-texts" data-lead-texts={sms.leadTexts.on ? "on" : "off"}>
+      <div className="sc-h">
+        <div>
+          <div className="sc-t">{TEXTS_COPY.leadTitle}</div>
+          <div className="sc-s">{TEXTS_COPY.leadSub}</div>
         </div>
-        <div className="tx-sub">
-          <div className="tx-sub-h">
-            <b>{TEXTS_COPY.extrasTitle}</b>
-            <span>{TEXTS_COPY.extrasSub}</span>
-          </div>
-          {sms.extras.length ? (
-            <ul className="tx-list">
-              {sms.extras.map((x) => (
-                <li key={x.id} className={x.active ? "" : "is-paused"}>
-                  <span className="tx-list-n">{x.name}</span>
-                  <span className="tx-list-p">{x.phone}</span>
-                  {x.stopped ? <span className="tx-tag tx-tag--warn">{TEXTS_COPY.stopped}</span> : !x.active ? <span className="tx-tag">paused</span> : null}
-                  <span className="tx-list-a">
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={() => run("toggle", () => setNotificationPhoneActive(x.id, !x.active))}>
-                      {x.active ? TEXTS_COPY.pause : TEXTS_COPY.resume}
-                    </button>
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={() => run("drop", () => removeNotificationPhone(x.id))}>
-                      {TEXTS_COPY.removeExtra}
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <div className="fgrid">
-            <Field label={TEXTS_COPY.extraName} value={extraName} placeholder="Dispatch" onChange={setExtraName} />
-            <Field label={TEXTS_COPY.extraPhone} value={extraPhone} placeholder={TEXTS_COPY.mobilePlaceholder} onChange={setExtraPhone} />
-          </div>
-          <div className="tx-row-a">
-            <button type="button" className="btn btn-ghost btn-sm" disabled={busy !== null || !extraName.trim() || extraPhone.replace(/\D/g, "").length < 10} onClick={() => run("add", () => addNotificationPhone({ name: extraName, phone: extraPhone }), () => { setExtraName(""); setExtraPhone(""); })}>
-              {busy === "add" ? "Adding…" : TEXTS_COPY.addExtra}
-            </button>
-          </div>
+      </div>
+      <div className="sc-b">
+        <div className="tx-row-a tx-row-a--left">
+          <button type="button" className={`btn btn-sm ${sms.leadTexts.on ? "btn-primary" : "btn-ghost"}`} disabled={busy !== null || sms.leadTexts.on || !sms.leadTexts.phone} onClick={() => run("lead", () => setLeadTexts(true))}>
+            {TEXTS_COPY.clientsOn}
+          </button>
+          <button type="button" className={`btn btn-sm ${sms.leadTexts.on ? "btn-ghost" : "btn-primary"}`} disabled={busy !== null || !sms.leadTexts.on} onClick={() => run("lead", () => setLeadTexts(false))}>
+            {TEXTS_COPY.clientsOff}
+          </button>
+          <span className="tx-note" style={{ margin: 0, alignSelf: "center" }}>{sms.leadTexts.phone ? `To ${sms.leadTexts.phone}` : TEXTS_COPY.leadNoPhone}</span>
         </div>
+        <p className="tx-note" data-lead-consent>
+          {TEXTS_COPY.leadConsent} <a href="/terms#sms">{TEXTS_COPY.terms}</a> · <a href="/privacy#sms">{TEXTS_COPY.privacy}</a>
+        </p>
         {notes}
       </div>
     </section>

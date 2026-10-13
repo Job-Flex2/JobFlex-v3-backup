@@ -121,10 +121,12 @@ export async function updateNotificationPrefs(raw: unknown) {
   const user = await requireUser();
   const data = notificationSchema.parse(raw);
   const stored = await db.user.findUnique({ where: { id: user.id }, select: { notificationPrefsJson: true } });
-  const matrix = mergeMatrixSave(data.matrix, parseNotificationPrefs(stored?.notificationPrefsJson));
+  const kept = parseNotificationPrefs(stored?.notificationPrefsJson);
+  const matrix = mergeMatrixSave(data.matrix, kept);
+  // What this page does not show stays as stored: who typed the mobile in, and whether texts are switched off.
   await db.user.update({
     where: { id: user.id },
-    data: { notificationPrefsJson: JSON.stringify({ ...data, matrix }) },
+    data: { notificationPrefsJson: JSON.stringify({ ...data, matrix, smsAddedBy: kept.smsAddedBy ?? null, smsPaused: kept.smsPaused === true }) },
   });
   revalidatePath(SETTINGS_PATH);
   return { ok: true };

@@ -82,6 +82,7 @@ import {
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
+import { TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
 import type { PaymentConnectionStatusView } from "@/lib/payments/connections";
 import type {
@@ -1210,9 +1211,27 @@ function TextingPane({ data }: { data: SettingsData }) {
   }
   return (
     <>
-      {!sms.configured ? <div className="mst-note">{TEXTING_COPY.notConfiguredLong}</div> : null}
+      {/* The steps first, then the number (2026-10-13) — the same order as the desk. */}
       {sms.canManage ? (
-        <section className="mst-card" data-roster>
+        <section className="mst-card" id="texting-overview">
+          <CardHeader card={{ title: TEXTING_COPY.overviewTitle, sub: TEXTING_COPY.overviewSub }} />
+          <div className="mst-cardB">
+            <TextingOverview sms={sms} />
+          </div>
+        </section>
+      ) : !sms.configured ? (
+        <div className="mst-note">{TEXTING_COPY.notConfiguredLong}</div>
+      ) : null}
+      {sms.canManage ? (
+        <section className="mst-card" id="texting-own-number">
+          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: REGISTRATION_COPY.sub }} />
+          <div className="mst-cardB">
+            <OwnNumber view={sms.registration} configured={sms.configured} />
+          </div>
+        </section>
+      ) : null}
+      {sms.canManage ? (
+        <section className="mst-card" id="texting-roster" data-roster>
           <CardHeader card={{ title: TEXTING_COPY.peopleTitle, sub: TEXTING_COPY.peopleSub }} />
           <div className="mst-cardB">
             <TextingPeople roster={sms.roster} />
@@ -1221,7 +1240,7 @@ function TextingPane({ data }: { data: SettingsData }) {
         </section>
       ) : null}
       {sms.canManage ? (
-        <section className="mst-card" data-rules>
+        <section className="mst-card" id="texting-rules" data-rules>
           <CardHeader card={{ title: TEXTING_COPY.rulesTitle, sub: TEXTING_COPY.rulesSub }} />
           <div className="mst-cardB">
             <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
@@ -1274,14 +1293,6 @@ function TextingPane({ data }: { data: SettingsData }) {
           )}
         </div>
       </section>
-      {sms.canManage ? (
-        <section className="mst-card" id="texting-own-number">
-          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: REGISTRATION_COPY.sub }} />
-          <div className="mst-cardB">
-            <OwnNumber view={sms.registration} configured={sms.configured} />
-          </div>
-        </section>
-      ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-lead-texts" data-lead-texts={sms.leadTexts.on ? "on" : "off"}>
           <CardHeader card={{ title: TEXTS_COPY.leadTitle, sub: TEXTS_COPY.leadSub }} />

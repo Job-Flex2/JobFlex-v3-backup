@@ -16,7 +16,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { clearMemberMobile, setMemberMobile, setMemberTextEvents, type SmsActionResult } from "@/actions/sms";
+import { setMemberMobile, setMemberTextEvents, setMemberTextsOn, type SmsActionResult } from "@/actions/sms";
 import { textEventsFor, type PrefEventMeta, type TextAudience } from "@/lib/notificationPrefsShared";
 import { roleLabel } from "@/lib/team/who";
 import type { SmsRosterRow } from "@/components/v3/settings-blueprint/settings-data";
@@ -120,9 +120,27 @@ function PersonRow({
   const texting = Boolean(row.phone) && !row.stopped;
   const onCount = events.filter((e) => row.cells[e.key]).length;
   const inputId = `tx-mobile-${row.userId}`;
+  // THE SWITCH (owner, 2026-10-13: "easy on and off for anybody"): off keeps the mobile and the choices.
+  const mobile = row.phone ?? row.phoneOnFile;
+  const canSwitch = Boolean(mobile) && !row.stopped && busy === null;
+  const switchWhy = row.stopped ? TEXTING_COPY.stoppedHelp : !mobile ? TEXTING_COPY.switchNoMobile : texting ? TEXTING_COPY.switchOnHelp : TEXTING_COPY.switchOffHelp;
   return (
-    <div className={`${s.person}${texting ? "" : ` ${s.quiet}`}`} data-member={row.userId}>
+    <div className={`${s.person}${texting ? "" : ` ${s.quiet}`}`} data-member={row.userId} data-texting={texting ? "on" : row.paused ? "off" : "none"}>
       <div className={s.head}>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={texting}
+          aria-label={`Texts to ${row.name}`}
+          title={switchWhy}
+          className={`${s.switch}${texting ? ` ${s.switchOn}` : ""}`}
+          disabled={!canSwitch}
+          onClick={() => run(`${row.userId}:switch`, () => setMemberTextsOn(row.userId, !texting))}
+          data-texting-switch
+        >
+          <i aria-hidden="true" />
+          <span>{texting ? TEXTING_COPY.switchOn : TEXTING_COPY.switchOff}</span>
+        </button>
         <span className={s.who}>
           <b>{row.name}</b>
           <em>
@@ -139,7 +157,7 @@ function PersonRow({
           ) : row.phoneOnFile ? (
             <>
               <b>{row.phoneOnFile}</b>
-              <span className={`${s.tag} ${s.tagWarn}`}>{TEXTING_COPY.onFileOff}</span>
+              <span className={`${s.tag} ${s.tagWarn}`}>{row.stopped ? TEXTS_COPY.stopped : TEXTING_COPY.onFileOff}</span>
             </>
           ) : (
             <span className={`${s.tag} ${s.tagWarn}`}>{TEXTING_COPY.noMobileLong}</span>
@@ -147,11 +165,6 @@ function PersonRow({
         </span>
         {!editing ? (
           <span className={s.acts}>
-            {row.phoneOnFile && !row.phone ? (
-              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null} onClick={() => run(`${row.userId}:on`, () => setMemberMobile(row.userId, row.phoneOnFile!))}>
-                {TEXTING_COPY.turnOn}
-              </button>
-            ) : null}
             <button
               type="button"
               className={`${s.btn}${row.phone || row.phoneOnFile ? "" : ` ${s.btnPrimary}`}`}
@@ -163,11 +176,6 @@ function PersonRow({
             >
               {row.phone || row.phoneOnFile ? TEXTING_COPY.changeMobile : TEXTING_COPY.addMobile}
             </button>
-            {row.phone ? (
-              <button type="button" className={s.btn} disabled={busy !== null} onClick={() => run(`${row.userId}:off`, () => clearMemberMobile(row.userId))}>
-                {TEXTING_COPY.stopTexts}
-              </button>
-            ) : null}
           </span>
         ) : null}
       </div>

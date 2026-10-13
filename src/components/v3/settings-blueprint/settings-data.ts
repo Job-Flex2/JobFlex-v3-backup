@@ -908,6 +908,8 @@ export interface SmsRosterRow {
   phoneBy: 'self' | 'office' | null;
   /** The number replied STOP. */
   stopped: boolean;
+  /** A mobile is on file but texts to them are switched off (2026-10-13). */
+  paused: boolean;
   isMe: boolean;
   /** Their Text switch per event of their roster. */
   cells: Record<string, boolean>;
@@ -918,8 +920,8 @@ export interface SmsRosterRow {
 export const TEXTING_COPY = {
   rosterTitle: 'Who gets texted',
   rosterSub: 'The office, by event. A member is texted only after they verify a mobile on their own account.',
-  peopleTitle: 'Who gets texted',
-  peopleSub: 'Everyone on the team, by what they do. Texts go out from your company’s own texting number (The company, below); until it is approved, the same alerts arrive by email and in the app.',
+  peopleTitle: 'Your team — who gets texts',
+  peopleSub: 'Flip anyone’s texts on or off; their mobile and choices are kept. Tap the texts under a name to choose exactly what they get.',
   sections: {
     office: { title: 'Office', sub: 'Owner, managers, admin and accounting — the whole company.' },
     sales: { title: 'Sales & estimators', sub: 'Their own leads, visits and deals — nobody else’s.' },
@@ -936,7 +938,13 @@ export const TEXTING_COPY = {
   byOffice: 'added by the office',
   bySelf: 'verified',
   noMobileLong: 'No mobile — nothing is texted',
-  onFileOff: 'on file, texts off',
+  onFileOff: 'texts off — number kept',
+  switchOn: 'Texts on',
+  switchOff: 'Texts off',
+  switchOnHelp: 'Texts go to this person. Tap to stop them — the mobile and choices are kept.',
+  switchOffHelp: 'Nothing is texted to this person. Tap to turn their texts back on.',
+  switchNoMobile: 'Add their mobile first.',
+  stoppedHelp: 'They replied STOP. Only they can restart texts, by texting START back.',
   examplesTitle: 'What the texts say',
   emptySection: 'Nobody here yet — invite them from Company or Workers.',
   whoMe: 'you',
@@ -948,6 +956,28 @@ export const TEXTING_COPY = {
   rulesTitle: 'Your own texts',
   rulesSub: 'Write a text for any moment — when it goes out, who gets it, what it says. {Fields} fill in from the job; clients always get your company name and the STOP line. They go out once your company has its own registered texting number.',
   notConfiguredLong: 'Texting is not switched on for this server yet. Everything here is kept and nothing is sent until it is.',
+  // The steps at the top of the page (2026-10-13): what is needed, and what happens now.
+  overviewTitle: 'Texting',
+  overviewSub: 'Get your number, pick who on your team gets texts, decide about clients — and add texts of your own if you like.',
+  stepNumber: 'Your texting number',
+  stepTeam: 'Your team',
+  stepClients: 'Texts to clients',
+  stepRules: 'Your own texts',
+  numberNone: 'Not requested yet — JobFlex prepares a number in your company’s name for you, files it with the carriers and pays for it.',
+  numberPaidOnly: 'Comes with a paid plan.',
+  numberPending: 'Twilio is checking your business — usually within 3 business days. Texts start on their own once approved.',
+  numberApproved: (n: string) => `Approved — texts go out from ${n}.`,
+  numberRejected: 'Twilio sent it back — fix what it asks and send it again.',
+  numberFailed: 'It did not reach Twilio — open it and send again.',
+  numberGo: 'Get your number',
+  numberOpen: 'Open',
+  teamLine: (on: number, off: number, none: number) => [`${on} getting texts`, off ? `${off} switched off` : '', none ? `${none} without a mobile` : ''].filter(Boolean).join(' · '),
+  teamGo: 'Choose who',
+  clientsLine: 'Visit reminders and the link to their proposal — only to clients who ticked “Text me…” when they booked online.',
+  rulesLine: (n: number) => (n ? `${n} of your own set up` : 'None yet — write a text for any moment'),
+  rulesGo: 'Set up',
+  statusWaiting: 'Nothing is texted yet — your texting number is not approved. Until it is, everyone gets the same alerts by email and in the app.',
+  statusLive: (n: string, people: number, clients: boolean) => `Texting is on from ${n}: ${people} ${people === 1 ? 'person' : 'people'} on your team${clients ? ', and clients who asked for texts' : ''}.`,
 } as const;
 
 export const TEST_RESULT_COPY = {

@@ -21,10 +21,13 @@ import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { twilioClient, twilioSettings } from "@/lib/sdk/twilio";
 import { notePaidCall } from "@/lib/trialMeter";
 import { clientProposalText, clientReminderText } from "./clients";
-import { crewAssignedText } from "./format";
+import { companyHelpText, crewAssignedText } from "./format";
+import { settingsOf } from "@/lib/bookingBook";
+import { parseTradeTypes } from "@/lib/tradeTypes";
 import {
   parseRegistration,
   registrationProblems,
+  sampleJobsFor,
   stageFor,
   tidyDetails,
   verificationFields,
@@ -56,14 +59,15 @@ export async function companyIsPaying(organizationId: string): Promise<boolean> 
   return (await getOrgPlanById(organizationId)) !== "FREE";
 }
 
-/** The company's own three texts, made by the templates the app sends them with. */
-function samplesFor(name: string, timezone: string | null): string[] {
+/** The company's own three texts, made by the templates the app sends them with, about its own trade. */
+export function samplesFor(name: string, timezone: string | null, trades: readonly string[] = []): string[] {
   const tz = timezone || "America/Los_Angeles";
-  const visit = { title: "Roof inspection", startsAt: new Date("2026-10-08T16:00:00Z"), endsAt: new Date("2026-10-08T17:00:00Z"), address: "4567 Rainier Ave S, Seattle, WA" };
+  const jobs = sampleJobsFor(trades);
+  const visit = { title: jobs.visit, startsAt: new Date("2026-10-08T16:00:00Z"), endsAt: new Date("2026-10-08T17:00:00Z"), address: "4567 Rainier Ave S, Seattle, WA" };
   return [
-    clientProposalText(name, "Roof replacement", 11306.52, "https://www.jobflex.app/portal/q/abc123"),
+    clientProposalText(name, jobs.job, 11306.52, "https://www.jobflex.app/portal/q/abc123"),
     clientReminderText(name, visit, tz),
-    crewAssignedText(name, { title: "Roof replacement", startsAt: new Date("2026-10-07T15:00:00Z"), endsAt: new Date("2026-10-07T23:00:00Z"), address: visit.address }, "https://www.jobflex.app/w/xyz", tz),
+    crewAssignedText(name, { title: jobs.job, startsAt: new Date("2026-10-07T15:00:00Z"), endsAt: new Date("2026-10-07T23:00:00Z"), address: visit.address }, "https://www.jobflex.app/w/xyz", tz),
   ];
 }
 
@@ -89,8 +93,10 @@ export async function submitRegistration(organizationId: string, actorId: string
   if (!(await companyIsPaying(organizationId))) return { ok: false, error: "Your own texting number comes with a paid plan." };
   const settings = await twilioSettings();
   if (!settings) return { ok: false, error: "Texting is not set up on this platform yet." };
-  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true, timezone: true, slug: true, smsFromNumber: true } });
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true, timezone: true, slug: true, smsFromNumber: true, phone: true, tradeTypesJson: true, bookingSettingsJson: true } });
   if (!org) return { ok: false, error: "Not found." };
+  // The booking page is the opt-in Twilio is shown; with booking off it says "booking is off" and the review fails.
+  if (!settingsOf(org).enabled) return { ok: false, error: "Turn on online booking first (Settings → Online booking) — it is where clients agree to your texts, and Twilio looks at it." };
 
   let state = await readRegistration(organizationId);
   if (state.stage === "approved") return { ok: true, state };
@@ -128,7 +134,15 @@ export async function submitRegistration(organizationId: string, actorId: string
   }
 
   // 2. The registration.
-  const fields = verificationFields({ details, companyName: org.name, samples: samplesFor(details.dba || org.name, org.timezone), bookingUrl: `https://www.jobflex.app/book/${org.slug}` });
+  const name = details.dba || org.name;
+  const fields = verificationFields({
+    details,
+    companyName: org.name,
+    samples: samplesFor(name, org.timezone, parseTradeTypes(org.tradeTypesJson)),
+    bookingUrl: `https://www.jobflex.app/book/${org.slug}`,
+    slug: org.slug,
+    helpText: companyHelpText(name, org.phone),
+  });
   try {
     const editable = state.stage === "rejected" && state.verificationSid && state.editAllowed !== false && (!state.editUntil || Date.parse(state.editUntil) > Date.now());
     let v;

@@ -124,4 +124,53 @@
 .root .form .why, .root .form .hint { font-family: var(--font, "Inter", system-ui, sans-serif); font-size: 12px; letter-spacing: normal; text-transform: none; line-height: 1.4; }
 .root .form .why { color: var(--danger, #a83232); }
 .root .form .hint { color: var(--muted, #6b6760); }
+/* What JobFlex does for the contractor, before they ask (2026-10-13). */
+.done { display: grid; gap: 8px; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; padding: 12px 14px; }
+.done b { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.done ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.done li { position: relative; padding-left: 22px; font-size: 13.5px; line-height: 1.4; }
+.done li::before { content: "✓"; position: absolute; left: 0; top: 0; font-weight: 700; color: var(--blue, #1854a0); }
+.done p { margin: 0; font-size: 12.5px; color: var(--muted, #6b6760); }
 .reasons { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--danger, #a83232); }
+
+/* The pages Twilio is handed (2026-10-12): links that read as links. */
+.note a { color: var(--blueprint, #1854a0); text-decoration: underline; text-underline-offset: 2px; }
+/* The one tick in the registration form: a row, words beside the box (2026-10-13). */
+.root .form label.checkRow { display: flex; gap: 10px; align-items: flex-start; font-family: var(--font, "Inter", system-ui, sans-serif); font-size: 13px; letter-spacing: normal; text-transform: none; color: var(--ink, #0a0a0a); }
+.root .form label.checkRow input { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+
+/* ── TEXTS ON / OFF (2026-10-13) — one switch per person, and for clients ── */
+.root .switch.switch {
+  appearance: none; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 4px;
+  border: 1.5px solid var(--ink, #0a0a0a); border-radius: 999px; background: #fff; color: var(--ink, #0a0a0a);
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap; flex: none;
+}
+.root .switch i { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--muted-faint, #b0aea8); transition: background .15s; }
+.root .switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.root .switch.switchOn { border-color: var(--success, #3a7d44); color: var(--success-dark, #2c6335); }
+.root .switch.switchOn i { background: var(--success, #3a7d44); }
+.root .switch.switchOn i::after { transform: translateX(14px); }
+.root .switch.switch:disabled { opacity: .45; cursor: default; }
+.root .switch.switch:focus-visible { outline: 2px solid var(--blue, #1854a0); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .root .switch i, .root .switch i::after { transition: none; } }
+
+/* ── TEXTING AT A GLANCE (2026-10-13): what is texted now, and the steps ── */
+.root .status { margin: 0; padding: 12px 14px; border: 1.5px solid var(--warning, #b88420); background: var(--warning-soft, rgba(184, 132, 32, .08)); font-size: 14px; line-height: 1.45; }
+.root .status.statusLive { border-color: var(--success, #3a7d44); background: var(--success-soft, rgba(58, 125, 68, .07)); }
+.root .steps { margin: 0; padding: 0; list-style: none; display: grid; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; }
+.root .step { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; }
+.root .step + .step { border-top: 1px solid var(--hair, rgba(10, 10, 10, .14)); }
+.root .stepN { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--ink, #0a0a0a); font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; font-weight: 700; }
+.root .step[data-tone="ok"] .stepN { background: var(--success, #3a7d44); border-color: var(--success, #3a7d44); color: #fff; }
+.root .step[data-tone="wait"] .stepN { background: var(--warning, #b88420); border-color: var(--warning, #b88420); color: #fff; }
+.root .step[data-tone="bad"] .stepN { background: var(--danger, #a83232); border-color: var(--danger, #a83232); color: #fff; }
+.root .stepT { display: grid; gap: 2px; min-width: 0; }
+.root .stepT b { font-size: 14px; }
+.root .stepT span { font-size: 13px; line-height: 1.4; color: var(--muted, #6b6760); }
+@media (max-width: 560px) {
+  .root .step { grid-template-columns: 26px minmax(0, 1fr); }
+  .root .step > button { grid-column: 2; justify-self: start; }
+}
+/* A switch on its own in a card keeps its own width. */
+.root.inline { justify-items: start; gap: 8px; }

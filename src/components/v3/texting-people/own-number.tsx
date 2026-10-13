@@ -25,7 +25,7 @@ import {
 } from "@/lib/sms/registrationShared";
 import s from "./texting-people.module.css";
 
-type FieldKey = Exclude<keyof SmsRegistrationDetails, "businessType">;
+type FieldKey = Exclude<keyof SmsRegistrationDetails, "businessType" | "showEmail">;
 const FIELDS: readonly { key: FieldKey; label: string; wide?: boolean; type?: string; auto?: string; hint?: string }[] = [
   { key: "legalName", label: "Legal business name", wide: true, auto: "organization" },
   { key: "dba", label: "Name your clients know", auto: "organization" },
@@ -36,6 +36,7 @@ const FIELDS: readonly { key: FieldKey; label: string; wide?: boolean; type?: st
   { key: "state", label: "State", auto: "address-level1", hint: "WA" },
   { key: "zip", label: "ZIP", auto: "postal-code" },
   { key: "website", label: "Website", wide: true, type: "url", auto: "url" },
+  { key: "social", label: "Facebook, Instagram, Google or Yelp page (optional)", wide: true, type: "url" },
   { key: "contactFirst", label: "Contact first name", auto: "given-name" },
   { key: "contactLast", label: "Contact last name", auto: "family-name" },
   { key: "contactEmail", label: "Contact email", type: "email", auto: "email" },
@@ -118,6 +119,18 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
       ) : null}
       {view.error && (view.stage === "failed" || view.stage === "rejected") ? <p className={`${s.note} ${s.noteErr}`}>{view.error}</p> : null}
 
+      {view.stage === "none" && !open && !view.legacy ? (
+        <div className={s.done} data-sms-done-for-you>
+          <b>{C.doneTitle}</b>
+          <ul>
+            {C.done.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+          <p>{C.doneYou}</p>
+        </div>
+      ) : null}
+
       {fresh && !open && !view.legacy ? (
         view.paying ? (
           <div className={s.acts}>
@@ -140,6 +153,12 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
           }}
         >
           <p className={`${s.note} ${s.wide}`}>{C.formIntro}</p>
+          {/* Booking is the opt-in Twilio looks at (2026-10-12): with it off the review fails, so the form waits. */}
+          {!view.bookingOn ? (
+            <p className={`${s.note} ${s.noteErr} ${s.wide}`} data-sms-booking-off>
+              {C.bookingOff}
+            </p>
+          ) : null}
           <label className={problems.businessType && tried ? s.bad : ""}>
             Kind of business
             <select value={d.businessType} onChange={(e) => setD((x) => ({ ...x, businessType: e.target.value as SmsBusinessType }))}>
@@ -164,11 +183,29 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
               />
               {problems[f.key] && tried ? <span className={s.why}>{problems[f.key]}</span> : null}
               {f.key === "contactEmail" && isFreeMailbox(d.contactEmail) ? <span className={s.hint}>{C.freeMail}</span> : null}
+              {f.key === "website" ? <span className={s.hint}>{C.website}</span> : null}
+              {f.key === "social" ? <span className={s.hint}>{C.social}</span> : null}
             </label>
           ))}
+          {/* A Gmail or Yahoo address passes only when the business's website lists it (30482, 2026-10-13). */}
+          <label className={`${s.wide} ${s.checkRow}`}>
+            <input type="checkbox" checked={d.showEmail} onChange={(e) => setD((x) => ({ ...x, showEmail: e.target.checked }))} data-sms-show-email />
+            <span>
+              {C.showEmail}
+              <span className={s.hint}> — {C.showEmailWhy}</span>
+            </span>
+          </label>
           <p className={`${s.note} ${s.wide}`}>{C.consent}</p>
+          {/* What Twilio is handed besides this form — each one opens, so the owner sees it as the reviewer will. */}
+          <p className={`${s.note} ${s.wide}`} data-sms-twilio-sees>
+            {C.whatTwilioSees}{" "}
+            <a href={view.pages.booking} target="_blank" rel="noreferrer">Booking page</a> ·{" "}
+            <a href={view.pages.optInImage} target="_blank" rel="noreferrer">Checkbox picture</a> ·{" "}
+            <a href={view.pages.terms} target="_blank" rel="noreferrer">Texting terms</a> ·{" "}
+            <a href={view.pages.privacy} target="_blank" rel="noreferrer">Privacy policy</a>
+          </p>
           <div className={`${s.acts} ${s.wide}`}>
-            <button type="submit" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || !configured}>
+            <button type="submit" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || !configured || !view.bookingOn}>
               {busy === "submit" ? "Sending to Twilio…" : view.stage === "rejected" ? C.resubmit : C.submit}
             </button>
             {fresh ? (

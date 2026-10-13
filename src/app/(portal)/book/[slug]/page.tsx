@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { orgBySlug, settingsOf } from "@/lib/bookingBook";
+import { listedEmail } from "./sms-company";
 import { BookWizard } from "./book-wizard";
 
 // BOOK A VISIT (2026-09-23) — public, /book/<company slug>. The company's
@@ -13,6 +14,8 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
   const org = await orgBySlug(slug);
   const settings = org ? settingsOf(org) : null;
   const name = org?.name ?? "This company";
+  // The contact email the company listed with its texting registration — with no website of its own, this page is its website.
+  const email = org ? await listedEmail(org.id) : null;
   return (
     <main className="min-h-screen bg-[color:var(--paper,#f4f2ec)] px-4 py-10">
       <div className="mx-auto w-full max-w-lg rounded-[14px] border border-[color:var(--ink-line,#ddd)] bg-white overflow-hidden">
@@ -20,6 +23,11 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
           <div className="quiet-caps mb-2">{name}</div>
           <h1 className="text-[24px] font-semibold leading-tight">Book a visit</h1>
           {org?.phone && <p className="mt-1 text-[13px] text-[color:var(--ink-muted,#666)]">Rather call? {org.phone}</p>}
+          {email && (
+            <p className="mt-1 text-[13px] text-[color:var(--ink-muted,#666)]" data-book-email>
+              Email: <a className="underline" href={`mailto:${email}`}>{email}</a>
+            </p>
+          )}
         </div>
         <div className="p-6">
           {!org || !settings ? (

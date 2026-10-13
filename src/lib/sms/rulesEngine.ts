@@ -12,6 +12,7 @@
 // STOP line. The team's copies wait through 8 PM – 7 AM. Nobody is texted
 // about their own click.
 
+import { parseNotificationPrefs } from "@/lib/notificationPrefsShared";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { toE164 } from "@/lib/phone";
@@ -283,13 +284,15 @@ export async function sendRule(
   if (opts.actorUserId) userIds.delete(opts.actorUserId);
   if (userIds.size) {
     const [members, workers] = await Promise.all([
-      db.membership.findMany({ where: { organizationId: ctx.organizationId, userId: { in: [...userIds] } }, select: { user: { select: { id: true, smsPhone: true, smsVerifiedAt: true } } } }),
+      db.membership.findMany({ where: { organizationId: ctx.organizationId, userId: { in: [...userIds] } }, select: { user: { select: { id: true, smsPhone: true, smsVerifiedAt: true, notificationPrefsJson: true } } } }),
       db.workerProfile.findMany({ where: { organizationId: ctx.organizationId, userId: { in: [...userIds] } }, select: { userId: true, phone: true, smsOptIn: true } }),
     ]);
     const workerOf = new Map(workers.map((w) => [w.userId, w]));
     for (const m of members) {
       const u = m.user;
       if (!u) continue;
+      // Texts switched off for this member on Settings → Texting (2026-10-13).
+      if (parseNotificationPrefs(u.notificationPrefsJson).smsPaused) continue;
       const w = workerOf.get(u.id);
       const phone = u.smsPhone && u.smsVerifiedAt ? u.smsPhone : w?.smsOptIn ? w.phone : null;
       await go(phone, staffBody, staffAfter);

@@ -160,6 +160,9 @@ export interface NotificationPrefs {
   /** The office member who typed this mobile in on Settings → Texting
    *  (2026-09-29), or null when the member verified it with a code. */
   smsAddedBy?: string | null;
+  /** Texts to this member are switched off on Settings → Texting (2026-10-13): the mobile and the event choices stay,
+   *  nothing is texted until the switch is on again. */
+  smsPaused?: boolean;
 }
 
 export const QUIET_FROM_DEFAULT = "20:00";
@@ -171,7 +174,7 @@ export function defaultNotificationPrefs(role?: string | null): NotificationPref
   const audience = audienceForRole(role);
   const matrix = {} as Record<PrefKey, PrefCells>;
   for (const e of ALL_PREF_EVENTS) matrix[e.key] = [e.seed[0], e.seed[1], smsSeedFor(e, audience)];
-  return { matrix, quietFrom: QUIET_FROM_DEFAULT, quietTo: QUIET_TO_DEFAULT, muteWeekends: false, smsAddedBy: null };
+  return { matrix, quietFrom: QUIET_FROM_DEFAULT, quietTo: QUIET_TO_DEFAULT, muteWeekends: false, smsAddedBy: null, smsPaused: false };
 }
 
 /** Accepts the triple and the older [inApp, email] pair — a pair's text cell
@@ -203,6 +206,7 @@ export function parseNotificationPrefs(json: string | null | undefined, role?: s
     quietTo: str(raw.quietTo, base.quietTo),
     muteWeekends: typeof raw.muteWeekends === "boolean" ? raw.muteWeekends : false,
     smsAddedBy: typeof raw.smsAddedBy === "string" ? raw.smsAddedBy : null,
+    smsPaused: raw.smsPaused === true,
   };
 }
 

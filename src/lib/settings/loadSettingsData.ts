@@ -305,7 +305,8 @@ async function loadSmsSettings(organizationId: string, smsPhone: string | null, 
       // The crew's number is the one its texts go to: the worker profile's,
       // when texting is on there. Everyone else: the member's own mobile.
       const workerPhone = w?.phone ? toE164(w.phone) : null;
-      const live = audience === "crew" && w ? (w.smsOptIn && workerPhone ? workerPhone : null) : u.smsPhone && u.smsVerifiedAt ? u.smsPhone : null;
+      // Switched off on this page (prefs.smsPaused, 2026-10-13): the number waits on file, nothing is texted.
+      const live = audience === "crew" && w ? (w.smsOptIn && workerPhone && !prefs.smsPaused ? workerPhone : null) : u.smsPhone && u.smsVerifiedAt && !prefs.smsPaused ? u.smsPhone : null;
       const known = live ?? workerPhone ?? u.smsPhone ?? null;
       roster.push({
         userId: u.id,
@@ -316,6 +317,7 @@ async function loadSmsSettings(organizationId: string, smsPhone: string | null, 
         phoneOnFile: !live && known ? prettyPhone(known) : null,
         phoneBy: live ? (prefs.smsAddedBy ? "office" : audience === "crew" && w && !u.smsVerifiedAt ? "office" : "self") : null,
         stopped: Boolean(live && stopped.has(live)),
+        paused: !live && Boolean(known),
         isMe: u.id === myUserId,
         cells: textCellsFor(prefs, audience) as Record<string, boolean>,
         groups: smsGroupsOf(prefs),
@@ -361,11 +363,12 @@ function leadTextsOn(json: string | null | undefined): boolean {
 async function loadRegistrationView(organizationId: string, myUserId: string | null): Promise<SmsRegistrationView | null> {
   try {
     const { companyIsPaying, refreshRegistration } = await import("@/lib/sms/registration");
-    const { prefillDetails } = await import("@/lib/sms/registrationShared");
+    const { prefillDetails, smsPagesFor } = await import("@/lib/sms/registrationShared");
+    const { settingsOf } = await import("@/lib/bookingBook");
     const [state, paying, org, me] = await Promise.all([
       refreshRegistration(organizationId),
       companyIsPaying(organizationId),
-      db.organization.findUnique({ where: { id: organizationId }, select: { name: true, website: true, address: true, phone: true, slug: true, smsFromNumber: true } }),
+      db.organization.findUnique({ where: { id: organizationId }, select: { name: true, website: true, address: true, phone: true, slug: true, smsFromNumber: true, tradeTypesJson: true, bookingSettingsJson: true } }),
       myUserId ? db.user.findUnique({ where: { id: myUserId }, select: { name: true, email: true } }) : Promise.resolve(null),
     ]);
     if (!org) return null;
@@ -381,6 +384,8 @@ async function loadRegistrationView(organizationId: string, myUserId: string | n
       error: state.error ?? null,
       paying,
       legacy,
+      bookingOn: settingsOf(org).enabled,
+      pages: smsPagesFor(org.slug),
       details: state.details ?? prefillDetails(org, { name: me?.name ?? null, email: me?.email ?? null }),
     };
   } catch {
