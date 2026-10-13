@@ -90,7 +90,7 @@ export function AddressPinPreview({ lat, lng, label }: { lat: number; lng: numbe
 
   return (
     <div className="rf-pin">
-      <div ref={hostRef} className="rf-pin-map" aria-label={`Satellite preview with a pin on ${label}`} />
+      <div ref={hostRef} className="rf-pin-map" aria-label={`Map preview with a pin on ${label}`} />
       <p className="rf-note rf-pin-note">
         The pin marks <b>{label}</b> — the roof the measurement will read. Wrong house? Pick the address
         again.

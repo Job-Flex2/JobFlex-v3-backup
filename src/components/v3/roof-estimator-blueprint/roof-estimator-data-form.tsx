@@ -306,6 +306,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // the explicit paid re-measure button renders only then.
   const [reusedInstant, setReusedInstant] = React.useState<"stored" | "recovered" | null>(null);
   const [view, setView] = React.useState<PhotoView>("satellite");
+  /** The measurement whose first tab was chosen — see showMeasurement. */
+  const openedRef = React.useRef<string | null>(null);
   const [satPhoto, setSatPhoto] = React.useState<string | null>(null);
   const [satErr, setSatErr] = React.useState<string | null>(null);
   const [orthoPhoto, setOrthoPhoto] = React.useState<string | null>(null);
@@ -631,6 +633,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setAssumptions([]);
     setScopeText("");
     setView("satellite");
+    openedRef.current = null;
     setSatPhoto(null);
     setSatErr(null);
     setOrthoPhoto(null);
@@ -657,9 +660,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // ── Photos ──
   // The EagleView clear ortho exists only when the paid answer carried imagery;
   // without it the ORTHO tab is hidden (not disabled) per the owner's call.
-  const hasOrtho = !isSolar && !!measurement?.instant?.imagery?.some(
-    (im) => im.view === "ortho" && im.masked === false && !!im.token && !!im.bbox,
-  );
+  const orthoOf = (m: RoofMeasurementDTO | null | undefined) =>
+    !!m && m.source !== "solar" && !!m.instant?.imagery?.some((im) => im.view === "ortho" && im.masked === false && !!im.token && !!im.bbox);
+  const hasOrtho = orthoOf(measurement);
   const orthoShotDate = shotDateLabel(
     measurement?.instant?.imagery?.find((im) => im.view === "ortho" && im.masked === false)?.shotDate ??
       measurement?.provenance?.instantImageryDate,
@@ -679,17 +682,22 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       .finally(() => setPhotoBusy(false));
   }, []);
 
-  const loadOrtho = React.useCallback((id: string) => {
+  // `orMap`: the photo was opened for the user (the first tab) — if it cannot be read, the map takes its place.
+  const loadOrtho = React.useCallback((id: string, orMap = false) => {
     setOrthoPhoto(null);
     setOrthoErr(null);
     if (id === "unsaved") return;
     setPhotoBusy(true);
+    const failed = (msg: string) => {
+      setOrthoErr(msg);
+      if (orMap) setView("satellite");
+    };
     void getMeasurementOrtho(id)
       .then((res) => {
         if (res.ok) setOrthoPhoto(res.dataUrl);
-        else setOrthoErr(res.error);
+        else failed(res.error);
       })
-      .catch((err: unknown) => setOrthoErr(errMsg(err)))
+      .catch((err: unknown) => failed(errMsg(err)))
       .finally(() => setPhotoBusy(false));
   }, []);
 
@@ -782,6 +790,15 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     if (reveal) setPanel("report");
     const willLiveMap = isMapsBrowserEnabled() && !mapDown && m.instant?.lat != null && m.instant?.lng != null;
     if (!wasUnsaved && m.id !== "unsaved" && !willLiveMap) loadSatellite(m.id);
+    // THE REPORT'S OWN PHOTO FIRST (owner, 2026-10-12: "Satellite view" over a map made contractors think the sizes
+    // came off Google Maps). A measurement from the aerial report opens on that report's photo; the map of the address
+    // is the second tab. Once per measurement — a later update of the same one leaves the tab the user chose.
+    if (openedRef.current !== m.id) {
+      openedRef.current = m.id;
+      const first = !wasUnsaved && m.id !== "unsaved" && orthoOf(m);
+      setView(first ? "ortho" : "satellite");
+      if (first) loadOrtho(m.id, true);
+    }
   }
 
   /** A step's label: while the report is held, the details step names what
@@ -1903,7 +1920,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               <div className="card rf-card rf-viewer">
                 <div className="rf-head rf-head--bar">
                   <div>
-                    <div className="card-title" id="vwTitle">{view === "satellite" ? "Satellite view" : "Ortho view"}</div>
+                    {/* What the card holds, not where the picture comes from (owner, 2026-10-12): the aerial report's
+                        measurement, or — when the roof was read from free elevation data — an estimate. */}
+                    <div className="card-title" id="vwTitle">{isSolar || measurement.source === "recon" ? "Roof estimate" : "Aerial measurement"}</div>
                     <div className="card-sub" id="vwSub">
                       {[measurement.address, [measurement.city, measurement.state].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Roof"}
                       {savedId ? ` · ${isSolar ? "ESTIMATE" : "DRAWING"} № RM-${savedId.slice(-6).toUpperCase()}` : ""}
@@ -1912,7 +1931,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                   <div className="vw-controls">
                     {/* The 2D|3D switch, verbatim — only the labels changed. */}
                     <div className="vsw" id="viewSwitch" role="radiogroup" aria-label="Photo source">
-                      {(["satellite", ...(hasOrtho ? (["ortho"] as const) : [])] as PhotoView[]).map((v) => (
+                      {([...(hasOrtho ? (["ortho"] as const) : []), "satellite"] as PhotoView[]).map((v) => (
                         <button
                           key={v}
                           className={"vsw-btn" + (view === v ? " active" : "")}
@@ -1921,7 +1940,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                           aria-checked={view === v}
                           onClick={() => switchView(v)}
                         >
-                          {v === "satellite" ? "Satellite" : AERIAL.ortho}
+                          {v === "satellite" ? "Map" : AERIAL.ortho}
                         </button>
                       ))}
                     </div>
@@ -1933,7 +1952,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                   <div className="rfx rf-stage">
                     {/* The live map stays mounted across the tab switch so the
                         user's pan/zoom survives a look at the ortho. */}
-                    {liveMap && <div ref={mapHostRef} className="rf-map" hidden={view !== "satellite"} aria-label="Satellite map" />}
+                    {liveMap && <div ref={mapHostRef} className="rf-map" hidden={view !== "satellite"} aria-label="Map of the address" />}
                     {liveMap && view === "satellite" && (
                       <button
                         type="button"
@@ -1950,7 +1969,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                         {/* eslint-disable-next-line @next/next/no-img-element -- data: URL from the server-side photo cache; next/image adds nothing here */}
                         <img
                           src={photoShown}
-                          alt={view === "satellite" ? "Satellite view" : AERIAL.ortho}
+                          alt={view === "satellite" ? "Map of the address" : AERIAL.ortho}
                           className="rf-photo"
                         />
                         {/* The static photo is CENTERED on the measured point
@@ -1976,10 +1995,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                 <div className="rf-legend" id="rfLegend">
                   <span className="lg">
                     {view === "satellite"
-                      ? liveMap
-                        ? `Google Maps satellite · the pin marks ${isSolar ? "the selected building" : "the measured point"} · drag to pan · scroll to zoom`
-                        : `Google Maps satellite · the pin marks ${isSolar ? "the selected building" : "the measured point"}`
-                      : `${AERIAL.ortho}${orthoShotDate ? ` · ${orthoShotDate}` : ""}`}
+                      ? `Map of the address · the pin marks ${isSolar ? "the selected building" : "the measured roof"}${liveMap ? " · drag to pan · scroll to zoom" : ""}`
+                      : `${AERIAL.ortho}${orthoShotDate ? ` · ${orthoShotDate}` : ""} · the photo the measurement was taken from`}
                   </span>
                 </div>
               </div>
