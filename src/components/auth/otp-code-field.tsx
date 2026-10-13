@@ -81,7 +81,7 @@ export function OtpCodeField({
   const current = focused && !disabled && !sel && value.length < OTP_LENGTH ? value.length : -1;
 
   return (
-    <div className={s.f} data-invalid={invalid || undefined} data-disabled={disabled || undefined}>
+    <div className={s.f} data-otp-field data-invalid={invalid || undefined} data-disabled={disabled || undefined}>
       <label className={labelClassName ?? s.lbl} htmlFor={id}>
         {label}
       </label>
@@ -151,24 +151,39 @@ export function KeyboardBridge({ ref }: { ref: React.Ref<HTMLInputElement> }) {
 }
 
 /** While `on` and a code field has the focus, the keyboard's arrival (the
- *  visual viewport shrinking) scrolls the page just enough to bring `bottom`
- *  above the keyboard, never past `top` — on a 360×640 phone the heading, the
- *  squares and Continue stay in sight. */
+ *  visual viewport shrinking) marks the page (`html[data-otp-keyboard]`, so a
+ *  stylesheet can close up the space over the block) and scrolls it just enough
+ *  to bring `bottom` above the keyboard — never past `top` when that is
+ *  enough, else never past the field itself: on 390×844 the heading, the boxes
+ *  and Continue stay in sight; on 360×640 at least the boxes and Continue. */
 export function useKeepInView(top: React.RefObject<HTMLElement | null>, bottom: React.RefObject<HTMLElement | null>, on: boolean) {
   React.useEffect(() => {
     const vv = window.visualViewport;
     if (!on || !vv) return;
+    const root = document.documentElement;
     let raf = 0;
     const fit = () => {
       cancelAnimationFrame(raf);
+      const active = document.activeElement;
+      const typing = active?.getAttribute("autocomplete") === "one-time-code";
+      // A keyboard: the visual viewport well short of the layout one.
+      if (typing && vv.height < window.innerHeight - 120) root.setAttribute("data-otp-keyboard", "");
+      else root.removeAttribute("data-otp-keyboard");
+      // Measured a frame later, once the space over the block has closed.
       raf = requestAnimationFrame(() => {
-        const t = top.current?.getBoundingClientRect();
-        const b = bottom.current?.getBoundingClientRect();
-        if (!t || !b || document.activeElement?.getAttribute("autocomplete") !== "one-time-code") return;
-        const shown = vv.offsetTop + vv.height - 12;
-        const room = t.top - vv.offsetTop - 8;
-        if (b.bottom <= shown || room <= 0) return;
-        window.scrollBy({ top: Math.min(b.bottom - shown, room) });
+        raf = requestAnimationFrame(() => {
+          const t = top.current?.getBoundingClientRect();
+          const b = bottom.current?.getBoundingClientRect();
+          const f = active?.closest("[data-otp-field]")?.getBoundingClientRect();
+          if (!t || !b || !typing) return;
+          const shown = vv.offsetTop + vv.height - 12;
+          const need = b.bottom - shown;
+          if (need <= 0) return;
+          const headRoom = t.top - vv.offsetTop - 8;
+          const fieldRoom = f ? f.top - vv.offsetTop - 8 : headRoom;
+          const by = need <= headRoom ? need : Math.min(need, Math.max(headRoom, fieldRoom));
+          if (by > 0) window.scrollBy({ top: by });
+        });
       });
     };
     fit();
@@ -178,6 +193,7 @@ export function useKeepInView(top: React.RefObject<HTMLElement | null>, bottom: 
       cancelAnimationFrame(raf);
       vv.removeEventListener("resize", fit);
       document.removeEventListener("focusin", fit);
+      root.removeAttribute("data-otp-keyboard");
     };
   }, [top, bottom, on]);
 }

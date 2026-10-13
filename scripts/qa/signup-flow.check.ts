@@ -118,11 +118,11 @@ async function step2(v: Awaited<ReturnType<typeof visitor>>) {
   return { ok, err };
 }
 
-/** The plan sheet's first plan (a phone: the chosen tile's pinned button, plan-phone) → /api/checkout/signup → the browser heads for Stripe. */
+/** The plan sheet's first plan → /api/checkout/signup → the browser heads for Stripe. */
 async function toCheckout(v: Awaited<ReturnType<typeof visitor>>) {
   const { page } = v;
   v.step("plan sheet → Checkout");
-  const go = page.locator("section.plan-sheet.is-in .pw-plan .pw-go, [data-plan-go]").filter({ visible: true }).first();
+  const go = page.locator("section.plan-sheet.is-in .pw-plan .pw-go").filter({ visible: true }).first();
   await go.waitFor({ timeout: 60000 });
   await page.waitForTimeout(600);
   const answer = page.waitForResponse((r: any) => r.url().startsWith(BASE + "/api/checkout/signup"), { timeout: 90000 }).catch(() => null);

@@ -8,7 +8,8 @@
 //   · a sheet's body does not scroll to its last field;
 //   · the app's top bar is not 12px from both edges, or a badge hangs out of its button;
 //   · a phone-width root carries a zoom;
-//   · (2026-10-12) on the sign-up's plan step — tiles and one pinned start button — the same;
+//   · (2026-10-12) on the sign-up's plan step (360×640, 390×844/700, 430×932) the same, and its
+//     full cards stand two to a row, each with its own list and start button, nothing pinned;
 //   · dev and prod draw the same page differently (stylesheet order) — when a dev server is up
 //     (QA_DEV_URL, else localhost:3001 / :3000); without one that half is reported, not failed.
 // Signs in only as qa@acme.test (QA Co); its records come from ./_world and ./_crewWorld and
@@ -91,13 +92,13 @@ async function withCrew(run: (crew: Awaited<ReturnType<typeof makeCrewWorld>>) =
 /** Playwright is resolved at run time (./_prod-server): its objects are untyped here. */
 type Loose = ReturnType<typeof playwright>;
 
-/** THE SIGN-UP'S PLAN STEP (2026-10-12): tiles, the chosen plan and one pinned start button
- *  (plan-phone). Reached as a new visitor (its own made-up IP; its pending signup removed after),
- *  judged like every page: no sideways scroll, the pinned button whole, the terms ending above it. */
+/** THE SIGN-UP'S PLAN STEP (owner, 2026-10-12): the full cards two to a row, each with its own
+ *  list and start button, the page scrolling down — nothing swiped, nothing pinned. Reached as a
+ *  new visitor (its own made-up IP; its pending signup removed after), judged like every page. */
 const SWEEP_MAIL = `sweep${Date.now()}.test`;
-async function planStep(webkit: Loose, H: number) {
+async function planStep(webkit: Loose, H: number, W = 390) {
   const ip = `10.${1 + Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}`;
-  const ctx = await webkit.newContext({ viewport: { width: 390, height: H }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: UA });
+  const ctx = await webkit.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: UA });
   await ctx.addCookies([{ name: "jf_consent", value: encodeURIComponent(JSON.stringify({ v: 1, at: new Date().toISOString(), analytics: false, marketing: false, ack: true })), domain: "localhost", path: "/" }]);
   await ctx.route("**/*", (route: Loose) => (route.request().url().startsWith(BASE) ? route.continue({ headers: { ...route.request().headers(), "x-forwarded-for": ip } }) : route.continue()));
   const page = await ctx.newPage();
@@ -122,10 +123,15 @@ async function planStep(webkit: Loose, H: number) {
     await sleep(1500);
     const p = await page.evaluate(PAGE);
     const issues = judge(p);
-    const bar = (p.bars || []).find((b: Loose) => /start/i.test(b.btns?.[0]?.l || ""));
-    check(`${H} /auth/register ▸ plan step`, !issues.filter((i: Loose) => !i.soft).length && !!bar && !bar.cut, `${say(issues)}${bar ? "" : " · no pinned start button"}`);
+    const grid = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll<HTMLElement>("section.plan-sheet.is-in [data-plan-card]")).map((c) => { const b = c.getBoundingClientRect(); return { top: Math.round(b.top), h: Math.round(b.height), go: c.querySelectorAll(".pw-go").length, rows: c.querySelectorAll("[data-plan-feats] > *").length }; });
+      return { cards, pinned: document.querySelectorAll("[data-plan-bar], [data-plan-tiles]").length };
+    });
+    const pairs = grid.cards.length >= 2 && Math.abs(grid.cards[0].top - grid.cards[1].top) <= 1 && Math.abs(grid.cards[0].h - grid.cards[1].h) <= 1;
+    const own = grid.cards.every((c: Loose) => c.go === 1 && c.rows > 0);
+    check(`${W}×${H} /auth/register ▸ plan step`, !issues.filter((i: Loose) => !i.soft).length && !(p.bars || []).length && !grid.pinned && pairs && own, `${say(issues)} · ${grid.cards.length} cards${pairs ? "" : " · not two to a row"}${own ? "" : " · a card without its list or button"}${(p.bars || []).length || grid.pinned ? " · something pinned" : ""}`);
   } catch (e) {
-    check(`${H} /auth/register ▸ plan step`, false, String((e as Error)?.message || e).split("\n")[0]);
+    check(`${W}×${H} /auth/register ▸ plan step`, false, String((e as Error)?.message || e).split("\n")[0]);
   } finally {
     await ctx.close();
     await db.syncState.deleteMany({ where: { OR: [{ key: { startsWith: "signup:" }, cursor: { contains: SWEEP_MAIL } }, { key: { startsWith: "rl:", endsWith: ":" + ip } }] } }).catch(() => {});
@@ -181,6 +187,7 @@ async function main() {
         await ctx.close();
         await planStep(webkit, H);
       }
+      for (const [W, H] of [[360, 640], [430, 932]]) await planStep(webkit, H, W);
       // DEV ↔ PROD — the same page drawn by both, when a dev server is up.
       const dev = await devBase();
       if (!dev) note("dev ↔ prod", "no dev server on QA_DEV_URL / :3001 / :3000 — not compared");

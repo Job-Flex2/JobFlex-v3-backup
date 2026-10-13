@@ -2,7 +2,7 @@
    the register page's `.bp` scope and the sign-in pages' scopes; each defines
    --ink / --blueprint / --danger, the global Blueprint tokens are the
    fallback. The squares wear the page's field frame — 2px ink, near-square,
-   white — with the 3px hard offset of its buttons. `.f.f` restates what the
+   white, upright (44×58) — and no offset shadow. `.f.f` restates what the
    scopes reset (they zero every margin and padding). */
 
 .f.f { display: block; width: 100%; }
@@ -16,11 +16,12 @@
 
 .f.f .row {
   position: relative;
-  display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr));
-  /* 8px; narrower only where a column cannot hold six 44px squares and 8px
-     gaps (the handheld sign-in card is 292px wide on a 360px phone). */
-  gap: clamp(4px, calc((100% - 264px) / 5), 8px);
-  max-width: 360px;
+  /* Upright squares, 6px apart (owner, 2026-10-12): 44 wide, 40 where the
+     column is narrow (the handheld sign-in card is 292px on a 360px phone);
+     the row is only as wide as its squares, so the field lies on them alone. */
+  display: grid; grid-template-columns: repeat(6, minmax(40px, 44px));
+  gap: 6px;
+  width: fit-content; max-width: 100%;
   margin-top: 2px;
 }
 
@@ -41,16 +42,17 @@
 .f.f .cell {
   position: relative;
   display: grid; place-items: center;
-  height: 56px; min-width: 0;
+  height: 58px; min-width: 0;
   border: 2px solid var(--ink); border-radius: var(--radius, var(--r-sm));
   background: var(--sheet, #fff);
-  box-shadow: 3px 3px 0 var(--ink);
+  /* the frame only: no offset shadow in any state (owner, 2026-10-12) */
+  box-shadow: none;
   font-family: var(--font, var(--font-sans)); font-size: 26px; font-weight: 800; line-height: 1;
   font-variant-numeric: tabular-nums; color: var(--ink);
-  transition: border-color 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
 }
 /* Where the next digit lands: the blue frame and a blinking caret. */
-.f.f .cell[data-current] { border-color: var(--blueprint, var(--accent)); box-shadow: 3px 3px 0 var(--blueprint, var(--accent)); }
+.f.f .cell[data-current] { border-color: var(--blueprint, var(--accent)); }
 .f.f .cell[data-current]::after {
   content: ""; width: 2px; height: 26px; background: var(--blueprint, var(--accent));
   animation: jf-otp-caret 1.06s steps(1, end) infinite;
@@ -59,7 +61,7 @@
 .f.f .cell[data-selected] { background: color-mix(in srgb, var(--blueprint, var(--accent)) 14%, var(--sheet, #fff)); }
 
 /* A wrong or spent code: all six in red, the line under them says why. */
-.f.f[data-invalid] .cell { border-color: var(--danger, var(--rose)); box-shadow: 3px 3px 0 var(--danger, var(--rose)); }
+.f.f[data-invalid] .cell { border-color: var(--danger, var(--rose)); }
 .f.f[data-invalid] .cell[data-current]::after { background: var(--danger, var(--rose)); }
 /* Checking: the squares hold still and dim, like the disabled button. */
 .f.f[data-disabled] .cell { opacity: 0.6; }

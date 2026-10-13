@@ -88,12 +88,11 @@ import {
 } from "@/lib/customPlan";
 import styles from "./auth-register.module.css";
 import { ProductMark } from "@/components/brand/ProductMark";
-import { PlanBar, PlanDetail, PlanTiles, type DetailRow, type PhoneTile } from "./plan-phone";
 
-/* THE PLAN STEP'S PHONE BUILD (owner, 2026-10-12): at ≤768px the plan step is
-   tiles, the chosen plan whole and one pinned start button (./plan-phone); the
-   desk keeps its cards. A media query, never the user agent; the server draws
-   the desk's, the client corrects on its first frame (the plans arrive after). */
+/* A PHONE (≤768px) — the plan step's cards are a two-column grid there
+   (auth-register.module.css); a few behaviours follow the width too. A media
+   query, never the user agent; the server draws the desk's, the client
+   corrects on its first frame (the plans arrive after). */
 const HANDHELD = "(max-width: 768px)";
 function subscribeHandheld(onChange: () => void) {
   const mq = window.matchMedia(HANDHELD);
@@ -315,8 +314,8 @@ export function RegisterContent({
   const orderedPlans = React.useMemo(() => (edition ? [...plans.filter((p) => isEditionPlan(p.slug, edition)), ...plans.filter((p) => !isEditionPlan(p.slug, edition))] : plans), [plans, edition]);
   /* Custom and catalog plans share the saved offer returned by signupPlans. */
   const [customTrialDays, setCustomTrialDays] = React.useState<number>(offer.days);
-  /* The desk's row of cards. On a phone the step is tiles (./plan-phone) — the
-     swiped carousel and its snap-to-the-hero passes are gone (2026-10-12). */
+  /* The row of cards. On a phone it is a two-column grid (2026-10-12): the swiped
+     carousel and its snap-to-the-hero passes are gone. */
   const plansRef = React.useRef<HTMLDivElement>(null);
   const handheld = React.useSyncExternalStore(subscribeHandheld, () => window.matchMedia(HANDHELD).matches, () => false);
   const isClient = React.useSyncExternalStore(
@@ -1373,58 +1372,6 @@ export function RegisterContent({
     </>
   );
 
-  /* THE PHONE'S PLAN STEP (./plan-phone): the tiles, the chosen plan and the pinned start. */
-  const money = dealDollars;
-  /** A code's effect on a price, as the bill shows it: "$95 $76/mo" (struck, then paid). */
-  const codeFigure = (term: BillingTerm, cents: number, monthlyCents: number) => {
-    if (!promo?.percentOff) return null;
-    const per = term === "YEAR" ? "/yr" : "/mo";
-    return (
-      <>
-        <s>{money(cents)}</s>{" "}
-        {money(firstBillCents(term, cents, monthlyCents, promo.percentOff))}
-        {per}
-      </>
-    );
-  };
-  const phoneTiles: PhoneTile[] = handheld
-    ? [
-        ...orderedPlans.map((p) => {
-          const t = planTerm(interval, p.yearlyPriceCents);
-          return {
-            slug: p.slug,
-            name: p.name,
-            monthlyCents: p.priceCents,
-            yearlyCents: p.yearlyPriceCents,
-            hero: p.highlight || (!!edition && isEditionPlan(p.slug, edition)),
-            tag: p.highlight ? "Most picked" : null,
-            code: codeFigure(t, t === "YEAR" ? (p.yearlyPriceCents ?? 0) : p.priceCents, p.priceCents),
-          };
-        }),
-        ...(offerCustom && plans.length > 0
-          ? [{ slug: CUSTOM_PLAN_SLUG, name: "Custom", monthlyCents: customPriceCents(customPages), yearlyCents: customPriceCents(customPages, "YEAR"), hero: false, tag: null, from: customPages.length === 0 }]
-          : []),
-      ]
-    : [];
-  const chosen = phoneTiles.find((t) => t.slug === planSlug) ?? null;
-  const chosenTerm: BillingTerm = chosen ? termFor(chosen.slug) : interval;
-  const chosenCents = chosen ? (chosenTerm === "YEAR" ? (chosen.yearlyCents ?? 0) : chosen.monthlyCents) : 0;
-  const chosenPer = chosenTerm === "YEAR" ? "/yr" : "/mo";
-  const chosenRows: DetailRow[] = !chosen
-    ? []
-    : chosen.slug === CUSTOM_PLAN_SLUG
-      ? [
-          ...CUSTOM_BASE_FEATURES.map((f) => ({ label: f, on: true })),
-          { label: customPages.length === 0 ? `Add pages · $${(CUSTOM_PAGE_CENTS / 100).toFixed(0)} each` : `${customPages.length} page${customPages.length === 1 ? "" : "s"} added`, on: true, add: true },
-          ...customPages.flatMap((id) => {
-            const page = CUSTOM_PAGES.find((x) => x.id === id);
-            return page ? [{ label: page.label, on: true }] : [];
-          }),
-        ]
-      : featureRows.map((f) => ({ label: f, on: (includedBySlug.get(chosen.slug) ?? new Set<string>()).has(f.toLowerCase()) }));
-  // The bar shows the step's error while it stands; otherwise it is over the step's head.
-  const barUp = handheld && !!chosen && !confirmSentTo;
-
   const stepper = twoStep || otp ? (
     <div className="stepper" id="stepper" data-steps="2">
       <div className={stItem(0, step)} data-step="1">
@@ -1970,7 +1917,7 @@ export function RegisterContent({
               </div>
             </div>
 
-            {plansErr && !barUp ? (
+            {plansErr ? (
               <div className="err" role="alert">
                 {plansErr}
               </div>
@@ -2008,24 +1955,6 @@ export function RegisterContent({
                 row's height. Nothing folds: every list is drawn whole. As many columns as cards
                 (`--pw-cols`, set on the sheet so every edge lines up with the row), the row centred,
                 a card no wider than the stylesheet's cap. */}
-            {/* A PHONE (owner, 2026-10-12): every plan at once as tiles, the chosen one whole under
-                them, one pinned start button (./plan-phone) — the desk's row of cards is not drawn. */}
-            {handheld ? (
-              confirmSentTo ? null : (
-                <>
-                  {plans.length === 0 && !plansErr ? <div className="fld-note pw-note">Loading plans…</div> : null}
-                  {phoneTiles.length ? <PlanTiles tiles={phoneTiles} term={interval} selected={planSlug} onPick={setPlanSlug} /> : null}
-                  {chosen ? (
-                    <PlanDetail
-                      slug={chosen.slug}
-                      when={freeUntilLine(chosenCents, chosenPer, chosen.monthlyCents)}
-                      rows={chosenRows}
-                      onSelectPages={chosen.slug === CUSTOM_PLAN_SLUG ? openPicker : undefined}
-                    />
-                  ) : null}
-                </>
-              )
-            ) : (
             <div
               className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")}
               ref={plansRef}
@@ -2144,16 +2073,17 @@ export function RegisterContent({
                 data-plan-card={CUSTOM_PLAN_SLUG}
                 data-monthly-cents={customPriceCents(customPages)}
                 data-yearly-cents={customPriceCents(customPages, "YEAR")}
+                // A phone: the card is the choice, like every card; its "Select pages" opens the picker.
                 onClick={() => {
                   setPlanSlug(CUSTOM_PLAN_SLUG);
-                  openPicker();
+                  if (!handheld) openPicker();
                 }}
                 onKeyDown={(e) => {
                   if (e.target !== e.currentTarget) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     setPlanSlug(CUSTOM_PLAN_SLUG);
-                    openPicker();
+                    if (!handheld) openPicker();
                   }
                 }}
               >
@@ -2163,7 +2093,20 @@ export function RegisterContent({
                   yearlyCents={customPriceCents(customPages, "YEAR")}
                   name={<span className="pw-plan-n">Custom</span>}
                 />
-                <PlanPrice term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} figureClassName="pw-price" />
+                <PlanPrice
+                  term={interval}
+                  monthlyCents={customPriceCents(customPages)}
+                  yearlyCents={customPriceCents(customPages, "YEAR")}
+                  figureClassName="pw-price"
+                  // a phone: before any page is ticked the price is a floor, "from $20/mo"
+                  figure={(num, per) => (
+                    <>
+                      {handheld && customPages.length === 0 ? <small className="pw-from">from </small> : null}
+                      {num}
+                      <i>{per}</i>
+                    </>
+                  )}
+                />
                 <PlanDealSlot term={interval} monthlyCents={customPriceCents(customPages)} yearlyCents={customPriceCents(customPages, "YEAR")} />
                 {freeUntil ? whenLine(customPriceCents(customPages), customPriceCents(customPages, "YEAR")) : null}
                 {/* the code's line has a row in this grid; the custom card keeps it empty */}
@@ -2237,7 +2180,6 @@ export function RegisterContent({
                 <div className="fld-note">Loading plans…</div>
               ) : null}
             </div>
-            )}
 
             {/* The code and the terms share one row on a desk (2026-10-12): the field on the left,
                 the fine print beside it. On a phone the wrappers step aside (display: contents). */}
@@ -2305,29 +2247,6 @@ export function RegisterContent({
               </button>
             ) : null}
             </div>
-
-            {/* The phone's one start button, pinned: the chosen plan's, doing exactly what that
-                plan card's button does (onStartPlan), with its states. */}
-            {barUp && chosen ? (
-              <PlanBar
-                label={startingSlug === chosen.slug ? busyLabel : !checkoutReady ? "Checkout is not configured" : `Start ${trialDays}-day free trial`}
-                busy={startingSlug === chosen.slug}
-                disabled={payBusy || !checkoutReady}
-                error={plansErr}
-                onStart={() => onStartPlan(chosen.slug)}
-                sub={
-                  <>
-                    {chosen.name} ·{" "}
-                    {codeFigure(chosenTerm, chosenCents, chosen.monthlyCents) ?? (
-                      <>
-                        {dealDollars(chosenCents)}
-                        {chosenPer}
-                      </>
-                    )}
-                  </>
-                }
-              />
-            ) : null}
 
             {/* THE PAGE PICKER. Hand-rolled (no Radix here, same as every other
                 dialog in this fleet): a scrim, one panel, Escape closes it. The

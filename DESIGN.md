@@ -100,13 +100,12 @@ the sidebar's and the landing's `/jobflex-mark.png`), not a drawn "J" square:
 the letters. The custom plan is a card in the row on the plan step and the
 upgrade page; on the landing and /pricing it stays the wide "Build your plan"
 plate under the row.
-The signup plan step on a phone (≤768px, owner 2026-10-12) shows every plan
-at once: a 2×2 grid of compact tiles (three plans: two over one full-width) —
-name, "Most picked", price, the stamp and saving or "Billed monthly", no list
-and no button; the tile is the choice (the cards' blue frame). The chosen
-plan's whole list sits under the tiles, and one start button is pinned to the
-bottom edge with the plan and term under it
-([plan-phone](src/components/v3/auth-register-blueprint/plan-phone.tsx)).
+The signup plan step on a phone (≤768px, owner 2026-10-12) shows the full
+cards two to a row (three plans: the third under them at the full width, its
+list in two columns); the page scrolls down, nothing swipes sideways. Every
+card keeps its own whole list and its own start button at its foot. There
+the year's stamp is the "Most picked" plate's size under the name, and the
+saving or "Billed monthly" is one 12px line (weight 600) under the price.
 
 ## Typography
 
@@ -128,9 +127,9 @@ bottom edge with the plan and term under it
   form: field labels 12px JetBrains Mono caps, about .05em tracking, ink;
   notes under fields 12.5px Inter in `--ink-soft`; inputs white. The older
   9.5–10.5px mono labels read badly on a phone; new auth forms use this.
-  An emailed code (owner, 2026-10-12) is always six white squares, one per
-  digit — 2px ink, the 3px hard offset, the next square framed blue with a
-  caret, all six red on an error — drawn over ONE real field
+  An emailed code (owner, 2026-10-12) is always six white upright boxes, one
+  per digit — 44×58, 6px apart, a 2px ink frame and no shadow, the next box
+  framed blue with a caret, all six red on an error — drawn over ONE real field
   ([OtpCodeField](src/components/auth/otp-code-field.tsx)); no copy of it.
 
 ## Layout, frames and controls

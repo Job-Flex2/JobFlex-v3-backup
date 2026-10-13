@@ -30,14 +30,8 @@
 //     "Most picked", or does not choose Annual when pressed; on a desk the logo, "Pick a plan."
 //     and the first card do not share a left edge, or the steps, the switch and the last card a
 //     right one (1px).
-//   · (2026-10-12, the phone's plan step is tiles) at 360×640, 390×844 and 430×932 — Chromium,
-//     and WebKit at 360 and 390 — with three plans and with four (the custom one): a tile is cut,
-//     under the pinned start button or under 72px; the page scrolls sideways; a tap does not make
-//     that tile alone the choice, with its own list under the tiles and its name and price on the
-//     button's line; a list is the same for two plans; Annual does not price every tile a year or
-//     moves a tile; at the end the terms or the last row are under the button, or it is not pinned;
-//     the code field is out of sight with the window 300px shorter (the keyboard) or under the
-//     button; a cancelled Checkout does not come back to the plan chosen before it.
+//   · (2026-10-12, the phone's plan step: full cards two to a row) at 360×640, 390×844 and 430×932,
+//     Chromium and WebKit, three plans and four (the custom one) — see phoneCards().
 // Pure half: lib/planDeal (months free in whole months only, never a percentage).
 // The plan step is reached the way signup-flow.check.ts reaches it (its own made-up IP, mail
 // keys blank, its pending signups and brake rows removed after). The upgrade page signs in
@@ -80,7 +74,7 @@ function pure() {
 }
 
 type CardRead = { slug: string; top: number; left: number; height: number; priceTop: number; featTop: number; text: string; deal: string; dealPx: number; stamp: string | null; stampRight: number | null; stampTop: number | null; when: string; price: string; monthly: number; yearly: number | null; overflow: boolean; cut: boolean };
-type RowRead = { cards: CardRead[]; more: string[]; scrollX: number; vw: number; switches: number; halves: number[]; badge: string | null; badgeLabel: string | null };
+type RowRead = { small: boolean; cards: CardRead[]; more: string[]; scrollX: number; vw: number; switches: number; halves: number[]; badge: string | null; badgeLabel: string | null };
 
 /** Every plan card on the page (data-plan-card), measured. */
 async function read(page: any, scope: string): Promise<RowRead> {
@@ -93,6 +87,8 @@ async function read(page: any, scope: string): Promise<RowRead> {
     const more = Array.from(root.querySelectorAll<HTMLElement>("button, [role=button], a")).filter((b) => b.getClientRects().length && /^(show (all|less)|what's included|hide the list)/i.test((b.textContent || "").trim())).map((b) => (b.textContent || "").trim());
     const r = (el: Element | null) => (el ? el.getBoundingClientRect() : null);
     return {
+      // the signup plan step on a phone sets its saving line at 12–13px (owner, 2026-10-12)
+      small: innerWidth <= 768 && !!root.closest?.(".plan-sheet"),
       cards: cards.map((c) => {
         const box = c.getBoundingClientRect();
         const feats = c.querySelector("[data-plan-feats]");
@@ -171,7 +167,7 @@ function judgeRow(name: string, r: RowRead, term: "MONTH" | "YEAR") {
       else {
         check(`${name}: ${c.slug} Annual price is the year`, c.price === `$${c.yearly / 100}/yr`.replace(/\.(\d)$/, ".$10"), c.price);
         check(`${name}: ${c.slug} "${savedYearWords(d) || "Billed yearly"}"${dealWords(d) ? " + stamp " + dealWords(d) : ""}`, (d ? c.deal === savedYearWords(d) : /Billed yearly/.test(c.deal)) && (dealWords(d) ? c.stamp === dealWords(d) : c.stamp === null), `${c.deal} · stamp ${c.stamp}`);
-        if (d) check(`${name}: ${c.slug} the saving line is 15px or more`, c.dealPx >= 15, `${c.dealPx}px`);
+        if (d) check(`${name}: ${c.slug} the saving line is ${r.small ? "12–13px (the phone's plan step)" : "15px or more"}`, r.small ? c.dealPx >= 12 && c.dealPx <= 13 : c.dealPx >= 15, `${c.dealPx}px`);
         if (c.when) check(`${name}: ${c.slug} the date line does not repeat the months`, !/months? free/i.test(c.when), c.when);
       }
     }
@@ -437,102 +433,106 @@ async function toPlanSheet(page: any, n: number, query = "") {
   await page.waitForTimeout(1500);
 }
 
-/** THE PHONE'S PLAN STEP (owner, 2026-10-12): every plan a tile on the first screen, the chosen
- *  plan whole under them, one pinned start button. Fails when a tile is cut or under the button,
- *  the page scrolls sideways, a tap does not change the list and the button's line, the switch
- *  moves a tile, the button covers the terms at the end, the code field is not in sight with the
- *  keyboard up (the window 300px shorter), or a cancelled Checkout does not come back to its plan. */
-async function phoneTiles(browser: any, width: number, height: number, n: number, cards = 3) {
+/** THE PHONE'S PLAN STEP (owner, 2026-10-12, after a look on an iPhone): the full cards, two to a
+ *  row (three plans: the third at the full width, its list in two columns), the page scrolling
+ *  down. Fails when the cards are not two to a row, a row's cards differ in height, the page or
+ *  the row scrolls sideways, a card lacks its own whole list or its own start button, tiles or a
+ *  pinned button are drawn, "Most picked" comes within 10px of the plan's name, a row's names
+ *  stand at different heights, the year's stamp is bigger than "Most picked", the saving line is
+ *  not 12–13px at weight 600, a card changes height on Monthly ↔ Annual, a tap does not make that
+ *  card alone the choice, a card's button does not start its own plan and term (its error under
+ *  the step's head), the code field and the terms are not under the grid, or a cancelled Checkout
+ *  does not come back to the plan chosen before it. */
+async function phoneCards(browser: any, width: number, height: number, n: number, cards = 3) {
   const engine = browser.browserType().name();
   const name = `phone plan step ${engine} ${width}×${height}${cards === 4 ? " (custom)" : ""}`;
   const ctx = await visit(browser, width, height);
+  // The start buttons are pressed for real; the checkout route answers here, so no Stripe session is made.
+  const asked: any[] = [];
+  await ctx.route(`${BASE}/api/checkout/signup`, (route: any) => {
+    asked.push(JSON.parse(route.request().postData() || "{}"));
+    return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: "QA: checkout answered by the check." }) });
+  });
   const page = await ctx.newPage();
   const sheet = "section.plan-sheet.is-in";
   const look = () =>
     page.evaluate((sheet: string) => {
       const root = document.querySelector(sheet)!;
-      const r = (e: Element | null) => (e ? e.getBoundingClientRect() : null);
-      const bar = document.querySelector("[data-plan-bar]");
-      const b = r(bar);
-      const tiles = Array.from(root.querySelectorAll<HTMLElement>("[data-plan-card]"));
+      const rail = root.querySelector(".pw-plans") as HTMLElement;
+      const list = Array.from(root.querySelectorAll<HTMLElement>("[data-plan-card]"));
+      const box = (e: Element | null) => (e ? e.getBoundingClientRect() : null);
       return {
-        vw: innerWidth, vh: innerHeight, sw: document.scrollingElement!.scrollWidth,
-        cards: root.querySelectorAll(".pw-plans, .pw-dots").length,
-        tiles: tiles.map((t) => { const x = t.getBoundingClientRect(); return { slug: t.dataset.planCard!, top: x.top, bottom: x.bottom, left: x.left, right: x.right, h: Math.round(x.height * 10) / 10, on: t.getAttribute("aria-pressed") === "true", price: (t.querySelector("[data-plan-price]")?.textContent || "").replace(/\s+/g, "") }; }),
-        barTop: b ? b.top : null, barBottom: b ? b.bottom : null,
-        sub: (document.querySelector("[data-plan-sub]")?.textContent || "").replace(/\s+/g, " ").trim(),
-        go: (document.querySelector("[data-plan-go]")?.textContent || "").trim(),
-        detail: (document.querySelector("[data-plan-detail]") as HTMLElement | null)?.dataset.planDetail ?? null,
-        rows: Array.from(document.querySelectorAll("[data-plan-detail] [data-plan-feats] > *")).map((x) => `${x.classList.contains("pw-f--no") ? "-" : "+"}${(x.textContent || "").trim()}`),
-        when: (document.querySelector("[data-plan-detail] p")?.textContent || "").trim(),
+        vw: innerWidth, sw: document.scrollingElement!.scrollWidth,
+        rail: { sw: rail.scrollWidth, cw: rail.clientWidth, x: getComputedStyle(rail).overflowX },
+        extras: document.querySelectorAll("[data-plan-tiles], [data-plan-bar], [data-plan-detail], .pw-dots").length,
+        cards: list.map((c) => {
+          const b = c.getBoundingClientRect();
+          const tag = c.querySelector(".pw-tag"), stamp = c.querySelector(".jf-stamp:not(.is-off)"), nm = c.querySelector(".pw-plan-n");
+          const save = c.querySelector(".jf-deal-save") || c.querySelector(".jf-deal-billed");
+          return {
+            slug: c.dataset.planCard!, top: b.top, bottom: b.bottom, left: b.left, right: b.right, h: Math.round(b.height * 10) / 10,
+            on: c.getAttribute("aria-pressed") === "true",
+            rows: c.querySelectorAll("[data-plan-feats] > *").length,
+            go: c.querySelectorAll(".pw-go").length, goH: box(c.querySelector(".pw-go"))?.height ?? 0,
+            nameTop: box(nm)?.top ?? 0, tagBottom: box(tag)?.bottom ?? null, tagPx: tag ? parseFloat(getComputedStyle(tag).fontSize) : null, tagH: box(tag)?.height ?? null,
+            stampPx: stamp ? parseFloat(getComputedStyle(stamp).fontSize) : null, stampH: box(stamp)?.height ?? null,
+            savePx: save ? parseFloat(getComputedStyle(save).fontSize) : null, saveW: save ? getComputedStyle(save).fontWeight : null,
+            over: c.scrollWidth - c.clientWidth,
+            price: (c.querySelector("[data-plan-price]")?.textContent || "").replace(/\s+/g, ""),
+          };
+        }),
+        terms: box(root.querySelector("#pwTerms"))?.top ?? 0,
+        promo: box(root.querySelector(".pw-promo"))?.top ?? 0,
+        err: (root.querySelector("#stepPlan > .err") as HTMLElement | null)?.innerText?.trim() ?? "",
+        errTop: box(root.querySelector("#stepPlan > .err"))?.top ?? null,
+        headBottom: box(root.querySelector(".pw-head"))?.bottom ?? 0,
+        firstCard: box(list[0])?.top ?? 0,
       };
     }, sheet);
   try {
     await toPlanSheet(page, n);
     await page.mouse.move(1, 1);
     const m = await look();
-    check(`${name}: ${cards} tiles, no swiped row of cards`, m.tiles.length === cards && m.cards === 0, `${m.tiles.length} tiles · ${m.cards} card rows`);
-    check(`${name}: no sideways scroll`, m.sw <= m.vw + 1, `${m.sw} > ${m.vw}`);
-    const cut = m.tiles.filter((t) => t.top < 0 || t.bottom + 3 > (m.barTop ?? m.vh) || t.left < 0 || t.right + 3 > m.vw).map((t) => `${t.slug} ${Math.round(t.top)}..${Math.round(t.bottom)}`);
-    check(`${name}: every tile whole on the first screen, above the start button`, !cut.length && m.barTop !== null, `${cut.join(", ")} · button from ${Math.round(m.barTop ?? -1)}`);
-    check(`${name}: tiles ≥ 72px tall`, m.tiles.every((t) => t.h >= 72), m.tiles.map((t) => t.h).join(" · "));
-    if (cards % 2 === 1) { const last = m.tiles[m.tiles.length - 1], first = m.tiles[0]; check(`${name}: the odd tile takes the full width`, last.left - first.left < 1 && last.right - m.tiles[1].right > -1, `${Math.round(last.left)}..${Math.round(last.right)}`); }
-    const hero = m.tiles.find((t) => t.on);
-    check(`${name}: the "Most picked" plan is chosen on arrival`, !!hero && Boolean((await page.locator(`${sheet} [data-plan-card="${hero.slug}"]`).textContent())?.includes("Most picked")), hero?.slug ?? "none");
-    check(`${name}: the button is pinned to the bottom edge`, Math.abs((m.barBottom ?? 0) - m.vh) <= 1 && /^Start \d+-day free trial$/.test(m.go), `${m.barBottom} of ${m.vh} · ${m.go}`);
-    // Every tile: the list under the tiles and the button's line follow the tap; the page stays put.
-    const seen = new Set<string>();
-    for (const t of m.tiles) {
-      const before = await page.locator(sheet).evaluate((el: HTMLElement) => el.scrollTop);
-      await page.locator(`${sheet} [data-plan-card="${t.slug}"]`).click();
-      await page.waitForTimeout(250);
-      const a = await look();
-      const tile = a.tiles.find((x) => x.slug === t.slug)!;
-      const tileName = (await page.locator(`${sheet} [data-plan-card="${t.slug}"] [data-plan-head] > :first-child`).innerText()).trim().toLowerCase();
-      const after = await page.locator(sheet).evaluate((el: HTMLElement) => el.scrollTop);
-      seen.add(a.rows.join("|"));
-      check(`${name}: tap ${t.slug} — it alone is chosen; the list and the button's line are its own`, tile.on && a.tiles.filter((x) => x.on).length === 1 && a.detail === t.slug && a.rows.length > 0 && a.sub.toLowerCase().startsWith(tileName + " ·") && a.sub.endsWith(tile.price.replace(/^from/, "")) && Math.abs(after - before) <= 1, `${a.sub} · ${a.rows.length} rows · scroll ${before}→${after}`);
+    check(`${name}: ${cards} full cards, no tiles, no pinned button, nothing swipes`, m.cards.length === cards && m.extras === 0 && m.rail.sw <= m.rail.cw + 1 && m.rail.x === "visible", `${m.cards.length} cards · extras ${m.extras} · rail ${m.rail.sw}/${m.rail.cw} ${m.rail.x}`);
+    check(`${name}: no sideways scroll, nothing wider than its card`, m.sw <= m.vw + 1 && m.cards.every((c) => c.over <= 1), `${m.sw}/${m.vw} · ${m.cards.map((c) => c.over).join(",")}`);
+    const [a, b] = m.cards;
+    const pairs: [typeof a, typeof a][] = [];
+    for (let i = 0; i + 1 < m.cards.length; i += 2) pairs.push([m.cards[i], m.cards[i + 1]]);
+    check(`${name}: two to a row, one height in a row`, pairs.every(([x, y]) => Math.abs(x.top - y.top) <= 1 && y.left > x.right && Math.abs(x.h - y.h) <= 1), pairs.map(([x, y]) => `${x.slug}/${y.slug} ${x.h}·${y.h}`).join(" · "));
+    if (cards % 2 === 1) {
+      const last = m.cards[m.cards.length - 1];
+      check(`${name}: the third card under the first two, at the full width`, Math.abs(last.left - a.left) <= 1 && Math.abs(last.right - b.right) <= 1 && last.top > a.bottom, `${Math.round(last.left)}..${Math.round(last.right)}`);
     }
-    check(`${name}: each plan's list differs`, seen.size === m.tiles.length, `${seen.size} lists for ${m.tiles.length} tiles`);
-    // Monthly ↔ Annual: the prices change, no tile moves.
-    const heights = (await look()).tiles.map((t) => t.h);
+    check(`${name}: every card its own whole list and its own start button (≥44px)`, m.cards.every((c) => c.rows > 0 && c.go === 1 && c.goH >= 44), m.cards.map((c) => `${c.slug} ${c.rows} rows ${c.go} btn ${Math.round(c.goH)}px`).join(" · "));
+    const tagged = m.cards.filter((c) => c.tagBottom !== null);
+    check(`${name}: "Most picked" sits 10px or more over the plan's name`, tagged.length > 0 && tagged.every((c) => c.nameTop - c.tagBottom! >= 10), tagged.map((c) => `${c.slug} ${Math.round((c.nameTop - c.tagBottom!) * 10) / 10}px`).join(" · "));
+    check(`${name}: a row's names at one height`, pairs.every(([x, y]) => Math.abs(x.nameTop - y.nameTop) <= 1), pairs.map(([x, y]) => `${x.nameTop}·${y.nameTop}`).join(" · "));
+    check(`${name}: Monthly — "Billed monthly" 12–13px`, m.cards.every((c) => c.savePx! >= 12 && c.savePx! <= 13), m.cards.map((c) => c.savePx).join(" · "));
+    // Annual: the stamp no bigger than "Most picked", the saving 12–13px at 600, no card moves.
     await page.locator(`${sheet} .jf-term [data-term="YEAR"]`).click();
     await page.waitForTimeout(350);
     const y = await look();
-    check(`${name}: Annual — every tile prices a year, no tile changes height`, y.tiles.every((t) => /\/yr$/.test(t.price)) && y.tiles.every((t, i) => Math.abs(t.h - heights[i]) <= 1) && /\/yr$/.test(y.sub), `${y.tiles.map((t) => `${t.price} ${t.h}`).join(" · ")} · ${y.sub}`);
-    await page.locator(`${sheet} .jf-term [data-term="MONTH"]`).click();
-    await page.waitForTimeout(350);
-    const mo = await look();
-    check(`${name}: Monthly again — /mo, the same heights`, mo.tiles.every((t) => /\/mo$/.test(t.price)) && mo.tiles.every((t, i) => Math.abs(t.h - heights[i]) <= 1), mo.tiles.map((t) => `${t.price} ${t.h}`).join(" · "));
-    // The end of the sheet: the terms and the last row clear of the button, which is still there.
-    await page.locator(sheet).evaluate((el: HTMLElement) => { el.scrollTop = el.scrollHeight; });
-    await page.waitForTimeout(350);
-    const end = await page.evaluate(() => {
-      const bar = document.querySelector("[data-plan-bar]")!.getBoundingClientRect();
-      const terms = document.querySelector("#pwTerms")!.getBoundingClientRect();
-      const rows = Array.from(document.querySelectorAll("[data-plan-detail] [data-plan-feats] > *"));
-      const last = rows[rows.length - 1]?.getBoundingClientRect();
-      return { barTop: bar.top, barBottom: bar.bottom, terms: terms.bottom, last: last?.bottom ?? 0, vh: innerHeight };
-    });
-    check(`${name}: at the end the terms and the last row are above the button, still pinned`, end.terms <= end.barTop && end.last <= end.barTop && Math.abs(end.barBottom - end.vh) <= 1, JSON.stringify(end));
-    // The code field with the keyboard up: the window 300px shorter, the field in sight, uncovered.
-    const promo = page.locator(`${sheet} .pw-promo-in`);
-    await promo.scrollIntoViewIfNeeded();
-    await promo.focus();
-    await page.setViewportSize({ width, height: height - 300 });
-    await page.waitForTimeout(700);
-    const kb = await page.evaluate(() => {
-      const f = document.querySelector("section.plan-sheet.is-in .pw-promo-in")!.getBoundingClientRect();
-      const bar = document.querySelector("[data-plan-bar]") as HTMLElement;
-      const cs = getComputedStyle(bar), b = bar.getBoundingClientRect();
-      const hidden = cs.visibility === "hidden" || b.top >= innerHeight - 1;
-      return { top: f.top, bottom: f.bottom, vh: innerHeight, hidden, barTop: b.top };
-    });
-    check(`${name}: the code field in sight with the keyboard up, the button out of its way`, kb.top >= 0 && kb.bottom <= kb.vh && (kb.hidden || kb.barTop >= kb.bottom), JSON.stringify(kb));
-    await page.setViewportSize({ width, height });
+    const plate = y.cards.find((c) => c.tagPx !== null);
+    const stamped = y.cards.filter((c) => c.stampPx !== null && c.stampH);
+    check(`${name}: Annual — the stamp no bigger than "Most picked"`, !!plate && stamped.length > 0 && stamped.every((c) => c.stampPx! <= plate.tagPx! && c.stampH! <= plate.tagH! + 1), `${stamped.map((c) => `${c.slug} ${c.stampPx}px/${Math.round(c.stampH!)}`).join(" · ")} vs ${plate?.tagPx}px/${Math.round(plate?.tagH ?? 0)}`);
+    check(`${name}: Annual — "You save $N a year" 12–13px at weight 600`, y.cards.filter((c) => /\/yr$/.test(c.price)).every((c) => c.savePx! >= 12 && c.savePx! <= 13 && c.saveW === "600"), y.cards.map((c) => `${c.savePx}px ${c.saveW}`).join(" · "));
+    check(`${name}: no card changes height on Monthly ↔ Annual`, y.cards.every((c, i) => Math.abs(c.h - m.cards[i].h) <= 1), y.cards.map((c, i) => `${c.slug} ${m.cards[i].h}→${c.h}`).join(" · "));
+    // A tap chooses; the card's own button starts its own plan on the switch's term; its error under the head.
+    const target = m.cards[0].slug;
+    await page.locator(`${sheet} [data-plan-card="${target}"]`).click({ position: { x: 20, y: 40 } });
+    await page.waitForTimeout(250);
+    const t = await look();
+    check(`${name}: a tap makes ${target} alone the choice`, t.cards.filter((c) => c.on).map((c) => c.slug).join() === target, t.cards.filter((c) => c.on).map((c) => c.slug).join());
+    const other = m.cards[1].slug;
+    const btn = page.locator(`${sheet} [data-plan-card="${other}"] .pw-go`);
+    await btn.scrollIntoViewIfNeeded();
+    await btn.click();
+    await page.waitForTimeout(1200);
+    const g = await look();
+    const sent = asked[asked.length - 1] || {};
+    check(`${name}: ${other}'s button starts ${other} on Annual and chooses it; the error under the step's head`, sent.planSlug === other && sent.interval === "YEAR" && g.cards.find((c) => c.on)?.slug === other && /QA: checkout answered/.test(g.err) && g.errTop !== null && g.errTop >= g.headBottom - 1 && g.errTop < g.firstCard, `${JSON.stringify({ planSlug: sent.planSlug, interval: sent.interval })} · "${g.err}"`);
+    check(`${name}: the code field and the terms under the grid`, g.promo > Math.max(...g.cards.map((c) => c.bottom)) && g.terms > g.promo, `promo ${Math.round(g.promo)} · terms ${Math.round(g.terms)} · cards end ${Math.round(Math.max(...g.cards.map((c) => c.bottom)))}`);
     // A cancelled Checkout comes back to the plan chosen before it (the tab's memory).
-    const pick = m.tiles[0].slug;
-    await page.locator(`${sheet} [data-plan-card="${pick}"]`).click();
     const row = await db.syncState.findFirst({ where: { key: { startsWith: "signup:" }, cursor: { contains: `tiles.${n}@${MAIL_DOMAIN}` } }, select: { key: true } });
     const tok = new URL(page.url()).searchParams.get("signup") ?? row?.key.slice("signup:".length) ?? null;
     if (tok) {
@@ -540,8 +540,8 @@ async function phoneTiles(browser: any, width: number, height: number, n: number
       await page.locator(`${sheet} [data-plan-card]`).first().waitFor({ timeout: 60000 });
       await page.waitForTimeout(800);
       const back = await look();
-      check(`${name}: back from a cancelled Checkout, ${pick} is still the choice`, back.tiles.find((t) => t.on)?.slug === pick, back.tiles.find((t) => t.on)?.slug ?? "none");
-    } else note(name, "no ?signup= in the address — the cancelled return was not tried");
+      check(`${name}: back from a cancelled Checkout, ${other} is still the choice`, back.cards.find((c) => c.on)?.slug === other, back.cards.find((c) => c.on)?.slug ?? "none");
+    } else note(name, "no ?signup= — the cancelled return was not tried");
   } catch (e) {
     check(`${name}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
   } finally {
@@ -628,11 +628,11 @@ async function main() {
       // QA_TERMS_TILES=3|4: only the phone's tiles, against QA_TERMS_URL (a server with or without the custom plan).
       if (process.env.QA_TERMS_TILES) {
         const cards = Number(process.env.QA_TERMS_TILES) || 3;
-        for (const [w, h, k] of [[360, 640, 31], [390, 844, 32], [430, 932, 33]]) await phoneTiles(browser, w, h, k, cards);
+        for (const [w, h, k] of [[360, 640, 31], [390, 844, 32], [430, 932, 33]]) await phoneCards(browser, w, h, k, cards);
         const wk = await pw.webkit.launch().catch(() => null);
         if (wk) {
           try {
-            await phoneTiles(wk, 390, 844, 34, cards);
+            for (const [w, h, k] of [[360, 640, 34], [390, 844, 35], [430, 932, 36]]) await phoneCards(wk, w, h, k, cards);
           } finally {
             await wk.close();
           }
@@ -643,13 +643,13 @@ async function main() {
       console.log("── the signup plan step");
       await planStep(browser, 390, 1);
       await planStep(browser, 1440, 2);
-      console.log("── the phone's plan step: tiles, the chosen plan, one pinned button");
-      for (const [w, h, k] of [[360, 640, 11], [390, 844, 12], [430, 932, 13]]) await phoneTiles(browser, w, h, k);
+      console.log("── the phone's plan step: full cards, two to a row");
+      for (const [w, h, k] of [[360, 640, 11], [390, 844, 12], [430, 932, 13]]) await phoneCards(browser, w, h, k);
       const wk = await pw.webkit.launch().catch(() => null);
       if (!wk) note("WebKit", "not installed (npx playwright install webkit) — the tiles ran in Chromium only");
       else {
         try {
-          for (const [w, h, k] of [[360, 640, 14], [390, 844, 15]]) await phoneTiles(wk, w, h, k);
+          for (const [w, h, k] of [[360, 640, 14], [390, 844, 15], [430, 932, 16]]) await phoneCards(wk, w, h, k);
         } finally {
           await wk.close();
         }
@@ -666,7 +666,7 @@ async function main() {
         BASE = `http://localhost:${PORT + 1}`;
         await marketing(browser, [390, 1440], true);
         await planStep(browser, 1440, 3, 4);
-        for (const [w, h, k] of [[360, 640, 21], [390, 844, 22], [430, 932, 23]]) await phoneTiles(browser, w, h, k, 4);
+        for (const [w, h, k] of [[360, 640, 21], [390, 844, 22], [430, 932, 23]]) await phoneCards(browser, w, h, k, 4);
         await upgrade(browser, [390, 1440], 4);
       }
       }

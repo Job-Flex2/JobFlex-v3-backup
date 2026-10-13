@@ -55,6 +55,8 @@ async function visitor(browser: any, kind: Kind, ip = newIp(), size?: { width: n
   // isMobile is Chromium's; WebKit takes the phone's size, touch and User-Agent.
   const mobile = phone && browser.browserType().name() === "chromium";
   const ctx = await browser.newContext({ viewport: size ?? (phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }), isMobile: mobile, hasTouch: phone, deviceScaleFactor: phone ? 2 : 1, userAgent: UA[kind], locale: "en-US" });
+  // tsx names the helpers inside page.evaluate with esbuild's __name; the page has none.
+  await ctx.addInitScript({ content: "window.__name = function (f) { return f; };" });
   const host = new URL(BASE).hostname;
   await ctx.addCookies([{ name: "jf_consent", value: encodeURIComponent(JSON.stringify({ v: 1, at: new Date().toISOString(), analytics: false, marketing: false, ack: true })), domain: host, path: "/" }]);
   const handoff: { checkout?: string } = {};
@@ -130,7 +132,7 @@ async function codeNote(v: V) {
 }
 
 /* THE SIX SQUARES (otp-code-field, 2026-10-12): one real field under six drawn squares. */
-type Squares = { value: string; shown: string; current: number; selected: number; invalid: boolean; red: boolean; focused: boolean; msg: string; live: string | null; cells: number; fields: number; cw: number; ch: number; gap: number; overflow: boolean };
+type Squares = { value: string; shown: string; current: number; selected: number; invalid: boolean; red: boolean; focused: boolean; msg: string; live: string | null; cells: number; fields: number; cw: number; cwMax: number; ch: number; gap: number; shadow: string; overflow: boolean };
 type Page = V["page"];
 type Browser = Parameters<typeof visitor>[0];
 async function squares(page: Page, id: string): Promise<Squares> {
@@ -159,6 +161,8 @@ async function squares(page: Page, id: string): Promise<Squares> {
       cells: cells.length,
       fields: document.querySelectorAll('input[autocomplete="one-time-code"]').length,
       cw: Math.min(...boxes.map((b) => b.width)),
+      cwMax: Math.max(...boxes.map((b) => b.width)),
+      shadow: [...new Set(cells.map((c) => getComputedStyle(c).boxShadow))].join(" | "),
       ch: Math.min(...boxes.map((b) => b.height)),
       gap: Math.round(boxes[1].left - boxes[0].right),
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -209,7 +213,34 @@ async function codeSquares(browser: Browser, width: number) {
     check(`${name}: the words — heading, address, label, one quiet foot line; the old phrases gone`, h1 === "We sent a 6-digit code to your email" && label === "Enter 6-digit code" && /Resend code in \d+ s/.test(text) && /Didn.t get it\? Check spam\./.test(text) && !stale.length, [h1, label, ...stale].join(" · "));
     let s = await squares(page, "otpCode");
     check(`${name}: six empty squares over ONE one-time-code field, focused, the first current, nothing under them`, s.cells === 6 && s.fields === 1 && s.shown === "" && s.focused && s.current === 0 && s.msg === "" && s.live === "polite" && (await page.locator("#otpBtn").isDisabled()), sq(s));
-    check(`${name}: squares ≥44×52, 8px apart, no sideways scroll`, s.cw >= 44 && s.ch >= 52 && s.gap === 8 && !s.overflow, JSON.stringify({ cw: s.cw, ch: s.ch, gap: s.gap, overflow: s.overflow }));
+    check(`${name}: upright boxes 40–44 × 56–60, 6px apart, a frame and no shadow, no sideways scroll`, s.cw >= 40 && s.cwMax <= 44 && s.ch >= 56 && s.ch <= 60 && s.ch > s.cwMax && s.gap <= 6 && s.gap >= 5 && s.shadow === "none" && !s.overflow, JSON.stringify({ cw: s.cw, cwMax: s.cwMax, ch: s.ch, gap: s.gap, shadow: s.shadow, overflow: s.overflow }));
+    // WHERE THE BLOCK STANDS (owner, 2026-10-12): a phone — about 12% of the screen under the steps
+    // (clamp 40…96px), not pressed to them; with the keyboard up (the window 300px shorter) the boxes
+    // and Continue in sight, the heading too from 390×844. A desk — centred in the column.
+    const at = await page.evaluate(() => {
+      const st = document.getElementById("stepper")!.getBoundingClientRect();
+      const h = document.querySelector("#step1 h1")!.getBoundingClientRect();
+      const col = document.querySelector(".auth-form")!.getBoundingClientRect();
+      const block = document.querySelector("[data-otp-screen=code]")!.getBoundingClientRect();
+      return { gap: Math.round(h.top - st.bottom), vh: innerHeight, above: Math.round(block.top - st.bottom), below: Math.round(Math.min(col.bottom, innerHeight) - block.bottom) };
+    });
+    const want = Math.min(96, Math.max(40, at.vh * 0.12));
+    if (width <= 768) check(`${name}: the block stands ~12% of the screen under the steps (${Math.round(want)}px), not pressed to them`, Math.abs(at.gap - want) <= 4, JSON.stringify(at));
+    else check(`${name}: on a desk the block is centred in the column`, Math.abs(at.above - at.below) <= 60, JSON.stringify(at));
+    if (width <= 768) {
+      const full = page.viewportSize()!;
+      await page.setViewportSize({ width: full.width, height: full.height - 300 });
+      await page.waitForTimeout(700);
+      const kb = await page.evaluate(() => {
+        const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
+        const h = r("#step1 h1"), f = r("#otpCode"), b = r("#otpBtn");
+        return { vh: innerHeight, h1: Math.round(h.top), boxes: Math.round(f.top), go: Math.round(b.bottom), focus: document.activeElement?.id };
+      });
+      const heading = full.height >= 800;
+      check(`${name}: keyboard up (${full.width}×${full.height - 300}) — the boxes and Continue in sight${heading ? ", the heading too" : ""}`, kb.boxes >= 0 && kb.go <= kb.vh && (!heading || kb.h1 >= 0) && kb.focus === "otpCode", JSON.stringify(kb));
+      await page.setViewportSize(full);
+      await page.waitForTimeout(400);
+    }
 
     await keys(page, "1a2");
     s = await squares(page, "otpCode");
@@ -313,7 +344,7 @@ async function newAddress(browser: any, kind: Kind, industry: string, toStripe: 
     check(`${name}: the intent — no password, address proven, name stands in${industry ? ", the trade" : ""}`, r.hashedPassword === null && !!r.emailVerifiedAt && r.nameUnset === true && (!industry || (r.tradeTypes ?? []).length === 1), JSON.stringify({ trades: r.tradeTypes, verified: !!r.emailVerifiedAt }));
     if (!toStripe) { const e = v.take(); check(`${name}: plan sheet`, !e, e); return; }
     v.step("plan → Checkout");
-    const go = v.page.locator("section.plan-sheet.is-in .pw-plan .pw-go, [data-plan-go]").filter({ visible: true }).first();
+    const go = v.page.locator("section.plan-sheet.is-in .pw-plan .pw-go").filter({ visible: true }).first();
     await v.page.waitForTimeout(800);
     await go.click();
     for (let i = 0; i < 80 && !v.handoff.checkout; i++) await v.page.waitForTimeout(250);
@@ -438,7 +469,7 @@ async function existing(browser: any) {
     const form = await l.page.locator("form").first().innerText();
     const label = (await l.page.locator('label[for="loginCode"]').textContent())?.trim();
     let s = await squares(l.page, "loginCode");
-    check("/auth/login: the six squares over one one-time-code field, focused; the account line kept, \"It works for 10 minutes.\" gone", s.cells === 6 && s.fields === 1 && s.focused && s.current === 0 && label === "Enter 6-digit code" && /If\s+qa@acme\.test\s+has a JobFlex account, a 6-digit code is on its way\./.test(form) && !/It works for 10 minutes/.test(form), [label, sq(s)].join(" · "));
+    check("/auth/login: the six upright boxes (no shadow, ≤6px apart) over one one-time-code field, focused; the account line kept, \"It works for 10 minutes.\" gone", s.cells === 6 && s.fields === 1 && s.focused && s.current === 0 && s.ch > s.cwMax && s.gap <= 6 && s.shadow === "none" && label === "Enter 6-digit code" && /If\s+qa@acme\.test\s+has a JobFlex account, a 6-digit code is on its way\./.test(form) && !/It works for 10 minutes/.test(form), [label, sq(s)].join(" · "));
     await pasteInto(l.page, "loginCode", "999 999");
     await settle(l.page, "loginCodeMsg", /isn't right/);
     s = await squares(l.page, "loginCode");
@@ -472,6 +503,7 @@ async function main() {
       await instagram(browser);
       await existing(browser);
       await codeSquares(browser, 360);
+      await codeSquares(browser, 390);
       await codeSquares(browser, 1440);
     } finally {
       await browser.close();
@@ -481,6 +513,7 @@ async function main() {
     if (!wk) note("WebKit", "not installed (npx playwright install webkit) — the squares ran in Chromium only");
     else {
       try {
+        await codeSquares(wk, 360);
         await codeSquares(wk, 390);
       } finally {
         await wk.close();
