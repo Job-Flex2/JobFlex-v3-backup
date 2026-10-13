@@ -48,7 +48,7 @@ export function InvestorReportView({ report, shared = false, between }: { report
         <Kpi label="Visitors" value={f.visitors === null ? "—" : n(f.visitors)} note={view !== "all" ? "not split by kind of trial" : f.visitors === null ? "analytics not reached" : `${money(f.unit.costPerVisitorCents)} each`} />
         <Kpi label="Signed up" value={n(f.signups)} note={`${f.unit.signupsPerDay}/day · ${pct(f.unit.visitorToSignupPct)} of visitors · ${money(f.unit.costPerSignupCents)} each`} />
         <Kpi label="On free trial" value={n(f.trials.count)} note={`${dollars(f.trials.maxMrrCents)}/mo if all pay`} tone="trial" />
-        <Kpi label="Paying" value={n(f.paying.count)} note={`${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${report.payingUnpriced > 0 ? ` · ${report.payingUnpriced} without a list price` : ""}`} tone="good" />
+        <Kpi label="Paying" value={n(f.paying.count)} note={`${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.preexisting > 0 ? ` · ${f.paying.preexisting} from before the start day` : ""}${report.payingUnpriced > 0 ? ` · ${report.payingUnpriced} without a list price` : ""}`} tone="good" />
         <Kpi label="Realistic MRR" value={dollars(f.projected.mrrRealisticCents)} note={`paying + ${a.realisticPct}% of trials`} tone="blue" />
         {/* THE TWO KINDS OF TRIAL (owner, 2026-10-13): the buttons re-read every figure above and below for one kind. */}
         <div className={s.cohortBar} data-cohort-bar>
@@ -180,7 +180,7 @@ export function InvestorReportView({ report, shared = false, between }: { report
       <section className={s.method}>
         <h2 className={s.h2}>How these are figured</h2>
         <ul>
-          <li>Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} not counted.` : ""}</li>
+          <li>Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted under With a card as paying — their revenue from that day on — but not as signups of the period.` : ""}</li>
           <li>Ad spend is {f.spend.dailyBudgetCents !== null && f.spend.budgetFrom ? `the daily budget — ${dollars(f.spend.dailyBudgetCents)} for all ads together — counted as spent every day since ${longDate(f.spend.budgetFrom)}${f.spend.bookedDays ? `, with ${f.spend.bookedDays} ${f.spend.bookedDays === 1 ? "day" : "days"} at the figure booked for it` : ""}` : "what was booked per day; a day with nothing booked counts as zero"}{shared ? "" : " (set on this page; Meta's own figures per day once its API token is connected)"}. Tomorrow on it is projected at {dollars(f.spend.perDayProjectedCents)} a day.</li>
           <li>A trial is worth its plan&apos;s monthly list price: a yearly plan as a twelfth, a custom plan by its pages. Discounts, taxes and churn are not modelled.</li>
           <li>The realistic share is {a.realisticPct}% of trials paying, set by the owner; &ldquo;by behaviour&rdquo; reads each account&apos;s activity instead and is shown beside it.</li>
@@ -202,7 +202,7 @@ function cohortRows(co: InvestorReport["cohorts"], realisticPct: number): Array<
     row("Ad spend", "attributed · the days it fell on", (c) => `${dollars(c.attributedCents)} · ${c.attributedDays}d`),
     row("Signed up", "trials, paying and lapsed", (c) => n(c.signups)),
     row("On free trial", "now", (c) => n(c.figures.trials.count)),
-    row("Paying", "accounts · list price a month", (c) => `${n(c.figures.paying.count)} · ${dollars(c.figures.paying.mrrCents)}`),
+    row("Paying", "accounts · list price a month", (c) => `${n(c.figures.paying.count)}${c.figures.paying.preexisting ? ` (${c.figures.paying.preexisting} from before)` : ""} · ${dollars(c.figures.paying.mrrCents)}`),
     row("Lapsed", "trials over or canceled", (c) => n(c.figures.lapsed)),
     row("Observed pay rate", "paid ÷ decided", (c) => pct(c.figures.observed.pct)),
     row("Cost per signup", "spend ÷ signups", (c) => money(c.figures.unit.costPerSignupCents)),

@@ -82,7 +82,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
             ["Visitors", f.visitors === null ? "—" : f.visitors.toLocaleString("en-US"), f.visitors === null ? "analytics not reached" : `${money(f.unit.costPerVisitorCents)} each`],
             ["Signed up", String(f.signups), `${f.unit.signupsPerDay}/day · ${pct(f.unit.visitorToSignupPct)} of visitors`],
             ["On free trial", String(f.trials.count), `${dollars(f.trials.maxMrrCents)}/mo if all pay`],
-            ["Paying", String(f.paying.count), `${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year`],
+            ["Paying", String(f.paying.count), `${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.preexisting > 0 ? ` · ${f.paying.preexisting} from before the start day` : ""}`],
             ["Realistic MRR", dollars(f.projected.mrrRealisticCents), `paying + ${a.realisticPct}% of trials`],
           ].map(([l, v, nt]) => (
             <View key={l} style={s.cell}>
@@ -142,7 +142,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
         )}
         <View wrap={false}>
         <Text style={s.h2}>How these are figured</Text>
-        <Text style={s.li}>· Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} account(s) paying from before that day (${dollars(report.before.mrrCents)}/mo) not counted.` : ""}</Text>
+        <Text style={s.li}>· Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted under With a card as paying, not as signups of the period.` : ""}</Text>
         <Text style={s.li}>· Ad spend is {f.spend.dailyBudgetCents !== null && f.spend.budgetFrom ? `the daily budget, ${dollars(f.spend.dailyBudgetCents)} for all ads together, counted as spent every day since ${longDate(f.spend.budgetFrom)}` : "what was booked per day"}; tomorrow on it is projected at {dollars(f.spend.perDayProjectedCents)} a day.</Text>
         <Text style={s.li}>· A trial is worth its plan&apos;s monthly list price (a yearly plan as a twelfth, a custom plan by its pages). Discounts, taxes and churn are not modelled.</Text>
         <Text style={s.li}>· The realistic share is {a.realisticPct}% of trials paying; &quot;by behaviour&quot; reads each account&apos;s activity instead.</Text>

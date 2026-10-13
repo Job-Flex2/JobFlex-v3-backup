@@ -235,7 +235,7 @@ export interface InvestorReport {
   visitorsKnown: boolean;
   /** Paying accounts whose plan has no list price — counted as $0 in the MRR, and said so. */
   payingUnpriced: number;
-  /** Accounts paying from before the start day — not counted, but named. */
+  /** Accounts paying from before the start day — counted under With a card as paying (2026-10-13), named here. */
   before: { paying: number; mrrCents: number };
   /** The first day a visitor arrived from an ad (utm_source or fbclid), when the analytics answered. */
   firstAdDay: string | null;
@@ -335,11 +335,14 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   }
   const cohortOf = (orgId: string): TrialCohort => (nocardIds.has(orgId) ? "nocard" : "card");
 
-  const paying = rows.filter((r) => r.state === "paying").map((r) => {
+  const payRowOf = (r: (typeof rows)[number], preexisting: boolean) => {
     // Paying from the trial's end when there was one, else from the subscription.
     const ends = r.trialEndsAt && r.trialEndsAt.getTime() < Date.now() ? r.trialEndsAt : r.subCreatedAt;
-    return { startedAt: dayOf(ends.toISOString()), monthlyCents: values.get(r.orgId)?.monthlyCents ?? 0, signedUpAt: dayOf(r.createdAt.toISOString()), cohort: cohortOf(r.orgId) };
-  });
+    return { startedAt: dayOf(ends.toISOString()), monthlyCents: values.get(r.orgId)?.monthlyCents ?? 0, signedUpAt: dayOf(r.createdAt.toISOString()), cohort: cohortOf(r.orgId), preexisting };
+  };
+  // The accounts paying from before the start day (owner, 2026-10-13: "add them to With a card, paying"): they
+  // took a card, so they sit in that cohort — paying, never signups of the period (lib/investorModel).
+  const paying = [...rows.filter((r) => r.state === "paying").map((r) => payRowOf(r, false)), ...beforeRows.map((r) => payRowOf(r, true))];
   const trials = rows.filter((r) => r.state === "trial").map((r) => {
     const v = values.get(r.orgId);
     return { createdAt: dayOf(r.createdAt.toISOString()), endsAt: r.trialEndsAt ? dayOf(r.trialEndsAt.toISOString()) : null, monthlyCents: v?.monthlyCents ?? null, chance: v?.chance ?? 0.2, cohort: cohortOf(r.orgId) };

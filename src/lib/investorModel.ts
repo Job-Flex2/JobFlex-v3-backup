@@ -39,6 +39,10 @@ export interface PayingAccount {
   /** The day the account signed up (for the cohort split); defaults to startedAt. */
   signedUpAt?: string;
   cohort?: TrialCohort;
+  /** Paying from before the start day (owner, 2026-10-13: "add the users already paying before this period to
+   *  With a card, paying"): counted as a paying account — its revenue from the start day on, in the run rate, the
+   *  curve and the payback — but not as a signup of the period: the ads did not bring it. */
+  preexisting?: boolean;
 }
 export interface TrialAccount {
   createdAt: string;
@@ -132,7 +136,7 @@ export interface InvestorFigures {
   visitors: number | null;
   signups: number;
   trials: { count: number; priced: number; maxMrrCents: number; realisticMrrCents: number; byBehaviourMrrCents: number; byBehaviourPct: number | null; avgMonthlyCents: number };
-  paying: { count: number; mrrCents: number; arrCents: number; revenueToDateCents: number };
+  paying: { count: number; mrrCents: number; arrCents: number; revenueToDateCents: number; /** Of them, the ones paying from before the start day, and their monthly list price. */ preexisting: number; preexistingMrrCents: number };
   lapsed: number;
   /** Trials that already ended: paid vs lapsed, the observed share. */
   observed: { paid: number; lapsed: number; pct: number | null };
@@ -204,10 +208,14 @@ export function investorFigures(input: ModelInput): InvestorFigures {
   const byBehaviour = priced.reduce((x, t) => x + r0((t.monthlyCents ?? 0) * t.chance), 0);
   const avgTrialMonthly = priced.length ? r0(maxMrr / priced.length) : 0;
   const payingMrr = input.paying.reduce((x, p) => x + p.monthlyCents, 0);
-  const revenueToDate = input.paying.reduce((x, p) => x + r0((p.monthlyCents * Math.max(0, daysBetween(p.startedAt, today) + 1)) / 30), 0);
-  const signups = trials.length + input.paying.length + input.lapsed;
-  const signupsPerDay = perDay([...trials.map((t) => t.createdAt), ...input.paying.map((p) => p.startedAt)].map(dayOf), since, today);
-  const observedPaid = input.paying.length;
+  // Revenue earned IN the period: an account paying from before the start day earns from the start day.
+  const revenueToDate = input.paying.reduce((x, p) => x + r0((p.monthlyCents * Math.max(0, daysBetween(p.startedAt > since ? p.startedAt : since, today) + 1)) / 30), 0);
+  // The period's own signups: the ads did not bring an account that was paying before the start day.
+  const won = input.paying.filter((p) => !p.preexisting);
+  const preexisting = input.paying.filter((p) => p.preexisting);
+  const signups = trials.length + won.length + input.lapsed;
+  const signupsPerDay = perDay([...trials.map((t) => t.createdAt), ...won.map((p) => p.signedUpAt ?? p.startedAt)].map(dayOf), since, today);
+  const observedPaid = won.length;
   const observedDone = observedPaid + input.lapsed;
 
   // ── the curve
@@ -221,7 +229,7 @@ export function investorFigures(input: ModelInput): InvestorFigures {
   let allRun = 0;
   let realRun = 0;
   const last = addDays(today, horizon);
-  const signupDates = [...trials.map((t) => dayOf(t.createdAt)), ...input.paying.map((p) => dayOf(p.startedAt))].sort();
+  const signupDates = [...trials.map((t) => dayOf(t.createdAt)), ...won.map((p) => dayOf(p.signedUpAt ?? p.startedAt))].sort();
   const futureCohorts: number[] = []; // monthly cents paying from each future day, all-pay basis
   for (let d = since; d <= last; d = addDays(d, 1)) {
     const projected = d > today;
@@ -273,14 +281,14 @@ export function investorFigures(input: ModelInput): InvestorFigures {
     visitors: input.visitors,
     signups,
     trials: { count: trials.length, priced: priced.length, maxMrrCents: maxMrr, realisticMrrCents: realisticMrr, byBehaviourMrrCents: byBehaviour, byBehaviourPct: maxMrr > 0 ? Math.round((byBehaviour / maxMrr) * 100) : null, avgMonthlyCents: avgTrialMonthly },
-    paying: { count: input.paying.length, mrrCents: payingMrr, arrCents: payingMrr * 12, revenueToDateCents: revenueToDate },
+    paying: { count: input.paying.length, mrrCents: payingMrr, arrCents: payingMrr * 12, revenueToDateCents: revenueToDate, preexisting: preexisting.length, preexistingMrrCents: preexisting.reduce((x, p) => x + p.monthlyCents, 0) },
     lapsed: input.lapsed,
     observed: { paid: observedPaid, lapsed: input.lapsed, pct: observedDone > 0 ? Math.round((observedPaid / observedDone) * 100) : null },
     projected: { mrrAllPayCents: payingMrr + maxMrr, mrrRealisticCents: mrrRealistic, mrrByBehaviourCents: payingMrr + byBehaviour },
     unit: {
       costPerVisitorCents: input.visitors ? div(totalSpend, input.visitors) : null,
       costPerSignupCents: div(totalSpend, signups),
-      costPerPayingRealisticCents: totalSpend > 0 && input.paying.length + trials.length * pct > 0 ? r0(totalSpend / (input.paying.length + trials.length * pct)) : null,
+      costPerPayingRealisticCents: totalSpend > 0 && won.length + trials.length * pct > 0 ? r0(totalSpend / (won.length + trials.length * pct)) : null,
       visitorToSignupPct: input.visitors ? Math.round((signups / input.visitors) * 1000) / 10 : null,
       signupsPerDay: Math.round(signupsPerDay * 100) / 100,
       paybackMonths: mrrRealistic > 0 && totalSpend > 0 ? Math.round((totalSpend / mrrRealistic) * 10) / 10 : null,

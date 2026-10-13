@@ -153,5 +153,20 @@ check("cost per signup is each cohort's own", card.figures.unit.costPerSignupCen
 const plain = cohortFigures(base, "card");
 check("an input without the cohort block reads as all card, no spend split lost", plain.attributedCents === investorFigures(base).spend.totalCents && plain.figures.trials.count === base.trials.length);
 
+
+// ── PAYING FROM BEFORE THE START DAY (2026-10-13): counted as paying, in the revenue and the payback; not a signup
+console.log("── pre-period paying");
+const withBefore: ModelInput = { ...base, paying: [...base.paying, { startedAt: "2026-09-01", monthlyCents: 9900, signedUpAt: "2026-08-20", cohort: "card", preexisting: true }] };
+const fb = investorFigures(withBefore);
+const f0 = investorFigures(base);
+check("it counts as paying, in the run rate", fb.paying.count === f0.paying.count + 1 && fb.paying.mrrCents === f0.paying.mrrCents + 9900 && fb.paying.preexisting === 1 && fb.paying.preexistingMrrCents === 9900);
+check("…its revenue counts from the start day only (7 days of $99 = $23.10)", fb.paying.revenueToDateCents === f0.paying.revenueToDateCents + 2310, `${fb.paying.revenueToDateCents - f0.paying.revenueToDateCents}`);
+check("…it is not a signup, and does not move the pace, the cost per signup or the observed share", fb.signups === f0.signups && fb.unit.signupsPerDay === f0.unit.signupsPerDay && fb.unit.costPerSignupCents === f0.unit.costPerSignupCents && fb.observed.pct === f0.observed.pct);
+check("…nor the cost per paying customer (the ads did not win it)", fb.unit.costPerPayingRealisticCents === f0.unit.costPerPayingRealisticCents);
+check("…but it pays into the curve from the first day", fb.curve[0].mrrAllPayCents === f0.curve[0].mrrAllPayCents + 9900 && fb.curve[0].payingAllPay === f0.curve[0].payingAllPay + 1);
+const cardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "card");
+const nocardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "nocard");
+check("it sits in the card cohort's paying, not in no card's, and not in either's signups", cardB.figures.paying.count === card.figures.paying.count + 1 && cardB.figures.paying.preexisting === 1 && cardB.signups === card.signups && nocardB.figures.paying.count === nocard.figures.paying.count);
+
 console.log(bad === 0 ? "\nAll investor model checks passed." : `\n${bad} investor model check(s) FAILED.`);
 process.exit(bad === 0 ? 0 : 1);
