@@ -211,5 +211,7 @@ export async function deskReadiness(adminUserId: string | null = null): Promise<
   if (defaults.length) steps.push(`Set AI desk minutes on ${defaults.map((p) => p.name).join(", ")} in Plans (the defaults apply until then).`);
   steps.push("Rehearse without a phone: `cd voice && OPENAI_API_KEY=… node test/live.mjs` — the real OpenAI realtime API, a scripted caller, the desk's voice saved to a WAV.");
   steps.push("Then the real thing: call a company's number from your phone. The call appears on its Phone page within a minute, with what the desk did; then try \"Test it here\" in Settings → AI desk.");
-  return { items, numbers, platform, companies: companies.map((c) => ({ id: c.id, name: c.name || c.id, mine: mine.has(c.id) })), plans, voiceUrl, model: voiceModel(), steps };
+  // The picker: the admin's own accounts first, then every company A–Z regardless of case (the database sorts "fancescan" after "Youn Fence").
+  const picker = companies.map((c) => ({ id: c.id, name: c.name || c.id, mine: mine.has(c.id) })).sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+  return { items, numbers, platform, companies: picker, plans, voiceUrl, model: voiceModel(), steps };
 }
