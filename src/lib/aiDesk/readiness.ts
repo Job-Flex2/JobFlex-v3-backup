@@ -68,7 +68,13 @@ async function probeVoiceServer(): Promise<ReadinessItem> {
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 5000);
-    const r = await fetch(`${url}?challenge=${challenge}`, { signal: ctl.signal, cache: "no-store" }).finally(() => clearTimeout(t));
+    let r = await fetch(`${url}?challenge=${challenge}`, { signal: ctl.signal, cache: "no-store" }).finally(() => clearTimeout(t));
+    // A server from before the proof answers /health only on the exact path: ask it plainly, and say the secret was not checked.
+    if (r.status === 404) {
+      const ctl2 = new AbortController();
+      const t2 = setTimeout(() => ctl2.abort(), 5000);
+      r = await fetch(url, { signal: ctl2.signal, cache: "no-store" }).finally(() => clearTimeout(t2));
+    }
     const j = (await r.json().catch(() => null)) as { ok?: boolean; model?: string; api?: string; proof?: string } | null;
     if (!r.ok || !j?.ok) return { key: "voice", label: "Voice server", state: "warn", detail: `${url} answered ${r.status} — is the Fly app up (fly status)?` };
     const sameModel = !j.model || j.model === voiceModel();
@@ -76,7 +82,7 @@ async function probeVoiceServer(): Promise<ReadinessItem> {
     const words = [`${ws} answers · model ${j.model ?? "?"} · api ${j.api ?? "?"}`];
     if (secret === "matches") words.push("secret matches");
     if (secret === "mismatch") words.push("SECRET MISMATCH — VOICE_SERVER_SECRET on Vercel is not the value on Fly: set the same on both (fly secrets set … / Vercel → redeploy)");
-    if (secret === "unchecked") words.push("secret not checked (an older server — fly deploy once more and it will be)");
+    if (secret === "unchecked") words.push("secret not checked yet — the server on Fly is from before this check: `git pull`, then `fly deploy` in voice/, and it will be");
     if (!sameModel) words.push(`the app's VOICE_MODEL is ${voiceModel()}: set the same on both`);
     return { key: "voice", label: "Voice server", state: sameModel && secret !== "mismatch" ? "ok" : "warn", detail: words.join(" · ") };
   } catch (err) {
