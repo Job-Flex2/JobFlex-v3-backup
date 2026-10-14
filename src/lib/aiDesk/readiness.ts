@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isOpenAIEnabled } from "@/lib/sdk/openai";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
-import { isTwilioEnabled, twilioClient } from "@/lib/sdk/twilio";
+import { isTwilioEnabled, twilioClient, twilioSettings } from "@/lib/sdk/twilio";
 import { parsePlanLimits } from "@/lib/planLimits";
 import { parseRegistration } from "@/lib/sms/registrationShared";
 import { voiceServerConfigured } from "./voiceToken";
@@ -33,7 +33,9 @@ export type DeskNumberRow = {
   minutes: string;
 };
 export type DeskPlanRow = { slug: string; name: string; minutes: number; source: "plan" | "default" };
-export type DeskReadiness = { items: ReadinessItem[]; numbers: DeskNumberRow[]; plans: DeskPlanRow[]; voiceUrl: string; model: string; steps: string[] };
+/** JobFlex's own line (TWILIO_PHONE_NUMBER / the admin's texting number): a call to it is answered for the first company — the way to a first test before any company buys a number. */
+export type PlatformNumber = { number: string; numberSid: string | null; webhook: "ok" | "wrong" | "unknown"; webhookUrl: string | null; answeredFor: string | null };
+export type DeskReadiness = { items: ReadinessItem[]; numbers: DeskNumberRow[]; platform: PlatformNumber | null; plans: DeskPlanRow[]; voiceUrl: string; model: string; steps: string[] };
 
 /** Where Twilio must send a call: TWILIO_APP_URL when set (lib/aiDesk/calls twilioBase), else this deployment. */
 export async function voiceWebhookBase(): Promise<string> {
@@ -100,12 +102,24 @@ export async function deskReadiness(): Promise<DeskReadiness> {
     }
     numbers.push({ organizationId, company: nameOf.get(organizationId) ?? organizationId, number: prettyPhone(reg.number), numberSid: reg.numberSid ?? null, voiceOn: Boolean(reg.voiceOnAt), webhook, webhookUrl, mode: settings.mode, minutes: balance ? minutesLeftWords(balance) : "?" });
   }
+  // The platform's own line: answered for the first company (lib/aiDesk/calls companyForCall).
+  let platform: PlatformNumber | null = null;
+  const settings = twilioOn ? await twilioSettings().catch(() => null) : null;
+  if (settings?.fromNumber) {
+    const [first, found] = await Promise.all([
+      db.organization.findFirst({ orderBy: { createdAt: "asc" }, select: { name: true } }).catch(() => null),
+      client ? client.incomingPhoneNumbers.list({ phoneNumber: settings.fromNumber, limit: 1 }).catch(() => []) : Promise.resolve([]),
+    ]);
+    const n = found[0];
+    platform = { number: prettyPhone(settings.fromNumber), numberSid: n?.sid ?? null, webhook: n ? (n.voiceUrl === voiceUrl ? "ok" : "wrong") : "unknown", webhookUrl: n?.voiceUrl || null, answeredFor: first?.name ?? null };
+  }
+
   const pointed = numbers.filter((n) => n.webhook === "ok").length;
   items.push({
     key: "numbers",
     label: "Company numbers",
     state: numbers.length ? (numbers.some((n) => n.webhook === "wrong") ? "warn" : "ok") : "warn",
-    detail: numbers.length ? `${numbers.length} number${numbers.length === 1 ? "" : "s"} · ${pointed} pointed at the voice webhook${client ? "" : " (not checked: Twilio off)"}` : "No company has a number yet — Settings → Texting buys one (it takes calls the same day).",
+    detail: numbers.length ? `${numbers.length} number${numbers.length === 1 ? "" : "s"} · ${pointed} pointed at the voice webhook${client ? "" : " (not checked: Twilio off)"}` : `No company has a number yet — Settings → Texting buys one (it takes calls the same day).${platform ? ` Until then, a call to the platform's own ${platform.number} is answered for ${platform.answeredFor ?? "the first company"}.` : ""}`,
   });
 
   // Each plan's included minutes: set in the plan editor, or the tier's default.
@@ -131,8 +145,10 @@ export async function deskReadiness(): Promise<DeskReadiness> {
   if (voice.state === "off") steps.push("Deploy the voice server on Fly (voice/README.md: account, secrets, fly deploy, voice.jobflex.app), then set VOICE_SERVER_URL=wss://voice.jobflex.app and VOICE_SERVER_SECRET on Vercel and redeploy.");
   else if (voice.state === "warn") steps.push("The voice server is set but not right: check `fly status`, the DNS for voice.jobflex.app, and VOICE_MODEL on both sides.");
   for (const n of numbers.filter((x) => x.webhook === "wrong")) steps.push(`Point ${n.number} (${n.company}) at the voice webhook — the button below.`);
+  if (platform?.webhook === "wrong") steps.push(`Point the platform's ${platform.number} at the voice webhook — the button below (its calls are answered for ${platform.answeredFor ?? "the first company"}).`);
+  if (!numbers.length) steps.push(`For a first test, ${platform ? `call the platform's ${platform.number} (answered for ${platform.answeredFor ?? "the first company"}), or ` : ""}buy a company a number on Settings → Texting — it takes calls the same day.`);
   if (defaults.length) steps.push(`Set AI desk minutes on ${defaults.map((p) => p.name).join(", ")} in Plans (the defaults apply until then).`);
   steps.push("Rehearse without a phone: `cd voice && OPENAI_API_KEY=… node test/live.mjs` — the real OpenAI realtime API, a scripted caller, the desk's voice saved to a WAV.");
   steps.push("Then the real thing: call a company's number from your phone. The call appears on its Phone page within a minute, with what the desk did; then try \"Test it here\" in Settings → AI desk.");
-  return { items, numbers, plans, voiceUrl, model: voiceModel(), steps };
+  return { items, numbers, platform, plans, voiceUrl, model: voiceModel(), steps };
 }
