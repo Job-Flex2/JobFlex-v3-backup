@@ -10,7 +10,7 @@
 import * as React from "react";
 import type { Route } from "next";
 import type { DeckDesign } from "@/lib/deck/design";
-import { clientStanding, STANDING_WORDS, type ClientLinkRow, type ClientStart } from "@/lib/deck/clientDesign";
+import { CLIENT_STAGES, clientStage, jobLine, STAGE_WORDS, type ClientLinkRow, type ClientStart } from "@/lib/deck/clientDesign";
 import { smsHref } from "@/lib/proposalLink";
 import { createDeckClientLink, deleteDeckClientLink, listDeckClientLinks } from "@/actions/deckClientDesign";
 import s from "./deck-studio.module.css";
@@ -26,11 +26,23 @@ const ago = (iso: string) => {
 
 type Row = ClientLinkRow & { url: string; message: string };
 
-function standing(l: Row): { text: string; tone: "pass" | "warn" | "none" | "new" } {
-  const st = clientStanding(l);
-  if (st === "returned") return { text: l.unseen ? "Sent back · new" : "Sent back ✓", tone: l.unseen ? "new" : "pass" };
-  if (st === "designing" || st === "opened") return { text: STANDING_WORDS[st], tone: "warn" };
-  return { text: STANDING_WORDS[st], tone: "none" };
+/** The stage line (lib/deck/clientDesign clientStage): every stage reached is lit, the current one named with its time. */
+function Stages({ l }: { l: Row }) {
+  const { stage, at } = clientStage(l);
+  const idx = CLIENT_STAGES.indexOf(stage);
+  const closed = l.expired && stage !== "accepted" && stage !== "proposal" && stage !== "priced";
+  return (
+    <div className={s.stages} role="img" aria-label={`Stage: ${STAGE_WORDS[stage]}${at ? `, ${ago(at)}` : ""}`} data-client-stage={stage}>
+      <span className={s.stageTrack} aria-hidden="true">
+        {CLIENT_STAGES.map((k, i) => (
+          <i key={k} className={cx(s.stageDot, i <= idx && s.stageOn, i === idx && s.stageNow, i === idx && stage === "returned" && l.unseen && s.stageNew)} title={STAGE_WORDS[k]} />
+        ))}
+      </span>
+      <span className={cx(s.stageWord, stage === "returned" && l.unseen && s.stageWordNew)}>
+        {closed ? "Link closed" : STAGE_WORDS[stage]}{at ? ` · ${ago(at)}` : ""}{stage === "returned" && l.unseen ? " · new" : ""}
+      </span>
+    </div>
+  );
 }
 
 export function DeckClientLink({ design, address, title, clientId, proposalId = null, unseen = 0, onOpened }: { design: DeckDesign; address: string; title: string; clientId?: string; proposalId?: string | null; unseen?: number; onOpened?: (token: string) => void }) {
@@ -130,20 +142,15 @@ export function DeckClientLink({ design, address, title, clientId, proposalId = 
         ) : null}
         {links === null ? <div className={s.draftEmpty}>Reading…</div> : links.length === 0 ? <div className={s.draftEmpty}>No client links yet — press New link.</div> : null}
         {(links ?? []).map((l) => {
-          const st = standing(l);
           return (
             <div key={l.token} className={cx(s.draftRow, l.unseen && s.draftRowNew)} data-client-link-row={l.token} data-client-link-unseen={l.unseen ? "1" : undefined}>
               <div style={{ minWidth: 0 }}>
-                <div className={s.draftName}>
-                  {l.clientName}
-                  <span className={cx(s.stamp, st.tone === "pass" && s.stampPass, st.tone === "warn" && s.stampWarn, st.tone === "new" && s.stampNew)} style={{ marginLeft: 6 }} data-client-link-status={st.text}>{st.text}</span>
-                </div>
+                <div className={s.draftName}>{l.clientName}</div>
+                <div className={s.draftMeta} data-client-link-job>{jobLine(l)}{l.words ? ` · ${l.words}` : ""}</div>
+                <Stages l={l} />
                 <div className={s.draftMeta}>
-                  {l.words ?? l.title}
-                  {l.status === "sent" && l.sentAt ? ` · sent back ${ago(l.sentAt)}` : ` · link made ${ago(l.createdAt)}`}
-                  {l.byName ? ` · by ${l.byName}` : ""}
-                  {l.proposalId ? " · on a proposal" : ""}
-                  {l.note ? ` · “${l.note.length > 60 ? `${l.note.slice(0, 60)}…` : l.note}”` : ""}
+                  link sent {ago(l.createdAt)}{l.byName ? ` by ${l.byName}` : ""}
+                  {l.note ? ` · “${l.note.length > 80 ? `${l.note.slice(0, 80)}…` : l.note}”` : ""}
                 </div>
               </div>
               {l.draftId ? (

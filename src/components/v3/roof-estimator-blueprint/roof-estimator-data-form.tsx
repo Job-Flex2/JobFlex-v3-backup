@@ -34,7 +34,10 @@ import {
   measureRoof,
   measureRoofInstant,
 } from "@/actions/roofMeasurement";
-import { estimateRoof, convertRoofEstimateToProposal } from "@/actions/roofEstimator";
+import { estimateRoof, convertRoofEstimateToProposal, loadRoofFromProposal, updateRoofProposal } from "@/actions/roofEstimator";
+import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
+// The card's own key for "this roof" (it counts the existing material and storeys too).
+import { factsKey } from "./roof-package-builder";
 import {
   reportPlanLimit,
   reportPlanLimitResult,
@@ -95,6 +98,27 @@ const FACADE: Record<string, string> = { N: "North", E: "East", S: "South", W: "
 // only the answer itself makes it 100. Each waypoint names the step under
 // way from that moment; the step list ticks the ones before it.
 const MS_STEPS = ["Locate the property", "Confirm the roof outline", "Measure the roof area", "Read the pitch, edges and details", "Finish the report"] as const;
+/** While the roof is measured (owner, 2026-10-13: "get some interactivity when roofing waiting"): what the page does
+ *  next, a line at a time — every one of them true of this page. */
+const WAIT_TIPS = [
+  "Squares, pitch, facets, eaves, rakes, ridges, hips and valleys land on one screen.",
+  "Pick the roof system in the estimate builder and every line prices itself — shingles, underlayment, flashing, vents, tear-off.",
+  "The prices you set in the builder are kept for your next roof.",
+  "An address you measured before opens from Recent — nothing is billed twice.",
+  "Convert makes the proposal. Edit the roof estimate on it brings you back here to change anything.",
+] as const;
+const WAIT_TIP_MS = 7_000;
+/** "5/12 on 60% · 11/12 on 40%" — how much of the roof is at each measured pitch, largest first. */
+function pitchSharesWords(families: ReadonlyArray<{ pitch12: number; planSqft: number }>): string {
+  const byPitch = new Map<number, number>();
+  for (const s of pitchFamilyShares(families)) {
+    const p = Math.round(s.pitch12);
+    byPitch.set(p, (byPitch.get(p) ?? 0) + s.share);
+  }
+  const rows = [...byPitch.entries()].sort((a, b) => b[1] - a[1]);
+  if (rows.length <= 1) return "measured · the whole roof";
+  return rows.map(([p, share]) => `${p}/12 on ${Math.round(share * 100)}%`).join(" · ");
+}
 const MS_WAYPOINTS: ReadonlyArray<{ atMs: number; pct: number; step: number }> = [
   { atMs: 0, pct: 0, step: 0 },
   { atMs: 1_500, pct: 8, step: 1 },
@@ -265,7 +289,7 @@ function shotDateLabel(v: string | undefined): string | null {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string } = {}) {
+export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string } = {}) {
   const router = useRouter();
 
   // ── Screen ──
@@ -282,6 +306,11 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   const revealRef = React.useRef<() => void>(() => {});
   const [msReport, setMsReport] = React.useState<string>("—");
   const [msHint, setMsHint] = React.useState<string | null>(null);
+  // The wait, made watchable (2026-10-13): seconds gone, the address on the map, a tip at a time.
+  const [msElapsed, setMsElapsed] = React.useState(0);
+  const [msWhere, setMsWhere] = React.useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [tip, setTip] = React.useState(0);
+  const [tipHeld, setTipHeld] = React.useState(false);
 
   // ── Measurement / photo viewer ──
   const [measurement, setMeasurement] = React.useState<RoofMeasurementDTO | null>(null);
@@ -609,6 +638,17 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // The pitch the contractor typed when EagleView had none (pack 002 not
   // bought). Nothing is priced on a pitch nobody stated.
   const [pitchEntered, setPitchEntered] = React.useState<string | null>(null);
+  // ── A saved roof proposal opened again (owner, 2026-10-13: "get back to the
+  // roofing edit to rebuild it") — ?proposal=<id> from the builder's "Edit the
+  // roof estimate". The page comes back with its measurement, choices and
+  // lines; Convert becomes "Update PRO-XXXX" and re-prices THAT proposal.
+  const [linked, setLinked] = React.useState<LinkedDeckProposal | null>(null);
+  const [linkInfo, setLinkInfo] = React.useState<{ others: number; older: boolean; missing: boolean; loading: boolean } | null>(proposalId ? { others: 0, older: false, missing: false, loading: true } : null);
+  const [seedSpec, setSeedSpec] = React.useState<{ spec: RoofPackageSpec; key: string } | null>(null);
+  // A sent proposal asks once before its client's copy changes.
+  const [askUpdate, setAskUpdate] = React.useState<{ go: () => void } | null>(null);
+  // The package choices the lines came from — kept with the proposal.
+  const lastSpecRef = React.useRef<RoofPackageSpec | null>(null);
 
   // Legacy recon rows remain unpriceable. Google estimates have a separate
   // source and require the contractor's review before pricing.
@@ -646,9 +686,25 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   function runProgress(): () => void {
     const startedAt = nowMs();
     setMs(msProgressAt(0));
-    const timer = setInterval(() => setMs(msProgressAt(nowMs() - startedAt)), MS_TICK_MS);
+    setMsElapsed(0);
+    setTip(0);
+    setTipHeld(false);
+    const timer = setInterval(() => {
+      const gone = nowMs() - startedAt;
+      setMs(msProgressAt(gone));
+      setMsElapsed(Math.floor(gone / 1000));
+    }, MS_TICK_MS);
     return () => clearInterval(timer);
   }
+
+  // A tip at a time while the roof is measured; a click on a dot holds the one chosen.
+  const waiting = panel === "measuring" && !ms.done;
+  const mapsOn = isMapsBrowserEnabled();
+  React.useEffect(() => {
+    if (!waiting || tipHeld) return;
+    const timer = setInterval(() => setTip((i) => (i + 1) % WAIT_TIPS.length), WAIT_TIP_MS);
+    return () => clearInterval(timer);
+  }, [waiting, tipHeld]);
 
   type OrderInput = { address: string; city: string; state: string; zip: string; lat?: number; lng?: number };
   function orderInput(): OrderInput {
@@ -865,10 +921,13 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setMeasurementBusy(true);
     setMs({ pct: 0, step: 0, done: false });
     setMsReport(input.address);
-    setMsHint("Checking the roof at this address. The report opens when the measurements are ready.");
+    setMsWhere(input.lat != null && input.lng != null ? { lat: input.lat, lng: input.lng, label: input.address } : null);
+    setMsHint("Usually under a minute. The report opens as soon as the roof is measured.");
     setPanel("measuring");
+    const stop = runProgress();
     try {
       const res = await measureRoof(input);
+      stop();
       if (!res.ok) {
         setPanel("intake");
         setIntakeError({ text: res.error, kind: res.noRoof ? "no-roof" : res.stillProcessing ? "processing" : "failed", target: input, reorder: res.canReorder === true });
@@ -887,6 +946,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         startHoldProgress();
         return;
       }
+      setMs({ pct: 100, step: MS_STEPS.length, done: true });
       showMeasurement(res.measurement, !!res.unsaved);
       if (solarResult) {
         toast.success(res.unsaved ? "Roof estimate ready — not saved" : "Roof estimate ready", "Review the roof and measurements before pricing.");
@@ -894,6 +954,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         measuredToast(res.measurement, !!res.unsaved, res.reusedInstant?.how ?? null);
       }
     } catch (err) {
+      stop();
       setPanel("intake");
       const text = "The measurement request did not complete. Check the connection and try again.";
       setIntakeError({ text, kind: "failed", target: input });
@@ -937,6 +998,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setInstantBusy(true);
     setReusedInstant(null);
     setMsReport(input.address);
+    setMsWhere(input.lat != null && input.lng != null ? { lat: input.lat, lng: input.lng, label: input.address } : null);
     setMsHint("Usually under a minute. The roof opens as soon as it is measured; any detail that finishes later fills into the report by itself.");
     setPanel("measuring");
     const stop = runProgress();
@@ -1014,7 +1076,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   }
 
   // Reopen a saved measurement — no lookup, nothing billed.
-  async function openRecent(id: string) {
+  async function openRecent(id: string): Promise<boolean> {
     setOpeningId(id);
     try {
       const m = await getRoofMeasurement(id);
@@ -1023,12 +1085,58 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       showMeasurement(m, false);
       // A saved row IS a stored answer: the paid re-order is offered the same way.
       setReusedInstant(m.instant && m.source !== "solar" ? "stored" : null);
+      return true;
     } catch (err) {
       toast.error("Couldn't open measurement", errMsg(err));
+      return false;
     } finally {
       setOpeningId(null);
     }
   }
+
+  // The proposal's roof, opened once on arrival: nothing is measured or
+  // billed — the stored measurement (or hand takeoff) comes back, then the
+  // proposal's own lines and the package choices they were built with.
+  const openedProposalRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!proposalId || openedProposalRef.current === proposalId) return;
+    openedProposalRef.current = proposalId;
+    void (async () => {
+      const r = await loadRoofFromProposal(proposalId).catch((err: unknown) => ({ ok: false as const, error: errMsg(err) }));
+      if (!r.ok) {
+        setLinkInfo(null);
+        toast.error("Couldn't open that proposal here", r.error);
+        return;
+      }
+      setLinked(r.proposal);
+      let opened = false;
+      if (r.manual) {
+        runManual(r.manual);
+        opened = true;
+      } else if (r.measurementId) {
+        opened = await openRecent(r.measurementId);
+      }
+      if (opened) {
+        setExtra(new Set(r.extra));
+        setPitchEntered(r.pitchEntered);
+        const toLine = (l: { name: string; quantity: number; unitPrice: number; unit: string }): EditableLine => ({ id: nanoid(6), name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, unit: l.unit });
+        setMaterials(r.materials.map(toLine));
+        setLabor(r.labor.map(toLine));
+        setTitle(r.title);
+        setScopeText(r.scope);
+        setAssumptions(r.assumptions);
+        setTablesEdited(false);
+        setSampleEstimate(false);
+        if (r.spec && r.factsKey) {
+          lastSpecRef.current = r.spec;
+          setSeedSpec({ spec: r.spec, key: r.factsKey });
+        }
+      }
+      setLinkInfo({ others: r.others, older: r.older, missing: !opened, loading: false });
+    })();
+    // openRecent/runManual are this render's handlers; the proposal opens once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalId]);
 
   async function generate() {
     const t = totals;
@@ -1071,7 +1179,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           : `MEASURED lengths from the aerial report #${mf.reportId}: eave ${Math.round(mf.eaveFt)} ft, rake ${Math.round(mf.rakeFt)} ft, ridge ${Math.round(mf.ridgeFt)} ft, hip ${Math.round(mf.hipFt)} ft, valley ${Math.round(mf.valleyFt)} ft, step flashing ${Math.round(mf.stepFlashFt)} ft — use these for drip edge, starter, cap, ridge vent, valley metal and step flashing`
           : est
           ? isSolar
-            ? `linear quantities ESTIMATED from building footprint and assumed roof shape: eave ${Math.round(est.eaveFt)} ft, rake ${Math.round(est.rakeFt)} ft, ridge ${Math.round(est.ridgeFt)} ft, hip ${Math.round(est.hipFt)} ft — verify every run on site`
+            ? `linear quantities ESTIMATED from building footprint and assumed roof shape: eave ${Math.round(est.eaveFt)} ft, rake ${Math.round(est.rakeFt)} ft, ridge ${Math.round(est.ridgeFt)} ft, hip ${Math.round(est.hipFt)} ft${est.valleyFt != null && est.valleyFt > 0 ? `, valley ${Math.round(est.valleyFt)} ft` : ""} — verify every run on site`
           : roofFacts && isFlatRoof(roofFacts)
             ? `flat roof perimeter ESTIMATED from the outline: ${Math.round(est.eaveFt)} ft — split it between parapet (coping) and open edge (edge metal) from the photo`
             : `edge lengths ESTIMATED from the outline and shape: eave ${Math.round(est.eaveFt)} ft, rake ${Math.round(est.rakeFt)} ft, ridge ${Math.round(est.ridgeFt)} ft, hip ${Math.round(est.hipFt)} ft${est.valleyFt != null && est.valleyFt > 0 ? `, valley ${Math.round(est.valleyFt)} ft (from the facet count)` : ""} — use these unless the photo says otherwise`
@@ -1168,6 +1276,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     });
   }
   function applyPackage(pkg: RoofPackage, spec: RoofPackageSpec, quiet = false) {
+    lastSpecRef.current = spec;
     if (!pitchForEstimate) {
       toast.error("Enter the roof pitch first");
       return null;
@@ -1210,6 +1319,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // case THOSE lines are the estimate and the card's button converts them
   // (review 2026-09-17: a qty edited 15 → 99 was silently dropped).
   function convertPackage(pkg: RoofPackage, spec: RoofPackageSpec) {
+    lastSpecRef.current = spec;
     if (hasEstimate && tablesEdited) {
       void convert();
       return;
@@ -1282,7 +1392,18 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
 
   // Convert THESE lines — the tables' state, or a package just built, which
   // React would not have committed to state yet ("convert as is").
-  async function convertWith(input: { title: string; materials: EditableLine[]; labor: EditableLine[]; assumptions: string[]; scope: string }) {
+  /** What the estimator was looking at, kept with the proposal so it opens here again (ROOF_PLAN). */
+  function planNow(assumptionsNow: string[]) {
+    return {
+      spec: (lastSpecRef.current as unknown as Record<string, unknown> | null) ?? null,
+      factsKey: roofFacts ? factsKey(roofFacts) : null,
+      manual: manual ? { squares: manual.squares, pitchLabel: manual.pitchLabel, address: manual.address } : null,
+      extra: [...extra],
+      pitchEntered,
+      assumptions: assumptionsNow,
+    };
+  }
+  async function convertWith(input: { title: string; materials: EditableLine[]; labor: EditableLine[]; assumptions: string[]; scope: string }, opts: { asNew?: boolean; confirmed?: boolean } = {}) {
     if (!measurement && !manual) return;
     if (isRecon) {
       toast.error("Estimated measurements can’t become a proposal", "Use Measure this roof on this address first.");
@@ -1294,6 +1415,42 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     }
     if (!input.materials.length && !input.labor.length) {
       toast.error("Nothing to convert", "Build the estimate first.");
+      return;
+    }
+    // Working on a saved proposal: THAT one is re-priced, unless it is signed
+    // or paid (then a new proposal), or the contractor chose a new one.
+    if (linked && !linked.lock && !opts.asNew) {
+      if (linked.seen && !opts.confirmed) {
+        setAskUpdate({ go: () => void convertWith(input, { confirmed: true }) });
+        document.querySelector("[data-roof-linked]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      setAskUpdate(null);
+      setConvertBusy(true);
+      try {
+        const r = await updateRoofProposal({
+          proposalId: linked.id,
+          title: input.title || `Roof · ${siteAddress || "site"}`,
+          scope: input.scope,
+          materials: input.materials.map(stripId),
+          labor: input.labor.map(stripId),
+          measurementId: savedId,
+          address: siteAddress ?? null,
+          plan: planNow(input.assumptions),
+        });
+        if (!r.ok) {
+          setConvertBusy(false);
+          if (r.code === "LOCKED") setLinked({ ...linked, lock: r.lock });
+          toast.error(`Couldn't update ${linked.ref}`, r.error);
+          return;
+        }
+        const kept = [r.kept ? `${r.kept} line${r.kept === 1 ? "" : "s"} you added in the proposal stayed` : "", r.titleKept ? "your title stayed" : "", r.scopeKept ? "your scope stayed" : ""].filter(Boolean).join(" · ");
+        toast.success(`${linked.ref} updated`, kept || "The proposal now carries this estimate.");
+        router.push(`/dashboard/proposals/${r.id}` as Parameters<typeof router.push>[0]);
+      } catch (err) {
+        setConvertBusy(false);
+        toast.error(`Couldn't update ${linked.ref}`, errMsg(err));
+      }
       return;
     }
     if (!(await ensureWithinLimit("proposalsCreated"))) return;
@@ -1310,6 +1467,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         // The job address rides with the proposal (and sets the state's sales
         // tax); the server prefers the saved measurement's own when there is one.
         address: siteAddress ?? undefined,
+        plan: planNow(input.assumptions),
       });
       toast.success("Proposal created");
       router.push(`/dashboard/proposals/${res.id}` as Parameters<typeof router.push>[0]);
@@ -1452,7 +1610,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     pitchKind === "solar"
       ? `rise / 12 · estimated${solar && solar.pitchFamilies.length > 1 ? " · mixed pitches" : ""}`
     : pitchKind === "measured"
-      ? `measured · ${Math.round((pitchRep!.trustedShare ?? 0) * 100)}% of roof`
+      ? // How much of the roof is at each pitch (owner, 2026-10-13: "what does 60% mean?" — it was the share of the
+        // roof the elevation data read cleanly, and it read like the share at that pitch).
+        pitchSharesWords(pitchRep!.families)
       : pitchKind === "entered"
         ? "rise / 12 · entered by hand"
         : pitchKind === "eagleview"
@@ -1513,6 +1673,10 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           measured: manual || isSolar ? null : report.state === "measured" ? report.footage ?? null : null,
           existingMaterial: manual || isSolar ? null : structure?.material ?? null,
           facetConfidence: manual || isSolar ? null : structure?.confidence?.facetCount ?? null,
+          // The footprints the valleys are read off (every inside corner is one, 2026-10-13); the fallback's roof-plane
+          // count stands in for a facet count there — an estimate, never a measured fact.
+          outlines: manual || isSolar ? null : includedStructures.map((s) => s.outline).filter((r): r is Array<{ lat: number; lng: number }> => !!r && r.length >= 4),
+          facetCountEstimated: isSolar ? solarFacetCount : null,
           buildingUse: manual ? null : buildingUse,
         }
       : null;
@@ -1535,7 +1699,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // these are MEASURED only when the full aerial report exists for the
   // address (ridge, hip, valley, eave and rake as flown); otherwise eave,
   // rake, ridge and hip are ESTIMATED from the outline and the roof shape,
-  // and valleys stay unknown until the report is ordered.
+  // and the valleys from the outline's inside corners (2026-10-13) — a dash
+  // only when there is nothing to read them from.
   // The hero says the figure and its unit — nothing else. The first cut wrote
   // the provenance under each number ("estimated from outline", "not in
   // instant data"), and a contractor turning the screen to a client was
@@ -1582,8 +1747,51 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   const photoShown = view === "satellite" ? satPhoto : orthoPhoto;
   const photoError = view === "satellite" ? satErr : orthoErr;
 
+  // The strip over the page while it works on a saved proposal.
+  const linkedStrip = linked ? (
+    <div className={"rf-linked" + (linked.lock ? " is-locked" : "")} data-roof-linked={linked.lock ? "locked" : "open"}>
+      <div className="rf-linked-main">
+        <span className="rf-linked-k">Editing</span>
+        <b>{linked.ref}</b>
+        <span className="rf-linked-t">{linked.title}</span>
+        <span className="rf-linked-st">{PROPOSAL_STATUS_WORDS[linked.status] ?? linked.status}</span>
+      </div>
+      <p className="rf-linked-say">
+        {linked.lock
+          ? `This proposal is ${DECK_LOCK_WORDS[linked.lock]}, so its price stays as it is. Change anything here and Convert makes a new proposal.`
+          : linkInfo?.loading
+            ? "Opening its roof…"
+            : linkInfo?.missing
+              ? "Its measurement couldn't be opened — measure the address again (or open one from Recent), then Update puts the new lines on this proposal."
+              : `Change anything — the roof, the choices, the lines — then Update ${linked.ref} re-prices this proposal.${linkInfo?.others ? ` ${linkInfo.others} line${linkInfo.others === 1 ? "" : "s"} you added in the proposal stay${linkInfo.others === 1 ? "s" : ""}.` : ""}${linkInfo?.older ? " It was made before choices were kept, so the builder starts from your usual ones; the lines are the proposal's." : ""}`}
+      </p>
+      {askUpdate ? (
+        <div className="rf-linked-ask" role="alert" data-roof-update-confirm>
+          <span>The client already has this proposal{linked.status === "VIEWED" ? " and opened it" : ""}. Updating changes what they see.</span>
+          <button type="button" className="btn btn-primary btn--sm" data-roof-update-yes onClick={() => askUpdate.go()} disabled={convertBusy}>
+            {convertBusy ? "Updating…" : `Update ${linked.ref}`}
+          </button>
+          <button type="button" className="btn btn-ghost btn--sm" onClick={() => setAskUpdate(null)} disabled={convertBusy}>
+            Not now
+          </button>
+        </div>
+      ) : null}
+      <div className="rf-linked-acts">
+        <a className="btn btn-ghost btn--sm" href={`/dashboard/proposals/${encodeURIComponent(linked.id)}`} data-roof-linked-back>
+          Back to the proposal
+        </a>
+        {!linked.lock && hasEstimate ? (
+          <button type="button" className="btn btn-ghost btn--sm" data-roof-convert-new disabled={convertBusy || isRecon || sampleEstimate} onClick={() => void convertWith({ title, materials, labor, assumptions, scope: scopeText }, { asNew: true })}>
+            Save as a new proposal
+          </button>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
+      {linkedStrip}
       {/* ===== INTAKE: measure a roof ===== */}
       <section className={"ppanel" + (panel === "intake" ? "" : " is-hidden")} data-panel="intake">
         <div className="card rf-card">
@@ -1732,31 +1940,61 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
 
       {/* ===== MEASUREMENT IN PROGRESS ===== */}
       <section className={"ppanel" + (panel === "measuring" ? "" : " is-hidden")} data-panel="measuring">
-        <div className="card rf-card measuring">
+        <div className={"card rf-card measuring" + (msWhere && mapsOn ? " has-map" : "")}>
           <div className="ms-body">
             <div className="ms-num">{msReport}</div>
             <div className="ms-head">
               <div className="ms-stage" role="status" aria-live="polite">
-                {measurementBusy ? "Measuring the roof…" : ms.done ? "Report ready" : `${stepLabel(Math.min(ms.step, MS_STEPS.length - 1))}…`}
+                {ms.done ? "Report ready" : `${stepLabel(Math.min(ms.step, MS_STEPS.length - 1))}…`}
               </div>
-              {!measurementBusy && <div className="ms-pct">{ms.pct}%</div>}
+              <div className="ms-pct">{ms.pct}%</div>
             </div>
-            {!measurementBusy && <>
             <div className="ms-track" role="progressbar" aria-label="Measurement progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={ms.pct}>
               <span className="ms-fill" style={{ width: `${ms.pct}%` }} />
             </div>
-            <ol className="ms-steps" aria-label="Measurement steps">
-              {MS_STEPS.map((label, i) => (
-                <li key={label} className={"ms-step" + (ms.done || i < ms.step ? " is-done" : i === ms.step ? " is-active" : "")}>
-                  <span className="ms-step-mark" aria-hidden="true" />
-                  <span>{stepLabel(i, label)}</span>
-                  <span className="ms-step-state">{ms.done || i < ms.step ? "done" : i === ms.step ? "in progress" : ""}</span>
-                </li>
-              ))}
-            </ol>
-            </>}
+            <div className={"ms-grid" + (msWhere && mapsOn ? " has-map" : "")}>
+              <div>
+                <ol className="ms-steps" aria-label="Measurement steps">
+                  {MS_STEPS.map((label, i) => (
+                    <li key={label} className={"ms-step" + (ms.done || i < ms.step ? " is-done" : i === ms.step ? " is-active" : "")}>
+                      <span className="ms-step-mark" aria-hidden="true" />
+                      <span>{stepLabel(i, label)}</span>
+                      <span className="ms-step-state">{ms.done || i < ms.step ? "done" : i === ms.step ? "in progress" : ""}</span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="ms-clock" data-ms-elapsed={msElapsed}>
+                  <span>{Math.floor(msElapsed / 60)}:{String(msElapsed % 60).padStart(2, "0")}</span> elapsed
+                </div>
+              </div>
+              {msWhere && mapsOn ? (
+                <div className="ms-map" data-ms-map>
+                  <AddressPinPreview lat={msWhere.lat} lng={msWhere.lng} label={msWhere.label} scanning />
+                </div>
+              ) : null}
+            </div>
             <div className="ms-hint">
               {msHint ?? "Measuring the structure, pitch by pitch."}
+            </div>
+            {/* While it works: what comes next, one line at a time; the dots pick one and hold it. */}
+            <div className="ms-tips" data-ms-tips>
+              <span className="ms-tips-k">While you wait</span>
+              <p className="ms-tip" aria-live="polite" key={tip}>{WAIT_TIPS[tip]}</p>
+              <div className="ms-tip-dots" role="group" aria-label="Tips">
+                {WAIT_TIPS.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={"ms-tip-dot" + (i === tip ? " is-on" : "")}
+                    aria-label={`Tip ${i + 1} of ${WAIT_TIPS.length}`}
+                    aria-pressed={i === tip}
+                    onClick={() => {
+                      setTip(i);
+                      setTipHeld(true);
+                    }}
+                  />
+                ))}
+              </div>
             </div>
             {holding && (
               <div className="ms-acts">
@@ -1905,7 +2143,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
             <div className="card rf-hero" id="rfHero">
               <HeroCell l="Total area" v={totals?.areaSqft != null ? num(totals.areaSqft) : "—"} h={isSolar ? "sq ft · estimated" : "sq ft"} />
               <HeroCell l="Roofing squares" v={totals?.squares != null ? num(totals.squares, 1) : "—"} h="× 100 sq ft" accent />
-              <HeroCell l="Predominant pitch" v={pitchLabelShown} h={pitchHint} />
+              <HeroCell l="Roof pitch" v={pitchLabelShown} h={pitchHint} />
               <HeroCell
                 l="Roof facets"
                 v={isSolar ? (solarFacetCount != null ? `≈${solarFacetCount}` : "—") : (totals?.facetCount != null ? String(totals.facetCount) : "—")}
@@ -1913,7 +2151,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               />
               <HeroCell l="Eaves + rakes" v={edgeTiles.edges} h={isSolar ? "linear ft · estimated" : "linear ft"} />
               <HeroCell l="Ridge + hips" v={edgeTiles.ridge} h={isSolar ? "linear ft · estimated" : "linear ft"} />
-              <HeroCell l="Valleys" v={edgeTiles.valley} h={isSolar ? "not measured" : "linear ft"} />
+              <HeroCell l="Valleys" v={edgeTiles.valley} h={isSolar ? "linear ft · estimated" : "linear ft"} />
             </div>
             {measurement && (
             <div className="rf-grid">
@@ -2204,6 +2442,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               converting={convertBusy}
               onBuild={applyPackage}
               onConvert={convertPackage}
+              seedSpec={seedSpec}
+              convertLabel={linked && !linked.lock ? `Update ${linked.ref}` : undefined}
               hasEstimate={hasEstimate}
               output={
                 <div className={"build-out" + (hasEstimate ? "" : " is-hidden")} id="buildOut">
@@ -2236,11 +2476,11 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                             type="button"
                             id="convertBtn"
                             disabled={convertBusy || isRecon || sampleEstimate}
-                            title={sampleEstimate ? "Sample lines (AI is off) can’t become a proposal — build the package instead." : "Create a draft proposal from these lines"}
+                            title={sampleEstimate ? "Sample lines (AI is off) can’t become a proposal — build the package instead." : linked && !linked.lock ? `Put these lines on ${linked.ref}` : "Create a draft proposal from these lines"}
                             onClick={() => void convert()}
                           >
                             <svg className="ic"><use href="#i-file" /></svg>
-                            {convertBusy ? "Creating…" : "Convert to proposal"}
+                            {linked && !linked.lock ? (convertBusy ? "Updating…" : `Update ${linked.ref}`) : convertBusy ? "Creating…" : "Convert to proposal"}
                           </button>
                         </span>
                       </div>

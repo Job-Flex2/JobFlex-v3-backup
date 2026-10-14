@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { requireEstimatorOrManager } from "@/lib/orgContext";
+import { isEstimatorRole, isSalesRole, requireEstimatorOrManager } from "@/lib/orgContext";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 
 const estimateTotal = (d: { materials: Array<{ quantity: number; unitPrice: number }>; labor: Array<{ quantity: number; unitPrice: number }> }) =>
@@ -23,6 +23,12 @@ import { logServerError } from "@/lib/server-events";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { takeTrialCap } from "@/lib/trialMeter";
 import { requirePage } from "@/lib/customPageAccess";
+import { proposalRef } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-bridge";
+import { saveProposal } from "@/actions/proposals";
+import { deckProposalLock, deckProposalSeen, DECK_LOCK_WORDS, type DeckProposalLock, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
+import { deckUpdatePayload } from "@/lib/deck/proposalUpdate";
+import { readRoofPlan, roofTablesFromProposal, roofUnitType as unitToType, ROOF_PLAN_EVENT, ROOF_PLAN_VERSION, type RoofManualTakeoff, type RoofTableLine } from "@/lib/roofPackage/proposalEdit";
+import type { RoofPackageSpec } from "@/lib/roofPackage/takeoff";
 
 /**
  * The sample shown when no OpenAI key is set. Scaled from the REAL squares
@@ -180,6 +186,46 @@ Waste factor: ${input.wastePct}%${input.roofKind === "low-slope" ? "\nRoof kind:
   }
 }
 
+/** The estimator's side of a ROOF_PLAN, as the page sends it (lib/roofPackage/proposalEdit reads it back). */
+const roofPlanInput = z.object({
+  spec: z.record(z.string(), z.unknown()).nullable().optional(),
+  factsKey: z.string().max(400).nullable().optional(),
+  manual: z.object({ squares: z.number().positive().max(100000), pitchLabel: z.string().max(20), address: z.string().max(300).nullable() }).nullable().optional(),
+  extra: z.array(z.number().int().min(0).max(200)).max(50).optional(),
+  pitchEntered: z.string().max(20).nullable().optional(),
+  assumptions: z.array(z.string().max(2000)).max(60).optional(),
+});
+type RoofPlanInput = z.infer<typeof roofPlanInput>;
+
+/** One ROOF_PLAN row: the plan, and what the estimator wrote on the proposal. A failure costs the reopening, never the proposal. */
+async function writeRoofPlan(
+  g: { organizationId: string; userId: string },
+  proposalId: string,
+  plan: RoofPlanInput | null | undefined,
+  at: { measurementId: string | null; address: string | null; written: { title: string; scope: string; lines: string[] } },
+  summary: string,
+) {
+  try {
+    const meta = {
+      v: ROOF_PLAN_VERSION,
+      measurementId: at.measurementId,
+      manual: plan?.manual ?? null,
+      spec: plan?.spec ?? null,
+      factsKey: plan?.factsKey ?? null,
+      extra: plan?.extra ?? [],
+      pitchEntered: plan?.pitchEntered ?? null,
+      assumptions: plan?.assumptions ?? [],
+      address: at.address,
+      written: at.written,
+    };
+    const json = JSON.stringify(meta);
+    // A spec is a few kilobytes; anything far past that is not one.
+    await db.activityEvent.create({ data: { organizationId: g.organizationId, actorId: g.userId, proposalId, kind: ROOF_PLAN_EVENT, summary, meta: json.length > 200_000 ? JSON.stringify({ ...meta, spec: null }) : json } });
+  } catch (err) {
+    console.warn("[roof] plan not kept:", err instanceof Error ? err.message : err);
+  }
+}
+
 const convertSchema = z.object({
   title: z.string(),
   scope: z.string().optional(),
@@ -209,6 +255,9 @@ const convertSchema = z.object({
   // The job address, for a hand takeoff with no measurement row; the saved
   // measurement's own address wins when there is one.
   address: z.string().max(300).optional().nullable(),
+  // What the estimator was looking at, kept with the proposal so it opens
+  // again there (ROOF_PLAN, 2026-10-13). Never trusted for prices.
+  plan: roofPlanInput.optional().nullable(),
 });
 
 export async function convertRoofEstimateToProposal(raw: unknown) {
@@ -341,6 +390,14 @@ export async function convertRoofEstimateToProposal(raw: unknown) {
       summary: `Converted roof estimate to proposal "${proposal.title}"`,
     },
   });
+  // Kept so "Edit the roof estimate" opens it again (2026-10-13).
+  await writeRoofPlan(
+    { organizationId, userId: user.id },
+    proposal.id,
+    data.plan,
+    { measurementId: measurementRow?.id ?? null, address, written: { title: data.title, scope: proposal.scopeOfWork ?? "", lines: lines.map((l) => l.name.trim()) } },
+    `Roof estimate kept with "${proposal.title}"`,
+  );
   trackProposalCreated(organizationId, "roof");
 
   if (filing) await clearFilingContext();
@@ -349,21 +406,194 @@ export async function convertRoofEstimateToProposal(raw: unknown) {
   return { id: proposal.id };
 }
 
-/**
- * The estimate's free-text unit → the proposal's measurement type. Reads the
- * WORD, not an exact spelling: the AI wrote "linear foot" and the old exact
- * match sent every such line to the proposal as "Unit" (2026-09-12, every
- * line of a converted estimate showed "Unit"). Roofing squares get their own
- * type — SQUARE — so a shingle line stays "24.9 squares" on the proposal.
+/* ── Opening a roof proposal again (owner, 2026-10-13) ──────────────────────
+ *
+ * "Make roofing proposal when open to get back to the roofing edit to rebuild
+ * it." The builder's "Edit the roof estimate" opens the estimator on
+ * ?proposal=<id>: loadRoofFromProposal hands back the measurement (or the hand
+ * takeoff), the package choices and the estimator's lines as the proposal has
+ * them now; updateRoofProposal re-prices THAT proposal through the builder's
+ * own save, by the deck's rules (lib/deck/proposalEdit — signed/paid/finished
+ * is refused, the builder's own lines stay, hand-typed title/scope stay).
+ * A roof proposal from before the plan was kept opens on its site photo's
+ * measurement, with every line as the estimator's.
  */
-function unitToType(unit: string | undefined): string {
-  const u = (unit ?? "").trim().toLowerCase();
-  if (!u) return "UNIT";
-  if (/sq\.?\s*ft|sqft|square\s*f(ee|oo)?t|\bsf\b/.test(u)) return "SQFT";
-  if (/^sq(uare)?s?$/.test(u) || /\bsquares?\b/.test(u)) return "SQUARE";
-  if (/lin|\bln\b|\blf\b|\bft\b|f(ee|oo)t/.test(u)) return "LINEAR_FT";
-  if (/cu(bic)?\.?\s*(ft|yd)|\bcy\b/.test(u)) return "CUBIC_FT";
-  if (/hour|\bhrs?\b/.test(u)) return "HOUR";
-  if (/lot|lump|allowance|flat|fixed|\bjob\b/.test(u)) return "LUMP_SUM";
-  return "UNIT";
+
+/** The proposal the estimator works on, as the page shows it; null when gone or another company's. */
+async function linkedRoofProposal(g: { organizationId: string; userId: string; role: string }, proposalId: string): Promise<LinkedDeckProposal | null> {
+  const p = await db.proposal
+    .findFirst({ where: { id: proposalId, organizationId: g.organizationId }, select: { id: true, publicId: true, title: true, status: true, ownerId: true, installments: { select: { status: true, paidAmount: true } } } })
+    .catch(() => null);
+  if (!p) return null;
+  // An estimator works on their own proposals only (requireProposalStaff's scope).
+  const theirs = (isSalesRole(g.role) || isEstimatorRole(g.role)) && p.ownerId !== g.userId;
+  return { id: p.id, ref: proposalRef(p.publicId), title: p.title, status: p.status, lock: deckProposalLock(p.status, p.installments) ?? (theirs ? "theirs" : null), seen: deckProposalSeen(p.status) };
 }
+
+export type RoofFromProposal = {
+  ok: true;
+  proposal: LinkedDeckProposal;
+  measurementId: string | null;
+  manual: RoofManualTakeoff | null;
+  spec: RoofPackageSpec | null;
+  factsKey: string | null;
+  extra: number[];
+  pitchEntered: string | null;
+  address: string | null;
+  title: string;
+  scope: string;
+  assumptions: string[];
+  materials: RoofTableLine[];
+  labor: RoofTableLine[];
+  /** Lines added in the builder: they stay on the proposal, after the estimator's. */
+  others: number;
+  /** No plan was kept (an older proposal): the page says what it could bring back. */
+  older: boolean;
+};
+
+export async function loadRoofFromProposal(proposalId: string): Promise<RoofFromProposal | { ok: false; error: string }> {
+  const { organizationId, user, role } = await requireEstimatorOrManager();
+  await requirePage(organizationId, "roof-estimator");
+  const g = { organizationId, userId: user.id, role };
+  const linked = await linkedRoofProposal(g, String(proposalId ?? ""));
+  if (!linked) return { ok: false, error: "That proposal is gone, or it is another company's." };
+  const [row, ev] = await Promise.all([
+    db.proposal.findFirst({
+      where: { id: linked.id, organizationId },
+      select: {
+        trade: true,
+        title: true,
+        scopeOfWork: true,
+        address: true,
+        lineItems: { orderBy: { position: "asc" }, select: { name: true, measurementType: true, quantity: true, unitPrice: true, materialCost: true, laborCost: true } },
+      },
+    }),
+    db.activityEvent.findFirst({ where: { proposalId: linked.id, organizationId, kind: ROOF_PLAN_EVENT }, orderBy: { createdAt: "desc" }, select: { meta: true } }).catch(() => null),
+  ]);
+  if (!row) return { ok: false, error: "That proposal is gone, or it is another company's." };
+  let plan = null as ReturnType<typeof readRoofPlan>;
+  try {
+    plan = ev?.meta ? readRoofPlan(JSON.parse(ev.meta)) : null;
+  } catch {
+    plan = null;
+  }
+  if (!plan && row.trade !== "roof") return { ok: false, error: "That proposal was not made in the roof estimator." };
+  // The measurement: the plan's, else the proposal's site photo (every roof convert links it).
+  let measurementId = plan?.measurementId ?? null;
+  if (!measurementId && !plan?.manual) {
+    const photo = await db.proposalSitePhoto.findFirst({ where: { proposalId: linked.id }, select: { roofMeasurementId: true } }).catch(() => null);
+    measurementId = photo?.roofMeasurementId ?? null;
+  }
+  // Only this company's measurement opens.
+  if (measurementId) {
+    const own = await db.roofMeasurement.findFirst({ where: { id: measurementId, organizationId }, select: { id: true } }).catch(() => null);
+    if (!own) measurementId = null;
+  }
+  const tables = roofTablesFromProposal(row.lineItems, plan?.written ?? null);
+  return {
+    ok: true,
+    proposal: linked,
+    measurementId,
+    manual: plan?.manual ?? null,
+    spec: plan?.spec ?? null,
+    factsKey: plan?.factsKey ?? null,
+    extra: plan?.extra ?? [],
+    pitchEntered: plan?.pitchEntered ?? null,
+    address: row.address ?? plan?.address ?? null,
+    title: row.title,
+    scope: row.scopeOfWork ?? "",
+    assumptions: plan?.assumptions ?? [],
+    materials: tables.materials,
+    labor: tables.labor,
+    others: tables.others,
+    older: !plan,
+  };
+}
+
+const lineInput = z.object({ name: z.string().max(300), quantity: z.number().finite().min(0).max(10_000_000), unitPrice: z.number().finite().min(0).max(10_000_000), unit: z.string().max(40).optional() });
+const roofUpdateSchema = z.object({
+  proposalId: z.string().min(1).max(64),
+  title: z.string().max(300),
+  scope: z.string().max(20_000).optional(),
+  materials: z.array(lineInput).max(300),
+  labor: z.array(lineInput).max(300),
+  measurementId: z.string().max(64).optional().nullable(),
+  address: z.string().max(300).optional().nullable(),
+  plan: roofPlanInput.optional().nullable(),
+});
+
+export type RoofUpdateResult =
+  | { ok: true; id: string; kept: number; titleKept: boolean; scopeKept: boolean }
+  | { ok: false; code: "LOCKED"; lock: DeckProposalLock; error: string }
+  | { ok: false; code: "MISSING" | "INVALID" | "FAILED"; error: string };
+
+export async function updateRoofProposal(raw: unknown): Promise<RoofUpdateResult> {
+  const { organizationId, user, role } = await requireEstimatorOrManager();
+  await requirePage(organizationId, "roof-estimator");
+  const parsed = roofUpdateSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, code: "INVALID", error: parsed.error.issues[0]?.message ?? "Those lines could not be read." };
+  const data = parsed.data;
+  if (!data.materials.length && !data.labor.length) return { ok: false, code: "INVALID", error: "Build the estimate first — there are no lines to put on the proposal." };
+  const g = { organizationId, userId: user.id, role };
+  const missing = { ok: false as const, code: "MISSING" as const, error: "That proposal is gone. Save the estimate as a new proposal." };
+  try {
+    const linked = await linkedRoofProposal(g, data.proposalId);
+    if (!linked) return missing;
+    if (linked.lock) return { ok: false, code: "LOCKED", lock: linked.lock, error: `This proposal is ${DECK_LOCK_WORDS[linked.lock]}, so its price stays as it is. Save the new estimate as a new proposal.` };
+    const [row, org, ev] = await Promise.all([
+      db.proposal.findFirst({
+        where: { id: linked.id, organizationId },
+        include: { lineItems: { orderBy: { position: "asc" } }, installments: { orderBy: { position: "asc" } }, discounts: true },
+      }),
+      db.organization.findUnique({ where: { id: organizationId }, select: { defaultTaxRate: true, materialMarkupPct: true, laborMarkupPct: true } }),
+      db.activityEvent.findFirst({ where: { proposalId: linked.id, organizationId, kind: ROOF_PLAN_EVENT }, orderBy: { createdAt: "desc" }, select: { meta: true } }).catch(() => null),
+    ]);
+    if (!row) return missing;
+    let before = null as ReturnType<typeof readRoofPlan>;
+    try {
+      before = ev?.meta ? readRoofPlan(JSON.parse(ev.meta)) : null;
+    } catch {
+      before = null;
+    }
+    // The measurement's own address wins, as at the convert.
+    let measurementId: string | null = null;
+    let address = data.address?.trim() || null;
+    if (data.measurementId) {
+      const m = await db.roofMeasurement.findFirst({ where: { id: data.measurementId, organizationId }, select: { id: true, address: true, city: true, state: true, zip: true } }).catch(() => null);
+      if (m) {
+        measurementId = m.id;
+        address = [m.address, [m.city, m.state].filter(Boolean).join(", "), m.zip].filter(Boolean).join(", ") || address;
+      }
+    }
+    const lines = [
+      ...data.materials.map((l) => ({ name: l.name, quantity: l.quantity, unit: l.unit, materialCost: l.unitPrice, laborCost: 0 })),
+      ...data.labor.map((l) => ({ name: l.name, quantity: l.quantity, unit: l.unit, materialCost: 0, laborCost: l.unitPrice })),
+    ].filter((l) => l.name.trim());
+    const next = deckUpdatePayload(
+      row,
+      // An older roof proposal has no record of its lines: every line is the estimator's, and its title follows.
+      { written: before?.written ?? null, oldWords: before?.written ? null : row.title.split(" · ")[0] || null },
+      { title: data.title, scope: data.scope ?? "", address, lines },
+      org,
+      unitToType,
+    );
+    await saveProposal(next.payload);
+    // The house photo follows a re-measured roof.
+    if (measurementId) {
+      await db.proposalSitePhoto.deleteMany({ where: { proposalId: row.id, NOT: { roofMeasurementId: measurementId } } }).catch(() => {});
+      const has = await db.proposalSitePhoto.findFirst({ where: { proposalId: row.id, roofMeasurementId: measurementId }, select: { id: true } }).catch(() => null);
+      if (!has) await db.proposalSitePhoto.create({ data: { proposalId: row.id, roofMeasurementId: measurementId } }).catch(() => {});
+    }
+    await writeRoofPlan(g, row.id, data.plan, { measurementId, address: next.payload.address || null, written: next.written }, `Roof estimate changed — ${money(Math.round(next.subtotal))}`);
+    await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.ESTIMATE, proposalId: row.id, summary: `Re-priced the roof from the estimator — ${money(Math.round(next.subtotal))}`, meta: { trade: "roof", amount: Math.round(next.subtotal) } });
+    revalidatePath("/dashboard/proposals");
+    return { ok: true, id: row.id, kept: next.kept, titleKept: next.titleKept, scopeKept: next.scopeKept };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (/already paid|being paid/.test(message)) return { ok: false, code: "LOCKED", lock: "paid", error: `${message}. Save the new estimate as a new proposal.` };
+    if (message === "Not found") return { ok: false, code: "LOCKED", lock: "theirs", error: `This proposal is ${DECK_LOCK_WORDS.theirs}. Save the estimate as a new proposal.` };
+    logServerError("roof-update", err, { kind: "action", organizationId });
+    return { ok: false, code: "FAILED", error: "The proposal could not be updated. Try again in a moment; if it keeps failing, tell support the time it happened." };
+  }
+}
+

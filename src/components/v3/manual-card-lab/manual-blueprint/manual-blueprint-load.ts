@@ -271,6 +271,7 @@ export async function loadManualBuilder({
         fenceDrawing,
         deckDrawing,
         priceOnly: !!proposalRow.trade,
+        trade: proposalRow.trade ?? null,
         media,
         ref: proposalRef(proposalRow.publicId),
         status: proposalRow.status,

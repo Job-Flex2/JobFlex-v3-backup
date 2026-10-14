@@ -48,7 +48,7 @@ import {
   type ClientStart,
   type ClientUnsure,
 } from "@/lib/deck/clientDesign";
-import { markClientLinkSeen, unseenClientReturns } from "@/lib/deck/clientLinksServer";
+import { markClientLinkSeen, unseenClientReturns, withProposals } from "@/lib/deck/clientLinksServer";
 
 type Gate = { ok: true; organizationId: string; userId: string } | { ok: false; error: string };
 
@@ -165,6 +165,7 @@ export async function createDeckClientLink(input: {
       proposalId,
       byName: who?.name?.trim() || who?.email || null,
       seenAt: null,
+      pricedAt: null,
     };
     await writeLink(link);
     // The shop's list, newest first; past the cap the oldest link closes.
@@ -198,13 +199,11 @@ export async function listDeckClientLinks(): Promise<{ ok: true; links: Array<Cl
     const org = await db.organization.findUnique({ where: { id: g.organizationId }, select: { name: true } }).catch(() => null);
     const base = (await appBaseUrl()).replace(/\/$/, "");
     const now = Date.now();
-    const links = tokens
-      .map((t) => byToken.get(t))
-      .filter((l): l is ClientDesignLink => !!l)
-      .map((l) => {
-        const url = `${base}/deck-design/${l.token}`;
-        return { ...clientLinkRow(l, now), url, message: clientLinkMessage({ org: org?.name ?? "", clientName: l.clientName, link: url, start: l.start }) };
-      });
+    const linkRows = await withProposals(tokens.map((t) => byToken.get(t)).filter((l): l is ClientDesignLink => !!l).map((l) => clientLinkRow(l, now)), g.organizationId);
+    const links = linkRows.map((r) => {
+      const url = `${base}/deck-design/${r.token}`;
+      return { ...r, url, message: clientLinkMessage({ org: org?.name ?? "", clientName: r.clientName, link: url, start: r.start }) };
+    });
     return { ok: true, links };
   } catch (err) {
     logServerError("deck-client-links", err, { kind: "action", organizationId: g.organizationId });
@@ -218,7 +217,7 @@ export async function deckClientInbox(): Promise<{ ok: true; unseen: Array<Clien
   if (!g.ok) return g;
   try {
     const base = (await appBaseUrl()).replace(/\/$/, "");
-    const unseen = (await unseenClientReturns(g.organizationId)).map((l) => ({ ...l, url: `${base}/deck-design/${l.token}` }));
+    const unseen = (await withProposals(await unseenClientReturns(g.organizationId), g.organizationId)).map((l) => ({ ...l, url: `${base}/deck-design/${l.token}` }));
     return { ok: true, unseen, count: unseen.length };
   } catch (err) {
     logServerError("deck-client-inbox", err, { kind: "action", organizationId: g.organizationId });

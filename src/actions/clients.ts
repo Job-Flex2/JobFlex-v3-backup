@@ -130,6 +130,42 @@ export async function setClientEmail(id: string, rawEmail: unknown) {
   return { email };
 }
 
+/**
+ * The email and phone typed on a proposal's client card, onto the client record
+ * (owner, 2026-10-13: an email typed on a roof proposal never reached the send).
+ * A blank field leaves the record's value alone — the card never erases.
+ */
+export async function saveClientContact(id: string, raw: unknown) {
+  const { organizationId, user } = await requireSalesOrManager();
+  const input = z
+    .object({
+      email: z.string().trim().email("Enter a valid email address").optional(),
+      phone: z.string().trim().max(40).optional(),
+    })
+    .parse(raw);
+  const existing = await db.client.findUnique({
+    where: { id },
+    select: { organizationId: true, deletedAt: true, name: true, email: true, phone: true },
+  });
+  if (!existing || existing.organizationId !== organizationId || existing.deletedAt) {
+    throw new Error("Client not found");
+  }
+  const data: { email?: string; phone?: string } = {};
+  if (input.email && input.email.toLowerCase() !== (existing.email ?? "").trim().toLowerCase()) data.email = input.email;
+  if (input.phone && input.phone !== (existing.phone ?? "").trim()) data.phone = input.phone;
+  if (!data.email && !data.phone) return { email: existing.email, phone: existing.phone };
+  await db.client.update({ where: { id }, data });
+  await logActivity({
+    organizationId,
+    actorId: user.id,
+    kind: TRAIL_KINDS.CLIENT,
+    summary: `Set ${existing.name}'s ${[data.email ? `email to ${data.email}` : "", data.phone ? `phone to ${data.phone}` : ""].filter(Boolean).join(" and ")} (from a proposal)`,
+    clientId: id,
+    meta: { fields: Object.keys(data), from: "proposal" },
+  });
+  return { email: data.email ?? existing.email, phone: data.phone ?? existing.phone };
+}
+
 export async function updateClient(
   id: string,
   raw: unknown,

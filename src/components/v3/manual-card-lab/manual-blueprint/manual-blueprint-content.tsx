@@ -120,7 +120,7 @@ import {
   whyNotSavable,
   type SheetIdentity,
 } from "./manual-blueprint-bridge";
-import { setClientEmail } from "@/actions/clients";
+import { saveClientContact, setClientEmail } from "@/actions/clients";
 import type { ManualBuilderData } from "./manual-blueprint-load";
 import { useReveal } from "./use-reveal";
 import { useHandheld } from "./use-handheld";
@@ -425,6 +425,66 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
     await persist({ sendAfter: true, sentTo: email });
   }
 
+  /**
+   * THE CLIENT CARD IS SAVED WITH THE PROPOSAL (owner, 2026-10-13: "the email
+   * is already set in the proposal and it doesn't appear" at the send). The
+   * card's Email and Phone were display state: a plain Save kept neither, and
+   * a one-off name was only made a client by Save & send — so a roof proposal
+   * saved with the client typed in landed "Unassigned" with no address, and
+   * the list's Send had nowhere to mail it.
+   *   · a one-off name → the client record is made from what was typed (the
+   *     inline "add a new client" form's write) and the proposal files under it;
+   *   · a picked client → a typed email/phone that differs is written onto the
+   *     record (a blank box never erases one).
+   * Returns the draft to save and the email the client now has ("" = none),
+   * or null when the save must stop (the note says why). A plain Save whose
+   * client write is refused (an estimator's role, the client cap) still saves
+   * the proposal, as before, and says what was not kept.
+   */
+  async function settleClient(
+    d: Draft,
+    sending: boolean,
+  ): Promise<{ draft: Draft; email: string; name?: string } | null> {
+    const email = contact.email.trim();
+    const phone = contact.phone.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setNote({ tone: "err", text: "The client's email doesn't look right" });
+      toast.error(sending ? "Can't send yet" : "Can't save yet", "Check the client's email in card 02.");
+      return null;
+    }
+    const pick = d.client;
+    try {
+      if (pick.mode === "freeText" && pick.name.trim()) {
+        const rec = await createClientRecord({ name: pick.name.trim(), email, phone, address: d.address ?? "" });
+        return { draft: { ...d, client: { mode: "record", id: rec.id } }, email: rec.email.trim(), name: rec.name };
+      }
+      if (pick.mode === "record") {
+        const rec = clients.find((c) => c.id === pick.id);
+        if (!rec) return { draft: d, email: "" };
+        const newEmail = email && email.toLowerCase() !== rec.email.trim().toLowerCase() ? email : "";
+        const newPhone = phone && phone !== rec.phone.trim() ? phone : "";
+        if (newEmail || newPhone) {
+          await saveClientContact(rec.id, { ...(newEmail ? { email: newEmail } : {}), ...(newPhone ? { phone: newPhone } : {}) });
+          setClients((list) =>
+            list.map((c) => (c.id === rec.id ? { ...c, email: newEmail || c.email, phone: newPhone || c.phone } : c)),
+          );
+        }
+        return { draft: d, email: newEmail || rec.email.trim(), name: rec.name };
+      }
+      return { draft: d, email: "" };
+    } catch (err: unknown) {
+      if (reportPlanLimit(err)) return null;
+      const text = err instanceof Error && err.message ? err.message : "Couldn't save the client";
+      if (sending) {
+        setNote({ tone: "err", text });
+        toast.error("Can't send yet", text);
+        return null;
+      }
+      toast.error("The client details weren't saved", text);
+      return { draft: d, email: "" };
+    }
+  }
+
   /* ---- the two writes ----------------------------------------------- */
 
   /**
@@ -435,19 +495,13 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
    * router push here would re-render the server component and replay the whole
    * entrance cascade over a form the user is still typing in.
    */
-  async function persist(
-    opts?: { sendAfter?: boolean; sentTo?: string },
-    /* The draft to write. Defaults to state; the one-off-client path below
-       hands in a copy that already names the record it just created, because
-       the setDraft it triggers has not flushed by the time the send runs. */
-    draftOverride?: Draft,
-  ) {
+  async function persist(opts?: { sendAfter?: boolean; sentTo?: string }) {
     /* THE SLIDERS ARE BAKED IN HERE (owner, 2026-09-05). Card 04's two cost
        adjustments are a tool until save: the saved lines carry the adjusted
        costs and the sliders go back to neutral — no memory of the original
        numbers after that. */
-    const d = bakeAdjustments(draftOverride ?? draft);
-    const why = whyNotSavable(d);
+    const baked = bakeAdjustments(draft);
+    const why = whyNotSavable(baked);
     if (why) {
       setNote({ tone: "err", text: why });
       // The chip is in the masthead, screens above the bar on a phone; the
@@ -457,6 +511,11 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
       toast.error(opts?.sendAfter ? "Can't send yet" : "Can't save yet", why);
       return;
     }
+    // The client card's name, email and phone reach the client RECORD on every
+    // save now, not only on a send (settleClient below).
+    const settled = await settleClient(baked, Boolean(opts?.sendAfter));
+    if (!settled) return;
+    const d = settled.draft;
     // A send with nowhere to go used to complete "successfully" and report
     // "marked sent — no client email on file", which reads as a delivery.
     // Stop on the missing fact instead and ask for it.
@@ -466,47 +525,17 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
     // reopen the dialog forever.
     if (opts?.sendAfter && !opts.sentTo) {
       const pick = d.client;
-      /* A ONE-OFF NAME WITH AN EMAIL IS ENOUGH (owner's report, 2026-09-02:
-         name, email and phone all filled in and the send still refused). The
-         proposal is filed against a client RECORD — that is where the send
-         reads its address — so the record is created here from what was
-         typed, exactly as the inline "add a new client" form would, and the
-         send carries on against it. */
-      if (pick.mode === "freeText" && pick.name.trim()) {
-        const email = contact.email.trim();
-        if (!email || !email.includes("@")) {
-          setNote({ tone: "err", text: "Add the client's email before sending" });
-          toast.error("Can't send yet", "Add the client's email address in card 02 first");
-          return;
-        }
-        try {
-          const rec = await createClientRecord({
-            name: pick.name.trim(),
-            email,
-            phone: contact.phone.trim(),
-            address: d.address ?? "",
-          });
-          await persist(
-            { sendAfter: true, sentTo: rec.email },
-            { ...d, client: { mode: "record", id: rec.id } },
-          );
-        } catch (err: unknown) {
-          const text = err instanceof Error && err.message ? err.message : "Couldn't save the client";
-          setNote({ tone: "err", text });
-          toast.error("Can't send yet", text);
-        }
-        return;
-      }
       if (pick.mode !== "record") {
         setNote({ tone: "err", text: "Name the client before sending" });
         toast.error("Can't send yet", "Name the client in card 02 first");
         return;
       }
-      const rec = clients.find((c) => c.id === pick.id);
-      if (!rec?.email?.trim()) {
-        setAskEmail({ clientId: pick.id, name: rec?.name ?? "this client" });
+      if (!settled.email) {
+        const rec = clients.find((c) => c.id === pick.id);
+        setAskEmail({ clientId: pick.id, name: rec?.name ?? settled.name ?? "this client" });
         return;
       }
+      opts = { ...opts, sentTo: settled.email };
     }
     // A brand-new proposal counts against the monthly cap; the dialog the shell
     // already mounts is what explains it.
@@ -731,7 +760,12 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
                 label="Email"
                 htmlFor="q-email"
                 hint={
-                  draft.client.mode === "record" ? "From the client record" : undefined
+                  // Said plainly (2026-10-13): what is typed here is kept, and where.
+                  draft.client.mode === "record"
+                    ? "Saved on the client record — the proposal goes here"
+                    : draft.client.mode === "freeText" && draft.client.name.trim()
+                      ? "Saving adds this client to your clients"
+                      : undefined
                 }
               >
                 <TextField
@@ -777,6 +811,17 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
             overflow, so it must not get a scroll container: `wide` also clips,
             and the row's unit <select> hangs its popup outside the body. */}
         <Card num="03" title="Line items" id="q-03" wide={!handheld}>
+          {/* Made in the roof estimator (owner, 2026-10-13: "when open, get back to the roofing edit to rebuild it"):
+              the estimator opens with this roof, its choices and lines, and Update re-prices THIS proposal. */}
+          {data.proposal?.roofEditable ? (
+            <div className={cx(styles.drawingEdit, styles.roofEdit)} data-roof-edit>
+              <a className={cx(styles.btn, styles.btnPrimary)} href={`/dashboard/roof-estimator?proposal=${encodeURIComponent(data.proposal.id)}`}>
+                <Ic name="pen" />
+                Edit the roof estimate
+              </a>
+              <span>Opens the roof estimator with this roof, its choices and lines. Change anything, then Update re-prices this proposal — lines you added here stay.{note === NOTE_EDITED ? " Save first — changes not saved here are not carried over." : ""}</span>
+            </div>
+          ) : null}
           <Lines
             lines={draft.lines}
             openIds={openLines}

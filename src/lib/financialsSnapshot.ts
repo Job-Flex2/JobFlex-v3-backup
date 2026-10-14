@@ -139,7 +139,7 @@ export async function getFinancialsSnapshot(
     jobId: e.jobId,
     // No job: a purchase for stock, or a Lead Center lead the shop paid for
     // (purpose LEAD, lib/leadCenter/purchase).
-    job: e.job?.title ?? (e.purpose === "LEAD" ? "Lead purchase" : "Stock purchase"),
+    job: e.job?.title ?? (e.purpose === "LEAD" ? "Lead purchase" : e.purpose === "DESK" ? "AI desk minutes" : "Stock purchase"),
     category: e.category,
     amount: e.amount,
     note: e.note ?? "",

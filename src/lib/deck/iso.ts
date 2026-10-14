@@ -22,7 +22,7 @@
 // house is painted first, block by block from the far one, with its own
 // windows and roof.
 
-import { SCENE_LAYERS, buildRank, type DeckScene, type SceneLayer } from "./scene";
+import { SCENE_LAYERS, buildRank, memberBoxCorners, MEMBER_BOX_FACES, type DeckScene, type SceneLayer } from "./scene";
 
 export type IsoDeckingFinish = "wood" | "hardwood" | "composite" | "pvc" | "mineral" | "aluminum";
 export type IsoRoofing = "arch-shingle" | "3tab-shingle" | "designer-shingle" | "cedar-shake" | "metal-panel" | "standing-seam" | "none";
@@ -195,6 +195,11 @@ function finishOf(layer: SceneLayer, role: string, colors: DeckScene["colors"], 
     case "hardware": return { base: "#9a9ea3", gloss: 0.5, shine: 30 };
     case "light": return { base: "#fff2cc", gloss: 0.6, shine: 30 };
     case "wire": return { base: "#3a3a3f", gloss: 0.1, shine: 10 };
+    case "spa":
+      // The water pane glossy and blue; the shell a dark acrylic cabinet.
+      return role === "spa water"
+        ? { base: "#6fb3cb", gloss: 0.5, shine: 40, opacity: 0.94 }
+        : { base: "#4c4a45", gloss: 0.3, shine: 24 };
     default: return { base: colors.frame, gloss: 0.06, shine: 10 };
   }
 }
@@ -245,9 +250,14 @@ const Z: V3 = [0, 0, 1];
 const X: V3 = [1, 0, 0];
 const Y: V3 = [0, 1, 0];
 
-/** A scene's box row → its solid: axis-aligned, leaning (a knee brace), or turned and tilted (a rafter). */
-function boxSolid(b: number[]): V3[][] {
-  const [, cx, cy, cz, sx, sy, sz, lean = 0, yaw, tilt] = b;
+/** A scene's box row → its solid: axis-aligned, leaning (a knee brace), or turned and tilted (a rafter).
+ *  Sloped members and braces come from the shared `memberBoxCorners`, so their ends are SAWN — plumb
+ *  rafter tails that tuck under the roofing instead of poking through it as teeth, braces plumb at the
+ *  post and level under the beam — and the WebGL viewer cuts them from the same corners. */
+function boxSolid(b: number[], role: string | null): V3[][] {
+  const cut = memberBoxCorners(b, role);
+  if (cut) return MEMBER_BOX_FACES.map((f) => f.map((i) => cut[i] as V3));
+  const [, cx, cy, cz, sx, sy, sz, , yaw, tilt] = b;
   const c: V3 = [cx, cy, cz];
   if (typeof yaw === "number" && typeof tilt === "number") {
     const u: V3 = [Math.cos(yaw) * Math.cos(tilt), Math.sin(yaw) * Math.cos(tilt), Math.sin(tilt)];
@@ -255,18 +265,35 @@ function boxSolid(b: number[]): V3[][] {
     const w = norm(cross(u, v));
     return orientedBox(c, u, v, w, sx, sy, sz);
   }
-  if (lean >= 1 && lean <= 4) {
-    // A brace drawn as the diagonal of its box: along x (1 toward +x, 2 toward −x) or y (3 toward +y, 4 toward −y), rising with z.
-    const alongX = lean <= 2;
-    const sign = lean === 1 || lean === 3 ? 1 : -1;
-    const run = alongX ? sx : sy;
-    const u = norm(alongX ? [sign * run, 0, sz] : [0, sign * run, sz]);
-    const v: V3 = alongX ? [0, 1, 0] : [1, 0, 0];
-    const w = norm(cross(u, v));
-    const thick = Math.min(alongX ? sy : sx, 0.3);
-    return orientedBox(c, u, v, w, Math.hypot(run, sz), thick, 0.3);
-  }
   return orientedBox(c, X, Y, Z, sx, sy, sz);
+}
+
+/** Quads longer than this get painted in strips, not as one face. */
+const SPLIT_FT = 4;
+/** The layers whose members run long past other things — a receding
+ *  fascia sorted by its middle fanned out OVER the roof at the corners. */
+const SPLIT_LAYERS = new Set<SceneLayer>(["trim", "gutter", "header", "beam", "ledger", "rim", "fascia"]);
+function splitLongFaces(faces: V3[][]): V3[][] {
+  const out: V3[][] = [];
+  for (const f of faces) {
+    if (f.length !== 4) { out.push(f); continue; }
+    const e01 = Math.hypot(f[1][0] - f[0][0], f[1][1] - f[0][1], f[1][2] - f[0][2]);
+    const e12 = Math.hypot(f[2][0] - f[1][0], f[2][1] - f[1][1], f[2][2] - f[1][2]);
+    const L = Math.max(e01, e12);
+    if (L <= SPLIT_FT) { out.push(f); continue; }
+    const n = Math.min(6, Math.ceil(L / SPLIT_FT));
+    const lerp = (A: V3, B: V3, t: number): V3 => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t];
+    for (let k = 0; k < n; k++) {
+      const t0 = k / n, t1 = (k + 1) / n;
+      // Split along the longer pair of edges, keeping the winding.
+      out.push(
+        e01 >= e12
+          ? [lerp(f[0], f[1], t0), lerp(f[0], f[1], t1), lerp(f[3], f[2], t1), lerp(f[3], f[2], t0)]
+          : [lerp(f[1], f[2], t0), lerp(f[1], f[2], t1), lerp(f[0], f[3], t1), lerp(f[0], f[3], t0)],
+      );
+    }
+  }
+  return out;
 }
 
 function newell(ring: V3[]): V3 {
@@ -493,8 +520,25 @@ export function isoDrawing(scene: DeckScene, opts: IsoOptions = {}): IsoDrawing 
     if (!layer || skip.has(layer)) return;
     if (!(b[4] > 0.005 && b[5] > 0.005 && b[6] > 0.005)) return;
     const role = roleOf(scene.tags[i]);
-    const finish = finishOf(layer, role, scene.colors, mats);
-    const s: Solid = { layer, rank: buildRank(layer), finish, faces: boxSolid(b) };
+    let finish = finishOf(layer, role, scene.colors, mats);
+    // An eave board lives in the roof's own shadow. Painted at full
+    // trim-white it glowed wherever a sliver of the far eave shows over
+    // the near slope — bright fins on every gazebo corner.
+    if (layer === "trim" && /fascia|subfascia|gutter/i.test(role)) {
+      finish = { ...finish, base: shadeHex(finish.base, 0.72) };
+    }
+    // A LONG member sorted by its middle paints half of itself in the
+    // wrong order — a receding fascia fanned out OVER the roof at every
+    // gazebo corner. Long faces are split into strips so each strip
+    // sorts by where it actually is.
+    const s: Solid = {
+      layer,
+      rank: buildRank(layer),
+      finish,
+      // Only the long thin members split — a deck board in strips grew a
+      // stroke at every joint and the whole surface read as scratched.
+      faces: SPLIT_LAYERS.has(layer) ? splitLongFaces(boxSolid(b, role)) : boxSolid(b, role),
+    };
     if ((layer === "decking" || layer === "stair") && mats.decking !== "aluminum" && b[9] === undefined) {
       const alongX = b[4] >= b[5];
       s.board = { axis: alongX ? "x" : "y", seed: hash01(b[1], b[2], b[3]) };
@@ -512,6 +556,10 @@ export function isoDrawing(scene: DeckScene, opts: IsoOptions = {}): IsoDrawing 
     const role = roleOf(scene.polyTags[i]);
     const finish = finishOf(layer, role, scene.colors, mats);
     const s: Solid = { layer, rank: buildRank(layer), finish, faces: [ringP] };
+    // The floor underfoot paints with the ground: a slab sorted by its
+    // nearest point painted LATE and erased the posts standing on it —
+    // the octagon gazebo drew with its right half floating.
+    if (layer === "slab") s.first = -1.5;
     if (layer === "roofing") {
       s.shadow = true;
       if (full && role !== "louver blade") {
@@ -564,6 +612,20 @@ export function isoDrawing(scene: DeckScene, opts: IsoOptions = {}): IsoDrawing 
     }
     return `M${pts.join("L")}Z`;
   };
+  /** The face's area on the page (viewBox units) — tiny means edge-on. */
+  const projArea = (face: V3[]): number => {
+    let a2 = 0;
+    let px = 0, py = 0, qx = 0, qy = 0;
+    for (let i = 0; i < face.length; i++) {
+      const [ax, ay] = project(face[i]);
+      const [bx, by] = project(face[(i + 1) % face.length]);
+      if (i === 0) { px = ax; py = ay; }
+      qx = bx; qy = by;
+      a2 += ax * by - bx * ay;
+    }
+    void px; void py; void qx; void qy;
+    return Math.abs(a2) / 2;
+  };
   const centre = (face: V3[]): V3 => {
     let cxp = 0, cyp = 0, czp = 0;
     for (const p of face) { cxp += p[0]; cyp += p[1]; czp += p[2]; }
@@ -582,7 +644,19 @@ export function isoDrawing(scene: DeckScene, opts: IsoOptions = {}): IsoDrawing 
       let n = newell(face);
       const facing = dot(n, toViewer);
       if (!lone && facing <= 0.02) continue;
-      if (lone && facing < 0) n = scale(n, -1);
+      // A lone plane is lit by the side the viewer sees — except the roof
+      // shell, which is lit by its TOP whichever way the ring winds: the
+      // far slopes of a shallow pyramid are genuinely visible over the
+      // near hips, and winding-flipped lighting painted that area in
+      // underside grey — the "teeth" at every corner of a gazebo roof.
+      if (lone && (s.layer === "roofing" || s.layer === "sheathing")) {
+        if (n[2] < 0) n = scale(n, -1);
+        // A far slope seen past a corner is a sliver a fraction of a
+        // foot wide on the page — and with its normal forced up it
+        // catches the full highlight, a pale fin against the silhouette.
+        // Thinner than readable, it is simply not painted.
+        if (projArea(face) < 0.35) continue;
+      } else if (lone && facing < 0) n = scale(n, -1);
       // A box sorts by its centre; a lone plane (a roof face, a ceiling, a slab, a pane of glass) by its nearest point,
       // so a rafter under the near end of a roof is painted before the roof, never through it.
       const dep = lone ? Math.max(...face.map(depth)) : depth(centre(face));
@@ -613,12 +687,17 @@ export function isoDrawing(scene: DeckScene, opts: IsoOptions = {}): IsoDrawing 
       const fill = lit(b, n, s.finish);
       const edge = s.layer === "screen" ? undefined : shadeHex(fill, s.layer === "trim" || s.layer === "house" ? 0.86 : 0.76);
       painted.push({ d, fill, opacity: s.finish.opacity, stroke: edge, strokeOpacity: edge ? 0.9 : undefined, layer: s.layer, rank: s.rank, depth: dep, first, sub: 0 });
+      // Decorations go on faces the viewer can actually read. A face seen
+      // nearly edge-on — the far slopes' slivers past a corner — wore the
+      // sheen gradient's white end and stood out as pale fins against the
+      // silhouette of every gazebo roof.
+      const readable = projArea(face) > 1.2;
       // The grain along a board, and a sheen across a glossy one.
-      if (s.board && top && full) painted.push({ d, fill: grainFor(s.board.axis, fineGrain), layer: s.layer, rank: s.rank, depth: dep, first, sub: 1 });
-      if (s.sheen && top && s.board) painted.push({ d, fill: sheenFill(s.board.axis), layer: s.layer, rank: s.rank, depth: dep, first, sub: 2 });
-      if (s.sheen && s.layer === "roofing") painted.push({ d, fill: roofSheen(), layer: s.layer, rank: s.rank, depth: dep, first, sub: 2 });
+      if (s.board && top && full && readable) painted.push({ d, fill: grainFor(s.board.axis, fineGrain), layer: s.layer, rank: s.rank, depth: dep, first, sub: 1 });
+      if (s.sheen && top && s.board && readable) painted.push({ d, fill: sheenFill(s.board.axis), layer: s.layer, rank: s.rank, depth: dep, first, sub: 2 });
+      if (s.sheen && s.layer === "roofing" && readable) painted.push({ d, fill: roofSheen(), layer: s.layer, rank: s.rank, depth: dep, first, sub: 2 });
       // Lines on the face: courses of shingles or shakes, standing seams, ribs, the laps of siding.
-      if (s.lines && (lone || s.layer === "house")) {
+      if (s.lines && (lone || s.layer === "house") && projArea(face) > 1.2) {
         const zs = face.map((p) => p[2]);
         const zLo = Math.min(...zs), zHi = Math.max(...zs);
         if (s.lines === "courses" || s.lines === "shakes" || s.lines === "siding") {

@@ -298,7 +298,7 @@ async function memberFor(organizationId: string, userId: string) {
   if (!audience) return null;
   const worker = await db.workerProfile.findFirst({ where: { userId, organizationId }, select: { id: true, phone: true, smsOptIn: true } });
   // The number texts go to: the crew's is on its worker profile.
-  const texted = audience === "crew" && worker ? Boolean(worker.phone && worker.smsOptIn) : Boolean(m.user.smsPhone && m.user.smsVerifiedAt);
+  const texted = audience === "crew" && worker ? Boolean(worker.phone && worker.smsOptIn) : Boolean(m.user.smsPhone && m.user.smsVerifiedAt && !parseNotificationPrefs(m.user.notificationPrefsJson).smsPaused);
   return { role: m.role, audience, user: m.user, workerId: worker?.id ?? null, texted };
 }
 
@@ -315,7 +315,7 @@ export async function setMemberMobile(userId: string, raw: string): Promise<SmsA
   const now = new Date();
   await db.user.update({
     where: { id: userId },
-    data: { smsPhone: phone, smsVerifiedAt: now, notificationPrefsJson: JSON.stringify({ ...prefs, smsAddedBy: me.id === userId ? null : me.id }) },
+    data: { smsPhone: phone, smsVerifiedAt: now, notificationPrefsJson: JSON.stringify({ ...prefs, smsAddedBy: me.id === userId ? null : me.id, smsPaused: false }) },
   });
   if (m.workerId) await db.workerProfile.update({ where: { id: m.workerId }, data: { phone, smsOptIn: true, smsOptedInAt: now } });
   const name = m.user.name?.trim() || m.user.email || "They";
@@ -337,6 +337,44 @@ export async function clearMemberMobile(userId: string): Promise<SmsActionResult
   await logActivity({ organizationId, actorId: me.id, kind: TRAIL_KINDS.TEAM, summary: `Stopped job texts to ${name}`, meta: { userId, texting: false } });
   revalidatePath(SETTINGS_PATH);
   return { ok: true, note: `${name} won't be texted.` };
+}
+
+/**
+ * TEXTS ON OR OFF FOR ONE PERSON (owner, 2026-10-13: "easy on and off — the owner can turn texts on and off for
+ * anybody"). Off keeps their mobile and their choices and texts them nothing (prefs.smsPaused; a crew member's
+ * worker profile too, which every crew text reads); on picks up where it was. The first time a crew number is
+ * switched on it gets the welcome text with the STOP line, as a typed-in number does.
+ */
+export async function setMemberTextsOn(userId: string, on: boolean): Promise<SmsActionResult> {
+  const { organizationId, user: me } = await requireManager();
+  const m = await memberFor(organizationId, userId);
+  if (!m) return { ok: false, error: "Only the office, sales and crew can be texted." };
+  const worker = m.workerId ? await db.workerProfile.findUnique({ where: { id: m.workerId }, select: { phone: true, smsOptIn: true, smsOptedInAt: true } }) : null;
+  const userPhone = m.user.smsPhone && m.user.smsVerifiedAt ? m.user.smsPhone : null;
+  const crewPhone = m.audience === "crew" && worker?.phone ? toE164(worker.phone) : null;
+  const phone = m.audience === "crew" ? crewPhone ?? userPhone : userPhone;
+  const name = m.user.name?.trim() || m.user.email || "They";
+  if (on) {
+    if (!phone) return { ok: false, error: `Add ${name}'s mobile first.` };
+    if (await db.smsOptOut.findUnique({ where: { phone }, select: { phone: true } })) {
+      return { ok: false, error: `${pretty(phone)} replied STOP. Only ${name} can restart texts — by texting START back.` };
+    }
+  }
+  const prefs = parseNotificationPrefs(m.user.notificationPrefsJson, m.role);
+  await db.user.update({ where: { id: userId }, data: { notificationPrefsJson: JSON.stringify({ ...prefs, smsPaused: !on }) } });
+  let welcomed = false;
+  if (m.workerId && worker) {
+    const firstTime = on && !worker.smsOptedInAt;
+    await db.workerProfile.update({ where: { id: m.workerId }, data: on ? { smsOptIn: true, ...(firstTime ? { smsOptedInAt: new Date() } : {}) } : { smsOptIn: false } });
+    if (firstTime && crewPhone) {
+      const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
+      const r = await sendText({ organizationId, to: crewPhone, body: welcomeText(org?.name ?? null), kind: "welcome" });
+      welcomed = r.ok && r.status === "SENT";
+    }
+  }
+  await logActivity({ organizationId, actorId: me.id, kind: TRAIL_KINDS.TEAM, summary: on ? `Turned job texts back on for ${name}` : `Turned job texts off for ${name} (mobile kept)`, meta: { userId, texting: on } });
+  revalidatePath(SETTINGS_PATH);
+  return { ok: true, note: on ? `Texts to ${name} are on${welcomed ? " — they got a welcome text with the STOP line" : ""}.` : `Texts to ${name} are off. Their mobile and choices are kept.` };
 }
 
 /** One member's Text switches — only the events their roster shows. */

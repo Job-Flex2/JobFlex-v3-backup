@@ -20,11 +20,15 @@ import { getOrgPlanById } from "@/lib/orgPlan";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { twilioClient, twilioSettings } from "@/lib/sdk/twilio";
 import { notePaidCall } from "@/lib/trialMeter";
+import { attachVoiceToNumber, forgetVoiceNumber, indexVoiceNumber } from "@/lib/aiDesk/numbers";
 import { clientProposalText, clientReminderText } from "./clients";
-import { crewAssignedText } from "./format";
+import { companyHelpText, crewAssignedText } from "./format";
+import { settingsOf } from "@/lib/bookingBook";
+import { parseTradeTypes } from "@/lib/tradeTypes";
 import {
   parseRegistration,
   registrationProblems,
+  sampleJobsFor,
   stageFor,
   tidyDetails,
   verificationFields,
@@ -56,14 +60,15 @@ export async function companyIsPaying(organizationId: string): Promise<boolean> 
   return (await getOrgPlanById(organizationId)) !== "FREE";
 }
 
-/** The company's own three texts, made by the templates the app sends them with. */
-function samplesFor(name: string, timezone: string | null): string[] {
+/** The company's own three texts, made by the templates the app sends them with, about its own trade. */
+export function samplesFor(name: string, timezone: string | null, trades: readonly string[] = []): string[] {
   const tz = timezone || "America/Los_Angeles";
-  const visit = { title: "Roof inspection", startsAt: new Date("2026-10-08T16:00:00Z"), endsAt: new Date("2026-10-08T17:00:00Z"), address: "4567 Rainier Ave S, Seattle, WA" };
+  const jobs = sampleJobsFor(trades);
+  const visit = { title: jobs.visit, startsAt: new Date("2026-10-08T16:00:00Z"), endsAt: new Date("2026-10-08T17:00:00Z"), address: "4567 Rainier Ave S, Seattle, WA" };
   return [
-    clientProposalText(name, "Roof replacement", 11306.52, "https://www.jobflex.app/portal/q/abc123"),
+    clientProposalText(name, jobs.job, 11306.52, "https://www.jobflex.app/portal/q/abc123"),
     clientReminderText(name, visit, tz),
-    crewAssignedText(name, { title: "Roof replacement", startsAt: new Date("2026-10-07T15:00:00Z"), endsAt: new Date("2026-10-07T23:00:00Z"), address: visit.address }, "https://www.jobflex.app/w/xyz", tz),
+    crewAssignedText(name, { title: jobs.job, startsAt: new Date("2026-10-07T15:00:00Z"), endsAt: new Date("2026-10-07T23:00:00Z"), address: visit.address }, "https://www.jobflex.app/w/xyz", tz),
   ];
 }
 
@@ -89,8 +94,10 @@ export async function submitRegistration(organizationId: string, actorId: string
   if (!(await companyIsPaying(organizationId))) return { ok: false, error: "Your own texting number comes with a paid plan." };
   const settings = await twilioSettings();
   if (!settings) return { ok: false, error: "Texting is not set up on this platform yet." };
-  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true, timezone: true, slug: true, smsFromNumber: true } });
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true, timezone: true, slug: true, smsFromNumber: true, phone: true, tradeTypesJson: true, bookingSettingsJson: true } });
   if (!org) return { ok: false, error: "Not found." };
+  // The booking page is the opt-in Twilio is shown; with booking off it says "booking is off" and the review fails.
+  if (!settingsOf(org).enabled) return { ok: false, error: "Turn on online booking first (Settings → Online booking) — it is where clients agree to your texts, and Twilio looks at it." };
 
   let state = await readRegistration(organizationId);
   if (state.stage === "approved") return { ok: true, state };
@@ -111,10 +118,14 @@ export async function submitRegistration(organizationId: string, actorId: string
         friendlyName: `JobFlex · ${org.name}`.slice(0, 64),
         smsUrl: `${base}/api/twilio/sms`,
         smsMethod: "POST",
+        // Calls need no approval: the number answers them from now (lib/aiDesk/calls).
+        voiceUrl: `${base}/api/twilio/voice`,
+        voiceMethod: "POST",
       });
-      state = { ...state, number: bought.phoneNumber, numberSid: bought.sid, error: null };
+      state = { ...state, number: bought.phoneNumber, numberSid: bought.sid, voiceOnAt: new Date().toISOString(), error: null };
       // Kept at once: whatever fails next, the number is not bought twice.
       await save(organizationId, state);
+      await indexVoiceNumber(organizationId, bought.phoneNumber);
       await notePaidCall("twilio", "number", { orgId: organizationId });
       if (settings.messagingServiceSid) {
         await client.messaging.v1.services(settings.messagingServiceSid).phoneNumbers.create({ phoneNumberSid: bought.sid }).catch((err: unknown) => {
@@ -128,7 +139,15 @@ export async function submitRegistration(organizationId: string, actorId: string
   }
 
   // 2. The registration.
-  const fields = verificationFields({ details, companyName: org.name, samples: samplesFor(details.dba || org.name, org.timezone), bookingUrl: `https://www.jobflex.app/book/${org.slug}` });
+  const name = details.dba || org.name;
+  const fields = verificationFields({
+    details,
+    companyName: org.name,
+    samples: samplesFor(name, org.timezone, parseTradeTypes(org.tradeTypesJson)),
+    bookingUrl: `https://www.jobflex.app/book/${org.slug}`,
+    slug: org.slug,
+    helpText: companyHelpText(name, org.phone),
+  });
   try {
     const editable = state.stage === "rejected" && state.verificationSid && state.editAllowed !== false && (!state.editUntil || Date.parse(state.editUntil) > Date.now());
     let v;
@@ -153,7 +172,7 @@ export async function submitRegistration(organizationId: string, actorId: string
 
 /** Ask Twilio how the registration stands; approval puts the number on the company. */
 export async function refreshRegistration(organizationId: string, force = false): Promise<SmsRegistrationState> {
-  const state = await readRegistration(organizationId);
+  const state = await ensureVoice(organizationId, await readRegistration(organizationId));
   if (state.stage !== "pending" || !state.verificationSid) return state;
   if (!force && state.checkedAt && Date.now() - Date.parse(state.checkedAt) < RECHECK_MS) return state;
   const settings = await twilioSettings();
@@ -182,6 +201,24 @@ export async function refreshRegistration(organizationId: string, force = false)
     return next;
   } catch (err) {
     console.warn(`[sms/registration] status check for ${organizationId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    return state;
+  }
+}
+
+/** A number bought before calls were wired (no voiceOnAt): point it at the voice webhook and index it, once. */
+async function ensureVoice(organizationId: string, state: SmsRegistrationState): Promise<SmsRegistrationState> {
+  if (!state.number || !state.numberSid || state.voiceOnAt) return state;
+  const settings = await twilioSettings();
+  if (!settings) return state;
+  try {
+    const client = await twilioClient(settings);
+    await attachVoiceToNumber(client, state.numberSid, process.env.TWILIO_APP_URL ?? (await appBaseUrl()));
+    await indexVoiceNumber(organizationId, state.number);
+    const next = { ...state, voiceOnAt: new Date().toISOString() };
+    await save(organizationId, next);
+    return next;
+  } catch (err) {
+    console.warn(`[sms/registration] could not wire calls for ${state.number}: ${err instanceof Error ? err.message : String(err)}`);
     return state;
   }
 }
@@ -218,6 +255,7 @@ export async function releaseRegistration(organizationId: string, actorId: strin
       console.warn(`[sms/registration] release of ${number} on Twilio failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+  await forgetVoiceNumber(number);
   await db.organization.update({ where: { id: organizationId }, data: { smsFromNumber: null, smsNumberSid: null } });
   await db.syncState.delete({ where: { key: keyOf(organizationId) } }).catch(() => null);
   await logActivity({ organizationId, actorId, kind: TRAIL_KINDS.SETTINGS, summary: `Released the texting number ${pretty(number)}` });

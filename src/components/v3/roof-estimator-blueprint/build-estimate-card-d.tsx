@@ -54,6 +54,9 @@ import {
   displayPitch12,
   FASCIA_OPTIONS,
   GUTTER_PLANS,
+  DECK_BOARDS,
+  DECK_SHEET_SIZES,
+  type DeckSheetSize,
   type FasciaRun,
   type GutterPlan,
 } from "@/lib/roofPackage/catalog";
@@ -65,6 +68,12 @@ import {
   fasciaFeet,
   gutterFeet,
   likeForLikeFamily,
+  deckBoardOf,
+  deckSheetOf,
+  plywoodCount,
+  plywoodLines,
+  plywoodRate,
+  plywoodScope,
   withJobClass,
   withMeasured,
   withSystem,
@@ -339,6 +348,161 @@ function Check({ label, checked, onChange, disabled }: { label: string; checked:
   );
 }
 
+/* ── PLYWOOD REPLACEMENT (owner, 2026-10-13: "what means deck sheet? … if it's the plywood replacement say it
+   clearly … per square foot and per sheet … if they don't know how many, a note to the client: during the job any
+   plywood replacement will be charged this … real fast, click click click"). Three picks; the installed price both
+   ways, linked; a count in a tap, by the sheet or the square foot; and the very words the client will read. ── */
+/** Sheet counts to tap; by the sq ft the same counts in that sheet's area. */
+const PLY_SHEET_CHIPS = [1, 2, 3, 4, 6, 8, 10] as const;
+const PLY_MODES = [
+  { id: "quote" as const, label: "Not known yet — quote the rate" },
+  { id: "count" as const, label: "I know how much" },
+  { id: "none" as const, label: "Leave it out" },
+];
+const money2 = (n: number) => (Math.abs(n - Math.round(n)) < 0.005 ? `$${Math.round(n).toLocaleString("en-US")}` : `$${n.toFixed(2)}`);
+
+function PlywoodBlock({
+  spec,
+  set,
+  disabled,
+  deckExposed,
+}: {
+  spec: RoofPackageSpec;
+  set: <K extends keyof RoofPackageSpec>(k: K, v: RoofPackageSpec[K]) => void;
+  disabled?: boolean;
+  /** A tear-off opens the deck; an overlay keeps it covered, so no rate is quoted. */
+  deckExposed: boolean;
+}) {
+  const count = plywoodCount(spec);
+  const [picked, setPicked] = React.useState<"count" | null>(null);
+  const mode = count || picked === "count" ? "count" : spec.plywoodQuote ? "quote" : "none";
+  const rate = plywoodRate(spec);
+  const board = deckBoardOf(spec);
+  const sheet = deckSheetOf(spec);
+  const bySqft = spec.plywoodUnit === "sqft";
+  const chips = bySqft ? [1, 2, 3, 4, 5, 8].map((n) => n * sheet.sqft) : PLY_SHEET_CHIPS;
+  // A board brings its own two starting prices (per 4 × 8, scaled to the sheet), as a fascia board does.
+  const pickBoard = (id: string) => {
+    const b = DECK_BOARDS.find((x) => x.id === id);
+    if (!b) return;
+    const k = sheet.sqft / 32;
+    set("plywoodBoardId", b.id);
+    set("plywoodEach", Math.round(b.each * k * 100) / 100);
+    set("plywoodLabor", Math.round(b.labor * k * 100) / 100);
+  };
+  // A bigger sheet costs more a sheet and the same a square foot.
+  const pickSize = (id: DeckSheetSize) => {
+    const next = DECK_SHEET_SIZES.find((s) => s.id === id);
+    if (!next || id === spec.plywoodSize) return;
+    const k = next.sqft / sheet.sqft;
+    set("plywoodSize", id);
+    set("plywoodEach", Math.round(spec.plywoodEach * k * 100) / 100);
+    set("plywoodLabor", Math.round(spec.plywoodLabor * k * 100) / 100);
+  };
+  const qty = bySqft ? spec.plywoodSqft : spec.plywoodSheets;
+  // One installed price, typed either way: the plywood and the fitting keep their split.
+  const setRate = (sheet: number) => {
+    const sum = spec.plywoodEach + spec.plywoodLabor;
+    const share = sum > 0 ? spec.plywoodEach / sum : 0.55;
+    const each = Math.round(sheet * share * 100) / 100;
+    set("plywoodEach", each);
+    set("plywoodLabor", Math.round((sheet - each) * 100) / 100);
+  };
+  const setCount = (n: number) => (bySqft ? set("plywoodSqft", n) : set("plywoodSheets", n));
+  const pick = (m: (typeof PLY_MODES)[number]["id"]) => {
+    if (m === "count") {
+      setPicked("count");
+      return;
+    }
+    setPicked(null);
+    set("plywoodSheets", 0);
+    set("plywoodSqft", 0);
+    set("plywoodQuote", m === "quote");
+  };
+  const toUnit = (u: "sheet" | "sqft") => {
+    if (u === spec.plywoodUnit) return;
+    if (u === "sqft") set("plywoodSqft", spec.plywoodSheets * sheet.sqft);
+    else set("plywoodSheets", Math.ceil(spec.plywoodSqft / sheet.sqft));
+    set("plywoodUnit", u);
+  };
+  const says = plywoodScope(spec, deckExposed);
+  // What the estimate's own lines come to — by the sq ft the cents are rounded per line, so this is the figure.
+  const lines = plywoodLines(spec);
+  const inEstimate = lines ? lines.material.quantity * lines.material.unitPrice + lines.labor.quantity * lines.labor.unitPrice : 0;
+  return (
+    <div className="rbd-f rbd-f--full rbd-ply" data-plywood={mode}>
+      <div className="rbd-ply-h">
+        <span className="rbd-ply-t">Plywood replacement</span>
+        <span className="rbd-ply-sub">
+          The damaged roof deck under the old roof · {board.label} · a {sheet.label} sheet is {sheet.sqft} sq ft
+        </span>
+      </div>
+      <Tiles label="How much plywood?" value={mode} options={PLY_MODES} onPick={pick} disabled={disabled} />
+      {mode !== "none" ? (
+        <div className="rbd-ply-what" data-plywood-board>
+          <Sel label="Replace it with" value={spec.plywoodBoardId} options={DECK_BOARDS} onChange={pickBoard} disabled={disabled} wide />
+          <div className="rbd-f">
+            <span className="rbd-lbl">Sheet size</span>
+            <div className="rbd-seg" role="radiogroup" aria-label="Sheet size">
+              {DECK_SHEET_SIZES.map((s) => (
+                <button key={s.id} type="button" role="radio" aria-checked={spec.plywoodSize === s.id} className={"rbd-seg-b" + (spec.plywoodSize === s.id ? " is-on" : "")} disabled={disabled} onClick={() => pickSize(s.id)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {mode !== "none" ? (
+        <div className="rbd-ply-rate">
+          <Num label="Installed, per sheet" unit="$/sheet" value={rate.sheet} onChange={setRate} disabled={disabled} />
+          <Num label="Installed, per sq ft" unit="$/sq ft" value={rate.sqft} onChange={(v) => setRate(v * sheet.sqft)} disabled={disabled} />
+          <p className="rbd-ply-split">
+            {money2(spec.plywoodEach)} for the {board.kind === "plywood" ? "plywood" : "board"} + {money2(spec.plywoodLabor)} to fit, per {sheet.label} sheet — set them under Your rates.
+          </p>
+        </div>
+      ) : null}
+      {mode === "count" ? (
+        <div className="rbd-ply-count" data-plywood-count>
+          <div className="rbd-ply-row">
+            <div className="rbd-seg" role="radiogroup" aria-label="Count plywood in">
+              {(["sheet", "sqft"] as const).map((u) => (
+                <button key={u} type="button" role="radio" aria-checked={spec.plywoodUnit === u} className={"rbd-seg-b" + (spec.plywoodUnit === u ? " is-on" : "")} disabled={disabled} onClick={() => toUnit(u)}>
+                  {u === "sheet" ? "Sheets" : "Sq ft"}
+                </button>
+              ))}
+            </div>
+            <div className="rbd-chips" role="group" aria-label={bySqft ? "Square feet of plywood" : "Sheets of plywood"}>
+              {chips.map((n) => (
+                <button key={n} type="button" className={"rbd-chip" + (qty === n ? " is-on" : "")} aria-pressed={qty === n} disabled={disabled} onClick={() => setCount(n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <Num label="" aria={bySqft ? "Square feet of plywood" : "Sheets of plywood"} unit={bySqft ? "sq ft" : "sheets"} value={qty} onChange={setCount} disabled={disabled} />
+          </div>
+          <p className="rbd-ply-sum" data-plywood-sum>
+            {count
+              ? `${count.unit === "each" ? `${count.sheets} sheet${count.sheets === 1 ? "" : "s"} · ${fmt(count.sqft)} sq ft` : `${fmt(count.sqft)} sq ft · about ${count.sheets} sheets`} · ${money2(inEstimate)} in the estimate`
+              : "Tap how much — or type it."}
+          </p>
+          {deckExposed ? <Check label="Also quote the rate for any more found at tear-off" checked={spec.plywoodQuote} onChange={(v) => set("plywoodQuote", v)} disabled={disabled} /> : null}
+        </div>
+      ) : null}
+      {says.length ? (
+        <div className="rbd-ply-says" data-plywood-says>
+          <span>The client&apos;s proposal says</span>
+          {says.map((s) => (
+            <p key={s}>{s}</p>
+          ))}
+        </div>
+      ) : mode === "quote" && !deckExposed ? (
+        <p className="rbd-note">No tear-off — the deck stays covered, so there is no plywood rate to quote.</p>
+      ) : null}
+    </div>
+  );
+}
+
 /** One of the contractor's own prices: a field like any other, gathered with
  *  its siblings under YOUR RATES at the foot of the open section. */
 function Rate({ label, unit, value, onChange, disabled }: { label: string; unit: string; value: number; onChange: (n: number) => void; disabled?: boolean }) {
@@ -440,8 +604,12 @@ function PackageLedger({
   needsPitch = false,
   blockedReason = "Enter pitch to price.",
   onBuildingUse,
+  seedSpec = null,
+  convertLabel,
 }: {
   facts: RoofFacts;
+  seedSpec?: { spec: RoofPackageSpec; key: string } | null;
+  convertLabel?: string;
   onBuildingUse?: (use: "residential" | "commercial") => void;
   onBuild: (pkg: RoofPackage, spec: RoofPackageSpec) => void;
   onConvert: (pkg: RoofPackage, spec: RoofPackageSpec) => void;
@@ -465,16 +633,25 @@ function PackageLedger({
   );
   const [spec, setSpec] = React.useState<RoofPackageSpec>(() => {
     const l = (typeof window === "undefined" ? null : saneLists(readLocal<CatalogLists>(LISTS_KEY))) ?? BUILTIN_LISTS;
+    // A saved proposal opened again (2026-10-13): its own choices, on the roof they were made for.
+    if (seedSpec && seedSpec.key === key) return reconcile({ ...defaultSpec(facts, l), ...seedSpec.spec }, l);
     const saved = typeof window === "undefined" ? null : readLocal<Prefs>(PREFS_KEY);
     return familyFit(reconcile(applyPrefs(defaultSpec(facts, l, saved?.lowSlopeSystemId), saved), l), facts, l, saved);
   });
   // A different roof opened: the per-roof entries start over from its facts,
-  // the preferences stay. Adjusted during render, not in an effect.
+  // the preferences stay. Adjusted during render, not in an effect. The
+  // proposal's own choices come back when its roof is the one now open, or
+  // when they arrive after the roof did.
   const [seenKey, setSeenKey] = React.useState(key);
-  if (key !== seenKey) {
+  const [seenSeed, setSeenSeed] = React.useState(seedSpec);
+  if (key !== seenKey || seedSpec !== seenSeed) {
     setSeenKey(key);
-    const saved = readLocal<Prefs>(PREFS_KEY);
-    setSpec(familyFit(reconcile(applyPrefs(defaultSpec(facts, lists, saved?.lowSlopeSystemId), saved), lists), facts, lists, saved));
+    setSeenSeed(seedSpec);
+    if (seedSpec && seedSpec.key === key) setSpec(reconcile({ ...defaultSpec(facts, lists), ...seedSpec.spec }, lists));
+    else if (key !== seenKey) {
+      const saved = readLocal<Prefs>(PREFS_KEY);
+      setSpec(familyFit(reconcile(applyPrefs(defaultSpec(facts, lists, saved?.lowSlopeSystemId), saved), lists), facts, lists, saved));
+    }
   }
   // The contractor answered residential or commercial (the report panel asks
   // when the roof reads commercial). Applied IN PLACE: the job-class defaults
@@ -505,6 +682,11 @@ function PackageLedger({
     factsRef.current = facts;
   });
 
+  const seedRef = React.useRef(seedSpec);
+  React.useEffect(() => {
+    seedRef.current = seedSpec;
+  });
+
   // The org's saved catalog, when the table exists and a save has happened:
   // its lists and prices win over the browser's copy.
   const [source, setSource] = React.useState<"loading" | "org" | "browser">("loading");
@@ -522,7 +704,13 @@ function PackageLedger({
         if (doc) {
           const l = saneLists({ systems: doc.systems, underlayments: doc.underlayments }) ?? BUILTIN_LISTS;
           setLists(l);
-          setSpec((s) => familyFit(reconcile(applyPrefs(s, doc.prefs), l), factsRef.current, l, doc.prefs as Prefs));
+          // A proposal's own choices (seedSpec) stay what they were: the company's usual ones are for a new roof.
+          const seed = seedRef.current;
+          setSpec((s) =>
+            seed && seed.key === factsKey(factsRef.current)
+              ? reconcile({ ...defaultSpec(factsRef.current, l), ...seed.spec }, l)
+              : familyFit(reconcile(applyPrefs(s, doc.prefs), l), factsRef.current, l, doc.prefs as Prefs),
+          );
           writeLocal(LISTS_KEY, l);
           writeLocal(PREFS_KEY, doc.prefs);
           setSource("org");
@@ -853,9 +1041,18 @@ function PackageLedger({
   const sumVents = ventsOn.length
     ? ventsOn.map((t) => `${fmt(ventOf(t.id).qty)}${t.unit === "linear ft" ? " ft" : " ×"} ${t.label.split(" · ")[0].toLowerCase()}`).join(" · ")
     : "No vents yet";
+  // The plywood in the section's one line: what is counted, or the rate the client is quoted.
+  const plyNow = plywoodCount(spec);
+  const plyBoard = deckBoardOf(spec).label;
+  const plyIsPlywood = deckBoardOf(spec).kind === "plywood";
+  const plywoodSummary = plyNow
+    ? `${plyBoard} ${plyNow.unit === "each" ? `${plyNow.sheets} sheet${plyNow.sheets === 1 ? "" : "s"}` : `${fmt(plyNow.sqft)} sq ft`}`
+    : spec.plywoodQuote && spec.tearOffLayers > 0 && plywoodRate(spec).sheet > 0
+      ? `${plyBoard} ${money2(plywoodRate(spec).sheet)}/sheet quoted`
+      : null;
   const sumTear = [
     spec.tearOffLayers === 0 ? "Overlay, no tear-off" : `Tear-off ${spec.tearOffLayers} layer${spec.tearOffLayers === 1 ? "" : "s"}`,
-    spec.plywoodSheets > 0 ? `${spec.plywoodSheets} deck sheet${spec.plywoodSheets === 1 ? "" : "s"}` : null,
+    plywoodSummary,
     spec.cleanupLump > 0 ? `cleanup ${money(spec.cleanupLump)}` : null,
     steepest >= 8 && spec.safetyLump > 0 ? `steep safety ${money(spec.safetyLump)}` : null,
     !spec.commercial.on && spec.permitLump > 0 ? `permit ${money(spec.permitLump)}` : null,
@@ -907,7 +1104,7 @@ function PackageLedger({
   const existingLabel = EXISTING_LOW_SLOPE.find((e) => e.id === F.existing)?.label ?? "Existing roof";
   const sumFlatTear = [
     surface ? "Over the existing roof, no tear-off" : spec.tearOffLayers === 0 ? "Recover, no tear-off" : `Tear-off ${existingLabel.toLowerCase()} · ${plural(spec.tearOffLayers, "layer")}`,
-    spec.plywoodSheets > 0 ? plural(spec.plywoodSheets, "deck sheet") : null,
+    plywoodSummary,
     spec.cleanupLump > 0 ? `cleanup ${money(spec.cleanupLump)}` : null,
     !spec.commercial.on && spec.permitLump > 0 ? `permit ${money(spec.permitLump)}` : null,
   ]
@@ -960,7 +1157,7 @@ function PackageLedger({
       title={needsPitch ? blockedReason : "Straight to a proposal with these lines — lines you already edited below are what gets converted"}
     >
       <svg className="ic" aria-hidden="true"><use href="#i-file" /></svg>
-      {converting ? "Creating…" : "Convert to proposal"}
+      {converting ? (convertLabel ? "Updating…" : "Creating…") : (convertLabel ?? "Convert to proposal")}
     </button>
   );
 
@@ -1451,8 +1648,8 @@ function PackageLedger({
                   <>
                     <Rate label="Tear-off labor" unit="$/sq·layer" value={spec.tearOffPerSqLayer} onChange={(v) => set("tearOffPerSqLayer", v)} disabled={disabled} />
                     <Rate label="Disposal" unit="$/sq·layer" value={spec.disposalPerSqLayer} onChange={(v) => set("disposalPerSqLayer", v)} disabled={disabled} />
-                    <Rate label="Deck sheet" unit="$/ea" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
-                    <Rate label="Sheet labor" unit="$/ea" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood sheet" : "Deck board sheet"} unit="$/sheet" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood fitting" : "Deck board fitting"} unit="$/sheet" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
                     <Rate label="Nails & fasteners" unit="$/sq" value={spec.nailsPerSq} onChange={(v) => set("nailsPerSq", v)} disabled={disabled} />
                     <Rate label="Sealant & collars" unit="$/sq" value={spec.sealantPerSq} onChange={(v) => set("sealantPerSq", v)} disabled={disabled} />
                   </>
@@ -1477,11 +1674,11 @@ function PackageLedger({
                     onChange={(v) => set("tearOffLayers", Number(v) as 0 | 1 | 2 | 3)}
                     disabled={disabled}
                   />
-                  <Num label="Deck sheets" unit="each" value={spec.plywoodSheets} onChange={(v) => set("plywoodSheets", v)} disabled={disabled} />
                   <Num label="Cleanup" unit="$" value={spec.cleanupLump} onChange={(v) => set("cleanupLump", v)} disabled={disabled} />
                   <Num label="Steep safety" unit="$" value={spec.safetyLump} onChange={(v) => set("safetyLump", v)} disabled={disabled} />
                   {!spec.commercial.on && <Num label="Permit" unit="$" value={spec.permitLump} onChange={(v) => set("permitLump", v)} disabled={disabled} />}
                   <Num label="Delivery" unit="$" value={spec.deliveryLump ?? 0} onChange={(v) => set("deliveryLump", v)} disabled={disabled} />
+                  <PlywoodBlock spec={spec} set={set} disabled={disabled} deckExposed={spec.tearOffLayers > 0} />
                 </Group>
               </Section>
             </>
@@ -1699,8 +1896,8 @@ function PackageLedger({
                         {F.existing === "bur_gravel" && flatRates(["gravelVac"])}
                       </>
                     )}
-                    <Rate label="Deck sheet" unit="$/ea" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
-                    <Rate label="Sheet labor" unit="$/ea" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood sheet" : "Deck board sheet"} unit="$/sheet" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood fitting" : "Deck board fitting"} unit="$/sheet" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
                   </>
                 }
               >
@@ -1722,9 +1919,9 @@ function PackageLedger({
                       />
                     </>
                   )}
-                  <Num label="Deck sheets" unit="each" value={spec.plywoodSheets} onChange={(v) => set("plywoodSheets", v)} disabled={disabled} />
                   <Num label="Cleanup" unit="$" value={spec.cleanupLump} onChange={(v) => set("cleanupLump", v)} disabled={disabled} />
                   {!spec.commercial.on && <Num label="Permit" unit="$" value={spec.permitLump} onChange={(v) => set("permitLump", v)} disabled={disabled} />}
+                  {!surface ? <PlywoodBlock spec={spec} set={set} disabled={disabled} deckExposed={spec.tearOffLayers > 0} /> : null}
                 </Group>
               </Section>
             </>
@@ -1927,6 +2124,8 @@ export default function BuildEstimateCardD({
   onBuildingUse,
   aiEnabled = true,
   waiting = null,
+  seedSpec = null,
+  convertLabel,
 }: BuildEstimateCardProps) {
   // Nothing is priced while the aerial provider is still delivering the
   // packs pricing needs, nor on a pitch nobody stated.
@@ -2014,6 +2213,8 @@ export default function BuildEstimateCardD({
             converting={converting}
             onBuild={onBuild}
             onConvert={onConvert}
+            seedSpec={seedSpec}
+            convertLabel={convertLabel}
             lead={pitchSel}
             needsPitch={needsPitch}
             blockedReason={blockedReason}

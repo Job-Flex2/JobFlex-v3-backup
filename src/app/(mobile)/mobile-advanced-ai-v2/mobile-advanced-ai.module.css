@@ -1615,54 +1615,9 @@
 .scroll { padding-bottom: 60px; }
 
 /* ============================================================
-   FROM BLUEPRINTS (2026-10-12) — the entry on the brief step, the
-   reader's layer over the page, and the trade heads on the line cards
-   of an estimate priced from a plan set (lib/plans).
+   AN ESTIMATE FROM THE BLUEPRINT ESTIMATOR — the trade heads on the line
+   cards of an estimate priced from a plan set (lib/plans).
    ============================================================ */
-.planEntry {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 14px;
-  padding: 12px 14px;
-  border: 1.5px dashed var(--blueprint);
-  border-radius: var(--radius, 2px);
-  background: rgba(24, 84, 160, 0.06);
-}
-.planEntryTxt {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--muted);
-}
-.planEntryTxt b {
-  color: var(--ink);
-  font-size: 14px;
-}
-.planEntry .btn {
-  flex: none;
-}
-.planBack {
-  width: 100%;
-  justify-content: center;
-}
-.planLayer {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: calc(14px + env(safe-area-inset-top, 0px)) var(--pad-x) calc(28px + var(--safe-b));
-  background: var(--paper);
-}
-.planLayer[hidden] {
-  display: none;
-}
 .lgroup {
   display: flex;
   align-items: baseline;

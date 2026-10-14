@@ -15,7 +15,8 @@
 //     benchmark is a new house's (a framing package, a roof), never a replacement's
 import type { PermitCall } from "../estimate/permits";
 import type { SpecialtyProcedure } from "../estimate/procedures/types";
-import { excludedWork, tradeBrief, type HouseBrief } from "./tradeBrief";
+import { excludedWork, tradeBrief, type HouseBrief, type JobAsk } from "./tradeBrief";
+import { isBuildSpecialty, profileForWords, specialtyName } from "./specialties";
 import { TRADE_LABEL, type PlanTrade, type TakeoffItem } from "./takeoff";
 
 export type TradeSetup = {
@@ -158,16 +159,41 @@ export type PlanTradeRun = {
   leftOut: string[];
 };
 
-export function planTradeRun(input: { trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; alsoPriced: readonly PlanTrade[] }): PlanTradeRun {
-  const b = tradeBrief(input.trade, input.house, input.items, input.alsoPriced);
+/** Specialties whose validator profile is set by hand; any other is profiled from its name (lib/plans/specialties). */
+const JOB_SETUP: Record<string, Pick<TradeSetup, "specialtyId" | "profileId" | "lineRange">> = {
+  "countertop-installer": { specialtyId: "countertop-installer", profileId: "general", lineRange: "4-12" },
+  "built-in-cabinetry": { specialtyId: "built-in-cabinetry", profileId: "general", lineRange: "5-14" },
+  "garage-flooring": { specialtyId: "garage-flooring", profileId: "flooring", lineRange: "4-10" },
+  "epoxy-flooring": { specialtyId: "epoxy-flooring", profileId: "flooring", lineRange: "4-10" },
+};
+
+export function planTradeRun(input: {
+  trade: PlanTrade;
+  house: HouseBrief;
+  items: TakeoffItem[];
+  alsoPriced: readonly PlanTrade[];
+  /** One job asked of the plans (lib/plans/ask) instead of whole trades. */
+  ask?: (JobAsk & { partial: boolean; specialtyId?: string | null; label?: string | null }) | null;
+}): PlanTradeRun {
+  const b = tradeBrief(input.trade, input.house, input.items, input.alsoPriced, input.ask);
+  // Any estimator specialty that builds something may price a job's lines (a fence:
+  // fencing; pavers: hardscape) — checked against the catalog here, on the server.
+  const id = isBuildSpecialty(input.ask?.specialtyId) ? input.ask!.specialtyId! : null;
+  const base = TRADE_SETUP[input.trade];
+  const own = id && id !== base.specialtyId ? JOB_SETUP[id] ?? { specialtyId: id, profileId: profileForWords(`${specialtyName(id)} ${input.ask?.title ?? ""}`), lineRange: "5-14" } : undefined;
+  // Work beyond the house's own trades (solar, a pool, a fence) is not covered by the
+  // house's building permit as a matter of course: whether it needs its own is the city's.
+  const permit: TradeSetup["permit"] = own && !JOB_SETUP[id!] ? { need: "depends", reason: "the city decides whether this work needs a permit of its own beside the house's" } : base.permit;
   return {
     trade: input.trade,
-    label: TRADE_LABEL[input.trade],
-    setup: TRADE_SETUP[input.trade],
+    label: input.ask?.label?.trim() || TRADE_LABEL[input.trade],
+    setup: own ? { ...base, ...own, permit } : base,
     brief: b.brief,
     block: b.takeoffBlock,
     items: b.items,
-    benchmarkQty: benchmarkQty(input.trade, input.house, b.items),
+    // A trade's benchmark is the whole trade's; part of it (the countertops of the cabinet
+    // trade) has none.
+    benchmarkQty: input.ask?.partial ? null : benchmarkQty(input.trade, input.house, b.items),
     leftOut: excludedWork(input.trade, input.alsoPriced).map((o) => `${o.work} (${TRADE_LABEL[o.owner]})`),
   };
 }

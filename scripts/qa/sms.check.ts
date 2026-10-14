@@ -5,6 +5,8 @@ import * as P from "../../src/lib/notificationPrefsShared";
 import * as F from "../../src/lib/sms/format";
 import * as R from "../../src/lib/sms/textRules";
 import * as G from "../../src/lib/sms/registrationShared";
+import * as D from "../../src/lib/aiDesk/shared";
+import * as V from "../../src/lib/sdk/twilioVoice";
 import {
   acceptedLine,
   brand,
@@ -181,7 +183,7 @@ check("the monthly allowance grows with the plan and defaults to the free tier",
   const good: G.SmsRegistrationDetails = {
     legalName: "Ridgeline Roofing LLC", dba: "Ridgeline Roofing", businessType: "PRIVATE_PROFIT", ein: "123456789",
     street: "4567 Rainier Ave S", street2: "", city: "Seattle", state: "wa", zip: "98118", website: "https://ridgelineroofing.com",
-    contactFirst: "Rick", contactLast: "Stevens", contactEmail: "rick@ridgelineroofing.com", contactPhone: "(206) 555-0100",
+    contactFirst: "Rick", contactLast: "Stevens", contactEmail: "rick@ridgelineroofing.com", contactPhone: "(206) 555-0100", social: "", showEmail: false,
   };
   check("a complete business form has no problems", Object.keys(G.registrationProblems(good)).length === 0, JSON.stringify(G.registrationProblems(good)));
   const p = G.registrationProblems({ ...good, ein: "", state: "Washington", zip: "981", website: "ridgeline.com", contactPhone: "555" });
@@ -194,18 +196,56 @@ check("the monthly allowance grows with the plan and defaults to the free tier",
   const pre = G.prefillDetails({ name: "Ridgeline Roofing", website: null, address: "13620 NE 20th St, Suite I, Bellevue, WA 98005", phone: "+14255550100", slug: "ridgeline" }, { name: "Rick Stevens", email: "rick@ridgelineroofing.com" });
   check("the form starts from the company's address, a JobFlex page for a missing website, and the person's name",
     pre.street === "13620 NE 20th St" && pre.street2 === "Suite I" && pre.city === "Bellevue" && pre.state === "WA" && pre.zip === "98005" &&
-    pre.website === "https://www.jobflex.app/r/ridgeline" && pre.contactFirst === "Rick" && pre.contactLast === "Stevens", JSON.stringify(pre));
+    pre.website === "https://www.jobflex.app/book/ridgeline" && pre.contactFirst === "Rick" && pre.contactLast === "Stevens", JSON.stringify(pre));
   const samples = ["Ridgeline Roofing: your proposal is ready.", "Ridgeline Roofing: reminder — tomorrow 9 AM."];
-  const f = G.verificationFields({ details: t, companyName: "Ridgeline Roofing", samples, bookingUrl: "https://www.jobflex.app/book/ridgeline-roofing-and-exteriors" });
+  const help = F.companyHelpText("Ridgeline Roofing", "+12065550100");
+  const f = G.verificationFields({ details: t, companyName: "Ridgeline Roofing", samples, bookingUrl: "https://www.jobflex.app/book/ridgeline-roofing-and-exteriors", slug: "ridgeline-roofing-and-exteriors", helpText: help });
   check("the registration names the contractor, not JobFlex, and stays inside Twilio's limits",
     f.businessName === "Ridgeline Roofing LLC" && f.doingBusinessAs === "Ridgeline Roofing" && f.businessContactEmail === "rick@ridgelineroofing.com" &&
-    f.businessContactPhone === "+12065550100" && f.businessRegistrationNumber === "12-3456789" && f.optInImageUrls[0] === G.BOOKING_OPT_IN_IMAGE &&
+    f.businessContactPhone === "+12065550100" && f.businessRegistrationNumber === "12-3456789" && f.optInImageUrls[0] === "https://www.jobflex.app/book/ridgeline-roofing-and-exteriors/opt-in.png" &&
     f.useCaseSummary.length <= 500 && f.additionalInformation.length <= 500 && f.productionMessageSample.length <= 500 && f.useCaseSummary.includes("used by Ridgeline Roofing only") && f.additionalInformation.includes("/book/ridgeline-roofing-and-exteriors") && !f.additionalInformation.endsWith("…"));
-  const sole = G.verificationFields({ details: { ...t, businessType: "SOLE_PROPRIETOR", ein: "", dba: "" }, companyName: "Ridgeline Roofing", samples, bookingUrl: "https://www.jobflex.app/book/ridgeline" });
+  // WHAT TWILIO CHECKS (2026-10-12): the company's own terms and privacy pages (30493, 30519), its HELP reply (30531),
+  // its own opt-in picture (30506) — never the demo company's.
+  check("the registration carries the company's own texting terms, privacy policy and HELP reply",
+    f.termsAndConditionsUrl === "https://www.jobflex.app/book/ridgeline-roofing-and-exteriors/texting" &&
+    f.privacyPolicyUrl === "https://www.jobflex.app/book/ridgeline-roofing-and-exteriors/privacy" &&
+    f.helpMessageSample === help && !f.optInImageUrls.includes(G.BOOKING_OPT_IN_IMAGE), JSON.stringify({ t: f.termsAndConditionsUrl, p: f.privacyPolicyUrl, i: f.optInImageUrls }));
+  check("the booking checkbox's words name the company and say it is optional, with frequency, rates, STOP and HELP",
+    G.bookingConsentText("Cedar Line Fence").lead === "Text me about my visit and estimate from Cedar Line Fence." &&
+    /Message frequency varies\. Msg & data rates may apply\. Reply STOP to opt out, HELP for help\. Agreeing is not a condition of booking\./.test(G.bookingConsentText("x").rest));
+  check("sample texts talk about the company's own trade", G.sampleJobsFor(["Fencing"]).job === "Fence installation" && G.sampleJobsFor(["Other", "HVAC"]).job === "Heat pump installation" && G.sampleJobsFor([]).job === "Home repair");
+  // NO WEBSITE, A GMAIL (2026-10-13): the booking page lists the email (30482), a social page goes along as proof.
+  const noSite = G.prefillDetails({ name: "Cedar Line Fence", website: null, address: null, phone: null, slug: "cedar" }, { name: "Ana Ruiz", email: "ana.cedarfence@gmail.com" });
+  check("no website and a Gmail: the form starts with the email shown on the booking page", noSite.showEmail === true && noSite.website === "https://www.jobflex.app/book/cedar");
+  check("…an own website: nothing is shown unless asked", G.prefillDetails({ name: "R", website: "https://ridgeline.com", address: null, phone: null, slug: "r" }, { name: "R", email: "r@gmail.com" }).showEmail === false);
+  check("a social page is optional, but must be a link", !G.registrationProblems({ ...good, social: "" }).social && Boolean(G.registrationProblems({ ...good, social: "facebook" }).social) && !G.registrationProblems({ ...good, social: "https://facebook.com/cedarlinefence" }).social);
+  const withSocial = G.verificationFields({ details: G.tidyDetails({ ...good, showEmail: true, social: "https://facebook.com/ridgelineroofing" }), companyName: "Ridgeline Roofing", samples, bookingUrl: "https://www.jobflex.app/book/ridgeline-roofing-and-exteriors", slug: "ridgeline-roofing-and-exteriors", helpText: help });
+  check("…and Twilio is told the email is listed and where the business is online, inside 500 characters",
+    withSocial.additionalInformation.includes("contact email is listed on that page") && withSocial.additionalInformation.endsWith("https://facebook.com/ridgelineroofing") && withSocial.additionalInformation.length <= 500, `${withSocial.additionalInformation.length}: ${withSocial.additionalInformation}`);
+  check("details saved before these fields read as their empty values", G.parseRegistration(JSON.stringify({ stage: "pending", details: { legalName: "X" } })).details?.showEmail === false && G.parseRegistration(JSON.stringify({ stage: "pending", details: { legalName: "X" } })).details?.social === "");
+  const sole = G.verificationFields({ details: { ...t, businessType: "SOLE_PROPRIETOR", ein: "", dba: "" }, companyName: "Ridgeline Roofing", samples, bookingUrl: "https://www.jobflex.app/book/ridgeline", slug: "ridgeline", helpText: help });
   check("a sole proprietor without an EIN sends no registration number, and no trade name equal to the legal one", !("businessRegistrationNumber" in sole) && !("doingBusinessAs" in sole));
   check("HELP on a company's number names the company and how to reach it",
     F.companyHelpText("Ridgeline Roofing", "+12065550100") === "Ridgeline Roofing: texts about your visits and estimates. Reply STOP to opt out. Questions: (206) 555-0100" &&
     F.companyHelpText("Ridgeline Roofing", null).endsWith("Questions: support@jobflex.app"));
+}
+
+// ONE NUMBER FOR CALLS AND TEXTS (2026-10-13, lib/aiDesk): calls the day it is bought, texts once approved.
+{
+  check("a saved registration keeps when calls were wired", G.parseRegistration(JSON.stringify({ stage: "pending", voiceOnAt: "2026-10-13T00:00:00Z" })).voiceOnAt === "2026-10-13T00:00:00Z");
+  check("the card says calls work at once and texts wait for the approval",
+    /takes calls right away/i.test(G.REGISTRATION_COPY.done.join(" ")) && /answers calls/i.test(G.REGISTRATION_COPY.pending) && /approval/i.test(G.REGISTRATION_COPY.textsPending) && G.REGISTRATION_COPY.title === "Your number");
+  const d = D.parseDeskSettings;
+  check("desk settings: the assistant answers unless told to forward; junk reads as the default", d(null).mode === "ANSWER" && d('{"mode":"FORWARD"}').mode === "FORWARD" && d('{"mode":"ROCKET"}').mode === "ANSWER" && d("nope").mode === "ANSWER");
+  check("where calls go: the assistant on the plan, else the company phone, else nowhere",
+    D.callsGo({ mode: "ANSWER", assistantOnPlan: true, companyPhone: "+14255550100" }) === "assistant" &&
+    D.callsGo({ mode: "FORWARD", assistantOnPlan: true, companyPhone: "+14255550100" }) === "phone" &&
+    D.callsGo({ mode: "ANSWER", assistantOnPlan: false, companyPhone: "+14255550100" }) === "phone" &&
+    D.callsGo({ mode: "FORWARD", assistantOnPlan: true, companyPhone: null }) === "assistant" &&
+    D.callsGo({ mode: "ANSWER", assistantOnPlan: false, companyPhone: null }) === "none");
+  const fwd = V.forwardTwiml({ baseUrl: "https://www.jobflex.app", number: "+14255550100" });
+  check("forwarding rings the company phone and comes back to the dial result", /<Dial action="https:\/\/www\.jobflex\.app\/api\/twilio\/voice\/dial" method="POST" timeout="25">\+14255550100<\/Dial>/.test(fwd));
+  check("the assistant's greeting names the company", D.greetingFor("Ridgeline Roofing").startsWith("Thanks for calling Ridgeline Roofing.") && /<Say voice="alice">Thanks for calling Ridgeline Roofing\./.test(V.recordingTwiml({ baseUrl: "https://x", greeting: D.greetingFor("Ridgeline Roofing") })));
 }
 
 console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");

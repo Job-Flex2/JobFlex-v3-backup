@@ -286,6 +286,37 @@ export interface LowerLevel {
 }
 export const LOWER_LIMITS = { widthFt: { min: 4, max: 60 }, depthFt: { min: 4, max: 30 }, dropIn: { min: 4, max: 96 } } as const;
 
+/** A hot-tub spot on the deck: where the tub will stand, and the frame
+ *  under it doubled for the water it holds. The tub itself is by others. */
+export interface SpaDesign {
+  on: boolean;
+  /** The tub's footprint, feet. */
+  widthFt: number;
+  depthFt: number;
+  /** Along the house wall: which way the spot slides. */
+  align: "left" | "centre" | "right";
+}
+export const SPA_LIMITS = { widthFt: { min: 5, max: 10 }, depthFt: { min: 5, max: 10 } } as const;
+export function defaultSpa(): SpaDesign {
+  return { on: false, widthFt: 7, depthFt: 7, align: "right" };
+}
+
+/** The tub's footprint on the deck, INCHES from the left-back corner —
+ *  against the house wall, slid by its alignment. Null when off. */
+export function spaRectIn(design: Pick<DeckDesign, "spa" | "shape">): { x0: number; x1: number; y0: number; y1: number } | null {
+  const spa = design.spa;
+  if (!spa?.on || design.shape.kind !== "rect") return null;
+  const W = design.shape.widthFt * 12;
+  const w = spa.widthFt * 12;
+  const d = spa.depthFt * 12;
+  const margin = 6;
+  const D = design.shape.depthFt * 12;
+  const x0 = spa.align === "left" ? margin : spa.align === "right" ? W - w - margin : (W - w) / 2;
+  // At the FRONT edge: by the rail with the view, clear of the door path
+  // along the house — and where every drawing actually shows it.
+  return { x0, x1: x0 + w, y0: Math.max(margin, D - d - margin), y1: Math.max(margin + d, D - margin) };
+}
+
 export type DeckPattern = "straight" | "diagonal" | "herringbone";
 export const PATTERN_LABEL: Record<DeckPattern, string> = { straight: "Square to the joists", diagonal: "Diagonal, 45°", herringbone: "Herringbone" };
 
@@ -451,6 +482,8 @@ export interface DeckDesign {
   stairs: StairDesign[];
   /** A lower level in front (M3). */
   lower: LowerLevel;
+  /** A hot-tub spot: doubled joists under the tub's footprint. */
+  spa: SpaDesign;
   /** The site (M3). */
   site: SiteDesign;
   /** Lights, outlets, heaters and the wiring to them (M3). */
@@ -594,6 +627,7 @@ export function defaultDeckDesign(opts: { state?: string | null; frostIn?: numbe
     rail: { ...defaultRailDesign(), heightIn: deckCodeFor(stateCode(opts.state)).guardIn },
     stairs: [],
     lower: defaultLowerLevel(),
+    spa: defaultSpa(),
     site: { ...defaultSite(), state: stateCode(opts.state) },
     electrical: defaultElectrical(),
     structure: "deck",
@@ -680,6 +714,7 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
   const railFt = ex.railFt === "auto" || ex.railFt === undefined ? "auto" : Math.round(clamp(num(ex.railFt, 0), DECK_LIMITS.railFt.min, DECK_LIMITS.railFt.max) * 10) / 10;
   const heightIn = Math.round(clamp(num(r.heightIn, d.heightIn), DECK_LIMITS.heightIn.min, DECK_LIMITS.heightIn.max) * 4) / 4;
   const lower = normalizeLower(r.lower, shape, heightIn);
+  const spa = normalizeSpa(r.spa, shape);
   // A v2 design carried the rail as an allowance in `extras` and the stairs as a count of flights.
   const rail = normalizeRail(r.rail, ex);
   const stairs = normalizeStairs(r.stairs, ex, shape, placement, lower);
@@ -737,6 +772,7 @@ export function normalizeDeckDesign(raw: unknown, opts: { state?: string | null;
     rail,
     stairs,
     lower,
+    spa,
     site,
     electrical,
     structure,
@@ -982,6 +1018,21 @@ function normalizeLower(raw: unknown, shape: DeckShape, heightIn: number): Lower
     widthFt: toInch(clamp(num(r.widthFt, Math.min(d.widthFt, maxWidth)), LOWER_LIMITS.widthFt.min, maxWidth)),
     depthFt: toInch(clamp(num(r.depthFt, d.depthFt), LOWER_LIMITS.depthFt.min, LOWER_LIMITS.depthFt.max)),
     dropIn: Math.round(clamp(num(r.dropIn, d.dropIn), LOWER_LIMITS.dropIn.min, maxDrop) * 4) / 4,
+    align: oneOf(r.align, ["left", "centre", "right"] as const, d.align),
+  };
+}
+
+function normalizeSpa(raw: unknown, shape: DeckShape): SpaDesign {
+  const d = defaultSpa();
+  const r = obj(raw);
+  // The tub needs a flat rectangle of deck wider than itself.
+  const maxW = Math.max(SPA_LIMITS.widthFt.min, Math.min(SPA_LIMITS.widthFt.max, shape.widthFt - 1));
+  const maxD = Math.max(SPA_LIMITS.depthFt.min, Math.min(SPA_LIMITS.depthFt.max, shape.depthFt - 1));
+  const fits = shape.widthFt >= SPA_LIMITS.widthFt.min + 1 && shape.depthFt >= SPA_LIMITS.depthFt.min + 1;
+  return {
+    on: r.on === true && fits,
+    widthFt: toInch(clamp(num(r.widthFt, Math.min(d.widthFt, maxW)), SPA_LIMITS.widthFt.min, maxW)),
+    depthFt: toInch(clamp(num(r.depthFt, Math.min(d.depthFt, maxD)), SPA_LIMITS.depthFt.min, maxD)),
     align: oneOf(r.align, ["left", "centre", "right"] as const, d.align),
   };
 }

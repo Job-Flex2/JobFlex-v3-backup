@@ -46,7 +46,7 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0a",
 };
 
-const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "texting"] as const;
+const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "texting", "desk"] as const;
 
 export default async function MobileSettingsV1Page({
   searchParams,

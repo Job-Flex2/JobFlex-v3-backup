@@ -5,6 +5,7 @@
 // visit), the receipt. Everything the shop set up is in `services`; the
 // open times come from the calendar through bookingAvailability.
 
+import { bookingConsentText } from "@/lib/sms/registrationShared";
 import { useState, useTransition } from "react";
 import { bookingAvailability, createBookingPublic, type PublicDay } from "@/actions/booking";
 import type { BookingService } from "@/lib/booking";
@@ -154,7 +155,10 @@ export function BookWizard({ slug, orgName, services, intro, arrivalWindow }: { 
           <label className="flex items-start gap-2 text-[12px] leading-snug" data-sms-optin>
             <input type="checkbox" className="mt-[2px] h-4 w-4 shrink-0" checked={form.smsOk} onChange={(e) => setForm({ ...form, smsOk: e.target.checked })} />
             <span>
-              <b className="font-medium">Text me about my visit and estimate from {orgName}.</b> Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. Agreeing is not a condition of booking.
+              <b className="font-medium">{bookingConsentText(orgName).lead}</b> {bookingConsentText(orgName).rest}{" "}
+              {/* The terms and the privacy policy beside the box (2026-10-12) — carriers look for them next to the consent. */}
+              <a className="underline" href={`/book/${encodeURIComponent(slug)}/texting`} target="_blank" rel="noreferrer">Texting terms</a> ·{" "}
+              <a className="underline" href={`/book/${encodeURIComponent(slug)}/privacy`} target="_blank" rel="noreferrer">Privacy policy</a>
             </span>
           </label>
           <label className="text-[12px] font-medium">Address of the visit<input className={IN} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} autoComplete="street-address" /></label>

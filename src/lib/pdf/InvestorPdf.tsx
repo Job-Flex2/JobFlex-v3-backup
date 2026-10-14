@@ -49,6 +49,17 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
     [`Realistic · ${a.realisticPct}% of trials`, dollars(f.projected.mrrRealisticCents), "the share used for the break-even", true],
     ["By behaviour", dollars(f.projected.mrrByBehaviourCents), `${pct(f.trials.byBehaviourPct)} of trials, from what each account has done`],
   ];
+  // The two kinds of trial (2026-10-13): the same figures for each, side by side.
+  const co = report.cohorts;
+  const kinds: Array<[string, string, string]> = [
+    ["Ad spend attributed", `${dollars(co.card.attributedCents)} · ${co.card.attributedDays}d`, `${dollars(co.nocard.attributedCents)} · ${co.nocard.attributedDays}d`],
+    ["Signed up", String(co.card.signups), String(co.nocard.signups)],
+    ["On free trial · paying · lapsed", `${co.card.figures.trials.count} · ${co.card.figures.paying.count} · ${co.card.figures.lapsed}`, `${co.nocard.figures.trials.count} · ${co.nocard.figures.paying.count} · ${co.nocard.figures.lapsed}`],
+    ["Observed pay rate", pct(co.card.figures.observed.pct), pct(co.nocard.figures.observed.pct)],
+    ["Cost per signup", money(co.card.figures.unit.costPerSignupCents), money(co.nocard.figures.unit.costPerSignupCents)],
+    ["Realistic MRR", dollars(co.card.figures.projected.mrrRealisticCents), dollars(co.nocard.figures.projected.mrrRealisticCents)],
+    ["Break-even", co.card.figures.breakEven.date ? longDate(co.card.figures.breakEven.date) : "not within the horizon", co.nocard.figures.breakEven.date ? longDate(co.nocard.figures.breakEven.date) : "not within the horizon"],
+  ];
   const costs: Array<[string, string, string, boolean?]> = [
     ["Per visitor", money(f.unit.costPerVisitorCents), f.visitors === null ? "no visitor count" : `${f.visitors.toLocaleString("en-US")} visitors`],
     ["Per signup", money(f.unit.costPerSignupCents), `${f.signups} signed up`],
@@ -71,7 +82,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
             ["Visitors", f.visitors === null ? "—" : f.visitors.toLocaleString("en-US"), f.visitors === null ? "analytics not reached" : `${money(f.unit.costPerVisitorCents)} each`],
             ["Signed up", String(f.signups), `${f.unit.signupsPerDay}/day · ${pct(f.unit.visitorToSignupPct)} of visitors`],
             ["On free trial", String(f.trials.count), `${dollars(f.trials.maxMrrCents)}/mo if all pay`],
-            ["Paying", String(f.paying.count), `${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year`],
+            ["Paying", String(f.paying.count), `${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.preexisting > 0 ? ` · ${f.paying.preexisting} from before the start day` : ""}`],
             ["Realistic MRR", dollars(f.projected.mrrRealisticCents), `paying + ${a.realisticPct}% of trials`],
           ].map(([l, v, nt]) => (
             <View key={l} style={s.cell}>
@@ -95,6 +106,11 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
             ))}
           </View>
         </View>
+        <Text style={s.h2}>The two kinds of trial · a new signup now gets {co.current === "nocard" ? "no card" : "a card"}{co.currentSince ? ` (since ${longDate(co.currentSince)})` : ""}</Text>
+        <View style={s.row}><Text style={[s.c1, { fontFamily: "Helvetica-Bold" }]}> </Text><Text style={[s.c2, { fontFamily: "Helvetica-Bold" }]}>With a card</Text><Text style={[s.c2, { fontFamily: "Helvetica-Bold" }]}>No card</Text></View>
+        {kinds.map(([l, c1, c2]) => (
+          <View key={l} style={s.row}><Text style={s.c1}>{l}</Text><Text style={s.c2}>{c1}</Text><Text style={s.c2}>{c2}</Text></View>
+        ))}
         <Text style={s.h2}>The ad spend by period{report.meta.lastPulledAt ? " (Meta's own figures)" : ""}</Text>
         {report.periods.map((p) => (
           <View key={p.key} style={s.row}><Text style={s.c1}>{p.label}</Text><Text style={s.c2}>{dollars(p.cents)}</Text><Text style={s.c3}>{p.days === 0 ? "nothing yet" : `${dollars(p.perDayCents)}/day over ${p.days} ${p.days === 1 ? "day" : "days"}`}</Text></View>
@@ -126,7 +142,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
         )}
         <View wrap={false}>
         <Text style={s.h2}>How these are figured</Text>
-        <Text style={s.li}>· Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} account(s) paying from before that day (${dollars(report.before.mrrCents)}/mo) not counted.` : ""}</Text>
+        <Text style={s.li}>· Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted under With a card as paying, not as signups of the period.` : ""}</Text>
         <Text style={s.li}>· Ad spend is {f.spend.dailyBudgetCents !== null && f.spend.budgetFrom ? `the daily budget, ${dollars(f.spend.dailyBudgetCents)} for all ads together, counted as spent every day since ${longDate(f.spend.budgetFrom)}` : "what was booked per day"}; tomorrow on it is projected at {dollars(f.spend.perDayProjectedCents)} a day.</Text>
         <Text style={s.li}>· A trial is worth its plan&apos;s monthly list price (a yearly plan as a twelfth, a custom plan by its pages). Discounts, taxes and churn are not modelled.</Text>
         <Text style={s.li}>· The realistic share is {a.realisticPct}% of trials paying; &quot;by behaviour&quot; reads each account&apos;s activity instead.</Text>

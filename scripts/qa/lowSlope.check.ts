@@ -9,6 +9,9 @@ import {
   defaultSpec,
   estimateEdges,
   estimateValleys,
+  simplifyOutline,
+  outlineFeet,
+  valleysFromOutline,
   withJobClass,
   withSystem,
   type RoofFacts,
@@ -57,7 +60,14 @@ check("8-facet hip: 4 valleys, 50–65 ft", v8?.count === 4 && (v8?.totalFt ?? 0
 const v12 = estimateValleys(house({ facetCount: 12, shape: "Complex", footprintSqft: 3200, perimeterFt: 300, pitchFamilies: [{ pitch12: 8, share: 1 }] }));
 check("12-facet complex: 2–4 ft of valley per square", v12 != null && v12.totalFt / 32 >= 2 && v12.totalFt / 32 <= 4, JSON.stringify(v12));
 check("a zero footprint and no perimeter is no figure, never NaN", estimateValleys(house({ footprintSqft: 0, perimeterFt: null })) === null);
-check("a low facet confidence is no figure", estimateValleys(house({ facetConfidence: 0.19 })) === null);
+// A count the provider scored low still gives a ROUGH figure (owner, 2026-10-13: "at least a rough estimate … about
+// the length of the ridge and hips"), never longer than the ridges and hips together.
+const low = estimateValleys(house({ facetConfidence: 0.19 }));
+check("a low facet confidence gives a rough figure, not a dash", low?.rough === true && (low?.count ?? 0) > 0 && (low?.totalFt ?? 0) > 0, JSON.stringify(low));
+const lowBig = estimateValleys(house({ facetCount: 18, shape: "Complex", facetConfidence: 0.2, footprintSqft: 3300, perimeterFt: 260, pitchFamilies: [{ pitch12: 5, share: 0.7 }, { pitch12: 11, share: 0.3 }] }));
+const lowEdges = estimateEdges(house({ facetCount: 18, shape: "Complex", facetConfidence: 0.2, footprintSqft: 3300, perimeterFt: 260, pitchFamilies: [{ pitch12: 5, share: 0.7 }, { pitch12: 11, share: 0.3 }] }));
+check("an 18-facet two-pitch house scored low (the Sammamish roof): valleys, no longer than ridge + hips", !!lowBig && !!lowEdges && lowBig.totalFt > 0 && lowBig.totalFt <= lowEdges.ridgeFt + lowEdges.hipFt + 0.5 && lowEdges.valleyFt === lowBig.totalFt, `${JSON.stringify(lowBig)} · ridge+hip ${lowEdges ? lowEdges.ridgeFt + lowEdges.hipFt : "—"}`);
+check("a trusted score is not capped (not rough)", !estimateValleys(house({ facetConfidence: 0.8 }))?.rough);
 check("a trusted facet confidence gives a figure", estimateValleys(house({ facetConfidence: 0.8 }))?.count === 2);
 check("facets below the shape's base is no figure", estimateValleys(house({ facetCount: 3 })) === null);
 // THE 20-FACET CEILING IS GONE (audit 2026-09-17, documented on
@@ -76,6 +86,45 @@ check("12 valleys of 12.5 ft", v24?.ftEach === 12.5 && v24?.totalFt === 150, JSO
 check("past the cap, more facets change nothing", JSON.stringify(estimateValleys(house({ facetCount: 40 }))) === JSON.stringify(v24));
 check("a tiny body is no figure", estimateValleys(house({ footprintSqft: 180, perimeterFt: 54 })) === null);
 check("a flat roof has no valleys", estimateValleys(flatRoof({ facetCount: 5 }))?.count === 0);
+
+// ── Valleys read off the footprint (2026-10-13, owner: "never calculating valleys")
+console.log("── valleys from the outline");
+// A ring in lat/lng from feet about a corner in Snohomish, so the geometry goes through the real projection.
+const LAT0 = 47.77, LNG0 = -122.2, R = 20925646.3;
+const ring = (pts: Array<[number, number]>, close = true, reverse = false) => {
+  const out = pts.map(([x, y]) => ({ lat: LAT0 + (y / R) * (180 / Math.PI), lng: LNG0 + (x / (R * Math.cos((LAT0 * Math.PI) / 180))) * (180 / Math.PI) }));
+  if (reverse) out.reverse();
+  if (close) out.push(out[0]);
+  return out;
+};
+const rect = ring([[0, 0], [40, 0], [40, 24], [0, 24]]);
+// A 16-ft-wide wing, 20 ft deep, at the right end of a 40 × 24 body: one inside corner.
+const L = ring([[0, 0], [40, 0], [40, 44], [24, 44], [24, 24], [0, 24]]);
+// The same wing in the middle of the body: two inside corners.
+const T = ring([[0, 0], [40, 0], [40, 24], [28, 24], [28, 44], [12, 44], [12, 24], [0, 24]]);
+const feet = outlineFeet(rect);
+check("a lat/lng ring comes back in feet about its first corner, the closing repeat dropped", feet.length === 4 && Math.abs(feet[1][0] - 40) < 0.05 && Math.abs(feet[2][1] - 24) < 0.05, JSON.stringify(feet.map((p) => p.map((v) => Math.round(v * 10) / 10))));
+const vRect = valleysFromOutline(rect, 5);
+check("a rectangle has no valleys — a confident zero", vRect?.count === 0 && vRect.totalFt === 0);
+const vL = valleysFromOutline(L, 5);
+// Run: half the 16-ft wing (8 ft) and a foot of eave, along √(2 + (5/12)²) = 1.474 → 13.3 ft.
+check("an L-shaped house has one valley, up from its inside corner to the wing's ridge", vL?.count === 1 && Math.abs(vL.totalFt - 13.3) < 0.15, JSON.stringify(vL));
+const vT = valleysFromOutline(T, 5);
+check("a T-shaped house has two, one each side of the wing", vT?.count === 2 && Math.abs(vT.totalFt - 26.5) < 0.3, JSON.stringify(vT));
+check("the ring's direction and its closing point change nothing", JSON.stringify(valleysFromOutline(ring([[0, 0], [40, 0], [40, 44], [24, 44], [24, 24], [0, 24]], false, true), 5)) === JSON.stringify(vL));
+check("a steeper roof makes a longer valley", (valleysFromOutline(L, 10)?.totalFt ?? 0) > (vL?.totalFt ?? 0));
+// A 1-ft jog in a traced wall and a bend of a few degrees are not corners.
+const noisy = ring([[0, 0], [20, 0.4], [40, 0], [40, 11], [41, 11], [41, 12], [40, 12], [40, 24], [0, 24]]);
+check("a 1-ft jog and a slight bend are no corners (nor a 40-in. notch a wing)", valleysFromOutline(noisy, 5)?.count === 0, JSON.stringify(simplifyOutline(outlineFeet(noisy)).map((p) => p.map(Math.round))));
+check("a wider wing's valley runs to the body's ridge, not past it", (() => { const wide = ring([[0, 0], [40, 0], [40, 44], [8, 44], [8, 24], [0, 24]]); const v = valleysFromOutline(wide, 5); return v?.count === 1 && Math.abs(v.totalFt - (12 + 1) * Math.sqrt(2 + (5 / 12) ** 2)) < 0.2; })());
+// Through estimateValleys: the outline wins over a missing or distrusted facet count; a plain rectangle lets the facet model speak.
+check("the outline gives the valleys when the facet count is scored low", estimateValleys(house({ outlines: [L], facetConfidence: 0.19 }))?.count === 1);
+check("…and when there is no facet count at all", estimateValleys(house({ outlines: [T], facetCount: null }))?.count === 2);
+check("a plain rectangle leaves it to the facet model (dormers are not in a footprint)", estimateValleys(house({ outlines: [rect] }))?.count === 2 && estimateValleys(house({ outlines: [rect], facetCount: 4 }))?.count === 0);
+check("the house and a ticked outbuilding add their valleys", estimateValleys(house({ outlines: [L, T] }))?.count === 3);
+check("the fallback's plane count stands in for a facet count", estimateValleys(house({ facetCount: null, shape: null, facetCountEstimated: 7 }))?.count === 3 && estimateValleys(house({ facetCount: null, shape: null })) === null);
+check("the edges carry the outline's valley feet", (() => { const e = estimateEdges(house({ outlines: [L], facetConfidence: 0.1 })); return !!e && e.valleyFt != null && Math.abs(e.valleyFt - 13.3) < 0.15; })());
+check("a flat roof's outline makes no valleys", estimateValleys(flatRoof({ outlines: [L] }))?.count === 0);
 const measuredZero = defaultSpec(house({ measured: { reportId: 9, eaveFt: 200, rakeFt: 30, ridgeFt: 40, hipFt: 80, valleyFt: 0, stepFlashFt: 0 } }));
 check("a report that measured zero valleys stays zero", measuredZero.valleyCount === 0 && measuredZero.valleyBasis === "measured");
 const est = defaultSpec(house());

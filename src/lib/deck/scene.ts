@@ -25,7 +25,7 @@
 import type { DeckFrame } from "./frame";
 import type { DeckSurface } from "./surface";
 import type { RoofMember, RoofPlane } from "./roof";
-import { ROOFING_LABEL, hasDeck, shapeOutline, sizeWords, structureWords, type DeckDesign } from "./design";
+import { ROOFING_LABEL, hasDeck, shapeOutline, sizeWords, structureWords, type DeckDesign, spaRectIn } from "./design";
 import { outsideRunOn, ringEdges } from "./ringEdges";
 import type { DeckStructure } from "./structure";
 import { BETWEEN_LEVELS_STAIR_ID, structureLevels } from "./structure";
@@ -67,6 +67,7 @@ export const SCENE_LAYERS = [
   "hardware",
   "light",
   "wire",
+  "spa",
 ] as const;
 export type SceneLayer = (typeof SCENE_LAYERS)[number];
 export const SCENE_LAYER_LABEL: Record<SceneLayer, string> = {
@@ -98,9 +99,10 @@ export const SCENE_LAYER_LABEL: Record<SceneLayer, string> = {
   hardware: "Bolts and hangers",
   light: "Lights and fixtures",
   wire: "Wiring",
+  spa: "Hot tub",
 };
 /** The order the build-up slider stands the layers up in (a slab goes down first; the hardware goes on with the frame). */
-export const SCENE_BUILD_ORDER: readonly SceneLayer[] = ["slab", "footing", "post", "beam", "ledger", "joist", "rim", "blocking", "brace", "hardware", "decking", "fascia", "stair", "rail", "glass", "roof-post", "header", "ridge", "rafter", "sheathing", "roofing", "trim", "gutter", "ceiling", "wall", "screen", "wire", "light"];
+export const SCENE_BUILD_ORDER: readonly SceneLayer[] = ["slab", "footing", "post", "beam", "ledger", "joist", "rim", "blocking", "brace", "hardware", "decking", "fascia", "stair", "rail", "glass", "spa", "roof-post", "header", "ridge", "rafter", "sheathing", "roofing", "trim", "gutter", "ceiling", "wall", "screen", "wire", "light"];
 /** A layer's step in the build-up. */
 export const buildRank = (layer: SceneLayer) => SCENE_BUILD_ORDER.indexOf(layer);
 /** The layers a scene actually has, in build order — the slider runs over these. */
@@ -367,7 +369,7 @@ export function deckScene(s: DeckStructure): DeckScene {
     legend.push({ role, nominal, lengthFt: 0, count: 1, note: note.slice(0, 240) });
     callouts.push([r3(x), r3(y), r3(z), legend.length - 1]);
   };
-  const box = (name: SceneLayer, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, tag: number, lean = 0, yaw = 0, tilt = 0) => {
+  const box = (name: SceneLayer, cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, tag: number, lean = 0, yaw = 0, tilt = 0, mA = 0, mB = 0) => {
     if (boxes.length >= SCENE_MAX_BOXES) return;
     // A part with no size (a ridge of no length on a square hip, a strip along a degenerate header) would make the
     // whole scene unreadable — parseDeckScene wants every size above zero — so such a part is simply not drawn.
@@ -375,7 +377,13 @@ export function deckScene(s: DeckStructure): DeckScene {
     if (!(ax > 0 && ay > 0 && az > 0) || ![cx, cy, cz].every(Number.isFinite)) return;
     const yw = r4(yaw);
     const tl = r4(tilt);
-    if (yw === 0 && tl === 0) boxes.push([layer(name), r3(cx), r3(cy), r3(cz), ax, ay, az, lean]);
+    const ma = r4(mA);
+    const mb = r4(mB);
+    // A 12-number row carries the plan mitres of a trim run's two ends —
+    // how a fascia board is actually sawn where two eaves meet at a
+    // corner, instead of two square ends shoved past each other.
+    if (ma !== 0 || mb !== 0) boxes.push([layer(name), r3(cx), r3(cy), r3(cz), ax, ay, az, lean, yw, tl, ma, mb]);
+    else if (yw === 0 && tl === 0) boxes.push([layer(name), r3(cx), r3(cy), r3(cz), ax, ay, az, lean]);
     else boxes.push([layer(name), r3(cx), r3(cy), r3(cz), ax, ay, az, lean, yw, tl]);
     tags.push(tag);
   };
@@ -711,7 +719,7 @@ export function deckScene(s: DeckStructure): DeckScene {
         box(ROOF_MEMBER_LAYER[m.role], m.cx, m.cy, (cut.over + top) / 2, m.sx - slim, m.sy - slim, top - cut.over, tag, 0, m.yaw, m.tilt);
         continue;
       }
-      box(ROOF_MEMBER_LAYER[m.role], m.cx, m.cy, m.cz, m.sx - slim, m.sy - less - slim, m.sz, tag, 0, m.yaw, m.tilt);
+      box(ROOF_MEMBER_LAYER[m.role], m.cx, m.cy, m.cz, m.sx - slim, m.sy - less - slim, m.sz, tag, 0, m.yaw, m.tilt, m.mA ?? 0, m.mB ?? 0);
     }
     for (const p of roof.planes) poly(ROOF_PLANE_LAYER[p.kind], p.ring, tagFor(p.kind, p.kind === "roofing" ? ROOFING_LABEL[r.roofing] : p.kind === "sheathing" ? "½-in. sheathing" : p.kind === "ceiling" ? "ceiling boards" : p.kind === "soffit" ? "vented soffit" : p.kind === "slab" ? "4-in. concrete" : p.kind === "screen" ? "screen" : p.kind === "louver" ? "louver blade" : "wall panel", 0, p.kind === "roofing" ? `${ROOFING_LABEL[r.roofing]} over synthetic underlayment, drip edge at the eaves and rakes.` : p.kind === "sheathing" ? "½-in. sheathing, H-clips between the rafters, 8d nails at 6 in. edges / 12 in. field." : p.kind === "ceiling" ? "Ceiling boards nailed to the undersides of the rafters." : p.kind === "soffit" ? "Vented soffit panels in J-channel under the eaves." : p.kind === "slab" ? "4-in. slab on a gravel base with wire mesh." : p.kind === "screen" ? "Fiberglass screen in a spline-framed panel." : p.kind === "louver" ? "Aluminum louver blade on a pivot bar; the set turns together." : p.kind === "wall" ? "Framed panel between the posts." : p.kind));
     // Hardware: hurricane ties at every rafter over the header, caps on the posts, hangers at the ridge beam, step flashing on the house.
@@ -793,6 +801,28 @@ export function deckScene(s: DeckStructure): DeckScene {
     const hShape = frame ? design.shape : { kind: "rect" as const, widthFt: Math.max(4, width / 12), depthFt: Math.max(4, depth / 12) };
     const hs = houseScene(hShape, design.house, { deckHeightFt: heightIn / 12, peakFt: peakIn / 12, mainEdge: main ? { x0: main.x0 / 12, x1: main.x1 / 12 } : null });
     house = { blocks: hs.blocks, heightFt: hs.heightFt, door: hs.door, storeys: hs.storeys, roof: hs.roof, windows: hs.windows, siding: hs.siding, roofColour: hs.roofColour };
+  }
+
+  // THE HOT TUB SPOT — the tub (by others) standing where the doubled
+  // joists are, so the office and the client both see what the frame
+  // under it is for.
+  const spaR = frame ? spaRectIn(design) : null;
+  if (spaR && frame) {
+    // All INCHES — box() and poly() take the frame's units.
+    const surface = design.heightIn;
+    const shellTag = tagFor("hot tub", "owner's tub", 0, "The tub is by others — the frame under it is doubled (sistered joists) for the filled weight, near 100 psf.");
+    const { x0, x1, y0, y1 } = spaR;
+    const h = 36;
+    const t = 5.5;
+    // Four shell walls, then the top rim, then the water as a glossy pane.
+    box("spa", (x0 + x1) / 2, y0 + t / 2, surface + h / 2, x1 - x0, t, h, shellTag);
+    box("spa", (x0 + x1) / 2, y1 - t / 2, surface + h / 2, x1 - x0, t, h, shellTag);
+    box("spa", x0 + t / 2, (y0 + y1) / 2, surface + h / 2, t, y1 - y0 - 2 * t, h, shellTag);
+    box("spa", x1 - t / 2, (y0 + y1) / 2, surface + h / 2, t, y1 - y0 - 2 * t, h, shellTag);
+    box("spa", (x0 + x1) / 2, (y0 + y1) / 2, surface + h + 0.75, x1 - x0, y1 - y0, 1.5, shellTag);
+    const waterTag = tagFor("spa water", "", 0, "Water level a hand below the rim.");
+    poly("spa", [x0 + t, y0 + t, surface + h - 4, x1 - t, y0 + t, surface + h - 4, x1 - t, y1 - t, surface + h - 4, x0 + t, y1 - t, surface + h - 4], waterTag);
+    callout((x0 + x1) / 2, (y0 + y1) / 2, surface + h + 2, "connection", "Spa framing", "Every joist under the tub is doubled (a sister nailed alongside); the beams and footings below carry the filled weight. Said plainly in the checks.");
   }
 
   const outline = frame ? shapeOutline(design.shape).flatMap((p) => [r3(p.x), r3(p.y)]) : (roof?.ring ?? []).flatMap((p) => [r3(p.x), r3(p.y)]);
@@ -912,11 +942,15 @@ export function parseDeckScene(raw: unknown): DeckScene | null {
   if (!Array.isArray(r.boxes) || r.boxes.length > SCENE_MAX_BOXES) return null;
   const boxes: number[][] = [];
   for (const b of r.boxes) {
-    const long = Array.isArray(b) && b.length === 10 && v !== 1;
-    const n = numbers(b, long ? 10 : 8);
+    const cols = Array.isArray(b) ? b.length : 0;
+    // 8 = an axis box; 10 adds a yaw and a tilt; 12 adds the two ends'
+    // plan mitres (a fascia sawn where two eaves meet).
+    const long = (cols === 10 || cols === 12) && v !== 1;
+    const n = numbers(b, long ? cols : 8);
     if (!n || !Number.isInteger(n[0]) || !inside(n[0], 0, maxLayer) || !Number.isInteger(n[7]) || !inside(n[7], 0, 4)) return null;
     if (n[4] <= 0 || n[5] <= 0 || n[6] <= 0) return null;
     if (long && (!inside(n[8], -7, 7) || !inside(n[9], -1.6, 1.6))) return null;
+    if (n.length === 12 && (!inside(n[10], -4, 4) || !inside(n[11], -4, 4))) return null;
     boxes.push(n);
   }
   if (!Array.isArray(r.footings) || r.footings.length > SCENE_MAX_FOOTINGS) return null;
@@ -1047,4 +1081,133 @@ export function parseDeckScene(raw: unknown): DeckScene | null {
     colors: { frame: color(c.frame, "#9d8c62"), decking: color(c.decking, "#a58a5c"), fascia: color(c.fascia, "#a58a5c"), roofing: color(c.roofing, "#565250"), rail: color(c.rail, "#9d8c62") },
     facts: typeof r.facts === "string" ? r.facts.slice(0, 200) : "",
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Member geometry — the one truth both renderers draw from           */
+/* ------------------------------------------------------------------ */
+
+/** A point in scene feet. */
+export type ScenePoint = [number, number, number];
+
+/**
+ * Corner order for `memberBoxCorners`: the box about its centre along unit
+ * axes u (length), v (width), w (depth) — minus/plus per axis, w last:
+ * [mmm, pmm, ppm, mpm, mmp, pmp, ppp, mpp]. `MEMBER_BOX_FACES` winds each
+ * of the six faces outward (right-hand rule) over those indexes.
+ */
+export const MEMBER_BOX_FACES: readonly number[][] = [
+  [4, 5, 6, 7], // +w
+  [0, 3, 2, 1], // −w
+  [1, 2, 6, 5], // +u
+  [0, 4, 7, 3], // −u
+  [3, 7, 6, 2], // +v
+  [0, 1, 5, 4], // −v
+];
+
+/** Roles whose sloped ends are plumb cuts (dashes read as spaces). */
+const PLUMB_ROLES = /^(?:upper |lower )?(rafter|jack|fly|hip|valley|fascia rake|stringer|stair rail|ridge|truss(?: top chord)?)$/;
+/** Roles that are knee braces: plumb against the post, LEVEL against what they hold up. */
+const BRACE_ROLES = /^(?:upper |lower )?(roof brace|brace|knee brace)$/;
+
+/**
+ * The eight corners of a scene box whose geometry is more than an axis
+ * box — a turned member with sawn ends, or a `lean` knee brace drawn as
+ * the true diagonal of its box. Null for an ordinary box: the renderer
+ * keeps its cheap path.
+ *
+ * The saw cuts are the real ones. A rafter's ends are PLUMB (the tail
+ * at the eave, the cut at the ridge — before this the square ends stuck
+ * through the roofing as teeth). A knee brace is plumb where it lags to
+ * the post and LEVEL where it lags under the beam — both renderers used
+ * to leave both ends square or both plumb, so every brace poked through
+ * its beam ("braces connections not cut at right angle", the owner,
+ * 2026-10-13).
+ */
+/**
+ * Does this box need REAL sawn geometry rather than a sheared unit box?
+ * True for the lean knee braces, the turned braces (plumb at the post,
+ * level under the beam — a single shear cannot do both ends), and any
+ * member carrying plan mitres. Plumb-cut rafters stay on the renderers'
+ * cheap sheared-instance path, which matches `memberBoxCorners` exactly.
+ */
+export function memberIsSawn(b: readonly number[], role: string | null): boolean {
+  const lean = b[7] ?? 0;
+  if (lean >= 1 && lean <= 4) return true;
+  if (b.length >= 12 && ((b[10] ?? 0) !== 0 || (b[11] ?? 0) !== 0)) return true;
+  const turned = b.length >= 10 && ((b[8] ?? 0) !== 0 || (b[9] ?? 0) !== 0);
+  return turned && BRACE_ROLES.test((role ?? "").replace(/-/g, " ").trim());
+}
+
+export function memberBoxCorners(b: readonly number[], role: string | null): ScenePoint[] | null {
+  const [, cx, cy, cz, sx, sy, sz, lean = 0, yawRaw, tiltRaw, mitreA = 0, mitreB = 0] = b;
+  const r = (role ?? "").replace(/-/g, " ").trim();
+  const turned = typeof yawRaw === "number" && typeof tiltRaw === "number" && (yawRaw !== 0 || tiltRaw !== 0);
+  const mitred = mitreA !== 0 || mitreB !== 0;
+
+  let u: ScenePoint, v: ScenePoint, w: ScenePoint;
+  let su = sx, sv = sy, sw = sz;
+  let tilt = 0;
+  let isBrace = false;
+
+  if (turned || (mitred && lean === 0)) {
+    const yaw = (turned ? yawRaw : 0) as number;
+    tilt = (turned ? tiltRaw : 0) as number;
+    u = [Math.cos(yaw) * Math.cos(tilt), Math.sin(yaw) * Math.cos(tilt), Math.sin(tilt)];
+    v = [-Math.sin(yaw), Math.cos(yaw), 0];
+    w = [-Math.sin(tilt) * Math.cos(yaw), -Math.sin(tilt) * Math.sin(yaw), Math.cos(tilt)];
+    isBrace = BRACE_ROLES.test(r);
+    if (!isBrace && !mitred && !PLUMB_ROLES.test(r)) return null; // square-cut turned member — the plain oriented box is right
+  } else if (lean >= 1 && lean <= 4) {
+    // The brace drawn as the diagonal of its axis-aligned box.
+    const alongX = lean <= 2;
+    const sign = lean === 1 || lean === 3 ? 1 : -1;
+    const run = alongX ? sx : sy;
+    const L = Math.hypot(run, sz);
+    if (L < 0.01) return null;
+    const ux = alongX ? (sign * run) / L : 0;
+    const uy = alongX ? 0 : (sign * run) / L;
+    u = [ux, uy, sz / L];
+    v = alongX ? [0, 1, 0] : [1, 0, 0];
+    // w = u × v, flipped if need be so depth points up out of the brace's top face.
+    w = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    if (w[2] < 0) w = [-w[0], -w[1], -w[2]];
+    su = L;
+    sv = Math.min(alongX ? sy : sx, 0.3);
+    sw = 0.3;
+    tilt = Math.atan2(sz, Math.abs(run));
+    isBrace = true;
+  } else {
+    return null;
+  }
+
+  // How far each end's corners slide along the length, per unit of their
+  // depth coordinate: tan(tilt) makes the end face PLUMB, −cot(tilt)
+  // makes it LEVEL. Guarded — a nearly flat or nearly plumb member keeps
+  // square ends rather than exploding.
+  const t = Math.abs(tilt);
+  const plumbK = t > 0.02 && t < 1.45 ? Math.tan(tilt) : 0;
+  const levelK = t > 0.25 && t < 1.35 ? -1 / Math.tan(tilt) : 0;
+  // With tilt > 0 the +u end is the high end; with tilt < 0 the −u end is.
+  const highAtPlus = tilt >= 0;
+  const kMinus = isBrace ? (highAtPlus ? plumbK : levelK) : plumbK;
+  const kPlus = isBrace ? (highAtPlus ? levelK : plumbK) : plumbK;
+
+  const c: ScenePoint = [cx, cy, cz];
+  const corner = (a: number, bb: number, d: number): ScenePoint => {
+    const k = a < 0 ? kMinus : kPlus;
+    // The end's plan mitre slides the corner along the length by its
+    // width coordinate — how the saw actually crosses the board.
+    const m = a < 0 ? mitreA : mitreB;
+    const along = (a * su) / 2 + ((d * sw) / 2) * k + ((bb * sv) / 2) * m;
+    return [
+      c[0] + u[0] * along + v[0] * ((bb * sv) / 2) + w[0] * ((d * sw) / 2),
+      c[1] + u[1] * along + v[1] * ((bb * sv) / 2) + w[1] * ((d * sw) / 2),
+      c[2] + u[2] * along + v[2] * ((bb * sv) / 2) + w[2] * ((d * sw) / 2),
+    ];
+  };
+  return [
+    corner(-1, -1, -1), corner(1, -1, -1), corner(1, 1, -1), corner(-1, 1, -1),
+    corner(-1, -1, 1), corner(1, -1, 1), corner(1, 1, 1), corner(-1, 1, 1),
+  ];
 }

@@ -155,6 +155,10 @@ export type RoofRole =
 /** One member of the roof, inches. `yaw` is the direction of its axis in plan (radians, from +x toward +y); `tilt` its rise along that axis. */
 export interface RoofMember {
   role: RoofRole;
+  /** Plan mitres at the −u and +u ends (tangent of the saw's swing): how
+   *  a fascia or gutter is cut where two eaves meet at a corner. */
+  mA?: number;
+  mB?: number;
   nominal: string;
   lengthIn: number;
   cx: number;
@@ -1768,8 +1772,19 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const zt = (v: number) => zTopAt(v, f.ovhIn, hTop, sl);
     const ring3 = (pts: Array<[V2, number]>) => pts.flatMap(([p, z]) => [p.x, p.y, z]);
     if (!pergola) {
-      planes.push({ kind: "sheathing", ring: ring3([[f.A, zt(0) + 0.25], [f.B, zt(0) + 0.25], [TB, zt(f.vTopIn) + 0.25], [TA, zt(f.vTopIn) + 0.25]]), of: f.id });
-      planes.push({ kind: "roofing", ring: ring3([[f.A, zt(0) + 0.9], [f.B, zt(0) + 0.9], [TB, zt(f.vTopIn) + 0.9], [TA, zt(f.vTopIn) + 0.9]]), of: f.id });
+      // The drip edge: sheathing and roofing run a touch past the eave
+      // line (and past the fascia under it), the corners still on the
+      // bisectors so neighbouring faces keep meeting exactly.
+      const uE = unit(sub(f.B, f.A));
+      const drip = 1.2;
+      const dripA = { x: f.A.x - f.n.x * drip - uE.x * (f.sideA === "hip" ? drip * cot(f.betaA) : 0), y: f.A.y - f.n.y * drip - uE.y * (f.sideA === "hip" ? drip * cot(f.betaA) : 0) };
+      const dripB = { x: f.B.x - f.n.x * drip + uE.x * (f.sideB === "hip" ? drip * cot(f.betaB) : 0), y: f.B.y - f.n.y * drip + uE.y * (f.sideB === "hip" ? drip * cot(f.betaB) : 0) };
+      planes.push({ kind: "sheathing", ring: ring3([[dripA, zt(-drip) + 0.25], [dripB, zt(-drip) + 0.25], [TB, zt(f.vTopIn) + 0.25], [TA, zt(f.vTopIn) + 0.25]]), of: f.id });
+      planes.push({ kind: "roofing", ring: ring3([[dripA, zt(-drip) + 0.9], [dripB, zt(-drip) + 0.9], [TB, zt(f.vTopIn) + 0.9], [TA, zt(f.vTopIn) + 0.9]]), of: f.id });
+      // The drip-edge flashing: a short vertical band off the roof's
+      // edge, over the fascia's top — the clean dark line a finished
+      // eave actually shows.
+      planes.push({ kind: "roofing", ring: ring3([[dripA, zt(-drip) + 0.9], [dripB, zt(-drip) + 0.9], [dripB, zt(-drip) - 1.6], [dripA, zt(-drip) - 1.6]]), of: f.id });
       if (ceilingOn) {
         const under = rafterDepth / cT + 0.75;
         planes.push({ kind: "ceiling", ring: ring3([[A1, zt(f.ovhIn) - under], [B1, zt(f.ovhIn) - under], [TB, zt(f.vTopIn) - under], [TA, zt(f.vTopIn) - under]]), of: f.id });
@@ -1807,9 +1822,36 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
     const outward = { x: -f.n.x, y: -f.n.y };
     const zEave = zTopAt(0, f.ovhIn, hTop, sl) - rafterDepth / cT / 2;
     if (r.fascia.eave && f.ovhIn > 0) {
-      const off = THICK_2X_IN / 2;
-      members.push({ role: "subfascia", nominal: subfasciaNominal, lengthIn: Lu, cx: (f.A.x + f.B.x) / 2 + outward.x * off, cy: (f.A.y + f.B.y) / 2 + outward.y * off, cz: zEave, sx: Lu, sy: THICK_2X_IN, sz: depthOf(subfasciaNominal), yaw: Math.atan2(u.y, u.x), tilt: 0, x0: f.A.x, y0: f.A.y, x1: f.B.x, y1: f.B.y, of: f.id });
-      members.push({ role: "fascia-eave", nominal: `1x${fasciaBoardIn}`, lengthIn: Lu, cx: (f.A.x + f.B.x) / 2 + outward.x * (THICK_2X_IN + 0.4), cy: (f.A.y + f.B.y) / 2 + outward.y * (THICK_2X_IN + 0.4), cz: zEave - 0.5, sx: Lu + 1.5, sy: 0.75, sz: fasciaBoardIn - 0.75, yaw: Math.atan2(u.y, u.x), tilt: 0, x0: f.A.x, y0: f.A.y, x1: f.B.x, y1: f.B.y, of: f.id });
+      // Tucked UNDER the eave: the sub-fascia's outer face lands flush on
+      // the eave line and the 1x sits over it, so the roof's drip edge
+      // (below) covers both. They used to hang OUTSIDE the roof edge and
+      // read from above as teeth at every corner.
+      const off = -(THICK_2X_IN / 2 + 0.05); // the 0.05 keeps it off the fly rafters' plane
+      // Where this eave meets its neighbours, the boards are SAWN on the
+      // corners' bisectors — βA/βB are the plan half-angles, and the sign
+      // follows which way the board's width axis points against the
+      // eave's outward normal. Square ends shoved past each other drew
+      // as spikes at every hip and polygon corner.
+      const vSide = Math.sign(-u.y * outward.x + u.x * outward.y) || 1;
+      const mitA = f.sideA === "hip" ? -(1 / Math.tan(f.betaA)) * vSide : 0;
+      const mitB = f.sideB === "hip" ? (1 / Math.tan(f.betaB)) * vSide : 0;
+      const yawE = Math.atan2(u.y, u.x);
+      // A hip end runs long to its mitre; a rake end DIES INTO the rake
+      // boards — pulled back clear of the fly rafter's plane, as built.
+      const endA = f.sideA === "hip" ? off * Math.abs(mitA) : -2.4;
+      const endB = f.sideB === "hip" ? off * Math.abs(mitB) : -2.4;
+      const place = (o: number, eA: number, eB: number) => ({
+        cx: (f.A.x + f.B.x) / 2 + outward.x * o + u.x * ((eB - eA) / 2),
+        cy: (f.A.y + f.B.y) / 2 + outward.y * o + u.y * ((eB - eA) / 2),
+        sx: Lu + eA + eB,
+      });
+      const pS = place(off, endA, endB);
+      members.push({ role: "subfascia", nominal: subfasciaNominal, lengthIn: pS.sx, mA: mitA, mB: mitB, cx: pS.cx, cy: pS.cy, cz: zEave, sx: pS.sx, sy: THICK_2X_IN, sz: depthOf(subfasciaNominal), yaw: yawE, tilt: 0, x0: f.A.x, y0: f.A.y, x1: f.B.x, y1: f.B.y, of: f.id });
+      const offF = 0.75 / 2;
+      const fA = f.sideA === "hip" ? offF * Math.abs(mitA) : -2.4;
+      const fB = f.sideB === "hip" ? offF * Math.abs(mitB) : -2.4;
+      const pF = place(offF, fA, fB);
+      members.push({ role: "fascia-eave", nominal: `1x${fasciaBoardIn}`, lengthIn: Lu, mA: mitA, mB: mitB, cx: pF.cx, cy: pF.cy, cz: zEave - 0.5, sx: pF.sx, sy: 0.75, sz: fasciaBoardIn - 0.75, yaw: yawE, tilt: 0, x0: f.A.x, y0: f.A.y, x1: f.B.x, y1: f.B.y, of: f.id });
     }
     if (r.fascia.rake) {
       const rakeAt = (P: V2, T: V2, side: 1 | -1) => {

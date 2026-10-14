@@ -50,7 +50,7 @@ import {
   parseGmailSettings,
   parsePaymentSettings,
 } from "@/lib/settings";
-import type { Badge, BillingData, SettingsData, SmsRosterRow, SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
+import type { Badge, BillingData, DeskSettingsData, SettingsData, SmsRosterRow, SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 
 /** Emails allowed to use the Gmail connector while the Google app is still in
  *  Testing — GMAIL_OAUTH_TEST_USERS, comma-separated, case-insensitive. */
@@ -263,6 +263,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
       prefs: parseNotificationPrefs(me?.notificationPrefsJson),
       sms: await loadSmsSettings(organizationId, me?.smsPhone ?? null, me?.smsVerifiedAt ?? null, role, sub?.plan ?? null, user.id),
     },
+    desk: await loadDeskSettings(organizationId, role),
   };
 }
 
@@ -331,7 +332,8 @@ async function loadSmsSettings(organizationId: string, smsPhone: string | null, 
       // The crew's number is the one its texts go to: the worker profile's,
       // when texting is on there. Everyone else: the member's own mobile.
       const workerPhone = w?.phone ? toE164(w.phone) : null;
-      const live = audience === "crew" && w ? (w.smsOptIn && workerPhone ? workerPhone : null) : u.smsPhone && u.smsVerifiedAt ? u.smsPhone : null;
+      // Switched off on this page (prefs.smsPaused, 2026-10-13): the number waits on file, nothing is texted.
+      const live = audience === "crew" && w ? (w.smsOptIn && workerPhone && !prefs.smsPaused ? workerPhone : null) : u.smsPhone && u.smsVerifiedAt && !prefs.smsPaused ? u.smsPhone : null;
       const known = live ?? workerPhone ?? u.smsPhone ?? null;
       roster.push({
         userId: u.id,
@@ -342,6 +344,7 @@ async function loadSmsSettings(organizationId: string, smsPhone: string | null, 
         phoneOnFile: !live && known ? prettyPhone(known) : null,
         phoneBy: live ? (prefs.smsAddedBy ? "office" : audience === "crew" && w && !u.smsVerifiedAt ? "office" : "self") : null,
         stopped: Boolean(live && stopped.has(live)),
+        paused: !live && Boolean(known),
         isMe: u.id === myUserId,
         cells: textCellsFor(prefs, audience) as Record<string, boolean>,
         groups: smsGroupsOf(prefs),
@@ -387,14 +390,28 @@ function leadTextsOn(json: string | null | undefined): boolean {
 async function loadRegistrationView(organizationId: string, myUserId: string | null): Promise<SmsRegistrationView | null> {
   try {
     const { companyIsPaying, refreshRegistration } = await import("@/lib/sms/registration");
-    const { prefillDetails } = await import("@/lib/sms/registrationShared");
-    const [state, paying, org, me] = await Promise.all([
+    const { prefillDetails, smsPagesFor } = await import("@/lib/sms/registrationShared");
+    const { settingsOf } = await import("@/lib/bookingBook");
+    const { readDeskSettings } = await import("@/lib/aiDesk/numbers");
+    const { callsGo } = await import("@/lib/aiDesk/shared");
+    const { isPageLocked } = await import("@/lib/customPageAccess");
+    const { toE164 } = await import("@/lib/phone");
+    const [state, paying, org, me, desk, phoneLocked] = await Promise.all([
       refreshRegistration(organizationId),
       companyIsPaying(organizationId),
-      db.organization.findUnique({ where: { id: organizationId }, select: { name: true, website: true, address: true, phone: true, slug: true, smsFromNumber: true } }),
+      db.organization.findUnique({ where: { id: organizationId }, select: { name: true, website: true, address: true, phone: true, slug: true, smsFromNumber: true, tradeTypesJson: true, bookingSettingsJson: true } }),
       myUserId ? db.user.findUnique({ where: { id: myUserId }, select: { name: true, email: true } }) : Promise.resolve(null),
+      readDeskSettings(organizationId),
+      isPageLocked(organizationId, "phone"),
     ]);
     if (!org) return null;
+    // Calls (lib/aiDesk): wired at purchase; where they go is the desk's mode and the plan.
+    const companyPhone = toE164(org.phone ?? "");
+    const calls = {
+      on: Boolean(state.number && state.voiceOnAt),
+      go: callsGo({ mode: desk.mode, assistantOnPlan: !phoneLocked, companyPhone }),
+      phone: companyPhone ? prettyPhone(companyPhone) : null,
+    };
     // A number from the old instant button: on the company, never registered.
     const legacy = state.stage === "none" && Boolean(org.smsFromNumber);
     const canEdit = state.stage === "rejected" && state.editAllowed !== false && (!state.editUntil || Date.parse(state.editUntil) > Date.now());
@@ -407,6 +424,9 @@ async function loadRegistrationView(organizationId: string, myUserId: string | n
       error: state.error ?? null,
       paying,
       legacy,
+      bookingOn: settingsOf(org).enabled,
+      calls,
+      pages: smsPagesFor(org.slug),
       details: state.details ?? prefillDetails(org, { name: me?.name ?? null, email: me?.email ?? null }),
     };
   } catch {
@@ -436,5 +456,45 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
     keepsUntil: keepsUntil?.toISOString() ?? null,
     losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated) }),
     made: madeWithLine(sent, scheduled),
+  };
+}
+
+/** The AI desk (2026-10-13, lib/aiDesk): who answers and what the desk knows. A missing piece costs the pane, never the page. */
+async function loadDeskSettings(organizationId: string, role: string): Promise<DeskSettingsData> {
+  const { readDeskSettings } = await import("@/lib/aiDesk/numbers");
+  const { companyFacts } = await import("@/lib/aiDesk/facts");
+  const { isPageLocked } = await import("@/lib/customPageAccess");
+  const { isOpenAIEnabled } = await import("@/lib/sdk/openai");
+  const { factsFor } = await import("@/lib/aiDesk/profile");
+  const { readDeskUse } = await import("@/lib/aiDesk/usage");
+  const { deskMinutesView } = await import("@/lib/aiDesk/packs");
+  const { numbersAssignedTo } = await import("@/lib/aiDesk/numbers");
+  const canManage = ["OWNER", "ADMIN", "MANAGER"].includes(role);
+  const [settings, facts, phoneLocked, use, minutes, assignedNumbers] = await Promise.all([
+    readDeskSettings(organizationId).catch(() => null),
+    companyFacts(organizationId).catch(() => null),
+    isPageLocked(organizationId, "phone").catch(() => true),
+    readDeskUse(organizationId),
+    deskMinutesView(organizationId),
+    numbersAssignedTo(organizationId),
+  ]);
+  const { callsGo, parseDeskSettings, prettyPhone } = await import("@/lib/aiDesk/shared");
+  const d = settings ?? parseDeskSettings(null);
+  // A line JobFlex assigned to this company on /admin/health: its number for calls, with no registration of its own.
+  const assigned = assignedNumbers[0] ? { number: prettyPhone(assignedNumbers[0]), go: callsGo({ mode: d.mode, assistantOnPlan: !phoneLocked, companyPhone: facts?.phone ?? null }), phone: facts?.phone ?? null } : null;
+  return {
+    canManage,
+    aiConfigured: isOpenAIEnabled(),
+    assistantOnPlan: !phoneLocked,
+    mode: d.mode,
+    voice: d.voice,
+    use,
+    minutes,
+    assigned,
+    brief: d.brief,
+    profile: d.profile,
+    profileUpdatedAt: d.profileUpdatedAt,
+    questions: d.questions,
+    facts: facts ?? factsFor({ name: "", phone: null, address: null, website: null, trades: [], hours: [], services: [], bookingUrl: null, timezone: null }),
   };
 }

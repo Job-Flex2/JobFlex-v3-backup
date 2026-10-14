@@ -45,7 +45,7 @@ export type NavItem = {
   tool?: NavTool;
 };
 /** The tile colours (blueprint-global.css `[data-tone]`). One per tool. */
-export type ToolTone = "violet" | "blue" | "spruce" | "berry" | "teal" | "cedar";
+export type ToolTone = "violet" | "blue" | "spruce" | "berry" | "teal" | "cedar" | "navy";
 export type NavTool = { tone: ToolTone; from: string; to: string };
 export type NavSection = { label: string; items: NavItem[] };
 
@@ -113,6 +113,9 @@ export const NAV_SECTIONS: NavSection[] = [
       // decision you make on your way somewhere else. The engines themselves
       // keep their items below.
       { label: "Smart Proposal", icon: "i-bulb", href: "/dashboard/advanced-ai", tool: { tone: "violet", from: "Words", to: "priced lines" } },
+      // The plan set as its own tool (owner, 2026-10-13): upload the plans, ask for any
+      // job off them — countertops, drywall, the whole house — measured and priced.
+      { label: "Blueprint estimator", icon: "i-plans", href: "/dashboard/blueprint-estimator", tool: { tone: "navy", from: "Plans", to: "any job" } },
       // Each estimator folds its own inventory under it (owner, 2026-10-10:
       // "a roofer doesn't have to see the other inventories"). The three
       // shared one page with a trade switch from 2026-09-29; before that they
@@ -278,6 +281,7 @@ const ROLE_NAV: Record<string, RoleNavPlan> = {
       // the estimator sees the engines its role is named after.
       hrefs: [
         "/dashboard/advanced-ai",
+        "/dashboard/blueprint-estimator",
         "/dashboard/roof-estimator",
         "/dashboard/fence-estimator",
         "/dashboard/hvac-estimator",

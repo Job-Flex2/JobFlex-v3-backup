@@ -82,6 +82,7 @@ import {
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
+import { TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
 import type { PaymentConnectionStatusView } from "@/lib/payments/connections";
 import type {
@@ -167,6 +168,9 @@ import { MobileSettingsSprite } from "./sprite";
 import { PasswordControl } from "@/components/account-password/password-control";
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
+import { DeskSetup, DeskStatus } from "@/components/v3/ai-desk/desk-setup";
+import { DeskMinutes } from "@/components/v3/ai-desk/desk-minutes";
+import { DESK_COPY } from "@/components/v3/settings-blueprint/settings-data";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
 
@@ -1193,6 +1197,37 @@ function NotificationsPane({ data }: { data: SettingsData }) {
 // Texting (2026-09-27) — the handheld build of the desk pane: who gets
 // texted (the office roster, a switch per group), your own mobile, the extra
 // numbers. Same actions as the desk; the copy comes from settings-data.
+/** The AI desk on the phone (2026-10-13): the same two pieces as the desk pane, in this page's cards. */
+function DeskPaneMobile({ data }: { data: SettingsData }) {
+  const desk = data.desk;
+  return (
+    <>
+      <section className="mst-card" id="desk-status">
+        <CardHeader card={{ title: DESK_COPY.title, sub: DESK_COPY.sub }} />
+        <div className="mst-cardB">
+          {desk.canManage ? <DeskStatus desk={desk} registration={data.notifications.sms.registration} /> : <div className="mst-note">{DESK_COPY.managersOnly}</div>}
+        </div>
+      </section>
+      {desk.canManage ? (
+        <section className="mst-card" id="desk-minutes">
+          <CardHeader card={{ title: DESK_COPY.minutesTitle, sub: DESK_COPY.minutesSub }} />
+          <div className="mst-cardB">
+            <DeskMinutes desk={desk} />
+          </div>
+        </section>
+      ) : null}
+      {desk.canManage ? (
+        <section className="mst-card" id="desk-setup">
+          <CardHeader card={{ title: DESK_COPY.setupTitle, sub: DESK_COPY.setupSub }} />
+          <div className="mst-cardB">
+            <DeskSetup desk={desk} />
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 function TextingPane({ data }: { data: SettingsData }) {
   const sms = data.notifications.sms;
   const router = useRouter();
@@ -1223,9 +1258,27 @@ function TextingPane({ data }: { data: SettingsData }) {
   }
   return (
     <>
-      {!sms.configured ? <div className="mst-note">{TEXTING_COPY.notConfiguredLong}</div> : null}
+      {/* The steps first, then the number (2026-10-13) — the same order as the desk. */}
       {sms.canManage ? (
-        <section className="mst-card" data-roster>
+        <section className="mst-card" id="texting-overview">
+          <CardHeader card={{ title: TEXTING_COPY.overviewTitle, sub: TEXTING_COPY.overviewSub }} />
+          <div className="mst-cardB">
+            <TextingOverview sms={sms} />
+          </div>
+        </section>
+      ) : !sms.configured ? (
+        <div className="mst-note">{TEXTING_COPY.notConfiguredLong}</div>
+      ) : null}
+      {sms.canManage ? (
+        <section className="mst-card" id="texting-own-number">
+          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: REGISTRATION_COPY.sub }} />
+          <div className="mst-cardB">
+            <OwnNumber view={sms.registration} configured={sms.configured} />
+          </div>
+        </section>
+      ) : null}
+      {sms.canManage ? (
+        <section className="mst-card" id="texting-roster" data-roster>
           <CardHeader card={{ title: TEXTING_COPY.peopleTitle, sub: TEXTING_COPY.peopleSub }} />
           <div className="mst-cardB">
             <TextingPeople roster={sms.roster} />
@@ -1234,7 +1287,7 @@ function TextingPane({ data }: { data: SettingsData }) {
         </section>
       ) : null}
       {sms.canManage ? (
-        <section className="mst-card" data-rules>
+        <section className="mst-card" id="texting-rules" data-rules>
           <CardHeader card={{ title: TEXTING_COPY.rulesTitle, sub: TEXTING_COPY.rulesSub }} />
           <div className="mst-cardB">
             <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
@@ -1287,14 +1340,6 @@ function TextingPane({ data }: { data: SettingsData }) {
           )}
         </div>
       </section>
-      {sms.canManage ? (
-        <section className="mst-card" id="texting-own-number">
-          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: REGISTRATION_COPY.sub }} />
-          <div className="mst-cardB">
-            <OwnNumber view={sms.registration} configured={sms.configured} />
-          </div>
-        </section>
-      ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-lead-texts" data-lead-texts={sms.leadTexts.on ? "on" : "off"}>
           <CardHeader card={{ title: TEXTS_COPY.leadTitle, sub: TEXTS_COPY.leadSub }} />
@@ -1357,6 +1402,7 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   integrations: "i-globe",
   notifications: "i-bell",
   texting: "i-phone",
+  desk: "i-phone",
 };
 
 export function MobileSettings({
@@ -1592,6 +1638,9 @@ export function MobileSettings({
             </div>
             <div className={active === "texting" ? "mst-pane is-on" : "mst-pane"}>
               <TextingPane data={data} />
+            </div>
+            <div className={active === "desk" ? "mst-pane is-on" : "mst-pane"}>
+              <DeskPaneMobile data={data} />
             </div>
           </div>
 

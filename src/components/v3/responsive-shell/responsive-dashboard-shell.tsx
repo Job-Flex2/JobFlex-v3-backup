@@ -310,6 +310,9 @@ const BLUEPRINT_HANDHELD = new Set([
   // The Deck Studio (2026-10-04): one responsive page, its steps a single
   // column and the 3D on top at ≤768px.
   "/dashboard/deck-estimator",
+  // The blueprint estimator (2026-10-13): one responsive page — upload, ask,
+  // the answer — a single column at ≤768px.
+  "/dashboard/blueprint-estimator",
 ]);
 
 export function ResponsiveDashboardShell({

@@ -45,6 +45,9 @@ export default async function AdminRootLayout({ children }: { children: React.Re
   // redirect() throws, so it sits outside the try above.
   if (!admin) redirect("/admin/login" as Route);
 
+  // The office screen goes on a TV (2026-10-13): guarded like every admin page, drawn without the console's chrome.
+  if (pathname === "/admin/office" || pathname.startsWith("/admin/office/")) return <>{children}</>;
+
   // Which door the admin came through decides what Sign out clears.
   const viaCookie = (await readAdminCookie()) !== null;
 

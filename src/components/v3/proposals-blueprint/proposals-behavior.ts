@@ -1201,7 +1201,7 @@ export function initProposalsContent(
         "i-send",
         "pmi--ok-solid",
         "Send to client",
-        p.clientEmail ? esc(p.clientEmail) : "No email on the client",
+        p.clientEmail ? esc(p.clientEmail) : p.clientId ? "No email yet — add it when you send" : "No client yet — add them when you send",
         "sendto",
       ) +
       // The client's link, copied or handed to the phone's own messages (2026-09-24).
@@ -1783,28 +1783,67 @@ export function initProposalsContent(
     sendId = p.id;
     const title = $("#sendTitle");
     if (title) title.textContent = `Send "${p.title}"`;
+    // THE BOX TAKES AN ADDRESS (owner, 2026-10-13: "the email is set and it
+    // doesn't appear — make it work to send"). It used to be locked, because
+    // the send read only the client record; sendProposal now writes what is
+    // typed here onto that record first (or makes the client, for a proposal
+    // that has none), so the box is honest.
+    const unassigned = !p.clientId;
+    const nameRow = $("#sendNameRow");
+    nameRow?.classList.toggle("is-hidden", !unassigned);
+    const name = $<HTMLInputElement>("#sendName");
+    if (name) name.value = "";
     const email = $<HTMLInputElement>("#sendEmail");
     if (email) {
-      // Read-only on purpose. sendProposal() mails the address on the CLIENT
-      // record — an editable box here would look like it changed the recipient
-      // and would change nothing at all.
       email.value = p.clientEmail ?? "";
-      email.placeholder = p.clientEmail ? "" : "No email on the client record";
-      email.disabled = true;
+      email.placeholder = "client@example.com";
+      email.disabled = false;
     }
-    // Only the no-email case needs a sentence (owner, 2026-09-26: the
-    // explanation of what the branded email does was noise on every send).
-    const note = $("#sendNote");
-    if (note) {
-      note.textContent = p.clientEmail
-        ? ""
-        : "This client has no email on file. The proposal will be marked Sent, but no email goes out until you add an address to the client record.";
-      note.classList.toggle("is-hidden", Boolean(p.clientEmail));
-    }
+    syncSendNote();
     setDlgError("#sendErr", null);
-    setSaving($("#sendOk"), false, "", "Send proposal");
     pstate.writing = false;
     openDlg("sendMdl");
+    // Straight to the first empty box.
+    after(50, () => {
+      const first = unassigned && name && !name.value ? name : email && !email.value ? email : null;
+      first?.focus();
+    });
+  }
+  /** The line under the boxes and the button's words follow what is typed. */
+  function syncSendNote() {
+    const p = byId(sendId);
+    if (!p) return;
+    const typed = ($<HTMLInputElement>("#sendEmail")?.value ?? "").trim();
+    const note = $("#sendNote");
+    const changed = Boolean(p.clientId && p.clientEmail && typed && typed.toLowerCase() !== p.clientEmail.toLowerCase());
+    const line = !typed
+      ? p.clientId
+        ? `${p.client} has no email on file. Add it here and it is saved on their client record — or leave it empty to mark the proposal sent without an email.`
+        : "This proposal has no client yet. Add their name and email — they are added to your clients and the proposal is filed under them."
+      : changed
+        ? `This also changes ${p.client}'s email on their client record.`
+        : !p.clientEmail
+          ? p.clientId
+            ? `Saved on ${p.client}'s client record, then sent.`
+            : "Added to your clients, then sent."
+          : "";
+    if (note) {
+      note.textContent = line;
+      note.classList.toggle("is-hidden", !line);
+    }
+    setSaving($("#sendOk"), false, "", typed ? "Send proposal" : "Mark as sent");
+  }
+  for (const sel of ["#sendEmail", "#sendName"]) {
+    const box = $(sel);
+    if (box) {
+      on(box, "input", () => syncSendNote());
+      on(box, "keydown", (e) => {
+        if ((e as KeyboardEvent).key === "Enter" && !pstate.writing) {
+          e.preventDefault();
+          void confirmSend();
+        }
+      });
+    }
   }
   const sendOk = $("#sendOk");
   if (sendOk) {
@@ -1816,26 +1855,41 @@ export function initProposalsContent(
   async function confirmSend() {
     const p = byId(sendId);
     if (!p) return;
+    const email = ($<HTMLInputElement>("#sendEmail")?.value ?? "").trim();
+    const name = ($<HTMLInputElement>("#sendName")?.value ?? "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setDlgError("#sendErr", "That email address doesn't look right — check it and try again.");
+      return;
+    }
+    // A new client needs a name; one already on file by this email is found by the server.
     // The first send to a client names the business first (lib/orgName).
     if (!(await ensureCompanyName())) return;
     setDlgError("#sendErr", null);
-    setSaving($("#sendOk"), true, "Sending…", "");
+    pstate.writing = true;
+    setSaving($("#sendOk"), true, email ? "Sending…" : "Saving…", "");
     try {
-      await sendProposal(p.id);
+      const r = await sendProposal(p.id, email ? { email, name } : undefined);
       p.status = "SENT";
       p.updated = "just now";
+      if (r.clientId) {
+        p.clientId = r.clientId;
+        if (r.client) p.client = r.client;
+      }
+      p.clientEmail = r.to ?? p.clientEmail;
+      pstate.writing = false;
       setSaving($("#sendOk"), false, "", "Send proposal");
       closeDlg("sendMdl");
       syncAllAfterChange(p.id);
       // Say it went (owner, 2026-09-26) — the row's stamp alone was easy to miss.
       showAlert(
-        p.clientEmail ? "Proposal sent" : "Marked as sent",
-        p.clientEmail
-          ? `"${p.title}" is on its way to ${p.clientEmail}.`
-          : "No email went out: this client has no email address on file. Add one to the client record, then send it again.",
+        r.to ? "Proposal sent" : "Marked as sent",
+        r.to
+          ? `"${p.title}" is on its way to ${r.to}.`
+          : "No email went out — there is no client email. Add one and send it again, or share the client link.",
       );
     } catch (err) {
-      setSaving($("#sendOk"), false, "", "Send proposal");
+      pstate.writing = false;
+      syncSendNote();
       // sendProposal refuses BEFORE writing when the provider fails, so the
       // proposal is genuinely still unsent — say so instead of closing.
       setDlgError("#sendErr", actionError(err));

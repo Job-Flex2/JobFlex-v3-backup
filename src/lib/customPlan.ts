@@ -56,7 +56,8 @@ export interface CustomPage {
 
 export const CUSTOM_PAGES: CustomPage[] = [
   { id: "smart-proposal", label: "Smart Proposal", note: "AI estimate from a prompt", href: "/dashboard/advanced-ai",
-    aliases: ["/dashboard/proposals/ai", "/mobile-advanced-ai-v2", "/mobile-smart-estimate-v1"] },
+    // The blueprint estimator is Smart Proposal's plan set as its own tool (2026-10-13).
+    aliases: ["/dashboard/proposals/ai", "/mobile-advanced-ai-v2", "/mobile-smart-estimate-v1", "/dashboard/blueprint-estimator"] },
   { id: "roof-estimator", label: "Roof estimator", note: "Aerial roof takeoff", href: "/dashboard/roof-estimator",
     aliases: ["/dashboard/advanced-ai/roof", "/mobile-roof-estimator-v2"] },
   { id: "fence-estimator", label: "Fence estimator", note: "Draw the fence on a map", href: "/dashboard/fence-estimator",

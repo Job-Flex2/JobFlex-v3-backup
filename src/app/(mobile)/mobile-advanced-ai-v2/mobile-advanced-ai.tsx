@@ -101,7 +101,7 @@ import {
 import type { ClarifyQuestion, GeneratedEstimate } from "@/lib/estimatorSchema";
 import { InventoryLinkChoice } from "@/components/v3/inventory-link/inventory-link-choice";
 import { isTradeId } from "@/lib/inventory";
-import { PlanEstimator, type PlanEstimateDone } from "@/components/v3/plan-estimator/plan-estimator";
+import { takePlanEstimate, type PlanEstimateDone } from "@/lib/plans/handoff";
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -267,12 +267,6 @@ export function MobileSmartProposal() {
 
   /* ---------- flow ------------------------------------------------------ */
   const [phase, setPhase] = useState<"intake" | "busy" | "studio">("intake");
-  // From blueprints (lib/plans): the reader opens over the page and stays mounted,
-  // hidden, behind the studio — "Back to the takeoff" finds it as it was left.
-  const [planKey, setPlanKey] = useState(0);
-  const [planOpen, setPlanOpen] = useState(false);
-  const [planShown, setPlanShown] = useState(false);
-  const [fromPlans, setFromPlans] = useState(false);
   const [step, setStep] = useState(1);
   const [dir, setDir] = useState<"fwd" | "back">("fwd");
   const [stageIdx, setStageIdx] = useState(0);
@@ -632,12 +626,9 @@ export function MobileSmartProposal() {
     e.target.value = "";
   };
 
-  /* ---------- from blueprints ------------------------------------------- */
-  const openPlans = () => {
-    setPlanKey((k) => k + 1);
-    setPlanOpen(true);
-    setPlanShown(true);
-  };
+  /* ---------- an estimate from the blueprint estimator --------------------- */
+  // Plan sets have their own tool, kept apart from this page (2026-10-13). Its "Edit in
+  // Smart Proposal" hands an estimate here to be edited (lib/plans/handoff).
   const landPlans = (r: PlanEstimateDone) => {
     setLines(r.lines);
     setCheckNotes(r.notes);
@@ -648,10 +639,15 @@ export function MobileSmartProposal() {
     setDiscount(NO_DISCOUNT);
     setLocUsed(r.location);
     setBanner(null);
-    setFromPlans(true);
-    setPlanShown(false);
     setPhase("studio");
   };
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const handed = takePlanEstimate();
+      if (handed) landPlans(handed);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   /* ---------- the real pipeline ------------------------------------------ */
 
@@ -844,9 +840,6 @@ export function MobileSmartProposal() {
     setTimelineDays(null);
     setDiscount(NO_DISCOUNT);
     setBanner(null);
-    setPlanOpen(false);
-    setPlanShown(false);
-    setFromPlans(false);
     setPhase("intake");
     setDir("back");
     setStep(1);
@@ -1348,16 +1341,6 @@ export function MobileSmartProposal() {
                         </p>
                       </div>
                     </div>
-                    {/* FROM BLUEPRINTS — a house, or any trade of one, off its plan set. */}
-                    <div className={styles.planEntry}>
-                      <div className={styles.planEntryTxt}>
-                        <b>Building from plans?</b>
-                        <span>The estimator reads the plan set and prices the whole house or your trades.</span>
-                      </div>
-                      <button className={`${styles.btn} ${styles.btnGhost}`} type="button" onClick={openPlans}>
-                        <Icon id="i-file" />From blueprints
-                      </button>
-                    </div>
                     <div className={styles.stepBody}>
                       <div className={`${styles.fld} ${errBrief ? styles.invalid : ""}`}>
                         <label className={styles.fldLbl} htmlFor="maBrief">
@@ -1620,12 +1603,6 @@ export function MobileSmartProposal() {
                   </div>
                 </div>
               </div>
-
-              {fromPlans && planOpen ? (
-                <button className={`${styles.btn} ${styles.btnGhost} ${styles.planBack}`} type="button" onClick={() => setPlanShown(true)}>
-                  <Icon id="i-file" />Back to the takeoff
-                </button>
-              ) : null}
 
               {/* SCOPE */}
               <section className={styles.card} key="scope">
@@ -1902,24 +1879,6 @@ export function MobileSmartProposal() {
           </>
         )}
       </div>
-
-      {/* ============ FROM BLUEPRINTS — over the page, kept mounted ============ */}
-      {planOpen ? (
-        <div className={styles.planLayer} hidden={!planShown}>
-          <PlanEstimator
-            key={planKey}
-            variant="phone"
-            hidden={!planShown}
-            location={where}
-            onCancel={() => setPlanShown(false)}
-            onEstimate={landPlans}
-            onReturn={fromPlans && phase === "studio" ? () => setPlanShown(false) : null}
-            onFail={(res) =>
-              res.code === "PLAN_LIMIT_REACHED" ? "You have used this month's estimator runs — upgrade your plan to price more." : res.error
-            }
-          />
-        </div>
-      ) : null}
 
       {/* ============ SHEET SCRIM (shared by both sheets) ============ */}
       <div

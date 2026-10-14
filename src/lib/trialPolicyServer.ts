@@ -30,7 +30,43 @@ import { trialRequiresCardEnv } from "@/lib/trialPolicy";
 import { cardlessCeilingReached, cardlessStartsInLastDay, cardlessTrialsPerDay } from "@/lib/trialDailyCap";
 
 export const TRIAL_POLICY_KEY = "trialPolicy";
+/** Every flip of the switch, oldest first (2026-10-13): the investors' page splits the ad spend by the day's policy. */
+export const TRIAL_POLICY_HISTORY_KEY = "trialPolicyHistory";
 const CACHE_MS = 10_000;
+
+export interface TrialPolicyFlip {
+  at: string;
+  /** What new signups got from then: a card, or none. */
+  requiresCard: boolean;
+  by: string | null;
+  /** True for a reset to the deployment's default. */
+  reset?: boolean;
+}
+
+export async function readTrialPolicyHistory(): Promise<TrialPolicyFlip[]> {
+  try {
+    const row = await db.syncState.findUnique({ where: { key: TRIAL_POLICY_HISTORY_KEY }, select: { cursor: true } });
+    const list = row?.cursor ? (JSON.parse(row.cursor) as unknown) : [];
+    if (!Array.isArray(list)) return [];
+    return list
+      .map((x) => x as Record<string, unknown>)
+      .filter((x) => typeof x.at === "string" && !Number.isNaN(Date.parse(x.at)) && typeof x.requiresCard === "boolean")
+      .map((x) => ({ at: x.at as string, requiresCard: x.requiresCard as boolean, by: typeof x.by === "string" ? x.by : null, reset: x.reset === true }))
+      .sort((a, b) => a.at.localeCompare(b.at));
+  } catch {
+    return [];
+  }
+}
+
+async function recordFlip(flip: TrialPolicyFlip): Promise<void> {
+  try {
+    const next = [...(await readTrialPolicyHistory()), flip].slice(-200);
+    const cursor = JSON.stringify(next);
+    await db.syncState.upsert({ where: { key: TRIAL_POLICY_HISTORY_KEY }, create: { key: TRIAL_POLICY_HISTORY_KEY, cursor }, update: { cursor } });
+  } catch (err) {
+    console.warn("[trial-policy] the flip was not recorded:", err);
+  }
+}
 
 export type SignupTrialMode = "card" | "no-card";
 
@@ -96,8 +132,10 @@ export async function signupTrialMode(opts?: { fresh?: boolean }): Promise<Signu
 
 /** The owner's switch. */
 export async function setTrialRequiresCard(requiresCard: boolean, by: string | null): Promise<SignupTrialState> {
-  const cursor = JSON.stringify({ requiresCard, by, at: new Date().toISOString() });
+  const at = new Date().toISOString();
+  const cursor = JSON.stringify({ requiresCard, by, at });
   await db.syncState.upsert({ where: { key: TRIAL_POLICY_KEY }, create: { key: TRIAL_POLICY_KEY, cursor }, update: { cursor } });
+  await recordFlip({ at, requiresCard, by });
   cache = null;
   return signupTrialState({ fresh: true });
 }
@@ -105,6 +143,7 @@ export async function setTrialRequiresCard(requiresCard: boolean, by: string | n
 /** Back to the deployment's default: the row goes, TRIAL_REQUIRES_CARD decides. */
 export async function resetTrialPolicy(): Promise<SignupTrialState> {
   await db.syncState.deleteMany({ where: { key: TRIAL_POLICY_KEY } });
+  await recordFlip({ at: new Date().toISOString(), requiresCard: trialRequiresCardEnv(), by: null, reset: true });
   cache = null;
   return signupTrialState({ fresh: true });
 }

@@ -391,9 +391,9 @@ export async function pricePlanTrade(raw: unknown): Promise<EstimateRun> {
   const blocked = await estimatorRunBlocked(organizationId);
   if (blocked) return blocked;
   if (!isOpenAIEnabled()) return { ok: false, error: "Pricing needs the estimator's AI service, which is not set up on this workspace." };
-  const run = planTradeRun({ trade: input.trade, house: input.house, items: input.items, alsoPriced: input.alsoPriced });
+  const run = planTradeRun({ trade: input.trade, house: input.house, items: input.items, alsoPriced: input.alsoPriced, ask: input.ask ?? null });
   if (!run.items.length) return { ok: false, error: `The takeoff has nothing for ${run.label.toLowerCase()}.` };
-  return runSmartEstimate(organizationId, { projectType: run.label, description: run.brief, location: input.location ?? undefined }, run, async () => {});
+  return runSmartEstimate(organizationId, { projectType: input.ask?.title ?? run.label, description: run.brief, location: input.location ?? undefined }, run, async () => {});
 }
 
 /** The validator's view of a blueprint trade: its profile without the remodel phases. */

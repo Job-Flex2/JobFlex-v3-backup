@@ -83,6 +83,7 @@ export type LimitKey =
   | "messagesSent"
   | "leads"
   | "aiPhoneCalls"
+  | "deskMinutes"
   | "reviewRequests"
   | "teamSeats"
   | "managers";
@@ -117,6 +118,9 @@ export const LIMIT_DEFS: readonly LimitDef[] = [
   { key: "messagesSent", label: "Messages sent", scope: "monthly", hint: "Messages sent per cycle" },
   { key: "leads", label: "Leads captured", scope: "monthly", hint: "New leads per cycle (all sources)" },
   { key: "aiPhoneCalls", label: "AI phone calls", scope: "monthly", hint: "AI receptionist calls per cycle" },
+  // The AI desk's minutes (2026-10-13): per CALENDAR month, not the cycle — the desk
+  // keeps its own month row (lib/aiDesk/usage). Past these, minute packs (lib/aiDesk/minutes).
+  { key: "deskMinutes", label: "AI desk minutes", scope: "monthly", hint: "Minutes the AI desk is on the line per calendar month; packs add more" },
   { key: "reviewRequests", label: "Review requests", scope: "monthly", hint: "Review asks per cycle (incl. auto)" },
   { key: "teamSeats", label: "Office team seats", scope: "absolute", hint: "Non-worker members + pending invites" },
   // Manager seats specifically (owner's call, 2026-08-31): some plans sell NO
@@ -151,6 +155,7 @@ export const DEFAULT_FREE_LIMITS: PlanLimits = {
   messagesSent: 50,
   leads: 10,
   aiPhoneCalls: 5,
+  deskMinutes: 0,
   reviewRequests: 3,
   teamSeats: 1,
 };

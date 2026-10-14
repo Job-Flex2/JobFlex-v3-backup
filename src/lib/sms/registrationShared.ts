@@ -28,6 +28,11 @@ export type SmsRegistrationDetails = {
   contactLast: string;
   contactEmail: string;
   contactPhone: string;
+  /** A public Facebook, Instagram, Google Business or Yelp page — extra proof for a business with no website (optional). */
+  social: string;
+  /** Show the contact email on the company's booking page — Twilio takes a Gmail or Yahoo address only when the
+   *  business's website lists it (30482), and with no website of its own the booking page IS the website. */
+  showEmail: boolean;
 };
 
 export type SmsRegistrationStage = "none" | "pending" | "approved" | "rejected" | "failed";
@@ -42,6 +47,8 @@ export type SmsRegistrationState = {
   submittedAt?: string | null;
   checkedAt?: string | null;
   approvedAt?: string | null;
+  /** Calls to the number reach the voice webhook since then (set at purchase; an older number gets it on the next check). */
+  voiceOnAt?: string | null;
   reasons?: { code: number | null; reason: string }[];
   /** A rejected submission can be corrected until then (Twilio's edit window). */
   editUntil?: string | null;
@@ -59,7 +66,7 @@ export const BUSINESS_TYPES: readonly { value: SmsBusinessType; label: string }[
 
 export const EMPTY_DETAILS: SmsRegistrationDetails = {
   legalName: "", dba: "", businessType: "PRIVATE_PROFIT", ein: "", street: "", street2: "", city: "", state: "", zip: "",
-  website: "", contactFirst: "", contactLast: "", contactEmail: "", contactPhone: "",
+  website: "", contactFirst: "", contactLast: "", contactEmail: "", contactPhone: "", social: "", showEmail: false,
 };
 
 const STAGES: readonly SmsRegistrationStage[] = ["none", "pending", "approved", "rejected", "failed"];
@@ -70,7 +77,8 @@ export function parseRegistration(json: string | null | undefined): SmsRegistrat
   try {
     const raw = JSON.parse(json) as Partial<SmsRegistrationState>;
     const stage = STAGES.includes(raw.stage as SmsRegistrationStage) ? (raw.stage as SmsRegistrationStage) : "none";
-    return { ...raw, stage };
+    // Details saved before `social` / `showEmail` existed read as their empty values.
+    return { ...raw, stage, ...(raw.details ? { details: { ...EMPTY_DETAILS, ...raw.details } } : {}) };
   } catch {
     return { stage: "none" };
   }
@@ -115,6 +123,7 @@ export function registrationProblems(d: SmsRegistrationDetails): Partial<Record<
   if (t(d.contactLast).length < 1) p.contactLast = "Their last name.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t(d.contactEmail))) p.contactEmail = "A working email address.";
   if (!usDigits(d.contactPhone)) p.contactPhone = "A US phone number.";
+  if (t(d.social ?? "") && !/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(t(d.social))) p.social = "The page's address, starting with https://.";
   return p;
 }
 
@@ -137,6 +146,8 @@ export function tidyDetails(d: SmsRegistrationDetails): SmsRegistrationDetails {
     contactLast: t(d.contactLast).slice(0, 60),
     contactEmail: t(d.contactEmail).toLowerCase().slice(0, 120),
     contactPhone: t(d.contactPhone).slice(0, 30),
+    social: t(d.social ?? "").slice(0, 200),
+    showEmail: Boolean(d.showEmail),
   };
 }
 
@@ -144,18 +155,67 @@ export function tidyDetails(d: SmsRegistrationDetails): SmsRegistrationDetails {
 export const TWILIO_TEXT_MAX = 500;
 const cap = (s: string) => (s.length <= TWILIO_TEXT_MAX ? s : `${s.slice(0, TWILIO_TEXT_MAX - 1).trimEnd()}…`);
 
-/** The opt-in picture every contractor's registration shows: the booking page's text checkbox. */
+/** The opt-in picture the first registrations showed (a demo company's booking page) — kept for the old URL only. */
 export const BOOKING_OPT_IN_IMAGE = "https://www.jobflex.app/twilio/opt-in-booking.png";
+
+// WHAT TWILIO CHECKS, AND WHERE IT FINDS IT (2026-10-12). A toll-free review looks at the END business, not JobFlex:
+// its opt-in in its own name (30506), a public terms page with the SMS disclosures (30493 — required since
+// 2026-09-15), a public privacy policy that keeps opt-in data from third parties (30519, 30477, 30521), a live website
+// that shows the business (30473, 30492), a HELP reply (30531). Each company gets those pages from JobFlex, under its
+// own booking page, in its own name — so a registration goes in complete the first time.
+const SITE = "https://www.jobflex.app";
+/** The company's public pages Twilio is given. */
+export function smsPagesFor(slug: string): { booking: string; terms: string; privacy: string; optInImage: string } {
+  const base = `${SITE}/book/${encodeURIComponent(slug)}`;
+  return { booking: base, terms: `${base}/texting`, privacy: `${base}/privacy`, optInImage: `${base}/opt-in.png` };
+}
+
+/** The booking page's texting checkbox, word for word — the live page and the picture Twilio sees both use it. */
+export function bookingConsentText(company: string): { lead: string; rest: string } {
+  return {
+    // "Ridgeline Roofing Co." already ends the sentence.
+    lead: `Text me about my visit and estimate from ${company}${/[.!?]$/.test(company.trim()) ? "" : "."}`,
+    rest: "Message frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Agreeing is not a condition of booking.",
+  };
+}
+
+/** The job titles a company's sample texts use, by its first trade — a fence company's samples talk about fences. */
+export function sampleJobsFor(trades: readonly string[]): { visit: string; job: string } {
+  const by: Record<string, { visit: string; job: string }> = {
+    Roofing: { visit: "Roof inspection", job: "Roof replacement" },
+    Fencing: { visit: "Fence estimate", job: "Fence installation" },
+    Decking: { visit: "Deck estimate", job: "Deck build" },
+    HVAC: { visit: "AC check-up", job: "Heat pump installation" },
+    Plumbing: { visit: "Plumbing visit", job: "Water heater replacement" },
+    Electrical: { visit: "Electrical visit", job: "Panel upgrade" },
+    Painting: { visit: "Painting estimate", job: "Exterior painting" },
+    Siding: { visit: "Siding estimate", job: "Siding replacement" },
+    Windows: { visit: "Window estimate", job: "Window replacement" },
+    Flooring: { visit: "Flooring estimate", job: "Floor installation" },
+    Tile: { visit: "Tile estimate", job: "Tile installation" },
+    Countertops: { visit: "Countertop measure", job: "Countertop installation" },
+    "Kitchen & Bath": { visit: "Remodel estimate", job: "Bathroom remodel" },
+    Landscaping: { visit: "Yard estimate", job: "Landscape install" },
+    Concrete: { visit: "Concrete estimate", job: "Driveway pour" },
+    Drywall: { visit: "Drywall estimate", job: "Drywall repair" },
+    Insulation: { visit: "Insulation check", job: "Attic insulation" },
+    Carpentry: { visit: "Carpentry estimate", job: "Trim carpentry" },
+    Demolition: { visit: "Demolition estimate", job: "Interior demolition" },
+  };
+  for (const t of trades) if (by[t]) return by[t];
+  return { visit: "Estimate visit", job: "Home repair" };
+}
 
 /**
  * Everything Twilio's toll-free verification asks, for one contractor, in the
  * Twilio library's names. `samples` are the company's own texts, made by the
  * templates themselves (registration.ts builds them).
  */
-export function verificationFields(input: { details: SmsRegistrationDetails; companyName: string; samples: string[]; bookingUrl: string }) {
+export function verificationFields(input: { details: SmsRegistrationDetails; companyName: string; samples: string[]; bookingUrl: string; slug: string; helpText: string }) {
   const d = input.details;
   const name = (d.dba || input.companyName || d.legalName).slice(0, 60);
   const ein = d.ein.replace(/\D/g, "");
+  const pages = smsPagesFor(input.slug);
   return {
     businessName: d.legalName,
     ...(d.dba && d.dba !== d.legalName ? { doingBusinessAs: d.dba } : {}),
@@ -166,7 +226,8 @@ export function verificationFields(input: { details: SmsRegistrationDetails; com
       `${name} is a home-improvement contractor. It texts its own clients and crew through JobFlex, its business software, from this number, which is used by ${name} only. A client who books a visit on its JobFlex booking page and ticks "Text me about my visit and estimate" gets the visit details, a reminder the evening before and the proposal they asked for; crew members get their job schedule. No marketing.`,
     ),
     productionMessageSample: cap(input.samples.filter(Boolean).join("\n")),
-    optInImageUrls: [BOOKING_OPT_IN_IMAGE],
+    // The company's own booking form, in its name (30506), checkbox shown unticked (30475/30505).
+    optInImageUrls: [pages.optInImage],
     optInType: "WEB_FORM" as const,
     messageVolume: "1,000",
     businessStreetAddress: d.street,
@@ -182,25 +243,58 @@ export function verificationFields(input: { details: SmsRegistrationDetails; com
     businessContactEmail: d.contactEmail,
     businessContactPhone: `+1${usDigits(d.contactPhone) ?? ""}`,
     additionalInformation: cap(
-      `Submitted by JobFlex (ISV, jobflex.app) for its customer ${d.legalName}; this toll-free number serves this one business only. Opt-in: on its booking page (${input.bookingUrl}) the client ticks "Text me about my visit and estimate from ${name}", shown with frequency, rates and STOP/HELP (image: the same form). Crew give their own mobile to their employer for job schedules; their first text explains STOP. Opt-outs are never texted again.`,
+      `Submitted by JobFlex (ISV) for its customer ${d.legalName}; this number serves this one business only. Opt-in: on its booking page (${input.bookingUrl}) the client ticks "Text me about my visit and estimate from ${name}", with frequency, rates and STOP/HELP (image: the same form). Crew give their own mobile for job schedules.${d.showEmail ? ` Its contact email is listed on that page.` : ""}${d.social ? ` Also online: ${d.social}` : ""}`,
     ),
+    // Its own public pages: SMS terms (30493) and privacy policy (30519), and the HELP reply it sends (30531).
+    termsAndConditionsUrl: pages.terms,
+    privacyPolicyUrl: pages.privacy,
+    helpMessageSample: cap(input.helpText),
     ageGatedContent: false,
   };
 }
 
 /** The settings card's words for each stage. */
 export const REGISTRATION_COPY = {
-  title: "Your texting number",
-  sub: "Every text — to your team, your clients and your crew — goes out from a number of your own, registered with the carriers in your business's name. JobFlex buys it and pays for it; Twilio checks your business before it can send, usually within a few days.",
-  get: "Get your texting number",
-  paidOnly: "Your own texting number comes with a paid plan.",
+  title: "Your number",
+  sub: "A toll-free number of your own, in your company's name — JobFlex gets it, registers it with the carriers and pays for it. It answers calls the day it arrives; texts to your team, clients and crew go out from it once the carriers approve it.",
+  // What JobFlex does so the contractor doesn't have to (owner, 2026-10-13: "say JobFlex will prepare your number … to give us more value").
+  // Each line is something the code really does: registration.ts buys + files (and wires calls), book/[slug] pages, sampleJobsFor, the approval check.
+  doneTitle: "JobFlex sets it up for you",
+  done: [
+    "Gets a toll-free number in your company's name — JobFlex pays for it. It takes calls right away",
+    "Prepares your carrier registration and sends it to Twilio for you",
+    "Makes your texting terms and privacy pages, and the “Text me” checkbox on your booking page",
+    "Writes your sample texts for your trade",
+    "Texting waits for the carriers' approval — JobFlex watches for it and turns your texts on by itself",
+  ],
+  doneYou: "You fill in one short form — what JobFlex already knows is filled in for you.",
+  get: "Get your number",
+  paidOnly: "Your own number comes with a paid plan.",
+  // What the number does right now (owner, 2026-10-13: "voice gets no approval … for SMS you have to wait").
+  usesCalls: "Calls",
+  usesTexts: "Texts",
+  callsAssistant: "On — JobFlex's phone assistant answers, takes the message and writes it up for you",
+  callsPhone: (phone: string) => `On — rings your company phone, ${phone}; a call nobody picks up goes to the phone assistant`,
+  callsNone: "On the number, but nowhere to send them: add your company phone in Company settings",
+  callsOff: "Not wired — this number was bought before calls were. Release it and get a new one",
+  textsOn: "On — approved by the carriers",
+  textsPending: "Waiting for the carriers' approval — usually within 3 business days; JobFlex turns them on by itself",
+  textsRejected: "Sent back by Twilio — fix what it asks below and send it again",
+  textsFailed: "Not sent to Twilio yet",
+  textsLegacy: "Carriers won't deliver this number's texts — it was never registered",
   notConfigured: "Texting is not set up on this platform yet.",
-  formIntro: "Twilio checks these against public records. Use the legal name and address on your EIN letter.",
-  freeMail: "Twilio refuses free mailboxes (Gmail, Yahoo…) unless your website lists the address. An address on your own domain is safer.",
+  formIntro: "Twilio checks every line against public records. Write the legal name, EIN and address exactly as on your IRS EIN letter (CP 575) or your state registration — the suite too (\"Ste L\" is not \"Suite I\").",
+  website: "Your own website is best. Without one, use your JobFlex booking page — it shows your name and phone.",
+  bookingOff: "Turn on online booking first (Settings → Online booking). Your booking page is where clients agree to your texts, and Twilio looks at it.",
+  whatTwilioSees: "Twilio also gets, in your name: your booking page with the texting checkbox, your texting terms and privacy pages, and three sample texts.",
+  freeMail: "Twilio refuses free mailboxes (Gmail, Yahoo…) unless your website lists the address — tick “Show this email on my booking page” below, or use an address on your own domain.",
+  showEmail: "Show this email on my booking page",
+  showEmailWhy: "Twilio accepts a Gmail or Yahoo address only when your website lists it. Without a website of your own, your booking page is your website.",
+  social: "No website? Add your Facebook, Instagram, Google Business or Yelp page — an active one helps Twilio see your business is real.",
   submit: "Register my number",
   resubmit: "Fix and send again",
-  pending: "Waiting for Twilio to approve your business. Texts start the moment it does; until then your team gets the same alerts by email and in the app.",
-  approved: "Approved. Texts to your team, clients and crew go out from this number, with your name.",
+  pending: "Your number already answers calls. For texting, JobFlex sent your registration to Twilio and is watching for the answer — usually within 3 business days. Texts start by themselves once it's approved; until then your team gets the same alerts by email and in the app.",
+  approved: "Approved. Texts to your team, clients and crew go out from this number, with your name — and it keeps answering calls.",
   rejected: "Twilio sent it back. Fix what it asks below and send it again.",
   rejectedClosed: "Twilio sent it back and the time to correct it has passed. Release the number and start again.",
   failed: "Something went wrong on the way to Twilio.",
@@ -226,7 +320,8 @@ export function prefillDetails(
     ...EMPTY_DETAILS,
     legalName: company.name,
     dba: company.name,
-    website: company.website?.trim() || `https://www.jobflex.app/r/${company.slug}`,
+    // No website of its own: the booking page — its name, its phone, and the texting checkbox Twilio looks for.
+    website: company.website?.trim() || smsPagesFor(company.slug).booking,
     street: streets[0] ?? "",
     street2: streets.slice(1).join(", "),
     city,
@@ -236,6 +331,8 @@ export function prefillDetails(
     contactLast: rest.join(" "),
     contactEmail: person.email ?? "",
     contactPhone: company.phone ?? "",
+    // No website of its own and a free mailbox: the booking page lists the email, or Twilio refuses it (30482).
+    showEmail: !company.website?.trim() && isFreeMailbox(person.email ?? ""),
   };
 }
 
@@ -253,5 +350,14 @@ export type SmsRegistrationView = {
   paying: boolean;
   /** A number bought before registration existed (the old instant button): release it first. */
   legacy: boolean;
+  /** Online booking is on — the page where clients agree to texts; a registration waits for it. */
+  bookingOn: boolean;
+  /**
+   * Calls (lib/aiDesk): a bought number answers them the day it arrives — the approval
+   * is for texts. Where they go, and the company phone they ring.
+   */
+  calls: { on: boolean; go: "assistant" | "phone" | "none"; phone: string | null };
+  /** The company's public pages Twilio is given (smsPagesFor). */
+  pages: { booking: string; terms: string; privacy: string; optInImage: string };
   details: SmsRegistrationDetails;
 };

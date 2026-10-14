@@ -355,6 +355,13 @@ async function countUsage(
       return db.lead.count({ where: { organizationId, createdAt: since } });
     case "aiPhoneCalls":
       return db.aiPhoneCall.count({ where: { organizationId, startedAt: since } });
+    case "deskMinutes": {
+      // The desk's own month row (calendar month), not the cycle — lib/aiDesk/usage.
+      const { readDeskUse } = await import("@/lib/aiDesk/usage");
+      const { minutesOf } = await import("@/lib/aiDesk/shared");
+      const use = await readDeskUse(organizationId);
+      return minutesOf(use.callSeconds + use.testSeconds);
+    }
     case "reviewRequests":
       return db.reviewRequest.count({ where: { organizationId, createdAt: since } });
     case "managers": {

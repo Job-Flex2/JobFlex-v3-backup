@@ -81,3 +81,4 @@ scripts/migrate-v2/reports/
 scripts/qa/*.png
 scripts/qa/report-dl.csv
 prisma/dev.db.bak-*
+voice/test/out/

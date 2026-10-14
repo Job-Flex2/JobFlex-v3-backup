@@ -67,7 +67,7 @@ import {
   type SpeciesGroup,
 } from "./codeTables";
 import { deckingProduct, framingSpecies, wallType, type DeckingProduct, type FramingSpecies, type WallType } from "./catalog";
-import { BUILT_UP_CHOICES, frontEdgeAt, isSolidBeam, normalizeDeckDesign, shapeAreaSqFt, shapeEdges, shapeOutline, shapeZones, type BeamKind, type BeamSize, type BeamStyle, type DeckDesign, type DeckEdge, type Zone } from "./design";
+import { BUILT_UP_CHOICES, frontEdgeAt, isSolidBeam, normalizeDeckDesign, shapeAreaSqFt, shapeEdges, shapeOutline, shapeZones, type BeamKind, type BeamSize, type BeamStyle, type DeckDesign, type DeckEdge, type Zone, spaRectIn } from "./design";
 import { ringEdges } from "./ringEdges";
 import { deckRate, lumberKey, type DeckRateBook } from "./rates";
 import type { MarketSnapshot } from "../fence/market";
@@ -927,6 +927,20 @@ export function buildDeckFrame(raw: DeckDesign, opts: BuildOptions = {}): DeckFr
       if (joists.some((j) => Math.abs(j.x - x) < 3)) continue;
       const zone = zoneAt(zones, x);
       if (zone) joists.push({ x, zoneId: zone.id, edge: false, sister: false });
+    }
+    // THE SPA SPOT: every joist under the tub's footprint is doubled —
+    // a filled 7-footer reads near 100 psf against the table's 40, and
+    // sistering is how a deck actually carries one. The sisters ride the
+    // same spans, land in the counts, and the checks say the rule.
+    const spaR = spaRectIn(design);
+    if (spaR) {
+      for (const j of [...joists]) {
+        if (j.sister || j.x < spaR.x0 - 1 || j.x > spaR.x1 + 1) continue;
+        const sx = j.x + THICK_2X_IN <= width - 1 ? j.x + THICK_2X_IN : j.x - THICK_2X_IN;
+        if (joists.some((o) => Math.abs(o.x - sx) < 1)) continue;
+        const zone = zoneAt(zones, sx);
+        if (zone) joists.push({ x: sx, zoneId: zone.id, edge: false, sister: true });
+      }
     }
     joists.sort((p, q) => p.x - q.x);
 

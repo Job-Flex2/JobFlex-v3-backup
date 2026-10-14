@@ -251,6 +251,9 @@ export interface DeckClientDesignerProps {
   note: string;
   unsure: ClientUnsure[];
   sentAt: string | null;
+  /** When the contractor opened what was sent, and when it was priced (2026-10-13): the client's side of the line. */
+  seenAt?: string | null;
+  pricedAt?: string | null;
   expired: boolean;
   /** The proposal this design became, once the contractor has sent it (2026-10-13): the client's own page. */
   proposal?: { url: string; status: string; sentAt: string | null; acceptedAt: string | null } | null;
@@ -789,6 +792,17 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
               {sendError ? <p className={s.error} role="alert">{sendError}</p> : null}
               {sent && !changedSinceSent ? (
                 <div className={s.sentBox} data-client-sent>
+                  {/* Where it stands, from the client's side (2026-10-13): sent → opened by the shop → priced → proposal → accepted. */}
+                  <ol className={s.sentSteps} aria-label="Where your design stands" data-client-steps>
+                    {(() => {
+                      const seen = !!props.seenAt && !!sent && Date.parse(props.seenAt) >= Date.parse(sent.at) - 1000;
+                      const accepted = !!props.proposal && ["ACCEPTED", "COMPLETED", "PAID"].includes(props.proposal.status);
+                      const ready = !!props.proposal;
+                      const priced = ready || !!props.pricedAt;
+                      const steps: Array<[string, boolean]> = [["Sent", true], [`${shopName} opened it`, seen || priced], ["Priced", priced], ["Proposal ready", ready], ["Accepted", accepted]];
+                      return steps.map(([label, done]) => <li key={label} className={done ? s.stepDone : s.stepTodo}>{label}</li>);
+                    })()}
+                  </ol>
                   {props.proposal ? (
                     <>
                       <b>{props.proposal.status === "ACCEPTED" || props.proposal.status === "COMPLETED" || props.proposal.status === "PAID" ? "Accepted ✓" : "Your proposal is ready ✓"}</b> {shopName} priced your design.{" "}
@@ -797,7 +811,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
                     </>
                   ) : (
                     <>
-                      <b>Sent ✓</b> {shopName} has your design and will be in touch with the price. Change anything and send it again any time.
+                      <b>Sent ✓</b> {props.seenAt && sent && Date.parse(props.seenAt) >= Date.parse(sent.at) - 1000 ? `${shopName} opened it and is pricing it.` : `${shopName} has your design and will be in touch with the price.`} Change anything and send it again any time.
                     </>
                   )}
                 </div>

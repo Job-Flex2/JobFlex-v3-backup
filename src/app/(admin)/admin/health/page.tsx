@@ -8,6 +8,7 @@ import { isResendEnabled } from "@/lib/sdk/resend";
 import { isSmtpEnabled } from "@/lib/sdk/smtp";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { isBlobEnabled } from "@/lib/sdk/blob";
+import { deskReadiness } from "@/lib/aiDesk/readiness";
 import { WebhookEventStatus } from "@/lib/prismaEnums";
 import {
   AdminHealthContent,
@@ -63,15 +64,20 @@ async function readWebhooks(since: Date): Promise<WebhookSnapshot> {
 }
 
 export default async function AdminHealthPage() {
-  await requirePlatformAdmin();
+  const admin = await requirePlatformAdmin();
 
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const [database, stripe, traffic] = await Promise.all([
+  const [database, stripe, traffic, desk] = await Promise.all([
     probeDatabase(),
     checkStripeReachable(),
     getTrafficSnapshot(),
+    // The AI desk's go-live lights (lib/aiDesk/readiness): never fails the page.
+    deskReadiness(admin.id).catch((err) => {
+      console.warn("[health] desk readiness failed:", err);
+      return null;
+    }),
   ]);
 
   // Everything below reads the database, so it only runs once the probe above
@@ -115,6 +121,7 @@ export default async function AdminHealthPage() {
     adminDoor: Boolean(process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD),
     webhooks,
     reconcileAt,
+    desk,
   };
 
   return <AdminHealthContent data={data} />;

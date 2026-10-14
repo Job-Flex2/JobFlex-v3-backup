@@ -15,9 +15,10 @@ import {
   type PlacedOrder,
 } from "../../src/lib/eagleviewOrder";
 import type { PackRecord, PackStatus } from "../../src/lib/eagleviewEntitlements";
-import { BUILTIN_LISTS, EXISTING_STEEP, FASCIA_OPTIONS, storeyLaborFactor, tearOffRatesFor, VENT_TYPES } from "../../src/lib/roofPackage/catalog";
+import { BUILTIN_LISTS, DECK_BOARDS, EXISTING_STEEP, FASCIA_OPTIONS, storeyLaborFactor, tearOffRatesFor, VENT_TYPES } from "../../src/lib/roofPackage/catalog";
 import {
   buildRoofPackage,
+  plywoodRate,
   checkVentilation,
   defaultSpec,
   estimateEdges,
@@ -403,6 +404,46 @@ const short = (packs: readonly string[]) => packs.map((p) => p.slice(-3)).join("
       const built = buildRoofPackage(defaultSpec(house({ existingMaterial: null }), custom), house({ existingMaterial: null }));
       check("…and a package on it has no NaN", [...built.materials, ...built.labor].every((l) => Number.isFinite(l.quantity * l.unitPrice)));
     }
+  }
+
+  console.log("── plywood replacement, said plainly (owner, 2026-10-13)");
+  {
+    const facts = house();
+    const base = defaultSpec(facts, L);
+    const lines = (p: RoofPackage) => [...p.materials, ...p.labor].filter((l) => /^Plywood replacement/.test(l.name));
+    check("a new roof quotes the plywood rate by default, and prices none", base.plywoodQuote === true && lines(buildRoofPackage(base, facts)).length === 0);
+    const r = plywoodRate(base);
+    const quoted = buildRoofPackage(base, facts);
+    const sentence = quoted.scope.find((s) => /Damaged decking found once the old roof is off/.test(s)) ?? "";
+    check("…the client reads the rate per sheet AND per sq ft, installed, not in the price", sentence.includes(`per 4x8 sheet`) && sentence.includes("per sq ft") && /not in the price above/.test(sentence) && Math.abs(r.sqft - r.sheet / 32) < 0.011, sentence);
+    check("…and the contractor's notes say it is not in the total", quoted.assumptions.some((a) => /Deck replacement is not in the total: the proposal quotes ½ in CDX plywood/.test(a)));
+    check("an overlay (no tear-off) quotes no plywood rate — the deck stays covered", !buildRoofPackage({ ...base, tearOffLayers: 0 }, facts).scope.some((s) => /decking/.test(s)));
+    check("Leave it out: no lines, no sentence", (() => { const p = buildRoofPackage({ ...base, plywoodQuote: false }, facts); return lines(p).length === 0 && !p.scope.some((s) => /decking/.test(s)); })());
+    const six = buildRoofPackage({ ...base, plywoodSheets: 6 }, facts);
+    const six6 = lines(six);
+    check("6 sheets known: plywood and fitting lines, 6 each at the sheet prices", six6.length === 2 && six6.every((l) => l.quantity === 6 && l.unit === "each") && six6.some((l) => l.unitPrice === base.plywoodEach) && six6.some((l) => l.unitPrice === base.plywoodLabor), JSON.stringify(six6.map((l) => [l.name, l.quantity, l.unit, l.unitPrice])));
+    check("…the client reads what is included and the rate for any more", six.scope.some((s) => /6 sheets \(192 sq ft\) included/.test(s)) && six.scope.some((s) => /Any more damaged decking/.test(s)));
+    const sq = buildRoofPackage({ ...base, plywoodUnit: "sqft", plywoodSqft: 100 }, facts);
+    const sq2 = lines(sq);
+    check("100 sq ft known: priced by the sq ft at the sheet price / 32", sq2.length === 2 && sq2.every((l) => l.quantity === 100 && l.unit === "sq ft") && Math.abs(sq2.reduce((a, l) => a + l.quantity * l.unitPrice, 0) - 100 * r.sqft) < 0.01, JSON.stringify(sq2.map((l) => [l.quantity, l.unitPrice])));
+    check("…and says about how many sheets that is", sq.scope.some((s) => /100 sq ft \(about 3\.1 sheets\) included/.test(s)));
+    check("a count without the quote: the count only", (() => { const p = buildRoofPackage({ ...base, plywoodSheets: 2, plywoodQuote: false }, facts); return p.scope.some((s) => /2 sheets/.test(s)) && !p.scope.some((s) => /Any more/.test(s)); })());
+    // What it is replaced with — kind, thickness, sheet size (owner, 2026-10-13).
+    check("the decking list: unique boards, each with its two starting prices", new Set(DECK_BOARDS.map((b) => b.id)).size === DECK_BOARDS.length && DECK_BOARDS.every((b) => b.each > 0 && b.labor > 0 && /in /.test(b.label)));
+    check("a new roof patches with ½ in CDX plywood, 4 × 8, at the prices it always had", base.plywoodBoardId === "cdx_12" && base.plywoodSize === "4x8" && base.plywoodEach === 42 && base.plywoodLabor === 35);
+    check("…and the client reads the board by name", sentence.includes("½ in CDX plywood at $77 per 4x8 sheet"), sentence);
+    const osb = buildRoofPackage({ ...base, plywoodBoardId: "osb_716", plywoodEach: 24, plywoodSheets: 4 }, facts);
+    const osbLines = [...osb.materials, ...osb.labor].filter((l) => /replacement/.test(l.name) && /deck/i.test(l.name));
+    check("OSB is called roof decking, not plywood, on the lines", osbLines.length === 2 && osbLines.some((l) => l.name === "Roof deck replacement (damaged decking) · 7/16 in OSB, 4 × 8 ft sheets") && !osbLines.some((l) => /^Plywood/.test(l.name)), osbLines.map((l) => l.name).join(" | "));
+    check("…and in the client's words", osb.scope.some((s) => s === "Replace damaged roof decking with 7/16 in OSB — 4 sheets (128 sq ft) included."), osb.scope.find((s) => /OSB/.test(s)) ?? "");
+    const big = { ...base, plywoodSize: "4x10" as const, plywoodEach: 52.5, plywoodLabor: 43.75 };
+    const bigR = plywoodRate(big);
+    const bigP = buildRoofPackage({ ...big, plywoodSheets: 3 }, facts);
+    check("a 4 × 10 sheet: 40 sq ft each, priced the same by the sq ft", bigR.sheet === 96.25 && bigR.sqft === 2.4 && bigP.scope.some((s) => /3 sheets \(120 sq ft\) included/.test(s)) && bigP.scope.some((s) => /per 4x10 sheet/.test(s)), JSON.stringify(bigR));
+    const flat = house({ pitchFamilies: [{ pitch12: 0.5, share: 1 }], shape: "Flat", facetCount: 1, existingMaterial: "Flat", squares: 22, footprintSqft: 2200, perimeterFt: 196 });
+    const fs = defaultSpec(flat, L);
+    const fp = buildRoofPackage({ ...fs, tearOffLayers: 1 }, flat);
+    check("a flat roof torn off quotes the rate too", fp.scope.some((s) => /Damaged decking found once the old roof is off/.test(s)), fp.scope.join(" | "));
   }
 
   console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");

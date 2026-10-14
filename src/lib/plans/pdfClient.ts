@@ -52,8 +52,17 @@ export type PlanPage = {
   titleText: string;
   widthIn: number | null;
   heightIn: number | null;
-  /** Rendered on demand (render() fills them) — the picker needs only the thumbnail. */
-  render: () => Promise<RenderedSheet>;
+  /**
+   * Rendered on demand. `light`: the overview and four close-ups instead of a full grid —
+   * for a sheet with nothing small to measure (an elevation, a section, structural notes).
+   */
+  render: (opts?: { light?: boolean }) => Promise<RenderedSheet>;
+  /**
+   * A first look: the sheet small, then its four quarters at the size the model reads them
+   * (about 64 px an inch on a 36 × 24 sheet) — drawing titles, schedule heads and notes
+   * legible enough to say what is on the sheet, without the full close-ups.
+   */
+  glance: () => Promise<string[]>;
 };
 
 type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -90,6 +99,17 @@ function scaledCanvas(src: CanvasImageSource, sw: number, sh: number, maxPx: num
 }
 
 export type RenderedSheet = { overview: string; tiles: string[]; grid: [number, number] | null };
+
+/** What a first look sends: the whole sheet at 1,024 px, then its quarters. */
+const GLANCE_PX = 1024;
+
+/** The sheet small, then its four quarters (each at the model's 768 px short side). */
+function glanceImages(big: HTMLCanvasElement): string[] {
+  const W = big.width;
+  const H = big.height;
+  const { tiles } = overviewAndTiles(big, [2, 2]);
+  return [canvasJpeg(scaledCanvas(big, W, H, GLANCE_PX), 0.6), ...tiles];
+}
 
 /** Whole sheet + overlapping close-ups in a grid, in reading order, from one big canvas. */
 function overviewAndTiles(big: HTMLCanvasElement, grid: [number, number] | null): RenderedSheet {
@@ -153,13 +173,33 @@ async function pdfPages(file: File, start: number, onPage?: () => void): Promise
       titleText,
       widthIn: Math.round((vp1.width / 72) * 10) / 10,
       heightIn: Math.round((vp1.height / 72) * 10) / 10,
-      render: async () => {
+      glance: async () => {
+        // Each quarter's short side at the model's 768 px: about 64 px an inch on a 36 × 24
+        // sheet — ¼" drawing titles at 16 px, ⅛" notes at 8.
+        const wIn = vp1.width / 72;
+        const hIn = vp1.height / 72;
+        const ppi = Math.min(110, Math.max(48, (MODEL_SHORT_PX / (Math.min(wIn, hIn) / 2)) * 1.05));
+        const vp = page.getViewport({ scale: ppi / 72 });
+        const c = document.createElement("canvas");
+        c.width = Math.round(vp.width);
+        c.height = Math.round(vp.height);
+        const g = c.getContext("2d")!;
+        g.fillStyle = "#fff";
+        g.fillRect(0, 0, c.width, c.height);
+        await page.render({ canvasContext: g, viewport: vp }).promise;
+        const out = glanceImages(c);
+        c.width = c.height = 0;
+        return out;
+      },
+      render: async (opts) => {
         // A scan, or CAD lettering drawn as lines (no text layer), needs the close-ups — and
         // so does any big sheet: a text layer often carries only a table while the notes
         // beside it are drawn. A letter-size page with text is read from its text.
         const wIn = vp1.width / 72;
         const hIn = vp1.height / 72;
-        const grid = thin || Math.max(wIn, hIn) >= 17 ? tileGrid(wIn, hIn) : null;
+        const full = thin || Math.max(wIn, hIn) >= 17 ? tileGrid(wIn, hIn) : null;
+        // A light read: four close-ups (quarters) are enough for notes and larger lettering.
+        const grid: [number, number] | null = full && opts?.light ? [2, 2] : full;
         // Sharp enough that each close-up's short side has its 768 px, and no bigger than a
         // phone's canvas allows (~16 megapixels).
         const tileShortIn = grid ? Math.min(wIn / grid[0], hIn / grid[1]) * (1 + OVERLAP) : 12;
@@ -194,6 +234,7 @@ async function imagePage(file: File, start: number): Promise<PlanPage> {
     titleText: "",
     widthIn: null,
     heightIn: null,
+    glance: async () => [canvasJpeg(scaledCanvas(bmp, bmp.width, bmp.height, GLANCE_PX), 0.6)],
     render: async () => {
       // A photo of a sheet: quarters, from the photo at up to 3,000 px.
       const c = scaledCanvas(bmp, bmp.width, bmp.height, 3000);

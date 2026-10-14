@@ -72,6 +72,8 @@ export const ROLE_ROUTE_GATES: Record<string, RoleRouteGate> = {
       "/dashboard/manual-blueprint",
       "/dashboard/projects",
       "/dashboard/advanced-ai",
+      // The blueprint estimator: Smart Proposal's plan set as its own tool (2026-10-13).
+      "/dashboard/blueprint-estimator",
       // The old shared inventory address: it forwards to a trade's own
       // inventory under its estimator (2026-10-10), which the estimator
       // prefixes below already allow.

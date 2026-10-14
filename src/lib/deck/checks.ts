@@ -38,7 +38,7 @@ import {
   risersFor,
 } from "./codeTables";
 import { GROUND_CONTACT_WITHIN_IN, MIN_FRAME_CLEAR_IN, PIER_BLOCK, footingDepthIn, type DeckFrame } from "./frame";
-import { FIXTURE_LABEL, GUTTER_LABEL, ROOFING_LABEL, WALL_FILL_LABEL, defaultStair, frontRadiusFt, normalizeDeckDesign, type DeckDesign } from "./design";
+import { FIXTURE_LABEL, GUTTER_LABEL, ROOFING_LABEL, WALL_FILL_LABEL, defaultStair, frontRadiusFt, normalizeDeckDesign, type DeckDesign, spaRectIn } from "./design";
 import { STAIR_POST_CLEAR_IN, type RoofFrame } from "./roof";
 import { RULE_HIP, RULE_RAFTER, RULE_RIDGE, RULE_ROOF_LOAD, RULE_TIES } from "./roofTables";
 import { BETWEEN_LEVELS_STAIR_ID, betweenLevelsStair, type DeckStructure } from "./structure";
@@ -91,6 +91,29 @@ export function deckChecks(s: DeckStructure): DeckCheck[] {
   codeCheck(s, add);
   if (frame) guardAndStairChecks(s, add);
   electricalChecks(s, add);
+  // ── The hot-tub spot ─────────────────────────────────────────────
+  if (frame && design.spa.on) {
+    const r = spaRectIn(design);
+    if (r) {
+      const sqFt = Math.round(((r.x1 - r.x0) / 12) * ((r.y1 - r.y0) / 12));
+      add({
+        id: "spa-framing",
+        level: "info",
+        part: "Hot tub spot",
+        text: `Every joist under the ${design.spa.widthFt}×${design.spa.depthFt} ft tub footprint is doubled (a sister alongside), which carries twice the table's load. A filled tub reads near 100 psf over its ${sqFt} sq ft — the doubled ${frame.joistSize} at ${frame.spacingIn} in. covers it on these spans. AN ESTIMATE by the deck tables' method, not a tub engineering letter: the tub maker's pad drawing governs.`,
+        rule: "Doubled joists under a concentrated load; IRC R507 tables read at twice the load share.",
+      });
+      if (design.heightIn > 30) {
+        add({
+          id: "spa-height",
+          level: "warn",
+          part: "Hot tub spot",
+          text: `The tub stands ${Math.round(design.heightIn / 12 * 10) / 10} ft up. Above 30 in., the posts and footings under a filled tub are past what the deck tables say on their own — have an engineer size them before the tub is set.`,
+          rule: "Concentrated loads above guard height are outside the prescriptive deck tables.",
+        });
+      }
+    }
+  }
   return out;
 }
 

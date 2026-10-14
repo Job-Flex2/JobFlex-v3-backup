@@ -166,6 +166,10 @@ export type ManualProposal = {
   deckDrawing?: boolean;
   /** This member may open that deck in the studio and update the proposal from it (2026-10-12). */
   deckEditable?: boolean;
+  /** `Proposal.trade` — "roof", "fence", "hvac", "deck"… or null for a builder proposal. */
+  trade?: string | null;
+  /** A roof proposal this member may open again in the roof estimator and update from there (2026-10-13). */
+  roofEditable?: boolean;
   /** The client's design link on this proposal (2026-10-13): one line on where it stands, Open when it came back. */
   clientDesign?: { line: string; standing: string; draftId: string | null; unseen: boolean } | null;
   /** Made by an estimator (fence, roof, HVAC — `Proposal.trade`): its lines

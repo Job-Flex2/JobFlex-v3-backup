@@ -222,6 +222,8 @@ export async function textOffice(organizationId: string, key: PrefKey, line: str
       const to = toE164(u.smsPhone);
       if (!to || seen.has(to)) continue;
       const prefs = parseNotificationPrefs(u.notificationPrefsJson, m.role);
+      // Texts to this member switched off on Settings → Texting (2026-10-13): their number and choices wait.
+      if (prefs.smsPaused) continue;
       const decision = smsDecision(prefs, key, now, tz);
       if (decision === "skip") continue;
       seen.add(to);
@@ -250,13 +252,14 @@ export async function textOfficeNow(organizationId: string, line: string, opts: 
   try {
     const [org, members, extras] = await Promise.all([
       db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
-      db.membership.findMany({ where: { organizationId, role: { in: [...OFFICE_ROLES] } }, select: { user: { select: { smsPhone: true, smsVerifiedAt: true } } } }),
+      db.membership.findMany({ where: { organizationId, role: { in: [...OFFICE_ROLES] } }, select: { user: { select: { smsPhone: true, smsVerifiedAt: true, notificationPrefsJson: true } } } }),
       db.notificationPhone.findMany({ where: { organizationId, active: true }, select: { phone: true } }),
     ]);
     const skip = new Set((opts.excludePhones ?? []).map((p) => toE164(p)).filter(Boolean));
     const seen = new Set<string>();
     const body = brand(org?.name, line);
-    const numbers = [...members.map((m) => (m.user?.smsVerifiedAt ? m.user.smsPhone : null)), ...extras.map((x) => x.phone)];
+    // A member whose texts are switched off gets no forwards either (2026-10-13).
+    const numbers = [...members.map((m) => (m.user?.smsVerifiedAt && !parseNotificationPrefs(m.user.notificationPrefsJson).smsPaused ? m.user.smsPhone : null)), ...extras.map((x) => x.phone)];
     for (const raw of numbers) {
       const to = toE164(raw);
       if (!to || seen.has(to) || skip.has(to)) continue;

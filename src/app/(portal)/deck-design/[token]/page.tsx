@@ -55,6 +55,8 @@ export default async function DeckDesignPage({ params }: { params: Promise<{ tok
       note={link.note}
       unsure={link.unsure}
       sentAt={link.sentAt}
+      seenAt={link.seenAt}
+      pricedAt={link.pricedAt}
       expired={expired}
     />
   );

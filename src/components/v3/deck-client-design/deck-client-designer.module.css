@@ -177,6 +177,13 @@
 .error { margin: 0; font-size: 13px; font-weight: 600; color: var(--danger); }
 .sentBox { padding: 10px 12px; border: 1.5px solid var(--success); background: var(--success-soft); font-size: 13.5px; line-height: 1.45; }
 .sentBox b { color: var(--success); }
+/* The client's side of the line (2026-10-13): five steps, the done ones in green. */
+.sentSteps { display: flex; flex-wrap: wrap; gap: 6px 0; margin: 0 0 8px; padding: 0; list-style: none; font-size: 12px; font-weight: 700; }
+.sentSteps li { display: inline-flex; align-items: center; }
+.sentSteps li + li::before { content: '→'; margin: 0 8px; color: var(--muted); font-weight: 400; }
+.stepDone { color: var(--success); }
+.stepDone::after { content: ' ✓'; }
+.stepTodo { color: var(--muted); }
 .sendBtn {
   width: 100%; min-height: 54px; padding: 0 16px; border: 0; border-radius: var(--radius); background: var(--blueprint); color: #fff; cursor: pointer;
   font-family: var(--font); font-size: 14px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase;

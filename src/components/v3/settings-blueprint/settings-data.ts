@@ -26,6 +26,8 @@ import type { FreeLoss } from "@/lib/freePlan";
 import type { PaymentConnectionStatusView } from '@/lib/payments/connections';
 import type { NotificationPrefs, PrefKey } from '@/lib/notificationPrefsShared';
 import type { SmsRegistrationView } from '@/lib/sms/registrationShared';
+import type { CompanyFacts, DeskProfile } from '@/lib/aiDesk/profile';
+import type { CallsGo, DeskBalance, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
 
 export type IconName =
   | 'i-arrow'
@@ -128,7 +130,8 @@ export type RailKey =
   | 'billing'
   | 'integrations'
   | 'notifications'
-  | 'texting';
+  | 'texting'
+  | 'desk';
 
 export interface RailItem {
   readonly key: RailKey;
@@ -147,6 +150,8 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   // Texting (2026-09-27): who gets texted, your mobile, the company's
   // numbers — the owner's own place for it, the way SmartSpace Pro has one.
   { key: 'texting', label: 'Texting', icon: 'i-phone' },
+  // The AI desk (2026-10-13): who answers the company's number, and what the desk knows and says.
+  { key: 'desk', label: 'AI desk', icon: 'i-phone', isNew: true },
 ];
 
 export const RAIL_NEW_BADGE = 'NEW' as const;
@@ -913,6 +918,8 @@ export interface SmsRosterRow {
   phoneBy: 'self' | 'office' | null;
   /** The number replied STOP. */
   stopped: boolean;
+  /** A mobile is on file but texts to them are switched off (2026-10-13). */
+  paused: boolean;
   isMe: boolean;
   /** Their Text switch per event of their roster. */
   cells: Record<string, boolean>;
@@ -923,8 +930,8 @@ export interface SmsRosterRow {
 export const TEXTING_COPY = {
   rosterTitle: 'Who gets texted',
   rosterSub: 'The office, by event. A member is texted only after they verify a mobile on their own account.',
-  peopleTitle: 'Who gets texted',
-  peopleSub: 'Everyone on the team, by what they do. Texts go out from your company’s own texting number (The company, below); until it is approved, the same alerts arrive by email and in the app.',
+  peopleTitle: 'Your team — who gets texts',
+  peopleSub: 'Flip anyone’s texts on or off; their mobile and choices are kept. Tap the texts under a name to choose exactly what they get.',
   sections: {
     office: { title: 'Office', sub: 'Owner, managers, admin and accounting — the whole company.' },
     sales: { title: 'Sales & estimators', sub: 'Their own leads, visits and deals — nobody else’s.' },
@@ -941,7 +948,13 @@ export const TEXTING_COPY = {
   byOffice: 'added by the office',
   bySelf: 'verified',
   noMobileLong: 'No mobile — nothing is texted',
-  onFileOff: 'on file, texts off',
+  onFileOff: 'texts off — number kept',
+  switchOn: 'Texts on',
+  switchOff: 'Texts off',
+  switchOnHelp: 'Texts go to this person. Tap to stop them — the mobile and choices are kept.',
+  switchOffHelp: 'Nothing is texted to this person. Tap to turn their texts back on.',
+  switchNoMobile: 'Add their mobile first.',
+  stoppedHelp: 'They replied STOP. Only they can restart texts, by texting START back.',
   examplesTitle: 'What the texts say',
   emptySection: 'Nobody here yet — invite them from Company or Workers.',
   whoMe: 'you',
@@ -953,6 +966,121 @@ export const TEXTING_COPY = {
   rulesTitle: 'Your own texts',
   rulesSub: 'Write a text for any moment — when it goes out, who gets it, what it says. {Fields} fill in from the job; clients always get your company name and the STOP line. They go out once your company has its own registered texting number.',
   notConfiguredLong: 'Texting is not switched on for this server yet. Everything here is kept and nothing is sent until it is.',
+  // The steps at the top of the page (2026-10-13): what is needed, and what happens now.
+  overviewTitle: 'Texting',
+  overviewSub: 'Get your number, pick who on your team gets texts, decide about clients — and add texts of your own if you like.',
+  stepNumber: 'Your number',
+  stepTeam: 'Your team',
+  stepClients: 'Texts to clients',
+  stepRules: 'Your own texts',
+  numberNone: 'Not requested yet — JobFlex prepares a number in your company’s name for you, files it with the carriers and pays for it. It takes calls right away; texting starts once the carriers approve.',
+  numberPaidOnly: 'Comes with a paid plan.',
+  numberPending: 'Your number already answers calls. Twilio is checking your business for texting — usually within 3 business days; texts start on their own once approved.',
+  numberApproved: (n: string) => `Approved — texts go out from ${n}, and it answers calls.`,
+  numberRejected: 'Twilio sent it back — fix what it asks and send it again.',
+  numberFailed: 'It did not reach Twilio — open it and send again.',
+  numberGo: 'Get your number',
+  numberOpen: 'Open',
+  teamLine: (on: number, off: number, none: number) => [`${on} getting texts`, off ? `${off} switched off` : '', none ? `${none} without a mobile` : ''].filter(Boolean).join(' · '),
+  teamGo: 'Choose who',
+  clientsLine: 'Visit reminders and the link to their proposal — only to clients who ticked “Text me…” when they booked online.',
+  rulesLine: (n: number) => (n ? `${n} of your own set up` : 'None yet — write a text for any moment'),
+  rulesGo: 'Set up',
+  statusWaiting: 'Nothing is texted yet — your texting number is not approved. Until it is, everyone gets the same alerts by email and in the app.',
+  statusLive: (n: string, people: number, clients: boolean) => `Texting is on from ${n}: ${people} ${people === 1 ? 'person' : 'people'} on your team${clients ? ', and clients who asked for texts' : ''}.`,
+} as const;
+
+/** Settings → AI desk (2026-10-13). */
+export const DESK_COPY = {
+  title: 'AI desk',
+  sub: 'Your number, answered: the desk picks up, gives callers what they ask, books visits and takes messages — or your phone rings first and the desk takes what you miss.',
+  managersOnly: 'Owners and managers set up the AI desk.',
+  noNumber: 'No number yet — the desk answers your company\u2019s own number.',
+  getNumber: 'Get your number',
+  callsDesk: 'answered by the desk',
+  callsPhone: (phone: string) => `rings ${phone || 'your company phone'} first; the desk takes what nobody picks up`,
+  callsNone: 'add your company phone in Company settings, or turn the desk on',
+  callsOff: 'not taking calls yet',
+  notOnPlan: 'Your plan does not include AI phone answering, so calls ring your company phone. The desk picks up once the Phone page is on your plan.',
+  whoAnswers: 'Who answers',
+  modeAnswer: 'The desk answers every call',
+  modeAnswerSub: 'Callers get answers, visits booked and messages taken, around the clock. It hands the call to you when they ask.',
+  modeForward: 'Ring my phone first',
+  modeForwardSub: (phone: string) => `${phone ? `${phone} rings` : 'Your company phone rings'} for 25 seconds; the desk takes the calls nobody picks up.`,
+  setupTitle: 'What the desk knows and says',
+  setupSub: 'Tell it about your company the way you would brief a new receptionist — type it, or say it. JobFlex turns that into the desk\u2019s instructions, which you can edit line by line.',
+  briefTitle: '1 · Tell us about your company',
+  briefSub: 'Any order, your own words: what you do, where, your hours, how you price, what you never promise, what counts as an emergency. What JobFlex already knows is filled in for you.',
+  knownAlready: 'What JobFlex already knows',
+  briefPlaceholder: 'We do roofs and gutters on the Eastside. Free estimates; leak calls are $149. Open 7 to 5 weekdays. Licensed and insured, 10-year workmanship warranty. A leak during rain is an emergency — book the first slot…',
+  speak: 'Say it instead',
+  compose: 'Write the desk\u2019s instructions',
+  recompose: 'Write them again from this',
+  composing: 'Writing…',
+  aiOff: 'The AI service is not set up on this workspace — the instructions can be edited by hand below.',
+  questionsTitle: 'The desk still doesn\u2019t know',
+  profileTitle: '2 · The desk\u2019s instructions',
+  profileTitleDraft: '2 · The desk\u2019s instructions — a first draft from what JobFlex knows',
+  profileSub: 'Written from what you said. Change anything; the desk follows these on every call.',
+  profileSubDraft: 'Nothing written yet: this is what the desk would say from your company settings alone. Describe your company above, or edit these and save.',
+  addFaq: 'Add a question',
+  save: 'Save the instructions',
+  saving: 'Saving…',
+  unsaved: 'Unsaved changes',
+  tryTitle: '3 · Try it',
+  trySub: 'Ask something a caller would. The desk answers from the instructions as saved.',
+  tryPlaceholder: 'Do you do free estimates? Can someone come today?',
+  ask: 'Ask',
+  asking: 'Asking…',
+  answerTag: 'what the desk would say',
+  // the voice, and the month's minutes (step 4)
+  voiceTitle: 'The desk\u2019s voice',
+  hear: 'Hear it',
+  hearing: 'One moment…',
+  playing: 'Playing…',
+  minutes: (min: number, calls: number, tests: number) =>
+    `${min} min this month — ${calls} call${calls === 1 ? '' : 's'}${tests ? `, ${tests} test${tests === 1 ? '' : 's'}` : ''}.`,
+  minutesNone: 'No minutes used this month.',
+  // test it here (step 4)
+  testTitle: '4 · Test it here',
+  testSub: 'Call the desk from this browser and talk to it the way a customer would — the saved instructions, the voice you chose, the real open times on your calendar. On a test, visits and messages are not saved: the desk only says what it would do.',
+  testStart: 'Call the desk',
+  testMic: 'Allow the microphone…',
+  testConnecting: 'Connecting…',
+  testLive: 'On the line',
+  testHangUp: 'Hang up',
+  testEnding: 'Hanging up…',
+  testUnsupported: 'This browser can\u2019t make a call here. Chrome, Safari or Edge on a phone or computer can.',
+  testNoMic: 'The microphone is off for this page. Allow it in the address bar and try again.',
+  testFailed: 'The call could not be connected. Try again in a minute.',
+  testYou: 'You',
+  testDesk: 'Desk',
+  // minutes and packs (step 5)
+  minutesTitle: 'Minutes',
+  minutesSub: 'Your plan includes minutes each month; past them the desk runs on packs, which don\u2019t expire. Out of both, calls ring your company phone or take a message until you add minutes.',
+  included: (n: number) => `${n} min included this month`,
+  usedWords: (n: number) => `${n} min used`,
+  packsWords: (n: number) => `${n} min in packs`,
+  buyPack: (min: number, price: string) => `Add ${min} minutes — ${price}`,
+  buying: 'One moment…',
+  confirmCharge: (price: string, brand: string, last4: string) => `Charge ${price} to ${brand} \u2022${last4}?`,
+  charge: 'Charge it',
+  notNow: 'Not now',
+  added: (min: number) => `${min} minutes added.`,
+  autoTitle: 'Auto top-up',
+  autoSub: (min: number, price: string, brand: string, last4: string) => `When the desk runs out, add ${min} minutes (${price}) to ${brand} \u2022${last4} without asking. You get an email each time.`,
+  autoNoCard: 'Auto top-up needs a card on file — add one on the Billing page.',
+  autoFailed: 'The last auto top-up couldn\u2019t charge your card. Update it on the Billing page; the desk tries again a day later.',
+  historyTitle: 'Packs bought',
+  historyNone: 'No packs yet.',
+  via: { 'card-on-file': 'card on file', checkout: 'Stripe', auto: 'auto top-up', admin: 'JobFlex' } as Record<string, string>,
+  outBanner: 'Out of minutes — calls ring your company phone, or take a message, until you add minutes.',
+  lowBanner: 'Running low — the desk stops answering when the minutes are gone.',
+  noBilling: 'Billing is not set up on this workspace, so packs can\u2019t be bought here.',
+  packFailed: 'The purchase could not go through. Try again in a minute.',
+  checkoutCancelled: 'Nothing was charged.',
+  checkoutPending: 'Stripe is confirming the payment — the minutes land in a moment.',
+  checkoutInvalid: 'That payment could not be matched to your company. If you were charged, write to support.',
 } as const;
 
 export const TEST_RESULT_COPY = {
@@ -1112,12 +1240,48 @@ export interface NotificationsData {
   sms: SmsSettingsData;
 }
 
+/** The AI desk (2026-10-13, lib/aiDesk): who answers, and what the desk knows and says. */
+export interface DeskSettingsData {
+  canManage: boolean;
+  /** The AI service is set up (the profile can be written and tried). */
+  aiConfigured: boolean;
+  /** The Phone page is on the plan: the desk answers; otherwise calls ring the company phone. */
+  assistantOnPlan: boolean;
+  mode: DeskMode;
+  /** The voice the live desk speaks with (lib/aiDesk/shared VOICES). */
+  voice: DeskVoice;
+  /** This month's minutes: the desk's calls and the owner's browser tests. */
+  use: DeskUse;
+  /** Where the company stands on minutes, and the packs (lib/aiDesk/minutes, packs). */
+  minutes: DeskMinutesData;
+  /** A line JobFlex assigned to this company on /admin/health — its number for calls when it bought none. */
+  assigned: { number: string; go: CallsGo; phone: string | null } | null;
+  brief: string;
+  profile: DeskProfile | null;
+  profileUpdatedAt: string | null;
+  questions: string[];
+  facts: CompanyFacts;
+}
+
+export interface DeskMinutesData {
+  balance: DeskBalance;
+  history: DeskPackRecord[];
+  pack: { minutes: number; cents: number };
+  /** The card the subscription bills, for the one-click buy and auto top-up; null → Stripe Checkout. */
+  card: { brand: string; last4: string } | null;
+  /** The last time auto top-up could not charge the card. */
+  autoFailedAt: string | null;
+  /** Billing is set up on this workspace (Stripe, or its stand-in). */
+  billingOn: boolean;
+}
+
 export interface SettingsData {
   account: AccountData;
   payments: PaymentsData;
   billing: BillingData;
   integrations: IntegrationsData;
   notifications: NotificationsData;
+  desk: DeskSettingsData;
 }
 
 /** Every pane takes exactly this. `navigate` jumps rails (and subtabs). */

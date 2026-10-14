@@ -2,7 +2,7 @@
 // realistic share, the payback curve and its break-even — on fixtures with
 // hand-checked answers.
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/investor-model.check.ts
-import { addDays, daysBetween, dollars, investorFigures, paybackSentence, perDay, spendPeriods, type ModelInput } from "../../src/lib/investorModel";
+import { addDays, cohortFigures, daysBetween, dollars, investorFigures, noCardShareByDay, paybackSentence, perDay, spendPeriods, type ModelInput } from "../../src/lib/investorModel";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -101,6 +101,72 @@ check("$5 of spend is already covered: the sentence says so", /already covered/.
 check("the sentence names the pace, the share and the date", /\$100 a day on ads, 0\.86 signups a day, 60% of trials paying/.test(paybackSentence(f)) && /on [A-Z][a-z]+ \d+, 202\d\./.test(paybackSentence(f)), paybackSentence(f));
 check("no visitors known → no per-visitor figures", investorFigures({ ...base, visitors: null }).unit.costPerVisitorCents === null && investorFigures({ ...base, visitors: 0 }).unit.visitorToSignupPct === null);
 check("dollars read as written", dollars(34220) === "$342" && dollars(158) === "$1.58" && dollars(0) === "$0");
+
+
+// ── THE TWO KINDS OF TRIAL (2026-10-13): a day's spend follows the switch where recorded, else who signed up
+console.log("── cohorts");
+const days = ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06"];
+const su = [
+  { date: "2026-10-01", cohort: "card" as const },
+  { date: "2026-10-03", cohort: "nocard" as const },
+  { date: "2026-10-04", cohort: "card" as const }, { date: "2026-10-04", cohort: "nocard" as const }, { date: "2026-10-04", cohort: "nocard" as const },
+];
+const sh = noCardShareByDay(days, su, []);
+check("a day of card signups is a card day; a day of no-card signups a no-card day", sh.get("2026-10-01") === 0 && sh.get("2026-10-03") === 1);
+check("a mixed day splits in proportion (1 card, 2 no-card → two thirds)", near(sh.get("2026-10-04") ?? -1, 2 / 3, 0.001));
+check("a day with no signups follows the nearest earlier day that had some", sh.get("2026-10-02") === 0 && near(sh.get("2026-10-05") ?? -1, 2 / 3, 0.001) && near(sh.get("2026-10-06") ?? -1, 2 / 3, 0.001));
+const sh2 = noCardShareByDay(days, su, [{ from: "2026-10-05", mode: "card" }]);
+check("a recorded flip outranks the signups from its day on", sh2.get("2026-10-05") === 0 && sh2.get("2026-10-06") === 0 && near(sh2.get("2026-10-04") ?? -1, 2 / 3, 0.001));
+check("with no signups and no flips every day is a card day (the only kind before the switch)", [...noCardShareByDay(days, [], []).values()].every((v) => v === 0));
+
+const withCohorts: ModelInput = {
+  ...base,
+  paying: [{ startedAt: "2026-10-02", monthlyCents: 7900, cohort: "card" }, { startedAt: "2026-10-06", monthlyCents: 7900, signedUpAt: "2026-10-05", cohort: "nocard" }],
+  trials: [
+    { createdAt: "2026-10-04", endsAt: "2026-10-11", monthlyCents: 7900, chance: 0.45, cohort: "card" },
+    { createdAt: "2026-10-05", endsAt: "2026-10-12", monthlyCents: 2900, chance: 0.2, cohort: "nocard" },
+    { createdAt: "2026-10-06", endsAt: "2026-10-13", monthlyCents: 19900, chance: 0.15, cohort: "nocard" },
+    { createdAt: "2026-10-06", endsAt: null, monthlyCents: null, chance: 0.15, cohort: "nocard" },
+  ],
+  lapsed: 1,
+  cohorts: {
+    lapsed: { card: 1, nocard: 0 },
+    signups: [
+      { date: "2026-09-30", cohort: "card" }, { date: "2026-10-02", cohort: "card" }, { date: "2026-10-04", cohort: "card" },
+      { date: "2026-10-05", cohort: "nocard" }, { date: "2026-10-05", cohort: "nocard" }, { date: "2026-10-06", cohort: "nocard" }, { date: "2026-10-06", cohort: "nocard" },
+    ],
+    policy: [],
+    current: "nocard",
+  },
+};
+const whole = investorFigures(withCohorts);
+const card = cohortFigures(withCohorts, "card", whole);
+const nocard = cohortFigures(withCohorts, "nocard", whole);
+check("the two cohorts' spend adds up to the whole ($700: $500 card days, $200 no-card days)", card.attributedCents + nocard.attributedCents === whole.spend.totalCents && card.attributedCents === 50000 && nocard.attributedCents === 20000, `${card.attributedCents} + ${nocard.attributedCents}`);
+check("…over the days each fell on (Sep 30–Oct 4 card, Oct 5–6 no card)", card.attributedDays === 5 && nocard.attributedDays === 2 && card.firstDay === "2026-09-30" && nocard.firstDay === "2026-10-05");
+check("each cohort counts its own accounts", card.figures.trials.count === 1 && card.figures.paying.count === 1 && card.figures.lapsed === 1 && nocard.figures.trials.count === 3 && nocard.figures.paying.count === 1 && nocard.figures.lapsed === 0);
+check("…and its signups add up to the whole", card.signups + nocard.signups === whole.signups);
+check("the kind a new signup gets today keeps spending forward; the other stands still", nocard.current && nocard.figures.spend.perDayProjectedCents === whole.spend.perDayProjectedCents && !card.current && card.figures.spend.perDayProjectedCents === 0);
+check("…so the card cohort's spend curve is flat past today", card.figures.curve.filter((p) => p.projected).every((p) => p.spendCents === card.attributedCents));
+check("visitors are not split", card.figures.visitors === null && nocard.figures.visitors === null && card.figures.unit.costPerVisitorCents === null);
+check("cost per signup is each cohort's own", card.figures.unit.costPerSignupCents === Math.round(50000 / card.signups) && nocard.figures.unit.costPerSignupCents === Math.round(20000 / nocard.signups));
+const plain = cohortFigures(base, "card");
+check("an input without the cohort block reads as all card, no spend split lost", plain.attributedCents === investorFigures(base).spend.totalCents && plain.figures.trials.count === base.trials.length);
+
+
+// ── PAYING FROM BEFORE THE START DAY (2026-10-13): counted as paying, in the revenue and the payback; not a signup
+console.log("── pre-period paying");
+const withBefore: ModelInput = { ...base, paying: [...base.paying, { startedAt: "2026-09-01", monthlyCents: 9900, signedUpAt: "2026-08-20", cohort: "card", preexisting: true }] };
+const fb = investorFigures(withBefore);
+const f0 = investorFigures(base);
+check("it counts as paying, in the run rate", fb.paying.count === f0.paying.count + 1 && fb.paying.mrrCents === f0.paying.mrrCents + 9900 && fb.paying.preexisting === 1 && fb.paying.preexistingMrrCents === 9900);
+check("…its revenue counts from the start day only (7 days of $99 = $23.10)", fb.paying.revenueToDateCents === f0.paying.revenueToDateCents + 2310, `${fb.paying.revenueToDateCents - f0.paying.revenueToDateCents}`);
+check("…it is not a signup, and does not move the pace, the cost per signup or the observed share", fb.signups === f0.signups && fb.unit.signupsPerDay === f0.unit.signupsPerDay && fb.unit.costPerSignupCents === f0.unit.costPerSignupCents && fb.observed.pct === f0.observed.pct);
+check("…nor the cost per paying customer (the ads did not win it)", fb.unit.costPerPayingRealisticCents === f0.unit.costPerPayingRealisticCents);
+check("…but it pays into the curve from the first day", fb.curve[0].mrrAllPayCents === f0.curve[0].mrrAllPayCents + 9900 && fb.curve[0].payingAllPay === f0.curve[0].payingAllPay + 1);
+const cardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "card");
+const nocardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "nocard");
+check("it sits in the card cohort's paying, not in no card's, and not in either's signups", cardB.figures.paying.count === card.figures.paying.count + 1 && cardB.figures.paying.preexisting === 1 && cardB.signups === card.signups && nocardB.figures.paying.count === nocard.figures.paying.count);
 
 console.log(bad === 0 ? "\nAll investor model checks passed." : `\n${bad} investor model check(s) FAILED.`);
 process.exit(bad === 0 ? 0 : 1);

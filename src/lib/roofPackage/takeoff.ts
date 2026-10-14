@@ -34,6 +34,10 @@ import {
   pitchLaborFactor,
   PLYWOOD_SHEET_EACH,
   PLYWOOD_SHEET_LABOR,
+  DECK_BOARDS,
+  DECK_SHEET_SIZES,
+  type DeckBoardOption,
+  type DeckSheetSize,
   SEALANT_PER_SQ,
   STARTER_PER_FT,
   FASCIA_OPTIONS,
@@ -110,9 +114,21 @@ export interface RoofFacts {
   existingMaterial?: string | null;
   /**
    * The aerial provider's own 0..1 score for facetCount, when it scored one.
-   * The valley estimate refuses a facet count scored under 0.5.
+   * The valley estimate's facet model refuses a facet count scored under 0.5.
    */
   facetConfidence?: number | null;
+  /**
+   * The building outlines (the main structure and any ticked outbuilding) as
+   * lat/lng rings — pack 007's polygons. The valley estimate reads its inside
+   * corners first (2026-10-13): every inside corner of a footprint is a valley.
+   */
+  outlines?: ReadonlyArray<ReadonlyArray<{ lat: number; lng: number }>> | null;
+  /**
+   * A roof-plane count that is only an estimate (the Google fallback's
+   * segments), never a measured fact: the valley estimate reads it when there
+   * is no measured facet count.
+   */
+  facetCountEstimated?: number | null;
   /**
    * How the contractor said this building is used — the only thing that
    * turns commercial pricing on. Null until they answer; the aerial data has
@@ -237,7 +253,18 @@ export interface RoofPackageSpec {
   tearOffLayers: 0 | 1 | 2 | 3;
   tearOffPerSqLayer: number;
   disposalPerSqLayer: number;
+  /** PLYWOOD REPLACEMENT — the damaged roof deck (½ in, 4 × 8 sheets). How much is known on this roof: sheets,
+   *  or square feet when `plywoodUnit` is "sqft" (2026-10-13). */
   plywoodSheets: number;
+  plywoodSqft: number;
+  plywoodUnit: "sheet" | "sqft";
+  /** The proposal tells the client what any damaged decking found at tear-off costs, per sheet and per sq ft —
+   *  not in the total (owner, 2026-10-13: "a note to the client … any plywood replacement will be charged this"). */
+  plywoodQuote: boolean;
+  /** The board it is replaced with (DECK_BOARDS: kind and thickness) and the sheet size (2026-10-13). */
+  plywoodBoardId: string;
+  plywoodSize: DeckSheetSize;
+  /** Per sheet of that board and size: the board, and fitting it. */
   plywoodEach: number;
   plywoodLabor: number;
   nailsPerSq: number;
@@ -281,7 +308,91 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
  * the ridge and hips run. A footprint is treated as a rectangle of aspect
  * 1.6 — the typical house — so these are estimates and are labelled so.
  */
+/* ── Plywood replacement (2026-10-13) ─────────────────────────────────── */
+
+/** A 4 × 8 sheet of roof decking. */
+export const PLYWOOD_SHEET_SQFT = 32;
+/** The board the deck is patched with (the first, ½ in CDX, when the pick is unknown). */
+export function deckBoardOf(spec: Pick<RoofPackageSpec, "plywoodBoardId">): DeckBoardOption {
+  return DECK_BOARDS.find((b) => b.id === spec.plywoodBoardId) ?? DECK_BOARDS[0];
+}
+/** The sheet: its size words ("4x8" for the client, "4 × 8 ft" on screen) and its area. */
+export function deckSheetOf(spec: Pick<RoofPackageSpec, "plywoodSize">): { id: DeckSheetSize; label: string; sqft: number } {
+  return DECK_SHEET_SIZES.find((s) => s.id === spec.plywoodSize) ?? DECK_SHEET_SIZES[0];
+}
+const money2 = (n: number) => (Math.abs(n - Math.round(n)) < 0.005 ? `$${Math.round(n).toLocaleString("en-US")}` : `$${n.toFixed(2)}`);
+
+/** The installed price of plywood: a sheet (plywood + fitting it) and the same by the square foot. */
+export function plywoodRate(spec: Pick<RoofPackageSpec, "plywoodEach" | "plywoodLabor"> & Partial<Pick<RoofPackageSpec, "plywoodSize">>): { sheet: number; sqft: number } {
+  const area = deckSheetOf({ plywoodSize: spec.plywoodSize ?? "4x8" }).sqft;
+  const sheet = Math.max(0, (spec.plywoodEach || 0) + (spec.plywoodLabor || 0));
+  // By the square foot it is what the two lines charge — each half rounded to the cent — so the rate quoted to the
+  // client and a count priced by the sq ft never differ by a cent.
+  const c2 = (n: number) => Math.round(n * 100) / 100;
+  return { sheet: c2(sheet), sqft: c2(c2(Math.max(0, spec.plywoodEach || 0) / area) + c2(Math.max(0, spec.plywoodLabor || 0) / area)) };
+}
+
+/** The plywood counted on this roof, as entered (sheets or square feet), with the other measure beside it; null for none. */
+export function plywoodCount(spec: Pick<RoofPackageSpec, "plywoodSheets" | "plywoodSqft" | "plywoodUnit"> & Partial<Pick<RoofPackageSpec, "plywoodSize">>): { qty: number; unit: "each" | "sq ft"; sheets: number; sqft: number } | null {
+  const area = deckSheetOf({ plywoodSize: spec.plywoodSize ?? "4x8" }).sqft;
+  const bySqft = spec.plywoodUnit === "sqft";
+  const qty = bySqft ? Math.max(0, spec.plywoodSqft || 0) : Math.max(0, spec.plywoodSheets || 0);
+  if (!(qty > 0)) return null;
+  return bySqft
+    ? { qty, unit: "sq ft", sheets: Math.round((qty / area) * 10) / 10, sqft: qty }
+    : { qty, unit: "each", sheets: qty, sqft: qty * area };
+}
+
+/** The plywood lines: the plywood and fitting it, by the sheet or by the square foot. */
+export function plywoodLines(spec: RoofPackageSpec): { material: { name: string; quantity: number; unit: PkgUnit; unitPrice: number }; labor: { name: string; quantity: number; unit: PkgUnit; unitPrice: number } } | null {
+  const c = plywoodCount(spec);
+  if (!c) return null;
+  const board = deckBoardOf(spec);
+  const sheet = deckSheetOf(spec);
+  const per = c.unit === "each" ? 1 : 1 / sheet.sqft;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  // Plywood is called plywood; OSB and ZIP are roof decking — the line says what goes on the roof.
+  const what = board.kind === "plywood" ? "Plywood replacement (damaged roof deck)" : "Roof deck replacement (damaged decking)";
+  return {
+    material: { name: c.unit === "each" ? `${what} · ${board.label}, ${sheet.label} sheets` : `${what} · ${board.label}, by the sq ft`, quantity: c.qty, unit: c.unit, unitPrice: r2(spec.plywoodEach * per) },
+    labor: { name: `${board.kind === "plywood" ? "Plywood" : "Roof deck"} replacement · remove the damaged deck and fit the new`, quantity: c.qty, unit: c.unit, unitPrice: r2(spec.plywoodLabor * per) },
+  };
+}
+
+/** What the CLIENT reads about plywood: what is included, and the rate for any more found once the old roof is off. */
+export function plywoodScope(spec: RoofPackageSpec, deckExposed: boolean): string[] {
+  const c = plywoodCount(spec);
+  const board = deckBoardOf(spec).label;
+  const size = deckSheetOf(spec).id;
+  const out: string[] = [];
+  if (c) out.push(`Replace damaged roof decking with ${board} — ${c.unit === "each" ? `${c.sheets} sheet${c.sheets === 1 ? "" : "s"} (${Math.round(c.sqft)} sq ft)` : `${Math.round(c.sqft)} sq ft (about ${c.sheets} sheets)`} included.`);
+  if (spec.plywoodQuote && deckExposed) {
+    const r = plywoodRate(spec);
+    if (r.sheet > 0) {
+      out.push(
+        c
+          ? `Any more damaged decking found once the old roof is off is replaced at ${money2(r.sheet)} per ${size} sheet (${money2(r.sqft)} per sq ft), installed — only what is replaced is charged.`
+          : `Damaged decking found once the old roof is off is replaced with ${board} at ${money2(r.sheet)} per ${size} sheet (${money2(r.sqft)} per sq ft), installed — only what is replaced is charged, and it is not in the price above.`,
+      );
+    }
+  }
+  return out;
+}
+
+/** The contractor's note (never the client's): plywood quoted, not priced. */
+function plywoodNote(spec: RoofPackageSpec, deckExposed: boolean): string[] {
+  if (plywoodCount(spec) || !spec.plywoodQuote || !deckExposed) return [];
+  const r = plywoodRate(spec);
+  return r.sheet > 0 ? [`Deck replacement is not in the total: the proposal quotes ${deckBoardOf(spec).label} at ${money2(r.sheet)} a ${deckSheetOf(spec).id} sheet (${money2(r.sqft)}/sq ft) installed for any damaged decking found at tear-off.`] : [];
+}
+
 export function estimateEdges(facts: RoofFacts): { eaveFt: number; rakeFt: number; ridgeFt: number; hipFt: number; valleyFt: number | null } | null {
+  const runs = edgeRuns(facts);
+  return runs ? { ...runs, valleyFt: estimateValleys(facts)?.totalFt ?? null } : null;
+}
+
+/** Eave, rake, ridge and hip from the footprint and the shape — the edges without the valleys (which read these). */
+function edgeRuns(facts: RoofFacts): { eaveFt: number; rakeFt: number; ridgeFt: number; hipFt: number } | null {
   // A zero footprint or perimeter is "not known", never a real zero — a 0
   // here once turned the whole estimate into NaN (review, 2026-09-14).
   const main = facts.pitchFamilies.filter((f) => f.share > 0).reduce<{ pitch12: number; share: number } | null>((a, f) => (a == null || f.share > a.share ? f : a), null);
@@ -317,7 +428,6 @@ export function estimateEdges(facts: RoofFacts): { eaveFt: number; rakeFt: numbe
     rakeFt: r1(rakePlan * rakeSlope),
     ridgeFt: r1(flat ? 0 : hip ? Math.max(0, L - W) : gable ? L : 0.7 * L),
     hipFt: r1(flat ? 0 : (hip ? 2.83 * W : gable ? 0 : 1.4 * W) * hipSlope),
-    valleyFt: estimateValleys(facts)?.totalFt ?? null,
   };
 }
 
@@ -347,6 +457,12 @@ export function underlaymentForFamily(family: RoofFamily, lists: CatalogLists): 
  * the shape's own base, no outline, or a body too small or too large for the
  * one-rectangle-with-wings model.
  *
+ * Since 2026-10-13 the OUTLINE is read first (valleysFromOutline): an inside
+ * corner of the footprint is a valley whatever the facet count says, so an
+ * L- or T-shaped house gets its valleys even when the facet count is missing
+ * or scored low. The facet model stands for footprints with no inside corner
+ * (dormers, cross gables) and for roofs with no outline at all.
+ *
  * A DELIVERED report's valley footage always wins over this (defaultSpecWith
  * takes `facts.measured` first). The 20-facet ceiling this once carried is
  * gone (audit 2026-09-17): a 22-facet roof with no report priced ZERO valleys
@@ -355,11 +471,25 @@ export function underlaymentForFamily(family: RoofFamily, lists: CatalogLists): 
  * complex, so the count stays capped at 12 and the run at half the perimeter,
  * and the lines carry the "estimated" basis that says so.
  */
-export function estimateValleys(facts: RoofFacts): { count: number; ftEach: number; totalFt: number } | null {
+export function estimateValleys(facts: RoofFacts): { count: number; ftEach: number; totalFt: number; rough?: boolean } | null {
   if (isFlatRoof(facts)) return { count: 0, ftEach: 0, totalFt: 0 };
-  const fc = facts.facetCount;
+  const main = facts.pitchFamilies.filter((f) => f.share > 0).reduce<{ pitch12: number; share: number } | null>((a, f) => (a == null || f.share > a.share ? f : a), null);
+  const t = Math.max(0, Math.min(20, main?.pitch12 ?? 5)) / 12;
+  const factor = Math.sqrt(2 + t * t);
+  // THE OUTLINE FIRST (owner, 2026-10-13: "the roofing estimator never
+  // calculates valleys"): every inside corner of the footprint is a valley,
+  // whatever the facet count or its score. A footprint with no inside corner
+  // says nothing about dormers and cross gables — the facet model below does.
+  const fromOutline = valleysFromOutlines(facts.outlines, t);
+  if (fromOutline && fromOutline.count > 0) return fromOutline;
+
+  const fc = facts.facetCount ?? facts.facetCountEstimated ?? null;
   if (fc == null || !Number.isFinite(fc) || fc < 1) return null;
-  if (facts.facetConfidence != null && facts.facetConfidence < 0.5) return null;
+  // A count the provider scored low is still a count (owner, 2026-10-13: "at least you can make a rough estimate …
+  // it's about the length of the ridge and hips"). It used to give no valleys at all — a dash on a roof that plainly
+  // has them. Now it gives a ROUGH figure, kept no longer than the ridges and hips together: on a hipped house every
+  // wing adds about as much valley as hip.
+  const rough = facts.facetCount != null && facts.facetConfidence != null && facts.facetConfidence < 0.5;
   const A = facts.footprintSqft != null && facts.footprintSqft > 0 ? facts.footprintSqft : null;
   const P = facts.perimeterFt != null && facts.perimeterFt > 0 ? facts.perimeterFt : A != null ? 4 * Math.sqrt(A) * 1.05 : null;
   if (A == null && P == null) return null;
@@ -381,17 +511,130 @@ export function estimateValleys(facts: RoofFacts): { count: number; ftEach: numb
   const n = Math.max(0, Math.min(12, body.pairs ? 2 * Math.round(extra / 2.5) : Math.round(extra * body.rate)));
   if (n === 0) return { count: 0, ftEach: 0, totalFt: 0 };
 
-  const main = facts.pitchFamilies.filter((f) => f.share > 0).reduce<{ pitch12: number; share: number } | null>((a, f) => (a == null || f.share > a.share ? f : a), null);
-  const t = Math.max(0, Math.min(20, main?.pitch12 ?? 5)) / 12;
-  const factor = Math.sqrt(2 + t * t);
   const primaries = Math.min(2, n - (n % 2));
   const secondaries = n - primaries;
   let plan = primaries * (Math.min(0.3 * W, 15) + 1.5) + secondaries * (Math.min(0.16 * W, 8) + 0.5);
   if (P != null) plan = Math.min(plan, 0.5 * P);
-  const ftEach = r1((plan * factor) / n);
-  const totalFt = r1(n * ftEach);
+  let ftEach = r1((plan * factor) / n);
+  let totalFt = r1(n * ftEach);
   if (!Number.isFinite(ftEach) || !Number.isFinite(totalFt)) return null;
+  if (rough) {
+    const e = edgeRuns(facts);
+    const cap = e ? e.ridgeFt + e.hipFt : 0;
+    if (cap > 0 && totalFt > cap) {
+      ftEach = r1(cap / n);
+      totalFt = r1(n * ftEach);
+    }
+    return { count: n, ftEach, totalFt, rough: true };
+  }
   return { count: n, ftEach, totalFt };
+}
+
+/* ── Valleys read off the footprint (2026-10-13) ─────────────────────── */
+
+const EARTH_FT = 20925646.3;
+const D2R = Math.PI / 180;
+type Pt = [number, number];
+
+/** A lat/lng ring in local feet about its first point (east, north); a closing repeat of the first point dropped. */
+export function outlineFeet(ring: ReadonlyArray<{ lat: number; lng: number }>): Pt[] {
+  if (ring.length < 3) return [];
+  const lat0 = ring[0].lat, lng0 = ring[0].lng;
+  const k = Math.cos(lat0 * D2R);
+  const pts: Pt[] = ring.map((p) => [(p.lng - lng0) * D2R * k * EARTH_FT, (p.lat - lat0) * D2R * EARTH_FT]);
+  const a = pts[0], b = pts[pts.length - 1];
+  if (pts.length > 3 && Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.5) pts.pop();
+  return pts;
+}
+
+/**
+ * The footprint with its noise taken out: no edge under `minEdgeFt` (a jog in
+ * a traced outline is not a wing), no corner that turns less than
+ * `minTurnDeg` (a bend in a straight wall is not a corner).
+ */
+export function simplifyOutline(pts: Pt[], minEdgeFt = 2.5, minTurnDeg = 10): Pt[] {
+  const out = pts.slice();
+  const len = (a: Pt, b: Pt) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  for (let guard = 0; guard < 200 && out.length > 3; guard++) {
+    let changed = false;
+    // The shortest edge under the floor goes: its far end is dropped.
+    let shortest = -1, shortLen = minEdgeFt;
+    for (let i = 0; i < out.length; i++) {
+      const l = len(out[i], out[(i + 1) % out.length]);
+      if (l < shortLen) { shortLen = l; shortest = i; }
+    }
+    if (shortest >= 0) { out.splice((shortest + 1) % out.length, 1); changed = true; }
+    if (!changed) {
+      // The straightest corner under the floor goes.
+      let straightest = -1, straightDeg = minTurnDeg;
+      for (let i = 0; i < out.length; i++) {
+        const a = out[(i - 1 + out.length) % out.length], b = out[i], c = out[(i + 1) % out.length];
+        const d1: Pt = [b[0] - a[0], b[1] - a[1]], d2: Pt = [c[0] - b[0], c[1] - b[1]];
+        const deg = Math.abs(Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1])) / D2R;
+        if (deg < straightDeg) { straightDeg = deg; straightest = i; }
+      }
+      if (straightest >= 0) { out.splice(straightest, 1); changed = true; }
+    }
+    if (!changed) break;
+  }
+  return out.length >= 3 ? out : [];
+}
+
+/**
+ * The valleys one footprint makes. A valley forms at every INSIDE corner of
+ * the outline — where a wing meets the body — and runs up from the eave at
+ * that corner to where the narrower of the two ridges dies into the other
+ * slope: a plan run of half the narrower width (the edges one step past the
+ * corner on each side), plus a foot of eave, along the hip-and-valley
+ * diagonal √(2 + (pitch/12)²). A corner the outline turns less than 25°, or
+ * a notch under 4 ft, is not a wing. At most twelve.
+ */
+export function valleysFromOutline(ring: ReadonlyArray<{ lat: number; lng: number }>, pitch12 = 5): { count: number; ftEach: number; totalFt: number; runs: number[] } | null {
+  const pts = simplifyOutline(outlineFeet(ring));
+  if (pts.length < 4) return pts.length >= 3 ? { count: 0, ftEach: 0, totalFt: 0, runs: [] } : null;
+  const n = pts.length;
+  let area2 = 0;
+  for (let i = 0; i < n; i++) area2 += pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1];
+  if (Math.abs(area2) < 50) return null;
+  const ccw = area2 > 0;
+  const t = Math.max(0, Math.min(20, pitch12)) / 12;
+  const factor = Math.sqrt(2 + t * t);
+  const at = (i: number) => pts[((i % n) + n) % n];
+  const len = (a: Pt, b: Pt) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const runs: number[] = [];
+  for (let i = 0; i < n && runs.length < 12; i++) {
+    const a = at(i - 1), b = at(i), c = at(i + 1);
+    const d1: Pt = [b[0] - a[0], b[1] - a[1]], d2: Pt = [c[0] - b[0], c[1] - b[1]];
+    const cross = d1[0] * d2[1] - d1[1] * d2[0];
+    const deg = Math.abs(Math.atan2(cross, d1[0] * d2[0] + d1[1] * d2[1])) / D2R;
+    const inside = ccw ? cross < 0 : cross > 0;
+    if (!inside || deg < 25) continue;
+    // The two bodies meeting here: the edge beyond the incoming one, and the edge beyond the outgoing one.
+    const w1 = len(at(i - 2), at(i - 1));
+    const w2 = len(at(i + 1), at(i + 2));
+    const w = Math.min(w1, w2);
+    if (w < 4) continue;
+    runs.push(Math.min(30, w / 2) + 1);
+  }
+  const lengths = runs.map((r) => r1(r * factor));
+  const totalFt = r1(lengths.reduce((s, v) => s + v, 0));
+  return { count: lengths.length, ftEach: lengths.length ? r1(totalFt / lengths.length) : 0, totalFt, runs: lengths };
+}
+
+/** Every outline's valleys together (the house and its ticked outbuildings). Null without a usable outline. */
+export function valleysFromOutlines(rings: ReadonlyArray<ReadonlyArray<{ lat: number; lng: number }>> | null | undefined, t: number): { count: number; ftEach: number; totalFt: number } | null {
+  if (!rings || !rings.length) return null;
+  let count = 0, totalFt = 0, any = false;
+  for (const ring of rings) {
+    const v = valleysFromOutline(ring, t * 12);
+    if (!v) continue;
+    any = true;
+    count += v.count;
+    totalFt += v.totalFt;
+  }
+  if (!any) return null;
+  count = Math.min(12, count);
+  return { count, ftEach: count ? r1(totalFt / count) : 0, totalFt: r1(totalFt) };
 }
 
 /**
@@ -553,6 +796,11 @@ export function defaultSpecWith(facts: RoofFacts, lists: CatalogLists, sys: Roof
     tearOffPerSqLayer: existing.tearOff,
     disposalPerSqLayer: existing.disposal,
     plywoodSheets: 0,
+    plywoodSqft: 0,
+    plywoodUnit: "sheet",
+    plywoodQuote: true,
+    plywoodBoardId: DECK_BOARDS[0].id,
+    plywoodSize: "4x8",
     plywoodEach: PLYWOOD_SHEET_EACH,
     plywoodLabor: PLYWOOD_SHEET_LABOR,
     nailsPerSq: NAILS_PER_SQ,
@@ -806,6 +1054,11 @@ export function withSystem(spec: RoofPackageSpec, sys: RoofSystem, facts: RoofFa
       commercial: spec.commercial,
       flat: { ...fresh.flat, rates: spec.flat.rates, drainWork: spec.flat.drainWork, productionSqPerDay: spec.flat.productionSqPerDay },
       plywoodSheets: spec.plywoodSheets,
+      plywoodSqft: spec.plywoodSqft,
+      plywoodUnit: spec.plywoodUnit,
+      plywoodQuote: spec.plywoodQuote,
+      plywoodBoardId: spec.plywoodBoardId,
+      plywoodSize: spec.plywoodSize,
       cleanupLump: spec.cleanupLump,
       permitLump: spec.permitLump,
     };
@@ -1045,7 +1298,8 @@ function buildSteep(spec: RoofPackageSpec, facts: RoofFacts): BuiltPackage {
     if (!t || v.qty <= 0) continue;
     materials.push({ name: t.label, quantity: t.unit === "each" ? Math.ceil(v.qty) : r1(v.qty), unit: t.unit, unitPrice: v.each, kind: "material", basis: t.id === "ridge" ? edgeB : "entered" });
   }
-  if (spec.plywoodSheets > 0) materials.push({ name: "Roof deck replacement · ½ in plywood, 4 × 8 sheets", quantity: spec.plywoodSheets, unit: "each", unitPrice: spec.plywoodEach, kind: "material", basis: "entered" });
+  const ply = plywoodLines(spec);
+  if (ply) materials.push({ ...ply.material, kind: "material", basis: "entered" });
   if (spec.nailsPerSq > 0) materials.push({ name: fastenersName(family), quantity: sqWaste, unit: "square", unitPrice: spec.nailsPerSq, kind: "material", basis: facts.squaresBasis });
   if (spec.sealantPerSq > 0) materials.push({ name: "Sealant, caulk & pipe collars", quantity: sqWaste, unit: "square", unitPrice: spec.sealantPerSq, kind: "material", basis: facts.squaresBasis });
   for (const c of spec.custom) {
@@ -1109,7 +1363,7 @@ function buildSteep(spec: RoofPackageSpec, facts: RoofFacts): BuiltPackage {
     if (!t || v.qty <= 0 || v.labor <= 0) continue;
     labor.push({ name: `${t.label} · install`, quantity: t.unit === "each" ? Math.ceil(v.qty) : r1(v.qty), unit: t.unit, unitPrice: v.labor, kind: "labor", basis: t.id === "ridge" ? edgeB : "entered" });
   }
-  if (spec.plywoodSheets > 0) labor.push({ name: "Roof deck replacement · install", quantity: spec.plywoodSheets, unit: "each", unitPrice: spec.plywoodLabor, kind: "labor", basis: "entered" });
+  if (ply) labor.push({ ...ply.labor, kind: "labor", basis: "entered" });
   const steep = families.some((f) => displayPitch12(f.pitch12) >= STEEP_PITCH);
   // Fascia and the gutters that hang on it (2026-09-19).
   if (fasciaFt > 0 && spec.fasciaLaborPerFt > 0) {
@@ -1213,7 +1467,8 @@ function buildSteep(spec: RoofPackageSpec, facts: RoofFacts): BuiltPackage {
   const scope: string[] = [];
   if (spec.tearOffLayers > 0) scope.push(`Remove the existing roof${spec.tearOffLayers > 1 ? ` (${spec.tearOffLayers} layers)` : ""} down to the deck and haul away the debris.`);
   else scope.push("Install the new roof over the existing layer.");
-  if (spec.plywoodSheets > 0) scope.push("Replace damaged roof decking with ½ in plywood.");
+  scope.push(...plywoodScope(spec, spec.tearOffLayers > 0));
+  assumptions.push(...plywoodNote(spec, spec.tearOffLayers > 0));
   const und = spec.underlaymentId !== "none" && spec.underlaymentName.trim() ? spec.underlaymentName.trim().toLowerCase() : null;
   scope.push(`Install ${sysName}${und ? ` over ${und}` : ""}${spec.iceWater !== "none" && spec.underlaymentId !== "peel_stick" ? `, with ice & water shield at the ${spec.iceWater === "full" ? "full deck" : spec.iceWater === "eaves" ? "eaves" : "eaves and valleys"}` : ""}.`);
   const edgeWork = [spec.dripEdgeOn && perimeter > 0 ? "drip edge" : null, spec.starterOn && takesStarter(family) && perimeter > 0 ? "starter" : null, spec.eaveFt > 0 && (family === "tile" || family === "slate") ? "eave riser" : null, spec.eaveFt > 0 && family === "metal" ? "eave trim" : null, capFt > 0 && spec.capPerFt > 0 ? (family === "metal" ? "ridge and hip trim" : "hip and ridge cap") : null].filter(Boolean);
@@ -1477,9 +1732,10 @@ function buildLowSlope(spec: RoofPackageSpec, facts: RoofFacts): BuiltPackage {
   }
 
   // ── Shared extras ──
-  if (spec.plywoodSheets > 0) {
-    mat({ name: "Roof deck replacement · ½ in plywood, 4 × 8 sheets", quantity: spec.plywoodSheets, unit: "each", unitPrice: spec.plywoodEach, basis: "entered" });
-    lab({ name: "Roof deck replacement · install", quantity: spec.plywoodSheets, unit: "each", unitPrice: spec.plywoodLabor, basis: "entered", wageable: true });
+  const plyF = plywoodLines(spec);
+  if (plyF) {
+    mat({ ...plyF.material, basis: "entered" });
+    lab({ ...plyF.labor, basis: "entered", wageable: true });
   }
   if (spec.cleanupLump > 0) lab({ name: "Cleanup & site restoration", quantity: 1, unit: "lot", unitPrice: spec.cleanupLump, basis: "entered", wageable: true });
   if (spec.permitLump > 0) lab({ name: "Permit & inspection", quantity: 1, unit: "lot", unitPrice: spec.permitLump, basis: "entered", residentialPermit: true, passThrough: true });
@@ -1533,7 +1789,8 @@ function buildLowSlope(spec: RoofPackageSpec, facts: RoofFacts): BuiltPackage {
   } else {
     if (tearing) scope.push(`Remove the existing roof down to the deck and haul away the debris.`);
     else if (rule.recover) scope.push("Prepare the existing roof to be covered.");
-    if (spec.plywoodSheets > 0) scope.push("Replace damaged roof decking.");
+    scope.push(...plywoodScope(spec, tearing));
+    assumptions.push(...plywoodNote(spec, tearing));
     if (f.wetInsulationSqft > 0) scope.push("Cut out and replace wet insulation.");
     const boardsWork = [insOn ? `${insLabel.split(" · ")[0].toLowerCase()} insulation` : null, coverOn ? `a ${coverLabel.split(" · ")[0].toLowerCase()} cover board` : null, boards && f.taperedSqft > 0 ? "tapered insulation and crickets to drain" : null].filter(Boolean);
     if (boardsWork.length) scope.push(`Install ${boardsWork.join(", ").replace(/, ([^,]*)$/, " and $1")}.`);

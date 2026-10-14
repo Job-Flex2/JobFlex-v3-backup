@@ -26,6 +26,24 @@
 .kpi[data-tone="good"] .kpiValue { color: var(--rep-green); }
 .kpi[data-tone="trial"] .kpiValue { color: var(--rep-amber); }
 .kpiNote { font: 600 11px/1.45 var(--rep-mono); color: var(--rep-muted); overflow-wrap: anywhere; }
+/* The two kinds of trial (2026-10-13): the switch under the numbers, and the strip beside them. The button rules
+   are written `.cohortSeg .cohortBtn` on purpose: the admin shell styles every `button` at (0,1,1), which outranks a
+   lone class — the chart's own `.seg button` has the same weight and so had kept its mono face. */
+.cohortBar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; flex-wrap: wrap; padding: 10px 14px; border-top: 2px solid var(--rep-ink); background: var(--rep-paper); }
+.cohortSeg { display: inline-flex; border: 1.5px solid var(--rep-ink); border-radius: 2px; background: #fff; }
+.cohortSeg .cohortBtn { appearance: none; border: 0; border-right: 1.5px solid var(--rep-ink); background: transparent; padding: 8px 14px; min-height: 36px; font: 800 11px var(--rep-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--rep-ink); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.cohortSeg .cohortBtn:last-child { border-right: 0; }
+.cohortSeg .cohortBtn small { font: 800 11px var(--rep-mono); letter-spacing: 0; padding: 1px 6px; border-radius: 9px; background: var(--rep-paper); color: var(--rep-muted); }
+.cohortSeg .cohortOn { background: var(--rep-ink); color: #fff; }
+.cohortSeg .cohortOn small { background: rgba(255, 255, 255, .18); color: #fff; }
+.cohortSeg .cohortBtn:focus-visible { outline: 2px solid var(--rep-blue); outline-offset: -2px; }
+.cohortNow { font: 600 12px/1.5 var(--rep-mono); color: var(--rep-muted); min-width: 0; }
+.cohortNow b { color: var(--rep-ink); }
+.cohortNow[data-cohort-now="nocard"] b { color: var(--rep-amber); }
+.cohortTbl th { font: 700 10.5px var(--rep-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--rep-muted); padding: 0 14px 8px 0; border-bottom: 2px solid var(--rep-ink); }
+.cohortTbl th:first-child { width: 42%; }
+.cohortTbl td small { display: block; }
+.nowTag { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 9px; background: var(--rep-ink); color: #fff; font: 800 10px var(--rep-mono); letter-spacing: .08em; }
 
 .card { padding: 18px 20px 20px; background: #fff; border: 2px solid var(--rep-ink); border-radius: 2px; min-width: 0; }
 .cardHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-bottom: 12px; }
@@ -123,6 +141,10 @@
   .leadFacts b { font-size: 24px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi { padding: 12px 14px; }
+  .cohortBar { padding: 10px 12px; }
+  .cohortSeg { width: 100%; }
+  .cohortSeg .cohortBtn { flex: 1 1 0; justify-content: center; padding: 8px 6px; min-height: 44px; }
+  .cohortTbl th:first-child { width: auto; }
   .kpi:nth-child(3n) { border-right: 1px solid var(--rep-line); }
   .kpi:nth-child(2n) { border-right: 0; }
   .kpi:nth-child(-n + 4) { border-bottom: 1px solid var(--rep-line); }
@@ -140,4 +162,10 @@
   .seg button { flex: 1 1 auto; min-height: 40px; }
   .tbl td:first-child { white-space: normal; }
   .sub { display: block; }
+}
+/* A phone: the three choices stack, each a full-width row. */
+@media (max-width: 520px) {
+  .cohortSeg { flex-direction: column; }
+  .cohortSeg .cohortBtn { border-right: 0; border-bottom: 1.5px solid var(--rep-ink); }
+  .cohortSeg .cohortBtn:last-child { border-bottom: 0; }
 }
