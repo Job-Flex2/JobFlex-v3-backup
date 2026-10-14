@@ -26,8 +26,9 @@ export function DeskStatus({ desk, registration, onNumber }: { desk: DeskSetting
   const player = useRef<HTMLAudioElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const number = registration?.number ?? null;
-  const calls = registration?.calls ?? null;
+  // The number it bought, else the line JobFlex assigned to it (calls only; texting keeps its own).
+  const number = registration?.number ?? desk.assigned?.number ?? null;
+  const calls = registration?.calls ?? (desk.assigned ? { on: true, go: desk.assigned.go, phone: desk.assigned.phone } : null);
   const pickVoice = async (next: DeskVoice) => {
     if (next === voice || busy) return;
     const prev = voice;

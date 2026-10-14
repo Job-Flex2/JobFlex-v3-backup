@@ -45,7 +45,7 @@ export type PlatformNumber = {
   answeredForId: string | null;
   assigned: boolean;
 };
-export type DeskReadiness = { items: ReadinessItem[]; numbers: DeskNumberRow[]; platform: PlatformNumber[]; companies: Array<{ id: string; name: string }>; plans: DeskPlanRow[]; voiceUrl: string; model: string; steps: string[] };
+export type DeskReadiness = { items: ReadinessItem[]; numbers: DeskNumberRow[]; platform: PlatformNumber[]; companies: Array<{ id: string; name: string; mine: boolean }>; plans: DeskPlanRow[]; voiceUrl: string; model: string; steps: string[] };
 
 /** Where Twilio must send a call: TWILIO_APP_URL when set (lib/aiDesk/calls twilioBase), else this deployment. */
 export async function voiceWebhookBase(): Promise<string> {
@@ -74,7 +74,8 @@ async function probeVoiceServer(): Promise<ReadinessItem> {
   }
 }
 
-export async function deskReadiness(): Promise<DeskReadiness> {
+/** @param adminUserId the admin looking — the companies they belong to are marked "(your account)" in the picker. */
+export async function deskReadiness(adminUserId: string | null = null): Promise<DeskReadiness> {
   const base = await voiceWebhookBase();
   const voiceUrl = `${base}/api/twilio/voice`;
   const openai = isOpenAIEnabled();
@@ -116,7 +117,11 @@ export async function deskReadiness(): Promise<DeskReadiness> {
   // when there is one, the approved toll-free in the messaging service) — a call to any of them
   // is answered for the first company (lib/aiDesk/calls companyForCall).
   let platform: PlatformNumber[] = [];
-  const companies = await db.organization.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }).catch(() => []);
+  const [companies, memberships] = await Promise.all([
+    db.organization.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }).catch(() => []),
+    adminUserId ? db.membership.findMany({ where: { userId: adminUserId }, select: { organizationId: true } }).catch(() => []) : Promise.resolve([]),
+  ]);
+  const mine = new Set(memberships.map((m) => m.organizationId));
   const companyName = new Map(companies.map((c) => [c.id, c.name || c.id]));
   if (client) {
     const settings = await twilioSettings().catch(() => null);
@@ -149,11 +154,16 @@ export async function deskReadiness(): Promise<DeskReadiness> {
   const firstLine = platform[0] ?? null;
 
   const pointed = numbers.filter((n) => n.webhook === "ok").length;
+  const assignedLines = platform.filter((p) => p.assigned);
   items.push({
     key: "numbers",
     label: "Company numbers",
-    state: numbers.length ? (numbers.some((n) => n.webhook === "wrong") ? "warn" : "ok") : "warn",
-    detail: numbers.length ? `${numbers.length} number${numbers.length === 1 ? "" : "s"} · ${pointed} pointed at the voice webhook${client ? "" : " (not checked: Twilio off)"}` : `No company has a number yet — Settings → Texting buys one (it takes calls the same day).${firstLine ? ` Until then, a call to the platform's own ${firstLine.number} is answered for ${firstLine.answeredFor ?? "the first company"}${firstLine.assigned ? "" : " (the oldest company — assign it below)"}.` : ""}`,
+    state: numbers.length ? (numbers.some((n) => n.webhook === "wrong") ? "warn" : "ok") : assignedLines.length ? "ok" : "warn",
+    detail: numbers.length
+      ? `${numbers.length} number${numbers.length === 1 ? "" : "s"} · ${pointed} pointed at the voice webhook${client ? "" : " (not checked: Twilio off)"}${assignedLines.length ? ` · ${assignedLines.length} of JobFlex's own assigned` : ""}`
+      : assignedLines.length
+        ? `No company bought a number yet; JobFlex's own ${assignedLines.map((p) => `${p.number} answers for ${p.answeredFor}`).join(", ")} — it shows on that company's AI desk and Phone pages.`
+        : `No company has a number yet — Settings → Texting buys one (it takes calls the same day).${firstLine ? ` Until then, a call to the platform's own ${firstLine.number} is answered for ${firstLine.answeredFor ?? "the first company"} (the oldest company — assign it below).` : ""}`,
   });
 
   // Each plan's included minutes: set in the plan editor, or the tier's default.
@@ -185,5 +195,5 @@ export async function deskReadiness(): Promise<DeskReadiness> {
   if (defaults.length) steps.push(`Set AI desk minutes on ${defaults.map((p) => p.name).join(", ")} in Plans (the defaults apply until then).`);
   steps.push("Rehearse without a phone: `cd voice && OPENAI_API_KEY=… node test/live.mjs` — the real OpenAI realtime API, a scripted caller, the desk's voice saved to a WAV.");
   steps.push("Then the real thing: call a company's number from your phone. The call appears on its Phone page within a minute, with what the desk did; then try \"Test it here\" in Settings → AI desk.");
-  return { items, numbers, platform, companies: companies.map((c) => ({ id: c.id, name: c.name || c.id })), plans, voiceUrl, model: voiceModel(), steps };
+  return { items, numbers, platform, companies: companies.map((c) => ({ id: c.id, name: c.name || c.id, mine: mine.has(c.id) })), plans, voiceUrl, model: voiceModel(), steps };
 }

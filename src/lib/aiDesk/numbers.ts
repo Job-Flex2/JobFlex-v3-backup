@@ -47,3 +47,9 @@ export async function saveDeskSettings(organizationId: string, settings: DeskSet
 export async function attachVoiceToNumber(client: { incomingPhoneNumbers: (sid: string) => { update: (o: { voiceUrl: string; voiceMethod: string }) => Promise<unknown> } }, numberSid: string, base: string): Promise<void> {
   await client.incomingPhoneNumbers(numberSid).update({ voiceUrl: `${base}/api/twilio/voice`, voiceMethod: "POST" });
 }
+
+/** The numbers routed to this company by the index alone — JobFlex's own lines assigned to it on /admin/health (no registration of its own). */
+export async function numbersAssignedTo(organizationId: string): Promise<string[]> {
+  const rows = await db.syncState.findMany({ where: { key: { startsWith: VOICE_KEY }, cursor: organizationId }, select: { key: true }, take: 10 }).catch(() => []);
+  return rows.map((r) => r.key.slice(VOICE_KEY.length));
+}

@@ -4,25 +4,28 @@ import { db } from "@/lib/db";
 import { isPageLocked } from "@/lib/customPageAccess";
 import { readRegistration } from "@/lib/sms/registration";
 import type { PhoneDeskStrip } from "@/components/v3/phone-blueprint/phone-data";
-import { readDeskSettings } from "./numbers";
+import { numbersAssignedTo, readDeskSettings } from "./numbers";
 import { readDeskUse } from "./usage";
 import { deskBalanceFor } from "./minutes";
 import { voiceServerConfigured } from "./voiceToken";
 import { callsGo, minutesLeftWords, minutesOf, prettyPhone } from "./shared";
 
 export async function deskStripFor(organizationId: string): Promise<PhoneDeskStrip> {
-  const [org, reg, settings, locked, use, balance] = await Promise.all([
+  const [org, reg, settings, locked, use, balance, assigned] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId }, select: { phone: true } }),
     readRegistration(organizationId).catch(() => null),
     readDeskSettings(organizationId),
     isPageLocked(organizationId, "phone").catch(() => true),
     readDeskUse(organizationId),
     deskBalanceFor(organizationId),
+    numbersAssignedTo(organizationId),
   ]);
   const companyPhone = org?.phone?.trim() || null;
+  // The number it bought, else a line JobFlex assigned to it on /admin/health.
+  const number = reg?.number ?? assigned[0] ?? null;
   return {
-    number: reg?.number ? prettyPhone(reg.number) : null,
-    on: Boolean(reg?.number && reg.voiceOnAt),
+    number: number ? prettyPhone(number) : null,
+    on: Boolean(reg?.number ? reg.voiceOnAt : assigned[0]),
     left: minutesLeftWords(balance),
     out: balance.out,
     low: balance.low,

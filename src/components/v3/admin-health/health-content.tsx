@@ -173,7 +173,8 @@ function PointWebhookButton({ numberSid }: { numberSid: string }) {
 
 /** The platform's own line: which company its calls reach — the picker and its save. */
 function AssignLine({ line, companies }: { line: DeskReadiness["platform"][number]; companies: DeskReadiness["companies"] }) {
-  const [orgId, setOrgId] = useState(line.answeredForId ?? "");
+  // Starts on the assignment when there is one — never on the fallback company, so one click cannot hand the line to a stranger.
+  const [orgId, setOrgId] = useState(line.assigned ? (line.answeredForId ?? "") : "");
   const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
   const save = async (id: string) => {
@@ -198,16 +199,17 @@ function AssignLine({ line, companies }: { line: DeskReadiness["platform"][numbe
       <label>
         answers for{" "}
         <select value={orgId} disabled={state === "busy"} onChange={(e) => setOrgId(e.target.value)} aria-label="The company this line answers for">
-          <option value="">— the oldest company (no assignment) —</option>
+          <option value="">— choose a company —</option>
           {companies.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
+              {c.mine ? " (your account)" : ""}
             </option>
           ))}
         </select>
       </label>{" "}
-      <button type="button" className="btn btn-ghost btn--sm" disabled={state === "busy" || orgId === (line.answeredForId ?? "") && line.assigned} onClick={() => void save(orgId)} data-assign-save>
-        {state === "busy" ? "Saving…" : line.assigned && orgId === line.answeredForId ? "Assigned" : "Assign"}
+      <button type="button" className="btn btn-ghost btn--sm" disabled={state === "busy" || (!orgId && !line.assigned) || (line.assigned && orgId === line.answeredForId)} onClick={() => void save(orgId)} data-assign-save>
+        {state === "busy" ? "Saving…" : line.assigned && orgId === line.answeredForId ? "Assigned" : line.assigned && !orgId ? "Remove the assignment" : "Assign"}
       </button>
       {msg ? <span className={state === "error" ? h.rowErr : "chip ok"}>{msg}</span> : null}
     </div>

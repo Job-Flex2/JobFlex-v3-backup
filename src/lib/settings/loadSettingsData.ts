@@ -418,16 +418,20 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
   const { factsFor } = await import("@/lib/aiDesk/profile");
   const { readDeskUse } = await import("@/lib/aiDesk/usage");
   const { deskMinutesView } = await import("@/lib/aiDesk/packs");
+  const { numbersAssignedTo } = await import("@/lib/aiDesk/numbers");
   const canManage = ["OWNER", "ADMIN", "MANAGER"].includes(role);
-  const [settings, facts, phoneLocked, use, minutes] = await Promise.all([
+  const [settings, facts, phoneLocked, use, minutes, assignedNumbers] = await Promise.all([
     readDeskSettings(organizationId).catch(() => null),
     companyFacts(organizationId).catch(() => null),
     isPageLocked(organizationId, "phone").catch(() => true),
     readDeskUse(organizationId),
     deskMinutesView(organizationId),
+    numbersAssignedTo(organizationId),
   ]);
-  const { parseDeskSettings } = await import("@/lib/aiDesk/shared");
+  const { callsGo, parseDeskSettings, prettyPhone } = await import("@/lib/aiDesk/shared");
   const d = settings ?? parseDeskSettings(null);
+  // A line JobFlex assigned to this company on /admin/health: its number for calls, with no registration of its own.
+  const assigned = assignedNumbers[0] ? { number: prettyPhone(assignedNumbers[0]), go: callsGo({ mode: d.mode, assistantOnPlan: !phoneLocked, companyPhone: facts?.phone ?? null }), phone: facts?.phone ?? null } : null;
   return {
     canManage,
     aiConfigured: isOpenAIEnabled(),
@@ -436,6 +440,7 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
     voice: d.voice,
     use,
     minutes,
+    assigned,
     brief: d.brief,
     profile: d.profile,
     profileUpdatedAt: d.profileUpdatedAt,
