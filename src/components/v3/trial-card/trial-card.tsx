@@ -24,6 +24,7 @@ import { TRIAL_CAP_NOUN, TRIAL_CAP_TITLE, trialCapAllowance, type TrialCapKey } 
 import { metaTrack, newEventId } from "@/lib/metaPixel";
 import { TRIAL_NOTICE_DAYS, trialDismissCookie, trialNoticeDismissed, trialNoticeStep } from "@/lib/trialNotice";
 import s from "./trial-card.module.css";
+import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 
 const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
@@ -193,6 +194,16 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
   );
   if (pathname?.startsWith("/dashboard/trial") || dismissed) return null;
   if (only === "dock") return dock;
+  // Cancelled during the trial: the switch to Free's own plate, the one every
+  // page that shows the plan draws (components/billing/FreeSwitch).
+  if (toFree) {
+    return (
+      <>
+        {dock}
+        <FreeSwitchNotice className={s.freeRibbon} planName={view.planName} at={view.endsAt} canKeep={isOwner} />
+      </>
+    );
+  }
   return (
     <>
     {dock}
@@ -202,10 +213,6 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
         {ended ? (
           <>
             <b>Your trial ended — you&rsquo;re on Free.</b> <span>Pick a plan to get {view.planName} back.</span>
-          </>
-        ) : toFree ? (
-          <>
-            <b>Your plan switches to Free on {switchDay}.</b> <span>Nothing is charged.</span>
           </>
         ) : view.hasCard ? (
           <>
@@ -221,9 +228,7 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
           </>
         )}
       </p>
-      {toFree ? (
-        action
-      ) : view.hasCard && !ended ? null : isOwner ? (
+      {view.hasCard && !ended ? null : isOwner ? (
         action
       ) : early ? null : (
         <span className={s.ribbonText}>

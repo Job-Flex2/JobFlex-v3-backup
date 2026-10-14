@@ -51,8 +51,11 @@
 .ribbonText.ribbonText b { font-weight: 800; }
 .ribbonText.ribbonText span { color: var(--ink-muted); }
 
-/* ── Buttons (the Meta card's: DESIGN.md working example) ─── */
-.button.button {
+/* ── Buttons (the Meta card's: DESIGN.md working example) ───
+   Three classes: a page's own reset of bare buttons and links inside its
+   content (`.bp .content button`, 0,2,1) took the fill off this one where the
+   ribbons and the switch-to-Free plate sit inside it. */
+.button.button.button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -71,10 +74,10 @@
   cursor: pointer;
   transition: background-color 160ms var(--ease-out);
 }
-.button.button:hover:not(:disabled) { background: var(--accent-ink); }
-.button.button:disabled { opacity: 0.55; cursor: not-allowed; }
-.button.button[aria-busy="true"] { cursor: progress; }
-.button.button:focus-visible,
+.button.button.button:hover:not(:disabled) { background: var(--accent-ink); }
+.button.button.button:disabled { opacity: 0.55; cursor: not-allowed; }
+.button.button.button[aria-busy="true"] { cursor: progress; }
+.button.button.button:focus-visible,
 .quiet.quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .quiet.quiet {
   display: inline-flex;
@@ -232,8 +235,11 @@
    the payment ribbon's); a dock that can be dismissed runs the full width
    instead — see .dockWide below. */
 .dock.dock { display: none; }
+/* The switch to Free's plate in the ribbon's place (components/billing/FreeSwitch). */
+.freeRibbon.freeRibbon { margin-bottom: 20px; }
 @media (max-width: 768px) {
   .ribbon.ribbon { display: none; }
+  .freeRibbon.freeRibbon.freeRibbon { display: none; }
   .dock.dock {
     position: fixed;
     left: 8px;
@@ -280,7 +286,7 @@
   .actions.actions .button.button { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .button.button,
+  .button.button.button,
   .dismiss.dismiss { transition: none; }
 }
 /* The win-back's offer line on the ended sheet (2026-10-08). */

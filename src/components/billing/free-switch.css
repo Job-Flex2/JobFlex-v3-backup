@@ -4,64 +4,47 @@
    a portal on <body>. Tokens only (globals.css); selectors carry two classes
    because both hosts reset bare buttons at (0,1,1). */
 
-/* ── The notice: "Your plan switches to Free on <date>" + Keep ─────────── */
-.jffs {
+/* ── The notice: "Your plan switches to Free on <date>" + Keep ───────────
+   The dashboard's plate (owner, 2026-10-14): a 2px ink frame and a hard 3px
+   shadow, the current light ground, the warning as a 4px stripe on the left
+   (inset, so the frame stays one line). 8px above and below, 16px in from
+   the stripe and from the right; one row, centred. The text and the button
+   are the ribbons' own (trial-card.module.css .ribbonText / .button): the
+   button is 44px tall, so the plate is 60px inside and the button sits 8px
+   from its top and bottom. Under 600px the button drops under the text and
+   takes the plate's width. */
+.jffs.jffs {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  padding: 12px 14px;
-  border: 1.5px solid var(--amber, #b88420);
+  gap: 8px 16px;
+  min-width: 0;
+  padding: 8px 16px 8px 20px;
+  border: 2px solid var(--ink, #0a0a0a);
   border-radius: var(--r-sm, 2px);
   background: color-mix(in srgb, var(--amber, #b88420) 8%, var(--paper-deep, #fff));
-}
-.jffs .jffs-t {
-  flex: 1 1 220px;
-  min-width: 0;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.4;
+  box-shadow:
+    inset 4px 0 0 var(--amber, #b88420),
+    3px 3px 0 var(--ink, #0a0a0a);
   color: var(--ink, #0a0a0a);
+  /* The ribbon's text (trial-card.module.css .ribbon). */
+  font: 14px/1.4 var(--font-sans, system-ui);
 }
-.jffs .jffs-keep {
+.jffs.jffs .jffs-t {
+  margin: 0;
+}
+.jffs.jffs .jffs-keep {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 2px solid var(--accent, #1854a0);
-  border-radius: var(--r-sm, 2px);
-  background: var(--accent, #1854a0);
-  color: #fff;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    transform 0.12s var(--ease-out, cubic-bezier(0.22, 0.61, 0.36, 1)),
-    box-shadow 0.12s var(--ease-out, cubic-bezier(0.22, 0.61, 0.36, 1));
+  margin: 0;
 }
-.jffs .jffs-keep:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 var(--ink, #0a0a0a);
-}
-.jffs .jffs-keep:focus-visible {
-  outline: 2px solid var(--ink, #0a0a0a);
-  outline-offset: 2px;
-}
-.jffs .jffs-keep:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-@media (max-width: 560px) {
-  .jffs .jffs-keep {
-    width: 100%;
+@media (max-width: 600px) {
+  .jffs.jffs {
+    flex-wrap: wrap;
+  }
+  .jffs.jffs .jffs-t {
+    flex: 1 1 100%;
+  }
+  .jffs.jffs .jffs-keep {
+    flex: 1 1 100%;
   }
 }
 

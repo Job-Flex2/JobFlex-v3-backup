@@ -26,7 +26,7 @@ const PAGES = [
 ];
 const run = (cmd, args, cwd, timeout = 300000) => spawnSync(cmd, args, { cwd, encoding: "utf8", shell: process.platform === "win32", timeout, maxBuffer: 64 << 20 });
 // The browser checks over a production build (rebuilt when src/ moved on): their own clock.
-const SLOW = { "mobile-sweep.check.ts": 30 * 60_000, "signup-flow.check.ts": 20 * 60_000, "sidebar-motion.check.ts": 20 * 60_000 };
+const SLOW = { "free-plan.check.ts": 20 * 60_000, "mobile-sweep.check.ts": 30 * 60_000, "signup-flow.check.ts": 20 * 60_000, "sidebar-motion.check.ts": 20 * 60_000 };
 const rows = [];
 
 // Before anything runs — a check, a seed, a browser: a local dev database, and qa@acme.test in

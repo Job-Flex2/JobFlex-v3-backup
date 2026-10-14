@@ -34,6 +34,7 @@ import { toast } from "@/components/ui/Toast";
 import { ConfirmPlanChange } from "./ConfirmPlanChange";
 import "./confirm-plan-change.css";
 import "./free-switch.css";
+import ribbon from "@/components/v3/trial-card/trial-card.module.css";
 
 /** "until Nov 12, 2026", or the cycle in words when the date is not known. */
 const untilWords = (iso: string | null) => (iso ? longDate(iso) : "the end of the cycle you've already paid for");
@@ -80,10 +81,21 @@ export function FreeSwitchNotice({
 
   return (
     <>
-      <div className={"jffs" + (className ? ` ${className}` : "")} data-free-switch="">
-        <p className="jffs-t">{at ? `Your plan switches to Free on ${longDate(at)}` : "Your plan switches to Free at the end of this cycle"}</p>
+      {/* The dashboard's plate (owner, 2026-10-14): the ribbons' own text and
+          blue button (trial-card.module.css — PaymentRibbon, TrialRibbon). */}
+      {/* data-nest: the pages' root resets step around it (DESIGN.md, mobile notes). */}
+      <div className={"jffs" + (className ? ` ${className}` : "")} data-free-switch="" data-nest="">
+        <p className={`jffs-t ${ribbon.ribbonText}`}>
+          {at ? (
+            <>
+              Your plan switches to Free on <b>{longDate(at)}</b>
+            </>
+          ) : (
+            "Your plan switches to Free at the end of this cycle"
+          )}
+        </p>
         {canKeep ? (
-          <button type="button" className="jffs-keep" disabled={busy} onClick={() => { setErr(null); setAsk(true); }}>
+          <button type="button" className={`jffs-keep ${ribbon.button}`} disabled={busy} onClick={() => { setErr(null); setAsk(true); }}>
             {`Keep ${planName}`}
           </button>
         ) : null}

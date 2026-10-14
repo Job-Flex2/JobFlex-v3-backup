@@ -25,7 +25,15 @@
 //     company; a grant still running keeps its doors open;
 //   · the webhook writes what Stripe holds now, never the event's copy: when
 //     Stripe cannot be read the event is not applied and answers 500, so
-//     Stripe delivers it again (owner, 2026-10-14).
+//     Stripe delivers it again (owner, 2026-10-14);
+//   · the plate "Your plan switches to Free on <date>" + "Keep <plan>", in a
+//     production build (./_prod-server; QA_FREE_URL to use a running server)
+//     as qa@acme.test in QA Co — whose subscription row is lent for the run
+//     and put back: on Settings → Billing, Subscription, Plans & upgrade and
+//     the card-less trial's ribbon, at 1440 and 390, the text and the button
+//     lie wholly inside the plate, their centres within 1px of its own, the
+//     button 16px in from the right and 16px shorter than the plate; on a
+//     phone the button sits under the text across the plate.
 import { actAs, check, outcome, summary } from "./_actionHarness";
 import { randomBytes } from "node:crypto";
 import type Stripe from "stripe";
@@ -51,6 +59,8 @@ import { analyzeJobPhoto } from "../../src/actions/photoAnalysis";
 import * as tiles from "../../src/app/api/parcel-tiles/[z]/[x]/[y]/route";
 import * as stripeWebhook from "../../src/app/api/webhooks/stripe/route";
 import StripeSdk from "stripe";
+import type { ChildProcess } from "node:child_process";
+import { ensureBuild, playwright, startServer, stopServer } from "./_prod-server";
 
 const tag = `qa-free-${Date.now()}`;
 const rid = () => randomBytes(6).toString("hex");
@@ -133,6 +143,119 @@ async function setup(c: Co) {
   const job = await db.job.create({ data: { organizationId: c.org.id, title: `Job ${tag}` } });
   const photo = await db.jobPhoto.create({ data: { jobId: job.id, url: TINY_PNG, kind: "BEFORE" } });
   return { est: est.id, photo: photo.id };
+}
+
+/* ── THE PLATE, IN A BROWSER ─────────────────────────────────────────────── */
+const PLATE_PORT = Number(process.env.QA_FREE_PORT || 3317);
+const PLATE_GIVEN = process.env.QA_FREE_URL?.replace(/\/$/, "");
+const PLATE_BASE = PLATE_GIVEN || `http://localhost:${PLATE_PORT}`;
+
+/** The plate and its two children, in CSS pixels of the plate itself (the desk shell scales its page). */
+const MEASURE = `(() => {
+  const el = [...document.querySelectorAll("[data-free-switch]")].find((e) => e.getClientRects().length && getComputedStyle(e).display !== "none");
+  if (!el) return null;
+  const r = el.getBoundingClientRect(), k = r.width / el.offsetWidth || 1;
+  const bl = el.clientLeft, bt = el.clientTop;
+  const box = (n) => { if (!n) return null; const q = n.getBoundingClientRect(); return { l: (q.left - r.left) / k - bl, t: (q.top - r.top) / k - bt, w: q.width / k, h: q.height / k }; };
+  const p = el.querySelector(".jffs-t"), b = el.querySelector(".jffs-keep");
+  const range = document.createRange(); range.selectNodeContents(p);
+  const cs = getComputedStyle(el);
+  // A 2px frame drawn beside it, for what 2px computes to here (the desk shell zooms its page,
+  // and a border is snapped to whole device pixels).
+  const probe = document.createElement("div"); probe.style.border = "2px solid"; el.parentElement.appendChild(probe);
+  const ref2 = getComputedStyle(probe).borderTopWidth; probe.remove();
+  return { ref2, btnBg: b ? getComputedStyle(b).backgroundColor : null, inW: el.clientWidth, inH: el.clientHeight, text: box(p), textLines: new Set([...range.getClientRects()].map((x) => Math.round(x.top))).size, button: box(b),
+    bold: p && p.querySelector("b") ? p.querySelector("b").textContent : null, label: b ? b.textContent : null, border: cs.borderTopWidth + " " + cs.borderTopColor, zoom: el.currentCSSZoom || 1, shadow: cs.boxShadow };
+})()`;
+
+/** check(), answering whether it held. */
+const held = (name: string, ok: boolean, detail?: unknown) => { check(name, ok, detail); return ok; };
+
+type Box = { l: number; t: number; w: number; h: number };
+type Plate = { inW: number; inH: number; text: Box; textLines: number; button: Box | null; bold: string | null; label: string | null; border: string; shadow: string; zoom: number; ref2: string; btnBg: string | null };
+
+function judgePlate(where: string, m: Plate | null, phone: boolean) {
+  if (!held(`${where}: the plate is there`, !!m, "no [data-free-switch]")) return;
+  const p = m!, t = p.text, b = p.button;
+  const inside = (x: Box) => x.l >= -0.5 && x.t >= -0.5 && x.l + x.w <= p.inW + 0.5 && x.t + x.h <= p.inH + 0.5;
+  check(`${where}: a 2px ink frame and a hard 3px shadow`, p.border.startsWith(p.ref2 + " ") && /rgb\(10, 10, 10\)$/.test(p.border) && /3px 3px 0px/.test(p.shadow), `${p.border} (2px here: ${p.ref2}, zoom ${p.zoom}) | ${p.shadow}`);
+  check(`${where}: the button is the dashboard's blue button (filled)`, !!p.btnBg && !/rgba\(0, 0, 0, 0\)|transparent/.test(p.btnBg), p.btnBg);
+  check(`${where}: the date is bold`, !!p.bold && /\d{4}/.test(p.bold), p.bold);
+  if (!held(`${where}: the text and the button lie wholly inside the plate`, !!b && inside(t) && inside(b!), JSON.stringify(p))) return;
+  const mid = p.inH / 2;
+  if (!phone) {
+    check(`${where}: text and button centred on the plate's height (±1px)`, Math.abs(t.t + t.h / 2 - mid) <= 1 && Math.abs(b!.t + b!.h / 2 - mid) <= 1, JSON.stringify({ mid, text: t.t + t.h / 2, button: b!.t + b!.h / 2 }));
+    check(`${where}: the button is the plate's height less 16px, its right edge 16px in`, Math.abs(b!.h - (p.inH - 16)) <= 1 && Math.abs(p.inW - (b!.l + b!.w) - 16) <= 1, JSON.stringify({ inH: p.inH, bh: b!.h, right: p.inW - (b!.l + b!.w) }));
+    check(`${where}: the text on one line`, p.textLines === 1, String(p.textLines));
+  } else {
+    check(`${where}: the button under the text, across the plate (16px in at the right, flush with the text at the left)`, b!.t >= t.t + t.h - 0.5 && Math.abs(p.inW - (b!.l + b!.w) - 16) <= 1 && Math.abs(b!.l - t.l) <= 1, JSON.stringify(p));
+  }
+}
+
+async function plate() {
+  const org = await db.organization.findUnique({ where: { slug: "qa-co" }, select: { id: true } });
+  if (!held("plate: QA Co is there", !!org)) return;
+  const orgId = org!.id;
+  const lent = await db.subscription.findUnique({ where: { organizationId: orgId } });
+  const recKey = `cardlessTrial:${orgId}`;
+  const lentRec = await db.syncState.findUnique({ where: { key: recKey } });
+  const subQ = `sub_${tag}_qa`;
+  const ends = new Date(Date.now() + 20 * DAY);
+  const put = (data: Record<string, unknown>) => db.subscription.upsert({ where: { organizationId: orgId }, create: { organizationId: orgId, ...data } as never, update: data as never });
+  const trialRec = () => JSON.stringify({ subId: subQ, customerId: "cus_qa", planSlug: "professional", interval: "MONTH", customPages: [], mode: "test", trialDays: 7, startedAt: new Date().toISOString(), endsAt: ends.toISOString() });
+  let server: ChildProcess | null = null;
+  process.env.QA_BASE_URL = PLATE_BASE; // ./_qa reads it once, on load
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const qa = require("./_qa");
+  playwright(); // resolvable by name for ./_qa
+  try {
+    if (!PLATE_GIVEN) {
+      ensureBuild((n: string, e?: string) => console.log(`note ${n}${e ? " — " + e : ""}`));
+      server = await startServer(PLATE_PORT, {}, "QA_FREE_PORT");
+    }
+    // Booked on a paid plan: the plate on Settings → Billing, Subscription and Plans & upgrade.
+    await put({ plan: "PROFESSIONAL", status: "ACTIVE", provider: "STRIPE", externalSubId: null, externalCustomerId: null, stripePriceId: null, trialEndsAt: null, currentPeriodEnd: ends, canceledAt: new Date() });
+    const chrome = await qa.launch({ channel: "chrome" }).catch(() => qa.launch());
+    const signer = await chrome.newContext();
+    await qa.signIn(await signer.newPage());
+    const cookies = await signer.cookies();
+    const at = async (w: number, h: number, run: (page: { goto: (u: string, o: object) => Promise<unknown>; waitForTimeout: (ms: number) => Promise<void>; evaluate: (s: string) => Promise<unknown>; locator: (s: string) => { innerText: () => Promise<string> } }) => Promise<void>) => {
+      const phone = w <= 768;
+      const ctx = await chrome.newContext({ viewport: { width: w, height: h }, isMobile: phone, hasTouch: phone });
+      await ctx.addCookies(cookies);
+      await qa.forbidControls(ctx);
+      try { await run(await ctx.newPage()); } finally { await ctx.close(); }
+    };
+    for (const [w, h] of [[1440, 900], [390, 844]] as const) {
+      await at(w, h, async (page) => {
+        for (const path of ["/dashboard/settings?tab=billing", "/dashboard/subscription", "/dashboard/upgrade"]) {
+          await page.goto(PLATE_BASE + path, { waitUntil: "load", timeout: 180000 });
+          await page.waitForTimeout(3500);
+          judgePlate(`plate ${path} @${w}`, (await page.evaluate(MEASURE)) as Plate | null, w <= 768);
+        }
+      });
+    }
+    // Cancelled during a card-less trial: the plate takes the trial ribbon's place (desk; the phone keeps its dock).
+    await put({ plan: "PROFESSIONAL", status: "TRIALING", provider: "STRIPE", externalSubId: subQ, externalCustomerId: null, stripePriceId: null, trialEndsAt: ends, currentPeriodEnd: ends, canceledAt: new Date() });
+    await db.syncState.upsert({ where: { key: recKey }, create: { key: recKey, cursor: trialRec() }, update: { cursor: trialRec() } });
+    for (const [w, h] of [[1440, 900], [390, 844]] as const) {
+      await at(w, h, async (page) => {
+        await page.goto(PLATE_BASE + "/dashboard/clients", { waitUntil: "load", timeout: 180000 });
+        await page.waitForTimeout(3500);
+        if (w > 768) judgePlate(`plate on the trial ribbon @${w}`, (await page.evaluate(MEASURE)) as Plate | null, false);
+        else check(`trial ribbon @${w}: the phone keeps the dock, which says when it switches`, /Switches to Free on/.test(await page.locator("body").innerText()));
+      });
+    }
+    await chrome.close();
+  } catch (err) {
+    check("plate: the browser part ran", false, err instanceof Error ? err.message : String(err));
+  } finally {
+    if (lent) await db.subscription.update({ where: { organizationId: orgId }, data: { plan: lent.plan, status: lent.status, provider: lent.provider, externalSubId: lent.externalSubId, externalCustomerId: lent.externalCustomerId, stripePriceId: lent.stripePriceId, trialEndsAt: lent.trialEndsAt, currentPeriodEnd: lent.currentPeriodEnd, canceledAt: lent.canceledAt } }).catch(() => {});
+    else await db.subscription.deleteMany({ where: { organizationId: orgId } }).catch(() => {});
+    if (lentRec) await db.syncState.update({ where: { key: recKey }, data: { cursor: lentRec.cursor } }).catch(() => {});
+    else await db.syncState.deleteMany({ where: { key: recKey } }).catch(() => {});
+    stopServer(server);
+  }
 }
 
 async function main() {
@@ -277,6 +400,7 @@ async function main() {
     await db.webhookEvent.deleteMany({ where: { eventId: evtId } });
     process.env.STRIPE_SECRET_KEY = "";
     process.env.STRIPE_WEBHOOK_SECRET = "";
+    await plate();
   } finally {
     for (const k of ["EAGLEVIEW_CLIENT_ID", "EAGLEVIEW_CLIENT_SECRET", "COOLCALC_CLIENT_ID", "COOLCALC_API_KEY", "COOLCALC_DEALER_ID"]) process.env[k] = "";
     const del = async (fn: () => Promise<unknown>) => { try { await fn(); } catch { /* next */ } };
