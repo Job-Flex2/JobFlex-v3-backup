@@ -13,10 +13,12 @@
   --good: #3fd08f;
   --warn: #f2b44a;
   --bad: #ff6b6b;
-  --u: clamp(7px, 1vh, 14px);
+  /* One unit for the whole board, from the SMALLER of the screen's height and width (2026-10-14: a MacBook window,
+     wide but short under the browser's bars, and a 4K TV read the same). */
+  --u: clamp(6px, min(1vh, 0.56vw), 15px);
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 2147483000;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   gap: calc(var(--u) * 1.4);
@@ -159,8 +161,11 @@
   .head { grid-template-columns: 1fr auto; }
   .status { grid-column: 1 / -1; align-items: flex-start; }
   .tiles, .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .main { grid-template-columns: 1fr; }
+  .main { grid-template-columns: 1fr; min-height: auto; }
   .feed { mask-image: none; }
+  /* Stacked, every panel takes the height it needs; the board scrolls instead. */
+  .col, .colMid, .colGrow { grid-template-rows: none; overflow: visible; }
+  .panel { overflow: visible; }
 }
 
 /* Fixes after the first look on a TV-sized screen (2026-10-13): a feed line wraps to a second line rather than

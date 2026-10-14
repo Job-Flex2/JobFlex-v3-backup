@@ -6,7 +6,8 @@
 // days of signups and proposals. It asks for fresh figures every thirty seconds, marks what arrived since, keeps the
 // screen awake, and hides the cursor when the mouse rests. Nothing here writes.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { loadOfficeScreen } from "@/actions/officeScreen";
 import { deltaWords, type OfficeFeedItem, type OfficeScreenData, type OfficeTile } from "@/lib/officeScreen";
 import s from "./office-screen.module.css";
@@ -32,6 +33,9 @@ const KIND_WORDS: Record<OfficeFeedItem["kind"], string> = {
 };
 
 const n = (v: number) => v.toLocaleString("en-US");
+/** True once in the browser (false while the server renders and while hydrating), with no effect and no state. */
+const noSubscribe = () => () => {};
+const useInBrowser = () => useSyncExternalStore(noSubscribe, () => true, () => false);
 const usd = (cents: number) => `$${Math.round(cents / 100).toLocaleString("en-US")}`;
 
 function useClock(tz: string) {
@@ -147,6 +151,19 @@ function Spark({ label, values, days, fmtDay }: { label: string; values: number[
 }
 
 export function OfficeScreen({ initial }: { initial: OfficeScreenData }) {
+  // THE BOARD SITS ON ITS OWN LAYER (owner, 2026-10-14: "doesn't fit a MacBook screen"). Reached from the admin menu
+  // the console's layout stays mounted around the page, so a fixed board inside it was clipped by the sidebar and
+  // the top bar. In the browser it is drawn straight into <body>, above everything, and the page under it is held
+  // still — however it was opened.
+  const inBrowser = useInBrowser();
+  useEffect(() => {
+    const html = document.documentElement;
+    const was = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = was;
+    };
+  }, []);
   const [data, setData] = useState<OfficeScreenData>(initial);
   const [lastOk, setLastOk] = useState<number>(initial.now);
   const [failing, setFailing] = useState(false);
@@ -246,7 +263,7 @@ export function OfficeScreen({ initial }: { initial: OfficeScreenData }) {
   const sysWord = !data.health ? "Systems not checked yet" : healthBad.length ? `${healthBad.length} system${healthBad.length === 1 ? "" : "s"} need${healthBad.length === 1 ? "s" : ""} a look` : "All systems running";
   const t = data.trials;
 
-  return (
+  const board = (
     <div className={`${s.root} ${idle ? s.idle : ""}`} data-office>
       <header className={s.head}>
         <div className={s.brand}>
@@ -370,7 +387,7 @@ export function OfficeScreen({ initial }: { initial: OfficeScreenData }) {
               <div>
                 <dt>Likely worth</dt>
                 <dd>{usd(t.likelyCents)}</dd>
-                <small>a month{t.setToCancel ? ` · ${t.setToCancel} set to cancel` : ""}</small>
+                <small>a month{t.setToCancel ? ` · ${t.setToCancel} set to cancel${t.setToCancelCard && t.setToCancelCard !== t.setToCancel ? ` (${t.setToCancelCard} with a card)` : ""}` : ""}</small>
               </div>
             </dl>
           </section>
@@ -426,4 +443,5 @@ export function OfficeScreen({ initial }: { initial: OfficeScreenData }) {
       {data.gaps.length ? <footer className={s.gaps}>Not read this time: {data.gaps.join(", ")}</footer> : null}
     </div>
   );
+  return inBrowser ? createPortal(board, document.body) : board;
 }

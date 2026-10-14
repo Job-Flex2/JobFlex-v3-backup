@@ -74,6 +74,8 @@ export interface OfficeScreenData {
     endsToday: number;
     endsTomorrow: number;
     setToCancel: number;
+    /** Of those, the ones with a card on file — the "needs you" line counts these. */
+    setToCancelCard: number;
     paying: number;
     /** Monthly from paying accounts, at their plan prices. */
     payingMonthlyCents: number;
