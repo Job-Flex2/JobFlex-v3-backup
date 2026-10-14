@@ -57,7 +57,8 @@ import { metaTrack, newEventId, readMetaCookies } from "@/lib/metaPixel";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
-import { rememberSignupMode, type SignupMode, type SignupModeLabel } from "@/lib/signupMode";
+import { rememberOtpDraft, rememberSignupMode, type SignupMode, type SignupModeLabel } from "@/lib/signupMode";
+import { forgetOtpDraft, otpPendingState } from "@/actions/signupOtp";
 import type { OtpRestore } from "@/lib/signupOtp";
 import { rememberFbclidForGoogle, writeLandingCookies } from "@/components/v3/landing-e/landing-variant-effects";
 import { resolveLandingVariant } from "@/components/v3/landing-e/landing-variants";
@@ -267,7 +268,7 @@ export function RegisterContent({
      shop is live" — which read as being sent back (owner's report). The done
      panel now carries a finalizing state (`payBusy`) for that second. */
   const [step, setStep] = React.useState<Step>(
-    setupMode ? 2 : ret ? (ret.sessionId && !ret.cancelled ? 4 : 3) : otpRestore?.signupToken ? 3 : googlePrefill ? (twoStep || otp ? 1 : 2) : 1,
+    setupMode ? 2 : ret ? (ret.sessionId && !ret.cancelled ? 4 : 3) : otpRestore?.signupToken || otpRestore?.stage === "taken" ? 3 : googlePrefill ? (twoStep || otp ? 1 : 2) : 1,
   );
   useTrialOfferExposure(step === 3);
   /* GOOGLE ON THIS PAGE proves who the visitor is and nothing more (owner,
@@ -351,6 +352,14 @@ export function RegisterContent({
   }, []);
   const [plansErr, setPlansErr] = React.useState<string | null>(
     ret?.cancelled ? "Checkout was cancelled — your account has not been created yet." : null,
+  );
+  /* THE PLAN STEP WITH NOTHING TO SELL (passwordless, 2026-10-14): the
+     address has an account by now ("taken" — the plan step offers sign-in),
+     or the pending signup ran out ("expired" — back to step 1, the fields
+     filled). Read as the page opens (lib/signupOtp draftRestore), before a
+     plan is started and when one is refused (otpPendingState). */
+  const [gate, setGate] = React.useState<{ kind: "taken"; email: string } | { kind: "expired" } | null>(
+    otpRestore?.stage === "taken" ? { kind: "taken", email: otpRestore.email } : null,
   );
   const [checkoutReady, setCheckoutReady] = React.useState(true);
   const [promo, setPromo] = React.useState<SignupPromo | null>(null);
@@ -814,7 +823,7 @@ export function RegisterContent({
       if (slug === CUSTOM_PLAN_SLUG && token) {
         const upd = await updatePendingSignupPages(token, customPages);
         if (!upd.ok) {
-          setPlansErr(upd.error);
+          await planRefused(upd.error);
           return;
         }
       }
@@ -823,7 +832,7 @@ export function RegisterContent({
       if (token) {
         const stamped = await updatePendingSignupAttribution(token, attribution);
         if (!stamped.ok) {
-          setPlansErr(stamped.error);
+          await planRefused(stamped.error);
           return;
         }
       }
@@ -848,7 +857,7 @@ export function RegisterContent({
         return;
       }
       trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_rejected" });
-      setPlansErr(body.error || "Couldn't open checkout — your account has not been created.");
+      await planRefused(body.error || "Couldn't open checkout — your account has not been created.");
     } catch {
       trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_unavailable" });
       setPlansErr("Couldn't reach checkout — your account has not been created.");
@@ -960,8 +969,46 @@ export function RegisterContent({
       setStartingSlug(null);
     }
   }
-  const onStartPlan = (slug: string) =>
+  /* The passwordless plan step asks first whether there is still something
+     to sell (otpPendingState): an account for the address by now, or an
+     intent that ran out, answers with the gate instead of a payment. */
+  const gatingRef = React.useRef(false);
+  async function onStartPlan(slug: string) {
+    if (otp && token && !payBusy) {
+      if (gatingRef.current) return;
+      gatingRef.current = true;
+      setStartingSlug(slug);
+      const shut = await otpGate().finally(() => {
+        gatingRef.current = false;
+        setStartingSlug(null);
+      });
+      if (shut) return;
+    }
     void (requiresCard ? onStartTrial(slug) : otp ? onStartCardlessVerified(slug) : onStartCardless(slug));
+  }
+
+  /** The gate, when the passwordless intent has nothing left to sell. True: shown. */
+  async function otpGate(): Promise<boolean> {
+    if (!otp || !token) return false;
+    const st = await otpPendingState(token).catch(() => null);
+    if (!st || st.state === "live") return false;
+    trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: st.state === "taken" ? "pending_taken" : "pending_expired", mode: signupMode });
+    setPlansErr(null);
+    if (st.state === "taken") {
+      setGate({ kind: "taken", email: st.email });
+      return true;
+    }
+    if (st.name) setName(st.name);
+    if (st.email) setEmail(st.email);
+    rememberOtpDraft(null);
+    setGate({ kind: "expired" });
+    return true;
+  }
+  /** A refusal on the plan step: the gate when that is what it means, the words otherwise. */
+  async function planRefused(error: string) {
+    if (await otpGate()) return;
+    setPlansErr(error);
+  }
   const busyLabel = requiresCard ? "Opening checkout…" : "Starting your trial…";
 
   /* ONCE. The intent is spent by its first completion, and React's development
@@ -1266,13 +1313,13 @@ export function RegisterContent({
       if (slug === CUSTOM_PLAN_SLUG) {
         const upd = await updatePendingSignupPages(token, customPages);
         if (!upd.ok) {
-          setPlansErr(upd.error);
+          await planRefused(upd.error);
           return;
         }
       }
       const stamped = await updatePendingSignupAttribution(token, attribution);
       if (!stamped.ok) {
-        setPlansErr(stamped.error);
+        await planRefused(stamped.error);
         return;
       }
       const res = await startVerifiedCardlessTrial(token, slug, termFor(slug));
@@ -1283,7 +1330,7 @@ export function RegisterContent({
           router.replace(`/auth/login?${new URLSearchParams({ next: "/dashboard", email: res.email }).toString()}` as Route);
           return;
         }
-        setPlansErr(res.error);
+        await planRefused(res.error);
         return;
       }
       if (res.registrationEventId) metaIds.current.registration = res.registrationEventId;
@@ -1301,6 +1348,31 @@ export function RegisterContent({
       setPayBusy(false);
       setStartingSlug(null);
     }
+  }
+
+  /* Back to step 1 from the gate: a fresh email step (remounted), the name
+     and email still in the fields, no draft, no intent in the address. */
+  const [otpEpoch, setOtpEpoch] = React.useState(0);
+  function otpStartAgain(keepFields: boolean) {
+    if (gate?.kind === "taken" && otpRestore?.draft) void forgetOtpDraft(otpRestore.draft);
+    rememberOtpDraft(null);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("signup");
+      url.searchParams.delete("d");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    } catch {
+      /* step 1 works without it */
+    }
+    if (!keepFields) {
+      setName("");
+      setEmail("");
+    }
+    setGate(null);
+    setPlansErr(null);
+    setToken(null);
+    setOtpEpoch((n) => n + 1);
+    setStep(1);
   }
 
   /* The address is proven (code, link or Google) and the pending signup
@@ -1452,11 +1524,12 @@ export function RegisterContent({
             {otp ? (
               <>
                 <PasswordlessStep
+                  key={otpEpoch}
                   name={name}
                   setName={setName}
                   email={email}
                   setEmail={setEmail}
-                  restore={otpRestore}
+                  restore={otpEpoch ? null : otpRestore}
                   google={google}
                   inApp={inApp}
                   requiresCard={requiresCard}
@@ -1902,16 +1975,18 @@ export function RegisterContent({
               <div className="pw-head-r">
                 {/* The trial's promise (owner, 2026-10-01) — the stamp the landing carries, in the
                     words of signupTrialMode (lib/trialPolicyServer; words: lib/trialPolicy trialLine). */}
-                <p className="pw-trial">
-                  <svg className="ic" aria-hidden>
-                    <use href="#i-check" />
-                  </svg>
-                  {trialLine(requiresCard, trialDays)}
-                </p>
+                {!gate ? (
+                  <p className="pw-trial">
+                    <svg className="ic" aria-hidden>
+                      <use href="#i-check" />
+                    </svg>
+                    {trialLine(requiresCard, trialDays)}
+                  </p>
+                ) : null}
                 {/* MONTHLY | ANNUAL (owner, 2026-10-12): one switch over the row, the landing's and
                     the upgrade page's own (components/billing/PlanTermSwitch). Not drawn when no
                     plan prices a year. */}
-                {showTerms && !confirmSentTo ? (
+                {showTerms && !confirmSentTo && !gate ? (
                   <PlanTermSwitch className="pw-termsw" value={interval} onChange={setInterval} tag={termTag} />
                 ) : null}
               </div>
@@ -1920,6 +1995,44 @@ export function RegisterContent({
             {plansErr ? (
               <div className="err" role="alert">
                 {plansErr}
+              </div>
+            ) : null}
+
+            {gate ? (
+              <div className="pw-confirm" role="status" id="planGate" data-gate={gate.kind}>
+                <span className="pw-confirm-k">{gate.kind === "taken" ? "Account found" : "Timed out"}</span>
+                <p className="pw-confirm-h">
+                  {gate.kind === "taken" ? "You already have an account" : "Your signup timed out — enter your email again"}
+                </p>
+                <p className="pw-confirm-p">
+                  {gate.kind === "taken" ? (
+                    <>
+                      <b>{gate.email}</b> already has a JobFlex account. Sign in to open it — nothing was charged here.
+                    </>
+                  ) : (
+                    "Nothing was charged. Your name and email are kept — we'll send a new code, then pick your plan."
+                  )}
+                </p>
+                <div className="pw-confirm-row">
+                  {gate.kind === "taken" ? (
+                    <>
+                      <Link
+                        className="btn pw-go"
+                        id="gateSignIn"
+                        href={`/auth/login?${new URLSearchParams({ email: gate.email, next: "/dashboard" }).toString()}` as Route}
+                      >
+                        Sign in
+                      </Link>
+                      <button type="button" className="pw-confirm-back" onClick={() => otpStartAgain(false)}>
+                        Use a different email
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="btn pw-go" id="gateAgain" onClick={() => otpStartAgain(true)}>
+                      Enter your email again
+                    </button>
+                  )}
+                </div>
               </div>
             ) : null}
 
@@ -1956,7 +2069,7 @@ export function RegisterContent({
                 (`--pw-cols`, set on the sheet so every edge lines up with the row), the row centred,
                 a card no wider than the stylesheet's cap. */}
             <div
-              className={"pw-plans" + (confirmSentTo ? " is-hidden" : "")}
+              className={"pw-plans" + (confirmSentTo || gate ? " is-hidden" : "")}
               ref={plansRef}
               style={{ "--pw-rows": 5 + (freeUntil ? 1 : 0) + (promo?.percentOff ? 1 : 0) } as React.CSSProperties}
             >
@@ -2040,7 +2153,7 @@ export function RegisterContent({
                         onClick={(e) => {
                           e.stopPropagation();
                           setPlanSlug(p.slug);
-                          onStartPlan(p.slug);
+                          void onStartPlan(p.slug);
                         }}
                         disabled={payBusy || !checkoutReady}
                       >
@@ -2162,7 +2275,7 @@ export function RegisterContent({
                     onClick={(e) => {
                       e.stopPropagation();
                       setPlanSlug(CUSTOM_PLAN_SLUG);
-                      onStartPlan(CUSTOM_PLAN_SLUG);
+                      void onStartPlan(CUSTOM_PLAN_SLUG);
                     }}
                     disabled={payBusy || !checkoutReady}
                   >

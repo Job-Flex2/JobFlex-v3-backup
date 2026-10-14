@@ -7,7 +7,7 @@
 // account is created only when this session comes back complete.
 //
 // It is deliberately narrow:
-//   · the token must resolve to a live pending intent (2h TTL) — no token, no
+//   · the token must resolve to a live pending intent (a day — lib/pendingSignup) — no token, no
 //     session, so this cannot be used as an anonymous Stripe session factory;
 //   · the customer email is taken from the INTENT, never from the request body;
 //   · `client_reference_id` carries the token, which is what

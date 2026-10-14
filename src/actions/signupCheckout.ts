@@ -65,12 +65,7 @@ import { sendEmail } from "@/lib/sdk/resend";
 import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { storedTrialOffer, TRIAL_TEST_ENDED, type TrialOffer } from "@/lib/trialOffer";
 import { buildTrialConfirm } from "@/lib/email/build/trial";
-
-/** How long an unpaid intent is honoured. Long enough to pay, short enough
- *  that an abandoned card never becomes an account a week later. */
-const PENDING_TTL_MS = 2 * 60 * 60 * 1000;
-/** How long a card-less trial's confirmation link stays good. */
-const CONFIRM_TTL_MS = 24 * 60 * 60 * 1000;
+import { pendingSignupAlive } from "@/lib/pendingSignup";
 
 const pendingSchema = z.object({
   analytics: trafficIdentitySchema.optional().catch(undefined),
@@ -386,13 +381,10 @@ async function loadPending(token: string): Promise<PendingRecord | null> {
   if (!row) return null;
   try {
     const rec = JSON.parse(row.cursor) as PendingRecord;
-    // A card-less trial waits on an email link, so it gets a day, counted from
-    // the latest link sent; every other intent has the checkout's two hours.
-    const alive = rec?.cardless
-      ? Date.now() - rec.cardless.requestedAt <= CONFIRM_TTL_MS
-      : Date.now() - (rec?.createdAt ?? 0) <= PENDING_TTL_MS;
-    if (!rec?.email || !alive) return null;
-    return rec;
+    // How long an unpaid intent is honoured (a day; a card-less trial's day
+    // counts from the latest link sent) — the one rule the register page's
+    // passwordless return reads too (lib/pendingSignup).
+    return pendingSignupAlive(rec) ? rec : null;
   } catch {
     return null;
   }

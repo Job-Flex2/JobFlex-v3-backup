@@ -1498,6 +1498,9 @@
 }
 .bp :global(.pw-confirm-back:hover) { color: var(--ink); }
 .bp :global(.pw-confirm-back:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 3px; }
+/* The passwordless gate (2026-10-14: an account by now, or the signup timed
+   out) ends the step too: no code field, no terms, no skip under it. */
+.bp :global(#stepPlan:has(#planGate) .pw-bottom) { display: none; }
 @media (max-width: 768px) {
   .bp :global(.pw-confirm) { margin: 13px 18px 0; padding: 20px; box-shadow: 4px 4px 0 var(--ink); }
   .bp :global(.pw-confirm-h) { font-size: 20px; }

@@ -156,7 +156,7 @@ export function PasswordlessStep({
   onLead: (email: string) => void;
 }) {
   const [screen, setScreen] = React.useState<Screen>(google ? "google" : restore?.stage === "code" ? "code" : "form");
-  const [draft, setDraft] = React.useState<string | null>(restore?.draft ?? null);
+  const [draft, setDraft] = React.useState<string | null>(restore && restore.stage !== "expired" ? restore.draft : null);
   const [sentTo, setSentTo] = React.useState(restore?.email ?? "");
   const [resendAt, setResendAt] = React.useState(restore?.resendAt ?? 0);
   const [burned, setBurned] = React.useState(restore?.burned ?? false);
@@ -270,6 +270,12 @@ export function PasswordlessStep({
       if (restore.name) setName(restore.name);
       if (restore.email) setEmail(restore.email);
       if (restore.stage === "code") setDraftInUrl(restore.draft);
+      // Its pending signup ran out (lib/signupOtp draftRestore deleted the
+      // draft): step 1 as ever, the fields filled, the cookie and ?d= gone.
+      if (restore.stage === "expired") {
+        rememberOtpDraft(null);
+        setDraftInUrl(null);
+      }
       return;
     }
     if (google) return;

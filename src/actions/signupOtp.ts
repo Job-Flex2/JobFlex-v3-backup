@@ -22,6 +22,8 @@ import {
   newAccountBrake,
   newDraftToken,
   nextForUser,
+  pendingSignupLive,
+  pendingStateOf,
   saveDraft,
   sendCode,
   verifyCode,
@@ -208,6 +210,35 @@ export async function otpDraftStatus(draftToken: string): Promise<
     return { stage: "verified", email: d.email };
   } catch {
     return { stage: "gone" };
+  }
+}
+
+/** THE PLAN STEP, before it sells and when a sale was refused (2026-10-14):
+ *  how the pending signup stands. The full answer — an account exists for
+ *  the address — only for the draft this browser's cookie names AND only for
+ *  that draft's own pending signup, so it never says whether some other
+ *  address has an account. Any other token (a Google arrival, a reload with
+ *  `?signup=`) learns only whether its own intent is still alive. An expired
+ *  draft is deleted; the browser drops its cookie. */
+export async function otpPendingState(signupToken: string): Promise<
+  { state: "live" } | { state: "expired"; name: string; email: string } | { state: "taken"; email: string }
+> {
+  try {
+    const own = await draftCookie();
+    const d = await loadDraft(own);
+    if (own && d && d.kind === "signup" && d.verifiedAt && d.signupToken === signupToken) {
+      const state = await pendingStateOf(d);
+      if (state === "taken") return { state, email: d.email };
+      if (state === "expired") {
+        await deleteDraft(own);
+        return { state, name: d.name, email: d.email };
+      }
+      return { state };
+    }
+    return (await pendingSignupLive(signupToken)) ? { state: "live" } : { state: "expired", name: "", email: "" };
+  } catch {
+    // A hiccup here must not block a sale: the payment path asks again.
+    return { state: "live" };
   }
 }
 

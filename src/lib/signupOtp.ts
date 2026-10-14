@@ -45,6 +45,7 @@ import { storedTrialOffer, type TrialOffer } from "@/lib/trialOffer";
 import type { MetaSignupContext } from "@/lib/metaCapi";
 import type { TradeType } from "@/lib/tradeTypes";
 import type { PendingRecord } from "@/actions/signupCheckout";
+import { pendingSignupAlive } from "@/lib/pendingSignup";
 
 export const OTP_MINUTES = 10;
 const CODE_TTL_MS = OTP_MINUTES * 60_000;
@@ -331,12 +332,20 @@ export async function newAccountBrake(): Promise<string | null> {
 
 /** What the register page opens on for a draft (from `?d=` or the cookie):
  *  the code screen with its clock, or — for the browser holding the cookie —
- *  the plan step of the pending signup the draft became. Null: step 1. */
+ *  the plan step of the pending signup the draft became. Null: step 1.
+ *
+ *  THE RETURN A DAY LATER (2026-10-14): the plan step opens only over an
+ *  intent the payment still honours (lib/pendingSignup — the same rule). One
+ *  that ran out is "expired": the draft is deleted and step 1 opens with the
+ *  name and email filled (the browser drops the cookie). An address that has
+ *  an account by now is "taken": the plan step says so and offers sign-in —
+ *  only ever for the draft this browser's own cookie names, so no address is
+ *  confirmed to anybody who did not prove it from here. */
 export interface OtpRestore {
   draft: string;
   name: string;
   email: string;
-  stage: "code" | "verified";
+  stage: "code" | "verified" | "expired" | "taken";
   resendAt: number;
   expiresAt: number;
   burned: boolean;
@@ -349,10 +358,34 @@ export async function draftRestore(token: string | null, cookieToken: string | n
   const own = cookieToken === t;
   if (d.verifiedAt) {
     if (!own || !d.signupToken) return null;
-    // Spent (the account exists) or stale: the plan step has nothing to sell.
-    const live = await db.syncState.findUnique({ where: { key: `signup:${d.signupToken}` }, select: { key: true } }).catch(() => null);
-    if (!live) return null;
-    return { draft: t, name: d.name, email: d.email, stage: "verified", resendAt: 0, expiresAt: 0, burned: true, signupToken: d.signupToken };
+    const at = { draft: t, name: d.name, email: d.email, resendAt: 0, expiresAt: 0, burned: true };
+    const state = await pendingStateOf(d);
+    if (state === "taken") return { ...at, stage: "taken", signupToken: null };
+    if (state === "expired") {
+      await deleteDraft(t);
+      return { ...at, stage: "expired", signupToken: null };
+    }
+    return { ...at, stage: "verified", signupToken: d.signupToken };
   }
   return { draft: t, name: d.name, email: d.email, stage: "code", ...draftClock(d), burned: !d.code, signupToken: null };
+}
+
+/** How the pending signup a proven draft became stands: the address has an
+ *  account by now (this signup finished, Google, a second tab), the intent
+ *  ran out, or the plan step can sell. Callers check the draft is the
+ *  browser's own before they say "taken". */
+export async function pendingStateOf(d: OtpDraft): Promise<"live" | "expired" | "taken"> {
+  if (await db.user.findUnique({ where: { email: d.email }, select: { id: true } })) return "taken";
+  return d.signupToken && (await pendingSignupLive(d.signupToken)) ? "live" : "expired";
+}
+
+/** The intent behind a token, by the payment's own rule (lib/pendingSignup). */
+export async function pendingSignupLive(signupToken: string): Promise<boolean> {
+  const row = await db.syncState.findUnique({ where: { key: `signup:${signupToken}` } }).catch(() => null);
+  if (!row) return false;
+  try {
+    return pendingSignupAlive(JSON.parse(row.cursor));
+  } catch {
+    return false;
+  }
 }

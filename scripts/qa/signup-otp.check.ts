@@ -16,6 +16,15 @@
 //     Backspace, select-and-replace, a whole code pasted with a space, a wrong code (red,
 //     cleared, focused), an expired one, Resend after the countdown, sent on the sixth digit;
 //     Use a different email; the old small print gone; the sign-in page's squares too;
+//   · THE RETURN (2026-10-14; lib/pendingSignup — one rule for the plan step and the payment):
+//     a draft and intent 3 hours old (past the old two-hour intent, inside the day) reopen the
+//     plan step and Start reaches Checkout; an intent that ran out opens step 1 with the name
+//     and email filled, the draft and its cookie gone; a draft whose address has an account
+//     (qa@acme.test) opens "You already have an account" → Sign in with the address; the same
+//     draft named by ?d= in ANOTHER browser says nothing about the address; on the plan step an
+//     account appearing or the intent running out answers the Start press with the gate, and
+//     "Enter your email again" goes back to step 1 with the fields; in each of the owner's three
+//     sign-ups (3-step, 2-step, passwordless — dev.db's switch put back after);
 //   · on every step: no console error, no page error, no 4xx/5xx from this server.
 // A production build sends no mail here (mail keys blank) and keeps the code only as a salted
 // hash, so the check writes its own code into the draft (the same hash lib/signupOtp keeps) and
@@ -24,7 +33,7 @@
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/signup-otp.check.ts
 // QA_OTP_URL=http://localhost:NNNN uses a server already up instead (no build, no start).
 import type { ChildProcess } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { ensureBuild, playwright, startServer, stopServer } from "./_prod-server";
 
@@ -44,6 +53,8 @@ const note = (name: string, extra = "") => console.log(`note ${name}${extra ? " 
 const octet = () => 1 + Math.floor(Math.random() * 250);
 const IPS: string[] = [];
 const DRAFTS: string[] = [];
+const SIGNUPS: string[] = [];
+const HOUR = 3_600_000;
 const newIp = () => { const ip = `10.${octet()}.${octet()}.${octet()}`; IPS.push(ip); return ip; };
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
@@ -483,6 +494,265 @@ async function existing(browser: any) {
   }
 }
 
+/* THE RETURN (2026-10-14). A draft proven `age` ago and the intent it became (none when
+   `intentAge` is null), written as lib/signupOtp writes them; the browser that proved it holds
+   the draft's cookie (holdDraft). */
+async function plantReturning(email: string, age: number, intentAge: number | null): Promise<{ draft: string; signup: string }> {
+  const draft = randomUUID();
+  const signup = randomUUID();
+  const at = Date.now() - age;
+  const d = { v: 1, kind: "signup", email, name: "Back Later", createdAt: at - 5 * 60_000, code: null, lastSentAt: at - 4 * 60_000, linkHash: null, verifiedAt: at, via: "code", signupToken: signup, trialOffer: { variant: "b", days: 7 } };
+  await db.syncState.create({ data: { key: `otp:${draft}`, cursor: JSON.stringify(d) } });
+  DRAFTS.push(draft);
+  if (intentAge !== null) {
+    const created = Date.now() - intentAge;
+    const rec = { trialOffer: { variant: "b", days: 7 }, name: "Back Later", businessName: "Back Later", email, tradeTypes: [], signupVariant: "e", attribution: null, customPages: [], hashedPassword: null, viaGoogle: false, image: null, createdAt: created, emailVerifiedAt: created, nameUnset: true, signupMode: "passwordless" };
+    await db.syncState.create({ data: { key: `signup:${signup}`, cursor: JSON.stringify(rec) } });
+    SIGNUPS.push(signup);
+  }
+  return { draft, signup };
+}
+async function holdDraft(v: V, draft: string, flowCookie = false) {
+  const domain = new URL(BASE).hostname;
+  await v.ctx.addCookies([{ name: "jf_otp_draft", value: draft, domain, path: "/" }, ...(flowCookie ? [{ name: "jf_signup_flow", value: "otp", domain, path: "/" }] : [])]);
+}
+type Opened = { plan: boolean; gate: string | null; gateText: string; step1: boolean; name: string | null; email: string | null; password: boolean; d: boolean; cookie: boolean; cards: number; overflow: boolean };
+async function openRegister(v: V, query = "?flow=otp"): Promise<Opened> {
+  await v.page.goto(`${BASE}/auth/register${query}`, { waitUntil: "load", timeout: 180000 });
+  await v.page.locator("#stepPlan").waitFor({ state: "attached", timeout: 120000 });
+  await v.page.waitForTimeout(1200);
+  return v.page.evaluate(() => {
+    const gate = document.getElementById("planGate");
+    const val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? null;
+    return {
+      plan: !!document.querySelector("section.plan-sheet.is-in"),
+      gate: gate?.getAttribute("data-gate") ?? null,
+      gateText: (gate?.textContent || "").replace(/\s+/g, " ").trim(),
+      step1: !document.getElementById("step1")?.classList.contains("is-hidden"),
+      name: val("name"),
+      email: val("email"),
+      password: !!document.getElementById("password"),
+      d: new URL(location.href).searchParams.has("d"),
+      cookie: /(?:^|; )jf_otp_draft=[^;]/.test(document.cookie),
+      cards: [...document.querySelectorAll<HTMLElement>("section.plan-sheet.is-in .pw-plan")].filter((c) => c.offsetParent !== null).length,
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  });
+}
+/** The plan step's Start: Checkout (test mode), or the gate. */
+async function startPlan(v: V): Promise<{ checkout: boolean; gate: string | null }> {
+  await v.page.locator("section.plan-sheet.is-in .pw-plan .pw-go").filter({ visible: true }).first().click();
+  for (let i = 0; i < 60 && !v.handoff.checkout && !(await v.page.locator("#planGate").count()); i++) await v.page.waitForTimeout(250);
+  return { checkout: !!v.handoff.checkout, gate: await v.page.locator("#planGate").getAttribute("data-gate", { timeout: 1000 }).catch(() => null) };
+}
+/** QA_OTP_SHOTS=<dir>: the return's screens at 390, for a look. */
+async function shot(v: V, name: string) {
+  if (process.env.QA_OTP_SHOTS) await v.page.screenshot({ path: `${process.env.QA_OTP_SHOTS}/${name}.png` }).catch(() => {});
+}
+const failed = (e: unknown, v: V) => `${String((e as Error)?.message || e).split("\n")[0]} · ${v.take()}`;
+
+async function returning(browser: Browser, toStripe: boolean) {
+  // 1 — three hours on (past the old two-hour intent): the plan step, and Start pays.
+  let v = await visitor(browser, "phone");
+  try {
+    const { draft } = await plantReturning(`otp.back3h.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR, 3 * HOUR);
+    await holdDraft(v, draft);
+    v.step("3 hours on");
+    const o = await openRegister(v);
+    check("return: a draft and intent 3 h old → the plan step, no gate", o.plan && !o.gate && o.cards > 0 && !o.overflow, JSON.stringify(o));
+    await shot(v, "live-3h");
+    if (toStripe && o.plan) {
+      const r = await startPlan(v);
+      check("return: …and Start free trial → Stripe Checkout", r.checkout && !r.gate, JSON.stringify(r));
+    } else note("return: Checkout", "dev.db stripe:mode is not test — stopped at the plan step");
+    const e = v.take();
+    check("return: 3 h — no console / page / HTTP errors", !e, e);
+  } catch (e) {
+    check("return: 3 h ran through", false, failed(e, v));
+  } finally {
+    await v.ctx.close();
+  }
+
+  // 2 — the intent ran out (25 h) / is gone: step 1, the fields filled, the draft and cookie gone.
+  for (const [what, intentAge] of [["ran out", 25 * HOUR], ["gone", null]] as const) {
+    v = await visitor(browser, "phone");
+    try {
+      const email = `otp.stale.${what.replace(" ", "")}.${STAMP}@${MAIL_DOMAIN}`;
+      const { draft } = await plantReturning(email, 3 * HOUR, intentAge);
+      await holdDraft(v, draft);
+      v.step(`intent ${what}`);
+      const o = await openRegister(v, `?flow=otp&d=${draft}`);
+      const row = await db.syncState.findUnique({ where: { key: `otp:${draft}` } });
+      check(`return: the intent ${what} → step 1 with the name and email, no plan step; the draft, its cookie and ?d= gone`, !o.plan && !o.gate && o.step1 && o.name === "Back Later" && o.email === email && !o.d && !o.cookie && !row, JSON.stringify({ ...o, row: !!row }));
+      if (what === "ran out") {
+        await shot(v, "stale-step1");
+        await v.page.click("#nextBtn");
+        const code = await v.page.locator("#otpCode").waitFor({ timeout: 60000 }).then(() => true).catch(() => false);
+        check("return: …and Continue sends a fresh code to that address", code && (await v.page.locator("#step1").innerText()).includes(email), v.page.url().slice(BASE.length));
+        if (code) DRAFTS.push(new URL(v.page.url()).searchParams.get("d") ?? "");
+      }
+      const e = v.take();
+      check(`return: intent ${what} — no console / page / HTTP errors`, !e, e);
+    } catch (e) {
+      check(`return: intent ${what} ran through`, false, failed(e, v));
+    } finally {
+      await v.ctx.close();
+    }
+  }
+
+  // 3 — the address has an account by now: "You already have an account" → Sign in, the address carried.
+  const qa = await db.user.findUnique({ where: { email: QA_EMAIL }, select: { id: true } });
+  if (!qa) note("return: account", `${QA_EMAIL} is not seeded — skipped`);
+  else {
+    const { draft: qaDraft } = await plantReturning(QA_EMAIL, HOUR, HOUR);
+    v = await visitor(browser, "phone");
+    try {
+      await holdDraft(v, qaDraft);
+      v.step("account exists");
+      const o = await openRegister(v);
+      check(`return: a draft whose address has an account → the plan step says "You already have an account", no cards`, o.plan && o.gate === "taken" && /You already have an account/.test(o.gateText) && o.gateText.includes(QA_EMAIL) && o.cards === 0 && !o.overflow, JSON.stringify(o));
+      await shot(v, "taken");
+      const btn = await v.page.locator("#gateSignIn").boundingBox();
+      check("return: Sign in is a ≥44px target", !!btn && btn.height >= 44, JSON.stringify(btn));
+      await v.page.click("#gateSignIn");
+      await v.page.waitForURL(/\/auth\/login/, { timeout: 60000 }).catch(() => {});
+      await v.page.locator('input[type="email"]').waitFor({ timeout: 60000 }).catch(() => {});
+      await v.page.waitForTimeout(800);
+      const field = await v.page.inputValue('input[type="email"]').catch(() => "");
+      check("return: Sign in → /auth/login with the address filled", /\/auth\/login\?/.test(v.page.url()) && field === QA_EMAIL, `${v.page.url().slice(BASE.length)} · ${field}`);
+      const e = v.take();
+      check("return: account — no console / page / HTTP errors", !e, e);
+    } catch (e) {
+      check("return: account ran through", false, failed(e, v));
+    } finally {
+      await v.ctx.close();
+    }
+    // The same draft named by ?d= in a browser that did not prove it: not a word about the address.
+    v = await visitor(browser, "desk");
+    try {
+      v.step("someone else's draft");
+      const o = await openRegister(v, `?flow=otp&d=${qaDraft}`);
+      const said = await v.page.locator("body").innerText();
+      check("return: that draft by ?d= in ANOTHER browser — step 1, no gate, the address nowhere on the page", !o.plan && !o.gate && o.step1 && o.email !== QA_EMAIL && !said.includes(QA_EMAIL) && !/You already have an account/i.test(said), JSON.stringify({ ...o, saysEmail: said.includes(QA_EMAIL) }));
+      const e = v.take();
+      check("return: someone else's draft — no console / page / HTTP errors", !e, e);
+    } catch (e) {
+      check("return: someone else's draft ran through", false, failed(e, v));
+    } finally {
+      await v.ctx.close();
+    }
+  }
+
+  // 4 — on the plan step: an account appears (Google, a second tab); the intent runs out.
+  for (const what of ["account appears", "intent runs out"] as const) {
+    if (what === "account appears" && !qa) continue;
+    v = await visitor(browser, "phone");
+    try {
+      const email = `otp.onplan.${what.split(" ")[0]}.${STAMP}@${MAIL_DOMAIN}`;
+      const { draft, signup } = await plantReturning(email, 30 * 60_000, 30 * 60_000);
+      await holdDraft(v, draft);
+      v.step(`plan step, ${what}`);
+      const o = await openRegister(v);
+      if (!o.plan) {
+        check(`return: ${what} — the plan step first`, false, JSON.stringify(o));
+        continue;
+      }
+      const rec = JSON.parse((await db.syncState.findUnique({ where: { key: `signup:${signup}` } }))!.cursor);
+      if (what === "account appears") {
+        // The address becomes one with an account: the draft and its intent now name qa@acme.test.
+        const d = JSON.parse((await db.syncState.findUnique({ where: { key: `otp:${draft}` } }))!.cursor);
+        await db.syncState.update({ where: { key: `signup:${signup}` }, data: { cursor: JSON.stringify({ ...rec, email: QA_EMAIL }) } });
+        await db.syncState.update({ where: { key: `otp:${draft}` }, data: { cursor: JSON.stringify({ ...d, email: QA_EMAIL }) } });
+      } else {
+        await db.syncState.update({ where: { key: `signup:${signup}` }, data: { cursor: JSON.stringify({ ...rec, createdAt: Date.now() - 25 * HOUR }) } });
+      }
+      const r = await startPlan(v);
+      const text = (await v.page.locator("#planGate").innerText().catch(() => "")).replace(/\s+/g, " ");
+      if (what === "account appears") {
+        check(`return: on the plan step an account appears → Start answers "You already have an account", not Checkout`, r.gate === "taken" && !r.checkout && /You already have an account/i.test(text), `${JSON.stringify(r)} · ${text}`);
+      } else {
+        const dead = await v.page.getByText("Start again").count();
+        check(`return: on the plan step the intent runs out → "Your signup timed out — enter your email again", no "Start again"`, r.gate === "expired" && !r.checkout && /Your signup timed out — enter your email again/i.test(text) && !dead, `${JSON.stringify(r)} · ${text}`);
+        await shot(v, "expired-gate");
+        await v.page.click("#gateAgain");
+        await v.page.waitForTimeout(800);
+        const b = await v.page.evaluate(() => ({
+          step1: !document.getElementById("step1")?.classList.contains("is-hidden"),
+          plan: !!document.querySelector("section.plan-sheet.is-in"),
+          name: (document.getElementById("name") as HTMLInputElement | null)?.value,
+          email: (document.getElementById("email") as HTMLInputElement | null)?.value,
+          signup: new URL(location.href).searchParams.has("signup"),
+          cookie: /(?:^|; )jf_otp_draft=[^;]/.test(document.cookie),
+        }));
+        check(`return: "Enter your email again" → step 1 with the name and email, no intent in the address, no cookie`, b.step1 && !b.plan && b.name === "Back Later" && b.email === email && !b.signup && !b.cookie, JSON.stringify(b));
+      }
+      const e = v.take();
+      check(`return: ${what} — no console / page / HTTP errors`, !e, e);
+    } catch (e) {
+      check(`return: ${what} ran through`, false, failed(e, v));
+    } finally {
+      await v.ctx.close();
+    }
+  }
+}
+
+/** The owner's three sign-ups (Admin → Trials; SyncState `signupFlow`, read through a 10 s
+ *  cache): the return in each — `?flow=otp`'s cookie in the password ones, the switch itself in
+ *  the passwordless one — and the password form untouched by a draft's cookie. dev.db's row is
+ *  put back as it was. */
+async function threeModes(browser: Browser, toStripe: boolean) {
+  const KEY = "signupFlow";
+  const before = await db.syncState.findUnique({ where: { key: KEY } });
+  const set = async (cursor: object) => {
+    const c = JSON.stringify({ ...cursor, by: "signup-otp.check", at: new Date().toISOString() });
+    await db.syncState.upsert({ where: { key: KEY }, create: { key: KEY, cursor: c }, update: { cursor: c } });
+    await new Promise((r) => setTimeout(r, 11_000));
+  };
+  try {
+    for (const mode of [{ label: "3-step", cursor: { steps: 3 } }, { label: "2-step", cursor: { steps: 2 } }, { label: "passwordless", cursor: { steps: 2, passwordless: true } }]) {
+      await set(mode.cursor);
+      const pw = mode.label !== "passwordless";
+      const v = await visitor(browser, "phone");
+      try {
+        const { draft } = await plantReturning(`otp.mode.${mode.label}.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR, 3 * HOUR);
+        await holdDraft(v, draft, pw);
+        v.step(`${mode.label}: the return`);
+        const o = await openRegister(v, "");
+        check(`mode ${mode.label}: a 3 h draft opens the plan step`, o.plan && !o.gate, JSON.stringify(o));
+        if (toStripe && o.plan) {
+          const r = await startPlan(v);
+          check(`mode ${mode.label}: Start → Stripe Checkout`, r.checkout && !r.gate, JSON.stringify(r));
+        }
+        const e = v.take();
+        check(`mode ${mode.label}: the return — no console / page / HTTP errors`, !e, e);
+      } catch (e) {
+        check(`mode ${mode.label}: the return ran through`, false, failed(e, v));
+      } finally {
+        await v.ctx.close();
+      }
+      if (!pw) continue;
+      // A draft's cookie left from a ?flow=otp visit does not reach the password form.
+      const w = await visitor(browser, "desk");
+      try {
+        const { draft } = await plantReturning(`otp.mode.pw.${mode.label}.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR, 25 * HOUR);
+        await holdDraft(w, draft);
+        w.step(`${mode.label}: password form`);
+        const o = await openRegister(w, "");
+        check(`mode ${mode.label}: the password form as ever beside a draft's cookie`, o.step1 && !o.plan && !o.gate && o.password, JSON.stringify(o));
+        const e = w.take();
+        check(`mode ${mode.label}: password form — no console / page / HTTP errors`, !e, e);
+      } catch (e) {
+        check(`mode ${mode.label}: password form ran through`, false, failed(e, w));
+      } finally {
+        await w.ctx.close();
+      }
+    }
+  } finally {
+    if (before) await db.syncState.upsert({ where: { key: KEY }, create: { key: KEY, cursor: before.cursor }, update: { cursor: before.cursor } });
+    else await db.syncState.deleteMany({ where: { key: KEY } });
+  }
+}
+
 async function main() {
   const pw = playwright();
   let server: ChildProcess | null = null;
@@ -496,6 +766,8 @@ async function main() {
     if (!toStripe) note("Stripe", `dev.db stripe:mode is "${mode ?? "live"}" — runs stop at the plan sheet`);
     const browser = await pw.chromium.launch({ channel: "chrome", args: ["--disable-blink-features=AutomationControlled"] }).catch(() => pw.chromium.launch());
     try {
+      await returning(browser, toStripe);
+      await threeModes(browser, toStripe);
       await newAddress(browser, "phone", "roofing", toStripe);
       await newAddress(browser, "desk", "", toStripe);
       await burn(browser);
@@ -524,6 +796,7 @@ async function main() {
     await db.syncState.deleteMany({ where: { key: { startsWith: "signup:" }, cursor: { contains: MAIL_DOMAIN } } }).catch(() => {});
     await db.syncState.deleteMany({ where: { key: { startsWith: "otp:" }, cursor: { contains: MAIL_DOMAIN } } }).catch(() => {});
     await db.syncState.deleteMany({ where: { key: { in: DRAFTS.map((d) => `otp:${d}`) } } }).catch(() => {});
+    await db.syncState.deleteMany({ where: { key: { in: SIGNUPS.map((t) => `signup:${t}`) } } }).catch(() => {});
     await db.syncState.deleteMany({ where: { key: { startsWith: "otp-link:" }, cursor: { in: DRAFTS } } }).catch(() => {});
     await db.syncState.deleteMany({ where: { OR: [...IPS.map((ip) => ({ key: { startsWith: "rl:", endsWith: ":" + ip } })), ...IPS.map((ip) => ({ key: { startsWith: `rl:otp-signup:${ip}:` } })), { key: `rl:otp-mail:${QA_EMAIL}` }, { key: { startsWith: "rl:otp-mail:", contains: MAIL_DOMAIN } }] } }).catch(() => {});
     await db.$disconnect();
