@@ -192,18 +192,20 @@ function DeskCard({ desk }: { desk: DeskReadiness | null }) {
           {desk.items.map((it) => (
             <SignalRow key={it.key} name={it.label} tone={LIGHT_TONE[it.state]} label={LIGHT_LABEL[it.state]} reason={it.detail} />
           ))}
-          {desk.platform ? (
+          {desk.platform.length ? (
             <div className={`${s.connect} ${h.below}`} data-desk-platform>
-              <div className={`${s.row} ${h.sigRow}`}>
-                <div className={s.rowMain}>
-                  <div className={`${s.rowTitle} ${h.sigName}`}>{desk.platform.number} · the platform&apos;s own line</div>
-                  <div className={h.rowErr}>
-                    answered for {desk.platform.answeredFor ?? "the first company"}
-                    {desk.platform.webhook === "wrong" ? ` · voice webhook: ${desk.platform.webhookUrl || "none"}` : ""}
+              {desk.platform.map((p) => (
+                <div key={p.number} className={`${s.row} ${h.sigRow}`}>
+                  <div className={s.rowMain}>
+                    <div className={`${s.rowTitle} ${h.sigName}`}>{p.number} · the platform&apos;s own line</div>
+                    <div className={h.rowErr}>
+                      answered for {p.answeredFor ?? "the first company"}
+                      {p.webhook === "wrong" ? ` · voice webhook: ${p.webhookUrl || "none"}` : ""}
+                    </div>
                   </div>
+                  {p.webhook === "ok" ? <span className="chip ok">Webhook OK</span> : p.webhook === "wrong" && p.numberSid ? <PointWebhookButton numberSid={p.numberSid} /> : <span className={chipClass("mute")}>Not checked</span>}
                 </div>
-                {desk.platform.webhook === "ok" ? <span className="chip ok">Webhook OK</span> : desk.platform.webhook === "wrong" && desk.platform.numberSid ? <PointWebhookButton numberSid={desk.platform.numberSid} /> : <span className={chipClass("mute")}>Not checked</span>}
-              </div>
+              ))}
             </div>
           ) : null}
           {desk.numbers.length ? (
