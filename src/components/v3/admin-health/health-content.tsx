@@ -24,7 +24,7 @@ import type { Route } from "next";
 import s from "@/components/v3/admin-overview/admin-shared.module.css";
 import { Ic, ago, shortDay } from "@/components/v3/admin-overview/admin-ui";
 import { useAdminMotion } from "@/components/v3/admin-overview/admin-motion";
-import { pointVoiceWebhook } from "@/actions/adminAiDesk";
+import { assignPlatformLine, pointVoiceWebhook } from "@/actions/adminAiDesk";
 import type { DeskReadiness } from "@/lib/aiDesk/readiness";
 import h from "./health.module.css";
 
@@ -171,6 +171,49 @@ function PointWebhookButton({ numberSid }: { numberSid: string }) {
   );
 }
 
+/** The platform's own line: which company its calls reach — the picker and its save. */
+function AssignLine({ line, companies }: { line: DeskReadiness["platform"][number]; companies: DeskReadiness["companies"] }) {
+  const [orgId, setOrgId] = useState(line.answeredForId ?? "");
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [msg, setMsg] = useState("");
+  const save = async (id: string) => {
+    setState("busy");
+    setMsg("");
+    try {
+      const r = await assignPlatformLine(line.e164, id);
+      if (r.ok) {
+        setState("done");
+        setMsg(r.company ? `Answers for ${r.company}.` : "Assignment removed — back to the oldest company.");
+      } else {
+        setState("error");
+        setMsg(r.error);
+      }
+    } catch {
+      setState("error");
+      setMsg("Could not save.");
+    }
+  };
+  return (
+    <div className={h.rowErr} data-assign-line>
+      <label>
+        answers for{" "}
+        <select value={orgId} disabled={state === "busy"} onChange={(e) => setOrgId(e.target.value)} aria-label="The company this line answers for">
+          <option value="">— the oldest company (no assignment) —</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>{" "}
+      <button type="button" className="btn btn-ghost btn--sm" disabled={state === "busy" || orgId === (line.answeredForId ?? "") && line.assigned} onClick={() => void save(orgId)} data-assign-save>
+        {state === "busy" ? "Saving…" : line.assigned && orgId === line.answeredForId ? "Assigned" : "Assign"}
+      </button>
+      {msg ? <span className={state === "error" ? h.rowErr : "chip ok"}>{msg}</span> : null}
+    </div>
+  );
+}
+
 const LIGHT_TONE: Record<DeskReadiness["items"][number]["state"], Tone> = { ok: "ok", warn: "warn", off: "mute" };
 const LIGHT_LABEL: Record<DeskReadiness["items"][number]["state"], string> = { ok: "OK", warn: "Attention", off: "Not set" };
 
@@ -199,9 +242,10 @@ function DeskCard({ desk }: { desk: DeskReadiness | null }) {
                   <div className={s.rowMain}>
                     <div className={`${s.rowTitle} ${h.sigName}`}>{p.number} · the platform&apos;s own line</div>
                     <div className={h.rowErr}>
-                      answered for {p.answeredFor ?? "the first company"}
+                      {p.assigned ? `assigned to ${p.answeredFor}` : `not assigned — its calls reach ${p.answeredFor ?? "the oldest company"}, the oldest company`}
                       {p.webhook === "wrong" ? ` · voice webhook: ${p.webhookUrl || "none"}` : ""}
                     </div>
+                    <AssignLine line={p} companies={desk.companies} />
                   </div>
                   {p.webhook === "ok" ? <span className="chip ok">Webhook OK</span> : p.webhook === "wrong" && p.numberSid ? <PointWebhookButton numberSid={p.numberSid} /> : <span className={chipClass("mute")}>Not checked</span>}
                 </div>

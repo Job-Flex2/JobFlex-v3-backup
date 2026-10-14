@@ -15,7 +15,7 @@ import { voiceServerConfigured } from "./voiceToken";
 import { DEFAULT_VOICE_MODEL } from "./testCall";
 import { DESK_MINUTES_CUSTOM_WITH_PHONE, DESK_MINUTES_DEFAULT, minutesLeftWords, prettyPhone } from "./shared";
 import { deskBalanceFor } from "./minutes";
-import { readDeskSettings } from "./numbers";
+import { organizationForCall, readDeskSettings } from "./numbers";
 
 export type Light = "ok" | "warn" | "off";
 export type ReadinessItem = { key: string; label: string; state: Light; detail: string };
@@ -34,8 +34,18 @@ export type DeskNumberRow = {
 };
 export type DeskPlanRow = { slug: string; name: string; minutes: number; source: "plan" | "default" };
 /** JobFlex's own lines — the numbers on the Twilio account that no company registered (the texting number, the approved toll-free): a call to one is answered for the first company — the way to a first test before any company buys a number. */
-export type PlatformNumber = { number: string; numberSid: string | null; webhook: "ok" | "wrong" | "unknown"; webhookUrl: string | null; answeredFor: string | null };
-export type DeskReadiness = { items: ReadinessItem[]; numbers: DeskNumberRow[]; platform: PlatformNumber[]; plans: DeskPlanRow[]; voiceUrl: string; model: string; steps: string[] };
+export type PlatformNumber = {
+  number: string;
+  e164: string;
+  numberSid: string | null;
+  webhook: "ok" | "wrong" | "unknown";
+  webhookUrl: string | null;
+  /** The company its calls reach: the one it is assigned to, else the oldest company (the old fallback). */
+  answeredFor: string | null;
+  answeredForId: string | null;
+  assigned: boolean;
+};
+export type DeskReadiness = { items: ReadinessItem[]; numbers: DeskNumberRow[]; platform: PlatformNumber[]; companies: Array<{ id: string; name: string }>; plans: DeskPlanRow[]; voiceUrl: string; model: string; steps: string[] };
 
 /** Where Twilio must send a call: TWILIO_APP_URL when set (lib/aiDesk/calls twilioBase), else this deployment. */
 export async function voiceWebhookBase(): Promise<string> {
@@ -106,18 +116,35 @@ export async function deskReadiness(): Promise<DeskReadiness> {
   // when there is one, the approved toll-free in the messaging service) — a call to any of them
   // is answered for the first company (lib/aiDesk/calls companyForCall).
   let platform: PlatformNumber[] = [];
+  const companies = await db.organization.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }).catch(() => []);
+  const companyName = new Map(companies.map((c) => [c.id, c.name || c.id]));
   if (client) {
     const settings = await twilioSettings().catch(() => null);
     const companySids = new Set(numbers.map((n) => n.numberSid).filter(Boolean));
     const companyE164 = new Set(regs.map((r) => parseRegistration(r.cursor).number).filter(Boolean));
     const [first, own] = await Promise.all([
-      db.organization.findFirst({ orderBy: { createdAt: "asc" }, select: { name: true } }).catch(() => null),
+      db.organization.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }).catch(() => null),
       client.incomingPhoneNumbers.list({ limit: 20 }).catch(() => [] as Array<{ sid: string; phoneNumber: string; voiceUrl: string | null }>),
     ]);
     const mine = own.filter((n) => !companySids.has(n.sid) && !companyE164.has(n.phoneNumber));
     // The texting number first, then the rest as Twilio lists them.
     mine.sort((a, b) => (a.phoneNumber === settings?.fromNumber ? -1 : b.phoneNumber === settings?.fromNumber ? 1 : 0));
-    platform = mine.slice(0, 5).map((n) => ({ number: prettyPhone(n.phoneNumber), numberSid: n.sid, webhook: n.voiceUrl === voiceUrl ? "ok" : "wrong", webhookUrl: n.voiceUrl || null, answeredFor: first?.name ?? null }));
+    platform = await Promise.all(
+      mine.slice(0, 5).map(async (n) => {
+        // Assigned to a company (the same index a bought number uses), else the oldest company.
+        const assignedTo = await organizationForCall(n.phoneNumber).catch(() => null);
+        return {
+          number: prettyPhone(n.phoneNumber),
+          e164: n.phoneNumber,
+          numberSid: n.sid,
+          webhook: n.voiceUrl === voiceUrl ? ("ok" as const) : ("wrong" as const),
+          webhookUrl: n.voiceUrl || null,
+          answeredFor: assignedTo ? (companyName.get(assignedTo) ?? assignedTo) : (first?.name ?? null),
+          answeredForId: assignedTo ?? first?.id ?? null,
+          assigned: Boolean(assignedTo),
+        };
+      }),
+    );
   }
   const firstLine = platform[0] ?? null;
 
@@ -126,7 +153,7 @@ export async function deskReadiness(): Promise<DeskReadiness> {
     key: "numbers",
     label: "Company numbers",
     state: numbers.length ? (numbers.some((n) => n.webhook === "wrong") ? "warn" : "ok") : "warn",
-    detail: numbers.length ? `${numbers.length} number${numbers.length === 1 ? "" : "s"} · ${pointed} pointed at the voice webhook${client ? "" : " (not checked: Twilio off)"}` : `No company has a number yet — Settings → Texting buys one (it takes calls the same day).${firstLine ? ` Until then, a call to the platform's own ${firstLine.number} is answered for ${firstLine.answeredFor ?? "the first company"}.` : ""}`,
+    detail: numbers.length ? `${numbers.length} number${numbers.length === 1 ? "" : "s"} · ${pointed} pointed at the voice webhook${client ? "" : " (not checked: Twilio off)"}` : `No company has a number yet — Settings → Texting buys one (it takes calls the same day).${firstLine ? ` Until then, a call to the platform's own ${firstLine.number} is answered for ${firstLine.answeredFor ?? "the first company"}${firstLine.assigned ? "" : " (the oldest company — assign it below)"}.` : ""}`,
   });
 
   // Each plan's included minutes: set in the plan editor, or the tier's default.
@@ -153,9 +180,10 @@ export async function deskReadiness(): Promise<DeskReadiness> {
   else if (voice.state === "warn") steps.push("The voice server is set but not right: check `fly status`, the DNS for voice.jobflex.app, and VOICE_MODEL on both sides.");
   for (const n of numbers.filter((x) => x.webhook === "wrong")) steps.push(`Point ${n.number} (${n.company}) at the voice webhook — the button below.`);
   for (const p of platform.filter((x) => x.webhook === "wrong")) steps.push(`Point the platform's ${p.number} at the voice webhook — the button below (its calls are answered for ${p.answeredFor ?? "the first company"}).`);
-  if (!numbers.length) steps.push(`For a first test, ${firstLine ? `call the platform's ${firstLine.number} (answered for ${firstLine.answeredFor ?? "the first company"}), or ` : ""}buy a company a number on Settings → Texting — it takes calls the same day.`);
+  for (const p of platform.filter((x) => !x.assigned)) steps.push(`Assign the platform's ${p.number} to your own company — the picker below. Until then its calls reach ${p.answeredFor ?? "the oldest company"} (the oldest company, the old fallback): a test call would land on their Phone page and could book on their calendar.`);
+  if (!numbers.length) steps.push(`For a first test, ${firstLine ? `call the platform's ${firstLine.number} once it is assigned, or ` : ""}buy a company a number on Settings → Texting — it takes calls the same day.`);
   if (defaults.length) steps.push(`Set AI desk minutes on ${defaults.map((p) => p.name).join(", ")} in Plans (the defaults apply until then).`);
   steps.push("Rehearse without a phone: `cd voice && OPENAI_API_KEY=… node test/live.mjs` — the real OpenAI realtime API, a scripted caller, the desk's voice saved to a WAV.");
   steps.push("Then the real thing: call a company's number from your phone. The call appears on its Phone page within a minute, with what the desk did; then try \"Test it here\" in Settings → AI desk.");
-  return { items, numbers, platform, plans, voiceUrl, model: voiceModel(), steps };
+  return { items, numbers, platform, companies: companies.map((c) => ({ id: c.id, name: c.name || c.id })), plans, voiceUrl, model: voiceModel(), steps };
 }
