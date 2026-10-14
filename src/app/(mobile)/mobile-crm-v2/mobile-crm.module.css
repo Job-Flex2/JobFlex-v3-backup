@@ -247,12 +247,16 @@
   /* minmax(0, 1fr), not 1fr: .tabInd is width 25% translated by index * 100%,
      so the rule only lands under its tab if the columns are EXACT quarters.
      Plain 1fr floors at auto, so one wide label would desynchronise it. */
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--tabs, 4), minmax(0, 1fr));
   border: var(--border);
   border-radius: var(--radius);
   background: var(--paper);
   overflow: hidden;
 }
+/* Six tabs (Today · Office · Overview · Book · Rules · Due) at 390px: ~60px
+   each, so the label shrinks a step and keeps its one line. */
+.tabs[data-n="6"] .tab, .tabs[data-n="5"] .tab { font-size: 11.5px; gap: 4px; padding: 0 2px; }
+.tabs[data-n="6"] .tabCount, .tabs[data-n="5"] .tabCount { min-width: 18px; height: 17px; font-size: 10px; }
 /* Label and count sit on ONE line at every width — never stacked. */
 .tab {
   display: flex; align-items: center; justify-content: center; gap: 7px;
@@ -286,7 +290,7 @@
 .tabInd {
   position: absolute;
   bottom: 0; left: 0;
-  width: 25%; height: 3px;
+  width: calc(100% / var(--tabs, 4)); height: 3px;
   background: var(--blueprint);
   transition: transform 0.34s var(--ease-soft);
   pointer-events: none;

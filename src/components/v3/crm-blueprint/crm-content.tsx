@@ -19,13 +19,20 @@ import { useRouter } from "next/navigation";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { initCrmContent } from "./crm-behavior";
 import type { CrmContentData } from "./crm-data";
+import type { CrmBrief } from "@/lib/crm/brief";
+import { OfficePanel, TodayPanel } from "./crm-brief";
 
 /**
  * @param data the org's real CRM rows, read in the page's server component.
  *   The behavior module takes them as its starting state and then keeps itself
  *   in step with the database through the follow-up server actions.
  */
-export function CrmContent({ data }: { data: CrmContentData }) {
+/**
+ * @param brief today's checks and the office figures (lib/crm/briefServer) —
+ *   drawn by React inside two `.ppanel` sections the behavior module switches
+ *   like any other tab. Today is the sheet the CRM opens on.
+ */
+export function CrmContent({ data, brief }: { data: CrmContentData; brief: CrmBrief }) {
   const router = useRouter();
 
   // The payload reaches `init` through refs, NOT through the callback's deps.
@@ -68,9 +75,24 @@ export function CrmContent({ data }: { data: CrmContentData }) {
         </div>
       </div>
 
-      {/* CRM TABS: Overview · Customer book · Workflows · Follow-up queue */}
+      {/* CRM TABS: Today · Office · Overview · Customer book · Workflows · Follow-up queue */}
       <nav className="crm-tabs" id="crmTabs">
-        <button className="crm-tab active" type="button" data-tab="overview">
+        <button className="crm-tab active" type="button" data-tab="today" data-crm-tab="today">
+          <svg className="ic">
+            <use href="#i-cal" />
+          </svg>
+          Today
+          {brief.today.score.open > 0 && <span className="crm-tab-n">{brief.today.score.open}</span>}
+        </button>
+        {brief.office && (
+          <button className="crm-tab" type="button" data-tab="office" data-crm-tab="office">
+            <svg className="ic">
+              <use href="#i-chart" />
+            </svg>
+            Office
+          </button>
+        )}
+        <button className="crm-tab" type="button" data-tab="overview">
           <svg className="ic">
             <use href="#i-grid" />
           </svg>
@@ -99,8 +121,20 @@ export function CrmContent({ data }: { data: CrmContentData }) {
         </button>
       </nav>
 
+      {/* ========== TODAY — what to check ========== */}
+      <section className="ppanel" data-panel="today">
+        <TodayPanel key={brief.today.dayKey} today={brief.today} />
+      </section>
+
+      {/* ========== OFFICE — how the company is doing, right now ========== */}
+      {brief.office && (
+        <section className="ppanel is-hidden" data-panel="office">
+          <OfficePanel office={brief.office} company={data.org.name} />
+        </section>
+      )}
+
       {/* ========== OVERVIEW ========== */}
-      <section className="ppanel" data-panel="overview">
+      <section className="ppanel is-hidden" data-panel="overview">
         <div className="stat-grid" id="statGrid"></div>
 
         <div className="crm-cols">
