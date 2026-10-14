@@ -54,6 +54,9 @@ import {
   displayPitch12,
   FASCIA_OPTIONS,
   GUTTER_PLANS,
+  DECK_BOARDS,
+  DECK_SHEET_SIZES,
+  type DeckSheetSize,
   type FasciaRun,
   type GutterPlan,
 } from "@/lib/roofPackage/catalog";
@@ -65,11 +68,12 @@ import {
   fasciaFeet,
   gutterFeet,
   likeForLikeFamily,
+  deckBoardOf,
+  deckSheetOf,
   plywoodCount,
   plywoodLines,
   plywoodRate,
   plywoodScope,
-  PLYWOOD_SHEET_SQFT,
   withJobClass,
   withMeasured,
   withSystem,
@@ -348,7 +352,8 @@ function Check({ label, checked, onChange, disabled }: { label: string; checked:
    clearly … per square foot and per sheet … if they don't know how many, a note to the client: during the job any
    plywood replacement will be charged this … real fast, click click click"). Three picks; the installed price both
    ways, linked; a count in a tap, by the sheet or the square foot; and the very words the client will read. ── */
-const PLY_CHIPS = { sheet: [1, 2, 3, 4, 6, 8, 10], sqft: [32, 64, 96, 128, 160, 256] } as const;
+/** Sheet counts to tap; by the sq ft the same counts in that sheet's area. */
+const PLY_SHEET_CHIPS = [1, 2, 3, 4, 6, 8, 10] as const;
 const PLY_MODES = [
   { id: "quote" as const, label: "Not known yet — quote the rate" },
   { id: "count" as const, label: "I know how much" },
@@ -372,7 +377,28 @@ function PlywoodBlock({
   const [picked, setPicked] = React.useState<"count" | null>(null);
   const mode = count || picked === "count" ? "count" : spec.plywoodQuote ? "quote" : "none";
   const rate = plywoodRate(spec);
+  const board = deckBoardOf(spec);
+  const sheet = deckSheetOf(spec);
   const bySqft = spec.plywoodUnit === "sqft";
+  const chips = bySqft ? [1, 2, 3, 4, 5, 8].map((n) => n * sheet.sqft) : PLY_SHEET_CHIPS;
+  // A board brings its own two starting prices (per 4 × 8, scaled to the sheet), as a fascia board does.
+  const pickBoard = (id: string) => {
+    const b = DECK_BOARDS.find((x) => x.id === id);
+    if (!b) return;
+    const k = sheet.sqft / 32;
+    set("plywoodBoardId", b.id);
+    set("plywoodEach", Math.round(b.each * k * 100) / 100);
+    set("plywoodLabor", Math.round(b.labor * k * 100) / 100);
+  };
+  // A bigger sheet costs more a sheet and the same a square foot.
+  const pickSize = (id: DeckSheetSize) => {
+    const next = DECK_SHEET_SIZES.find((s) => s.id === id);
+    if (!next || id === spec.plywoodSize) return;
+    const k = next.sqft / sheet.sqft;
+    set("plywoodSize", id);
+    set("plywoodEach", Math.round(spec.plywoodEach * k * 100) / 100);
+    set("plywoodLabor", Math.round(spec.plywoodLabor * k * 100) / 100);
+  };
   const qty = bySqft ? spec.plywoodSqft : spec.plywoodSheets;
   // One installed price, typed either way: the plywood and the fitting keep their split.
   const setRate = (sheet: number) => {
@@ -395,8 +421,8 @@ function PlywoodBlock({
   };
   const toUnit = (u: "sheet" | "sqft") => {
     if (u === spec.plywoodUnit) return;
-    if (u === "sqft") set("plywoodSqft", spec.plywoodSheets * PLYWOOD_SHEET_SQFT);
-    else set("plywoodSheets", Math.ceil(spec.plywoodSqft / PLYWOOD_SHEET_SQFT));
+    if (u === "sqft") set("plywoodSqft", spec.plywoodSheets * sheet.sqft);
+    else set("plywoodSheets", Math.ceil(spec.plywoodSqft / sheet.sqft));
     set("plywoodUnit", u);
   };
   const says = plywoodScope(spec, deckExposed);
@@ -407,15 +433,32 @@ function PlywoodBlock({
     <div className="rbd-f rbd-f--full rbd-ply" data-plywood={mode}>
       <div className="rbd-ply-h">
         <span className="rbd-ply-t">Plywood replacement</span>
-        <span className="rbd-ply-sub">The damaged roof deck under the old roof · ½ in plywood · a 4 × 8 sheet is 32 sq ft</span>
+        <span className="rbd-ply-sub">
+          The damaged roof deck under the old roof · {board.label} · a {sheet.label} sheet is {sheet.sqft} sq ft
+        </span>
       </div>
       <Tiles label="How much plywood?" value={mode} options={PLY_MODES} onPick={pick} disabled={disabled} />
       {mode !== "none" ? (
+        <div className="rbd-ply-what" data-plywood-board>
+          <Sel label="Replace it with" value={spec.plywoodBoardId} options={DECK_BOARDS} onChange={pickBoard} disabled={disabled} wide />
+          <div className="rbd-f">
+            <span className="rbd-lbl">Sheet size</span>
+            <div className="rbd-seg" role="radiogroup" aria-label="Sheet size">
+              {DECK_SHEET_SIZES.map((s) => (
+                <button key={s.id} type="button" role="radio" aria-checked={spec.plywoodSize === s.id} className={"rbd-seg-b" + (spec.plywoodSize === s.id ? " is-on" : "")} disabled={disabled} onClick={() => pickSize(s.id)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {mode !== "none" ? (
         <div className="rbd-ply-rate">
           <Num label="Installed, per sheet" unit="$/sheet" value={rate.sheet} onChange={setRate} disabled={disabled} />
-          <Num label="Installed, per sq ft" unit="$/sq ft" value={rate.sqft} onChange={(v) => setRate(v * PLYWOOD_SHEET_SQFT)} disabled={disabled} />
+          <Num label="Installed, per sq ft" unit="$/sq ft" value={rate.sqft} onChange={(v) => setRate(v * sheet.sqft)} disabled={disabled} />
           <p className="rbd-ply-split">
-            {money2(spec.plywoodEach)} plywood + {money2(spec.plywoodLabor)} to fit, per sheet — split under Your rates.
+            {money2(spec.plywoodEach)} for the {board.kind === "plywood" ? "plywood" : "board"} + {money2(spec.plywoodLabor)} to fit, per {sheet.label} sheet — set them under Your rates.
           </p>
         </div>
       ) : null}
@@ -430,7 +473,7 @@ function PlywoodBlock({
               ))}
             </div>
             <div className="rbd-chips" role="group" aria-label={bySqft ? "Square feet of plywood" : "Sheets of plywood"}>
-              {PLY_CHIPS[bySqft ? "sqft" : "sheet"].map((n) => (
+              {chips.map((n) => (
                 <button key={n} type="button" className={"rbd-chip" + (qty === n ? " is-on" : "")} aria-pressed={qty === n} disabled={disabled} onClick={() => setCount(n)}>
                   {n}
                 </button>
@@ -1000,10 +1043,12 @@ function PackageLedger({
     : "No vents yet";
   // The plywood in the section's one line: what is counted, or the rate the client is quoted.
   const plyNow = plywoodCount(spec);
+  const plyBoard = deckBoardOf(spec).label;
+  const plyIsPlywood = deckBoardOf(spec).kind === "plywood";
   const plywoodSummary = plyNow
-    ? `plywood ${plyNow.unit === "each" ? `${plyNow.sheets} sheet${plyNow.sheets === 1 ? "" : "s"}` : `${fmt(plyNow.sqft)} sq ft`}`
+    ? `${plyBoard} ${plyNow.unit === "each" ? `${plyNow.sheets} sheet${plyNow.sheets === 1 ? "" : "s"}` : `${fmt(plyNow.sqft)} sq ft`}`
     : spec.plywoodQuote && spec.tearOffLayers > 0 && plywoodRate(spec).sheet > 0
-      ? `plywood ${money2(plywoodRate(spec).sheet)}/sheet quoted`
+      ? `${plyBoard} ${money2(plywoodRate(spec).sheet)}/sheet quoted`
       : null;
   const sumTear = [
     spec.tearOffLayers === 0 ? "Overlay, no tear-off" : `Tear-off ${spec.tearOffLayers} layer${spec.tearOffLayers === 1 ? "" : "s"}`,
@@ -1603,8 +1648,8 @@ function PackageLedger({
                   <>
                     <Rate label="Tear-off labor" unit="$/sq·layer" value={spec.tearOffPerSqLayer} onChange={(v) => set("tearOffPerSqLayer", v)} disabled={disabled} />
                     <Rate label="Disposal" unit="$/sq·layer" value={spec.disposalPerSqLayer} onChange={(v) => set("disposalPerSqLayer", v)} disabled={disabled} />
-                    <Rate label="Plywood sheet" unit="$/sheet" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
-                    <Rate label="Plywood fitting" unit="$/sheet" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood sheet" : "Deck board sheet"} unit="$/sheet" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood fitting" : "Deck board fitting"} unit="$/sheet" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
                     <Rate label="Nails & fasteners" unit="$/sq" value={spec.nailsPerSq} onChange={(v) => set("nailsPerSq", v)} disabled={disabled} />
                     <Rate label="Sealant & collars" unit="$/sq" value={spec.sealantPerSq} onChange={(v) => set("sealantPerSq", v)} disabled={disabled} />
                   </>
@@ -1851,8 +1896,8 @@ function PackageLedger({
                         {F.existing === "bur_gravel" && flatRates(["gravelVac"])}
                       </>
                     )}
-                    <Rate label="Plywood sheet" unit="$/sheet" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
-                    <Rate label="Plywood fitting" unit="$/sheet" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood sheet" : "Deck board sheet"} unit="$/sheet" value={spec.plywoodEach} onChange={(v) => set("plywoodEach", v)} disabled={disabled} />
+                    <Rate label={plyIsPlywood ? "Plywood fitting" : "Deck board fitting"} unit="$/sheet" value={spec.plywoodLabor} onChange={(v) => set("plywoodLabor", v)} disabled={disabled} />
                   </>
                 }
               >

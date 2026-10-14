@@ -341,6 +341,33 @@ export function storeyLaborFactor(storeys: number | null | undefined): number {
 }
 export const PLYWOOD_SHEET_EACH = 42;
 export const PLYWOOD_SHEET_LABOR = 35;
+
+/**
+ * THE DECKING A DAMAGED SHEET IS REPLACED WITH (owner, 2026-10-13: "what kind, what thickness and size? add it").
+ * Each board seeds its own two prices per 4 × 8 sheet — the board, and fitting it — as STARTING figures the
+ * contractor sets under Your rates (a pick seeds them, like the fascia boards). The ½ in CDX row keeps the prices
+ * the builder always had. "plywood" names a plywood line; OSB and ZIP are named as roof decking.
+ */
+export interface DeckBoardOption extends CatalogOption {
+  kind: "plywood" | "osb" | "zip";
+  each: number;
+  labor: number;
+}
+export const DECK_BOARDS: DeckBoardOption[] = [
+  { id: "cdx_12", label: "½ in CDX plywood", kind: "plywood", each: PLYWOOD_SHEET_EACH, labor: PLYWOOD_SHEET_LABOR },
+  { id: "osb_716", label: "7/16 in OSB", kind: "osb", each: 24, labor: PLYWOOD_SHEET_LABOR },
+  { id: "cdx_58", label: "⅝ in CDX plywood", kind: "plywood", each: 54, labor: 38 },
+  { id: "osb_58", label: "⅝ in OSB", kind: "osb", each: 34, labor: 38 },
+  { id: "cdx_34", label: "¾ in CDX plywood", kind: "plywood", each: 66, labor: 42 },
+  { id: "zip_716", label: "7/16 in ZIP System roof sheathing", kind: "zip", each: 40, labor: 40 },
+  { id: "zip_58", label: "⅝ in ZIP System roof sheathing", kind: "zip", each: 52, labor: 42 },
+];
+/** The sheet sizes a deck is patched with; the board prices above are per 4 × 8 and scale with the area. */
+export type DeckSheetSize = "4x8" | "4x10";
+export const DECK_SHEET_SIZES: Array<{ id: DeckSheetSize; label: string; sqft: number }> = [
+  { id: "4x8", label: "4 × 8 ft", sqft: 32 },
+  { id: "4x10", label: "4 × 10 ft", sqft: 40 },
+];
 export const NAILS_PER_SQ = 4.5;
 export const SEALANT_PER_SQ = 1.2;
 export const CLEANUP_LUMP = 250;

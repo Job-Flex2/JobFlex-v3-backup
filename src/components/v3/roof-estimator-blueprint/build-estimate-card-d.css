@@ -1070,3 +1070,7 @@
   .jf-blueprint .content .rbd-ply-rate { grid-template-columns: 1fr; }
   .jf-blueprint .content .rbd-ply-row > .rbd-f { flex: 1 1 100%; }
 }
+/* What the deck is patched with (2026-10-13): the board beside the sheet size. */
+.jf-blueprint .content .rbd-ply-what { display: grid; grid-template-columns: minmax(0, 1.4fr) auto; gap: 10px 14px; align-items: end; }
+.jf-blueprint .content .rbd-ply-what .rbd-f--wide { grid-column: auto; }
+@media (max-width: 520px) { .jf-blueprint .content .rbd-ply-what { grid-template-columns: 1fr; } }

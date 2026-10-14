@@ -34,6 +34,10 @@ import {
   pitchLaborFactor,
   PLYWOOD_SHEET_EACH,
   PLYWOOD_SHEET_LABOR,
+  DECK_BOARDS,
+  DECK_SHEET_SIZES,
+  type DeckBoardOption,
+  type DeckSheetSize,
   SEALANT_PER_SQ,
   STARTER_PER_FT,
   FASCIA_OPTIONS,
@@ -257,7 +261,10 @@ export interface RoofPackageSpec {
   /** The proposal tells the client what any damaged decking found at tear-off costs, per sheet and per sq ft —
    *  not in the total (owner, 2026-10-13: "a note to the client … any plywood replacement will be charged this"). */
   plywoodQuote: boolean;
-  /** Per 4 × 8 sheet: the plywood, and fitting it. */
+  /** The board it is replaced with (DECK_BOARDS: kind and thickness) and the sheet size (2026-10-13). */
+  plywoodBoardId: string;
+  plywoodSize: DeckSheetSize;
+  /** Per sheet of that board and size: the board, and fitting it. */
   plywoodEach: number;
   plywoodLabor: number;
   nailsPerSq: number;
@@ -305,51 +312,67 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 
 /** A 4 × 8 sheet of roof decking. */
 export const PLYWOOD_SHEET_SQFT = 32;
+/** The board the deck is patched with (the first, ½ in CDX, when the pick is unknown). */
+export function deckBoardOf(spec: Pick<RoofPackageSpec, "plywoodBoardId">): DeckBoardOption {
+  return DECK_BOARDS.find((b) => b.id === spec.plywoodBoardId) ?? DECK_BOARDS[0];
+}
+/** The sheet: its size words ("4x8" for the client, "4 × 8 ft" on screen) and its area. */
+export function deckSheetOf(spec: Pick<RoofPackageSpec, "plywoodSize">): { id: DeckSheetSize; label: string; sqft: number } {
+  return DECK_SHEET_SIZES.find((s) => s.id === spec.plywoodSize) ?? DECK_SHEET_SIZES[0];
+}
 const money2 = (n: number) => (Math.abs(n - Math.round(n)) < 0.005 ? `$${Math.round(n).toLocaleString("en-US")}` : `$${n.toFixed(2)}`);
 
 /** The installed price of plywood: a sheet (plywood + fitting it) and the same by the square foot. */
-export function plywoodRate(spec: Pick<RoofPackageSpec, "plywoodEach" | "plywoodLabor">): { sheet: number; sqft: number } {
+export function plywoodRate(spec: Pick<RoofPackageSpec, "plywoodEach" | "plywoodLabor"> & Partial<Pick<RoofPackageSpec, "plywoodSize">>): { sheet: number; sqft: number } {
+  const area = deckSheetOf({ plywoodSize: spec.plywoodSize ?? "4x8" }).sqft;
   const sheet = Math.max(0, (spec.plywoodEach || 0) + (spec.plywoodLabor || 0));
   // By the square foot it is what the two lines charge — each half rounded to the cent — so the rate quoted to the
   // client and a count priced by the sq ft never differ by a cent.
   const c2 = (n: number) => Math.round(n * 100) / 100;
-  return { sheet: c2(sheet), sqft: c2(c2(Math.max(0, spec.plywoodEach || 0) / PLYWOOD_SHEET_SQFT) + c2(Math.max(0, spec.plywoodLabor || 0) / PLYWOOD_SHEET_SQFT)) };
+  return { sheet: c2(sheet), sqft: c2(c2(Math.max(0, spec.plywoodEach || 0) / area) + c2(Math.max(0, spec.plywoodLabor || 0) / area)) };
 }
 
 /** The plywood counted on this roof, as entered (sheets or square feet), with the other measure beside it; null for none. */
-export function plywoodCount(spec: Pick<RoofPackageSpec, "plywoodSheets" | "plywoodSqft" | "plywoodUnit">): { qty: number; unit: "each" | "sq ft"; sheets: number; sqft: number } | null {
+export function plywoodCount(spec: Pick<RoofPackageSpec, "plywoodSheets" | "plywoodSqft" | "plywoodUnit"> & Partial<Pick<RoofPackageSpec, "plywoodSize">>): { qty: number; unit: "each" | "sq ft"; sheets: number; sqft: number } | null {
+  const area = deckSheetOf({ plywoodSize: spec.plywoodSize ?? "4x8" }).sqft;
   const bySqft = spec.plywoodUnit === "sqft";
   const qty = bySqft ? Math.max(0, spec.plywoodSqft || 0) : Math.max(0, spec.plywoodSheets || 0);
   if (!(qty > 0)) return null;
   return bySqft
-    ? { qty, unit: "sq ft", sheets: Math.round((qty / PLYWOOD_SHEET_SQFT) * 10) / 10, sqft: qty }
-    : { qty, unit: "each", sheets: qty, sqft: qty * PLYWOOD_SHEET_SQFT };
+    ? { qty, unit: "sq ft", sheets: Math.round((qty / area) * 10) / 10, sqft: qty }
+    : { qty, unit: "each", sheets: qty, sqft: qty * area };
 }
 
 /** The plywood lines: the plywood and fitting it, by the sheet or by the square foot. */
 export function plywoodLines(spec: RoofPackageSpec): { material: { name: string; quantity: number; unit: PkgUnit; unitPrice: number }; labor: { name: string; quantity: number; unit: PkgUnit; unitPrice: number } } | null {
   const c = plywoodCount(spec);
   if (!c) return null;
-  const per = c.unit === "each" ? 1 : 1 / PLYWOOD_SHEET_SQFT;
+  const board = deckBoardOf(spec);
+  const sheet = deckSheetOf(spec);
+  const per = c.unit === "each" ? 1 : 1 / sheet.sqft;
   const r2 = (n: number) => Math.round(n * 100) / 100;
+  // Plywood is called plywood; OSB and ZIP are roof decking — the line says what goes on the roof.
+  const what = board.kind === "plywood" ? "Plywood replacement (damaged roof deck)" : "Roof deck replacement (damaged decking)";
   return {
-    material: { name: c.unit === "each" ? "Plywood replacement (damaged roof deck) · ½ in, 4 × 8 sheets" : "Plywood replacement (damaged roof deck) · ½ in, by the sq ft", quantity: c.qty, unit: c.unit, unitPrice: r2(spec.plywoodEach * per) },
-    labor: { name: "Plywood replacement · remove the damaged deck and fit the new", quantity: c.qty, unit: c.unit, unitPrice: r2(spec.plywoodLabor * per) },
+    material: { name: c.unit === "each" ? `${what} · ${board.label}, ${sheet.label} sheets` : `${what} · ${board.label}, by the sq ft`, quantity: c.qty, unit: c.unit, unitPrice: r2(spec.plywoodEach * per) },
+    labor: { name: `${board.kind === "plywood" ? "Plywood" : "Roof deck"} replacement · remove the damaged deck and fit the new`, quantity: c.qty, unit: c.unit, unitPrice: r2(spec.plywoodLabor * per) },
   };
 }
 
 /** What the CLIENT reads about plywood: what is included, and the rate for any more found once the old roof is off. */
 export function plywoodScope(spec: RoofPackageSpec, deckExposed: boolean): string[] {
   const c = plywoodCount(spec);
+  const board = deckBoardOf(spec).label;
+  const size = deckSheetOf(spec).id;
   const out: string[] = [];
-  if (c) out.push(`Replace damaged roof decking with ½ in plywood — ${c.unit === "each" ? `${c.sheets} sheet${c.sheets === 1 ? "" : "s"} (${Math.round(c.sqft)} sq ft)` : `${Math.round(c.sqft)} sq ft (about ${c.sheets} sheets)`} included.`);
+  if (c) out.push(`Replace damaged roof decking with ${board} — ${c.unit === "each" ? `${c.sheets} sheet${c.sheets === 1 ? "" : "s"} (${Math.round(c.sqft)} sq ft)` : `${Math.round(c.sqft)} sq ft (about ${c.sheets} sheets)`} included.`);
   if (spec.plywoodQuote && deckExposed) {
     const r = plywoodRate(spec);
     if (r.sheet > 0) {
       out.push(
         c
-          ? `Any more damaged decking found once the old roof is off is replaced at ${money2(r.sheet)} per 4x8 sheet (${money2(r.sqft)} per sq ft), installed — only what is replaced is charged.`
-          : `Damaged decking found once the old roof is off is replaced with ½ in plywood at ${money2(r.sheet)} per 4x8 sheet (${money2(r.sqft)} per sq ft), installed — only what is replaced is charged, and it is not in the price above.`,
+          ? `Any more damaged decking found once the old roof is off is replaced at ${money2(r.sheet)} per ${size} sheet (${money2(r.sqft)} per sq ft), installed — only what is replaced is charged.`
+          : `Damaged decking found once the old roof is off is replaced with ${board} at ${money2(r.sheet)} per ${size} sheet (${money2(r.sqft)} per sq ft), installed — only what is replaced is charged, and it is not in the price above.`,
       );
     }
   }
@@ -360,7 +383,7 @@ export function plywoodScope(spec: RoofPackageSpec, deckExposed: boolean): strin
 function plywoodNote(spec: RoofPackageSpec, deckExposed: boolean): string[] {
   if (plywoodCount(spec) || !spec.plywoodQuote || !deckExposed) return [];
   const r = plywoodRate(spec);
-  return r.sheet > 0 ? [`Plywood is not in the total: the proposal quotes ${money2(r.sheet)} a sheet (${money2(r.sqft)}/sq ft) installed for any damaged decking found at tear-off.`] : [];
+  return r.sheet > 0 ? [`Deck replacement is not in the total: the proposal quotes ${deckBoardOf(spec).label} at ${money2(r.sheet)} a ${deckSheetOf(spec).id} sheet (${money2(r.sqft)}/sq ft) installed for any damaged decking found at tear-off.`] : [];
 }
 
 export function estimateEdges(facts: RoofFacts): { eaveFt: number; rakeFt: number; ridgeFt: number; hipFt: number; valleyFt: number | null } | null {
@@ -776,6 +799,8 @@ export function defaultSpecWith(facts: RoofFacts, lists: CatalogLists, sys: Roof
     plywoodSqft: 0,
     plywoodUnit: "sheet",
     plywoodQuote: true,
+    plywoodBoardId: DECK_BOARDS[0].id,
+    plywoodSize: "4x8",
     plywoodEach: PLYWOOD_SHEET_EACH,
     plywoodLabor: PLYWOOD_SHEET_LABOR,
     nailsPerSq: NAILS_PER_SQ,
@@ -1032,6 +1057,8 @@ export function withSystem(spec: RoofPackageSpec, sys: RoofSystem, facts: RoofFa
       plywoodSqft: spec.plywoodSqft,
       plywoodUnit: spec.plywoodUnit,
       plywoodQuote: spec.plywoodQuote,
+      plywoodBoardId: spec.plywoodBoardId,
+      plywoodSize: spec.plywoodSize,
       cleanupLump: spec.cleanupLump,
       permitLump: spec.permitLump,
     };

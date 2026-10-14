@@ -12,7 +12,7 @@ export const PREF_KEYS = [
   "valleyTypeId", "valleyMatPerFt", "valleyLaborPerFt", "stepSizeId", "stepPerPiece", "stepLaborPerFt",
   "apronPerFt", "apronLaborPerFt", "counterPerFt", "counterLaborPerFt", "pipeBootPrices",
   "chimneySizeId", "chimneyEach", "chimneyLabor", "curbEach", "curbLabor", "ventBalanced",
-  "tearOffPerSqLayer", "disposalPerSqLayer", "plywoodEach", "plywoodLabor", "plywoodQuote", "plywoodUnit",
+  "tearOffPerSqLayer", "disposalPerSqLayer", "plywoodEach", "plywoodLabor", "plywoodQuote", "plywoodUnit", "plywoodBoardId", "plywoodSize",
   "nailsPerSq", "sealantPerSq", "cleanupLump", "safetyLump", "permitLump", "deliveryLump",
 ] as const satisfies ReadonlyArray<keyof RoofPackageSpec>;
 
