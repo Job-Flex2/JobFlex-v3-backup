@@ -2,12 +2,16 @@
 // the current link first (each email once: first seen, last seen, how many visits), then any earlier link's; the
 // offers newest first, each one a mailto away. Read-only; the lists live in lib/investorVisitors.
 import type { InvestorOffer, InvestorVisitor } from "@/lib/investorVisitors";
-import { INVESTING_KINDS } from "@/lib/investorGate";
+import { INVESTING_KINDS, offersOf, readersOf } from "@/lib/investorGate";
 import s from "./investor-audience.module.css";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-export function InvestorAudience({ visitors, offers, linkMadeAt }: { visitors: InvestorVisitor[]; offers: InvestorOffer[]; linkMadeAt: string | null }) {
+export function InvestorAudience({ visitors: allVisitors, offers: allOffers, linkMadeAt }: { visitors: InvestorVisitor[]; offers: InvestorOffer[]; linkMadeAt: string | null }) {
+  // The admins' own walk-throughs and test offers (2026-10-14) are not readers or offers.
+  const visitors = readersOf(allVisitors);
+  const offers = offersOf(allOffers);
+  const tests = allVisitors.length - visitors.length + (allOffers.length - offers.length);
   const current = visitors.filter((v) => v.linkMadeAt === linkMadeAt);
   const earlier = visitors.filter((v) => v.linkMadeAt !== linkMadeAt);
   const investors = current.filter((v) => INVESTING_KINDS.has(v.kind)).length;
@@ -79,6 +83,7 @@ export function InvestorAudience({ visitors, offers, linkMadeAt }: { visitors: I
       ) : (
         <p className={s.empty}>Nobody has opened the link yet.</p>
       )}
+      {tests ? <p className={s.hint} data-admin-tests>{tests === 1 ? "One entry of your own" : `${tests} entries of your own`} (an admin going through the door, or a test offer) left out.</p> : null}
     </section>
   );
 }

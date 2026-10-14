@@ -4,6 +4,11 @@ import "server-only";
 // first. A reader's pass is a cookie signed with the auth secret AND the link's token, so a new link asks again and a
 // cookie cannot be made up. Every introduction and every offer is emailed to the platform admins (the support
 // recipients); an offer is sent with the investor's address as reply-to, so answering is one click.
+//
+// THE DOOR IS FOR EVERYONE (owner, 2026-10-14: "before anyone opens the link they need to submit who they are, and
+// then they see the stats"): a signed-in admin goes through it too, to see the page as a reader does. Their entry is
+// marked `admin` — kept out of the reader list and the office feed, and nobody is emailed about it; a test offer
+// from them is emailed, marked as a test, so the whole way through can be tried.
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
@@ -32,6 +37,8 @@ export interface InvestorOffer extends InvestorOfferInput {
   id: string;
   at: string;
   visitorId: string | null;
+  /** Sent by a signed-in admin trying the page: a test, not an offer. */
+  admin?: boolean;
 }
 
 async function readList<T>(key: string): Promise<T[]> {
@@ -115,22 +122,24 @@ async function tellAdmins(subject: string, headline: string, rows: Array<{ label
   }
 }
 
-/** A reader introduces themselves: kept, the admins told, and this browser given its pass for the link. */
-export async function introduceVisitor(token: string, linkMadeAt: string | null, input: InvestorIntroInput): Promise<InvestorVisitor> {
+/** A reader introduces themselves: kept, the admins told, and this browser given its pass for the link. An admin's own
+ *  walk-through is kept marked as one, and told to nobody. */
+export async function introduceVisitor(token: string, linkMadeAt: string | null, input: InvestorIntroInput, opts: { admin?: boolean } = {}): Promise<InvestorVisitor> {
   const list = await readInvestorVisitors();
   const now = new Date().toISOString();
   // The same person on the same link (same email) is one reader who came back, not two.
   const same = list.findIndex((v) => v.email === input.email && v.linkMadeAt === linkMadeAt);
   let visitor: InvestorVisitor;
   if (same >= 0) {
-    visitor = { ...list[same], name: input.name, company: input.company, kind: input.kind, phone: input.phone ?? list[same].phone, visits: list[same].visits + 1, lastSeen: now };
+    visitor = { ...list[same], name: input.name, company: input.company, kind: input.kind, phone: input.phone ?? list[same].phone, visits: list[same].visits + 1, lastSeen: now, admin: opts.admin || list[same].admin || undefined };
     list.splice(same, 1);
   } else {
-    visitor = { id: randomBytes(9).toString("base64url"), at: now, lastSeen: now, visits: 1, linkMadeAt, name: input.name, company: input.company, kind: input.kind, email: input.email, phone: input.phone ?? null };
+    visitor = { id: randomBytes(9).toString("base64url"), at: now, lastSeen: now, visits: 1, linkMadeAt, name: input.name, company: input.company, kind: input.kind, email: input.email, phone: input.phone ?? null, ...(opts.admin ? { admin: true } : {}) };
   }
   await writeList(VISITORS_KEY, [visitor, ...list], 1000);
   const pass = passFor(visitor.id, token);
   (await cookies()).set(INVESTOR_PASS_COOKIE, pass.value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: pass.maxAge });
+  if (visitor.admin) return visitor;
   await tellAdmins(
     `Investor link opened — ${visitor.name}, ${visitor.company}`,
     same >= 0 ? `${visitor.name} came back to the investor page` : `${visitor.name} opened the investor page`,
@@ -146,14 +155,16 @@ export async function introduceVisitor(token: string, linkMadeAt: string | null,
   return visitor;
 }
 
-/** An offer from the page: kept, and emailed to the admins with the investor as reply-to. */
-export async function recordOffer(visitorId: string | null, input: InvestorOfferInput): Promise<InvestorOffer> {
-  const offer: InvestorOffer = { ...input, id: randomBytes(9).toString("base64url"), at: new Date().toISOString(), visitorId };
+/** An offer from the page: kept, and emailed to the admins with the investor as reply-to. An admin's own test offer is
+ *  kept marked as one and emailed as a test, so the whole way through can be tried. */
+export async function recordOffer(visitorId: string | null, input: InvestorOfferInput, opts: { admin?: boolean } = {}): Promise<InvestorOffer> {
+  const offer: InvestorOffer = { ...input, id: randomBytes(9).toString("base64url"), at: new Date().toISOString(), visitorId, ...(opts.admin ? { admin: true } : {}) };
   const list = await readInvestorOffers();
   await writeList(OFFERS_KEY, [offer, ...list], 300);
+  const test = offer.admin ? "Test — " : "";
   await tellAdmins(
-    `VC offer — ${offer.company}: ${offer.amount} · ${offer.instrument}`,
-    `${offer.company} sent ${offer.type === "Term sheet" ? "a term sheet" : offer.type === "Intro call first" ? "a request for an intro call" : "an investment interest"}`,
+    `${test}VC offer — ${offer.company}: ${offer.amount} · ${offer.instrument}`,
+    `${test}${offer.company} sent ${offer.type === "Term sheet" ? "a term sheet" : offer.type === "Intro call first" ? "a request for an intro call" : "an investment interest"}`,
     [
       { label: "From", value: `${offer.name} · ${offer.company}` },
       { label: "Email", value: offer.email },

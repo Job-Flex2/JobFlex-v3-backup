@@ -6,8 +6,9 @@
 // WHO IS READING (owner, 2026-10-13): the figures open once the reader says
 // who they are — name, company, what they do, an email — and we hear about it
 // (lib/investorVisitors); this browser keeps a pass for the link. At the top,
-// "We accept VC offers" sends a short offer to us. A signed-in platform admin
-// sees the figures straight away (?preview=gate shows the form investors get).
+// "We accept VC offers" sends a short offer to us. The door is for everyone
+// (owner, 2026-10-14): a signed-in admin goes through it too and sees the page
+// as a reader does — their entry marked as a test, told to nobody.
 import type { Metadata } from "next";
 import { investorLinkOpen, investorReport } from "@/lib/investors";
 import { visitorForLink } from "@/lib/investorVisitors";
@@ -30,7 +31,7 @@ async function signedInAdmin(): Promise<boolean> {
   }
 }
 
-export default async function InvestorsPublicPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ preview?: string }> }) {
+export default async function InvestorsPublicPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const open = /^[A-Za-z0-9_-]{16,64}$/.test(token) && (await investorLinkOpen(token));
   if (!open) {
@@ -44,30 +45,25 @@ export default async function InvestorsPublicPage({ params, searchParams }: { pa
       </main>
     );
   }
-  const [admin, visitor, sp] = await Promise.all([signedInAdmin(), visitorForLink(token, { countVisit: true }), searchParams]);
-  if (!visitor && (!admin || sp.preview === "gate")) {
+  const [admin, visitor] = await Promise.all([signedInAdmin(), visitorForLink(token, { countVisit: true })]);
+  if (!visitor) {
     return (
       <main className={s.page}>
-        <InvestorGate token={token} adminPreview={admin} />
+        <InvestorGate token={token} admin={admin} />
       </main>
     );
   }
   const report = await investorReport();
-  const lead = !!visitor && INVESTING_KINDS.has(visitor.kind);
+  const lead = INVESTING_KINDS.has(visitor.kind);
   return (
     <main className={s.page}>
       <div className={s.frame}>
         <div className={s.vcBar} data-vc-bar>
           <p className={s.vcWords}>
-            {visitor ? (
-              <>
-                {visitor.visits > 1 ? "Welcome back" : "Welcome"}, <b>{visitor.name}</b> · {visitor.company}. We&apos;re raising — offers and first conversations welcome.
-              </>
-            ) : (
-              <>Admin view — investors introduce themselves first (<a href={`/investors/${token}?preview=gate`}>see the form</a>).</>
-            )}
+            {visitor.visits > 1 ? "Welcome back" : "Welcome"}, <b>{visitor.name}</b> · {visitor.company}. We&apos;re raising — offers and first conversations welcome.
+            {visitor.admin ? <> <em data-admin-test>You are signed in as an admin: this is the page a reader sees. Your entry is kept out of the reader list; an offer from here is emailed as a test.</em></> : null}
           </p>
-          <VcOfferButton token={token} visitor={visitor ? { name: visitor.name, company: visitor.company, kind: visitor.kind, email: visitor.email, phone: visitor.phone } : null} lead={lead} />
+          <VcOfferButton token={token} visitor={{ name: visitor.name, company: visitor.company, kind: visitor.kind, email: visitor.email, phone: visitor.phone }} lead={lead} />
         </div>
         <header className={s.head}>
           <div>

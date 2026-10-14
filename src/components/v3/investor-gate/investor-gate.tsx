@@ -41,8 +41,8 @@ function Chips({ name, options, value, onPick, problem }: { name: string; option
   );
 }
 
-/** Before the figures: who is reading. */
-export function InvestorGate({ token, adminPreview = false }: { token: string; adminPreview?: boolean }) {
+/** Before the figures: who is reading. An admin goes through it too (2026-10-14), to see the page as a reader does. */
+export function InvestorGate({ token, admin = false }: { token: string; admin?: boolean }) {
   const router = useRouter();
   const [f, setF] = useState({ name: "", company: "", kind: "", email: "", phone: "" });
   const [problems, setProblems] = useState<Problems>({});
@@ -78,7 +78,7 @@ export function InvestorGate({ token, adminPreview = false }: { token: string; a
       <p className={s.sub}>
         The live numbers are one step away: what the ads cost, how many contractors start a trial, and how soon the ads pay for themselves. Tell us who you are and the page opens — this browser remembers you.
       </p>
-      {adminPreview ? <p className={s.note}>Admin preview: this is what a reader sees first. Your own visit is not recorded.</p> : null}
+      {admin ? <p className={s.note} data-admin-note>You are signed in as an admin. Every reader goes through this door before the figures — go through it yourself to see the page as they do. Your entry is marked as yours and kept out of the reader list, and nobody is emailed about it.</p> : null}
       <form className={s.form} onSubmit={submit} noValidate>
         <div className={s.pair}>
           <Field id="inv-name" label="Your name" problem={problems.name}>
@@ -105,7 +105,7 @@ export function InvestorGate({ token, adminPreview = false }: { token: string; a
             {error}
           </p>
         ) : null}
-        <button type="submit" className={s.primary} disabled={busy || adminPreview} data-investor-open>
+        <button type="submit" className={s.primary} disabled={busy} data-investor-open>
           {busy ? "Opening…" : "See the figures"}
         </button>
         <p className={s.fine}>Used only to know who is reading and to answer you. Never shared.</p>
