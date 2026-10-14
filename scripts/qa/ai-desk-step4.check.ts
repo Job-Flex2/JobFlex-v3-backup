@@ -31,7 +31,7 @@ const check = (name: string, ok: boolean, detail = "") => {
   check("audio deltas and unknown events are nothing to the panel; so is a non-JSON frame", readRealtimeEvent({ type: "response.output_audio.delta", delta: "AAAA" }) === null && readRealtimeEvent("{{") === null && readRealtimeEvent(42) === null);
   const outs = toolOutputEvents("c1", { booked: true });
   check("a tool's output goes back as a function_call_output, then the model's next turn", outs.length === 2 && (outs[0].item as { call_id: string; output: string }).call_id === "c1" && (outs[0].item as { output: string }).output === '{"booked":true}' && outs[1].type === "response.create");
-  check("the desk speaks first", GREET_FIRST.type === "response.create" && /greeting/.test(GREET_FIRST.response.instructions));
+  check("the desk speaks first, with the written greeting word for word", GREET_FIRST.type === "response.create" && /GREETING exactly as written/.test(GREET_FIRST.response.instructions) && /recorded/.test(GREET_FIRST.response.instructions));
 
   // ── the session the key is minted for
   const ga = testSession({ instructions: "I", voice: "cedar", model: "gpt-realtime-mini", api: "ga" }) as { type: string; model: string; audio: { output: { voice: string }; input: { transcription: unknown; turn_detection: unknown } }; tools: unknown[]; output_modalities: string[] };

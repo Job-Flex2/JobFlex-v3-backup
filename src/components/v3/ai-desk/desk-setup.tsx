@@ -112,6 +112,7 @@ export function DeskStatus({ desk, registration, onNumber }: { desk: DeskSetting
         )}
       </div>
       {!desk.assistantOnPlan ? <p className={`${s.note} ${s.noteErr}`}>{C.notOnPlan}</p> : null}
+      {number ? <p className={s.note} data-desk-forward-tip>{C.forwardTip(number)}</p> : null}
       <div className={s.modes} role="group" aria-label={C.whoAnswers}>
         <button type="button" className={s.mode} aria-pressed={mode === "ANSWER"} disabled={busy || !desk.canManage} onClick={() => flip("ANSWER")} data-mode-btn="ANSWER">
           <b>{C.modeAnswer}</b>

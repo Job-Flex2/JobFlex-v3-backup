@@ -145,7 +145,7 @@ export function readRealtimeEvent(raw: unknown): TestEvent {
 }
 
 /** The first client event on the channel: the desk speaks first, as on a real call. */
-export const GREET_FIRST = { type: "response.create", response: { instructions: "Start the call with your greeting, then wait for the caller." } } as const;
+export const GREET_FIRST = { type: "response.create", response: { instructions: "Start the call by saying your GREETING exactly as written in your instructions — every word of it, including that this is a virtual assistant and the call is recorded — then wait for the caller." } } as const;
 
 /** A tool's result back to the model, then the model's next turn. */
 export const toolOutputEvents = (callId: string, output: unknown): Array<Record<string, unknown>> => [

@@ -1033,6 +1033,8 @@ export const DESK_COPY = {
   ask: 'Ask',
   asking: 'Asking…',
   answerTag: 'what the desk would say',
+  // a number customers already know: forwarded at the carrier, not in JobFlex
+  forwardTip: (number: string) => `Have a number customers already know? Forward it to ${number} at your phone carrier and the desk answers that one too — on most US carriers dial *72 then the number to forward every call, or *71 to forward only the calls you don\u2019t pick up (*73 turns it off). Your own phone keeps working as before.`,
   // the voice, and the month's minutes (step 4)
   voiceTitle: 'The desk\u2019s voice',
   hear: 'Hear it',

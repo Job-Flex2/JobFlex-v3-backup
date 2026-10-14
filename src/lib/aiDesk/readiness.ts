@@ -103,8 +103,9 @@ export async function deskReadiness(adminUserId: string | null = null): Promise<
     const recent = await db.syncState.findMany({ where: { key: { startsWith: "callout:" }, updatedAt: { gte: new Date(Date.now() - 86_400_000) } }, orderBy: { updatedAt: "desc" }, take: 30, select: { cursor: true, updatedAt: true } }).catch(() => []);
     for (const r of recent) {
       try {
-        const o = JSON.parse(r.cursor) as { error?: string | null };
-        if (o.error) {
+        const o = JSON.parse(r.cursor) as { outcome?: string; error?: string | null };
+        // Only a call the desk could not take: an error on a call it handled is a note, not a failure.
+        if (o.error && o.outcome === "failed") {
           lastFailure = { at: r.updatedAt, error: o.error };
           break;
         }
