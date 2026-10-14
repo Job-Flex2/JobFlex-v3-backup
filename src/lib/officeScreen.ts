@@ -6,6 +6,8 @@
 // the shapes, the feed's order, and the rules that turn the day's facts into "needs you" lines — so
 // scripts/qa/office-screen.check.ts holds them without a database. lib/officeScreenRead gathers the facts.
 
+import { screenName } from "./signup-watch-shared";
+
 export type OfficeTone = "bad" | "warn" | "info" | "good";
 
 /** One number on the board: today so far, and yesterday by this time (null when there is no fair comparison). */
@@ -127,6 +129,8 @@ export interface AttentionFacts {
   sentYesterday: number;
   /** VC offers sent from the investor link in the last three days (2026-10-13). */
   recentOffers?: { company: string; amount: string; at: number }[];
+  /** The sign-up form's alarm: the same problem for several visitors in the last hour (2026-10-14, lib/signup-alerts). */
+  signupAlerts?: { words: string; side: "ours" | "theirs"; visits: number; times: number; screen: string }[];
 }
 
 /**
@@ -137,6 +141,10 @@ export function buildAttention(f: AttentionFacts): OfficeAttention[] {
   const out: OfficeAttention[] = [];
   const downs = f.health.filter((s) => !s.optional && s.level === "down");
   for (const s of downs) out.push({ tone: "bad", text: `${s.name} is down — ${s.reason}` });
+  // People failing on the sign-up form right now: ours is an alarm, the form refusing several is a warning.
+  for (const a of f.signupAlerts ?? []) {
+    out.push({ tone: a.side === "ours" ? "bad" : "warn", text: `Sign-up: ${plural(a.visits, "visitor")} hit "${a.words}" in the last hour${a.side === "ours" ? " — on our side" : ""}`, who: [`${a.times} ${a.times === 1 ? "time" : "times"}${a.screen ? ` · ${screenName(a.screen)} screen` : ""}`] });
+  }
   // An offer is good news that waits on a person.
   if (f.recentOffers?.length) out.push({ tone: "good", text: `${plural(f.recentOffers.length, "VC offer")} to answer — from the investor link`, who: f.recentOffers.map((o) => `${o.company} · ${o.amount}`) });
   if (f.failedPayments.length) out.push({ tone: "bad", text: `${plural(f.failedPayments.length, "payment")} failed — the card was declined`, who: f.failedPayments });

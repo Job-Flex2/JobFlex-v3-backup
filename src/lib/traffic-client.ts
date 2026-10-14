@@ -182,5 +182,9 @@ export function trackException(error: Error & { digest?: string }, boundary: "ro
       organizationId: errorContext.organizationId ?? "",
     },
   });
+  // On the sign-up form a crash is the visitor's last sight of us: the form's watcher reads it as ours (2026-10-14).
+  if (window.location.pathname.startsWith("/auth/register")) {
+    deliver({ event: TRAFFIC_EVENTS.signupProblem, properties: { reason: "page_crash", side: "ours", message, screen: "", step: "" } });
+  }
   if (boundary === "global") flushByBeacon();
 }

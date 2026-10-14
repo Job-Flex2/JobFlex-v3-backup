@@ -35,6 +35,8 @@ import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
 import { trackTraffic, trafficIdentity } from "@/lib/traffic-client";
+import { setSignupPosition, signupLeavingTo, signupProblem, startSignupWatch } from "@/lib/signup-watch";
+import { reasonOfMessage } from "@/lib/signup-watch-shared";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import { createPortal } from "react-dom";
 import { attachPlacesSuggest } from "@/components/v3/blueprint-shell/places-suggest";
@@ -287,6 +289,14 @@ export function RegisterContent({
   /* The same mode as the reports split completions (lib/signupMode), on the
      browser's copies of CompleteRegistration / StartTrial. */
   const modeLabel: SignupModeLabel = otp ? "passwordless" : twoStep ? "2-step" : "3-step";
+  /* THE FORM, WATCHED (owner, 2026-10-14: "where exactly do they stop, and is it us?"): which box, how long, every
+     refusal with whose side it is, the tab going away and the page closing — lib/signup-watch. */
+  React.useEffect(() => startSignupWatch(), []);
+  React.useEffect(() => {
+    // The email-code screens are the passwordless step's own to name; here the step and the flow.
+    const screen = step >= 4 ? "done" : step === 3 ? "plan" : step === 2 ? "company" : otp ? "" : "account";
+    setSignupPosition({ step: String(step), flow: trafficFlow, ...(screen ? { screen } : {}) });
+  }, [step, trafficFlow, otp]);
   React.useEffect(() => {
     if (step === 4) return;
     const key = `${trafficFlow}:${step}`;
@@ -517,7 +527,10 @@ export function RegisterContent({
   const leadSent = React.useRef(false);
   const registrationSent = React.useRef(false);
   /** Step 1's outcome for the analyst: passed, or refused and why. */
-  const step1Outcome = (outcome: "continue" | "error", reason = "") => trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: twoStep ? 2 : 3, mode: signupMode });
+  const step1Outcome = (outcome: "continue" | "error", reason = "", message = "") => {
+    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: twoStep ? 2 : 3, mode: signupMode });
+    if (outcome === "error") signupProblem(reason, { message });
+  };
   /* CompleteRegistration, the browser's copy. On the return from Checkout
      the page mounts straight on step 4 — before the consent provider has
      loaded the pixel, so an effect keyed on the step fired into nothing
@@ -632,6 +645,8 @@ export function RegisterContent({
         if (v.password2) setPassword2(v.password2);
       }, 0);
     }
+    // A form that took more than five seconds to come alive is ours to fix, whatever they did next.
+    if (performance.now() > 5000) signupProblem("slow_form", { message: `ready after ${Math.round(performance.now() / 100) / 10} s` });
     trackTraffic(TRAFFIC_EVENTS.signupStep1, {
       outcome: "ready", ready_ms: Math.round(performance.now()),
       typed_before_ready: !!pre?.typedAt, typed_ms: pre?.typedAt || -1,
@@ -844,6 +859,7 @@ export function RegisterContent({
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (res.ok && body.url) {
         trackTraffic(TRAFFIC_EVENTS.opened, { plan: slug, interval: term, flow: trafficFlow });
+        signupLeavingTo("checkout");
         leavingRef.current = true;
         window.location.href = body.url;
         /* A hand-off that never happens (blocked, cancelled) must not leave
@@ -856,10 +872,10 @@ export function RegisterContent({
         }, 15000);
         return;
       }
-      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_rejected" });
+      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_rejected" }); signupProblem("checkout_rejected");
       await planRefused(body.error || "Couldn't open checkout — your account has not been created.");
     } catch {
-      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_unavailable" });
+      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_unavailable" }); signupProblem("checkout_unavailable");
       setPlansErr("Couldn't reach checkout — your account has not been created.");
     } finally {
       if (!leavingRef.current) {
@@ -937,7 +953,7 @@ export function RegisterContent({
       }
       const res = await requestCardlessTrial(token, slug, termFor(slug));
       if (!res.ok) {
-        trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected" });
+        trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected" }); signupProblem(res.requiresCard ? "trial_needs_card" : "trial_rejected");
         // The day's card-less trials are taken: the same plan step now opens
         // Stripe Checkout, and the line under it says why.
         if (res.requiresCard) setRequiresCard(true);
@@ -962,7 +978,7 @@ export function RegisterContent({
       setConfirmSlug(slug);
       setConfirmSentTo(res.email);
     } catch {
-      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "trial_unavailable" });
+      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "trial_unavailable" }); signupProblem("trial_unavailable");
       setPlansErr("Couldn't start the trial. Try again.");
     } finally {
       setPayBusy(false);
@@ -992,7 +1008,7 @@ export function RegisterContent({
     if (!otp || !token) return false;
     const st = await otpPendingState(token).catch(() => null);
     if (!st || st.state === "live") return false;
-    trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: st.state === "taken" ? "pending_taken" : "pending_expired", mode: signupMode });
+    trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: st.state === "taken" ? "pending_taken" : "pending_expired", mode: signupMode }); signupProblem(st.state === "taken" ? "pending_taken" : "pending_expired");
     setPlansErr(null);
     if (st.state === "taken") {
       setGate({ kind: "taken", email: st.email });
@@ -1156,7 +1172,7 @@ export function RegisterContent({
             ? "That email signs in with Google. Open this page in your browser (below) to continue with Google."
             : msg,
         );
-        step1Outcome("error", /Google/.test(msg) ? "email_google" : /temporary|throwaway|disposable/i.test(msg) ? "email_disposable" : /Too many/.test(msg) ? "rate_limited" : /valid email/.test(msg) ? "email_invalid" : "email_taken");
+        step1Outcome("error", /Google/.test(msg) ? "email_google" : /temporary|throwaway|disposable/i.test(msg) ? "email_disposable" : /Too many/.test(msg) ? "rate_limited" : /valid email/.test(msg) ? "email_invalid" : "email_taken", msg);
         return;
       }
     } catch {
@@ -1197,16 +1213,19 @@ export function RegisterContent({
     /* The business name is asked for on this step, so it is validated here. */
     if (!biz.trim()) {
       report("Enter your business name.");
+      signupProblem("biz_missing");
       return;
     }
     /* The two-step sign-up asks for the address later, in Settings. */
     if (!twoStep && !addr.trim()) {
       report("Enter your company address — leads are matched by distance.");
+      signupProblem("addr_missing");
       return;
     }
     if (trades.length === 0) {
       report(twoStep ? "Pick at least one trade — what you do." : "Pick at least one trade — leads are matched to it.");
       setFoldOpen(true);
+      signupProblem("trades_missing");
       return;
     }
     setCreating(true);
@@ -1260,6 +1279,7 @@ export function RegisterContent({
       if (!res.ok) {
         report(res.error);
         toast.error("Couldn't continue", res.error);
+        signupProblem(reasonOfMessage(res.error), { message: res.error });
         return;
       }
       try {
@@ -1272,6 +1292,7 @@ export function RegisterContent({
     } catch {
       report(SERVER_TROUBLE);
       toast.error("Couldn't continue", SERVER_TROUBLE);
+      signupProblem("pending_failed", { message: SERVER_TROUBLE });
     } finally {
       setCreating(false);
     }
@@ -1288,6 +1309,7 @@ export function RegisterContent({
     // that already has an account signs in and lands on the dashboard. The
     // ad's click id rides to that return in a cookie (2026-10-01).
     rememberFbclidForGoogle(searchParams?.get("fbclid"));
+    signupLeavingTo("google");
     if (otp) {
       // The return of a new address is built from cookies (lib/googleSignup):
       // the trade and the campaign this page came in on, and the mode — a
@@ -1324,7 +1346,7 @@ export function RegisterContent({
       }
       const res = await startVerifiedCardlessTrial(token, slug, termFor(slug));
       if (!res.ok) {
-        trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected", mode: signupMode });
+        trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected", mode: signupMode }); signupProblem(res.requiresCard ? "trial_needs_card" : "trial_rejected");
         if (res.requiresCard) setRequiresCard(true);
         if (res.done && res.email) {
           router.replace(`/auth/login?${new URLSearchParams({ next: "/dashboard", email: res.email }).toString()}` as Route);
@@ -1342,7 +1364,7 @@ export function RegisterContent({
       setDoneNote(`Your ${trialDays}-day free trial is on for ${res.email}. No card needed.`);
       setStep(4);
     } catch {
-      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "trial_unavailable", mode: signupMode });
+      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "trial_unavailable", mode: signupMode }); signupProblem("trial_unavailable");
       setPlansErr("Couldn't start the trial. Try again.");
     } finally {
       setPayBusy(false);

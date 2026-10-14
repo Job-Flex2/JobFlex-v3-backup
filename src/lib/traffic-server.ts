@@ -3,6 +3,7 @@ import { experimentResultFromRow } from "./traffic-contract";
 import { buildExperimentsQuery, buildStageVisitorsQuery, buildTrafficQueries, funnelStages, shiftDate } from "./traffic-query";
 import { CONVERTED_HOURS, MAP_HISTORY_LIMIT, buildConvertedQuery, buildLiveQuery, buildInvestorVisitorsQuery, buildLiveTotalsQuery, buildMapHistoryQuery, liveEventFromRow, liveHeadline, liveTotalsFromRow, mapHistoryEventsFromRow, minutesIntoDay, shapeLive, shortId, type FreshSignup, type LiveEvent, type LiveReport, type LiveTotalsPair, type MapHistory, type MapSpan } from "./traffic-live";
 import { analystSessionFromRow, buildAnalystQuery, type LandingSession } from "./traffic-analyst";
+import { buildDropoffQuery, buildDropoffReport, dropoffVisitFromRow, type DropoffReport, type DropoffVisit } from "./signup-dropoff";
 import { TRAFFIC_TZ } from "./traffic-visitor";
 
 /** The last half hour of events, one PostHog query, shared by every admin
@@ -57,6 +58,25 @@ export async function fetchAnalystSessions(force = false): Promise<AnalystRead> 
   }));
   promise.catch(() => { if (analystSessions?.promise === promise) analystSessions = null; });
   analystSessions = { at: now, promise };
+  return promise;
+}
+
+/** WHERE SIGN-UPS STOP (2026-10-14): the week's or the month's sign-up visits, one row each, read into the report
+ *  under the live map. Five minutes per span — the form's numbers do not move while someone reads them. */
+const DROPOFF_CACHE_MS = 5 * 60_000;
+export interface DropoffRead { report: DropoffReport; readAt: string }
+const dropoffReads = new Map<number, { at: number; promise: Promise<DropoffRead> }>();
+export async function fetchSignupDropoff(days: number, force = false): Promise<DropoffRead> {
+  const now = Date.now();
+  const hit = dropoffReads.get(days);
+  if (!force && hit && now - hit.at < DROPOFF_CACHE_MS) return hit.promise;
+  const scope = process.env.NODE_ENV === "production" ? "production" : "with-local";
+  const promise = runTrafficQuery(buildDropoffQuery(days, scope), "signup dropoff").then((rows) => ({
+    report: buildDropoffReport(rows.map(dropoffVisitFromRow).filter((v): v is DropoffVisit => !!v), days, Date.now()),
+    readAt: new Date().toISOString(),
+  }));
+  promise.catch(() => { if (dropoffReads.get(days)?.promise === promise) dropoffReads.delete(days); });
+  dropoffReads.set(days, { at: now, promise });
   return promise;
 }
 
@@ -192,7 +212,10 @@ export async function getLiveTraffic(signups: FreshSignup[], opts: { includeDeve
       dayAgeMinutes,
       topPlatform: top && top.visitors > 0 ? { name: top.name, visitors: top.visitors } : null,
     });
-    const report: LiveReport = keepGood(keptKey, { ...shaped, converted, totals, dayAgeMinutes, headline, status: "ok", fetchedAt });
+    // The session replays (2026-10-14): PostHog's own player for the visit, one click from its line.
+    const cfg = posthogApiConfig();
+    const replayBase = cfg ? `${cfg.host}/project/${cfg.id}/replay/` : null;
+    const report: LiveReport = keepGood(keptKey, { ...shaped, converted, totals, dayAgeMinutes, headline, status: "ok", fetchedAt, replayBase });
     return totalsRead?.stale ? { ...report, stale: totalsRead.stale } : report;
   } catch (err) {
     const msg = err instanceof Error && err.name === "TimeoutError" ? "PostHog took too long. Try again shortly." : err instanceof Error ? err.message : "Live view unavailable.";

@@ -605,7 +605,7 @@ export function analyse(sessions: LandingSession[], opts: { now?: number; timezo
   // Where the sign-up leaks.
   if (s1.length >= 10) {
     const trans = [
-      { from: 1, to: 2, a: s1.length, b: s2.length, action: "Step 1 asks for name, email and two passwords, and the Google button is hidden inside Facebook's browser. Ask for the email alone first; set the password after the trial starts. (Step-1 errors — 'email already registered' — are not tracked yet.)" },
+      { from: 1, to: 2, a: s1.length, b: s2.length, action: "Step 1 asks for name, email and two passwords, and the Google button is hidden inside Facebook's browser. Ask for the email alone first; set the password after the trial starts. Which box they stop in, and every refusal on it, is in 'Where sign-ups stop' below." },
       { from: 2, to: 3, a: s2.length, b: s3.length, action: "Step 2 wants the business name, the address and the trades, all required. Make the company step optional — ask inside the app on the first proposal — or keep only the business name." },
       { from: 3, to: 4, a: s3.length, b: attempted.length, action: "The plan sheet stops them. Pre-select the plan the ad promised, and say 'Start free trial' on the button; show the price per month next to it." },
     ].filter((t) => t.a >= 8).map((t) => ({ ...t, loss: 1 - t.b / t.a })).sort((x, y) => y.loss - x.loss);

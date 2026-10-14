@@ -17,6 +17,7 @@ import { TrafficDatePicker } from "./traffic-date-picker";
 import { TRAFFIC_SINCE, TRAFFIC_SINCE_LABEL, TRAFFIC_SINCE_SHORT, TRAFFIC_SINCE_WHY } from "@/lib/traffic-visitor";
 import { LivePanel } from "./live-panel";
 import { AnalystPanel } from "./analyst-panel";
+import { SignupStopsPanel } from "./signup-stops-panel";
 import { AnalystTrend } from "./analyst-trend";
 import { DigestToggle } from "./digest-toggle";
 import { AdLinks } from "./ad-links";
@@ -183,6 +184,7 @@ export function AdminTrafficContent({ data, deferred = false, signups: initialSi
     {live && <LivePanel initial={live} timezone={filters.timezone} fullHistory={filters.fullHistory} ledger={ledger}/>}
     {/* The analyst (2026-10-02): the week's landing visits read as findings, under the live map. */}
     <AnalystPanel timezone={filters.timezone}/>
+    <SignupStopsPanel timezone={filters.timezone}/>
     {/* One saved reading a day, and what changed (2026-10-04, lib/traffic-digest). */}
     <AnalystTrend/>
     {/* The signups have their own page under Traffic now (owner, 2026-10-12); here, their numbers and the door. */}

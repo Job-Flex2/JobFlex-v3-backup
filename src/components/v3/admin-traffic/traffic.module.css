@@ -824,3 +824,56 @@
 /* A step is a plain numbered line: the finding row's own grid, frame and tint (.analystFindings li) stop here. */
 :global(.jf-blueprint) .analystFindings .analystSteps li { display:list-item; grid-template-columns:none; gap:0; padding:0 0 0 2px; margin:0 0 4px; border:0; background:none; }
 :global(.jf-blueprint) .analystFindings .analystSteps li::marker { font:700 11px var(--font-mono); color:var(--muted); }
+
+/* THE SIGN-UP FORM ON A LIVE LINE (2026-10-14): the box now, the boxes used, the problems by side, the leave. */
+:global(.jf-blueprint) .formWatch { display:flex; flex-direction:column; gap:5px; margin-top:4px; }
+:global(.jf-blueprint) .fwRow { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+:global(.jf-blueprint) .fwRow em { font:700 10.5px/1.3 var(--font-mono); font-style:normal; letter-spacing:.02em; padding:3px 7px; border:1.5px solid var(--hair, rgba(10,10,10,.18)); border-radius:2px; color:var(--ink-soft); background:#fff; white-space:nowrap; }
+:global(.jf-blueprint) .fwRow em i { font-style:normal; font-weight:500; margin-left:6px; opacity:.7; }
+:global(.jf-blueprint) .fwScreen { border-color:var(--ink) !important; color:var(--ink) !important; text-transform:uppercase; letter-spacing:.08em !important; }
+:global(.jf-blueprint) .fwNow { border-color:var(--blueprint, #1854a0) !important; color:#fff !important; background:var(--blueprint, #1854a0) !important; animation: fwPulse 1.6s ease-in-out infinite; }
+@keyframes fwPulse { 50% { opacity:.65; } }
+:global(.jf-blueprint) .fwBox[data-filled="false"], :global(.jf-blueprint) .fwBox[data-valid="false"] { border-color:var(--warning, #c98a10) !important; color:var(--warning-dark, #8a5d00) !important; }
+:global(.jf-blueprint) .fwProblem[data-side="theirs"] { border-color:var(--warning, #c98a10) !important; background:var(--warning-soft, #fdf3e0) !important; color:var(--warning-dark, #8a5d00) !important; }
+:global(.jf-blueprint) .fwProblem[data-side="ours"] { border-color:var(--danger, #a83232) !important; background:var(--danger-soft, #fbeaea) !important; color:var(--danger, #a83232) !important; }
+:global(.jf-blueprint) .fwAway, :global(.jf-blueprint) .fwBack { border-style:dashed !important; }
+:global(.jf-blueprint) .fwLeft { border-color:var(--ink) !important; color:var(--ink) !important; }
+:global(.jf-blueprint) .fwVerdict[data-tone="ours"] { background:var(--danger, #a83232) !important; border-color:var(--danger, #a83232) !important; color:#fff !important; }
+:global(.jf-blueprint) .fwVerdict[data-tone="theirs"] { background:var(--warning, #c98a10) !important; border-color:var(--warning, #c98a10) !important; color:#fff !important; }
+:global(.jf-blueprint) .fwVerdict[data-tone="choice"] { background:var(--paper-deep, #ece9e1) !important; color:var(--ink) !important; }
+:global(.jf-blueprint) .liveReplay { display:inline-flex; align-items:center; gap:5px; align-self:flex-start; font:800 11px/1 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; color:var(--blueprint, #1854a0); text-decoration:none; padding:4px 0; }
+:global(.jf-blueprint) .liveReplay:hover { text-decoration:underline; }
+@media (prefers-reduced-motion: reduce) { :global(.jf-blueprint) .fwNow { animation:none; } }
+
+/* ── Where sign-ups stop (2026-10-14) ─────────────────────────── */
+:global(.jf-blueprint) .stops { --stops-ours: var(--danger, #a83232); --stops-theirs: var(--warning, #c98a10); --stops-choice: var(--hair-soft, #c9cdd4); scroll-margin-top:80px; }
+:global(.jf-blueprint) .stopsVerdict { padding:16px 24px 14px; border-bottom:1px solid var(--traffic-line); border-left:5px solid var(--hair-soft); display:flex; flex-direction:column; gap:10px; }
+:global(.jf-blueprint) .stopsVerdict[data-tone="bad"] { border-left-color:var(--stops-ours); background:color-mix(in oklab, var(--stops-ours) 6%, transparent); }
+:global(.jf-blueprint) .stopsVerdict[data-tone="warn"] { border-left-color:var(--stops-theirs); background:var(--warning-soft); }
+:global(.jf-blueprint) .stopsVerdict p { margin:0; display:flex; flex-direction:column; gap:4px; }
+:global(.jf-blueprint) .stopsVerdict p b { font:700 17px/1.45 var(--font); letter-spacing:-.01em; color:var(--ink); text-wrap:balance; }
+:global(.jf-blueprint) .stopsVerdict p span { font:500 13px/1.6 var(--font); color:var(--ink-soft); max-width:72ch; }
+:global(.jf-blueprint) .stopsSplit { display:flex; height:10px; gap:2px; max-width:560px; }
+:global(.jf-blueprint) .stopsSplit i { display:block; min-width:4px; border-radius:1px; }
+:global(.jf-blueprint) .stopsSplitKey { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:4px 18px; font:600 11px/1.4 var(--font-mono); color:var(--ink-soft); }
+:global(.jf-blueprint) .stopsSplitKey li { display:flex; align-items:center; gap:6px; }
+:global(.jf-blueprint) .stopsSplitKey li i { width:10px; height:10px; border-radius:1px; display:inline-block; }
+:global(.jf-blueprint) .stopsSplitKey b { color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
+:global(.jf-blueprint) .stopsSplitKey em { font-style:normal; color:var(--muted); font-variant-numeric:tabular-nums; }
+:global(.jf-blueprint) :is(.stopsSplit, .stopsSplitKey) [data-part="ours"], :global(.jf-blueprint) .stopsSplitKey [data-part="ours"] i { background:var(--stops-ours); }
+:global(.jf-blueprint) :is(.stopsSplit, .stopsSplitKey) [data-part="theirs"], :global(.jf-blueprint) .stopsSplitKey [data-part="theirs"] i { background:var(--stops-theirs); }
+:global(.jf-blueprint) :is(.stopsSplit, .stopsSplitKey) [data-part="choice"], :global(.jf-blueprint) .stopsSplitKey [data-part="choice"] i { background:var(--stops-choice); }
+:global(.jf-blueprint) .stopsSplitKey li[data-part] { background:none; }
+:global(.jf-blueprint) .sideChip { display:inline-block; font:700 10.5px/1.3 var(--font-mono); letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; border:1.5px solid currentColor; border-radius:2px; }
+:global(.jf-blueprint) .sideChip[data-side="ours"] { color:var(--stops-ours); background:var(--danger-soft, #fbeaea); }
+:global(.jf-blueprint) .sideChip[data-side="theirs"] { color:var(--warning-dark, #8a5d00); background:var(--warning-soft, #fdf3e0); }
+:global(.jf-blueprint) .stopsMessage { max-width:340px; white-space:normal; color:var(--muted); font-size:12px; }
+@media (max-width: 720px) {
+  :global(.jf-blueprint) .stopsVerdict { padding:14px 16px 12px; }
+  :global(.jf-blueprint) .stopsVerdict p b { font-size:15px; }
+}
+:global(.jf-blueprint) .stops h2 { display:flex; align-items:center; gap:8px; }
+@media (min-width: 769px) { :global(.jf-blueprint) .stops .cardHead > .headerActions { flex-shrink:0; flex-wrap:nowrap; } }
+:global(.jf-blueprint) .stops .tableScroll { padding:10px 24px 0; }
+:global(.jf-blueprint) .stops .footnote { padding:12px 24px 16px; }
+@media (max-width: 720px) { :global(.jf-blueprint) .stops .tableScroll { padding:10px 16px 0; } :global(.jf-blueprint) .stops .footnote { padding:12px 16px 14px; } }

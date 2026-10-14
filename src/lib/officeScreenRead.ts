@@ -13,6 +13,7 @@ import { TRAFFIC_TZ, trafficDayStartMs } from "@/lib/traffic-visitor";
 import { DECK_PLAN_EVENT } from "@/lib/deck/convertSchema";
 import { FENCE_PLAN_EVENT } from "@/lib/fence/planSvg";
 import { readInvestorOffers, readInvestorVisitors } from "@/lib/investorVisitors";
+import { readSignupAlerts } from "@/lib/signup-alerts";
 import { buildAttention, orderFeed, type OfficeFeedItem, type OfficeHealthRow, type OfficeScreenData, type OfficeTile } from "@/lib/officeScreen";
 
 const HOUR = 3_600_000;
@@ -204,6 +205,8 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
     part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorVisitors>>, () => readInvestorVisitors().then((l) => l.filter((v) => !v.admin))),
     part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorOffers>>, () => readInvestorOffers().then((l) => l.filter((o) => !o.admin))),
   ]);
+  // The sign-up form's alarm (2026-10-14): the last check's alerts, while it is fresh (lib/signup-alerts).
+  const signupAlerts = await part("sign-up alerts", gaps, [] as Awaited<ReturnType<typeof readSignupAlerts>>, () => readSignupAlerts(now));
   for (const v of invVisitors) {
     const at = Date.parse(v.lastSeen);
     if (at >= dayStart) feedItems.push({ at, kind: "investor", who: v.name, text: `${v.visits > 1 ? "came back to" : "opened"} the investor page · ${v.company} · ${v.kind}` });
@@ -257,6 +260,7 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
     sentToday: sentT,
     sentYesterday: sentY,
     recentOffers: invOffers.filter((o) => now - Date.parse(o.at) < 3 * 24 * HOUR).map((o) => ({ company: o.company, amount: o.amount, at: Date.parse(o.at) })),
+    signupAlerts: signupAlerts.map((a) => ({ words: a.words, side: a.side, visits: a.visits, times: a.times, screen: a.screen })),
   });
 
   return {

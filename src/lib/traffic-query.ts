@@ -1,5 +1,5 @@
 import type { TrafficFilters } from "./traffic-contract";
-import { TRAFFIC_EVENTS as E } from "./traffic-contract";
+import { DETAIL_EVENTS, TRAFFIC_EVENTS as E } from "./traffic-contract";
 // Who counts: one rule for every figure on the page (2026-10-01).
 import { BROWSER_TYPE_SQL, HOST_SQL, IN_APP_SQL, PERSON_KEY_SQL, TRAFFIC_SINCE, TRAFFIC_TZ, UA_SQL, sinceSql, visitorRuleSql, type VisitorScope } from "./traffic-visitor";
 
@@ -95,7 +95,7 @@ function trafficParts(f: TrafficFilters) {
       ${prop("verified")} AS verified, ${prop("billing_mode")} AS billing_mode,
       ${prop("intent")} AS intent, ${prop("outcome")} AS outcome
     FROM events
-    WHERE timestamp <= now() AND ${sinceSql(f.fullHistory)} AND (event = '$pageview' OR event IN (${Object.values(E).filter((e) => e !== E.landingSection).map(q).join(",")}))
+    WHERE timestamp <= now() AND ${sinceSql(f.fullHistory)} AND (event = '$pageview' OR event IN (${Object.values(E).filter((e) => !DETAIL_EVENTS.has(e)).map(q).join(",")}))
   ), base AS (
     SELECT *, if(event = ${q(E.step)}, concat('registration:', step), pathname) AS page,
       if(utm_source != '', utm_source, if(referrer IN ('', '$direct') OR referrer = hostname, 'Direct / unknown', referrer)) AS source

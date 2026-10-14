@@ -6,7 +6,7 @@
 // PostHog query behind it (lib/traffic-server fetchLiveEvents).
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
-import { Building2, Info, KeyRound, Megaphone, MousePointerClick, RefreshCw } from "lucide-react";
+import { Building2, Info, KeyRound, Megaphone, MousePointerClick, PlayCircle, RefreshCw } from "lucide-react";
 import { getLiveTraffic, getMapHistory, nameAdTag } from "@/actions/trafficDashboard";
 import { MAP_HISTORY_LIMIT, MAP_SPANS, isAdId, mapSpanLabel, prospectsOf, type LiveReport, type LiveStage, type LiveVisitor, type MapHistory, type MapSpan, type SignupLedger } from "@/lib/traffic-live";
 import { TRAFFIC_SINCE_LABEL, TRAFFIC_SINCE_MS, TRAFFIC_SINCE_SHORT } from "@/lib/traffic-visitor";
@@ -20,6 +20,7 @@ import { sameReport } from "./live-diff";
    its own chunk (2026-10-01). */
 const LiveMap = dynamic(() => import("./live-map").then((m) => m.LiveMap), { ssr: false, loading: () => <div className={s.mapLoading}>Loading the map…</div> });
 import { JourneyLine } from "./journey-line";
+import { FormWatchLine } from "./form-watch-line";
 import { SignupRail } from "./signup-rail";
 import rail from "./signup-rail.module.css";
 import s from "./traffic.module.css";
@@ -303,7 +304,7 @@ export function LivePanel({ initial, timezone, fullHistory = false, ledger = nul
     {live && <div className={s.activityHead}><h3>Who is on the site</h3><span className={s.micro}>{fmt(rows.length)} {rows.length === 1 ? "visitor" : "visitors"} in the last {report.windowMinutes} min · newest move first · click a line to see it on the map</span></div>}
     {live && !rows.length && <div className={s.liveEmpty}>{report.visitors.length ? (platform ? "Nobody from this platform in the last half hour — press the card again to see everyone." : "Nobody from an ad in the last half hour — turn off the ads filter to see everyone.") : `Nobody on the site in the last ${report.windowMinutes} minutes.`}</div>}
     {rows.length > 0 && <ol className={s.liveList} aria-label="Visitors on the site">
-      {rows.map((v) => <LiveRow key={v.id + v.firstAt} v={v} timezone={timezone} selected={selected === v.id} onToggle={toggleRow} adNames={adNames} onName={onName}/>)}
+      {rows.map((v) => <LiveRow key={v.id + v.firstAt} v={v} timezone={timezone} selected={selected === v.id} onToggle={toggleRow} adNames={adNames} onName={onName} replayBase={report.replayBase ?? null}/>)}
     </ol>}
     {report.otherSignups.length > 0 && <div className={s.liveOthers}><span className={s.micro}>Signed up today, outside the last {report.windowMinutes} minutes or with analytics blocked — the live list above only holds the window, this holds the day:</span>{report.otherSignups.map((o) => <span key={o.orgName + o.at} className={s.liveOther}><b>{o.orgName}</b> · {o.ownerEmail || "no owner yet"} · {o.source} · {clock(o.at, timezone)} <b className={s.livePlan}>{o.planLabel}</b></span>)}</div>}
     </div>
@@ -356,7 +357,8 @@ function AdTag({ tag, adNames, onName }: { tag: string; adNames: Record<string, 
 }
 
 /** One visitor. Memoised: between refreshes only its "n s ago" moves, and that is the shared clock's. */
-const LiveRow = memo(function LiveRow({ v, timezone, selected, onToggle, adNames, onName }: { v: LiveVisitor; timezone: string; selected: boolean; onToggle: (id: string) => void; adNames: Record<string, string>; onName: (tag: string, name: string) => Promise<{ ok: boolean; error?: string }> }) {
+const LiveRow = memo(function LiveRow({ v, timezone, selected, onToggle, adNames, onName, replayBase }: { v: LiveVisitor; timezone: string; selected: boolean; onToggle: (id: string) => void; adNames: Record<string, string>; onName: (tag: string, name: string) => Promise<{ ok: boolean; error?: string }>; replayBase: string | null }) {
+  const replay = replayBase && v.session ? `${replayBase}${encodeURIComponent(v.session)}` : null;
   // A row is a click away from its pin on the map (and back).
   return <li className={s.liveRow} data-live-row data-stage={v.stage} data-active={v.active} data-ad={v.fromAd} data-selected={selected} onClick={() => onToggle(v.id)} title={v.lat !== null ? "Show on the map" : "No known place for this visitor"}>
     <div className={s.liveMark} aria-hidden="true"/>
@@ -397,9 +399,12 @@ const LiveRow = memo(function LiveRow({ v, timezone, selected, onToggle, adNames
       {/* The visit in one sentence, so the trail above does not have to be
           decoded by eye. */}
       {v.summary && <span className={s.liveSummary}>{v.summary}</span>}
+      {/* The sign-up form, as its watcher saw it (2026-10-14): the box, the problems and whose side, the leave. */}
+      {v.form && <FormWatchLine f={v.form} active={v.active} timezone={timezone}/>}
+      {replay && <a className={s.liveReplay} href={replay} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} data-replay><PlayCircle size={12}/>Watch the replay</a>}
     </div>
     <div className={s.liveWhen}>
-      <b>{v.active ? "On the site now" : "Left"}</b>
+      <b>{v.active ? (v.form?.away ? "Away from the tab" : "On the site now") : v.form?.left?.kind === "closed" ? "Closed the page" : "Left"}</b>
       <span><Ago iso={v.lastAt}/> · since {clock(v.firstAt, timezone)}</span>
       <span>{[v.device, v.browser].filter(Boolean).join(" / ") || "Unknown device"}{v.place ? ` · ${v.place}` : ""}{v.environment === "development" ? " · localhost" : ""}</span>
     </div>

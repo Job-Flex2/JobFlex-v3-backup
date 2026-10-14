@@ -29,6 +29,7 @@ import { TRAFFIC_EVENTS as E, pageLabel, type StaleNote } from "./traffic-contra
 // Who counts and what is "from an ad": one rule for the whole page (2026-10-01).
 import { BROWSER_TYPE_SQL, HOST_SQL, TRAFFIC_SINCE, UA_SQL, carriesAdTag, isCountedEvent, sinceSql, trafficDayStartMs, visitorRuleSql } from "./traffic-visitor";
 import { resolveLandingVariant, VARIANT_TRADE } from "@/components/v3/landing-e/landing-variants";
+import { durationWords, reasonSide, reasonWords, screenName } from "./signup-watch-shared";
 
 export const LIVE_WINDOW_MINUTES = 30;
 export const LIVE_ACTIVE_MINUTES = 5;
@@ -84,6 +85,48 @@ export interface LiveEvent {
   /** The browser's user agent and PostHog's own bot flag — the visitor rule (lib/traffic-visitor). */
   ua: string;
   browserType: string;
+  /** The sign-up form's watcher (lib/signup-watch, 2026-10-14): the reason and side of a problem, the box, the
+   *  screen, ms on it, how a leave went, the words they saw, a box left filled / valid, "in" or "out" of a box. */
+  reason?: string;
+  field?: string;
+  side?: string;
+  screen?: string;
+  ms?: string;
+  kind?: string;
+  message?: string;
+  filled?: string;
+  valid?: string;
+  phase?: string;
+  /** A box's edits; the page's ms by a leave; the last problem before it. */
+  edits?: string;
+  pageMs?: string;
+  lastProblem?: string;
+}
+
+/** The watcher's events: they describe the form, never a screen of their own on the trail. */
+const WATCH_EVENTS: ReadonlySet<string> = new Set([E.signupField, E.signupProblem, E.signupAway, E.signupBack, E.signupLeave]);
+
+/** What the sign-up form's watcher saw on one visit — the live line's "where exactly, and whose side". */
+export interface LiveFormWatch {
+  /** The screen they are on (or left from): "Account", "Email code", "Company", "Plan". */
+  screen: string;
+  /** Seconds on that screen by their last move. */
+  screenSecs: number;
+  /** The box they are in right now (an "in" with no "out" after it), and since when. */
+  inBox: { field: string; since: string } | null;
+  /** Each box they used, first touch first: time in it, left filled / valid, edits. */
+  boxes: Array<{ field: string; secs: number; filled: boolean; valid: boolean; edits: number; visits: number }>;
+  /** Every refusal and failure they met, newest first. */
+  problems: Array<{ at: string; reason: string; words: string; side: "ours" | "theirs"; message: string; screen: string; field: string }>;
+  /** The tab is away (hidden) since then — on the code screen, usually reading the email. */
+  away: { since: string } | null;
+  /** They came back after being away, and how long they were gone. */
+  cameBack: { at: string; secs: number } | null;
+  /** The page closed or left: how, from where, after how long on the screen and the page. */
+  /** `awaySecs`: the tab had been away this long before it closed (a phone put down, then the tab swiped away). */
+  left: { at: string; kind: string; screen: string; field: string; screenSecs: number; pageSecs: number; lastProblem: string; awaySecs?: number } | null;
+  /** Why they stopped, once they have: "ours" (a failure of ours), "theirs" (the form refused them last), "choice" (no error). */
+  verdict: "ours" | "theirs" | "choice" | null;
 }
 
 /** An organization created in the last day (or the map's span), from the
@@ -217,6 +260,10 @@ export interface LiveVisitor {
   userId: string;
   /** Filled in by the admin's server action from orgId / userId. */
   member?: { orgName: string; userName: string } | null;
+  /** The sign-up form, as its watcher saw this visit (2026-10-14); null off the form. */
+  form?: LiveFormWatch | null;
+  /** The visit's PostHog session — its replay is one click from the line. */
+  session?: string;
 }
 
 export interface LiveCounts {
@@ -306,6 +353,8 @@ export interface LiveReport {
   /** PostHog did not answer: this is the last report it did answer for
    *  (lib/traffic-server) — or, with a scope, a fresh one but for that part. */
   stale?: StaleNote;
+  /** Where a visit's session replay opens: this + the session id (2026-10-14). */
+  replayBase?: string | null;
 }
 
 /** The SyncState key a name for an ad or campaign id is kept under. */
@@ -493,6 +542,7 @@ export function stepTitle(step: string, steps?: string): string {
 }
 
 function trailLabel(e: LiveEvent): string | null {
+  if (WATCH_EVENTS.has(e.event)) return null;
   if (e.event === E.completed) return "Signed up";
   if (e.event === E.opened || e.event === E.attempt) return "Checkout";
   if (e.event === E.step && e.step) return stepTitle(e.step, e.steps);
@@ -518,6 +568,119 @@ function pathOf(e: LiveEvent): string {
   if (e.pathname) return e.pathname;
   const m = /^[a-z]+:\/\/[^/?#]+([^?#]*)/i.exec(e.url);
   return m ? m[1] || "/" : "";
+}
+
+/** The screen a step event names, in the watcher's words. */
+const STEP_SCREEN: Record<string, string> = { "1": "account", "2": "company", "3": "plan", code: "code" };
+
+/**
+ * What the sign-up form's watcher saw on one visit (2026-10-14), from the visit's events oldest first: the screen
+ * and the box they are in, each box's time, every problem with its side, the tab away and back, and the leave.
+ * Null when the visit never reached the form's watcher.
+ */
+export function formWatchOf(visit: readonly LiveEvent[], now = Date.now()): LiveFormWatch | null {
+  const watched = visit.filter((e) => WATCH_EVENTS.has(e.event));
+  const stepEvents = visit.filter((e) => e.event === E.step && e.step);
+  if (!watched.length && !stepEvents.length) return null;
+  // The screen: the newest event that names one (a step event, or a watcher event's own screen).
+  let screen = "";
+  let screenAt = visit[0]?.at ?? now;
+  for (const e of visit) {
+    const s = WATCH_EVENTS.has(e.event) ? e.screen || "" : e.event === E.step ? STEP_SCREEN[e.step] ?? "" : "";
+    if (s && s !== screen) {
+      screen = s;
+      screenAt = e.at;
+    }
+  }
+  const boxes = new Map<string, { field: string; secs: number; filled: boolean; valid: boolean; edits: number; visits: number }>();
+  let inBox: LiveFormWatch["inBox"] = null;
+  const problems: LiveFormWatch["problems"] = [];
+  let away: LiveFormWatch["away"] = null;
+  let cameBack: LiveFormWatch["cameBack"] = null;
+  let left: LiveFormWatch["left"] = null;
+  for (const e of watched) {
+    const iso = new Date(e.at).toISOString();
+    if (e.event === E.signupField && e.field) {
+      if (e.phase === "in") {
+        inBox = { field: e.field, since: iso };
+        continue;
+      }
+      const b = boxes.get(e.field) ?? { field: e.field, secs: 0, filled: false, valid: true, edits: 0, visits: 0 };
+      b.secs += Math.max(0, Number(e.ms) || 0) / 1000;
+      b.filled = e.filled === "true";
+      b.valid = e.valid !== "false";
+      b.edits += Number(e.edits) || 0;
+      b.visits += 1;
+      boxes.set(e.field, b);
+      if (inBox && inBox.field === e.field) inBox = null;
+    } else if (e.event === E.signupProblem && e.reason) {
+      const side = e.side === "ours" || e.side === "theirs" ? e.side : reasonSide(e.reason);
+      problems.unshift({ at: iso, reason: e.reason, words: reasonWords(e.reason), side, message: e.message || "", screen: e.screen || screen, field: e.field || "" });
+    } else if (e.event === E.signupAway) {
+      away = { since: iso };
+    } else if (e.event === E.signupBack) {
+      if (away) cameBack = { at: iso, secs: Math.round((Number(e.ms) || e.at - Date.parse(away.since)) / 1000) };
+      away = null;
+    } else if (e.event === E.signupLeave) {
+      // Closing a tab hides it first: an away a moment before the leave IS the close; a longer one is part of the story.
+      const awaySecs = away ? Math.round((e.at - Date.parse(away.since)) / 1000) : 0;
+      left = { at: iso, kind: e.kind || "closed", screen: screenName(e.screen || screen), field: e.field || "", screenSecs: Math.round((Number(e.ms) || 0) / 1000), pageSecs: Math.round((Number(e.pageMs) || 0) / 1000), lastProblem: e.lastProblem || "", ...(awaySecs >= 3 ? { awaySecs } : {}) };
+      away = null;
+      inBox = null;
+    }
+  }
+  // The query's clock is whole seconds: the close's own away can sort just after its leave. Same moment, same close.
+  const leftAt = left ? Date.parse(left.at) : 0;
+  const closing = (e: LiveEvent) => e.event === E.signupAway && e.at - leftAt <= 1000;
+  if (left && away && Date.parse(away.since) - leftAt <= 1000) away = null;
+  // A later move after a leave (a back button, a reload) means they did not leave after all.
+  const last = visit[visit.length - 1];
+  if (left && last && last.at > leftAt && last.event !== E.signupLeave && !closing(last)) left = null;
+  // Gone for good, and why: a failure of ours outranks the rest; then the form's last refusal; else their choice.
+  const stopped = !!left && left.kind === "closed";
+  const verdict: LiveFormWatch["verdict"] = !stopped && !away ? null : problems.some((p) => p.side === "ours") ? "ours" : problems.length ? "theirs" : stopped ? "choice" : null;
+  return {
+    screen: screenName(screen || "account"),
+    screenSecs: Math.max(0, Math.round(((last?.at ?? now) - screenAt) / 1000)),
+    inBox,
+    boxes: [...boxes.values()].map((b) => ({ ...b, secs: Math.round(b.secs) })),
+    problems: problems.slice(0, 8),
+    away,
+    cameBack,
+    left,
+    verdict,
+  };
+}
+
+/** The live line's sentence for a visitor the watcher saw on the sign-up form. */
+export function formSentence(f: LiveFormWatch, active: boolean, now = Date.now()): string {
+  const lastProblem = f.problems[0];
+  const ours = f.problems.find((p) => p.side === "ours");
+  const why = ours ? ` — after a failure of ours: ${ours.words.toLowerCase()}` : lastProblem ? ` — right after “${lastProblem.words}”` : " — no error shown: their choice";
+  if (f.left && f.left.kind === "closed") {
+    const where = `the ${f.left.screen.toLowerCase()} screen`;
+    return `Left at ${where} after ${durationWords(f.left.screenSecs * 1000)}${f.left.field ? `, in the ${f.left.field} box` : ""}${why}.`;
+  }
+  if (f.left && f.left.kind === "google") return "Went to Google to sign up with it.";
+  if (f.left && f.left.kind === "checkout") return "Went to the checkout to start the plan.";
+  if (f.away) {
+    const mins = durationWords(now - Date.parse(f.away.since));
+    return f.screen === "Email code"
+      ? `Switched away from the code screen ${mins} ago — most likely reading the email for the code.`
+      : `Switched to another tab or app ${mins} ago, from the ${f.screen.toLowerCase()} screen.`;
+  }
+  const parts: string[] = [];
+  parts.push(`On the ${f.screen.toLowerCase()} screen${f.screenSecs ? ` for ${durationWords(f.screenSecs * 1000)}` : ""}`);
+  if (f.inBox && active) parts.push(`in the ${f.inBox.field} box since ${durationWords(now - Date.parse(f.inBox.since))} ago`);
+  let s = `${parts.join(", ")}.`;
+  if (f.problems.length) {
+    const counts = new Map<string, number>();
+    for (const p of f.problems) counts.set(p.words, (counts.get(p.words) ?? 0) + 1);
+    s += ` Met: ${[...counts].map(([w, c]) => (c > 1 ? `${w} ×${c}` : w)).join(", ")}.`;
+  }
+  if (f.cameBack) s += ` Came back after ${durationWords(f.cameBack.secs * 1000)} away.`;
+  if (!active) s += ours ? ` Stopped there — ours to fix (${ours.words.toLowerCase()}).` : " Stopped there.";
+  return s;
 }
 
 /** One sentence for what a visit is (2026-09-30). The list used to make the
@@ -853,6 +1016,14 @@ export function shapeLive(events: LiveEvent[], signups: FreshSignup[], now = Dat
     }
     while (trail.length > 6) trail.shift();
     while (steps.length > 8) steps.shift();
+    // The form's watcher (2026-10-14): a closed page is gone now, not in five minutes.
+    const form = formWatchOf(visit, now);
+    const closed = !!form?.left && form.left.kind === "closed";
+    const isActive = last.at >= activeSince && !closed;
+    const baseSummary = visitSummary({ stage, lockedOut, views: views.length, trail, clicks, active: isActive, signup, step: furthestStep, twoStep: twoStepFlag, fromAd: src.fromAd, source: src.label });
+    const summary = form && (stage === "registering" || stage === "checkout")
+      ? [formSentence(form, isActive, now), clicks[0] ? `Pressed “${clicks[0].label}”${clicks[0].placement ? ` in the ${clicks[0].placement.replace(/[-_]/g, " ")}` : ""}.` : ""].filter(Boolean).join(" ")
+      : baseSummary;
     visitors.push({
       id: shortId(person),
       stage,
@@ -870,7 +1041,7 @@ export function shapeLive(events: LiveEvent[], signups: FreshSignup[], now = Dat
       steps,
       firstAt: new Date(first.at).toISOString(),
       lastAt: new Date(last.at).toISOString(),
-      active: last.at >= activeSince,
+      active: isActive,
       device: lastView.device || first.device || "",
       browser: lastView.browser || first.browser || "",
       place: [first.city, first.region, first.country].filter(Boolean).join(", "),
@@ -890,7 +1061,9 @@ export function shapeLive(events: LiveEvent[], signups: FreshSignup[], now = Dat
       trade: landingTradeOf(visit.map((e) => e.url)) || signupTrade,
       orgId: [...list].reverse().find((e) => e.orgId)?.orgId ?? "",
       userId: [...list].reverse().find((e) => e.userId)?.userId ?? "",
-      summary: visitSummary({ stage, lockedOut, views: views.length, trail, clicks, active: last.at >= activeSince, signup, step: furthestStep, twoStep: twoStepFlag, fromAd: src.fromAd, source: src.label }),
+      summary,
+      form,
+      session: lastSession || undefined,
     });
   }
   // Signups first, then the people from ads who are on the site now, then
@@ -1012,7 +1185,7 @@ export function platformCards(visitors: LiveVisitor[], signups: FreshSignup[]): 
 }
 
 /** The events the live view reads, as a HogQL list. */
-const liveEventsSql = () => ["'$pageview'", ...[E.step, E.attempt, E.opened, E.completed, E.landingView, E.ctaClick].map((e) => `'${e}'`)].join(", ");
+const liveEventsSql = () => ["'$pageview'", ...[E.step, E.attempt, E.opened, E.completed, E.landingView, E.ctaClick, ...WATCH_EVENTS].map((e) => `'${e}'`)].join(", ");
 
 /** The one HogQL query behind the panel: the window's events, one row each. */
 export function buildLiveQuery(windowMinutes = LIVE_WINDOW_MINUTES): string {
@@ -1175,7 +1348,10 @@ function liveSelectSql(): string {
     ${prop("$geoip_country_code")}, ${prop("$geoip_subdivision_1_code")},
     multiIf(${CLICK_ID_KEYS.map((k) => `${prop(k)} != '', '${k}'`).join(", ")}, ''),
     ${prop("placement")}, ${prop("label")}, ${prop("jf_org_id")}, ${prop("jf_user_id")},
-    ${UA_SQL}, ${BROWSER_TYPE_SQL}, ${prop("steps")}
+    ${UA_SQL}, ${BROWSER_TYPE_SQL}, ${prop("steps")},
+    ${prop("reason")}, ${prop("field")}, ${prop("side")}, ${prop("screen")}, ${prop("ms")},
+    ${prop("kind")}, ${prop("message")}, ${prop("filled")}, ${prop("valid")}, ${prop("phase")},
+    ${prop("edits")}, ${prop("page_ms")}, ${prop("last_problem")}
     FROM events`;
 }
 
@@ -1309,5 +1485,18 @@ export function liveEventFromRow(row: unknown[]): LiveEvent | null {
     ua: str(33),
     browserType: str(34),
     steps: str(35),
+    reason: str(36),
+    field: str(37),
+    side: str(38),
+    screen: str(39),
+    ms: str(40),
+    kind: str(41),
+    message: str(42).slice(0, 160),
+    filled: str(43),
+    valid: str(44),
+    phase: str(45),
+    edits: str(46),
+    pageMs: str(47),
+    lastProblem: str(48),
   };
 }

@@ -184,7 +184,37 @@ export const TRAFFIC_EVENTS = {
   // "error" with `reason` when it refuses. Fired by
   // auth-register-blueprint/register-content.tsx; the analyst alone reads it.
   signupStep1: "signup_step1",
+  // WATCHING THE SIGN-UP FORM (owner, 2026-10-14: "we need to see in real
+  // time what they're doing exactly, and at which point they leave — is it
+  // our side?"). Fired by lib/signup-watch on /auth/register:
+  //   signup_field   — a box left: which one (never what was typed), ms in it,
+  //                    filled, valid, edits, the screen it was on;
+  //   signup_problem — every refusal and failure the visitor met, with the
+  //                    reason, "ours" / "theirs", and the words they saw
+  //                    (emails and long digit runs struck);
+  //   signup_away / signup_back — the tab hidden (often: reading the code
+  //                    email) and the return, with how long;
+  //   signup_leave   — the page closed or left: the screen, the box, ms on
+  //                    the step and on the page, the last problem, and where
+  //                    it went ("closed", "google", "done").
+  // Several per visit, so the report's `raw` CTE leaves them out
+  // (DETAIL_EVENTS); the live view, the form report and the alerts read them.
+  signupField: "signup_field",
+  signupProblem: "signup_problem",
+  signupAway: "signup_away",
+  signupBack: "signup_back",
+  signupLeave: "signup_leave",
 } as const;
+
+/** Events that come several per visit: the report's `raw` CTE leaves them out (lib/traffic-query). */
+export const DETAIL_EVENTS: ReadonlySet<string> = new Set([
+  TRAFFIC_EVENTS.landingSection,
+  TRAFFIC_EVENTS.signupField,
+  TRAFFIC_EVENTS.signupProblem,
+  TRAFFIC_EVENTS.signupAway,
+  TRAFFIC_EVENTS.signupBack,
+  TRAFFIC_EVENTS.signupLeave,
+]);
 
 /** Signups read from the database by what the landing recorded on them. */
 export interface SignupAttribution {

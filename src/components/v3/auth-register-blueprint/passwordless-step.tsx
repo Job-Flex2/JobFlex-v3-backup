@@ -41,6 +41,8 @@ import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import type { OtpRestore } from "@/lib/signupOtp";
 import { SIGNUP_MODE_COOKIE, rememberOtpDraft, rememberSignupMode } from "@/lib/signupMode";
 import { trackTraffic } from "@/lib/traffic-client";
+import { setSignupPosition, signupLeavingTo, signupProblem } from "@/lib/signup-watch";
+import { reasonOfMessage } from "@/lib/signup-watch-shared";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import {
   forgetOtpDraft,
@@ -175,8 +177,15 @@ export function PasswordlessStep({
   useKeepInView(headRef, goRef, screen === "code");
   const verifying = React.useRef(false);
   const handoff = useBrowserHandoff(inApp ?? "instagram");
-  const track = (outcome: string, reason = "") =>
+  const track = (outcome: string, reason = "", message = "") => {
     trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp" });
+    // The watcher's own reasons: a refusal the server answered in words is read from them (start_rejected).
+    if (outcome === "error" || outcome === "code_error") signupProblem(reason === "start_rejected" ? reasonOfMessage(message) : reason, { message });
+  };
+  // Which screen of the code flow the visitor is on, for the watcher.
+  React.useEffect(() => {
+    setSignupPosition({ screen: screen === "form" ? "account" : screen });
+  }, [screen]);
 
   /* This browser's copy of the fields and the screen (never the code). */
   React.useEffect(() => {
@@ -220,6 +229,7 @@ export function PasswordlessStep({
         setDraft(null);
         setDraftInUrl(null);
         setErr("This sign-up timed out. Start again with your email.");
+        signupProblem("gone");
       }
       return;
     }
@@ -312,11 +322,12 @@ export function PasswordlessStep({
         }
         setScreen("form");
         setErr(res.error);
-        track("error", res.taken ? "email_taken_google" : "google_rejected");
+        track("error", res.taken ? "email_taken_google" : /expired/i.test(res.error) ? "google_expired" : "google_rejected", res.error);
       })
       .catch(() => {
         setScreen("form");
         setErr(SERVER_TROUBLE);
+        signupProblem("google_failed", { message: SERVER_TROUBLE });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per Google identity
   }, [google]);
@@ -337,6 +348,8 @@ export function PasswordlessStep({
 
   function googleTap() {
     if (!inApp) return onGoogle();
+    // Off to the phone's own browser for Google: a leave on purpose, not an abandon.
+    signupLeavingTo("google");
     // To Safari / Chrome with the progress in the address: the draft, the
     // referral (the webview's cookies stay behind) and the mode.
     const url = new URL(window.location.href);
@@ -382,7 +395,7 @@ export function PasswordlessStep({
       if (!res.ok) {
         setErr(res.error);
         backToEmail();
-        track("error", /temporary|throwaway|disposable/i.test(res.error) ? "email_disposable" : /Too many/.test(res.error) ? "rate_limited" : /valid email/.test(res.error) ? "email_invalid" : "start_rejected");
+        track("error", /temporary|throwaway|disposable/i.test(res.error) ? "email_disposable" : /Too many/.test(res.error) ? "rate_limited" : /valid email/.test(res.error) ? "email_invalid" : "start_rejected", res.error);
         return;
       }
       track("continue");
@@ -432,7 +445,7 @@ export function PasswordlessStep({
           setErr(res.error);
         }
         setCode("");
-        track("code_error", res.burned ? "burned" : res.expired ? "expired" : res.gone ? "gone" : /Too many/.test(res.error) ? "rate_limited" : "wrong");
+        track("code_error", /on our side/i.test(res.error) ? "server_error" : res.burned ? "burned" : res.expired ? "expired" : res.gone ? "gone" : /Too many/.test(res.error) ? "rate_limited" : "wrong", res.error);
         window.setTimeout(() => codeRef.current?.focus(), 30);
         return;
       }
@@ -445,6 +458,7 @@ export function PasswordlessStep({
       proceed(res.signupToken);
     } catch {
       setCodeErr(SERVER_TROUBLE);
+      signupProblem("network", { message: SERVER_TROUBLE });
     } finally {
       verifying.current = false;
       setBusy(false);
@@ -468,7 +482,7 @@ export function PasswordlessStep({
       if (!res.ok) {
         if (res.resendAt) setResendAt(res.resendAt);
         setCodeErr(res.error);
-        track("code_error", /Too many/.test(res.error) ? "resend_limited" : "resend_rejected");
+        track("code_error", /Too many/.test(res.error) ? "resend_limited" : "resend_rejected", res.error);
         return;
       }
       setResendAt(res.resendAt);
@@ -480,6 +494,7 @@ export function PasswordlessStep({
       window.setTimeout(() => codeRef.current?.focus(), 30);
     } catch {
       setCodeErr(SERVER_TROUBLE);
+      signupProblem("network", { message: SERVER_TROUBLE });
     } finally {
       setBusy(false);
     }

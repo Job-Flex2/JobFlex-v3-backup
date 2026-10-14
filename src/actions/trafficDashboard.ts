@@ -2,7 +2,8 @@
 
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
-import { getLiveTraffic as liveTraffic, getMapHistory as mapHistory, getStageVisitors, getTrafficExperiments, getTrafficReport } from "@/lib/traffic-server";
+import { fetchSignupDropoff, getLiveTraffic as liveTraffic, getMapHistory as mapHistory, getStageVisitors, getTrafficExperiments, getTrafficReport, posthogApiConfig } from "@/lib/traffic-server";
+import { DROPOFF_DAYS, type DropoffReport } from "@/lib/signup-dropoff";
 import { readAnalyst, type AnalystResult } from "@/lib/traffic-analyst-read";
 import { parseTrafficFilters } from "@/lib/traffic-query";
 import { TRAFFIC_SINCE_MS } from "@/lib/traffic-visitor";
@@ -290,6 +291,24 @@ export async function getTrafficAnalyst(input: Record<string, unknown> = {}): Pr
   return (await readAnalyst(input)).result;
 }
 export type { AnalystResult };
+
+/** WHERE SIGN-UPS STOP (2026-10-14): the week's or the month's sign-up visits read as drop-off by screen and box,
+ *  the problems with whose side they are on, and one verdict (lib/signup-dropoff). PostHog down → an error the
+ *  panel shows beside its last reading. */
+export type SignupDropoffResult =
+  | { status: "ok"; report: DropoffReport; readAt: string }
+  | { status: "off" | "error"; message: string };
+export async function getSignupDropoff(input: { days?: unknown; force?: unknown } = {}): Promise<SignupDropoffResult> {
+  await requirePlatformAdmin();
+  const days = DROPOFF_DAYS.find((d) => d === Number(input.days)) ?? 7;
+  try {
+    if (!posthogApiConfig()) return { status: "off", message: "PostHog's reading key is not set." };
+    const read = await fetchSignupDropoff(days, input.force === true);
+    return { status: "ok", report: read.report, readAt: read.readAt };
+  } catch (err) {
+    return { status: "error", message: err instanceof Error && err.name === "TimeoutError" ? "PostHog took too long." : err instanceof Error ? err.message : "PostHog did not answer." };
+  }
+}
 
 /** Who reached a funnel stage: device, place, source and how far they got. */
 export async function getTrafficStageVisitors(input: Record<string, unknown> = {}, stageId: unknown) {
