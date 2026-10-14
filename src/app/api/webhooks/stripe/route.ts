@@ -101,7 +101,8 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
     }
     case "customer.subscription.created":
     case "customer.subscription.updated": {
-      const sub = event.data.object as Stripe.Subscription;
+      const sub = await freshSubscription(stripe, event);
+      if (!sub) break; // gone from Stripe: nothing live to write
       await syncSubscriptionFromStripe(sub, stripe);
       // An admin change written from Stripe's reply is "syncing" until Stripe
       // reports the subscription back in that state (lib/planGrant).
@@ -109,11 +110,17 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       break;
     }
     case "customer.subscription.deleted": {
-      const sub = event.data.object as Stripe.Subscription;
+      // Gone from Stripe altogether: the event's own copy is the last word,
+      // and a deletion is final whenever it arrives.
+      const sub = (await freshSubscription(stripe, event)) ?? (event.data.object as Stripe.Subscription);
       // A card-less trial that ran out lands as TRIAL_ENDED, not CANCELED
-      // (lib/stripeSync, isCardlessTrialLapse).
-      await markSubscriptionCanceled(sub);
-      await noteCardlessTrialEnded(sub);
+      // (lib/stripeSync, isCardlessTrialLapse) — both are the Free plan.
+      if (sub.status === "canceled" || sub.status === "incomplete_expired") {
+        await markSubscriptionCanceled(sub);
+        await noteCardlessTrialEnded(sub);
+      } else {
+        await syncSubscriptionFromStripe(sub, stripe);
+      }
       break;
     }
     // Three days before any trial ends. The mirror follows the subscription
@@ -121,7 +128,8 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
     // are the daily cron's (/api/cron/trials), on its own two-day and same-day
     // schedule.
     case "customer.subscription.trial_will_end": {
-      await syncSubscriptionFromStripe(event.data.object as Stripe.Subscription, stripe);
+      const sub = await freshSubscription(stripe, event);
+      if (sub) await syncSubscriptionFromStripe(sub, stripe);
       break;
     }
     case "invoice.paid": {
@@ -199,6 +207,29 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
     }
     default:
       break;
+  }
+}
+
+/* THE EVENT IS A SIGNAL, STRIPE IS THE STATE (owner, 2026-10-14). A
+   subscription event can arrive twice, late, or after a newer one — a
+   "trialing" picture delivered after "active" used to put a paying shop back
+   on its trial. Every subscription event therefore writes what Stripe holds
+   NOW for that subscription, read by id, never the event's own copy. If
+   Stripe cannot be read the event is not applied: the throw answers 500 and
+   Stripe delivers it again (lib/webhookEnvelope keeps it unprocessed). */
+async function freshSubscription(stripe: Stripe, event: Stripe.Event): Promise<Stripe.Subscription | null> {
+  const id = (event.data.object as Stripe.Subscription).id;
+  try {
+    return await stripe.subscriptions.retrieve(id);
+  } catch (err) {
+    // Stripe answered that it holds no such subscription (its customer was
+    // deleted with it): that is an answer, not a failure — null.
+    if ((err as { code?: string })?.code === "resource_missing") {
+      console.info(`[webhook] ${event.type} ${event.id}: ${id} no longer exists on Stripe`);
+      return null;
+    }
+    console.warn(`[webhook] ${event.type} ${event.id}: could not read ${id} from Stripe — not applied, Stripe will retry:`, err);
+    throw new Error(`Could not read subscription ${id} from Stripe`);
   }
 }
 

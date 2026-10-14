@@ -22,7 +22,10 @@
 //   · a complimentary plan that runs out onto "free" (status FREE) and a
 //     card-less trial that runs out with no card (TRIAL_ENDED) are the Free
 //     plan too (owner, 2026-10-14): the same 16 answers as a cancelled
-//     company; a grant still running keeps its doors open.
+//     company; a grant still running keeps its doors open;
+//   · the webhook writes what Stripe holds now, never the event's copy: when
+//     Stripe cannot be read the event is not applied and answers 500, so
+//     Stripe delivers it again (owner, 2026-10-14).
 import { actAs, check, outcome, summary } from "./_actionHarness";
 import { randomBytes } from "node:crypto";
 import type Stripe from "stripe";
@@ -46,6 +49,8 @@ import { requestHvacPermitReport, readHvacNameplate } from "../../src/actions/hv
 import { startPhoneVerification } from "../../src/actions/sms";
 import { analyzeJobPhoto } from "../../src/actions/photoAnalysis";
 import * as tiles from "../../src/app/api/parcel-tiles/[z]/[x]/[y]/route";
+import * as stripeWebhook from "../../src/app/api/webhooks/stripe/route";
+import StripeSdk from "stripe";
 
 const tag = `qa-free-${Date.now()}`;
 const rid = () => randomBytes(6).toString("hex");
@@ -256,6 +261,22 @@ async function main() {
     }
     const grantOpen = (["roof", "coolcalc", "photoAi", "phoneCode", "parcelTiles", "planOpen", "texts"] as const).filter((k) => doorsGrant[k] !== doorsPaying[k]);
     check("a grant still running keeps its paid doors open, as a paying company", grantOpen.length === 0 && doorsGrant.planEnded === false && doorsGrant.pages === doorsPaying.pages, grantOpen);
+    // ── the webhook: the event is a signal, Stripe is the state ──
+    const W = await company("W");
+    const subW = `sub_${tag}_w`;
+    await db.subscription.create({ data: { organizationId: W.org.id, plan: "PROFESSIONAL", status: "ACTIVE", provider: "STRIPE", externalSubId: subW, externalCustomerId: `cus_${tag}`, currentPeriodEnd: new Date(Date.now() + 20 * DAY) } });
+    process.env.STRIPE_SECRET_KEY = "sk_test_qa_not_a_key";
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_qa_free_plan";
+    const evtId = `evt_${tag}_w`;
+    const body = JSON.stringify({ id: evtId, object: "event", type: "customer.subscription.updated", created: now, livemode: false, data: { object: stripeSub(subW, W.org.id, { status: "trialing", trial_end: now + 86400, periodEnd: now + 86400 }) } });
+    const sig = new StripeSdk("sk_test_qa_not_a_key").webhooks.generateTestHeaderString({ payload: body, secret: "whsec_qa_free_plan" });
+    const res = await stripeWebhook.POST(new Request("http://local/api/webhooks/stripe", { method: "POST", headers: { "stripe-signature": sig, "content-type": "application/json" }, body }));
+    const rowW = await db.subscription.findUnique({ where: { organizationId: W.org.id } });
+    const evtRow = await db.webhookEvent.findFirst({ where: { eventId: evtId } });
+    check("webhook: Stripe cannot be read → the old \"trialing\" copy is not written, 500 so Stripe retries, the event stays unprocessed", res.status === 500 && rowW?.status === "ACTIVE" && evtRow?.status === "FAILED", `${res.status} ${rowW?.status} ${evtRow?.status}`);
+    await db.webhookEvent.deleteMany({ where: { eventId: evtId } });
+    process.env.STRIPE_SECRET_KEY = "";
+    process.env.STRIPE_WEBHOOK_SECRET = "";
   } finally {
     for (const k of ["EAGLEVIEW_CLIENT_ID", "EAGLEVIEW_CLIENT_SECRET", "COOLCALC_CLIENT_ID", "COOLCALC_API_KEY", "COOLCALC_DEALER_ID"]) process.env[k] = "";
     const del = async (fn: () => Promise<unknown>) => { try { await fn(); } catch { /* next */ } };
