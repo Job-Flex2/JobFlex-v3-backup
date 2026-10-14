@@ -478,7 +478,7 @@ export function analyse(sessions: LandingSession[], opts: { now?: number; timezo
       action: heldBack ? "The headline is held back after the first paint: the hero's copy is kept invisible until the JavaScript is in, for an entrance animation — that is most of the wait. Show it from the first paint, then make the page lighter."
         : "The headline now comes with the first paint — it is the first paint that is late. The page is heavy for a phone: make what the first screen needs small, and everything else wait.",
       steps: [
-        ...(heldBack ? ["Show the hero copy from the first paint: hold `.lp-enter` back only where an entrance is about to play (landing-e.css, hero-entrance.tsx), and render the pill and the product shot visible from the server (reveal.tsx `shown`). Never animate it in on phones."] : []),
+        ...(heldBack ? ["Show the hero copy from the first paint: hold `.lp-enter` back only where an entrance is about to play (landing-e.css, hero-entrance.tsx), and render the product shot visible from the server (reveal.tsx `shown`). Never animate it in on phones."] : []),
         "Serve the fonts as subset WOFF2 files instead of the full variable TTFs (a fraction of the size); the mono font is for a few small labels and can go.",
         "Merge the stylesheets into one or two and inline the hero's own CSS in the HTML, so the first paint waits for nothing.",
         "Fetch the sections under the fold on scroll, not at start — today every section's JavaScript arrives before the page can respond.",

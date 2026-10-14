@@ -79,22 +79,10 @@ export function Hero({
     <section id="hero" className="lp-hero">
       <div className="lp-bg lp-bg--ridge" aria-hidden />
       <div className={`relative z-[1] mx-auto flex max-w-[86rem] flex-col items-center gap-3 px-5 pt-[12vmin] text-center sm:pt-[14vmin]${adScreen ? " lp-hero-copy--ad" : ""}`}>
-        {/* On the first screen nothing waits for a script to be seen (2026-10-04): `shown`. */}
-        <Reveal shown>
-          {/* The gold pill is the same on every variant — one launch line, one
-              link — and is deliberately NOT part of LandingVariant (owner,
-              2026-09-07). */}
-          <a
-            href={registerHref}
-            data-cta="pill"
-            // A fifth smaller on a phone (owner, 2026-09-14): 12 px / 13 px sides /
-            // 5.5 px top and bottom, against 15 / 16 / 7; from 640 px as before.
-            className="inline-flex items-center gap-1 rounded-full bg-lp-gold px-[13px] py-[5.5px] text-[12px] font-semibold text-ink transition-transform duration-200 hover:scale-[1.03] sm:px-4 sm:py-[7px] sm:text-[14px]"
-          >
-            Just launched: JobFlex AI Estimator
-            <span aria-hidden>→</span>
-          </a>
-        </Reveal>
+        {/* No launch line above the headline (owner, 2026-10-14): the gold
+            "Just launched" link is gone from every variant. The column's own
+            top padding is the gap under the nav, so the headline now starts
+            exactly where that link did. */}
         {/* The entrance (pass C): H1 lines out of a mask, sub +150 ms, buttons
             +250 ms — hero-entrance.tsx, on a desk the prelude has armed.
             `.lp-enter` marks the three blocks; they are hidden only under

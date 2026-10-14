@@ -93,8 +93,9 @@ export default async function RegisterPage({
       : resolveLandingVariant(jar.get(INDUSTRY_COOKIE)?.value),
   );
   /* THE CAMPAIGN THE VISITOR CAME IN ON: utm_* from the register link, else
-     the landing's memory cookie (the Google return and the gold pill carry
-     no query). Stamped on the organization at creation (CRO stage 1). */
+     the landing's memory cookie (the Google return, and an older link in a
+     mail or an ad that carries no utm_*, arrive with no query). Stamped on
+     the organization at creation (CRO stage 1). */
   const utmFromQuery = pickUtm(sp);
   const utm = hasUtm(utmFromQuery) ? utmFromQuery : parseUtmCookie(jar.get(UTM_COOKIE)?.value);
   /* THE RETURN FROM GOOGLE, resolved HERE rather than in the browser. The

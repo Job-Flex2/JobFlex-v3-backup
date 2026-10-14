@@ -77,9 +77,11 @@ async function landingToRegister(v: Awaited<ReturnType<typeof visitor>>, industr
   const res = await page.goto(`${BASE}/${industry ? "?industry=" + industry : ""}`, { waitUntil: "load", timeout: 180000 });
   const cta = page.locator('a[data-cta="hero"]').filter({ visible: true }).first();
   await cta.waitFor({ timeout: 60000 });
+  // The gold "Just launched" link left the hero on 2026-10-14 (owner): no landing carries it.
+  const launch = (await page.locator('[data-cta="pill"]').count()) + (await page.getByText("Just launched").count());
   v.step("landing → register");
   await Promise.all([page.waitForURL(/\/auth\/register/, { timeout: 120000 }), cta.click()]);
-  return res ? res.status() : 0;
+  return { status: res ? res.status() : 0, launch };
 }
 
 async function step1(v: Awaited<ReturnType<typeof visitor>>, email: string) {
@@ -136,7 +138,8 @@ async function emailPath(browser: any, kind: Kind, industry: string, ip: string,
   const name = `${kind} ${industry ? "?industry=" + industry : "/"}`;
   const v = await visitor(browser, kind, ip);
   try {
-    const status = await landingToRegister(v, industry);
+    const { status, launch } = await landingToRegister(v, industry);
+    check(`${name}: no launch link above the headline`, launch === 0, `${launch} found`);
     check(`${name}: landing → register`, status === 200 && (!industry || v.page.url().includes(`industry=${industry}`)), `HTTP ${status} → ${v.page.url().slice(BASE.length)}${(() => { const e = v.take(); return e ? " · " + e : ""; })()}`);
     const s1 = await step1(v, `signup.${n}@${MAIL_DOMAIN}`);
     const webview = kind === "ig-ios" || kind === "ig-android";

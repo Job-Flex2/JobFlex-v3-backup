@@ -669,7 +669,7 @@ export function pickUtm(params: Record<string, string | string[] | undefined>): 
 }
 
 /* The utm_* of the visit, remembered the same way as the trade (30 days,
-   first-party) so the Google button, the gold pill and a later visit with no
+   first-party) so the Google button and a later visit with no
    parameters still hand the campaign to the signup (CRO stage 1, 2026-09-09).
    Stored as a query string; read back through pickUtm so the keys and caps
    are the same as for a URL. */

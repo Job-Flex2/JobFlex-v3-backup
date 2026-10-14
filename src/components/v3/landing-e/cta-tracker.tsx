@@ -6,8 +6,9 @@ import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import type { LandingVariantKey } from "./landing-variants";
 
 /* One `cta_click` per click on any element carrying `data-cta` — the hero
-   button, the Google button, the gold pill, the sticky phone bar, the footer,
-   the nav and the intro (CRO stage 1, 2026-09-09). Delegated from the
+   button, the Google button, the sticky phone bar, the footer, the nav and
+   the intro (CRO stage 1, 2026-09-09; the gold "pill" placement is retired
+   since 2026-10-14 and only appears in older events). Delegated from the
    document so the anchors stay plain server-rendered links; the capture phase
    runs before the navigation, and trackTraffic sends by beacon, so the event
    survives the page leaving. Properties: placement, the button's words,
