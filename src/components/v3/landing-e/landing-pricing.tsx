@@ -5,6 +5,7 @@ import { REGISTER } from "./routes";
 import "./pricing-faq.css";
 import { TrialLine } from "./trial-line";
 import { CustomPlanBlock } from "@/components/v3/pricing-d/custom-plan-block";
+import type { SpotlightTool } from "@/lib/planSpotlight";
 
 /* The price anchor before the footer (CRO stage 2, 2026-09-09). The plans
    are the Subscription page's own catalogue (PricingPlan, via
@@ -22,8 +23,11 @@ export function LandingPricing({
   registerHref = REGISTER,
   requiresCard = true,
   customOffered = false,
+  spotlight = null,
 }: {
   plans: PlanDTO[];
+  /** The tool the visitor came for (lib/planSpotlight): pinned and marked on every card. */
+  spotlight?: SpotlightTool | null;
   /** CUSTOM_PLAN_ENABLED (lib/customPlanFlag), read on the server per request:
    *  "Build your plan" under the cards while the custom plan is on sale. */
   customOffered?: boolean;
@@ -46,7 +50,7 @@ export function LandingPricing({
         </Reveal>
 
         <Reveal delay={120} className="mt-9 sm:mt-11">
-          <PricingPlans plans={sellable} registerHref={registerHref} tone="ink" />
+          <PricingPlans plans={sellable} registerHref={registerHref} tone="ink" spotlight={spotlight} />
         </Reveal>
 
         {customOffered ? (

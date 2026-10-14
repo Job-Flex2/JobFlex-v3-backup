@@ -434,3 +434,15 @@
 @media (prefers-reduced-motion: reduce) and (hover: hover) {
   .jf-lp .lp-faq-card:hover .lp-faq-a { transition: none; }
 }
+
+/* THE TOOL THE VISITOR CAME FOR (lib/planSpotlight, owner 2026-10-14): the line
+   over the cards, and the pinned, marked row on every card. */
+.jf-lp .lp-pw-spot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 18px; padding: 12px 14px; border: 2px solid #0a0a0a; border-radius: 2px; background: #fff; color: #0a0a0a; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.jf-lp .lp-pw-spot--ink { background: #0a0a0a; color: #f2f0eb; border-color: #4a9eff; }
+.jf-lp .lp-pw-spot-k { display: inline-block; padding: 3px 8px; border-radius: 2px; background: #1854a0; color: #fff; font-family: var(--font-jbmono), "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.jf-lp .lp-pw-f--spot { position: relative; background: rgba(24, 84, 160, 0.09); box-shadow: inset 3px 0 0 #1854a0; padding-left: 10px; font-weight: 800; color: #0a0a0a; animation: lpSpotIn 0.9s ease-out both; }
+.jf-lp .lp-pw-f--spot.lp-pw-f--no { background: rgba(168, 50, 50, 0.07); box-shadow: inset 3px 0 0 #a83232; color: #666; font-weight: 600; }
+.jf-lp .lp-pw-spot-tag { display: inline-block; margin-left: 8px; padding: 2px 6px; border-radius: 2px; background: #1854a0; color: #fff; font-family: var(--font-jbmono), "JetBrains Mono", ui-monospace, monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; vertical-align: 1px; white-space: nowrap; }
+.jf-lp .lp-pw-f--no .lp-pw-spot-tag { background: #a83232; }
+@keyframes lpSpotIn { 0% { background-color: rgba(24, 84, 160, 0.3); } 100% { background-color: rgba(24, 84, 160, 0.09); } }
+@media (prefers-reduced-motion: reduce) { .jf-lp .lp-pw-f--spot { animation: none; } }

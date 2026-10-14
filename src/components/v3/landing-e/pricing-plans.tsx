@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { expandPlanFeatures, type PlanDTO } from "@/lib/planCatalog";
 import { annualDeal, offersYearly, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
+import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import "./pricing-faq.css";
 
 /* THE REGISTER'S PLAN CARDS ON THE LANDING (owner, 2026-09-26). A port of
@@ -53,14 +54,23 @@ export function PricingPlans({
   plans,
   registerHref,
   tone = "paper",
+  spotlight = null,
 }: {
   plans: PlanDTO[];
   registerHref: string;
+  /** THE TOOL THE VISITOR CAME FOR (lib/planSpotlight, owner 2026-10-14): its
+   *  feature line is pinned first and marked on every card, and a card that
+   *  lacks it says so — a roofer off the roofing ad sees the Roof estimator
+   *  without reading the whole list. */
+  spotlight?: SpotlightTool | null;
   /** "ink" on the landing's dark pricing band — the switch's colours. */
   tone?: "paper" | "ink";
 }) {
   const { days } = useTrialOffer();
-  const { rows, included } = expandPlanFeatures(plans);
+  const expanded = expandPlanFeatures(plans);
+  const spot = spotlightRow(expanded.rows, spotlight);
+  const rows = withSpotlightFirst(expanded.rows, spotlight);
+  const included = expanded.included;
   const heroIndex = Math.max(0, plans.findIndex((p) => p.highlight));
   const railRef = useRef<HTMLDivElement>(null);
   const touched = useRef(false);
@@ -161,6 +171,12 @@ export function PricingPlans({
 
   return (
     <>
+      {spotlight ? (
+        <p className={"lp-pw-spot" + (tone === "ink" ? " lp-pw-spot--ink" : "")} data-plan-spotlight={spotlight} data-plan-spotlight-row={spot ?? ""}>
+          <span className="lp-pw-spot-k">{SPOTLIGHT[spotlight].label}</span>
+          {spotlightLine(spotlight, !!spot)}
+        </p>
+      ) : null}
       {yearly ? (
         <div className="lp-pw-termrow">
           <PlanTermSwitch value={term} onChange={setTerm} tag={tag} tone={tone} />
@@ -190,11 +206,13 @@ export function PricingPlans({
               <ul className="lp-pw-feats" data-plan-feats>
                 {rows.map((f) => {
                   const on = has.has(f.toLowerCase());
+                  const lit = spot !== null && f === spot;
                   return (
-                    <li key={f} className={on ? "lp-pw-f" : "lp-pw-f lp-pw-f--no"}>
+                    <li key={f} className={(on ? "lp-pw-f" : "lp-pw-f lp-pw-f--no") + (lit ? " lp-pw-f--spot" : "")} data-plan-spot-row={lit ? (on ? "in" : "out") : undefined}>
                       {on ? <Check /> : <Minus />}
                       <span className="sr-only">{on ? "Included: " : "Not included: "}</span>
                       {f}
+                      {lit ? <span className="lp-pw-spot-tag">{on ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
                     </li>
                   );
                 })}

@@ -31,6 +31,7 @@
 // stylesheet only restyles the fields (white inputs, larger labels — owner's
 // brief, section H) inside `.otp`, so the password sign-up is untouched.
 import * as React from "react";
+import type { SpotlightTool } from "@/lib/planSpotlight";
 import Link from "next/link";
 import type { Route } from "next";
 import { signIn } from "next-auth/react";
@@ -126,6 +127,7 @@ export function PasswordlessStep({
   requiresCard,
   trialDays,
   industry,
+  tool = null,
   utm,
   attribution,
   analytics,
@@ -146,6 +148,8 @@ export function PasswordlessStep({
   requiresCard: boolean;
   trialDays: number;
   industry: TradeType | null;
+  /** The tool the visitor came for (lib/planSpotlight) — rides the draft so the return link keeps marking it. */
+  tool?: SpotlightTool | null;
   utm: UtmParams | null;
   attribution: { kind: "promo" | "ref"; code: string } | null;
   analytics: () => unknown;
@@ -310,6 +314,7 @@ export function PasswordlessStep({
       analytics: analytics(),
       displayedTrialDays: trialDays === 3 || trialDays === 7 ? trialDays : undefined,
       industry: industry ?? undefined,
+      tool: tool ?? undefined,
       utm: utm ?? undefined,
       attribution,
       meta: meta(),
@@ -388,6 +393,7 @@ export function PasswordlessStep({
         analytics: analytics(),
         displayedTrialDays: trialDays === 3 || trialDays === 7 ? trialDays : undefined,
         industry: industry ?? undefined,
+        tool: tool ?? undefined,
         utm: utm ?? undefined,
         attribution,
         meta: meta(),

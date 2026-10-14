@@ -721,3 +721,14 @@
   .jf-upgrade .jf-up-plans:has(> .jf-up-plan:last-child:nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 320px)); }
   .jf-upgrade .jf-up-plans:has(> .jf-up-plan:last-child:nth-child(1)) { grid-template-columns: minmax(0, 320px); }
 }
+
+/* THE TOOL THE SIGNUP CAME FOR (lib/planSpotlight, owner 2026-10-14): the line
+   over the cards and the pinned, marked row on every card. */
+.jf-upgrade .jf-up-spot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 16px; padding: 12px 14px; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; background: #fff; font-size: 14px; font-weight: 600; line-height: 1.4; box-shadow: 3px 3px 0 rgba(10, 10, 10, 0.06); }
+.jf-upgrade .jf-up-spot-k { display: inline-block; padding: 3px 8px; border-radius: 2px; background: var(--blueprint, #1854a0); color: #fff; font-family: var(--font-mono, ui-monospace); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.jf-upgrade .jf-up-f.spot { background: rgba(24, 84, 160, 0.09); box-shadow: inset 3px 0 0 var(--blueprint, #1854a0); padding-left: 10px; font-weight: 800; animation: upSpotIn 0.9s ease-out both; }
+.jf-upgrade .jf-up-f.spot.no { background: rgba(168, 50, 50, 0.07); box-shadow: inset 3px 0 0 var(--danger, #a83232); font-weight: 600; }
+.jf-upgrade .jf-up-spot-tag { display: inline-block; margin-left: 8px; padding: 2px 6px; border-radius: 2px; background: var(--blueprint, #1854a0); color: #fff; font-family: var(--font-mono, ui-monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; vertical-align: 1px; white-space: nowrap; }
+.jf-upgrade .jf-up-f.no .jf-up-spot-tag { background: var(--danger, #a83232); }
+@keyframes upSpotIn { 0% { background-color: rgba(24, 84, 160, 0.3); } 100% { background-color: rgba(24, 84, 160, 0.09); } }
+@media (prefers-reduced-motion: reduce) { .jf-upgrade .jf-up-f.spot { animation: none; } }
