@@ -157,7 +157,7 @@ export class Call {
       if (!this.ended) void this.finish("openai-error");
     });
     // The desk speaks first: its greeting.
-    this.aiSend({ type: "response.create", response: { instructions: "Start the call with your greeting, then wait for the caller." } });
+    this.aiSend({ type: "response.create", response: { instructions: "Start the call by saying your GREETING exactly as written in your instructions — every word of it, including that this is a virtual assistant and the call is recorded — then wait for the caller." } });
     const max = Math.max(60, Number(this.brief.maxSeconds) || 600) * 1000;
     this.timers.push(setTimeout(() => this.aiSend({ type: "response.create", response: { instructions: "You have about thirty seconds left on this call. Wrap up: confirm anything booked or any message taken, say goodbye, and call end_call." } }), max - 30_000));
     this.timers.push(setTimeout(() => void this.finish("time-cap"), max));
@@ -212,8 +212,11 @@ export class Call {
       return;
     }
     if (t === "error") {
-      this.lastError = (ev.error && typeof ev.error.message === "string" ? ev.error.message : JSON.stringify(ev.error ?? ev)).slice(0, 300);
-      this.log(`openai error: ${this.lastError}`);
+      const msg = (ev.error && typeof ev.error.message === "string" ? ev.error.message : JSON.stringify(ev.error ?? ev)).slice(0, 300);
+      // A cancel sent while nothing was playing is nothing wrong (the caller spoke in a gap); not a failure to report.
+      if (/cancellation failed|no active response/i.test(msg)) return;
+      this.lastError = msg;
+      this.log(`openai error: ${msg}`);
     }
   }
 
