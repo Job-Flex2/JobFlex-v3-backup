@@ -131,6 +131,7 @@ export function initPhoneContent(
     today: callsData.filter((c) => /m ago|h ago|just now/.test(c.when)).length,
     week: callsData.length,
     leads: callsData.filter((c) => c.lead).length,
+    deskMinutes: Math.round(callsData.reduce((n, c) => n + (c.desk?.seconds ?? 0), 0) / 60),
   };
 
   // Dismiss Lead Center banners (smooth height + gap collapse) — inert on this
@@ -191,6 +192,7 @@ export function initPhoneContent(
       { k: "today", l: "Calls today", h: "Since midnight" },
       { k: "week", l: "Calls · 7d", h: "Inbound and outbound" },
       { k: "leads", l: "Auto-leads · 7d", h: "Created from transcripts", accent: true },
+      { k: "deskMinutes", l: "Desk minutes · month", h: "The AI desk on the line" },
     ];
     const grid = $("#statGrid");
     if (!grid) return;
@@ -223,11 +225,13 @@ export function initPhoneContent(
   function filterCount(k: string) {
     if (k === "ALL") return callsData.length;
     if (k === "LEADS") return callsData.filter((c) => c.lead).length;
+    if (k === "DESK") return callsData.filter((c) => c.desk).length;
     return callsData.filter((c) => c.dir === k).length;
   }
   function filtered() {
     if (ph.filter === "ALL") return callsData;
     if (ph.filter === "LEADS") return callsData.filter((c) => c.lead);
+    if (ph.filter === "DESK") return callsData.filter((c) => c.desk);
     return callsData.filter((c) => c.dir === ph.filter);
   }
 
@@ -236,6 +240,7 @@ export function initPhoneContent(
     { k: "INBOUND", l: "Inbound" },
     { k: "OUTBOUND", l: "Outbound" },
     { k: "LEADS", l: "Became leads" },
+    { k: "DESK", l: "AI desk" },
   ];
   /** Built ONCE. Pressing a chip must not rebuild this strip: the pressed
    *  button would be destroyed mid-click and the focus ring with it. */
@@ -280,6 +285,7 @@ export function initPhoneContent(
       esc(c.dir.toLowerCase()) +
       "</span>" +
       (c.lead ? '<span class="pstatus lead-flag">lead</span>' : "") +
+      (c.desk ? '<span class="pstatus desk-flag">' + esc(c.desk.label) + "</span>" : "") +
       "</td>" +
       '<td><span class="ph-dur">' +
       fmtDur(c.dur) +
@@ -419,7 +425,31 @@ export function initPhoneContent(
       '<span class="pstatus">' +
       fmtDur(c.dur) +
       "</span>" +
-      (c.lead ? '<span class="pstatus lead-flag" data-lead-badge>lead</span>' : "")
+      (c.lead ? '<span class="pstatus lead-flag" data-lead-badge>lead</span>' : "") +
+      (c.desk ? '<span class="pstatus desk-flag">AI desk · ' + esc(c.desk.label) + "</span>" : "")
+    );
+  }
+  /** What the AI desk did on the call, and the visit it booked — a link onto the calendar. */
+  function deskHtml(c: Call) {
+    if (!c.desk) return "";
+    const a = c.desk.appointment;
+    return (
+      '<div class="sh-sec" data-sheet-desk><div class="kpi-lbl">The AI desk</div><div class="sh-desk">' +
+      "<div>The desk " +
+      esc(c.desk.label) +
+      " and was on the line " +
+      fmtDur(c.desk.seconds) +
+      ".</div>" +
+      (a
+        ? '<a class="btn btn-ghost btn--sm" href="/dashboard/calendar?date=' +
+          esc(encodeURIComponent(a.date)) +
+          "&ev=apt:" +
+          esc(encodeURIComponent(a.id)) +
+          '" data-desk-visit><svg class="ic"><use href="#i-ext"/></svg>Open the visit · ' +
+          esc(a.when) +
+          "</a>"
+        : "") +
+      "</div></div>"
     );
   }
   function transcriptHtml(c: Call) {
@@ -430,10 +460,10 @@ export function initPhoneContent(
           .map(
             (l) =>
               '<div class="script-line ' +
-              (l[0] === "agent" ? "agent" : "") +
+              (l[0] === "agent" || l[0] === "desk" ? "agent" : "") +
               '">' +
               '<span class="script-who">' +
-              (l[0] === "agent" ? "Shop" : "Caller") +
+              (l[0] === "desk" ? "AI desk" : l[0] === "agent" ? "Shop" : "Caller") +
               "</span>" +
               "<span>" +
               esc(l[1]) +
@@ -475,6 +505,7 @@ export function initPhoneContent(
           fmtDur(c.dur) +
           "</span></div></div>"
         : "") +
+      deskHtml(c) +
       '<div class="sh-sec"><div class="kpi-lbl">Call summary</div>' +
       (c.summary
         ? '<div class="sh-summary">' + esc(c.summary) + "</div>"

@@ -105,6 +105,19 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
           {STAGE_TAG[view.stage] ? <span className={`${s.tag}${view.stage === "rejected" || view.stage === "failed" ? ` ${s.tagWarn}` : ""}`}>{STAGE_TAG[view.stage]}</span> : null}
         </div>
       ) : null}
+      {/* What the number does right now (2026-10-13): calls from the day it is bought, texts once the carriers approve. */}
+      {view.number ? (
+        <ul className={s.uses} data-number-uses>
+          <li data-use="calls" data-on={view.calls.on && view.calls.go !== "none" ? "1" : "0"}>
+            <b>{C.usesCalls}</b>
+            <span>{!view.calls.on ? C.callsOff : view.calls.go === "assistant" ? C.callsAssistant : view.calls.go === "phone" ? C.callsPhone(view.calls.phone ?? "") : C.callsNone}</span>
+          </li>
+          <li data-use="texts" data-on={view.stage === "approved" ? "1" : "0"}>
+            <b>{C.usesTexts}</b>
+            <span>{view.stage === "approved" ? C.textsOn : view.stage === "pending" ? C.textsPending : view.stage === "rejected" ? C.textsRejected : view.legacy ? C.textsLegacy : C.textsFailed}</span>
+          </li>
+        </ul>
+      ) : null}
       {view.stage === "pending" ? <p className={s.note}>{C.pending}</p> : null}
       {view.stage === "approved" ? <p className={s.note}>{C.approved}</p> : null}
       {view.stage === "rejected" ? <p className={`${s.note} ${s.noteErr}`}>{view.canEdit ? C.rejected : C.rejectedClosed}</p> : null}

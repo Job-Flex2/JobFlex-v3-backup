@@ -1,70 +1,17 @@
+// A call comes in (Twilio's voice webhook, the number's VoiceUrl). Which company and
+// what happens are lib/aiDesk/calls: the company whose number was dialed; its phone
+// rings first or the assistant answers, as its desk is set.
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { recordingTwiml, unavailableTwiml, verifyTwilioSignature } from "@/lib/sdk/twilioVoice";
-import { startInboundCall } from "@/lib/aiPhoneCalls";
-import { checkPlanLimit } from "@/lib/limitsEngine";
-import { isPageLocked } from "@/lib/customPageAccess";
+import { readTwilioForm } from "@/lib/sdk/twilioVoice";
+import { inboundTwiml, twilioBase } from "@/lib/aiDesk/calls";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const form = await req.formData();
-  const params: Record<string, string> = {};
-  form.forEach((v, k) => (params[k] = String(v)));
-
-  const fullUrl = process.env.TWILIO_APP_URL
-    ? `${process.env.TWILIO_APP_URL}/api/twilio/voice`
-    : new URL(req.url).toString();
-
-  const signatureOk = await verifyTwilioSignature(
-    fullUrl,
-    params,
-    req.headers.get("x-twilio-signature"),
-  );
-  if (!signatureOk) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
-  }
-
-  const callSid = params.CallSid;
-  const from = params.From;
-  const to = params.To;
-  if (!callSid || !from || !to) {
-    return NextResponse.json({ error: "Missing call params" }, { status: 400 });
-  }
-
-  // Map inbound To number → Organization. Simplest: default to first org.
-  const org = await db.organization.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!org) return NextResponse.json({ error: "No org" }, { status: 500 });
-
-  // The one public path that BLOCKS at the cap (product decision): over-limit
-  // orgs get a polite unavailable message and no AiPhoneCall row is written.
-  const quota = await checkPlanLimit(org.id, "aiPhoneCalls");
-  // A custom-plan shop that did not buy Phone has no AI answering either.
-  if (!quota.allowed || (await isPageLocked(org.id, "phone"))) {
-    return new NextResponse(unavailableTwiml(), {
-      headers: { "Content-Type": "text/xml" },
-    });
-  }
-
-  try {
-    await startInboundCall(callSid, from, to, org.id);
-  } catch (err) {
-    console.warn("[twilio/voice] startInboundCall failed:", err);
-  }
-
-  const baseUrl =
-    process.env.TWILIO_APP_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    new URL(req.url).origin;
-
-  const xml = recordingTwiml({
-    baseUrl,
-    greeting:
-      "Thanks for calling. Please leave your name, phone number, and a short description of your project after the beep.",
-    maxLengthSec: 180,
-  });
-
-  return new NextResponse(xml, {
-    headers: { "Content-Type": "text/xml" },
-  });
+  const params = await readTwilioForm(req, "/api/twilio/voice");
+  if (!params) return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+  const { CallSid: callSid, From: from, To: to } = params;
+  if (!callSid || !from || !to) return NextResponse.json({ error: "Missing call params" }, { status: 400 });
+  const xml = await inboundTwiml({ to, from, callSid, base: twilioBase(req.url) });
+  return new NextResponse(xml, { headers: { "Content-Type": "text/xml" } });
 }

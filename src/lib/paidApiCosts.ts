@@ -51,6 +51,10 @@ export const UNIT_CENTS: Record<PaidService, Record<string, number>> = {
     // this is the fallback when a response carries no usage.
     chat: 3,
     "transcribe-minute": 0.6,
+    // The AI desk (2026-10-13): a realtime minute on the mini model ≈ 3–5¢ (audio in
+    // and out); a voice preview is a few seconds of gpt-4o-mini-tts.
+    "realtime-minute": 4,
+    "tts-preview": 1,
   },
   "google-solar": { buildingInsights: 1, dataLayers: 7.5, raster: 0 },
   "google-geocoding": { geocode: 0.5, geocodeAddress: 0.5 },

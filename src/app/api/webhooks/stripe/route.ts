@@ -21,6 +21,7 @@ import { trackActivation } from "@/lib/activation-events";
 import { finishCardCheckout, noteCardlessTrialEnded } from "@/lib/cardlessTrial";
 import { CARD_UPDATE_PURPOSE, finishCardUpdate, sendDunningEmail } from "@/lib/cardUpdate";
 import { completeFromCheckoutSession, completeFromPaymentIntent } from "@/lib/leadCenter/purchase";
+import { completeFromPackSession } from "@/lib/aiDesk/packs";
 import { cancelReplacedSubscription } from "@/lib/checkoutReturn";
 import { invoiceSubscriptionId } from "@/lib/stripeCompat";
 
@@ -60,6 +61,9 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       // A Lead Center lead paid through Checkout (lib/leadCenter/purchase):
       // the contacts open here, or on the return page if it got there first.
       if (await completeFromCheckoutSession(session)) break;
+      // An AI desk minute pack paid through Checkout (lib/aiDesk/packs): on the
+      // balance here, or on the return page if it got there first.
+      if (await completeFromPackSession(session)) break;
       // A card added to a card-less trial (setup mode), or the plan restarted
       // after one ended (subscription mode) — lib/cardlessTrial. The return
       // page usually got there first; both are safe to run twice.

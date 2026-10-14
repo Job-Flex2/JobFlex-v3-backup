@@ -97,8 +97,8 @@ function jobHref(id: string): string {
  * no-op: `2026-02-31` rolls over in the Date constructor, so the only proof the
  * date was real is that it survives the round trip.
  */
-function readEntryParams(): { date: Date | null; create: boolean } {
-  if (typeof window === "undefined") return { date: null, create: false };
+function readEntryParams(): { date: Date | null; create: boolean; ev: string | null } {
+  if (typeof window === "undefined") return { date: null, create: false, ev: null };
   // THIS EDITION IS NOT ALWAYS THE ONE THE USER GETS. `ResponsiveDashboardShell`
   // renders desktop on the server — it cannot know the viewport — and corrects
   // during hydration, so on a phone this module mounts, inits and unmounts
@@ -107,12 +107,12 @@ function readEntryParams(): { date: Date | null; create: boolean } {
   // opened on today with no create sheet. The same query the shell switches on,
   // evaluated at the same moment, so the two can only ever agree about which
   // edition owns the params.
-  if (window.matchMedia("(max-width: 768px)").matches) return { date: null, create: false };
+  if (window.matchMedia("(max-width: 768px)").matches) return { date: null, create: false, ev: null };
   let q: URLSearchParams;
   try {
     q = new URLSearchParams(window.location.search);
   } catch {
-    return { date: null, create: false };
+    return { date: null, create: false, ev: null };
   }
   const raw = q.get("date");
   const m = raw ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw) : null;
@@ -128,16 +128,21 @@ function readEntryParams(): { date: Date | null; create: boolean } {
       date = d;
     }
   }
-  return { date, create: q.get("new") === "1" };
+  // `?ev=apt:<id>` — one event's sheet open on arrival (the Phone page's "Open the
+  // visit" on a call the AI desk booked, 2026-10-13). An id the loaded range does not
+  // hold is a no-op in `openDetail`.
+  const ev = q.get("ev");
+  return { date, create: q.get("new") === "1", ev: ev && /^[a-z]+:[A-Za-z0-9_-]{1,64}$/.test(ev) ? ev : null };
 }
 
-/** Drop `date` / `new` from the address bar without a navigation. */
+/** Drop `date` / `new` / `ev` from the address bar without a navigation. */
 function clearEntryParams(): void {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
-  if (!url.searchParams.has("date") && !url.searchParams.has("new")) return;
+  if (!url.searchParams.has("date") && !url.searchParams.has("new") && !url.searchParams.has("ev")) return;
   url.searchParams.delete("date");
   url.searchParams.delete("new");
+  url.searchParams.delete("ev");
   window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
 }
 
@@ -3099,12 +3104,14 @@ export function initCalendarContent(
     if (entry.create) {
       const day = entry.date ?? cal.cursor;
       openQuickAdd(atMins(day, 8 * 60), atMins(day, 10 * 60));
+    } else if (entry.ev) {
+      openDetail(entry.ev);
     }
     // Consumed either way: leaving them in the URL means Back re-opens the
     // sheet, and a stale `?date=` outliving the day it was about. A no-op at
     // handheld width, where `readEntryParams` declined to read them and the
     // handheld build owns the clearing — see its guard.
-    if (entry.date || entry.create) clearEntryParams();
+    if (entry.date || entry.create || entry.ev) clearEntryParams();
   });
 
   // Keep the week's "now" marker honest while the page stays open (outside the

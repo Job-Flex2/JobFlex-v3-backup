@@ -13,8 +13,12 @@ import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { relative } from "@/lib/format";
+import type { CallOutcome } from "@/lib/aiDesk/liveCall";
+import { DESK_OUTCOME_LABEL, deskOutcomeWord, minutesOf } from "@/lib/aiDesk/shared";
+import { deskStripFor } from "@/lib/aiDesk/strip";
+import { readDeskUse } from "@/lib/aiDesk/usage";
 import type { PhoneContentProps } from "@/components/v3/phone-blueprint/phone-content";
-import type { Call, CallScriptLine } from "@/components/v3/phone-blueprint/phone-data";
+import type { Call, CallDesk, CallScriptLine } from "@/components/v3/phone-blueprint/phone-data";
 
 export type PhoneProps = PhoneContentProps;
 
@@ -23,6 +27,8 @@ export type PhoneProps = PhoneContentProps;
  *  and hand-pasted transcripts usually do. */
 const SPEAKER_LINE = /^([A-Za-z][A-Za-z ]{0,14}?)\s*[:：]\s*(.+)$/;
 const AGENT_SPEAKERS = new Set(["agent", "shop", "rep", "receptionist", "you", "assistant", "ai"]);
+/** The AI desk's own side of a call it answered (lib/aiDesk/liveCall writes "Desk: …"). */
+const DESK_SPEAKERS = new Set(["desk", "ai desk"]);
 
 /**
  * Split a transcript into the sheet's two-column script.
@@ -40,7 +46,8 @@ function parseTranscript(raw: string | null): CallScriptLine[] {
   for (const line of lines) {
     const m = SPEAKER_LINE.exec(line);
     if (!m) return [];
-    const who = AGENT_SPEAKERS.has(m[1].trim().toLowerCase()) ? "agent" : "caller";
+    const key = m[1].trim().toLowerCase();
+    const who = DESK_SPEAKERS.has(key) ? "desk" : AGENT_SPEAKERS.has(key) ? "agent" : "caller";
     out.push([who, m[2].trim()]);
   }
   return out;
@@ -68,7 +75,7 @@ export async function loadPhoneProps(nextPath: string): Promise<PhoneProps> {
   const startOfWeek = new Date();
   startOfWeek.setDate(startOfWeek.getDate() - 7);
 
-  const [calls, todayCount, weekCount, leadsCreated] = await Promise.all([
+  const [calls, todayCount, weekCount, leadsCreated, use, strip, org] = await Promise.all([
     db.aiPhoneCall.findMany({
       where: { organizationId },
       orderBy: { startedAt: "desc" },
@@ -79,7 +86,41 @@ export async function loadPhoneProps(nextPath: string): Promise<PhoneProps> {
     db.aiPhoneCall.count({
       where: { organizationId, leadId: { not: null }, startedAt: { gte: startOfWeek } },
     }),
+    readDeskUse(organizationId),
+    deskStripFor(organizationId).catch(() => null),
+    db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } }),
   ]);
+
+  // What the AI desk did on each call it answered (2026-10-13): the outcome rows the
+  // voice server posted (SyncState `callout:<sid>`, no schema change) and the visits it
+  // booked, so a row can say "booked a visit" and open it on the calendar.
+  const outcomes = new Map<string, CallOutcome>();
+  if (calls.length) {
+    const rows = await db.syncState.findMany({ where: { key: { in: calls.map((c) => `callout:${c.callSid}`) } }, select: { key: true, cursor: true } });
+    for (const r of rows) {
+      try {
+        outcomes.set(r.key.slice("callout:".length), JSON.parse(r.cursor) as CallOutcome);
+      } catch {
+        /* an unreadable row shows as a call the desk did not take */
+      }
+    }
+  }
+  const apptIds = Array.from(outcomes.values()).map((o) => o.appointmentId).filter((x): x is string => !!x);
+  const appts = apptIds.length ? await db.appointment.findMany({ where: { id: { in: apptIds }, organizationId }, select: { id: true, startsAt: true } }) : [];
+  const apptById = new Map(appts.map((a) => [a.id, a]));
+  const tz = org?.timezone || "America/New_York";
+  const deskOf = (callSid: string): CallDesk | null => {
+    const o = outcomes.get(callSid);
+    if (!o) return null;
+    const word = deskOutcomeWord(o);
+    const a = o.appointmentId ? apptById.get(o.appointmentId) : null;
+    return {
+      word,
+      label: DESK_OUTCOME_LABEL[word],
+      seconds: o.seconds,
+      appointment: a ? { id: a.id, when: a.startsAt.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz }), date: localDate(a.startsAt, tz) } : null,
+    };
+  };
 
   const entries: Call[] = calls.map((c) => ({
     id: c.id,
@@ -94,6 +135,7 @@ export async function loadPhoneProps(nextPath: string): Promise<PhoneProps> {
     summary: c.summary,
     script: parseTranscript(c.transcript),
     transcript: c.transcript,
+    desk: deskOf(c.callSid),
   }));
 
   const appUrl = await appBaseUrl();
@@ -101,8 +143,18 @@ export async function loadPhoneProps(nextPath: string): Promise<PhoneProps> {
 
   return {
     entries,
-    stats: { today: todayCount, week: weekCount, leads: leadsCreated },
+    stats: { today: todayCount, week: weekCount, leads: leadsCreated, deskMinutes: minutesOf(use.callSeconds + use.testSeconds) },
     webhookUrl,
     twilioConfigured: await isTwilioEnabled(),
+    desk: strip,
   };
+}
+
+/** `2026-10-14` in the company's zone — the calendar's `?date=` for the day of a visit. */
+function localDate(d: Date, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
 }
