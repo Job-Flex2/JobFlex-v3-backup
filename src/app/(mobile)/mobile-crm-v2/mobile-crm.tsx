@@ -70,6 +70,9 @@ import {
   type FollowUpChannel,
 } from "@/lib/followUps/copy";
 import { getCrmSnapshot } from "./crm-snapshot";
+import { getCrmBrief } from "@/actions/crmBrief";
+import { moneyShort, type CrmBrief } from "@/lib/crm/brief";
+import { OfficePanel, TodayPanel } from "@/components/v3/crm-blueprint/crm-brief";
 import {
   LEAD_CLS,
   PAGE_BOOK,
@@ -314,6 +317,9 @@ export function MobileCrm() {
   /* The one place a refused or failed write is reported. */
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [stats, setStats] = useState<CrmStats>(EMPTY_STATS);
+  /* Today's checks and the office figures — the same read the desktop sheet
+     gets as props (lib/crm/briefServer), fetched beside the snapshot. */
+  const [brief, setBrief] = useState<CrmBrief | null>(null);
   const [leads, setLeads] = useState<CrmLead[]>([]);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -327,7 +333,7 @@ export function MobileCrm() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [tab, setTab] = useState<TabKey>("overview");
+  const [tab, setTab] = useState<TabKey>("today");
   const [bookFilter, setBookFilter] = useState<string>("ALL");
   const [bookQuery, setBookQuery] = useState("");
   const [bookPage, setBookPage] = useState(1);
@@ -378,8 +384,9 @@ export function MobileCrm() {
   }, []);
 
   const refresh = useCallback(async () => {
-    const res = await getCrmSnapshot();
+    const [res, b] = await Promise.all([getCrmSnapshot(), getCrmBrief()]);
     if (!alive.current) return;
+    if (b.ok) setBrief(b.data);
     if (!res.ok) {
       setLoadErr(res.error);
       return;
@@ -692,6 +699,31 @@ export function MobileCrm() {
      Never a third, and all three computed — claim a lead or send a follow-up
      and the head moves with it. */
   const mast = useMemo(() => {
+    if (tab === "today") {
+      const t = brief?.today ?? null;
+      const open = t ? t.score.open : 0;
+      const urgent = t ? t.checks.filter((c) => c.tone === "danger" && !c.done).length : 0;
+      return {
+        kicker: "Today · to check",
+        value: open,
+        format: fmtInt,
+        tone: t && t.score.total > 0 && open === 0 ? styles.isGood : urgent ? styles.isBad : "",
+        a1: { l: "Checked", v: t ? `${t.score.done} of ${t.score.total}` : "—" },
+        a2: { l: "Can't wait", v: t ? String(urgent) : "—" },
+      };
+    }
+    if (tab === "office") {
+      const o = brief?.office ?? null;
+      const by = (k: string) => o?.health.find((x) => x.key === k);
+      return {
+        kicker: "Collected this month",
+        value: by("mtd")?.raw ?? 0,
+        format: fmtMoney,
+        tone: "",
+        a1: { l: "Still owed", v: o ? moneyShort(by("outstanding")?.raw ?? 0) : "—" },
+        a2: { l: "Win rate · 90d", v: by("win")?.value ?? "—" },
+      };
+    }
     if (tab === "overview") {
       return {
         kicker: "Conversion · won rate",
@@ -731,7 +763,7 @@ export function MobileCrm() {
       a2: { l: "Oldest", v: oldest ? `${oldest}d` : "—" },
     };
   }, [
-    tab, rate, won, lost, active, ltvTotal, customers.length, quotesTotal,
+    tab, brief, rate, won, lost, active, ltvTotal, customers.length, quotesTotal,
     rulesOn.length, rules.length, fastest, dueNow.length, laterOn.length, oldest,
   ]);
 
@@ -1049,7 +1081,10 @@ export function MobileCrm() {
     setFilterOpen(false);
   };
 
-  const tabIndex = TABS.findIndex((t) => t.key === tab);
+  /* The Office tab is the office's alone; a sales rep or an estimator never
+     sees it (lib/crm/brief decides who is who). */
+  const tabs = useMemo(() => TABS.filter((t) => t.key !== "office" || !!brief?.office), [brief?.office]);
+  const tabIndex = Math.max(0, tabs.findIndex((t) => t.key === tab));
   const anyOverlay = Boolean(sheetView) || ruleOpen;
   /* Panels wait for the read. Rendering them first would print "Book is
      empty" / "Queue is clear" over rows that are still in flight. */
@@ -1111,9 +1146,9 @@ export function MobileCrm() {
           </div>
 
           {/* TABS — the desktop's four CRM panels */}
-          <div className={styles.tabs}>
+          <div className={styles.tabs} data-n={tabs.length} style={{ ["--tabs" as string]: tabs.length }}>
             <span className={styles.tabInd} style={{ transform: `translateX(${tabIndex * 100}%)` }} />
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.key}
                 className={`${styles.tab} ${tab === t.key ? styles.active : ""}`}
@@ -1162,6 +1197,20 @@ export function MobileCrm() {
               <div className={styles.noteS}>{actionErr}</div>
             </div>
           ) : null}
+
+          {/* ============ TAB: TODAY — what to check ============ */}
+          {ready && tab === "today" && brief && (
+            <TodayPanel key={brief.today.dayKey} today={brief.today} onGoto={(t) => goTab(t === "queue" ? "queue" : t === "workflows" ? "rules" : "book")} />
+          )}
+          {ready && tab === "today" && !brief && (
+            <div className={styles.note} role="status">
+              <div className={styles.noteT}>Today&rsquo;s checks didn&rsquo;t load</div>
+              <div className={styles.noteS}>Pull down to try again.</div>
+            </div>
+          )}
+
+          {/* ============ TAB: OFFICE — how the company is doing ============ */}
+          {ready && tab === "office" && brief?.office && <OfficePanel office={brief.office} company={org.name} />}
 
           {/* ============ TAB: OVERVIEW ============ */}
           {ready && tab === "overview" && (

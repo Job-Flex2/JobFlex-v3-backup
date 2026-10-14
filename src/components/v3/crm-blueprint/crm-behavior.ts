@@ -181,7 +181,8 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
 
   /** True while any write is in flight, so a double click cannot fire twice. */
   const crm = {
-    tab: "overview",
+    // Today is the first tab now (lib/crm/brief); the overview panel starts hidden.
+    tab: "today",
     cbFilter: [] as string[],
     qTab: "ALL",
     qPage: 1,

@@ -33,6 +33,7 @@ import type {
   QueueItem,
 } from "@/components/v3/crm-blueprint/crm-data";
 import { STATUS_ORDER } from "@/components/v3/crm-blueprint/crm-data";
+import { readCrmBrief } from "@/lib/crm/briefServer";
 
 export const dynamic = "force-dynamic";
 
@@ -65,9 +66,13 @@ function deriveTopStatus(statuses: string[]): string {
 
 export default async function CrmPage() {
   let organizationId: string;
+  let userId: string;
+  let role: string;
   try {
     const ctx = await requireOrg();
     organizationId = ctx.organizationId;
+    userId = ctx.user.id;
+    role = ctx.role;
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fcrm");
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");
@@ -75,6 +80,9 @@ export default async function CrmPage() {
   }
 
   const now = new Date();
+
+  // Today's checks and the office figures, read beside the rest.
+  const briefP = readCrmBrief({ organizationId, userId, role, now });
 
   const [
     leads,
@@ -228,5 +236,6 @@ export default async function CrmPage() {
     smsEnabled: await isTwilioEnabled(),
   };
 
-  return <CrmContent data={data} />;
+  const brief = await briefP;
+  return <CrmContent data={data} brief={brief} />;
 }

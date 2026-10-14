@@ -68,8 +68,10 @@ export function LivePanel({ initial, timezone, fullHistory = false, ledger = nul
   const [error, setError] = useState("");
   /** Who the map shows (2026-10-03): the last 5 minutes (on the site now), the
    *  live half hour, or a longer span — 1 hour to a month — read as one row
-   *  per person (getMapHistory) and asked again every two minutes while chosen. */
-  const [span, setSpan] = useState<MapSpan>(30);
+   *  per person (getMapHistory) and asked again every two minutes while chosen.
+   *  It opens on the 5 minutes (owner, 2026-10-14: "always open it on five
+   *  minutes, not on 30") — who is here now, not who passed through. */
+  const [span, setSpan] = useState<MapSpan>(5);
   const [history, setHistory] = useState<MapHistory | null>(null);
   // MAP VIEW (owner, 2026-10-02): everyone, or only the prospects — new
   // visitors trying to convert, members and customers signing in left off, a

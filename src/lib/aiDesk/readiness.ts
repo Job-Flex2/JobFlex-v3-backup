@@ -4,6 +4,7 @@
 // its /health, a company number's voice webhook as Twilio has it, each plan's included
 // minutes. The steps at the end are what is still to do, in order — the owner's side of
 // going live, written against what is actually missing.
+import { createHmac, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isOpenAIEnabled } from "@/lib/sdk/openai";
@@ -61,14 +62,29 @@ async function probeVoiceServer(): Promise<ReadinessItem> {
     return { key: "voice", label: "Voice server", state: "off", detail: "VOICE_SERVER_URL and VOICE_SERVER_SECRET are not set on Vercel — callers get the recording until they are (voice/README.md)." };
   }
   const url = healthUrlOf(ws);
+  // The secret, checked without sending it: the server answers an HMAC of our challenge.
+  const challenge = randomBytes(16).toString("hex");
+  const expected = createHmac("sha256", process.env.VOICE_SERVER_SECRET ?? "").update(challenge).digest("hex");
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 5000);
-    const r = await fetch(url, { signal: ctl.signal, cache: "no-store" }).finally(() => clearTimeout(t));
-    const j = (await r.json().catch(() => null)) as { ok?: boolean; model?: string; api?: string } | null;
+    let r = await fetch(`${url}?challenge=${challenge}`, { signal: ctl.signal, cache: "no-store" }).finally(() => clearTimeout(t));
+    // A server from before the proof answers /health only on the exact path: ask it plainly, and say the secret was not checked.
+    if (r.status === 404) {
+      const ctl2 = new AbortController();
+      const t2 = setTimeout(() => ctl2.abort(), 5000);
+      r = await fetch(url, { signal: ctl2.signal, cache: "no-store" }).finally(() => clearTimeout(t2));
+    }
+    const j = (await r.json().catch(() => null)) as { ok?: boolean; model?: string; api?: string; proof?: string } | null;
     if (!r.ok || !j?.ok) return { key: "voice", label: "Voice server", state: "warn", detail: `${url} answered ${r.status} — is the Fly app up (fly status)?` };
-    const same = !j.model || j.model === voiceModel();
-    return { key: "voice", label: "Voice server", state: same ? "ok" : "warn", detail: `${ws} answers · model ${j.model ?? "?"} · api ${j.api ?? "?"}${same ? "" : ` — the app's VOICE_MODEL is ${voiceModel()}: set the same on both`}` };
+    const sameModel = !j.model || j.model === voiceModel();
+    const secret = j.proof ? (j.proof === expected ? "matches" : "mismatch") : "unchecked";
+    const words = [`${ws} answers · model ${j.model ?? "?"} · api ${j.api ?? "?"}`];
+    if (secret === "matches") words.push("secret matches");
+    if (secret === "mismatch") words.push("SECRET MISMATCH — VOICE_SERVER_SECRET on Vercel is not the value on Fly: set the same on both (fly secrets set … / Vercel → redeploy)");
+    if (secret === "unchecked") words.push("secret not checked yet — the server on Fly is from before this check: `git pull`, then `fly deploy` in voice/, and it will be");
+    if (!sameModel) words.push(`the app's VOICE_MODEL is ${voiceModel()}: set the same on both`);
+    return { key: "voice", label: "Voice server", state: sameModel && secret !== "mismatch" ? "ok" : "warn", detail: words.join(" · ") };
   } catch (err) {
     return { key: "voice", label: "Voice server", state: "warn", detail: `${url} did not answer (${err instanceof Error ? err.message : "error"}) — the DNS for voice.jobflex.app, or the Fly app is down.` };
   }
@@ -187,7 +203,7 @@ export async function deskReadiness(adminUserId: string | null = null): Promise<
   if (!openai) steps.push("Set OPENAI_API_KEY on Vercel (Production) and redeploy.");
   if (!twilioOn) steps.push("Configure Twilio (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) — without it no company gets a number.");
   if (voice.state === "off") steps.push("Deploy the voice server on Fly (voice/README.md: account, secrets, fly deploy, voice.jobflex.app), then set VOICE_SERVER_URL=wss://voice.jobflex.app and VOICE_SERVER_SECRET on Vercel and redeploy.");
-  else if (voice.state === "warn") steps.push("The voice server is set but not right: check `fly status`, the DNS for voice.jobflex.app, and VOICE_MODEL on both sides.");
+  else if (voice.state === "warn") steps.push(/SECRET MISMATCH/.test(voice.detail) ? "The secret differs between Fly and Vercel: paste the value go-live.sh printed into Vercel's VOICE_SERVER_SECRET (or run `fly secrets set VOICE_SERVER_SECRET=…` with Vercel's value), then redeploy." : "The voice server is set but not right: check `fly status`, the DNS name in VOICE_SERVER_URL, and VOICE_MODEL on both sides.");
   for (const n of numbers.filter((x) => x.webhook === "wrong")) steps.push(`Point ${n.number} (${n.company}) at the voice webhook — the button below.`);
   for (const p of platform.filter((x) => x.webhook === "wrong")) steps.push(`Point the platform's ${p.number} at the voice webhook — the button below (its calls are answered for ${p.answeredFor ?? "the first company"}).`);
   for (const p of platform.filter((x) => !x.assigned)) steps.push(`Assign the platform's ${p.number} to your own company — the picker below. Until then its calls reach ${p.answeredFor ?? "the oldest company"} (the oldest company, the old fallback): a test call would land on their Phone page and could book on their calendar.`);

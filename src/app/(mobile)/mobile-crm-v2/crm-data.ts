@@ -131,6 +131,8 @@ export const ACTIVE_STATUSES = ['NEW', 'ROUTED', 'CLAIMED', 'CONTACTED', 'QUOTED
  * the shortest of the four.
  */
 export const TABS = [
+  { key: 'today', label: 'Today' },
+  { key: 'office', label: 'Office' },
   { key: 'overview', label: 'Overview' },
   { key: 'book', label: 'Book' },
   { key: 'rules', label: 'Rules' },

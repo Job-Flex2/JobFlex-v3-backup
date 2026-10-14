@@ -12,6 +12,7 @@ import { fetchLiveTotals } from "@/lib/traffic-server";
 import { TRAFFIC_TZ, trafficDayStartMs } from "@/lib/traffic-visitor";
 import { DECK_PLAN_EVENT } from "@/lib/deck/convertSchema";
 import { FENCE_PLAN_EVENT } from "@/lib/fence/planSvg";
+import { readInvestorOffers, readInvestorVisitors } from "@/lib/investorVisitors";
 import { buildAttention, orderFeed, type OfficeFeedItem, type OfficeHealthRow, type OfficeScreenData, type OfficeTile } from "@/lib/officeScreen";
 
 const HOUR = 3_600_000;
@@ -52,8 +53,11 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
   const sparkFrom = trafficDayStartMs(dayStart - 13 * 24 * HOUR + 2 * HOUR);
 
   const count = (name: string, run: () => Promise<number>) => part(name, gaps, 0, run);
+  // Platform admins are the staff, not the users (owner, 2026-10-14: the admin showed under "in the app now").
+  const staff = (await db.user.findMany({ where: { isPlatformAdmin: true }, select: { id: true } }).catch(() => [] as { id: string }[])).map((u) => u.id);
+  const userWhere = staff.length ? { not: null, notIn: staff } : { not: null };
   const people = async (range: { gte: Date; lte?: Date; lt?: Date }) =>
-    (await db.pageView.findMany({ where: { at: range, userId: { not: null }, ...orgWhere }, distinct: ["userId"], select: { userId: true } })).length;
+    (await db.pageView.findMany({ where: { at: range, userId: userWhere, ...orgWhere }, distinct: ["userId"], select: { userId: true } })).length;
 
   const [board, healthReport, website, signupsT, signupsY, activeT, activeY, createdT, createdY, sentT, sentY, acceptedRowsT, acceptedY, roofT, roofY, hvacT, hvacY, plansT, plansY, leadsT, leadsY, textsT, textsY, supportUnread, supportOldest, leadQueue] = await Promise.all([
     part("trials", gaps, null, () => readTrialBoard(now), 15000),
@@ -120,7 +124,7 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
 
   // ── Who is in the app now: the last screen of each person seen in ten minutes. ──
   const online = await part("people in the app", gaps, [] as OfficeScreenData["online"], async () => {
-    const views = await db.pageView.findMany({ where: { at: { gte: new Date(now - ONLINE_MS) }, userId: { not: null }, ...orgWhere }, orderBy: { at: "desc" }, take: 400, select: { userId: true, organizationId: true, route: true, at: true } });
+    const views = await db.pageView.findMany({ where: { at: { gte: new Date(now - ONLINE_MS) }, userId: userWhere, ...orgWhere }, orderBy: { at: "desc" }, take: 400, select: { userId: true, organizationId: true, route: true, at: true } });
     const last = new Map<string, (typeof views)[number]>();
     for (const v of views) if (v.userId && !last.has(v.userId)) last.set(v.userId, v);
     const picked = [...last.values()].slice(0, 14);
@@ -194,6 +198,19 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
       return null;
     }),
   ]);
+  // The investor link (2026-10-13): who introduced themselves today, and any offer.
+  const [invVisitors, invOffers] = await Promise.all([
+    part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorVisitors>>, () => readInvestorVisitors()),
+    part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorOffers>>, () => readInvestorOffers()),
+  ]);
+  for (const v of invVisitors) {
+    const at = Date.parse(v.lastSeen);
+    if (at >= dayStart) feedItems.push({ at, kind: "investor", who: v.name, text: `${v.visits > 1 ? "came back to" : "opened"} the investor page · ${v.company} · ${v.kind}` });
+  }
+  for (const o of invOffers) {
+    const at = Date.parse(o.at);
+    if (at >= dayStart) feedItems.push({ at, kind: "offer", who: o.company, text: `sent a VC offer — ${o.type.toLowerCase()} · ${o.amount} · ${o.instrument}`, win: true });
+  }
   for (const r of rows) {
     if (r.phase === "paying" && r.paidFrom != null && r.paidFrom >= dayStart) feedItems.push({ at: r.paidFrom, kind: "paid", who: r.orgName, text: `started PAYING${r.plan ? ` · ${r.plan}` : ""}${r.monthlyCents ? ` · ${money(r.monthlyCents / 100)}/mo` : ""}`, win: true });
     if (r.cardAddedAt != null && r.cardAddedAt >= dayStart) feedItems.push({ at: r.cardAddedAt, kind: "card", who: r.orgName, text: "added a card to their trial", win: true });
@@ -238,6 +255,7 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
     visitors,
     sentToday: sentT,
     sentYesterday: sentY,
+    recentOffers: invOffers.filter((o) => now - Date.parse(o.at) < 3 * 24 * HOUR).map((o) => ({ company: o.company, amount: o.amount, at: Date.parse(o.at) })),
   });
 
   return {
@@ -257,6 +275,7 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
       endsToday: endsToday.length,
       endsTomorrow: endsTomorrow.length,
       setToCancel: onTrial.filter((r) => r.cancelsAtEnd).length,
+      setToCancelCard: onTrial.filter((r) => r.cancelsAtEnd && r.cardNow).length,
       paying: paying.length,
       payingMonthlyCents: paying.reduce((a, r) => a + (r.monthlyCents ?? 0), 0),
       likelyCents: board?.onTrial.likelyCents ?? 0,

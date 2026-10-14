@@ -6,6 +6,7 @@
 // (https://www.jobflex.app), PORT (8080), VOICE_MODEL (gpt-realtime-mini),
 // REALTIME_API (ga | beta), OPENAI_REALTIME_URL (the test harness points it at a fake).
 import http from "node:http";
+import { createHmac } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { Call, sessionUpdate } from "./call.mjs";
 
@@ -78,9 +79,13 @@ export function openOpenAI(brief) {
 }
 
 const server = http.createServer((req, res) => {
-  if (req.method === "GET" && req.url === "/health") {
+  if (req.method === "GET" && req.url?.startsWith("/health")) {
+    const body = { ok: true, model: MODEL, api: API };
+    // The app proves the shared secret matches without either side sending it: an HMAC of its challenge.
+    const challenge = new URL(req.url, "http://x").searchParams.get("challenge");
+    if (challenge && /^[a-f0-9]{8,64}$/.test(challenge)) body.proof = createHmac("sha256", SECRET).update(challenge).digest("hex");
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, model: MODEL, api: API }));
+    res.end(JSON.stringify(body));
     return;
   }
   res.writeHead(404);
