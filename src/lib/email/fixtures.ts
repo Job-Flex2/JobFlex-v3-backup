@@ -580,7 +580,7 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
   {
     id: "b-payment-failed-final",
     label: "18g · buildPaymentFailed({ final: true })",
-    note: "Stripe's last try was declined too: the plan is closed (UNPAID or CANCELED).",
+    note: "Stripe's last try was declined too: the account has moved to the Free plan (UNPAID or CANCELED).",
     doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: null, href: "https://example.com/dashboard/subscription", final: true }),
   },
   {

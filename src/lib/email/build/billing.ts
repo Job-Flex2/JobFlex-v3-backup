@@ -20,7 +20,7 @@ export interface PaymentFailedInput {
   nextAttemptAt: Date | null;
   /** Absolute link to /dashboard/subscription. */
   href: string;
-  /** True when Stripe has stopped retrying: the plan is closed. */
+  /** True when Stripe has stopped retrying: the account has moved to Free. */
   final: boolean;
 }
 
@@ -36,21 +36,21 @@ export function buildPaymentFailed(i: PaymentFailedInput): EmailDoc {
     { type: "field", label: "Plan", value: i.planName },
     { type: "field", label: "Amount due", value: amount },
     i.final
-      ? { type: "cond", label: "Status", chip: "Plan closed", tone: "bad" }
+      ? { type: "cond", label: "Status", chip: "Moved to Free", tone: "bad" }
       : { type: "cond", label: "Next try", chip: i.nextAttemptAt ? DATE_FMT.format(i.nextAttemptAt) : "Soon", tone: "warn" },
   ];
   if (i.final) {
     return {
-      subject: "Your JobFlex plan is closed — the payment didn't go through",
+      subject: "Your JobFlex plan has moved to Free — the payment didn't go through",
       lockup: PLATFORM_LOCKUP,
       kicker: { text: "Payment failed", tone: "bad" },
-      headline: "Your plan is closed",
+      headline: "Your plan has moved to Free",
       prose: [
-        `Hi ${first} — we tried your card several times for ${i.planName} (${amount}) and every try was declined, so the plan's tools are closed now.`,
-        "Everything you made is still there — proposals, clients and jobs stay open. Update your card or choose a plan to open the rest again.",
+        `Hi ${first} — we tried your card several times for ${i.planName} (${amount}) and every try was declined, so your account has moved to the Free plan.`,
+        `Everything you made is still there — proposals, clients and jobs stay open. Update your card to get ${i.planName} back.`,
       ],
       box,
-      cta: { label: "Open Subscription", href: i.href },
+      cta: { label: `Update card to get ${i.planName} back`, href: i.href },
       after: ["Questions? Reply to this email and we'll help."],
       footer: PLATFORM_FOOTER,
     };
