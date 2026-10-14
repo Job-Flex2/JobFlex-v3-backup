@@ -206,12 +206,22 @@ export function evaluateItem(item: CatalogItem, load: LoadResult, c: DesignCondi
       // the cooling window ranks first (Manual S sizes the heat pump on heat)
       // — among heat pumps. On a house that keeps its gas the AC still leads
       // and the heat pump stays the dual-fuel runner-up.
-      if (heatingGoverns && !keepsGas) score += Math.round(share * 30);
+      // A PENALTY for the heat not carried, not a bonus for the heat carried
+      // (2026-10-14): the score is capped at 100, and a bonus pushed every
+      // in-window size past the cap, where a 2-ton that carries 22% of the
+      // design heat tied a 2.5-ton that carries 44% and won on catalog order.
+      if (heatingGoverns && !keepsGas) score -= Math.round((1 - share) * 30);
       if (share < 0.6) { score -= 15; reasons.push("Under 60% at the design temperature — the strips will run most cold nights."); }
       else if (share < 0.8) score -= 6;
     }
     if (c.heatingF <= 17 && !item.coldClimate) { score -= 10; reasons.push("A cold-climate rated unit holds more capacity at this design temperature."); }
     if (m.preferences.keepGas && !opts.wantsHeatPump) { score -= 4; reasons.push("Customer wants to keep gas; a dual-fuel pairing may suit better."); }
+  } else if (item.kind === "package" && item.heatKind === "electric" && load.heatingBtuh > load.coolingTotalBtuh) {
+    // The same ladder for a straight-cool package with strip heat: on a house
+    // whose heating load is the bigger one it carries none of the heat without
+    // the strips, so it sits below every heat-pump package (2026-10-14).
+    score -= 30;
+    reasons.push("Electric-strip heat only: on a house whose heating load is the bigger one, a heat-pump package carries most of it for a third of the power.");
   }
 
   if (item.kind === "furnace") {

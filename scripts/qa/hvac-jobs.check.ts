@@ -343,7 +343,8 @@ ok("A v2 card round-trips", JSON.stringify(normalizeRateCard(DEFAULT_RATE_CARD))
   const fur = lBig.materials.find((l) => l.id === "eq-furnace");
   const furK = Number((fur?.name.match(/(\d+)k BTU/) ?? [])[1] ?? 0);
   const per = rBig.selection.perSystem?.heatingBtuh ?? 0;
-  ok("6,000 sq ft house: two systems, each furnace sized to its zone (output ≤ 1.5 × the zone's heat)", rBig.selection.systems === 2 && !!fur && fur.quantity === 2 && per > 0 && furK * 1000 * 0.96 <= per * 1.55, `${rBig.selection.systems} systems · zone heat ${per} · ${fur?.name}`);
+  // 1.6, not 1.5 (2026-10-14): the 0.2 engine turns over less air in a 6,000 sq ft house (Manual J Table 5A), and the 60k cabinet is the smallest that carries a 3-ton coil — the "Furnace fit" check says so.
+  ok("6,000 sq ft house: two systems, each furnace sized to its zone (output ≤ 1.6 × the zone's heat)", rBig.selection.systems === 2 && !!fur && fur.quantity === 2 && per > 0 && furK * 1000 * 0.96 <= per * 1.6, `${rBig.selection.systems} systems · zone heat ${per} · ${fur?.name}`);
   const thin = house({ gas: { available: true, pipeIn: 0.5, longestRunFt: 100 } });
   const rThin = runEngine(thin, { catalog: US_CATALOG, job: "replace-system", outdoorKind: "air-conditioner" });
   const lThin = buildLedger(rThin, thin, DEFAULT_RATE_CARD, US_CATALOG, { job: "replace-system", input: {} });
