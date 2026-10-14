@@ -469,15 +469,20 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
   const { readDeskUse } = await import("@/lib/aiDesk/usage");
   const { deskMinutesView } = await import("@/lib/aiDesk/packs");
   const { numbersAssignedTo } = await import("@/lib/aiDesk/numbers");
+  const { readRegistration } = await import("@/lib/sms/registration");
+  const { settingsOf } = await import("@/lib/bookingBook");
   const canManage = ["OWNER", "ADMIN", "MANAGER"].includes(role);
-  const [settings, facts, phoneLocked, use, minutes, assignedNumbers] = await Promise.all([
+  const [settings, facts, phoneLocked, use, minutes, assignedNumbers, registration, orgRow] = await Promise.all([
     readDeskSettings(organizationId).catch(() => null),
     companyFacts(organizationId).catch(() => null),
     isPageLocked(organizationId, "phone").catch(() => true),
     readDeskUse(organizationId),
     deskMinutesView(organizationId),
     numbersAssignedTo(organizationId),
+    readRegistration(organizationId).catch(() => null),
+    db.organization.findUnique({ where: { id: organizationId }, select: { phone: true, timezone: true, tradeTypesJson: true, bookingSettingsJson: true } }).catch(() => null),
   ]);
+  const bookingSettings = orgRow ? settingsOf(orgRow) : null;
   const { callsGo, parseDeskSettings, prettyPhone } = await import("@/lib/aiDesk/shared");
   const d = settings ?? parseDeskSettings(null);
   // A line JobFlex assigned to this company on /admin/health: its number for calls, with no registration of its own.
@@ -488,6 +493,21 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
     assistantOnPlan: !phoneLocked,
     mode: d.mode,
     voice: d.voice,
+    forwarding: d.forwarding,
+    businessPhone: orgRow?.phone?.trim() || null,
+    timezone: orgRow?.timezone || "America/New_York",
+    booking: {
+      enabled: bookingSettings?.enabled ?? false,
+      hoursWords: facts?.hoursWords ?? "",
+      services: facts?.services ?? [],
+      url: "/dashboard/booking",
+    },
+    steps: {
+      number: Boolean(registration?.number || assignedNumbers[0]),
+      profile: Boolean(d.profile),
+      booking: Boolean(bookingSettings?.enabled),
+      tested: use.calls + use.tests > 0,
+    },
     use,
     minutes,
     assigned,

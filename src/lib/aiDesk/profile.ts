@@ -1,3 +1,4 @@
+import type { DeskForwarding } from "./shared";
 // THE DESK'S PROFILE — what a company's phone assistant knows and says. Pure, browser-safe.
 //
 // The owner tells JobFlex about the company in their own words (typed or spoken, any
@@ -266,7 +267,7 @@ export function composePrompt(brief: string, f: CompanyFacts): string {
  * the "try it" box answers from. Everything the desk may say is here or in the tools the
  * voice server gives it (open times, booking, transfer, a message).
  */
-export function deskInstructions(p: DeskProfile, f: CompanyFacts, mode: "ANSWER" | "FORWARD"): string {
+export function deskInstructions(p: DeskProfile, f: CompanyFacts, mode: "ANSWER" | "FORWARD", forwarding: DeskForwarding = "none"): string {
   const sec = (label: string, body: string | string[]) => {
     const text = Array.isArray(body) ? body.map((x) => `- ${x}`).join("\n") : body;
     return text.trim() ? `${label}:\n${text}` : "";
@@ -283,7 +284,12 @@ export function deskInstructions(p: DeskProfile, f: CompanyFacts, mode: "ANSWER"
     sec("LICENSING, INSURANCE, WARRANTIES", p.credentials),
     p.faqs.length ? `QUESTIONS CALLERS ASK:\n${p.faqs.map((x) => `Q: ${x.q}\nA: ${x.a}`).join("\n")}` : "",
     sec("EMERGENCIES", p.emergencies),
-    sec("WHEN TO HAND THE CALL TO A PERSON", p.transfer || (mode === "FORWARD" ? "The company phone rang first; the caller reached you because nobody picked up — offer to take a message or book a visit." : "When the caller asks for a person, or the call is urgent.")),
+    sec(
+      "WHEN TO HAND THE CALL TO A PERSON",
+      forwarding === "all"
+        ? "You cannot hand this call to a person: the company's own phone forwards every call straight back to you, so a transfer would only ring you again. When a caller asks for a person, take a message and say someone will call back."
+        : p.transfer || (mode === "FORWARD" ? "The company phone rang first; the caller reached you because nobody picked up — offer to take a message or book a visit." : "When the caller asks for a person, or the call is urgent."),
+    ),
     sec("NEVER", p.neverSay),
     sec("LANGUAGES", p.languages.length ? `Speak ${list(p.languages)}; answer in the language the caller uses when you can.` : "English"),
     "",
