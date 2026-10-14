@@ -76,7 +76,7 @@ export const CUSTOM_PAGES: CustomPage[] = [
     aliases: ["/v3/workers-new", "/mobile-workers-v2"] },
   { id: "company", label: "Company", note: "Branding and lead matching", href: "/dashboard/company",
     aliases: ["/mobile-company-v2"] },
-  { id: "phone", label: "Phone", note: "AI answering and call log", href: "/dashboard/phone",
+  { id: "phone", label: "AI desk", note: "Answers calls, books visits, takes messages — the call log", href: "/dashboard/phone",
     aliases: ["/mobile-phone-v2"] },
 ];
 
