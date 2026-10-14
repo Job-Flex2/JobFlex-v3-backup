@@ -3,6 +3,7 @@
 // holds the machine). Every refusal is RETURNED as words, never thrown: a
 // production build withholds a thrown server-action message (2026-10-07).
 import { cookies } from "next/headers";
+import { parseSpotlightTool } from "@/lib/planSpotlight";
 import { z } from "zod";
 import { TRADE_TYPES } from "@/lib/tradeTypes";
 import { trafficIdentitySchema } from "@/lib/traffic-capture-server";
@@ -60,6 +61,8 @@ const carriedSchema = z.object({
   analytics: trafficIdentitySchema.optional().catch(undefined),
   displayedTrialDays: z.union([z.literal(3), z.literal(7)]).optional().catch(undefined),
   industry: z.enum(TRADE_TYPES).optional().catch(undefined),
+  /** The tool the ad sold (lib/planSpotlight), parsed on the way in. */
+  tool: z.string().max(40).optional().catch(undefined),
   utm: utmSchema,
   attribution: z
     .object({ kind: z.enum(["promo", "ref"]), code: z.string().trim().min(3).max(40) })
@@ -109,6 +112,7 @@ export async function startOtpSignup(raw: unknown): Promise<Sent | Refused> {
       name: data.name,
       createdAt: reuse && prev ? prev.createdAt : Date.now(),
       industry: data.industry,
+      tool: parseSpotlightTool(data.tool),
       utm: data.utm,
       attribution: data.attribution ?? null,
       meta: await metaContextFor(data.meta),
@@ -277,6 +281,7 @@ export async function startOtpGoogleSignup(raw: unknown): Promise<{ ok: true; si
         email: g.email,
         name: g.name || data.name || "",
         industry: data.industry,
+        tool: parseSpotlightTool(data.tool),
         utm: data.utm,
         attribution: data.attribution ?? null,
         meta: await metaContextFor(data.meta),

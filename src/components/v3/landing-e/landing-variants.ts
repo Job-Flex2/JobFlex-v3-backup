@@ -720,9 +720,10 @@ export const FBCLID_MAX_AGE_S = 60 * 60; // 1 hour
 /** `/auth/register` → `/auth/register?industry=fencing&utm_source=…&fbclid=…`.
  *  With no variant, utm or fbclid it returns `base` untouched, so the default
  *  page's markup is exactly what it was. */
-export function signupHref(base: string, opts: { industry?: LandingVariantKey; utm?: UtmParams; fbclid?: string }): string {
+export function signupHref(base: string, opts: { industry?: LandingVariantKey; utm?: UtmParams; fbclid?: string; /** The tool the ad sold (lib/planSpotlight) — the plan cards mark it. */ tool?: string }): string {
   const q = new URLSearchParams();
   if (opts.industry) q.set("industry", opts.industry);
+  if (opts.tool) q.set("tool", opts.tool);
   for (const key of UTM_KEYS) {
     const v = opts.utm?.[key];
     if (v) q.set(key, v);

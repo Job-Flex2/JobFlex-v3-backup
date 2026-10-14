@@ -48,6 +48,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { UpgradeContent, type UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
+import { SPOTLIGHT_TAG, spotlightRow, withSpotlightFirst } from "@/lib/planSpotlight";
 import { longDate } from "@/lib/format";
 import { customPlanAddable, customPlanIncludes, customPriceCents } from "@/lib/customPlan";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
@@ -172,10 +173,15 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
 
   /* The comparison rows, "Everything in <plan>" expanded — the same rule the
      signup step and /dashboard/upgrade apply (lib/planCatalog). */
-  const { rows: featureRows, included } = useMemo(
+  const expanded = useMemo(
     () => expandPlanFeatures(props.plans.filter((p) => !p.isFree)),
     [props.plans],
   );
+  /* THE TOOL THE SIGNUP CAME FOR (lib/planSpotlight): its row first and marked. */
+  const spotlight = props.spotlight ?? null;
+  const spotRow = useMemo(() => spotlightRow(expanded.rows, spotlight), [expanded.rows, spotlight]);
+  const featureRows = useMemo(() => withSpotlightFirst(expanded.rows, spotlight), [expanded.rows, spotlight]);
+  const included = expanded.included;
 
   const comp = props.complimentary;
   const ended = props.cancellation;
@@ -361,6 +367,7 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
       <section className={cx("plans-embed", RV)} id="plans">
         <UpgradeContent
           embedded
+          spotlight={spotlight}
           plans={upgradePlans}
           currentPlan={props.currentSlug}
           currentInterval={props.interval ?? null}
@@ -570,8 +577,8 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
             </thead>
             <tbody>
               {featureRows.map((f) => (
-                <tr key={f}>
-                  <th className={cx("mx-feature")}>{f}</th>
+                <tr key={f} className={spotRow !== null && f === spotRow ? cx("mx-row--spot") : undefined} data-plan-spot-row={spotRow !== null && f === spotRow ? "1" : undefined}>
+                  <th className={cx("mx-feature")}>{f}{spotRow !== null && f === spotRow ? <span className={cx("mx-spot-tag")}>{SPOTLIGHT_TAG}</span> : null}</th>
                   {plansStrip.map((p) => (
                     <td key={p.slug} className={p.cur ? cx("col-cur") : ""}>
                       {p.slug === "custom" ? (

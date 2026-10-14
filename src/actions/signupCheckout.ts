@@ -25,6 +25,8 @@
 // The skip path (testing only) calls `completePendingSignup(token, null)`,
 // which creates the same account with no subscription attached.
 import { randomUUID, randomBytes, createHash } from "crypto";
+import { SPOTLIGHT_KEY } from "@/lib/planSpotlightServer";
+import { parseSpotlightTool } from "@/lib/planSpotlight";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -85,6 +87,9 @@ const pendingSchema = z.object({
    *  kept next to the promo/referral attribution so the signup can be read
    *  back to its campaign. Advisory only — never overrides tradeTypes. */
   landingIndustry: z.enum(TRADE_TYPES).optional(),
+  /** The tool the ad sold (lib/planSpotlight) — written on the company so the
+   *  Subscription page keeps marking it. */
+  landingTool: z.string().max(40).optional(),
   /** The signup flow, recorded on the organization and carried on the
    *  completion event. "e" — landing-e's arm (pass A, 2026-09-11) — is the
    *  only flow since 2026-09-16; older organizations carry null ("d"). */
@@ -893,6 +898,13 @@ async function createAccountFromPending(
       // marked so the company page, the banner and the first send ask for it.
       if (rec.nameUnset) {
         await tx.syncState.upsert({ where: { key: orgNameUnsetKey(org.id) }, create: { key: orgNameUnsetKey(org.id), cursor: "1" }, update: { cursor: "1" } });
+      }
+
+      // THE TOOL THE VISITOR CAME FOR (lib/planSpotlight, 2026-10-14): on the
+      // company, no schema change, read by lib/planSpotlightServer.
+      const spotTool = parseSpotlightTool(rec.landingTool);
+      if (spotTool) {
+        await tx.syncState.upsert({ where: { key: SPOTLIGHT_KEY(org.id) }, create: { key: SPOTLIGHT_KEY(org.id), cursor: spotTool }, update: { cursor: spotTool } });
       }
 
       return { orgId: org.id, userId: user.id };

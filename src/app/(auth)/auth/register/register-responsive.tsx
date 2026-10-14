@@ -29,6 +29,7 @@ import { Suspense, useSyncExternalStore } from "react";
 import { RegisterContent } from "@/components/v3/auth-register-blueprint/register-content";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
 import type { TradeType } from "@/lib/tradeTypes";
+import type { SpotlightTool } from "@/lib/planSpotlight";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import type { SignupMode } from "@/lib/signupMode";
 import type { OtpRestore } from "@/lib/signupOtp";
@@ -87,6 +88,7 @@ function RegisterSwitch({
   setup,
   google,
   industry,
+  spotlight = null,
   edition = null,
   utm,
   inAppBrowser,
@@ -105,6 +107,8 @@ function RegisterSwitch({
   setup: SetupPrefill | null;
   google: GooglePrefill | null;
   industry: TradeType | null;
+  /** The tool the visitor came for (lib/planSpotlight): marked on the plan step. */
+  spotlight?: SpotlightTool | null;
   /** The door the visitor came in by (2026-10-11, lib/editions). */
   edition: EditionId | null;
   utm: UtmParams | null;
@@ -135,7 +139,7 @@ function RegisterSwitch({
      day the handheld build is ported to the pending-signup flow. */
   void isHandheld;
   void params;
-  return <RegisterContent setup={setup} google={google} industry={industry}
+  return <RegisterContent setup={setup} google={google} industry={industry} spotlight={spotlight}
         edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} otpRestore={otpRestore} />;
 }
 
@@ -146,6 +150,7 @@ export function RegisterResponsive({
   setup = null,
   google = null,
   industry = null,
+  spotlight = null,
   edition = null,
   utm = null,
   inAppBrowser = null,
@@ -168,6 +173,8 @@ export function RegisterResponsive({
   google?: GooglePrefill | null;
   /** The landing's trade variant, resolved by the page — see page.tsx. */
   industry?: TradeType | null;
+  /* The tool the visitor came for (lib/planSpotlight): marked on the plan step. */
+  spotlight?: SpotlightTool | null;
   /* The door the visitor came in by (2026-10-11, lib/editions). */
   edition?: EditionId | null;
   /** The visit's utm_*, resolved by the page the same way. */
@@ -181,7 +188,7 @@ export function RegisterResponsive({
 }) {
   return (
     <Suspense fallback={null}>
-      <RegisterSwitch setup={setup} google={google} industry={industry}
+      <RegisterSwitch setup={setup} google={google} industry={industry} spotlight={spotlight}
         edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} otpRestore={otpRestore} />
     </Suspense>
   );

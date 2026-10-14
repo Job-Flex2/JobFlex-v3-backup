@@ -1,4 +1,6 @@
 import { isStripeEnabled } from "@/lib/sdk/stripe";
+import { orgSpotlight } from "@/lib/planSpotlightServer";
+import type { SpotlightTool } from "@/lib/planSpotlight";
 import { getStripeMode } from "@/lib/stripeMode";
 // The subscription surface's ONE data read.
 //
@@ -63,6 +65,8 @@ export interface SubscriptionViewProps {
   currentSlug: string;
   /** Active catalog plans, display-ordered. */
   plans: PlanDTO[];
+  /** The tool the signup came for (lib/planSpotlight): pinned and marked on every plan card. */
+  spotlight?: SpotlightTool | null;
   status: string;
   accessBlocked?: boolean;
   nextBill: string | null;
@@ -357,6 +361,7 @@ export async function loadSubscriptionData(
     invoices: invoiceResult,
     nextCharge,
     customPages,
+    spotlight: await orgSpotlight(organizationId),
     // The card line belongs to a running card-less trial, never to the Free plan.
     trialCard: freePlan ? null : trialCard,
     checkoutReady: isStripeEnabled(),

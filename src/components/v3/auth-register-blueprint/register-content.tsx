@@ -61,6 +61,7 @@ import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
 import { rememberOtpDraft, rememberSignupMode, type SignupMode, type SignupModeLabel } from "@/lib/signupMode";
 import { forgetOtpDraft, otpPendingState } from "@/actions/signupOtp";
+import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import type { OtpRestore } from "@/lib/signupOtp";
 import { rememberFbclidForGoogle, writeLandingCookies } from "@/components/v3/landing-e/landing-variant-effects";
 import { resolveLandingVariant } from "@/components/v3/landing-e/landing-variants";
@@ -161,6 +162,7 @@ export function RegisterContent({
   setup = null,
   google: googlePrefill = null,
   industry = null,
+  spotlight = null,
   edition = null,
   utm = null,
   inAppBrowser: inAppInitial = null,
@@ -207,6 +209,10 @@ export function RegisterContent({
      the server. Pre-selects that chip on step 2 — a suggestion the visitor
      can change, never a lock — and rides along into the signup intent. */
   industry?: TradeType | null;
+  /* THE TOOL THE VISITOR CAME FOR (lib/planSpotlight, owner 2026-10-14): its
+     feature line is pinned first and marked on every plan card, so a roofer
+     off the roofing ad sees the Roof estimator without reading the list. */
+  spotlight?: SpotlightTool | null;
   /* THE DOOR THE VISITOR CAME IN BY (2026-10-11, lib/editions): `?edition=deck`
      from the Deck Studio landing. Its plan is pre-selected and drawn first on
      the plan step; the trade chip comes with `industry`. */
@@ -573,8 +579,10 @@ export function RegisterContent({
         rows.push(f.trim());
       }
     }
-    return rows;
-  }, [plans]);
+    return withSpotlightFirst(rows, spotlight);
+  }, [plans, spotlight]);
+  /* The row the spotlight marks — null when no plan lists the tool. */
+  const spotRow = React.useMemo(() => spotlightRow(featureRows, spotlight), [featureRows, spotlight]);
 
   /* WHAT EACH PLAN ACTUALLY INCLUDES. The catalog writes the inheritance as a
      line of prose — "Everything in Starter" — so a naive per-plan lookup marked
@@ -1260,6 +1268,7 @@ export function RegisterContent({
           trades.includes("Other") && otherTrade.trim() ? otherTrade.trim() : undefined,
         attribution: attribution ?? undefined,
         landingIndustry: industry ?? undefined,
+        landingTool: spotlight ?? undefined,
         utm: utm ?? undefined,
         signupVariant: "e",
         signupMode: twoStep ? "2-step" : "3-step",
@@ -1314,7 +1323,7 @@ export function RegisterContent({
       // The return of a new address is built from cookies (lib/googleSignup):
       // the trade and the campaign this page came in on, and the mode — a
       // page handed over from an in-app browser has none of the landing's.
-      writeLandingCookies(industry ? resolveLandingVariant(industry) : undefined, utm ?? undefined);
+      writeLandingCookies(industry ? resolveLandingVariant(industry) : undefined, utm ?? undefined, spotlight);
       rememberSignupMode(searchParams?.get("flow") ?? null);
     }
     void signIn("google", { callbackUrl: "/auth/register" });
@@ -1557,6 +1566,7 @@ export function RegisterContent({
                   requiresCard={requiresCard}
                   trialDays={offer.days}
                   industry={industry}
+                  tool={spotlight}
                   utm={utm}
                   attribution={attribution}
                   analytics={trafficIdentity}
@@ -1992,6 +2002,12 @@ export function RegisterContent({
             {/* ONE ROW ON A DESK (owner, 2026-10-12): the question on the left; the trial's
                 stamp and the Monthly | Annual switch side by side on the right, so the head
                 takes one row (two when the window is narrow) and the cards fit the screen. */}
+            {spotlight ? (
+              <p className="pw-spot" data-plan-spotlight={spotlight} data-plan-spotlight-row={spotRow ?? ""}>
+                <span className="pw-spot-k">{SPOTLIGHT[spotlight].label}</span>
+                {spotlightLine(spotlight, spotRow !== null)}
+              </p>
+            ) : null}
             <div className="pw-head">
               <h1 className="auth-h1">Pick a plan.</h1>
               <div className="pw-head-r">
@@ -2152,12 +2168,14 @@ export function RegisterContent({
                     <span className="pw-feats" data-plan-feats>
                       {featureRows.map((f) => {
                         const included = has.has(f.toLowerCase());
+                        const lit = spotRow !== null && f === spotRow;
                         return (
-                          <span key={f} className={included ? "pw-f" : "pw-f pw-f--no"}>
+                          <span key={f} className={(included ? "pw-f" : "pw-f pw-f--no") + (lit ? " pw-f--spot" : "")} data-plan-spot-row={lit ? (included ? "in" : "out") : undefined}>
                             <svg className="ic">
                               <use href={included ? "#i-check" : "#i-minus"} />
                             </svg>
                             {f}
+                            {lit ? <span className="pw-spot-tag">{included ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
                           </span>
                         );
                       })}

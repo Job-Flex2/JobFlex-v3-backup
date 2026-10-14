@@ -45,6 +45,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
 import { expandPlanFeatures } from "@/lib/planCatalog";
+import type { SpotlightTool } from "@/lib/planSpotlight";
 import { changePlan, previewPlanChange, updateCustomPages, type PlanChangePreviewResult } from "@/actions/billing";
 import { CardDeclinedNote, PlanChangeMoney, ScheduledSwitchNote, longDay, money } from "@/components/billing/PlanChangeNotes";
 import { CustomChangeNote } from "@/components/v3/upgrade-blueprint/custom-change-note";
@@ -80,6 +81,8 @@ export type MobileUpgradeProps = {
   /** The plan an edition's upgrade points at (lib/editions), and the line that says so — drawn by the desk page. */
   focusSlug?: string | null;
   focusWords?: string | null;
+  /** The tool the signup came for (lib/planSpotlight); the desk page marks it, the phone carries it along. */
+  spotlight?: SpotlightTool | null;
   plans: UpgradePlan[];
   /** Subscription.plan as stored ("PROFESSIONAL", "CUSTOM", …), or null. */
   currentPlan: string | null;
