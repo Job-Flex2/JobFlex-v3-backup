@@ -6,7 +6,7 @@
 // days booked by hand or read from Meta, the start day and the assumptions,
 // and the shared link.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Copy, ExternalLink, FileDown, Link as LinkIcon, RefreshCw, Trash2 } from "lucide-react";
 import { addAdSpendAction, deleteAdSpendAction, getInvestorReport, investorLinkAction, pullMetaSpendAction, saveInvestorSettingsAction } from "@/actions/investors";
 import type { InvestorReport } from "@/lib/investors";
@@ -21,7 +21,7 @@ const todayLocal = () => {
 };
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
-export function AdminInvestorsContent({ initial, origin }: { initial: InvestorReport; origin: string }) {
+export function AdminInvestorsContent({ initial, origin, audience }: { initial: InvestorReport; origin: string; /** Who opened the link and their offers (2026-10-13), drawn by the page. */ audience?: ReactNode }) {
   const [report, setReport] = useState(initial);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -216,6 +216,8 @@ export function AdminInvestorsContent({ initial, origin }: { initial: InvestorRe
       </div>
 
       {error && <p className={`${shared.note} ${s.err}`} role="alert">{error}</p>}
+
+      {audience}
 
       <InvestorReportView report={report} between={controls} />
     </>

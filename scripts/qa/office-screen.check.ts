@@ -51,5 +51,10 @@ check("visitors well behind yesterday warn; a small day does not", buildAttentio
 check("no proposals sent by afternoon when yesterday had some", buildAttention({ ...base, sentToday: 0, sentYesterday: 4 }).some((x) => /No proposals sent yet today — 4 by now yesterday/.test(x.text)));
 check("…but not in the morning", buildAttention({ ...base, now: dayStart + 9 * H, sentToday: 0, sentYesterday: 4 }).length === 0);
 
+// ── the investor link (2026-10-13) ──
+const offers = buildAttention({ ...base, recentOffers: [{ company: "Cascade Ventures", amount: "$500K–$1M", at: now - H }] });
+check("a VC offer from the investor link is a good line to answer, naming the fund", offers.length === 1 && offers[0].tone === "good" && /1 VC offer to answer/.test(offers[0].text) && offers[0].who?.[0] === "Cascade Ventures · $500K–$1M", JSON.stringify(offers));
+check("…and sits after the alarms", buildAttention({ ...base, failedPayments: ["X"], recentOffers: [{ company: "A", amount: "Open", at: now }] })[0].tone === "bad");
+
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

@@ -1,0 +1,56 @@
+/* The investor link's front door and offer form (2026-10-13) — the public page's own paper-and-ink: a framed card,
+   bold caps headline, chips that fill blue when picked, one strong button. */
+.gate { max-width: 760px; margin: 0 auto; display: grid; gap: 14px; padding: 28px clamp(18px, 4vw, 40px) 32px; border: 2px solid var(--ink, #0a0a0a); background: #fff; }
+.kicker { font: 700 11px var(--font-mono, ui-monospace, monospace); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-muted, #555); }
+.h1 { margin: 0; font-size: clamp(28px, 4.6vw, 40px); font-weight: 900; letter-spacing: -0.03em; line-height: 1; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+.h2 { margin: 4px 0 0; font-size: clamp(22px, 3.4vw, 28px); font-weight: 900; letter-spacing: -0.02em; line-height: 1; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+.sub { margin: 0; max-width: 64ch; font-size: 14px; line-height: 1.55; color: var(--ink-soft, #2a2a2a); }
+.note { margin: 0; padding: 8px 12px; border-left: 3px solid #1854a0; background: rgba(24, 84, 160, 0.06); font-size: 13px; color: var(--ink, #0a0a0a); }
+.form { display: grid; gap: 14px; margin-top: 4px; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.field { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.label { display: flex; align-items: baseline; gap: 8px; font: 700 11px var(--font-mono, ui-monospace, monospace); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+.label em { font-style: normal; font-weight: 500; letter-spacing: 0.06em; text-transform: none; color: var(--ink-muted, #666); }
+.input, .textarea { width: 100%; min-width: 0; padding: 0 12px; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; background: #fff; color: var(--ink, #0a0a0a); font: 500 16px var(--font-sans, Inter, system-ui, sans-serif); }
+.input { height: 46px; }
+.textarea { padding: 10px 12px; resize: vertical; line-height: 1.45; }
+.input:focus, .textarea:focus { outline: 2px solid #1854a0; outline-offset: 1px; }
+.bad .input, .bad .textarea { border-color: #a83232; }
+.why { font-size: 12.5px; color: #a83232; }
+.chipsWrap { display: grid; gap: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 40px; padding: 0 14px; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; background: #fff; color: var(--ink, #0a0a0a); font: 700 13px var(--font-sans, Inter, system-ui, sans-serif); cursor: pointer; }
+.chip:hover { background: var(--paper, #f2f0eb); }
+.chip.on { border-color: #1854a0; background: #1854a0; color: #fff; }
+.chip:focus-visible { outline: 2px solid #1854a0; outline-offset: 2px; }
+.bad .chips .chip:not(.on) { border-color: #a83232; }
+.err { margin: 0; padding: 8px 12px; border-left: 3px solid #a83232; background: rgba(168, 50, 50, 0.07); font-size: 13.5px; color: #a83232; }
+.primary { justify-self: start; min-height: 48px; padding: 0 22px; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; background: var(--ink, #0a0a0a); color: #fff; font: 800 13px var(--font-sans, Inter, system-ui, sans-serif); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; }
+.primary:hover:not(:disabled) { background: #1854a0; border-color: #1854a0; }
+.primary:disabled { opacity: 0.5; cursor: default; }
+.fine { margin: 0; font: 500 11.5px var(--font-mono, ui-monospace, monospace); color: var(--ink-muted, #666); }
+
+/* the VC button at the top of the page */
+.vc { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px; border: 2px solid #1854a0; border-radius: 2px; background: #fff; color: #1854a0; font: 800 12.5px var(--font-sans, Inter, system-ui, sans-serif); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; }
+.vc:hover { background: #1854a0; color: #fff; }
+.vcLead { background: #1854a0; color: #fff; }
+.vcLead:hover { background: #0e3d7a; border-color: #0e3d7a; }
+.vcSent { border-color: #2f7d4f; background: #2f7d4f; color: #fff; }
+.vcDot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(24, 84, 160, 0.18); animation: vcPulse 2.2s ease-in-out infinite; }
+@keyframes vcPulse { 50% { opacity: 0.4; } }
+
+/* the offer dialog */
+.backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(10, 10, 10, 0.55); overflow-y: auto; }
+.dialog { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; display: grid; gap: 12px; padding: 22px clamp(16px, 3vw, 28px) 24px; border: 2px solid var(--ink, #0a0a0a); background: #fff; }
+.dHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.x { width: 40px; height: 40px; border: 2px solid var(--ink, #0a0a0a); background: #fff; font-size: 22px; line-height: 1; cursor: pointer; }
+.from { margin: 0; font-size: 13.5px; color: var(--ink-soft, #2a2a2a); }
+.link { padding: 0; border: 0; background: none; color: #1854a0; font: inherit; text-decoration: underline; cursor: pointer; }
+.done { display: grid; gap: 14px; }
+.done p { margin: 0; font-size: 15px; line-height: 1.55; }
+
+@media (max-width: 640px) {
+  .pair { grid-template-columns: 1fr; }
+  .primary, .vc { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .vcDot { animation: none; } }

@@ -22,7 +22,7 @@ export interface OfficeTile {
   missing?: boolean;
 }
 
-export type OfficeFeedKind = "signup" | "paid" | "card" | "cancel" | "proposal" | "first" | "sent" | "opened" | "accepted" | "estimate" | "lead" | "support";
+export type OfficeFeedKind = "signup" | "paid" | "card" | "cancel" | "proposal" | "first" | "sent" | "opened" | "accepted" | "estimate" | "lead" | "support" | "investor" | "offer";
 
 export interface OfficeFeedItem {
   at: number;
@@ -89,7 +89,7 @@ export interface OfficeScreenData {
 
 /** Newest first, at most `limit`; two lines about the same thing at the same minute keep the more telling one. */
 export function orderFeed(items: readonly OfficeFeedItem[], limit = 30): OfficeFeedItem[] {
-  const rank: Record<OfficeFeedKind, number> = { first: 9, paid: 8, accepted: 7, signup: 6, card: 5, sent: 4, lead: 4, estimate: 3, opened: 3, proposal: 2, support: 2, cancel: 2 };
+  const rank: Record<OfficeFeedKind, number> = { offer: 10, first: 9, paid: 8, accepted: 7, signup: 6, investor: 6, card: 5, sent: 4, lead: 4, estimate: 3, opened: 3, proposal: 2, support: 2, cancel: 2 };
   const seen = new Map<string, OfficeFeedItem>();
   for (const it of items) {
     const key = `${it.who}|${Math.floor(it.at / 60_000)}|${it.kind === "first" || it.kind === "proposal" ? "made" : it.kind}`;
@@ -123,6 +123,8 @@ export interface AttentionFacts {
   visitors: { today: number; yesterday: number } | null;
   sentToday: number;
   sentYesterday: number;
+  /** VC offers sent from the investor link in the last three days (2026-10-13). */
+  recentOffers?: { company: string; amount: string; at: number }[];
 }
 
 /**
@@ -133,6 +135,8 @@ export function buildAttention(f: AttentionFacts): OfficeAttention[] {
   const out: OfficeAttention[] = [];
   const downs = f.health.filter((s) => !s.optional && s.level === "down");
   for (const s of downs) out.push({ tone: "bad", text: `${s.name} is down — ${s.reason}` });
+  // An offer is good news that waits on a person.
+  if (f.recentOffers?.length) out.push({ tone: "good", text: `${plural(f.recentOffers.length, "VC offer")} to answer — from the investor link`, who: f.recentOffers.map((o) => `${o.company} · ${o.amount}`) });
   if (f.failedPayments.length) out.push({ tone: "bad", text: `${plural(f.failedPayments.length, "payment")} failed — the card was declined`, who: f.failedPayments });
   const idleEnding = f.trialsEndingToday.filter((t) => t.proposals === 0);
   if (f.trialsEndingToday.length) {
@@ -158,7 +162,8 @@ export function buildAttention(f: AttentionFacts): OfficeAttention[] {
     out.push({ tone: "warn", text: `Website visitors are ${Math.round((1 - f.visitors.today / f.visitors.yesterday) * 100)}% behind yesterday at this time` });
   }
   if (f.sentToday === 0 && f.sentYesterday >= 3 && f.now - f.dayStart > 12 * 3_600_000) out.push({ tone: "info", text: `No proposals sent yet today — ${f.sentYesterday} by now yesterday` });
-  const order: Record<OfficeTone, number> = { bad: 0, warn: 1, info: 2, good: 3 };
+  // An offer waiting on an answer outranks the routine notes, never an alarm.
+  const order: Record<OfficeTone, number> = { bad: 0, warn: 1, good: 2, info: 3 };
   return out.sort((a, b) => order[a.tone] - order[b.tone]);
 }
 

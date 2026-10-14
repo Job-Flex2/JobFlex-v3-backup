@@ -178,3 +178,5 @@
 .colMid .money small { white-space: normal; font-size: calc(var(--u) * 1.2); }
 .colMid .sparkSvg { height: calc(var(--u) * 4.6); }
 .colMid .trend { padding-top: calc(var(--u) * 1); padding-bottom: calc(var(--u) * 1); }
+.k_investor .fk { color: #c79bff; }
+.k_offer .fk { color: var(--good); }

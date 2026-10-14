@@ -27,6 +27,8 @@ const KIND_WORDS: Record<OfficeFeedItem["kind"], string> = {
   estimate: "Estimate",
   lead: "Request",
   support: "Support",
+  investor: "Investor",
+  offer: "VC offer",
 };
 
 const n = (v: number) => v.toLocaleString("en-US");
