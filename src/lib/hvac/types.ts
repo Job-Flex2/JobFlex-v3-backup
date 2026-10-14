@@ -163,8 +163,12 @@ export interface BuildingModel {
   perimeterFt?: number;
   footprintEdges?: FootprintEdge[];
 
-  /** Window area as a share of floor area (0.12 = 12%). */
+  /** Window area as a share of floor area (0.12 = 12%) — the era default
+   *  the load falls back on when nobody has counted the glass. */
   windowToFloor: number;
+  /** The glass area itself, sq ft, counted on the walk or typed (2026-10-14):
+   *  it outranks the ratio. The single biggest lever on a cooling load. */
+  windowSqft?: number;
   windowType: WindowType;
   wallInsulation: WallInsulation;
   ceilingInsulation: CeilingInsulation;

@@ -7,7 +7,7 @@ import { DEFAULT_JOB, jobDef, type JobInput, type JobKind, type OutdoorKind } fr
 import { waterHeaterChecks, waterHeaterPlan } from "./waterHeater";
 import { fuelChecks, resolveUlnCheck } from "./checks";
 import { companionFurnace, keepsGas } from "./ledger";
-import { computeBlockLoad, ENGINE_VERSION } from "./load";
+import { computeBlockLoad, ENGINE_VERSION, loadLevers } from "./load";
 import { ratedCoolingBtuh, selectSystem } from "./select";
 import { allChecks, defaultedFields, gasCheck, sizingCheck } from "./checks";
 import { ductCapacity } from "./ductCalc";
@@ -41,6 +41,7 @@ const FIELD_WORDS: Record<string, string> = {
   ceilingHeightFt: "ceiling height",
   yearBuilt: "year built",
   windowToFloor: "window area",
+  windowSqft: "window area",
   windowType: "window type",
   wallInsulation: "wall insulation",
   ceilingInsulation: "attic insulation",
@@ -84,6 +85,7 @@ export function runEngine(model: BuildingModel, opts: RunEngineOptions): EngineR
   const zoneOccupants = zoneSqft ? Math.max(1, Math.min(model.occupants > 0 ? model.occupants : 3, Math.ceil(zoneSqft / 300))) : model.occupants;
   const loadModel = zoneSqft ? { ...model, conditionedSqft: zoneSqft, storeys: 1, occupants: zoneOccupants, ducts: { location: "none" as const, condition: "good" as const }, perimeterFt: undefined, footprintEdges: undefined } : model;
   const load = computeBlockLoad(loadModel, conditions, { zone: zoneSqft > 0 });
+  if (!zoneSqft && job.needs.load) load.assumptions.push(...loadLevers(loadModel, conditions));
   if (zoneSqft && !(opts.input?.zoneSqft && opts.input.zoneSqft > 0)) load.assumptions.unshift("Zone size not given — loaded as a 100 sq ft room; type the zone's square feet.");
   // The ducts that are there (lib/hvac/ductCalc, 2026-10-08): what they carry
   // bounds the size, and so does the old unit that kept up on the hottest days.
@@ -232,7 +234,8 @@ export function runEngine(model: BuildingModel, opts: RunEngineOptions): EngineR
   if (job.needs.load) for (const a of load.assumptions) notes.push({ kind: "assumption", text: a });
   if (zoneSqft) notes.push({ kind: "assumption", text: `Zone load: ${zoneSqft.toLocaleString("en-US")} sq ft, ${zoneOccupants} occupant${zoneOccupants === 1 ? "" : "s"}, no duct loss.` });
   if (heads > 1) notes.push({ kind: "assumption", text: `Multi-zone: ${heads} heads on one outdoor unit sized to the zone (${selection.targetTons} t). The catalog's single-zone rows set the rating; the outdoor unit is priced from the rate card's multi-zone default until multi-zone rows are imported.` });
-  const defaulted = job.needs.load ? defaultedFields(model).map((f) => FIELD_WORDS[f] ?? f) : [];
+  // A counted glass area answers the window-area default.
+  const defaulted = job.needs.load ? defaultedFields(model).filter((f) => !(f === "windowToFloor" && typeof model.windowSqft === "number" && model.windowSqft > 0)).map((f) => FIELD_WORDS[f] ?? f) : [];
   if (defaulted.length) {
     notes.push({
       kind: "assumption",

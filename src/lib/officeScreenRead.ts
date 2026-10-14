@@ -199,9 +199,10 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
     }),
   ]);
   // The investor link (2026-10-13): who introduced themselves today, and any offer.
+  // …without the admins' own walk-throughs and test offers (2026-10-14).
   const [invVisitors, invOffers] = await Promise.all([
-    part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorVisitors>>, () => readInvestorVisitors()),
-    part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorOffers>>, () => readInvestorOffers()),
+    part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorVisitors>>, () => readInvestorVisitors().then((l) => l.filter((v) => !v.admin))),
+    part("investor link", gaps, [] as Awaited<ReturnType<typeof readInvestorOffers>>, () => readInvestorOffers().then((l) => l.filter((o) => !o.admin))),
   ]);
   for (const v of invVisitors) {
     const at = Date.parse(v.lastSeen);

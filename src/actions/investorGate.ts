@@ -5,7 +5,18 @@
 import { investorLinkOpen, readInvestorSettings } from "@/lib/investors";
 import { checkIntro, checkOffer } from "@/lib/investorGate";
 import { introduceVisitor, recordOffer, visitorForLink } from "@/lib/investorVisitors";
+import { requirePlatformAdmin } from "@/lib/orgContext";
 import { clientIp, enforceRateLimit } from "@/lib/rateLimit";
+
+/** A signed-in platform admin trying the page: their entries are marked as tests (2026-10-14). */
+async function isAdmin(): Promise<boolean> {
+  try {
+    await requirePlatformAdmin();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const HOUR = 3_600_000;
 type Result = { ok: true } | { ok: false; error: string; problems?: Record<string, string> };
@@ -31,19 +42,20 @@ export async function introduceInvestorAction(token: unknown, raw: unknown): Pro
   const { value, problems } = checkIntro((raw ?? {}) as Record<string, string>);
   if (Object.keys(problems).length) return { ok: false, error: "A few details are missing.", problems: problems as Record<string, string> };
   const settings = await readInvestorSettings();
-  await introduceVisitor(t, settings.linkMadeAt, value);
+  await introduceVisitor(t, settings.linkMadeAt, value, { admin: await isAdmin() });
   return { ok: true };
 }
 
 export async function sendInvestorOfferAction(token: unknown, raw: unknown): Promise<Result> {
   const t = await linkLive(token);
   if (!t) return { ok: false, error: "This link is no longer active. Ask for a current one." };
+  // The offer carries its own name, company and email, so it goes through with or without this browser's pass
+  // (2026-10-14: a lost cookie refused the owner's own test with "introduce yourself first").
   const visitor = await visitorForLink(t);
-  if (!visitor) return { ok: false, error: "Introduce yourself on the page first — then the offer comes from you." };
   const slow = await limit("inv-offer", 5);
   if (slow) return { ok: false, error: slow };
   const { value, problems } = checkOffer((raw ?? {}) as Record<string, string>);
   if (Object.keys(problems).length) return { ok: false, error: "A few details are missing.", problems: problems as Record<string, string> };
-  await recordOffer(visitor.id, value);
+  await recordOffer(visitor?.id ?? null, value, { admin: visitor?.admin || (await isAdmin()) });
   return { ok: true };
 }

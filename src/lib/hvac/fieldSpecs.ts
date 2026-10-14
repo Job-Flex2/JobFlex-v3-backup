@@ -33,6 +33,7 @@ export const FIX_FIELDS: Record<string, FixFieldSpec> = {
   "gas.pipeIn": { label: "Gas pipe", kind: "select", numeric: true, options: [["0.5", "½ in"], ["0.75", "¾ in"], ["1", "1 in"], ["1.25", "1¼ in"]] },
   "gas.longestRunFt": { label: "Gas run ft", kind: "num", placeholder: "40" },
   "gas.available": { label: "Gas at the house", kind: "bool" },
+  windowSqft: { label: "Window area (sq ft)", kind: "num", placeholder: "280" },
   windowType: { label: "Windows", kind: "select", options: [["single", "Single pane"], ["double", "Double pane"], ["double-lowe", "Double, low-E"], ["triple", "Triple pane"]] },
   wallInsulation: { label: "Wall insulation", kind: "select", options: [["none", "None"], ["r11", "R-11"], ["r13", "R-13"], ["r19", "R-19"], ["r21", "R-21"]] },
   ceilingInsulation: { label: "Attic insulation", kind: "select", options: [["none", "None"], ["r11", "R-11"], ["r19", "R-19"], ["r30", "R-30"], ["r38", "R-38"], ["r49", "R-49"]] },

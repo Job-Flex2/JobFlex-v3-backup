@@ -104,4 +104,15 @@ export interface InvestorVisitorView {
   kind: string;
   email: string;
   phone: string | null;
+  /** A signed-in platform admin who went through the door to see the page as a reader (2026-10-14): a test, not a reader. */
+  admin?: boolean;
+}
+
+/** The readers, without the admins' own walk-throughs. */
+export function readersOf<T extends { admin?: boolean }>(list: readonly T[]): T[] {
+  return list.filter((v) => !v.admin);
+}
+/** The offers, without the admins' own test offers. */
+export function offersOf<T extends { admin?: boolean }>(list: readonly T[]): T[] {
+  return list.filter((o) => !o.admin);
 }

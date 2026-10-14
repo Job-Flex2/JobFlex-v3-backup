@@ -26,7 +26,7 @@ import {
   WINDOW,
 } from "./data/defaults";
 
-export const ENGINE_VERSION = "jobflex-hvac-engine 0.1 · block load, estimating grade";
+export const ENGINE_VERSION = "jobflex-hvac-engine 0.2 · block load, estimating grade (2026-10-14: seasonal infiltration, measured glass area)";
 export const INDOOR_COOLING_F = 75;
 export const INDOOR_HEATING_F = 70;
 /** Supply-to-room temperature difference the airflow is sized on, °F. */
@@ -37,6 +37,9 @@ const OCCUPANT_SENSIBLE = 230;
 const OCCUPANT_LATENT = 200;
 const APPLIANCE_SENSIBLE = 1200;
 const REFERENCE_SHGC = 0.87;
+/** Summer natural air changes as a share of winter's (Manual J Table 5A: the
+ *  cooling column runs 0.5–0.55 of the heating column in every class). */
+const SUMMER_ACH_SHARE = 0.53;
 
 const round500 = (v: number) => Math.max(0, Math.round(v / 500) * 500);
 const round = (v: number, d = 0) => Math.round(v * 10 ** d) / 10 ** d;
@@ -92,7 +95,11 @@ export function computeBlockLoad(m: BuildingModel, c: DesignConditions, opts: { 
   const dtHeat = Math.max(0, INDOOR_HEATING_F - c.heatingF);
   const dtCool = Math.max(0, c.coolingF - INDOOR_COOLING_F);
   const win = WINDOW[m.windowType];
-  const windowSqft = area * m.windowToFloor;
+  // The glass area counted on the walk or typed beats the era ratio — window
+  // area is the biggest single lever on a cooling load, and the ratio is a
+  // guess at it.
+  const glassMeasured = typeof m.windowSqft === "number" && m.windowSqft > 0;
+  const windowSqft = glassMeasured ? (m.windowSqft as number) : area * m.windowToFloor;
   const doorSqft = DOOR_SQFT_PER_STOREY * Math.min(2, storeys);
   const grossWall = perimeter * ceiling * storeys;
   const netWall = Math.max(0, grossWall - windowSqft - doorSqft);
@@ -102,12 +109,21 @@ export function computeBlockLoad(m: BuildingModel, c: DesignConditions, opts: { 
   const floorUA = floor.perPerimeter ? floor.heatingUA * perimeter : floor.heatingUA * footprint;
 
   // Infiltration: blower-door ACH50 to natural air changes by the usual
-  // divisor (about 20 for a single storey, less for a taller house).
+  // divisor (about 20 for a single storey, less for a taller house) — that is
+  // the WINTER rate. Manual J's Table 5A gives summer air changes at about
+  // half the winter figure (less wind, less stack), and fewer air changes
+  // for a bigger house of the same construction (its envelope is smaller for
+  // its volume): a 2,000 sq ft "average" house turns over ~0.4 ACH in winter
+  // and ~0.2 in summer; a 3,200 sq ft one ~0.3 / 0.16. One rate for both
+  // seasons (the 0.1 engine) doubled the summer infiltration load.
   const nFactor = storeys >= 2 ? 17 : 20;
-  const ach = ACH50[m.tightness] / nFactor;
+  const sizeFactor = Math.min(1.6, Math.max(0.7, Math.sqrt(2000 / area)));
+  const achHeat = (ACH50[m.tightness] / nFactor) * sizeFactor;
+  const achCool = achHeat * SUMMER_ACH_SHARE;
   const volume = area * ceiling;
-  const infilCfm = (ach * volume) / 60;
-  assumptions.push(`Infiltration from a "${m.tightness}" blower-door class (${ACH50[m.tightness]} ACH50 ÷ ${nFactor}).`);
+  const infilCfmHeat = (achHeat * volume) / 60;
+  const infilCfmCool = (achCool * volume) / 60;
+  assumptions.push(`Infiltration from a "${m.tightness}" blower-door class (${ACH50[m.tightness]} ACH50 ÷ ${nFactor}${sizeFactor !== 1 ? `, × ${sizeFactor.toFixed(2)} for the house's size` : ""}): ${achHeat.toFixed(2)} air changes an hour in winter, ${achCool.toFixed(2)} in summer — the Manual J Table 5A shape, where summer runs about half of winter.`);
   // A tight house (2012 IECC and later, and every CA / WA / OR house) runs a
   // whole-house fan the code requires, and Manual J (Section 11) adds that
   // air to the load: ASHRAE 62.2, 0.03 CFM per sq ft plus 7.5 CFM per person.
@@ -138,14 +154,20 @@ export function computeBlockLoad(m: BuildingModel, c: DesignConditions, opts: { 
   const shares = windowShares(m);
   let solar = 0;
   for (const s of shares) solar += windowSqft * s.share * s.gain * (win.shgc / REFERENCE_SHGC) * shade;
-  push(`Windows · ${Math.round(windowSqft)} sq ft ${win.label}`, win.u * windowSqft * dtHeat, win.u * windowSqft * dtCool);
+  push(`Windows · ${Math.round(windowSqft)} sq ft ${win.label}${glassMeasured ? "" : " (assumed)"}`, win.u * windowSqft * dtHeat, win.u * windowSqft * dtCool);
+  if (!glassMeasured && !opts.zone) {
+    // What 50 sq ft of glass is worth here, so the assumption reads as a lever.
+    const avgGain = shares.reduce((a, s) => a + s.share * s.gain, 0) * (win.shgc / REFERENCE_SHGC) * shade;
+    const per50 = Math.round((50 * (avgGain + win.u * dtCool)) / 100) * 100;
+    assumptions.push(`Window area assumed at ${Math.round(m.windowToFloor * 100)}% of the floor (${Math.round(windowSqft)} sq ft, the era default) — count the windows or type the glass area: every 50 sq ft of glass is about ${per50.toLocaleString("en-US")} BTU/h of cooling here.`);
+  }
   push(`Window solar · ${shares.map((s) => `${s.label} ${Math.round(s.share * 100)}%`).join(", ")}`, 0, solar);
   push(`Doors · ${doorSqft} sq ft`, DOOR_U * doorSqft * dtHeat, DOOR_U * doorSqft * (dtCool + 8));
   push(`Walls · ${Math.round(netWall)} sq ft net, ${m.wallInsulation === "none" ? "uninsulated" : m.wallInsulation.toUpperCase()}`, wallU * netWall * dtHeat, wallU * netWall * (dtCool + 8));
   push(`Ceiling · ${Math.round(footprint)} sq ft under ${m.ceilingInsulation === "none" ? "an uninsulated attic" : m.ceilingInsulation.toUpperCase() + " attic"}, ${m.roofColor} roof`, ceilU * footprint * dtHeat, ceilU * footprint * (dtCool + roofAdd));
   push(`Floor · ${floor.label}`, floorUA * dtHeat, floor.coolingShare * floorUA * dtCool);
   const grains = Math.max(0, c.grainsDiff);
-  push(`Infiltration · ${Math.round(infilCfm)} CFM natural`, SENS * infilCfm * dtHeat, SENS * infilCfm * dtCool, LAT * infilCfm * grains);
+  push(`Infiltration · ${Math.round(infilCfmHeat)} CFM winter / ${Math.round(infilCfmCool)} CFM summer`, SENS * infilCfmHeat * dtHeat, SENS * infilCfmCool * dtCool, LAT * infilCfmCool * grains);
   const ventCfm = ventilated ? 0.03 * area + 7.5 * (m.occupants > 0 ? m.occupants : 3) : 0;
   if (ventCfm > 0) {
     push(`Ventilation · ${Math.round(ventCfm)} CFM (ASHRAE 62.2 whole-house fan)`, SENS * ventCfm * dtHeat, SENS * ventCfm * dtCool, LAT * ventCfm * grains);
@@ -215,4 +237,27 @@ export function heatingLoadAt(load: LoadResult, c: DesignConditions, outdoorF: n
   const span = 65 - c.heatingF;
   if (span <= 0) return 0;
   return Math.max(0, (load.heatingBtuh * (65 - outdoorF)) / span);
+}
+
+/** What moves this number most — the load re-run with the three things a
+ *  contractor can still change or measure, so the assumption list reads as
+ *  levers, not caveats (2026-10-14, after "bad sizing" from the field). */
+export function loadLevers(m: BuildingModel, c: DesignConditions): string[] {
+  const base = computeBlockLoad(m, c);
+  const out: string[] = [];
+  const k = (n: number) => `${Math.abs(n) >= 1000 ? (Math.abs(n) / 1000).toFixed(1) + "k" : String(Math.abs(n))} BTU/h`;
+  const glass = typeof m.windowSqft === "number" && m.windowSqft > 0 ? m.windowSqft : m.conditionedSqft * m.windowToFloor;
+  const moreGlass = computeBlockLoad({ ...m, windowSqft: glass * 1.25 }, c);
+  if (moreGlass.coolingTotalBtuh !== base.coolingTotalBtuh) out.push(`a quarter more glass than assumed adds ${k(moreGlass.coolingTotalBtuh - base.coolingTotalBtuh)} of cooling`);
+  if (m.ducts.location !== "conditioned" && m.ducts.location !== "none") {
+    const inside = computeBlockLoad({ ...m, ducts: { ...m.ducts, location: "conditioned" } }, c);
+    out.push(`ducts in the ${m.ducts.location} carry ${k(base.coolingTotalBtuh - inside.coolingTotalBtuh)} of cooling and ${k(base.heatingBtuh - inside.heatingBtuh)} of heating that ducts inside the envelope would not`);
+  }
+  const tighter: Record<string, BuildingModel["tightness"] | undefined> = { leaky: "average", average: "tight", tight: "very-tight", "very-tight": undefined };
+  const next = tighter[m.tightness];
+  if (next) {
+    const t = computeBlockLoad({ ...m, tightness: next }, c);
+    out.push(`one tightness class better ("${next}") takes off ${k(base.heatingBtuh - t.heatingBtuh)} of heating and ${k(base.coolingTotalBtuh - t.coolingTotalBtuh)} of cooling`);
+  }
+  return out.length ? [`What moves this number most: ${out.join("; ")}.`] : [];
 }
