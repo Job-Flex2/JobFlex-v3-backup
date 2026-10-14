@@ -466,6 +466,7 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
   const { isPageLocked } = await import("@/lib/customPageAccess");
   const { isOpenAIEnabled } = await import("@/lib/sdk/openai");
   const { factsFor } = await import("@/lib/aiDesk/profile");
+  const { businessFromTrades } = await import("@/lib/aiDesk/tradePresets");
   const { readDeskUse } = await import("@/lib/aiDesk/usage");
   const { deskMinutesView } = await import("@/lib/aiDesk/packs");
   const { numbersAssignedTo } = await import("@/lib/aiDesk/numbers");
@@ -515,6 +516,8 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
     profile: d.profile,
     profileUpdatedAt: d.profileUpdatedAt,
     questions: d.questions,
+    business: d.business || businessFromTrades(facts?.trades ?? []),
+    review: d.profile ? d.review : [],
     facts: facts ?? factsFor({ name: "", phone: null, address: null, website: null, trades: [], hours: [], services: [], bookingUrl: null, timezone: null }),
   };
 }

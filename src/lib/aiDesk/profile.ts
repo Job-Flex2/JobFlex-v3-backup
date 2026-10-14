@@ -189,15 +189,21 @@ export function cleanProfile(raw: unknown, base: DeskProfile): DeskProfile {
   };
 }
 
-/** What the desk cannot answer yet — one question per empty section the owner should fill. */
-export function gapQuestions(p: DeskProfile): string[] {
+/**
+ * What the desk cannot answer yet — one question per empty section the owner should fill. A section already
+ * highlighted to check (`marked`, lib/aiDesk/tradePresets) is asked there, with its fixes — not twice.
+ */
+export function gapQuestions(p: DeskProfile, marked: ReadonlySet<string> = new Set()): string[] {
   const out: string[] = [];
-  if (!p.hours) out.push("What are your hours — and when does someone answer the phone?");
-  if (!p.services.length) out.push("What services do you offer?");
-  if (!p.serviceArea) out.push("What area do you serve?");
-  if (!p.pricing) out.push("How should the desk talk about prices — free estimates, a service fee, anything it can quote?");
-  if (!p.credentials) out.push("Are you licensed and insured, and do you offer a warranty?");
-  if (!p.emergencies) out.push("What counts as an emergency, and what should the desk do then?");
+  const ask = (key: keyof DeskProfile, empty: boolean, q: string) => {
+    if (empty && !marked.has(key)) out.push(q);
+  };
+  ask("hours", !p.hours, "What are your hours — and when does someone answer the phone?");
+  ask("services", !p.services.length, "What services do you offer?");
+  ask("serviceArea", !p.serviceArea, "What area do you serve?");
+  ask("pricing", !p.pricing, "How should the desk talk about prices — free estimates, a service fee, anything it can quote?");
+  ask("credentials", !p.credentials, "Are you licensed and insured, and do you offer a warranty?");
+  ask("emergencies", !p.emergencies, "What counts as an emergency, and what should the desk do then?");
   return out;
 }
 
@@ -238,11 +244,19 @@ export function factsBlock(f: CompanyFacts): string {
     .join("\n");
 }
 
-export function composePrompt(brief: string, f: CompanyFacts): string {
+export function composePrompt(brief: string, f: CompanyFacts, base?: DeskProfile): string {
   return [
     "WHAT JOBFLEX HAS ON FILE:",
     factsBlock(f),
     "",
+    // The desk preset for the trade (lib/aiDesk/tradePresets): the owner's words change it, they do not start over.
+    ...(base
+      ? [
+          "THE DESK'S CURRENT INSTRUCTIONS (preset for the trade, maybe corrected by the owner) — START FROM THESE: keep every line the owner's words do not change, correct what they contradict, add what they say that is new:",
+          JSON.stringify(base),
+          "",
+        ]
+      : []),
     "WHAT THE OWNER SAID ABOUT THE COMPANY (typed or spoken, in any order):",
     `«${brief.trim()}»`,
     "",
@@ -253,7 +267,9 @@ export function composePrompt(brief: string, f: CompanyFacts): string {
     "1. greeting: two sentences at most, in the company's name; it must say it is a virtual assistant and that the call is recorded (the law where the company works), then ask how it can help.",
     "2. services: short noun phrases, one each. hours: as the owner said them, else the hours on file. serviceArea: as the owner said it, else the city on file and nearby.",
     "3. pricing: only numbers the owner gave (a service fee, free estimates). If none, say prices depend on the job and the desk books an estimate instead of quoting.",
-    "4. faqs: 3 to 8 questions callers ask, answered only from what the owner said — nothing invented. credentials: only what was said.",
+    base
+      ? "4. faqs: keep the current questions (correct an answer the owner's words contradict) and add the owner's own — at most 12, nothing invented. credentials: as they are, unless the owner said otherwise."
+      : "4. faqs: 3 to 8 questions callers ask, answered only from what the owner said — nothing invented. credentials: only what was said.",
     "5. emergencies: what the owner counts as urgent and what the desk should do (book the first slot today, transfer, take the number). If unsaid, the safe default: danger → safety and 911, then take the number for an urgent call back.",
     "6. neverSay: 3 to 6 lines — always include: never quote a price the company did not give; never promise a date the calendar does not show open; never share a team member's personal number. Add what the owner asked for.",
     "7. transfer: when the desk hands the call to a person, as the owner said; else when the caller asks or says it is urgent. languages: the ones the owner named, else English.",

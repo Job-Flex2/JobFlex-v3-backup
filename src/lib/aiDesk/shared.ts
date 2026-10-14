@@ -10,6 +10,7 @@
 //            the assistant's voicemail
 
 import { cleanProfile, EMPTY_PROFILE, type DeskProfile } from "./profile";
+import { cleanReview, type DeskReviewItem } from "./tradePresets";
 
 export const DESK_MODES = ["ANSWER", "FORWARD"] as const;
 export type DeskMode = (typeof DESK_MODES)[number];
@@ -55,9 +56,13 @@ export type DeskSettings = {
   profileUpdatedAt: string | null;
   /** What the desk still cannot answer — questions for the owner. */
   questions: string[];
+  /** The kind of business, as the contractor typed it ("roofing, gutters") — what the desk was preset for. */
+  business: string;
+  /** The parts of the profile the contractor should still check (lib/aiDesk/tradePresets), highlighted until they do. */
+  review: DeskReviewItem[];
 };
 
-export const DEFAULT_DESK: DeskSettings = { mode: "ANSWER", forwarding: "none", voice: "marin", brief: "", profile: null, profileUpdatedAt: null, questions: [] };
+export const DEFAULT_DESK: DeskSettings = { mode: "ANSWER", forwarding: "none", voice: "marin", brief: "", profile: null, profileUpdatedAt: null, questions: [], business: "", review: [] };
 
 /** The zones a US/Canadian contractor picks from; any IANA zone is accepted on save. */
 export const US_TIMEZONES: ReadonlyArray<{ id: string; label: string }> = [
@@ -106,6 +111,8 @@ export function parseDeskSettings(json: string | null | undefined): DeskSettings
       profile: raw.profile && typeof raw.profile === "object" ? cleanProfile(raw.profile, EMPTY_PROFILE) : null,
       profileUpdatedAt: typeof raw.profileUpdatedAt === "string" ? raw.profileUpdatedAt : null,
       questions: Array.isArray(raw.questions) ? raw.questions.filter((x): x is string => typeof x === "string").slice(0, 8) : [],
+      business: typeof raw.business === "string" ? raw.business.replace(/\s+/g, " ").trim().slice(0, 200) : "",
+      review: cleanReview(raw.review),
     };
   } catch {
     return { ...DEFAULT_DESK };

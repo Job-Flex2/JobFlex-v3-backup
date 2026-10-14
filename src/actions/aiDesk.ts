@@ -1,6 +1,9 @@
 "use server";
 // THE AI DESK — Settings → AI desk (2026-10-13). Managers only.
 //
+//   presetDeskProfile   the kind of business ("roofing, gutters") → everything callers ask that trade, from the
+//                       company's details, with the sensitive parts marked to check (lib/aiDesk/tradePresets);
+//                       a business no preset knows is written by the model in the same shape
 //   composeDeskProfile  what the owner typed or said → the desk's profile, the questions
 //                       it still has, and three sample answers (lib/aiDesk/profile)
 //   saveDeskProfile     the profile as edited on the page
@@ -27,6 +30,7 @@ import { deskBalanceFor, readDeskPacks, setAutoTopUp, settleDeskUse } from "@/li
 import { chargePackOnFile, finishPackCheckout, startPackPurchase, type PackStep } from "@/lib/aiDesk/packs";
 import { ASK_FORMAT, cleanCompose, cleanProfile, COMPOSE_SYSTEM, composePrompt, deskInstructions, EMPTY_PROFILE, gapQuestions, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
 import { companyFacts } from "@/lib/aiDesk/facts";
+import { cleanPack, matchBusiness, PACK_SYSTEM, packPrompt, presetProfile, pruneReview, reviewAfterCompose, type DeskReviewItem, type TradePack } from "@/lib/aiDesk/tradePresets";
 import { openTimes } from "@/lib/aiDesk/liveCall";
 import { DEFAULT_VOICE_MODEL, realtimeCallsUrl, TEST_NOTE, TEST_TOOL_NAMES, testSession, timeIdWords, type RealtimeApi } from "@/lib/aiDesk/testCall";
 import { noteDeskUse } from "@/lib/aiDesk/usage";
@@ -74,13 +78,14 @@ const uniq = (xs: string[]) => Array.from(new Set(xs.map((x) => x.trim()).filter
  * The owner's words about the company → the desk's profile. With nothing said, the
  * profile is the facts on file (no model call) and the questions are what is missing.
  */
-export async function composeDeskProfile(briefRaw: string): Promise<DeskActionResult<{ profile: DeskProfile; questions: string[]; samples: DeskFaq[] }>> {
+export async function composeDeskProfile(briefRaw: string): Promise<DeskActionResult<{ profile: DeskProfile; questions: string[]; samples: DeskFaq[]; review: DeskReviewItem[] }>> {
   const { organizationId, user } = await requireManager();
   const brief = (briefRaw ?? "").replace(/\r/g, "").trim().slice(0, 4000);
   const facts = await companyFacts(organizationId);
   if (!facts) return { ok: false, error: "Not found." };
-  const base = profileFromFacts(facts);
   const current = await readDeskSettings(organizationId);
+  // The preset (or the instructions as last saved) is where the owner's words start — not a blank page.
+  const base = current.profile ?? profileFromFacts(facts);
   let profile = base;
   let questions: string[] = [];
   let samples: DeskFaq[] = [];
@@ -92,7 +97,7 @@ export async function composeDeskProfile(briefRaw: string): Promise<DeskActionRe
       return { ok: false, error: err instanceof Error ? err.message : "Too many rewrites." };
     }
     try {
-      const composed = cleanCompose(await askJson(COMPOSE_SYSTEM, composePrompt(brief, facts), 0.3), base);
+      const composed = cleanCompose(await askJson(COMPOSE_SYSTEM, composePrompt(brief, facts, current.profile ?? undefined), 0.3), base);
       profile = composed.profile;
       questions = composed.questions;
       samples = composed.samples;
@@ -100,24 +105,65 @@ export async function composeDeskProfile(briefRaw: string): Promise<DeskActionRe
       return { ok: false, error: friendlyAIError(err, "writing the desk's instructions") };
     }
   }
-  questions = uniq([...questions, ...gapQuestions(profile)]).slice(0, 6);
-  await saveDeskSettings(organizationId, { ...current, brief, profile, profileUpdatedAt: new Date().toISOString(), questions });
+  // What the model changed in a sensitive part is marked for the owner, like the preset's own marks.
+  const review = brief ? reviewAfterCompose(base, profile, current.review) : pruneReview(current.review, profile);
+  questions = uniq([...questions, ...gapQuestions(profile, new Set(review.map((r) => r.key)))]).slice(0, 6);
+  await saveDeskSettings(organizationId, { ...current, brief, profile, review, profileUpdatedAt: new Date().toISOString(), questions });
   await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: brief ? "Wrote the AI desk's instructions from the company description" : "Started the AI desk's instructions from what JobFlex has on file" });
   revalidatePath(SETTINGS_PATH);
-  return { ok: true, profile, questions, samples, note: questions.length ? `Written. The desk still has ${questions.length} question${questions.length === 1 ? "" : "s"} for you below.` : "Written — the desk has what it needs." };
+  return { ok: true, profile, questions, samples, review, note: questions.length ? `Written. The desk still has ${questions.length} question${questions.length === 1 ? "" : "s"} for you below.` : "Written — the desk has what it needs." };
 }
 
-/** The profile as edited on the page. */
-export async function saveDeskProfile(raw: unknown): Promise<DeskActionResult<{ questions: string[] }>> {
+/**
+ * The kind of business → the desk's profile, preset for the trade with the company's details, and the parts the
+ * owner should check. Words no preset knows ("pool resurfacing") are written by the model in the same shape; without
+ * the AI service they still get the company's details and the generic parts.
+ */
+export async function presetDeskProfile(businessRaw: string): Promise<DeskActionResult<{ profile: DeskProfile; review: DeskReviewItem[]; questions: string[]; business: string; trades: string[] }>> {
+  const { organizationId, user } = await requireManager();
+  const business = (businessRaw ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (business.length < 2) return { ok: false, error: "Type what kind of business you are — roofing, remodeling, tile…" };
+  const facts = await companyFacts(organizationId);
+  if (!facts) return { ok: false, error: "Not found." };
+  const { packs, unknown } = matchBusiness(business);
+  const written: TradePack[] = [];
+  const typed: string[] = [];
+  if (unknown.length && isOpenAIEnabled()) {
+    try {
+      await enforceRateLimit(`aidesk-preset:${organizationId}`, 30, HOUR, "desk presets");
+      const made = await Promise.all(unknown.slice(0, 3).map((u) => askJson(PACK_SYSTEM, packPrompt(u, facts), 0.3).then((raw) => cleanPack(raw, u)).catch(() => null)));
+      unknown.slice(0, 3).forEach((u, i) => (made[i] ? written.push(made[i]!) : typed.push(u)));
+    } catch {
+      typed.push(...unknown);
+    }
+  } else typed.push(...unknown);
+  const { profile, review, trades } = presetProfile([...packs, ...written], facts, typed);
+  const questions = gapQuestions(profile, new Set(review.map((r) => r.key)));
+  const current = await readDeskSettings(organizationId);
+  await saveDeskSettings(organizationId, { ...current, business, profile, review, questions, profileUpdatedAt: new Date().toISOString() });
+  const named = trades.length ? trades.join(", ") : business;
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Preset the AI desk for ${named}` });
+  revalidatePath(SETTINGS_PATH);
+  const missed = typed.length ? ` No preset for ${typed.join(", ")} yet — check the services.` : "";
+  return { ok: true, profile, review, questions, business, trades, note: `Preset for ${named.toLowerCase()}. ${review.length} part${review.length === 1 ? "" : "s"} to check — highlighted below.${missed}` };
+}
+
+/**
+ * The profile as edited on the page. `stillToCheck` = the marked parts the owner has not looked at yet (their keys);
+ * the page can only clear marks, never add one. Left out, the marks stay as they were.
+ */
+export async function saveDeskProfile(raw: unknown, stillToCheck?: unknown): Promise<DeskActionResult<{ questions: string[]; review: DeskReviewItem[] }>> {
   const { organizationId, user } = await requireManager();
   const current = await readDeskSettings(organizationId);
   const profile = cleanProfile(raw, current.profile ?? EMPTY_PROFILE);
   if (!profile.greeting.trim()) return { ok: false, error: "The desk needs a greeting." };
-  const questions = gapQuestions(profile);
-  await saveDeskSettings(organizationId, { ...current, profile, profileUpdatedAt: new Date().toISOString(), questions });
-  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: "Edited the AI desk's instructions" });
+  const keep = Array.isArray(stillToCheck) ? new Set(stillToCheck.filter((k): k is string => typeof k === "string")) : null;
+  const review = pruneReview(keep ? current.review.filter((r) => keep.has(r.key)) : current.review, profile);
+  const questions = gapQuestions(profile, new Set(review.map((r) => r.key)));
+  await saveDeskSettings(organizationId, { ...current, profile, review, profileUpdatedAt: new Date().toISOString(), questions });
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: review.length ? `Edited the AI desk's instructions (${review.length} still to check)` : "Checked and saved the AI desk's instructions" });
   revalidatePath(SETTINGS_PATH);
-  return { ok: true, questions, note: "Saved." };
+  return { ok: true, questions, review, note: review.length ? `Saved. ${review.length} part${review.length === 1 ? "" : "s"} still to check.` : "Saved — everything checked." };
 }
 
 /** Who answers: the desk every call, or the company phone first. */

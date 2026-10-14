@@ -27,6 +27,7 @@ import type { PaymentConnectionStatusView } from '@/lib/payments/connections';
 import type { NotificationPrefs, PrefKey } from '@/lib/notificationPrefsShared';
 import type { SmsRegistrationView } from '@/lib/sms/registrationShared';
 import type { CompanyFacts, DeskProfile } from '@/lib/aiDesk/profile';
+import type { DeskReviewItem } from '@/lib/aiDesk/tradePresets';
 import type { CallsGo, DeskBalance, DeskForwarding, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
 
 export type IconName =
@@ -1055,7 +1056,33 @@ export const DESK_COPY = {
   forwardNeedsNumber: 'Forwarding needs the desk\u2019s number first.',
   modeForwardOff: 'Not with every call forwarded — your phone would forward straight back to the desk.',
   step2: 'Tell the desk about your company',
-  step2Sub: 'Say it or type it, the way you would brief a new receptionist. JobFlex writes the desk\u2019s instructions from it; you can change any line.',
+  step2Sub: 'Type what kind of business you are. JobFlex presets everything callers ask, from your company details — you check the highlighted parts and correct what\u2019s different.',
+  // preset for the trade, the sensitive parts highlighted (2026-10-14)
+  kindTitle: 'What kind of business are you?',
+  kindPlaceholder: 'Roofing, gutters — or remodeling, tile, painting, anything',
+  kindHint: 'Type what you do. JobFlex presets everything callers ask that kind of company, using your company details — then check the highlighted parts and correct anything that\u2019s different about your business.',
+  kindMatched: 'Preset for',
+  kindAi: 'No ready preset — the AI writes one for this business',
+  kindAiShort: 'AI writes it',
+  kindGeneric: 'No preset — the general one, with your company details',
+  kindGenericShort: 'general preset',
+  kindSuggest: 'Add a trade',
+  preset: 'Preset the desk',
+  presetAgain: 'Preset again',
+  presetting: 'Presetting…',
+  replaceWarn: 'This replaces the desk\u2019s current instructions with a new preset — changes you made to them will be gone.',
+  replaceYes: 'Replace them',
+  cancel: 'Cancel',
+  toCheck: (n: number) => `${n} to check`,
+  toCheckSub: '— highlighted below. Each says why: fix it in one click, edit it, or mark it right.',
+  nextToCheck: 'Show the next',
+  checkThis: 'Check this',
+  looksRight: 'Looks right',
+  profileSubCheck: 'Preset from your trade and your company details. The highlighted parts are what callers will hear as promises — check each one, then save.',
+  saveChecked: 'Save the instructions',
+  moreTitle: 'Anything else the desk should know?',
+  moreSub: 'Optional — your prices, your warranty, what you never do. Say it or type it; the AI works it in and highlights what it changed.',
+  workItIn: 'Work it into the instructions',
   showDetails: 'Read and edit the instructions',
   hideDetails: 'Hide the instructions',
   step3: 'When it can book visits',
@@ -1311,6 +1338,10 @@ export interface DeskSettingsData {
   profile: DeskProfile | null;
   profileUpdatedAt: string | null;
   questions: string[];
+  /** What the desk was preset for, as typed — or the trades on file before anything was typed. */
+  business: string;
+  /** The parts still to check, highlighted (lib/aiDesk/tradePresets). */
+  review: DeskReviewItem[];
   facts: CompanyFacts;
 }
 
