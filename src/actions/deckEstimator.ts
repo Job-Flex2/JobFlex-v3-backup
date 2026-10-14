@@ -37,7 +37,7 @@ import { deckBookKey as bookKey } from "@/lib/deck/rateBookStore";
 import { DECK_PLAN_EVENT, DECK_PLAN_VERSION, deckConvertSchema, deckUpdateSchema, firstIssue, type DeckConvertInput } from "@/lib/deck/convertSchema";
 import { DECK_LOCK_WORDS, deckProposalLock, deckProposalSeen, readDeckWritten, type DeckProposalLock, type DeckWritten, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import { deckUpdatePayload } from "@/lib/deck/proposalUpdate";
-import { markClientLinkSeen, tieClientLinkToProposal } from "@/lib/deck/clientLinksServer";
+import { clientLinkOfDraft, markClientLinkSeen, tieClientLinkToProposal } from "@/lib/deck/clientLinksServer";
 import { CLIENT_TOKEN_RE } from "@/lib/deck/clientDesign";
 import { saveProposal } from "@/actions/proposals";
 import { proposalRef } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-bridge";
@@ -368,6 +368,9 @@ export interface ReturnedClientDesign {
   sentAt: string | null;
   sends: number;
   url: string;
+  /** The job as the link named it: the contractor's title for it, and the address. */
+  address: string | null;
+  title: string;
 }
 
 export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: DeckDraft; proposal: LinkedDeckProposal | null; client: ReturnedClientDesign | null } | { ok: false; error: string }> {
@@ -377,11 +380,29 @@ export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: Deck
   const row = await db.syncState.findUnique({ where: { key: draftKey(g.organizationId, id) }, select: { cursor: true } }).catch(() => null);
   const draft = row ? readDraft(id, row.cursor) : null;
   if (!draft) return { ok: false, error: "That draft is gone." };
-  // A returned design: opening it is seeing it — it stops blooming — and the client's words come along.
+  // A returned design: opening it is seeing it — it stops blooming — and the client's words come along. A draft
+  // that came back before the token was written on it (before 2026-10-13) is found by its own id, and the token
+  // written on it now, so the next open is direct.
   let client: ReturnedClientDesign | null = null;
-  if (draft.clientToken) {
-    const link = await markClientLinkSeen(draft.clientToken, g.organizationId);
-    if (link) client = { token: link.token, name: link.clientName, phone: link.clientPhone, note: link.note, unsure: link.unsure, sentAt: link.sentAt, sends: link.sends, url: `${(await appBaseUrl()).replace(/\/$/, "")}/deck-design/${link.token}` };
+  let token = draft.clientToken;
+  if (!token) {
+    const old = await clientLinkOfDraft(id, g.organizationId);
+    if (old) {
+      token = old.token;
+      draft.clientToken = token;
+      if (row) {
+        try {
+          const body = JSON.parse(row.cursor) as Record<string, unknown>;
+          await db.syncState.update({ where: { key: draftKey(g.organizationId, id) }, data: { cursor: JSON.stringify({ ...body, clientToken: token, proposalId: body.proposalId ?? old.proposalId ?? null }) } });
+        } catch {
+          /* next time */
+        }
+      }
+    }
+  }
+  if (token) {
+    const link = await markClientLinkSeen(token, g.organizationId);
+    if (link) client = { token: link.token, name: link.clientName, phone: link.clientPhone, note: link.note, unsure: link.unsure, sentAt: link.sentAt, sends: link.sends, url: `${(await appBaseUrl()).replace(/\/$/, "")}/deck-design/${link.token}`, address: link.address, title: link.title };
   }
   // A draft opened from a proposal goes on updating it, while the proposal is there.
   const proposalId = draft.proposalId ?? (client ? (await db.syncState.findUnique({ where: { key: `deckclient:${client.token}` }, select: { cursor: true } }).then((r) => (r ? (JSON.parse(r.cursor) as { proposalId?: unknown }).proposalId : null)).catch(() => null)) : null);

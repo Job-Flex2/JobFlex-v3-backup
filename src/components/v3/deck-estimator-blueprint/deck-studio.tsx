@@ -99,7 +99,7 @@ import { STORE_SURVEY, storePrice } from "@/lib/deck/storePrices";
 import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type DeckRateBook, type DeckRateGroup } from "@/lib/deck/rates";
 import { convertDeckEstimateToProposal, updateDeckProposal, deckPhotoHref, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckPhoto, readDeckSite, saveDeckDraft, saveDeckRateBook, uploadDeckPhoto, type DeckDraftRow, type ReturnedClientDesign } from "@/actions/deckEstimator";
 import { deckClientInbox } from "@/actions/deckClientDesign";
-import type { ClientLinkRow } from "@/lib/deck/clientDesign";
+import { jobLine, type ClientLinkRow } from "@/lib/deck/clientDesign";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
 import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
@@ -871,7 +871,28 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
   const [fromClient, setFromClient] = React.useState<ReturnedClientDesign | null>(opened?.client ?? null);
   const clientToken = fromClient?.token ?? null;
   const [inbox, setInbox] = React.useState<Array<ClientLinkRow & { url: string }>>([]);
-  const [inboxSeen, setInboxSeen] = React.useState<Set<string>>(() => new Set());
+  // "Later" puts a return aside in this browser until it is sent again (the key carries the send's time).
+  const LATER_KEY = "jf-deck-later";
+  // Read once at mount; nothing of it is in the server's markup (the inbox arrives after), so no mismatch.
+  const [inboxSeen, setInboxSeen] = React.useState<Set<string>>(() => {
+    try {
+      return new Set(typeof localStorage === "undefined" ? [] : (JSON.parse(localStorage.getItem(LATER_KEY) ?? "[]") as string[]));
+    } catch {
+      return new Set();
+    }
+  });
+  const putAside = (l: ClientLinkRow) => {
+    const key = `${l.token}:${l.sentAt ?? ""}`;
+    setInboxSeen((set) => {
+      const next = new Set(set).add(key);
+      try {
+        localStorage.setItem(LATER_KEY, JSON.stringify([...next].slice(-100)));
+      } catch {
+        /* no storage */
+      }
+      return next;
+    });
+  };
   React.useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -899,7 +920,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
     };
   }, []);
   /** Returns to show: not the one on screen, not one dismissed here. */
-  const inboxNew = inbox.filter((l) => l.token !== clientToken && !inboxSeen.has(l.token));
+  const inboxNew = inbox.filter((l) => l.token !== clientToken && !inboxSeen.has(`${l.token}:${l.sentAt ?? ""}`));
   React.useEffect(() => {
     if (!dirty.current) return;
     const t = setTimeout(async () => {
@@ -1634,10 +1655,10 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             <div key={l.token} className={s.inboxRow} data-deck-inbox-row={l.token}>
               <span className={s.inboxDot} aria-hidden="true" />
               <div className={s.inboxText}>
-                <b>{l.clientName} sent back {/s$/i.test(l.clientName.trim()) ? "their" : "a"} deck design</b>
-                {l.sentAt ? <span className={s.inboxWhen}> · {ago(l.sentAt)}</span> : null}
-                {l.words ? <span className={s.inboxWords}> · {l.words}</span> : null}
-                {l.note ? <span className={s.inboxNote}> · “{l.note.length > 90 ? `${l.note.slice(0, 90)}…` : l.note}”</span> : null}
+                <b>{l.clientName}</b> sent back a deck design{l.sentAt ? <span className={s.inboxWhen}> · {ago(l.sentAt)}</span> : null}
+                <span className={s.inboxJob}>for {jobLine(l)}</span>
+                {l.words ? <span className={s.inboxWords}>{l.words}</span> : null}
+                {l.note ? <span className={s.inboxNote}>“{l.note.length > 120 ? `${l.note.slice(0, 120)}…` : l.note}”</span> : null}
               </div>
               <div className={s.rowActs}>
                 {l.draftId ? (
@@ -1645,7 +1666,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                     Open it
                   </a>
                 ) : null}
-                <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => setInboxSeen((set) => new Set(set).add(l.token))} aria-label={`Put ${l.clientName}'s design aside for now`}>
+                <button type="button" className={cx(s.btn, s.btnSm, s.btnGhost)} onClick={() => putAside(l)} aria-label={`Put ${l.clientName}'s design aside until they send again`} title="Put it aside — it comes back when they send again; the count in Client designs stays">
                   Later
                 </button>
               </div>
@@ -1660,6 +1681,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
         <section className={cx(s.card, s.fromClient)} aria-label="What the client sent" data-deck-from-client>
           <div className={s.linkedText}>
             <div className={s.linkedKicker}>{fromClient.name}&apos;s design{fromClient.sends > 1 ? ` · sent ${fromClient.sends} times` : ""}{fromClient.sentAt ? ` · ${ago(fromClient.sentAt)}` : ""}</div>
+            {!linked ? <div className={s.linkedTitle}><span className={s.linkedName}>{fromClient.title}</span>{fromClient.address ? <span className={s.mono}>{fromClient.address}</span> : null}</div> : null}
             <p className={s.linkedSub}>
               {fromClient.note ? <>“{fromClient.note}” </> : <>No note with it. </>}
               {fromClient.unsure.includes("height") ? <b>Not sure of the height — measure it on site. </b> : null}

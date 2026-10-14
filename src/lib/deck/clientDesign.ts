@@ -84,6 +84,8 @@ export interface ClientDesignLink {
   byName: string | null;
   /** When the contractor last opened what came back; null = not yet. Older than sentAt = a new return. */
   seenAt: string | null;
+  /** When what came back was priced onto a proposal (a convert or an update with this link); null = not yet. */
+  pricedAt: string | null;
 }
 
 /** The row the contractor's list shows. */
@@ -109,6 +111,10 @@ export interface ClientLinkRow {
   unseen: boolean;
   /** What the client designed, in words ("16 × 12 ft deck"), once they have worked on it. */
   words: string | null;
+  address: string | null;
+  pricedAt: string | null;
+  /** The proposal it belongs to, as the list says it (filled by lib/deck/clientLinksServer withProposals). */
+  proposal: { ref: string; title: string; status: string; address: string | null } | null;
 }
 
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -148,6 +154,7 @@ export function parseClientLink(cursor: string): ClientDesignLink | null {
       proposalId: typeof raw.proposalId === "string" && /^[\w-]{1,64}$/.test(raw.proposalId) ? raw.proposalId : null,
       byName: strOrNull(raw.byName, 120),
       seenAt: iso(raw.seenAt),
+      pricedAt: iso(raw.pricedAt),
     };
   } catch {
     return null;
@@ -175,7 +182,44 @@ export function clientLinkRow(l: ClientDesignLink, now: number): ClientLinkRow {
     seenAt: l.seenAt,
     unseen: isUnseenReturn(l),
     words: l.work ? structureWords(l.work) : null,
+    address: l.address,
+    pricedAt: l.pricedAt,
+    proposal: null,
   };
+}
+
+/* ── THE STAGES (owner, 2026-10-13: "a more understandable flow between the contractor and the client") ─────
+   One line of stages both sides read the same way. The client's page shows the same line from their side. */
+export type ClientStage = "link" | "opened" | "designing" | "returned" | "seen" | "priced" | "proposal" | "accepted";
+export const CLIENT_STAGES: readonly ClientStage[] = ["link", "opened", "designing", "returned", "seen", "priced", "proposal", "accepted"];
+export const STAGE_WORDS: Readonly<Record<ClientStage, string>> = {
+  link: "Link sent",
+  opened: "Opened",
+  designing: "Designing",
+  returned: "Sent back",
+  seen: "You opened it",
+  priced: "Priced",
+  proposal: "Proposal sent",
+  accepted: "Accepted",
+};
+const DECIDED = new Set(["SENT", "VIEWED", "ACCEPTED", "DECLINED", "COMPLETED", "PAID"]);
+/** Where a link stands, as the furthest stage it has reached, and when it got there. */
+export function clientStage(l: Pick<ClientLinkRow, "openedAt" | "workAt" | "status" | "sentAt" | "seenAt" | "pricedAt" | "proposal" | "createdAt">): { stage: ClientStage; at: string | null } {
+  const p = l.proposal;
+  if (l.pricedAt && p && (p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID")) return { stage: "accepted", at: null };
+  if (l.pricedAt && p && DECIDED.has(p.status)) return { stage: "proposal", at: null };
+  if (l.pricedAt) return { stage: "priced", at: l.pricedAt };
+  if (l.status === "sent" && l.sentAt) return isUnseenReturn(l) ? { stage: "returned", at: l.sentAt } : { stage: "seen", at: l.seenAt };
+  if (l.workAt) return { stage: "designing", at: l.workAt };
+  if (l.openedAt) return { stage: "opened", at: l.openedAt };
+  return { stage: "link", at: l.createdAt };
+}
+/** "for Smith backyard deck (PRO-4C1B) · 123 Main St" — the job a link is about, the client's name aside. */
+export function jobLine(l: Pick<ClientLinkRow, "title" | "address" | "proposal">): string {
+  const p = l.proposal;
+  const name = p ? `${p.title} (${p.ref})` : l.title;
+  const where = p?.address ?? l.address;
+  return where ? `${name} · ${where}` : name;
 }
 
 /** Sent back, and the contractor has not opened it since. */

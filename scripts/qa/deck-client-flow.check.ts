@@ -4,7 +4,7 @@
 // standing words every surface shares, the row's data shape.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json scripts/qa/deck-client-flow.check.ts
 import { defaultDeckDesign } from "../../src/lib/deck/design";
-import { clientLinkRow, clientStanding, isUnseenReturn, parseClientLink, standingLine, STANDING_WORDS, type ClientDesignLink } from "../../src/lib/deck/clientDesign";
+import { clientLinkRow, clientStage, clientStanding, isUnseenReturn, jobLine, parseClientLink, standingLine, STANDING_WORDS, STAGE_WORDS, CLIENT_STAGES, type ClientDesignLink } from "../../src/lib/deck/clientDesign";
 import { deckConvertSchema, deckUpdateSchema } from "../../src/lib/deck/convertSchema";
 import { deckingProduct, defaultDecking, treatedDecking } from "../../src/lib/deck/catalog";
 import { REGIONAL_STATES } from "../../src/lib/deck/regional";
@@ -23,7 +23,7 @@ const link: ClientDesignLink = {
   v: 1, token: "abcdefghijklmnopqrstuvwx", orgId: "org1", createdBy: "u1", createdAt: T0, expiresAt: "2027-01-01T00:00:00.000Z",
   clientName: "Jane Smith", clientPhone: "555-0100", clientEmail: null, clientId: null, address: null, title: "Smith deck", start: "mine",
   base, work: null, workAt: null, openedAt: null, note: "", unsure: [], status: "open", sentAt: null, sends: 0, draftId: null,
-  proposalId: "cmv123", byName: "Quinn Adler", seenAt: null,
+  proposalId: "cmv123", byName: "Quinn Adler", seenAt: null, pricedAt: null,
 };
 
 // ── the record
@@ -50,6 +50,18 @@ const at = { sentAt: sent.sentAt, workAt: sent.workAt, openedAt: sent.openedAt, 
 check("the line names the client by first name and when", standingLine(row, ago, at).startsWith("Jane sent back a design · ") , standingLine(row, ago, at));
 check("…waiting says the link went out and was not opened", /^Design link sent to Jane · not opened yet$/.test(standingLine(clientLinkRow(link, Date.parse(T2)), ago, { ...at, sentAt: null, workAt: null, openedAt: null })));
 check("…a nameless client is 'The client'", standingLine({ ...row, clientName: "  " }, ago, at).startsWith("The client sent back"));
+
+// ── the stages, one line both sides read (2026-10-13)
+const st = (x: Partial<ClientDesignLink>, proposal: { ref: string; title: string; status: string; address: string | null } | null = null) => clientStage({ ...clientLinkRow({ ...link, ...x }, Date.parse(T2)), proposal });
+check("every stage has words, in the order the flow goes", CLIENT_STAGES.length === 8 && CLIENT_STAGES.every((k) => STAGE_WORDS[k].length > 2) && CLIENT_STAGES[0] === "link" && CLIENT_STAGES[7] === "accepted");
+check("link sent → opened → designing", st({}).stage === "link" && st({ openedAt: T0 }).stage === "opened" && st({ openedAt: T0, workAt: T1 }).stage === "designing");
+check("sent back, not opened = returned (blooms); opened = seen", st({ status: "sent", sentAt: T1 }).stage === "returned" && st({ status: "sent", sentAt: T1, seenAt: T2 }).stage === "seen");
+check("priced once the return went onto a proposal, whatever was seen", st({ status: "sent", sentAt: T1, pricedAt: T2 }).stage === "priced" && st({ status: "sent", sentAt: T1, pricedAt: T2 }, { ref: "PRO-1", title: "t", status: "DRAFT", address: null }).stage === "priced");
+check("the proposal sent → 'proposal'; accepted → 'accepted'", st({ status: "sent", sentAt: T1, pricedAt: T2 }, { ref: "PRO-1", title: "t", status: "SENT", address: null }).stage === "proposal" && st({ status: "sent", sentAt: T1, pricedAt: T2 }, { ref: "PRO-1", title: "t", status: "ACCEPTED", address: null }).stage === "accepted");
+check("a link made FROM a proposal is not 'priced' until a return is priced", st({}, { ref: "PRO-1", title: "t", status: "SENT", address: null }).stage === "link");
+check("the stage says when it got there", st({ status: "sent", sentAt: T1 }).at === T1 && st({ openedAt: T0 }).at === T0);
+check("the job line names the proposal and the address, else the link's own title", jobLine({ title: "Smith deck", address: "1 Main St", proposal: { ref: "PRO-1", title: "Smith backyard", status: "DRAFT", address: "2 Oak St" } }) === "Smith backyard (PRO-1) · 2 Oak St" && jobLine({ title: "Smith deck", address: null, proposal: null }) === "Smith deck");
+check("pricedAt round-trips and an old record reads null", parseClientLink(JSON.stringify({ ...link, pricedAt: T2 }))?.pricedAt === T2 && parseClientLink(JSON.stringify({ ...link, pricedAt: undefined }))?.pricedAt === null);
 
 // ── the token rides with a convert / an update
 const lines = [{ name: "Framing", quantity: 1, materialCost: 1, laborCost: 1 }];

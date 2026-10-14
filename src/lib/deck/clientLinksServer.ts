@@ -6,6 +6,16 @@
 // the two small facts other surfaces set: the proposal a link belongs to, and when the contractor looked.
 import { db } from "@/lib/db";
 import { CLIENT_TOKEN_RE, clientIndexKey, clientLinkKey, clientLinkRow, isUnseenReturn, parseClientLink, type ClientDesignLink, type ClientLinkRow } from "./clientDesign";
+import { proposalRef } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-bridge";
+
+/** The rows with their proposals named (ref, title, status, address) — one read for the lot. */
+export async function withProposals(rows: ClientLinkRow[], organizationId: string): Promise<ClientLinkRow[]> {
+  const ids = [...new Set(rows.map((r) => r.proposalId).filter((id): id is string => !!id))];
+  if (!ids.length) return rows;
+  const found = await db.proposal.findMany({ where: { id: { in: ids }, organizationId }, select: { id: true, publicId: true, title: true, status: true, address: true } }).catch(() => []);
+  const by = new Map(found.map((p) => [p.id, { ref: proposalRef(p.publicId), title: p.title, status: p.status, address: p.address }]));
+  return rows.map((r) => (r.proposalId && by.has(r.proposalId) ? { ...r, proposal: by.get(r.proposalId) ?? null } : r));
+}
 
 export async function readClientIndex(organizationId: string): Promise<string[]> {
   const row = await db.syncState.findUnique({ where: { key: clientIndexKey(organizationId) }, select: { cursor: true } }).catch(() => null);
@@ -56,16 +66,23 @@ async function readOwnLink(token: string, organizationId: string): Promise<Clien
 const writeLink = (link: ClientDesignLink) =>
   db.syncState.upsert({ where: { key: clientLinkKey(link.token) }, create: { key: clientLinkKey(link.token), cursor: JSON.stringify(link) }, update: { cursor: JSON.stringify(link) } });
 
-/** The returned design was priced onto this proposal: the link follows it. Quiet on any failure (it is a pointer, never the price). */
+/** The returned design was priced onto this proposal: the link follows it, and the stage moves to "priced". Quiet on any failure (it is a pointer, never the price). */
 export async function tieClientLinkToProposal(token: string | null | undefined, organizationId: string, proposalId: string): Promise<void> {
   if (!token) return;
   try {
     const link = await readOwnLink(token, organizationId);
-    if (!link || link.proposalId === proposalId) return;
-    await writeLink({ ...link, proposalId });
+    if (!link) return;
+    const now = new Date().toISOString();
+    await writeLink({ ...link, proposalId, pricedAt: now, seenAt: link.seenAt ?? now });
   } catch {
     /* the proposal stands either way */
   }
+}
+
+/** A draft that came back before the link's token was written on it (before 2026-10-13): its link, by the draft id. */
+export async function clientLinkOfDraft(draftId: string, organizationId: string): Promise<ClientDesignLink | null> {
+  if (!/^[a-f0-9-]{8,40}$/i.test(draftId)) return null;
+  return (await readOrgClientLinks(organizationId)).find((l) => l.draftId === draftId) ?? null;
 }
 
 /** The contractor opened what came back: it stops blooming. Returns the link as it stands. */
