@@ -435,11 +435,15 @@ export function initPhoneContent(
     const a = c.desk.appointment;
     return (
       '<div class="sh-sec" data-sheet-desk><div class="kpi-lbl">The AI desk</div><div class="sh-desk">' +
-      "<div>The desk " +
-      esc(c.desk.label) +
-      " and was on the line " +
-      fmtDur(c.desk.seconds) +
-      ".</div>" +
+      (c.desk.word === "failed"
+        ? "<div>The desk couldn't take this call" +
+          (c.desk.error ? ": " + esc(c.desk.error) : "") +
+          " — the caller was asked to leave a message.</div>"
+        : "<div>The desk " +
+          esc(c.desk.label) +
+          " and was on the line " +
+          fmtDur(c.desk.seconds) +
+          ".</div>") +
       (a
         ? '<a class="btn btn-ghost btn--sm" href="/dashboard/calendar?date=' +
           esc(encodeURIComponent(a.date)) +

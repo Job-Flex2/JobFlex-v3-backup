@@ -24,7 +24,15 @@ export function fakeRealtime({ port = 0, scenario = process.env.FAKE_SCENARIO ||
     const call = (name, args) => send({ type: "response.function_call_arguments.done", name, call_id: `call_${name}_${Date.now()}`, arguments: JSON.stringify(args) });
     ws.on("message", (raw) => {
       const ev = JSON.parse(String(raw));
+      if (session.dead) return;
       if (ev.type === "session.update") seen.sessions.push(ev.session);
+      // "badkey": what OpenAI does with a key it refuses — the socket opens, an error event, silence, then it closes.
+      if (ev.type === "session.update" && scenario === "badkey") {
+        session.dead = true;
+        send({ type: "error", event_id: "evt_bad", error: { type: "invalid_request_error", code: "invalid_api_key", message: "Incorrect API key provided: sk-fake-***-123. You can find your API key at https://platform.openai.com/account/api-keys." } });
+        setTimeout(() => ws.close(), 50);
+        return;
+      }
       if (ev.type === "input_audio_buffer.append") {
         // After the greeting and ~1 s of caller audio, the caller "speaks".
         session.audio = (session.audio || 0) + 1;

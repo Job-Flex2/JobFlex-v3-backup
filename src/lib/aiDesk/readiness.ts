@@ -97,6 +97,26 @@ export async function deskReadiness(adminUserId: string | null = null): Promise<
   const openai = isOpenAIEnabled();
   const stripe = isStripeEnabled();
   const [voice, twilioOn] = await Promise.all([probeVoiceServer(), isTwilioEnabled()]);
+  // The last call the desk could not take, in the last day — OpenAI's own words come back with the call (voice/call.mjs lastError).
+  let lastFailure: { at: Date; error: string } | null = null;
+  if (voice.state !== "off") {
+    const recent = await db.syncState.findMany({ where: { key: { startsWith: "callout:" }, updatedAt: { gte: new Date(Date.now() - 86_400_000) } }, orderBy: { updatedAt: "desc" }, take: 30, select: { cursor: true, updatedAt: true } }).catch(() => []);
+    for (const r of recent) {
+      try {
+        const o = JSON.parse(r.cursor) as { error?: string | null };
+        if (o.error) {
+          lastFailure = { at: r.updatedAt, error: o.error };
+          break;
+        }
+      } catch {
+        /* an unreadable row is no failure */
+      }
+    }
+    if (lastFailure) {
+      voice.state = "warn";
+      voice.detail += ` · the last call the desk could not take (${lastFailure.at.toISOString().slice(11, 16)} UTC): ${lastFailure.error}`;
+    }
+  }
   const items: ReadinessItem[] = [
     { key: "openai", label: "OpenAI key", state: openai ? "ok" : "off", detail: openai ? `OPENAI_API_KEY set · VOICE_MODEL ${voiceModel()}${process.env.VOICE_MODEL?.trim() ? "" : " (the default)"}` : "OPENAI_API_KEY is missing — the desk, the voices and the browser test need it." },
     voice,
@@ -203,7 +223,13 @@ export async function deskReadiness(adminUserId: string | null = null): Promise<
   if (!openai) steps.push("Set OPENAI_API_KEY on Vercel (Production) and redeploy.");
   if (!twilioOn) steps.push("Configure Twilio (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) — without it no company gets a number.");
   if (voice.state === "off") steps.push("Deploy the voice server on Fly (voice/README.md: account, secrets, fly deploy, voice.jobflex.app), then set VOICE_SERVER_URL=wss://voice.jobflex.app and VOICE_SERVER_SECRET on Vercel and redeploy.");
-  else if (voice.state === "warn") steps.push(/SECRET MISMATCH/.test(voice.detail) ? "The secret differs between Fly and Vercel: paste the value go-live.sh printed into Vercel's VOICE_SERVER_SECRET (or run `fly secrets set VOICE_SERVER_SECRET=…` with Vercel's value), then redeploy." : "The voice server is set but not right: check `fly status`, the DNS name in VOICE_SERVER_URL, and VOICE_MODEL on both sides.");
+  else if (voice.state === "warn") {
+    if (/SECRET MISMATCH/.test(voice.detail)) steps.push("The secret differs between Fly and Vercel: paste the value go-live.sh printed into Vercel's VOICE_SERVER_SECRET (or run `fly secrets set VOICE_SERVER_SECRET=…` with Vercel's value), then redeploy.");
+    else if (lastFailure && /api key/i.test(lastFailure.error)) steps.push("OpenAI refuses the key on Fly: set it again in voice/ — `fly secrets set OPENAI_API_KEY='sk-…'` (a fresh key from platform.openai.com/api-keys, pasted with nothing before or after it) — then call once more.");
+    else if (lastFailure && /model/i.test(lastFailure.error)) steps.push(`OpenAI refuses the model: ${lastFailure.error} — set VOICE_MODEL on Fly (fly.toml) and Vercel to one your account has, e.g. gpt-realtime.`);
+    else if (lastFailure) steps.push(`The last call failed — ${lastFailure.error}. Fix that, then call once more; \`fly logs -a jobflex-voice\` has the server's side.`);
+    else steps.push("The voice server is set but not right: check `fly status`, the DNS name in VOICE_SERVER_URL, and VOICE_MODEL on both sides.");
+  }
   for (const n of numbers.filter((x) => x.webhook === "wrong")) steps.push(`Point ${n.number} (${n.company}) at the voice webhook — the button below.`);
   for (const p of platform.filter((x) => x.webhook === "wrong")) steps.push(`Point the platform's ${p.number} at the voice webhook — the button below (its calls are answered for ${p.answeredFor ?? "the first company"}).`);
   for (const p of platform.filter((x) => !x.assigned)) steps.push(`Assign the platform's ${p.number} to your own company — the picker below. Until then its calls reach ${p.answeredFor ?? "the oldest company"} (the oldest company, the old fallback): a test call would land on their Phone page and could book on their calendar.`);

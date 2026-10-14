@@ -119,6 +119,7 @@ export async function loadPhoneProps(nextPath: string): Promise<PhoneProps> {
       label: DESK_OUTCOME_LABEL[word],
       seconds: o.seconds,
       appointment: a ? { id: a.id, when: a.startsAt.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz }), date: localDate(a.startsAt, tz) } : null,
+      error: typeof o.error === "string" && o.error ? o.error : null,
     };
   };
 

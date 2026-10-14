@@ -110,6 +110,24 @@ test("a refused token: the stream closes before the desk speaks and the app's Tw
   }
 });
 
+test("a key OpenAI refuses: the call fails with the reason for the app, before the desk speaks", async () => {
+  const app = fakeApp();
+  const realtime = fakeRealtime({ scenario: "badkey" });
+  const srv = serve({ app, realtime });
+  try {
+    const got = await twilioClient({ url: srv.url, token: "good", WS, frames: 10 });
+    assert.ok(got.closed);
+    assert.equal(got.media, 0, "no audio reached the caller");
+    const end = app.log.find((x) => x.path === "/api/desk/call-end")?.body;
+    assert.equal(end?.outcome, "failed");
+    assert.match(end?.error ?? "", /Incorrect API key/);
+  } finally {
+    srv.close();
+    app.close();
+    realtime.close();
+  }
+});
+
 test("the beta session shape, for an account still on it", () => {
   const s = sessionUpdate({ instructions: "x", voice: "cedar" }, "beta").session;
   assert.equal(s.input_audio_format, "g711_ulaw");

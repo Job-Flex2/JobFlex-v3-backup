@@ -15,6 +15,6 @@ export async function POST(req: Request) {
     .filter((l): l is { role: string; text: string } => !!l && !!l.text)
     .slice(0, 400);
   const booked = r.body.booked && typeof r.body.booked === "object" ? { appointmentId: str((r.body.booked as Record<string, unknown>).appointmentId, 60) } : null;
-  await finishCall({ callSid: r.token.callSid, organizationId: r.token.organizationId }, { outcome, transcript, seconds: Number(r.body.seconds) || 0, booked: booked?.appointmentId ? booked : null, messageTaken: r.body.messageTaken === true });
+  await finishCall({ callSid: r.token.callSid, organizationId: r.token.organizationId }, { outcome, transcript, seconds: Number(r.body.seconds) || 0, booked: booked?.appointmentId ? booked : null, messageTaken: r.body.messageTaken === true, error: str(r.body.error, 300) || null });
   return json({ ok: true });
 }

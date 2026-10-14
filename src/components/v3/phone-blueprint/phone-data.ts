@@ -59,6 +59,8 @@ export type CallDesk = {
   seconds: number;
   /** The visit it booked, with the calendar link's two halves. */
   appointment: { id: string; when: string; date: string } | null;
+  /** Why it could not take the call, when it could not (OpenAI's words, or the session never opening). */
+  error: string | null;
 };
 
 /** Stat-strip figures, counted server-side over the whole table rather than
