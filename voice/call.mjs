@@ -80,6 +80,8 @@ export class Call {
     this.brief = null;
     this.transcript = [];
     this.outcome = "voicemail";
+    /** The last thing that went wrong — OpenAI's error event, or why the session never opened — for the app to show. */
+    this.lastError = null;
     this.booked = null;
     this.messageTaken = false;
     this.startedAt = now();
@@ -209,7 +211,10 @@ export class Call {
       );
       return;
     }
-    if (t === "error") this.log(`openai error: ${JSON.stringify(ev.error ?? ev).slice(0, 300)}`);
+    if (t === "error") {
+      this.lastError = (ev.error && typeof ev.error.message === "string" ? ev.error.message : JSON.stringify(ev.error ?? ev)).slice(0, 300);
+      this.log(`openai error: ${this.lastError}`);
+    }
   }
 
   async tool(name, callId, argsJson) {
@@ -271,7 +276,8 @@ export class Call {
 
   fail(why) {
     this.log(`call failed before the desk spoke: ${why}`);
-    this.outcome = "voicemail";
+    this.lastError = this.lastError ?? why;
+    this.outcome = "failed";
     return this.finish("failed");
   }
 
@@ -281,10 +287,15 @@ export class Call {
     this.ended = true;
     for (const t of this.timers) clearTimeout(t);
     const seconds = Math.round((now() - this.startedAt) / 1000);
-    this.log(`call ${this.callSid ?? "?"} ended (${why}) · ${this.outcome} · ${seconds}s · ${this.transcript.length} lines`);
+    // The desk never said a word and something went wrong: that is a failed call, not a voicemail.
+    if (this.outcome === "voicemail" && !this.transcript.some((l) => l.role === "desk") && (this.lastError || /^openai/.test(why))) {
+      this.outcome = "failed";
+      this.lastError = this.lastError ?? `the realtime session ended (${why}) before the desk spoke`;
+    }
+    this.log(`call ${this.callSid ?? "?"} ended (${why}) · ${this.outcome} · ${seconds}s · ${this.transcript.length} lines${this.lastError ? ` · ${this.lastError}` : ""}`);
     if (this.token && this.brief) {
       try {
-        await this.app.post("/api/desk/call-end", { token: this.token, outcome: this.outcome, transcript: this.transcript, seconds, booked: this.booked, messageTaken: this.messageTaken, why });
+        await this.app.post("/api/desk/call-end", { token: this.token, outcome: this.outcome, transcript: this.transcript, seconds, booked: this.booked, messageTaken: this.messageTaken, why, error: this.lastError });
       } catch (e) {
         this.log(`call-end not delivered: ${e.message}`);
       }

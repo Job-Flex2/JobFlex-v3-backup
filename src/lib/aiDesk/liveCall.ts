@@ -22,7 +22,15 @@ import { deskBalanceFor, settleDeskUse } from "./minutes";
 const ORG_SELECT = { id: true, name: true, slug: true, timezone: true, logoUrl: true, phone: true, billingEmail: true, gmailSettingsJson: true, gmailTokensJson: true, tradeTypesJson: true, bookingSettingsJson: true } as const;
 
 /** How a call went, kept beside the call (SyncState `callout:<callSid>` — no schema change). */
-export type CallOutcome = { outcome: "done" | "transfer" | "voicemail" | "failed"; appointmentId: string | null; seconds: number; messageTaken: boolean; at: string };
+export type CallOutcome = {
+  outcome: "done" | "transfer" | "voicemail" | "failed";
+  appointmentId: string | null;
+  seconds: number;
+  messageTaken: boolean;
+  at: string;
+  /** Why the desk could not take the call — OpenAI's error, or the session never opening (voice/call.mjs). */
+  error?: string | null;
+};
 
 const outcomeKey = (callSid: string) => `callout:${callSid}`;
 
@@ -121,9 +129,9 @@ export async function takeMessage(organizationId: string, callSid: string, input
   return { ok: true };
 }
 
-export async function finishCall(t: { callSid: string; organizationId: string }, input: { outcome: CallOutcome["outcome"]; transcript: Array<{ role: string; text: string }>; seconds: number; booked: { appointmentId: string } | null; messageTaken: boolean }): Promise<void> {
+export async function finishCall(t: { callSid: string; organizationId: string }, input: { outcome: CallOutcome["outcome"]; transcript: Array<{ role: string; text: string }>; seconds: number; booked: { appointmentId: string } | null; messageTaken: boolean; error?: string | null }): Promise<void> {
   const text = input.transcript.map((l) => `${l.role === "desk" ? "Desk" : "Caller"}: ${l.text}`).join("\n").slice(0, 20_000);
-  const outcome: CallOutcome = { outcome: input.outcome, appointmentId: input.booked?.appointmentId ?? null, seconds: Math.max(0, Math.round(input.seconds)), messageTaken: input.messageTaken, at: new Date().toISOString() };
+  const outcome: CallOutcome = { outcome: input.outcome, appointmentId: input.booked?.appointmentId ?? null, seconds: Math.max(0, Math.round(input.seconds)), messageTaken: input.messageTaken, at: new Date().toISOString(), error: typeof input.error === "string" && input.error ? input.error.slice(0, 300) : null };
   const key = outcomeKey(t.callSid);
   await db.syncState.upsert({ where: { key }, create: { key, cursor: JSON.stringify(outcome) }, update: { cursor: JSON.stringify(outcome) } });
   await db.aiPhoneCall.updateMany({ where: { callSid: t.callSid, organizationId: t.organizationId }, data: { status: "COMPLETED", endedAt: new Date(), durationSeconds: outcome.seconds } });
