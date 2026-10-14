@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { SupportForm } from "./support-form";
 import { SupportFaq } from "./support-faq";
 import { SupportTickets, type SupportTicketView } from "./support-tickets";
+import { repliesForTickets } from "@/lib/supportReplies";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,9 @@ export default async function SupportPage() {
     },
   });
 
+  // Our answers (2026-10-14, lib/supportReplies): the same words that went by email, under the ticket here too.
+  const replies = await repliesForTickets(tickets.map((t) => t.id));
+
   const open = tickets.filter((t) => t.status === "OPEN").length;
   const inProgress = tickets.filter((t) => t.status === "IN_PROGRESS").length;
   const resolved = tickets.filter((t) => t.status === "RESOLVED" || t.status === "CLOSED").length;
@@ -52,6 +56,7 @@ export default async function SupportPage() {
     priority: t.priority,
     status: t.status,
     createdAt: t.createdAt,
+    replies: (replies[t.id] ?? []).map((r) => ({ id: r.id, at: r.at, body: r.body })),
   }));
 
   return (

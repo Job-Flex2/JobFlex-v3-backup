@@ -13,6 +13,8 @@ export interface SupportTicketView {
   priority: string;
   status: string;
   createdAt: Date;
+  /** Our answers, oldest first (2026-10-14) — the same words that went by email. */
+  replies: Array<{ id: string; at: string; body: string }>;
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -100,6 +102,11 @@ function TicketCard({ ticket }: { ticket: SupportTicketView }) {
               {CATEGORY_LABEL[ticket.category] ?? "General"}
             </span>
             <span className="tabular">{relative(ticket.createdAt)}</span>
+            {ticket.replies.length ? (
+              <span className="rounded-full bg-[color:var(--accent-soft)] px-2 py-0.5 font-medium text-[color:var(--accent-ink)]" data-support-answered>
+                {ticket.replies.length === 1 ? "Answered" : `${ticket.replies.length} answers`}
+              </span>
+            ) : null}
           </div>
         </div>
         <Badge tone={STATUS_TONE[ticket.status] ?? "neutral"}>
@@ -155,6 +162,12 @@ function TicketCard({ ticket }: { ticket: SupportTicketView }) {
           <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[color:var(--ink-soft)]">
             {ticket.body}
           </p>
+          {ticket.replies.map((r) => (
+            <div key={r.id} className="mt-3 rounded-md border-l-2 border-[color:var(--accent)] bg-[color:var(--accent-soft)] px-3 py-2.5" data-support-reply-card>
+              <div className="text-[11px] font-medium text-[color:var(--accent-ink)]">JobFlex support · {relative(new Date(r.at))}</div>
+              <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-[color:var(--ink)]">{r.body}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>

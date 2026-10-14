@@ -105,6 +105,18 @@
 :global(.jf-blueprint .content) .taskLink { max-width: 100%; min-width: 0; text-transform: none; letter-spacing: 0; font-size: 12.5px; }
 :global(.jf-blueprint .content) .taskLinkTxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ── The answers (2026-10-14): the thread under the message, the box for the next ── */
+:global(.jf-blueprint .content) .thread { display: grid; gap: 8px; margin-top: 12px; }
+:global(.jf-blueprint .content) .reply {
+  border: 1.5px solid var(--hair); border-left: 3px solid var(--blueprint, #1854a0); border-radius: var(--radius);
+  background: #fff; padding: 10px 12px; min-width: 0;
+}
+:global(.jf-blueprint .content) .replyMeta { margin-bottom: 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted, #555); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .replyBody { font-size: 13.5px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .replyBox { display: grid; gap: 8px; margin-top: 12px; }
+:global(.jf-blueprint .content) .replyActs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .replySent { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--success-dark, #2c6335); }
+
 /* ── Mobile layer — LAST in the cascade ─────────────────────── */
 @media (max-width: 860px) {
   :global(.jf-blueprint .content) .fSearch,

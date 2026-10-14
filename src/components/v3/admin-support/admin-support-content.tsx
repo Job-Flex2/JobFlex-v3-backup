@@ -11,6 +11,12 @@
 // existing `updateTicketStatus` (src/actions/admin.ts), which whitelists the
 // four statuses — the column is a free String, so that guard is the only one.
 //
+// THE ANSWER (owner, 2026-10-14: "respond to the client from admin right
+// away"): under the message, the answers already given and a box to write the
+// next one — sent by email to whoever filed the ticket as a plain letter with
+// the ticket quoted under it (replyToSupportTicket), kept in the thread here
+// and on the contractor's own support page; an Open ticket turns In progress.
+//
 // The controls are components/v3/admin-users/admin-kit, and the vocabulary is
 // its admin-shared.module.css: same buttons, same estimate-style table, same
 // status badges, same hand-rolled sheet as /admin/users and /admin/plans.
@@ -21,7 +27,8 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
-import { updateTicketStatus } from "@/actions/admin";
+import { replyToSupportTicket, updateTicketStatus } from "@/actions/admin";
+import type { SupportReply } from "@/lib/supportReply";
 import { createTaskFromSupportTicket } from "@/actions/adminTasks";
 import { taskPath } from "@/lib/adminTasks/model";
 import shared from "@/components/v3/admin-users/admin-shared.module.css";
@@ -58,6 +65,10 @@ export interface SupportTicketDTO {
   unread: boolean;
   /** The task made from this ticket on /admin/tasks, if any. */
   task: { id: string; title: string; status: string } | null;
+  /** The answers already given, oldest first (lib/supportReplies). */
+  replies: SupportReply[];
+  /** Where an answer goes — whoever filed it, else the account's owner, else its billing email; null = nowhere. */
+  to: string | null;
 }
 
 export interface SupportCounts {
@@ -138,6 +149,7 @@ export function AdminSupportContent({
   now,
   initialTicketId = null,
   tasksAvailable = true,
+  signer = "JobFlex support",
 }: {
   tickets: SupportTicketDTO[];
   counts: SupportCounts;
@@ -147,6 +159,8 @@ export function AdminSupportContent({
   tasksAvailable?: boolean;
   /** ISO clock read in the server page — the anchor for every age. */
   now: string;
+  /** The name a reply is signed with — this admin's. */
+  signer?: string;
 }) {
   useAdminMotion(KIT_BTN_CLASS);
 
@@ -370,6 +384,7 @@ export function AdminSupportContent({
             task={madeTasks[selected.id] ?? selected.task}
             onTask={(t) => setMadeTasks((m) => ({ ...m, [selected.id]: t }))}
             tasksAvailable={tasksAvailable}
+            signer={signer}
           />
         ) : null}
       </Sheet>
@@ -387,17 +402,45 @@ function TicketDetail({
   task,
   onTask,
   tasksAvailable,
+  signer,
 }: {
   ticket: SupportTicketDTO;
   task: SupportTicketDTO["task"];
   onTask: (t: NonNullable<SupportTicketDTO["task"]>) => void;
   tasksAvailable: boolean;
+  signer: string;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(ticket.status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
+  // The answer: the thread so far, the one being written, and the last send.
+  const [replies, setReplies] = useState<SupportReply[]>(ticket.replies);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sentAt, setSentAt] = useState<string | null>(null);
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  async function sendReply() {
+    if (sending || !ticket.to) return;
+    setSending(true);
+    setReplyError(null);
+    try {
+      const r = await replyToSupportTicket(ticket.id, draft);
+      if (r.ok) {
+        setReplies((list) => [...list, r.reply]);
+        setDraft("");
+        setSentAt(r.reply.at);
+        setStatus(r.status);
+        router.refresh();
+      } else setReplyError(r.error);
+    } catch {
+      setReplyError("The reply did not go out. Check the connection and try again.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   // "Create task" (2026-10-11): a Support task on /admin/tasks with the
   // ticket's subject and message and a link back here. A second press — or a
@@ -453,6 +496,45 @@ function TicketDetail({
         </div>
 
         <div className={cx("msg")}>{ticket.body}</div>
+
+        {/* The answers so far, and the next one. */}
+        {replies.length ? (
+          <div className={cx("thread")} data-support-thread>
+            {replies.map((r) => (
+              <div key={r.id} className={cx("reply")}>
+                <div className={cx("replyMeta")}>
+                  {r.by} · {filedAt(r.at)} · to {r.to}
+                </div>
+                <div className={cx("replyBody")}>{r.body}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className={cx("replyBox")} data-support-reply>
+          <Field
+            label={ticket.to ? "Reply" : "Reply — no address to send to"}
+            htmlFor="ticket-reply"
+            hint={ticket.to ? `Goes by email to ${ticket.to} as a plain letter signed ${signer} · JobFlex support — no need to sign it — with the ticket quoted under it. Their reply comes back to support@jobflex.app.` : "Nobody is on this ticket and the account has no owner or billing email."}
+          >
+            <textarea
+              id="ticket-reply"
+              className={cx("in", "ta")}
+              rows={4}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Write the answer as you'd say it."
+              disabled={!ticket.to || sending}
+              data-support-reply-text
+            />
+          </Field>
+          <div className={cx("replyActs")}>
+            <button type="button" className={cx("btn", "btn-primary", "btn-sm")} onClick={sendReply} disabled={!ticket.to || sending || draft.trim().length < 2} data-support-send>
+              {sending ? "Sending…" : "Send the reply"}
+            </button>
+            {sentAt && !draft ? <span className={cx("replySent")} data-support-sent>Sent · {filedAt(sentAt)}</span> : null}
+          </div>
+          {replyError ? <Note tone="danger">{replyError}</Note> : null}
+        </div>
 
         {/* Without the task tables (not set up yet) there is nothing to link or make. */}
         {tasksAvailable ? (
