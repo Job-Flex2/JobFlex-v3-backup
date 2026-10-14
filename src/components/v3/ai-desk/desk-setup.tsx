@@ -27,8 +27,9 @@ export function DeskStatus({ desk, registration, onNumber }: { desk: DeskSetting
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   // The number it bought, else the line JobFlex assigned to it (calls only; texting keeps its own).
+  // A registration without a number (none started, or still being filed) says nothing about calls.
   const number = registration?.number ?? desk.assigned?.number ?? null;
-  const calls = registration?.calls ?? (desk.assigned ? { on: true, go: desk.assigned.go, phone: desk.assigned.phone } : null);
+  const calls = registration?.number ? registration.calls : desk.assigned ? { on: true, go: desk.assigned.go, phone: desk.assigned.phone } : (registration?.calls ?? null);
   const pickVoice = async (next: DeskVoice) => {
     if (next === voice || busy) return;
     const prev = voice;
