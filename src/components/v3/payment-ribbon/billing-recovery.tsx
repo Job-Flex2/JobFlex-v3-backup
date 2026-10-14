@@ -19,7 +19,7 @@ export function BillingRecovery({ isOwner, pageLabel, status, blocked = false }:
   // The Free plan (lib/freePlan) is a plan, not a problem: the subscription
   // page says "Free" in its hero and offers the plans. The card still stands
   // in front of a page Free does not open (the gate passes pageLabel).
-  const onFree = ["CANCELED", "FREE"].includes(status ?? "") && !pageLabel;
+  const onFree = ["CANCELED", "TRIAL_ENDED", "FREE"].includes(status ?? "") && !pageLabel;
   const needed = !onFree && (blocked || ["PAST_DUE", "UNPAID", "CANCELED", "EXPIRED", "TRIAL_ENDED"].includes(status ?? ""));
   const [busy, setBusy] = useState(needed);
   const [error, setError] = useState<string | null>(null);
@@ -81,11 +81,11 @@ export function BillingRecoveryCard({ isOwner, state, pageLabel, busy, error, ca
   const owner = isOwner && state?.isOwner;
   const kind = state?.kind;
   const title = !state ? "Checking your subscription" : kind === "payment" ? "Payment needs attention" :
-    kind === "trial-ended" ? "Your trial has ended" : kind === "canceled" ? "You're on the Free plan" :
+    kind === "trial-ended" || kind === "canceled" ? "You're on the Free plan" :
     kind === "active" ? "Your plan is active" : "Your plan access has expired";
   const details = !state ? "We're checking the latest billing status before asking you to take action." :
     kind === "payment" ? (owner ? state.reason : "The payment for this workspace's plan did not go through. Ask the account owner to resolve it.") :
-    kind === "trial-ended" ? "Choose a paid plan to continue using your tools. Your saved work is still here." :
+    kind === "trial-ended" ? `${pageLabel ? `${pageLabel} isn't on the Free plan. ` : ""}Your trial ended and your account moved to the Free plan — everything you made is still here. Pick a plan to open your tools again.` :
     kind === "canceled" ? state.reason || `${pageLabel ? `${pageLabel} isn't on the Free plan.` : "Your account is on the Free plan."} Your proposals, clients and jobs are all here — choose a plan to open your tools again.` :
     kind === "active" ? "Your subscription is up to date. Your available tools will reopen when the page refreshes." :
     "The access period recorded for this plan has ended. If you already renewed or were given ongoing access, check the status again or contact JobFlex support.";

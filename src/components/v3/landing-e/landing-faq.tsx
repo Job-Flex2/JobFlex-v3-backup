@@ -48,7 +48,7 @@ const cardQuestions = (days: number): Record<"card" | "cardless", Faq> => ({
   },
   cardless: {
     q: "Do I need a credit card to start?",
-    a: `No. Confirm your email to start your ${days}-day free trial. Add a card before it ends to keep your plan; without one the workspace turns read-only and nothing is charged.`,
+    a: `No. Confirm your email to start your ${days}-day free trial. Add a card before it ends to keep your plan; without one your account moves to the free plan, your work stays and nothing is charged.`,
   },
 });
 
@@ -68,7 +68,7 @@ function questions(variant: LandingVariantKey | undefined, requiresCard: boolean
     data,
     {
       q: `What happens after ${days} days?`,
-      a: requiresCard ? "Your selected plan renews automatically at the price and billing interval shown in checkout unless you cancel before the trial ends. Cancel anytime from Settings → Billing: you keep the plan to the end of the period you've paid for, then your account moves to the free plan — no more charges, and your work stays." : "With a card added, your selected plan starts billing at the disclosed price when the trial ends. Without a card, nothing is charged and your saved work stays readable.",
+      a: requiresCard ? "Your selected plan renews automatically at the price and billing interval shown in checkout unless you cancel before the trial ends. Cancel anytime from Settings → Billing: you keep the plan to the end of the period you've paid for, then your account moves to the free plan — no more charges, and your work stays." : "With a card added, your selected plan starts billing at the disclosed price when the trial ends. Without a card, nothing is charged: your account moves to the free plan and your work stays.",
     },
     {
       q: "Does it work from my phone?",

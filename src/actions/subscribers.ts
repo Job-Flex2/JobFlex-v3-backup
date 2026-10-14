@@ -685,7 +685,7 @@ async function accountDefaultCurrency(stripe: Stripe): Promise<string | null> {
 /** A Stripe row is the org's Free plan when the org's own record still names
  *  this very subscription and holds it as ended (lib/freePlan). */
 function isFreeRecord(status: string, record: { status: string; provider: string; externalSubId: string | null } | undefined, subId: string): boolean {
-  return status === "CANCELED" && !!record && record.provider === "STRIPE" && record.externalSubId === subId && onFreePlan(record);
+  return onFreePlan({ status }) && !!record && record.provider === "STRIPE" && record.externalSubId === subId && onFreePlan(record);
 }
 
 // ── The platform's own record: dev without Stripe, or Stripe unreachable ───

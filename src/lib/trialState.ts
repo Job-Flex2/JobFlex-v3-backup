@@ -133,7 +133,12 @@ export async function trialEndedResponse(orgId: string): Promise<Response | null
   return Response.json({ ok: false, error: TRIAL_ENDED_MESSAGE, trialEnded: true }, { status: 403 });
 }
 
-/** True while the organization is past a card-less trial with no card. */
+/** Never, since 2026-10-14 (owner): a card-less trial that ran out with no
+ *  card is on the Free plan (lib/freePlan) — it reads and writes within the
+ *  "free" catalog row's limits, and lib/planStatus closes everything paid,
+ *  exactly as for a cancelled company. The write lock (lib/trialLock) and its
+ *  callers stay wired; this answer keeps it open. */
 export async function isTrialWriteLocked(orgId: string): Promise<boolean> {
-  return (await cardlessTrialState(orgId))?.kind === "ended";
+  void orgId;
+  return false;
 }

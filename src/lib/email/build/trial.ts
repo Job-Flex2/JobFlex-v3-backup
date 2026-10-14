@@ -40,7 +40,7 @@ export function buildTrialReminder(i: TrialReminderInput): EmailDoc {
       today
         ? `Hi ${first} — your ${i.trialDays ?? 7}-day trial of ${i.planName} ends today, and there is no card on file yet.`
         : `Hi ${first} — your ${i.trialDays ?? 7}-day trial of ${i.planName} ends on ${date}, and there is no card on file yet.`,
-      `Add a card to keep your workspace open: ${i.planName} carries on at ${i.price}, charged when the trial ends. Without one the workspace turns read-only — everything you made stays, and a card brings it back.`,
+      `Add a card to keep your workspace open: ${i.planName} carries on at ${i.price}, charged when the trial ends. Without one your account moves to the Free plan — everything you made stays, and a card brings ${i.planName} back.`,
     ],
     box,
     cta: { label: "Add a card", href: i.href },

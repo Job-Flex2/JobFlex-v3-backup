@@ -19,8 +19,9 @@
 //     lock, and gets no "add a card" mail;
 //   · webhooks delivered again or out of order do not move a company from
 //     Free back to its paid plan, nor from a new paid plan back to Free;
-//   · a complimentary plan that runs out onto "free" (status FREE) is the
-//     Free plan too (owner, 2026-10-14): the same 16 answers as a cancelled
+//   · a complimentary plan that runs out onto "free" (status FREE) and a
+//     card-less trial that runs out with no card (TRIAL_ENDED) are the Free
+//     plan too (owner, 2026-10-14): the same 16 answers as a cancelled
 //     company; a grant still running keeps its doors open.
 import { actAs, check, outcome, summary } from "./_actionHarness";
 import { randomBytes } from "node:crypto";
@@ -39,6 +40,7 @@ import { companyIsPaying } from "../../src/lib/sms/registration";
 import { cardlessTrialState, isTrialWriteLocked } from "../../src/lib/trialState";
 import { onFreePlan, freeSwitchBooked } from "../../src/lib/freePlan";
 import { endPlanGrant, writePlanGrant, type PlanGrant } from "../../src/lib/planGrant";
+import { trialCapScope } from "../../src/lib/trialMeter";
 import { measureRoofInstant } from "../../src/actions/roofMeasurement";
 import { requestHvacPermitReport, readHvacNameplate } from "../../src/actions/hvacEstimator";
 import { startPhoneVerification } from "../../src/actions/sms";
@@ -234,9 +236,23 @@ async function main() {
     const kitH = await setup(H);
     const doorsGrant = await doors(H, kitH.est, kitH.photo);
 
-    console.log("── the doors, a grant that ran out, and one running ──\n" + keys.map((k) => `${k.padEnd(12)} grant→free ${String(doorsGrantFree[k]).slice(0, 40).padEnd(42)} grant running ${String(doorsGrant[k]).slice(0, 40)}`).join("\n"));
+    // ── a card-less trial runs out with no card: TRIAL_ENDED is the Free plan ──
+    const E = await company("E");
+    const subE = `sub_${tag}_e`;
+    const endE = now - 3600;
+    await db.subscription.create({ data: { organizationId: E.org.id, plan: "PROFESSIONAL", status: "TRIALING", provider: "STRIPE", externalSubId: subE, externalCustomerId: `cus_${tag}`, trialEndsAt: new Date(endE * 1000), currentPeriodEnd: new Date(endE * 1000) } });
+    await db.syncState.create({ data: { key: `cardlessTrial:${E.org.id}`, cursor: JSON.stringify({ subId: subE, customerId: `cus_${tag}`, planSlug: "professional", interval: "MONTH", customPages: [], mode: "test", trialDays: 7, startedAt: new Date((endE - 7 * 86400) * 1000).toISOString(), endsAt: new Date(endE * 1000).toISOString() }) } });
+    await markSubscriptionCanceled(stripeSub(subE, E.org.id, { status: "canceled", ended_at: endE, canceled_at: endE, trial_end: endE, metadata: { organizationId: E.org.id, jf_cardless: "1" }, periodEnd: endE }));
+    const rowE = await db.subscription.findUnique({ where: { organizationId: E.org.id } });
+    check("a card-less trial that ran out with no card is TRIAL_ENDED — the Free plan", rowE?.status === "TRIAL_ENDED" && onFreePlan(rowE), rowE?.status);
+    check("…not read-only: no write lock, and the trial's own ceilings give way to Free's limits", !(await isTrialWriteLocked(E.org.id)) && (await trialCapScope(E.org.id)) === "none");
+    const kitE = await setup(E);
+    const doorsTrialEnded = await doors(E, kitE.est, kitE.photo);
+
+    console.log("── the doors, Free in its three shapes ──\n" + keys.map((k) => `${k.padEnd(12)} grant→free ${String(doorsGrantFree[k]).slice(0, 40).padEnd(42)} trial ended ${String(doorsTrialEnded[k]).slice(0, 40).padEnd(42)} grant running ${String(doorsGrant[k]).slice(0, 40)}`).join("\n"));
     for (const k of keys) {
       check(`door "${k}": status FREE (a grant ran out) answers exactly as a cancelled company`, JSON.stringify(doorsGrantFree[k]) === JSON.stringify(doorsCanceled[k]), { free: doorsGrantFree[k], canceled: doorsCanceled[k] });
+      check(`door "${k}": a card-less trial that ran out answers exactly as a cancelled company`, JSON.stringify(doorsTrialEnded[k]) === JSON.stringify(doorsCanceled[k]), { ended: doorsTrialEnded[k], canceled: doorsCanceled[k] });
     }
     const grantOpen = (["roof", "coolcalc", "photoAi", "phoneCode", "parcelTiles", "planOpen", "texts"] as const).filter((k) => doorsGrant[k] !== doorsPaying[k]);
     check("a grant still running keeps its paid doors open, as a paying company", grantOpen.length === 0 && doorsGrant.planEnded === false && doorsGrant.pages === doorsPaying.pages, grantOpen);

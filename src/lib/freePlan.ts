@@ -10,6 +10,8 @@
 // "free" catalog row, the paid services, texting, the parcel tiles):
 //   · CANCELED    — the subscription ended (the owner cancelled, support
 //                   ended it, Stripe gave up on payment);
+//   · TRIAL_ENDED — a card-less trial ran out with no card (owner,
+//                   2026-10-14: Free, no longer a read-only lock);
 //   · FREE        — a complimentary plan ran out onto "free" (lib/planGrant).
 // Free is how that state is NAMED — on the subscription page, the settings,
 // the sidebar, the emails and the admin.
@@ -41,7 +43,7 @@ export type FreePlanRow = {
 const at = (d: Date | string | null | undefined): Date | null => (d ? new Date(d) : null);
 
 /** The mirror statuses that are the Free plan (see the head of this file). */
-export const FREE_STATUSES = ["CANCELED", "FREE"] as const;
+export const FREE_STATUSES = ["CANCELED", "TRIAL_ENDED", "FREE"] as const;
 
 /** The company is on the Free plan. */
 export function onFreePlan(sub: Pick<FreePlanRow, "status"> | null | undefined): boolean {

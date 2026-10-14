@@ -261,7 +261,7 @@ export function topicDraft(key: TopicKey, p: ContractorProfile, now = Date.now()
         subject: d > 1 ? `Your JobFlex trial ends in ${d} days` : d === 1 ? "Your JobFlex trial ends tomorrow" : "Your JobFlex trial ends today",
         body: join(
           `Hi ${first} — your free trial of ${p.account.plan} ${ends ? `ends on ${ends}` : "is almost over"}. ${p.built.clients + p.built.proposals + p.built.jobs > 0 ? madeLine(p).replace("is still there, exactly as you left it", "stays right where it is") : ""}`.trim(),
-          `Add a card before then to keep ${p.business} running${price}. Without one, the workspace turns read-only and nothing is charged.`,
+          `Add a card before then to keep ${p.business} running${price}. Without one, the account moves to the Free plan and nothing is charged.`,
         ),
         cta: { label: "Add a card", path: "/dashboard/trial" },
       };
@@ -293,7 +293,7 @@ export function topicDraft(key: TopicKey, p: ContractorProfile, now = Date.now()
     case "come-back":
       return {
         subject: `${p.business} is still here`,
-        body: p.account.kind === "canceled"
+        body: p.account.kind === "canceled" || p.account.kind === "trial-ended"
           // On the Free plan since the subscription ended (lib/freePlan): coming back is from Free.
           ? join(`Hi ${first} — ${p.business} is on the Free plan now, and ${afterDash(madeLine(p))}`, `If you'd like ${p.account.plan} back, it picks up right where you stopped${price} — straight from Free, nothing to set up again.`)
           : join(`Hi ${first} — ${afterDash(madeLine(p))}`, `If you'd like to pick it back up, you can carry on right where you stopped${price}.`),
@@ -355,7 +355,7 @@ export function accountWords(p: ContractorProfile): string {
   const a = p.account;
   switch (a.kind) {
     case "trialing": return `on a free trial of ${a.plan}${a.price ? ` (${a.price} after)` : ""}, ${plural(a.daysLeft ?? 0, "day", "days")} left, ${a.hasCard ? "card on file" : "no card yet"}`;
-    case "trial-ended": return `free trial of ${a.plan} ended with no card — the workspace is read-only`;
+    case "trial-ended": return `free trial of ${a.plan} ended with no card — now on the Free plan, nothing is billed`;
     case "paying": return `paying customer on ${a.plan}${a.price ? ` (${a.price})` : ""}`;
     case "past-due": return `subscription to ${a.plan} is past due — a payment failed`;
     case "canceled": return `on the Free plan since canceling ${a.plan} — nothing is billed`;

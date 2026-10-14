@@ -345,7 +345,7 @@ function stateChip(p: NonNullable<ContractorMailView["profile"]>): string {
   switch (a.kind) {
     case "trialing": return `Trial · ${a.daysLeft ?? 0} ${a.daysLeft === 1 ? "day" : "days"} left · ${a.hasCard ? "card on file" : "no card"}`;
     case "paying": return `Paying · ${a.plan}${a.price ? ` ${a.price}` : ""}`;
-    case "trial-ended": return `Trial ended${a.endedAt ? ` ${DAY.format(new Date(a.endedAt))}` : ""} · no card`;
+    case "trial-ended": return `Free · trial ended${a.endedAt ? ` ${DAY.format(new Date(a.endedAt))}` : ""}`;
     case "past-due": return "Payment failed";
     case "canceled": return `Free · was ${a.plan}`;
     case "free": return "Free plan";

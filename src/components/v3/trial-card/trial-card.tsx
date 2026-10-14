@@ -4,7 +4,8 @@
 //   · TrialRibbon — over every dashboard page. Early in the trial a calm
 //     "N days free · No card needed" with a quiet "Add a card early" link; in
 //     the last days "N days left · Add a card to keep access" with the button;
-//     "Trial ended · read-only" with the way back. A card already on file
+//     "Trial ended · you're on Free" with the way back (owner, 2026-10-14:
+//     a trial that ran out is the Free plan, no longer read-only). A card already on file
 //     turns it quiet. Every way to a card leads to /dashboard/trial first.
 //   · TrialSheet — /dashboard/trial: when the trial ends, the plan and its
 //     price, that nothing is charged before then, and the one action. Only
@@ -150,7 +151,7 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
   // The early step (lib/trialNotice): nothing is due, so nothing is asked.
   const early = !ended && !toFree && !view.hasCard && view.daysLeft > TRIAL_NOTICE_DAYS;
   const tone = ended ? s.isEnded : toFree || view.hasCard ? s.isCard : early ? s.isEarly : s.isSoon;
-  const stamp = ended ? "Trial ended" : toFree ? "Switching to Free" : view.hasCard ? "Card on file" : early ? freeText(view.daysLeft) : daysText(view.daysLeft);
+  const stamp = ended ? "On Free" : toFree ? "Switching to Free" : view.hasCard ? "Card on file" : early ? freeText(view.daysLeft) : daysText(view.daysLeft);
   const switchDay = DATE.format(new Date(view.endsAt));
   const action =
     toFree ? (
@@ -165,16 +166,16 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
       </Link>
     ) : (
       <Link className={s.button} href={"/dashboard/trial" as Route}>
-        {ended ? "Add a card" : "Add card"}
+        {ended ? "Pick a plan" : "Add card"}
       </Link>
     );
   const dock = (
-    <div className={`${s.dock} ${tone} ${ended ? "" : s.dockWide}`} role={ended ? "alert" : "status"}>
+    <div className={`${s.dock} ${tone} ${ended ? "" : s.dockWide}`} role="status">
       <div className={s.dockLead}>
         <span className={s.stamp}>{stamp}</span>
         <p className={s.dockText}>
           {ended
-            ? "Read-only until a card is added"
+            ? "Your trial ended — you're on Free"
             : toFree
               ? `Switches to Free on ${switchDay}`
               : view.hasCard
@@ -195,12 +196,12 @@ export function TrialRibbon({ view, isOwner, orgId, only }: { view: TrialView; i
   return (
     <>
     {dock}
-    <div className={`${s.ribbon} ${tone}`} role={ended ? "alert" : "status"}>
+    <div className={`${s.ribbon} ${tone}`} role="status">
       <span className={s.stamp}>{stamp}</span>
       <p className={s.ribbonText}>
         {ended ? (
           <>
-            <b>Add a card to continue.</b> <span>Your workspace is read-only until then — nothing is lost.</span>
+            <b>Your trial ended — you&rsquo;re on Free.</b> <span>Pick a plan to get {view.planName} back.</span>
           </>
         ) : toFree ? (
           <>
@@ -262,11 +263,11 @@ export function TrialSheet({
   // A ceiling was reached: the sheet leads with it (owner, 2026-10-02).
   const hit = !ended && !view.hasCard && caps ? capHit : null;
   const toFree = !ended && view.toFree;
-  const title = ended ? "Add a card to continue" : toFree ? "Your plan switches to Free" : view.hasCard ? "Your card is on file" : hit ? TRIAL_CAP_TITLE : "Add a card to keep access";
+  const title = ended ? "Your trial ended — you're on Free" : toFree ? "Your plan switches to Free" : view.hasCard ? "Your card is on file" : hit ? TRIAL_CAP_TITLE : "Add a card to keep access";
   const lede = toFree
     ? `You cancelled during the trial. On ${when} your account moves to the Free plan and nothing is charged — your work stays. Changed your mind? Keep ${view.planName} from Settings → Billing.`
     : ended
-    ? `Your trial ended on ${when}. Everything you made is still here and readable; add a card and ${view.planName} starts again today — no new trial.`
+    ? `Your trial ended on ${when} and your account moved to the Free plan: everything you made is still here, and you keep working within the Free plan's limits. Add a card and ${view.planName} is back today — no new trial — or pick another plan.`
     : view.hasCard
       ? `Nothing to do. The trial runs until ${when}, then ${view.planName} begins and the card is charged.`
       : hit
@@ -350,10 +351,15 @@ export function TrialSheet({
                 </p>
               ) : null}
               <button type="button" className={s.button} onClick={() => void go()} disabled={busy} aria-busy={busy || undefined}>
-                {busy ? "Opening…" : ended && view.offer ? `Add a card with ${view.offer.pct}% off` : ended ? "Add a card to continue" : "Add a card"}
+                {busy ? "Opening…" : ended && view.offer ? `Get ${view.planName} back — ${view.offer.pct}% off` : ended ? `Get ${view.planName} back` : "Add a card"}
               </button>
+              {ended ? (
+                <Link className={s.quiet} href={"/dashboard/upgrade" as Route}>
+                  See every plan
+                </Link>
+              ) : null}
               <Link className={s.quiet} href={"/dashboard" as Route}>
-                {ended ? "Look around first" : "Later"}
+                {ended ? "Stay on Free" : "Later"}
               </Link>
             </div>
           ) : (

@@ -109,14 +109,16 @@ async function mutateMeter(orgId: string, change: (m: TrialMeter) => TrialMeter 
 
 // ── the ceilings ───────────────────────────────────────────────────────────
 
-/** none — the plan's limits apply (no card-less trial, or a card on file);
- *  capped — card-less, no card: TRIAL_CAPS apply; ended — past the end with no card. */
+/** none — the plan's limits apply (no card-less trial, a card on file, or a
+ *  trial that ran out — the Free plan's limits then, lib/freePlan);
+ *  capped — card-less, no card: TRIAL_CAPS apply. "ended" is no longer
+ *  answered (owner, 2026-10-14). */
 export type TrialCapScope = "none" | "capped" | "ended";
 
 export async function trialCapScope(orgId: string): Promise<TrialCapScope> {
   const state = await cardlessTrialState(orgId).catch(() => null);
   if (!state) return "none";
-  if (state.kind === "ended") return "ended";
+  if (state.kind === "ended") return "none";
   return state.hasCard ? "none" : "capped";
 }
 
