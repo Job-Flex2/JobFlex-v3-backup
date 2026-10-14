@@ -1600,6 +1600,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
                 <Field label="Storeys" path="storeys" model={model} kind="num" onChange={onTyped} />
                 <Field label="Year built" path="yearBuilt" model={model} kind="num" onChange={onTyped} placeholder="1998" />
                 <Field label="Windows" path="windowType" model={model} kind="select" onChange={onTyped} options={[["single", "Single pane"], ["double", "Double pane"], ["double-lowe", "Double, low-E"], ["triple", "Triple pane"]]} />
+                <Field label="Window area sq ft" path="windowSqft" model={model} kind="num" onChange={onTyped} placeholder={`${Math.round((model.conditionedSqft || 0) * model.windowToFloor) || 280} assumed`} />
                 <Field label="Foundation" path="foundation" model={model} kind="select" onChange={onTyped} options={[["slab", "Slab"], ["crawl-vented", "Crawlspace, vented"], ["crawl-sealed", "Crawlspace, sealed"], ["basement-unconditioned", "Basement, unconditioned"], ["basement-conditioned", "Basement, conditioned"]]} />
               </div>
             </div>}
@@ -1609,6 +1610,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
                 <Field label="Year built" path="yearBuilt" model={model} kind="num" onChange={onTyped} placeholder="1998" />
                 <Field label="Ceiling ft" path="ceilingHeightFt" model={model} kind="num" onChange={onTyped} />
                 <Field label="Windows" path="windowType" model={model} kind="select" onChange={onTyped} options={[["single", "Single pane"], ["double", "Double pane"], ["double-lowe", "Double, low-E"], ["triple", "Triple pane"]]} />
+                <Field label="Window area sq ft" path="windowSqft" model={model} kind="num" onChange={onTyped} placeholder="assumed" />
                 <Field label="Wall insulation" path="wallInsulation" model={model} kind="select" onChange={onTyped} options={[["none", "None"], ["r11", "R-11"], ["r13", "R-13"], ["r19", "R-19"], ["r21", "R-21"]]} />
                 <Field label="Attic insulation" path="ceilingInsulation" model={model} kind="select" onChange={onTyped} options={[["none", "None"], ["r11", "R-11"], ["r19", "R-19"], ["r30", "R-30"], ["r38", "R-38"], ["r49", "R-49"]]} />
                 <Field label="Shading" path="shading" model={model} kind="select" onChange={onTyped} options={[["none", "None — full sun"], ["some", "Some"], ["heavy", "Heavy trees"]]} />

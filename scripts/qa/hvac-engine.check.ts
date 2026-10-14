@@ -6,7 +6,9 @@
 // rules, the heat-pump capacity curve, the NEC 220.83 service check and the
 // duct rules answer known cases. Not an ACCA comparison — that is the
 // twenty-real-jobs gate in the plan.
-import { computeBlockLoad, heatingLoadAt } from "../../src/lib/hvac/load";
+import { computeBlockLoad, ENGINE_VERSION, heatingLoadAt, loadLevers } from "../../src/lib/hvac/load";
+import { designConditionsFor } from "../../src/lib/hvac/designConditions";
+import { humidityClass } from "../../src/lib/hvac/data/defaults";
 import { balancePointF, evaluateItem, heatPumpCapacityAt, selectSystem } from "../../src/lib/hvac/select";
 import { ductChecks, electricalCheck, gasCheck, complianceChecks, sizingCheck } from "../../src/lib/hvac/checks";
 import { ductCapacity, equivalentRoundIn, parseDuctSize, roundDuctCfm, staticAtAirflow } from "../../src/lib/hvac/ductCalc";
@@ -67,13 +69,47 @@ function house(over: Partial<BuildingModel> = {}): BuildingModel {
   const l = computeBlockLoad(house(), dallas);
   ok("Dallas 2,000 sq ft 1995 house: cooling 30–45 kBTU/h", between(l.coolingTotalBtuh, 30000, 45000), `${l.coolingTotalBtuh}`);
   ok("…heating 26–45 kBTU/h (13–22 BTU/h per sq ft)", between(l.heatingBtuh, 26000, 45000), `${l.heatingBtuh}`);
-  ok("…humid climate carries latent load", l.coolingLatentBtuh >= 3000 && l.sensibleHeatRatio <= 0.9, `latent ${l.coolingLatentBtuh}, SHR ${l.sensibleHeatRatio}`);
+  // Summer infiltration at Manual J's rate (half of winter's) leaves an average house near SHR 0.9 — the figure Manual J itself is known for.
+  ok("…humid climate carries latent load", l.coolingLatentBtuh >= 2500 && l.sensibleHeatRatio <= 0.92, `latent ${l.coolingLatentBtuh}, SHR ${l.sensibleHeatRatio}`);
   ok("…loads rounded to 500", l.heatingBtuh % 500 === 0 && l.coolingTotalBtuh % 500 === 0);
   ok("…airflow 350 CFM per ton in a humid climate", l.cfmPerTon === 350);
   const s = computeBlockLoad(house({ state: "WA", county: "King", conditionedSqft: 1800, yearBuilt: 1972, windowType: "single", wallInsulation: "r11", ceilingInsulation: "r19", tightness: "leaky", foundation: "crawl-vented", ducts: { location: "crawl", condition: "fair" } }), seattle);
   ok("Seattle 1,800 sq ft 1972 house: heating 40–65 kBTU/h", between(s.heatingBtuh, 40000, 65000), `${s.heatingBtuh}`);
   ok("…cooling 15–30 kBTU/h", between(s.coolingTotalBtuh, 15000, 30000), `${s.coolingTotalBtuh}`);
   ok("…dry climate: no infiltration latent", s.components.find((c) => c.name.startsWith("Infiltration"))!.coolingLatentBtuh === 0);
+}
+
+// ── seasonal infiltration and the measured glass (2026-10-14, after "bad sizing" from the field) ──
+{
+  const l = computeBlockLoad(house(), dallas);
+  const inf = l.components.find((c) => c.name.startsWith("Infiltration"))!;
+  const m = inf.name.match(/(\d+) CFM winter \/ (\d+) CFM summer/);
+  ok("infiltration names a winter and a summer rate", !!m, inf.name);
+  ok("summer air changes run about half of winter's (Manual J Table 5A)", !!m && between(Number(m[2]) / Number(m[1]), 0.5, 0.56), m ? `${m[1]} / ${m[2]}` : "");
+  ok("a 2,000 sq ft 'average' house: ~0.4 ACH winter, ~0.21 summer", !!m && between(Number(m[1]) * 60 / 16000, 0.38, 0.42) && between(Number(m[2]) * 60 / 16000, 0.2, 0.23), m ? `${(Number(m[1]) * 60 / 16000).toFixed(2)} / ${(Number(m[2]) * 60 / 16000).toFixed(2)}` : "");
+  const big = computeBlockLoad(house({ conditionedSqft: 3200 }), dallas);
+  const mb = big.components.find((c) => c.name.startsWith("Infiltration"))!.name.match(/(\d+) CFM winter/);
+  ok("a 3,200 sq ft house turns over less of its air (~0.32 ACH winter, the table's shape)", !!mb && between(Number(mb[1]) * 60 / 25600, 0.29, 0.34), mb ? (Number(mb[1]) * 60 / 25600).toFixed(2) : "");
+  ok("the assumption says so in words", l.assumptions.some((x) => /air changes an hour in winter/.test(x) && /Table 5A/.test(x)));
+  // the glass
+  const assumed = computeBlockLoad(house(), dallas);
+  const counted = computeBlockLoad(house({ windowSqft: 420 }), dallas);
+  ok("a counted glass area outranks the era ratio (420 sq ft > 14% of 2,000)", counted.coolingTotalBtuh > assumed.coolingTotalBtuh && /Windows · 420 sq ft/.test(counted.components[0].name) && !/assumed/.test(counted.components[0].name), `${assumed.coolingTotalBtuh} → ${counted.coolingTotalBtuh}`);
+  ok("an assumed window area says what 50 sq ft of glass is worth here", assumed.assumptions.some((x) => /Window area assumed at 14%/.test(x) && /every 50 sq ft of glass is about [\d,]+ BTU\/h/.test(x)) && !counted.assumptions.some((x) => /Window area assumed/.test(x)));
+  const levers = loadLevers(house(), dallas);
+  ok("the levers line: more glass, the attic ducts, one tightness class", levers.length === 1 && /quarter more glass/.test(levers[0]) && /ducts in the attic/.test(levers[0]) && /one tightness class better/.test(levers[0]), levers[0]);
+  ok("…and a house with ducts inside and no tighter class to go has fewer levers", /glass/.test(loadLevers(house({ ducts: { location: "conditioned", condition: "good" }, tightness: "very-tight" }), dallas)[0] ?? "") && !/ducts in the/.test(loadLevers(house({ ducts: { location: "conditioned", condition: "good" }, tightness: "very-tight" }), dallas)[0] ?? ""));
+  ok("the engine version moved", /0\.2/.test(ENGINE_VERSION));
+}
+
+// ── where the county's air and its station are not the metro's ──
+{
+  ok("El Paso is a desert, whatever Texas is", humidityClass("TX", "El Paso County") === "dry" && designConditionsFor("TX", "El Paso").conditions.grainsDiff === 0);
+  ok("Lubbock and Midland are dry plains (moderate); Harris stays humid", humidityClass("TX", "Lubbock") === "moderate" && humidityClass("TX", "Midland") === "moderate" && humidityClass("TX", "Harris") === "humid");
+  const sj = designConditionsFor("CA", "Santa Clara").conditions;
+  ok("Santa Clara takes San Jose's 85 / 34, not the ridge's 97 / 27", sj.coolingF === 85 && sj.heatingF === 34 && /San Jose/.test(sj.source));
+  const tus = designConditionsFor("AZ", "Pima").conditions;
+  ok("Pima takes Tucson's 104 / 32, not the desert-and-mountain 109 / 22", tus.coolingF === 104 && tus.heatingF === 32);
 }
 
 // ── monotonic behaviour ──
@@ -103,7 +139,10 @@ function house(over: Partial<BuildingModel> = {}): BuildingModel {
 }
 
 // ── Manual S rules ──
-const load = computeBlockLoad(house(), dallas);
+// The selection checks were written against the 0.1 engine's 37,000 BTU/h Dallas
+// load (the 0.2 engine's summer infiltration brings the same house to ~33,500);
+// they test the selector's windows and ranking, so the total is pinned.
+const load = { ...computeBlockLoad(house(), dallas), coolingTotalBtuh: 37000, coolingTons: 3.08 };
 const hp = (tons: number, over: Partial<CatalogItem> = {}): CatalogItem => ({ id: `hp${tons}`, kind: "heat-pump", brand: "Acme", model: `HP${tons * 12}`, refrigerant: "R-454B", staging: "single", tons, seer2: 15, hspf2: 8, source: "shop", ...over });
 {
   const small = evaluateItem(hp(2), load, dallas, house());

@@ -98,8 +98,25 @@ export const SHADING_FACTOR = { none: 1, some: 0.75, heavy: 0.5 } as const;
 const HUMID = new Set(["FL", "LA", "MS", "AL", "GA", "SC", "NC", "TX", "AR", "TN", "VA", "MD", "DE", "NJ", "HI", "PR", "GU", "VI", "MP", "DC"]);
 const DRY = new Set(["AZ", "NV", "UT", "NM", "CO", "WY", "ID", "MT", "CA", "OR", "WA", "AK"]);
 
-export function humidityClass(state: string): HumidityClass {
+/** Counties whose air is nothing like their state's: the Trans-Pecos is a
+ *  desert and the Panhandle, South Plains and Permian are dry plains, while
+ *  Texas as a state reads "humid" (2026-10-14, El Paso came out at 45 grains). */
+const COUNTY_HUMIDITY: Record<string, Record<string, HumidityClass>> = {
+  TX: {
+    "el paso": "dry", hudspeth: "dry", culberson: "dry", "jeff davis": "dry", presidio: "dry", brewster: "dry", reeves: "dry", pecos: "dry", terrell: "dry", ward: "dry", winkler: "dry", loving: "dry", crane: "dry", upton: "dry",
+    midland: "moderate", ector: "moderate", andrews: "moderate", martin: "moderate", howard: "moderate", glasscock: "moderate", reagan: "moderate", irion: "moderate", "tom green": "moderate", sterling: "moderate", coke: "moderate",
+    lubbock: "moderate", hale: "moderate", lamb: "moderate", hockley: "moderate", lynn: "moderate", terry: "moderate", yoakum: "moderate", gaines: "moderate", dawson: "moderate", crosby: "moderate", floyd: "moderate", swisher: "moderate", castro: "moderate", parmer: "moderate", bailey: "moderate", cochran: "moderate",
+    potter: "moderate", randall: "moderate", "deaf smith": "moderate", oldham: "moderate", hartley: "moderate", dallam: "moderate", sherman: "moderate", moore: "moderate", hutchinson: "moderate", carson: "moderate", armstrong: "moderate", donley: "moderate", gray: "moderate", hansford: "moderate", ochiltree: "moderate",
+    taylor: "moderate", nolan: "moderate", mitchell: "moderate", scurry: "moderate", fisher: "moderate", jones: "moderate", "val verde": "moderate",
+  },
+};
+export function humidityClass(state: string, county?: string | null): HumidityClass {
   const st = state.toUpperCase();
+  if (county) {
+    const key = county.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\b(county|parish)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+    const hit = COUNTY_HUMIDITY[st]?.[key];
+    if (hit) return hit;
+  }
   if (HUMID.has(st)) return "humid";
   if (DRY.has(st)) return "dry";
   return "moderate";

@@ -66,7 +66,7 @@ function median(nums: number[]): number {
 export function designConditionsFor(state: string, county: string | undefined | null, elevationFt = 0): DesignLookup {
   const st = state.toUpperCase();
   const rows = rowsFor(st);
-  const humidity = humidityClass(st);
+  const humidity = humidityClass(st, county);
   const base = { state: st, humidity, grainsDiff: GRAINS[humidity], elevationFt: Math.round(elevationFt), source: DESIGN_TEMPS_SOURCE, verifiedOn: DESIGN_TEMPS_VERIFIED_ON };
   if (!rows.length) {
     return {
@@ -156,12 +156,17 @@ const METRO_STATION: Record<string, Record<string, { station: string; coolingF: 
     "san diego": { station: "San Diego (Miramar / Lindbergh)", coolingF: 88, heatingF: 43, limitFrom: "Borrego / Palomar", note: "the coast runs ~83 °F, the inland valleys ~95 °F — set the address's own figures." },
     "san bernardino": { station: "San Bernardino", coolingF: 104, heatingF: 34, limitFrom: "Baker / Big Bear", note: "the high desert and the mountains differ — set the address's own figures." },
     riverside: { station: "Riverside", coolingF: 101, heatingF: 36, limitFrom: "Palm Desert / Mt San Jacinto", note: "the Coachella Valley runs ~112 °F — set the address's own figures there." },
-  },
-  NV: {
-    clark: { station: "Las Vegas (Harry Reid Intl)", coolingF: 107, heatingF: 31, limitFrom: "Willow Beach / Indian Springs", note: "the metro figures suit the valley." },
+    // Title 24 climate zone 4's reference city (PG&E zone sheet: winter 99% 34 °F, summer 1% 85 °F); the county limit
+    // (97 / 27) is the Diablo Range / Gilroy side (2026-10-14).
+    "santa clara": { station: "San Jose (Title 24 climate zone 4)", coolingF: 85, heatingF: 34, limitFrom: "the inland and ridge stations", note: "Gilroy and the Diablo foothills run ~95 °F — set the address's own figures there." },
   },
   AZ: {
     maricopa: { station: "Phoenix Sky Harbor", coolingF: 109, heatingF: 34, limitFrom: "Gila Bend / Harquahala", note: "the metro figures suit the valley." },
+    // Tucson Intl: 1% ~104 °F, 99% ~32 °F (the county limit, 109 / 22, is the low desert and the Catalinas) — confirm against the ASHRAE table before a permit (2026-10-14).
+    pima: { station: "Tucson Intl", coolingF: 104, heatingF: 32, limitFrom: "Organ Pipe / Mt Lemmon", note: "the metro figures suit the city; Green Valley and Marana are close to them." },
+  },
+  NV: {
+    clark: { station: "Las Vegas (Harry Reid Intl)", coolingF: 107, heatingF: 31, limitFrom: "Willow Beach / Indian Springs", note: "the metro figures suit the valley." },
   },
   MA: {
     suffolk: { station: "Boston Logan", coolingF: 89, heatingF: 9, limitFrom: "an inland station", note: "the metro figures suit the city." },

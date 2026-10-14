@@ -185,6 +185,11 @@ const LABELS: Array<{ re: RegExp; apply: (m: BuildingModel, v: string, p: Proven
   { re: /btu|furnace input|heating capacity|furnace capacity|input rating/i, apply: (m, v, p) => { const n = num(v); if (n && n >= 20000 && n <= 200000) setNested(m, "existing.btuInput", Math.round(n), p); else if (n && n >= 1 && n <= 10 && /cooling|ac\b|condenser|heat pump/i.test(v)) setNested(m, "existing.tons", n, p); } },
   { re: /tons?|tonnage|capacity/i, apply: (m, v, p) => { const n = num(v); if (n && n >= 1 && n <= 10) setNested(m, "existing.tons", n, p); else if (n && n >= 12000 && n <= 120000 && !/btu/i.test(v)) setNested(m, "existing.tons", Math.round((n / 12000) * 2) / 2, p); else if (n && n >= 20000 && n <= 200000) setNested(m, "existing.btuInput", Math.round(n), p); } },
   { re: /seer/i, apply: (m, v, p) => { const n = num(v); if (n && n >= 8 && n <= 30) setNested(m, "existing.seer", n, p); } },
+  // The glass (2026-10-14): "Window area: 320 sq ft", "Windows: 18" (counted — an
+  // average window is about 15 sq ft), "Window type: double pane low-e".
+  { re: /window (type|glass|glazing|pane)|glazing/i, apply: (m, v, p) => { const w = windowBucket(v); if (w) setFact(m, "windowType", w, p); } },
+  { re: /window area|glass area|windows? sq|sq\.?\s*ft of (window|glass)/i, apply: (m, v, p) => { const n = num(v); if (n && n >= 20 && n <= 3000) setFact(m, "windowSqft", Math.round(n), p); } },
+  { re: /^\s*windows?\s*$|number of windows|window count|windows counted/i, apply: (m, v, p) => { const n = num(v); if (n && n >= 1 && n <= 120 && !/sq|ft|pane|double|single|low/i.test(v)) setFact(m, "windowSqft", Math.round(n * 15), { ...p, note: `${Math.round(n)} windows counted on the walk × 15 sq ft each` }); } },
   // Insulation read on the walk: "Attic insulation: R-19 blown", "Wall insulation: R-13 batts", "no insulation".
   { re: /attic insulation|ceiling insulation|attic r|roof insulation/i, apply: (m, v, p) => { const b = ceilingBucket(v); if (b) setFact(m, "ceilingInsulation", b, p); } },
   { re: /wall insulation|walls? r-?\d/i, apply: (m, v, p) => { const b = wallBucket(v); if (b) setFact(m, "wallInsulation", b, p); } },
@@ -215,6 +220,16 @@ function wallBucket(s: string): BuildingModel["wallInsulation"] | undefined {
   if (r === undefined) return undefined;
   const ladder: Array<[number, BuildingModel["wallInsulation"]]> = [[0, "none"], [11, "r11"], [13, "r13"], [19, "r19"], [21, "r21"]];
   return ladder.reduce((best, cur) => (Math.abs(cur[0] - r) < Math.abs(best[0] - r) ? cur : best))[1];
+}
+
+/** "double pane low-e" / "single" / "triple" → the glazing class the load tables carry. */
+function windowBucket(s: string): BuildingModel["windowType"] | undefined {
+  const t = s.toLowerCase();
+  if (/triple/.test(t)) return "triple";
+  if (/low[- ]?e|argon|energy star|vinyl/.test(t)) return "double-lowe";
+  if (/double|dual|insulated|thermal/.test(t)) return "double";
+  if (/single|old|original|aluminum|storm/.test(t)) return "single";
+  return undefined;
 }
 
 function refrigerantIn(s: string): "R-22" | "R-410A" | "R-454B" | "R-32" | undefined {
