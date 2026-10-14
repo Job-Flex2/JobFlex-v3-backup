@@ -17,6 +17,7 @@ import {
   type SupportTicketDTO,
 } from "@/components/v3/admin-support/admin-support-content";
 import { tasksForTicketsSafe } from "@/lib/adminTasks/service";
+import { recipientsForTickets, repliesForTickets } from "@/lib/supportReplies";
 import { MarkSupportSeen } from "./mark-seen";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,9 @@ export default async function AdminSupportPage({
 }: {
   searchParams: Promise<{ ticket?: string | string[] }>;
 }) {
-  await requirePlatformAdmin();
+  const admin = await requirePlatformAdmin();
+  // The name a reply is signed with (replyToSupportTicket), so the box can say so.
+  const signer = (admin as { name?: string | null }).name?.trim() || "JobFlex support";
   // ?ticket=<id> opens that ticket — the link a task made from it carries.
   const sp = await searchParams;
   const openTicketId = typeof sp.ticket === "string" ? sp.ticket : null;
@@ -41,7 +44,7 @@ export default async function AdminSupportPage({
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {
-        organization: { select: { name: true } },
+        organization: { select: { name: true, billingEmail: true } },
         user: { select: { email: true } },
       },
     }),
@@ -55,6 +58,8 @@ export default async function AdminSupportPage({
   // The task made from each ticket, if any (/admin/tasks, "Create task").
   // Without the task tables the tickets show as before and "Create task" hides.
   const { available: tasksAvailable, tasks } = await tasksForTicketsSafe(rows.map((t) => t.id));
+  // The answers already given, and where a new one goes (2026-10-14, lib/supportReplies).
+  const [replies, recipients] = await Promise.all([repliesForTickets(rows.map((t) => t.id)), recipientsForTickets(rows)]);
 
   const tickets: SupportTicketDTO[] = rows.map((t) => ({
     id: t.id,
@@ -69,6 +74,8 @@ export default async function AdminSupportPage({
     createdAt: t.createdAt.toISOString(),
     unread: t.adminReadAt === null,
     task: tasks[t.id] ?? null,
+    replies: replies[t.id] ?? [],
+    to: recipients[t.id] ?? null,
   }));
 
   return (
@@ -81,6 +88,7 @@ export default async function AdminSupportPage({
         counts={{ open, inProgress, resolved, closed }}
         initialTicketId={openTicketId}
         tasksAvailable={tasksAvailable}
+        signer={signer}
         // One clock, read on the server, so every age renders identically here
         // and after hydration.
         now={new Date().toISOString()}
