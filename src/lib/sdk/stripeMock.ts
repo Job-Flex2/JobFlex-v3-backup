@@ -46,6 +46,41 @@ export interface MockCustomer {
   metadata?: Meta;
   balance?: number;
   deleted?: boolean;
+  /** The card on file (invoice default). `declines` makes every off-session charge fail. */
+  card?: { id: string; brand: string; last4: string; declines?: boolean } | null;
+}
+
+/** An off-session or Checkout payment (lib/aiDesk/packs; lib/leadCenter/purchase). */
+export interface MockPaymentIntent {
+  id: string;
+  object: "payment_intent";
+  status: "succeeded" | "canceled" | "requires_payment_method";
+  amount: number;
+  amount_received: number;
+  currency: string;
+  customer: string | null;
+  description?: string | null;
+  metadata: Meta;
+  created: number;
+}
+
+export interface MockCheckoutSession {
+  id: string;
+  object: "checkout.session";
+  mode: string;
+  url: string;
+  payment_status: "unpaid" | "paid";
+  payment_intent: string | null;
+  amount_total: number;
+  currency: string;
+  customer: string | null;
+  customer_details: { email: string | null } | null;
+  metadata: Meta;
+  client_reference_id: string | null;
+  success_url: string;
+  cancel_url: string;
+  livemode: false;
+  created: number;
 }
 
 export interface MockItem {
@@ -112,6 +147,8 @@ export interface MockStore {
   subscriptions: Record<string, MockSubscription>;
   invoices: MockInvoice[];
   calls: MockCall[];
+  paymentIntents: Record<string, MockPaymentIntent>;
+  checkouts: Record<string, MockCheckoutSession>;
 }
 
 export class MockStripeError extends Error {
@@ -135,7 +172,7 @@ const INTERVAL_SECONDS: Record<string, number> = {
 };
 
 export function emptyMockStore(): MockStore {
-  return { customers: {}, prices: {}, subscriptions: {}, invoices: [], calls: [] };
+  return { customers: {}, prices: {}, subscriptions: {}, invoices: [], calls: [], paymentIntents: {}, checkouts: {} };
 }
 
 export function readMockStore(file: string): MockStore {
@@ -462,13 +499,118 @@ export function mockStripeClient(file: string): Stripe {
   };
 
   const customers = {
-    async retrieve(id: string) {
+    async retrieve(id: string, params?: Params) {
       const s = load();
-      record(s, "customers.retrieve", [id]);
+      record(s, "customers.retrieve", [id, params]);
       save(s);
       const c = s.customers[id];
       if (!c) throw new MockStripeError(`No such customer: '${id}'`);
-      return { ...c, object: "customer" };
+      const expand = (params?.expand as string[] | undefined) ?? [];
+      const pm = c.card ? (expand.includes("invoice_settings.default_payment_method") ? { id: c.card.id, object: "payment_method", type: "card", card: { brand: c.card.brand, last4: c.card.last4 } } : c.card.id) : null;
+      return { ...c, object: "customer", invoice_settings: { default_payment_method: pm } };
+    },
+  };
+
+  /** A charge to the card on file, confirmed at once: succeeded, or the card's refusal. */
+  const paymentIntents = {
+    async create(params: Params, opts?: Params) {
+      const s = load();
+      record(s, "paymentIntents.create", [params, opts]);
+      const key = opts?.idempotencyKey as string | undefined;
+      const prior = key ? Object.values(s.paymentIntents).find((p) => p.metadata.__idem === key) : undefined;
+      if (prior) {
+        save(s);
+        return prior;
+      }
+      const customer = (params.customer as string | undefined) ?? null;
+      const card = customer ? s.customers[customer]?.card : null;
+      if (card?.declines) {
+        save(s);
+        const err = new MockStripeError("Your card was declined.", "card_declined", 402);
+        err.type = "StripeCardError";
+        err.name = "StripeCardError";
+        throw err;
+      }
+      const amount = Number(params.amount ?? 0);
+      const pi: MockPaymentIntent = {
+        id: `pi_mock_${Object.keys(s.paymentIntents).length + 1}_${Date.now().toString(36)}`,
+        object: "payment_intent",
+        status: "succeeded",
+        amount,
+        amount_received: amount,
+        currency: String(params.currency ?? "usd"),
+        customer,
+        description: (params.description as string | undefined) ?? null,
+        metadata: { ...((params.metadata as Meta | undefined) ?? {}), ...(key ? { __idem: key } : {}) },
+        created: s.clock ?? Math.floor(Date.now() / 1000),
+      };
+      s.paymentIntents[pi.id] = pi;
+      save(s);
+      return pi;
+    },
+    async retrieve(id: string) {
+      const s = load();
+      record(s, "paymentIntents.retrieve", [id]);
+      save(s);
+      const pi = s.paymentIntents[id];
+      if (!pi) throw new MockStripeError(`No such payment_intent: '${id}'`);
+      return pi;
+    },
+    async cancel(id: string) {
+      const s = load();
+      record(s, "paymentIntents.cancel", [id]);
+      const pi = s.paymentIntents[id];
+      if (pi) pi.status = "canceled";
+      save(s);
+      return pi ?? { id, status: "canceled" };
+    },
+  };
+
+  /** Checkout, mode=payment: the session is a record; a walk marks it paid by editing the store. */
+  const checkout = {
+    sessions: {
+      async create(params: Params, opts?: Params) {
+        const s = load();
+        record(s, "checkout.sessions.create", [params, opts]);
+        const key = opts?.idempotencyKey as string | undefined;
+        const prior = key ? Object.values(s.checkouts).find((c) => c.metadata.__idem === key) : undefined;
+        if (prior) {
+          save(s);
+          return prior;
+        }
+        const items = (params.line_items as Array<{ quantity?: number; price_data?: { unit_amount?: number; currency?: string } }> | undefined) ?? [];
+        const amount = items.reduce((n, it) => n + (it.price_data?.unit_amount ?? 0) * (it.quantity ?? 1), 0);
+        const id = `cs_mock_${Object.keys(s.checkouts).length + 1}_${Date.now().toString(36)}`;
+        const session: MockCheckoutSession = {
+          id,
+          object: "checkout.session",
+          mode: String(params.mode ?? "payment"),
+          url: `https://checkout.stripe.mock/c/pay/${id}`,
+          payment_status: "unpaid",
+          payment_intent: null,
+          amount_total: amount,
+          currency: String(items[0]?.price_data?.currency ?? "usd"),
+          customer: (params.customer as string | undefined) ?? null,
+          customer_details: { email: (params.customer_email as string | undefined) ?? null },
+          metadata: { ...((params.metadata as Meta | undefined) ?? {}), ...(key ? { __idem: key } : {}) },
+          client_reference_id: (params.client_reference_id as string | undefined) ?? null,
+          success_url: String(params.success_url ?? ""),
+          cancel_url: String(params.cancel_url ?? ""),
+          livemode: false,
+          created: s.clock ?? Math.floor(Date.now() / 1000),
+        };
+        s.checkouts[id] = session;
+        save(s);
+        return session;
+      },
+      async retrieve(id: string) {
+        const s = load();
+        record(s, "checkout.sessions.retrieve", [id]);
+        save(s);
+        const c = s.checkouts[id];
+        if (!c) throw new MockStripeError(`No such checkout.session: '${id}'`);
+        return c;
+      },
     },
   };
 
@@ -498,7 +640,7 @@ export function mockStripeClient(file: string): Stripe {
     },
   };
 
-  const implemented: Record<string, unknown> = { subscriptions, invoices, customers, prices, accounts };
+  const implemented: Record<string, unknown> = { subscriptions, invoices, customers, prices, accounts, paymentIntents, checkout };
 
   const guard = (path: string, target: unknown): unknown =>
     new Proxy(target as object, {

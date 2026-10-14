@@ -1,0 +1,30 @@
+# JobFlex's AI desk voice server — one small machine, always on (a live call cannot wait
+# for a cold start). Secrets: fly secrets set OPENAI_API_KEY=… VOICE_SERVER_SECRET=… APP_URL=…
+app = "jobflex-voice"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  VOICE_MODEL = "gpt-realtime-mini"
+  REALTIME_API = "ga"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -39,6 +39,50 @@ export function unavailableTwiml(): string {
 </Response>`;
 }
 
+/**
+ * The company's own phone rings first (lib/aiDesk: FORWARD, or a plan without the
+ * assistant). The caller's number is the caller ID, as on a forwarded line. Whether
+ * anyone picked up comes back to the action URL (DialCallStatus), which hangs up after
+ * a conversation and takes a message after no answer.
+ */
+export function forwardTwiml(opts: { baseUrl: string; number: string; timeoutSec?: number }): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial action="${opts.baseUrl}/api/twilio/voice/dial" method="POST" timeout="${opts.timeoutSec ?? 25}">${escapeXml(opts.number)}</Dial>
+</Response>`;
+}
+
+/**
+ * The live desk takes the call: Twilio streams the audio to the voice server with the
+ * call's signed token; when the stream ends — the desk said goodbye, a transfer, or it
+ * never got going — Twilio asks /api/twilio/voice/after what to do next.
+ */
+export function streamTwiml(opts: { baseUrl: string; wsUrl: string; token: string }): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="${escapeXml(opts.wsUrl)}">
+      <Parameter name="token" value="${escapeXml(opts.token)}"/>
+    </Stream>
+  </Connect>
+  <Redirect method="POST">${opts.baseUrl}/api/twilio/voice/after</Redirect>
+</Response>`;
+}
+
+/**
+ * A Twilio webhook's form, once its signature checks out — null when it does not.
+ * `path` is the route Twilio signed ("/api/twilio/voice"); TWILIO_APP_URL names the
+ * public origin behind a proxy.
+ */
+export async function readTwilioForm(req: Request, path: string): Promise<Record<string, string> | null> {
+  const form = await req.formData();
+  const params: Record<string, string> = {};
+  form.forEach((v, k) => (params[k] = String(v)));
+  const fullUrl = process.env.TWILIO_APP_URL ? `${process.env.TWILIO_APP_URL}${path}` : new URL(req.url).toString();
+  const ok = await verifyTwilioSignature(fullUrl, params, req.headers.get("x-twilio-signature"));
+  return ok ? params : null;
+}
+
 function escapeXml(s: string) {
   return s
     .replace(/&/g, "&amp;")

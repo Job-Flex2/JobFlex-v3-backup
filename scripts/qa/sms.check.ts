@@ -5,6 +5,8 @@ import * as P from "../../src/lib/notificationPrefsShared";
 import * as F from "../../src/lib/sms/format";
 import * as R from "../../src/lib/sms/textRules";
 import * as G from "../../src/lib/sms/registrationShared";
+import * as D from "../../src/lib/aiDesk/shared";
+import * as V from "../../src/lib/sdk/twilioVoice";
 import {
   acceptedLine,
   brand,
@@ -226,6 +228,24 @@ check("the monthly allowance grows with the plan and defaults to the free tier",
   check("HELP on a company's number names the company and how to reach it",
     F.companyHelpText("Ridgeline Roofing", "+12065550100") === "Ridgeline Roofing: texts about your visits and estimates. Reply STOP to opt out. Questions: (206) 555-0100" &&
     F.companyHelpText("Ridgeline Roofing", null).endsWith("Questions: support@jobflex.app"));
+}
+
+// ONE NUMBER FOR CALLS AND TEXTS (2026-10-13, lib/aiDesk): calls the day it is bought, texts once approved.
+{
+  check("a saved registration keeps when calls were wired", G.parseRegistration(JSON.stringify({ stage: "pending", voiceOnAt: "2026-10-13T00:00:00Z" })).voiceOnAt === "2026-10-13T00:00:00Z");
+  check("the card says calls work at once and texts wait for the approval",
+    /takes calls right away/i.test(G.REGISTRATION_COPY.done.join(" ")) && /answers calls/i.test(G.REGISTRATION_COPY.pending) && /approval/i.test(G.REGISTRATION_COPY.textsPending) && G.REGISTRATION_COPY.title === "Your number");
+  const d = D.parseDeskSettings;
+  check("desk settings: the assistant answers unless told to forward; junk reads as the default", d(null).mode === "ANSWER" && d('{"mode":"FORWARD"}').mode === "FORWARD" && d('{"mode":"ROCKET"}').mode === "ANSWER" && d("nope").mode === "ANSWER");
+  check("where calls go: the assistant on the plan, else the company phone, else nowhere",
+    D.callsGo({ mode: "ANSWER", assistantOnPlan: true, companyPhone: "+14255550100" }) === "assistant" &&
+    D.callsGo({ mode: "FORWARD", assistantOnPlan: true, companyPhone: "+14255550100" }) === "phone" &&
+    D.callsGo({ mode: "ANSWER", assistantOnPlan: false, companyPhone: "+14255550100" }) === "phone" &&
+    D.callsGo({ mode: "FORWARD", assistantOnPlan: true, companyPhone: null }) === "assistant" &&
+    D.callsGo({ mode: "ANSWER", assistantOnPlan: false, companyPhone: null }) === "none");
+  const fwd = V.forwardTwiml({ baseUrl: "https://www.jobflex.app", number: "+14255550100" });
+  check("forwarding rings the company phone and comes back to the dial result", /<Dial action="https:\/\/www\.jobflex\.app\/api\/twilio\/voice\/dial" method="POST" timeout="25">\+14255550100<\/Dial>/.test(fwd));
+  check("the assistant's greeting names the company", D.greetingFor("Ridgeline Roofing").startsWith("Thanks for calling Ridgeline Roofing.") && /<Say voice="alice">Thanks for calling Ridgeline Roofing\./.test(V.recordingTwiml({ baseUrl: "https://x", greeting: D.greetingFor("Ridgeline Roofing") })));
 }
 
 console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");

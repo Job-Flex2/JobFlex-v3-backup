@@ -47,6 +47,8 @@ export type SmsRegistrationState = {
   submittedAt?: string | null;
   checkedAt?: string | null;
   approvedAt?: string | null;
+  /** Calls to the number reach the voice webhook since then (set at purchase; an older number gets it on the next check). */
+  voiceOnAt?: string | null;
   reasons?: { code: number | null; reason: string }[];
   /** A rejected submission can be corrected until then (Twilio's edit window). */
   editUntil?: string | null;
@@ -253,21 +255,33 @@ export function verificationFields(input: { details: SmsRegistrationDetails; com
 
 /** The settings card's words for each stage. */
 export const REGISTRATION_COPY = {
-  title: "Your texting number",
-  sub: "A number of your own, registered with the carriers in your business's name — JobFlex prepares it, files it and pays for it. Every text to your team, your clients and your crew goes out from it.",
+  title: "Your number",
+  sub: "A toll-free number of your own, in your company's name — JobFlex gets it, registers it with the carriers and pays for it. It answers calls the day it arrives; texts to your team, clients and crew go out from it once the carriers approve it.",
   // What JobFlex does so the contractor doesn't have to (owner, 2026-10-13: "say JobFlex will prepare your number … to give us more value").
-  // Each line is something the code really does: registration.ts buys + files, book/[slug] pages, sampleJobsFor, the approval check.
+  // Each line is something the code really does: registration.ts buys + files (and wires calls), book/[slug] pages, sampleJobsFor, the approval check.
   doneTitle: "JobFlex sets it up for you",
   done: [
-    "Gets a toll-free number in your company's name — JobFlex pays for it",
+    "Gets a toll-free number in your company's name — JobFlex pays for it. It takes calls right away",
     "Prepares your carrier registration and sends it to Twilio for you",
     "Makes your texting terms and privacy pages, and the “Text me” checkbox on your booking page",
     "Writes your sample texts for your trade",
-    "Watches for the approval and turns your texts on by itself",
+    "Texting waits for the carriers' approval — JobFlex watches for it and turns your texts on by itself",
   ],
   doneYou: "You fill in one short form — what JobFlex already knows is filled in for you.",
-  get: "Get your texting number",
-  paidOnly: "Your own texting number comes with a paid plan.",
+  get: "Get your number",
+  paidOnly: "Your own number comes with a paid plan.",
+  // What the number does right now (owner, 2026-10-13: "voice gets no approval … for SMS you have to wait").
+  usesCalls: "Calls",
+  usesTexts: "Texts",
+  callsAssistant: "On — JobFlex's phone assistant answers, takes the message and writes it up for you",
+  callsPhone: (phone: string) => `On — rings your company phone, ${phone}; a call nobody picks up goes to the phone assistant`,
+  callsNone: "On the number, but nowhere to send them: add your company phone in Company settings",
+  callsOff: "Not wired — this number was bought before calls were. Release it and get a new one",
+  textsOn: "On — approved by the carriers",
+  textsPending: "Waiting for the carriers' approval — usually within 3 business days; JobFlex turns them on by itself",
+  textsRejected: "Sent back by Twilio — fix what it asks below and send it again",
+  textsFailed: "Not sent to Twilio yet",
+  textsLegacy: "Carriers won't deliver this number's texts — it was never registered",
   notConfigured: "Texting is not set up on this platform yet.",
   formIntro: "Twilio checks every line against public records. Write the legal name, EIN and address exactly as on your IRS EIN letter (CP 575) or your state registration — the suite too (\"Ste L\" is not \"Suite I\").",
   website: "Your own website is best. Without one, use your JobFlex booking page — it shows your name and phone.",
@@ -279,8 +293,8 @@ export const REGISTRATION_COPY = {
   social: "No website? Add your Facebook, Instagram, Google Business or Yelp page — an active one helps Twilio see your business is real.",
   submit: "Register my number",
   resubmit: "Fix and send again",
-  pending: "JobFlex sent your registration to Twilio and is watching for the answer — usually within 3 business days. Texts start by themselves once it's approved; until then your team gets the same alerts by email and in the app.",
-  approved: "Approved. Texts to your team, clients and crew go out from this number, with your name.",
+  pending: "Your number already answers calls. For texting, JobFlex sent your registration to Twilio and is watching for the answer — usually within 3 business days. Texts start by themselves once it's approved; until then your team gets the same alerts by email and in the app.",
+  approved: "Approved. Texts to your team, clients and crew go out from this number, with your name — and it keeps answering calls.",
   rejected: "Twilio sent it back. Fix what it asks below and send it again.",
   rejectedClosed: "Twilio sent it back and the time to correct it has passed. Release the number and start again.",
   failed: "Something went wrong on the way to Twilio.",
@@ -338,6 +352,11 @@ export type SmsRegistrationView = {
   legacy: boolean;
   /** Online booking is on — the page where clients agree to texts; a registration waits for it. */
   bookingOn: boolean;
+  /**
+   * Calls (lib/aiDesk): a bought number answers them the day it arrives — the approval
+   * is for texts. Where they go, and the company phone they ring.
+   */
+  calls: { on: boolean; go: "assistant" | "phone" | "none"; phone: string | null };
   /** The company's public pages Twilio is given (smsPagesFor). */
   pages: { booking: string; terms: string; privacy: string; optInImage: string };
   details: SmsRegistrationDetails;

@@ -165,6 +165,9 @@ import { ProviderKeyForm } from "@/components/v3/settings-blueprint/panes/stripe
 import { MobileSettingsSprite } from "./sprite";
 import { PasswordControl } from "@/components/account-password/password-control";
 import "./mobile-settings.css";
+import { DeskSetup, DeskStatus } from "@/components/v3/ai-desk/desk-setup";
+import { DeskMinutes } from "@/components/v3/ai-desk/desk-minutes";
+import { DESK_COPY } from "@/components/v3/settings-blueprint/settings-data";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
 
@@ -1181,6 +1184,37 @@ function NotificationsPane({ data }: { data: SettingsData }) {
 // Texting (2026-09-27) — the handheld build of the desk pane: who gets
 // texted (the office roster, a switch per group), your own mobile, the extra
 // numbers. Same actions as the desk; the copy comes from settings-data.
+/** The AI desk on the phone (2026-10-13): the same two pieces as the desk pane, in this page's cards. */
+function DeskPaneMobile({ data }: { data: SettingsData }) {
+  const desk = data.desk;
+  return (
+    <>
+      <section className="mst-card" id="desk-status">
+        <CardHeader card={{ title: DESK_COPY.title, sub: DESK_COPY.sub }} />
+        <div className="mst-cardB">
+          {desk.canManage ? <DeskStatus desk={desk} registration={data.notifications.sms.registration} /> : <div className="mst-note">{DESK_COPY.managersOnly}</div>}
+        </div>
+      </section>
+      {desk.canManage ? (
+        <section className="mst-card" id="desk-minutes">
+          <CardHeader card={{ title: DESK_COPY.minutesTitle, sub: DESK_COPY.minutesSub }} />
+          <div className="mst-cardB">
+            <DeskMinutes desk={desk} />
+          </div>
+        </section>
+      ) : null}
+      {desk.canManage ? (
+        <section className="mst-card" id="desk-setup">
+          <CardHeader card={{ title: DESK_COPY.setupTitle, sub: DESK_COPY.setupSub }} />
+          <div className="mst-cardB">
+            <DeskSetup desk={desk} />
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 function TextingPane({ data }: { data: SettingsData }) {
   const sms = data.notifications.sms;
   const router = useRouter();
@@ -1355,6 +1389,7 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   integrations: "i-globe",
   notifications: "i-bell",
   texting: "i-phone",
+  desk: "i-phone",
 };
 
 export function MobileSettings({
@@ -1590,6 +1625,9 @@ export function MobileSettings({
             </div>
             <div className={active === "texting" ? "mst-pane is-on" : "mst-pane"}>
               <TextingPane data={data} />
+            </div>
+            <div className={active === "desk" ? "mst-pane is-on" : "mst-pane"}>
+              <DeskPaneMobile data={data} />
             </div>
           </div>
 

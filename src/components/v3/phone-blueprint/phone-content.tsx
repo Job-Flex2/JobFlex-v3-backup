@@ -33,7 +33,7 @@
 import { useCallback, useRef } from "react";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { initPhoneContent } from "./phone-behavior";
-import type { Call, PhoneStats } from "./phone-data";
+import { deskStripWords, type Call, type PhoneDeskStrip, type PhoneStats } from "./phone-data";
 import "./phone-global.css";
 
 export type PhoneContentProps = {
@@ -44,6 +44,8 @@ export type PhoneContentProps = {
   /** The Twilio "A call comes in" webhook this deployment answers on. */
   webhookUrl: string;
   twilioConfigured: boolean;
+  /** The AI desk's line under the title (2026-10-13); null when it could not be read. */
+  desk: PhoneDeskStrip | null;
 };
 
 export function PhoneContent({
@@ -51,6 +53,7 @@ export function PhoneContent({
   stats,
   webhookUrl,
   twilioConfigured,
+  desk,
 }: PhoneContentProps) {
   // The seed reaches `init` through a ref, NOT through the callback's deps.
   // `useBlueprintContent` re-runs whenever `init` changes identity, and a
@@ -79,7 +82,31 @@ export function PhoneContent({
           <div className="kicker">Automation · Voice</div>
           <h1 className="page-title">Phone</h1>
         </div>
+        {/* The AI desk's settings (2026-10-13): who answers, what the desk knows and says. */}
+        <a className="btn btn-ghost" href="/dashboard/settings?pane=desk" data-desk-setup-link>
+          Set up the AI desk
+        </a>
       </div>
+
+      {/* The desk's line: the number, who answers, the voice, the month's minutes. */}
+      {desk ? (
+        <div className="desk-strip" data-desk-strip data-go={desk.go} data-live={desk.live ? "1" : "0"} data-out={desk.out ? "1" : "0"}>
+          <span className="pstatus desk-flag">AI desk</span>
+          <span>{deskStripWords(desk)}</span>
+          <span className="desk-strip-m" data-desk-minutes>
+            {desk.minutes ? `${desk.minutes} min this month` : "No minutes used this month"} · {desk.left}
+          </span>
+          {desk.out || desk.low ? (
+            <a className="desk-strip-a" href="/dashboard/settings?pane=desk#desk-minutes" data-desk-minutes-link>
+              Add minutes
+            </a>
+          ) : (
+            <a className="desk-strip-a" href="/dashboard/settings?pane=desk#desk-test" data-desk-test-link>
+              Test it here
+            </a>
+          )}
+        </div>
+      ) : null}
 
       {/* banner: provider not configured */}
       {!twilioConfigured && (

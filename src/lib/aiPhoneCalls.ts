@@ -41,23 +41,24 @@ export async function attachRecording(callSid: string, url: string, durationSeco
   });
 }
 
-export async function attachTranscript(callSid: string, transcript: string) {
+export async function attachTranscript(callSid: string, transcript: string, opts: { lead?: boolean } = {}) {
   const call = await db.aiPhoneCall.findUnique({ where: { callSid } });
   if (!call) return null;
   const updated = await db.aiPhoneCall.update({
     where: { callSid },
     data: { transcript },
   });
-  // Kick off summarization in-line (best-effort)
+  // Kick off summarization in-line (best-effort). The live desk (lib/aiDesk) passes
+  // lead:false when it already booked a visit or took a message for this call.
   try {
-    await summarizeAndMaybeCreateLead(updated.id);
+    await summarizeAndMaybeCreateLead(updated.id, opts.lead !== false);
   } catch (err) {
     console.warn("[attachTranscript] summarize failed:", err);
   }
   return updated;
 }
 
-async function summarizeAndMaybeCreateLead(callId: string) {
+async function summarizeAndMaybeCreateLead(callId: string, mayCreateLead = true) {
   const call = await db.aiPhoneCall.findUnique({ where: { id: callId } });
   if (!call || !call.transcript) return;
   if (!isOpenAIEnabled()) {
@@ -107,7 +108,7 @@ async function summarizeAndMaybeCreateLead(callId: string) {
       where: { id: callId },
       data: { summary: parsed.summary ?? null },
     });
-    if (parsed.shouldCreateLead && parsed.leadData) {
+    if (mayCreateLead && parsed.shouldCreateLead && parsed.leadData) {
       // Quota: intentionally ALLOW-BUT-COUNT — automatic lead capture from a
       // completed call is never blocked (the call itself was already gated at
       // the voice webhook); the Lead row still counts toward "leads" usage.
