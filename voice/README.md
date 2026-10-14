@@ -18,6 +18,9 @@ The real voice server talks to the real realtime API while this script plays Twi
 
 ## Put it on Fly.io (the owner, once)
 
+The short way: `bash go-live.sh` from this folder does steps 2–4 below and prints the two Vercel lines (it asks for the OpenAI key, typed and never shown). The long way:
+
+
 1. Install the Fly CLI and sign up: `brew install flyctl` · `fly auth signup` (add a card on fly.io → Billing).
 2. From this folder: `fly launch --no-deploy --copy-config --name jobflex-voice --region sea` (accept the defaults; say no to a Postgres or Redis).
 3. Secrets — type them into the terminal, never into a chat or a file:
