@@ -610,8 +610,8 @@ export function MobilePhone({ entries, stats, webhookUrl, twilioConfigured }: Mo
         <div className={styles.content} ref={contentRef}>
           {/* PAGE HEAD */}
           <div className={styles.pageHead}>
-            <div className={styles.kicker}>Automation · Voice</div>
-            <h1 className={styles.pageTitle}>Phone</h1>
+            <div className={styles.kicker}>Calls · the desk&apos;s log</div>
+            <h1 className={styles.pageTitle}>AI desk</h1>
             <div className={styles.pageActions}>
               <button
                 className={`${styles.btn} ${styles.btnPrimary}`}

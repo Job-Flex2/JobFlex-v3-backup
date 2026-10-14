@@ -105,7 +105,7 @@ const NAV: {
       { label: "Smart Proposal", icon: "i-bulb", href: "/dashboard/proposals/ai" },
       { label: "Roof estimator", icon: "i-roof", href: "/dashboard/advanced-ai" },
       { label: "Fence estimator", icon: "i-fence", href: "/dashboard/advanced-ai" },
-      { label: "Phone", icon: "i-phone", href: "/dashboard/phone" },
+      { label: "AI desk", icon: "i-phone", href: "/dashboard/phone" },
       { label: "Messages", icon: "i-msg", href: "/dashboard/messages" },
       { label: "Reviews", icon: "i-thumb", href: "/dashboard/reviews" },
       { label: "Trade board", icon: "i-board", href: "/dashboard/trade" },

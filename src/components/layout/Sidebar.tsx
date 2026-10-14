@@ -84,7 +84,7 @@ const groups: NavGroup[] = [
       // and /advanced-ai/fence/studio are no longer linked from anywhere.
       { href: "/dashboard/roof-estimator", label: "Roof estimator", icon: <Home className="h-4 w-4" /> },
       { href: "/dashboard/fence-estimator", label: "Fence estimator", icon: <Fence className="h-4 w-4" /> },
-      { href: "/dashboard/phone", label: "Phone", icon: <Phone className="h-4 w-4" /> },
+      { href: "/dashboard/phone", label: "AI desk", icon: <Phone className="h-4 w-4" /> },
       { href: "/dashboard/messages", label: "Messages", icon: <MessagesSquare className="h-4 w-4" /> },
       { href: "/dashboard/reviews", label: "Reviews", icon: <Star className="h-4 w-4" /> },
       { href: "/dashboard/trade", label: "Trade board", icon: <MessageSquare className="h-4 w-4" /> },
@@ -134,7 +134,7 @@ const SALES_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard/calendar", label: "Calendar", icon: <Calendar className="h-4 w-4" /> },
       { href: "/dashboard/messages", label: "Messages", icon: <MessagesSquare className="h-4 w-4" /> },
-      { href: "/dashboard/phone", label: "Phone", icon: <Phone className="h-4 w-4" /> },
+      { href: "/dashboard/phone", label: "AI desk", icon: <Phone className="h-4 w-4" /> },
     ],
   },
 ];

@@ -79,12 +79,12 @@ export function PhoneContent({
     <>
       <div className="page-head">
         <div>
-          <div className="kicker">Automation · Voice</div>
-          <h1 className="page-title">Phone</h1>
+          <div className="kicker">Calls · the desk&apos;s log</div>
+          <h1 className="page-title">AI desk</h1>
         </div>
         {/* The AI desk's settings (2026-10-13): who answers, what the desk knows and says. */}
         <a className="btn btn-ghost" href="/dashboard/settings?pane=desk" data-desk-setup-link>
-          Set up the AI desk
+          Set up the desk
         </a>
       </div>
 

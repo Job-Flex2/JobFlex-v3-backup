@@ -168,7 +168,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Automation",
     items: [
-      { label: "Phone", icon: "i-phone", href: "/dashboard/phone" },
+      { label: "AI desk", icon: "i-phone", href: "/dashboard/phone" },
       { label: "Messages", icon: "i-msg", href: "/dashboard/messages" },
       { label: "Reviews", icon: "i-thumb", href: "/dashboard/reviews" },
       { label: "Trade board", icon: "i-board", href: "/dashboard/trade" },
