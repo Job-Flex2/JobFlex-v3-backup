@@ -65,7 +65,9 @@ export async function afterStreamTwiml(input: { to: string; from: string; callSi
   const org = await companyForCall(input.to);
   if (!org) return hangupTwiml();
   if (outcome?.outcome === "transfer") {
-    const phone = toE164(org.phone ?? "");
+    // Never to a phone that forwards every call back here.
+    const desk = await readDeskSettings(org.id);
+    const phone = desk.forwarding === "all" ? null : toE164(org.phone ?? "");
     if (phone) return forwardTwiml({ baseUrl: input.base, number: phone });
   }
   // The desk never got going (or asked to transfer with no phone to ring): a message, the old way.
@@ -91,7 +93,8 @@ export async function inboundTwiml(input: { to: string; from: string; callSid: s
   const org = await companyForCall(input.to);
   if (!org) return unavailableTwiml();
   const [onPlan, desk, minutes] = await Promise.all([assistantOnPlan(org.id), readDeskSettings(org.id), deskHasMinutes(org.id)]);
-  const phone = toE164(org.phone ?? "");
+  // A company phone that forwards every call to the desk cannot be rung from here (it would ring the desk again).
+  const phone = desk.forwarding === "all" ? null : toE164(org.phone ?? "");
   const go = callsGo({ mode: desk.mode, assistantOnPlan: onPlan, companyPhone: phone });
   if (go === "phone" && phone) return forwardTwiml({ baseUrl: input.base, number: phone });
   if (go === "assistant") {

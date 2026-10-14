@@ -8,7 +8,7 @@
 // instructions — the owner's description in, the profile out, section by section, with
 // the questions the desk still has and a box to try it.
 
-import { DeskSetup, DeskStatus } from "@/components/v3/ai-desk/desk-setup";
+import { DeskSteps } from "@/components/v3/ai-desk/desk-steps";
 import { DeskMinutes } from "@/components/v3/ai-desk/desk-minutes";
 import type { PaneProps } from "../settings-data";
 import { DESK_COPY } from "../settings-data";
@@ -24,9 +24,10 @@ export function DeskPane({ data, navigate }: PaneProps) {
             <div className="sc-t">{DESK_COPY.title}</div>
             <div className="sc-s">{DESK_COPY.sub}</div>
           </div>
+          <div className="sc-s">{DESK_COPY.stepsKicker}</div>
         </div>
         <div className="sc-b">
-          {desk.canManage ? <DeskStatus desk={desk} registration={registration} onNumber={() => navigate("texting")} /> : <p className="tx-note" style={{ margin: 0 }}>{DESK_COPY.managersOnly}</p>}
+          {desk.canManage ? <DeskSteps desk={desk} registration={registration} onNumber={() => navigate("texting")} /> : <p className="tx-note" style={{ margin: 0 }}>{DESK_COPY.managersOnly}</p>}
         </div>
       </section>
       {desk.canManage ? (
@@ -39,19 +40,6 @@ export function DeskPane({ data, navigate }: PaneProps) {
           </div>
           <div className="sc-b">
             <DeskMinutes desk={desk} />
-          </div>
-        </section>
-      ) : null}
-      {desk.canManage ? (
-        <section className="sc" id="desk-setup">
-          <div className="sc-h">
-            <div>
-              <div className="sc-t">{DESK_COPY.setupTitle}</div>
-              <div className="sc-s">{DESK_COPY.setupSub}</div>
-            </div>
-          </div>
-          <div className="sc-b">
-            <DeskSetup desk={desk} />
           </div>
         </section>
       ) : null}

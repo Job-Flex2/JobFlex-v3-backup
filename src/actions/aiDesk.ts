@@ -20,7 +20,9 @@ import { friendlyAIError, getOpenAI, isOpenAIEnabled, resolveOpenAIModel, sampli
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { notePaidCall } from "@/lib/trialMeter";
 import { readDeskSettings, saveDeskSettings } from "@/lib/aiDesk/numbers";
-import { clock, DESK_MODES, DESK_PACK, dollars, minutesLeftWords, minutesOf, VOICES, type DeskBalance, type DeskMode, type DeskPackRecord, type DeskVoice } from "@/lib/aiDesk/shared";
+import { db } from "@/lib/db";
+import { toE164 } from "@/lib/phone";
+import { clock, DESK_FORWARDING, DESK_MODES, DESK_PACK, dollars, minutesLeftWords, minutesOf, validTimezone, VOICES, type DeskBalance, type DeskForwarding, type DeskMode, type DeskPackRecord, type DeskVoice } from "@/lib/aiDesk/shared";
 import { deskBalanceFor, readDeskPacks, setAutoTopUp, settleDeskUse } from "@/lib/aiDesk/minutes";
 import { chargePackOnFile, finishPackCheckout, startPackPurchase, type PackStep } from "@/lib/aiDesk/packs";
 import { ASK_FORMAT, cleanCompose, cleanProfile, COMPOSE_SYSTEM, composePrompt, deskInstructions, EMPTY_PROFILE, gapQuestions, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
@@ -144,7 +146,7 @@ export async function askDesk(questionRaw: string): Promise<DeskActionResult<{ a
   if (!facts) return { ok: false, error: "Not found." };
   const profile = settings.profile ?? profileFromFacts(facts);
   try {
-    const o = await askJson(`${deskInstructions(profile, facts, settings.mode)}\n\n${ASK_FORMAT}`, `A caller says: «${question}»`, 0.4);
+    const o = await askJson(`${deskInstructions(profile, facts, settings.mode, settings.forwarding)}\n\n${ASK_FORMAT}`, `A caller says: «${question}»`, 0.4);
     const answer = o && typeof o === "object" && typeof (o as { answer?: unknown }).answer === "string" ? (o as { answer: string }).answer.trim().slice(0, 500) : "";
     if (!answer) return { ok: false, error: "The desk gave no answer — try again." };
     return { ok: true, answer };
@@ -213,7 +215,7 @@ export async function startDeskTest(): Promise<DeskActionResult<DeskTestStart>> 
   if (balance.out) return { ok: false, error: `The desk is out of minutes — add ${DESK_PACK.minutes} minutes below, then test it.` };
   const profile = settings.profile ?? profileFromFacts(facts);
   const nowWords = new Date().toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: facts.timezone });
-  const instructions = [deskInstructions(profile, facts, settings.mode), "", `THIS CALL: it is ${nowWords} (${facts.timezone}). ${TEST_NOTE}`, "Offer only times that open_times returns, and book only with book_visit."].join("\n");
+  const instructions = [deskInstructions(profile, facts, settings.mode, settings.forwarding), "", `THIS CALL: it is ${nowWords} (${facts.timezone}). ${TEST_NOTE}`, "Offer only times that open_times returns, and book only with book_visit."].join("\n");
   const api = realtimeApi();
   const model = voiceModel();
   const session = testSession({ instructions, voice: settings.voice, model, api });
@@ -282,6 +284,54 @@ export async function endDeskTest(secondsRaw: number): Promise<DeskActionResult<
   void notePaidCall("openai", "realtime-minute", { units: Math.max(1, Math.ceil(seconds / 60)), orgId: organizationId }).catch(() => null);
   revalidatePath(SETTINGS_PATH);
   return { ok: true, minutes: minutesOf(use.callSeconds + use.testSeconds), note: `Test call · ${clock(seconds)} — counted in this month's minutes${balance ? ` · ${minutesLeftWords(balance).toLowerCase()}` : ""}.` };
+}
+
+/* ── the numbers, the forwarding, the clock, the calendar (the setup's steps 1 and 3) ── */
+
+/** How the company's own phone reaches the desk — set at the carrier; the desk only needs to know. */
+export async function setDeskForwarding(forwarding: DeskForwarding): Promise<DeskActionResult> {
+  const { organizationId, user } = await requireManager();
+  if (!(DESK_FORWARDING as readonly string[]).includes(forwarding)) return { ok: false, error: "Unknown setting." };
+  const current = await readDeskSettings(organizationId);
+  // A phone that forwards every call cannot ring first: it would forward straight back to the desk.
+  const mode: DeskMode = forwarding === "all" ? "ANSWER" : current.mode;
+  await saveDeskSettings(organizationId, { ...current, forwarding, mode });
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: forwarding === "none" ? "The company phone does not forward to the AI desk" : forwarding === "all" ? "The company phone forwards every call to the AI desk" : "The company phone forwards missed calls to the AI desk" });
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath("/dashboard/phone");
+  return { ok: true, note: forwarding === "all" ? "Noted: the desk takes messages instead of transferring, since a transfer would ring itself." : "Saved." };
+}
+
+/** The number customers call the company on — the one the desk rings or hands calls to (Organization.phone). */
+export async function setBusinessPhone(raw: string): Promise<DeskActionResult<{ phone: string | null }>> {
+  const { organizationId, user } = await requireManager();
+  const typed = (raw ?? "").trim().slice(0, 40);
+  if (typed && !toE164(typed)) return { ok: false, error: "That is not a phone number — digits with the area code, like (425) 555-0100." };
+  await db.organization.update({ where: { id: organizationId }, data: { phone: typed || null } });
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: typed ? `The company phone for the AI desk is ${typed}` : "The company phone was removed from the AI desk" });
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath("/dashboard/phone");
+  return { ok: true, phone: typed || null, note: "Saved." };
+}
+
+/** The company's time zone — the clock the desk tells callers and books by. */
+export async function setCompanyTimezone(tz: string): Promise<DeskActionResult<{ timezone: string }>> {
+  const { organizationId, user } = await requireManager();
+  const timezone = (tz ?? "").trim().slice(0, 80);
+  if (!timezone || !validTimezone(timezone)) return { ok: false, error: "Pick a time zone from the list." };
+  await db.organization.update({ where: { id: organizationId }, data: { timezone } });
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `The company's time zone is ${timezone}` });
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath("/dashboard/calendar");
+  return { ok: true, timezone, note: "Saved." };
+}
+
+/** The next open times the desk would offer a caller right now — the calendar's, in the company's zone. */
+export async function previewDeskTimes(): Promise<DeskActionResult<{ enabled: boolean; times: Array<{ id: string; label: string }>; note: string | null }>> {
+  const { organizationId } = await requireManager();
+  const r = await openTimes(organizationId, null, 7);
+  if (!r.ok) return { ok: true, enabled: !/does not book visits by phone/.test(r.error), times: [], note: r.error };
+  return { ok: true, enabled: true, times: r.times.map((t) => ({ id: t.id, label: t.label })), note: r.note };
 }
 
 /* ── minutes and packs ───────────────────────────────────────────────────── */

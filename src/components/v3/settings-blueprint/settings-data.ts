@@ -27,7 +27,7 @@ import type { PaymentConnectionStatusView } from '@/lib/payments/connections';
 import type { NotificationPrefs, PrefKey } from '@/lib/notificationPrefsShared';
 import type { SmsRegistrationView } from '@/lib/sms/registrationShared';
 import type { CompanyFacts, DeskProfile } from '@/lib/aiDesk/profile';
-import type { CallsGo, DeskBalance, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
+import type { CallsGo, DeskBalance, DeskForwarding, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
 
 export type IconName =
   | 'i-arrow'
@@ -1010,6 +1010,7 @@ export const DESK_COPY = {
   setupTitle: 'What the desk knows and says',
   setupSub: 'Tell it about your company the way you would brief a new receptionist — type it, or say it. JobFlex turns that into the desk\u2019s instructions, which you can edit line by line.',
   briefTitle: '1 · Tell us about your company',
+  briefTitleShort: 'In your own words',
   briefSub: 'Any order, your own words: what you do, where, your hours, how you price, what you never promise, what counts as an emergency. What JobFlex already knows is filled in for you.',
   knownAlready: 'What JobFlex already knows',
   briefPlaceholder: 'We do roofs and gutters on the Eastside. Free estimates; leak calls are $149. Open 7 to 5 weekdays. Licensed and insured, 10-year workmanship warranty. A leak during rain is an emergency — book the first slot…',
@@ -1019,20 +1020,59 @@ export const DESK_COPY = {
   composing: 'Writing…',
   aiOff: 'The AI service is not set up on this workspace — the instructions can be edited by hand below.',
   questionsTitle: 'The desk still doesn\u2019t know',
-  profileTitle: '2 · The desk\u2019s instructions',
-  profileTitleDraft: '2 · The desk\u2019s instructions — a first draft from what JobFlex knows',
+  profileTitle: 'The desk\u2019s instructions',
+  profileTitleDraft: 'The desk\u2019s instructions — a first draft from what JobFlex knows',
   profileSub: 'Written from what you said. Change anything; the desk follows these on every call.',
   profileSubDraft: 'Nothing written yet: this is what the desk would say from your company settings alone. Describe your company above, or edit these and save.',
   addFaq: 'Add a question',
   save: 'Save the instructions',
   saving: 'Saving…',
   unsaved: 'Unsaved changes',
-  tryTitle: '3 · Try it',
+  tryTitle: 'Try it by text',
   trySub: 'Ask something a caller would. The desk answers from the instructions as saved.',
   tryPlaceholder: 'Do you do free estimates? Can someone come today?',
   ask: 'Ask',
   asking: 'Asking…',
   answerTag: 'what the desk would say',
+  // the setup, in four steps (2026-10-14)
+  stepsKicker: 'Set up in four steps',
+  stepDone: 'Done',
+  stepTodo: 'To do',
+  step1: 'Your numbers',
+  step1Sub: 'The number the desk answers, the phone customers already know, and who picks up.',
+  deskNumberTitle: 'The desk\u2019s number',
+  businessTitle: 'Your business phone',
+  businessSub: 'The number customers call you on today. The desk rings it when a caller asks for a person — or first, if you choose "ring my phone first".',
+  businessPlaceholder: '(425) 555-0100',
+  businessSave: 'Save',
+  forwardTitle: 'How do customers reach the desk?',
+  forwardNone: 'They call the desk\u2019s number',
+  forwardNoneSub: (n: string) => `You give out ${n} — site, truck, cards. Your own phone keeps working as before.`,
+  forwardMissed: 'My number forwards the calls I miss',
+  forwardMissedSub: (n: string) => `At your carrier, forward unanswered calls to ${n} (most US carriers: dial *71, then the number; *73 turns it off). The desk takes what you miss and can still hand a call back to you.`,
+  forwardAll: 'My number forwards every call',
+  forwardAllSub: (n: string) => `At your carrier, forward all calls to ${n} (*72, then the number; *73 turns it off). The desk answers everything and takes messages instead of transferring — a transfer would ring itself.`,
+  forwardNeedsNumber: 'Forwarding needs the desk\u2019s number first.',
+  modeForwardOff: 'Not with every call forwarded — your phone would forward straight back to the desk.',
+  step2: 'Tell the desk about your company',
+  step2Sub: 'Say it or type it, the way you would brief a new receptionist. JobFlex writes the desk\u2019s instructions from it; you can change any line.',
+  showDetails: 'Read and edit the instructions',
+  hideDetails: 'Hide the instructions',
+  step3: 'When it can book visits',
+  step3Sub: 'The desk offers the same open times as your online booking page — your hours, your visits, around what is already on the calendar.',
+  tzTitle: 'Your time zone',
+  tzSub: 'The clock the desk tells callers and books by.',
+  bookingOn: 'Online booking is on — the desk books from this calendar.',
+  bookingOff: 'Online booking is off — the desk takes messages instead of booking. Turn it on and set your hours on the Online booking page.',
+  bookingHours: 'Hours',
+  bookingServices: 'Visits it can book',
+  bookingEdit: 'Change hours and visits',
+  previewTitle: 'The next times it would offer a caller',
+  previewLoad: 'Show the next open times',
+  previewLoading: 'Looking…',
+  previewNone: 'Nothing open in the next 7 days.',
+  step4: 'Voice and a test',
+  step4Sub: 'Pick the voice, ask it something by text, then call it from this browser.',
   // a number customers already know: forwarded at the carrier, not in JobFlex
   forwardTip: (number: string) => `Have a number customers already know? Forward it to ${number} at your phone carrier and the desk answers that one too — on most US carriers dial *72 then the number to forward every call, or *71 to forward only the calls you don\u2019t pick up (*73 turns it off). Your own phone keeps working as before.`,
   // the voice, and the month's minutes (step 4)
@@ -1044,7 +1084,7 @@ export const DESK_COPY = {
     `${min} min this month — ${calls} call${calls === 1 ? '' : 's'}${tests ? `, ${tests} test${tests === 1 ? '' : 's'}` : ''}.`,
   minutesNone: 'No minutes used this month.',
   // test it here (step 4)
-  testTitle: '4 · Test it here',
+  testTitle: 'Test it here, by voice',
   testSub: 'Call the desk from this browser and talk to it the way a customer would — the saved instructions, the voice you chose, the real open times on your calendar. On a test, visits and messages are not saved: the desk only says what it would do.',
   testStart: 'Call the desk',
   testMic: 'Allow the microphone…',
@@ -1252,6 +1292,15 @@ export interface DeskSettingsData {
   mode: DeskMode;
   /** The voice the live desk speaks with (lib/aiDesk/shared VOICES). */
   voice: DeskVoice;
+  /** How the company's own phone reaches the desk (set at the carrier). */
+  forwarding: DeskForwarding;
+  /** The number customers call the company on (Organization.phone), as typed. */
+  businessPhone: string | null;
+  timezone: string;
+  /** The online-booking calendar the desk books from. */
+  booking: { enabled: boolean; hoursWords: string; services: string[]; url: string };
+  /** Which of the four setup steps are done. */
+  steps: { number: boolean; profile: boolean; booking: boolean; tested: boolean };
   /** This month's minutes: the desk's calls and the owner's browser tests. */
   use: DeskUse;
   /** Where the company stands on minutes, and the packs (lib/aiDesk/minutes, packs). */

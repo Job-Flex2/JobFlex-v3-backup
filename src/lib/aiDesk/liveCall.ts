@@ -69,7 +69,7 @@ export async function callBrief(t: { callSid: string; organizationId: string; fr
   ].join("\n");
   // A call is capped at ten minutes, or at what is left on the balance (a minute at least, so the desk can say so).
   const maxSeconds = balance ? Math.max(60, Math.min(600, balance.remainingSeconds)) : 600;
-  return { ok: true, instructions: `${deskInstructions(profile, facts, settings.mode)}\n\n${extras}`, voice: settings.voice, maxSeconds, callSid: t.callSid };
+  return { ok: true, instructions: `${deskInstructions(profile, facts, settings.mode, settings.forwarding)}\n\n${extras}`, voice: settings.voice, maxSeconds, callSid: t.callSid };
 }
 
 type OrgRow = { id: string; name: string | null; slug: string; timezone: string; logoUrl: string | null; phone: string | null; billingEmail: string | null; gmailSettingsJson: string | null; gmailTokensJson: string | null; tradeTypesJson: string | null; bookingSettingsJson: string | null };

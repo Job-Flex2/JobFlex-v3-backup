@@ -32,8 +32,20 @@ export const VOICE_WORDS: Record<DeskVoice, string> = {
   verse: "expressive",
 };
 
+/**
+ * Whether the company's own phone forwards to the desk's number — set at the carrier, not
+ * here; the desk only needs to know, because with "all" a transfer back to that phone would
+ * ring the desk again.
+ *   none    customers call the desk's number directly
+ *   all     every call to the company phone forwards (*72) — the desk takes messages, never transfers
+ *   missed  only unanswered calls forward (*71) — transfers still reach a person
+ */
+export const DESK_FORWARDING = ["none", "all", "missed"] as const;
+export type DeskForwarding = (typeof DESK_FORWARDING)[number];
+
 export type DeskSettings = {
   mode: DeskMode;
+  forwarding: DeskForwarding;
   /** The voice the live desk speaks with. */
   voice: DeskVoice;
   /** What the owner typed or said about the company, as they said it. */
@@ -45,7 +57,40 @@ export type DeskSettings = {
   questions: string[];
 };
 
-export const DEFAULT_DESK: DeskSettings = { mode: "ANSWER", voice: "marin", brief: "", profile: null, profileUpdatedAt: null, questions: [] };
+export const DEFAULT_DESK: DeskSettings = { mode: "ANSWER", forwarding: "none", voice: "marin", brief: "", profile: null, profileUpdatedAt: null, questions: [] };
+
+/** The zones a US/Canadian contractor picks from; any IANA zone is accepted on save. */
+export const US_TIMEZONES: ReadonlyArray<{ id: string; label: string }> = [
+  { id: "America/New_York", label: "Eastern — New York, Miami, Atlanta" },
+  { id: "America/Chicago", label: "Central — Chicago, Dallas, Houston" },
+  { id: "America/Denver", label: "Mountain — Denver, Salt Lake City" },
+  { id: "America/Phoenix", label: "Arizona — Phoenix (no daylight time)" },
+  { id: "America/Los_Angeles", label: "Pacific — Seattle, Portland, Los Angeles" },
+  { id: "America/Anchorage", label: "Alaska" },
+  { id: "Pacific/Honolulu", label: "Hawaii" },
+  { id: "America/Toronto", label: "Eastern — Toronto" },
+  { id: "America/Edmonton", label: "Mountain — Calgary, Edmonton" },
+  { id: "America/Vancouver", label: "Pacific — Vancouver" },
+];
+
+export function validTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The zone's name for a card, with the time there now. */
+export function timezoneWords(tz: string, at: Date = new Date()): string {
+  const known = US_TIMEZONES.find((z) => z.id === tz)?.label ?? tz;
+  try {
+    return `${known} · ${at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })} there now`;
+  } catch {
+    return known;
+  }
+}
 
 /** The stored JSON, read tolerantly: anything unreadable is the default. */
 export function parseDeskSettings(json: string | null | undefined): DeskSettings {
@@ -55,6 +100,7 @@ export function parseDeskSettings(json: string | null | undefined): DeskSettings
     const mode = (DESK_MODES as readonly string[]).includes(String(raw.mode)) ? (raw.mode as DeskMode) : DEFAULT_DESK.mode;
     return {
       mode,
+      forwarding: (DESK_FORWARDING as readonly string[]).includes(String(raw.forwarding)) ? (raw.forwarding as DeskForwarding) : DEFAULT_DESK.forwarding,
       voice: (VOICES as readonly string[]).includes(String(raw.voice)) ? (raw.voice as DeskVoice) : DEFAULT_DESK.voice,
       brief: typeof raw.brief === "string" ? raw.brief.slice(0, 4000) : "",
       profile: raw.profile && typeof raw.profile === "object" ? cleanProfile(raw.profile, EMPTY_PROFILE) : null,

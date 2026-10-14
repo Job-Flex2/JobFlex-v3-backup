@@ -168,7 +168,7 @@ import { MobileSettingsSprite } from "./sprite";
 import { PasswordControl } from "@/components/account-password/password-control";
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
-import { DeskSetup, DeskStatus } from "@/components/v3/ai-desk/desk-setup";
+import { DeskSteps } from "@/components/v3/ai-desk/desk-steps";
 import { DeskMinutes } from "@/components/v3/ai-desk/desk-minutes";
 import { DESK_COPY } from "@/components/v3/settings-blueprint/settings-data";
 
@@ -1205,7 +1205,7 @@ function DeskPaneMobile({ data }: { data: SettingsData }) {
       <section className="mst-card" id="desk-status">
         <CardHeader card={{ title: DESK_COPY.title, sub: DESK_COPY.sub }} />
         <div className="mst-cardB">
-          {desk.canManage ? <DeskStatus desk={desk} registration={data.notifications.sms.registration} /> : <div className="mst-note">{DESK_COPY.managersOnly}</div>}
+          {desk.canManage ? <DeskSteps desk={desk} registration={data.notifications.sms.registration} /> : <div className="mst-note">{DESK_COPY.managersOnly}</div>}
         </div>
       </section>
       {desk.canManage ? (
@@ -1213,14 +1213,6 @@ function DeskPaneMobile({ data }: { data: SettingsData }) {
           <CardHeader card={{ title: DESK_COPY.minutesTitle, sub: DESK_COPY.minutesSub }} />
           <div className="mst-cardB">
             <DeskMinutes desk={desk} />
-          </div>
-        </section>
-      ) : null}
-      {desk.canManage ? (
-        <section className="mst-card" id="desk-setup">
-          <CardHeader card={{ title: DESK_COPY.setupTitle, sub: DESK_COPY.setupSub }} />
-          <div className="mst-cardB">
-            <DeskSetup desk={desk} />
           </div>
         </section>
       ) : null}
