@@ -19,6 +19,8 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     label: "Platform",
     items: [
       { label: "Overview", icon: "i-grid", href: "/admin" },
+      // The wall board for the office TV (2026-10-13) — today, live, no chrome.
+      { label: "Office screen", icon: "i-chart", href: "/admin/office" },
       { label: "Traffic", icon: "i-chart", href: "/admin/traffic" },
       // Added 2026-10-12: the signups section of the traffic page, on its own page under it — the trials with a card
       // and without, in the order they end, the seven-day calendar, who started paying and how, what each trial did.
