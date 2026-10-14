@@ -6,7 +6,9 @@
 //
 //   · TRIAL_CAPS: every ceiling counts its uses on a card-less trial with no
 //     card and refuses past it with a PlanLimitFailure that names the ceiling;
-//     a card lifts them all; an ended trial refuses everything paid; an
+//     a card lifts them all; an ended trial is on the Free plan (owner,
+//     2026-10-14): its ceilings give way and lib/planStatus closes everything
+//     paid, as for a cancelled company; an
 //     organization with no card-less trial is never counted.
 //   · a point asked twice is one fence use; a refund gives a use back; a
 //     coveredBy claim made outside a request covers nothing.
@@ -30,6 +32,7 @@ import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "../../src/lib/dispo
 import { cardlessTrialRefusal } from "../../src/lib/trialGuard";
 import { cardlessTrialsPaused, cardlessStartsInLastDay, noteCardlessTrialStarted } from "../../src/lib/trialDailyCap";
 import { cardlessKey } from "../../src/lib/trialState";
+import { planEnded } from "../../src/lib/paidCaps";
 
 const db = new PrismaClient();
 const PID = process.pid;
@@ -102,12 +105,13 @@ async function main() {
   const concurrent = await Promise.all(Array.from({ length: 6 }, () => takeTrialCap(fresh, "hvacLookups")));
   ok("six presses at once take exactly three uses (compare-and-swap)", concurrent.filter((g) => g.ok).length === 3 && (await readTrialMeter(fresh)).uses.hvacLookups === 3);
 
-  head("a card lifts them; an ended trial refuses everything paid");
+  head("a card lifts them; an ended trial is on the Free plan, where everything paid is closed");
   const cardGates = await Promise.all([takeTrialCap(carded, "eagleViewOrders"), takeTrialCap(carded, "smsOutbound"), takeTrialCap(carded, "aiCalls")]);
   ok("with a card on file nothing is refused and nothing counted (the plan's limits apply)", cardGates.every((g) => g.ok && !g.counted) && !(await db.syncState.findUnique({ where: { key: trialMeterKey(carded) } })));
   await db.subscription.update({ where: { organizationId: fresh }, data: { trialEndsAt: new Date(Date.now() - 60_000) } });
   const endedGate = await takeTrialCap(fresh, "aiCalls");
-  ok("past the end with no card: refused as ended", !endedGate.ok && endedGate.ended && endedGate.failure.trialEnded === true && /trial has ended/i.test(endedGate.failure.error));
+  ok("past the end with no card: the trial's ceilings give way to the Free plan's limits (nothing counted)", endedGate.ok && !endedGate.counted && (await trialCapScope(fresh)) === "none");
+  ok("…and the plan rule closes everything paid, as for a cancelled company", await planEnded(fresh));
   const thrown = new TrialCapError("aiCalls");
   ok("the thrown form carries Next's redirect to the trial page", thrown.digest === "NEXT_REDIRECT;push;/dashboard/trial?cap=aiCalls;303;" && new TrialCapError("aiCalls", true).digest.includes("/dashboard/trial?locked=1"));
 
