@@ -97,7 +97,7 @@ export default async function MobileUpgradeV1Page({
   }
 
   // On the Free plan (lib/freePlan) no card is current: each one is paid at once.
-  const onFree = sub?.provider !== "MANUAL" && onFreePlan(sub);
+  const onFree = onFreePlan(sub);
   // Booked: the date it switches, and the way back (lib/freePlan).
   const freeSwitch =
     sub && sub.provider !== "MANUAL" && freeSwitchBooked(sub)

@@ -296,13 +296,15 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
               /* On the Free plan (owner, 2026-10-13): since when, and the
                  plan it had — nothing is billed. */
               <>
+                {freePlan.since ? (
+                  <div>
+                    <span>On Free since</span>
+                    <b>{longDate(freePlan.since)}</b>
+                  </div>
+                ) : null}
                 <div>
-                  <span>On Free since</span>
-                  <b>{freePlan.since ? longDate(freePlan.since) : "—"}</b>
-                </div>
-                <div>
-                  <span>Was</span>
-                  <b>{freePlan.wasName}</b>
+                  <span>{freePlan.wasName ? "Was" : "Billed"}</span>
+                  <b>{freePlan.wasName || "Nothing"}</b>
                 </div>
               </>
             ) : freeSwitch ? (

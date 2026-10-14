@@ -18,7 +18,8 @@ export interface BillingRecoveryState {
 export function recoveryKind(sub: PlanStatusRow | null): RecoveryKind {
   if (sub && ["PAST_DUE", "UNPAID"].includes(sub.status)) return "payment";
   if (sub?.status === "TRIAL_ENDED" || (sub?.status === "TRIALING" && planLapsed(sub))) return "trial-ended";
-  if (sub?.status === "CANCELED") return "canceled";
+  // The Free plan (lib/freePlan): a subscription that ended, or a grant that ran out.
+  if (sub?.status === "CANCELED" || sub?.status === "FREE") return "canceled";
   return sub && !planLapsed(sub) ? "active" : "expired";
 }
 

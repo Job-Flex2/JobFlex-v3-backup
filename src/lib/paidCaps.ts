@@ -94,7 +94,8 @@ export async function takeHvacReportCap(organizationId: string): Promise<{ ok: t
 // Two questions, both on the one rule of lib/planStatus over the effective
 // row (lib/subscriptionAccess — a grant's terms, a stale Stripe row checked):
 //   · planEnded   — the plan was cancelled, unpaid, expired or its trial ran
-//                   out. A company with no plan (or FREE) has nothing to end.
+//                   out, or the company is on the Free plan (lib/planStatus,
+//                   2026-10-14). A company with no plan has nothing to end.
 //   · planOpen    — the company HOLDS a plan that is still open: a
 //                   subscription that is not FREE and not ended. What the
 //                   owner asked for before a text code or a parcel tile.

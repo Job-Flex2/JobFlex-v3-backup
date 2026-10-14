@@ -19,7 +19,9 @@
 //     lock, and gets no "add a card" mail;
 //   · webhooks delivered again or out of order do not move a company from
 //     Free back to its paid plan, nor from a new paid plan back to Free;
-//   · what the status FREE would have opened (the reason Free is not that).
+//   · a complimentary plan that runs out onto "free" (status FREE) is the
+//     Free plan too (owner, 2026-10-14): the same 16 answers as a cancelled
+//     company; a grant still running keeps its doors open.
 import { actAs, check, outcome, summary } from "./_actionHarness";
 import { randomBytes } from "node:crypto";
 import type Stripe from "stripe";
@@ -36,6 +38,7 @@ import { planEnded, planOpen, orgMayText } from "../../src/lib/paidCaps";
 import { companyIsPaying } from "../../src/lib/sms/registration";
 import { cardlessTrialState, isTrialWriteLocked } from "../../src/lib/trialState";
 import { onFreePlan, freeSwitchBooked } from "../../src/lib/freePlan";
+import { endPlanGrant, writePlanGrant, type PlanGrant } from "../../src/lib/planGrant";
 import { measureRoofInstant } from "../../src/actions/roofMeasurement";
 import { requestHvacPermitReport, readHvacNameplate } from "../../src/actions/hvacEstimator";
 import { startPhoneVerification } from "../../src/actions/sms";
@@ -212,13 +215,31 @@ async function main() {
     const rowT = await db.subscription.findUnique({ where: { organizationId: T.org.id } });
     check("the cancelled card-less trial is on Free and not write-locked", onFreePlan(rowT) && !(await isTrialWriteLocked(T.org.id)), rowT?.status);
 
-    // ── why Free is not the status FREE ──
-    const F = await company("F");
-    await db.subscription.create({ data: { organizationId: F.org.id, plan: "FREE", status: "FREE", provider: "MANUAL" } });
-    const kitF = await setup(F);
-    const doorsStatusFree = await doors(F, kitF.est, kitF.photo);
-    const opened = keys.filter((k) => JSON.stringify(doorsStatusFree[k]) !== JSON.stringify(doorsCanceled[k]));
-    console.log(`note: the status FREE would answer differently from a cancelled company on: ${opened.join(", ") || "nothing"}`);
+    // ── a complimentary plan runs out onto "free": status FREE is the Free plan ──
+    const grantOf = (endsAt: string | null): PlanGrant => ({ plan: "PROFESSIONAL", grantedAt: new Date(Date.now() - 30 * DAY).toISOString(), endsAt, fallback: "free", reason: "qa", actorId: "qa", actorEmail: "qa@qa.test", replaced: null });
+    const G = await company("G");
+    await db.subscription.create({ data: { organizationId: G.org.id, plan: "PROFESSIONAL", status: "ACTIVE", provider: "MANUAL", currentPeriodEnd: new Date(Date.now() - 3600e3) } });
+    const gGrant = grantOf(new Date(Date.now() - 3600e3).toISOString());
+    await writePlanGrant(G.org.id, gGrant);
+    await endPlanGrant(G.org.id, gGrant, "PROFESSIONAL", "expired", null);
+    const rowG = await db.subscription.findUnique({ where: { organizationId: G.org.id } });
+    check("a grant that ran out onto \"free\" leaves the company on the Free plan (status FREE)", rowG?.status === "FREE" && onFreePlan(rowG), rowG?.status);
+    const kitG = await setup(G);
+    const doorsGrantFree = await doors(G, kitG.est, kitG.photo);
+
+    // ── a grant still running: its doors stay open ──
+    const H = await company("H");
+    await db.subscription.create({ data: { organizationId: H.org.id, plan: "PROFESSIONAL", status: "ACTIVE", provider: "MANUAL", currentPeriodEnd: new Date(Date.now() + 30 * DAY) } });
+    await writePlanGrant(H.org.id, grantOf(new Date(Date.now() + 30 * DAY).toISOString()));
+    const kitH = await setup(H);
+    const doorsGrant = await doors(H, kitH.est, kitH.photo);
+
+    console.log("── the doors, a grant that ran out, and one running ──\n" + keys.map((k) => `${k.padEnd(12)} grant→free ${String(doorsGrantFree[k]).slice(0, 40).padEnd(42)} grant running ${String(doorsGrant[k]).slice(0, 40)}`).join("\n"));
+    for (const k of keys) {
+      check(`door "${k}": status FREE (a grant ran out) answers exactly as a cancelled company`, JSON.stringify(doorsGrantFree[k]) === JSON.stringify(doorsCanceled[k]), { free: doorsGrantFree[k], canceled: doorsCanceled[k] });
+    }
+    const grantOpen = (["roof", "coolcalc", "photoAi", "phoneCode", "parcelTiles", "planOpen", "texts"] as const).filter((k) => doorsGrant[k] !== doorsPaying[k]);
+    check("a grant still running keeps its paid doors open, as a paying company", grantOpen.length === 0 && doorsGrant.planEnded === false && doorsGrant.pages === doorsPaying.pages, grantOpen);
   } finally {
     for (const k of ["EAGLEVIEW_CLIENT_ID", "EAGLEVIEW_CLIENT_SECRET", "COOLCALC_CLIENT_ID", "COOLCALC_API_KEY", "COOLCALC_DEALER_ID"]) process.env[k] = "";
     const del = async (fn: () => Promise<unknown>) => { try { await fn(); } catch { /* next */ } };

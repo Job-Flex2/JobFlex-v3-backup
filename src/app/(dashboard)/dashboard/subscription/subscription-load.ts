@@ -282,7 +282,10 @@ export async function loadSubscriptionData(
      grant that expired (EXPIRED) still reads "Access ended". */
   const freeSwitch = !complimentary && freeSwitchBooked(sub) ? { at: freeSwitchDate(sub)?.toISOString() ?? null } : null;
   const wasName = planDto?.name ?? titleCaseSlug(rawPlan);
-  const freePlan = !complimentary && onFreePlan(sub) ? { since: freeSince(sub)?.toISOString() ?? null, wasName } : null;
+  // A grant that ran out onto "free" kept no plan of its own to name: no "Was".
+  const freePlan = !complimentary && onFreePlan(sub)
+    ? { since: freeSince(sub)?.toISOString() ?? null, wasName: wasName.toLowerCase() === "free" ? "" : wasName }
+    : null;
   const endedStatus = status.toUpperCase() === "EXPIRED";
   const cancellation = !complimentary && endedStatus
     ? { accessUntil: (sub?.currentPeriodEnd ?? sub?.trialEndsAt)?.toISOString() ?? null, ended: true }

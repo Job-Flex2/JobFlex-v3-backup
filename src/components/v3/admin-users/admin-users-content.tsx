@@ -398,7 +398,7 @@ export function AdminUsersContent({
                         <span className={cx("au-plan-name")}>
                           {!u.plan || u.plan === "NONE" ? (
                             <span className={cx("au-dash")}>—</span>
-                          ) : onFreePlan({ status: u.planStatus }) && u.provider !== "MANUAL" ? (
+                          ) : onFreePlan({ status: u.planStatus }) ? (
                             // Its subscription ended: the Free plan (lib/freePlan).
                             freeWasLabel(planLabel(u.plan, plans))
                           ) : (
@@ -406,7 +406,7 @@ export function AdminUsersContent({
                           )}
                         </span>
                         {u.planStatus !== "NONE" ? (
-                          <StatusBadge status={onFreePlan({ status: u.planStatus }) && u.provider !== "MANUAL" ? "FREE" : u.planStatus} />
+                          <StatusBadge status={onFreePlan({ status: u.planStatus }) ? "FREE" : u.planStatus} />
                         ) : null}
                         {/* Where the plan on this row came from, but only when
                             it is not the ordinary case. A grant and a

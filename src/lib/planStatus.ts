@@ -12,7 +12,11 @@
 //   · CANCELED, UNPAID (Stripe gave up retrying), EXPIRED and TRIAL_ENDED (a
 //     card-less trial that ran out) close it at once. A cancellation booked
 //     for the period's end is still ACTIVE/TRIALING until Stripe ends it.
-//   · No subscription, or FREE, is not a lapse: there is nothing to close.
+//   · FREE closes it too (owner, 2026-10-14): it is the Free plan, which
+//     opens nothing a cancelled company cannot (lib/freePlan) — a grant that
+//     ran out onto "free" used to open the paid pages, the roof orders,
+//     Cool Calc and texts. Its limits are the "free" catalog row's.
+//   · No subscription is not a lapse: there is nothing to close.
 //
 // Database-free, so the edge of every check can call it on a row it already
 // holds.
@@ -31,7 +35,8 @@ export const PLAN_STATUS_SELECT = { status: true, currentPeriodEnd: true, trialE
 
 /** True when the subscription no longer opens its plan's features. */
 export function planLapsed(sub: PlanStatusRow | null | undefined, now: Date = new Date()): boolean {
-  if (!sub || sub.status === "FREE") return false;
+  if (!sub) return false;
+  if (sub.status === "FREE") return true;
   const periodOver = !!sub.currentPeriodEnd && sub.currentPeriodEnd.getTime() + LAPSE_GRACE_MS < now.getTime();
   if (sub.status === "ACTIVE" || sub.status === "PAST_DUE") return periodOver;
   if (sub.status === "TRIALING") {

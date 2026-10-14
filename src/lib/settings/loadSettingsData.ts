@@ -135,7 +135,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
   const wasName = planContext.plan?.name ?? titleCaseSlug(planContext.rawPlan);
   // Ended (CANCELED) reads as the Free plan (lib/freePlan); a grant is not one.
   const granted = sub?.provider === "MANUAL";
-  const onFree = !granted && onFreePlan(sub);
+  const onFree = onFreePlan(sub);
   const planName = onFree ? FREE_PLAN_NAME : wasName;
   const seatStatus = usage.find((u) => u.resource === "teamSeats");
   const seatsUsed = seatStatus?.used ?? 0;

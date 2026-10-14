@@ -131,7 +131,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // The sidebar's limit pill names the plan by its catalog name, never the slug.
   // An ended subscription is the Free plan (lib/freePlan).
   const planName =
-    subscription && subscription.provider !== "MANUAL" && onFreePlan(subscription)
+    onFreePlan(subscription)
       ? FREE_PLAN_NAME
       : subscription?.plan
         ? await getPlanDisplayName(subscription.plan)

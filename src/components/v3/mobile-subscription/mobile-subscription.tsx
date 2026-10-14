@@ -465,9 +465,9 @@ export function MobileSubscription({
                 <span className="jfms-heroFactV">{billValue}</span>
               </div>
               <div className="jfms-heroFact">
-                <span className="jfms-heroFactL">{complimentary ? "Then" : freePlan ? "Was" : "Billing"}</span>
+                <span className="jfms-heroFactL">{complimentary ? "Then" : freePlan?.wasName ? "Was" : "Billing"}</span>
                 <span className="jfms-heroFactV">
-                  {complimentary ? (complimentary.after === "free" ? "Free plan" : "Choose a plan") : freePlan ? freePlan.wasName : freeSwitch ? "Nothing more" : priceCents === null ? "—" : interval === "YEAR" ? "Per year" : "Per month"}
+                  {complimentary ? (complimentary.after === "free" ? "Free plan" : "Choose a plan") : freePlan ? freePlan.wasName || "Nothing billed" : freeSwitch ? "Nothing more" : priceCents === null ? "—" : interval === "YEAR" ? "Per year" : "Per month"}
                 </span>
               </div>
             </div>

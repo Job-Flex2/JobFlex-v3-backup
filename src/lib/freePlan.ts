@@ -4,14 +4,15 @@
 // it has paid for, it moves to the Free plan. Nothing more is billed, nothing
 // is refunded, and every proposal, job and client stays where it is.
 //
-// FREE OPENS NOTHING A CANCELLED COMPANY COULD NOT OPEN. The mirror keeps the
-// status Stripe gives an ended subscription — CANCELED — and every door
-// (lib/planStatus: the page gate, the feature tier, the limits engine, the
-// paid services, texting, the parcel tiles) keeps answering it exactly as
-// before: closed, at the "free" catalog row's limits. Free is how that state
-// is NAMED — on the subscription page, the settings, the sidebar, the emails
-// and the admin — never a status of its own. The status FREE would not do: it
-// is "nothing to close" to lib/planStatus, so the paid pages would open.
+// FREE OPENS NOTHING A CANCELLED COMPANY COULD NOT OPEN. Three mirror
+// statuses are the Free plan, and lib/planStatus closes every door for each
+// of them alike (the page gate, the feature tier, the limits engine at the
+// "free" catalog row, the paid services, texting, the parcel tiles):
+//   · CANCELED    — the subscription ended (the owner cancelled, support
+//                   ended it, Stripe gave up on payment);
+//   · FREE        — a complimentary plan ran out onto "free" (lib/planGrant).
+// Free is how that state is NAMED — on the subscription page, the settings,
+// the sidebar, the emails and the admin.
 //
 // The plan the company had stays on the row (Subscription.plan), the day it
 // asked to leave on canceledAt and the day it moved to Free on
@@ -39,9 +40,12 @@ export type FreePlanRow = {
 
 const at = (d: Date | string | null | undefined): Date | null => (d ? new Date(d) : null);
 
-/** The company is on the Free plan: its subscription has ended. */
+/** The mirror statuses that are the Free plan (see the head of this file). */
+export const FREE_STATUSES = ["CANCELED", "FREE"] as const;
+
+/** The company is on the Free plan. */
 export function onFreePlan(sub: Pick<FreePlanRow, "status"> | null | undefined): boolean {
-  return (sub?.status ?? "").toUpperCase() === "CANCELED";
+  return (FREE_STATUSES as readonly string[]).includes((sub?.status ?? "").toUpperCase());
 }
 
 /** The switch to Free is booked: still live, set to end with the cycle. */

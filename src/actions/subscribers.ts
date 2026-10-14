@@ -646,7 +646,7 @@ async function fromStripe(withCards: boolean): Promise<SubscribersData> {
       // list cannot see it (a sandbox subscription on a test clock is left out
       // of every list that does not name the clock or the customer).
       card: withCards && (comped || !r.externalSubId) ? NO_CARD : null,
-      onFree: !comped && onFreePlan(r),
+      onFree: onFreePlan(r),
     });
   }
 
@@ -797,7 +797,7 @@ async function fromRecord(
       changedAt: r.updatedAt,
       changeKind: "updated",
       card: null, // Stripe was not read
-      onFree: !comped && onFreePlan(r),
+      onFree: onFreePlan(r),
     };
   });
 
