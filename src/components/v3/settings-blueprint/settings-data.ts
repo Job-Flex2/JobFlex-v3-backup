@@ -25,7 +25,7 @@ import type { PaymentConnectionStatusView } from '@/lib/payments/connections';
 import type { NotificationPrefs, PrefKey } from '@/lib/notificationPrefsShared';
 import type { SmsRegistrationView } from '@/lib/sms/registrationShared';
 import type { CompanyFacts, DeskProfile } from '@/lib/aiDesk/profile';
-import type { DeskBalance, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
+import type { CallsGo, DeskBalance, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
 
 export type IconName =
   | 'i-arrow'
@@ -1233,6 +1233,8 @@ export interface DeskSettingsData {
   use: DeskUse;
   /** Where the company stands on minutes, and the packs (lib/aiDesk/minutes, packs). */
   minutes: DeskMinutesData;
+  /** A line JobFlex assigned to this company on /admin/health — its number for calls when it bought none. */
+  assigned: { number: string; go: CallsGo; phone: string | null } | null;
   brief: string;
   profile: DeskProfile | null;
   profileUpdatedAt: string | null;

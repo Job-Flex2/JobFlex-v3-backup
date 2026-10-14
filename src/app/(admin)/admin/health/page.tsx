@@ -64,7 +64,7 @@ async function readWebhooks(since: Date): Promise<WebhookSnapshot> {
 }
 
 export default async function AdminHealthPage() {
-  await requirePlatformAdmin();
+  const admin = await requirePlatformAdmin();
 
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -74,7 +74,7 @@ export default async function AdminHealthPage() {
     checkStripeReachable(),
     getTrafficSnapshot(),
     // The AI desk's go-live lights (lib/aiDesk/readiness): never fails the page.
-    deskReadiness().catch((err) => {
+    deskReadiness(admin.id).catch((err) => {
       console.warn("[health] desk readiness failed:", err);
       return null;
     }),
