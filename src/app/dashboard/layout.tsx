@@ -43,6 +43,7 @@ import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
 import { getBlockedCustomPages } from "@/lib/customPageAccess";
 import { workspaceOf } from "@/lib/editionAccess";
 import { unlockedByEdition } from "@/lib/editions";
+import { canUseDeckEstimator } from "@/lib/deck/access";
 import type { NavView } from "@/components/v3/blueprint-shell/nav-role";
 import { UpgradeGate } from "@/components/v3/upgrade-gate/upgrade-gate";
 import { isCustomBlockedPath } from "@/lib/customPlan";
@@ -158,8 +159,14 @@ export default async function DashboardBlueprintLayout({
     lockedPages = await getBlockedCustomPages(ctx.organizationId).catch(() =>
       getBlockedCustomPages(ctx.organizationId),
     );
-    const ws = await workspaceOf(ctx.organizationId).catch(() => null);
+    // Deck Studio is not sold yet; the admins who test it (lib/deck/access) get it in the
+    // New estimate dialog as a Preview — read beside the workspace, not after it.
+    const [ws, deckPreview] = await Promise.all([
+      workspaceOf(ctx.organizationId).catch(() => null),
+      canUseDeckEstimator({ id: ctx.user.id, email: ctx.user.email }, null).catch(() => false),
+    ]);
     if (ws) navView = { workspace: ws.workspace, unlocked: ws.deckAccess ? [...unlockedByEdition("deck")] : [], switchable: ws.switchable };
+    if (deckPreview && !ws?.deckAccess) navView = { ...navView, preview: [...unlockedByEdition("deck")] };
     announcements = await db.announcement
       .findMany({
         where: {
