@@ -268,6 +268,7 @@ export const REGISTRATION_COPY = {
     "Texting waits for the carriers' approval — JobFlex watches for it and turns your texts on by itself",
   ],
   doneYou: "You fill in one short form — what JobFlex already knows is filled in for you.",
+  doneRegisters: (n: string) => `Registers ${n} — the line you already have — in your company's name. No new number`,
   get: "Get your number",
   paidOnly: "Your own number comes with a paid plan.",
   // What the number does right now (owner, 2026-10-13: "voice gets no approval … for SMS you have to wait").
@@ -302,6 +303,20 @@ export const REGISTRATION_COPY = {
   release: "Release this number",
   consent: "Clients get texts only after they tick “Text me about my visit and estimate” when they book online.",
   legacy: "This number was bought before registration existed, so carriers will not deliver its texts to clients. Release it, then get your registered number.",
+  // A line JobFlex lent the company for calls (2026-10-14): the AI desk answers it, texting does not come with it.
+  assignedTag: "for calls",
+  assignedCalls: "On — JobFlex lent you this line; the AI desk answers it today",
+  assignedTextsJobflex: "Not from this line — it is JobFlex's own number, registered to JobFlex. The carriers deliver a company's texts only from a number registered in its name",
+  assignedTextsRegistrable: "Not yet — register this same number in your company's name below; texts go out from it once the carriers approve",
+  assignedTextsLocal: "Not from this line — it is a local number, and the carriers register a company's texts on a toll-free one",
+  assignedKeep: (n: string) => `Your calls keep coming to ${n}. JobFlex gets you a number of your own for texts — it answers calls too, if you ever want to give it out instead.`,
+  assignedKeepSame: (n: string) => `No new number: JobFlex registers ${n} — the line you already have — in your company's name. Calls keep coming to it meanwhile.`,
+  getOwn: "Get your own number for texts",
+  // JobFlex's own company (lib/sms/houseLine): the JobFlex line is its line, calls and texts.
+  assignedTagHouse: "sending",
+  assignedTextsHouse: "On — this is JobFlex's own number and this company is JobFlex's: texts to your team and clients go out from it",
+  assignedKeepHouse: (n: string) => `Calls and texts both go through ${n}. A number of your own is still here if you ever want one.`,
+  registerThis: "Register this number for texts",
 } as const;
 
 /** The form's first values: what JobFlex already knows about the company and the person filling it in. */
@@ -360,4 +375,33 @@ export type SmsRegistrationView = {
   /** The company's public pages Twilio is given (smsPagesFor). */
   pages: { booking: string; terms: string; privacy: string; optInImage: string };
   details: SmsRegistrationDetails;
+  /**
+   * A line JobFlex assigned to the company for calls (/admin/health, lib/aiDesk/numbers) while
+   * it has no registered number of its own (owner, 2026-10-14: "we already have the number for
+   * the AI desk — show it in Texting"). `jobflexOwn`: JobFlex's own approved sender, registered
+   * to JobFlex — it can never carry the company's texts. `registrable`: a toll-free line that
+   * is not JobFlex's own — the registration can take it instead of buying a new number.
+   */
+  assigned: AssignedLine | null;
 };
+
+/** `house`: JobFlex's own company (lib/sms/houseLine) — the lent JobFlex line carries its texts too. */
+export type AssignedLine = { number: string; jobflexOwn: boolean; registrable: boolean; house: boolean };
+
+/** A US/Canada toll-free number (E.164): the only kind a toll-free verification takes. */
+export function isTollFree(e164: string | null | undefined): boolean {
+  return /^\+1(800|833|844|855|866|877|888)\d{7}$/.test(e164 ?? "");
+}
+
+/** What the number card says about a lent line: calls today, texts only from a number in the company's name. */
+export function assignedLineWords(a: AssignedLine): { tag: string; calls: string; texts: string; keep: string; button: string } {
+  const C = REGISTRATION_COPY;
+  if (a.house) return { tag: C.assignedTagHouse, calls: C.assignedCalls, texts: C.assignedTextsHouse, keep: C.assignedKeepHouse(a.number), button: C.getOwn };
+  return {
+    tag: C.assignedTag,
+    calls: C.assignedCalls,
+    texts: a.jobflexOwn ? C.assignedTextsJobflex : a.registrable ? C.assignedTextsRegistrable : C.assignedTextsLocal,
+    keep: a.registrable && !a.jobflexOwn ? C.assignedKeepSame(a.number) : C.assignedKeep(a.number),
+    button: a.registrable && !a.jobflexOwn ? C.registerThis : C.getOwn,
+  };
+}

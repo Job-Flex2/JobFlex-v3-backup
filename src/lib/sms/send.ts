@@ -37,6 +37,7 @@ import { brand, clip, heldDigestText, SMS_MAX, unbrand } from "./format";
 import { trialBlocksText } from "@/lib/trialMeter";
 import { hasTextConsent, isTeamPhone } from "./consent";
 import { jobflexSender } from "./jobflexSender";
+import { houseLineFor } from "./houseLine";
 import { orgMayText } from "@/lib/paidCaps";
 
 const CAP_PER_NUMBER_PER_DAY = 25;
@@ -98,7 +99,9 @@ async function dispatch(m: { organizationId: string | null; to: string; body: st
     return { ok: false, reason: "trial" };
   }
   // Which number: the company's own, once Twilio approved it (registration.ts
-  // sets smsFromNumber then). There is no JobFlex number to fall back on. The
+  // sets smsFromNumber then). There is no JobFlex number to fall back on —
+  // except for JobFlex's own company (houseLine.ts), which IS the business the
+  // JobFlex number is registered to. The
   // company's number texts its team, and anyone else only after they said yes
   // on the booking page (consent.ts): the opt-in its registration was approved
   // on. The answer to HELP always goes. Asked before the caps, so a text that
@@ -107,7 +110,7 @@ async function dispatch(m: { organizationId: string | null; to: string; body: st
   try {
     const jobflexOwn = !m.organizationId && m.kind.startsWith("jobflex-");
     const org = !jobflexOwn && m.organizationId ? await db.organization.findUnique({ where: { id: m.organizationId }, select: { smsFromNumber: true } }) : null;
-    own = jobflexOwn ? await jobflexSender() : org?.smsFromNumber ?? null;
+    own = jobflexOwn ? await jobflexSender() : org?.smsFromNumber ?? (m.organizationId ? await houseLineFor(m.organizationId) : null);
     // A company whose plan has ended sends nothing from its own number
     // (2026-10-12, money audit P1-8): every text costs JobFlex money.
     if (!jobflexOwn && m.organizationId && own && !(await orgMayText(m.organizationId))) {

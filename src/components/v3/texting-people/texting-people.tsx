@@ -27,6 +27,13 @@ import s from "./texting-people.module.css";
 const AUDIENCES: readonly TextAudience[] = ["office", "sales", "crew"];
 
 type Run = (label: string, fn: () => Promise<SmsActionResult>, after?: () => void) => Promise<void>;
+type RowMessage = { forRow: string; kind: "ok" | "err"; text: string };
+
+/** (425) 772-6587 from whatever was typed; the digits back when it is not a US number. */
+function prettyTyped(raw: string): string {
+  const d = raw.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : raw.trim();
+}
 
 export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
   const router = useRouter();
@@ -38,22 +45,23 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
     setRows(roster);
   }
   const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState("");
-  const [err, setErr] = useState("");
+  // The answer lands on the row that asked (2026-10-14: the owner tapped "Text me a code" on
+  // a long roster and the note sat at the bottom, out of sight). Labels are `<userId>:<what>`.
+  const [msg, setMsg] = useState<RowMessage | null>(null);
   const run: Run = async (label, fn, after) => {
+    const forRow = label.split(":")[0] ?? "";
     setBusy(label);
-    setNote("");
-    setErr("");
+    setMsg(null);
     try {
       const r = await fn();
       if (r.ok) {
-        setNote(r.note ?? "Saved.");
+        setMsg({ forRow, kind: "ok", text: r.note ?? "Saved." });
         after?.();
         router.refresh();
-      } else setErr(r.error);
+      } else setMsg({ forRow, kind: "err", text: r.error });
     } catch (e) {
       // A throw that reached the browser (the sign-in redirected the action, a deploy in between): words, not "#441" (2026-10-14).
-      setErr(smsFailureMessage(e));
+      setMsg({ forRow, kind: "err", text: smsFailureMessage(e) });
     } finally {
       setBusy(null);
     }
@@ -78,7 +86,7 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
             {people.length ? (
               <div className={s.people}>
                 {people.map((r) => (
-                  <PersonRow key={r.userId} row={r} events={events} busy={busy} run={run} onFlip={flip} />
+                  <PersonRow key={r.userId} row={r} events={events} busy={busy} run={run} onFlip={flip} msg={msg?.forRow === r.userId ? msg : null} />
                 ))}
               </div>
             ) : (
@@ -98,8 +106,6 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
           </div>
         );
       })}
-      {note ? <p className={s.note} role="status">{note}</p> : null}
-      {err ? <p className={`${s.note} ${s.noteErr}`} role="alert">{err}</p> : null}
     </div>
   );
 }
@@ -110,12 +116,14 @@ function PersonRow({
   busy,
   run,
   onFlip,
+  msg,
 }: {
   row: SmsRosterRow;
   events: readonly PrefEventMeta[];
   busy: string | null;
   run: Run;
   onFlip: (row: SmsRosterRow, keys: string[], on: boolean) => void;
+  msg: RowMessage | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState("");
@@ -193,9 +201,14 @@ function PersonRow({
           </span>
         ) : null}
       </div>
+      {msg ? (
+        <p className={`${s.note} ${s.rowNote}${msg.kind === "err" ? ` ${s.noteErr}` : ""}`} role={msg.kind === "err" ? "alert" : "status"} data-row-message>
+          {msg.text}
+        </p>
+      ) : null}
       {editing && row.isMe ? (
         <div className={s.edit} data-texting-own-editor>
-          <label htmlFor={inputId}>{TEXTS_COPY.mobileLabel}</label>
+          <label htmlFor={inputId} hidden={stage === "code"}>{TEXTS_COPY.mobileLabel}</label>
           <input
             id={inputId}
             type="tel"
@@ -203,7 +216,7 @@ function PersonRow({
             autoComplete="off"
             value={phone}
             placeholder={TEXTS_COPY.mobilePlaceholder}
-            disabled={stage === "code"}
+            hidden={stage === "code"}
             onChange={(e) => setPhone(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && stage === "phone" && phone.replace(/\D/g, "").length >= 10) void run(`${row.userId}:code`, () => startPhoneVerification(phone), () => setStage("code"));
@@ -212,6 +225,12 @@ function PersonRow({
           />
           {stage === "code" ? (
             <>
+              <p className={s.sentTo} data-texting-sent-to>
+                {TEXTS_COPY.sentTo(prettyTyped(phone))}{" "}
+                <button type="button" className={s.linkBtn} disabled={busy !== null} onClick={() => { setStage("phone"); setCode(""); }}>
+                  {TEXTS_COPY.notYours}
+                </button>
+              </p>
               <label htmlFor={`${inputId}-code`}>{TEXTS_COPY.codeLabel}</label>
               <input
                 id={`${inputId}-code`}
@@ -229,9 +248,10 @@ function PersonRow({
               <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || code.length !== 6} onClick={() => run(`${row.userId}:verify`, () => confirmPhoneVerification(code), () => setEditing(false))} data-texting-verify>
                 {busy === `${row.userId}:verify` ? "Checking…" : TEXTS_COPY.verify}
               </button>
-              <button type="button" className={s.btn} disabled={busy !== null} onClick={() => { setStage("phone"); setCode(""); }}>
-                {TEXTS_COPY.change}
+              <button type="button" className={s.btn} disabled={busy !== null} onClick={() => run(`${row.userId}:code`, () => startPhoneVerification(phone))} data-texting-send-again>
+                {busy === `${row.userId}:code` ? "Sending…" : TEXTS_COPY.sendAgain}
               </button>
+              <p className={s.consent} data-texting-code-hint>{TEXTS_COPY.codeHint}</p>
             </>
           ) : (
             <>

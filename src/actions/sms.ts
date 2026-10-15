@@ -76,11 +76,14 @@ async function startPhoneVerificationInner(raw: string): Promise<SmsActionResult
     return { ok: true, note: `Code sent to ${pretty(phone)}.` };
   }
   if (!sent.notConfigured) return { ok: false, error: `Couldn't send the code: ${sent.error}` };
+  // In production a missing Twilio means no code can reach anyone — say so, instead of
+  // inventing one that only a log would hold (2026-10-14).
+  if (process.env.NODE_ENV === "production") return { ok: false, error: "JobFlex's texting isn't switched on yet, so the code can't be sent. Tell JobFlex support and we'll switch it on." };
   // Texting is not configured on this server (the local stand): our own code,
   // in the server log and only there, so the flow can still be walked.
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await db.phoneVerification.create({ data: { userId: user.id, phone, codeHash: hashCode(code, user.id), expiresAt: new Date(Date.now() + CODE_TTL_MS) } });
-  if (process.env.NODE_ENV !== "production") console.info(`[sms] verification code for …${phone.slice(-4)}: ${code}`);
+  console.info(`[sms] verification code for …${phone.slice(-4)}: ${code}`); // never production: it returned above
   return { ok: true, note: "Texting is not set up on this server — the code is in the server log." };
 }
 

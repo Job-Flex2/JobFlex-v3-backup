@@ -22,7 +22,8 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
   const [err, setErr] = useState("");
   const C = TEXTING_COPY;
   const reg = sms.registration;
-  const approvedNumber = reg?.stage === "approved" ? reg.number : sms.ownNumber;
+  // JobFlex's own company: the lent JobFlex line is its number (lib/sms/houseLine, 2026-10-14).
+  const approvedNumber = reg?.stage === "approved" ? reg.number : reg?.assigned?.house ? reg.assigned.number : sms.ownNumber;
   const people = sms.roster;
   const on = people.filter((r) => r.phone && !r.stopped).length;
   const off = people.filter((r) => !r.phone && (r.paused || r.stopped)).length;
@@ -33,7 +34,9 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
     : !reg || reg.stage === "none"
       ? reg && !reg.paying
         ? { tone: "todo", line: C.numberPaidOnly, go: C.numberOpen }
-        : { tone: "todo", line: C.numberNone, go: C.numberGo }
+        : reg?.assigned
+          ? { tone: "todo", line: reg.assigned.registrable && !reg.assigned.jobflexOwn ? C.numberLentRegistrable(reg.assigned.number) : C.numberLent(reg.assigned.number), go: reg.assigned.registrable && !reg.assigned.jobflexOwn ? C.numberGoRegister : C.numberGoOwn }
+          : { tone: "todo", line: C.numberNone, go: C.numberGo }
       : reg.stage === "pending"
         ? { tone: "wait", line: C.numberPending, go: C.numberOpen }
         : reg.stage === "rejected"
