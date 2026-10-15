@@ -10,8 +10,10 @@ import { clientErrorText } from "@/lib/staleDeploy";
 // is where the data layer is wired.
 //
 // THE FLOW
-//   pickFile     → probeVideo (reject > 5 min / undecodable) → extractFrames
+//   pickFile     → openClip (reject > 5 min / undecodable) → its still pass
 //                  in the background; the intake strip fills as stills land.
+//   retryFrames  → the still pass again, from a tap — iOS decodes for a user
+//                  gesture where it would not for a script.
 //   analyze      → extractAudioChunks → transcribe (route, chunked)
 //                → analyzeWalkthrough (the reading)
 //                → [clarify dialog, when the reading says the clip is thin]
@@ -69,15 +71,16 @@ import {
 import {
   TranscribeError,
   extractAudioChunks,
-  extractFrames,
   fmtBytes,
   fmtClock,
   fmtRes,
   frameCountFor,
-  probeVideo,
+  frameFailureReason,
+  openClip,
   stripFrames,
   transcribeChunks,
   transcriptText,
+  type ClipReader,
   type VideoFrame,
   type VideoProbe,
 } from "./video-ingest";
@@ -176,6 +179,8 @@ export function useVideoEstimator(opts: {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [frames, setFrames] = useState<VideoFrame[]>([]);
   const [framesProgress, setFramesProgress] = useState<{ done: number; total: number } | null>(null);
+  /** The still pass came back empty — the error line says why and offers Retry. */
+  const [framesFailed, setFramesFailed] = useState(false);
   const [job, setJob] = useState("");
   const [addr, setAddr] = useState("");
   const [notes, setNotes] = useState("");
@@ -223,6 +228,8 @@ export function useVideoEstimator(opts: {
     timers.current.add(t);
   }, []);
   const previewRef = useRef<string | null>(null);
+  /** The clip open for the still pass; closed on a new pick, on remove and on unmount. */
+  const readerRef = useRef<ClipReader | null>(null);
 
   useEffect(() => {
     // Set after mount — a server-rendered date can straddle midnight against the
@@ -236,6 +243,7 @@ export function useVideoEstimator(opts: {
       t.forEach(clearTimeout);
       t.clear();
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+      readerRef.current?.close();
     };
   }, []);
 
@@ -280,6 +288,8 @@ export function useVideoEstimator(opts: {
 
   const removeFile = useCallback(() => {
     pickSeq.current += 1;
+    readerRef.current?.close();
+    readerRef.current = null;
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null;
     setPreviewUrl(null);
@@ -287,24 +297,72 @@ export function useVideoEstimator(opts: {
     setProbe(null);
     setFrames([]);
     setFramesProgress(null);
+    setFramesFailed(false);
     setError("");
     setStep("intake");
     clearResult();
   }, [clearResult]);
 
+  /** The still pass on an open clip, under the "frames" stage. An empty pull
+   *  says WHY on the error line (the pull's own report) and offers Retry —
+   *  a tap is a user gesture, which is what iOS wants before it decodes. */
+  const pullFrames = useCallback(async (reader: ClipReader, token: number, duration: number) => {
+    setFramesFailed(false);
+    setStage("frames");
+    setFramesProgress({ done: 0, total: frameCountFor(duration) });
+    try {
+      const { frames: out, report } = await reader.frames((done, total) => {
+        if (pickSeq.current === token) setFramesProgress({ done, total });
+      });
+      if (pickSeq.current !== token) return;
+      if (out.length === 0) {
+        console.warn("[videoEstimator] no frames pulled", report);
+        setError(
+          `Couldn't pull any frames — ${frameFailureReason(report)}. Tap Retry, or export the clip as MP4 (1080p) and add that.`,
+        );
+        setFramesFailed(true);
+        toast.error("Can't read the video", "No frames could be decoded.");
+      }
+      setFrames(out);
+    } catch (err) {
+      if (pickSeq.current !== token) return;
+      setError(err instanceof Error ? err.message : "Could not read the video.");
+      setFramesFailed(true);
+    } finally {
+      reader.close();
+      if (readerRef.current === reader) readerRef.current = null;
+      if (pickSeq.current === token) {
+        setFramesProgress(null);
+        setStage(null);
+      }
+    }
+  }, []);
+
   const pickFile = useCallback(
     async (f: File) => {
       setError("");
+      // Opened before the first await: openClip starts the clip (muted) inside
+      // the gesture that picked it — see video-ingest's header on iOS.
+      readerRef.current?.close();
+      const reader = openClip(f);
+      readerRef.current = reader;
+      const token = ++pickSeq.current;
       let p: VideoProbe;
       try {
-        p = await probeVideo(f);
+        p = await reader.ready;
       } catch (err) {
+        reader.close();
+        if (readerRef.current === reader) readerRef.current = null;
+        if (pickSeq.current !== token) return;
         const msg = err instanceof Error ? err.message : "Could not read that file.";
         setError(msg);
         toast.error("Can't use that video", msg);
         return;
       }
-      const token = ++pickSeq.current;
+      if (pickSeq.current !== token) {
+        reader.close();
+        return;
+      }
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
       const url = URL.createObjectURL(f);
       previewRef.current = url;
@@ -314,31 +372,31 @@ export function useVideoEstimator(opts: {
       setFrames([]);
       setStep("intake");
       clearResult();
-      setStage("frames");
-      setFramesProgress({ done: 0, total: frameCountFor(p.duration) });
-      try {
-        const out = await extractFrames(f, p, (done, total) => {
-          if (pickSeq.current === token) setFramesProgress({ done, total });
-        });
-        if (pickSeq.current !== token) return;
-        if (out.length === 0) {
-          setError("Couldn't pull any frames from this clip — try a different export.");
-          toast.error("Can't read the video", "No frames could be decoded.");
-        }
-        setFrames(out);
-      } catch (err) {
-        if (pickSeq.current !== token) return;
-        const msg = err instanceof Error ? err.message : "Could not read the video.";
-        setError(msg);
-      } finally {
-        if (pickSeq.current === token) {
-          setFramesProgress(null);
-          setStage(null);
-        }
-      }
+      await pullFrames(reader, token, p.duration);
     },
-    [clearResult],
+    [clearResult, pullFrames],
   );
+
+  /** The still pass again, from a tap. */
+  const retryFrames = useCallback(() => {
+    if (!file || !probe || busy) return;
+    setError("");
+    readerRef.current?.close();
+    const reader = openClip(file);
+    readerRef.current = reader;
+    const token = ++pickSeq.current;
+    setFrames([]);
+    void reader.ready.then(
+      () => pullFrames(reader, token, probe.duration),
+      (err: unknown) => {
+        reader.close();
+        if (readerRef.current === reader) readerRef.current = null;
+        if (pickSeq.current !== token) return;
+        setError(err instanceof Error ? err.message : "Could not read the video.");
+        setFramesFailed(true);
+      },
+    );
+  }, [file, probe, busy, pullFrames]);
 
   // ── Clarify gate ────────────────────────────────────────────────────────
   function askClarify(questions: ClarifyQuestion[]): Promise<ClarifyAnswer[] | null> {
@@ -737,6 +795,15 @@ export function useVideoEstimator(opts: {
     return stripFrames(frames, 4).map((frame) => ({ frame, label: fmtClock(frame.t) }));
   }, [analysis, frames]);
 
+  /** The look-ahead part of the reading — the work, what it brings with it,
+   *  the procedure — or null for a reading in the old shape, so the cards
+   *  hide the section whole rather than show three empty faces. */
+  const deep = useMemo(
+    () =>
+      analysis && (analysis.work.length || analysis.behind.length || analysis.steps.length) ? analysis : null,
+    [analysis],
+  );
+
   const sourceLabel = probe ? `Walkthrough · ${fmtClock(probe.duration)}` : "—";
   const fileMeta =
     file && probe ? [fmtClock(probe.duration), fmtBytes(file.size), fmtRes(probe)].filter(Boolean).join(" · ") : "";
@@ -759,6 +826,8 @@ export function useVideoEstimator(opts: {
     stripFrames: stripFrames(frames, 4),
     framesProgress,
     framesReady,
+    framesFailed,
+    retryFrames,
     job,
     setJob,
     addr,
@@ -785,6 +854,7 @@ export function useVideoEstimator(opts: {
     aiEnabled,
     // result
     analysis,
+    deep,
     title,
     scope,
     assumptions,

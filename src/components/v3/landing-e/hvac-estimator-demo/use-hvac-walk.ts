@@ -10,9 +10,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WalkthroughAnalysis } from "@/lib/estimate/video-schema";
 import {
-  extractFrames,
   frameCountFor,
-  probeVideo,
+  frameFailureReason,
+  openClip,
+  type ClipReader,
   type VideoFrame,
   type VideoProbe,
 } from "@/components/v3/video-estimator-blueprint/video-ingest";
@@ -26,6 +27,10 @@ export const DEMO_WALK: WalkthroughAnalysis = {
   projectType: "other",
   title: "HVAC replacement survey — 4418 NE 97th St",
   location: "Kirkland, WA",
+  work: [],
+  behind: [],
+  steps: [],
+  permits: [],
   scope: "Two-storey 1978 house on a vented crawlspace, 1,980 sq ft conditioned. A 3-ton split AC on an 80% gas furnace, ducts in the crawl in fair shape, one undersized return in the hall. 200 A panel with four free slots. The owner wants the AC and furnace replaced together and asked about a heat pump.",
   measurements: [
     { label: "Square footage", value: "1,980", unit: "sq ft", confidence: "high", source: "spoken" },
@@ -69,11 +74,21 @@ export function useHvacWalk(_aiEnabled: boolean) {
   const [audioState, setAudioState] = useState<"pending" | "ok" | "partial" | "none" | "failed">("pending");
   const pickSeq = useRef(0);
   const previewRef = useRef<string | null>(null);
+  /** The clip open for the still pass; closed on a new pick, on remove and on unmount. */
+  const readerRef = useRef<ClipReader | null>(null);
 
-  useEffect(() => () => { if (previewRef.current) URL.revokeObjectURL(previewRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+      readerRef.current?.close();
+    },
+    [],
+  );
 
   const removeFile = useCallback(() => {
     pickSeq.current += 1;
+    readerRef.current?.close();
+    readerRef.current = null;
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null;
     setPreviewUrl(null); setFile(null); setProbe(null); setFrames([]); setStage(null); setStageNote(""); setError(""); setAudioState("pending");
@@ -81,22 +96,42 @@ export function useHvacWalk(_aiEnabled: boolean) {
 
   const pickFile = useCallback(async (f: File) => {
     setError("");
-    let p: VideoProbe;
-    try { p = await probeVideo(f); } catch (err) { setError(err instanceof Error ? err.message : "Could not read that file."); return; }
+    // One open for the probe and the stills, started inside the gesture that
+    // picked the file — see video-ingest's header on iOS.
+    readerRef.current?.close();
+    const reader = openClip(f);
+    readerRef.current = reader;
     const token = ++pickSeq.current;
+    let p: VideoProbe;
+    try {
+      p = await reader.ready;
+    } catch (err) {
+      reader.close();
+      if (readerRef.current === reader) readerRef.current = null;
+      if (pickSeq.current !== token) return;
+      setError(err instanceof Error ? err.message : "Could not read that file.");
+      return;
+    }
+    if (pickSeq.current !== token) {
+      reader.close();
+      return;
+    }
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     const url = URL.createObjectURL(f);
     previewRef.current = url;
     setPreviewUrl(url); setFile(f); setProbe(p); setFrames([]);
     setStage("frames"); setStageNote(`0 / ${frameCountFor(p.duration)}`);
     try {
-      const out = await extractFrames(f, p, (done, total) => { if (pickSeq.current === token) setStageNote(`${done} / ${total}`); });
+      const { frames: out, report } = await reader.frames((done, total) => { if (pickSeq.current === token) setStageNote(`${done} / ${total}`); });
       if (pickSeq.current !== token) return;
+      if (out.length === 0) setError(`Couldn't pull any frames — ${frameFailureReason(report)}. Add it again, or export the clip as MP4 (1080p) and add that.`);
       setFrames(out);
     } catch (err) {
       if (pickSeq.current !== token) return;
       setError(err instanceof Error ? err.message : "Could not read the video.");
     } finally {
+      reader.close();
+      if (readerRef.current === reader) readerRef.current = null;
       if (pickSeq.current === token) { setStage(null); setStageNote(""); }
     }
   }, []);
