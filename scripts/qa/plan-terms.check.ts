@@ -30,7 +30,7 @@
 //     "Most picked", or does not choose Annual when pressed; on a desk the logo, "Pick a plan."
 //     and the first card do not share a left edge, or the steps, the switch and the last card a
 //     right one (1px).
-//   · (2026-10-12, the phone's plan step: full cards two to a row) at 360×640, 390×844 and 430×932,
+//   · (2026-10-14, the phone's plan step: one swiped row of full cards) at 360×640, 390×844 and 430×932,
 //     Chromium and WebKit, three plans and four (the custom one) — see phoneCards().
 // Pure half: lib/planDeal (months free in whole months only, never a percentage).
 // The plan step is reached the way signup-flow.check.ts reaches it (its own made-up IP, mail
@@ -433,20 +433,33 @@ async function toPlanSheet(page: any, n: number, query = "") {
   await page.waitForTimeout(1500);
 }
 
-/** THE PHONE'S PLAN STEP (owner, 2026-10-12, after a look on an iPhone): the full cards, two to a
- *  row (three plans: the third at the full width, its list in two columns), the page scrolling
- *  down. Fails when the cards are not two to a row, a row's cards differ in height, the page or
- *  the row scrolls sideways, a card lacks its own whole list or its own start button, tiles or a
- *  pinned button are drawn, "Most picked" comes within 10px of the plan's name, a row's names
- *  stand at different heights, the year's stamp is bigger than "Most picked", the saving line is
- *  not 12–13px at weight 600, a card changes height on Monthly ↔ Annual, a tap does not make that
- *  card alone the choice, a card's button does not start its own plan and term (its error under
- *  the step's head), the code field and the terms are not under the grid, or a cancelled Checkout
- *  does not come back to the plan chosen before it. */
+/** THE PHONE'S PLAN STEP (owner, 2026-10-14): one swiped row of full cards. Fails when the most-
+ *  picked card is not the chosen one in the middle as the step opens, or the rail moved after its
+ *  first frame (a visible jump); a neighbour shows less than 24px or more than 32px at an edge, or
+ *  the middle card is not 80–85% of the screen; the page scrolls sideways (only the rail may); the
+ *  cards differ in height or a card scrolls inside; a card lacks its own whole list or its own
+ *  start button (≥44px); "Most picked" comes within 10px of the plan's name; the year's stamp is
+ *  bigger than "Most picked"; the saving line is not 12–13px at weight 600; Monthly ↔ Annual moves
+ *  a card's height or the rail; a swipe does not snap a card to the middle and make it the choice;
+ *  the dots are not one per card with the middle one marked, or a dot does not bring its card; a
+ *  tap on a neighbour does not choose it and bring it to the middle; the middle card's button does
+ *  not start its own plan and term (its error under the step's head); the code field and the terms
+ *  are not under the rail; or a cancelled Checkout does not come back to the plan chosen before it,
+ *  in the middle. */
+const FIRST_FRAME = `(() => {
+  const mo = new MutationObserver(() => {
+    const rail = document.querySelector("section.plan-sheet .pw-plans");
+    if (!rail || !rail.querySelector("[data-plan-card]") || window.__railFirst !== undefined) return;
+    window.__railFirst = Math.round(rail.scrollLeft);
+    requestAnimationFrame(() => { window.__railFrame = Math.round(rail.scrollLeft); });
+  });
+  document.addEventListener("DOMContentLoaded", () => mo.observe(document.body, { childList: true, subtree: true }));
+})();`;
 async function phoneCards(browser: any, width: number, height: number, n: number, cards = 3) {
   const engine = browser.browserType().name();
   const name = `phone plan step ${engine} ${width}×${height}${cards === 4 ? " (custom)" : ""}`;
   const ctx = await visit(browser, width, height);
+  await ctx.addInitScript({ content: FIRST_FRAME });
   // The start buttons are pressed for real; the checkout route answers here, so no Stripe session is made.
   const asked: any[] = [];
   await ctx.route(`${BASE}/api/checkout/signup`, (route: any) => {
@@ -458,81 +471,125 @@ async function phoneCards(browser: any, width: number, height: number, n: number
   const look = () =>
     page.evaluate((sheet: string) => {
       const root = document.querySelector(sheet)!;
-      const rail = root.querySelector(".pw-plans") as HTMLElement;
+      const railEl = root.querySelector(".pw-plans") as HTMLElement;
+      const rail = railEl.getBoundingClientRect();
+      const mid = (rail.left + rail.right) / 2;
       const list = Array.from(root.querySelectorAll<HTMLElement>("[data-plan-card]"));
       const box = (e: Element | null) => (e ? e.getBoundingClientRect() : null);
+      const read = list.map((c) => {
+        const b = c.getBoundingClientRect();
+        const tag = c.querySelector(".pw-tag"), stamp = c.querySelector(".jf-stamp:not(.is-off)"), nm = c.querySelector(".pw-plan-n");
+        const save = c.querySelector(".jf-deal-save") || c.querySelector(".jf-deal-billed");
+        return {
+          slug: c.dataset.planCard!, top: b.top, bottom: b.bottom, left: b.left, right: b.right, w: b.width, h: Math.round(b.height * 10) / 10,
+          hero: c.classList.contains("pw-plan--hero"),
+          on: c.getAttribute("aria-pressed") === "true",
+          rows: c.querySelectorAll("[data-plan-feats] > *").length,
+          go: c.querySelectorAll(".pw-go").length, goH: box(c.querySelector(".pw-go"))?.height ?? 0,
+          nameTop: box(nm)?.top ?? 0, tagBottom: box(tag)?.bottom ?? null, tagPx: tag ? parseFloat(getComputedStyle(tag).fontSize) : null, tagH: box(tag)?.height ?? null,
+          stampPx: stamp ? parseFloat(getComputedStyle(stamp).fontSize) : null, stampH: box(stamp)?.height ?? null,
+          savePx: save ? parseFloat(getComputedStyle(save).fontSize) : null, saveW: save ? getComputedStyle(save).fontWeight : null,
+          over: c.scrollWidth - c.clientWidth, inner: c.scrollHeight - c.clientHeight,
+          price: (c.querySelector("[data-plan-price]")?.textContent || "").replace(/\s+/g, ""),
+        };
+      });
+      const at = read.reduce((best, c, i) => (Math.abs((c.left + c.right) / 2 - mid) < Math.abs((read[best].left + read[best].right) / 2 - mid) ? i : best), 0);
+      const c = read[at];
       return {
-        vw: innerWidth, sw: document.scrollingElement!.scrollWidth,
-        rail: { sw: rail.scrollWidth, cw: rail.clientWidth, x: getComputedStyle(rail).overflowX },
-        extras: document.querySelectorAll("[data-plan-tiles], [data-plan-bar], [data-plan-detail], .pw-dots").length,
-        cards: list.map((c) => {
-          const b = c.getBoundingClientRect();
-          const tag = c.querySelector(".pw-tag"), stamp = c.querySelector(".jf-stamp:not(.is-off)"), nm = c.querySelector(".pw-plan-n");
-          const save = c.querySelector(".jf-deal-save") || c.querySelector(".jf-deal-billed");
-          return {
-            slug: c.dataset.planCard!, top: b.top, bottom: b.bottom, left: b.left, right: b.right, h: Math.round(b.height * 10) / 10,
-            on: c.getAttribute("aria-pressed") === "true",
-            rows: c.querySelectorAll("[data-plan-feats] > *").length,
-            go: c.querySelectorAll(".pw-go").length, goH: box(c.querySelector(".pw-go"))?.height ?? 0,
-            nameTop: box(nm)?.top ?? 0, tagBottom: box(tag)?.bottom ?? null, tagPx: tag ? parseFloat(getComputedStyle(tag).fontSize) : null, tagH: box(tag)?.height ?? null,
-            stampPx: stamp ? parseFloat(getComputedStyle(stamp).fontSize) : null, stampH: box(stamp)?.height ?? null,
-            savePx: save ? parseFloat(getComputedStyle(save).fontSize) : null, saveW: save ? getComputedStyle(save).fontWeight : null,
-            over: c.scrollWidth - c.clientWidth,
-            price: (c.querySelector("[data-plan-price]")?.textContent || "").replace(/\s+/g, ""),
-          };
-        }),
+        vw: innerWidth, sw: document.scrollingElement!.scrollWidth, sheetX: root.scrollWidth - root.clientWidth,
+        rail: { sw: railEl.scrollWidth, cw: railEl.clientWidth, x: getComputedStyle(railEl).overflowX, sl: Math.round(railEl.scrollLeft), bottom: rail.bottom },
+        first: (window as any).__railFirst as number | undefined, frame: (window as any).__railFrame as number | undefined,
+        extras: document.querySelectorAll("[data-plan-tiles], [data-plan-bar], [data-plan-detail]").length,
+        at, middle: c.slug, off: Math.round(((c.left + c.right) / 2 - mid) * 10) / 10, ratio: Math.round((c.w / innerWidth) * 1000) / 10,
+        peekL: read[at - 1] ? Math.round((read[at - 1].right - rail.left) * 10) / 10 : null,
+        peekR: read[at + 1] ? Math.round((rail.right - read[at + 1].left) * 10) / 10 : null,
+        dots: Array.from(root.querySelectorAll<HTMLElement>("[data-plan-dot]")).map((d) => ({ slug: d.dataset.planDot!, on: d.getAttribute("aria-current") === "true", h: d.getBoundingClientRect().height })),
+        cards: read,
         terms: box(root.querySelector("#pwTerms"))?.top ?? 0,
         promo: box(root.querySelector(".pw-promo"))?.top ?? 0,
         err: (root.querySelector("#stepPlan > .err") as HTMLElement | null)?.innerText?.trim() ?? "",
         errTop: box(root.querySelector("#stepPlan > .err"))?.top ?? null,
         headBottom: box(root.querySelector(".pw-head"))?.bottom ?? 0,
-        firstCard: box(list[0])?.top ?? 0,
+        railTop: rail.top,
       };
     }, sheet);
+  type Look = Awaited<ReturnType<typeof look>>;
+  const chosen = (m: Look) => m.cards.filter((c) => c.on).map((c) => c.slug).join();
+  const dotsOk = (m: Look) => m.dots.length === m.cards.length && m.dots.every((d, i) => d.slug === m.cards[i].slug && d.on === (i === m.at) && d.h >= 44);
+  /** A finger's swipe from right to left (Chromium: touch events; WebKit: a sideways wheel). */
+  const swipe = async () => {
+    const rb = await page.locator(`${sheet} .pw-plans`).boundingBox();
+    const x0 = Math.round(rb.x + rb.width * 0.75), y0 = Math.round(rb.y + 160);
+    if (engine === "chromium") {
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x0, y: y0 }] });
+      for (let i = 1; i <= 12; i++) {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x0 - i * 12, y: y0 }] });
+        await page.waitForTimeout(16);
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } else {
+      await page.mouse.move(x0, y0);
+      await page.mouse.wheel(140, 0);
+    }
+    await page.waitForTimeout(1200);
+  };
   try {
     await toPlanSheet(page, n);
     await page.mouse.move(1, 1);
     const m = await look();
-    check(`${name}: ${cards} full cards, no tiles, no pinned button, nothing swipes`, m.cards.length === cards && m.extras === 0 && m.rail.sw <= m.rail.cw + 1 && m.rail.x === "visible", `${m.cards.length} cards · extras ${m.extras} · rail ${m.rail.sw}/${m.rail.cw} ${m.rail.x}`);
-    check(`${name}: no sideways scroll, nothing wider than its card`, m.sw <= m.vw + 1 && m.cards.every((c) => c.over <= 1), `${m.sw}/${m.vw} · ${m.cards.map((c) => c.over).join(",")}`);
-    const [a, b] = m.cards;
-    const pairs: [typeof a, typeof a][] = [];
-    for (let i = 0; i + 1 < m.cards.length; i += 2) pairs.push([m.cards[i], m.cards[i + 1]]);
-    check(`${name}: two to a row, one height in a row`, pairs.every(([x, y]) => Math.abs(x.top - y.top) <= 1 && y.left > x.right && Math.abs(x.h - y.h) <= 1), pairs.map(([x, y]) => `${x.slug}/${y.slug} ${x.h}·${y.h}`).join(" · "));
-    if (cards % 2 === 1) {
-      const last = m.cards[m.cards.length - 1];
-      check(`${name}: the third card under the first two, at the full width`, Math.abs(last.left - a.left) <= 1 && Math.abs(last.right - b.right) <= 1 && last.top > a.bottom, `${Math.round(last.left)}..${Math.round(last.right)}`);
-    }
+    const heroAt = m.cards.findIndex((c) => c.hero);
+    check(`${name}: ${cards} full cards in one swiped row, no tiles, no pinned button`, m.cards.length === cards && m.extras === 0 && m.rail.sw > m.rail.cw + 1 && /auto|scroll/.test(m.rail.x) && m.cards.every((c) => Math.abs(c.top - m.cards[0].top) <= 1), `${m.cards.length} cards · extras ${m.extras} · rail ${m.rail.sw}/${m.rail.cw} ${m.rail.x}`);
+    check(`${name}: opens on the most-picked card, chosen, in the middle`, heroAt >= 0 && m.at === heroAt && Math.abs(m.off) <= 1 && chosen(m) === m.cards[heroAt].slug, `${m.middle} ${m.off}px · chosen ${chosen(m)}`);
+    check(`${name}: placed before its first frame — no jump`, m.first !== undefined && m.frame !== undefined && Math.abs(m.first - m.rail.sl) <= 1 && Math.abs(m.frame - m.rail.sl) <= 1, `first ${m.first} · frame ${m.frame} · now ${m.rail.sl}`);
+    check(`${name}: the neighbours show 24–32px at the edges, the card ${m.ratio}% of the screen`, m.peekL !== null && m.peekR !== null && [m.peekL, m.peekR].every((x) => x! >= 23.5 && x! <= 32.5) && m.ratio >= 80 && m.ratio <= 85, `left ${m.peekL} · right ${m.peekR}`);
+    check(`${name}: no sideways scroll but the rail's, nothing wider than its card`, m.sw <= m.vw + 1 && m.sheetX <= 1 && m.cards.every((c) => c.over <= 1), `${m.sw}/${m.vw} · sheet ${m.sheetX} · ${m.cards.map((c) => c.over).join(",")}`);
+    check(`${name}: every card one height, nothing scrolls inside a card`, m.cards.every((c) => Math.abs(c.h - m.cards[0].h) <= 1 && c.inner <= 1), m.cards.map((c) => `${c.slug} ${c.h} in${c.inner}`).join(" · "));
     check(`${name}: every card its own whole list and its own start button (≥44px)`, m.cards.every((c) => c.rows > 0 && c.go === 1 && c.goH >= 44), m.cards.map((c) => `${c.slug} ${c.rows} rows ${c.go} btn ${Math.round(c.goH)}px`).join(" · "));
+    check(`${name}: one dot per card, the middle one marked, 44px targets`, dotsOk(m), m.dots.map((d) => `${d.slug}${d.on ? "*" : ""}`).join(" "));
     const tagged = m.cards.filter((c) => c.tagBottom !== null);
     check(`${name}: "Most picked" sits 10px or more over the plan's name`, tagged.length > 0 && tagged.every((c) => c.nameTop - c.tagBottom! >= 10), tagged.map((c) => `${c.slug} ${Math.round((c.nameTop - c.tagBottom!) * 10) / 10}px`).join(" · "));
-    check(`${name}: a row's names at one height`, pairs.every(([x, y]) => Math.abs(x.nameTop - y.nameTop) <= 1), pairs.map(([x, y]) => `${x.nameTop}·${y.nameTop}`).join(" · "));
     check(`${name}: Monthly — "Billed monthly" 12–13px`, m.cards.every((c) => c.savePx! >= 12 && c.savePx! <= 13), m.cards.map((c) => c.savePx).join(" · "));
-    // Annual: the stamp no bigger than "Most picked", the saving 12–13px at 600, no card moves.
+    // Annual: the stamp no bigger than "Most picked", the saving 12–13px at 600, no card and not the rail moves.
     await page.locator(`${sheet} .jf-term [data-term="YEAR"]`).click();
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(400);
     const y = await look();
     const plate = y.cards.find((c) => c.tagPx !== null);
     const stamped = y.cards.filter((c) => c.stampPx !== null && c.stampH);
     check(`${name}: Annual — the stamp no bigger than "Most picked"`, !!plate && stamped.length > 0 && stamped.every((c) => c.stampPx! <= plate.tagPx! && c.stampH! <= plate.tagH! + 1), `${stamped.map((c) => `${c.slug} ${c.stampPx}px/${Math.round(c.stampH!)}`).join(" · ")} vs ${plate?.tagPx}px/${Math.round(plate?.tagH ?? 0)}`);
     check(`${name}: Annual — "You save $N a year" 12–13px at weight 600`, y.cards.filter((c) => /\/yr$/.test(c.price)).every((c) => c.savePx! >= 12 && c.savePx! <= 13 && c.saveW === "600"), y.cards.map((c) => `${c.savePx}px ${c.saveW}`).join(" · "));
-    check(`${name}: no card changes height on Monthly ↔ Annual`, y.cards.every((c, i) => Math.abs(c.h - m.cards[i].h) <= 1), y.cards.map((c, i) => `${c.slug} ${m.cards[i].h}→${c.h}`).join(" · "));
-    // A tap chooses; the card's own button starts its own plan on the switch's term; its error under the head.
-    const target = m.cards[0].slug;
-    await page.locator(`${sheet} [data-plan-card="${target}"]`).click({ position: { x: 20, y: 40 } });
-    await page.waitForTimeout(250);
+    check(`${name}: no card changes height, the rail does not move on Monthly ↔ Annual`, y.cards.every((c, i) => Math.abs(c.h - m.cards[i].h) <= 1) && Math.abs(y.rail.sl - m.rail.sl) <= 1 && y.middle === m.middle, `${y.cards.map((c, i) => `${c.slug} ${m.cards[i].h}→${c.h}`).join(" · ")} · rail ${m.rail.sl}→${y.rail.sl}`);
+    // A swipe: the next card snaps to the middle and becomes the choice; the dots follow.
+    await swipe();
+    const s1 = await look();
+    const next = m.cards[m.at + 1]?.slug;
+    check(`${name}: a swipe snaps ${next} to the middle and chooses it`, !!next && s1.middle === next && Math.abs(s1.off) <= 1 && chosen(s1) === next && dotsOk(s1), `${s1.middle} ${s1.off}px · chosen ${chosen(s1)} · dots ${s1.dots.map((d) => `${d.slug}${d.on ? "*" : ""}`).join(" ")}`);
+    // A dot: the first card comes to the middle and becomes the choice.
+    await page.locator(`${sheet} [data-plan-dot]`).first().click();
+    await page.waitForTimeout(1000);
+    const d1 = await look();
+    const firstSlug = m.cards[0].slug;
+    check(`${name}: the first dot brings ${firstSlug} to the middle and chooses it`, d1.middle === firstSlug && Math.abs(d1.off) <= 1 && chosen(d1) === firstSlug && dotsOk(d1), `${d1.middle} ${d1.off}px · chosen ${chosen(d1)}`);
+    // A tap on the right neighbour's visible edge chooses it and brings it to the middle.
+    const right = d1.cards[d1.at + 1];
+    // the dot press scrolled the page down to the dots: bring the rail's top back into view first
+    await page.locator(`${sheet} .pw-plans`).evaluate((el: HTMLElement) => el.scrollIntoView({ block: "start" }));
+    await page.waitForTimeout(300);
+    const rb = await page.locator(`${sheet} .pw-plans`).boundingBox();
+    await page.mouse.click(Math.min(right.left, width) + 8, Math.max(rb.y, 0) + 160);
+    await page.waitForTimeout(1000);
     const t = await look();
-    check(`${name}: a tap makes ${target} alone the choice`, t.cards.filter((c) => c.on).map((c) => c.slug).join() === target, t.cards.filter((c) => c.on).map((c) => c.slug).join());
-    const other = m.cards[1].slug;
-    const btn = page.locator(`${sheet} [data-plan-card="${other}"] .pw-go`);
+    check(`${name}: a tap on ${right.slug}'s edge chooses it and brings it to the middle`, t.middle === right.slug && Math.abs(t.off) <= 1 && chosen(t) === right.slug, `${t.middle} ${t.off}px · chosen ${chosen(t)}`);
+    // The middle card's own button starts its plan on the switch's term; the error under the head.
+    const btn = page.locator(`${sheet} .pw-plan.on .pw-go`);
     await btn.scrollIntoViewIfNeeded();
     await btn.click();
     await page.waitForTimeout(1200);
     const g = await look();
     const sent = asked[asked.length - 1] || {};
-    check(`${name}: ${other}'s button starts ${other} on Annual and chooses it; the error under the step's head`, sent.planSlug === other && sent.interval === "YEAR" && g.cards.find((c) => c.on)?.slug === other && /QA: checkout answered/.test(g.err) && g.errTop !== null && g.errTop >= g.headBottom - 1 && g.errTop < g.firstCard, `${JSON.stringify({ planSlug: sent.planSlug, interval: sent.interval })} · "${g.err}"`);
-    check(`${name}: the code field and the terms under the grid`, g.promo > Math.max(...g.cards.map((c) => c.bottom)) && g.terms > g.promo, `promo ${Math.round(g.promo)} · terms ${Math.round(g.terms)} · cards end ${Math.round(Math.max(...g.cards.map((c) => c.bottom)))}`);
-    // A cancelled Checkout comes back to the plan chosen before it (the tab's memory).
+    check(`${name}: ${t.middle}'s button starts ${t.middle} on Annual; the error under the step's head`, sent.planSlug === t.middle && sent.interval === "YEAR" && chosen(g) === t.middle && g.middle === t.middle && /QA: checkout answered/.test(g.err) && g.errTop !== null && g.errTop >= g.headBottom - 1 && g.errTop < g.railTop, `${JSON.stringify({ planSlug: sent.planSlug, interval: sent.interval })} · "${g.err}"`);
+    check(`${name}: the code field and the terms under the rail`, g.promo > g.rail.bottom && g.terms > g.promo, `promo ${Math.round(g.promo)} · terms ${Math.round(g.terms)} · rail ends ${Math.round(g.rail.bottom)}`);
+    // A cancelled Checkout comes back to the plan chosen before it (the tab's memory), in the middle.
     const row = await db.syncState.findFirst({ where: { key: { startsWith: "signup:" }, cursor: { contains: `tiles.${n}@${MAIL_DOMAIN}` } }, select: { key: true } });
     const tok = new URL(page.url()).searchParams.get("signup") ?? row?.key.slice("signup:".length) ?? null;
     if (tok) {
@@ -540,7 +597,7 @@ async function phoneCards(browser: any, width: number, height: number, n: number
       await page.locator(`${sheet} [data-plan-card]`).first().waitFor({ timeout: 60000 });
       await page.waitForTimeout(800);
       const back = await look();
-      check(`${name}: back from a cancelled Checkout, ${other} is still the choice`, back.cards.find((c) => c.on)?.slug === other, back.cards.find((c) => c.on)?.slug ?? "none");
+      check(`${name}: back from a cancelled Checkout, ${t.middle} is still the choice, in the middle`, chosen(back) === t.middle && back.middle === t.middle && Math.abs(back.off) <= 1, `${chosen(back) || "none"} · middle ${back.middle} ${back.off}px`);
     } else note(name, "no ?signup= — the cancelled return was not tried");
   } catch (e) {
     check(`${name}: ran through`, false, String((e as Error)?.message || e).split("\n")[0]);
@@ -625,7 +682,7 @@ async function main() {
     }
     const browser = await pw.chromium.launch({ channel: "chrome", args: ["--disable-blink-features=AutomationControlled"] }).catch(() => pw.chromium.launch());
     try {
-      // QA_TERMS_TILES=3|4: only the phone's tiles, against QA_TERMS_URL (a server with or without the custom plan).
+      // QA_TERMS_TILES=3|4: only the phone's plan step, against QA_TERMS_URL (a server with or without the custom plan).
       if (process.env.QA_TERMS_TILES) {
         const cards = Number(process.env.QA_TERMS_TILES) || 3;
         for (const [w, h, k] of [[360, 640, 31], [390, 844, 32], [430, 932, 33]]) await phoneCards(browser, w, h, k, cards);
@@ -643,10 +700,10 @@ async function main() {
       console.log("── the signup plan step");
       await planStep(browser, 390, 1);
       await planStep(browser, 1440, 2);
-      console.log("── the phone's plan step: full cards, two to a row");
+      console.log("── the phone's plan step: one swiped row of full cards");
       for (const [w, h, k] of [[360, 640, 11], [390, 844, 12], [430, 932, 13]]) await phoneCards(browser, w, h, k);
       const wk = await pw.webkit.launch().catch(() => null);
-      if (!wk) note("WebKit", "not installed (npx playwright install webkit) — the tiles ran in Chromium only");
+      if (!wk) note("WebKit", "not installed (npx playwright install webkit) — the phone's plan step ran in Chromium only");
       else {
         try {
           for (const [w, h, k] of [[360, 640, 14], [390, 844, 15], [430, 932, 16]]) await phoneCards(wk, w, h, k);

@@ -355,7 +355,8 @@ async function newAddress(browser: any, kind: Kind, industry: string, toStripe: 
     check(`${name}: the intent — no password, address proven, name stands in${industry ? ", the trade" : ""}`, r.hashedPassword === null && !!r.emailVerifiedAt && r.nameUnset === true && (!industry || (r.tradeTypes ?? []).length === 1), JSON.stringify({ trades: r.tradeTypes, verified: !!r.emailVerifiedAt }));
     if (!toStripe) { const e = v.take(); check(`${name}: plan sheet`, !e, e); return; }
     v.step("plan → Checkout");
-    const go = v.page.locator("section.plan-sheet.is-in .pw-plan .pw-go").filter({ visible: true }).first();
+    // a phone presses the card in the middle of the swiped rail — the chosen one (2026-10-14)
+    const go = v.page.locator(`section.plan-sheet.is-in ${v.page.viewportSize()!.width <= 768 ? ".pw-plan.on" : ".pw-plan"} .pw-go`).filter({ visible: true }).first();
     await v.page.waitForTimeout(800);
     await go.click();
     for (let i = 0; i < 80 && !v.handoff.checkout; i++) await v.page.waitForTimeout(250);
@@ -541,7 +542,8 @@ async function openRegister(v: V, query = "?flow=otp"): Promise<Opened> {
 }
 /** The plan step's Start: Checkout (test mode), or the gate. */
 async function startPlan(v: V): Promise<{ checkout: boolean; gate: string | null }> {
-  await v.page.locator("section.plan-sheet.is-in .pw-plan .pw-go").filter({ visible: true }).first().click();
+  // a phone presses the card in the middle of the swiped rail — the chosen one (2026-10-14)
+  await v.page.locator(`section.plan-sheet.is-in ${v.page.viewportSize()!.width <= 768 ? ".pw-plan.on" : ".pw-plan"} .pw-go`).filter({ visible: true }).first().click();
   for (let i = 0; i < 60 && !v.handoff.checkout && !(await v.page.locator("#planGate").count()); i++) await v.page.waitForTimeout(250);
   return { checkout: !!v.handoff.checkout, gate: await v.page.locator("#planGate").getAttribute("data-gate", { timeout: 1000 }).catch(() => null) };
 }

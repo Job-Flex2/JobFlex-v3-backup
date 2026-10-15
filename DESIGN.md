@@ -100,12 +100,20 @@ the sidebar's and the landing's `/jobflex-mark.png`), not a drawn "J" square:
 the letters. The custom plan is a card in the row on the plan step and the
 upgrade page; on the landing and /pricing it stays the wide "Build your plan"
 plate under the row.
-The signup plan step on a phone (≤768px, owner 2026-10-12) shows the full
-cards two to a row (three plans: the third under them at the full width, its
-list in two columns); the page scrolls down, nothing swipes sideways. Every
-card keeps its own whole list and its own start button at its foot. There
-the year's stamp is the "Most picked" plate's size under the name, and the
-saving or "Billed monthly" is one 12px line (weight 600) under the price.
+The signup plan step on a phone (≤768px, owner 2026-10-14; it replaced the
+two-to-a-row grid of 2026-10-12) is one swiped row of full cards with scroll
+snap: one card in the middle (81–84% of a 360–430px screen, capped at 420px
+on a tablet), its neighbours showing 24px at either edge, square dots under
+the row (one per card, the middle one filled, 44px targets). It opens on the
+most-picked plan, or on the plan the link or the tab names (a cancelled
+Checkout), centred before the first paint. The card in the middle is the
+choice (the blue frame); a tap on a card chooses it and brings it to the
+middle. The cards stay one subgrid in columns, so every card is the row's
+height and neither the switch nor a swipe moves anything; the page scrolls
+down, nothing scrolls inside a card. Every card keeps its own whole list and
+its own start button at its foot. There the year's stamp is the "Most
+picked" plate's size at the name's right edge, and the saving or "Billed
+monthly" is one 12px line (weight 600) under the price.
 
 ## Typography
 

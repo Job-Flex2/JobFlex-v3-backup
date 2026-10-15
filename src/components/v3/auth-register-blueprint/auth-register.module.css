@@ -1726,62 +1726,85 @@
   .bp :global(.pw-head-r) :global(.jf-term.jf-term.has-badge) { margin-bottom: 15px; }
 }
 
-/* THE PLAN STEP ON A PHONE: FULL CARDS, TWO TO A ROW (owner, 2026-10-12,
-   checked on an iPhone). The swiped row showed one plan at a time; now every
-   card stands in a two-column grid — Starter | Professional, Advanced | Custom;
-   three plans put the third under the first two at the full width, its list
-   in two columns — and the page scrolls down. Each card keeps the desk's
-   subgrid (prices, deal lines and first rows on one line across a row, the
-   start button at the foot), its own whole list and its own start button.
-   "Most picked" sits on the top frame with 10px or more under it to the name
-   (every card of a row takes the same top padding); the year's stamp is the
-   plate's size, one line under the name; "You save $N a year" / "Billed
-   monthly" one 12px line under the price, the only green besides the stamp. */
+/* THE PLAN STEP ON A PHONE: A SWIPED ROW OF FULL CARDS (owner, 2026-10-14;
+   it replaces the two-to-a-row grid of 2026-10-12). One card in the middle of
+   the screen, its neighbours showing 24px at either edge: the rail is the
+   sheet's width, its inline padding is the peek plus the gap, so a card is
+   the rail's content box — 100% of it (81–84% of a 360–430px phone), capped
+   at 420px on a tablet. Snap to the card's centre; the page scrolls down, the
+   card never scrolls inside. The cards stay the desk's subgrid, laid out in
+   columns: every card the row's height, prices and first rows on one line,
+   so neither the switch nor a swipe moves anything. Square dots under the
+   rail, as the landing's plans had. register-content centres the chosen card
+   before the first paint and moves the choice to the card a swipe settles on.
+   The desk (≥769px) is untouched. */
 @media (max-width: 768px) {
   .bp :global(.pw-plans) {
+    --pw-peek: 24px;
+    --pw-gap: 10px;
+    position: relative;
     display: grid;
-    grid-auto-flow: row;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-columns: auto;
-    column-gap: 10px;
-    row-gap: 24px;
-    padding: 13px 18px 4px;
-    overflow: visible;
-    scroll-snap-type: none;
-    touch-action: auto;
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: 100%;
+    column-gap: var(--pw-gap);
+    padding: 14px max(calc(var(--pw-peek) + var(--pw-gap)), calc((100% - 420px) / 2)) 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    /* a vertical pan that starts on a card still scrolls the page */
+    touch-action: pan-x pan-y;
+    scrollbar-width: none;
   }
-  .bp :global(.pw-plans) > :global(.pw-plan:last-child:nth-child(odd)) { grid-column: 1 / -1; }
-  .bp :global(.pw-plans) > :global(.pw-plan:last-child:nth-child(odd)) :global(.pw-feats) {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; align-content: start;
-  }
-  .bp :global(.pw-plans) > :global(.pw-plan:last-child:nth-child(odd)) :global(.pw-f:nth-last-child(2)) { border-bottom: none; }
+  .bp :global(.pw-plans::-webkit-scrollbar) { display: none; }
   .bp :global(.pw-plan) {
-    min-width: 0; scroll-snap-align: none;
-    padding: 24px 10px 10px;
-    row-gap: 6px;
+    min-width: 0;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    padding: 24px 16px 14px;
+    row-gap: 8px;
   }
-  .bp :global(.pw-tag) { top: -12px; left: 10px; padding: 4px 8px; font-size: 10px; letter-spacing: 0.12em; }
-  .bp :global(.pw-plan-n) { font-size: 11px; letter-spacing: 0.12em; color: var(--ink); overflow-wrap: anywhere; }
-  /* the name over the stamp in every card, so a row's prices stand on one line */
-  .bp :global(.pw-plan) :global(.jf-card-head) { flex-direction: column; align-items: flex-start; row-gap: 5px; }
-  .bp :global(.pw-plan) :global(.jf-card-head-r) { align-items: flex-start; }
+  .bp :global(.pw-tag) { top: -12px; left: 16px; padding: 4px 8px; font-size: 10px; letter-spacing: 0.12em; }
+  .bp :global(.pw-plan-n) { font-size: 12px; letter-spacing: 0.12em; color: var(--ink); overflow-wrap: anywhere; }
+  /* the name and, at the card's right edge, the year's stamp — the desk's head */
   .bp :global(.pw-plan) :global(.jf-stamp) { padding: 4px 8px; font-size: 10px; letter-spacing: 0.12em; }
-  .bp :global(.pw-price) { font-size: 26px; white-space: nowrap; }
-  .bp :global(.pw-price i) { font-size: 12px; }
+  .bp :global(.pw-price) { font-size: 34px; white-space: nowrap; }
+  .bp :global(.pw-price i) { font-size: 13px; }
   .bp :global(.pw-plan) :global(.jf-deal) { margin-top: 0; height: auto; font-size: 12px; line-height: 1.3; white-space: nowrap; }
   .bp :global(.pw-plan) :global(.jf-deal .jf-deal-save) { font-weight: 600; }
   .bp :global(.pw-plan) :global(.jf-deal .jf-deal-billed) { font-size: 12px; font-weight: 500; }
-  .bp :global(.pw-when) { font-size: 11.5px; font-weight: 600; line-height: 1.3; }
+  .bp :global(.pw-when) { font-size: 12px; font-weight: 600; line-height: 1.3; }
   /* a code's price: ink here — the stamp and the saving are the card's only green */
   .bp :global(.pw-save--code) { flex-wrap: wrap; gap: 0 6px; font-size: 10px; letter-spacing: 0.04em; color: var(--ink-soft); }
-  .bp :global(.pw-feats) { margin-bottom: 2px; }
-  .bp :global(.pw-f) { gap: 6px; padding: 5px 0; font-size: 12px; line-height: 1.3; }
-  .bp :global(.pw-f .ic) { width: 12px; height: 12px; margin-top: 2px; }
+  .bp :global(.pw-feats) { margin-bottom: 4px; }
+  .bp :global(.pw-f) { gap: 8px; padding: 6px 0; font-size: 13px; line-height: 1.3; }
+  .bp :global(.pw-f .ic) { width: 13px; height: 13px; margin-top: 2px; }
   .bp :global(.pw-plan) :global(.pw-go.pw-go) {
-    min-height: 44px; padding: 6px 8px;
-    font-size: 11px; letter-spacing: 0.06em; line-height: 1.15; white-space: normal; text-align: center;
+    min-height: 44px; padding: 6px 10px;
+    font-size: 12px; letter-spacing: 0.08em; line-height: 1.15; white-space: normal; text-align: center;
   }
-  .bp :global(.pw-plan) :global(.pw-edit) { align-self: stretch; text-align: center; padding: 6px 8px; display: flex; align-items: center; justify-content: center; }
+  .bp :global(.pw-plan) :global(.pw-edit) { align-self: stretch; min-height: 44px; text-align: center; padding: 6px 10px; display: flex; align-items: center; justify-content: center; }
+
+  /* the dots: one 44px target per card, a 10px square in it; the card in the middle filled */
+  .bp :global(.pw-dots) { display: flex; justify-content: center; margin: -4px 0 0; }
+  .bp :global(.pw-dot) {
+    display: grid; place-items: center;
+    width: 44px; height: 44px; padding: 0;
+    border: 0; background: none; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bp :global(.pw-dot) > span {
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--muted-light); border-radius: 1px;
+    transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease);
+  }
+  .bp :global(.pw-dot[aria-current="true"]) > span { background: var(--ink); border-color: var(--ink); }
+  .bp :global(.pw-dot:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: -8px; }
+}
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+  .bp :global(.pw-dot) > span { transition: none; }
 }
 @media (max-width: 768px) {
   .bp :global(.pw-price) :global(.pw-from) { font-size: 12px; font-weight: 800; letter-spacing: 0; color: var(--muted); }

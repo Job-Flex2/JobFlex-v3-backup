@@ -8,8 +8,10 @@
 //   · a sheet's body does not scroll to its last field;
 //   · the app's top bar is not 12px from both edges, or a badge hangs out of its button;
 //   · a phone-width root carries a zoom;
-//   · (2026-10-12) on the sign-up's plan step (360×640, 390×844/700, 430×932) the same, and its
-//     full cards stand two to a row, each with its own list and start button, nothing pinned;
+//   · (2026-10-12; 2026-10-14) on the sign-up's plan step (360×640, 390×844/700, 430×932) the same,
+//     and its full cards stand in one swiped row, the most-picked one in the middle with its
+//     neighbours at the edges, one dot per card, each card with its own list and start button,
+//     nothing pinned;
 //   · dev and prod draw the same page differently (stylesheet order) — when a dev server is up
 //     (QA_DEV_URL, else localhost:3001 / :3000); without one that half is reported, not failed.
 // Signs in only as qa@acme.test (QA Co); its records come from ./_world and ./_crewWorld and
@@ -92,9 +94,10 @@ async function withCrew(run: (crew: Awaited<ReturnType<typeof makeCrewWorld>>) =
 /** Playwright is resolved at run time (./_prod-server): its objects are untyped here. */
 type Loose = ReturnType<typeof playwright>;
 
-/** THE SIGN-UP'S PLAN STEP (owner, 2026-10-12): the full cards two to a row, each with its own
- *  list and start button, the page scrolling down — nothing swiped, nothing pinned. Reached as a
- *  new visitor (its own made-up IP; its pending signup removed after), judged like every page. */
+/** THE SIGN-UP'S PLAN STEP (owner, 2026-10-14): the full cards in one swiped row — the most-picked
+ *  card in the middle, its neighbours showing at the edges, a dot per card — each with its own list
+ *  and start button, the page scrolling down, nothing pinned. Reached as a new visitor (its own
+ *  made-up IP; its pending signup removed after), judged like every page. */
 const SWEEP_MAIL = `sweep${Date.now()}.test`;
 async function planStep(webkit: Loose, H: number, W = 390) {
   const ip = `10.${1 + Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}`;
@@ -124,12 +127,19 @@ async function planStep(webkit: Loose, H: number, W = 390) {
     const p = await page.evaluate(PAGE);
     const issues = judge(p);
     const grid = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll<HTMLElement>("section.plan-sheet.is-in [data-plan-card]")).map((c) => { const b = c.getBoundingClientRect(); return { top: Math.round(b.top), h: Math.round(b.height), go: c.querySelectorAll(".pw-go").length, rows: c.querySelectorAll("[data-plan-feats] > *").length }; });
-      return { cards, pinned: document.querySelectorAll("[data-plan-bar], [data-plan-tiles]").length };
+      const root = document.querySelector("section.plan-sheet.is-in")!;
+      const railEl = root.querySelector<HTMLElement>(".pw-plans")!;
+      const rail = railEl.getBoundingClientRect();
+      const mid = (rail.left + rail.right) / 2;
+      const cards = Array.from(root.querySelectorAll<HTMLElement>("[data-plan-card]")).map((c) => { const b = c.getBoundingClientRect(); return { top: Math.round(b.top), h: Math.round(b.height), l: b.left, r: b.right, hero: c.classList.contains("pw-plan--hero"), go: c.querySelectorAll(".pw-go").length, rows: c.querySelectorAll("[data-plan-feats] > *").length }; });
+      const at = cards.findIndex((c) => Math.abs((c.l + c.r) / 2 - mid) <= 1);
+      const peeks = at < 0 ? [] : [cards[at - 1] ? cards[at - 1].r - rail.left : null, cards[at + 1] ? rail.right - cards[at + 1].l : null].filter((x): x is number => x !== null);
+      return { cards, at, hero: at >= 0 && cards[at].hero, peeks, swipes: railEl.scrollWidth > railEl.clientWidth + 1, dots: root.querySelectorAll("[data-plan-dot]").length, pinned: document.querySelectorAll("[data-plan-bar], [data-plan-tiles]").length };
     });
-    const pairs = grid.cards.length >= 2 && Math.abs(grid.cards[0].top - grid.cards[1].top) <= 1 && Math.abs(grid.cards[0].h - grid.cards[1].h) <= 1;
-    const own = grid.cards.every((c: Loose) => c.go === 1 && c.rows > 0);
-    check(`${W}×${H} /auth/register ▸ plan step`, !issues.filter((i: Loose) => !i.soft).length && !(p.bars || []).length && !grid.pinned && pairs && own, `${say(issues)} · ${grid.cards.length} cards${pairs ? "" : " · not two to a row"}${own ? "" : " · a card without its list or button"}${(p.bars || []).length || grid.pinned ? " · something pinned" : ""}`);
+    const row = grid.cards.length >= 2 && grid.cards.every((c: Loose) => Math.abs(c.top - grid.cards[0].top) <= 1 && Math.abs(c.h - grid.cards[0].h) <= 1) && grid.swipes;
+    const middle = grid.hero && grid.peeks.length > 0 && grid.peeks.every((x: number) => x >= 23 && x <= 33);
+    const own = grid.cards.every((c: Loose) => c.go === 1 && c.rows > 0) && grid.dots === grid.cards.length;
+    check(`${W}×${H} /auth/register ▸ plan step`, !issues.filter((i: Loose) => !i.soft).length && !(p.bars || []).length && !grid.pinned && row && middle && own, `${say(issues)} · ${grid.cards.length} cards${row ? "" : " · not one swiped row of one height"}${middle ? "" : ` · the middle card ${grid.at} (most picked: ${grid.hero}), edges ${grid.peeks.map((x: number) => Math.round(x)).join("/")}px`}${own ? "" : ` · a card without its list or button, or ${grid.dots} dots`}${(p.bars || []).length || grid.pinned ? " · something pinned" : ""}`);
   } catch (e) {
     check(`${W}×${H} /auth/register ▸ plan step`, false, String((e as Error)?.message || e).split("\n")[0]);
   } finally {

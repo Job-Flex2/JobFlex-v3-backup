@@ -120,18 +120,29 @@ async function step2(v: Awaited<ReturnType<typeof visitor>>) {
   return { ok, err };
 }
 
-/** The plan sheet's first plan → /api/checkout/signup → the browser heads for Stripe. */
+/** The plan sheet's start → /api/checkout/signup → the browser heads for Stripe. A desk presses
+ *  the first card's button; a phone (the swiped rail, 2026-10-14) the button of the card in the
+ *  middle of the screen — the chosen one — and says which card that was. */
 async function toCheckout(v: Awaited<ReturnType<typeof visitor>>) {
   const { page } = v;
   v.step("plan sheet → Checkout");
-  const go = page.locator("section.plan-sheet.is-in .pw-plan .pw-go").filter({ visible: true }).first();
+  const phone = page.viewportSize()!.width <= 768;
+  const go = page.locator(`section.plan-sheet.is-in ${phone ? ".pw-plan.on" : ".pw-plan"} .pw-go`).filter({ visible: true }).first();
   await go.waitFor({ timeout: 60000 });
   await page.waitForTimeout(600);
+  const middle = phone
+    ? await page.evaluate(() => {
+        const rail = document.querySelector("section.plan-sheet.is-in .pw-plans")!.getBoundingClientRect();
+        const on = document.querySelector<HTMLElement>("section.plan-sheet.is-in .pw-plan.on")!;
+        const b = on.getBoundingClientRect();
+        return { slug: on.dataset.planCard ?? "", hero: on.classList.contains("pw-plan--hero"), off: Math.round(((b.left + b.right) / 2 - (rail.left + rail.right) / 2) * 10) / 10 };
+      })
+    : null;
   const answer = page.waitForResponse((r: any) => r.url().startsWith(BASE + "/api/checkout/signup"), { timeout: 90000 }).catch(() => null);
   await go.click();
   const r = await answer;
   for (let i = 0; i < 60 && !v.handoff.checkout; i++) await page.waitForTimeout(250);
-  return { status: r ? r.status() : 0, url: v.handoff.checkout || "" };
+  return { status: r ? r.status() : 0, url: v.handoff.checkout || "", middle };
 }
 
 async function emailPath(browser: any, kind: Kind, industry: string, ip: string, n: number, toStripe: boolean) {
@@ -150,6 +161,7 @@ async function emailPath(browser: any, kind: Kind, industry: string, ip: string,
     if (!s2.ok) return;
     if (!toStripe) { const e = v.take(); check(`${name}: plan sheet`, !e, e); return; }
     const c = await toCheckout(v);
+    if (c.middle) check(`${name}: the button pressed is the middle card's, the most-picked one (${c.middle.slug})`, Math.abs(c.middle.off) <= 1 && c.middle.hero, `${c.middle.slug} ${c.middle.off}px off the middle`);
     check(`${name}: Start free trial → Stripe Checkout`, c.status === 200 && /^https:\/\/checkout\.stripe\.com\//.test(c.url), [`/api/checkout/signup ${c.status}`, c.url ? "→ " + c.url.slice(0, 40) + "…" : "no hand-off", v.take()].filter(Boolean).join(" · "));
   } catch (e) {
     check(`${name}: ran through`, false, `${String((e as Error)?.message || e).split("\n")[0]} · ${v.take()}`);

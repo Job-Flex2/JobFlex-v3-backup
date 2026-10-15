@@ -325,8 +325,9 @@ export function RegisterContent({
   const orderedPlans = React.useMemo(() => (edition ? [...plans.filter((p) => isEditionPlan(p.slug, edition)), ...plans.filter((p) => !isEditionPlan(p.slug, edition))] : plans), [plans, edition]);
   /* Custom and catalog plans share the saved offer returned by signupPlans. */
   const [customTrialDays, setCustomTrialDays] = React.useState<number>(offer.days);
-  /* The row of cards. On a phone it is a two-column grid (2026-10-12): the swiped
-     carousel and its snap-to-the-hero passes are gone. */
+  /* The row of cards. On a phone it is a swiped row again (owner, 2026-10-14):
+     one full card in the middle, its neighbours at the edges, dots under it
+     (auth-register.module.css). See the rail's effects below. */
   const plansRef = React.useRef<HTMLDivElement>(null);
   const handheld = React.useSyncExternalStore(subscribeHandheld, () => window.matchMedia(HANDHELD).matches, () => false);
   const isClient = React.useSyncExternalStore(
@@ -789,6 +790,86 @@ export function RegisterContent({
   React.useEffect(() => {
     if (step === 3 && handheld) rememberPlan(planSlug);
   }, [step, handheld, planSlug]);
+
+  /* THE PHONE'S RAIL (owner, 2026-10-14). The card in the middle is the choice:
+     the rail opens on the chosen card — the most-picked one, or the plan the link
+     or this tab named — centred before the first paint (a layout effect, so there
+     is no visible jump), and is set again whenever the rail changes size until a
+     finger, a wheel or a key touches it (the sheet's slide-in and the fonts
+     arriving can move a card under it). A swipe that settles on a card makes that
+     card the choice; a tap on a card, or on its start button, chooses it and
+     brings it to the middle. The dots follow the card in the middle as it moves. */
+  const planSlugRef = React.useRef(planSlug);
+  React.useLayoutEffect(() => {
+    planSlugRef.current = planSlug;
+  }, [planSlug]);
+  const railTouched = React.useRef(false);
+  const [railAt, setRailAt] = React.useState<number | null>(null);
+  const centreCard = React.useCallback((slug: string | null, smooth: boolean) => {
+    const rail = plansRef.current;
+    const card = slug ? rail?.querySelector<HTMLElement>(`[data-plan-card="${slug}"]`) : null;
+    if (!rail || !card) return;
+    // The rail is `position: relative` on a phone, so offsetLeft is in its own scroll space.
+    const left = Math.max(0, card.offsetLeft - (rail.clientWidth - card.offsetWidth) / 2);
+    if (Math.abs(rail.scrollLeft - left) <= 1) return;
+    if (smooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) rail.scrollTo({ left, behavior: "smooth" });
+    else rail.scrollLeft = left;
+  }, []);
+  const cardCount = orderedPlans.length + (offerCustom && plans.length > 0 ? 1 : 0);
+  React.useLayoutEffect(() => {
+    const rail = plansRef.current;
+    if (step !== 3 || !handheld || !rail || cardCount === 0) return;
+    railTouched.current = false;
+    const place = () => {
+      if (!railTouched.current) centreCard(planSlugRef.current, false);
+    };
+    place();
+    const timers = [window.setTimeout(place, 120), window.setTimeout(place, 520)];
+    const ro = new ResizeObserver(place);
+    ro.observe(rail);
+    const mark = () => {
+      railTouched.current = true;
+    };
+    const MARKS = ["pointerdown", "touchstart", "wheel", "keydown"] as const;
+    for (const ev of MARKS) rail.addEventListener(ev, mark, { passive: true });
+    // The card nearest the middle: the dots now, the choice once the rail is still.
+    const nearest = () => {
+      const mid = rail.scrollLeft + rail.clientWidth / 2;
+      const cards = Array.from(rail.querySelectorAll<HTMLElement>("[data-plan-card]"));
+      let best = 0;
+      cards.forEach((c, i) => {
+        if (Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - mid)) best = i;
+      });
+      return { i: best, slug: cards[best]?.dataset.planCard ?? null };
+    };
+    let frame = 0;
+    let still = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setRailAt(nearest().i));
+      window.clearTimeout(still);
+      still = window.setTimeout(() => {
+        const { slug } = nearest();
+        if (slug && railTouched.current) setPlanSlug(slug);
+      }, 140);
+    };
+    rail.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      timers.forEach(clearTimeout);
+      ro.disconnect();
+      cancelAnimationFrame(frame);
+      window.clearTimeout(still);
+      for (const ev of MARKS) rail.removeEventListener(ev, mark);
+      rail.removeEventListener("scroll", onScroll);
+    };
+  }, [step, handheld, cardCount, centreCard]);
+  /** A card chosen by a tap (the card or its start button): on a phone it comes to the middle. */
+  const choosePlan = (slug: string) => {
+    setPlanSlug(slug);
+    if (!handheld) return;
+    railTouched.current = true;
+    centreCard(slug, true);
+  };
 
   async function onApplyPromo() {
     if (promoBusy) return;
@@ -2111,12 +2192,12 @@ export function RegisterContent({
                     data-plan-card={p.slug}
                     data-monthly-cents={p.priceCents}
                     data-yearly-cents={p.yearlyPriceCents ?? undefined}
-                    onClick={() => setPlanSlug(p.slug)}
+                    onClick={() => choosePlan(p.slug)}
                     onKeyDown={(e) => {
                       if (e.target !== e.currentTarget) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setPlanSlug(p.slug);
+                        choosePlan(p.slug);
                       }
                     }}
                   >
@@ -2174,7 +2255,7 @@ export function RegisterContent({
                         aria-busy={startingSlug === p.slug || undefined}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setPlanSlug(p.slug);
+                          choosePlan(p.slug);
                           void onStartPlan(p.slug);
                         }}
                         disabled={payBusy || !checkoutReady}
@@ -2210,14 +2291,14 @@ export function RegisterContent({
                 data-yearly-cents={customPriceCents(customPages, "YEAR")}
                 // A phone: the card is the choice, like every card; its "Select pages" opens the picker.
                 onClick={() => {
-                  setPlanSlug(CUSTOM_PLAN_SLUG);
+                  choosePlan(CUSTOM_PLAN_SLUG);
                   if (!handheld) openPicker();
                 }}
                 onKeyDown={(e) => {
                   if (e.target !== e.currentTarget) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    setPlanSlug(CUSTOM_PLAN_SLUG);
+                    choosePlan(CUSTOM_PLAN_SLUG);
                     if (!handheld) openPicker();
                   }
                 }}
@@ -2284,7 +2365,7 @@ export function RegisterContent({
                     role="presentation"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setPlanSlug(CUSTOM_PLAN_SLUG);
+                      choosePlan(CUSTOM_PLAN_SLUG);
                       openPicker();
                     }}
                   >
@@ -2296,7 +2377,7 @@ export function RegisterContent({
                     aria-busy={startingSlug === CUSTOM_PLAN_SLUG || undefined}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setPlanSlug(CUSTOM_PLAN_SLUG);
+                      choosePlan(CUSTOM_PLAN_SLUG);
                       void onStartPlan(CUSTOM_PLAN_SLUG);
                     }}
                     disabled={payBusy || !checkoutReady}
@@ -2315,6 +2396,32 @@ export function RegisterContent({
                 <div className="fld-note">Loading plans…</div>
               ) : null}
             </div>
+
+            {/* THE DOTS under the phone's rail: one per card, the one in the middle filled; a
+                press brings that card to the middle (and the choice follows it there). */}
+            {handheld && cardCount > 1 && !confirmSentTo && !gate ? (
+              <div className="pw-dots" data-plan-dots>
+                {[...orderedPlans.map((p) => ({ slug: p.slug, name: p.name })), ...(cardCount > orderedPlans.length ? [{ slug: CUSTOM_PLAN_SLUG, name: "Custom" }] : [])].map((d, i) => {
+                  const at = railAt ?? Math.max(0, [...orderedPlans.map((p) => p.slug), CUSTOM_PLAN_SLUG].indexOf(planSlug ?? ""));
+                  return (
+                    <button
+                      key={d.slug}
+                      type="button"
+                      className="pw-dot"
+                      data-plan-dot={d.slug}
+                      aria-label={`Show the ${d.name} plan`}
+                      aria-current={i === at ? "true" : undefined}
+                      onClick={() => {
+                        railTouched.current = true;
+                        centreCard(d.slug, true);
+                      }}
+                    >
+                      <span aria-hidden />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
 
             {/* The code and the terms share one row on a desk (2026-10-12): the field on the left,
                 the fine print beside it. On a phone the wrappers step aside (display: contents). */}
