@@ -81,6 +81,7 @@ import {
   money,
   useVideoEstimator,
 } from "@/components/v3/video-estimator-blueprint/use-video-estimator";
+import { BEHIND_LABEL } from "@/lib/estimate/video-schema";
 import { MobileClarifySheet } from "./mobile-clarify-sheet";
 import "./mobile-video-estimator.css";
 
@@ -482,6 +483,14 @@ export function MobileVideoEstimator({
                 </button>
                 <span>{ve.fileMeta}</span>
               </div>
+              {ve.framesDeferred ? (
+                <div className="mve-defer" data-video-deferred>
+                  This browser reads a clip from a tap only — the stills are pulled when you tap Analyze video.
+                </div>
+              ) : null}
+              {/* preload="none": a second decoder on the clip while the still
+                  pass runs is one more than a phone has to give — the first
+                  still is the poster, and a tap loads the player. */}
               {ve.previewUrl ? (
                 <video
                   className="mve-preview"
@@ -489,7 +498,8 @@ export function MobileVideoEstimator({
                   controls
                   muted
                   playsInline
-                  preload="metadata"
+                  preload="none"
+                  poster={ve.stripFrames[0]?.dataUrl}
                 />
               ) : null}
               {/* Real stills as they land; until then the cells wear the
@@ -634,6 +644,69 @@ export function MobileVideoEstimator({
                   <div className="mve-none">Nothing noted on site.</div>
                 )}
 
+                {/* THE LOOK-AHEAD (owner, 2026-10-14): the work, what it brings
+                    with it, the procedure — absent for a reading in the old shape. */}
+                {ve.deep ? (
+                  <div data-video-deep>
+                    <div className="mve-sec-h mve-sec-h--gap">The work</div>
+                    {ve.deep.work.length > 0 ? (
+                      <ul className="mve-notes" data-video-work>
+                        {ve.deep.work.map((w, i) => (
+                          <li key={i}>
+                            {w.what}
+                            {w.where ? <span className="mve-dim"> — {w.where}</span> : null}
+                            {w.detail ? <span className="mve-dim"> · {w.detail}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="mve-none">No task list came back — the scope is the job.</div>
+                    )}
+
+                    <div className="mve-sec-h mve-sec-h--gap">What the work brings with it</div>
+                    {ve.deep.behind.length > 0 ? (
+                      <ul className="mve-notes mve-notes--behind" data-video-behind>
+                        {ve.deep.behind.map((b, i) => (
+                          <li key={i}>
+                            <b>{b.item}</b>
+                            {b.because ? <span className="mve-dim"> — {b.because}</span> : null}
+                            <i className="mve-m-tag" data-h={b.handling}>
+                              {BEHIND_LABEL[b.handling]}
+                            </i>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="mve-none">Nothing beyond the work itself.</div>
+                    )}
+
+                    <div className="mve-sec-h mve-sec-h--gap">Procedure</div>
+                    {ve.deep.steps.length > 0 ? (
+                      <ol className="mve-steps" data-video-steps>
+                        {ve.deep.steps.map((s, i) => (
+                          <li key={i}>
+                            <b>{s.step}</b>
+                            {s.materials ? <span>Materials: {s.materials}</span> : null}
+                            {s.labor ? <span>Labor: {s.labor}</span> : null}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className="mve-none">No step list came back.</div>
+                    )}
+                    {ve.deep.permits.length > 0 ? (
+                      <>
+                        <div className="mve-sec-h mve-sec-h--gap">Permits &amp; inspections</div>
+                        <ul className="mve-notes" data-video-permits>
+                          {ve.deep.permits.map((p, i) => (
+                            <li key={i}>{p}</li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="mve-sec-h mve-sec-h--gap">Assumptions</div>
                 {ve.assumptions.length > 0 ? (
                   <ul className="mve-notes mve-notes--assume">
@@ -713,6 +786,17 @@ export function MobileVideoEstimator({
               failed needs a way off the screen that is not Start over. */}
           <div className="mve-err" hidden={!ve.error} role="alert">
             <span>{ve.error}</span>
+            {ve.framesFailed ? (
+              <button
+                className="mve-btn mve-err-retry"
+                type="button"
+                onClick={ve.retryFrames}
+                disabled={ve.busy || !!ve.framesProgress}
+                data-video-retry
+              >
+                Retry
+              </button>
+            ) : null}
             <button
               className="mve-err-x"
               type="button"

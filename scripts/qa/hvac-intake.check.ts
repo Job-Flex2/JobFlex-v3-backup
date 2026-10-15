@@ -76,6 +76,10 @@ const analysis: WalkthroughAnalysis = {
   projectType: "other",
   title: "HVAC replacement",
   location: "Frisco, TX",
+  work: [],
+  behind: [],
+  steps: [],
+  permits: [],
   scope: "Replace a 4-ton R-22 split system.",
   measurements: [
     { label: "Square footage", value: "2,400", unit: "sq ft", confidence: "high", source: "spoken" },

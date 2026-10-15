@@ -28,6 +28,7 @@ import type { NotificationPrefs, PrefKey } from '@/lib/notificationPrefsShared';
 import type { SmsRegistrationView } from '@/lib/sms/registrationShared';
 import type { CompanyFacts, DeskProfile } from '@/lib/aiDesk/profile';
 import type { DeskReviewItem } from '@/lib/aiDesk/tradePresets';
+import type { ForwardCheck } from '@/lib/aiDesk/forwardCheck';
 import type { CallsGo, DeskBalance, DeskForwarding, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
 
 export type IconName =
@@ -140,6 +141,9 @@ export interface RailItem {
   readonly icon: IconName;
   /** Renders the `.rail-new` NEW badge. The `.kicker` still reads `label`. */
   readonly isNew?: boolean;
+  /** One line under the pane's title saying what the pane is for (2026-10-14: Texting and the AI desk sit
+   *  one above the other in the scroll, and the owner read the team's texts as part of the desk). */
+  readonly sub?: string;
 }
 
 export const RAIL_ITEMS: readonly RailItem[] = [
@@ -150,9 +154,9 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   { key: 'notifications', label: 'Notifications', icon: 'i-bell' },
   // Texting (2026-09-27): who gets texted, your mobile, the company's
   // numbers — the owner's own place for it, the way SmartSpace Pro has one.
-  { key: 'texting', label: 'Texting', icon: 'i-phone' },
+  { key: 'texting', label: 'Texting', icon: 'i-phone', sub: 'The texts your company sends — from your own number: who on the team gets them, which clients, and texts you write yourself.' },
   // The AI desk (2026-10-13): who answers the company's number, and what the desk knows and says.
-  { key: 'desk', label: 'AI desk', icon: 'i-phone', isNew: true },
+  { key: 'desk', label: 'AI desk', icon: 'i-phone', isNew: true, sub: 'Calls to that same number, answered for you. Texts are set up under Texting — the desk does not send any.' },
 ];
 
 export const RAIL_NEW_BADGE = 'NEW' as const;
@@ -814,6 +818,11 @@ export const TEXTS_COPY = {
   terms: 'Terms',
   privacy: 'Privacy Policy',
   codeLabel: 'The six digits',
+  // Where the code went, and what to do when nothing comes (owner, 2026-10-14: "code didn't show up" — typed 424…, the row below had 425…).
+  sentTo: (n: string) => `We texted ${n}.`,
+  notYours: 'Not your number? Change it',
+  sendAgain: 'Send again',
+  codeHint: 'The code comes from a Twilio number, not your company’s. Nothing within a minute? Check the area code above, then Send again.',
   verify: 'Verify',
   change: 'Change',
   remove: 'Stop texting me',
@@ -932,7 +941,7 @@ export const TEXTING_COPY = {
   rosterTitle: 'Who gets texted',
   rosterSub: 'The office, by event. A member is texted only after they verify a mobile on their own account.',
   peopleTitle: 'Your team — who gets texts',
-  peopleSub: 'Flip anyone’s texts on or off; their mobile and choices are kept. Tap the texts under a name to choose exactly what they get.',
+  peopleSub: 'Your own mobile: tap Add mobile on your row and verify it with a six-digit code. Anyone else: type their mobile in and they get a welcome text with the STOP line. Flip texts on or off per person — the mobile and the choices are kept — and tap the texts under a name to choose what they get.',
   sections: {
     office: { title: 'Office', sub: 'Owner, managers, admin and accounting — the whole company.' },
     sales: { title: 'Sales & estimators', sub: 'Their own leads, visits and deals — nobody else’s.' },
@@ -944,6 +953,8 @@ export const TEXTING_COPY = {
   cancel: 'Cancel',
   stopTexts: 'Stop texts',
   turnOn: 'Text this number',
+  theirMobile: (name: string) => `${name.split(' ')[0]}’s mobile`,
+  typedInNote: 'They get a welcome text with the STOP line the moment you save — that text is their notice.',
   all: 'All',
   none: 'None',
   byOffice: 'added by the office',
@@ -981,6 +992,11 @@ export const TEXTING_COPY = {
   numberRejected: 'Twilio sent it back — fix what it asks and send it again.',
   numberFailed: 'It did not reach Twilio — open it and send again.',
   numberGo: 'Get your number',
+  // A line JobFlex lent for calls (2026-10-14): the AI desk answers it; texts need a number in the company's name.
+  numberLent: (n: string) => `Calls come to ${n} — a line JobFlex lent you; the AI desk answers it. Texts need a number registered in your company’s name: JobFlex gets you one and pays for it.`,
+  numberLentRegistrable: (n: string) => `Calls come to ${n}. Register that same number in your company’s name and texts go out from it too — no new number.`,
+  numberGoOwn: 'Get your own number',
+  numberGoRegister: 'Register it',
   numberOpen: 'Open',
   teamLine: (on: number, off: number, none: number) => [`${on} getting texts`, off ? `${off} switched off` : '', none ? `${none} without a mobile` : ''].filter(Boolean).join(' · '),
   teamGo: 'Choose who',
@@ -998,6 +1014,10 @@ export const DESK_COPY = {
   managersOnly: 'Owners and managers set up the AI desk.',
   noNumber: 'No number yet — the desk answers your company\u2019s own number.',
   getNumber: 'Get your number',
+  // The desk answers a line JobFlex lent (2026-10-14); texting is set up under Texting, on a number in the company's name.
+  lentLine: 'A line JobFlex lent you for calls. Texts need a number registered in your company\u2019s name — Texting → Your number sets that up; calls keep coming here meanwhile.',
+  lentGo: 'Texting',
+  lentLineHouse: 'JobFlex\u2019s own line — this company is JobFlex\u2019s, so it carries your calls and your texts. Who gets texted is set under',
   callsDesk: 'answered by the desk',
   callsPhone: (phone: string) => `rings ${phone || 'your company phone'} first; the desk takes what nobody picks up`,
   callsNone: 'add your company phone in Company settings, or turn the desk on',
@@ -1037,10 +1057,39 @@ export const DESK_COPY = {
   answerTag: 'what the desk would say',
   // the setup, in four steps (2026-10-14)
   stepsKicker: 'Set up in four steps',
+  // the redesigned desk: overview + tabs (2026-10-14)
+  overviewLabel: 'Your AI desk at a glance',
+  tabsLabel: 'Set up the AI desk',
+  tabNumbers: 'Phone & forwarding',
+  tabNumbersShort: 'Phone',
+  tabBusinessShort: 'Business',
+  subnavLabel: 'Parts of your business setup',
+  navKind: 'Kind of business',
+  navDescribe: 'Describe it',
+  navKnow: 'What it knows',
+  navInstructions: 'Instructions',
+  tabBusiness: 'Your business',
+  tabBooking: 'Booking',
+  tabVoice: 'Voice & test',
+  noNumberShort: 'No number yet',
+  copy: 'Copy',
+  copied: 'Copied',
+  statMinutes: 'Minutes left',
+  statOut: 'Out',
+  statCalls: 'Calls this month',
+  statVoice: 'Voice',
+  progressWords: (n: number) => `${n} of 4 set up`,
+  continueTo: (t: string) => `Continue: ${t}`,
+  callTheDesk: 'Call the desk to test it',
+  reachNone: 'Get the desk a number first — then customers can call it.',
+  reachDirect: 'Customers call this number. Your own phone keeps working as before.',
+  reachMissed: (phone: string) => `Calls you miss on ${phone || 'your phone'} forward here.`,
+  reachAll: (phone: string) => `Every call to ${phone || 'your phone'} forwards here.`,
+  reachRingFirst: (phone: string) => `${phone || 'Your phone'} rings first; the desk takes the calls nobody picks up.`,
   stepDone: 'Done',
   stepTodo: 'To do',
   step1: 'Your numbers',
-  step1Sub: 'The number the desk answers, the phone customers already know, and who picks up.',
+  step1Sub: 'The number the desk answers, the phone customers already know, and who picks up. Texts go out from this same number — who gets them is set under Texting.',
   deskNumberTitle: 'The desk\u2019s number',
   businessTitle: 'Your business phone',
   businessSub: 'The number customers call you on today. The desk rings it when a caller asks for a person — or first, if you choose "ring my phone first".',
@@ -1050,9 +1099,30 @@ export const DESK_COPY = {
   forwardNone: 'They call the desk\u2019s number',
   forwardNoneSub: (n: string) => `You give out ${n} — site, truck, cards. Your own phone keeps working as before.`,
   forwardMissed: 'My number forwards the calls I miss',
-  forwardMissedSub: (n: string) => `Your carrier sends the calls you don\u2019t pick up to ${n} — you turn it on once, with the code below. The desk takes what you miss and can still hand a call back to you.`,
+  forwardMissedSub: (n: string) => `Your phone carrier sends the calls you don\u2019t pick up to ${n}. JobFlex can\u2019t switch this on for you — you turn it on once, with your carrier\u2019s code below. The desk takes what you miss and can still hand a call back to you.`,
   forwardAll: 'My number forwards every call',
-  forwardAllSub: (n: string) => `Your carrier sends every call to ${n} — you turn it on once, with the code below. The desk answers everything and takes messages instead of transferring — a transfer would ring itself.`,
+  forwardAllSub: (n: string) => `Your phone carrier sends every call to ${n}. JobFlex can\u2019t switch this on for you — you turn it on once, with your carrier\u2019s code below. The desk answers everything and takes messages instead of transferring — a transfer would ring itself.`,
+  // is it really forwarding? (2026-10-14)
+  fwdTitle: 'Is your number forwarding?',
+  fwdNeedPhone: 'Add your business phone above — the test calls it.',
+  fwdUnknown: (phone: string) => `Not checked yet. Calls to ${phone} reach the desk only after you turn on forwarding at your carrier — JobFlex can\u2019t do it for you. Dial the code below, then test it.`,
+  fwdTest: 'Test my forwarding',
+  fwdTestAgain: 'Test again',
+  fwdCallingAll: (phone: string) => `Calling ${phone} from the desk… If your phone rings, forwarding isn\u2019t on yet — answer it to hear what to do.`,
+  fwdCallingMissed: (phone: string) => `Calling ${phone} from the desk… Let it ring — don\u2019t answer. In about 30 seconds it should forward to the desk.`,
+  fwdWorks: (how: string, when: string) => `Forwarding works — ${how === 'call' ? 'a customer\u2019s call came through it' : how === 'manual' ? 'you checked it' : 'the test call came back to the desk'}, ${when}.`,
+  fwdRang: 'Your phone answered instead of the desk — forwarding isn\u2019t on yet. Dial your carrier\u2019s code below, wait for the confirmation, then test again.',
+  fwdNoAnswerAll: 'The test call rang your phone and never came to the desk — forwarding isn\u2019t on yet. Dial your carrier\u2019s code below, then test again.',
+  fwdNoAnswerMissed: 'Nobody answered and the call never reached the desk — forwarding of missed calls isn\u2019t on yet. On an iPhone, Live Voicemail can catch it first: turn it off, then test again.',
+  fwdFailed: (err: string) => `The test call couldn\u2019t be placed — ${err} Check it yourself instead: call your number from another phone.`,
+  fwdManualAsk: 'Or check it yourself — call your number from another phone:',
+  fwdManualYes: 'The desk answered',
+  fwdManualNo: 'My phone rang',
+  fwdShowCodes: 'Show the codes again',
+  fwdHideCodes: 'Hide the codes',
+  fwdBanner: (phone: string) => `Calls to ${phone || 'your number'} won\u2019t reach the desk until forwarding is on at your phone carrier — JobFlex can\u2019t switch it on for you.`,
+  fwdBannerBtn: 'Show me how',
+  fwdChip: 'Forwarding to check',
   // turning forwarding on at the carrier (2026-10-14: *72 is Verizon's only)
   codesTitle: 'Turn it on at your carrier',
   codesHow: (phone: string) => `JobFlex can\u2019t forward your calls — your phone carrier does. From the phone${phone ? ` with ${phone}` : ''}, dial the code for your carrier and press call, then wait for the tone or the message that it\u2019s on.`,
@@ -1068,7 +1138,19 @@ export const DESK_COPY = {
   forwardNeedsNumber: 'Forwarding needs the desk\u2019s number first.',
   modeForwardOff: 'Not with every call forwarded — your phone would forward straight back to the desk.',
   step2: 'Tell the desk about your company',
-  step2Sub: 'Type what kind of business you are. JobFlex presets everything callers ask, from your company details — you check the highlighted parts and correct what\u2019s different.',
+  step2Sub: 'Type what kind of business you are for a head start, then describe it in your own words — typed or spoken. JobFlex writes it up professionally and the desk answers every caller from it.',
+  // describe the business → the professional write-up (2026-10-14)
+  describeTitle: 'Describe your business',
+  describeSub: 'Talk or type the way you\u2019d brief a new office manager — what you do, how you work, your area, prices, warranty, what makes you different. JobFlex corrects it and writes it up professionally; the desk answers callers\u2019 questions from it.',
+  coverageTitle: 'Covered so far',
+  writePro: 'Write it professionally',
+  rewritePro: 'Write it again from this',
+  writing: 'Writing…',
+  knowTitle: 'What the desk knows about your business',
+  knowHint: 'The desk answers every caller\u2019s question from this. Edit anything.',
+  knowEmpty: 'Nothing written yet — describe your business above, then press Write it professionally.',
+  samplesTitle: 'Callers might ask — and the desk would say',
+  answerIt: 'Answer it',
   // preset for the trade, the sensitive parts highlighted (2026-10-14)
   kindTitle: 'What kind of business are you?',
   kindPlaceholder: 'Roofing, gutters — or remodeling, tile, painting, anything',
@@ -1354,6 +1436,8 @@ export interface DeskSettingsData {
   business: string;
   /** The parts still to check, highlighted (lib/aiDesk/tradePresets). */
   review: DeskReviewItem[];
+  /** Whether the business phone really forwards to the desk, for the forwarding chosen (lib/aiDesk/forwardCheck). */
+  forwardCheck: ForwardCheck | null;
   facts: CompanyFacts;
 }
 

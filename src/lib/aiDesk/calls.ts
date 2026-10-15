@@ -17,6 +17,8 @@ import { callsGo, greetingFor } from "./shared";
 import { readCallOutcome } from "./liveCall";
 import { deskBalanceFor } from "./minutes";
 import { signCallToken, voiceServerConfigured, voiceStreamUrl } from "./voiceToken";
+import { samePhone } from "./forwardCheck";
+import { forwardingOnInbound } from "./forwardTest";
 
 type Company = { id: string; name: string; phone: string | null };
 
@@ -88,10 +90,15 @@ async function deskHasMinutes(organizationId: string): Promise<boolean> {
   }
 }
 
-/** What a call to a company's number gets. */
-export async function inboundTwiml(input: { to: string; from: string; callSid: string; base: string }): Promise<string> {
+/** What a call to a company's number gets. `forwardedFrom`: the number the carrier says forwarded it, when it says. */
+export async function inboundTwiml(input: { to: string; from: string; callSid: string; base: string; forwardedFrom?: string | null }): Promise<string> {
   const org = await companyForCall(input.to);
   if (!org) return unavailableTwiml();
+  // The forwarding check (lib/aiDesk/forwardTest): our own test call back at the desk is answered as the test, not by it.
+  const test = await forwardingOnInbound(org, { from: input.from, to: input.to, forwardedFrom: input.forwardedFrom ?? null });
+  if (test) return test;
+  // A number calling itself is only ever a forwarding loop — never a customer.
+  if (samePhone(input.from, input.to)) return hangupTwiml();
   const [onPlan, desk, minutes] = await Promise.all([assistantOnPlan(org.id), readDeskSettings(org.id), deskHasMinutes(org.id)]);
   // A company phone that forwards every call to the desk cannot be rung from here (it would ring the desk again).
   const phone = desk.forwarding === "all" ? null : toE164(org.phone ?? "");

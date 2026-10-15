@@ -1445,6 +1445,9 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [], demo 
                   <div className={cx("stage")}><div className={cx("stage-bar")}><div className={cx("stage-fill")} style={{ width: `${walk.stagePct}%` }} /></div><span className={cx("stage-t")}>{walk.stageText}</span></div>
                 )}
                 {walk.error && <div className={cx("call", "bad")} style={{ marginTop: 10 }}>{walk.error}</div>}
+                {walk.framesDeferred && !analysis && (
+                  <div className={cx("call")} style={{ marginTop: 10 }} data-video-deferred>This browser reads a clip from a tap only — the stills are pulled when you tap Read the walk.</div>
+                )}
                 {walk.frames.length > 0 && !analysis && (
                   <div className={cx("frames")}>
                     {/* Data URLs pulled from the clip in this browser — nothing for next/image to optimise. */}

@@ -423,6 +423,7 @@ export function presetProfile(packs: readonly TradePack[], f: CompanyFacts, type
   const profile: DeskProfile = {
     greeting: `Thanks for calling ${plainName}. This is the company's virtual assistant, and this call is recorded. How can I help you today?`,
     about: `${f.name || "The company"} is ${article(kind)} ${kind} company${f.city ? ` serving ${f.city} and the area around it` : ""}.`,
+    knowledge: "",
     services: services.length ? services : f.services,
     serviceArea: f.city ? `${f.city} and nearby` : "",
     hours: f.hoursWords,
@@ -538,7 +539,7 @@ export function cleanPack(raw: unknown, business: string): TradePack | null {
 // ── after the model rewrites from the owner's words ────────────────────────
 
 /** The sections where a changed line is a claim the owner should see. */
-const SENSITIVE_SECTIONS = ["pricing", "credentials", "services", "serviceArea", "hours", "emergencies"] as const;
+const SENSITIVE_SECTIONS = ["knowledge", "pricing", "credentials", "services", "serviceArea", "hours", "emergencies"] as const;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
@@ -552,7 +553,8 @@ export function reviewAfterCompose(before: DeskProfile, after: DeskProfile, revi
   for (const k of SENSITIVE_SECTIONS) {
     const old = byKey.get(k);
     if (same(before[k], after[k])) { if (old) out.push(old); }
-    else out.push({ key: k, why, ...(old?.fixes ? { fixes: old.fixes } : {}) });
+    else if (k === "knowledge" && !after.knowledge) continue;
+    else out.push({ key: k, why: k === "knowledge" ? "Written by AI from your words — read it through once: the desk answers every caller's question from it." : why, ...(old?.fixes ? { fixes: old.fixes } : {}) });
   }
   const beforeFaq = new Map(before.faqs.map((x) => [faqKey(x.q), x.a]));
   for (const x of after.faqs) {

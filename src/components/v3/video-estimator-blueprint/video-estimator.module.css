@@ -414,6 +414,27 @@
 :global(.jf-blueprint .content) .vr-notes--assume li::before { background: transparent;
   border: 1.5px solid var(--warning); width: 5px; height: 5px; }
 
+/* THE LOOK-AHEAD (2026-10-14): a second row under the facts — the work list and
+   what it brings with it on the left, the procedure on the right. The handling
+   tag borrows the measurement tag's face: green when a crew always does it,
+   amber for an allowance, red for a thing to confirm on site. */
+:global(.jf-blueprint .content) .vr-deep { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 22px 28px; margin-top: 26px; padding-top: 22px; border-top: var(--border-thin); }
+:global(.jf-blueprint .content) .vr-dim { color: var(--muted); font-weight: 500; }
+:global(.jf-blueprint .content) .vr-notes--behind li b { font-weight: 700; color: var(--ink); }
+:global(.jf-blueprint .content) .vr-notes--behind li::before { background: var(--ink); }
+:global(.jf-blueprint .content) .vr-notes li .vr-m-tag { margin-top: 3px; }
+:global(.jf-blueprint .content) .vr-m-tag[data-h="include"] { color: var(--success); }
+:global(.jf-blueprint .content) .vr-m-tag[data-h="allowance"] { color: var(--warning); }
+:global(.jf-blueprint .content) .vr-m-tag[data-h="verify"] { color: var(--danger); }
+:global(.jf-blueprint .content) .vr-steps { display: grid; gap: 9px; margin: 0; padding-left: 22px; }
+:global(.jf-blueprint .content) .vr-steps li { font-size: 13px; line-height: 1.45; color: var(--ink-soft);
+  overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .vr-steps li::marker { font-family: var(--font-mono); font-size: 11px;
+  font-weight: 700; color: var(--blueprint); }
+:global(.jf-blueprint .content) .vr-steps li b { display: block; font-weight: 700; color: var(--ink); }
+:global(.jf-blueprint .content) .vr-steps li span { display: block; font-size: 12.5px; color: var(--muted); }
+
 /* Ledger lines carry their quantity and unit price under the name, so a
    total is never a bare figure. */
 :global(.jf-blueprint .content) .vr-line b { display: block; min-width: 0; }
@@ -734,3 +755,10 @@
   place-items: center; border: 1.5px solid currentColor; border-radius: var(--radius);
   background: transparent; color: var(--danger); cursor: pointer; }
 :global(.jf-blueprint .content) .vt-err-x .ic { width: 11px; height: 11px; }
+/* The browser held the stills for a tap (iOS, Low Power Mode): one quiet line
+   under the file, in the film's own white. */
+:global(.jf-blueprint .content) .vt-defer { margin: 8px 0 0; font-size: 12px; font-weight: 600; line-height: 1.4;
+  color: var(--paper); opacity: .78; }
+/* Retry beside the failure line: the still pass again, from a click. */
+:global(.jf-blueprint .content) .vt-err-retry { flex-shrink: 0; min-height: 26px; padding: 0 10px;
+  font-size: 11px; color: var(--danger); border-color: currentColor; background: transparent; }

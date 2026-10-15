@@ -29,8 +29,9 @@ import { enforceRateLimit, HOUR } from "@/lib/rateLimit";
 
 import { z } from "zod";
 import { requireEstimatorOrManager } from "@/lib/orgContext";
-import { getOpenAI, getVisionModel, isOpenAIEnabled, isReasoningModelName } from "@/lib/sdk/openai";
+import { getOpenAI, getVisionModel, isOpenAIEnabled, isReasoningModelName, resolveOpenAIModel } from "@/lib/sdk/openai";
 import { HVAC_READING_ADDENDUM, isHvacBrief } from "@/lib/estimate/hvac-prompt";
+import { WALKTHROUGH_READER_PROMPT } from "@/lib/estimate/video-prompt";
 import { checkPlanLimit } from "@/lib/limitsEngine";
 import { PLAN_LIMIT_MESSAGE, type LimitKey } from "@/lib/planLimits";
 import {
@@ -45,12 +46,21 @@ import { logServerError } from "@/lib/server-events";
 import { takeTrialCap } from "@/lib/trialMeter";
 import { requirePage } from "@/lib/customPageAccess";
 
-/** Vision quality matters more here than on the text-only planner: reading a
- *  fence run off a frame against a door for scale is spatial reasoning, which
- *  is exactly where the mini tier falls over. Own knob (OPENAI_VIDEO_MODEL),
- *  else the pictures' model — the estimators' model, never a mini tier
- *  (lib/sdk/openai getVisionModel). Read at call time. */
-const videoModel = () => process.env.OPENAI_VIDEO_MODEL?.trim() || getVisionModel();
+/** The reader reads with the model the rest of JobFlex runs on (gpt-4.1 on
+ *  jobflex.app since 2026-09-19), through the pictures' rule in lib/sdk/openai
+ *  getVisionModel: OPENAI_VISION_MODEL when one is set, else OPENAI_MODEL, never
+ *  a mini or nano tier — reading a fence run off a frame against a door for
+ *  scale is spatial reasoning, exactly where those fall over.
+ *  The reader's own knob, OPENAI_VIDEO_MODEL, is gone (owner, 2026-10-15:
+ *  "JobFlex already uses 4.1 — add it to video as well"): a value left in an
+ *  environment (the example file set it to gpt-4o) could hold the video a model
+ *  behind everything else. The availability check runs first, so a main model
+ *  the key's project cannot use falls back to gpt-4o here exactly as it does
+ *  for the planner. Read at call time. */
+async function videoModel(): Promise<string> {
+  await resolveOpenAIModel();
+  return getVisionModel();
+}
 
 type Fail = { ok: false; error: string; code?: "PLAN_LIMIT_REACHED"; resource?: LimitKey };
 
@@ -144,10 +154,10 @@ export async function analyzeWalkthrough(
 
   try {
     const client = getOpenAI();
+    const model = await videoModel();
     console.info(
-      `[videoEstimator] reading walkthrough · model=${videoModel()} · ${frames.length} frames · audio=${input.audioState} · hvac=${hvac} · ${clock(input.duration)}`,
+      `[videoEstimator] reading walkthrough · model=${model} · ${frames.length} frames · audio=${input.audioState} · hvac=${hvac} · ${clock(input.duration)}`,
     );
-    const model = videoModel();
     const completion = await client.chat.completions.create({
       model,
       // A reasoning model rejects a temperature.
@@ -155,11 +165,9 @@ export async function analyzeWalkthrough(
       messages: [
         {
           role: "system",
-          content:
-            "You are a senior construction estimator reading a contractor's jobsite walkthrough video. You receive still frames pulled from the clip in chronological order (each tagged with its index and timestamp) and, when there is audio, a timestamped transcript of what was said. Your job is to READ the job accurately — not to price it. " +
-            'Return JSON ONLY matching: {"projectType": "roof"|"fence"|"deck"|"siding"|"gutters"|"other", "title": string, "location": string|null, "scope": string, "measurements": [{"label": string, "value": string, "unit"?: string, "confidence": "high"|"medium"|"low", "source": "spoken"|"visual"|"inferred"}], "observations": string[], "frames": [{"index": number, "label": string}], "enoughDetail": boolean, "questions": [{"id": string, "question": string, "kind": "select"|"number"|"text", "options"?: string[], "unit"?: string, "placeholder"?: string}], "confidence": number, "transcriptHighlights": string[]}. ' +
-            "Rules. (1) Anything SAID is ground truth: a spoken dimension, count, material or instruction outranks what you see — record it as source 'spoken', confidence 'high'. (2) A dimension READ OFF A FRAME must be grounded against a reference of known size (an entry door ≈ 80 in tall, a standard fence picket, 16 in stud spacing, a person, a vehicle, a brick course) — say which in `observations`, and mark it source 'visual' with confidence 'medium' or 'low'. Never invent a number you cannot ground; if a dimension matters and is unknown, ask for it in `questions` instead. (3) projectType: the one of the six that the pricing engine should use; 'other' for anything else. (4) title: a short job title a contractor would write on a ticket. (5) location: 'City, ST' only if it was said, is visible (a sign, a mailbox) or was typed on the ticket; otherwise null. (6) scope: 3–8 sentences a material planner can price from — what is being built, replaced or repaired, its dimensions, the materials seen or named, site conditions, access, demolition and haul-off, and anything the contractor said to include or exclude. (7) measurements: every dimension, count and area you can state, max 16. (8) observations: existing materials, condition and damage, obstacles, slope, access, utilities — short items, max 16. (9) frames: the indexes that carry the evidence, each with a 2–6 word caption, max 6 — the contractor will be shown these pictures with your captions. (10) enoughDetail and questions: if materials, dimensions, finish level or scope are too thin to price ACCURATELY, set enoughDetail=false and write 2–6 clarifying questions closing the biggest gaps first; kind 'select' needs 2–5 concrete options, 'number' needs a `unit`, 'text' a short `placeholder`; `id` is a kebab slug. Never ask for anything the frames or transcript already answer. (11) confidence: 0–100, how well this clip supports a priced estimate. (12) transcriptHighlights: up to 10 short verbatim quotes that change the estimate. Return JSON only." +
-            (hvac ? `\n\n${HVAC_READING_ADDENDUM}` : ""),
+          // The reader's instructions live in lib/estimate/video-prompt.ts, next
+          // to the schema they must match.
+          content: WALKTHROUGH_READER_PROMPT + (hvac ? `\n\n${HVAC_READING_ADDENDUM}` : ""),
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { role: "user", content: content as any },
@@ -197,7 +205,7 @@ export async function analyzeWalkthrough(
       location: parsed.location?.trim() || null,
     };
     console.info(
-      `[videoEstimator] read "${data.title}" · type=${data.projectType} · ${data.measurements.length} measurements · ${data.questions.length} questions · confidence ${data.confidence}`,
+      `[videoEstimator] read "${data.title}" · type=${data.projectType} · ${data.work.length} work · ${data.behind.length} behind · ${data.steps.length} steps · ${data.measurements.length} measurements · ${data.questions.length} questions · confidence ${data.confidence}`,
     );
     trackActivation("estimator_used", organizationId, { estimator: "video" });
     return { ok: true, data };

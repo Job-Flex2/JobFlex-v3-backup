@@ -30,6 +30,8 @@ import { deskBalanceFor, readDeskPacks, setAutoTopUp, settleDeskUse } from "@/li
 import { chargePackOnFile, finishPackCheckout, startPackPurchase, type PackStep } from "@/lib/aiDesk/packs";
 import { ASK_FORMAT, cleanCompose, cleanProfile, COMPOSE_SYSTEM, composePrompt, deskInstructions, EMPTY_PROFILE, gapQuestions, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
 import { companyFacts } from "@/lib/aiDesk/facts";
+import { currentForwardCheck, deskNumberFor, noteForwardCheck, startForwardTest } from "@/lib/aiDesk/forwardTest";
+import type { ForwardCheck } from "@/lib/aiDesk/forwardCheck";
 import { cleanPack, matchBusiness, PACK_SYSTEM, packPrompt, presetProfile, pruneReview, reviewAfterCompose, type DeskReviewItem, type TradePack } from "@/lib/aiDesk/tradePresets";
 import { openTimes } from "@/lib/aiDesk/liveCall";
 import { DEFAULT_VOICE_MODEL, realtimeCallsUrl, TEST_NOTE, TEST_TOOL_NAMES, testSession, timeIdWords, type RealtimeApi } from "@/lib/aiDesk/testCall";
@@ -137,9 +139,12 @@ export async function presetDeskProfile(businessRaw: string): Promise<DeskAction
       typed.push(...unknown);
     }
   } else typed.push(...unknown);
-  const { profile, review, trades } = presetProfile([...packs, ...written], facts, typed);
-  const questions = gapQuestions(profile, new Set(review.map((r) => r.key)));
+  const preset = presetProfile([...packs, ...written], facts, typed);
+  const { review, trades } = preset;
   const current = await readDeskSettings(organizationId);
+  // A new preset never throws away what the owner described: the write-up stays.
+  const profile = { ...preset.profile, knowledge: current.profile?.knowledge ?? "" };
+  const questions = gapQuestions(profile, new Set(review.map((r) => r.key)));
   await saveDeskSettings(organizationId, { ...current, business, profile, review, questions, profileUpdatedAt: new Date().toISOString() });
   const named = trades.length ? trades.join(", ") : business;
   await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Preset the AI desk for ${named}` });
@@ -346,6 +351,45 @@ export async function setDeskForwarding(forwarding: DeskForwarding): Promise<Des
   revalidatePath(SETTINGS_PATH);
   revalidatePath("/dashboard/phone");
   return { ok: true, note: forwarding === "all" ? "Noted: the desk takes messages instead of transferring, since a transfer would ring itself." : "Saved." };
+}
+
+/* ── does the business phone really forward? (2026-10-14) ───────────────────── */
+
+/**
+ * The forwarding test: JobFlex calls the business phone from the desk's number. Forwarding on, the call comes straight
+ * back to the desk and the check says it works; forwarding off, the phone rings (lib/aiDesk/forwardTest). The page
+ * then polls readDeskForwarding.
+ */
+export async function testDeskForwarding(): Promise<DeskActionResult<{ check: ForwardCheck }>> {
+  const { organizationId, user } = await requireManager();
+  try {
+    await enforceRateLimit(`aidesk-fwdtest:${organizationId}`, 8, HOUR, "forwarding tests");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Too many tests — try again later." };
+  }
+  const base = (process.env.TWILIO_APP_URL ?? (await appBaseUrl())).replace(/\/$/, "");
+  const r = await startForwardTest(organizationId, base);
+  if (!r.ok) return r;
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: "Tested the AI desk's call forwarding" });
+  return { ok: true, check: r.check };
+}
+
+/** Where the forwarding check stands (the page polls it while the test call runs). */
+export async function readDeskForwarding(): Promise<{ check: ForwardCheck | null }> {
+  const { organizationId } = await requireManager();
+  return { check: await currentForwardCheck(organizationId) };
+}
+
+/** The owner checked it themselves: they called the business phone and the desk answered — or their phone rang. */
+export async function confirmDeskForwarding(works: boolean): Promise<DeskActionResult<{ check: ForwardCheck }>> {
+  const { organizationId, user } = await requireManager();
+  const [desk, org, deskNumber] = await Promise.all([readDeskSettings(organizationId), db.organization.findUnique({ where: { id: organizationId }, select: { phone: true } }), deskNumberFor(organizationId)]);
+  const phone = toE164(org?.phone ?? "");
+  if (desk.forwarding === "none" || !phone || !deskNumber) return { ok: false, error: "Pick how your number forwards, and add your business phone, first." };
+  const check = await noteForwardCheck(organizationId, desk.forwarding, phone, deskNumber, works ? "works" : "rang", "manual");
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: works ? "Confirmed the business phone forwards to the AI desk" : "Noted the business phone does not forward to the AI desk yet" });
+  revalidatePath(SETTINGS_PATH);
+  return { ok: true, check, note: works ? "Noted — forwarding works." : "Noted — dial your carrier's code, then test again." };
 }
 
 /** The number customers call the company on — the one the desk rings or hands calls to (Organization.phone). */

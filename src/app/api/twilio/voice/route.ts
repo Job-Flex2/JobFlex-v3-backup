@@ -12,6 +12,6 @@ export async function POST(req: Request) {
   if (!params) return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
   const { CallSid: callSid, From: from, To: to } = params;
   if (!callSid || !from || !to) return NextResponse.json({ error: "Missing call params" }, { status: 400 });
-  const xml = await inboundTwiml({ to, from, callSid, base: twilioBase(req.url) });
+  const xml = await inboundTwiml({ to, from, callSid, base: twilioBase(req.url), forwardedFrom: params.ForwardedFrom || null });
   return new NextResponse(xml, { headers: { "Content-Type": "text/xml" } });
 }

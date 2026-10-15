@@ -41,6 +41,7 @@ import { HoverTitle } from "@/components/v3/advanced-ai-blueprint/hover-title";
 import { ClarifyDialog } from "./clarify-dialog";
 import { VIDEO_ACCEPT, fmtClock } from "./video-ingest";
 import { confidenceTone, money, useVideoEstimator } from "./use-video-estimator";
+import { BEHIND_LABEL } from "@/lib/estimate/video-schema";
 import { useVideoEstimatorMotion } from "./video-estimator-motion";
 import s from "./video-estimator.module.css";
 import "./video-estimator-global.css";
@@ -336,6 +337,14 @@ export function VideoEstimatorContent({
                 Remove
               </button>
             </div>
+            {ve.framesDeferred ? (
+              <div className={cx("vt-defer")} data-video-deferred>
+                This browser reads a clip from a tap only — the stills are pulled when you tap Analyze video.
+              </div>
+            ) : null}
+            {/* preload="none": a second decoder on the clip while the still pass
+                runs is one more than a phone has to give — the first still is
+                the poster, and a tap loads the player. */}
             {ve.previewUrl ? (
               <video
                 className={cx("vt-preview")}
@@ -343,7 +352,8 @@ export function VideoEstimatorContent({
                 controls
                 muted
                 playsInline
-                preload="metadata"
+                preload="none"
+                poster={ve.stripFrames[0]?.dataUrl}
               />
             ) : null}
             <div className={cx("vt-strip")}>
@@ -428,6 +438,17 @@ export function VideoEstimatorContent({
             </div>
             <div className={cx("vt-err")} hidden={!ve.error} role="alert">
               <span>{ve.error}</span>
+              {ve.framesFailed ? (
+                <button
+                  className={cx("btn", "vt-err-retry")}
+                  type="button"
+                  onClick={ve.retryFrames}
+                  disabled={ve.busy || !!ve.framesProgress}
+                  data-video-retry
+                >
+                  Retry
+                </button>
+              ) : null}
               <button
                 className={cx("vt-err-x")}
                 type="button"
@@ -542,6 +563,75 @@ export function VideoEstimatorContent({
                 )}
               </div>
             </div>
+
+            {/* THE LOOK-AHEAD (owner, 2026-10-14): the work list, what each task
+                brings with it, and the procedure — the reading the planner priced
+                from, shown so the contractor sees the sink AND the shutoffs under
+                it. Absent entirely for a reading in the old shape. */}
+            {ve.deep ? (
+              <div className={cx("vr-deep")} data-video-deep>
+                <div className={cx("vr-fact")}>
+                  <div className={cx("vr-sec-h")}>The work</div>
+                  {ve.deep.work.length > 0 ? (
+                    <ul className={cx("vr-notes")} data-video-work>
+                      {ve.deep.work.map((w, i) => (
+                        <li key={i}>
+                          {w.what}
+                          {w.where ? <span className={cx("vr-dim")}> — {w.where}</span> : null}
+                          {w.detail ? <span className={cx("vr-dim")}> · {w.detail}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className={cx("vr-none")}>No task list came back — the scope above is the job.</div>
+                  )}
+
+                  <div className={cx("vr-sec-h", "vr-sec-h--gap")}>What the work brings with it</div>
+                  {ve.deep.behind.length > 0 ? (
+                    <ul className={cx("vr-notes", "vr-notes--behind")} data-video-behind>
+                      {ve.deep.behind.map((b, i) => (
+                        <li key={i}>
+                          <b>{b.item}</b>
+                          {b.because ? <span className={cx("vr-dim")}> — {b.because}</span> : null}
+                          <i className={cx("vr-m-tag")} data-h={b.handling}>
+                            {BEHIND_LABEL[b.handling]}
+                          </i>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className={cx("vr-none")}>Nothing beyond the work itself.</div>
+                  )}
+                </div>
+
+                <div className={cx("vr-fact")}>
+                  <div className={cx("vr-sec-h")}>Procedure</div>
+                  {ve.deep.steps.length > 0 ? (
+                    <ol className={cx("vr-steps")} data-video-steps>
+                      {ve.deep.steps.map((s, i) => (
+                        <li key={i}>
+                          <b>{s.step}</b>
+                          {s.materials ? <span>Materials: {s.materials}</span> : null}
+                          {s.labor ? <span>Labor: {s.labor}</span> : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <div className={cx("vr-none")}>No step list came back.</div>
+                  )}
+                  {ve.deep.permits.length > 0 ? (
+                    <>
+                      <div className={cx("vr-sec-h", "vr-sec-h--gap")}>Permits &amp; inspections</div>
+                      <ul className={cx("vr-notes")} data-video-permits>
+                        {ve.deep.permits.map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 

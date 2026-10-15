@@ -138,6 +138,8 @@
    settings-global.css under the page-prefixed name. */
 .bp :global(.content .pane.on) { display: block; animation: settings_setIn .34s var(--ease-out); }
 .bp :global(.content .pane-h) { margin-bottom: 18px; }
+/* What the pane is for, one line under its title (2026-10-14). */
+.bp :global(.content .pane-s) { margin-top: 6px; max-width: 64ch; font-size: 14px; line-height: 1.45; color: var(--muted, #555); }
 .bp :global(.content .pane-k) { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: .2em;
   text-transform: uppercase; color: var(--muted); }
 .bp :global(.content .pane-t) { margin-top: 8px; font-size: 26px; font-weight: 900; letter-spacing: -.03em; text-transform: uppercase; }

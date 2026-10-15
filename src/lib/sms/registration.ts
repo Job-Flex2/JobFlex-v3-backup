@@ -20,12 +20,14 @@ import { getOrgPlanById } from "@/lib/orgPlan";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { twilioClient, twilioSettings } from "@/lib/sdk/twilio";
 import { notePaidCall } from "@/lib/trialMeter";
-import { attachVoiceToNumber, forgetVoiceNumber, indexVoiceNumber } from "@/lib/aiDesk/numbers";
+import { attachVoiceToNumber, forgetVoiceNumber, indexVoiceNumber, numbersAssignedTo } from "@/lib/aiDesk/numbers";
+import { jobflexSender } from "./jobflexSender";
 import { clientProposalText, clientReminderText } from "./clients";
 import { companyHelpText, crewAssignedText } from "./format";
 import { settingsOf } from "@/lib/bookingBook";
 import { parseTradeTypes } from "@/lib/tradeTypes";
 import {
+  isTollFree,
   parseRegistration,
   registrationProblems,
   sampleJobsFor,
@@ -106,7 +108,29 @@ export async function submitRegistration(organizationId: string, actorId: string
   if (state.stage === "pending") return { ok: false, error: "Twilio is already checking your business — nothing to send until it answers." };
 
   const client = await twilioClient(settings);
-  // 1. The number.
+  // 1. The number. A toll-free line JobFlex lent the company for calls (/admin/health) that is
+  // not JobFlex's own sender is registered as it is — no second number (owner, 2026-10-14:
+  // "if the contractor already has the number, show it … unless they want another one").
+  if (!state.numberSid) {
+    try {
+      const base = process.env.TWILIO_APP_URL ?? (await appBaseUrl());
+      const [lent, jobflexOwn] = await Promise.all([numbersAssignedTo(organizationId).catch(() => [] as string[]), jobflexSender().catch(() => null)]);
+      const reuse = lent.find((n) => isTollFree(n) && n !== jobflexOwn) ?? null;
+      const owned = reuse ? (await client.incomingPhoneNumbers.list({ phoneNumber: reuse, limit: 1 }))[0] : undefined;
+      if (owned) {
+        await client.incomingPhoneNumbers(owned.sid).update({ smsUrl: `${base}/api/twilio/sms`, smsMethod: "POST", voiceUrl: `${base}/api/twilio/voice`, voiceMethod: "POST" });
+        state = { ...state, number: owned.phoneNumber, numberSid: owned.sid, voiceOnAt: new Date().toISOString(), error: null };
+        await save(organizationId, state);
+        if (settings.messagingServiceSid) {
+          await client.messaging.v1.services(settings.messagingServiceSid).phoneNumbers.create({ phoneNumberSid: owned.sid }).catch((err: unknown) => {
+            console.warn(`[sms/registration] could not add ${owned.phoneNumber} to the Messaging Service: ${err instanceof Error ? err.message : String(err)}`);
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[sms/registration] could not take the lent line: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   if (!state.numberSid) {
     try {
       const found = await client.availablePhoneNumbers("US").tollFree.list({ smsEnabled: true, limit: 1 });

@@ -7,6 +7,7 @@ import * as R from "../../src/lib/sms/textRules";
 import * as G from "../../src/lib/sms/registrationShared";
 import * as D from "../../src/lib/aiDesk/shared";
 import * as V from "../../src/lib/sdk/twilioVoice";
+import * as A from "../../src/lib/sms/actionGuard";
 import {
   acceptedLine,
   brand,
@@ -248,5 +249,41 @@ check("the monthly allowance grows with the plan and defaults to the free tier",
   check("the assistant's greeting names the company", D.greetingFor("Ridgeline Roofing").startsWith("Thanks for calling Ridgeline Roofing.") && /<Say voice="alice">Thanks for calling Ridgeline Roofing\./.test(V.recordingTwiml({ baseUrl: "https://x", greeting: D.greetingFor("Ridgeline Roofing") })));
 }
 
-console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");
-process.exit(bad ? 1 : 0);
+// ── every texting action answers in words (lib/sms/actionGuard, 2026-10-14) ──
+{
+  const named = (name: string, message = "") => Object.assign(new Error(message), { name });
+  check("a run-out session says sign in again, not 'your role'", A.smsFailureMessage(named("UnauthorizedError")) === A.SIGN_IN_AGAIN && A.smsFailureMessage(named("UnauthorizedError", "Session expired — please sign in again")) === A.SIGN_IN_AGAIN);
+  check("a limited role is told who can, and what to do", A.smsFailureMessage(named("UnauthorizedError", "Your role doesn't open this page")) === A.OFFICE_ONLY && A.smsFailureMessage(named("UnauthorizedError", "Manager access required")) === A.OFFICE_ONLY && A.smsFailureMessage(named("UnauthorizedError", "Owner access required")) === A.OFFICE_ONLY);
+  check("no company → sign in to one; a trial lock keeps its own sentence", A.smsFailureMessage(named("NoOrgError")) === A.NO_COMPANY && A.smsFailureMessage(named("TrialEndedError", "Your free trial has ended.")) === "Your free trial has ended." && A.smsFailureMessage(named("RateLimitError", "Too many verification texts. Try again in an hour.")).startsWith("Too many"));
+  check("the browser's own words for a lost action — #441 included — say refresh and sign in", A.smsFailureMessage(new Error("An unexpected response was received from the server.")) === A.LOST_SESSION && A.smsFailureMessage(new Error("Minified React error #441; visit https://react.dev/errors/441 for the full message")) === A.LOST_SESSION && A.smsFailureMessage(new Error("An error occurred in the Server Components render.")) === A.LOST_SESSION && A.smsFailureMessage(Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/auth/login" })) === A.LOST_SESSION);
+  check("anything else is 'our side', never the raw stack", A.smsFailureMessage(new TypeError("Cannot read properties of undefined")) === A.OUR_SIDE && A.smsFailureMessage(null) === A.OUR_SIDE && A.smsFailureMessage("boom") === A.OUR_SIDE);
+}
+
+// ── the line JobFlex lent for calls, on the texting card (registrationShared, 2026-10-14) ──
+{
+  check("toll-free is 800/833/844/855/866/877/888 in E.164, nothing else", G.isTollFree("+18005550123") && G.isTollFree("+18885550123") && G.isTollFree("+18335550123") && !G.isTollFree("+14255550123") && !G.isTollFree("8005550123") && !G.isTollFree("+1800555012") && !G.isTollFree(null));
+  const jf = G.assignedLineWords({ number: "(800) 555-0123", jobflexOwn: true, registrable: false, house: false });
+  check("JobFlex's own line: calls on, texts never from it, get your own number", /AI desk answers it today/.test(jf.calls) && /registered to JobFlex/.test(jf.texts) && jf.button === "Get your own number for texts" && /keep coming to \(800\) 555-0123/.test(jf.keep));
+  const spare = G.assignedLineWords({ number: "(888) 555-0199", jobflexOwn: false, registrable: true, house: false });
+  check("a spare toll-free line: register this same number, no new one", /register this same number/i.test(spare.texts) && spare.button === "Register this number for texts" && /No new number/.test(spare.keep));
+  const local = G.assignedLineWords({ number: "(425) 555-0100", jobflexOwn: false, registrable: false, house: false });
+  check("a local line: texts need a toll-free one, get your own", /local number/.test(local.texts) && local.button === "Get your own number for texts");
+  const house = G.assignedLineWords({ number: "(800) 555-0123", jobflexOwn: true, registrable: false, house: true });
+  check("JobFlex's own company: the JobFlex line is its line — sending, texts on, both go through it", house.tag === "sending" && /this company is JobFlex's/.test(house.texts) && /Calls and texts both go through \(800\) 555-0123/.test(house.keep));
+  check("the first set-up line for a registrable lent line is the registration, not a purchase", /^Registers \(888\) 555-0199/.test(G.REGISTRATION_COPY.doneRegisters("(888) 555-0199")));
+}
+
+async function guardChecks() {
+  const named = (name: string, message = "") => Object.assign(new Error(message), { name });
+  const r = await A.guardSms(async () => { throw named("UnauthorizedError"); });
+  check("guardSms turns a throw into { ok: false, error }", !r.ok && r.error === A.SIGN_IN_AGAIN);
+  const ok = await A.guardSms(async () => ({ ok: true as const, note: "Saved." }));
+  check("…and passes a good answer through", ok.ok && ok.note === "Saved.");
+  const bad2 = await A.guardSms(async () => ({ ok: false as const, error: "That doesn't look like a US or Canadian mobile number." }));
+  check("…and a plain refusal through untouched", !bad2.ok && /US or Canadian/.test(bad2.error));
+}
+
+void guardChecks().then(() => {
+  console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");
+  process.exit(bad ? 1 : 0);
+});

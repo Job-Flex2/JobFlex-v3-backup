@@ -2,14 +2,140 @@
 // STEP 1 · YOUR NUMBERS (2026-10-14): the desk's number, the business phone customers
 // already call, how the two meet (give out the desk's number, or forward the business
 // phone at the carrier — all calls, or only the missed ones), and who picks up.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { setBusinessPhone, setDeskForwarding, setDeskMode } from "@/actions/aiDesk";
+import { confirmDeskForwarding, readDeskForwarding, setBusinessPhone, setDeskForwarding, setDeskMode, testDeskForwarding } from "@/actions/aiDesk";
+import type { ForwardCheck, ForwardStatus } from "@/lib/aiDesk/forwardCheck";
 import { callsGo, forwardingCodes, type DeskForwarding, type DeskMode } from "@/lib/aiDesk/shared";
 import type { SmsRegistrationView } from "@/lib/sms/registrationShared";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
+
+const whenWords = (at: number) => new Date(at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+/**
+ * IS IT REALLY FORWARDING? (2026-10-14) — JobFlex calls the business phone from the desk's number; forwarding on, the
+ * call comes straight back to the desk and this says so. Or the owner checks it by hand. Polls while the test runs.
+ */
+function ForwardCheckBox({ initial, kind, phone, canManage, onStatus }: { initial: ForwardCheck | null; kind: "all" | "missed"; phone: string; canManage: boolean; onStatus: (s: ForwardStatus | null) => void }) {
+  const router = useRouter();
+  const [check, setCheck] = useState<ForwardCheck | null>(initial);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const calling = check?.status === "calling";
+
+  useEffect(() => {
+    if (!calling) return;
+    const started = Date.now();
+    const id = window.setInterval(async () => {
+      try {
+        const r = await readDeskForwarding();
+        if (r.check && r.check.status !== "calling") {
+          setCheck(r.check);
+          onStatus(r.check.status);
+          router.refresh();
+        } else if (Date.now() - started > 130_000) {
+          setCheck((c) => (c ? { ...c, status: "noanswer" } : c));
+          onStatus("noanswer");
+        }
+      } catch {
+        /* the next poll tries again */
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [calling, onStatus, router]);
+
+  const test = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await testDeskForwarding();
+      if (r.ok) {
+        setCheck(r.check);
+        onStatus("calling");
+      } else {
+        // A call Twilio would not place is a result (with its reason), not a stray error under the last one.
+        const now = await readDeskForwarding().catch(() => null);
+        if (now?.check?.status === "failed") {
+          setCheck(now.check);
+          onStatus("failed");
+        } else setErr(r.error);
+      }
+    } catch {
+      setErr("Couldn't reach JobFlex. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const manual = async (works: boolean) => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await confirmDeskForwarding(works);
+      if (r.ok) {
+        setCheck(r.check);
+        onStatus(r.check.status);
+        router.refresh();
+      } else setErr(r.error);
+    } catch {
+      setErr("Couldn't save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const status = check?.status ?? null;
+  const line = !phone
+    ? C.fwdNeedPhone
+    : status === "works"
+      ? C.fwdWorks(check!.how, whenWords(check!.at))
+      : status === "calling"
+        ? kind === "all"
+          ? C.fwdCallingAll(phone)
+          : C.fwdCallingMissed(phone)
+        : status === "rang"
+          ? C.fwdRang
+          : status === "noanswer"
+            ? kind === "all"
+              ? C.fwdNoAnswerAll
+              : C.fwdNoAnswerMissed
+            : status === "failed"
+              ? C.fwdFailed(check?.error ? `${check.error.replace(/\.?$/, ".")}` : "")
+              : C.fwdUnknown(phone);
+  return (
+    <div className={s.fwd} data-fwd-status={status ?? "unknown"}>
+      <div className={s.h}>{C.fwdTitle}</div>
+      <p className={s.fwdLine} role="status" suppressHydrationWarning>
+        <span className={s.fwdDot} aria-hidden />
+        {line}
+      </p>
+      {phone ? (
+        <div className={s.acts}>
+          <button type="button" className={`${s.btn} ${status === "works" ? "" : s.btnPrimary}`} disabled={!canManage || busy || calling} onClick={() => void test()} data-fwd-test>
+            {calling ? "Calling…" : status ? C.fwdTestAgain : C.fwdTest}
+          </button>
+        </div>
+      ) : null}
+      {phone && status !== "works" && !calling ? (
+        <div className={s.fwdManual}>
+          <span className={s.note}>{C.fwdManualAsk}</span>
+          <button type="button" className={s.fix} disabled={!canManage || busy} onClick={() => void manual(true)} data-fwd-manual="yes">
+            {C.fwdManualYes}
+          </button>
+          <button type="button" className={s.fix} disabled={!canManage || busy} onClick={() => void manual(false)} data-fwd-manual="no">
+            {C.fwdManualNo}
+          </button>
+        </div>
+      ) : null}
+      {err ? (
+        <p className={`${s.note} ${s.noteErr}`} role="alert">
+          {err}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 /** The codes for the contractor's carrier, a copy button each, the test, and what to do when it doesn't take. */
 function ForwardCodes({ number, kind, phone }: { number: string; kind: "all" | "missed"; phone: string }) {
@@ -68,6 +194,9 @@ export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettin
   const [forwarding, setForwarding] = useState<DeskForwarding>(desk.forwarding);
   const [phone, setPhone] = useState(desk.businessPhone ?? "");
   const [savedPhone, setSavedPhone] = useState(desk.businessPhone ?? "");
+  // The forwarding check's state, for folding the codes away once it works.
+  const [fwdStatus, setFwdStatus] = useState<ForwardStatus | null>(desk.forwardCheck?.status ?? null);
+  const [showCodes, setShowCodes] = useState(false);
   const [busy, setBusy] = useState<null | "mode" | "forward" | "phone">(null);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
@@ -156,6 +285,18 @@ export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettin
             <>
               <b>{number}</b>
               <span className={s.note}>{callsWords}</span>
+              {!registration?.number && desk.assigned ? (
+                <span className={s.note} data-desk-lent>
+                  {registration?.assigned?.house ? C.lentLineHouse : C.lentLine}{" "}
+                  {onNumber ? (
+                    <button type="button" className={s.link} onClick={onNumber}>
+                      {C.lentGo}
+                    </button>
+                  ) : (
+                    <a href="/dashboard/settings?tab=texting#texting-own-number">{C.lentGo}</a>
+                  )}
+                </span>
+              ) : null}
             </>
           ) : (
             <>
@@ -202,8 +343,28 @@ export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettin
         </div>
       </div>
 
-      {/* turning it on at the carrier — JobFlex can't; the codes, with the desk's number in them */}
-      {number && forwarding !== "none" ? <ForwardCodes number={number} kind={forwarding} phone={savedPhone} /> : null}
+      {/* forwarding: is it really on (the test), and how to turn it on at the carrier — JobFlex can't */}
+      {number && forwarding !== "none" ? (
+        <div className={s.sec} id="desk-forward" data-desk-forward>
+          <ForwardCheckBox
+            key={`${forwarding}|${savedPhone}`}
+            initial={desk.forwardCheck && desk.forwardCheck.kind === forwarding ? desk.forwardCheck : null}
+            kind={forwarding}
+            phone={savedPhone}
+            canManage={desk.canManage}
+            onStatus={setFwdStatus}
+          />
+          {fwdStatus === "works" && !showCodes ? (
+            <div className={s.acts}>
+              <button type="button" className={s.btn} onClick={() => setShowCodes(true)} data-fwd-show-codes>
+                {C.fwdShowCodes}
+              </button>
+            </div>
+          ) : (
+            <ForwardCodes number={number} kind={forwarding} phone={savedPhone} />
+          )}
+        </div>
+      ) : null}
 
       {/* who answers */}
       <div className={s.sec}>

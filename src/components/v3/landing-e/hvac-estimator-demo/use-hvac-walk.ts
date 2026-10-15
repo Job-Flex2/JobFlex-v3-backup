@@ -10,9 +10,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WalkthroughAnalysis } from "@/lib/estimate/video-schema";
 import {
-  extractFrames,
   frameCountFor,
-  probeVideo,
+  frameFailureReason,
+  openClip,
+  pullNeedsTap,
+  type ClipReader,
   type VideoFrame,
   type VideoProbe,
 } from "@/components/v3/video-estimator-blueprint/video-ingest";
@@ -26,6 +28,10 @@ export const DEMO_WALK: WalkthroughAnalysis = {
   projectType: "other",
   title: "HVAC replacement survey — 4418 NE 97th St",
   location: "Kirkland, WA",
+  work: [],
+  behind: [],
+  steps: [],
+  permits: [],
   scope: "Two-storey 1978 house on a vented crawlspace, 1,980 sq ft conditioned. A 3-ton split AC on an 80% gas furnace, ducts in the crawl in fair shape, one undersized return in the hall. 200 A panel with four free slots. The owner wants the AC and furnace replaced together and asked about a heat pump.",
   measurements: [
     { label: "Square footage", value: "1,980", unit: "sq ft", confidence: "high", source: "spoken" },
@@ -69,11 +75,24 @@ export function useHvacWalk(_aiEnabled: boolean) {
   const [audioState, setAudioState] = useState<"pending" | "ok" | "partial" | "none" | "failed">("pending");
   const pickSeq = useRef(0);
   const previewRef = useRef<string | null>(null);
+  /** The clip open for the still pass; closed on a new pick, on remove and on unmount. */
+  const readerRef = useRef<ClipReader | null>(null);
+  /** The browser wants a tap before it reads the clip (iOS, Low Power Mode): the stills are pulled inside the Read tap instead. */
+  const [framesDeferred, setFramesDeferred] = useState(false);
 
-  useEffect(() => () => { if (previewRef.current) URL.revokeObjectURL(previewRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+      readerRef.current?.close();
+    },
+    [],
+  );
 
   const removeFile = useCallback(() => {
     pickSeq.current += 1;
+    readerRef.current?.close();
+    readerRef.current = null;
+    setFramesDeferred(false);
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null;
     setPreviewUrl(null); setFile(null); setProbe(null); setFrames([]); setStage(null); setStageNote(""); setError(""); setAudioState("pending");
@@ -81,36 +100,78 @@ export function useHvacWalk(_aiEnabled: boolean) {
 
   const pickFile = useCallback(async (f: File) => {
     setError("");
-    let p: VideoProbe;
-    try { p = await probeVideo(f); } catch (err) { setError(err instanceof Error ? err.message : "Could not read that file."); return; }
+    // One open for the probe and the stills, started inside the gesture that
+    // picked the file — see video-ingest's header on iOS.
+    readerRef.current?.close();
+    const reader = openClip(f);
+    readerRef.current = reader;
     const token = ++pickSeq.current;
+    let p: VideoProbe;
+    try {
+      p = await reader.ready;
+    } catch (err) {
+      reader.close();
+      if (readerRef.current === reader) readerRef.current = null;
+      if (pickSeq.current !== token) return;
+      setError(err instanceof Error ? err.message : "Could not read that file.");
+      return;
+    }
+    if (pickSeq.current !== token) {
+      reader.close();
+      return;
+    }
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     const url = URL.createObjectURL(f);
     previewRef.current = url;
     setPreviewUrl(url); setFile(f); setProbe(p); setFrames([]);
     setStage("frames"); setStageNote(`0 / ${frameCountFor(p.duration)}`);
     try {
-      const out = await extractFrames(f, p, (done, total) => { if (pickSeq.current === token) setStageNote(`${done} / ${total}`); });
+      const { frames: out, report } = await reader.frames((done, total) => { if (pickSeq.current === token) setStageNote(`${done} / ${total}`); });
       if (pickSeq.current !== token) return;
+      // A refusal for want of a gesture alone is not an error: the stills come from the Read tap.
+      if (out.length === 0 && pullNeedsTap(report)) setFramesDeferred(true);
+      else if (out.length === 0) setError(`Couldn't pull any frames — ${frameFailureReason(report)}. Add it again, or export the clip as MP4 (1080p) and add that.`);
       setFrames(out);
     } catch (err) {
       if (pickSeq.current !== token) return;
       setError(err instanceof Error ? err.message : "Could not read the video.");
     } finally {
+      reader.close();
+      if (readerRef.current === reader) readerRef.current = null;
       if (pickSeq.current === token) { setStage(null); setStageNote(""); }
     }
   }, []);
 
   const framesReady = frames.length > 0 && stage !== "frames";
-  const canRead = !!file && !!probe && framesReady && !busy;
+  const canRead = !!file && !!probe && (framesReady || (framesDeferred && stage !== "frames")) && !busy;
 
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const read = useCallback(async (_address: string): Promise<WalkthroughAnalysis | null> => {
-    if (!canRead) return null;
+    if (!canRead || !file || !probe) return null;
+    // Stills deferred to this tap (iOS reads a clip from a gesture only): the
+    // clip is opened HERE, before the first await, so the tap still covers it.
+    let deferredClip: ClipReader | null = null;
+    if (frames.length === 0 && framesDeferred) { readerRef.current?.close(); deferredClip = openClip(file); readerRef.current = deferredClip; }
     setError("");
     setBusy(true);
     try {
+      if (deferredClip) {
+        setStage("frames"); setStageNote(`0 / ${frameCountFor(probe.duration)}`);
+        try {
+          await deferredClip.ready;
+          const pulled = await deferredClip.frames((d, t) => setStageNote(`${d} / ${t}`));
+          if (!pulled.frames.length) {
+            setError(pullNeedsTap(pulled.report) ? "Couldn't pull any frames — the browser refused to play this clip even from a tap (NotAllowedError). Export it as MP4 (1080p) and add that." : `Couldn't pull any frames — ${frameFailureReason(pulled.report)}. Add it again, or export the clip as MP4 (1080p) and add that.`);
+            return null;
+          }
+          setFrames(pulled.frames);
+          setFramesDeferred(false);
+        } finally {
+          deferredClip.close();
+          if (readerRef.current === deferredClip) readerRef.current = null;
+        }
+      }
       setStage("audio"); setStageNote("1 / 1");
       await wait(1400);
       setAudioState("ok");
@@ -120,12 +181,12 @@ export function useHvacWalk(_aiEnabled: boolean) {
     } finally {
       setBusy(false); setStage(null); setStageNote("");
     }
-  }, [canRead]);
+  }, [canRead, file, probe, frames, framesDeferred]);
 
   const stageText = stage
     ? `${stage === "frames" ? "Pulling stills" : stage === "audio" ? "Transcribing the audio" : "Reading the walk"}${stageNote ? ` · ${stageNote}` : ""}`
     : "";
   const stagePct = stage === "frames" ? 20 : stage === "audio" ? 55 : stage === "read" ? 85 : 0;
 
-  return { file, probe, frames, previewUrl, stage, stageText, stagePct, busy, error, audioState, canRead, pickFile, removeFile, read };
+  return { file, probe, frames, framesDeferred, previewUrl, stage, stageText, stagePct, busy, error, audioState, canRead, pickFile, removeFile, read };
 }
