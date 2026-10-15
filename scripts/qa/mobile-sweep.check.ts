@@ -137,7 +137,7 @@ async function planStep(webkit: Loose, H: number, W = 390) {
       return { cards, at, hero: at >= 0 && cards[at].hero, peeks, swipes: railEl.scrollWidth > railEl.clientWidth + 1, dots: root.querySelectorAll("[data-plan-dot]").length, pinned: document.querySelectorAll("[data-plan-bar], [data-plan-tiles]").length };
     });
     const row = grid.cards.length >= 2 && grid.cards.every((c: Loose) => Math.abs(c.top - grid.cards[0].top) <= 1 && Math.abs(c.h - grid.cards[0].h) <= 1) && grid.swipes;
-    const middle = grid.hero && grid.peeks.length > 0 && grid.peeks.every((x: number) => x >= 23 && x <= 33);
+    const middle = grid.hero && grid.peeks.length > 0 && grid.peeks.every((x: number) => Math.abs(x - (24 + 0.05 * W)) <= 1.5);
     const own = grid.cards.every((c: Loose) => c.go === 1 && c.rows > 0) && grid.dots === grid.cards.length;
     check(`${W}×${H} /auth/register ▸ plan step`, !issues.filter((i: Loose) => !i.soft).length && !(p.bars || []).length && !grid.pinned && row && middle && own, `${say(issues)} · ${grid.cards.length} cards${row ? "" : " · not one swiped row of one height"}${middle ? "" : ` · the middle card ${grid.at} (most picked: ${grid.hero}), edges ${grid.peeks.map((x: number) => Math.round(x)).join("/")}px`}${own ? "" : ` · a card without its list or button, or ${grid.dots} dots`}${(p.bars || []).length || grid.pinned ? " · something pinned" : ""}`);
   } catch (e) {

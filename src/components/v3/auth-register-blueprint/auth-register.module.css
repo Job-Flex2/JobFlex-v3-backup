@@ -1820,3 +1820,41 @@
 .bp :global(.pw-f--no .pw-spot-tag) { background: var(--danger, #a83232); }
 @keyframes pwSpotIn { 0% { background-color: rgba(24, 84, 160, 0.3); } 100% { background-color: rgba(24, 84, 160, 0.09); } }
 @media (prefers-reduced-motion: reduce) { .bp :global(.pw-f--spot) { animation: none; } }
+
+/* THE PLAN STEP ON A PHONE, ONE HEAD ROW (owner, 2026-10-14). Up to 640px:
+   · the logo and the steps share one line — the logo left, the steps at the
+     right edge, centred on the logo — the two squares joined by a short faint
+     rule, the names a size down and never wrapped;
+   · the "You came for …" line over "Pick a plan." goes (the pinned, marked
+     row stays on every card), and the heading takes its place;
+   · the swiped cards narrow by 10% of the screen: each neighbour shows 5% of
+     the screen more at either edge, the gap between cards unchanged.
+   A tablet and the desk keep the rules above. */
+@media (max-width: 640px) {
+  .bp :global(.plan-sheet-in) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 12px;
+  }
+  .bp :global(.plan-sheet) :global(#stepPlan) { grid-column: 1 / -1; min-width: 0; }
+  .bp :global(.plan-sheet .brand) { margin-right: 0; }
+  .bp :global(.plan-sheet .stepper) {
+    justify-self: end; justify-content: flex-end;
+    gap: 0; margin-left: 0; min-width: 0;
+  }
+  .bp :global(.plan-sheet .st-item) { flex: 0 0 auto; gap: 6px; }
+  .bp :global(.plan-sheet .st-n) { width: 24px; height: 24px; font-size: 11px; }
+  .bp :global(.plan-sheet .st-t) { font-size: 11px; white-space: nowrap; }
+  .bp :global(.plan-sheet .st-line) {
+    display: block; flex: 0 0 24px; width: 24px; height: 1px;
+    margin: 0 7px; background: currentColor; opacity: 0.28;
+  }
+  /* three steps (the password sign-up) do not fit beside the logo with every
+     name: the done steps keep their squares, only the current one its name */
+  .bp :global(.plan-sheet .stepper[data-steps="3"]) :global(.st-item:not(.on) .st-txt) { display: none; }
+
+  .bp :global(.pw-spot) { display: none; }
+
+  .bp :global(.pw-plans) { --pw-peek: calc(24px + 5vw); }
+}
