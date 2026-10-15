@@ -11,6 +11,8 @@ import { getLiveTraffic, getMapHistory, nameAdTag } from "@/actions/trafficDashb
 import { MAP_HISTORY_LIMIT, MAP_SPANS, isAdId, mapSpanLabel, prospectsOf, type LiveReport, type LiveStage, type LiveVisitor, type MapHistory, type MapSpan, type SignupLedger } from "@/lib/traffic-live";
 import { TRAFFIC_SINCE_LABEL, TRAFFIC_SINCE_MS, TRAFFIC_SINCE_SHORT } from "@/lib/traffic-visitor";
 import { staleLabel } from "@/lib/traffic-contract";
+import { dollars } from "@/lib/investorModel";
+import { perAdSignupCents, type AdSpendToday } from "@/lib/adSpendTodayShared";
 import { LivePlatforms } from "./live-platforms";
 import { Ago, setClockPeriod } from "./ticker";
 import { sameReport } from "./live-diff";
@@ -56,6 +58,25 @@ const FUNNEL: Array<[LiveStage, string]> = [
   ["member", "members"],
 ];
 const STAGE: Record<LiveStage, string> = { browsing: "Looking around", "signing-in": "Signing in", registering: "On the sign-up form", checkout: "At checkout", "signed-up": "Signed up", member: "In the app · member" };
+
+/** "Spent on ads today": Meta's figure (as of its last read), or what was booked, or the daily budget said as one. */
+function AdSpendTile({ spend, adSignups, timezone }: { spend: AdSpendToday | null; adSignups: number; timezone: string }) {
+  const per = perAdSignupCents(spend?.cents ?? null, adSignups);
+  const asOf = spend?.asOf ? clock(spend.asOf, timezone) : "";
+  const note = !spend ? "spend unavailable"
+    : spend.source === "budget" ? "the daily budget — Meta isn't connected"
+    : spend.source === "none" ? "nothing booked — add it on Investors"
+    : spend.cents === null ? (spend.error ? `Meta didn't answer${asOf ? ` · last read ${asOf}` : ""}` : "reading Meta…")
+    : [per !== null ? `${dollars(per)} per ad signup` : adSignups === 0 && spend.cents > 0 ? "no ad signup yet" : "",
+       spend.source === "meta" ? `Meta${asOf ? `, as of ${asOf}` : ""}` : "booked on Investors"].filter(Boolean).join(" · ");
+  return (
+    <div data-tone="spend" data-spend-source={spend?.source ?? "none"} data-ad-spend>
+      <span>{spend?.source === "budget" ? "Ad budget today" : "Spent on ads today"}</span>
+      <strong>{spend && spend.cents !== null ? dollars(spend.cents) : "—"}</strong>
+      <small>{note}</small>
+    </div>
+  );
+}
 
 function clock(iso: string, timezone: string): string {
   try { return new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit" }).format(new Date(iso)); } catch { return ""; }
@@ -249,6 +270,8 @@ export function LivePanel({ initial, timezone, fullHistory = false, ledger = nul
         <strong>{fmt(report.today.signups)}</strong>
         <small>{report.today.signups > 0 ? `${fmt(report.today.fromAds)} from ads` : t && t.today > 0 ? `${fmt(t.today)} visitors, none yet` : "none yet"}</small>
       </div>
+      {/* Spent on ads today (owner, 2026-10-15), right after the signups it bought. */}
+      <AdSpendTile spend={report.adSpend ?? null} adSignups={report.today.fromAds} timezone={timezone}/>
       <div data-tone="mute">
         <span>Visitors since {TRAFFIC_SINCE_SHORT}</span>
         <strong>{t ? fmt(t.allTime) : "—"}</strong>

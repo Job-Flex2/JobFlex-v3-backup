@@ -371,7 +371,7 @@
 /* The totals (2026-09-30): everyone today, at this hour yesterday, the week
    and ever — above the half-hour window, so the live section answers "how
    many" on its own. Heavier type than the live KPIs: these are the headline. */
-:global(.jf-blueprint) .liveTotals { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--traffic-line); background:var(--paper); }
+:global(.jf-blueprint) .liveTotals { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-bottom:1px solid var(--traffic-line); background:var(--paper); }
 :global(.jf-blueprint) .liveTotals > div { display:flex; flex-direction:column; gap:6px; padding:16px 20px; border-right:1px solid var(--traffic-line); min-width:0; }
 :global(.jf-blueprint) .liveTotals > div:last-child { border-right:0; }
 :global(.jf-blueprint) .liveTotals span { font:700 11px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; color:var(--traffic-label); }
@@ -384,6 +384,8 @@
 :global(.jf-blueprint) .liveTotals > div[data-tone="now"] strong { color:var(--ink); }
 :global(.jf-blueprint) .liveTotals > div[data-tone="ok"] strong { color:var(--success-dark); }
 :global(.jf-blueprint) .liveTotals > div[data-tone="mute"] strong { color:var(--muted); }
+/* Spent on ads today (2026-10-15): ink, money is not good or bad news by itself. */
+:global(.jf-blueprint) .liveTotals > div[data-tone="spend"] strong { color:var(--ink); }
 /* The sentence under the row: what all those figures actually mean. */
 :global(.jf-blueprint) .liveHeadline { margin:0; padding:13px 24px; border-bottom:1px solid var(--traffic-line); font:500 13.5px/1.6 var(--font); color:var(--ink-soft); }
 /* The window as one coloured line, the map's own stage colours. */
@@ -576,7 +578,8 @@
 @media (max-width: 900px) {
   :global(.jf-blueprint) .liveTotals { grid-template-columns:repeat(2,minmax(0,1fr)); }
   :global(.jf-blueprint) .liveTotals > div:nth-child(2n) { border-right:0; }
-  :global(.jf-blueprint) .liveTotals > div:nth-child(-n+2) { border-bottom:1px solid var(--traffic-line); }
+  :global(.jf-blueprint) .liveTotals > div:nth-child(-n+4) { border-bottom:1px solid var(--traffic-line); }
+  :global(.jf-blueprint) .liveTotals > div:nth-child(5) { grid-column:1 / -1; }
   :global(.jf-blueprint) .liveKpis { grid-template-columns:repeat(3,minmax(0,1fr)); }
   :global(.jf-blueprint) .liveKpis > div:nth-child(3n) { border-right:0; }
   :global(.jf-blueprint) .liveKpis > div:nth-child(-n+3) { border-bottom:1px solid var(--traffic-line); }
