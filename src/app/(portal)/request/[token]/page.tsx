@@ -103,11 +103,11 @@ export default async function RequestPage({ params }: { params: Promise<{ token:
   } else if (v.status === "MANUAL_QUEUE") {
     // Neutral (owner, 2026-10-03): the same words whether the queue holds the
     // lead by design (manual mode) or because no shop took it.
-    stamp = { label: "In progress", tone: "neutral" };
+    stamp = { label: "Finding a pro", tone: "neutral" };
     title = "We're finding the right contractor for you";
     body = "We're matching your project with a qualified local pro. You'll get an email the moment one takes it on — no action needed.";
   } else {
-    stamp = { label: "Matching", tone: "neutral" };
+    stamp = { label: "Finding a pro", tone: "neutral" };
     title = "We're finding your contractor";
     body = "Your request is being matched with a local pro on JobFlex right now. You'll get an email the moment one takes it on.";
   }
@@ -360,7 +360,8 @@ export default async function RequestPage({ params }: { params: Promise<{ token:
               </dl>
             )}
             {v.scope && (
-              <details className={s.scope}>
+              // Open (2026-10-14): on a fresh request it is the only thing on the page that is theirs.
+              <details className={s.scope} open>
                 <summary>What you asked for</summary>
                 <p>{v.scope}</p>
               </details>

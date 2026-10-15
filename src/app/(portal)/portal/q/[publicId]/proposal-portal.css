@@ -533,3 +533,7 @@ body:has(.jf-proposal-portal)::before { content: none; }
    its tip on the house, drawn at a fixed size whatever the picture's width. */
 .jf-proposal-portal .pv-site-pin { position: absolute; width: 34px; height: 48px; transform: translate(-50%, -93%); pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
 .jf-proposal-portal .pv-site-pin svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* The way back to the home dashboard (home-back-link.tsx, 2026-10-14) — shown only to a homeowner who came from it. */
+.jf-proposal-portal .pv-back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 6px;
+  font-size: 13px; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }

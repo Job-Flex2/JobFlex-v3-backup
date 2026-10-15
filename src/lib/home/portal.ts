@@ -187,7 +187,8 @@ export interface HomeMembership {
 }
 
 export interface HomeNeed {
-  kind: "proposal" | "pay" | "change" | "visit" | "review" | "plan" | "files";
+  /** `due`: a payment the shop arranges itself (no online payment) — shown, never a Pay button (2026-10-14). */
+  kind: "proposal" | "pay" | "due" | "change" | "visit" | "review" | "plan" | "files";
   text: string;
   href: string;
   at: string | null;
@@ -344,7 +345,9 @@ export async function loadHomeDashboard(key: string, now = new Date()): Promise<
   }
   for (const p of projects) {
     for (const q of p.proposals) {
-      if (q.current && q.nextDue && q.remaining > 0) needs.push({ kind: "pay", text: `${q.orgName}: ${q.nextDue.label} due — ${usd0(q.nextDue.amount)}`, href: `/portal/q/${encodeURIComponent(q.publicId)}`, at: null });
+      if (q.current && q.nextDue && q.remaining > 0) needs.push(q.payOnline
+        ? { kind: "pay", text: `${q.orgName}: ${q.nextDue.label} due — ${usd0(q.nextDue.amount)}`, href: `/portal/q/${encodeURIComponent(q.publicId)}`, at: null }
+        : { kind: "due", text: `${q.orgName}: ${q.nextDue.label} due — ${usd0(q.nextDue.amount)} · they'll tell you how to pay`, href: `/portal/q/${encodeURIComponent(q.publicId)}`, at: null });
     }
   }
   for (const pl of planRows) {

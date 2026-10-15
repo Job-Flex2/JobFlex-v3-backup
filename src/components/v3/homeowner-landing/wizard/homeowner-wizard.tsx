@@ -51,6 +51,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DictateButton, MicIcon, setTextareaValue } from "@/components/estimator/DictateButton";
 import {
+  categoryOf,
   CONTACT_FIELDS,
   CONTACT_INPUTS,
   QUESTIONS,
@@ -144,7 +145,8 @@ export function HomeownerWizard({ uid, prefill = null }: { uid: string; prefill?
   /* donor `questions()` / `canRefine()`. The category picker is gone (owner,
      2026-09-04): the description is the one source, and the TRADE is detected
      server-side by AI at submit — see submitHomeownerRequest. */
-  const questions: Question[] = aiQs ?? QUESTIONS["default"];
+  // The model's questions; without them, the set the words point at (kitchen, roof…), then the general one (2026-10-14).
+  const questions: Question[] = aiQs ?? QUESTIONS[categoryOf(desc)] ?? QUESTIONS["default"];
   /* One character wakes "Continue" — the donor's `> 12` read as a broken
      button (owner's call on the retired portal wizard, carried here). */
   const canRefine = desc.trim().length > 0;
@@ -645,7 +647,7 @@ export function HomeownerWizard({ uid, prefill = null }: { uid: string; prefill?
             void onSend();
           }}
         >
-          {sending ? "Sending…" : "Send to contractors"}
+          {sending ? "Sending…" : "Send my project"}
           <svg className="ic">
             <use href="#i-arrow-r" />
           </svg>
