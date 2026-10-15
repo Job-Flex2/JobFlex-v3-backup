@@ -192,8 +192,24 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
 
   return (
     <div className={s.root} data-desk-setup data-written={written ? "1" : "0"}>
+      {/* the four parts of this tab, one tap away — the tab is long by nature */}
+      <nav className={s.subnav} aria-label={C.subnavLabel} data-desk-subnav>
+        {(
+          [
+            ["desk-kind", C.navKind],
+            ["desk-describe", C.navDescribe],
+            ["desk-know", C.navKnow],
+            ["desk-instructions", C.navInstructions],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" className={s.subnavBtn} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })} data-desk-jump={id}>
+            {label}
+            {id === "desk-instructions" && review.length ? <span className={s.subnavCount}>{C.toCheck(review.length)}</span> : null}
+          </button>
+        ))}
+      </nav>
       {/* 1 · what kind of business */}
-      <div className={s.sec} data-desk-business>
+      <div className={`${s.sec} ${s.card}`} id="desk-kind" data-desk-business>
         <label className={s.h} htmlFor="desk-business">
           {C.kindTitle}
         </label>
@@ -266,7 +282,7 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
       </div>
 
       {/* 2 · the business, in their own words → the professional write-up the desk answers from */}
-      <div className={`${s.sec} ${s.describe}`} data-desk-describe>
+      <div className={`${s.sec} ${s.card} ${s.describe}`} id="desk-describe" data-desk-describe>
         <label className={s.h} htmlFor="desk-brief">
           {C.describeTitle}
         </label>
@@ -289,7 +305,7 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
           {!desk.aiConfigured ? <span className={`${s.note} ${s.noteErr}`}>{C.aiOff}</span> : null}
         </div>
 
-        <div className={`${s.sec} ${marks.get("knowledge") ? s.secCheck : ""}`} data-section="knowledge" data-check={marks.get("knowledge") ? "1" : "0"}>
+        <div className={`${s.sec} ${marks.get("knowledge") ? s.secCheck : ""}`} id="desk-know" data-section="knowledge" data-check={marks.get("knowledge") ? "1" : "0"}>
           <div className={s.secHead}>
             <label className={s.h} htmlFor="desk-knowledge">
               {C.knowTitle}
@@ -363,7 +379,7 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
       ) : null}
 
       {/* 2 · the instructions, section by section — folded once written and checked */}
-      <div className={s.sections} data-desk-profile data-open={showDetails ? "1" : "0"}>
+      <div className={`${s.sections} ${s.card}`} id="desk-instructions" data-desk-profile data-open={showDetails ? "1" : "0"}>
         <div className={s.secHead}>
           <div>
             <div className={s.h}>{written ? C.profileTitle : C.profileTitleDraft}</div>

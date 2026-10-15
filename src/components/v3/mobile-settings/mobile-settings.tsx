@@ -169,7 +169,6 @@ import { PasswordControl } from "@/components/account-password/password-control"
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
 import { DeskSteps } from "@/components/v3/ai-desk/desk-steps";
-import { DeskMinutes } from "@/components/v3/ai-desk/desk-minutes";
 import { DESK_COPY } from "@/components/v3/settings-blueprint/settings-data";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
@@ -1200,23 +1199,21 @@ function NotificationsPane({ data }: { data: SettingsData }) {
 /** The AI desk on the phone (2026-10-13): the same two pieces as the desk pane, in this page's cards. */
 function DeskPaneMobile({ data }: { data: SettingsData }) {
   const desk = data.desk;
-  return (
-    <>
+  // The desk's own overview and tabs (minutes included) — the same piece as the desk pane.
+  if (!desk.canManage) {
+    return (
       <section className="mst-card" id="desk-status">
         <CardHeader card={{ title: DESK_COPY.title, sub: DESK_COPY.sub }} />
         <div className="mst-cardB">
-          {desk.canManage ? <DeskSteps desk={desk} registration={data.notifications.sms.registration} /> : <div className="mst-note">{DESK_COPY.managersOnly}</div>}
+          <div className="mst-note">{DESK_COPY.managersOnly}</div>
         </div>
       </section>
-      {desk.canManage ? (
-        <section className="mst-card" id="desk-minutes">
-          <CardHeader card={{ title: DESK_COPY.minutesTitle, sub: DESK_COPY.minutesSub }} />
-          <div className="mst-cardB">
-            <DeskMinutes desk={desk} />
-          </div>
-        </section>
-      ) : null}
-    </>
+    );
+  }
+  return (
+    <div id="desk-status">
+      <DeskSteps desk={desk} registration={data.notifications.sms.registration} />
+    </div>
   );
 }
 
