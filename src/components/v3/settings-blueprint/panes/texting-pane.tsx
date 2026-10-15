@@ -79,6 +79,7 @@ export function TextingPane({ data }: PaneProps) {
         </section>
       ) : null}
       {sms.canManage ? <PeopleCard sms={sms} /> : null}
+      {sms.canManage ? <ExtrasCard sms={sms} /> : null}
       {sms.canManage ? <ClientsCard sms={sms} /> : null}
       {sms.canManage ? (
         <section className="sc" id="texting-rules">
@@ -93,8 +94,9 @@ export function TextingPane({ data }: PaneProps) {
           </div>
         </section>
       ) : null}
-      {sms.canManage ? <ExtrasCard sms={sms} /> : null}
-      <MobileCard sms={sms} />
+      {/* The office verifies its own mobile on its roster row (2026-10-14); this
+          card is for a sales rep, an estimator or a worker who opens Settings. */}
+      {sms.canManage ? null : <MobileCard sms={sms} />}
       {sms.canManage ? <LeadTextsCard sms={sms} /> : null}
     </>
   );

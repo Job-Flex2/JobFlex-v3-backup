@@ -1286,52 +1286,55 @@ function TextingPane({ data }: { data: SettingsData }) {
           </div>
         </section>
       ) : null}
-      <section className="mst-card">
-        <CardHeader card={{ title: TEXTING_COPY.mineTitle, sub: TEXTING_COPY.mineSub }} />
-        <div className="mst-cardB">
-          {sms.phone && stage === "idle" ? (
-            <>
-              <div className="mst-trow">
-                <span className="mst-trowB">
-                  <span className="mst-trowN">{sms.phone}</span>
-                  <span className="mst-trowD">{sms.stopped ? TEXTS_COPY.stopped : TEXTS_COPY.verified}</span>
-                </span>
-              </div>
-              <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => run("test", sendTestText)}>
-                {TEXTS_COPY.testText}
-              </button>
-              <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => run("remove", removeSmsPhone)}>
-                {TEXTS_COPY.remove}
-              </button>
-            </>
-          ) : (
-            <>
-              {!sms.phone ? <div className="mst-note">{TEXTS_COPY.noPhone}</div> : null}
-              <Field label={TEXTS_COPY.mobileLabel} value={phone} placeholder={TEXTS_COPY.mobilePlaceholder} onChange={setPhone} disabled={stage === "code"} inputMode="tel" />
-              {stage === "code" ? <Field label={TEXTS_COPY.codeLabel} value={code} placeholder="482913" onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))} inputMode="tel" /> : null}
-              {stage === "idle" ? (
-                <button className="mst-btn mst-btn--primary mst-btn--wide" type="button" disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => run("code", () => startPhoneVerification(phone), () => setStage("code"))}>
-                  {busy === "code" ? "Sending…" : TEXTS_COPY.sendCode}
+      {/* The office verifies its own mobile on its roster row (2026-10-14); this card is for a rep or a worker. */}
+      {sms.canManage ? null : (
+        <section className="mst-card">
+          <CardHeader card={{ title: TEXTING_COPY.mineTitle, sub: TEXTING_COPY.mineSub }} />
+          <div className="mst-cardB">
+            {sms.phone && stage === "idle" ? (
+              <>
+                <div className="mst-trow">
+                  <span className="mst-trowB">
+                    <span className="mst-trowN">{sms.phone}</span>
+                    <span className="mst-trowD">{sms.stopped ? TEXTS_COPY.stopped : TEXTS_COPY.verified}</span>
+                  </span>
+                </div>
+                <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => run("test", sendTestText)}>
+                  {TEXTS_COPY.testText}
                 </button>
-              ) : (
-                <>
-                  <button className="mst-btn mst-btn--primary mst-btn--wide" type="button" disabled={busy !== null || code.length !== 6} onClick={() => run("verify", () => confirmPhoneVerification(code), () => { setStage("idle"); setCode(""); setPhone(""); })}>
-                    {busy === "verify" ? "Checking…" : TEXTS_COPY.verify}
+                <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => run("remove", removeSmsPhone)}>
+                  {TEXTS_COPY.remove}
+                </button>
+              </>
+            ) : (
+              <>
+                {!sms.phone ? <div className="mst-note">{TEXTS_COPY.noPhone}</div> : null}
+                <Field label={TEXTS_COPY.mobileLabel} value={phone} placeholder={TEXTS_COPY.mobilePlaceholder} onChange={setPhone} disabled={stage === "code"} inputMode="tel" />
+                {stage === "code" ? <Field label={TEXTS_COPY.codeLabel} value={code} placeholder="482913" onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))} inputMode="tel" /> : null}
+                {stage === "idle" ? (
+                  <button className="mst-btn mst-btn--primary mst-btn--wide" type="button" disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => run("code", () => startPhoneVerification(phone), () => setStage("code"))}>
+                    {busy === "code" ? "Sending…" : TEXTS_COPY.sendCode}
                   </button>
-                  <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => { setStage("idle"); setCode(""); }}>
-                    {TEXTS_COPY.change}
-                  </button>
-                </>
-              )}
-              <div className="mst-note" data-sms-consent>
-                <span>
-                  {TEXTS_COPY.consent} <a href="/terms">{TEXTS_COPY.terms}</a> · <a href="/privacy">{TEXTS_COPY.privacy}</a>
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-      </section>
+                ) : (
+                  <>
+                    <button className="mst-btn mst-btn--primary mst-btn--wide" type="button" disabled={busy !== null || code.length !== 6} onClick={() => run("verify", () => confirmPhoneVerification(code), () => { setStage("idle"); setCode(""); setPhone(""); })}>
+                      {busy === "verify" ? "Checking…" : TEXTS_COPY.verify}
+                    </button>
+                    <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => { setStage("idle"); setCode(""); }}>
+                      {TEXTS_COPY.change}
+                    </button>
+                  </>
+                )}
+                <div className="mst-note" data-sms-consent>
+                  <span>
+                    {TEXTS_COPY.consent} <a href="/terms">{TEXTS_COPY.terms}</a> · <a href="/privacy">{TEXTS_COPY.privacy}</a>
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
       {sms.canManage ? (
         <section className="mst-card" id="texting-lead-texts" data-lead-texts={sms.leadTexts.on ? "on" : "off"}>
           <CardHeader card={{ title: TEXTS_COPY.leadTitle, sub: TEXTS_COPY.leadSub }} />

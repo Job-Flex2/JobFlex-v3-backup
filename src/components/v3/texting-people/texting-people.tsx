@@ -16,8 +16,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { setMemberMobile, setMemberTextEvents, setMemberTextsOn, type SmsActionResult } from "@/actions/sms";
+import { confirmPhoneVerification, setMemberMobile, setMemberTextEvents, setMemberTextsOn, startPhoneVerification, type SmsActionResult } from "@/actions/sms";
 import { textEventsFor, type PrefEventMeta, type TextAudience } from "@/lib/notificationPrefsShared";
+import { smsFailureMessage } from "@/lib/sms/actionGuard";
 import { roleLabel } from "@/lib/team/who";
 import type { SmsRosterRow } from "@/components/v3/settings-blueprint/settings-data";
 import { TEXTING_COPY, TEXTS_COPY } from "@/components/v3/settings-blueprint/settings-data";
@@ -51,7 +52,8 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
         router.refresh();
       } else setErr(r.error);
     } catch (e) {
-      setErr(e instanceof Error && e.message ? e.message : "Couldn't save. Try again.");
+      // A throw that reached the browser (the sign-in redirected the action, a deploy in between): words, not "#441" (2026-10-14).
+      setErr(smsFailureMessage(e));
     } finally {
       setBusy(null);
     }
@@ -117,6 +119,11 @@ function PersonRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState("");
+  // YOUR OWN ROW (2026-10-14): your mobile is verified by a six-digit code — the
+  // code is your consent — right here, where everyone else's is typed in by
+  // the office. The separate "Your mobile" card is gone for the office.
+  const [code, setCode] = useState("");
+  const [stage, setStage] = useState<"phone" | "code">("phone");
   const texting = Boolean(row.phone) && !row.stopped;
   const onCount = events.filter((e) => row.cells[e.key]).length;
   const inputId = `tx-mobile-${row.userId}`;
@@ -125,7 +132,7 @@ function PersonRow({
   const canSwitch = Boolean(mobile) && !row.stopped && busy === null;
   const switchWhy = row.stopped ? TEXTING_COPY.stoppedHelp : !mobile ? TEXTING_COPY.switchNoMobile : texting ? TEXTING_COPY.switchOnHelp : TEXTING_COPY.switchOffHelp;
   return (
-    <div className={`${s.person}${texting ? "" : ` ${s.quiet}`}`} data-member={row.userId} data-texting={texting ? "on" : row.paused ? "off" : "none"}>
+    <div className={`${s.person}${texting ? "" : ` ${s.quiet}`}`} data-member={row.userId} data-me={row.isMe || undefined} data-texting={texting ? "on" : row.paused ? "off" : "none"}>
       <div className={s.head}>
         <button
           type="button"
@@ -165,6 +172,11 @@ function PersonRow({
         </span>
         {!editing ? (
           <span className={s.acts}>
+            {mobile && !texting && !row.stopped ? (
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null} onClick={() => run(`${row.userId}:switch`, () => setMemberTextsOn(row.userId, true))} data-texting-turn-on>
+                {TEXTING_COPY.turnOn}
+              </button>
+            ) : null}
             <button
               type="button"
               className={`${s.btn}${row.phone || row.phoneOnFile ? "" : ` ${s.btnPrimary}`}`}
@@ -172,6 +184,8 @@ function PersonRow({
               onClick={() => {
                 setEditing(true);
                 setPhone("");
+                setCode("");
+                setStage("phone");
               }}
             >
               {row.phone || row.phoneOnFile ? TEXTING_COPY.changeMobile : TEXTING_COPY.addMobile}
@@ -179,9 +193,63 @@ function PersonRow({
           </span>
         ) : null}
       </div>
-      {editing ? (
-        <div className={s.edit}>
+      {editing && row.isMe ? (
+        <div className={s.edit} data-texting-own-editor>
           <label htmlFor={inputId}>{TEXTS_COPY.mobileLabel}</label>
+          <input
+            id={inputId}
+            type="tel"
+            inputMode="tel"
+            autoComplete="off"
+            value={phone}
+            placeholder={TEXTS_COPY.mobilePlaceholder}
+            disabled={stage === "code"}
+            onChange={(e) => setPhone(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && stage === "phone" && phone.replace(/\D/g, "").length >= 10) void run(`${row.userId}:code`, () => startPhoneVerification(phone), () => setStage("code"));
+              if (e.key === "Escape") setEditing(false);
+            }}
+          />
+          {stage === "code" ? (
+            <>
+              <label htmlFor={`${inputId}-code`}>{TEXTS_COPY.codeLabel}</label>
+              <input
+                id={`${inputId}-code`}
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                placeholder="482913"
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && code.length === 6) void run(`${row.userId}:verify`, () => confirmPhoneVerification(code), () => setEditing(false));
+                  if (e.key === "Escape") setEditing(false);
+                }}
+              />
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || code.length !== 6} onClick={() => run(`${row.userId}:verify`, () => confirmPhoneVerification(code), () => setEditing(false))} data-texting-verify>
+                {busy === `${row.userId}:verify` ? "Checking…" : TEXTS_COPY.verify}
+              </button>
+              <button type="button" className={s.btn} disabled={busy !== null} onClick={() => { setStage("phone"); setCode(""); }}>
+                {TEXTS_COPY.change}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => run(`${row.userId}:code`, () => startPhoneVerification(phone), () => setStage("code"))} data-texting-send-code>
+                {busy === `${row.userId}:code` ? "Sending…" : TEXTS_COPY.sendCode}
+              </button>
+              <button type="button" className={s.btn} disabled={busy !== null} onClick={() => setEditing(false)}>
+                {TEXTING_COPY.cancel}
+              </button>
+            </>
+          )}
+          <p className={s.consent} data-sms-consent>
+            {TEXTS_COPY.consent} <a href="/terms">{TEXTS_COPY.terms}</a> · <a href="/privacy">{TEXTS_COPY.privacy}</a>
+          </p>
+        </div>
+      ) : editing ? (
+        <div className={s.edit}>
+          <label htmlFor={inputId}>{TEXTING_COPY.theirMobile(row.name)}</label>
           <input
             id={inputId}
             type="tel"
@@ -201,6 +269,7 @@ function PersonRow({
           <button type="button" className={s.btn} disabled={busy !== null} onClick={() => setEditing(false)}>
             {TEXTING_COPY.cancel}
           </button>
+          <p className={s.consent}>{TEXTING_COPY.typedInNote}</p>
         </div>
       ) : null}
       <div className={s.evs} role="group" aria-label={`Texts to ${row.name}`}>
