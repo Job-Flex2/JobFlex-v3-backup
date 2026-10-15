@@ -755,6 +755,10 @@
   place-items: center; border: 1.5px solid currentColor; border-radius: var(--radius);
   background: transparent; color: var(--danger); cursor: pointer; }
 :global(.jf-blueprint .content) .vt-err-x .ic { width: 11px; height: 11px; }
+/* The browser held the stills for a tap (iOS, Low Power Mode): one quiet line
+   under the file, in the film's own white. */
+:global(.jf-blueprint .content) .vt-defer { margin: 8px 0 0; font-size: 12px; font-weight: 600; line-height: 1.4;
+  color: var(--paper); opacity: .78; }
 /* Retry beside the failure line: the still pass again, from a click. */
 :global(.jf-blueprint .content) .vt-err-retry { flex-shrink: 0; min-height: 26px; padding: 0 10px;
   font-size: 11px; color: var(--danger); border-color: currentColor; background: transparent; }

@@ -337,6 +337,11 @@ export function VideoEstimatorContent({
                 Remove
               </button>
             </div>
+            {ve.framesDeferred ? (
+              <div className={cx("vt-defer")} data-video-deferred>
+                This browser reads a clip from a tap only — the stills are pulled when you tap Analyze video.
+              </div>
+            ) : null}
             {/* preload="none": a second decoder on the clip while the still pass
                 runs is one more than a phone has to give — the first still is
                 the poster, and a tap loads the player. */}

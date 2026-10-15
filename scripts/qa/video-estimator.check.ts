@@ -21,6 +21,7 @@ import {
   frameFailureReason,
   frameTimes,
   isBlankPixels,
+  pullNeedsTap,
   stripFrames,
   type FrameReport,
 } from "../../src/components/v3/video-estimator-blueprint/video-ingest";
@@ -134,6 +135,8 @@ check("the failure reason: playback refused alone", frameFailureReason({ ...base
 check("the failure reason: seeks alone", frameFailureReason({ ...base, seekTimeouts: 2 }) === "the browser never finished seeking through this clip");
 check("the failure reason: black frames", frameFailureReason({ ...base, blank: 4 }) === "every frame came back black");
 check("the failure reason: nothing to say", frameFailureReason(base) === "no frame could be decoded");
+check("a pull refused for want of a gesture, and nothing else wrong, asks for a tap", pullNeedsTap({ ...base, seekTimeouts: 1, playNote: "refused: NotAllowedError" }));
+check("…but not when a still landed, the track failed, or the refusal was something else", !pullNeedsTap({ ...base, seekOk: 1, playNote: "refused: NotAllowedError" }) && !pullNeedsTap({ ...base, seekErrors: 1, playNote: "refused: NotAllowedError" }) && !pullNeedsTap({ ...base, playNote: "refused: AbortError" }) && !pullNeedsTap({ ...base, seekTimeouts: 2 }));
 const ten = Array.from({ length: 10 }, (_, i) => ({ t: i, dataUrl: "d" }));
 check("the strip takes the first, the last and an even spread", stripFrames(ten, 4).map((f) => f.t).join(",") === "0,3,6,9" && stripFrames(ten.slice(0, 3), 4).length === 3);
 

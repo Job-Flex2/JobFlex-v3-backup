@@ -38,6 +38,14 @@
 //     clip is played at 2× and the stills are taken as the playhead crosses
 //     each target time (`requestVideoFrameCallback`, `timeupdate` elsewhere).
 //
+// AND WHEN THE KICK IS REFUSED (2026-10-15: the owner's iPhone, in Low Power
+// Mode, answered play() with NotAllowedError and no seek ever landed). iOS in
+// Low Power Mode lets a video play from a user gesture only — and the file
+// picker's `change` event is not one. So a refused kick is answered fast
+// (one short seek, no play-through, ~4 s instead of 12) and reported as
+// `pullNeedsTap`: the caller then pulls the stills from the next TAP it gets
+// (Analyze), opening the clip synchronously inside that gesture.
+//
 // Every function here is best-effort in the same direction: a frame that will
 // not seek is skipped, an audio track that will not decode returns null, and
 // the caller decides whether to carry on with what it has. The pull's `report`
@@ -199,8 +207,8 @@ function waitFor(
 }
 
 /** Move the playhead and wait for it to land — `seeked`, or a `timeupdate`
- *  that shows it there, within SEEK_TIMEOUT_MS. */
-async function seekTo(el: HTMLVideoElement, t: number): Promise<void> {
+ *  that shows it there, within `ms`. */
+async function seekTo(el: HTMLVideoElement, t: number, ms = SEEK_TIMEOUT_MS): Promise<void> {
   const target = Math.min(t, Math.max(0, el.duration - 0.05));
   // Already there: no engine fires `seeked` for a seek to the current time.
   if (!el.seeking && Math.abs(el.currentTime - target) < 0.05) return;
@@ -208,7 +216,7 @@ async function seekTo(el: HTMLVideoElement, t: number): Promise<void> {
   await waitFor(
     el,
     ["seeked", "timeupdate"],
-    SEEK_TIMEOUT_MS,
+    ms,
     "seeking the video",
     () => !el.seeking && Math.abs(el.currentTime - target) < 0.35,
   );
@@ -411,10 +419,14 @@ async function pullFrames(
   await Promise.race([clip.kick, sleep(4_000)]);
   if (isClosed()) return finish();
   video.pause();
-  if (clip.kickNote()) report.playNote = `refused: ${clip.kickNote()}`;
+  // A refused kick (iOS wanting a gesture) is answered fast: the engine that
+  // refused to play will not load data for a seek either, so one short try
+  // and no play-through — the caller asks for a tap instead.
+  const refused = clip.kickNote() !== "";
+  if (refused) report.playNote = `refused: ${clip.kickNote()}`;
   if (video.readyState < 2) {
     try {
-      await waitFor(video, ["loadeddata", "canplay", "canplaythrough"], 8_000, "loading the video", () => video.readyState >= 2);
+      await waitFor(video, ["loadeddata", "canplay", "canplaythrough"], refused ? 1_500 : 8_000, "loading the video", () => video.readyState >= 2);
     } catch {
       /* the seeks will say */
     }
@@ -452,7 +464,7 @@ async function pullFrames(
   for (let i = 0; i < times.length && !isClosed(); i++) {
     const t = times[i];
     try {
-      await seekTo(video, t);
+      await seekTo(video, t, refused ? 2_500 : SEEK_TIMEOUT_MS);
       await painted(video);
       let ok = grab(i, t);
       if (!ok) {
@@ -473,7 +485,7 @@ async function pullFrames(
       // A track the browser cannot decode will not decode on playback either,
       // and a canvas it will not read never will.
       if (name === "MediaDecodeError" || name === "SecurityError") break;
-      if (misses >= SEEK_GIVE_UP_AFTER && got.size === 0) break;
+      if (misses >= (refused ? 1 : SEEK_GIVE_UP_AFTER) && got.size === 0) break;
       if (misses >= 4) break;
     }
     tick();
@@ -481,7 +493,7 @@ async function pullFrames(
 
   // ── Pass 2 · play the clip through for whatever is missing ────────────
   const missing = times.map((_, i) => i).filter((i) => !got.has(i));
-  const hopeless = report.seekErrors > 0 || report.thrown.includes("SecurityError");
+  const hopeless = report.seekErrors > 0 || report.thrown.includes("SecurityError") || refused;
   if (missing.length && !isClosed() && !hopeless) {
     await playThrough(video, missing, times, grab, tick, report, isClosed);
   }
@@ -593,6 +605,20 @@ async function playThrough(
   });
   video.pause();
   if (lost && !report.playNote) report.playNote = `${lost} target${lost === 1 ? "" : "s"} behind the playhead`;
+}
+
+/** An empty pull whose only fault was a refused play(): the engine wants a user
+ *  gesture (iOS in Low Power Mode). Everything else about the clip was fine, so
+ *  the caller should pull again from the next tap it gets rather than fail. */
+export function pullNeedsTap(r: FrameReport): boolean {
+  return (
+    r.seekOk === 0 &&
+    r.playOk === 0 &&
+    r.seekErrors === 0 &&
+    r.blank === 0 &&
+    r.thrown.length === 0 &&
+    r.playNote === "refused: NotAllowedError"
+  );
 }
 
 /** One clause for the error line when a pull came back empty — what the numbers say went wrong. */

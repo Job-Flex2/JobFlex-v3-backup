@@ -1860,6 +1860,16 @@ body:has(.jf-mobile-video-estimator)::before { content: none; }
   color: var(--danger);
 }
 .jf-mobile-video-estimator .mve-err-x .mve-ic { width: 14px; height: 14px; }
+/* The browser held the stills for a tap (iOS, Low Power Mode): one quiet line
+   under the file, in the film's own white. */
+.jf-mobile-video-estimator .mve-defer {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--paper);
+  opacity: 0.78;
+}
 /* Retry beside the failure line: the still pass again, from a tap. */
 .jf-mobile-video-estimator .mve-err-retry {
   flex: 0 0 auto;
