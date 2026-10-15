@@ -272,6 +272,27 @@ export function deskOutcomeWord(o: { outcome: string; appointmentId: string | nu
 }
 
 /** `+18665550199` → `(866) 555-0199`; anything else as written. */
+/**
+ * The codes that turn forwarding on and off at the contractor's own carrier, with the desk's number in them
+ * (2026-10-14: the owner set "forwards every call", dialed nothing that his carrier knew, and his cell kept ringing —
+ * *72 is Verizon's; AT&T and T-Mobile, and the brands on their networks, use the GSM codes). `kind` "all" forwards
+ * every call, "missed" only what is not picked up. Empty for a number that is not a 10-digit US one.
+ */
+export type ForwardCode = { carrier: string; on: string; off: string };
+export function forwardingCodes(deskNumber: string, kind: "all" | "missed"): ForwardCode[] {
+  const d = deskNumber.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+  if (!/^\d{10}$/.test(d)) return [];
+  return kind === "all"
+    ? [
+        { carrier: "Verizon", on: `*72${d}`, off: "*73" },
+        { carrier: "AT&T · T-Mobile", on: `**21*${d}#`, off: "##21#" },
+      ]
+    : [
+        { carrier: "Verizon", on: `*71${d}`, off: "*73" },
+        { carrier: "AT&T · T-Mobile", on: `**004*${d}#`, off: "##004#" },
+      ];
+}
+
 export function prettyPhone(e164: string): string {
   const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(e164.trim());
   return m ? `(${m[1]}) ${m[2]}-${m[3]}` : e164;
