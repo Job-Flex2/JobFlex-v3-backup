@@ -211,8 +211,13 @@ export function PricingPlans({
                     <li key={f} className={(on ? "lp-pw-f" : "lp-pw-f lp-pw-f--no") + (lit ? " lp-pw-f--spot" : "")} data-plan-spot-row={lit ? (on ? "in" : "out") : undefined}>
                       {on ? <Check /> : <Minus />}
                       <span className="sr-only">{on ? "Included: " : "Not included: "}</span>
-                      {f}
-                      {lit ? <span className="lp-pw-spot-tag">{on ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                      {/* The name and its tag (pricing-faq.css, .lp-pw-ft): the tag drops
+                          under the name when the line cannot hold both, and the name
+                          never breaks inside a word. */}
+                      <span className="lp-pw-ft">
+                        <span className="lp-pw-fn">{f}</span>
+                        {lit ? <span className="lp-pw-spot-tag">{on ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                      </span>
                     </li>
                   );
                 })}

@@ -1818,6 +1818,18 @@
 .bp :global(.pw-f--spot.pw-f--no) { background: rgba(168, 50, 50, 0.07); box-shadow: inset 3px 0 0 var(--danger, #a83232); font-weight: 600; }
 .bp :global(.pw-spot-tag) { display: inline-block; margin-left: 8px; padding: 2px 6px; border-radius: 2px; background: var(--blueprint, #1854a0); color: #fff; font-family: var(--font-mono, ui-monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; vertical-align: 1px; white-space: nowrap; }
 .bp :global(.pw-f--no .pw-spot-tag) { background: var(--danger, #a83232); }
+/* THE ROW'S WORDS (2026-10-15): at 320–390 px, or with the system text at
+   125–150 %, the tag would not shrink and the name was squeezed to one
+   letter a line ("estimator" split in two). The name is its own item that
+   breaks only between words; the tag never shrinks, and when the two do not
+   fit on one line the tag wraps under the name, flush left, 4 px down —
+   plain flex wrap, so it follows the text size, not the viewport. The tag
+   is one line at its own width; only where it alone is wider than the row
+   (320–390 px zoomed to 150 %) does max-width hold it to the row, and its
+   words wrap rather than run off the card's edge. */
+.bp :global(.pw-ft) { flex: 1 1 auto; min-width: 8ch; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.bp :global(.pw-fn) { flex: 1 1 auto; min-width: 8ch; overflow-wrap: normal; word-break: keep-all; hyphens: none; }
+.bp :global(.pw-ft > .pw-spot-tag) { flex: none; max-width: 100%; margin-left: 0; white-space: normal; text-wrap: balance; }
 @keyframes pwSpotIn { 0% { background-color: rgba(24, 84, 160, 0.3); } 100% { background-color: rgba(24, 84, 160, 0.09); } }
 @media (prefers-reduced-motion: reduce) { .bp :global(.pw-f--spot) { animation: none; } }
 

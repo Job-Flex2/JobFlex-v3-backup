@@ -2257,8 +2257,13 @@ export function RegisterContent({
                             <svg className="ic">
                               <use href={included ? "#i-check" : "#i-minus"} />
                             </svg>
-                            {f}
-                            {lit ? <span className="pw-spot-tag">{included ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                            {/* The name and its tag (.pw-ft): the tag drops under the
+                                name when the line cannot hold both, and the name never
+                                breaks inside a word. */}
+                            <span className="pw-ft">
+                              <span className="pw-fn">{f}</span>
+                              {lit ? <span className="pw-spot-tag">{included ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                            </span>
                           </span>
                         );
                       })}
