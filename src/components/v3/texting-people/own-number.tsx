@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 
 import { checkSmsRegistration, releaseSmsNumber, submitSmsRegistration, type SmsActionResult } from "@/actions/sms";
 import {
+  assignedLineWords,
   BUSINESS_TYPES,
   EMPTY_DETAILS,
   isFreeMailbox,
@@ -82,6 +83,8 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
 
   const problems = registrationProblems(d);
   const fresh = view.stage === "none" || view.stage === "failed";
+  // The line JobFlex lent for calls (2026-10-14): shown as the number until the company registers one.
+  const lent = fresh && !view.number && !view.legacy && view.assigned ? assignedLineWords(view.assigned) : null;
   const formOpen = fresh ? open : view.stage === "rejected" && view.canEdit;
   const set = (k: keyof SmsRegistrationDetails, v: string) => setD((x) => ({ ...x, [k]: v }));
   const send = () => {
@@ -97,8 +100,27 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
   };
 
   return (
-    <div className={`${s.root} ${s.own}`} data-own-number data-stage={view.stage}>
+    <div className={`${s.root} ${s.own}`} data-own-number data-stage={view.stage} data-assigned={lent ? (view.assigned?.house ? "house" : view.assigned?.jobflexOwn ? "jobflex" : view.assigned?.registrable ? "registrable" : "local") : undefined}>
       {!configured ? <p className={s.note}>{C.notConfigured}</p> : null}
+      {lent && view.assigned ? (
+        <>
+          <div className={s.ownHead}>
+            <b>{view.assigned.number}</b>
+            <span className={s.tag}>{lent.tag}</span>
+          </div>
+          <ul className={s.uses} data-number-uses>
+            <li data-use="calls" data-on="1">
+              <b>{C.usesCalls}</b>
+              <span>{lent.calls}</span>
+            </li>
+            <li data-use="texts" data-on={view.assigned.house ? "1" : "0"}>
+              <b>{C.usesTexts}</b>
+              <span>{lent.texts}</span>
+            </li>
+          </ul>
+          <p className={s.note} data-assigned-keep>{lent.keep}</p>
+        </>
+      ) : null}
       {view.number ? (
         <div className={s.ownHead}>
           <b>{view.number}</b>
@@ -132,11 +154,11 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
       ) : null}
       {view.error && (view.stage === "failed" || view.stage === "rejected") ? <p className={`${s.note} ${s.noteErr}`}>{view.error}</p> : null}
 
-      {view.stage === "none" && !open && !view.legacy ? (
+      {view.stage === "none" && !open && !view.legacy && !view.assigned?.house ? (
         <div className={s.done} data-sms-done-for-you>
           <b>{C.doneTitle}</b>
           <ul>
-            {C.done.map((x) => (
+            {(lent && view.assigned?.registrable && !view.assigned.jobflexOwn ? [C.doneRegisters(view.assigned.number), ...C.done.slice(1)] : C.done).map((x) => (
               <li key={x}>{x}</li>
             ))}
           </ul>
@@ -147,8 +169,8 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
       {fresh && !open && !view.legacy ? (
         view.paying ? (
           <div className={s.acts}>
-            <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={!configured || busy !== null} onClick={() => setOpen(true)}>
-              {view.stage === "failed" ? C.resubmit : C.get}
+            <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={!configured || busy !== null} onClick={() => setOpen(true)} data-get-number>
+              {view.stage === "failed" ? C.resubmit : lent ? lent.button : C.get}
             </button>
           </div>
         ) : (

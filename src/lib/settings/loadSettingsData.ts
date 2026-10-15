@@ -356,7 +356,8 @@ async function loadSmsSettings(organizationId: string, smsPhone: string | null, 
       extras: extras.map((x) => ({ id: x.id, name: x.name, phone: prettyPhone(x.phone), active: x.active, stopped: stopped.has(x.phone) })),
       monthCount,
       clientsOn: orgSms?.smsClientsOn ?? true,
-      ownNumber: orgSms?.smsFromNumber ? prettyPhone(orgSms.smsFromNumber) : null,
+      // JobFlex's own company texts from the JobFlex line (lib/sms/houseLine, 2026-10-14).
+      ownNumber: orgSms?.smsFromNumber ? prettyPhone(orgSms.smsFromNumber) : await houseNumber(organizationId),
       registration: base.canManage ? await loadRegistrationView(organizationId, myUserId) : null,
       leadTexts: { on: leadTextsOn(orgSms?.leadsSettingsJson), phone: orgSms?.phone?.trim() || null },
       roster,
@@ -386,25 +387,44 @@ function leadTextsOn(json: string | null | undefined): boolean {
   }
 }
 
+/** The JobFlex line JobFlex's own company texts from, pretty — null for every other company. */
+async function houseNumber(organizationId: string): Promise<string | null> {
+  try {
+    const { houseLineFor } = await import("@/lib/sms/houseLine");
+    const n = await houseLineFor(organizationId);
+    return n ? prettyPhone(n) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The company's own texting number (2026-10-02, lib/sms/registration): its state in words, the form prefilled. */
 async function loadRegistrationView(organizationId: string, myUserId: string | null): Promise<SmsRegistrationView | null> {
   try {
     const { companyIsPaying, refreshRegistration } = await import("@/lib/sms/registration");
-    const { prefillDetails, smsPagesFor } = await import("@/lib/sms/registrationShared");
+    const { prefillDetails, smsPagesFor, isTollFree } = await import("@/lib/sms/registrationShared");
     const { settingsOf } = await import("@/lib/bookingBook");
-    const { readDeskSettings } = await import("@/lib/aiDesk/numbers");
+    const { readDeskSettings, numbersAssignedTo } = await import("@/lib/aiDesk/numbers");
     const { callsGo } = await import("@/lib/aiDesk/shared");
     const { isPageLocked } = await import("@/lib/customPageAccess");
     const { toE164 } = await import("@/lib/phone");
-    const [state, paying, org, me, desk, phoneLocked] = await Promise.all([
+    const { jobflexSender } = await import("@/lib/sms/jobflexSender");
+    const { houseLineFor } = await import("@/lib/sms/houseLine");
+    const [state, paying, org, me, desk, phoneLocked, lent, jobflexOwn] = await Promise.all([
       refreshRegistration(organizationId),
       companyIsPaying(organizationId),
       db.organization.findUnique({ where: { id: organizationId }, select: { name: true, website: true, address: true, phone: true, slug: true, smsFromNumber: true, tradeTypesJson: true, bookingSettingsJson: true } }),
       myUserId ? db.user.findUnique({ where: { id: myUserId }, select: { name: true, email: true } }) : Promise.resolve(null),
       readDeskSettings(organizationId),
       isPageLocked(organizationId, "phone"),
+      numbersAssignedTo(organizationId).catch(() => [] as string[]),
+      jobflexSender().catch(() => null),
     ]);
     if (!org) return null;
+    // The line JobFlex lent for calls (2026-10-14) — shown as the company's number until it registers one.
+    const lentLine = state.number ? null : (lent[0] ?? null);
+    const isJobflexOwn = Boolean(jobflexOwn && lentLine === jobflexOwn);
+    const assigned = lentLine ? { number: prettyPhone(lentLine), jobflexOwn: isJobflexOwn, registrable: isTollFree(lentLine) && lentLine !== jobflexOwn, house: isJobflexOwn && Boolean(await houseLineFor(organizationId).catch(() => null)) } : null;
     // Calls (lib/aiDesk): wired at purchase; where they go is the desk's mode and the plan.
     const companyPhone = toE164(org.phone ?? "");
     const calls = {
@@ -428,6 +448,7 @@ async function loadRegistrationView(organizationId: string, myUserId: string | n
       calls,
       pages: smsPagesFor(org.slug),
       details: state.details ?? prefillDetails(org, { name: me?.name ?? null, email: me?.email ?? null }),
+      assigned,
     };
   } catch {
     return null;

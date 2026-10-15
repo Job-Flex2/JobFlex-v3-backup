@@ -285,6 +285,18 @@ export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettin
             <>
               <b>{number}</b>
               <span className={s.note}>{callsWords}</span>
+              {!registration?.number && desk.assigned ? (
+                <span className={s.note} data-desk-lent>
+                  {registration?.assigned?.house ? C.lentLineHouse : C.lentLine}{" "}
+                  {onNumber ? (
+                    <button type="button" className={s.link} onClick={onNumber}>
+                      {C.lentGo}
+                    </button>
+                  ) : (
+                    <a href="/dashboard/settings?tab=texting#texting-own-number">{C.lentGo}</a>
+                  )}
+                </span>
+              ) : null}
             </>
           ) : (
             <>

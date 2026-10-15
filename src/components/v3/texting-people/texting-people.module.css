@@ -184,3 +184,10 @@
 /* The consent under your own mobile, and the note under a typed-in one (2026-10-14). */
 .consent { grid-column: 1 / -1; margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted, #555); }
 .consent a { color: var(--blueprint, #1854a0); }
+
+/* The row's own answer (2026-10-14), the "We texted …" line and its link-button. */
+.rowNote { margin: 6px 0 0; }
+.sentTo { grid-column: 1 / -1; flex-basis: 100%; margin: 0; font-size: 14px; }
+.sentTo b { font-variant-numeric: tabular-nums; }
+.linkBtn { padding: 0; border: 0; background: none; font: inherit; color: var(--blueprint, #1854a0); text-decoration: underline; cursor: pointer; }
+.linkBtn:disabled { opacity: .5; cursor: default; }

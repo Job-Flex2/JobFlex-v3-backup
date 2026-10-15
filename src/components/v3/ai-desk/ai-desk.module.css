@@ -359,3 +359,6 @@
   .fwd[data-fwd-status="calling"] .fwdDot,
   .testState[data-live="1"]::before { animation: none; }
 }
+
+/* A link inside a note — the way from the desk's lent line to Texting (2026-10-14). */
+.link { display: inline; padding: 0; border: 0; background: none; font: inherit; color: var(--blueprint, #1854a0); text-decoration: underline; cursor: pointer; }
