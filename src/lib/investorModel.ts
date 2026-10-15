@@ -359,7 +359,7 @@ export interface CohortFigures {
 }
 
 /** The figures for one cohort, cut from the whole: its accounts, its share of each day's spend. */
-export function cohortFigures(input: ModelInput, cohort: TrialCohort, whole: InvestorFigures = investorFigures(input)): CohortFigures {
+export function cohortFigures(input: ModelInput, cohort: TrialCohort, whole: InvestorFigures = investorFigures(input), opts: { keepVisitors?: boolean } = {}): CohortFigures {
   const c = input.cohorts ?? { lapsed: { card: 0, nocard: 0 }, signups: [], policy: [], current: "card" as TrialCohort };
   const booked = whole.curve.filter((p) => !p.projected && p.date <= whole.today);
   const share = noCardShareByDay(booked.map((p) => p.date), c.signups, c.policy);
@@ -378,7 +378,7 @@ export function cohortFigures(input: ModelInput, cohort: TrialCohort, whole: Inv
     lapsed: c.lapsed[cohort] ?? 0,
     // The whole's spend is already filled by the budget; from tomorrow only today's cohort spends.
     assumptions: { ...input.assumptions, dailyBudgetCents: null, budgetFrom: null, spendPerDayCents: current ? whole.spend.perDayProjectedCents : 0 },
-    visitors: null,
+    visitors: opts.keepVisitors ? input.visitors : null,
     cohorts: undefined,
   };
   const figures = investorFigures(mine);
