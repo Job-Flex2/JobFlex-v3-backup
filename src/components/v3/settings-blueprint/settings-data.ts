@@ -28,6 +28,7 @@ import type { NotificationPrefs, PrefKey } from '@/lib/notificationPrefsShared';
 import type { SmsRegistrationView } from '@/lib/sms/registrationShared';
 import type { CompanyFacts, DeskProfile } from '@/lib/aiDesk/profile';
 import type { DeskReviewItem } from '@/lib/aiDesk/tradePresets';
+import type { ForwardCheck } from '@/lib/aiDesk/forwardCheck';
 import type { CallsGo, DeskBalance, DeskForwarding, DeskMode, DeskPackRecord, DeskUse, DeskVoice } from '@/lib/aiDesk/shared';
 
 export type IconName =
@@ -1050,9 +1051,30 @@ export const DESK_COPY = {
   forwardNone: 'They call the desk\u2019s number',
   forwardNoneSub: (n: string) => `You give out ${n} — site, truck, cards. Your own phone keeps working as before.`,
   forwardMissed: 'My number forwards the calls I miss',
-  forwardMissedSub: (n: string) => `Your carrier sends the calls you don\u2019t pick up to ${n} — you turn it on once, with the code below. The desk takes what you miss and can still hand a call back to you.`,
+  forwardMissedSub: (n: string) => `Your phone carrier sends the calls you don\u2019t pick up to ${n}. JobFlex can\u2019t switch this on for you — you turn it on once, with your carrier\u2019s code below. The desk takes what you miss and can still hand a call back to you.`,
   forwardAll: 'My number forwards every call',
-  forwardAllSub: (n: string) => `Your carrier sends every call to ${n} — you turn it on once, with the code below. The desk answers everything and takes messages instead of transferring — a transfer would ring itself.`,
+  forwardAllSub: (n: string) => `Your phone carrier sends every call to ${n}. JobFlex can\u2019t switch this on for you — you turn it on once, with your carrier\u2019s code below. The desk answers everything and takes messages instead of transferring — a transfer would ring itself.`,
+  // is it really forwarding? (2026-10-14)
+  fwdTitle: 'Is your number forwarding?',
+  fwdNeedPhone: 'Add your business phone above — the test calls it.',
+  fwdUnknown: (phone: string) => `Not checked yet. Calls to ${phone} reach the desk only after you turn on forwarding at your carrier — JobFlex can\u2019t do it for you. Dial the code below, then test it.`,
+  fwdTest: 'Test my forwarding',
+  fwdTestAgain: 'Test again',
+  fwdCallingAll: (phone: string) => `Calling ${phone} from the desk… If your phone rings, forwarding isn\u2019t on yet — answer it to hear what to do.`,
+  fwdCallingMissed: (phone: string) => `Calling ${phone} from the desk… Let it ring — don\u2019t answer. In about 30 seconds it should forward to the desk.`,
+  fwdWorks: (how: string, when: string) => `Forwarding works — ${how === 'call' ? 'a customer\u2019s call came through it' : how === 'manual' ? 'you checked it' : 'the test call came back to the desk'}, ${when}.`,
+  fwdRang: 'Your phone answered instead of the desk — forwarding isn\u2019t on yet. Dial your carrier\u2019s code below, wait for the confirmation, then test again.',
+  fwdNoAnswerAll: 'The test call rang your phone and never came to the desk — forwarding isn\u2019t on yet. Dial your carrier\u2019s code below, then test again.',
+  fwdNoAnswerMissed: 'Nobody answered and the call never reached the desk — forwarding of missed calls isn\u2019t on yet. On an iPhone, Live Voicemail can catch it first: turn it off, then test again.',
+  fwdFailed: (err: string) => `The test call couldn\u2019t be placed — ${err} Check it yourself instead: call your number from another phone.`,
+  fwdManualAsk: 'Or check it yourself — call your number from another phone:',
+  fwdManualYes: 'The desk answered',
+  fwdManualNo: 'My phone rang',
+  fwdShowCodes: 'Show the codes again',
+  fwdHideCodes: 'Hide the codes',
+  fwdBanner: (phone: string) => `Calls to ${phone || 'your number'} won\u2019t reach the desk until forwarding is on at your phone carrier — JobFlex can\u2019t switch it on for you.`,
+  fwdBannerBtn: 'Show me how',
+  fwdChip: 'Forwarding to check',
   // turning forwarding on at the carrier (2026-10-14: *72 is Verizon's only)
   codesTitle: 'Turn it on at your carrier',
   codesHow: (phone: string) => `JobFlex can\u2019t forward your calls — your phone carrier does. From the phone${phone ? ` with ${phone}` : ''}, dial the code for your carrier and press call, then wait for the tone or the message that it\u2019s on.`,
@@ -1068,7 +1090,19 @@ export const DESK_COPY = {
   forwardNeedsNumber: 'Forwarding needs the desk\u2019s number first.',
   modeForwardOff: 'Not with every call forwarded — your phone would forward straight back to the desk.',
   step2: 'Tell the desk about your company',
-  step2Sub: 'Type what kind of business you are. JobFlex presets everything callers ask, from your company details — you check the highlighted parts and correct what\u2019s different.',
+  step2Sub: 'Type what kind of business you are for a head start, then describe it in your own words — typed or spoken. JobFlex writes it up professionally and the desk answers every caller from it.',
+  // describe the business → the professional write-up (2026-10-14)
+  describeTitle: 'Describe your business',
+  describeSub: 'Talk or type the way you\u2019d brief a new office manager — what you do, how you work, your area, prices, warranty, what makes you different. JobFlex corrects it and writes it up professionally; the desk answers callers\u2019 questions from it.',
+  coverageTitle: 'Covered so far',
+  writePro: 'Write it professionally',
+  rewritePro: 'Write it again from this',
+  writing: 'Writing…',
+  knowTitle: 'What the desk knows about your business',
+  knowHint: 'The desk answers every caller\u2019s question from this. Edit anything.',
+  knowEmpty: 'Nothing written yet — describe your business above, then press Write it professionally.',
+  samplesTitle: 'Callers might ask — and the desk would say',
+  answerIt: 'Answer it',
   // preset for the trade, the sensitive parts highlighted (2026-10-14)
   kindTitle: 'What kind of business are you?',
   kindPlaceholder: 'Roofing, gutters — or remodeling, tile, painting, anything',
@@ -1354,6 +1388,8 @@ export interface DeskSettingsData {
   business: string;
   /** The parts still to check, highlighted (lib/aiDesk/tradePresets). */
   review: DeskReviewItem[];
+  /** Whether the business phone really forwards to the desk, for the forwarding chosen (lib/aiDesk/forwardCheck). */
+  forwardCheck: ForwardCheck | null;
   facts: CompanyFacts;
 }
 

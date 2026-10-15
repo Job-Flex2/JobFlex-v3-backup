@@ -154,6 +154,31 @@
 .moreBody[hidden] { display: none; }
 .stepChipCheck { border-color: var(--warn, #96691a); color: var(--warn, #96691a); background: rgba(150, 105, 26, .08); }
 
+/* describe the business → the professional write-up (2026-10-14) */
+.describe { padding: 14px; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; gap: 8px; }
+.coverage { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.cover { font-size: 12px; padding: 3px 8px; border: 1px dashed var(--hair-soft, rgba(10,10,10,.24)); color: var(--muted, #6b6760); background: #fff; }
+.coverOn { border-style: solid; border-color: var(--success, #2c7a5a); color: var(--success, #2c7a5a); background: rgba(44, 122, 90, .07); }
+.root .briefArea.briefArea { min-height: 170px; }
+.root .knowArea.knowArea { min-height: 220px; font-size: 15px; line-height: 1.55; background: var(--paper, #f2f0eb); white-space: pre-wrap; }
+.root .answerIt.answerIt { appearance: none; margin-left: 4px; padding: 1px 8px; border: 1px solid var(--warn, #96691a); border-radius: var(--radius, 0); background: #fff; color: var(--warn, #96691a); font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; vertical-align: 1px; }
+.root .answerIt.answerIt:hover:not(:disabled) { background: rgba(150, 105, 26, .1); }
+.root .answerIt.answerIt:focus-visible { outline: 2px solid var(--blue, #1854a0); outline-offset: 2px; }
+
+/* is it really forwarding? (2026-10-14) */
+.fwd { display: grid; gap: 8px; padding: 12px 14px; border: 1.5px solid var(--warn, #96691a); background: rgba(150, 105, 26, .06); }
+.fwd[data-fwd-status="works"] { border-color: var(--success, #2c7a5a); background: rgba(44, 122, 90, .06); }
+.fwd[data-fwd-status="calling"] { border-color: var(--blue, #1854a0); background: rgba(24, 84, 160, .05); }
+.fwd[data-fwd-status="rang"], .fwd[data-fwd-status="noanswer"], .fwd[data-fwd-status="failed"] { border-color: var(--danger, #a83232); background: rgba(168, 50, 50, .05); }
+.fwdLine { margin: 0; display: flex; gap: 9px; align-items: baseline; font-size: 14px; line-height: 1.5; color: var(--ink, #0a0a0a); }
+.fwdDot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--warn, #96691a); transform: translateY(1px); }
+.fwd[data-fwd-status="works"] .fwdDot { background: var(--success, #2c7a5a); }
+.fwd[data-fwd-status="calling"] .fwdDot { background: var(--blue, #1854a0); animation: deskPulse 1.2s ease-in-out infinite; }
+.fwd[data-fwd-status="rang"] .fwdDot, .fwd[data-fwd-status="noanswer"] .fwdDot, .fwd[data-fwd-status="failed"] .fwdDot { background: var(--danger, #a83232); }
+.fwdManual { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.fwdBanner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 14px; border: 1.5px solid var(--warn, #96691a); background: rgba(150, 105, 26, .08); font-size: 14px; line-height: 1.45; }
+@media (prefers-reduced-motion: reduce) { .fwd[data-fwd-status="calling"] .fwdDot { animation: none; } }
+
 /* turning forwarding on at the carrier (2026-10-14) */
 .codes { display: grid; gap: 8px; padding: 12px 14px; border: 1.5px solid var(--blue, #1854a0); background: rgba(24, 84, 160, .04); }
 .codeTable { display: grid; gap: 6px; }

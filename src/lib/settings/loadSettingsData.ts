@@ -467,6 +467,9 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
   const { isOpenAIEnabled } = await import("@/lib/sdk/openai");
   const { factsFor } = await import("@/lib/aiDesk/profile");
   const { businessFromTrades } = await import("@/lib/aiDesk/tradePresets");
+  const { forwardCheckView } = await import("@/lib/aiDesk/forwardCheck");
+  const { readForwardCheck } = await import("@/lib/aiDesk/forwardTest");
+  const { toE164 } = await import("@/lib/phone");
   const { readDeskUse } = await import("@/lib/aiDesk/usage");
   const { deskMinutesView } = await import("@/lib/aiDesk/packs");
   const { numbersAssignedTo } = await import("@/lib/aiDesk/numbers");
@@ -518,6 +521,7 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
     questions: d.questions,
     business: d.business || businessFromTrades(facts?.trades ?? []),
     review: d.profile ? d.review : [],
+    forwardCheck: forwardCheckView(await readForwardCheck(organizationId).catch(() => null), { forwarding: d.forwarding, phone: toE164(orgRow?.phone ?? ""), desk: toE164(registration?.number ?? "") ?? toE164(assignedNumbers[0] ?? "") }),
     facts: facts ?? factsFor({ name: "", phone: null, address: null, website: null, trades: [], hours: [], services: [], bookingUrl: null, timezone: null }),
   };
 }

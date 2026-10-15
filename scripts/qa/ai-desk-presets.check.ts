@@ -3,7 +3,7 @@
 // never state a price; the marks after an edit, a removed question and an AI rewrite; a model-written preset for a
 // business with none; the settings round trip.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json scripts/qa/ai-desk-presets.check.ts
-import { composePrompt, deskInstructions, factsFor, gapQuestions, type DeskProfile } from "../../src/lib/aiDesk/profile";
+import { briefCoverage, cleanKnowledge, cleanProfile, composePrompt, deskInstructions, EMPTY_PROFILE, factsFor, gapQuestions, type DeskProfile } from "../../src/lib/aiDesk/profile";
 import { businessFromTrades, cleanPack, cleanReview, faqKey, matchBusiness, presetProfile, pruneReview, reviewAfterCompose, TRADE_PACKS, URGENT_ACTIONS } from "../../src/lib/aiDesk/tradePresets";
 import { parseDeskSettings } from "../../src/lib/aiDesk/shared";
 
@@ -106,6 +106,23 @@ check("the rewrite prompt starts from the preset when there is one", composeProm
 const round = parseDeskSettings(JSON.stringify({ mode: "ANSWER", business: "  roofing,   gutters ", review: pr.review, profile: p }));
 check("settings keep the business and the marks", round.business === "roofing, gutters" && round.review.length === pr.review.length && round.review[0].fixes?.length === 3);
 check("old settings without them read as empty", parseDeskSettings(JSON.stringify({ mode: "ANSWER" })).business === "" && parseDeskSettings(JSON.stringify({ mode: "ANSWER" })).review.length === 0);
+
+// ── the business, described → the professional write-up ──
+const written = cleanKnowledge("What we do:\r\n  Ridgeline   replaces roofs.  \n\n\n\nWarranty:\n10-year workmanship warranty.");
+check("the write-up keeps its paragraphs and lines, tidies the rest", written === "What we do:\nRidgeline replaces roofs.\n\nWarranty:\n10-year workmanship warranty.", JSON.stringify(written));
+check("…and is capped", cleanKnowledge("x".repeat(9000)).length === 6000 && cleanKnowledge(42) === "");
+check("a profile carries it; an old one without it reads as empty", cleanProfile({ ...p, knowledge: written }, EMPTY_PROFILE).knowledge === written && cleanProfile({ greeting: "Hi" }, EMPTY_PROFILE).knowledge === "");
+const cov = Object.fromEntries(briefCoverage("We replace roofs in Bellevue and Kirkland, open 7am to 5pm weekdays. Free estimates. GAF shingles, 10 year warranty, licensed and insured.").map((c) => [c.key, c.covered]));
+check("covered so far: what they said ticks, what they didn't doesn't", cov.services && cov.area && cov.hours && cov.prices && cov.warranty && cov.credentials && cov.materials && !cov.payment && !cov.emergencies, JSON.stringify(cov));
+check("an empty description covers nothing", briefCoverage("").every((c) => !c.covered));
+const withKnow = deskInstructions({ ...p, knowledge: written }, facts, "ANSWER");
+check("the live desk answers from the write-up", withKnow.includes("WHAT THE COMPANY TOLD YOU ABOUT ITSELF") && withKnow.includes("10-year workmanship warranty") && withKnow.indexOf("WHAT THE COMPANY TOLD YOU") < withKnow.indexOf("SERVICES:"));
+check("no write-up, no empty section", !deskInstructions(p, facts, "ANSWER").includes("WHAT THE COMPANY TOLD YOU"));
+const cp = composePrompt("we do roofs, 10 yr warranty", facts, p);
+check("the AI is asked to correct the owner's words into the write-up, inventing nothing", /knowledge: the owner's words, corrected and written up professionally/.test(cp) && /never invent a fact or a price/.test(cp) && cp.includes('"knowledge": ""'));
+const reK = reviewAfterCompose(p, { ...p, knowledge: written }, pr.review);
+check("an AI-written write-up is highlighted to read once", /read it through once/.test(reK.find((r) => r.key === "knowledge")?.why ?? ""));
+check("…an unchanged one is not", !reviewAfterCompose({ ...p, knowledge: written }, { ...p, knowledge: written }, []).some((r) => r.key === "knowledge"));
 
 if (bad) {
   console.log(`\n${bad} FAILED`);

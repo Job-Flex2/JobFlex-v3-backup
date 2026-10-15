@@ -7,14 +7,17 @@
 //                               (actions/aiDesk presetDeskProfile, lib/aiDesk/tradePresets)
 //   2 · the instructions        open, every sensitive part highlighted with why — a one-click fix, an edit, or
 //                               "Looks right" clears it; Save keeps what is still to check
-//   3 · anything else           optional: say it or type it, the AI works it in (composeDeskProfile) and marks
-//                               what it changed
-import { useMemo, useState } from "react";
+//   2b · describe the business  the big box, typed or spoken (DictateButton) → "Write it professionally"
+//                               (composeDeskProfile): the owner's words corrected into the write-up the desk answers
+//                               every question from (profile.knowledge), the structured parts updated and what the AI
+//                               changed highlighted; what is covered so far ticks as they talk; "Answer it" puts a
+//                               question the desk still has into the box
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { composeDeskProfile, presetDeskProfile, saveDeskProfile } from "@/actions/aiDesk";
 import { DictateButton } from "@/components/estimator/DictateButton";
-import { PROFILE_SECTIONS, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
+import { briefCoverage, PROFILE_SECTIONS, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
 import { BUSINESS_SUGGESTIONS, faqKey, matchBusiness, type DeskFix, type DeskReviewItem } from "@/lib/aiDesk/tradePresets";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
@@ -52,7 +55,8 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
   const [review, setReviewState] = useState<DeskReviewItem[]>(desk.review);
   // Written and fully checked opens folded (a glance); a preset with parts to check, or a draft, opens to edit.
   const [showDetails, setShowDetails] = useState(!desk.profile || desk.review.length > 0);
-  const [showMore, setShowMore] = useState(false);
+  const [samples, setSamples] = useState<DeskFaq[]>([]);
+  const briefRef = useRef<HTMLTextAreaElement>(null);
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<null | "preset" | "compose" | "save">(null);
@@ -80,6 +84,7 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
   };
 
   const matched = useMemo(() => matchBusiness(business), [business]);
+  const coverage = useMemo(() => briefCoverage(`${brief}\n${profile.knowledge}`), [brief, profile.knowledge]);
 
   const preset = async () => {
     if (written && !confirmReplace) {
@@ -125,6 +130,7 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
         setDirty(false);
         if (r.review.length) setShowDetails(true);
         setNote(r.note ?? "Written.");
+        setSamples(r.samples);
         onWritten?.(r.samples);
         router.refresh();
       } else setErr(r.error);
@@ -160,6 +166,19 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
     const el = document.querySelector<HTMLElement>("[data-desk-setup] [data-check='1']");
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
     el?.querySelector<HTMLElement>("input, textarea, button")?.focus({ preventScroll: true });
+  };
+
+  // A question the desk still has → into the description, the cursor after it, for the owner to answer in their words.
+  const answerIt = (q: string) => {
+    const next = `${brief.trimEnd()}${brief.trim() ? "\n\n" : ""}${q} `;
+    setBrief(next);
+    window.setTimeout(() => {
+      const el = briefRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(next.length, next.length);
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
   };
 
   const addSuggestion = (word: string) => {
@@ -246,6 +265,72 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
         ) : null}
       </div>
 
+      {/* 2 · the business, in their own words → the professional write-up the desk answers from */}
+      <div className={`${s.sec} ${s.describe}`} data-desk-describe>
+        <label className={s.h} htmlFor="desk-brief">
+          {C.describeTitle}
+        </label>
+        <p className={s.note}>{C.describeSub}</p>
+        <div className={s.coverage} aria-label={C.coverageTitle} data-desk-coverage>
+          <span className={s.factLead}>{C.coverageTitle}:</span>
+          {coverage.map((c) => (
+            <span key={c.key} className={`${s.cover} ${c.covered ? s.coverOn : ""}`} data-covered={c.covered ? "1" : "0"} data-cover={c.key}>
+              {c.covered ? "✓ " : ""}
+              {c.label}
+            </span>
+          ))}
+        </div>
+        <textarea ref={briefRef} id="desk-brief" className={`${s.area} ${s.briefArea}`} value={brief} placeholder={C.briefPlaceholder} disabled={disabled} onChange={(e) => setBrief(e.target.value)} data-desk-brief />
+        <DictateButton id="deskBriefDictate" label={C.speak} value={brief} onChange={setBrief} wrapClassName={s.dictate} buttonClassName={s.btn} onClassName={s.dictateOn} noteClassName={s.dictateNote} iconClassName={s.ic} />
+        <div className={s.acts}>
+          <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || disabled || !desk.aiConfigured || !brief.trim()} onClick={() => void compose()} data-desk-compose>
+            {busy === "compose" ? C.writing : profile.knowledge ? C.rewritePro : C.writePro}
+          </button>
+          {!desk.aiConfigured ? <span className={`${s.note} ${s.noteErr}`}>{C.aiOff}</span> : null}
+        </div>
+
+        <div className={`${s.sec} ${marks.get("knowledge") ? s.secCheck : ""}`} data-section="knowledge" data-check={marks.get("knowledge") ? "1" : "0"}>
+          <div className={s.secHead}>
+            <label className={s.h} htmlFor="desk-knowledge">
+              {C.knowTitle}
+            </label>
+            <span className={s.secHint}>{C.knowHint}</span>
+          </div>
+          {marks.get("knowledge") ? (
+            <CheckNote
+              item={marks.get("knowledge")!}
+              disabled={disabled}
+              onFix={(f) => set("knowledge", f.text)}
+              onOk={() => {
+                clear("knowledge");
+                setDirty(true);
+              }}
+            />
+          ) : null}
+          <textarea id="desk-knowledge" className={`${s.area} ${s.knowArea}`} value={profile.knowledge} placeholder={C.knowEmpty} disabled={disabled} onChange={(e) => set("knowledge", e.target.value)} data-desk-knowledge />
+          {dirty ? (
+            <div className={s.saveBar}>
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || disabled} onClick={() => void save()} data-desk-save-knowledge>
+                {busy === "save" ? C.saving : C.save}
+              </button>
+              <span className={s.note}>{C.unsaved}</span>
+            </div>
+          ) : null}
+        </div>
+
+        {samples.length ? (
+          <div className={s.samples} data-desk-samples-inline>
+            <div className={s.h}>{C.samplesTitle}</div>
+            {samples.map((x) => (
+              <div key={x.q} className={s.sample}>
+                <b>“{x.q}”</b>
+                <span>{x.a}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
       {note ? <p className={`${s.note} ${s.noteOk}`} role="status">{note}</p> : null}
       {err ? <p className={`${s.note} ${s.noteErr}`} role="alert">{err}</p> : null}
 
@@ -266,7 +351,12 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
           <b>{C.questionsTitle}</b>
           <ul>
             {questions.map((q) => (
-              <li key={q}>{q}</li>
+              <li key={q}>
+                {q}{" "}
+                <button type="button" className={s.answerIt} disabled={disabled} onClick={() => answerIt(q)} data-answer-it>
+                  {C.answerIt}
+                </button>
+              </li>
             ))}
           </ul>
         </div>
@@ -398,23 +488,6 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
         </div>
       </div>
 
-      {/* 3 · anything else, in their own words — optional */}
-      <div className={s.more} data-desk-more data-open={showMore ? "1" : "0"}>
-        <button type="button" className={s.moreHead} onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} data-desk-more-toggle>
-          <span className={s.h}>{C.moreTitle}</span>
-          <span className={s.note}>{C.moreSub}</span>
-        </button>
-        <div className={s.moreBody} hidden={!showMore}>
-          <textarea className={s.area} value={brief} placeholder={C.briefPlaceholder} aria-label={C.moreTitle} disabled={disabled} onChange={(e) => setBrief(e.target.value)} data-desk-brief />
-          <DictateButton id="deskBriefDictate" label={C.speak} value={brief} onChange={setBrief} wrapClassName={s.dictate} buttonClassName={s.btn} onClassName={s.dictateOn} noteClassName={s.dictateNote} iconClassName={s.ic} />
-          <div className={s.acts}>
-            <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || disabled || !desk.aiConfigured || !brief.trim()} onClick={() => void compose()} data-desk-compose>
-              {busy === "compose" ? C.composing : written ? C.workItIn : C.compose}
-            </button>
-            {!desk.aiConfigured ? <span className={`${s.note} ${s.noteErr}`}>{C.aiOff}</span> : null}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

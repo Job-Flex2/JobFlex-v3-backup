@@ -14,6 +14,13 @@ export type DeskProfile = {
   greeting: string;
   /** One short paragraph: who the company is. */
   about: string;
+  /**
+   * Everything the owner told the desk about the business, written up professionally (owner, 2026-10-14: "the prompt
+   * window where he describes all the business, a talk-to-speech button, and you correct it into the professional
+   * prompt — for any question about the business, to have the answers"): short labelled paragraphs the desk answers
+   * every question from. Newlines kept.
+   */
+  knowledge: string;
   services: string[];
   serviceArea: string;
   hours: string;
@@ -34,6 +41,7 @@ export type DeskProfile = {
 export const EMPTY_PROFILE: DeskProfile = {
   greeting: "",
   about: "",
+  knowledge: "",
   services: [],
   serviceArea: "",
   hours: "",
@@ -144,6 +152,7 @@ export function profileFromFacts(f: CompanyFacts): DeskProfile {
   return {
     greeting: `Thanks for calling ${plainName}. This is the company's virtual assistant, and this call is recorded. How can I help you today?`,
     about: `${f.name} is a ${trades || "contracting"} company${f.city ? ` serving ${f.city} and the area around it` : ""}.`,
+    knowledge: "",
     services: f.services.length ? f.services : f.trades.map((t) => `${t} — estimates and installation`),
     serviceArea: f.city ? `${f.city} and nearby` : "",
     hours: f.hoursWords,
@@ -163,6 +172,19 @@ const lines = (v: unknown, max: number, each: number): string[] => {
   return arr.map((x) => str(x, each)).filter(Boolean).slice(0, max);
 };
 
+/** The business write-up: paragraphs and lines kept, spaces tidied, at most one blank line in a row, 6000 characters. */
+export function cleanKnowledge(v: unknown): string {
+  if (typeof v !== "string") return "";
+  return v
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 6000);
+}
+
 /** A profile from the model or the form, checked: strings trimmed and capped, unknown fields kept from `base`. */
 export function cleanProfile(raw: unknown, base: DeskProfile): DeskProfile {
   const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -176,6 +198,7 @@ export function cleanProfile(raw: unknown, base: DeskProfile): DeskProfile {
   return {
     greeting: take("greeting", 400),
     about: take("about", 800),
+    knowledge: "knowledge" in o ? cleanKnowledge(o.knowledge) : base.knowledge ?? "",
     services: "services" in o ? lines(o.services, 30, 120) : base.services,
     serviceArea: take("serviceArea", 300),
     hours: take("hours", 300),
@@ -261,9 +284,10 @@ export function composePrompt(brief: string, f: CompanyFacts, base?: DeskProfile
     `«${brief.trim()}»`,
     "",
     "Answer with JSON:",
-    '{"profile": {"greeting": "", "about": "", "services": [""], "serviceArea": "", "hours": "", "pricing": "", "credentials": "", "faqs": [{"q": "", "a": ""}], "emergencies": "", "neverSay": [""], "transfer": "", "languages": [""]}, "questions": [""], "samples": [{"q": "", "a": ""}]}',
+    '{"profile": {"greeting": "", "about": "", "knowledge": "", "services": [""], "serviceArea": "", "hours": "", "pricing": "", "credentials": "", "faqs": [{"q": "", "a": ""}], "emergencies": "", "neverSay": [""], "transfer": "", "languages": [""]}, "questions": [""], "samples": [{"q": "", "a": ""}]}',
     "",
     "RULES:",
+    "0. knowledge: the owner's words, corrected and written up professionally — the description of the business the desk answers ANY caller question from. Short labelled paragraphs, each label on its own line followed by a colon (What we do, How we work, Materials and brands, Service area, Hours, Prices and estimates, Warranty and guarantees, Licensing and insurance, Payment and financing, Good to know), only the labels the owner gave something for. Third person in the company's name. Fix grammar, spelling and order; keep every specific the owner gave (brands, numbers, prices, years, towns, steps) and add nothing they did not say — never invent a fact or a price. If the owner said nothing new, keep the current knowledge as it is.",
     "1. greeting: two sentences at most, in the company's name; it must say it is a virtual assistant and that the call is recorded (the law where the company works), then ask how it can help.",
     "2. services: short noun phrases, one each. hours: as the owner said them, else the hours on file. serviceArea: as the owner said it, else the city on file and nearby.",
     "3. pricing: only numbers the owner gave (a service fee, free estimates). If none, say prices depend on the job and the desk books an estimate instead of quoting.",
@@ -293,6 +317,7 @@ export function deskInstructions(p: DeskProfile, f: CompanyFacts, mode: "ANSWER"
     "",
     sec("GREETING", p.greeting),
     sec("ABOUT", p.about),
+    sec("WHAT THE COMPANY TOLD YOU ABOUT ITSELF — answer callers' questions from this; if it is not here or below, say you'll have someone call back", p.knowledge),
     sec("SERVICES", p.services),
     sec("SERVICE AREA", p.serviceArea),
     sec("HOURS", p.hours),
@@ -320,3 +345,22 @@ export function deskInstructions(p: DeskProfile, f: CompanyFacts, mode: "ANSWER"
 
 /** What the "try it" box adds: an answer in JSON, kept to what the desk would say. */
 export const ASK_FORMAT = 'Reply with JSON only: {"answer": "exactly what you would say on the phone — two sentences at most"}';
+
+/** What a description covers so far, for the checkmarks under the box (2026-10-14). Words, not the model. */
+export const COVERAGE: ReadonlyArray<{ key: string; label: string; re: RegExp; alt?: RegExp }> = [
+  { key: "services", label: "What you do", re: /\b(we (do|install|repair|replace|build|fix|offer|specialize)|services?|specialize|install|replace|repair)\b/i },
+  // "in Bellevue and Kirkland": a place named after in / around / near / across (capitalised — no i flag).
+  { key: "area", label: "Area", re: /\b(serv(e|ing)|area|count(y|ies)|within \d+|miles|cities|towns|eastside|westside|north|south)\b/i, alt: /\b(?:[Ii]n|[Aa]round|[Nn]ear|[Aa]cross|[Tt]hroughout) (?:the )?[A-Z][a-z]{2,}/ },
+  { key: "hours", label: "Hours", re: /\b(\d{1,2}(:\d\d)?\s?(am|pm)|monday|tuesday|weekdays?|weekends?|saturday|sunday|hours|open|24\/7)\b/i },
+  { key: "prices", label: "Prices", re: /(\$\s?\d|\b(price|prices|pricing|free estimates?|estimate fee|fee|cost|charge|per (square|sq|foot|hour)|quote)\b)/i },
+  { key: "warranty", label: "Warranty", re: /\b(warrant(y|ies)|guarantee)/i },
+  { key: "credentials", label: "Licensed / insured", re: /\b(licen[sc]ed?|insured|insurance|bonded|certified)\b/i },
+  { key: "materials", label: "Materials", re: /\b(materials?|brands?|shingles?|gaf|owens|certainteed|quartz|granite|composite|trex|vinyl|cedar|hardie|carrier|trane|lennox|porcelain|hardwood)\b/i },
+  { key: "process", label: "How you work", re: /\b(process|first|then|step|timeline|takes? (about )?\d|days?|weeks?|schedule|permits?)\b/i },
+  { key: "payment", label: "Payment", re: /\b(financ(e|ing)|payments?|deposit|cash|credit card|check|pay)\b/i },
+  { key: "emergencies", label: "Emergencies", re: /\b(emergenc(y|ies)|urgent|same[- ]day|after[- ]hours|leaks?|burst)\b/i },
+];
+export function briefCoverage(text: string): Array<{ key: string; label: string; covered: boolean }> {
+  const t = text || "";
+  return COVERAGE.map((c) => ({ key: c.key, label: c.label, covered: c.re.test(t) || (!!c.alt && c.alt.test(t)) }));
+}

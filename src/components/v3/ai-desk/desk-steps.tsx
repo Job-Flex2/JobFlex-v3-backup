@@ -41,9 +41,19 @@ export function DeskSteps({ desk, registration, onNumber }: { desk: DeskSettings
   const [samples, setSamples] = useState<DeskFaq[]>([]);
   // The preset's highlighted parts: step 2 reads "3 to check" until they are looked at.
   const [toCheck, setToCheck] = useState(desk.profile ? desk.review.length : 0);
+  // Forwarding chosen but not seen working: the desk says so above everything (2026-10-14) — JobFlex can't switch it on.
+  const fwdPending = desk.steps.number && desk.forwarding !== "none" && desk.forwardCheck?.status !== "works";
   return (
     <div className={s.steps} data-desk-steps>
-      <Step n={1} id="desk-step-numbers" title={C.step1} sub={C.step1Sub} done={desk.steps.number}>
+      {fwdPending ? (
+        <div className={`${s.root} ${s.fwdBanner}`} role="note" data-desk-fwd-banner>
+          <span>{C.fwdBanner(desk.businessPhone ?? "")}</span>
+          <button type="button" className={s.btn} onClick={() => document.getElementById("desk-forward")?.scrollIntoView({ behavior: "smooth", block: "start" })} data-desk-fwd-show>
+            {C.fwdBannerBtn}
+          </button>
+        </div>
+      ) : null}
+      <Step n={1} id="desk-step-numbers" title={C.step1} sub={C.step1Sub} done={desk.steps.number && !fwdPending} chip={fwdPending ? C.fwdChip : undefined}>
         <DeskNumbers desk={desk} registration={registration} onNumber={onNumber} />
       </Step>
       <Step n={2} id="desk-step-brief" title={C.step2} sub={C.step2Sub} done={written && toCheck === 0} chip={written && toCheck > 0 ? C.toCheck(toCheck) : undefined}>
