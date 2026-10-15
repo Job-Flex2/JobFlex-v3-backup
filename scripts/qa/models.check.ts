@@ -1,7 +1,8 @@
 // Which model reads what (2026-09-19): the estimators run on OPENAI_MODEL;
 // photos and video frames follow it unless it is a mini or nano tier (then
-// gpt-4o), and each has its own override. Reasoning models get no
-// temperature. No model call.
+// gpt-4o), and OPENAI_VISION_MODEL overrides both — the video reader's own
+// knob is retired (2026-10-15). Reasoning models get no temperature. No
+// model call.
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/models.check.ts
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -57,6 +58,18 @@ const short = PAGES.filter((f) => {
 check(`every estimator page gives its action five minutes (${PAGES.length} pages)`, short.length === 0, short.join(", "));
 
 // ── What a reasoning model is sent ──────────────────────────────────────────
+// ── The video estimator reads with the app's model ─────────────────────────
+// The owner runs JobFlex on gpt-4.1 and wants the walkthrough read by it too
+// (2026-10-15): the reader names no model of its own, so nothing left in an
+// environment can hold it on another, and it asks for the availability check
+// first, as the planner does.
+const reader = readFileSync("src/actions/videoEstimator.ts", "utf8");
+check(
+  "the video reader reads with the app's model — no knob of its own, availability checked first",
+  !/OPENAI_VIDEO_MODEL\?\./.test(reader) && !/process\.env\.OPENAI_VIDEO_MODEL/.test(reader) && /await resolveOpenAIModel\(\)/.test(reader) && /return getVisionModel\(\)/.test(reader),
+);
+check("the example env no longer sets a video-only model", !/^OPENAI_VIDEO_MODEL=/m.test(readFileSync(".env.example", "utf8")));
+
 // resolveOpenAIModel remembers the first answer, so this runs last.
 process.env.OPENAI_MODEL = "gpt-5";
 samplingOptions(0.2, 42)
