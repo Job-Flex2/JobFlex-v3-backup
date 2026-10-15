@@ -42,7 +42,10 @@ export async function checkoutConfigured(page: Page): Promise<boolean> {
 
 /** Picks a plan card by its slug (the phone's rail centres it first) and presses its Start. */
 export async function startPlan(page: Page, slug: string, term: "MONTH" | "YEAR" = "MONTH"): Promise<void> {
-  if (term === "YEAR") await page.locator('[data-plan-term] [role="radio"]', { hasText: /annual|year/i }).first().click().catch(() => {});
+  if (term === "YEAR") {
+    await page.locator("section.plan-sheet.is-in [data-plan-term] button", { hasText: /annual/i }).first().click();
+    await expect(page.locator("section.plan-sheet.is-in [data-plan-term]")).toHaveAttribute("data-plan-term", "YEAR");
+  }
   const card = page.locator(`section.plan-sheet.is-in [data-plan-card="${slug}"]`).first();
   await card.evaluate((e) => e.scrollIntoView({ inline: "center", block: "nearest" }));
   await page.waitForTimeout(900);
@@ -54,7 +57,12 @@ export async function payWithTestCard(page: Page, card = "4242424242424242"): Pr
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 90_000 });
   expect(page.url(), "Stripe Checkout must be a TEST session").toMatch(/cs_test_/);
   // Checkout may lead with Link or a wallet; the card form is behind "Pay with card" then.
-  await page.locator('[data-testid="card-accordion-item-button"], button:has-text("Card")').first().click({ timeout: 8000 }).catch(() => {});
+  // The methods are an accordion (Card, Cash App, Klarna, …). Its Card button is a zero-size
+  // overlay Playwright calls invisible, so it is pressed in the page; with a single method the
+  // card fields are already open and the button is absent.
+  const cardButton = page.locator('[data-testid="card-accordion-item-button"]');
+  await cardButton.waitFor({ state: "attached", timeout: 20_000 }).catch(() => {});
+  if (await cardButton.count()) await cardButton.first().evaluate((b) => (b as HTMLButtonElement).click());
   await page.locator("#cardNumber").fill(card, { timeout: 60_000 });
   await page.locator("#cardExpiry").fill("12 / 34");
   await page.locator("#cardCvc").fill("123");
@@ -64,7 +72,7 @@ export async function payWithTestCard(page: Page, card = "4242424242424242"): Pr
   if (await zip.isVisible().catch(() => false)) await zip.fill("98033");
   // Link's "save my info" would ask for a phone number; leave it off.
   const save = page.locator("#enableStripePass, input[name=enableStripePass]");
-  if (await save.isChecked().catch(() => false)) await save.uncheck().catch(() => {});
+  if (await save.isChecked().catch(() => false)) await save.evaluate((c) => (c as HTMLInputElement).click());
   await page.locator('[data-testid="hosted-payment-submit-button"], button.SubmitButton, button[type=submit]').first().click();
 }
 

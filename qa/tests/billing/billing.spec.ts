@@ -1,6 +1,8 @@
 // BILLING — Stripe TEST mode only (a cs_live_ Checkout is a forbidden request, forbidden.yaml).
 // Each test makes its own trial account through the real sign-up (lib/signup.ts) and then works
-// on /dashboard/upgrade at 1440, checking the Subscription row after every action. The rules
+// on /dashboard/upgrade at 1440, checking the Subscription row after every action. In test mode
+// the Checkout price comes from lib/signupPricing, not from the PlanPrice mirror (that is the
+// live account's), so the row is compared with the price it started on. The rules
 // these flows follow (proration, the YEAR → MONTH switch booked for the period end) are pinned at
 // the data level by the legacy billing checks (plan-change.check.ts and others in this folder).
 import { test, expect, open } from "../../lib/fixtures";
@@ -28,10 +30,6 @@ async function trialAccount(page: Page, label: string, plan = "professional", te
   return { email, orgId: acct!.memberships[0].organization.id };
 }
 
-async function priceOf(plan: string, interval: "MONTH" | "YEAR"): Promise<string | null> {
-  const row = await prisma().planPrice.findFirst({ where: { planSlug: plan, interval, active: true }, select: { stripePriceId: true } });
-  return row?.stripePriceId ?? null;
-}
 async function subscriptionOf(orgId: string) {
   return prisma().subscription.findUnique({ where: { organizationId: orgId }, select: { plan: true, status: true, stripePriceId: true, externalSubId: true, trialEndsAt: true, currentPeriodEnd: true } });
 }
@@ -43,34 +41,45 @@ async function chooseTerm(page: Page, term: "MONTH" | "YEAR") {
 test("monthly → annual on the same plan: the subscription moves to the yearly price @billing @writes", async ({ page, qa }) => {
   test.setTimeout(8 * 60_000);
   const { orgId } = await test.step("a monthly trial account", () => trialAccount(page, "m2y"));
-  const yearly = await priceOf("professional", "YEAR");
-  test.skip(!yearly, "no active yearly price for professional in PlanPrice (sync plans in /admin/plans)");
+  const monthly = (await subscriptionOf(orgId))?.stripePriceId;
   await open(page, "/dashboard/upgrade", { settleMs: 1500 });
   await chooseTerm(page, "YEAR");
   const go = page.locator('[data-plan-card="professional"] .jf-up-go');
   await expect(go).toHaveText(/switch to annual/i);
   await go.click();
   await page.locator(".jf-confirm-btn.primary").click();
-  await expect.poll(async () => (await subscriptionOf(orgId))?.stripePriceId, { timeout: 90_000, message: "the subscription row carries the yearly price" }).toBe(yearly);
-  qa.meta({ after: await subscriptionOf(orgId) });
+  await expect.poll(async () => (await subscriptionOf(orgId))?.stripePriceId, { timeout: 90_000, message: "the subscription row moves off the monthly price" }).not.toBe(monthly);
+  await open(page, "/dashboard/upgrade", { settleMs: 1500 });
+  await chooseTerm(page, "YEAR");
+  await expect(page.locator('[data-plan-card="professional"]'), "on Annual, Professional is the current plan").toContainText(/current plan/i);
+  const after = await subscriptionOf(orgId);
+  qa.meta({ before: monthly, after });
+  expect(after?.plan?.toLowerCase()).toContain("professional");
 });
 
-test("annual → monthly: the switch is booked for the period end, the yearly price stays until then @billing @writes", async ({ page, qa }) => {
+test("annual → monthly during a trial: the switch happens at once, on the monthly price @billing @writes", async ({ page, qa }) => {
+  // The owner's rule (2026-10-14): during a TRIAL nothing has been paid, so annual → monthly switches
+  // at once. (A PAID annual plan books the switch for the period end — lib/planChange; that case
+  // needs a subscription past its trial, i.e. test clocks, like the card-after-trial test below.)
   test.setTimeout(8 * 60_000);
   const { orgId } = await test.step("an annual trial account", () => trialAccount(page, "y2m", "professional", "YEAR"));
-  const yearly = await priceOf("professional", "YEAR");
-  expect((await subscriptionOf(orgId))?.stripePriceId, "starts on the yearly price").toBe(yearly);
+  const yearly = (await subscriptionOf(orgId))?.stripePriceId;
   await open(page, "/dashboard/upgrade", { settleMs: 1500 });
+  await chooseTerm(page, "YEAR");
+  await expect(page.locator('[data-plan-card="professional"]'), "it starts on Annual").toContainText(/current plan/i);
   await chooseTerm(page, "MONTH");
   const go = page.locator('[data-plan-card="professional"] .jf-up-go');
   await expect(go).toHaveText(/switch to monthly/i);
   await go.click();
   await page.locator(".jf-confirm-btn.primary").click();
-  await expect(page.getByText(/booked|switches to monthly|from .* monthly/i).first(), "the page says when the switch happens").toBeVisible({ timeout: 60_000 });
+  await expect.poll(async () => (await subscriptionOf(orgId))?.stripePriceId, { timeout: 90_000, message: "the subscription row moves off the yearly price at once" }).not.toBe(yearly);
+  await open(page, "/dashboard/upgrade", { settleMs: 1500 });
+  await chooseTerm(page, "MONTH");
+  await expect(page.locator('[data-plan-card="professional"]'), "on Monthly, Professional is the current plan").toContainText(/current plan/i);
+  await expect(page.getByText(/switch booked|switches to monthly on/i), "nothing is booked for later").toHaveCount(0);
   const after = await subscriptionOf(orgId);
-  qa.meta({ after });
-  expect(after?.stripePriceId, "still yearly until the period ends").toBe(yearly);
-  expect(after?.status).toBe("TRIALING");
+  qa.meta({ before: yearly, after });
+  expect(after?.status, "still on the trial").toBe("TRIALING");
 });
 
 test("adding a card after the trial ended @billing @writes", async () => {

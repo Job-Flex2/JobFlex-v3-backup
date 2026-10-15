@@ -11,7 +11,7 @@ function base(t: RawTest): Omit<Signal, "kind" | "message" | "rawRef" | "primary
 }
 
 /** Which collected event made the test fail, in order of how much it explains. */
-const CAUSE_ORDER: SignalKind[] = ["forbidden", "api-error", "page-error", "network", "timeout", "access", "unknown-access", "legacy", "forms", "layout", "broken-link", "slow", "console-error", "assertion", "visual"];
+const CAUSE_ORDER: SignalKind[] = ["environment", "forbidden", "api-error", "page-error", "network", "timeout", "access", "unknown-access", "legacy", "forms", "layout", "broken-link", "slow", "console-error", "assertion", "visual"];
 
 export function extractSignals(raw: RawRun): Signal[] {
   const out: Signal[] = [];
@@ -28,13 +28,18 @@ export function extractSignals(raw: RawRun): Signal[] {
       // a made-up link token answering 404 is the expected answer
       if (e.status === 404 && t.meta?.realParams === false && e.resourceType === "document") return;
       if (e.status >= 500 || (api && e.status >= 400 && e.status !== 401 && e.status !== 403)) {
-        add({ kind: "api-error", message: `HTTP ${e.status} ${e.method} ${pathOf(e.url)}${e.body ? ` — ${e.body.slice(0, 200)}` : ""}`, url: e.url, status: e.status, method: e.method, step: e.step, rawRef: `tests[${i}].collected.httpErrors[${j}]` });
+        // A Next server action POSTs to the page's own address: the page is not the cause. The
+        // server's error, as the dev overlay logs it to the console ("NoOrgError: …"), is.
+        const serverAction = e.method === "POST" && !/\/api\//.test(e.url);
+        // the RSC answer itself names the error ({"name":"NoOrgError","message":…}); else the console
+        const cause = !serverAction ? null : (e.body?.match(/"name":"(\w+)","message":"([^"]{0,120})"/) ?? c.console.map((x) => x.text.match(/\b([A-Z][A-Za-z]*Error): ([^\n]{3,120}?)(?:\s+at |\n|$)/)).find(Boolean) ?? null);
+        add({ kind: "api-error", message: `HTTP ${e.status} ${e.method} ${pathOf(e.url)}${cause ? ` — ${cause[1]}: ${cause[2]}` : e.body ? ` — ${e.body.slice(0, 200)}` : ""}`, url: e.url, status: e.status, method: e.method, step: e.step, extra: serverAction ? { serverAction: true, cause: cause ? `${cause[1]}: ${cause[2]}` : null } : undefined, rawRef: `tests[${i}].collected.httpErrors[${j}]` });
       } else if (e.status >= 400) {
         add({ kind: "broken-link", message: `HTTP ${e.status} ${e.method} ${pathOf(e.url)} (${e.resourceType})`, url: e.url, status: e.status, method: e.method, step: e.step, rawRef: `tests[${i}].collected.httpErrors[${j}]` });
       }
     });
     c.pageErrors.forEach((e, j) => add({ kind: "page-error", message: e.message, stack: e.stack, url: e.url, step: e.step, rawRef: `tests[${i}].collected.pageErrors[${j}]` }));
-    c.failedRequests.forEach((e, j) => { if (e.sameOrigin) add({ kind: "network", message: `${e.method} ${pathOf(e.url)} failed: ${e.error}`, url: e.url, method: e.method, step: e.step, rawRef: `tests[${i}].collected.failedRequests[${j}]` }); });
+    c.failedRequests.forEach((e, j) => { if (e.sameOrigin) add({ kind: DOWN.test(e.error) ? "environment" : "network", message: `${e.method} ${pathOf(e.url)} failed: ${e.error}`, url: e.url, method: e.method, step: e.step, rawRef: `tests[${i}].collected.failedRequests[${j}]` }); });
     c.console.forEach((e, j) => { if (e.type === "error") add({ kind: "console-error", message: e.text, url: e.url, step: e.step, extra: { location: e.location }, rawRef: `tests[${i}].collected.console[${j}]` }); });
     c.hungRequests.forEach((e, j) => { if (e.sameOrigin) add({ kind: "network", message: `${e.method} ${pathOf(e.url)} never answered (${Math.round(e.ms / 1000)} s)`, url: e.url, step: e.step, rawRef: `tests[${i}].collected.hungRequests[${j}]` }); });
 
@@ -69,8 +74,9 @@ export function extractSignals(raw: RawRun): Signal[] {
     if (m.kind === "visual" && failed) add({ kind: "visual", message: firstLine(t.errors[0]?.message ?? "visual difference"), extra: { visualId: m.visualId, ratio: m.ratio }, rawRef: `tests[${i}].errors[0]` });
 
     if (failed) {
-      // the test's own error: a timeout or a failed check
+      // the test's own error: a timeout or a failed check — or the server or browser gone
       t.errors.forEach((e, j) => {
+        if (DOWN.test(e.message)) add({ kind: "environment", message: firstLine(e.message), rawRef: `tests[${i}].errors[${j}]` });
         const kind: SignalKind = /Timeout \d+ms exceeded|Test timeout of/.test(e.message) ? "timeout" : "assertion";
         add({ kind, message: firstLine(e.message), stack: e.stack, extra: { location: e.location, snippet: e.snippet }, rawRef: `tests[${i}].errors[${j}]` });
       });
@@ -82,6 +88,9 @@ export function extractSignals(raw: RawRun): Signal[] {
   });
   return out;
 }
+
+/** The server under test (or the test's own browser) went away: not a product defect. */
+const DOWN = /ERR_CONNECTION_REFUSED|ECONNREFUSED|ERR_CONNECTION_RESET|ECONNRESET|ERR_EMPTY_RESPONSE|socket hang up|Target page, context or browser has been closed|Page crashed|worker process exited unexpectedly/;
 
 export function pathOf(url: string): string {
   try { return new URL(url).pathname; } catch { return url.replace(/[?#].*$/, ""); }

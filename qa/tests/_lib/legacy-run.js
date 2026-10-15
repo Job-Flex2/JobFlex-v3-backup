@@ -2,8 +2,9 @@
 // Runs one of the old QA scripts (qa/config/legacy.yaml) the way scripts/qa/run-all.js always
 // did, and reads its verdict. Shared by qa/tests/legacy.spec.ts (the QA Lab) and run-all.js.
 //
-// Every child gets the external senders blanked — Twilio, Resend, SMTP, Meta CAPI — so no script
-// can text, mail or report a real person (crew-days could have texted through Twilio before).
+// No child can text, mail or report a real person: the `twilio` package is replaced by a recording
+// stand-in (_no-sms.js, preloaded — the Twilio keys stay as they are, so code paths that need
+// "texting configured" run), and the mail and Meta keys are blanked.
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
@@ -24,11 +25,13 @@ function runnable() {
   return manifest().filter((e) => e.status === "live" && ["check", "node", "page", "prod"].includes(e.kind));
 }
 
-const BLANK = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "RESEND_API_KEY", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "META_CAPI_ACCESS_TOKEN"];
+const BLANK = ["RESEND_API_KEY", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "META_CAPI_ACCESS_TOKEN"];
+const NO_SMS = path.join(__dirname, "_no-sms.js").split(path.sep).join("/"); // NODE_OPTIONS eats backslashes
 
 function childEnv(baseUrl) {
   const env = { ...process.env, MSYS_NO_PATHCONV: "1" };
   for (const k of BLANK) env[k] = ""; // an empty value wins over .env (Next and dotenv never override a set variable)
+  env.NODE_OPTIONS = [`--require "${NO_SMS}"`, process.env.NODE_OPTIONS].filter(Boolean).join(" ");
   if (baseUrl) {
     env.QA_BASE_URL = baseUrl;
     env.QA_DEV_URL = env.QA_DEV_URL || baseUrl; // mobile-sweep's dev ↔ prod compare

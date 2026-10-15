@@ -85,14 +85,11 @@ routes:
     homeowner: login
   /admin/integrations/twilio:
     guest: login
-    owner: error:500
+    owner: login
     manager: login
     worker: login
     admin: open
     homeowner: login
-    review:
-      - owner
-    why: "auto: owner: the server fails (error:500)"
   /admin/investors:
     guest: login
     owner: login
@@ -423,6 +420,16 @@ routes:
     review:
       - admin
     why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/company/landing:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
   /dashboard/company/subscription:
     guest: login
     owner: redirect:/dashboard/subscription
@@ -535,7 +542,7 @@ routes:
     homeowner: login
     review:
       - admin
-    why: "auto: admin: a platform admin with no company opens the dashboard"
+    why: "auto: admin: a platform admin with no company opens the dashboard (owner corrected to open by hand 2026-10-14: the 500 at generation was the dev server's EPERM rename race, the full run's owner got 200)"
   /dashboard/financials/expenses:
     guest: login
     owner: open
@@ -547,6 +554,16 @@ routes:
       - admin
     why: "auto: admin: a platform admin with no company opens the dashboard"
   /dashboard/financials/invoices:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/follow-ups:
     guest: login
     owner: open
     manager: open
@@ -969,6 +986,13 @@ routes:
       - admin
     why: "auto: admin: a platform admin with no company opens the dashboard"
   /dashboard/settings/gmail:
+    guest: login
+    owner: redirect:/dashboard/settings
+    manager: redirect:/dashboard/settings
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/settings
+    homeowner: login
+  /dashboard/settings/integrations:
     guest: login
     owner: redirect:/dashboard/settings
     manager: redirect:/dashboard/settings
@@ -1676,3 +1700,17 @@ routes:
     worker: redirect:/dashboard/jobs
     admin: redirect:/dashboard
     homeowner: login
+  /w/[token]:
+    guest: not-found
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /w/[token]/jobs/[assignmentId]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found

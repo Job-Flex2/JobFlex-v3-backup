@@ -21,7 +21,7 @@
 //   · the plan matrix: every way a company holds a plan (card-less trial,
 //     trial, each paid plan, past due, grant, comp, platform admin, booked
 //     cancellation) passes; an ended one is refused.
-import { actAs, check, outcome, summary } from "../_lib/_actionHarness";
+import { actAs, check, outcome, sentSms, summary } from "../_lib/_actionHarness";
 import { randomBytes } from "node:crypto";
 import { db } from "../../../src/lib/db";
 import { PAID_CAPS, takePaidCap, takeRoofOrderCap, takeHvacReportCap } from "../../../src/lib/paidCaps";
@@ -214,19 +214,30 @@ async function main() {
     check("number: Jamaica (+1 876), the Dominican Republic (+1 809), 900 and a UK number are not", !isUsCanadaNumber("+18765550100") && !isUsCanadaNumber("+18095550100") && !isUsCanadaNumber("+19005550100") && !isUsCanadaNumber("+442071234567"));
     const P0 = await company("P0");
     as(P0);
+    // The verification text goes to a recording stand-in (_stubs/sms-verify.js): what is checked
+    // is that the send was asked for, to which number and with which words — not that it arrived.
+    const textsBefore = sentSms().length;
     const noPlan = await outcome(() => startPhoneVerification("(206) 555-0100"));
-    check("phone: a company without a plan sends no code", noPlan.refused && /active plan/.test(noPlan.text), noPlan.text);
+    check("phone: a company without a plan sends no code", noPlan.refused && /active plan/.test(noPlan.text) && sentSms().length === textsBefore, noPlan.text);
     const P = await company("P", "ACTIVE");
     as(P);
     for (const [label, raw] of [["a UK number", "+44 20 7123 4567"], ["a Jamaican +1 number", "+1 876 555 0100"], ["a 900 number", "1-900-555-0100"]] as const) {
       const r = await outcome(() => startPhoneVerification(raw));
       check(`phone: ${label} gets no code`, r.refused && /US or Canadian/.test(r.text), r.text);
     }
+    check("phone: no text was asked for the refused numbers", sentSms().length === textsBefore, JSON.stringify(sentSms().slice(textsBefore)));
     const us = await outcome(() => startPhoneVerification("(206) 555-0100"));
-    check("phone: a US number on an open plan goes on (Twilio is off here)", !us.refused, us.text);
+    const usText = sentSms().slice(textsBefore);
+    check("phone: a US number on an open plan goes on", !us.refused && /Code sent to/.test(us.text), us.text);
+    check(
+      'phone: one verification text, to +12065550100, reading "Your JobFlex verification code is NNNNNN"',
+      usText.length === 1 && usText[0].to === "+12065550100" && usText[0].channel === "sms" && /^Your JobFlex verification code is \d{6}$/.test(usText[0].body),
+      JSON.stringify(usText.map((m) => ({ to: m.to, body: m.body.replace(/\d{6}$/, "••••••") }))),
+    );
+    const textsAfterUs = sentSms().length;
     await setPlan(P.org.id, "CANCELED");
     const ended = await outcome(() => startPhoneVerification("(206) 555-0101"));
-    check("phone: after the plan ends, no code", ended.refused && /active plan/.test(ended.text), ended.text);
+    check("phone: after the plan ends, no code", ended.refused && /active plan/.test(ended.text) && sentSms().length === textsAfterUs, ended.text);
 
     // ── parcel tiles: only with an open plan ──
     const tile = (c: Co | null) => {

@@ -66,6 +66,12 @@ export const test = base.extend<{ role: RoleName; qa: Qa; _guard: void }>({
     const block = qaConfig().blockThirdParty.map((r) => new RegExp(r, "i"));
     await context.route("**/*", (route) => {
       const url = route.request().url();
+      // `next dev -H 0.0.0.0` builds absolute links (Stripe's success_url) on 0.0.0.0, which a
+      // browser refuses (ERR_ADDRESS_INVALID): send them to the server under test instead.
+      if (/^https?:\/\/0\.0\.0\.0[:/]/.test(url)) {
+        const to = origin + url.replace(/^https?:\/\/0\.0\.0\.0(:\d+)?/, "");
+        return route.fulfill({ status: 302, headers: { location: to } });
+      }
       if (url.startsWith(origin)) return route.fallback({ headers: { ...route.request().headers(), "x-forwarded-for": ip } });
       if (block.some((r) => r.test(url))) return route.fulfill({ status: 204, body: "" });
       return route.fallback();

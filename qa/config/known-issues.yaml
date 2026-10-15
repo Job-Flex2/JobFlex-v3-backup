@@ -1,15 +1,31 @@
-# Confirmed false positives. The analysis does not show a finding that matches an entry here;
-# it counts it on one line of the summary ("known: N") instead.
+# Confirmed false positives and known, accepted failures. The analysis does not show a finding
+# that matches an entry here; it counts it on one line of the summary ("known: N") instead.
 #
 # An entry matches a finding when EVERY field given matches (regex, case-insensitive):
 #   signature — the finding's id or its signature (shown in the report under "Откуда это известно")
 #   message   — the original error text
 #   test      — a test title
 #   route     — a page path
-# Always say why it is not a defect and who confirmed it, with a date.
-#
-# - id: example-dev-hmr-socket
-#   message: "WebSocket connection to .*_next/webpack-hmr"
-#   why: "dev server hot-reload socket; production has none"
-#   confirmed: "owner, 2026-10-14"
-issues: []
+# Always say why it is not (or not now) a defect and who confirmed it, with a date.
+issues:
+  - id: fence-3d-ground-known
+    signature: "^legacy qa/tests/logic/fence-3d-ground\\.check\\.ts$"
+    why: "four checks (steps per bay, step post panel, 3D steps = priced steps, corner post) fail since before 2026-10-06 (fence engine d2578453) — known, not a regression"
+    confirmed: "owner, 2026-10-15"
+  - id: fence-terrain-known
+    signature: "^legacy qa/tests/logic/fence-terrain-check\\.ts$"
+    why: "the valley case fails since before 2026-10-06 — known, not a regression"
+    confirmed: "owner, 2026-10-15"
+  - id: admin-subscription-stripe-test-mode
+    signature: "^legacy qa/tests/billing/admin-subscription\\.check\\.ts$"
+    why: "conflicts with dev.db stripe:mode=test — its Stripe mock / price ids do not match the sandbox account (No such price…)"
+    confirmed: "owner, 2026-10-15"
+  - id: landing-ad-screen-outdated
+    signature: "^legacy qa/tests/logic/landing-ad-screen\\.check\\.ts$"
+    why: "the check is out of date: the ad's first screen now goes to the decking landing too (fencing, roofing, decking, hvac)"
+    confirmed: "owner, 2026-10-15"
+  - id: google-client-id-empty-locally
+    test: "Google is offered on sign-up and sign-in"
+    message: "client id"
+    why: "GOOGLE_CLIENT_ID is empty in the local .env, so the Google URL carries client_id=\"\" — environment, not code"
+    confirmed: "owner, 2026-10-15"

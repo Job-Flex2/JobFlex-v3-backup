@@ -21,7 +21,8 @@ export type SignalKind =
   | "legacy" // an old script failed
   | "visual"
   | "a11y"
-  | "perf"; // Lighthouse under the threshold
+  | "perf" // Lighthouse under the threshold
+  | "environment"; // the server under test went away (connection refused / reset, a crashed browser)
 
 /** One observation, with the exact place in raw.json it came from. */
 export type Signal = {

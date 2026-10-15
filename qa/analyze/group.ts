@@ -32,8 +32,13 @@ const area = (route: string | null) => (route ? route.split("/").slice(0, 3).joi
 /** What makes two signals the same cause. */
 export function signatureOf(s: Signal): string {
   switch (s.kind) {
-    case "api-error": return `api ${s.status} ${s.method} ${normalisePath(pathOf(s.url ?? ""))}`;
-    case "page-error": return `page-error ${norm(s.message)}${topFrame(s.stack) ? " @ " + topFrame(s.stack) : ""}`;
+    case "api-error":
+      // a server action's error is one cause wherever the page is; group by it (and the role)
+      if (s.extra?.serverAction) return `server-action ${s.status} ${s.extra.cause ? norm(String(s.extra.cause)) : "(the error is not in the console)"} as ${s.role ?? "?"}`;
+      return `api ${s.status} ${s.method} ${normalisePath(pathOf(s.url ?? ""))}`;
+    case "environment": return "environment server-unavailable";
+    // a generic message (React's hydration text) is one cause per page, not one for the app
+    case "page-error": return `page-error ${norm(s.message).slice(0, 120)} @ ${topFrame(s.stack) || normalisePath(pathOf(s.url ?? ""))}`;
     case "network": return `network ${norm(s.message)}`;
     case "console-error": return `console ${norm(s.message)}`;
     case "forbidden": return `forbidden ${norm(s.message)}`;
@@ -83,6 +88,7 @@ export function severityOf(kind: SignalKind, signals: Signal[]): { severity: Sev
     return { severity: "P2", why: "a function works with a defect" };
   }
   switch (kind) {
+    case "environment": return { severity: "P2", why: "the server under test went away during the run — not a product defect; re-run these tests on a steady server" };
     case "forbidden": return { severity: "P2", why: "a test pressed a forbidden control — the guard stopped it; the test or the control's label needs a look" };
     case "access": {
       const leak = signals.some((s) => /guest:|homeowner:/.test(signatureOf(s)) && /→open/.test(signatureOf(s))) || signals.some((s) => /\/admin/.test(s.route ?? "") && /→open/.test(signatureOf(s)) && !/admin:/.test(signatureOf(s)));

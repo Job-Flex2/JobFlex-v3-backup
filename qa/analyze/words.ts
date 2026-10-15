@@ -53,6 +53,7 @@ export function ruleWords(f: Omit<Finding, "human" | "title">, list: Signal[]): 
     a11y: `Доступность: ${s.message.slice(0, 90)} — на ${f.evidence.routes.length || n} страницах`,
     perf: `Lighthouse ниже порога${where}: ${s.message.replace(/^Lighthouse \w+: /, "")}`,
     forbidden: `Тест попытался нажать запрещённое действие: ${s.message.slice(0, 80)}`,
+    environment: `Сервер под тестом пропадал во время прогона — ${n} тест(ов) упали из-за этого`,
   };
   const WHAT: Record<string, string> = {
     "api-error": "Запрос к серверу заканчивается ошибкой — страница или действие, которые на него опираются, не работают.",
@@ -72,6 +73,7 @@ export function ruleWords(f: Omit<Finding, "human" | "title">, list: Signal[]): 
     a11y: "axe-core нашёл серьёзную проблему доступности (экранные дикторы, контраст, подписи).",
     perf: "Оценка Lighthouse ниже порога. На dev-сервере performance всегда ниже, чем в production.",
     forbidden: "Защита остановила действие из forbidden.yaml; нужно поправить тест или подпись кнопки.",
+    environment: "Соединение с сервером отказано или оборвано (или упал браузер теста) — это не дефект продукта. Эти тесты нужно перепрогнать на стабильном сервере.",
   };
   return {
     title: T[f.kind] ?? s.message.slice(0, 100),

@@ -5,7 +5,7 @@
    "kind": "api-error",
    "severity": "P0",
    "tests": 3,
-   "signature": "api 500 POST /auth/register"
+   "signature": "server-action 500"
   }
  ]
 }

@@ -80,7 +80,7 @@ const api = run("2026-10-14T20-20-00", [...cascade, a11y, test({ title: "home pa
 
 const EXPECTED = {
   green: { failedTests: 0, findings: [] as unknown[] },
-  "signup-code": { failedTests: 3, findings: [{ kind: "api-error", severity: "P0", tests: 3, signature: "api 500 POST /auth/register" }] },
+  "signup-code": { failedTests: 3, findings: [{ kind: "api-error", severity: "P0", tests: 3, signature: "server-action 500" }] },
   "api-cascade": { failedTests: 12, findings: [{ kind: "api-error", severity: "P1", tests: 12, signature: "api 500 GET /api/notifications/summary" }, { kind: "a11y", severity: "P3", tests: 1, signature: "a11y color-contrast" }] },
 };
 

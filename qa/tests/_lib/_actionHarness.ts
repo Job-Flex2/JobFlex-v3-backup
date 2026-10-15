@@ -35,6 +35,8 @@ M._resolveFilename = function (this: unknown, request: string, ...rest: unknown[
   if (request === "next/server" && !(rest[0] as { filename?: string })?.filename?.includes("_stubs")) return path.join(STUBS, "next-server.js");
   const out = resolve.call(this, request, ...rest);
   if (out.split(path.sep).join("/").endsWith("/src/lib/auth.ts")) return path.join(STUBS, "auth.js");
+  // a verification text is recorded, never sent (stubs/sms-verify.js; sentSms() below)
+  if (out.split(path.sep).join("/").endsWith("/src/lib/sms/verify.ts")) return path.join(STUBS, "sms-verify.js");
   return out;
 };
 
@@ -44,6 +46,11 @@ M._resolveFilename = function (this: unknown, request: string, ...rest: unknown[
 
 type G = typeof globalThis & { __auditSession?: unknown; __auditHeaders?: Record<string, string> };
 /** Every later call runs as this member (null = signed out). */
+/** The verification texts the actions asked for in this process (stubs/sms-verify.js). */
+export function sentSms(): { kind: string; to: string; channel: string; body: string }[] {
+  return ((globalThis as unknown as { __qaSms?: { kind: string; to: string; channel: string; body: string }[] }).__qaSms ??= []);
+}
+
 export function actAs(user: { id: string; activeOrgId?: string | null } | null) {
   (globalThis as G).__auditSession = user ? { user: { id: user.id, activeOrgId: user.activeOrgId ?? null, credentialVersion: 0, principal: "USER" } } : null;
 }
