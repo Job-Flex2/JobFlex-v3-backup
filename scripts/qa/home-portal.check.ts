@@ -3,6 +3,7 @@
 // right after a submission. Pure functions, no database.
 //   npx --no-install tsx --tsconfig tsconfig.json scripts/qa/home-portal.check.ts
 import { localHourAt, mayShowHomeKey, planDate, planWhen, reminderFor, remindModeOf, validTimeZone } from "../../src/lib/home/dates";
+import { guessTrade } from "../../src/lib/tradeGuess";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -47,6 +48,13 @@ check("a first-timer sees their dashboard at once", mayShowHomeKey({ isNew: true
 check("a returning email does NOT see it on screen (it goes by email)", !mayShowHomeKey({ isNew: false, older: 0, fromDashboard: false }));
 check("a new home with older requests under that email does NOT see it on screen", !mayShowHomeKey({ isNew: true, older: 2, fromDashboard: false }));
 check("a request made from the dashboard itself sees it", mayShowHomeKey({ isNew: false, older: 3, fromDashboard: true }));
+
+// ── a trade word from the homeowner's words (lib/tradeGuess, 2026-10-14)
+check("kitchen words read as a kitchen remodel", guessTrade("I want to remodel my 12x14 kitchen with white shaker cabinets") === "Kitchen remodel");
+check("a leaking roof reads as roofing, a bathroom as a bathroom remodel", guessTrade("My roof is 15 years old and leaking around the chimney") === "Roofing" && guessTrade("Hall bathroom: walk-in shower instead of the tub") === "Bathroom remodel");
+check("epoxy beats flooring, gutters beat roofing, a deck is a deck", guessTrade("epoxy my garage floor") === "Epoxy floor" && guessTrade("new gutters on the roof line") === "Gutters" && guessTrade("rebuild the back deck") === "Deck");
+check("heat pump → HVAC, water heater → Plumbing, repaint → Painting", guessTrade("replace the furnace with a heat pump") === "HVAC" && guessTrade("the water heater is leaking") === "Plumbing" && guessTrade("repaint the living room") === "Painting");
+check("nothing to go on → null, never a made-up word", guessTrade("") === null && guessTrade("something for the house") === null);
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

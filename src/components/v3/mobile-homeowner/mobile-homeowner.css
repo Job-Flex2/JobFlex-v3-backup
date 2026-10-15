@@ -904,16 +904,23 @@ body:has(.jf-mobile-homeowner)::before { content: none; }
 .jf-mobile-homeowner .restart:active { color: var(--ink); border-color: var(--ink); }
 /* The status page link — the one way back to the request besides the email. */
 .jf-mobile-homeowner .done-link {
-  margin-top: calc(12px * var(--s));
+  margin-top: calc(16px * var(--s));
   display: inline-flex;
   align-items: center;
-  min-height: calc(44px * var(--s));
-  padding: 0 calc(8px * var(--s));
-  font-size: calc(14px * var(--s));
+  justify-content: center;
+  gap: calc(9px * var(--s));
+  min-height: calc(48px * var(--s));
+  padding: 0 calc(20px * var(--s));
+  border: var(--border);
+  border-radius: var(--radius);
+  background: var(--blueprint);
+  color: #fff;
+  font-size: calc(12.5px * var(--s));
   font-weight: 800;
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: calc(3px * var(--s)) calc(3px * var(--s)) 0 var(--ink);
 }
 
 /* ── category picker: a bottom sheet, not a dropdown ──────────────────────

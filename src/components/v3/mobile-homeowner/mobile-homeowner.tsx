@@ -555,10 +555,10 @@ export function MobileHomeowner({ prefill = null }: { prefill?: WizardPrefill | 
       <section className="cta">
         <div className="cta-in">
           <p className={rv.cls("ctaQ", "cta-q")} ref={rv.ref("ctaQ")}>
-            Learned enough about the Homeowner Portal?
+            Ready when you are.
           </p>
           <p className={rv.cls("ctaA", "cta-a")} ref={rv.ref("ctaA")}>
-            Now get your job noticed by contractors.
+            Describe your project in a minute — a local pro takes it from there, and your home dashboard comes with it.
           </p>
           <a className={rv.cls("ctaBtn", "cta-btn")} ref={rv.ref("ctaBtn")} href="#jfmh-top">
             Describe your project

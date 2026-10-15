@@ -1,0 +1,5 @@
+/* The phone's way back to the home dashboard (home-back-link.tsx, 2026-10-14): a slim paper bar above the
+   handheld proposal, in its drafting cream, with a 44px tap target. */
+.bar { padding: 4px 16px 0; background: #f2f0eb; }
+.link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 700; color: #0a0a0a;
+  text-decoration: underline; text-underline-offset: 3px; }

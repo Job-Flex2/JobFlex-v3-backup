@@ -44,8 +44,8 @@ const STATUS: Record<RequestPortalView["status2"], { label: string; tone: Tone }
   DONE: { label: "Done", tone: "emerald" },
 };
 const STAGE_WORD: Record<ProposalStage, string> = { NEW: "New", OPENED: "Opened", ACCEPTED: "Accepted", DECLINED: "Declined", PAID: "Paid", COMPLETED: "Completed" };
-const NEED_WORD: Record<HomeNeed["kind"], string> = { proposal: "Review", pay: "Pay", change: "Approve", visit: "Details", review: "Review", plan: "Submit", files: "Add photos" };
-const NEED_PHRASE: Record<HomeNeed["kind"], string> = { proposal: "a proposal to review", pay: "a payment due", change: "a change to approve", visit: "a visit coming up", review: "a review to leave", plan: "a plan to submit", files: "photos to add" };
+const NEED_WORD: Record<HomeNeed["kind"], string> = { proposal: "Review", pay: "Pay", due: "Details", change: "Approve", visit: "Details", review: "Review", plan: "Submit", files: "Add photos" };
+const NEED_PHRASE: Record<HomeNeed["kind"], string> = { proposal: "a proposal to review", pay: "a payment due", due: "a payment coming up", change: "a change to approve", visit: "a visit coming up", review: "a review to leave", plan: "a plan to submit", files: "photos to add" };
 /** "a proposal to review and a visit coming up" — the welcome band's one line on what waits below. */
 function needsSummary(needs: HomeNeed[]): string {
   const kinds = [...new Set(needs.map((n) => n.kind))];
@@ -154,7 +154,7 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
                       <div className={s.rowTitle}>{n.text}</div>
                       {n.at && <div className={s.mono}><LocalTime iso={n.at} tz={h.timeZone} /></div>}
                     </div>
-                    <a className={s.btnPrimary} href={n.href}>{NEED_WORD[n.kind]}</a>
+                    <a className={n.kind === "due" ? s.btnGhost : s.btnPrimary} href={n.href}>{NEED_WORD[n.kind]}</a>
                   </div>
                 ))}
               </section>
@@ -334,7 +334,9 @@ function ProjectCard({ p, h }: { p: RequestPortalView; h: HomeDashboard }) {
             <dt>Payments</dt>
             <dd>
               {won.remaining <= 0 ? "Paid in full" : `${usd.format(won.paid)} paid · ${usd.format(won.remaining)} left`}
-              {won.nextDue && won.remaining > 0 && <> · next: {won.nextDue.label} {usd.format(won.nextDue.amount)} — <a className={s.link} href={`/portal/q/${encodeURIComponent(won.publicId)}`}>pay</a></>}
+              {won.nextDue && won.remaining > 0 && (won.payOnline
+                ? <> · next: {won.nextDue.label} {usd.format(won.nextDue.amount)} — <a className={s.link} href={`/portal/q/${encodeURIComponent(won.publicId)}`}>pay</a></>
+                : <> · next: {won.nextDue.label} {usd.format(won.nextDue.amount)} — {won.orgName} will tell you how to pay</>)}
             </dd>
           </div>
         )}
