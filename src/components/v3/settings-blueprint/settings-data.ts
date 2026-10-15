@@ -141,6 +141,9 @@ export interface RailItem {
   readonly icon: IconName;
   /** Renders the `.rail-new` NEW badge. The `.kicker` still reads `label`. */
   readonly isNew?: boolean;
+  /** One line under the pane's title saying what the pane is for (2026-10-14: Texting and the AI desk sit
+   *  one above the other in the scroll, and the owner read the team's texts as part of the desk). */
+  readonly sub?: string;
 }
 
 export const RAIL_ITEMS: readonly RailItem[] = [
@@ -151,9 +154,9 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   { key: 'notifications', label: 'Notifications', icon: 'i-bell' },
   // Texting (2026-09-27): who gets texted, your mobile, the company's
   // numbers — the owner's own place for it, the way SmartSpace Pro has one.
-  { key: 'texting', label: 'Texting', icon: 'i-phone' },
+  { key: 'texting', label: 'Texting', icon: 'i-phone', sub: 'The texts your company sends — from your own number: who on the team gets them, which clients, and texts you write yourself.' },
   // The AI desk (2026-10-13): who answers the company's number, and what the desk knows and says.
-  { key: 'desk', label: 'AI desk', icon: 'i-phone', isNew: true },
+  { key: 'desk', label: 'AI desk', icon: 'i-phone', isNew: true, sub: 'Calls to that same number, answered for you. Texts are set up under Texting — the desk does not send any.' },
 ];
 
 export const RAIL_NEW_BADGE = 'NEW' as const;
@@ -933,7 +936,7 @@ export const TEXTING_COPY = {
   rosterTitle: 'Who gets texted',
   rosterSub: 'The office, by event. A member is texted only after they verify a mobile on their own account.',
   peopleTitle: 'Your team — who gets texts',
-  peopleSub: 'Flip anyone’s texts on or off; their mobile and choices are kept. Tap the texts under a name to choose exactly what they get.',
+  peopleSub: 'Your own mobile: tap Add mobile on your row and verify it with a six-digit code. Anyone else: type their mobile in and they get a welcome text with the STOP line. Flip texts on or off per person — the mobile and the choices are kept — and tap the texts under a name to choose what they get.',
   sections: {
     office: { title: 'Office', sub: 'Owner, managers, admin and accounting — the whole company.' },
     sales: { title: 'Sales & estimators', sub: 'Their own leads, visits and deals — nobody else’s.' },
@@ -945,6 +948,8 @@ export const TEXTING_COPY = {
   cancel: 'Cancel',
   stopTexts: 'Stop texts',
   turnOn: 'Text this number',
+  theirMobile: (name: string) => `${name.split(' ')[0]}’s mobile`,
+  typedInNote: 'They get a welcome text with the STOP line the moment you save — that text is their notice.',
   all: 'All',
   none: 'None',
   byOffice: 'added by the office',
@@ -1041,7 +1046,7 @@ export const DESK_COPY = {
   stepDone: 'Done',
   stepTodo: 'To do',
   step1: 'Your numbers',
-  step1Sub: 'The number the desk answers, the phone customers already know, and who picks up.',
+  step1Sub: 'The number the desk answers, the phone customers already know, and who picks up. Texts go out from this same number — who gets them is set under Texting.',
   deskNumberTitle: 'The desk\u2019s number',
   businessTitle: 'Your business phone',
   businessSub: 'The number customers call you on today. The desk rings it when a caller asks for a person — or first, if you choose "ring my phone first".',

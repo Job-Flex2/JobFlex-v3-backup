@@ -180,3 +180,7 @@
 }
 /* A switch on its own in a card keeps its own width. */
 .root.inline { justify-items: start; gap: 8px; }
+
+/* The consent under your own mobile, and the note under a typed-in one (2026-10-14). */
+.consent { grid-column: 1 / -1; margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted, #555); }
+.consent a { color: var(--blueprint, #1854a0); }

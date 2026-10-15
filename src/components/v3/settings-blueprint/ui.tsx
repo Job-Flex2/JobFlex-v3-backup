@@ -344,6 +344,11 @@ const AUTOSAVE_MS = 900;
  *  fall back to a generic line for anything unrecognisable. */
 export function actionError(err: unknown): string {
   const msg = err instanceof Error ? err.message.trim() : "";
+  // The action never answered as one — the sign-in redirected it (a run-out session) or a deploy landed in
+  // between. A production build words this "Minified React error #441" (the owner's screenshot, 2026-10-14).
+  if (/unexpected response|server components render|minified react error|next_redirect/i.test(msg)) {
+    return "JobFlex couldn't reach your sign-in. Refresh the page — sign in again if it asks — then try once more. Nothing was changed.";
+  }
   if (!msg || msg.toLowerCase().includes("fetch failed")) {
     return "Something went wrong. Check your connection and try again.";
   }

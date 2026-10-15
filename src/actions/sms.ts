@@ -11,7 +11,7 @@
 import { createHash, randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { UnauthorizedError, requireManager, requireRouteAccess } from "@/lib/orgContext";
+import { requireManager, requireRouteAccess } from "@/lib/orgContext";
 import { isUsCanadaNumber, toE164 } from "@/lib/phone";
 import { PLAN_NEEDED_MESSAGE, planOpen } from "@/lib/paidCaps";
 import { enforceRateLimit, HOUR, RateLimitError } from "@/lib/rateLimit";
@@ -23,6 +23,7 @@ import { refreshRegistration, releaseRegistration, submitRegistration } from "@/
 import type { SmsRegistrationDetails } from "@/lib/sms/registrationShared";
 import { SMS_GROUPS, audienceForRole, parseNotificationPrefs, textEventsFor, type PrefCells, type PrefKey, type SmsGroupKey } from "@/lib/notificationPrefsShared";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
+import { guardSms, type SmsActionResult } from "@/lib/sms/actionGuard";
 
 const OFFICE_ROLES = ["OWNER", "ADMIN", "MANAGER"];
 
@@ -33,7 +34,7 @@ const MAX_EXTRA_NUMBERS = 10;
 /** In PhoneVerification.codeHash: Twilio Verify holds this code (lib/sms/verify). */
 const VERIFY_HELD = "verify";
 
-export type SmsActionResult = { ok: true; note?: string } | { ok: false; error: string };
+export type { SmsActionResult } from "@/lib/sms/actionGuard";
 
 function hashCode(code: string, userId: string): string {
   return createHash("sha256").update(`${code}:${userId}`).digest("hex");
@@ -46,15 +47,10 @@ function pretty(e164: string): string {
 }
 
 /** Step one: text a code to the number the member typed. */
-export async function startPhoneVerification(raw: string): Promise<SmsActionResult> {
-  let user: { id: string };
-  let organizationId: string;
-  try {
-    ({ user, organizationId } = await requireRouteAccess("/dashboard/settings"));
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return { ok: false, error: "Phone texts are set up in Settings, which your role doesn't open." };
-    throw err;
-  }
+async function startPhoneVerificationInner(raw: string): Promise<SmsActionResult> {
+  // A thrown guard (a run-out session, a limited role) is answered in words by
+  // guardSms below — it used to blame the role for every one of them (2026-10-14).
+  const { user, organizationId } = await requireRouteAccess("/dashboard/settings");
   // A verification text is a paid Twilio call (2026-10-12, money audit
   // P0-8): a US or Canadian number only — never another country's, nor a
   // Caribbean +1 — and only for a company that holds an open plan.
@@ -89,7 +85,7 @@ export async function startPhoneVerification(raw: string): Promise<SmsActionResu
 }
 
 /** Step two: the code came back — the number is verified, and that is the opt-in. */
-export async function confirmPhoneVerification(rawCode: string): Promise<SmsActionResult> {
+async function confirmPhoneVerificationInner(rawCode: string): Promise<SmsActionResult> {
   const { user } = await requireRouteAccess("/dashboard/settings");
   const code = (rawCode ?? "").replace(/\D/g, "");
   if (code.length !== 6) return { ok: false, error: "Enter the six digits from the text." };
@@ -124,7 +120,7 @@ export async function confirmPhoneVerification(rawCode: string): Promise<SmsActi
 }
 
 /** Drop the mobile: no more texts to this member. */
-export async function removeSmsPhone(): Promise<SmsActionResult> {
+async function removeSmsPhoneInner(): Promise<SmsActionResult> {
   const { user } = await requireRouteAccess("/dashboard/settings");
   await db.user.update({ where: { id: user.id }, data: { smsPhone: null, smsVerifiedAt: null } });
   await db.phoneVerification.deleteMany({ where: { userId: user.id } });
@@ -133,7 +129,7 @@ export async function removeSmsPhone(): Promise<SmsActionResult> {
 }
 
 /** An extra office number — the dispatcher, the spouse who runs the books. */
-export async function addNotificationPhone(input: { name: string; phone: string }): Promise<SmsActionResult> {
+async function addNotificationPhoneInner(input: { name: string; phone: string }): Promise<SmsActionResult> {
   const { organizationId } = await requireManager();
   const name = (input.name ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
   const phone = toE164(input.phone);
@@ -150,7 +146,7 @@ export async function addNotificationPhone(input: { name: string; phone: string 
   return { ok: true, note: r.ok && r.status === "SENT" ? `${name} added and welcomed by text.` : `${name} added.` };
 }
 
-export async function setNotificationPhoneActive(id: string, active: boolean): Promise<SmsActionResult> {
+async function setNotificationPhoneActiveInner(id: string, active: boolean): Promise<SmsActionResult> {
   const { organizationId } = await requireManager();
   const row = await db.notificationPhone.findFirst({ where: { id, organizationId }, select: { id: true } });
   if (!row) return { ok: false, error: "Not found." };
@@ -159,7 +155,7 @@ export async function setNotificationPhoneActive(id: string, active: boolean): P
   return { ok: true };
 }
 
-export async function removeNotificationPhone(id: string): Promise<SmsActionResult> {
+async function removeNotificationPhoneInner(id: string): Promise<SmsActionResult> {
   const { organizationId } = await requireManager();
   const row = await db.notificationPhone.findFirst({ where: { id, organizationId }, select: { id: true } });
   if (!row) return { ok: false, error: "Not found." };
@@ -169,7 +165,7 @@ export async function removeNotificationPhone(id: string): Promise<SmsActionResu
 }
 
 /** "Send me a test text" — to the member's own verified mobile. */
-export async function sendTestText(): Promise<SmsActionResult> {
+async function sendTestTextInner(): Promise<SmsActionResult> {
   const { organizationId, user } = await requireRouteAccess("/dashboard/settings");
   const me = await db.user.findUnique({ where: { id: user.id }, select: { smsPhone: true, smsVerifiedAt: true } });
   if (!me?.smsPhone || !me.smsVerifiedAt) return { ok: false, error: "Verify a mobile first." };
@@ -181,7 +177,7 @@ export async function sendTestText(): Promise<SmsActionResult> {
 }
 
 /** Client-facing texts on/off: the proposal link when sent, a reminder the evening before a visit. */
-export async function setClientTextsOn(on: boolean): Promise<SmsActionResult> {
+async function setClientTextsOnInner(on: boolean): Promise<SmsActionResult> {
   const { organizationId } = await requireManager();
   await db.organization.update({ where: { id: organizationId }, data: { smsClientsOn: on } });
   revalidatePath(SETTINGS_PATH);
@@ -194,7 +190,7 @@ export async function setClientTextsOn(on: boolean): Promise<SmsActionResult> {
  * company's name. Paid plans only; JobFlex pays for it. It starts sending once
  * Twilio approves the business.
  */
-export async function submitSmsRegistration(details: SmsRegistrationDetails): Promise<SmsActionResult> {
+async function submitSmsRegistrationInner(details: SmsRegistrationDetails): Promise<SmsActionResult> {
   const { organizationId, user } = await requireManager();
   const r = await submitRegistration(organizationId, user.id, details);
   revalidatePath(SETTINGS_PATH);
@@ -208,7 +204,7 @@ export async function submitSmsRegistration(details: SmsRegistrationDetails): Pr
  * Only the one key changes in the stored leads settings; turning it on sends
  * the confirmation with the STOP and HELP words.
  */
-export async function setLeadTexts(on: boolean): Promise<SmsActionResult> {
+async function setLeadTextsInner(on: boolean): Promise<SmsActionResult> {
   const { organizationId, user } = await requireManager();
   const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true, phone: true, leadsSettingsJson: true } });
   if (!org) return { ok: false, error: "Not found." };
@@ -229,7 +225,7 @@ export async function setLeadTexts(on: boolean): Promise<SmsActionResult> {
 }
 
 /** Ask Twilio now instead of waiting for the hourly check. */
-export async function checkSmsRegistration(): Promise<SmsActionResult> {
+async function checkSmsRegistrationInner(): Promise<SmsActionResult> {
   const { organizationId } = await requireManager();
   const s = await refreshRegistration(organizationId, true);
   revalidatePath(SETTINGS_PATH);
@@ -238,7 +234,7 @@ export async function checkSmsRegistration(): Promise<SmsActionResult> {
   return { ok: true, note: "Still with Twilio. It usually answers within a few days." };
 }
 
-export async function releaseSmsNumber(): Promise<SmsActionResult> {
+async function releaseSmsNumberInner(): Promise<SmsActionResult> {
   const { organizationId, user } = await requireManager();
   const r = await releaseRegistration(organizationId, user.id);
   revalidatePath(SETTINGS_PATH);
@@ -253,7 +249,7 @@ export async function releaseSmsNumber(): Promise<SmsActionResult> {
  * `textOffice` already reads, so nothing else changes. Only office members
  * are on the roster: the office is who the texts are for.
  */
-export async function setMemberTextGroups(userId: string, groups: Partial<Record<SmsGroupKey, boolean>>): Promise<SmsActionResult> {
+async function setMemberTextGroupsInner(userId: string, groups: Partial<Record<SmsGroupKey, boolean>>): Promise<SmsActionResult> {
   const { organizationId } = await requireManager();
   const m = await db.membership.findUnique({
     where: { userId_organizationId: { userId, organizationId } },
@@ -302,7 +298,7 @@ async function memberFor(organizationId: string, userId: string) {
   return { role: m.role, audience, user: m.user, workerId: worker?.id ?? null, texted };
 }
 
-export async function setMemberMobile(userId: string, raw: string): Promise<SmsActionResult> {
+async function setMemberMobileInner(userId: string, raw: string): Promise<SmsActionResult> {
   const { organizationId, user: me } = await requireManager();
   const m = await memberFor(organizationId, userId);
   if (!m) return { ok: false, error: "Only the office, sales and crew can be texted." };
@@ -326,7 +322,7 @@ export async function setMemberMobile(userId: string, raw: string): Promise<SmsA
   return { ok: true, note: r.ok && r.status === "SENT" ? `Saved — ${name} got a welcome text with the STOP line.` : `Saved for ${name}.` };
 }
 
-export async function clearMemberMobile(userId: string): Promise<SmsActionResult> {
+async function clearMemberMobileInner(userId: string): Promise<SmsActionResult> {
   const { organizationId, user: me } = await requireManager();
   const m = await memberFor(organizationId, userId);
   if (!m) return { ok: false, error: "Not on the team." };
@@ -345,7 +341,7 @@ export async function clearMemberMobile(userId: string): Promise<SmsActionResult
  * worker profile too, which every crew text reads); on picks up where it was. The first time a crew number is
  * switched on it gets the welcome text with the STOP line, as a typed-in number does.
  */
-export async function setMemberTextsOn(userId: string, on: boolean): Promise<SmsActionResult> {
+async function setMemberTextsOnInner(userId: string, on: boolean): Promise<SmsActionResult> {
   const { organizationId, user: me } = await requireManager();
   const m = await memberFor(organizationId, userId);
   if (!m) return { ok: false, error: "Only the office, sales and crew can be texted." };
@@ -378,7 +374,7 @@ export async function setMemberTextsOn(userId: string, on: boolean): Promise<Sms
 }
 
 /** One member's Text switches — only the events their roster shows. */
-export async function setMemberTextEvents(userId: string, cells: Partial<Record<string, boolean>>): Promise<SmsActionResult> {
+async function setMemberTextEventsInner(userId: string, cells: Partial<Record<string, boolean>>): Promise<SmsActionResult> {
   const { organizationId } = await requireManager();
   const m = await memberFor(organizationId, userId);
   if (!m) return { ok: false, error: "Only the office, sales and crew can be texted." };
@@ -398,3 +394,88 @@ export async function setMemberTextEvents(userId: string, cells: Partial<Record<
   return { ok: true, note: m.texted ? "Saved." : "Saved — add their mobile and these start going out." };
 }
 
+
+/** startPhoneVerification, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function startPhoneVerification(raw: string): Promise<SmsActionResult> {
+  return guardSms(() => startPhoneVerificationInner(raw));
+}
+
+/** confirmPhoneVerification, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function confirmPhoneVerification(rawCode: string): Promise<SmsActionResult> {
+  return guardSms(() => confirmPhoneVerificationInner(rawCode));
+}
+
+/** removeSmsPhone, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function removeSmsPhone(): Promise<SmsActionResult> {
+  return guardSms(() => removeSmsPhoneInner());
+}
+
+/** addNotificationPhone, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function addNotificationPhone(input: { name: string; phone: string }): Promise<SmsActionResult> {
+  return guardSms(() => addNotificationPhoneInner(input));
+}
+
+/** setNotificationPhoneActive, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function setNotificationPhoneActive(id: string, active: boolean): Promise<SmsActionResult> {
+  return guardSms(() => setNotificationPhoneActiveInner(id, active));
+}
+
+/** removeNotificationPhone, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function removeNotificationPhone(id: string): Promise<SmsActionResult> {
+  return guardSms(() => removeNotificationPhoneInner(id));
+}
+
+/** sendTestText, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function sendTestText(): Promise<SmsActionResult> {
+  return guardSms(() => sendTestTextInner());
+}
+
+/** setClientTextsOn, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function setClientTextsOn(on: boolean): Promise<SmsActionResult> {
+  return guardSms(() => setClientTextsOnInner(on));
+}
+
+/** submitSmsRegistration, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function submitSmsRegistration(details: SmsRegistrationDetails): Promise<SmsActionResult> {
+  return guardSms(() => submitSmsRegistrationInner(details));
+}
+
+/** setLeadTexts, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function setLeadTexts(on: boolean): Promise<SmsActionResult> {
+  return guardSms(() => setLeadTextsInner(on));
+}
+
+/** checkSmsRegistration, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function checkSmsRegistration(): Promise<SmsActionResult> {
+  return guardSms(() => checkSmsRegistrationInner());
+}
+
+/** releaseSmsNumber, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function releaseSmsNumber(): Promise<SmsActionResult> {
+  return guardSms(() => releaseSmsNumberInner());
+}
+
+/** setMemberTextGroups, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function setMemberTextGroups(userId: string, groups: Partial<Record<SmsGroupKey, boolean>>): Promise<SmsActionResult> {
+  return guardSms(() => setMemberTextGroupsInner(userId, groups));
+}
+
+/** setMemberMobile, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function setMemberMobile(userId: string, raw: string): Promise<SmsActionResult> {
+  return guardSms(() => setMemberMobileInner(userId, raw));
+}
+
+/** clearMemberMobile, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function clearMemberMobile(userId: string): Promise<SmsActionResult> {
+  return guardSms(() => clearMemberMobileInner(userId));
+}
+
+/** setMemberTextsOn, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function setMemberTextsOn(userId: string, on: boolean): Promise<SmsActionResult> {
+  return guardSms(() => setMemberTextsOnInner(userId, on));
+}
+
+/** setMemberTextEvents, answered in words whatever its guards throw (lib/sms/actionGuard). */
+export async function setMemberTextEvents(userId: string, cells: Partial<Record<string, boolean>>): Promise<SmsActionResult> {
+  return guardSms(() => setMemberTextEventsInner(userId, cells));
+}
