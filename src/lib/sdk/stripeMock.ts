@@ -327,6 +327,9 @@ export function mockStripeClient(file: string): Stripe {
       if (status && status !== "all") rows = rows.filter((r) => r.status === status);
       else if (!status) rows = rows.filter((r) => r.status !== "canceled");
       rows.sort((a, b) => b.created - a.created);
+      // Pages, as Stripe does: `starting_after` an id, newest first.
+      const after = params?.starting_after as string | undefined;
+      if (after) rows = rows.slice(rows.findIndex((r) => r.id === after) + 1);
       const limit = Number(params?.limit ?? 10);
       const data = rows.slice(0, limit).map((r) => expandCustomer(s, r, params?.expand as string[] | undefined));
       return { object: "list", data, has_more: rows.length > limit, url: "/v1/subscriptions" };
@@ -425,7 +428,11 @@ export function mockStripeClient(file: string): Stripe {
       if (params?.customer) rows = rows.filter((r) => r.customer === params.customer);
       if (params?.subscription) rows = rows.filter((r) => r.subscription === params.subscription);
       if (params?.status) rows = rows.filter((r) => r.status === params.status);
+      const created = params?.created as { gte?: number } | undefined;
+      if (typeof created?.gte === "number") rows = rows.filter((r) => r.created >= created.gte!);
       rows.sort((a, b) => b.created - a.created);
+      const after = params?.starting_after as string | undefined;
+      if (after) rows = rows.slice(rows.findIndex((r) => r.id === after) + 1);
       const limit = Number(params?.limit ?? 10);
       return { object: "list", data: rows.slice(0, limit), has_more: rows.length > limit, url: "/v1/invoices" };
     },
