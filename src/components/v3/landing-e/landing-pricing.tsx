@@ -3,7 +3,6 @@ import { PricingPlans } from "./pricing-plans";
 import { Reveal } from "./reveal";
 import { REGISTER } from "./routes";
 import "./pricing-faq.css";
-import { TrialLine } from "./trial-line";
 import { CustomPlanBlock } from "@/components/v3/pricing-d/custom-plan-block";
 import type { SpotlightTool } from "@/lib/planSpotlight";
 
@@ -21,7 +20,6 @@ import type { SpotlightTool } from "@/lib/planSpotlight";
 export function LandingPricing({
   plans,
   registerHref = REGISTER,
-  requiresCard = true,
   customOffered = false,
   spotlight = null,
 }: {
@@ -33,8 +31,6 @@ export function LandingPricing({
   customOffered?: boolean;
   registerHref?: string;
   cta?: string;
-  /** signupTrialMode (lib/trialPolicyServer): the words of the trial's badge under the title. */
-  requiresCard?: boolean;
 }) {
   const sellable = plans.filter((p) => !p.isFree);
   if (!sellable.length) return null;
@@ -46,7 +42,6 @@ export function LandingPricing({
           <h2 className="lp-sec-title lp-sec-title--on-ink">Subscription plans</h2>
           {/* U+2011 non-breaking hyphens: the line never breaks at "per-/seat" or "add-/ons". */}
           <p className="lp-sec-lede lp-sec-lede--on-ink">Flat monthly price · no per‑seat add‑ons</p>
-          <TrialLine tone="dark" className="mt-6" href={registerHref} spot="pricing" requiresCard={requiresCard} />
         </Reveal>
 
         <Reveal delay={120} className="mt-9 sm:mt-11">

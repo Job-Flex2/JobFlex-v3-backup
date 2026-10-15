@@ -175,7 +175,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const order = landingSectionOrder(variant);
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
-    hero: <Hero trialDays={offer.days} variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} fbclid={fbclid} requiresCard={requiresCard} inAppBrowser={inAppBrowser} priceLine={priceLine} />,
+    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={priceLine} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
@@ -196,9 +196,9 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     integrations: <div className="lp-cv lp-cv--integrations"><Integrations registerHref={register} /></div>,
     stats: <div className="lp-cv lp-cv--stats"><StatsSection rows={g?.stats} /></div>,
     built: <div className="lp-cv lp-cv--built"><BuiltSection jobs={g?.jobs} phoneJobs={g?.phoneJobs} /></div>,
-    pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} requiresCard={requiresCard} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
+    pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
     faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={low} requiresCard={requiresCard} /></div>,
-    final: <CtaFooter registerHref={register} cta={low} requiresCard={requiresCard} />,
+    final: <CtaFooter registerHref={register} cta={low} />,
   };
   return (
     <TrialOfferProvider offer={offer}>
@@ -207,7 +207,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
       <main>
         {order.map((key) => (blocks[key] ? <Fragment key={key}>{blocks[key]}</Fragment> : null))}
       </main>
-      <MobileCta registerHref={register} cta={top} requiresCard={requiresCard} />
+      <MobileCta registerHref={register} cta={top} />
       <ScrollFx />
       {/* Mouse-wheel notches glide, 0.7× the browser's step — on a desk only
           (hover, fine pointer, wider than 768px); phones, tablets and touch

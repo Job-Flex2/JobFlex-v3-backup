@@ -9,17 +9,15 @@ import { TrialOfferProvider } from "@/components/providers/trial-offer";
 import type { Metadata } from "next";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
 import { PricingPage } from "@/components/v3/pricing-d/pricing-page";
-import { signupTrialMode } from "@/lib/trialPolicyServer";
 import { customPlanOffered } from "@/lib/customPlanFlag";
 import { cookies } from "next/headers";
 import { INDUSTRY_COOKIE, resolveLandingVariant } from "@/components/v3/landing-e/landing-variants";
 import { SPOTLIGHT_COOKIE, spotlightFor } from "@/lib/planSpotlight";
 
 // RENDERED PER REQUEST (owner, 2026-10-07). It used to be ISR (an hour), so
-// the server-side flags it reads — CUSTOM_PLAN_ENABLED (lib/customPlanFlag)
-// and the trial's card (lib/trialPolicyServer signupTrialMode) — were baked into the prerender
-// at build time and showed whatever the environment said THEN until the page
-// regenerated. The landing, which shows the same plans and flags, has always
+// the server-side flag it reads — CUSTOM_PLAN_ENABLED (lib/customPlanFlag) —
+// was baked into the prerender at build time and showed whatever the
+// environment said THEN until the page regenerated. The landing, which shows the same plans and flags, has always
 // been dynamic; this page now matches it.
 export const dynamic = "force-dynamic";
 
@@ -45,7 +43,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     <PricingPage
       plans={plans}
       spotlight={spotlight}
-      requiresCard={(await signupTrialMode()) === "card"}
       customOffered={customPlanOffered()}
     />
     </TrialOfferProvider>

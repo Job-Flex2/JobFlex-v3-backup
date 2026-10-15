@@ -24,7 +24,6 @@ import { Reveal } from "@/components/v3/landing-e/reveal";
 import { REGISTER } from "@/components/v3/landing-e/routes";
 import { PricingPlans } from "@/components/v3/landing-e/pricing-plans";
 import type { SpotlightTool } from "@/lib/planSpotlight";
-import { TrialLine } from "@/components/v3/landing-e/trial-line";
 import { PricingVisit } from "./pricing-visit";
 import { CustomPlanBlock } from "./custom-plan-block";
 import type { PlanDTO } from "@/lib/planCatalog";
@@ -33,7 +32,6 @@ import "./pricing.css";
 
 export function PricingPage({
   plans,
-  requiresCard = true,
   customOffered = false,
   spotlight = null,
 }: {
@@ -41,8 +39,6 @@ export function PricingPage({
   customOffered?: boolean;
   /** The tool the visitor came for (lib/planSpotlight), marked on every card. */
   spotlight?: SpotlightTool | null;
-  /** signupTrialMode (lib/trialPolicyServer): the words of the trial's badge. */
-  requiresCard?: boolean;
   plans: PlanDTO[];
 }) {
   // A $0 tier is what happens when somebody skips, not something to sell here.
@@ -61,7 +57,6 @@ export function PricingPage({
               <h1 className="mt-6 max-w-[22ch] text-[clamp(38px,5.4vw,72px)] font-bold leading-[1.04] tracking-[-0.03em]">
                 Pay for the shop you run.
               </h1>
-              <TrialLine className="mt-6" href={REGISTER} spot="pricing-page" requiresCard={requiresCard} />
               <p className="mt-6 max-w-[52ch] text-[16px] leading-[1.65] text-slate-500 sm:text-[17px]">
                 Every plan carries unlimited clients and the client portal. Move up, move down, or
                 build your own from the pages you actually open. No setup fee, cancel whenever.
@@ -97,7 +92,7 @@ export function PricingPage({
           </section>
         ) : null}
 
-        <CtaFooter requiresCard={requiresCard} />
+        <CtaFooter />
       </main>
       <PricingVisit />
     </div>

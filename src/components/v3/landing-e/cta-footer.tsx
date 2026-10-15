@@ -1,6 +1,5 @@
 import { TrialStartLabel } from "@/components/providers/trial-offer";
 import { CookieSettingsLink, DoNotSellLink } from "@/components/consent/cookie-settings-link";
-import { TrialLine } from "./trial-line";
 import { Logo } from "./logo";
 import { REGISTER } from "./routes";
 import { Reveal } from "./reveal";
@@ -19,10 +18,7 @@ const LINK = "inline-flex min-h-[44px] items-center transition-colors hover:text
 export function CtaFooter({
   registerHref = REGISTER,
   cta,
-  requiresCard = true,
 }: {
-  /** signupTrialMode (lib/trialPolicyServer): the words of the trial's badge under the heading. */
-  requiresCard?: boolean;
   registerHref?: string;
   /** A trade variant's primary CTA words; the default page keeps its own. */
   cta?: string;
@@ -42,7 +38,6 @@ export function CtaFooter({
           <p className="mt-3 text-[clamp(30px,4vw,56px)] font-bold leading-[1.1] tracking-[-0.02em] text-lp-sky">
             Today, it&rsquo;s your turn.
           </p>
-          <TrialLine tone="dark" className="mt-8" href={registerHref} spot="final" requiresCard={requiresCard} />
           {/* One button, both viewports (owner, 2026-08-25). The white mobile
               variant and the blue one were rendering together — `.jf-lp
               .lp-btn-lime` sets display and outranks Tailwind's `hidden` — and
