@@ -17,6 +17,7 @@
    asks (trimmed, lower-cased; phone as digits with the country code). */
 
 import { createHash } from "node:crypto";
+import { isQaEmail } from "@/lib/qaEmail";
 
 const GRAPH_VERSION = "v21.0";
 
@@ -107,6 +108,8 @@ export function buildMetaPayload(e: MetaEvent): Record<string, unknown> {
  *  the event. The callers run it inside `after()` or an awaited webhook, so
  *  the request is not cut off with the response. */
 export async function sendMetaEvent(e: MetaEvent): Promise<boolean> {
+  // The QA Lab's own accounts (@qa.jobflex.test, lib/qaTestMode) never reach Meta.
+  if (isQaEmail(e.user?.email)) return false;
   // Read here, at send time, on the server: the token never reaches a bundle.
   const pixel = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
   const token = process.env.META_CAPI_ACCESS_TOKEN?.trim();

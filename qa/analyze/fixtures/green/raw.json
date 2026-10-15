@@ -1,0 +1,700 @@
+{
+ "schema": "jobflex-qa-raw/1",
+ "run": {
+  "id": "2026-10-14T20-00-00",
+  "startedAt": "2026-10-14T20:00:00.000Z",
+  "finishedAt": "2026-10-14T20:10:00.000Z",
+  "durationMs": 600000,
+  "baseUrl": "http://localhost:3005",
+  "target": "local",
+  "suites": [
+   "all"
+  ],
+  "grep": null,
+  "projects": [
+   "chromium",
+   "webkit"
+  ],
+  "git": {
+   "commit": "fixture",
+   "branch": "main",
+   "dirty": false
+  },
+  "playwright": "1.64.1",
+  "node": "v24",
+  "status": "passed",
+  "setup": [
+   {
+    "role": "owner",
+    "ok": true,
+    "note": "fixture"
+   }
+  ],
+  "notes": []
+ },
+ "stats": {
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "skipped": 0,
+  "flaky": 0,
+  "bySuite": {
+   "smoke": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "pages": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "roles": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "logic": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   }
+  }
+ },
+ "tests": [
+  {
+   "id": "fixture-001",
+   "titlePath": [
+    "chromium",
+    "qa/tests/smoke/smoke.spec.ts",
+    "/ opens @smoke"
+   ],
+   "line": 11,
+   "project": "chromium",
+   "tags": [
+    "@smoke"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:02.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008002300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "route": "/",
+    "role": "guest"
+   },
+   "title": "/ opens @smoke",
+   "suite": "smoke",
+   "file": "qa/tests/smoke/smoke.spec.ts"
+  },
+  {
+   "id": "fixture-002",
+   "titlePath": [
+    "chromium",
+    "qa/tests/smoke/smoke.spec.ts",
+    "/pricing opens @smoke"
+   ],
+   "line": 12,
+   "project": "chromium",
+   "tags": [
+    "@smoke"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:04.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008004300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "route": "/pricing",
+    "role": "guest"
+   },
+   "title": "/pricing opens @smoke",
+   "suite": "smoke",
+   "file": "qa/tests/smoke/smoke.spec.ts"
+  },
+  {
+   "id": "fixture-003",
+   "titlePath": [
+    "chromium",
+    "qa/tests/smoke/smoke.spec.ts",
+    "/auth/login opens @smoke"
+   ],
+   "line": 13,
+   "project": "chromium",
+   "tags": [
+    "@smoke"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:06.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008006300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "route": "/auth/login",
+    "role": "guest"
+   },
+   "title": "/auth/login opens @smoke",
+   "suite": "smoke",
+   "file": "qa/tests/smoke/smoke.spec.ts"
+  },
+  {
+   "id": "fixture-004",
+   "titlePath": [
+    "chromium",
+    "qa/tests/smoke/smoke.spec.ts",
+    "/auth/register opens @smoke"
+   ],
+   "line": 14,
+   "project": "chromium",
+   "tags": [
+    "@smoke"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:08.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008008300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "route": "/auth/register",
+    "role": "guest"
+   },
+   "title": "/auth/register opens @smoke",
+   "suite": "smoke",
+   "file": "qa/tests/smoke/smoke.spec.ts"
+  },
+  {
+   "id": "fixture-005",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard as owner @pages"
+   ],
+   "line": 15,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:10.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008010300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard",
+    "role": "owner",
+    "coldMs": 2100,
+    "warmMs": 900,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-006",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/proposals as owner @pages"
+   ],
+   "line": 16,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:12.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008012300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/proposals",
+    "role": "owner",
+    "coldMs": 2100,
+    "warmMs": 900,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/proposals as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-007",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/projects as owner @pages"
+   ],
+   "line": 17,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:14.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008014300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/projects",
+    "role": "owner",
+    "coldMs": 2100,
+    "warmMs": 900,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/projects as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-008",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/financials as owner @pages"
+   ],
+   "line": 18,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:16.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008016300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/financials",
+    "role": "owner",
+    "coldMs": 2100,
+    "warmMs": 900,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/financials as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-009",
+   "titlePath": [
+    "chromium",
+    "qa/tests/roles/access.spec.ts",
+    "access /dashboard @roles"
+   ],
+   "line": 19,
+   "project": "chromium",
+   "tags": [
+    "@roles"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:18.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008018300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "access",
+    "route": "/dashboard",
+    "cells": {
+     "guest": "login",
+     "owner": "open"
+    },
+    "expected": {
+     "guest": "login",
+     "owner": "open"
+    },
+    "review": []
+   },
+   "title": "access /dashboard @roles",
+   "suite": "roles",
+   "file": "qa/tests/roles/access.spec.ts"
+  },
+  {
+   "id": "fixture-010",
+   "titlePath": [
+    "chromium",
+    "qa/tests/legacy.spec.ts",
+    "legacy logic/deck-engine.check.ts @logic @legacy"
+   ],
+   "line": 20,
+   "project": "chromium",
+   "tags": [
+    "@logic"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:20.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008020300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "legacy logic/deck-engine.check.ts @logic @legacy",
+   "suite": "logic",
+   "file": "qa/tests/legacy.spec.ts"
+  }
+ ]
+}

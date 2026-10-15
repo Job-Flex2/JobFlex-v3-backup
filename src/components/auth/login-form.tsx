@@ -30,6 +30,7 @@ import { HandoffHelp, useBrowserHandoff } from "@/components/auth/open-in-browse
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
 import { resendOtpCode, startOtpLogin, verifyOtpCode } from "@/actions/signupOtp";
 import { rememberOtpDraft } from "@/lib/signupMode";
+import { markQaVisitor } from "@/lib/qaEmail";
 import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/otp-code-field";
 import s from "./login-form.module.css";
 
@@ -163,6 +164,7 @@ export function LoginForm({
     setBusy(true);
     setErr(null);
     try {
+      markQaVisitor(email); // a QA Lab address: no analytics from this browser (lib/qaEmail)
       const res = await signIn("credentials", { email, password, redirect: false });
       if (!res) {
         setErr("The sign-in service did not answer. Try again in a minute.");
@@ -204,6 +206,7 @@ export function LoginForm({
     bridgeRef.current?.focus({ preventScroll: true });
     const backToEmail = () => document.getElementById("loginEmail")?.focus({ preventScroll: true });
     try {
+      markQaVisitor(em);
       const res = await startOtpLogin({ email: em });
       if (!res.ok) {
         setErr(res.error);

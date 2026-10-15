@@ -21,6 +21,7 @@
    as well; the server prefers the request's cookies and falls back to these. */
 
 import { effectiveConsent } from "@/lib/consent";
+import { isQaVisitor, markQaVisitor } from "@/lib/qaEmail";
 import { isMetaPixelConfigured, loadMetaPixel, metaTrack, metaTrackCustom, newEventId, readMetaCookies } from "@/lib/metaPixel";
 
 const FBP_WAIT_MS = 2500;
@@ -29,7 +30,7 @@ export type MetaPairEvent = "ViewContent" | "Lead";
 export type MetaCustomEvent = "EstimatorDemoStep" | "EstimatorDemoTier";
 
 function allowed(): boolean {
-  if (!isMetaPixelConfigured() || !effectiveConsent().marketing) return false;
+  if (!isMetaPixelConfigured() || !effectiveConsent().marketing || isQaVisitor()) return false;
   // An event fired from a page's first effect runs before the provider's
   // (children first); the load is idempotent, so the event finds its pixel.
   loadMetaPixel();
@@ -43,6 +44,7 @@ export function metaTrackWithServer(
   params: { content_name?: string },
   extra: { email?: string } = {},
 ): boolean {
+  markQaVisitor(extra.email); // a QA Lab address (lib/qaEmail): this event and every later one stay home
   if (!allowed()) return false;
   const eventId = newEventId();
   metaTrack(event, params, eventId);

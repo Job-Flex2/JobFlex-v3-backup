@@ -55,6 +55,7 @@ import {
 } from "@/actions/signupOtp";
 import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/otp-code-field";
 import css from "./passwordless.module.css";
+import { markQaVisitor } from "@/lib/qaEmail";
 
 type Screen = "form" | "code" | "google" | "done";
 const STORE_KEY = "jf_otp_signup";
@@ -387,6 +388,7 @@ export function PasswordlessStep({
     bridgeRef.current?.focus({ preventScroll: true });
     const backToEmail = () => document.getElementById("email")?.focus({ preventScroll: true });
     try {
+      markQaVisitor(em); // a QA Lab address: no analytics from this browser (lib/qaEmail)
       const res = await startOtpSignup({
         name: n,
         email: em,

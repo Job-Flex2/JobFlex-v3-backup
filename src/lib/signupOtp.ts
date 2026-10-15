@@ -47,6 +47,7 @@ import type { MetaSignupContext } from "@/lib/metaCapi";
 import type { TradeType } from "@/lib/tradeTypes";
 import type { PendingRecord } from "@/actions/signupCheckout";
 import { pendingSignupAlive } from "@/lib/pendingSignup";
+import { keepQaCode, qaCaptures } from "@/lib/qaTestMode";
 
 export const OTP_MINUTES = 10;
 const CODE_TTL_MS = OTP_MINUTES * 60_000;
@@ -176,6 +177,13 @@ export async function sendCode(
   };
   await saveDraft(token, next);
   await db.syncState.upsert({ where: { key: linkKey(linkHash) }, update: { cursor: token }, create: { key: linkKey(linkHash), cursor: token } });
+
+  // QA Lab test mode (lib/qaTestMode): a @qa.jobflex.test address gets no
+  // email — the code (and the button's link) is kept for GET /api/qa/otp.
+  if (qaCaptures(d.email)) {
+    await keepQaCode({ email: d.email, kind: d.kind, code: next.noAccount ? null : code, link: next.noAccount ? null : `/auth/register/code?k=${secret}`, draft: token, at: now });
+    return { ok: true, ...draftClock(next) };
+  }
 
   const base = (await appBaseUrl()).replace(/\/$/, "");
   const doc = next.noAccount

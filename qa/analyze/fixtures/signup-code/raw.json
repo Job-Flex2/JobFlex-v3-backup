@@ -1,0 +1,501 @@
+{
+ "schema": "jobflex-qa-raw/1",
+ "run": {
+  "id": "2026-10-14T20-10-00",
+  "startedAt": "2026-10-14T20:00:00.000Z",
+  "finishedAt": "2026-10-14T20:10:00.000Z",
+  "durationMs": 600000,
+  "baseUrl": "http://localhost:3005",
+  "target": "local",
+  "suites": [
+   "all"
+  ],
+  "grep": null,
+  "projects": [
+   "chromium",
+   "webkit"
+  ],
+  "git": {
+   "commit": "fixture",
+   "branch": "main",
+   "dirty": false
+  },
+  "playwright": "1.64.1",
+  "node": "v24",
+  "status": "failed",
+  "setup": [
+   {
+    "role": "owner",
+    "ok": true,
+    "note": "fixture"
+   }
+  ],
+  "notes": []
+ },
+ "stats": {
+  "total": 6,
+  "passed": 3,
+  "failed": 3,
+  "skipped": 0,
+  "flaky": 0,
+  "bySuite": {
+   "signup": {
+    "total": 5,
+    "passed": 2,
+    "failed": 3,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "smoke": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   }
+  }
+ },
+ "tests": [
+  {
+   "id": "fixture-001",
+   "titlePath": [
+    "chromium",
+    "qa/tests/signup/signup.spec.ts",
+    "code → plan step: the address is proven and the intent kept @signup @webkit"
+   ],
+   "line": 11,
+   "project": "chromium",
+   "tags": [
+    "@signup"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:02.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: expect(locator).toBeVisible() failed\nLocator: locator('section.plan-sheet.is-in')\nExpected: visible\nTimeout: 60000ms",
+     "stack": "Error: Error: expect(locator).toBeVisible() failed\nLocator: locator('section.plan-sheet.is-in')\nExpected: visible\nTimeout: 60000ms\n    at qa/lib/signup.ts:37:9",
+     "location": {
+      "file": "qa/lib/signup.ts",
+      "line": 37,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "name and email",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 3000
+    },
+    {
+     "title": "the emailed code",
+     "category": "test.step",
+     "startMs": 3000,
+     "durationMs": 61000,
+     "error": "expect(locator).toBeVisible() failed"
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008005100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/auth/register?flow=otp",
+      "step": "the emailed code"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008005000,
+      "status": 500,
+      "method": "POST",
+      "url": "http://localhost:3005/auth/register?flow=otp",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/auth/register?flow=otp&d=•••",
+      "body": "Internal Server Error",
+      "step": "the emailed code"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008002300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "code → plan step: the address is proven and the intent kept @signup @webkit",
+   "suite": "signup",
+   "file": "qa/tests/signup/signup.spec.ts"
+  },
+  {
+   "id": "fixture-002",
+   "titlePath": [
+    "chromium",
+    "qa/tests/signup/signup.spec.ts",
+    "code → plan step: the address is proven and the intent kept @signup @webkit"
+   ],
+   "line": 12,
+   "project": "webkit",
+   "tags": [
+    "@signup"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:04.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: expect(locator).toBeVisible() failed\nLocator: locator('section.plan-sheet.is-in')\nExpected: visible\nTimeout: 60000ms",
+     "stack": "Error: Error: expect(locator).toBeVisible() failed\nLocator: locator('section.plan-sheet.is-in')\nExpected: visible\nTimeout: 60000ms\n    at qa/lib/signup.ts:37:9",
+     "location": {
+      "file": "qa/lib/signup.ts",
+      "line": 37,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "name and email",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 3000
+    },
+    {
+     "title": "the emailed code",
+     "category": "test.step",
+     "startMs": 3000,
+     "durationMs": 61000,
+     "error": "expect(locator).toBeVisible() failed"
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008005100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/auth/register?flow=otp",
+      "step": "the emailed code"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008005000,
+      "status": 500,
+      "method": "POST",
+      "url": "http://localhost:3005/auth/register?flow=otp",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/auth/register?flow=otp&d=•••",
+      "body": "Internal Server Error",
+      "step": "the emailed code"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008004300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "code → plan step: the address is proven and the intent kept @signup @webkit",
+   "suite": "signup",
+   "file": "qa/tests/signup/signup.spec.ts"
+  },
+  {
+   "id": "fixture-003",
+   "titlePath": [
+    "chromium",
+    "qa/tests/signup/signup.spec.ts",
+    "plan → test card 4242 → dashboard: company, owner seat and trial are right @signup @writes"
+   ],
+   "line": 13,
+   "project": "chromium",
+   "tags": [
+    "@signup"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:06.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: expect(locator).toBeVisible() failed\nLocator: locator('section.plan-sheet.is-in')\nExpected: visible\nTimeout: 60000ms",
+     "stack": "Error: Error: expect(locator).toBeVisible() failed\nLocator: locator('section.plan-sheet.is-in')\nExpected: visible\nTimeout: 60000ms\n    at qa/lib/signup.ts:37:9",
+     "location": {
+      "file": "qa/lib/signup.ts",
+      "line": 37,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "name and email",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 3000
+    },
+    {
+     "title": "the emailed code",
+     "category": "test.step",
+     "startMs": 3000,
+     "durationMs": 61000,
+     "error": "expect(locator).toBeVisible() failed"
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008005100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/auth/register?flow=otp",
+      "step": "the emailed code"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008005000,
+      "status": 500,
+      "method": "POST",
+      "url": "http://localhost:3005/auth/register?flow=otp",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/auth/register?flow=otp&d=•••",
+      "body": "Internal Server Error",
+      "step": "the emailed code"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008006300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "plan → test card 4242 → dashboard: company, owner seat and trial are right @signup @writes",
+   "suite": "signup",
+   "file": "qa/tests/signup/signup.spec.ts"
+  },
+  {
+   "id": "fixture-004",
+   "titlePath": [
+    "chromium",
+    "qa/tests/signup/signup.spec.ts",
+    "a wrong code is refused and says how many tries are left @signup"
+   ],
+   "line": 14,
+   "project": "chromium",
+   "tags": [
+    "@signup"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:08.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008008300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "a wrong code is refused and says how many tries are left @signup",
+   "suite": "signup",
+   "file": "qa/tests/signup/signup.spec.ts"
+  },
+  {
+   "id": "fixture-005",
+   "titlePath": [
+    "chromium",
+    "qa/tests/signup/signup.spec.ts",
+    "Google is offered on sign-up and sign-in, and goes to Google @signup"
+   ],
+   "line": 15,
+   "project": "chromium",
+   "tags": [
+    "@signup"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:10.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008010300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "Google is offered on sign-up and sign-in, and goes to Google @signup",
+   "suite": "signup",
+   "file": "qa/tests/signup/signup.spec.ts"
+  },
+  {
+   "id": "fixture-006",
+   "titlePath": [
+    "chromium",
+    "qa/tests/smoke/smoke.spec.ts",
+    "home page opens with its headline @smoke @webkit"
+   ],
+   "line": 16,
+   "project": "chromium",
+   "tags": [
+    "@smoke"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:12.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008012300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "home page opens with its headline @smoke @webkit",
+   "suite": "smoke",
+   "file": "qa/tests/smoke/smoke.spec.ts"
+  }
+ ]
+}

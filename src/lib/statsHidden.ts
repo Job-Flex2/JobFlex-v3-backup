@@ -10,6 +10,7 @@ import "server-only";
 // Kept as ONE SyncState row (`statsHidden`, a JSON list) — no table, no
 // column, nothing to push to production by hand.
 import { db } from "@/lib/db";
+import { qaOrgIds } from "@/lib/qaTestMode";
 
 export const STATS_HIDDEN_KEY = "statsHidden";
 export type StatsHiddenEntry = { orgId: string; at: string; by: string | null };
@@ -24,8 +25,12 @@ export async function readStatsHidden(): Promise<StatsHiddenEntry[]> {
   }
 }
 
+/** Every organisation the statistics leave out: the ones an admin hid, and the
+ *  QA Lab's own accounts (@qa.jobflex.test, lib/qaTestMode — never counted,
+ *  never listed, with no switch to show them). */
 export async function statsHiddenIds(): Promise<string[]> {
-  return (await readStatsHidden()).map((e) => e.orgId);
+  const [hidden, qa] = await Promise.all([readStatsHidden(), qaOrgIds()]);
+  return [...new Set([...hidden.map((e) => e.orgId), ...qa])];
 }
 
 /** Hide or show one account. Returns the list as it now stands. */

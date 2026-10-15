@@ -1,0 +1,85 @@
+# QA Lab settings. Everything a run or the analysis reads that is not a secret lives here.
+# Secrets (QA_SECRET, QA_PASS_<ROLE>, ANTHROPIC_API_KEY) come from .env.local / .env only.
+
+# The server under test when QA_BASE_URL is not set: the first of these ports on localhost that
+# answers as JobFlex (bin/qa.ts checks /auth/login for the product name).
+devPorts: [3005, 3000, 3001, 3002, 3003, 3004, 3006, 3007, 3008, 3009, 3010]
+
+# Hosts that are production. Any other host that is not this machine or the LAN is treated as
+# production too unless QA_TARGET_ENV=preview is set (lib/target.ts).
+productionHosts: [jobflex.app, www.jobflex.app]
+
+# Suites that may run against production. The rest are refused by code (lib/target.ts).
+productionSuites: [smoke, pages, perf]
+
+thresholds:
+  # A page counts as slow past this (navigation start → load event), per viewport.
+  # A dev server compiles a route on its first hit; the first visit of a route gets compileGraceMs on top.
+  pageLoadMs: 8000
+  compileGraceMs: 45000
+  # A request that is still open at the end of a test, or took longer than this, is reported.
+  slowRequestMs: 10000
+  hungRequestMs: 20000
+
+viewports:
+  phone: { width: 390, height: 844 }
+  desk: { width: 1440, height: 900 }
+
+visual:
+  # pixelmatch colour threshold (0…1) and the share of changed pixels that fails a page.
+  pixelThreshold: 0.12
+  maxDiffRatio: 0.003
+  # Animated or data-driven parts hidden before the shot (CSS selectors).
+  hide: ["[data-qa-volatile]", ".cookie-banner", "[data-consent]", "time", "[data-live-clock]"]
+
+perf:
+  # Lighthouse runs (mobile + desktop) on these.
+  pages:
+    - { path: "/", role: guest }
+    - { path: "/auth/register", role: guest }
+    - { path: "/auth/login", role: guest }
+    - { path: "/dashboard", role: owner }
+    - { path: "/dashboard/proposals", role: owner }
+    - { path: "/dashboard/projects", role: owner }
+    - { path: "/dashboard/financials", role: owner }
+  # Scores (0…100) under these are findings.
+  minScores: { performance: 50, accessibility: 85, "best-practices": 80 }
+  # axe-core impacts reported by the pages suite.
+  axeImpacts: [critical, serious]
+
+# Third-party traffic answered with 204 in every test: analytics and ads never see a QA run.
+blockThirdParty:
+  - "posthog"
+  - "facebook\\.(com|net)"
+  - "connect\\.facebook"
+  - "googletagmanager"
+  - "google-analytics"
+  - "doubleclick"
+  - "clarity\\.ms"
+  - "hotjar"
+
+# Console lines that are not defects (regex, case-insensitive). Keep this list short and explain each.
+ignoreConsole:
+  - "Download the React DevTools"            # dev build hint
+  - "\\[Fast Refresh\\]"                      # dev build hot reload
+  - "\\[HMR\\]"                               # dev build hot reload
+  - "^\\[Report Only\\]"                      # report-only CSP blocks nothing
+  - "delivered in report-only mode"
+
+analysis:
+  # Dollars per run. Past it the analysis stops calling the model and writes what it has.
+  budgetUsd: 1.50
+  # Cheap model: grouping and the words for people. Strong model: finding the code, unclear diffs.
+  cheapModel: claude-haiku-5-5
+  strongModel: claude-opus-5-5
+  # $ per million tokens (input, output) — used for the cost line in the report.
+  pricing:
+    claude-haiku-5-5: { input: 0.10, output: 0.50 }
+    claude-sonnet-5-5: { input: 2.00, output: 10.00 }
+    claude-opus-5-5: { input: 4.00, output: 20.00 }
+  # A finding seen in this many runs in a row is marked stale ("застарелое").
+  staleAfterRuns: 3
+  # At most this many findings get a strong-model localisation per run (P0 first).
+  maxLocalize: 12
+  # At most this many visual pairs go to the model per run.
+  maxVisualReviews: 20

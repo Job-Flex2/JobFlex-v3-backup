@@ -3,6 +3,7 @@
 import type { PostHog } from "posthog-js";
 import { TRAFFIC_EVENTS } from "./traffic-contract";
 import { effectiveConsent } from "./consent";
+import { isQaVisitor } from "./qaEmail";
 
 /* posthog-js is NOT imported here (landing-e pass C, 2026-09-11): it is a
    259 KB script, and a static import from this module put it in every page
@@ -51,6 +52,7 @@ function deliver(item: Queued) {
   if (!process.env.NEXT_PUBLIC_POSTHOG_KEY || typeof window === "undefined") return;
   if (!available || !client) { if (queued.length < 30) queued.push(item); return; }
   if (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) return;
+  if (isQaVisitor()) return; // the QA Lab's own browsers (lib/qaEmail)
   try {
     if (item.event === "$exception" && item.error) { client.captureException(item.error, item.properties); return; }
     client.capture(item.event, { ...item.properties, $pathname: window.location.pathname }, { transport: "sendBeacon", send_instantly: true });
@@ -92,7 +94,7 @@ function distinctId(): string {
 function flushByBeacon() {
   if (!KEY || available || !queued.length || typeof navigator === "undefined" || !navigator.sendBeacon) return;
   const path = window.location.pathname;
-  if (path === "/admin" || path.startsWith("/admin/")) { queued.length = 0; return; }
+  if (path === "/admin" || path.startsWith("/admin/") || isQaVisitor()) { queued.length = 0; return; }
   const id = distinctId();
   const now = new Date().toISOString();
   const batch = queued.splice(0).map((q) => ({

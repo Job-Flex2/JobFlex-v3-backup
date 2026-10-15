@@ -16,6 +16,13 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
+    "qa": "tsx qa/bin/qa.ts",
+    "qa:smoke": "tsx qa/bin/qa.ts --suite smoke",
+    "qa:analyze": "tsx qa/bin/analyze.ts",
+    "qa:accept": "tsx qa/bin/accept.ts",
+    "qa:selftest": "tsx qa/bin/selftest.ts",
+    "qa:seed-roles": "tsx qa/bin/seed-roles.ts",
+    "qa:install": "npm --prefix qa install && npm --prefix qa exec -- playwright install chromium webkit",
     "postinstall": "prisma generate"
   },
   "prisma": {

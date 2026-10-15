@@ -5,6 +5,7 @@ import type { PostHog } from "posthog-js";
 import { trafficReady } from "@/lib/traffic-client";
 import { effectiveConsent, onConsent, readConsent } from "@/lib/consent";
 import { TRAFFIC_EXPERIMENTS_ACTIVE } from "@/lib/traffic-experiments";
+import { isQaVisitor } from "@/lib/qaEmail";
 
 const KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
@@ -42,6 +43,8 @@ function loadPostHog(): Promise<PostHog | null> {
         session_recording: { maskAllInputs: true, maskTextSelector: "[data-ph-mask]" },
         before_send: (event) => {
           if (!event || internal(window.location.pathname)) return null;
+          // A browser that typed a QA Lab address (@qa.jobflex.test) sends nothing (lib/qaEmail).
+          if (isQaVisitor()) return null;
           // Opt-in countries with no choice yet send nothing (lib/consent).
           if (!effectiveConsent().analytics) return null;
           scrubUrls(event.properties);

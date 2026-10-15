@@ -1,4 +1,5 @@
 "use client";
+import { isQaVisitor } from "@/lib/qaEmail";
 
 /* Meta Pixel, browser half (2026-09-09). Loads ONLY after marketing consent
    (lib/consent) and only when NEXT_PUBLIC_META_PIXEL_ID is set; without the
@@ -79,7 +80,7 @@ export function isMetaPixelLoaded(): boolean {
 }
 
 export function metaTrack(event: string, params: Record<string, string | number> = {}, eventId?: string): void {
-  if (!isMetaPixelLoaded()) return;
+  if (!isMetaPixelLoaded() || isQaVisitor()) return; // QA Lab browsers send nothing (lib/qaEmail)
   try {
     window.fbq!("track", event, params, eventId ? { eventID: eventId } : undefined);
   } catch {
@@ -90,7 +91,7 @@ export function metaTrack(event: string, params: Record<string, string | number>
 /** A custom event (fbq trackCustom) — ours, not one of Meta's standard names.
  *  Browser only: there is no server copy to deduplicate against. */
 export function metaTrackCustom(event: string, params: Record<string, string | number> = {}): void {
-  if (!isMetaPixelLoaded()) return;
+  if (!isMetaPixelLoaded() || isQaVisitor()) return; // QA Lab browsers send nothing (lib/qaEmail)
   try {
     window.fbq!("trackCustom", event, params);
   } catch {
@@ -104,7 +105,7 @@ export function metaTrackCustom(event: string, params: Record<string, string | n
  *  PageView, then sent with an `industry` parameter, as a custom event
  *  (2026-09-30). */
 export function metaPageView(): void {
-  if (!isMetaPixelLoaded()) return;
+  if (!isMetaPixelLoaded() || isQaVisitor()) return; // QA Lab browsers send nothing (lib/qaEmail)
   try {
     window.fbq!("track", "PageView");
   } catch {

@@ -92,6 +92,7 @@ import {
 } from "@/lib/customPlan";
 import styles from "./auth-register.module.css";
 import { ProductMark } from "@/components/brand/ProductMark";
+import { markQaVisitor } from "@/lib/qaEmail";
 
 /* A PHONE (≤768px) — the plan step's cards are a two-column grid there
    (auth-register.module.css); a few behaviours follow the width too. A media
@@ -1335,6 +1336,7 @@ export function RegisterContent({
         return;
       }
       setDoneNote(biz.trim() + " is ready to send its first proposal.");
+      markQaVisitor(email); // a QA Lab address: no analytics from this browser (lib/qaEmail)
       const res = await startPendingSignup({
         analytics: trafficIdentity(),
         displayedTrialDays: offer.days,

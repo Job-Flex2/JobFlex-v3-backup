@@ -1,0 +1,11 @@
+{
+ "failedTests": 3,
+ "findings": [
+  {
+   "kind": "api-error",
+   "severity": "P0",
+   "tests": 3,
+   "signature": "api 500 POST /auth/register"
+  }
+ ]
+}

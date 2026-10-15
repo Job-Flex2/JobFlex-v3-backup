@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { IntegrationDisabledError } from "./base";
 import { isSmtpEnabled, sendViaSmtp } from "./smtp";
 import { withEmailRetry, recipientLabel } from "./emailRetry";
+import { isQaEmail } from "@/lib/qaEmail";
 
 let client: Resend | null = null;
 
@@ -62,6 +63,14 @@ export async function sendEmail(opts: {
   /** Extra headers, e.g. List-Unsubscribe (lib/adminMail/optout). */
   headers?: Record<string, string>;
 }) {
+  // QA Lab test mode (lib/qaTestMode, 2026-10-14): nothing is sent to the
+  // automated checks' @qa.jobflex.test addresses. Same gate as qaTestModeOn,
+  // read here without the database so this module stays importable anywhere.
+  const recipients = Array.isArray(opts.to) ? opts.to : [opts.to];
+  if (process.env.QA_TEST_MODE === "1" && !!process.env.QA_SECRET && process.env.VERCEL_ENV !== "production" && recipients.length > 0 && recipients.every((r) => isQaEmail(r))) {
+    return { id: "qa-test-mode:skipped", skipped: true as const };
+  }
+
   // Dev preview: when DEV_EMAIL_OVERRIDE is set, redirect every email to that one
   // inbox so you can see the design without a verified domain (Resend's test
   // sender only delivers to your own address). The original recipient is shown

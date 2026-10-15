@@ -1,0 +1,1678 @@
+# ROLE × PAGE — what each role is expected to get on each page (qa/lib/matrix.ts).
+#   open · login · forbidden · not-found · redirect:<path> · error:<status>; alternatives with |
+# Generated from the app's behaviour by `npm run qa -- --suite roles --update-matrix`.
+# `review` lists the cells that need a person's decision; write the decision in `why`
+# (a `why` not starting with "auto:" is kept on the next update) and remove `review`.
+version: 1
+generated: 2026-10-15
+roles:
+  - guest
+  - owner
+  - manager
+  - worker
+  - admin
+  - homeowner
+routes:
+  /:
+    guest: open
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard
+    admin: redirect:/dashboard
+    homeowner: open
+  /about:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /admin:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/ab-testing:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/activity:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/announcements:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/campaigns:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/health:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/influencers:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/integrations:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/integrations/twilio:
+    guest: login
+    owner: error:500
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+    review:
+      - owner
+    why: "auto: owner: the server fails (error:500)"
+  /admin/investors:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/lead-center:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/lead-center/alerts:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/login:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+    review:
+      - guest
+      - homeowner
+    why: "auto: guest: opens a signed-in area without a session; homeowner: opens a signed-in area without a session"
+  /admin/office:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/payouts:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/plans:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/prompts:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/referrals:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/revenue:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/specialties:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/subscribers:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/support:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/tasks:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/traffic:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/traffic/signups:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/trials:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /admin/users:
+    guest: login
+    owner: login
+    manager: login
+    worker: login
+    admin: open
+    homeowner: login
+  /auth/forgot:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /auth/invite/[token]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found
+  /auth/login:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /auth/register:
+    guest: open
+    owner: redirect:/dashboard
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /auth/register/code:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /auth/register/confirm:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /auth/reset:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /book/[slug]:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /book/[slug]/privacy:
+    guest: not-found
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /book/[slug]/texting:
+    guest: not-found
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /book/manage/[token]:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /co/[token]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found
+  /dashboard:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/advanced-ai:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/advanced-ai/fence:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/advanced-ai/fence/studio:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/advanced-ai/roof:
+    guest: redirect:/dashboard/roof-estimator
+    owner: redirect:/dashboard/roof-estimator
+    manager: redirect:/dashboard/roof-estimator
+    worker: redirect:/dashboard/roof-estimator
+    admin: redirect:/dashboard/roof-estimator
+    homeowner: redirect:/dashboard/roof-estimator
+  /dashboard/beige:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/blueprint-estimator:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/booking:
+    guest: login
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/calendar:
+    guest: login
+    owner: open
+    manager: open
+    worker: open
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/client-detail:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/clients:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/clients/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/company:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/company/activity:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/company/subscription:
+    guest: login
+    owner: redirect:/dashboard/subscription
+    manager: redirect:/dashboard/subscription
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/subscription
+    homeowner: login
+  /dashboard/company/team:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - manager
+      - admin
+    why: "auto: manager: billing / team page open to a non-owner; admin: a platform admin with no company opens the dashboard"
+  /dashboard/crm:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/crm/customers:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/crm/queue:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/crm/workflows:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/deck-estimator:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/deck-estimator/inventory:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/estimators/manual:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/fence-estimator:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/fence-estimator/inventory:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/financials:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/financials/change-orders:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/financials/expenses:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/financials/invoices:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hire:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/hire/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hire/applications:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hire/contracts:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hire/hub:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hire/job-posts:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hire/new:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hire/talent:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hvac-estimator:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/hvac-estimator/catalog:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: error:500
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: the server fails (error:500)"
+  /dashboard/hvac-estimator/inventory:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/inventory:
+    guest: login
+    owner: redirect:/dashboard/roof-estimator/inventory
+    manager: redirect:/dashboard/roof-estimator/inventory
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/jobs:
+    guest: login
+    owner: open
+    manager: open
+    worker: open
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/jobs/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/jobs/new:
+    guest: login
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/leads:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/leads/[id]:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/leads/kanban:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/manual-blueprint:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/manual-cards:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/manual-focus:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/manual-lines:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/manual-quiet:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/manual-sheet:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/manual-steps:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/messages:
+    guest: login
+    owner: open
+    manager: open
+    worker: open
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/phone:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/projects:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/projects/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/projects/new:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/proposals:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/proposals/[id]:
+    guest: login
+    owner: redirect:/dashboard/manual-blueprint
+    manager: redirect:/dashboard/manual-blueprint
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/manual-blueprint
+    homeowner: login
+  /dashboard/proposals/ai:
+    guest: login
+    owner: redirect:/dashboard/advanced-ai
+    manager: redirect:/dashboard/advanced-ai
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/advanced-ai
+    homeowner: login
+  /dashboard/proposals/ai/build:
+    guest: login
+    owner: redirect:/dashboard/advanced-ai
+    manager: redirect:/dashboard/advanced-ai
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/advanced-ai
+    homeowner: login
+  /dashboard/proposals/create:
+    guest: login
+    owner: redirect:/dashboard/manual-blueprint
+    manager: redirect:/dashboard/manual-blueprint
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/manual-blueprint
+    homeowner: login
+  /dashboard/proposals/new:
+    guest: login
+    owner: redirect:/dashboard/manual-blueprint
+    manager: redirect:/dashboard/manual-blueprint
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/manual-blueprint
+    homeowner: login
+  /dashboard/referrals:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/reports:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/reviews:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/roof-estimator:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/roof-estimator/card-preview:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/roof-estimator/inventory:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/service-plans:
+    guest: login
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/settings:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/settings/account:
+    guest: login
+    owner: redirect:/dashboard/settings
+    manager: redirect:/dashboard/settings
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/settings
+    homeowner: login
+  /dashboard/settings/ai:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/settings/billing:
+    guest: login
+    owner: redirect:/dashboard/settings
+    manager: redirect:/dashboard/settings
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/settings
+    homeowner: login
+  /dashboard/settings/company:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/settings/email:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/settings/gmail:
+    guest: login
+    owner: redirect:/dashboard/settings
+    manager: redirect:/dashboard/settings
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/settings
+    homeowner: login
+  /dashboard/settings/leads:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/settings/meta:
+    guest: login
+    owner: redirect:/dashboard/settings
+    manager: redirect:/dashboard/settings
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/settings
+    homeowner: login
+  /dashboard/settings/payment:
+    guest: login
+    owner: redirect:/dashboard/settings
+    manager: redirect:/dashboard/settings
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/settings
+    homeowner: login
+  /dashboard/settings/preferences:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/settings/proposals:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/settings/team:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - manager
+      - admin
+    why: "auto: manager: billing / team page open to a non-owner; admin: a platform admin with no company opens the dashboard"
+  /dashboard/settings/theme:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/subscription:
+    guest: login
+    owner: open
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/subscription-blueprint:
+    guest: login
+    owner: open
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/support:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/trade:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/trade/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/trial:
+    guest: login
+    owner: redirect:/dashboard/subscription
+    manager: redirect:/dashboard/subscription
+    worker: redirect:/dashboard/jobs
+    admin: login
+    homeowner: login
+  /dashboard/upgrade:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: login
+    homeowner: login
+    review:
+      - manager
+    why: "auto: manager: billing / team page open to a non-owner"
+  /dashboard/video-estimator:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /dashboard/visits/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/workers:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /dashboard/workers/[id]:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: a platform admin with no company opens the dashboard"
+  /deck-design/[token]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found
+  /deck-materials:
+    guest: login
+    owner: redirect:/dashboard/deck-estimator
+    manager: redirect:/dashboard/deck-estimator
+    worker: redirect:/dashboard/deck-estimator
+    admin: redirect:/dashboard
+    homeowner: login
+  /deck-permit:
+    guest: login
+    owner: redirect:/dashboard/deck-estimator
+    manager: redirect:/dashboard/deck-estimator
+    worker: redirect:/dashboard/deck-estimator
+    admin: redirect:/dashboard
+    homeowner: login
+  /dev/emails:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /dev/landing-variants:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /dev/throw:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /home:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /home/[key]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found
+  /homeowner:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /influencer:
+    guest: login
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard
+    admin: redirect:/dashboard
+    homeowner: login
+  /influencer/dashboard:
+    guest: login
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard
+    admin: redirect:/dashboard
+    homeowner: login
+  /influencer/earnings:
+    guest: login
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard
+    admin: redirect:/dashboard
+    homeowner: login
+  /influencer/forgot-password:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /influencer/login:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /influencer/payouts:
+    guest: login
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard
+    admin: redirect:/dashboard
+    homeowner: login
+  /influencer/set-password:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /investors/[token]:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /landing-e:
+    guest: redirect:/
+    owner: redirect:/
+    manager: redirect:/
+    worker: redirect:/
+    admin: redirect:/
+    homeowner: redirect:/
+  /mobile-advanced-ai-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-calendar-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: open
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-clients-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-company-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-crm-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-estimator-picker-v2:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+    review:
+      - guest
+      - homeowner
+    why: "auto: guest: opens a signed-in area without a session; homeowner: opens a signed-in area without a session"
+  /mobile-fence-estimator-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-financials-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-hire-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-job-detail-v1/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-jobs-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: login
+  /mobile-leads-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-manual-builder-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-messages-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: login
+  /mobile-overhead-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-phone-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-project-detail-v2/[id]:
+    guest: login
+    owner: not-found
+    manager: not-found
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-projects-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-proposal-client-v2/[publicId]:
+    guest: not-found
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+    review:
+      - homeowner
+    why: "auto: homeowner: opens a signed-in area without a session"
+  /mobile-proposals-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-referrals-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-reports-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-reviews-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-roof-estimator-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-roof-estimator-v2/codex-compare:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-settings-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-smart-estimate-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-subscription-v2:
+    guest: login
+    owner: open
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard/jobs
+    admin: error:500
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: the server fails (error:500)"
+  /mobile-trade-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-upgrade-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: login
+    homeowner: login
+  /mobile-v1/auth/login:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+    review:
+      - guest
+      - homeowner
+    why: "auto: guest: opens a signed-in area without a session; homeowner: opens a signed-in area without a session"
+  /mobile-v1/auth/register:
+    guest: redirect:/auth/register
+    owner: redirect:/auth/register
+    manager: redirect:/auth/register
+    worker: redirect:/auth/register
+    admin: redirect:/auth/register
+    homeowner: redirect:/auth/register
+  /mobile-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /mobile-video-estimator-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /mobile-workers-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /plan/[token]:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /portal/q/[publicId]:
+    guest: not-found
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /pricing:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /privacy:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /quotes:
+    guest: login
+    owner: redirect:/dashboard/proposals
+    manager: redirect:/dashboard/proposals
+    worker: redirect:/dashboard/proposals
+    admin: redirect:/dashboard/proposals
+    homeowner: login
+  /r/[slug]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found
+  /report/[token]:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /request/[token]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found
+  /review/[token]:
+    guest: not-found
+    owner: not-found
+    manager: not-found
+    worker: not-found
+    admin: not-found
+    homeowner: not-found
+  /terms:
+    guest: open
+    owner: open
+    manager: open
+    worker: open
+    admin: open
+    homeowner: open
+  /trade-services:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: open
+    homeowner: login
+  /v3/calendar-a:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: error:500
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: the server fails (error:500)"
+  /v3/dashboard:
+    guest: login
+    owner: redirect:/dashboard
+    manager: redirect:/dashboard
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /v3/dashboard-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /v3/proposals:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: error:500
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: the server fails (error:500)"
+  /v3/proposals-blueprint:
+    guest: login
+    owner: redirect:/dashboard/proposals
+    manager: redirect:/dashboard/proposals
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard/proposals
+    homeowner: login
+  /v3/proposals-c:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: error:500
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: the server fails (error:500)"
+  /v3/proposals-v2:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /v3/proposals-v3:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+  /v3/proposals/manual-builder-a:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: error:500
+    homeowner: login
+    review:
+      - admin
+    why: "auto: admin: the server fails (error:500)"
+  /v3/workers-new:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login

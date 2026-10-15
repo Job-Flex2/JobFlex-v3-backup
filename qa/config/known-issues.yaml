@@ -1,0 +1,15 @@
+# Confirmed false positives. The analysis does not show a finding that matches an entry here;
+# it counts it on one line of the summary ("known: N") instead.
+#
+# An entry matches a finding when EVERY field given matches (regex, case-insensitive):
+#   signature — the finding's id or its signature (shown in the report under "Откуда это известно")
+#   message   — the original error text
+#   test      — a test title
+#   route     — a page path
+# Always say why it is not a defect and who confirmed it, with a date.
+#
+# - id: example-dev-hmr-socket
+#   message: "WebSocket connection to .*_next/webpack-hmr"
+#   why: "dev server hot-reload socket; production has none"
+#   confirmed: "owner, 2026-10-14"
+issues: []

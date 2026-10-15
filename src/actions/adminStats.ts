@@ -11,6 +11,7 @@
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { statsHiddenIds } from "@/lib/statsHidden";
+import { QA_EMAIL_DOMAIN } from "@/lib/qaEmail";
 import { QUOTA_KEY as PARCEL_QUOTA_KEY } from "@/lib/parcelLookup";
 import { QUOTA_ALLTIME as PARCEL_QUOTA_TOTAL } from "@/lib/reportall";
 import { getSubscribersData } from "@/actions/subscribers";
@@ -165,7 +166,8 @@ function signedUpPeopleCount(hidden: readonly string[] = []) {
   return db.user.count({
     where: {
       memberships: hidden.length ? { some: { organizationId: { notIn: [...hidden] } } } : { some: {} },
-      email: { not: { endsWith: ADMIN_EMAIL_DOMAIN } },
+      // and the QA Lab's own accounts (lib/qaTestMode)
+      AND: [{ email: { not: { endsWith: ADMIN_EMAIL_DOMAIN } } }, { email: { not: { endsWith: QA_EMAIL_DOMAIN } } }],
     },
   });
 }

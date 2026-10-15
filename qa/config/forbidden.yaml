@@ -1,0 +1,62 @@
+# Actions no QA test may perform — anywhere, in any suite, against any server.
+# lib/forbidden.ts installs these in every browser context before the first page loads:
+#   · controls — a click / Enter / Space on a match is swallowed in the page and the test fails
+#                with a "forbidden" finding (nothing happens on the page);
+#   · requests — a matching request is aborted before it leaves the browser and the test fails.
+# Test-mode Stripe Checkout (signup, billing) is allowed; a LIVE one (cs_live_) is a forbidden
+# request below — the page never loads, so no card can be typed into it.
+#
+# Inherited from scripts/qa/_world.js FORBIDDEN_CONTROLS (2026-09-21), extended 2026-10-14.
+
+controls:
+  # CSS selectors (matched on the pressed control or its ancestors)
+  selectors:
+    # deleting an account or an organisation
+    - '[data-act="delete-account"]'
+    - '[data-act="delete-org"]'
+    - '[data-act="delete-organization"]'
+    - "#deleteAccountBtn"
+    - "#deleteOrgBtn"
+    # cancelling a subscription
+    - '[data-act="cancel-subscription"]'
+    - "#cancelSubBtn"
+    - '[data-mdl-ok="cancel-plan"]'
+    # paid lookups: an EagleView order, the roof page's Instant measure and its re-measure
+    - '[data-act="ev-order"]'
+    - '[data-act="order-report"]'
+    - "#orderReportBtn"
+    - "#instantBtn"
+    - "#remeasureBtn"
+  # Regexes against the control's own visible text and aria-label (from the start, case-insensitive)
+  labels:
+    - '^(permanently )?delete (my |this |the )?(account|organi[sz]ation|workspace|company)\b'
+    - '^(yes, )?(cancel|end) (my |the )?(subscription|plan|membership)\b'
+    - '^send (the )?(e-?mail|proposal|invoice|contract|estimate|reminder|campaign|sms|text|message to (the )?(client|customer|homeowner))\b'
+    - '^(e-?mail|send|text) (it )?to (the )?(client|customer|homeowner)\b'
+    - '^save (&|and) send\b'
+    - '^(send|resend) (an? |the )?invite'
+    - '^invite\b'
+    - '^(order|buy|purchase) (a |the )?(roof |eagleview |measurement )?(report|measurement)\b'
+    - '^measure (this |the )?roof\b'
+    - '^re-?measure\b'
+    - '^(issue |send )?(a )?refund\b'
+    - '^charge (the )?(card|client|customer)\b'
+    - '^(publish|broadcast) (to )?(all|everyone|subscribers)\b'
+    - '^(call|dial) (now|the client|the customer|back)\b'
+
+requests:
+  # method + path regex (same-origin), or host regex for third parties
+  - { method: "DELETE", path: "^/api/(account|organi[sz]ation|org)(/|$)", why: "account / organisation deletion" }
+  - { method: "POST", path: "^/api/(account|organi[sz]ation)/delete", why: "account / organisation deletion" }
+  - { method: "POST", path: "^/api/billing/cancel", why: "subscription cancel" }
+  - { method: "POST", path: "^/api/(sms|twilio)(/|$)", why: "SMS to a real phone" }
+  - { method: "POST", path: "^/api/(eagleview|roof/(order|instant|measure))", why: "paid roof lookup" }
+  - { url: "^https://checkout\\.stripe\\.com/.*cs_live_", why: "a LIVE Stripe Checkout — only test mode (cs_test_) is ever opened" }
+  - { url: "^https://billing\\.stripe\\.com/p/session/live_", why: "the LIVE Stripe billing portal" }
+  - { host: "api\\.twilio\\.com", why: "SMS / calls" }
+  - { host: "api\\.eagleview\\.com", why: "paid roof lookup" }
+
+# The forms suite never presses the submit of a form whose submit control matches one of these:
+# it fills the fields, checks the field-level validation the person sees, and stops there.
+formsNoSubmit:
+  - '\b(send|resend|invite|pay|charge|refund|delete|remove|cancel|publish|email|e-mail|text|sms|call|dial|order|purchase|buy|subscribe|upgrade|checkout|transfer|payout|withdraw)\b'

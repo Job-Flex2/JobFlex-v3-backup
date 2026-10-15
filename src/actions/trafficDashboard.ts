@@ -9,6 +9,7 @@ import { parseTrafficFilters } from "@/lib/traffic-query";
 import { TRAFFIC_SINCE_MS } from "@/lib/traffic-visitor";
 import { valueSignups } from "@/lib/trialProjectionRead";
 import { countedOrgs, setStatsHidden, statsHiddenIds } from "@/lib/statsHidden";
+import { qaOrgIds } from "@/lib/qaTestMode";
 import { lapseReasons } from "@/lib/lapseReason";
 import type { SignupAttribution } from "@/lib/traffic-contract";
 import { adNameKey, adTagsOf, isMapSpan, signupLedgerSummary, signupPlanLabel, signupSource, signupState, type FreshSignup, type LiveReport, type LiveVisitor, type MapHistory, type MapSpan, type SignupLedger, type SignupRecord } from "@/lib/traffic-live";
@@ -217,8 +218,10 @@ export async function getSignupLedger(input: Record<string, unknown> = {}): Prom
   });
   // Accounts an admin took out of the statistics (lib/statsHidden): listed
   // apart under the list, in no count and no figure.
+  // The QA Lab's own accounts (lib/qaTestMode) are left out without a line here.
   const hiddenIds = new Set(await statsHiddenIds());
-  const hidden = records.filter((r) => hiddenIds.has(r.orgId));
+  const qaIds = new Set(await qaOrgIds());
+  const hidden = records.filter((r) => hiddenIds.has(r.orgId) && !qaIds.has(r.orgId));
   const counted = records.filter((r) => !hiddenIds.has(r.orgId));
   const pageCounted = page.filter((r) => !hiddenIds.has(r.id));
 

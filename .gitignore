@@ -82,3 +82,15 @@ scripts/qa/*.png
 scripts/qa/report-dl.csv
 prisma/dev.db.bak-*
 voice/test/out/
+
+# QA Lab (qa/README.md): run folders, signed-in states, baselines (size), its own installs
+qa/runs/
+qa/auth/*.json
+qa/node_modules/
+qa/baselines/
+qa/test-results/
+# run artefacts of the old page scripts (now under qa/tests); receipt.png is their 1×1 fixture
+qa/tests/**/*.png
+!qa/tests/pages/receipt.png
+qa/tests/**/*.csv
+qa/tests/_archive/roof/

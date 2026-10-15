@@ -46,6 +46,7 @@ import { mintSigninTicket } from "@/lib/signinTicket";
 import { readGoogleSignup } from "@/lib/googleSignup";
 import { settleReferralsForSignupOrg } from "@/lib/referralRewards";
 import { after } from "next/server";
+import { isQaEmail } from "@/lib/qaEmail";
 import { captureSignupOutcome, trafficIdentitySchema } from "@/lib/traffic-capture-server";
 import { sendMetaEvent, type MetaSignupContext } from "@/lib/metaCapi";
 import { metaContextFor } from "@/lib/metaSignupContext";
@@ -1041,7 +1042,8 @@ async function createAccountFromPending(
   // at the login wall with a password it typed two screens and one Stripe
   // round-trip ago.
   const ticket = await mintSigninTicket(userId);
-  if (sessionId && rec.analytics) {
+  // Not for the QA Lab's own accounts (@qa.jobflex.test, lib/qaTestMode); nor Meta below.
+  if (sessionId && rec.analytics && !isQaEmail(rec.email)) {
     after(() => captureSignupOutcome(rec.analytics, billing.flow === "cardless" && stripeSubscriptionId ? stripeSubscriptionId : sessionId, analyticsOutcome, planSlug, analyticsLive, rec.landingIndustry ?? null, rec.utm ?? null, rec.signupVariant ?? null, rec.signupMode ?? null));
   }
   // The welcome email (landing-e pass A; every signup since 2026-09-16). Sent

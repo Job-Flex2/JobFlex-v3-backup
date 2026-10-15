@@ -1,0 +1,222 @@
+# THE OLD QA SCRIPTS (scripts/qa until 2026-10-14), moved into qa/tests/<suite>/ — nothing deleted.
+# qa/tests/legacy.spec.ts runs every `live` entry as one Playwright test, tagged with its suite and
+# @legacy, so its verdict lands in raw.json beside the new suites. Classification of 2026-10-14
+# (each import, route and selector checked against src/; see the report's migration table).
+#
+#   kind    check   — tsx, no browser; exit code is the verdict (most write only throwaway orgs)
+#           node    — plain node script with its own pass/fail exit code
+#           page    — Playwright page pass against the dev server, signs in as qa@acme.test, QA Co only
+#           prod    — drives a browser over its own production build (scripts start it; minutes)
+#   status  live · dup (covered by `by`, kept in _archive) · dead (_archive) · manual (needs the
+#           network or a paid key — not run by the suite; run by hand) · tool (no assertions; qa/tools)
+#   seed    a script run `up` before and `down` after
+#   minutes the test's time limit (default 5)
+defaults: { minutes: 5 }
+scripts:
+  # ── smoke ───────────────────────────────────────────────────────────────
+  - { file: qa-guard.check.js, suite: smoke, kind: node, status: live, note: "the old harness's own safety net (local DB, QA identity, forbidden controls)" }
+
+  # ── signup ──────────────────────────────────────────────────────────────
+  - { file: signup-dropoff.check.ts, suite: signup, kind: check, status: live }
+  - { file: signup-watch.check.ts, suite: signup, kind: check, status: live }
+  - { file: signup-flow.check.ts, suite: signup, kind: prod, status: live, minutes: 25, note: "landing → register → plan → Checkout hand-off, every industry; own build on :3312" }
+  - { file: signup-otp.check.ts, suite: signup, kind: prod, status: live, minutes: 25, note: "passwordless sign-up, code squares, the return gate; own build on :3313" }
+
+  # ── billing ─────────────────────────────────────────────────────────────
+  - { file: admin-subscription.check.ts, suite: billing, kind: check, status: live, note: "fails while dev.db stripe:mode=test (its Stripe mock has no products.create) — known, 2026-10-06" }
+  - { file: editions.check.ts, suite: billing, kind: check, status: live }
+  - { file: free-plan.check.ts, suite: billing, kind: prod, status: live, minutes: 25 }
+  - { file: influencer-commission.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-dispute.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-limits.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-mail.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-payout-run.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-payout.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-promo-mode.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-transfer-reversal.check.ts, suite: billing, kind: check, status: live }
+  - { file: influencer-upgrade.check.ts, suite: billing, kind: check, status: live }
+  - { file: lapse-reason.check.ts, suite: billing, kind: check, status: live }
+  - { file: lead-purchase.check.ts, suite: billing, kind: check, status: live }
+  - { file: paid-caps.check.ts, suite: billing, kind: check, status: live }
+  - { file: plan-change.check.ts, suite: billing, kind: check, status: live }
+  - { file: plan-spotlight.check.ts, suite: billing, kind: check, status: live }
+  - { file: platform-admin-limits.check.ts, suite: billing, kind: check, status: live }
+  - { file: refund-isolation.check.ts, suite: billing, kind: check, status: live }
+  - { file: trial-board.check.ts, suite: billing, kind: check, status: live }
+  - { file: trial-caps.check.ts, suite: billing, kind: check, status: live }
+  - { file: trial-once-referral.check.ts, suite: billing, kind: check, status: live }
+  - { file: trial-projection.check.ts, suite: billing, kind: check, status: live }
+  - { file: trial-watch.check.ts, suite: billing, kind: check, status: live }
+  - { file: usage-reset.check.ts, suite: billing, kind: check, status: live }
+
+  # ── roles ───────────────────────────────────────────────────────────────
+  - { file: roles.check.ts, suite: roles, kind: check, status: live, note: "role × server action (the browser matrix is qa/tests/roles/access.spec.ts)" }
+  - { file: tenant-isolation.check.ts, suite: roles, kind: check, status: live }
+  - { file: everyday-work.check.ts, suite: roles, kind: check, status: live }
+  - { file: media-storage.check.ts, suite: roles, kind: check, status: live }
+  - { file: influencer-brakes.check.ts, suite: roles, kind: check, status: live, note: "shares qa-ses-partner@jobflex.test with -principal / -reset / -sessions: run one at a time (the legacy runner does)" }
+  - { file: influencer-invite.check.ts, suite: roles, kind: check, status: live }
+  - { file: influencer-principal.check.ts, suite: roles, kind: check, status: live }
+  - { file: influencer-reset.check.ts, suite: roles, kind: check, status: live }
+  - { file: influencer-sessions.check.ts, suite: roles, kind: check, status: live }
+
+  # ── pages (Playwright passes against the dev server) ─────────────────────
+  - { file: ann-test.js, suite: pages, kind: page, status: live }
+  - { file: fence-test.js, suite: pages, kind: page, status: live }
+  - { file: fence-tiers-test.js, suite: pages, kind: page, status: live }
+  - { file: fin-test.js, suite: pages, kind: page, status: live, note: "reads receipt.png (a 1×1 fixture) from its own folder" }
+  - { file: messages-test.js, suite: pages, kind: page, status: live }
+  - { file: phone-test.js, suite: pages, kind: page, status: live, seed: seed-phone.js }
+  - { file: ref-test.js, suite: pages, kind: page, status: live }
+  - { file: reports-test.js, suite: pages, kind: page, status: live, note: "\"sheet recomputes on switch\" fails in the first month of a quarter (Quarter = quarter-to-date) — not a regression" }
+  - { file: reviews-test.js, suite: pages, kind: page, status: live }
+  - { file: roof-test.js, suite: pages, kind: page, status: live, seed: seed-roof.js }
+  - { file: sub-test.js, suite: pages, kind: page, status: live }
+  - { file: trade-test.js, suite: pages, kind: page, status: live }
+  - { file: seed-phone.js, suite: pages, kind: seed, status: live, note: "seed for phone-test" }
+  - { file: seed-roof.js, suite: pages, kind: seed, status: live, note: "seed for roof-test" }
+
+  # ── visual ──────────────────────────────────────────────────────────────
+  - { file: mobile-sweep.check.ts, suite: visual, kind: prod, status: live, minutes: 35, note: "WebKit phone sweep; compares against QA_DEV_URL (the runner passes the dev server)" }
+  - { file: plan-terms.check.ts, suite: visual, kind: prod, status: live, minutes: 25 }
+  - { file: sidebar-motion.check.ts, suite: visual, kind: prod, status: live, minutes: 25 }
+  - { file: fixpass-smoke.js, suite: visual, kind: page, status: live }
+  - { file: deck-zfight.check.ts, suite: visual, kind: check, status: live, note: "geometry-level: no coplanar faces (3D flicker)" }
+
+  # ── logic (engines, server actions, data rules — no browser) ────────────
+  - { file: admin-mail.check.ts, suite: logic, kind: check, status: live }
+  - { file: admin-tasks.check.ts, suite: logic, kind: check, status: live }
+  - { file: ai-desk-forwarding.check.ts, suite: logic, kind: check, status: live }
+  - { file: ai-desk-minutes.check.ts, suite: logic, kind: check, status: live, note: "its cleanup (slug qa-aidesk*) also removes ai-desk-route's orgs — never run the two at once" }
+  - { file: ai-desk-overview.check.ts, suite: logic, kind: check, status: live, note: "added upstream 2026-10-14 while the move was in progress" }
+  - { file: ai-desk-presets.check.ts, suite: logic, kind: check, status: live }
+  - { file: ai-desk-profile.check.ts, suite: logic, kind: check, status: live }
+  - { file: ai-desk-route.check.ts, suite: logic, kind: check, status: live }
+  - { file: ai-desk-step4.check.ts, suite: logic, kind: check, status: live }
+  - { file: ai-desk-step5.check.ts, suite: logic, kind: check, status: live }
+  - { file: changeOrders.check.ts, suite: logic, kind: check, status: live }
+  - { file: crew-days.check.ts, suite: logic, kind: check, status: live, note: "could text through Twilio if its keys were set — the runner blanks them" }
+  - { file: crew-onsite.check.ts, suite: logic, kind: check, status: live }
+  - { file: crm-brief.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-autofix.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-brands-regional.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-client-design.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-client-flow.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-custom.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-engine.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-field-parts.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-fuzz.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-house.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-m3.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-material-list.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-permit.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-photo-fit.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-proposal-edit.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-roof-engineering.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-roof-supports.check.ts, suite: logic, kind: check, status: live, note: "passes placement \"freestanding\", no longer a Placement value (attached|beside|detached) — its free-standing cases run as an attached deck" }
+  - { file: deck-roof.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-samples.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-stairs-3d.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-state-codes.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-store-prices.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-studio-smart.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-wall-highlight.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-wall-pull.check.ts, suite: logic, kind: check, status: live }
+  - { file: deck-wall-shaping.check.ts, suite: logic, kind: check, status: live }
+  - { file: equipment-booking.check.ts, suite: logic, kind: check, status: live }
+  - { file: estimate-brief.check.ts, suite: logic, kind: check, status: live }
+  - { file: fence-3d-ground.check.ts, suite: logic, kind: check, status: live, note: "failing since before 2026-10-06 (fence engine d2578453)" }
+  - { file: fence-build.check.ts, suite: logic, kind: check, status: live }
+  - { file: fence-convert-lines.check.ts, suite: logic, kind: check, status: live }
+  - { file: fence-house.check.ts, suite: logic, kind: check, status: live }
+  - { file: fence-package.check.ts, suite: logic, kind: check, status: live }
+  - { file: fence-scene.check.ts, suite: logic, kind: check, status: live }
+  - { file: fence-terrain-check.ts, suite: logic, kind: check, status: live, note: "failing since before 2026-10-06 (valley case)" }
+  - { file: fence-topo.check.ts, suite: logic, kind: check, status: live }
+  - { file: gmail-fallback.check.ts, suite: logic, kind: check, status: live }
+  - { file: gmail-tokens.check.ts, suite: logic, kind: check, status: live }
+  - { file: home-portal.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-assessors.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-catalog-view.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-catalog.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-coolcalc.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-directory.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-engine.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-fieldspecs.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-fixes.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-intake.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-jobs.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-ledger.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-parcel.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-regrid.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-review.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-service-menu.check.ts, suite: logic, kind: check, status: live }
+  - { file: hvac-site.check.ts, suite: logic, kind: check, status: live }
+  - { file: intake-questions.check.ts, suite: logic, kind: check, status: live }
+  - { file: integration-links.check.ts, suite: logic, kind: check, status: live }
+  - { file: inventory-page.check.ts, suite: logic, kind: check, status: live }
+  - { file: inventory-presets.check.ts, suite: logic, kind: check, status: live }
+  - { file: inventory-stock-defaults.check.ts, suite: logic, kind: check, status: live }
+  - { file: inventory-trade.check.ts, suite: logic, kind: check, status: live }
+  - { file: inventory.check.ts, suite: logic, kind: check, status: live }
+  - { file: investor-gate.check.ts, suite: logic, kind: check, status: live }
+  - { file: investor-model.check.ts, suite: logic, kind: check, status: live }
+  - { file: job-money.check.ts, suite: logic, kind: check, status: live }
+  - { file: landing-ad-screen.check.ts, suite: logic, kind: check, status: live }
+  - { file: lead-reroute-test.ts, suite: logic, kind: check, status: live }
+  - { file: lead-scope.check.ts, suite: logic, kind: check, status: live }
+  - { file: likeForLike.check.ts, suite: logic, kind: check, status: live }
+  - { file: lowSlope.check.ts, suite: logic, kind: check, status: live }
+  - { file: models.check.ts, suite: logic, kind: check, status: live }
+  - { file: office-screen.check.ts, suite: logic, kind: check, status: live }
+  - { file: overpass-fallback.check.ts, suite: logic, kind: check, status: live }
+  - { file: parcels-geom-test.mjs, suite: logic, kind: node, status: live, note: "was not in run-all; added" }
+  - { file: paymentSchedule.check.ts, suite: logic, kind: check, status: live }
+  - { file: permits.check.ts, suite: logic, kind: check, status: live }
+  - { file: plans-ask.check.ts, suite: logic, kind: check, status: live }
+  - { file: plans-eagle.check.ts, suite: logic, kind: check, status: live }
+  - { file: plans-eagle.fixture.ts, suite: logic, kind: helper, status: live, note: "fixture of the plans-* checks" }
+  - { file: plans-pricing.check.ts, suite: logic, kind: check, status: live }
+  - { file: plans-read-order.check.ts, suite: logic, kind: check, status: live }
+  - { file: plans-specialties.check.ts, suite: logic, kind: check, status: live }
+  - { file: plans-takeoff.check.ts, suite: logic, kind: check, status: live }
+  - { file: portal-accept-final.check.ts, suite: logic, kind: check, status: live }
+  - { file: pricing.check.ts, suite: logic, kind: check, status: live }
+  - { file: procedures.check.ts, suite: logic, kind: check, status: live }
+  - { file: proposal-money.check.ts, suite: logic, kind: check, status: live }
+  - { file: proposal-pictures.check.ts, suite: logic, kind: check, status: live }
+  - { file: remodel-method.check.ts, suite: logic, kind: check, status: live }
+  - { file: roof-proposal-edit.check.ts, suite: logic, kind: check, status: live }
+  - { file: roof-review.check.ts, suite: logic, kind: check, status: live }
+  - { file: roofReview.check.ts, suite: logic, kind: check, status: live, note: "not a duplicate of roof-review: a different review, different fixes" }
+  - { file: service-plans.check.ts, suite: logic, kind: check, status: live }
+  - { file: sms.check.ts, suite: logic, kind: check, status: live }
+  - { file: solar-houses.check.ts, suite: logic, kind: check, status: live }
+  - { file: specialty-detect.check.ts, suite: logic, kind: check, status: live }
+  - { file: step-prices.check.ts, suite: logic, kind: check, status: live }
+  - { file: support-reply.check.ts, suite: logic, kind: check, status: live }
+  - { file: traffic-analyst.check.ts, suite: logic, kind: check, status: live }
+  - { file: traffic-live.check.ts, suite: logic, kind: check, status: live }
+  - { file: traffic-stale.check.ts, suite: logic, kind: check, status: live }
+  - { file: video-estimator.check.ts, suite: logic, kind: check, status: live, note: "added upstream 2026-10-14 while the move was in progress" }
+  - { file: worker-expenses.check.ts, suite: logic, kind: check, status: live }
+  - { file: elevation3dep.live.ts, suite: logic, kind: check, status: manual, note: "real USGS calls (free, network) — by hand" }
+  - { file: hvac-assessors.live.ts, suite: logic, kind: check, status: manual, note: "real county GIS calls (network) — by hand" }
+
+  # ── duplicates (the covering script is live; the copy is kept in _archive) ─
+  - { file: reviews-chips.js, suite: _archive, kind: page, status: dup, by: reviews-test.js, note: "its 5★ / 1★ / All chip assertions are reviews-test.js's (lines 72–84)" }
+  - { file: trade-tail.js, suite: _archive, kind: page, status: dup, by: trade-test.js, note: "closed post: badge, no Close, reply hidden, delete — trade-test.js lines 77–106" }
+  - { file: fence-remove-check.js, suite: _archive, kind: page, status: dup, by: fence-test.js, note: "\"removing a run puts the total back\" is fence-test.js's; this copy hard-codes $7,200/$4,800" }
+
+  # ── dead (a page or a function that is gone) ────────────────────────────
+  - { file: roof-builder-shot.js, suite: _archive, kind: tool, status: dead, note: "#manSquares / #manPitch / #manualBtn exist nowhere in src; the roof page no longer reads ?builder= (rebuilt data-only 2026-10-01)" }
+  - { file: package.json, suite: _archive, kind: tool, status: dead, note: "scripts/qa's own playwright install; replaced by qa/package.json" }
+
+  # ── tools (no assertions — utilities, not tests) → qa/tools/legacy ──────
+  - { file: shot.js, suite: tools, kind: tool, status: tool, note: "signs in and screenshots any routes" }
+  - { file: debug.js, suite: tools, kind: tool, status: tool, note: "prints the beige skin's CSS state on /dashboard/beige" }
+  - { file: fence-debug.js, suite: tools, kind: tool, status: tool }
+  - { file: fence-probe.js, suite: tools, kind: tool, status: tool, note: "\"Find\" on an uncached address spends one of QA Co's 30 property lookups an hour" }
+  - { file: roof-debug.js, suite: tools, kind: tool, status: tool }
+  - { file: pitch-audit.ts, suite: tools, kind: tool, status: tool, note: "reads c:/Projects/JobFlex-roofcore (this machine only); prints JSON, asserts nothing — was in run-all as a check that passes unless it throws" }
+  - { file: trade-detect-check.ts, suite: tools, kind: tool, status: tool, note: "real (paid) OpenAI calls; prints, asserts nothing" }

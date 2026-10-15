@@ -1,0 +1,97 @@
+# QA Lab — stage 2 groundwork (qa/README.md). Started by hand only (workflow_dispatch):
+# no push or pull_request trigger on purpose. Runs the selected suites against `base_url`,
+# analyses the run and uploads report.html, report.md, raw.json and analysis.json as one artifact.
+#
+# Against production only smoke, pages (guest pages) and perf can run — the code refuses the
+# rest (qa/lib/target.ts), whatever is typed here.
+#
+# Secrets (Settings → Secrets and variables → Actions), all optional:
+#   ANTHROPIC_API_KEY  the analysis' model calls (without it the report is built by the rules)
+#   QA_SECRET          the test endpoint's secret, for a preview server started with QA_TEST_MODE=1
+#   QA_PASS_OWNER / QA_PASS_MANAGER / QA_PASS_WORKER / QA_PASS_ADMIN  role passwords (non-production targets)
+name: QA Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Server under test (https://…). Production allows smoke, pages, perf only."
+        required: true
+        type: string
+      suites:
+        description: "Comma-separated suites (smoke,pages,perf,signup,billing,roles,forms,visual,logic)"
+        required: false
+        default: "smoke"
+        type: string
+      budget_usd:
+        description: "Analysis budget in dollars"
+        required: false
+        default: "1.50"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-lab
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      QA_BASE_URL: ${{ inputs.base_url }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      QA_SECRET: ${{ secrets.QA_SECRET }}
+      QA_PASS_OWNER: ${{ secrets.QA_PASS_OWNER }}
+      QA_PASS_MANAGER: ${{ secrets.QA_PASS_MANAGER }}
+      QA_PASS_WORKER: ${{ secrets.QA_PASS_WORKER }}
+      QA_PASS_ADMIN: ${{ secrets.QA_PASS_ADMIN }}
+      QA_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            qa/package-lock.json
+
+      - name: Install the app's dependencies (tsx, the Prisma client)
+        run: npm ci
+
+      - name: Install the QA Lab and its browsers
+        run: |
+          npm --prefix qa ci
+          npm --prefix qa exec -- playwright install --with-deps chromium webkit
+
+      - name: Run the suites
+        id: run
+        continue-on-error: true
+        run: npm run qa -- --suite "${{ inputs.suites }}"
+
+      - name: Analyse the run
+        if: always()
+        run: npm run qa:analyze -- --budget "${{ inputs.budget_usd }}"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-lab-report-${{ github.run_id }}
+          path: |
+            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/report.html
+            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/report.md
+            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/raw.json
+            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/analysis.json
+            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/screenshots/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail the job when the suites failed
+        if: steps.run.outcome == 'failure'
+        run: exit 1

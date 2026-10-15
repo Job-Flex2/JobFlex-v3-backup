@@ -1,0 +1,1393 @@
+{
+ "schema": "jobflex-qa-raw/1",
+ "run": {
+  "id": "2026-10-14T20-20-00",
+  "startedAt": "2026-10-14T20:00:00.000Z",
+  "finishedAt": "2026-10-14T20:10:00.000Z",
+  "durationMs": 600000,
+  "baseUrl": "http://localhost:3005",
+  "target": "local",
+  "suites": [
+   "all"
+  ],
+  "grep": null,
+  "projects": [
+   "chromium",
+   "webkit"
+  ],
+  "git": {
+   "commit": "fixture",
+   "branch": "main",
+   "dirty": false
+  },
+  "playwright": "1.64.1",
+  "node": "v24",
+  "status": "failed",
+  "setup": [
+   {
+    "role": "owner",
+    "ok": true,
+    "note": "fixture"
+   }
+  ],
+  "notes": []
+ },
+ "stats": {
+  "total": 14,
+  "passed": 2,
+  "failed": 12,
+  "skipped": 0,
+  "flaky": 0,
+  "bySuite": {
+   "pages": {
+    "total": 13,
+    "passed": 1,
+    "failed": 12,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "smoke": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   }
+  }
+ },
+ "tests": [
+  {
+   "id": "fixture-001",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard as owner @pages"
+   ],
+   "line": 11,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:02.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard",
+      "step": "open /dashboard"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008002300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard",
+    "role": "owner",
+    "path": "/dashboard",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-002",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/proposals as owner @pages"
+   ],
+   "line": 12,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:04.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/proposals",
+      "step": "open /dashboard/proposals"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/proposals",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/proposals"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008004300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/proposals",
+    "role": "owner",
+    "path": "/dashboard/proposals",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/proposals as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-003",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/projects as owner @pages"
+   ],
+   "line": 13,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:06.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/projects",
+      "step": "open /dashboard/projects"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/projects",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/projects"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008006300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/projects",
+    "role": "owner",
+    "path": "/dashboard/projects",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/projects as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-004",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/financials as owner @pages"
+   ],
+   "line": 14,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:08.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/financials",
+      "step": "open /dashboard/financials"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/financials",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/financials"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008008300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/financials",
+    "role": "owner",
+    "path": "/dashboard/financials",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/financials as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-005",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/clients as owner @pages"
+   ],
+   "line": 15,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:10.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/clients",
+      "step": "open /dashboard/clients"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/clients",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/clients"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008010300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/clients",
+    "role": "owner",
+    "path": "/dashboard/clients",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/clients as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-006",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/leads as owner @pages"
+   ],
+   "line": 16,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:12.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/leads",
+      "step": "open /dashboard/leads"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/leads",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/leads"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008012300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/leads",
+    "role": "owner",
+    "path": "/dashboard/leads",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/leads as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-007",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/jobs as owner @pages"
+   ],
+   "line": 17,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:14.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/jobs",
+      "step": "open /dashboard/jobs"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/jobs",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/jobs"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008014300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/jobs",
+    "role": "owner",
+    "path": "/dashboard/jobs",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/jobs as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-008",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/calendar as owner @pages"
+   ],
+   "line": 18,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:16.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/calendar",
+      "step": "open /dashboard/calendar"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/calendar",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/calendar"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008016300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/calendar",
+    "role": "owner",
+    "path": "/dashboard/calendar",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/calendar as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-009",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/messages as owner @pages"
+   ],
+   "line": 19,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:18.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/messages",
+      "step": "open /dashboard/messages"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/messages",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/messages"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008018300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/messages",
+    "role": "owner",
+    "path": "/dashboard/messages",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/messages as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-010",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/reports as owner @pages"
+   ],
+   "line": 20,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:20.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/reports",
+      "step": "open /dashboard/reports"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/reports",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/reports"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008020300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/reports",
+    "role": "owner",
+    "path": "/dashboard/reports",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/reports as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-011",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/reviews as owner @pages"
+   ],
+   "line": 21,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:22.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/reviews",
+      "step": "open /dashboard/reviews"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/reviews",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/reviews"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008022300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/reviews",
+    "role": "owner",
+    "path": "/dashboard/reviews",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/reviews as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-012",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/referrals as owner @pages"
+   ],
+   "line": 22,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:24.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]",
+     "stack": "Error: Error: 4xx/5xx from this server\n\nexpect(received).toEqual(expected)\n- []\n+ [\"500 GET http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip\"]\n    at qa/tests/pages/pages.spec.ts:58:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 58,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/referrals",
+      "step": "open /dashboard/referrals"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 500,
+      "method": "GET",
+      "url": "http://localhost:3005/api/notifications/summary?org=cmv5jpweq006fyu23ed0f0hip",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/referrals",
+      "body": "{\"error\":\"PrismaClientKnownRequestError: column does not exist\"}",
+      "step": "open /dashboard/referrals"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008024300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/referrals",
+    "role": "owner",
+    "path": "/dashboard/referrals",
+    "realParams": true,
+    "coldMs": 2600,
+    "warmMs": 1100,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/referrals as owner @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-013",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/pricing as guest @pages"
+   ],
+   "line": 23,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:26.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008026300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/pricing",
+    "role": "guest",
+    "coldMs": 1500,
+    "warmMs": 700,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": [
+     {
+      "id": "color-contrast",
+      "impact": "serious",
+      "help": "Elements must meet minimum color contrast ratio thresholds",
+      "nodes": 3,
+      "sample": [
+       ".plan small"
+      ]
+     }
+    ]
+   },
+   "title": "/pricing as guest @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-014",
+   "titlePath": [
+    "chromium",
+    "qa/tests/smoke/smoke.spec.ts",
+    "home page opens with its headline @smoke @webkit"
+   ],
+   "line": 24,
+   "project": "chromium",
+   "tags": [
+    "@smoke"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:28.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008028300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "home page opens with its headline @smoke @webkit",
+   "suite": "smoke",
+   "file": "qa/tests/smoke/smoke.spec.ts"
+  }
+ ]
+}

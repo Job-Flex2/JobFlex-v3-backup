@@ -14,6 +14,7 @@
 
 import { db } from "@/lib/db";
 import { afterResponse, captureServerEvent } from "@/lib/server-events";
+import { isQaOrg } from "@/lib/qaTestMode";
 
 export type ActivationEvent =
   | "organization_created"
@@ -53,6 +54,7 @@ async function organizationFacts(organizationId: string): Promise<Extra> {
 export function trackActivation(event: ActivationEvent, organizationId: string | null | undefined, extra: Extra = {}): void {
   if (!organizationId || !process.env.NEXT_PUBLIC_POSTHOG_KEY) return;
   afterResponse(async () => {
+    if (await isQaOrg(organizationId)) return; // the QA Lab's own accounts (lib/qaTestMode)
     await captureServerEvent(event, organizationId, { ...(await organizationFacts(organizationId)), ...extra });
   });
 }
@@ -63,7 +65,7 @@ export function trackProposalCreated(organizationId: string, source: ProposalSou
   afterResponse(async () => {
     // take 2: "is there more than one" without counting a large table.
     const rows = await db.proposal.findMany({ where: { organizationId }, select: { id: true }, take: 2 });
-    if (rows.length !== 1) return;
+    if (rows.length !== 1 || (await isQaOrg(organizationId))) return;
     await captureServerEvent("first_proposal_created", organizationId, { ...(await organizationFacts(organizationId)), source });
   });
 }
@@ -90,7 +92,7 @@ export function reportPlanChange(organizationId: string, via: PlanChangeVia, bef
     const from = before?.plan ?? "FREE";
     // A cancellation keeps the slug on the row; the status is what changed.
     const to = after?.status === "CANCELED" && before?.status !== "CANCELED" ? "CANCELED" : after?.plan ?? "FREE";
-    if (from.toUpperCase() === to.toUpperCase()) return;
+    if (from.toUpperCase() === to.toUpperCase() || (await isQaOrg(organizationId))) return;
     await captureServerEvent("plan_changed", organizationId, { ...(await organizationFacts(organizationId)), from, to, via });
   });
 }
