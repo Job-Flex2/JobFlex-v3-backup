@@ -31,7 +31,7 @@ import {
   updateAdminTaskField,
   type TaskResult,
 } from "@/actions/adminTasks";
-import { Check, Hand } from "lucide-react";
+import { Check, CheckCheck, Clock, Hand } from "lucide-react";
 import { TaskPictures } from "./task-pictures";
 import { TaskDictate } from "./task-dictate";
 import { rememberTakeAs, takeOptions, useTakeAs } from "./take-as";
@@ -235,7 +235,7 @@ export function TaskSheetContent({
 
   const setAssignee = (v: string) => {
     const p = people.find((x) => x.id === v) ?? null;
-    void setField("assigneeId", v || null, { assigneeName: p?.name ?? null });
+    void setField("assigneeId", v || null, { assigneeName: p?.name ?? null, confirmedAt: null, confirmedBy: null });
   };
 
   // ── take it (2026-10-15): the login is shared, so it asks who; a To-do starts; the team hears who took it ──
@@ -250,7 +250,8 @@ export function TaskSheetContent({
     const name = people.find((x) => x.id === who)?.name ?? null;
     rememberTakeAs(who);
     setSwitching(false);
-    const err = await run(fieldPatch({ assigneeId: who, assigneeName: name, status: task.status === "TODO" ? "IN_PROGRESS" : task.status }), () => takeAdminTask(task.id, who));
+    const patch = { assigneeId: who, assigneeName: name, status: task.status === "TODO" ? "IN_PROGRESS" : task.status, confirmedAt: new Date().toISOString(), confirmedBy: "admin" as const };
+    const err = await run(fieldPatch(patch), () => takeAdminTask(task.id, who));
     if (!err) toast.success(`${firstName(name)} has it`, "The rest of the team got a text.");
   };
 
@@ -305,7 +306,23 @@ export function TaskSheetContent({
             <span className={cx("takeWho")}>
               {task.assigneeId ? (
                 <>
-                  <b>{task.assigneeId === me.id ? "You have" : `${task.assigneeName} has`} this task.</b> Mark it done when it&apos;s finished — the team gets a text.
+                  <b>{task.assigneeId === me.id ? "You have" : `${task.assigneeName} has`} this task.</b>{" "}
+                  {isMemberRef(task.assigneeId) ? (
+                    task.confirmedAt ? (
+                      <span className={cx("conf", "confOk")} data-confirmed="1">
+                        <CheckCheck size={12} aria-hidden />
+                        Confirmed {task.confirmedBy === "text" ? "by text" : "in admin"}
+                        {hydrated ? ` · ${stampLabel(task.confirmedAt)}` : ""}
+                      </span>
+                    ) : (
+                      <span className={cx("conf", "confWait")} data-confirmed="0">
+                        <Clock size={12} aria-hidden />
+                        Texted — waiting for them to reply OK
+                      </span>
+                    )
+                  ) : (
+                    "Mark it done when it's finished — the team gets a text."
+                  )}
                 </>
               ) : (
                 <b>Nobody has this task yet.</b>

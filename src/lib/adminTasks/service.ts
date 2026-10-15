@@ -47,8 +47,8 @@ import {
   type TaskRowDTO,
 } from "./model";
 import { pictureCounts, taskPictures } from "./pictures";
-import { memberPeople, memberOfRef, readAssignments, readMembers, setAssignment, withMember } from "./teamStore";
-import { isMemberRef, memberRef, type TaskText, type TeamMember } from "./teamShared";
+import { memberPeople, memberOfRef, readAssignments, readMembers, readTeamState, setAssignment, setConfirmed, withMember } from "./teamStore";
+import { isMemberRef, memberRef, readTextNote, textNoteBody, type ReplyIntent, type ReplyOutcome, type TaskText, type TeamMember } from "./teamShared";
 
 export class TaskError extends Error {
   constructor(message: string) {
@@ -122,8 +122,8 @@ function toRow(t: RowRecord, pictures = 0): TaskRowDTO {
 
 export async function listTasks(client: Client = db): Promise<TaskRowDTO[]> {
   const rows = await client.adminTask.findMany({ include: ROW_INCLUDE, orderBy: { updatedAt: "desc" }, take: LIST_CAP });
-  const [pics, members, assign] = await Promise.all([pictureCounts(rows.map((r) => r.id), client), readMembers(client), readAssignments(client)]);
-  return rows.map((r) => withMember(toRow(r, pics.get(r.id) ?? 0), assign, members));
+  const [pics, team] = await Promise.all([pictureCounts(rows.map((r) => r.id), client), readTeamState(client)]);
+  return rows.map((r) => withMember(toRow(r, pics.get(r.id) ?? 0), team));
 }
 
 export async function getTaskDetail(id: string, client: Client = db): Promise<TaskDetailDTO | null> {
@@ -138,27 +138,31 @@ export async function getTaskDetail(id: string, client: Client = db): Promise<Ta
   });
   if (!t) return null;
   const feed: FeedItemDTO[] = [
-    ...t.comments.map((c) => ({
-      type: "comment" as const,
-      id: c.id,
-      at: c.createdAt.toISOString(),
-      actorId: c.authorId,
-      actorName: personName(c.author),
-      body: c.body,
-    })),
+    ...t.comments.map((c) => {
+      // A note texted in by someone on the team (lib/adminTasks/textReply): their name, their words.
+      const texted = !c.author ? readTextNote(c.body) : null;
+      return {
+        type: "comment" as const,
+        id: c.id,
+        at: c.createdAt.toISOString(),
+        actorId: c.authorId,
+        actorName: texted ? `${texted.name} · by text` : personName(c.author),
+        body: texted ? texted.note : c.body,
+      };
+    }),
     ...t.events.map((e) => ({
       type: "event" as const,
       id: e.id,
       at: e.createdAt.toISOString(),
       actorId: e.actorId,
       // Someone on the team took it at the shared screen: the journal names them.
-      actorName: (e.kind === "TAKEN" || e.kind === "TAKEN_STARTED") && !e.actor && e.to ? e.to : personName(e.actor),
+      actorName: (e.kind === "TAKEN" || e.kind === "TAKEN_STARTED" || e.kind === "BY_TEXT") && !e.actor && e.to ? e.to : personName(e.actor),
       kind: e.kind,
       from: e.from,
       to: e.to,
     })),
   ].sort((a, b) => (a.at === b.at ? (a.type === b.type ? a.id.localeCompare(b.id) : a.type === "event" ? -1 : 1) : a.at < b.at ? -1 : 1));
-  const [photos, members, assign] = await Promise.all([taskPictures(t.id, client), readMembers(client), readAssignments(client)]);
+  const [photos, team] = await Promise.all([taskPictures(t.id, client), readTeamState(client)]);
   return withMember(
     {
       ...toRow({ ...t, subtasks: t.subtasks }, photos.length),
@@ -166,8 +170,7 @@ export async function getTaskDetail(id: string, client: Client = db): Promise<Ta
       feed,
       photos,
     },
-    assign,
-    members,
+    team,
   );
 }
 
@@ -179,8 +182,8 @@ export async function getTaskDetail(id: string, client: Client = db): Promise<Ta
 export async function changesSince(since: Date, openId: string | null): Promise<{ now: string; rows: TaskRowDTO[]; detail: TaskDetailDTO | null }> {
   const now = new Date();
   const found = await db.adminTask.findMany({ where: { updatedAt: { gt: since } }, include: ROW_INCLUDE, orderBy: { updatedAt: "asc" }, take: 500 });
-  const [pics, members, assign] = await Promise.all([pictureCounts(found.map((r) => r.id)), readMembers(), readAssignments()]);
-  const rows = found.map((r) => withMember(toRow(r, pics.get(r.id) ?? 0), assign, members));
+  const [pics, team] = await Promise.all([pictureCounts(found.map((r) => r.id)), readTeamState()]);
+  const rows = found.map((r) => withMember(toRow(r, pics.get(r.id) ?? 0), team));
   const detail = openId && rows.some((r) => r.id === openId) ? await getTaskDetail(openId) : null;
   return { now: now.toISOString(), rows, detail };
 }
@@ -388,11 +391,86 @@ export async function takeTask(actor: Actor, taskId: string, who: string): Promi
     const starting = t.status === "TODO";
     if (same && !starting) return { task: await finish(tx, taskId), notices: [], texts: [] };
     await pointAt(tx, taskId, prev, next, starting ? { status: "IN_PROGRESS" } : {});
+    // They took it themselves: that's their word they'll do it.
+    await setConfirmed(taskId, next.member.id, "admin", tx);
     // One line in the journal, in the taker's name: "Ivan Petrov took the task — now In progress".
     if (!same) await event(tx, taskId, null, starting ? "TAKEN_STARTED" : "TAKEN", assigneeName(prev), next.member.name);
     else if (starting) await event(tx, taskId, actor.id, "STATUS", statusLabel("TODO"), statusLabel("IN_PROGRESS"));
     const texts: TaskText[] = same ? [] : [{ kind: "taken", task: textTask(t), member: next.member.id, name: next.member.name }];
     return { task: await finish(tx, taskId), notices: [], texts };
+  });
+}
+
+// ── A reply to a task text ─────────────────────────────────────────
+
+/** What a reply did (lib/adminTasks/textReply texts it back). */
+export interface TextAnswer {
+  outcome: ReplyOutcome;
+  title: string | null;
+  /** Who has the task, when it isn't theirs. */
+  holder: string | null;
+  texts: TaskText[];
+  notices: TaskNotice[];
+}
+
+/**
+ * Someone on the team answered a task text (owner, 2026-10-15: "mark to confirm they will do it, in the SMS reply").
+ * OK: a task nobody has becomes theirs; one given to them is confirmed (a To-do starts). DONE: theirs, or nobody's,
+ * is done. NO: theirs goes back to nobody and the team hears it's open. Words beyond the command go on the task as
+ * their note. A task someone else has, or a closed one, is left as it is.
+ */
+export async function answerByText(member: TeamMember, taskId: string, intent: ReplyIntent, note: string): Promise<TextAnswer> {
+  return db.$transaction(async (tx) => {
+    const t = await tx.adminTask.findUnique({ where: { id: taskId }, include: { assignee: PERSON, author: PERSON } });
+    if (!t) return { outcome: "none" as const, title: null, holder: null, texts: [], notices: [] };
+    const me: Assignee = { kind: "member", member };
+    const prev = await currentAssignee(tx, t);
+    const mine = assigneeRef(prev) === memberRef(member.id);
+    const out: TextAnswer = { outcome: "noted", title: t.title, holder: null, texts: [], notices: [] };
+    const say = (what: string) => event(tx, taskId, null, "BY_TEXT", what, member.name);
+
+    if (note) await tx.adminTaskComment.create({ data: { taskId, authorId: null, body: textNoteBody(member.name, note.slice(0, COMMENT_MAX - 80)) } });
+
+    if (intent === "ok") {
+      if (isClosed(t.status)) out.outcome = "closed";
+      else if (prev && !mine) [out.outcome, out.holder] = ["theirs", assigneeName(prev)];
+      else {
+        const starting = t.status === "TODO";
+        if (mine) await tx.adminTask.update({ where: { id: taskId }, data: { ...(starting ? { status: "IN_PROGRESS" } : {}), updatedAt: new Date() } });
+        else await pointAt(tx, taskId, prev, me, starting ? { status: "IN_PROGRESS" } : {});
+        await setConfirmed(taskId, member.id, "text", tx);
+        await say(mine ? "confirmed" : "took");
+        if (!mine) out.texts.push({ kind: "taken", task: textTask(t), member: member.id, name: member.name });
+        out.outcome = mine ? "confirmed" : "took";
+      }
+    } else if (intent === "done") {
+      if (t.status === "DONE") out.outcome = "already";
+      else if (t.status === "CANCELED") out.outcome = "closed";
+      else if (prev && !mine) [out.outcome, out.holder] = ["theirs", assigneeName(prev)];
+      else {
+        const closing = { status: "DONE", closedAt: new Date() };
+        if (mine) await tx.adminTask.update({ where: { id: taskId }, data: { ...closing, updatedAt: new Date() } });
+        else await pointAt(tx, taskId, prev, me, closing);
+        await say("done");
+        out.texts.push({ kind: "done", task: textTask(t), member: member.id, name: member.name });
+        if (t.author && emailsAuthorOnClose(t.status, "DONE", t.author, "")) {
+          out.notices.push({ kind: "closed", to: { email: t.author.email, name: personName(t.author) }, by: member.name, task: { id: t.id, title: t.title, status: "DONE" } });
+        }
+        out.outcome = "done";
+      }
+    } else if (intent === "no") {
+      if (isClosed(t.status)) out.outcome = "closed";
+      else if (prev && !mine) [out.outcome, out.holder] = ["theirs", assigneeName(prev)];
+      else if (!mine) out.outcome = "passed";
+      else {
+        await pointAt(tx, taskId, prev, null);
+        await say("declined");
+        out.texts.push({ kind: "declined", task: textTask(t), member: member.id, name: member.name });
+        out.outcome = "declined";
+      }
+    }
+    if (note && (out.outcome === "noted" || out.outcome === "closed" || out.outcome === "theirs" || out.outcome === "already" || out.outcome === "passed")) await touch(tx, taskId);
+    return out;
   });
 }
 

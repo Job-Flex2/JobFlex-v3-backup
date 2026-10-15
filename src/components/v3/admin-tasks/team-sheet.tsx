@@ -245,8 +245,9 @@ export function TeamSheetContent({ onClose, onPeople }: { onClose: () => void; o
       <SheetBody>
         <p className={cx("tmIntro")}>
           The people who work JobFlex&apos;s tasks — a name and a mobile, no sign-in. They get a text when a new task needs
-          someone, when one is given to them, when someone takes one, and when one is done; they open Tasks in admin to see
-          it and mark it done.
+          someone, when one is given to them, when someone takes one, and when one is done. They answer right in the text:{" "}
+          <b>OK</b> to take it or confirm they&apos;ll do it, <b>DONE</b> when it&apos;s finished, <b>NO</b> if they can&apos;t — anything
+          else they write lands on the task as their note. Or they open Tasks in admin.
         </p>
         {error ? <Note tone="danger">{error}</Note> : null}
         {data ? (

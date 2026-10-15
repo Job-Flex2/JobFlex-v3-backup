@@ -12,6 +12,8 @@ import { sendText, type SendTextResult } from "@/lib/sms/send";
 import { jobflexSender } from "@/lib/sms/jobflexSender";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { taskPath } from "./model";
+import { sendTaskNotices } from "./mail";
+import type { TaskReplyPlan } from "./textReply";
 import { dropMemberAssignments, readAssignments, readMembers, writeMembers } from "./teamStore";
 import { NAME_MAX, phoneE164, phoneWords, TEAM_MAX, TEAM_TZ, taskTextBody, textRecipients, welcomeTextBody, type LastText, type TaskText, type TeamMember, type TeamMemberView, type TextingStatus } from "./teamShared";
 
@@ -182,4 +184,11 @@ export async function sendTaskTexts(texts: TaskText[], baseUrl: string, now = ne
     console.warn("[adminTasks] task texts skipped:", err instanceof Error ? err.message : err);
   }
   return { sent };
+}
+
+/** A reply from the team was answered (lib/adminTasks/textReply): text them what it did, then whoever else hears. */
+export async function deliverTaskReply(plan: Extract<TaskReplyPlan, { handled: true }>, baseUrl: string): Promise<void> {
+  await textOne(plan.member.phone, plan.reply);
+  if (plan.texts.length) await sendTaskTexts(plan.texts, baseUrl);
+  if (plan.notices.length) await sendTaskNotices(plan.notices, baseUrl).catch((err) => console.warn("[adminTasks] reply notice not sent:", err instanceof Error ? err.message : err));
 }

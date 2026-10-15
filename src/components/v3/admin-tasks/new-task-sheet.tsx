@@ -61,10 +61,10 @@ export function NewTaskForm({
   const team = teamOf(people);
   const textHint = d.assigneeId
     ? team.some((p) => p.id === d.assigneeId)
-      ? "They get a text with the task."
+      ? "They get a text with the task and confirm by replying OK."
       : "They get an email with the task."
     : team.length
-      ? "Unassigned: everyone on the team gets a text to take it."
+      ? "Unassigned: everyone on the team gets a text — the first to reply OK takes it."
       : "Unassigned. Add the team's phones (Team) and they get a text to take it.";
 
   function submit(e: FormEvent) {

@@ -211,6 +211,9 @@ export interface TaskRowDTO {
   comments: number;
   /** How many pictures the task carries (2026-10-15). */
   pictures: number;
+  /** Someone on the team list said they'll do it: when, and how (replied OK to the text, or took it in admin). */
+  confirmedAt?: string | null;
+  confirmedBy?: "text" | "admin" | null;
 }
 
 /** A picture on a task, as a page shows it: a short signed link (lib/adminTasks/pictures). */
@@ -297,6 +300,17 @@ export function eventWords(e: { kind: string; from: string | null; to: string | 
       return e.from ? `took the task from ${e.from}` : "took the task";
     case "TAKEN_STARTED":
       return `${e.from ? `took the task from ${e.from}` : "took the task"} — now In progress`;
+    // A reply to a task text (2026-10-15): `from` says what it did, `to` is who (the feed shows them as the actor).
+    case "BY_TEXT":
+      return e.from === "took"
+        ? "replied OK — took the task"
+        : e.from === "confirmed"
+          ? "replied OK — confirmed they'll do it"
+          : e.from === "done"
+            ? "replied DONE — marked it done"
+            : e.from === "declined"
+              ? "replied NO — can't do it, so it's open again"
+              : "replied by text";
     default:
       return "changed the task";
   }

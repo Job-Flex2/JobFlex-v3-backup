@@ -9,7 +9,12 @@ import {
   isQuietHour,
   memberIdOf,
   memberRef,
+  parseTaskReply,
   phoneE164,
+  readTextNote,
+  replyTextBody,
+  taskIdInText,
+  textNoteBody,
   phoneWords,
   taskTextBody,
   textRecipients,
@@ -48,10 +53,10 @@ check("quiet hours are 9 PM–7 AM Los Angeles", isQuietHour(night) && !isQuietH
 
 const href = "https://www.jobflex.app/admin/tasks?task=t1";
 const t1 = taskTextBody({ kind: "new", task, by: "Dmitriy Apetenok" }, href);
-check("new: from whom, the title, the due day, take it in admin, the link", t1 === `JobFlex task from Dmitriy: “Fix the roof estimator's photo upload on iPhone” · due Oct 16. Nobody has it yet — open Tasks in admin to take it: ${href}`, t1);
+check("new: from whom, the title, the due day, reply OK to take it, the link", t1 === `JobFlex task from Dmitriy: “Fix the roof estimator's photo upload on iPhone” · due Oct 16. Nobody has it yet — reply OK to take it. ${href}`, t1);
 check("new from the shared console: no name", taskTextBody({ kind: "new", task, by: null }, href).startsWith("JobFlex task: “Fix"));
 const given = taskTextBody({ kind: "assigned", task: { ...task, priority: "URGENT" }, by: "Dmitriy", to: "ivan01" }, href);
-check("assigned: a task for you, Urgent first", given.startsWith("JobFlex: a task for you from Dmitriy — URGENT · “Fix"), given);
+check("assigned: a task for you, Urgent first, reply OK or NO", given.startsWith("JobFlex: a task for you from Dmitriy — URGENT · “Fix") && given.includes("Reply OK if you'll do it, NO if you can't.") && given.endsWith(href), given);
 check(
   "taken / done read as one line each",
   taskTextBody({ kind: "taken", task, member: "ivan01", name: "Ivan Petrov" }, href) === `JobFlex: Ivan took “Fix the roof estimator's photo upload on iPhone”. ${href}` &&
@@ -60,7 +65,7 @@ check(
 const long = taskTextBody({ kind: "new", task: { ...task, title: "x".repeat(200), dueDate: null }, by: "D" }, href);
 check("a long title is cut so the text stays short", long.length < 220 && long.includes("…"), String(long.length));
 const hi = welcomeTextBody("Ivan Petrov", "Dmitriy Apetenok");
-check("the welcome text says who added them, what the texts are, and how to stop", hi.startsWith("JobFlex: hi Ivan — Dmitriy added you to the JobFlex team's task texts.") && hi.endsWith("Reply STOP to stop."), hi);
+check("the welcome text says who added them, the reply words, and how to stop", hi.startsWith("JobFlex: hi Ivan — Dmitriy added you to the JobFlex team's task texts.") && /reply OK to take it, DONE when it's finished, NO if you can't/.test(hi) && hi.endsWith("Reply STOP to stop."), hi);
 check("…and from the shared console without a name", welcomeTextBody("Ivan", null).startsWith("JobFlex: hi Ivan — you're added to"));
 
 check("phones as typed → E.164", phoneE164("(425) 772-6587") === "+14257726587" && phoneE164("1 425 772 6587") === "+14257726587" && phoneE164("+44 20 7946 0958") === "+442079460958" && phoneE164("12345") === null && phoneE164("") === null);
@@ -91,6 +96,23 @@ check(
     dw("SKIPPED", "no-number")?.words === "Last text not sent — JobFlex's number isn't approved yet" &&
     deliveryWords(null) === null,
 );
+
+// Replies to a task text (2026-10-15): OK / DONE / NO, a note, a named task.
+check("Ivan said no: everyone else hears it's open again", ids({ kind: "declined", task, member: "ivan01", name: "Ivan Petrov" }) === "dima01,ana001" && taskTextBody({ kind: "declined", task, member: "ivan01", name: "Ivan Petrov" }, href).startsWith("JobFlex: Ivan can't do “Fix the roof estimator's photo upload on iPhone” — it's open again. Reply OK to take it."));
+const r = (t: string) => parseTaskReply(t);
+check("OK in its everyday spellings", ["OK", "ok", "Okay!", "k", "Yes", "yep", "Sure", "on it", "I'll do it", "I’ll do it", "got it", "👍", "1"].every((t) => r(t).intent === "ok" && r(t).note === ""));
+check("DONE / NO", ["DONE", "done.", "Finished", "completed", "✅", "2"].every((t) => r(t).intent === "done") && ["NO", "nope", "can't", "can’t", "not me", "3"].every((t) => r(t).intent === "no"));
+check("words beyond the command become their note, as written", r("ok, on my way").intent === "ok" && r("ok, on my way").note === "ok, on my way" && r("can't today").intent === "no" && r("can't today").note === "can't today" && r("done - pushed the fix").note === "done - pushed the fix");
+check("anything else is a note; look-alikes aren't commands", r("what time?").intent === "note" && r("what time?").note === "what time?" && r("nothing yet").intent === "note" && r("okra for lunch").intent === "note" && r("Dones").intent === "note");
+check("a named task: T-XXXXXX anywhere", r("T-3g60ge done").ref === "3G60GE" && r("T-3g60ge done").intent === "done" && r("done T-3G60GE").ref === "3G60GE" && r("ok").ref === null);
+check("the answers say what the reply did",
+  replyTextBody("took", "Fix it", "Ivan Petrov") === "JobFlex: it's yours, Ivan — “Fix it”. Reply DONE when it's finished." &&
+    replyTextBody("confirmed", "Fix it", "Ivan Petrov") === "JobFlex: confirmed, Ivan — “Fix it” is yours. Reply DONE when it's finished." &&
+    replyTextBody("done", "Fix it", "Ivan") === "JobFlex: ✓ “Fix it” is marked done. Thanks, Ivan!" &&
+    replyTextBody("theirs", "Fix it", "Ivan", "Ana Lee") === "JobFlex: Ana has “Fix it”, so nothing changed." &&
+    /no task to answer/.test(replyTextBody("none", null, "Ivan")));
+check("a texted note keeps who wrote it", JSON.stringify(readTextNote(textNoteBody("Ivan Petrov", "on my way\nsecond line"))) === JSON.stringify({ name: "Ivan Petrov", note: "on my way\nsecond line" }) && readTextNote("plain comment") === null);
+check("the task a text was about, from its link", taskIdInText(`JobFlex: Ivan took “x”. ${href.replace("t1", "cmv9ybdra003c17o4nq86y8xy")}`) === "cmv9ybdra003c17o4nq86y8xy" && taskIdInText("JobFlex: hi Ivan — you're added. Reply STOP to stop.") === null);
 
 if (bad) {
   console.log(`\n${bad} FAILED`);

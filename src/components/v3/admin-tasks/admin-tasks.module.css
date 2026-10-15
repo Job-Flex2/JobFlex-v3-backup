@@ -444,3 +444,12 @@
   :global(.jf-blueprint .content) .dictRow .dictBtn span { display: none; }
   :global(.jf-blueprint .content) .takePick { flex: 1 1 100%; }
 }
+
+/* ── They said they'll do it: replied OK to the text, or took it in admin (2026-10-15) ── */
+:global(.jf-blueprint .content) .conf {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; line-height: 1.5; white-space: nowrap; vertical-align: middle; border: 1px solid;
+}
+:global(.jf-blueprint .content) .confOk { color: var(--success); border-color: color-mix(in srgb, var(--success) 55%, transparent); background: color-mix(in srgb, var(--success) 8%, #fff); }
+:global(.jf-blueprint .content) .confWait { color: var(--warning-dark, #8a5d00); border-color: var(--warning, #c98a10); background: var(--warning-soft, #fdf3e0); }
+:global(.jf-blueprint .content) .tdWho .conf { margin-right: 6px; }

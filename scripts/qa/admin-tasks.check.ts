@@ -38,6 +38,7 @@ import { db } from "../../src/lib/db";
 import * as svc from "../../src/lib/adminTasks/service";
 import * as pics from "../../src/lib/adminTasks/pictures";
 import * as team from "../../src/lib/adminTasks/teamStore";
+import { planTaskReply } from "../../src/lib/adminTasks/textReply";
 import {
   cleanLink,
   dayLabel,
@@ -233,12 +234,13 @@ async function main() {
 
     // The team by name and phone, take it as…, texts (2026-10-15, no logins): the service says who hears what; the
     // action layer sends. The list is SyncState; what was there before is put back after.
-    const teamBefore = await db.syncState.findMany({ where: { key: { in: ["adminTeam:members:v1", "adminTeam:assign:v1"] } } });
+    const teamBefore = await db.syncState.findMany({ where: { key: { in: ["adminTeam:members:v1", "adminTeam:assign:v1", "adminTeam:confirm:v1"] } } });
     await team.writeMembers([
       { id: "ivan01", name: "Ivan Petrov", phone: "+12065550101", on: true, quietNights: true, addedAt: "" },
       { id: "ana001", name: "Ana Lee", phone: "+12065550102", on: true, quietNights: true, addedAt: "" },
+      { id: "zed001", name: "Zed Quiet", phone: "+12065550103", on: true, quietNights: true, addedAt: "" },
     ]);
-    await db.syncState.deleteMany({ where: { key: "adminTeam:assign:v1" } });
+    await db.syncState.deleteMany({ where: { key: { in: ["adminTeam:assign:v1", "adminTeam:confirm:v1"] } } });
     try {
       const kindsOf = (w: { texts?: Array<{ kind: string }> }) => (w.texts ?? []).map((t) => t.kind).join();
       const people = await svc.taskPeople();
@@ -273,8 +275,54 @@ async function main() {
       await svc.updateTaskField(A, given.task.id, "assigneeId", "m:ivan01");
       const dropped = await team.dropMemberAssignments("ivan01");
       check("someone leaves the team: their tasks are let go", dropped.includes(given.task.id) && (await svc.getTaskDetail(given.task.id))?.assigneeId === null);
+      check("taking it in admin counts as their word", took.task.confirmedBy === "admin" && !!took.task.confirmedAt);
+
+      // Replies to a task text (2026-10-15): OK / DONE / NO / a note, on the task the last text was about.
+      const IV = "+12065550101", AN = "+12065550102", ZE = "+12065550103";
+      const texted = (to: string, taskId: string) => db.smsMessage.create({ data: { direction: "OUT", to, body: `JobFlex task: “x”. Reply OK to take it. http://localhost/admin/tasks?task=${taskId}`, kind: "jobflex-admin-task", status: "SKIPPED" } });
+      const kinds = (p: { texts?: Array<{ kind: string }> }) => (p.texts ?? []).map((t) => t.kind).join();
+      const open1 = await svc.createTask(A, { title: "Reply test" });
+      await texted(IV, open1.task.id);
+      await texted(AN, open1.task.id);
+      const okIvan = await planTaskReply(IV, "OK");
+      let d = (await svc.getTaskDetail(open1.task.id))!;
+      check("Ivan replies OK to a task nobody has: his, In progress, confirmed by text, the team hears", okIvan.handled && okIvan.reply.startsWith("JobFlex: it's yours, Ivan — “Reply test”") && kinds(okIvan) === "taken" && d.assigneeId === "m:ivan01" && d.status === "IN_PROGRESS" && d.confirmedBy === "text" && !!d.confirmedAt, okIvan.handled ? okIvan.reply : "not handled");
+      const by = d.feed.find((f) => f.type === "event" && f.kind === "BY_TEXT") as { actorName: string; kind: string; from: string | null; to: string | null } | undefined;
+      check("…the journal: 'Ivan Petrov replied OK — took the task'", by?.actorName === "Ivan Petrov" && eventWords(by!) === "replied OK — took the task");
+      const anaLate = await planTaskReply(AN, "can't, on the roof job till 5");
+      d = (await svc.getTaskDetail(open1.task.id))!;
+      const note = d.feed.filter((f) => f.type === "comment").pop() as { actorName: string; body: string } | undefined;
+      check("Ana answers it after Ivan took it: nothing changes, she's told who has it, her words land on the task", anaLate.handled && anaLate.reply === "JobFlex: Ivan has “Reply test”, so nothing changed." && d.assigneeId === "m:ivan01" && note?.actorName === "Ana Lee · by text" && note?.body === "can't, on the roof job till 5");
+      const doneIvan = await planTaskReply(IV, "done - pushed the fix");
+      d = (await svc.getTaskDetail(open1.task.id))!;
+      check("Ivan replies DONE: done, the team hears, his words on the task", doneIvan.handled && doneIvan.reply === "JobFlex: ✓ “Reply test” is marked done. Thanks, Ivan!" && kinds(doneIvan) === "done" && d.status === "DONE" && !!d.closedAt && (d.feed.filter((f) => f.type === "comment").pop() as { body: string }).body === "done - pushed the fix");
+      check("…the author hears by email", doneIvan.handled && doneIvan.notices.length === 1 && doneIvan.notices[0].kind === "closed" && doneIvan.notices[0].by === "Ivan Petrov");
+      const again = await planTaskReply(IV, "DONE");
+      check("DONE again: already done, nothing sent to the team", again.handled && /was already done/.test(again.reply) && kinds(again) === "");
+
+      const forAna = await svc.createTask(A, { title: "Ana's task", assigneeId: "m:ana001" });
+      check("given to someone on the team: Waiting (not confirmed yet)", forAna.task.assigneeId === "m:ana001" && !forAna.task.confirmedAt);
+      await texted(AN, forAna.task.id);
+      const yes = await planTaskReply(AN, "Yes");
+      d = (await svc.getTaskDetail(forAna.task.id))!;
+      check("Ana replies yes: confirmed by text, To do → In progress, no text to the team", yes.handled && yes.reply.startsWith("JobFlex: confirmed, Ana — “Ana's task” is yours.") && d.confirmedBy === "text" && d.status === "IN_PROGRESS" && kinds(yes) === "");
+      check("…the list shows it confirmed", !!(await svc.listTasks()).find((r) => r.id === forAna.task.id)?.confirmedAt);
+      await svc.updateTaskField(A, forAna.task.id, "assigneeId", "m:ivan01");
+      d = (await svc.getTaskDetail(forAna.task.id))!;
+      check("handed to Ivan: Ana's confirmation doesn't carry over", d.assigneeId === "m:ivan01" && !d.confirmedAt);
+      await texted(IV, forAna.task.id);
+      const no = await planTaskReply(IV, "No");
+      d = (await svc.getTaskDetail(forAna.task.id))!;
+      check("Ivan replies NO: back to nobody, the rest of the team hears it's open", no.handled && /is open again and the team got a text/.test(no.reply) && kinds(no) === "declined" && d.assigneeId === null);
+      const named = await planTaskReply(IV, `T-${forAna.task.id.slice(-6).toUpperCase()} ok`);
+      check("a reply that names the task acts on that one", named.handled && named.taskId === forAna.task.id && (await svc.getTaskDetail(forAna.task.id))?.assigneeId === "m:ivan01");
+      check("a number not on the team: not ours", !(await planTaskReply("+12065550999", "OK")).handled);
+      check("a team member's plain message with no task text lately: not ours", !(await planTaskReply(ZE, "hello there")).handled);
+      const lost = await planTaskReply(ZE, "OK");
+      check("…a command with no task to answer: told so", lost.handled && /no task to answer/.test(lost.reply) && lost.taskId === null);
+      await db.smsMessage.deleteMany({ where: { to: { in: [IV, AN, ZE] }, kind: "jobflex-admin-task" } });
     } finally {
-      await db.syncState.deleteMany({ where: { key: { in: ["adminTeam:members:v1", "adminTeam:assign:v1"] } } });
+      await db.syncState.deleteMany({ where: { key: { in: ["adminTeam:members:v1", "adminTeam:assign:v1", "adminTeam:confirm:v1"] } } });
       for (const r of teamBefore) await db.syncState.create({ data: { key: r.key, cursor: r.cursor } });
     }
     const given = await svc.createTask(A, { title: "For pictures" });
@@ -305,6 +353,8 @@ async function main() {
   const exported = [...actions.matchAll(/export async function (\w+)\(([^)]*)\)[^{]*\{([\s\S]*?)\n\}/g)];
   // 16 since 2026-10-15: take it, a picture off, and the team list (teamRun asks asAdmin() first).
   check("every action asks for a platform admin first", exported.length === 16 && exported.every(([, , , body]) => /asAdmin\(\)|\brun\(|teamRun\(/.test(body)) && /requirePlatformAdmin\(\)/.test(actions) && /async function teamRun[\s\S]*?asAdmin\(\)/.test(actions), exported.map((m) => m[1]).join());
+  const sms = readFileSync(join(ROOT, "src/app/api/twilio/sms/route.ts"), "utf8");
+  check("the SMS webhook: signature first, STOP before a task reply, a task reply before START", sms.indexOf("verifyTwilioSignature(") < sms.indexOf("isStopWord(body)") && sms.indexOf("isStopWord(body)") < sms.indexOf("planTaskReply(") && sms.indexOf("planTaskReply(") < sms.indexOf("if (isStartWord(body)) {") && /smsFromNumber: to/.test(sms.slice(sms.indexOf("planTaskReply(") - 400, sms.indexOf("planTaskReply("))));
   const route = readFileSync(join(ROOT, "src/app/api/admin/tasks/changes/route.ts"), "utf8");
   check("the changes route asks before reading", route.indexOf("requirePlatformAdmin()") > -1 && route.indexOf("requirePlatformAdmin()") < route.indexOf("changesSince(") && /status: forbidden \? 403 : 401/.test(route));
   const page = readFileSync(join(ROOT, "src/app/(admin)/admin/tasks/page.tsx"), "utf8");

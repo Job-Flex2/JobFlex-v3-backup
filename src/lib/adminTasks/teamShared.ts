@@ -11,6 +11,10 @@
 //   assigned  given to someone       → that person
 //   taken     someone took it        → everyone else
 //   done      it's done              → everyone but whoever had it
+//   declined  they replied NO        → everyone else (it's open again)
+// Replies (owner, 2026-10-15: "mark to confirm they will do it, in the SMS reply"): OK takes the task or confirms the
+// one given to them, DONE finishes it, NO hands it back; anything else lands on the task as their note
+// (lib/adminTasks/textReply). Not YES: Twilio keeps it as a re-subscribe word (it is still understood).
 // Never a switched-off phone; nothing 9 PM–7 AM (Los Angeles) to a phone that keeps quiet nights — unless Urgent.
 
 export type TeamMember = {
@@ -35,7 +39,8 @@ export type TaskText =
   | { kind: "new"; task: TextTask; by: string | null }
   | { kind: "assigned"; task: TextTask; by: string | null; to: string }
   | { kind: "taken"; task: TextTask; member: string; name: string }
-  | { kind: "done"; task: TextTask; member: string | null; name: string | null };
+  | { kind: "done"; task: TextTask; member: string | null; name: string | null }
+  | { kind: "declined"; task: TextTask; member: string; name: string };
 
 export const TEAM_TZ = "America/Los_Angeles";
 
@@ -50,7 +55,7 @@ export function textRecipients(t: TaskText, members: readonly TeamMember[], now:
   const quiet = t.task.priority !== "URGENT" && isQuietHour(now);
   const can = (m: TeamMember) => m.on && !(m.quietNights && quiet);
   if (t.kind === "assigned") return members.filter((m) => m.id === t.to && can(m)).map((m) => m.id);
-  const skip = t.kind === "taken" ? t.member : t.kind === "done" ? t.member : null;
+  const skip = t.kind === "taken" || t.kind === "done" || t.kind === "declined" ? t.member : null;
   return members.filter((m) => m.id !== skip && can(m)).map((m) => m.id);
 }
 
@@ -71,9 +76,11 @@ export function taskTextBody(t: TaskText, href: string): string {
   const pri = PRIORITY_WORD[t.task.priority] ?? "";
   switch (t.kind) {
     case "new":
-      return `JobFlex task${t.by ? ` from ${firstName(t.by)}` : ""}: ${pri}${title}${dueWords(t.task.dueDate)}. Nobody has it yet — open Tasks in admin to take it: ${href}`;
+      return `JobFlex task${t.by ? ` from ${firstName(t.by)}` : ""}: ${pri}${title}${dueWords(t.task.dueDate)}. Nobody has it yet — reply OK to take it. ${href}`;
     case "assigned":
-      return `JobFlex: a task for you${t.by ? ` from ${firstName(t.by)}` : ""} — ${pri}${title}${dueWords(t.task.dueDate)}. ${href}`;
+      return `JobFlex: a task for you${t.by ? ` from ${firstName(t.by)}` : ""} — ${pri}${title}${dueWords(t.task.dueDate)}. Reply OK if you'll do it, NO if you can't. ${href}`;
+    case "declined":
+      return `JobFlex: ${firstName(t.name)} can't do ${title} — it's open again. Reply OK to take it. ${href}`;
     case "taken":
       return `JobFlex: ${firstName(t.name)} took ${title}. ${href}`;
     case "done":
@@ -83,7 +90,7 @@ export function taskTextBody(t: TaskText, href: string): string {
 
 /** The first text a new team member gets — what these texts are, and how to stop them. */
 export function welcomeTextBody(name: string, by: string | null): string {
-  return `JobFlex: hi ${firstName(name)} — ${by ? `${firstName(by)} added` : "you're added"} ${by ? "you " : ""}to the JobFlex team's task texts. You'll get a text when a task is yours or needs someone; open Tasks in admin to see it and mark it done. Reply STOP to stop.`;
+  return `JobFlex: hi ${firstName(name)} — ${by ? `${firstName(by)} added` : "you're added"} ${by ? "you " : ""}to the JobFlex team's task texts. You'll get a text when a task is yours or needs someone: reply OK to take it, DONE when it's finished, NO if you can't. Reply STOP to stop.`;
 }
 
 /** A phone as typed → E.164 (US/Canada numbers without +1 get it), or null. */
@@ -180,4 +187,69 @@ export function deliveryWords(last: LastText | null): { tone: "ok" | "wait" | "b
     return { tone: "bad", words: `Last text not sent — ${why}` };
   }
   return { tone: "wait", words: "Last text sent" };
+}
+
+// ── Replies to a task text ─────────────────────────────────────────
+
+export type ReplyIntent = "ok" | "done" | "no" | "note";
+
+const OK_WORDS = /^(ok(ay)?|k|yes|yep|yeah|y|sure|on it|will do|i'?ll do it|i will|i got it|got it|take|taking|mine|confirm(ed)?|1|👍|👌)(?=$|[\s,.!:;-])/i;
+const DONE_WORDS = /^(done|finished|complete(d)?|fixed|all done|2|✅|✔️?)(?=$|[\s,.!:;-])/i;
+const NO_WORDS = /^(no|nope|n|can'?t|cannot|not me|pass|busy|3|👎)(?=$|[\s,.!:;-])/i;
+const REF = /\bT-([A-Z0-9]{6})\b/i;
+
+/** "OK" → ok; "ok, on my way" → ok + that whole line as their note; "T-3G60GE done" → that task, done. */
+export function parseTaskReply(raw: string): { intent: ReplyIntent; ref: string | null; note: string } {
+  let s = (raw || "").replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+  const ref = REF.exec(s)?.[1]?.toUpperCase() ?? null;
+  if (ref) s = s.replace(REF, " ").replace(/\s+/g, " ").trim();
+  for (const [intent, re] of [["done", DONE_WORDS], ["no", NO_WORDS], ["ok", OK_WORDS]] as const) {
+    const m = re.exec(s);
+    // Words beyond the command ("can't today", "ok, on my way") go on the task as they were written.
+    if (m) return { intent, ref, note: s.slice(m[0].length).replace(/^[\s,.!:;-]+/, "").trim() ? s : "" };
+  }
+  return { intent: "note", ref, note: s };
+}
+
+export type ReplyOutcome = "took" | "confirmed" | "done" | "already" | "declined" | "passed" | "noted" | "closed" | "theirs" | "none";
+
+/** The answer texted back, so they know what their reply did. */
+export function replyTextBody(o: ReplyOutcome, title: string | null, name: string, holder?: string | null): string {
+  const t = title ? `“${shortTitle(title)}”` : "the task";
+  const me = firstName(name);
+  switch (o) {
+    case "took":
+      return `JobFlex: it's yours, ${me} — ${t}. Reply DONE when it's finished.`;
+    case "confirmed":
+      return `JobFlex: confirmed, ${me} — ${t} is yours. Reply DONE when it's finished.`;
+    case "done":
+      return `JobFlex: ✓ ${t} is marked done. Thanks, ${me}!`;
+    case "already":
+      return `JobFlex: ${t} was already done — nothing changed.`;
+    case "declined":
+      return `JobFlex: OK — ${t} is open again and the team got a text.`;
+    case "passed":
+      return `JobFlex: OK — ${t} stays open for someone else.`;
+    case "noted":
+      return `JobFlex: your note is on ${t}. Reply OK to take it or confirm, DONE when it's finished.`;
+    case "closed":
+      return `JobFlex: ${t} is closed — nothing changed.`;
+    case "theirs":
+      return `JobFlex: ${holder ? firstName(holder) : "someone else"} has ${t}, so nothing changed.`;
+    case "none":
+      return "JobFlex: there's no task to answer. Reply OK, DONE or NO right after a task text, or open Tasks in admin.";
+  }
+}
+
+/** A note texted in, as the task's comment: who wrote it rides in a first line the page reads back. */
+const NOTE_MARK = /^\[by text: ([^\]\n]{1,60})\]\n/;
+export const textNoteBody = (name: string, note: string) => `[by text: ${name.replace(/[\]\n]/g, " ").slice(0, 60)}]\n${note}`;
+export function readTextNote(body: string): { name: string; note: string } | null {
+  const m = NOTE_MARK.exec(body);
+  return m ? { name: m[1], note: body.slice(m[0].length) } : null;
+}
+
+/** A task's link in a text we sent → its id (the reply's task is the last one texted). */
+export function taskIdInText(body: string): string | null {
+  return /\/admin\/tasks\?task=([A-Za-z0-9_-]{6,40})/.exec(body)?.[1] ?? null;
 }

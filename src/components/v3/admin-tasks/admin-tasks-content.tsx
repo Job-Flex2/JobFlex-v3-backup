@@ -14,7 +14,8 @@ import { Sheet, useSheet, KIT_BTN_CLASS } from "@/components/v3/admin-users/admi
 import { useAdminMotion } from "@/components/v3/admin-users/use-admin-motion";
 import ui from "@/components/v3/admin-influencers/admin-ui.module.css";
 import { toast } from "@/components/ui/Toast";
-import { Camera, Check, Users } from "lucide-react";
+import { Camera, Check, CheckCheck, Clock, Users } from "lucide-react";
+import { isMemberRef } from "@/lib/adminTasks/teamShared";
 import { createAdminTask, getAdminTask, takeAdminTask, updateAdminTaskField } from "@/actions/adminTasks";
 import {
   categoryLabel,
@@ -35,7 +36,7 @@ import { EMPTY_DRAFT, NewTaskForm, type NewTaskDraft } from "./new-task-sheet";
 import { TaskFilterBar } from "./task-filter-bar";
 import { TaskSheetContent, sheetKicker } from "./task-sheet";
 import { useTaskLive } from "./use-task-live";
-import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, useDayOf, useHydrated, useToday } from "./task-bits";
+import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, stampLabel, useDayOf, useHydrated, useToday } from "./task-bits";
 
 export interface AdminTasksProps {
   initialRows: TaskRowDTO[];
@@ -206,7 +207,8 @@ export function AdminTasksContent(props: AdminTasksProps) {
     async (t: TaskRowDTO, who: string) => {
       const name = people.find((p) => p.id === who)?.name ?? null;
       rememberTakeAs(who);
-      const err = await store.mutate(t.id, fieldPatch({ assigneeId: who, assigneeName: name, status: t.status === "TODO" ? "IN_PROGRESS" : t.status }), () => takeAdminTask(t.id, who));
+      const patch = { assigneeId: who, assigneeName: name, status: t.status === "TODO" ? "IN_PROGRESS" : t.status, confirmedAt: new Date().toISOString(), confirmedBy: "admin" as const };
+      const err = await store.mutate(t.id, fieldPatch(patch), () => takeAdminTask(t.id, who));
       if (err) toast.error("Not taken", err);
       else toast.success(`${(name ?? "They").split(/\s+/)[0]} has it`, "The rest of the team got a text.");
     },
@@ -369,6 +371,24 @@ export function AdminTasksContent(props: AdminTasksProps) {
                       </td>
                       <td className={cx("tdWho")} data-l="Assignee">
                         {t.assigneeName ? <span className={cx("who")}>{t.assigneeId === me.id ? "You" : t.assigneeName}</span> : <span className={cx("whoNone")}>Unassigned</span>}
+                        {/* Someone on the team list: did they say they'll do it (replied OK, or took it themselves)? */}
+                        {!archive && isMemberRef(t.assigneeId) ? (
+                          t.confirmedAt ? (
+                            <span
+                              className={cx("conf", "confOk")}
+                              title={`Confirmed ${t.confirmedBy === "text" ? "by text" : "in admin"}${hydrated ? ` · ${stampLabel(t.confirmedAt)}` : ""}`}
+                              data-confirmed="1"
+                            >
+                              <CheckCheck size={12} aria-hidden />
+                              Confirmed
+                            </span>
+                          ) : (
+                            <span className={cx("conf", "confWait")} title="Texted — waiting for them to reply OK" data-confirmed="0">
+                              <Clock size={12} aria-hidden />
+                              Waiting
+                            </span>
+                          )
+                        ) : null}
                         {temp || archive ? null : t.assigneeId ? (
                           <button
                             type="button"
