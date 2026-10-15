@@ -13,7 +13,9 @@
 //                        for whatever a seek would not give.
 //   extractAudioChunks — decodes the audio track with Web Audio, renders it to
 //                        16kHz mono PCM through an OfflineAudioContext, and cuts
-//                        it into ≤100s WAV chunks for the transcribe route.
+//                        it into ≤100s WAV chunks for the transcribe route. A
+//                        QuickTime movie's AAC is lifted out as ADTS first
+//                        (movie-audio.ts) — Safari will not decode a .MOV.
 //
 // WHY HERE AND NOT ON A SERVER
 // The server has no ffmpeg (Vercel functions) and a 4.5MB request cap; the
@@ -52,6 +54,8 @@
 // says what happened in numbers, so an empty result can say WHY on the error
 // line instead of "try a different export".
 
+import { aacAsAdts, isQuickTimeHead, type ByteReader } from "./movie-audio";
+
 export const MAX_DURATION_S = 300;
 export const MAX_FRAMES = 14;
 export const MIN_FRAMES = 4;
@@ -63,6 +67,8 @@ const AUDIO_RATE = 16_000;
 const AUDIO_CHUNK_S = 100;
 /** A seek that has not landed in this long is not going to. */
 const SEEK_TIMEOUT_MS = 5_000;
+/** A paused seek still pending after this long gets the nudge (seekTo). */
+const SEEK_NUDGE_MS = 700;
 /** This many seeks in a row that never land, with none landed yet, and the
  *  pass stops seeking and plays the clip through — fourteen timeouts would be
  *  seventy seconds of a contractor watching a counter. */
@@ -98,6 +104,8 @@ export type FrameReport = {
   playOk: number;
   /** Stills the decoder painted black, twice over. */
   blank: number;
+  /** Stills that came back the picture before, and were taken again. */
+  repeated: number;
   /** Error names the canvas threw (a tainted canvas is a SecurityError). */
   thrown: string[];
   /** Why playback did not help, when it did not. */
@@ -206,20 +214,92 @@ function waitFor(
   });
 }
 
-/** Move the playhead and wait for it to land — `seeked`, or a `timeupdate`
- *  that shows it there, within `ms`. */
-async function seekTo(el: HTMLVideoElement, t: number, ms = SEEK_TIMEOUT_MS): Promise<void> {
+/**
+ * Move the playhead and wait for it to land — `seeked`, or a `timeupdate` that
+ * shows it there, within `ms`.
+ *
+ * THE NUDGE (2026-10-15). WebKit — Safari, and every browser on an iPhone — can
+ * leave a paused seek pending for good once the clip has been started and
+ * stopped (the play kick in openClip): `seeking` stays true, `seeked` never
+ * comes, on some clips every time and on others now and then. Without the kick
+ * the same seeks land in 50 ms; with it, a still pass fell back to playing the
+ * whole clip through. So a seek still pending after SEEK_NUDGE_MS runs the
+ * pipeline (play) until the playhead is there, and holds it again (pause).
+ * `nudge` false (a WebM — see Clip) waits the seek out instead.
+ */
+async function seekTo(el: HTMLVideoElement, t: number, ms = SEEK_TIMEOUT_MS, nudge = true): Promise<void> {
   const target = Math.min(t, Math.max(0, el.duration - 0.05));
   // Already there: no engine fires `seeked` for a seek to the current time.
   if (!el.seeking && Math.abs(el.currentTime - target) < 0.05) return;
   el.currentTime = target;
-  await waitFor(
-    el,
-    ["seeked", "timeupdate"],
-    ms,
-    "seeking the video",
-    () => !el.seeking && Math.abs(el.currentTime - target) < 0.35,
-  );
+  const there = () => !el.seeking && Math.abs(el.currentTime - target) < 0.35;
+  if (!nudge || ms <= SEEK_NUDGE_MS || !el.paused) {
+    await waitFor(el, ["seeked", "timeupdate"], ms, "seeking the video", there);
+    return;
+  }
+  try {
+    await waitFor(el, ["seeked", "timeupdate"], SEEK_NUDGE_MS, "seeking the video", there);
+    return;
+  } catch (err) {
+    if (errName(err) !== "MediaTimeout") throw err;
+  }
+  // Only a seek the element took and left pending gets the nudge. One it never
+  // took would be chased by playing the clip forward, and the play-through
+  // pass does that better — from the start, at 2×, for every missing still.
+  if (!el.seeking) {
+    await waitFor(el, ["seeked", "timeupdate"], ms - SEEK_NUDGE_MS, "seeking the video", there);
+    return;
+  }
+  await presentFrame(el, target, ms - SEEK_NUDGE_MS);
+}
+
+/**
+ * Run the clip until a frame at or past `target` has been PRESENTED, then hold
+ * the playhead. WebKit only puts a new picture on the element while its
+ * pipeline runs: after a seek it left pending, the picture is the one from
+ * before (a still that repeats the last), and after a paused seek in a WebM it
+ * is black. Presented means a frame callback at the target or, for players
+ * that never call one (WebKit's WebM player), the playhead seen moving past
+ * it. A refused play() is answered by the wait running out.
+ */
+async function presentFrame(el: HTMLVideoElement, target: number, ms: number): Promise<void> {
+  const v = el as HTMLVideoElement & {
+    requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => number;
+  };
+  const reached = (t: number) => !el.seeking && t >= target - 0.35;
+  const from = el.currentTime;
+  try {
+    await Promise.race([el.play().catch(() => {}), sleep(1_000)]);
+    await new Promise<void>((resolve, reject) => {
+      let done = false;
+      const finish = (fn: () => void) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        el.removeEventListener("timeupdate", onTime);
+        el.removeEventListener("ended", onTime);
+        fn();
+      };
+      const timer = setTimeout(() => finish(() => reject(new MediaTimeout("seeking the video"))), ms);
+      const rvfc = typeof v.requestVideoFrameCallback === "function";
+      if (rvfc) {
+        const next = () =>
+          v.requestVideoFrameCallback!((_now, meta) => (reached(meta.mediaTime) ? finish(resolve) : !done && next()));
+        next();
+      }
+      // The playhead seen moving at the target — or the clip ended there: give
+      // the compositor two frames to show it.
+      const onTime = () => {
+        if (reached(el.currentTime) && (el.currentTime > from + 0.03 || el.ended)) {
+          requestAnimationFrame(() => requestAnimationFrame(() => finish(resolve)));
+        }
+      };
+      el.addEventListener("timeupdate", onTime);
+      el.addEventListener("ended", onTime);
+    });
+  } finally {
+    el.pause();
+  }
 }
 
 /** Wait until the frame at the new time has actually been painted — `seeked`
@@ -346,7 +426,17 @@ export function openClip(file: File): ClipReader {
   return {
     ready,
     frames: (onProgress) =>
-      pullFrames({ video, ready, kick, kickNote: () => kickNote, isClosed: () => closed }, onProgress),
+      pullFrames(
+        {
+          video,
+          webm: file.type === "video/webm" || /\.webm$/i.test(file.name),
+          ready,
+          kick,
+          kickNote: () => kickNote,
+          isClosed: () => closed,
+        },
+        onProgress,
+      ),
     close,
   };
 }
@@ -379,6 +469,9 @@ export function frameTimes(duration: number, n: number): number[] {
 
 type Clip = {
   video: HTMLVideoElement;
+  /** WebKit plays a WebM through its own player: its seeks land (and paint
+   *  black), and a play() while one settles can wedge it — no nudge there. */
+  webm: boolean;
   ready: Promise<VideoProbe>;
   kick: Promise<void>;
   kickNote: () => string;
@@ -400,6 +493,7 @@ async function pullFrames(
     seekErrors: 0,
     playOk: 0,
     blank: 0,
+    repeated: 0,
     thrown: [],
     playNote: "",
     ms: 0,
@@ -447,14 +541,30 @@ async function pullFrames(
   const pctx = peek.getContext("2d", { alpha: false, willReadFrequently: true });
   if (!ctx || !pctx) throw new Error("Canvas is unavailable in this browser.");
 
-  /** Paint the current frame; false when the decoder painted black. Throws
-   *  what the canvas throws — a tainted canvas is a SecurityError on toDataURL. */
-  const grab = (i: number, t: number): boolean => {
+  // The last still's 24×24 fingerprint: a still that matches it is the
+  // picture from before the seek (WebKit, a pending seek), not a new one.
+  let lastPrint = -1;
+  const fingerprint = (px: Uint8ClampedArray) => {
+    let h = 0x811c9dc5;
+    for (let k = 0; k < px.length; k++) {
+      if ((k & 3) === 3) continue;
+      h = Math.imul(h ^ px[k], 0x01000193) >>> 0;
+    }
+    return h;
+  };
+  /** Paint the current frame. "blank" when the decoder painted black, "same"
+   *  when it is the last still again (taken anyway when `same` is allowed).
+   *  Throws what the canvas throws — a tainted canvas is a SecurityError. */
+  const grab = (i: number, t: number, allowSame = false): "ok" | "blank" | "same" => {
     ctx.drawImage(video, 0, 0, w, h);
     pctx.drawImage(canvas, 0, 0, 24, 24);
-    if (isBlankPixels(pctx.getImageData(0, 0, 24, 24).data)) return false;
+    const px = pctx.getImageData(0, 0, 24, 24).data;
+    if (isBlankPixels(px)) return "blank";
+    const print = fingerprint(px);
+    if (print === lastPrint && !allowSame) return "same";
+    lastPrint = print;
     got.set(i, { t, dataUrl: canvas.toDataURL("image/jpeg", JPEG_Q) });
-    return true;
+    return "ok";
   };
   const tick = () => onProgress?.(got.size, n);
   tick();
@@ -464,16 +574,22 @@ async function pullFrames(
   for (let i = 0; i < times.length && !isClosed(); i++) {
     const t = times[i];
     try {
-      await seekTo(video, t, refused ? 2_500 : SEEK_TIMEOUT_MS);
+      await seekTo(video, t, refused ? 2_500 : SEEK_TIMEOUT_MS, !clip.webm);
       await painted(video);
-      let ok = grab(i, t);
-      if (!ok) {
-        // The first paint after a seek can be the frame before it on WebKit —
-        // one more beat, then it is a black still.
-        await painted(video, 300);
-        ok = grab(i, t);
+      let got1 = grab(i, t);
+      if (got1 !== "ok") {
+        // Black (WebKit after a paused seek in a WebM) or the last still again
+        // (a pending seek): run the pipeline until a frame at the target is
+        // shown, then take what is there — a still scene repeats honestly.
+        if (got1 === "same") report.repeated += 1;
+        try {
+          await presentFrame(video, t, 2_500);
+        } catch {
+          /* the grab below says what is on the element */
+        }
+        got1 = grab(i, t, true);
       }
-      if (ok) report.seekOk += 1;
+      if (got1 === "ok") report.seekOk += 1;
       else report.blank += 1;
       misses = 0;
     } catch (err) {
@@ -510,7 +626,7 @@ async function playThrough(
   video: HTMLVideoElement,
   missing: number[],
   times: number[],
-  grab: (i: number, t: number) => boolean,
+  grab: (i: number, t: number, allowSame?: boolean) => "ok" | "blank" | "same",
   tick: () => void,
   report: FrameReport,
   isClosed: () => boolean,
@@ -568,7 +684,7 @@ async function playThrough(
       const i = missing[k];
       k += 1;
       try {
-        if (grab(i, now)) report.playOk += 1;
+        if (grab(i, now, true) === "ok") report.playOk += 1;
         else report.blank += 1;
       } catch (err) {
         report.thrown.push(errName(err));
@@ -643,6 +759,57 @@ export function stripFrames(frames: VideoFrame[], n = 4): VideoFrame[] {
 }
 // ── Audio ───────────────────────────────────────────────────────────────────
 
+const blobReader =
+  (blob: Blob): ByteReader =>
+  async (offset, length) =>
+    new Uint8Array(await blob.slice(offset, offset + length).arrayBuffer());
+
+async function isQuickTime(file: File): Promise<boolean> {
+  if (file.type === "video/quicktime" || /\.mov$/i.test(file.name)) return true;
+  try {
+    return isQuickTimeHead(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The clip's sound, decoded — two ways, in the order most likely to work:
+ *   whole  — the file itself through decodeAudioData (Chrome reads every
+ *            container; Safari reads .mp4 and .webm);
+ *   lifted — the AAC track lifted out of the movie as ADTS (movie-audio.ts),
+ *            which Safari decodes where it refuses the .MOV around it.
+ * A QuickTime movie (an iPhone's) goes lifted-first, which also spares the
+ * phone loading a several-hundred-MB original whole; anything else goes
+ * whole-first. Either way the other is the fallback. A lifted stream that
+ * decodes far shorter than its track says it is was demuxed wrong, and is
+ * not used.
+ */
+async function decodeSound(file: File, AC: typeof AudioContext): Promise<AudioBuffer | null> {
+  const ctx = new AC();
+  const whole = async () => ctx.decodeAudioData(await file.arrayBuffer());
+  const lifted = async () => {
+    const aac = await aacAsAdts(blobReader(file), file.size);
+    if (!aac) return null;
+    const buf = await ctx.decodeAudioData(aac.bytes.buffer as ArrayBuffer);
+    return aac.seconds > 0 && buf.duration < aac.seconds * 0.5 ? null : buf;
+  };
+  try {
+    const ways = (await isQuickTime(file)) ? [lifted, whole] : [whole, lifted];
+    for (const way of ways) {
+      try {
+        const buf = await way();
+        if (buf) return buf;
+      } catch {
+        /* the other way */
+      }
+    }
+    return null;
+  } finally {
+    ctx.close().catch(() => {});
+  }
+}
+
 function wavFromPcm(samples: Float32Array, rate: number): Blob {
   const bytes = samples.length * 2;
   const buf = new ArrayBuffer(44 + bytes);
@@ -673,8 +840,8 @@ function wavFromPcm(samples: Float32Array, rate: number): Blob {
 
 /**
  * The clip's audio as 16kHz mono WAV chunks, or null when there is nothing
- * usable — no Web Audio, a container the browser cannot demux, no audio track,
- * or a track that is silent end to end.
+ * usable — no Web Audio, a container neither way can open (decodeSound), no
+ * audio track, or a track that is silent end to end.
  */
 export async function extractAudioChunks(
   file: File,
@@ -686,17 +853,9 @@ export async function extractAudioChunks(
   if (!AC || typeof OfflineAudioContext === "undefined") return null;
 
   onProgress?.(0, 3);
-  let decoded: AudioBuffer;
-  const ctx = new AC();
-  try {
-    decoded = await ctx.decodeAudioData(await file.arrayBuffer());
-  } catch {
-    return null;
-  } finally {
-    ctx.close().catch(() => {});
-  }
+  const decoded = await decodeSound(file, AC);
   onProgress?.(1, 3);
-  if (!decoded.numberOfChannels || decoded.duration < 0.5) return null;
+  if (!decoded || !decoded.numberOfChannels || decoded.duration < 0.5) return null;
 
   // Down-mix and resample in one pass: a mono destination sums the channels.
   const length = Math.ceil(decoded.duration * AUDIO_RATE);
