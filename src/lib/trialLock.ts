@@ -37,7 +37,15 @@ export class TrialEndedError extends Error {
   }
 }
 
-const noted = new WeakMap<object, string>();
+// ON globalThis, like the database client itself (lib/db keeps one Prisma
+// client on globalThis across hot reloads and route bundles): the client's
+// write guard and requireOrg's note must share ONE map, and a map held in
+// module state is not shared when the two reach this module through
+// different copies of it — the note was then written in one copy and the
+// guard read another, and nothing was ever refused (found 2026-10-14).
+const LOCK_MAP = "__jobflexTrialLockNoted";
+const noted: WeakMap<object, string> = ((globalThis as unknown as Record<string, unknown>)[LOCK_MAP] as WeakMap<object, string> | undefined) ?? new WeakMap<object, string>();
+(globalThis as unknown as Record<string, unknown>)[LOCK_MAP] = noted;
 
 async function requestHeaders(): Promise<Headers | null> {
   try {
