@@ -209,6 +209,18 @@ export interface TaskRowDTO {
   subtasksDone: number;
   subtasksTotal: number;
   comments: number;
+  /** How many pictures the task carries (2026-10-15). */
+  pictures: number;
+}
+
+/** A picture on a task, as a page shows it: a short signed link (lib/adminTasks/pictures). */
+export interface PictureDTO {
+  id: string;
+  href: string;
+  name: string;
+  by: string | null;
+  byName: string;
+  at: string;
 }
 
 export interface SubtaskDTO {
@@ -227,16 +239,19 @@ export interface TaskDetailDTO extends TaskRowDTO {
   subtasks: SubtaskDTO[];
   /** Comments and journal entries, oldest first. */
   feed: FeedItemDTO[];
+  /** Its pictures, oldest first. */
+  photos: PictureDTO[];
 }
 
 /** The list row a detail implies — the open sheet and its row never disagree. */
 export function rowFromDetail(d: TaskDetailDTO): TaskRowDTO {
-  const { subtasks, feed, ...row } = d;
+  const { subtasks, feed, photos, ...row } = d;
   return {
     ...row,
     subtasksTotal: subtasks.length,
     subtasksDone: subtasks.filter((s) => s.done).length,
     comments: feed.filter((f) => f.type === "comment").length,
+    pictures: photos.length,
   };
 }
 
@@ -274,6 +289,14 @@ export function eventWords(e: { kind: string; from: string | null; to: string | 
       return `removed the subtask ${q(e.from)}`;
     case "SUBTASK_ASSIGNED":
       return e.to ? `gave ${q(e.from)} to ${e.to}` : `unassigned the subtask ${q(e.from)}`;
+    case "PICTURE_ADDED":
+      return `added a picture${e.to ? ` (${e.to})` : ""}`;
+    case "PICTURE_REMOVED":
+      return `removed a picture${e.from ? ` (${e.from})` : ""}`;
+    case "TAKEN":
+      return e.from ? `took the task from ${e.from}` : "took the task";
+    case "TAKEN_STARTED":
+      return `${e.from ? `took the task from ${e.from}` : "took the task"} — now In progress`;
     default:
       return "changed the task";
   }

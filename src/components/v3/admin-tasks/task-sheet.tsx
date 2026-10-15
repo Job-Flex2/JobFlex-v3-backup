@@ -26,10 +26,16 @@ import {
   addAdminTaskComment,
   removeAdminSubtask,
   reorderAdminSubtasks,
+  takeAdminTask,
   updateAdminSubtask,
   updateAdminTaskField,
   type TaskResult,
 } from "@/actions/adminTasks";
+import { Check, Hand } from "lucide-react";
+import { TaskPictures } from "./task-pictures";
+import { TaskDictate } from "./task-dictate";
+import { rememberTakeAs, takeOptions, useTakeAs } from "./take-as";
+import { isMemberRef } from "@/lib/adminTasks/teamShared";
 import {
   CATEGORIES,
   CATEGORY_LABEL,
@@ -232,6 +238,22 @@ export function TaskSheetContent({
     void setField("assigneeId", v || null, { assigneeName: p?.name ?? null });
   };
 
+  // ── take it (2026-10-15): the login is shared, so it asks who; a To-do starts; the team hears who took it ──
+  const mine = useTakeAs();
+  const takeChoices = takeOptions(people, mine).filter((o) => o.value !== task.assigneeId);
+  const [taker, setTaker] = useState("");
+  const [switching, setSwitching] = useState(false);
+  const who = takeChoices.some((o) => o.value === taker) ? taker : takeChoices[0]?.value ?? "";
+  const firstName = (n: string | null) => (n ?? "").split(/\s+/)[0] || "them";
+  const take = async () => {
+    if (!who) return;
+    const name = people.find((x) => x.id === who)?.name ?? null;
+    rememberTakeAs(who);
+    setSwitching(false);
+    const err = await run(fieldPatch({ assigneeId: who, assigneeName: name, status: task.status === "TODO" ? "IN_PROGRESS" : task.status }), () => takeAdminTask(task.id, who));
+    if (!err) toast.success(`${firstName(name)} has it`, "The rest of the team got a text.");
+  };
+
   // ── subtasks ──
   const subRun = (patch: (subs: SubtaskDTO[]) => SubtaskDTO[], call: () => Promise<TaskResult>) => run(subtaskPatch(patch), call);
   const [newSub, setNewSub] = useState("");
@@ -277,6 +299,54 @@ export function TaskSheetContent({
     <>
       <SheetBody>
         {error ? <Note tone="danger">{error}</Note> : null}
+
+        {!isClosed(task.status) && (task.assigneeId || takeChoices.length) ? (
+          <div className={cx("takeBar", task.assigneeId && "takeMine")} data-take-bar={task.assigneeId ? (isMemberRef(task.assigneeId) ? "member" : "admin") : "free"}>
+            <span className={cx("takeWho")}>
+              {task.assigneeId ? (
+                <>
+                  <b>{task.assigneeId === me.id ? "You have" : `${task.assigneeName} has`} this task.</b> Mark it done when it&apos;s finished — the team gets a text.
+                </>
+              ) : (
+                <b>Nobody has this task yet.</b>
+              )}
+            </span>
+            <span className={cx("rowBtns")}>
+              {task.assigneeId && !switching ? (
+                <>
+                  {takeChoices.length ? (
+                    <button type="button" className={cx("btn", "btn-quiet", "btn-sm")} onClick={() => setSwitching(true)} data-take-switch>
+                      Someone else is taking it
+                    </button>
+                  ) : null}
+                  <button type="button" className={cx("btn", "btn-primary", "btn-sm")} onClick={() => setStatus("DONE")} data-take-done>
+                    <Check size={14} aria-hidden />
+                    Mark done
+                  </button>
+                </>
+              ) : (
+                <>
+                  <select className={cx("in", "takePick")} value={who} onChange={(e) => setTaker(e.target.value)} aria-label="Who's taking it" data-take-who>
+                    {takeChoices.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {switching ? (
+                    <button type="button" className={cx("btn", "btn-quiet", "btn-sm")} onClick={() => setSwitching(false)}>
+                      Keep it with {firstName(task.assigneeName)}
+                    </button>
+                  ) : null}
+                  <button type="button" className={cx("btn", "btn-primary", "btn-sm")} onClick={() => void take()} disabled={!who} data-take>
+                    <Hand size={14} aria-hidden />
+                    {switching ? `Take it from ${firstName(task.assigneeName)}` : "Take it"}
+                  </button>
+                </>
+              )}
+            </span>
+          </div>
+        ) : null}
 
         <Field label="Title">
           <InlineText value={task.title} onCommit={(v) => void setField("title", v)} label="Title" maxLength={TITLE_MAX} className={cx("in")} />
@@ -368,6 +438,8 @@ export function TaskSheetContent({
           )}
         </section>
 
+        <TaskPictures task={task} store={store} />
+
         <section className={cx("sec")} aria-labelledby={`${id}-subs`}>
           <div className={cx("sec-h")}>
             <span className={cx("sec-t")} id={`${id}-subs`}>
@@ -455,7 +527,8 @@ export function TaskSheetContent({
               placeholder="Write a comment — links become clickable"
               aria-label="Comment"
             />
-            <div className={cx("rowBtns")}>
+            <div className={cx("rowBtns", "composeBtns")}>
+              <TaskDictate value={comment} max={COMMENT_MAX} label="Speak a comment" onChange={setComment} />
               <button type="submit" className={cx("btn", "btn-ghost", "btn-sm")} disabled={!comment.trim()}>
                 <Ic name="send" />
                 Comment
@@ -532,6 +605,7 @@ function DescriptionEditor({ value, onSave, onCancel }: { value: string; onSave:
         aria-label="Description"
         autoFocus
       />
+      <TaskDictate value={draft} max={DESCRIPTION_MAX} label="Speak" onChange={setDraft} />
       {changedMeanwhile ? (
         <span className={cx("fld-hint", "tsHint")} role="status">
           Someone changed the description while you were editing — saving replaces their version.
@@ -584,7 +658,8 @@ function SubtaskRow({
           value={sub.assigneeId ?? ""}
           onChange={(v) => onAssign(v || null)}
           placeholder="Anyone"
-          options={people.map((p) => ({ value: p.id, label: p.name }))}
+          // A subtask goes to an admin with a sign-in (its column holds an account); the task itself to anyone.
+          options={people.filter((p) => !isMemberRef(p.id)).map((p) => ({ value: p.id, label: p.name }))}
           ariaLabel={`Who does “${sub.title}”`}
           disabled={temp}
         />

@@ -1,0 +1,183 @@
+// THE JOBFLEX TEAM, BY TEXT (owner, 2026-10-15: "add the team with their phone numbers … anybody can grab a task, I
+// can assign it to Ivan, everybody gets a text"; then: "let's not do any logins — I just add their phone number; the
+// team already has access to admin tasks; we just tell who's doing what by text, and they go to admin, find it and
+// mark it done"). Pure, browser-safe.
+//
+// The team is a list the owner keeps: a name and a mobile each — no accounts, no codes (the owner adds the number;
+// the person gets one welcome text that says how to stop). A task can be given to someone on it: their id rides in
+// the task's assignee as "m:<id>" (lib/adminTasks/teamStore keeps the pairing; the task table is unchanged), so the
+// list, the filters and the sheet treat them like anyone else. A write to a task produces TaskTexts; who gets each:
+//   new       a task nobody has yet → everyone on the team
+//   assigned  given to someone       → that person
+//   taken     someone took it        → everyone else
+//   done      it's done              → everyone but whoever had it
+// Never a switched-off phone; nothing 9 PM–7 AM (Los Angeles) to a phone that keeps quiet nights — unless Urgent.
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  /** E.164. */
+  phone: string;
+  on: boolean;
+  quietNights: boolean;
+  addedAt: string;
+};
+
+/** A team member as a task's assignee: "m:<id>". */
+export const MEMBER_PREFIX = "m:";
+export const memberRef = (id: string) => `${MEMBER_PREFIX}${id}`;
+export const isMemberRef = (v: string | null | undefined): v is string => typeof v === "string" && v.startsWith(MEMBER_PREFIX) && v.length > MEMBER_PREFIX.length;
+export const memberIdOf = (ref: string) => ref.slice(MEMBER_PREFIX.length);
+
+export type TextTask = { id: string; title: string; priority: string; dueDate: string | null };
+export type TaskText =
+  /** `by`: who posted it, when that is a person (the shared console login is nobody). */
+  | { kind: "new"; task: TextTask; by: string | null }
+  | { kind: "assigned"; task: TextTask; by: string | null; to: string }
+  | { kind: "taken"; task: TextTask; member: string; name: string }
+  | { kind: "done"; task: TextTask; member: string | null; name: string | null };
+
+export const TEAM_TZ = "America/Los_Angeles";
+
+/** 9 PM–7 AM on the team's clock. */
+export function isQuietHour(now: Date, tz = TEAM_TZ): boolean {
+  const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(now));
+  return h >= 21 || h < 7;
+}
+
+/** Who a text goes to: member ids, in the list's order. */
+export function textRecipients(t: TaskText, members: readonly TeamMember[], now: Date): string[] {
+  const quiet = t.task.priority !== "URGENT" && isQuietHour(now);
+  const can = (m: TeamMember) => m.on && !(m.quietNights && quiet);
+  if (t.kind === "assigned") return members.filter((m) => m.id === t.to && can(m)).map((m) => m.id);
+  const skip = t.kind === "taken" ? t.member : t.kind === "done" ? t.member : null;
+  return members.filter((m) => m.id !== skip && can(m)).map((m) => m.id);
+}
+
+const SHORT_TITLE = 70;
+const shortTitle = (s: string) => (s.length > SHORT_TITLE ? `${s.slice(0, SHORT_TITLE - 1).trimEnd()}…` : s);
+const firstName = (s: string) => s.trim().split(/\s+/)[0] || s;
+const PRIORITY_WORD: Record<string, string> = { URGENT: "URGENT · ", HIGH: "High · " };
+
+function dueWords(day: string | null): string {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return "";
+  const d = new Date(`${day}T12:00:00Z`);
+  return ` · due ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`;
+}
+
+/** The text itself, with the task's link. One short line — it reads on a lock screen. */
+export function taskTextBody(t: TaskText, href: string): string {
+  const title = `“${shortTitle(t.task.title)}”`;
+  const pri = PRIORITY_WORD[t.task.priority] ?? "";
+  switch (t.kind) {
+    case "new":
+      return `JobFlex task${t.by ? ` from ${firstName(t.by)}` : ""}: ${pri}${title}${dueWords(t.task.dueDate)}. Nobody has it yet — open Tasks in admin to take it: ${href}`;
+    case "assigned":
+      return `JobFlex: a task for you${t.by ? ` from ${firstName(t.by)}` : ""} — ${pri}${title}${dueWords(t.task.dueDate)}. ${href}`;
+    case "taken":
+      return `JobFlex: ${firstName(t.name)} took ${title}. ${href}`;
+    case "done":
+      return `JobFlex: ✓ ${title} is done${t.name ? ` (${firstName(t.name)})` : ""}. ${href}`;
+  }
+}
+
+/** The first text a new team member gets — what these texts are, and how to stop them. */
+export function welcomeTextBody(name: string, by: string | null): string {
+  return `JobFlex: hi ${firstName(name)} — ${by ? `${firstName(by)} added` : "you're added"} ${by ? "you " : ""}to the JobFlex team's task texts. You'll get a text when a task is yours or needs someone; open Tasks in admin to see it and mark it done. Reply STOP to stop.`;
+}
+
+/** A phone as typed → E.164 (US/Canada numbers without +1 get it), or null. */
+export function phoneE164(raw: string): string | null {
+  const s = (raw || "").trim();
+  if (!s) return null;
+  const digits = s.replace(/\D/g, "");
+  if (s.startsWith("+")) return /^\+[1-9]\d{7,14}$/.test(`+${digits}`) ? `+${digits}` : null;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return null;
+}
+
+/** "(425) 772-6587" for a US/Canada number, else the E.164 as it is. */
+export function phoneWords(e164: string): string {
+  const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(e164);
+  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : e164;
+}
+
+export const NAME_MAX = 60;
+export const TEAM_MAX = 40;
+
+/** The list as stored, checked (a junk row never reaches a send). */
+export function cleanMembers(raw: unknown): TeamMember[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: TeamMember[] = [];
+  for (const v of raw) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    const id = typeof o.id === "string" && /^[A-Za-z0-9_-]{4,40}$/.test(o.id) ? o.id : null;
+    const name = typeof o.name === "string" ? o.name.replace(/\s+/g, " ").trim().slice(0, NAME_MAX) : "";
+    const phone = typeof o.phone === "string" ? phoneE164(o.phone) : null;
+    if (!id || !name || !phone || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name, phone, on: o.on !== false, quietNights: o.quietNights !== false, addedAt: typeof o.addedAt === "string" ? o.addedAt : "" });
+  }
+  return out.slice(0, TEAM_MAX);
+}
+
+/** Can texts go at all from this server — Twilio set up, JobFlex's number approved. */
+export type TextingStatus = { ready: boolean; words: string };
+
+/** The latest task text to a number, as SmsMessage keeps it (the Twilio status callback fills in delivery). */
+export type LastText = { status: string; error: string | null; at: string };
+
+/** One person on the team, as the Team sheet shows them. */
+export type TeamMemberView = {
+  id: string;
+  name: string;
+  phone: string;
+  on: boolean;
+  quietNights: boolean;
+  /** Open tasks given to them now. */
+  open: number;
+  /** Did the last text reach them. */
+  last: LastText | null;
+  /** They replied STOP: nothing reaches them until they text START. */
+  stopped: boolean;
+};
+
+/** The carrier's error codes a person can act on (Twilio's 2xxxx/3xxxx). */
+const CARRIER_WORDS: Record<string, string> = {
+  "21211": "the number isn't a valid mobile",
+  "21610": "they replied STOP",
+  "21614": "the number can't get texts",
+  "30003": "their phone was off or out of reach",
+  "30004": "the number blocks texts",
+  "30005": "the number doesn't exist",
+  "30006": "it's a landline",
+  "30007": "the carrier filtered it",
+  "30008": "the carrier didn't say why",
+  "30032": "JobFlex's toll-free number isn't verified yet",
+};
+
+/** What became of the last text, in words, with a tone for the dot beside it. */
+export function deliveryWords(last: LastText | null): { tone: "ok" | "wait" | "bad"; words: string } | null {
+  if (!last) return null;
+  const s = last.status.toUpperCase();
+  if (s === "DELIVERED" || s === "READ") return { tone: "ok", words: "Last text delivered" };
+  if (s === "QUEUED" || s === "SENT" || s === "SENDING" || s === "ACCEPTED" || s === "SCHEDULED" || s === "HELD") return { tone: "wait", words: "Last text sent — no delivery receipt yet" };
+  if (s === "UNDELIVERED" || s === "FAILED") {
+    const code = /^(\d{5})/.exec(last.error ?? "")?.[1];
+    const why = code ? CARRIER_WORDS[code] ?? `carrier error ${code}` : null;
+    return { tone: "bad", words: `Last text didn't arrive${why ? ` — ${why}` : ""}` };
+  }
+  if (s === "SKIPPED") {
+    const e = last.error ?? "";
+    const why =
+      e === "not-configured" ? "texting isn't set up on this server" :
+      e === "no-number" ? "JobFlex's number isn't approved yet" :
+      e === "cap-number" ? "today's texts to this number were used up" :
+      e.startsWith("cap-") ? "today's texting limit was reached" : "it was held back";
+    return { tone: "bad", words: `Last text not sent — ${why}` };
+  }
+  return { tone: "wait", words: "Last text sent" };
+}

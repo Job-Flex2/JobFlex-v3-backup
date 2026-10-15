@@ -72,6 +72,9 @@ export function useDictation(value: string, onChange: (next: string) => void): D
   // since: the field shows base + finals + the interim guess.
   const baseRef = useRef("");
   const finalsRef = useRef("");
+  // What this session last put in the field: if the field holds something else when the session ends (it was sent
+  // and cleared, or edited), the end leaves it alone instead of writing the words back (2026-10-15).
+  const wroteRef = useRef<string | null>(null);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   useEffect(() => {
@@ -93,6 +96,7 @@ export function useDictation(value: string, onChange: (next: string) => void): D
     rec.interimResults = true;
     baseRef.current = valueRef.current;
     finalsRef.current = "";
+    wroteRef.current = null;
     rec.onstart = () => setListening(true);
     rec.onresult = (e) => {
       let interim = "";
@@ -102,7 +106,9 @@ export function useDictation(value: string, onChange: (next: string) => void): D
         if (r.isFinal) finalsRef.current = join(finalsRef.current, text);
         else interim = join(interim, text);
       }
-      onChangeRef.current(join(join(baseRef.current, finalsRef.current), interim));
+      const next = join(join(baseRef.current, finalsRef.current), interim);
+      wroteRef.current = next;
+      onChangeRef.current(next);
     };
     rec.onerror = (e) => {
       const code = e.error ?? "";
@@ -120,8 +126,8 @@ export function useDictation(value: string, onChange: (next: string) => void): D
       );
     };
     rec.onend = () => {
-      // The interim guess is gone with the session; the field keeps what was final.
-      onChangeRef.current(join(baseRef.current, finalsRef.current));
+      // The interim guess is gone with the session; the field keeps what was final — unless it changed meanwhile.
+      if (wroteRef.current !== null && valueRef.current === wroteRef.current) onChangeRef.current(join(baseRef.current, finalsRef.current));
       recRef.current = null;
       setListening(false);
     };

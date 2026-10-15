@@ -36,6 +36,8 @@ for (const k of ["SMTP_HOST", "SMTP_USER", "RESEND_API_KEY"]) process.env[k] = "
 
 import { db } from "../../src/lib/db";
 import * as svc from "../../src/lib/adminTasks/service";
+import * as pics from "../../src/lib/adminTasks/pictures";
+import * as team from "../../src/lib/adminTasks/teamStore";
 import {
   cleanLink,
   dayLabel,
@@ -104,7 +106,7 @@ const row = (p: Partial<TaskRowDTO>): TaskRowDTO => ({
   title: "t", description: "", priority: "NORMAL", status: "TODO", category: "OTHER",
   assigneeId: null, assigneeName: null, authorId: null, authorName: "x", dueDate: null, linkUrl: null, supportTicketId: null,
   createdAt: "2026-10-05T12:00:00.000Z", updatedAt: "2026-10-05T12:00:00.000Z", closedAt: null,
-  subtasksDone: 0, subtasksTotal: 0, comments: 0, ...p,
+  subtasksDone: 0, subtasksTotal: 0, comments: 0, pictures: 0, ...p,
 });
 const ROWS = [
   row({ id: "a", title: "Stripe retries", priority: "URGENT", status: "IN_PROGRESS", category: "BUG", assigneeId: "me", dueDate: "2026-10-09", subtasksDone: 1, subtasksTotal: 3, createdAt: "2026-10-01T12:00:00.000Z", updatedAt: "2026-10-11T09:00:00.000Z" }),
@@ -228,6 +230,67 @@ async function main() {
     const [t1, t2] = await Promise.all([svc.createTaskFromTicket(A, ticket.id), svc.createTaskFromTicket(B, ticket.id)]);
     const count = await db.adminTask.count({ where: { supportTicketId: ticket.id } });
     check("ticket → one task even when pressed twice at once", count === 1 && t1.task.id === t2.task.id && [t1.existed, t2.existed].filter(Boolean).length === 1);
+
+    // The team by name and phone, take it as…, texts (2026-10-15, no logins): the service says who hears what; the
+    // action layer sends. The list is SyncState; what was there before is put back after.
+    const teamBefore = await db.syncState.findMany({ where: { key: { in: ["adminTeam:members:v1", "adminTeam:assign:v1"] } } });
+    await team.writeMembers([
+      { id: "ivan01", name: "Ivan Petrov", phone: "+12065550101", on: true, quietNights: true, addedAt: "" },
+      { id: "ana001", name: "Ana Lee", phone: "+12065550102", on: true, quietNights: true, addedAt: "" },
+    ]);
+    await db.syncState.deleteMany({ where: { key: "adminTeam:assign:v1" } });
+    try {
+      const kindsOf = (w: { texts?: Array<{ kind: string }> }) => (w.texts ?? []).map((t) => t.kind).join();
+      const people = await svc.taskPeople();
+      check("everyone a task can go to: the team list first (m:<id>), then admins", people[0].id === "m:ivan01" && people[1].id === "m:ana001" && people.some((p) => p.id === A.id) && !people.some((p) => p.id === C.id));
+      const free = await svc.createTask(A, { title: "Nobody has this" });
+      check("a new task nobody has → a 'new' text from its author", kindsOf(free) === "new" && (free.texts![0] as { by: string | null }).by === "QA ana");
+      check("…from the shared console: no name on it", (((await svc.createTask(C, { title: "From the console" })).texts![0]) as { by: string | null }).by === null);
+      const given = await svc.createTask(A, { title: "For Ivan", assigneeId: "m:ivan01" });
+      check("a new task given to someone on the team → an 'assigned' text to them, the row says their name", kindsOf(given) === "assigned" && (given.texts![0] as { to: string }).to === "ivan01" && given.task.assigneeId === "m:ivan01" && given.task.assigneeName === "Ivan Petrov");
+      check("…the list says it too", (await svc.listTasks()).find((r) => r.id === given.task.id)?.assigneeName === "Ivan Petrov");
+      check("a new task given to an admin with a sign-in → their email, no text", kindsOf(await svc.createTask(A, { title: "For Bea", assigneeId: B.id })) === "");
+      check("someone not on the team → refused", await refuses(svc.createTask(A, { title: "Ghost", assigneeId: "m:zzzz99" }), /isn't on the team/));
+      const took = await svc.takeTask(C, free.task.id, "m:ivan01");
+      const takenEv = took.task.feed.find((f) => f.type === "event" && f.kind === "TAKEN_STARTED");
+      check("take it as Ivan (from the shared console): his, To do → In progress, a 'taken' text", took.task.assigneeId === "m:ivan01" && took.task.status === "IN_PROGRESS" && kindsOf(took) === "taken");
+      check("…one journal line in his name: 'Ivan Petrov took the task — now In progress'", takenEv?.actorName === "Ivan Petrov" && eventWords(takenEv as { kind: string; from: string | null; to: string | null }) === "took the task — now In progress" && !took.task.feed.some((f) => f.type === "event" && f.kind === "STATUS"));
+      check("taking your own in-progress task again: nothing", kindsOf(await svc.takeTask(C, free.task.id, "m:ivan01")) === "");
+      const stolen = await svc.takeTask(A, free.task.id, "m:ana001");
+      const fromEv = stolen.task.feed.filter((f) => f.type === "event" && f.kind === "TAKEN").pop() as { kind: string; from: string | null; to: string | null } | undefined;
+      check("Ana takes it from Ivan: allowed, a 'taken' text, 'took the task from Ivan Petrov'", stolen.task.assigneeId === "m:ana001" && kindsOf(stolen) === "taken" && !!fromEv && eventWords(fromEv) === "took the task from Ivan Petrov");
+      check("take it needs someone on the team", (await refuses(svc.takeTask(A, free.task.id, A.id), /who's taking it/)) && (await refuses(svc.takeTask(A, free.task.id, "m:zzzz99"), /isn't on the team/)));
+      const done = await svc.updateTaskField(C, free.task.id, "status", "DONE");
+      check("done → a 'done' text naming who had it, not sent to them", kindsOf(done) === "done" && (done.texts![0] as { member: string; name: string }).member === "ana001" && (done.texts![0] as { name: string }).name === "Ana Lee");
+      check("a closed task can't be taken", await refuses(svc.takeTask(C, free.task.id, "m:ivan01"), /closed/));
+      const toAdmin = await svc.updateTaskField(A, given.task.id, "assigneeId", B.id);
+      check("Ivan's task handed to an admin: the column, no text, Ivan's pairing gone", toAdmin.task.assigneeId === B.id && kindsOf(toAdmin) === "" && !(given.task.id in (await team.readAssignments())));
+      const back = await svc.updateTaskField(A, given.task.id, "assigneeId", "m:ana001");
+      check("…and on to Ana: the column cleared, an 'assigned' text to her", back.task.assigneeId === "m:ana001" && kindsOf(back) === "assigned" && (await db.adminTask.findUnique({ where: { id: given.task.id } }))?.assigneeId === null);
+      const nobody = await svc.updateTaskField(A, given.task.id, "assigneeId", null);
+      check("…and to nobody: unassigned, no text, journaled", nobody.task.assigneeId === null && kindsOf(nobody) === "" && nobody.task.feed.some((f) => f.type === "event" && f.kind === "ASSIGNEE" && f.from === "Ana Lee" && f.to === null));
+      check("any other change → no text", kindsOf(await svc.updateTaskField(A, given.task.id, "priority", "HIGH")) === "");
+      await svc.updateTaskField(A, given.task.id, "assigneeId", "m:ivan01");
+      const dropped = await team.dropMemberAssignments("ivan01");
+      check("someone leaves the team: their tasks are let go", dropped.includes(given.task.id) && (await svc.getTaskDetail(given.task.id))?.assigneeId === null);
+    } finally {
+      await db.syncState.deleteMany({ where: { key: { in: ["adminTeam:members:v1", "adminTeam:assign:v1"] } } });
+      for (const r of teamBefore) await db.syncState.create({ data: { key: r.key, cursor: r.cursor } });
+    }
+    const given = await svc.createTask(A, { title: "For pictures" });
+
+    // Pictures — the private store in local mode (this machine's disk), a signed link to read one.
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+    await pics.addTaskPicture({ id: A.id, name: "QA ana" }, given.task.id, { bytes: png, type: "image/png", name: "screen.png" });
+    let gd = (await svc.getTaskDetail(given.task.id))!;
+    check("a picture added: a signed link, counted on the row, journaled", gd.photos.length === 1 && /^\/api\/media\/f\?u=/.test(gd.photos[0].href) && rowFromDetail(gd).pictures === 1 && gd.feed.some((f) => f.type === "event" && f.kind === "PICTURE_ADDED"));
+    check("the list counts it too", (await svc.listTasks()).find((r) => r.id === given.task.id)?.pictures === 1);
+    const notPic = await pics.addTaskPicture({ id: A.id, name: "QA ana" }, given.task.id, { bytes: Buffer.from("hello"), type: "text/plain", name: "a.txt" }).then(() => "", (e: Error) => e.message);
+    check("not a picture → refused", /Only pictures/.test(notPic), notPic);
+    await pics.removeTaskPicture({ id: B.id }, given.task.id, gd.photos[0].id);
+    gd = (await svc.getTaskDetail(given.task.id))!;
+    check("removed: gone from the task, journaled", gd.photos.length === 0 && gd.feed.some((f) => f.type === "event" && f.kind === "PICTURE_REMOVED"));
+    check("the journal says it in words", eventWords({ kind: "PICTURE_ADDED", from: null, to: "screen.png" }) === "added a picture (screen.png)" && eventWords({ kind: "PICTURE_REMOVED", from: "screen.png", to: null }) === "removed a picture (screen.png)");
     check("ticket task: Support, High, subject, message, link back", t1.task.category === "SUPPORT" && t1.task.priority === "HIGH" && t1.task.title === "Logo too large" && t1.task.description.startsWith("20 MB PNG") && t1.task.linkUrl === `/admin/support?ticket=${ticket.id}`);
     check("tasks for tickets", (await svc.tasksForTickets([ticket.id]))[ticket.id]?.id === t1.task.id);
   } finally {
@@ -240,7 +303,8 @@ async function main() {
   // ── 9. access ──
   const actions = readFileSync(join(ROOT, "src/actions/adminTasks.ts"), "utf8");
   const exported = [...actions.matchAll(/export async function (\w+)\(([^)]*)\)[^{]*\{([\s\S]*?)\n\}/g)];
-  check("every action asks for a platform admin first", exported.length === 9 && exported.every(([, , , body]) => /asAdmin\(\)|run\(/.test(body)) && /requirePlatformAdmin\(\)/.test(actions), exported.map((m) => m[1]).join());
+  // 16 since 2026-10-15: take it, a picture off, and the team list (teamRun asks asAdmin() first).
+  check("every action asks for a platform admin first", exported.length === 16 && exported.every(([, , , body]) => /asAdmin\(\)|\brun\(|teamRun\(/.test(body)) && /requirePlatformAdmin\(\)/.test(actions) && /async function teamRun[\s\S]*?asAdmin\(\)/.test(actions), exported.map((m) => m[1]).join());
   const route = readFileSync(join(ROOT, "src/app/api/admin/tasks/changes/route.ts"), "utf8");
   check("the changes route asks before reading", route.indexOf("requirePlatformAdmin()") > -1 && route.indexOf("requirePlatformAdmin()") < route.indexOf("changesSince(") && /status: forbidden \? 403 : 401/.test(route));
   const page = readFileSync(join(ROOT, "src/app/(admin)/admin/tasks/page.tsx"), "utf8");
