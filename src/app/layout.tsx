@@ -44,7 +44,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jbMono.variable}`}>
+    // suppressHydrationWarning: the landing hero's inline prelude sets
+    // data-lp-entrance on <html> before React hydrates (landing-e/hero.tsx
+    // ENTRANCE_PRELUDE) — on purpose, desk-width only. Covers <html>'s own
+    // attributes, nothing below it.
+    <html lang="en" className={`${inter.variable} ${jbMono.variable}`} suppressHydrationWarning>
       {/* suppressHydrationWarning: browser extensions (e.g. Grammarly) inject
           data-gr-* attributes on <body> before React hydrates — benign mismatch. */}
       {/* No `antialiased`: default subpixel rendering keeps text crisper

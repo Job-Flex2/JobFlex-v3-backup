@@ -174,7 +174,10 @@ export function PasswordlessStep({
   const [said, setSaid] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [code, setCode] = React.useState("");
-  const [now, setNow] = React.useState(() => Date.now());
+  // Seeded from the server's clock (restore.now), never this render's
+  // Date.now(): the SSR'd countdown and the hydrating one must print the same
+  // second. A fresh visit has no countdown (resendAt 0), so any seed reads 0 s.
+  const [now, setNow] = React.useState(() => restore?.now ?? 0);
   const codeRef = React.useRef<HTMLInputElement>(null);
   const bridgeRef = React.useRef<HTMLInputElement>(null);
   const headRef = React.useRef<HTMLHeadingElement>(null);
@@ -206,7 +209,9 @@ export function PasswordlessStep({
     trackTraffic(TRAFFIC_EVENTS.step, { step: "code", flow: "otp", variant: "e", steps: 2, mode: "otp" });
   }, [screen]);
 
-  /* The resend countdown. */
+  /* The resend countdown — on this browser's clock from the first effect on. */
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- the browser's clock, read once after hydration
+  React.useEffect(() => setNow(Date.now()), []);
   React.useEffect(() => {
     if (screen !== "code" || resendAt <= Date.now()) return;
     const t = window.setInterval(() => setNow(Date.now()), 1000);

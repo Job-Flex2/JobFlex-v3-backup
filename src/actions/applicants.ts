@@ -5,6 +5,7 @@ import { requireManager, requireRouteAccess } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { relative } from "@/lib/format";
 import { ApplicantStatus } from "@/lib/prismaEnums";
+import { refusal, type ActionResult } from "@/lib/actionResult";
 
 // The pipeline's row shape used to live in the blueprint hire page's data
 // module; that page was rebuilt as the Hire & Work marketplace (2026-09-03) and
@@ -26,14 +27,17 @@ export type Applicant = {
   resumeUrl?: string | null;
 };
 
+// Every string has a ceiling: the columns are unbounded TEXT, and a 5000-character
+// name used to save as-is (QA forms, too-long). Messages are the half after
+// the label — `refusal` adds "Email: " and the rest.
 const applicantInput = z.object({
-  fullName: z.string().min(1),
-  email: z.string().email(),
-  phone: z.string().optional().nullable(),
-  role: z.string().min(1),
-  source: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-  resumeUrl: z.string().optional().nullable(),
+  fullName: z.string().trim().min(1, "required.").max(120, "120 characters at most."),
+  email: z.string().trim().max(254, "254 characters at most.").email("enter a valid address, like name@company.com."),
+  phone: z.string().trim().max(32, "32 characters at most.").optional().nullable(),
+  role: z.string().trim().min(1, "required.").max(120, "120 characters at most."),
+  source: z.string().trim().max(120, "120 characters at most.").optional().nullable(),
+  notes: z.string().max(2000, "2000 characters at most.").optional().nullable(),
+  resumeUrl: z.string().trim().max(2000, "2000 characters at most.").optional().nullable(),
   status: z.enum([
     ApplicantStatus.APPLIED,
     ApplicantStatus.INTERVIEWING,
@@ -42,9 +46,15 @@ const applicantInput = z.object({
   ]).default(ApplicantStatus.APPLIED),
 });
 
-export async function createApplicant(raw: unknown) {
+const APPLICANT_LABELS = { fullName: "Full name", email: "Email", phone: "Phone", role: "Role", source: "Source", notes: "Notes", resumeUrl: "Résumé link", status: "Status" };
+
+/** A wrong field comes back as a refusal the form prints under it — thrown,
+ *  the ZodError reached the page as a 500 (QA F-1f3f6da5). */
+export async function createApplicant(raw: unknown): Promise<ActionResult<{ id: string }>> {
   const { organizationId } = await requireManager();
-  const data = applicantInput.parse(raw);
+  const parsed = applicantInput.safeParse(raw);
+  if (!parsed.success) return refusal(parsed.error, APPLICANT_LABELS);
+  const data = parsed.data;
   const a = await db.applicant.create({
     data: {
       organizationId,
@@ -59,7 +69,7 @@ export async function createApplicant(raw: unknown) {
     },
   });
   revalidatePath("/dashboard/hire");
-  return { id: a.id };
+  return { ok: true, id: a.id };
 }
 
 const statusSchema = z.enum([

@@ -6,35 +6,53 @@ import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { db } from "@/lib/db";
 import { dispatchOne } from "@/lib/followUps/engine";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
-import { encodeChannel } from "@/lib/followUps/copy";
+import { encodeChannel, MAX_DELAY_MINUTES, TEXT_NEEDS_TWILIO } from "@/lib/followUps/copy";
+import { ProposalStatus } from "@/lib/prismaEnums";
+import { refusal, refused, type ActionResult } from "@/lib/actionResult";
 
+// A rule fires when a proposal's status becomes `triggerStatus`
+// (lib/followUps/engine scheduleFollowUpsFor), so the proposal statuses are the
+// only values that can ever match. The editors offer a subset.
+const TRIGGER_STATUSES = Object.values(ProposalStatus) as [ProposalStatus, ...ProposalStatus[]];
+
+// Messages are the half after the label — `refusal` adds "Delay: " and the rest.
 const ruleInput = z.object({
   id: z.string().optional(),
-  name: z.string().min(1),
-  triggerStatus: z.string(),
-  delayMinutes: z.number().min(1),
+  name: z.string().trim().min(1, "required.").max(120, "120 characters at most."),
+  triggerStatus: z.enum(TRIGGER_STATUSES, { errorMap: () => ({ message: "pick one from the list." }) }),
+  delayMinutes: z
+    .number({ invalid_type_error: "enter a number." })
+    .int("use whole minutes.")
+    .min(1, "at least 1 minute.")
+    .max(MAX_DELAY_MINUTES, "365 days at most."),
   enabled: z.boolean().default(true),
   /** EMAIL or TEXT. Stored in the `template` column — see
    *  src/lib/followUps/copy.ts for why that column carries the channel now. */
   channel: z.enum(["EMAIL", "TEXT"]).default("EMAIL"),
 });
 
-export async function upsertFollowUpRule(raw: unknown) {
+const RULE_LABELS = { name: "Rule name", triggerStatus: "Trigger", delayMinutes: "Delay", channel: "Send by" };
+
+/** Every refusal is a value the editor prints (lib/actionResult) — a thrown
+ *  one reached the page as a 500 with Prisma's own text in it. */
+export async function upsertFollowUpRule(raw: unknown): Promise<ActionResult<{ id: string }>> {
   const { organizationId, user } = await requireManager();
-  const data = ruleInput.parse(raw);
+  const parsed = ruleInput.safeParse(raw);
+  if (!parsed.success) return refusal(parsed.error, RULE_LABELS);
+  const data = parsed.data;
 
   // A rule can only promise what this deployment can actually deliver. Offering
   // TEXT in the editor is gated on the same flag, but the server is the one that
   // has to refuse — otherwise a rule quietly stops sending the day the number
   // is removed.
   if (data.channel === "TEXT" && !await isTwilioEnabled()) {
-    throw new Error("Texting needs a Twilio number — set one up on the Phone page.");
+    return refused(TEXT_NEEDS_TWILIO, "channel");
   }
   const channel = encodeChannel(data.channel);
 
   if (data.id) {
     const existing = await db.followUpRule.findUnique({ where: { id: data.id } });
-    if (!existing || existing.organizationId !== organizationId) throw new Error("Not found");
+    if (!existing || existing.organizationId !== organizationId) return refused("This rule is gone — it was deleted. Reload the page.");
     const updated = await db.followUpRule.update({
       where: { id: data.id },
       data: {
@@ -48,7 +66,7 @@ export async function upsertFollowUpRule(raw: unknown) {
     revalidatePath("/dashboard/follow-ups");
     revalidatePath("/dashboard/crm");
     await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Updated follow-up rule settings — edited "${data.name}"`, meta: { area: "follow-up rules", ruleId: updated.id, channel: data.channel, enabled: data.enabled } });
-    return { id: updated.id };
+    return { ok: true, id: updated.id };
   }
 
   const created = await db.followUpRule.create({
@@ -64,7 +82,7 @@ export async function upsertFollowUpRule(raw: unknown) {
   revalidatePath("/dashboard/follow-ups");
   revalidatePath("/dashboard/crm");
   await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Updated follow-up rule settings — added "${data.name}"`, meta: { area: "follow-up rules", ruleId: created.id, channel: data.channel, enabled: data.enabled } });
-  return { id: created.id };
+  return { ok: true, id: created.id };
 }
 
 export async function setFollowUpRuleEnabled(id: string, enabled: boolean) {

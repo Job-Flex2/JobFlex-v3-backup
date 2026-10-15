@@ -9,6 +9,7 @@ import { renderEmail } from "@/lib/email/renderEmail";
 import { buildTestEmail } from "@/lib/email/build/platform";
 import { sendOrgEmail } from "@/lib/email/orgSend";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
+import { refusal, type ActionResult } from "@/lib/actionResult";
 
 const settingsSaved = (organizationId: string, actorId: string, area: string, meta?: Record<string, unknown>) =>
   logActivity({ organizationId, actorId, kind: TRAIL_KINDS.SETTINGS, summary: `Updated ${area} settings`, meta: { area, ...meta } });
@@ -164,16 +165,21 @@ export async function disconnectGmail() {
 // by the estimators. 0% keeps current behaviour. min(0) blocks negative markup
 // (which would sell below cost); the ceiling is a sanity guard, not a rule.
 const proposalDefaultsSchema = z.object({
-  materialMarkupPct: z.number().finite().min(0).max(1000),
-  laborMarkupPct: z.number().finite().min(0).max(1000),
+  materialMarkupPct: z.number({ invalid_type_error: "enter a number." }).finite("enter a number.").min(0, "can't be below 0.").max(1000, "1000 at most."),
+  laborMarkupPct: z.number({ invalid_type_error: "enter a number." }).finite("enter a number.").min(0, "can't be below 0.").max(1000, "1000 at most."),
   // Default sales tax, stored as a FRACTION 0-1 (0.08 = 8%) to match
   // Proposal.taxRate. The settings UI collects a percent and divides by 100.
-  defaultTaxRate: z.number().finite().min(0).max(1),
+  defaultTaxRate: z.number({ invalid_type_error: "enter a number." }).finite("enter a number.").min(0, "can't be below 0.").max(1, "100% at most."),
 });
+const PROPOSAL_DEFAULT_LABELS = { materialMarkupPct: "Materials markup", laborMarkupPct: "Labor markup", defaultTaxRate: "Default tax rate" };
 
-export async function updateProposalDefaults(raw: unknown) {
+// A wrong value comes back as a refusal the form prints under its field — a
+// thrown ZodError reached the page as a 500 (QA F-1f3f6da5).
+export async function updateProposalDefaults(raw: unknown): Promise<ActionResult> {
   const { organizationId, user } = await requireManager();
-  const data = proposalDefaultsSchema.parse(raw);
+  const parsed = proposalDefaultsSchema.safeParse(raw);
+  if (!parsed.success) return refusal(parsed.error, PROPOSAL_DEFAULT_LABELS);
+  const data = parsed.data;
   await db.organization.update({
     where: { id: organizationId },
     data: {

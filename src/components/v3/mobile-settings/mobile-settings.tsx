@@ -168,6 +168,7 @@ import { MobileSettingsSprite } from "./sprite";
 import { PasswordControl } from "@/components/account-password/password-control";
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
+import { isRefusal } from "@/lib/actionResult";
 import { DeskSteps } from "@/components/v3/ai-desk/desk-steps";
 import { DESK_COPY } from "@/components/v3/settings-blueprint/settings-data";
 
@@ -335,7 +336,14 @@ function SaveBar({
     inFlight.current = true;
     setBusy(true);
     try {
-      await onSave();
+      // A refusal (lib/actionResult) is an answer, not a save: its words go in
+      // the message slot and "Saved" never shows.
+      const res = await onSave();
+      if (isRefusal(res)) {
+        setSaved(false);
+        setError(res.error);
+        return;
+      }
       setSaved(true);
       timer.current = setTimeout(() => setSaved(false), 2200);
     } catch (err) {
