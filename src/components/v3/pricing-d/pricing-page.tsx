@@ -23,6 +23,7 @@ import { CtaFooter } from "@/components/v3/landing-e/cta-footer";
 import { Reveal } from "@/components/v3/landing-e/reveal";
 import { REGISTER } from "@/components/v3/landing-e/routes";
 import { PricingPlans } from "@/components/v3/landing-e/pricing-plans";
+import type { SpotlightTool } from "@/lib/planSpotlight";
 import { TrialLine } from "@/components/v3/landing-e/trial-line";
 import { PricingVisit } from "./pricing-visit";
 import { CustomPlanBlock } from "./custom-plan-block";
@@ -34,9 +35,12 @@ export function PricingPage({
   plans,
   requiresCard = true,
   customOffered = false,
+  spotlight = null,
 }: {
   /** CUSTOM_PLAN_ENABLED (lib/customPlanFlag): false hides "Build your plan". */
   customOffered?: boolean;
+  /** The tool the visitor came for (lib/planSpotlight), marked on every card. */
+  spotlight?: SpotlightTool | null;
   /** signupTrialMode (lib/trialPolicyServer): the words of the trial's badge. */
   requiresCard?: boolean;
   plans: PlanDTO[];
@@ -72,7 +76,7 @@ export function PricingPage({
             <div className="border-t border-slate-900/10 pt-[6vmin]">
               {sellable.length > 0 ? (
                 <Reveal className="pr-plans">
-                  <PricingPlans plans={sellable} registerHref={REGISTER} />
+                  <PricingPlans plans={sellable} registerHref={REGISTER} spotlight={spotlight} />
                 </Reveal>
               ) : (
                 <p className="py-12 text-center text-[15px] text-slate-500">

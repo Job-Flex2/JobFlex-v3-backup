@@ -51,6 +51,7 @@ import { Hero } from "./hero";
 import { Intro } from "./intro";
 import { firstPersonCta } from "./cta-copy";
 import { LandingVariantEffects } from "./landing-variant-effects";
+import { spotlightFor, type SpotlightTool } from "@/lib/planSpotlight";
 
 /* CRO stage 1 (2026-09-09): everything under the intro is code-split. The
    sections still render on the server (the HTML is byte-for-byte what it
@@ -97,6 +98,8 @@ import "./landing-e.css";
 export interface LandingEProps {
   /** Resolved trade variant; undefined is the default page. */
   variant?: LandingVariantKey;
+  /** The tool the ad link said it sold (`?tool=`, lib/planSpotlight). */
+  tool?: SpotlightTool;
   /** True when the variant came from the URL rather than the memory cookie. */
   explicitVariant?: boolean;
   /** utm_* the visit arrived with — carried into the register links. */
@@ -111,7 +114,9 @@ export interface LandingEProps {
   hook?: string;
 }
 
-export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, inAppBrowser = null, hook }: LandingEProps) {
+export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, inAppBrowser = null, hook, tool }: LandingEProps) {
+  // What the plan cards mark for this visitor: the ad's tool, else the trade's own estimator (lib/planSpotlight).
+  const spotlight = spotlightFor({ tool, industry: variant });
   // The trade's hero — with the ad's two lines in place of its own when the
   // link carried a `?hook=` the trade knows.
   const base = withHook(variantContent(variant), hookContent(variant, hook));
@@ -128,11 +133,11 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const requiresCard = (await signupTrialMode()) === "card";
   const offer = await signupTrialOffer();
   // Every register link carries the trade, the visit's utm_* and the fbclid.
-  const registerPlain = signupHref(REGISTER, { industry: variant, utm, fbclid });
+  const registerPlain = signupHref(REGISTER, { industry: variant, utm, fbclid, tool });
   // THE DECK DOOR (2026-10-11, lib/editions): the decking landing is the Deck Studio's; its sign-up carries the edition.
   const register = variant === "decking" && !deckSoon ? `${registerPlain}${registerPlain.includes("?") ? "&" : "?"}edition=deck` : registerPlain;
   // …and so does the nav's Pricing link, for /pricing to hand on (pricing-visit.tsx).
-  const pricing = signupHref(PRICING, { industry: variant, utm, fbclid });
+  const pricing = signupHref(PRICING, { industry: variant, utm, fbclid, tool });
   // The price anchor shows the Subscription page's own catalogue (CRO stage
   // 2); a catalogue read that fails leaves the section out rather than the
   // page down.
@@ -191,7 +196,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     integrations: <div className="lp-cv lp-cv--integrations"><Integrations registerHref={register} /></div>,
     stats: <div className="lp-cv lp-cv--stats"><StatsSection rows={g?.stats} /></div>,
     built: <div className="lp-cv lp-cv--built"><BuiltSection jobs={g?.jobs} phoneJobs={g?.phoneJobs} /></div>,
-    pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} requiresCard={requiresCard} customOffered={customPlanOffered()} /></div>,
+    pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} requiresCard={requiresCard} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
     faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={low} requiresCard={requiresCard} /></div>,
     final: <CtaFooter registerHref={register} cta={low} requiresCard={requiresCard} />,
   };
@@ -215,7 +220,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
       <SectionTracker industry={variant} />
       {/* When the first screen really showed on this visitor's phone (2026-10-04). */}
       <LandingTiming industry={variant} />
-      <LandingVariantEffects industry={variant} remember={explicitVariant} utm={utm} hook={hook} />
+      <LandingVariantEffects industry={variant} remember={explicitVariant} utm={utm} hook={hook} tool={tool ?? null} />
       {/* Google One Tap (pass A): only when NEXT_PUBLIC_GOOGLE_CLIENT_ID is set;
           loads after the page is idle, so it never competes with the hero. */}
       <GoogleOneTap />

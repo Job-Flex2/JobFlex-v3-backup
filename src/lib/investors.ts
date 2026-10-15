@@ -20,7 +20,7 @@ import { signupState } from "@/lib/traffic-live";
 import { TRAFFIC_SINCE, TRAFFIC_SINCE_MS, TRAFFIC_TZ } from "@/lib/traffic-visitor";
 import { fetchInvestorVisitors } from "@/lib/traffic-server";
 import { valueSignups } from "@/lib/trialProjectionRead";
-import { investorFigures, cohortFigures, dayOf, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type CohortFigures, type InvestorAssumptions, type InvestorFigures, type PolicySpan, type SpendDay, type SpendPlatform, type SpendPeriod, type TrialCohort } from "@/lib/investorModel";
+import { investorFigures, cohortFigures, noCardShareByDay, dayOf, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type InvestorAssumptions, type InvestorFigures, type PolicySpan, type SpendDay, type SpendPlatform, type SpendPeriod, type TrialCohort } from "@/lib/investorModel";
 import { cardlessKey } from "@/lib/trialState";
 import { readTrialPolicyHistory, signupTrialState } from "@/lib/trialPolicyServer";
 
@@ -243,22 +243,14 @@ export interface InvestorReport {
   meta: { configured: boolean } & MetaSpendStatus;
   /** The spend by period — today, this week, this month… — off the curve's booked days (lib/investorModel). */
   periods: SpendPeriod[];
-  /** Meta's own figures, when read: by day for the bars, by campaign for the table (with the signups each brought). */
+  /** Meta's own figures, when read: by day for the bars. */
   insights: MetaInsights | null;
-  campaigns: Array<{ id: string; name: string; spendCents: number; impressions: number; clicks: number; cpcCents: number | null; signups: number; costPerSignupCents: number | null }>;
-  /** The last 30 days, one row each: what was spent (any source) and who signed up. */
+  /** The last 30 days, one row each: what was spent (the trials' share) and who signed up. */
   dailyRows: Array<{ date: string; spendCents: number; source: "booked" | "budget" | "none"; clicks: number | null; signups: number }>;
-  /** THE TWO COHORTS (owner, 2026-10-13): the same figures for the trials that started with a card and the ones
-   *  that started with none, each with the ad spend that went to it; which one a new signup gets today. */
-  cohorts: {
-    card: CohortFigures;
-    nocard: CohortFigures;
-    current: TrialCohort;
-    /** When the current policy began, YYYY-MM-DD, when known. */
-    currentSince: string | null;
-    /** How the spend was split: by the recorded switch from this day on (null = no flip recorded yet). */
-    recordedFrom: string | null;
-  };
+  /** LEFT OUT ON PURPOSE (owner, 2026-10-14: "keep only the trials with a card and the budget that went to them"):
+   *  the trials that started with no card — an experiment since ended — and the ad spend of the days that brought
+   *  them. The figures above are the card trials' alone; this is what was taken out, so the page can say so. */
+  leftOut: { signups: number; spendCents: number; days: number; from: string | null; to: string | null };
   /** When this was read. */
   at: string;
 }
@@ -352,12 +344,10 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   // The switch's recorded flips (from 2026-10-13), and what a new signup gets today.
   let policy: PolicySpan[] = [];
   let current: TrialCohort = "card";
-  let currentSince: string | null = null;
   try {
     const [flips, state] = await Promise.all([readTrialPolicyHistory(), signupTrialState({ fresh: true })]);
     policy = flips.map((f) => ({ from: dayOf(f.at), mode: f.requiresCard ? "card" : "nocard" }));
     current = state.requiresCard ? "card" : "nocard";
-    currentSince = state.at ? dayOf(state.at) : policy.at(-1)?.from ?? null;
     // The switch's own stamp stands in for the last flip when the history began after it.
     if (state.source === "admin" && state.at && !policy.some((p) => p.from === dayOf(state.at as string) && p.mode === current)) policy.push({ from: dayOf(state.at), mode: current });
   } catch {
@@ -384,25 +374,27 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   }
 
   const spend: SpendDay[] = entries.map((e) => ({ date: e.date, cents: e.cents }));
-  const modelInput = { since, today, spend, paying, trials, lapsed, assumptions: settings, visitors, cohorts: cohortInput };
-  const figures = investorFigures(modelInput);
-  const cohorts = {
-    card: cohortFigures(modelInput, "card", figures),
-    nocard: cohortFigures(modelInput, "nocard", figures),
-    current,
-    currentSince,
-    recordedFrom: policy.length ? [...policy].sort((a, b) => a.from.localeCompare(b.from))[0].from : null,
-  };
+  // THE REPORT IS THE CARD TRIALS' (owner, 2026-10-14): the whole is figured once — its curve filled by the daily
+  // budget — and the card cohort is cut from it: its signups, its share of each day's spend (the no-card days'
+  // spend falls out), its own break-even. Spend keeps going forward for it; the visitor count stays (not split).
+  const modelInput = { since, today, spend, paying, trials, lapsed, assumptions: settings, visitors, cohorts: { ...cohortInput, current: "card" as TrialCohort } };
+  const whole = investorFigures(modelInput);
+  const card = cohortFigures(modelInput, "card", whole, { keepVisitors: true });
+  const nocard = cohortFigures(modelInput, "nocard", whole);
+  const figures = card.figures;
+  const nocardDates = cohortInput.signups.filter((x) => x.cohort === "nocard").map((x) => x.date).sort();
+  const leftOut = { signups: nocard.signups, spendCents: nocard.attributedCents, days: nocard.attributedDays, from: nocardDates[0] ?? null, to: nocardDates.at(-1) ?? null };
+  // The platform split, day by day, at the card trials' share of that day.
+  const nocardShare = noCardShareByDay(entries.map((e) => e.date), cohortInput.signups, policy);
   const byPlatform = PLATFORMS.map((platform) => {
     const mine = entries.filter((e) => e.platform === platform && e.date >= since && e.date <= today);
-    return { platform, label: PLATFORM_LABEL[platform], cents: mine.reduce((a, e) => a + e.cents, 0), days: new Set(mine.map((e) => e.date)).size };
+    return { platform, label: PLATFORM_LABEL[platform], cents: mine.reduce((a, e) => a + Math.round(e.cents * (1 - (nocardShare.get(e.date) ?? 0))), 0), days: new Set(mine.map((e) => e.date)).size };
   }).filter((p) => p.cents > 0);
-  // Spend by period, the daily rows of the last 30 days, and each Meta campaign with the signups it brought
-  // (a signup carries the ad's utm_campaign — Meta sends {{campaign.id}} or the name — so both are matched).
+  // Spend by period and the daily rows of the last 30 days — the card trials' spend and signups.
   const periods = spendPeriods(figures.curve, today);
   const dayIn = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TRAFFIC_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-  // Only the signups the figures count (a trial, a paying account, a lapsed trial) — the same rows as "Signed up".
-  const counted = new Set(rows.filter((r) => r.state === "trial" || r.state === "paying" || r.state === "lapsed").map((r) => r.orgId));
+  // Only the signups the figures count (a trial, a paying account, a lapsed trial, with a card) — the same rows as "Signed up".
+  const counted = new Set(rows.filter((r) => (r.state === "trial" || r.state === "paying" || r.state === "lapsed") && cohortOf(r.orgId) === "card").map((r) => r.orgId));
   const signupsByDay = new Map<string, number>();
   for (const o of orgs) { if (!counted.has(o.id)) continue; const d = dayIn(o.createdAt); signupsByDay.set(d, (signupsByDay.get(d) ?? 0) + 1); }
   const clicksByDay = new Map((insights?.days ?? []).map((d) => [d.date, d.clicks]));
@@ -410,11 +402,5 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   const dailyRows = figures.curve.filter((p) => !p.projected && p.date >= from30 && p.date <= today).map((p) => ({
     date: p.date, spendCents: p.spendDayCents, source: p.spendSource === "projected" ? ("none" as const) : p.spendSource, clicks: clicksByDay.has(p.date) ? (clicksByDay.get(p.date) ?? 0) : null, signups: signupsByDay.get(p.date) ?? 0,
   }));
-  const tagOf = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
-  const campaigns = (insights?.campaigns ?? []).map((c) => {
-    const id = tagOf(c.id), name = tagOf(c.name);
-    const signups = orgs.filter((o) => { if (!counted.has(o.id)) return false; const t = tagOf(o.utmCampaign); return t !== "" && (t === id || t === name); }).length;
-    return { id: c.id, name: c.name || c.id, spendCents: c.spendCents, impressions: c.impressions, clicks: c.clicks, cpcCents: c.clicks > 0 ? Math.round(c.spendCents / c.clicks) : null, signups, costPerSignupCents: signups > 0 && c.spendCents > 0 ? Math.round(c.spendCents / signups) : null };
-  }).sort((a, b) => b.spendCents - a.spendCents);
-  return { figures, settings, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, campaigns, cohorts, dailyRows, at: new Date().toISOString() };
+  return { figures, settings, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, leftOut, dailyRows, at: new Date().toISOString() };
 }

@@ -21,6 +21,7 @@
 // rather than inline. /mobile-v1/auth/register remains as a direct preview URL.
 
 import type { Metadata } from "next";
+import { SPOTLIGHT_COOKIE, spotlightFor } from "@/lib/planSpotlight";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -87,11 +88,14 @@ export default async function RegisterPage({
      pre-selects a chip the visitor can un-pick. */
   const jar = await cookies();
   const industryParam = sp.industry ?? sp.trade;
-  const industry = variantTrade(
-    industryParam !== undefined
-      ? resolveLandingVariant(industryParam)
-      : resolveLandingVariant(jar.get(INDUSTRY_COOKIE)?.value),
-  );
+  const industryKey = industryParam !== undefined ? resolveLandingVariant(industryParam) : resolveLandingVariant(jar.get(INDUSTRY_COOKIE)?.value);
+  const industry = variantTrade(industryKey);
+  /* THE TOOL THE VISITOR CAME FOR (lib/planSpotlight, 2026-10-14): the link's
+     `?tool=` or the landing's memory of it, else the trade's own estimator.
+     The plan step pins and marks it on every card. */
+  const spotlight =
+    spotlightFor({ tool: sp.tool, industry: industryParam !== undefined ? resolveLandingVariant(industryParam) : undefined }) ??
+    spotlightFor({ tool: jar.get(SPOTLIGHT_COOKIE)?.value, industry: industryKey });
   /* THE CAMPAIGN THE VISITOR CAME IN ON: utm_* from the register link, else
      the landing's memory cookie (the Google return, and an older link in a
      mail or an ad that carries no utm_*, arrive with no query). Stamped on
@@ -181,6 +185,7 @@ export default async function RegisterPage({
         setup={setup}
         google={google}
         industry={industry}
+        spotlight={spotlight}
         edition={sp.edition === "deck" ? "deck" : null}
         utm={hasUtm(utm) ? utm : null}
         inAppBrowser={inAppBrowser}

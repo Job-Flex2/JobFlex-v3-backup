@@ -67,6 +67,11 @@ export const DEFAULT_VOICE_MODEL = "gpt-realtime-mini";
 
 export type RealtimeApi = "ga" | "beta";
 
+/** How the test listens — the phone desk's stricter, more patient detector (voice/call.mjs TURN, 2026-10-14: "it
+ *  interrupts real fast, so sensitive"), with the laptop's far-field noise reduction. The browser's WebRTC cuts its own
+ *  playback on an interruption, so here the server still interrupts and answers by itself. */
+export const TEST_TURN = { type: "server_vad", threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 800 } as const;
+
 /** The session the ephemeral key is minted for — GA shape, or the beta shape when REALTIME_API=beta (as voice/call.mjs). */
 export function testSession(input: { instructions: string; voice: string; model: string; api: RealtimeApi }): Record<string, unknown> {
   if (input.api === "beta") {
@@ -76,7 +81,8 @@ export function testSession(input: { instructions: string; voice: string; model:
       instructions: input.instructions,
       voice: input.voice,
       input_audio_transcription: { model: "gpt-4o-mini-transcribe" },
-      turn_detection: { type: "server_vad", silence_duration_ms: 600 },
+      input_audio_noise_reduction: { type: "far_field" },
+      turn_detection: TEST_TURN,
       tools: DESK_TOOLS,
       tool_choice: "auto",
     };
@@ -87,7 +93,7 @@ export function testSession(input: { instructions: string; voice: string; model:
     instructions: input.instructions,
     output_modalities: ["audio"],
     audio: {
-      input: { transcription: { model: "gpt-4o-mini-transcribe" }, turn_detection: { type: "server_vad", silence_duration_ms: 600 } },
+      input: { transcription: { model: "gpt-4o-mini-transcribe" }, noise_reduction: { type: "far_field" }, turn_detection: TEST_TURN },
       output: { voice: input.voice },
     },
     tools: DESK_TOOLS,

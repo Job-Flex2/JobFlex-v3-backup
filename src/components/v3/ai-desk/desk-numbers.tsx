@@ -6,10 +6,61 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { setBusinessPhone, setDeskForwarding, setDeskMode } from "@/actions/aiDesk";
-import { callsGo, type DeskForwarding, type DeskMode } from "@/lib/aiDesk/shared";
+import { callsGo, forwardingCodes, type DeskForwarding, type DeskMode } from "@/lib/aiDesk/shared";
 import type { SmsRegistrationView } from "@/lib/sms/registrationShared";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
+
+/** The codes for the contractor's carrier, a copy button each, the test, and what to do when it doesn't take. */
+function ForwardCodes({ number, kind, phone }: { number: string; kind: "all" | "missed"; phone: string }) {
+  const [copied, setCopied] = useState("");
+  const codes = forwardingCodes(number, kind);
+  const copy = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(code);
+      window.setTimeout(() => setCopied((c) => (c === code ? "" : c)), 1600);
+    } catch {
+      setCopied("");
+    }
+  };
+  return (
+    <div className={s.codes} data-forward-codes={kind}>
+      <div className={s.h}>{C.codesTitle}</div>
+      <p className={s.note}>{C.codesHow(phone)}</p>
+      {codes.length ? (
+        <div className={s.codeTable} role="table" aria-label={C.codesTitle}>
+          {codes.map((c) => (
+            <div key={c.carrier} className={s.codeRow} role="row" data-carrier={c.carrier}>
+              <span className={s.codeCarrier} role="cell">
+                {c.carrier}
+              </span>
+              <span className={s.codeOn} role="cell">
+                <small>{C.codesOn}</small>
+                <code data-code-on>{c.on}</code>
+                <button type="button" className={s.codeCopy} onClick={() => void copy(c.on)} aria-label={`${C.codesCopy} ${c.on}`}>
+                  {copied === c.on ? C.codesCopied : C.codesCopy}
+                </button>
+              </span>
+              <span className={s.codeOff} role="cell">
+                <small>{C.codesOff}</small>
+                <code>{c.off}</code>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <ul className={s.codeNotes}>
+        <li>{C.codesOther(number)}</li>
+        <li>{kind === "all" ? C.codesIphone : C.codesLiveVoicemail}</li>
+        <li>
+          <b>{C.codesTest(phone)}</b>
+        </li>
+        <li>{C.codesTrouble}</li>
+      </ul>
+    </div>
+  );
+}
 
 export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettingsData; registration: SmsRegistrationView | null; onNumber?: () => void }) {
   const router = useRouter();
@@ -150,6 +201,9 @@ export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettin
           ))}
         </div>
       </div>
+
+      {/* turning it on at the carrier — JobFlex can't; the codes, with the desk's number in them */}
+      {number && forwarding !== "none" ? <ForwardCodes number={number} kind={forwarding} phone={savedPhone} /> : null}
 
       {/* who answers */}
       <div className={s.sec}>

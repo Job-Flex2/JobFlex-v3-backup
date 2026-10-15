@@ -2,8 +2,11 @@
 // API, and Twilio's media-stream client. No network beyond localhost.
 import http from "node:http";
 import { WebSocketServer } from "ws";
+import { mulawEncode } from "./audio.mjs";
 
 const SILENCE = Buffer.alloc(160, 0xff).toString("base64"); // 20 ms of μ-law silence
+/** 20 ms of a caller talking: a 200 Hz tone at speech level. */
+export const SPEECH = Buffer.from(mulawEncode(new Int16Array(160).map((_, i) => Math.round(Math.sin((2 * Math.PI * 200 * i) / 8000) * 6000)))).toString("base64");
 
 /**
  * A fake realtime server. Scenario (FAKE_SCENARIO or the option): "book" — greeting,
@@ -11,7 +14,7 @@ const SILENCE = Buffer.alloc(160, 0xff).toString("base64"); // 20 ms of μ-law s
  * "message" — greeting, take_message, end_call. Records every session.update.
  */
 export function fakeRealtime({ port = 0, scenario = process.env.FAKE_SCENARIO || "book" } = {}) {
-  const seen = { sessions: [], items: [], responses: 0 };
+  const seen = { sessions: [], items: [], responses: 0, cancels: 0, truncates: [], deletes: [] };
   const wss = new WebSocketServer({ port });
   wss.on("connection", (ws) => {
     const session = { steps: 0, timesId: null };
@@ -31,6 +34,34 @@ export function fakeRealtime({ port = 0, scenario = process.env.FAKE_SCENARIO ||
         session.dead = true;
         send({ type: "error", event_id: "evt_bad", error: { type: "invalid_request_error", code: "invalid_api_key", message: "Incorrect API key provided: sk-fake-***-123. You can find your API key at https://platform.openai.com/account/api-keys." } });
         setTimeout(() => ws.close(), 50);
+        return;
+      }
+      if (ev.type === "response.cancel") seen.cancels++;
+      if (ev.type === "conversation.item.truncate") seen.truncates.push(ev);
+      if (ev.type === "conversation.item.delete") seen.deletes.push(ev.item_id);
+      // "talkover": the desk is mid-greeting when the caller makes a sound (a cough, or real words — the test's
+      // Twilio client decides how long); the turn ends 25 frames later and is committed.
+      if (scenario === "talkover" && ev.type === "input_audio_buffer.append") {
+        session.audio = (session.audio || 0) + 1;
+        if (session.audio === 30) send({ type: "input_audio_buffer.speech_started", audio_start_ms: 600, item_id: "item_caller" });
+        if (session.audio === 55) {
+          send({ type: "input_audio_buffer.speech_stopped", audio_end_ms: 1100, item_id: "item_caller" });
+          send({ type: "input_audio_buffer.committed", item_id: "item_caller" });
+        }
+        return;
+      }
+      if (scenario === "talkover" && ev.type === "response.create") {
+        seen.responses++;
+        if (session.steps === 0) {
+          session.steps = 1;
+          send({ type: "response.created" });
+          for (let i = 0; i < 100; i++) send({ type: "response.output_audio.delta", item_id: "item_greeting", delta: SILENCE }); // 2 s of greeting
+          send({ type: "response.output_audio_transcript.done", transcript: "Thanks for calling. This is the virtual assistant, and this call is recorded. How can I help?" });
+          send({ type: "response.done" });
+        } else {
+          send({ type: "response.created" });
+          send({ type: "response.done" });
+        }
         return;
       }
       if (ev.type === "input_audio_buffer.append") {
@@ -131,7 +162,7 @@ export function fakeApp({ port = 0 } = {}) {
  * A fake Twilio media-stream client: connects with a token, sends silence as the caller,
  * collects what the desk sends back, and resolves when the server closes the stream.
  */
-export function twilioClient({ url, token, callSid = "CAtest", frames = 120, WS }) {
+export function twilioClient({ url, token, callSid = "CAtest", frames = 120, WS, speech = null, markDelay = 100, hangUpAfter = 0 }) {
   return new Promise((resolve, reject) => {
     const ws = new WS(url);
     const got = { media: 0, clears: 0, closed: false };
@@ -142,8 +173,13 @@ export function twilioClient({ url, token, callSid = "CAtest", frames = 120, WS 
       let n = 0;
       timer = setInterval(() => {
         if (ws.readyState !== 1) return clearInterval(timer);
-        ws.send(JSON.stringify({ event: "media", media: { track: "inbound", payload: SILENCE } }));
-        if (++n >= frames) clearInterval(timer);
+        // `speech` [from, to): frames where the caller talks; silence elsewhere.
+        const talking = speech && n >= speech[0] && n < speech[1];
+        ws.send(JSON.stringify({ event: "media", media: { track: "inbound", payload: talking ? SPEECH : SILENCE } }));
+        if (++n >= frames) {
+          clearInterval(timer);
+          if (hangUpAfter) setTimeout(() => ws.readyState === 1 && ws.close(), hangUpAfter);
+        }
       }, 20);
     });
     ws.on("message", (raw) => {
@@ -151,7 +187,7 @@ export function twilioClient({ url, token, callSid = "CAtest", frames = 120, WS 
       if (m.event === "media") got.media++;
       if (m.event === "clear") got.clears++;
       // Twilio echoes a mark once the audio before it has played.
-      if (m.event === "mark") setTimeout(() => ws.readyState === 1 && ws.send(JSON.stringify({ event: "mark", streamSid: "MZtest", mark: { name: m.mark?.name } })), 100);
+      if (m.event === "mark") setTimeout(() => ws.readyState === 1 && ws.send(JSON.stringify({ event: "mark", streamSid: "MZtest", mark: { name: m.mark?.name } })), markDelay);
     });
     ws.on("close", () => {
       clearInterval(timer);

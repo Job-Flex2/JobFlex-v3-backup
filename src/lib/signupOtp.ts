@@ -1,4 +1,5 @@
 import "server-only";
+import type { SpotlightTool } from "@/lib/planSpotlight";
 // PASSWORDLESS SIGN-UP AND SIGN-IN BY EMAIL CODE (owner, 2026-10-10).
 //
 // Step 1 asks for a name and an email. The address is proven by a six-digit
@@ -68,6 +69,8 @@ export interface OtpDraft {
   name: string;
   createdAt: number;
   industry?: TradeType;
+  /** The tool the ad sold (lib/planSpotlight). */
+  tool?: SpotlightTool;
   utm?: Utm;
   attribution?: { kind: "promo" | "ref"; code: string } | null;
   meta?: MetaSignupContext;
@@ -236,6 +239,7 @@ export async function verifyLink(secret: string): Promise<OtpOutcome & { query?:
 function carriedQuery(d: OtpDraft): string {
   const q = new URLSearchParams();
   if (d.industry) q.set("industry", d.industry.toLowerCase());
+  if (d.tool) q.set("tool", d.tool);
   for (const [k, v] of Object.entries(d.utm ?? {})) if (v) q.set(k, v);
   if (d.meta?.fbclid) q.set("fbclid", d.meta.fbclid);
   return q.toString();
@@ -291,7 +295,7 @@ export async function nextForUser(userId: string): Promise<string> {
  * the one the landing was opened on, or none.
  */
 export async function writeVerifiedPending(
-  d: Pick<OtpDraft, "email" | "name" | "industry" | "utm" | "attribution" | "meta" | "analytics" | "trialOffer">,
+  d: Pick<OtpDraft, "email" | "name" | "industry" | "tool" | "utm" | "attribution" | "meta" | "analytics" | "trialOffer">,
   opts: { viaGoogle: boolean; image: string | null },
 ): Promise<string> {
   const token = randomUUID();
@@ -304,6 +308,7 @@ export async function writeVerifiedPending(
     email: d.email,
     tradeTypes: d.industry ? [d.industry] : [],
     landingIndustry: d.industry,
+    landingTool: d.tool,
     signupVariant: "e",
     utm: d.utm,
     meta: d.meta,

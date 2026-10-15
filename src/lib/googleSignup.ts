@@ -48,6 +48,10 @@ export async function googleSignupReturnUrl(handle: string): Promise<string> {
     const jar = await cookies();
     const industry = resolveLandingVariant(jar.get(INDUSTRY_COOKIE)?.value);
     if (industry) q.set("industry", industry);
+    // The tool the ad sold, remembered beside the trade (lib/planSpotlight).
+    const { SPOTLIGHT_COOKIE, parseSpotlightTool } = await import("@/lib/planSpotlight");
+    const tool = parseSpotlightTool(jar.get(SPOTLIGHT_COOKIE)?.value);
+    if (tool) q.set("tool", tool);
     const utm = parseUtmCookie(jar.get(UTM_COOKIE)?.value);
     for (const key of UTM_KEYS) if (utm[key]) q.set(key, utm[key] as string);
     // The ad's click id, left by the landing's Google button (FBCLID_COOKIE).

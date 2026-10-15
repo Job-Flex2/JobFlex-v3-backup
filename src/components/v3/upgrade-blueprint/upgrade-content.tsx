@@ -36,6 +36,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { expandPlanFeatures } from "@/lib/planCatalog";
+import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import { changePlan, previewPlanChange, updateCustomPages, type PlanChangePreviewResult } from "@/actions/billing";
 import { CardDeclinedNote, PlanChangeMoney, ScheduledSwitchNote, longDay, money } from "@/components/billing/PlanChangeNotes";
 import { CustomChangeNote } from "./custom-change-note";
@@ -68,6 +69,7 @@ function dollarsOf(cents: number): string {
 }
 
 export function UpgradeContent({
+  spotlight = null,
   plans,
   currentPlan,
   customPages,
@@ -95,6 +97,10 @@ export function UpgradeContent({
   /** THE PLAN TO POINT AT (2026-10-11, lib/editions): the one that carries the edition an existing customer came to add (?edition=deck), and the line that says so. */
   focusSlug?: string | null;
   focusWords?: string | null;
+  /** THE TOOL THE SIGNUP CAME FOR (lib/planSpotlight, owner 2026-10-14): its
+   *  feature line is pinned first and marked on every card; a card that lacks
+   *  it says so. */
+  spotlight?: SpotlightTool | null;
   /** CUSTOM_PLAN_ENABLED (lib/customPlanFlag): off, a shop not already on the
    *  custom plan is not offered it. One on it always manages its pages. */
   customOffered?: boolean;
@@ -184,7 +190,10 @@ export function UpgradeContent({
   // The feature comparison, with "Everything in <plan>" expanded so a dearer
   // plan never reads as missing the cheaper plan's basics — the same rule the
   // signup step applies (lib/planCatalog.expandPlanFeatures).
-  const { rows: featureRows, included } = useMemo(() => expandPlanFeatures(plans), [plans]);
+  const expanded = useMemo(() => expandPlanFeatures(plans), [plans]);
+  const spotRow = useMemo(() => spotlightRow(expanded.rows, spotlight), [expanded.rows, spotlight]);
+  const featureRows = useMemo(() => withSpotlightFirst(expanded.rows, spotlight), [expanded.rows, spotlight]);
+  const included = expanded.included;
 
 
   const curCents = useMemo(() => {
@@ -530,6 +539,12 @@ export function UpgradeContent({
       {showTerms ? (
         <PlanTermSwitch className="jf-up-termsw" value={interval} onChange={setInterval} tag={termTag} />
       ) : null}
+      {spotlight ? (
+        <p className="jf-up-spot" data-plan-spotlight={spotlight} data-plan-spotlight-row={spotRow ?? ""}>
+          <span className="jf-up-spot-k">{SPOTLIGHT[spotlight].label}</span>
+          {spotlightLine(spotlight, spotRow !== null)}
+        </p>
+      ) : null}
       <div className="jf-up-plans has-custom">
         {plans.map((p) => {
           const term = planTerm(interval, p.yearlyPriceCents);
@@ -558,12 +573,14 @@ export function UpgradeContent({
               <span className="jf-up-feats" data-plan-feats>
                 {featureRows.map((f) => {
                   const has = included.get(p.slug)?.has(f.toLowerCase()) ?? false;
+                  const lit = spotRow !== null && f === spotRow;
                   return (
-                    <span key={f} className={"jf-up-f" + (has ? "" : " no")}>
+                    <span key={f} className={"jf-up-f" + (has ? "" : " no") + (lit ? " spot" : "")} data-plan-spot-row={lit ? (has ? "in" : "out") : undefined}>
                       <svg viewBox="0 0 24 24" className="jf-up-fic" aria-hidden="true">
                         {has ? <path d="M20 6 9 17l-5-5" /> : <path d="M5 12h14" />}
                       </svg>
                       {f}
+                      {lit ? <span className="jf-up-spot-tag">{has ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
                     </span>
                   );
                 })}

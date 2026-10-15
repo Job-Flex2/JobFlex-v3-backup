@@ -19,6 +19,7 @@
 // signup flow's completePendingSignup.
 
 import { redirect } from "next/navigation";
+import { orgSpotlight } from "@/lib/planSpotlightServer";
 import { requireOrg } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
@@ -123,6 +124,7 @@ export default async function UpgradePage({
   const target = params.edition === "deck" ? await editionUpgradeTarget("deck").catch(() => null) : null;
   return (
     <UpgradeResponsive
+      spotlight={await orgSpotlight(ctx.organizationId)}
       focusSlug={target?.slug ?? null}
       focusWords={target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? (isEditionOpen("deck") ? "No plan carries the Deck Studio yet — ask us to add it." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
       plans={plans}
