@@ -13,9 +13,11 @@ import type { LandingVariantKey } from "./landing-variants";
    runs before the navigation, and trackTraffic sends by beacon, so the event
    survives the page leaving. Properties: placement, the button's words,
    the trade hero shown ("default" when none), the target path; `spot` when
-   the element names which of a kind it is (the trial badges, 2026-10-02).
-   `only` limits the tracker to some placements — /pricing tracks its badge
-   and nothing else. */
+   the element names which of a kind it is (the trial badges, 2026-10-02);
+   `button` when it names which button it is (data-cta-button: the plan a
+   card's button starts, the nav's trial or login — 2026-10-15).
+   `only` limits the tracker to some placements — /pricing tracks the plan
+   buttons and the nav's (pricing-visit.tsx). */
 export function CtaTracker({ industry, only }: { industry: LandingVariantKey | undefined; only?: string[] }) {
   useEffect(() => {
     const onClick = (ev: MouseEvent) => {
@@ -32,6 +34,7 @@ export function CtaTracker({ industry, only }: { industry: LandingVariantKey | u
         href: href.split("?")[0],
         variant: "e",
         ...(target.dataset.ctaSpot ? { spot: target.dataset.ctaSpot } : {}),
+        ...(target.dataset.ctaButton ? { button: target.dataset.ctaButton } : {}),
       });
     };
     document.addEventListener("click", onClick, true);

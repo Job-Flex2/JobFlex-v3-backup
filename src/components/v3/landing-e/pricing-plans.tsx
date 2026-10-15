@@ -217,7 +217,7 @@ export function PricingPlans({
                   );
                 })}
               </ul>
-              <a href={startHref} className="lp-pw-go" data-cta="pricing">
+              <a href={startHref} className="lp-pw-go" data-cta="pricing" data-cta-button={`plan-${p.slug}`}>
                 Start {days}-day free trial
                 <span className="sr-only"> on {p.name}</span>
               </a>

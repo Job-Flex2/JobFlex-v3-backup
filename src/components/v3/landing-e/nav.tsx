@@ -43,7 +43,7 @@ export function Nav({
           </a>
           {/* No note under this one (owner, 2026-09-10): the bar stays a bar.
               The trial line lives under the hero pair. */}
-          <a href={registerHref} className="lp-btn-dark" data-cta="nav">
+          <a href={registerHref} className="lp-btn-dark" data-cta="nav" data-cta-button="nav-trial">
             {cta ?? <TrialStartLabel />}
           </a>
         </div>

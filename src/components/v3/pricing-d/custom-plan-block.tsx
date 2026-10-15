@@ -73,7 +73,7 @@ export function CustomPlanBlock({
                 still less than the seats most shops pay for twice over.
               </p>
             </div>
-            <a href={registerHref} className="lp-pw-go mt-8" data-cta={cta}>
+            <a href={registerHref} className="lp-pw-go mt-8" data-cta={cta} data-cta-button="plan-custom">
               <TrialStartLabel />
             </a>
           </div>
