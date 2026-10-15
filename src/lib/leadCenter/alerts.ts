@@ -34,6 +34,7 @@
 // waiting request, one per morning — so this is a code change, no migration.
 
 import { createHash, randomInt } from "node:crypto";
+import { guessTrade } from "@/lib/tradeGuess";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { sendEmail } from "@/lib/sdk/resend";
@@ -190,7 +191,8 @@ type Facts = { trade: string | null; where: string; firstName: string | null; sc
 
 function factsOf(pl: { id: string; detectedTrade: string | null; projectType: string | null; city: string | null; state: string | null; zip: string | null; name: string; scope: string | null; description: string | null }): Facts {
   return {
-    trade: pl.detectedTrade ?? pl.projectType ?? null,
+    // Unclassified for routing, but the admin sees what it reads like (lib/tradeGuess, 2026-10-14) — the "?" says it is a guess.
+    trade: pl.detectedTrade ?? pl.projectType ?? (guessTrade(pl.description) ? `${guessTrade(pl.description)}?` : null),
     where: [pl.city, pl.state].filter(Boolean).join(", ") || pl.zip || "no location",
     firstName: (pl.name || "").trim().split(/\s+/)[0] || null,
     scope: pl.scope ?? pl.description ?? "",

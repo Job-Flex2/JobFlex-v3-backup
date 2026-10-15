@@ -34,16 +34,37 @@ import type { Route } from "next";
 import { canOpen } from "@/components/v3/blueprint-shell/nav-map";
 import { useNavLocked, useNavRole, useNavView } from "@/components/v3/blueprint-shell/nav-role";
 import { clearFiling, writeFiling, type Filing } from "@/lib/filingCookie";
-import { ENGINES, QUEUED_COUNT, type Engine, type EngineDiagram } from "./estimators-data";
+import { ENGINES, type Engine, type EngineDiagram } from "./estimators-data";
 
 // Split once at module scope — the roster is a constant, so there is nothing
-// for the component to recompute on a render or memoise.
-const active = ENGINES.filter((e) => e.status === "active");
+// for the component to recompute on a render or memoise. "soon" engines (Deck
+// Studio) sit in the catalogue order with the live ones; the picker decides per
+// account what each of them is.
+const catalogue = ENGINES.filter((e): e is Extract<Engine, { status: "active" | "soon" }> => e.status !== "queued");
 const queued = ENGINES.filter((e) => e.status === "queued");
-/* THE DECK STUDIO (2026-10-11, lib/editions): a live engine for an account that holds the edition — the sidebar's
-   unlocked rows say so — and, for every other account, the queued stub becomes the way to add it. */
-const DECK_ENGINE: Extract<Engine, { status: "active" }> = { id: "deck", no: "05", title: "Deck Studio", method: "3D on the house photo", diagram: "sheet", status: "active", href: "/dashboard/deck-estimator", spec: { input: "size · photo · state", output: "3D · permit set · proposal" } };
+/* THE DECK STUDIO (2026-10-11, lib/editions; a card since 2026-10-15). Not sold yet: the way to add it once
+   it is (EDITION_OPEN.deck), named and dimmed until then. */
 const DECK_ADD_HREF = "/dashboard/upgrade?edition=deck";
+
+/** How a card behaves for this account: open it; open it as an admin's preview; add the
+ *  edition; or name it, dimmed, as coming soon. */
+type CardMode = "open" | "preview" | "add" | "soon";
+type Card = { engine: Extract<Engine, { status: "active" | "soon" }>; mode: CardMode };
+
+/** COLUMNS (2026-10-15). Eight engines in two columns made a dialog taller
+ *  than a laptop screen, so on a desk wide enough the catalogue goes four
+ *  across (≥7 cards), three (5–6), or two. A short last row never leaves a
+ *  hole: its last card spans what is left — a wider sheet, the rule the
+ *  two-column layout already had for an odd count. Narrower screens keep the
+ *  two-column CSS (≤1100px) and the handheld sheet (≤768px), which ignore both
+ *  attributes. */
+function columnsFor(count: number): number {
+  return count >= 7 ? 4 : count >= 5 ? 3 : 2;
+}
+function spanOfLast(count: number, cols: number): number {
+  const rest = count % cols;
+  return rest === 0 ? 1 : cols - rest + 1;
+}
 
 /** The drawing this engine makes, on the card's blueprint-blue graph paper.
     Straight from the source's DIA map — same viewBox, same path data, same
@@ -156,6 +177,50 @@ function Diagram({ kind }: { kind: EngineDiagram }) {
           <text x="82" y="64" textAnchor="middle">{'128\'-0"'}</text>
         </>
       )}
+      {/* PLAN SHEET (Blueprint, 2026-10-15) — a drawing sheet with its border and
+          title block, a floor plan on it: walls, a door and its swing, a window,
+          the overall dimension. What the engine reads, drawn in the same
+          ln / bp / dim weights as the plates around it. */}
+      {kind === "plans" && (
+        <>
+          <rect className="dim" x="6" y="3" width="152" height="66" />
+          <rect className="ln" x="20" y="16" width="84" height="44" />
+          <path className="ln" d="M62 16 V34 M62 44 V60 M20 38 H46 M54 38 H62" />
+          <path className="bp" d="M62 34 H72 M72 34 A10 10 0 0 1 62 44" />
+          <path className="bp" d="M80 14.5 H96 M80 17.5 H96" />
+          <path className="dim" d="M84 26 H100 V52 H84 Z" strokeDasharray="3 3" />
+          <path className="dim" d="M20 10 H104 M20 7 V13 M104 7 V13" />
+          <text x="62" y="8" textAnchor="middle">{'42\'-0"'}</text>
+          <rect className="bp" x="114" y="44" width="38" height="20" />
+          <path className="bp" d="M114 52 H152" />
+          <text x="133" y="50" textAnchor="middle">PLAN</text>
+          <text x="133" y="60" textAnchor="middle">A-101</text>
+          <path className="dim" d="M114 20 H152 M114 28 H152 M114 36 H140" />
+        </>
+      )}
+      {/* DECK ELEVATION (Deck Studio, 2026-10-15) — the house wall with its
+          siding, the ledger, the deck board line on posts and footings, the
+          railing and its balusters, the stair down to grade, the span. */}
+      {kind === "deck" && (
+        <>
+          <path className="ln" d="M6 58 H158" />
+          <path className="dim" d="M14 58 l-5 6 M34 58 l-5 6 M54 58 l-5 6 M74 58 l-5 6 M94 58 l-5 6 M114 58 l-5 6 M134 58 l-5 6 M154 58 l-5 6" />
+          <rect className="ln" x="8" y="4" width="22" height="54" />
+          <path className="dim" d="M8 12 H30 M8 20 H30 M8 28 H30 M8 36 H30 M8 44 H30 M8 52 H30" />
+          <rect className="ln" x="30" y="30" width="92" height="4" />
+          <path className="ln" d="M56 34 V58 M88 34 V58 M118 34 V58" />
+          <path className="bp" d="M53 58 h6 M85 58 h6 M115 58 h6" />
+          <path className="ln" d="M30 14 H122 M122 14 V30" />
+          <path
+            className="bp"
+            d="M36 14 V30 M42 14 V30 M48 14 V30 M54 14 V30 M60 14 V30 M66 14 V30 M72 14 V30 M78 14 V30 M84 14 V30 M90 14 V30 M96 14 V30 M102 14 V30 M108 14 V30 M114 14 V30"
+          />
+          <path className="ln" d="M122 34 H128 V40 H134 V46 H140 V52 H146 V58" />
+          <path className="dim" d="M30 66 H122 M30 63 V69 M122 63 V69" />
+          <text x="76" y="64" textAnchor="middle">{'16\'-0"'}</text>
+          <text x="150" y="26" textAnchor="end">3D</text>
+        </>
+      )}
       {/* HVAC — a house section: the outdoor unit on its pad at left, the
           line set into the air handler, a supply trunk with three registers,
           and the design-temperature annotation. Same language as the plates
@@ -201,11 +266,25 @@ export function EstimatorPicker() {
   const role = useNavRole();
   const locked = useNavLocked();
   const view = useNavView();
-  const deckOpen = view.unlocked.includes("/dashboard/deck-estimator");
-  const openEngines = useMemo(
-    () => [...active.filter((engine) => canOpen(role, engine.href, locked)), ...(deckOpen && canOpen(role, DECK_ENGINE.href, locked) ? [DECK_ENGINE] : [])],
-    [role, locked, deckOpen],
+  // One list in catalogue order. A live engine opens; a "soon" one (Deck Studio)
+  // opens for the edition's buyers (view.unlocked), opens as a Preview for the
+  // admins who test it (view.preview), is the way to add it once it is sold, and
+  // otherwise is named and dimmed. A role that cannot reach the page gets no card.
+  const cards = useMemo<Card[]>(
+    () =>
+      catalogue
+        .filter((engine) => canOpen(role, engine.href, locked))
+        .map((engine): Card => {
+          if (engine.status === "active" || view.unlocked.includes(engine.href)) return { engine, mode: "open" };
+          if (view.preview?.includes(engine.href)) return { engine, mode: "preview" };
+          return { engine, mode: engine.id === "deck" && isEditionOpen("deck") ? "add" : "soon" };
+        }),
+    [role, locked, view],
   );
+  const ready = cards.filter((c) => c.mode === "open" || c.mode === "preview").length;
+  const soon = cards.length - ready;
+  const cols = columnsFor(cards.length);
+  const lastSpan = spanOfLast(cards.length, cols);
   // Two flags because the source has two classes. `open` drives the `hidden`
   // attribute (`.estp[hidden] { display: none }`); `on` is added a frame later
   // so the enter transition has a start state to leave from — the source's
@@ -264,7 +343,8 @@ export function EstimatorPicker() {
     const outer = requestAnimationFrame(() => {
       inner = requestAnimationFrame(() => {
         setOn(true);
-        boxRef.current?.querySelector<HTMLButtonElement>(".estp-card")?.focus();
+        // The first card that can be pressed — a "Coming soon" card is not one.
+        boxRef.current?.querySelector<HTMLElement>("button.estp-card, a.estp-card")?.focus();
       });
     });
     return () => {
@@ -332,7 +412,7 @@ export function EstimatorPicker() {
     >
       <div className="estp-bg" onClick={close} />
 
-      <div className="estp-box" ref={boxRef}>
+      <div className="estp-box" ref={boxRef} data-cols={cols}>
         <div className="estp-head">
           <div className="estp-title" id="estpTitle">
             New estimate
@@ -345,7 +425,7 @@ export function EstimatorPicker() {
               </>
             ) : (
               <>
-                {openEngines.length} active &middot; {QUEUED_COUNT} queued
+                {ready} active{soon > 0 ? <> &middot; {soon} soon</> : null} &middot; {queued.length} queued
               </>
             )}
           </span>
@@ -363,51 +443,69 @@ export function EstimatorPicker() {
             footprint as the ones you can actually start.
             (Was a fixed 2×2 until Video made five; an odd last card takes the
             full width — see .estp-grid in estimators-global.css.) */}
-        <div className="estp-grid">
-          {openEngines.map((engine) => (
-            <button
-              key={engine.id}
-              type="button"
-              className="estp-card"
-              onClick={() => choose(engine.href)}
-            >
-              <span className="estp-dia-cell">
-                <Diagram kind={engine.diagram} />
-              </span>
-              <span className="estp-nameline">
-                <span className="estp-nm">
-                  <span className="estp-name">{engine.title}</span>
-                  <span className="estp-method">{engine.method}</span>
+        <div className="estp-grid" data-cols={cols}>
+          {cards.map(({ engine, mode }, i) => {
+            const span = i === cards.length - 1 && lastSpan > 1 ? lastSpan : undefined;
+            const body = (
+              <>
+                <span className="estp-dia-cell">
+                  <Diagram kind={engine.diagram} />
+                  {mode === "preview" ? (
+                    <span className="estp-tag" data-tag="preview">Preview · admins</span>
+                  ) : mode === "soon" ? (
+                    <span className="estp-tag" data-tag="soon">Coming soon</span>
+                  ) : mode === "add" ? (
+                    <span className="estp-tag" data-tag="add">Add it</span>
+                  ) : null}
                 </span>
-              </span>
-            </button>
-          ))}
+                <span className="estp-nameline">
+                  <span className="estp-nm">
+                    <span className="estp-name">{engine.title}</span>
+                    <span className="estp-method">{engine.method}</span>
+                  </span>
+                </span>
+              </>
+            );
+            if (mode === "soon") {
+              // Named, not offered: no button, no focus stop — the queue stubs' rule, at card size.
+              return (
+                <div key={engine.id} className="estp-card estp-card--soon" aria-disabled="true" data-engine={engine.id} data-mode={mode} data-span={span}>
+                  {body}
+                </div>
+              );
+            }
+            if (mode === "add") {
+              return (
+                <a key={engine.id} className="estp-card" href={DECK_ADD_HREF} onClick={() => close()} data-engine={engine.id} data-mode={mode} data-span={span}>
+                  {body}
+                </a>
+              );
+            }
+            return (
+              <button
+                key={engine.id}
+                type="button"
+                className="estp-card"
+                onClick={() => choose(engine.href)}
+                data-engine={engine.id}
+                data-mode={mode}
+                data-span={span}
+              >
+                {body}
+              </button>
+            );
+          })}
         </div>
 
         {queued.length > 0 && (
           <div className="estp-queue">
             <span className="estp-queue-label">In the queue</span>
-            {queued
-              .filter((engine) => !(deckOpen && engine.id === "deck"))
-              .map((engine) =>
-                engine.id === "deck" && isEditionOpen("deck") ? (
-                  <a key={engine.id} className="estp-stub estp-stub--add" href={DECK_ADD_HREF} data-deck-add onClick={() => close()}>
-                    <i>{engine.no}</i>
-                    Deck Studio · add it
-                  </a>
-                ) : engine.id === "deck" ? (
-                  // Coming soon (lib/editions EDITION_OPEN): named, not sold.
-                  <span key={engine.id} className="estp-stub" data-deck-soon>
-                    <i>{engine.no}</i>
-                    Deck Studio · coming soon
-                  </span>
-                ) : (
-                  <span key={engine.id} className="estp-stub">
-                    <i>{engine.no}</i>
-                    {engine.title}
-                  </span>
-                ),
-              )}
+            {queued.map((engine) => (
+              <span key={engine.id} className="estp-stub">
+                <i>{engine.no}</i>
+                {engine.title}
+              </span>
+            ))}
           </div>
         )}
       </div>

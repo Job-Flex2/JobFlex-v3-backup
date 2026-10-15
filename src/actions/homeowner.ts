@@ -28,7 +28,29 @@ const homeownerSchema = z.object({
   timezone: z.string().max(80).optional(),
 });
 
+/**
+ * The homeowner's "Send my project". Every refusal comes back as `{ ok: false, error }` in words (2026-10-14):
+ * a thrown error is masked in production ("An error occurred in the Server Components render…"), and the person
+ * reading it has just typed out their project from an ad. Their answers stay on the form either way.
+ */
 export async function submitHomeownerRequest(raw: unknown) {
+  try {
+    return await submitHomeownerRequestInner(raw);
+  } catch (err) {
+    const e = err as { name?: string; message?: string; retryAfterMs?: number };
+    if (e?.name === "RateLimitError") {
+      const mins = Math.max(1, Math.ceil((e.retryAfterMs ?? 10 * MINUTE) / MINUTE));
+      return { ok: false as const, error: `We've had several projects from this connection in the last few minutes, so we're pausing for a moment. Please send again in ${mins} minute${mins === 1 ? "" : "s"} — your answers are still here.` };
+    }
+    if (err instanceof z.ZodError) {
+      return { ok: false as const, error: "Something in the form doesn't look right — check your name, email and ZIP code, then send again." };
+    }
+    console.error("[homeowner] submit failed:", err);
+    return { ok: false as const, error: "We couldn't send that just now — nothing was lost. Please try again in a minute." };
+  }
+}
+
+async function submitHomeownerRequestInner(raw: unknown) {
   const data = homeownerSchema.parse(raw);
   // Public, unauthenticated, and expensive downstream (AI, geocode, email, SMS
   // to a caller-supplied number): per-IP cap plus a platform-wide ceiling.

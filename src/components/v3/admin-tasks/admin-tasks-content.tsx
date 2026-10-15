@@ -14,7 +14,9 @@ import { Sheet, useSheet, KIT_BTN_CLASS } from "@/components/v3/admin-users/admi
 import { useAdminMotion } from "@/components/v3/admin-users/use-admin-motion";
 import ui from "@/components/v3/admin-influencers/admin-ui.module.css";
 import { toast } from "@/components/ui/Toast";
-import { createAdminTask, getAdminTask } from "@/actions/adminTasks";
+import { Camera, Check, CheckCheck, Clock, Users } from "lucide-react";
+import { isMemberRef } from "@/lib/adminTasks/teamShared";
+import { createAdminTask, getAdminTask, takeAdminTask, updateAdminTaskField } from "@/actions/adminTasks";
 import {
   categoryLabel,
   dayLabel,
@@ -26,12 +28,15 @@ import {
   type TaskRowDTO,
 } from "@/lib/adminTasks/model";
 import { DEFAULT_DIR, applyFilters, countTasks, defaultSort, serializeFilters, sortRows, type Tab, type TaskFilters } from "@/lib/adminTasks/filters";
-import { useTaskStore } from "./use-task-store";
+import { fieldPatch, useTaskStore } from "./use-task-store";
+import { TeamSheetContent } from "./team-sheet";
+import { rememberTakeAs, TakeSelect, teamOf } from "./take-as";
+import { uploadTaskPictures } from "./task-pictures";
 import { EMPTY_DRAFT, NewTaskForm, type NewTaskDraft } from "./new-task-sheet";
 import { TaskFilterBar } from "./task-filter-bar";
 import { TaskSheetContent, sheetKicker } from "./task-sheet";
 import { useTaskLive } from "./use-task-live";
-import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, useDayOf, useHydrated, useToday } from "./task-bits";
+import { cx, Ic, PriorityStamp, ProgressBar, StatusStamp, stampLabel, useDayOf, useHydrated, useToday } from "./task-bits";
 
 export interface AdminTasksProps {
   initialRows: TaskRowDTO[];
@@ -45,7 +50,9 @@ export interface AdminTasksProps {
 }
 
 export function AdminTasksContent(props: AdminTasksProps) {
-  const { people, me, serverToday } = props;
+  const { me, serverToday } = props;
+  // Everyone a task can go to; the Team sheet hands back a fresh list after each change to the team.
+  const [people, setPeople] = useState(props.people);
   useAdminMotion(KIT_BTN_CLASS);
 
   const store = useTaskStore(props.initialRows, props.initialDetail);
@@ -166,10 +173,11 @@ export function AdminTasksContent(props: AdminTasksProps) {
         subtasksDone: 0,
         subtasksTotal: 0,
         comments: 0,
+        pictures: 0,
       };
       // A new task belongs on Active — show it there even if Archive was open.
       setFilters((f) => (f.tab === "active" ? f : { ...f, tab: "active", st: "" }));
-      const { error } = await store.create(temp, () =>
+      const { error, task } = await store.create(temp, () =>
         createAdminTask({
           title: d.title,
           description: d.description,
@@ -183,12 +191,50 @@ export function AdminTasksContent(props: AdminTasksProps) {
         toast.error("The task wasn't created", error);
         setDraft((x) => ({ key: x.key + 1, value: d, error }));
         newSheet.open();
+        return;
+      }
+      // Its pictures go up right after it exists (2026-10-15).
+      if (task && d.files.length) {
+        const err = await uploadTaskPictures(task.id, d.files, (t) => store.ingestDetail(t));
+        if (err) toast.error("Not every picture went up", err);
       }
     },
     [newSheet, people, me.id, store],
   );
 
+  // ── Take it / Done, right from the list (2026-10-15). The login is shared, so Take it asks who. ──
+  const take = useCallback(
+    async (t: TaskRowDTO, who: string) => {
+      const name = people.find((p) => p.id === who)?.name ?? null;
+      rememberTakeAs(who);
+      const patch = { assigneeId: who, assigneeName: name, status: t.status === "TODO" ? "IN_PROGRESS" : t.status, confirmedAt: new Date().toISOString(), confirmedBy: "admin" as const };
+      const err = await store.mutate(t.id, fieldPatch(patch), () => takeAdminTask(t.id, who));
+      if (err) toast.error("Not taken", err);
+      else toast.success(`${(name ?? "They").split(/\s+/)[0]} has it`, "The rest of the team got a text.");
+    },
+    [store, people],
+  );
+  const finish = useCallback(
+    async (t: TaskRowDTO) => {
+      // Open subtasks: the sheet asks before closing.
+      if (t.subtasksTotal > t.subtasksDone) return void openTask(t.id);
+      const err = await store.mutate(t.id, fieldPatch({ status: "DONE", closedAt: new Date().toISOString() }), () => updateAdminTaskField(t.id, "status", "DONE"));
+      if (err) toast.error("Not marked done", err);
+      else toast.success("Done", "The team got a text that it's finished.");
+    },
+    [store, openTask],
+  );
+
+  // ── The team and their phones (read fresh each time the sheet opens) ──
+  const teamSheet = useSheet();
+  const [teamOpen, setTeamOpen] = useState(0);
+  const openTeam = useCallback(() => {
+    setTeamOpen((n) => n + 1);
+    teamSheet.open();
+  }, [teamSheet]);
+
   const archive = filters.tab === "archive";
+  const teamSize = teamOf(people).length;
 
   return (
     <>
@@ -206,6 +252,11 @@ export function AdminTasksContent(props: AdminTasksProps) {
             <span className={cx("liveMark")} aria-hidden="true" />
             {live.status === "offline" ? "No connection" : live.status === "live" ? "Live" : "Connecting"}
           </span>
+          <button type="button" className={cx("btn", "btn-ghost")} onClick={openTeam} data-team-open title="Names and mobiles of the people who get task texts">
+            <Users size={16} aria-hidden />
+            Team
+            {teamSize ? <span className={cx("tabN")}>{teamSize}</span> : <span className={cx("teamAdd")}>add phones</span>}
+          </button>
           <button type="button" className={cx("btn", "btn-primary")} onClick={openNew}>
             <Ic name="plus" />
             New task
@@ -310,10 +361,52 @@ export function AdminTasksContent(props: AdminTasksProps) {
                         </div>
                         <div className={cx("t-sub")}>
                           {categoryLabel(t.category)} · {temp ? "Saving…" : taskRef(t.id)}
+                          {t.pictures ? (
+                            <span className={cx("picCount")} aria-label={`${t.pictures} pictures`}>
+                              <Camera size={12} aria-hidden />
+                              {t.pictures}
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                       <td className={cx("tdWho")} data-l="Assignee">
-                        {t.assigneeName ? <span className={cx("who")}>{t.assigneeName}</span> : <span className={cx("whoNone")}>Unassigned</span>}
+                        {t.assigneeName ? <span className={cx("who")}>{t.assigneeId === me.id ? "You" : t.assigneeName}</span> : <span className={cx("whoNone")}>Unassigned</span>}
+                        {/* Someone on the team list: did they say they'll do it (replied OK, or took it themselves)? */}
+                        {!archive && isMemberRef(t.assigneeId) ? (
+                          t.confirmedAt ? (
+                            <span
+                              className={cx("conf", "confOk")}
+                              title={`Confirmed ${t.confirmedBy === "text" ? "by text" : "in admin"}${hydrated ? ` · ${stampLabel(t.confirmedAt)}` : ""}`}
+                              data-confirmed="1"
+                            >
+                              <CheckCheck size={12} aria-hidden />
+                              Confirmed
+                            </span>
+                          ) : (
+                            <span className={cx("conf", "confWait")} title="Texted — waiting for them to reply OK" data-confirmed="0">
+                              <Clock size={12} aria-hidden />
+                              Waiting
+                            </span>
+                          )
+                        ) : null}
+                        {temp || archive ? null : t.assigneeId ? (
+                          <button
+                            type="button"
+                            className={cx("rowAct", "rowActDone")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void finish(t);
+                            }}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            title={`Mark done — the team gets a text`}
+                            data-row-act="done"
+                          >
+                            <Check size={13} aria-hidden />
+                            Done
+                          </button>
+                        ) : (
+                          <TakeSelect people={people} onTake={(who) => void take(t, who)} />
+                        )}
                       </td>
                       <td className={cx("tdStatus")}>
                         <StatusStamp status={t.status} />
@@ -359,6 +452,10 @@ export function AdminTasksContent(props: AdminTasksProps) {
             </div>
           </div>
         )}
+      </Sheet>
+
+      <Sheet handle={teamSheet} kicker="Tasks" title="The team" onClose={() => teamSheet.close()}>
+        {teamOpen ? <TeamSheetContent key={teamOpen} onClose={() => teamSheet.close()} onPeople={setPeople} /> : null}
       </Sheet>
 
       <Sheet handle={newSheet} kicker="Tasks" title="New task" onClose={closeNew}>

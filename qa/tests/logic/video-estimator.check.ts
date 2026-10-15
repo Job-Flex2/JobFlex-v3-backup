@@ -1,6 +1,6 @@
 // The video estimator's reading (2026-10-14): the deeper schema (work, the look-ahead, the procedure, permits),
-// the brief it hands the planner, the reader's instructions, and the browser-side frame maths. Pure — no DOM,
-// no model, no database.
+// the brief it hands the planner, the reader's instructions, the browser-side frame maths, and the sound lifted
+// out of a QuickTime movie (2026-10-15). Pure — no DOM, no model, no database.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/video-estimator.check.ts
 import {
   BEHIND_LABEL,
@@ -25,6 +25,13 @@ import {
   stripFrames,
   type FrameReport,
 } from "../../../src/components/v3/video-estimator-blueprint/video-ingest";
+import {
+  aacAsAdts,
+  aacTrackOf,
+  adtsFieldsOf,
+  isQuickTimeHead,
+  writeAdtsHeader,
+} from "../../../src/components/v3/video-estimator-blueprint/movie-audio";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -126,7 +133,7 @@ const t35 = frameTimes(35, 4);
 check("frame times keep off the ends and spread evenly", t35.length === 4 && Math.abs(t35[0] - 0.4) < 1e-9 && Math.abs(t35[3] - 34.6) < 1e-9 && Math.abs(t35[1] - 11.8) < 1e-9);
 check("a one-frame clip takes the middle, never past the end", frameTimes(2, 1)[0] <= 1 && frameTimes(0.5, 4).every((t) => t >= 0 && t <= 0.5));
 check("black is blank; a dark grey still is a picture", isBlankPixels(new Uint8ClampedArray(24 * 24 * 4)) && isBlankPixels(new Uint8ClampedArray([5, 5, 5, 255, 8, 8, 8, 255])) && !isBlankPixels(new Uint8ClampedArray([0, 0, 0, 255, 30, 30, 30, 255])));
-const base: FrameReport = { strategy: "none", wanted: 4, seekOk: 0, seekTimeouts: 0, seekErrors: 0, playOk: 0, blank: 0, thrown: [], playNote: "", ms: 0 };
+const base: FrameReport = { strategy: "none", wanted: 4, seekOk: 0, seekTimeouts: 0, seekErrors: 0, playOk: 0, blank: 0, repeated: 0, thrown: [], playNote: "", ms: 0 };
 check("the failure reason: a tainted canvas", frameFailureReason({ ...base, thrown: ["SecurityError"] }).includes("refused to copy pictures"));
 check("the failure reason: a track it cannot decode", frameFailureReason({ ...base, seekErrors: 1 }).includes("could not decode"));
 check("the failure reason: seeks that never land, and playback refused", frameFailureReason({ ...base, seekTimeouts: 2, playNote: "refused: NotAllowedError" }) === "the browser never finished seeking through this clip and refused to play it (NotAllowedError)");
@@ -140,5 +147,118 @@ check("…but not when a still landed, the track failed, or the refusal was some
 const ten = Array.from({ length: 10 }, (_, i) => ({ t: i, dataUrl: "d" }));
 check("the strip takes the first, the last and an even spread", stripFrames(ten, 4).map((f) => f.t).join(",") === "0,3,6,9" && stripFrames(ten.slice(0, 3), 4).length === 3);
 
-console.log(bad ? `\n${bad} FAILED` : "\nall passed");
-process.exit(bad ? 1 : 0);
+// ── The sound of a QuickTime movie (movie-audio.ts) ─────────────────────────
+// Safari will not decode a .MOV's audio, so the AAC is lifted out as ADTS. A
+// synthetic movie stands in for an iPhone's: the sound track after a picture
+// track, a QuickTime v1 sound description with its esds inside a `wave` atom,
+// two runs in the sample-to-chunk table, the index after the media.
+const enc = (s: string) => Array.from(s, (c) => c.charCodeAt(0));
+const be = (n: number, bytes: number) => Array.from({ length: bytes }, (_, i) => Math.floor(n / 2 ** (8 * (bytes - 1 - i))) & 255);
+const cat = (...parts: (number[] | Uint8Array)[]) => Uint8Array.from(parts.flatMap((p) => Array.from(p)));
+const mkbox = (type: string, ...body: (number[] | Uint8Array)[]) => {
+  const b = cat(...body);
+  return cat(be(8 + b.length, 4), enc(type), b);
+};
+const full = (type: string, ...body: (number[] | Uint8Array)[]) => mkbox(type, [0, 0, 0, 0], ...body);
+const ASC_LC_48K_MONO = [0x11, 0x88];
+const esdsBox = (asc: number[], longLengths = false) => {
+  const len = (n: number) => (longLengths ? [0x80, 0x80, 0x80, n] : [n]);
+  const dsi = [0x05, ...len(asc.length), ...asc];
+  const dcd = [0x04, ...len(13 + dsi.length), 0x40, 0x15, 0, 0, 0, ...be(64000, 4), ...be(64000, 4), ...dsi];
+  const es = [0x03, ...len(3 + dcd.length), 0, 1, 0, ...dcd];
+  return full("esds", es);
+};
+const soundEntry = (kind: "qt-v1" | "iso-v0", asc: number[], codec = "mp4a") => {
+  const common = (version: number) => [...be(0, 6), ...be(1, 2), ...be(version, 2), ...be(0, 2), ...be(0, 4), ...be(1, 2), ...be(16, 2), ...be(version ? 0xfffe : 0, 2), ...be(0, 2), ...be(48000 * 65536, 4)];
+  if (kind === "iso-v0") return mkbox(codec, common(0), esdsBox(asc));
+  const v1 = [...be(1024, 4), ...be(0, 4), ...be(0, 4), ...be(2, 4)];
+  const wave = mkbox("wave", mkbox("frma", enc("mp4a")), mkbox("mp4a", [0, 0, 0, 0]), esdsBox(asc, true), [0, 0, 0, 8, 0, 0, 0, 0]);
+  return mkbox(codec, common(1), v1, wave);
+};
+type Layout = { kind: "qt-v1" | "iso-v0"; moovFirst: boolean; co64: boolean; brand: string; apacFirst?: boolean; noSound?: boolean; badOffset?: boolean };
+const FRAMES = [10, 20, 15, 7, 30].map((n, i) => Uint8Array.from({ length: n }, (_, k) => (i * 37 + k * 11 + 1) & 255));
+function movie(l: Layout): { file: Uint8Array; expected: Uint8Array } {
+  const ftyp = mkbox("ftyp", enc(l.brand), be(0x200, 4), enc(l.brand));
+  const junk = new Uint8Array(100).fill(0xee);
+  const chunk1 = cat(FRAMES[0], FRAMES[1], FRAMES[2]);
+  const chunk2 = cat(FRAMES[3], FRAMES[4]);
+  const mdatBody = cat(junk, chunk1, junk, chunk2);
+  const build = (mdatAt: number) => {
+    const c1 = mdatAt + 8 + junk.length;
+    const c2 = c1 + chunk1.length + junk.length;
+    const offs = l.badOffset ? [c1, 10_000_000] : [c1, c2];
+    const chunkTable = l.co64 ? full("co64", be(2, 4), ...offs.map((o) => be(o, 8))) : full("stco", be(2, 4), ...offs.map((o) => be(o, 4)));
+    const stbl = mkbox("stbl",
+      full("stsd", be(1, 4), soundEntry(l.kind, ASC_LC_48K_MONO)),
+      full("stts", be(1, 4), be(5, 4), be(1024, 4)),
+      full("stsc", be(2, 4), be(1, 4), be(3, 4), be(1, 4), be(2, 4), be(2, 4), be(1, 4)),
+      full("stsz", be(0, 4), be(5, 4), ...FRAMES.map((f) => be(f.length, 4))),
+      chunkTable);
+    const soundTrak = mkbox("trak", mkbox("mdia",
+      full("mdhd", be(0, 4), be(0, 4), be(48000, 4), be(5 * 1024, 4), be(0, 4)),
+      full("hdlr", be(0, 4), enc("soun"), be(0, 12), [0]),
+      mkbox("minf", stbl)));
+    const pictureTrak = mkbox("trak", mkbox("mdia", full("hdlr", be(0, 4), enc("vide"), be(0, 12), [0])));
+    const apacTrak = mkbox("trak", mkbox("mdia",
+      full("hdlr", be(0, 4), enc("soun"), be(0, 12), [0]),
+      mkbox("minf", mkbox("stbl", full("stsd", be(1, 4), soundEntry("iso-v0", ASC_LC_48K_MONO, "apac"))))));
+    const traks = [pictureTrak, ...(l.apacFirst ? [apacTrak] : []), ...(l.noSound ? [] : [soundTrak])];
+    return mkbox("moov", full("mvhd", be(0, 96)), ...traks);
+  };
+  const mdat = (moovLen: number) => mkbox("mdat", mdatBody).length + moovLen;
+  void mdat;
+  let file: Uint8Array;
+  if (l.moovFirst) {
+    const probe = build(0);
+    const moov = build(ftyp.length + probe.length);
+    file = cat(ftyp, moov, mkbox("mdat", mdatBody));
+  } else {
+    const wide = [0, 0, 0, 8, ...enc("wide")];
+    file = cat(ftyp, wide, mkbox("mdat", mdatBody), build(ftyp.length + wide.length));
+  }
+  const expected = cat(...FRAMES.flatMap((f) => {
+    const h = new Uint8Array(7);
+    writeAdtsHeader(h, 0, { profile: 1, sfi: 3, channels: 1 }, f.length + 7);
+    return [h, f];
+  }));
+  return { file, expected };
+}
+const readerOver = (file: Uint8Array) => {
+  const log: [number, number][] = [];
+  const read = async (o: number, n: number) => {
+    log.push([o, n]);
+    return file.subarray(o, Math.min(file.length, o + n));
+  };
+  return { read, log };
+};
+const same = (a: Uint8Array | undefined, b: Uint8Array) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
+
+const head = new Uint8Array(7);
+writeAdtsHeader(head, 0, { profile: 1, sfi: 3, channels: 1 }, 17);
+check("an ADTS header, bit for bit (AAC LC, 48 kHz, mono, 17-byte frame)", Array.from(head).map((x) => x.toString(16).padStart(2, "0")).join(" ") === "ff f1 4c 40 02 3f fc");
+check("AudioSpecificConfig: LC 48k mono, LC 44.1k stereo", JSON.stringify(adtsFieldsOf(Uint8Array.from([0x11, 0x88]))) === JSON.stringify({ profile: 1, sfi: 3, channels: 1 }) && JSON.stringify(adtsFieldsOf(Uint8Array.from([0x12, 0x10]))) === JSON.stringify({ profile: 1, sfi: 4, channels: 2 }));
+check("…explicit SBR (HE-AAC) is carried as its core AAC LC, at the core rate", JSON.stringify(adtsFieldsOf(Uint8Array.from([0x2b, 0x92, 0x08]))) === JSON.stringify({ profile: 1, sfi: 7, channels: 2 }));
+check("…what ADTS cannot carry is refused: AAC-LD, a channel layout from a PCE, a cut-short config", adtsFieldsOf(Uint8Array.from([0xb9, 0x88])) === null && adtsFieldsOf(Uint8Array.from([0x11, 0x80])) === null && adtsFieldsOf(Uint8Array.from([0x11])) === null);
+check("a QuickTime head is told from an MP4's", isQuickTimeHead(Uint8Array.from([0, 0, 0, 20, ...enc("ftypqt  ")])) && !isQuickTimeHead(Uint8Array.from([0, 0, 0, 20, ...enc("ftypisom")])) && !isQuickTimeHead(new Uint8Array(4)));
+
+void (async () => {
+  const qt = movie({ kind: "qt-v1", moovFirst: false, co64: false, brand: "qt  " });
+  const r1 = readerOver(qt.file);
+  const a1 = await aacAsAdts(r1.read, qt.file.length);
+  check("an iPhone-style movie (index last, QuickTime v1 sound, esds in a wave atom, two chunk runs): the AAC comes out as ADTS, frame for frame", same(a1?.bytes, qt.expected), `${a1?.bytes.length ?? "null"} vs ${qt.expected.length} bytes`);
+  check("…with the track's own length", !!a1 && Math.abs(a1.seconds - (5 * 1024) / 48000) < 1e-9);
+  check("…reading the index and the sound, never the picture between", r1.log.every(([o, n]) => o + n <= qt.file.length) && r1.log.reduce((t, [, n]) => t + n, 0) < qt.file.length);
+  const iso = movie({ kind: "iso-v0", moovFirst: true, co64: true, brand: "isom" });
+  const a2 = await aacAsAdts(readerOver(iso.file).read, iso.file.length);
+  check("a web-export MP4 (index first, plain sound entry, 64-bit chunk offsets): the same frames", same(a2?.bytes, iso.expected));
+  const apac = movie({ kind: "qt-v1", moovFirst: false, co64: false, brand: "qt  ", apacFirst: true });
+  check("a spatial-audio track ahead of the AAC one is passed over for it", same((await aacAsAdts(readerOver(apac.file).read, apac.file.length))?.bytes, apac.expected));
+  const silent = movie({ kind: "qt-v1", moovFirst: false, co64: false, brand: "qt  ", noSound: true });
+  check("a movie with no sound track gives nothing", (await aacAsAdts(readerOver(silent.file).read, silent.file.length)) === null);
+  const broken = movie({ kind: "qt-v1", moovFirst: false, co64: false, brand: "qt  ", badOffset: true });
+  check("an index pointing past the end of the file gives nothing, and reads nothing out of bounds", (await aacAsAdts(readerOver(broken.file).read, broken.file.length)) === null);
+  check("not a movie at all gives nothing", (await aacAsAdts(readerOver(Uint8Array.from(enc("RIFF....WEBMjunkjunk"))).read, 20)) === null && aacTrackOf(Uint8Array.from(enc("notmoov!"))) === null);
+
+  console.log(bad ? `\n${bad} FAILED` : "\nall passed");
+  process.exit(bad ? 1 : 0);
+})();

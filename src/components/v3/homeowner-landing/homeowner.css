@@ -380,9 +380,12 @@ body:has(.jf-homeowner-landing)::before { content: none; }
   text-transform: uppercase; color: var(--muted); transition: color .15s var(--ease); }
 .jf-homeowner-landing .restart:hover { color: var(--ink); }
 /* The status page link — the one way back to the request besides the email. */
-.jf-homeowner-landing .done-link { margin-top: calc(14px * var(--s)); display: inline-flex; align-items: center; min-height: 44px;
-  font-size: calc(13.5px * var(--s)); font-weight: 800; color: var(--ink);
-  text-decoration: underline; text-underline-offset: 3px; }
+/* The way into the dashboard is the one button on the done pane (2026-10-14) — the same look as "Continue". */
+.jf-homeowner-landing .done-link { margin-top: calc(18px * var(--s)); display: inline-flex; align-items: center; justify-content: center; gap: calc(9px * var(--s));
+  min-height: calc(48px * var(--s)); padding: 0 calc(22px * var(--s)); border: var(--border); border-radius: var(--radius);
+  background: var(--blueprint); color: #fff; font-size: calc(12.5px * var(--s)); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  text-decoration: none; box-shadow: calc(3px * var(--s)) calc(3px * var(--s)) 0 var(--ink); transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease); }
+.jf-homeowner-landing .done-link:hover { transform: translate(calc(-1px * var(--s)),calc(-1px * var(--s))); box-shadow: calc(4px * var(--s)) calc(4px * var(--s)) 0 var(--ink); }
 
 .jf-homeowner-landing .trust-row { display: flex; gap: calc(12px * var(--s));
   max-width: calc(760px * var(--s)); margin: clamp(calc(34px * var(--s)), 6vh, calc(70px * var(--s))) auto 0; }

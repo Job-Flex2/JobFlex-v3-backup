@@ -12,7 +12,7 @@
 // stays on the record as `no`; only the queued stubs print it, which is also
 // what the source does (`<i>05</i>Deck`).
 
-export type EngineDiagram = "roof" | "fence" | "sheet" | "prose" | "video" | "hvac";
+export type EngineDiagram = "roof" | "fence" | "sheet" | "prose" | "video" | "hvac" | "plans" | "deck";
 
 type EngineBase = {
   id: string;
@@ -29,8 +29,10 @@ type EngineBase = {
   spec: { input: string; output: string };
 };
 
+/** "soon": built, but not sold yet (lib/editions EDITION_OPEN) — a card for whoever
+ *  may use it (the edition's buyers; admins preview), "Coming soon" for everyone else. */
 export type Engine = EngineBase &
-  ({ status: "active"; href: string } | { status: "queued"; href?: never });
+  ({ status: "active"; href: string } | { status: "soon"; href: string } | { status: "queued"; href?: never });
 
 export const ENGINES: Engine[] = [
   {
@@ -60,6 +62,19 @@ export const ENGINES: Engine[] = [
     status: "active",
     href: "/dashboard/advanced-ai",
     spec: { input: "plain prose", output: "cost sheet" },
+  },
+  {
+    // Added 2026-10-15 (owner: "add the blueprint estimator"). After Smart
+    // Proposal, where the sidebar's Estimating tools bay puts it. Catalogue 10
+    // for the same reason as Video and HVAC: only the queued stubs print theirs.
+    id: "blueprint",
+    no: "10",
+    title: "Blueprint",
+    method: "read the plans",
+    diagram: "plans",
+    status: "active",
+    href: "/dashboard/blueprint-estimator",
+    spec: { input: "plan set · spec pages", output: "measures · priced lines" },
   },
   {
     id: "roof",
@@ -112,13 +127,19 @@ export const ENGINES: Engine[] = [
     spec: { input: "video walk · nameplates", output: "load · unit · cost sheet" },
   },
   {
+    // A card since 2026-10-15 (it was a queued stub, then a stub that said
+    // "coming soon"). Built and working; not sold yet. The picker decides per
+    // account: live for the edition's buyers, live with a Preview tag for the
+    // admins who test it (lib/deck/access), Coming soon for everyone else.
     id: "deck",
     no: "05",
-    title: "Deck",
-    method: "queued",
-    diagram: "sheet",
-    status: "queued",
-    spec: { input: "—", output: "—" },
+    title: "Deck Studio",
+    // Lowercase like every method line (the card sets text-transform), so no "3D" here.
+    method: "design it on the house",
+    diagram: "deck",
+    status: "soon",
+    href: "/dashboard/deck-estimator",
+    spec: { input: "size · photo · state", output: "3D · permit set · proposal" },
   },
   {
     id: "concrete",
@@ -141,6 +162,7 @@ export const ENGINES: Engine[] = [
 ];
 
 export const ACTIVE_COUNT = ENGINES.filter((e) => e.status === "active").length;
+export const SOON_COUNT = ENGINES.filter((e) => e.status === "soon").length;
 export const QUEUED_COUNT = ENGINES.filter((e) => e.status === "queued").length;
 
 /** Where the live engines go. Exported so the two topbars can ask "can this

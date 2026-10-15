@@ -6,13 +6,19 @@
 // number recently, put on that company's bell, and forwarded to the office
 // numbers right away — a "can't make it tomorrow" at 11 PM is exactly the
 // text the office wants. The signature is verified like the voice webhook.
+//
+// Before that, JobFlex's own team (2026-10-15): someone on /admin/tasks' team
+// list answering a task text — OK, DONE, NO, or a note — is answered by
+// lib/adminTasks/textReply and texted back what it did.
 
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { verifyTwilioSignature } from "@/lib/sdk/twilioVoice";
 import { clip, companyHelpText, helpText, isHelpWord, isStartWord, isStopWord, replyForwardLine } from "@/lib/sms/format";
 import { sendText, textOfficeNow } from "@/lib/sms/send";
+import { planTaskReply } from "@/lib/adminTasks/textReply";
+import { deliverTaskReply } from "@/lib/adminTasks/team";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,6 +45,23 @@ export async function POST(req: Request) {
     await db.smsOptOut.upsert({ where: { phone: from }, create: { phone: from, body: clip(body, 60) }, update: { stoppedAt: new Date(), body: clip(body, 60) } });
     await db.smsMessage.create({ data: { direction: "IN", to, from, body, kind: "stop", status: "RECEIVED", sid } }).catch(() => null);
     return twiml();
+  }
+  // JobFlex's team answering a task text, on JobFlex's number (not a company's own). Ahead of START so a plain
+  // "yes" counts as OK; HELP and the other START words go on below.
+  if (!isHelpWord(body) && (!isStartWord(body) || /^\s*yes\b/i.test(body))) {
+    const company = to ? await db.organization.findFirst({ where: { smsFromNumber: to }, select: { id: true } }) : null;
+    const plan = company ? null : await planTaskReply(from, body).catch((err) => {
+      console.error("[sms] task reply failed:", err instanceof Error ? err.message : err);
+      return null;
+    });
+    if (plan?.handled) {
+      await db.smsMessage.create({ data: { direction: "IN", to, from, body, kind: "jobflex-admin-task-reply", status: "RECEIVED", sid } }).catch(() => null);
+      // "Yes" is a re-subscribe word to Twilio too: mirror it, as START would.
+      if (isStartWord(body)) await db.smsOptOut.deleteMany({ where: { phone: from } }).catch(() => null);
+      const base = await appBaseUrl();
+      after(() => deliverTaskReply(plan, base));
+      return twiml();
+    }
   }
   if (isStartWord(body)) {
     await db.smsOptOut.deleteMany({ where: { phone: from } });

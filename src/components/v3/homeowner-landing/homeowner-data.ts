@@ -32,6 +32,12 @@ export const KEYWORDS: Array<[RegExp, string]> = [
   [/basement|crawl\s?space/i, "Basement"],
 ];
 
+/** The question set a description belongs to by its words — the fallback when the model is off or slow (2026-10-14). */
+export function categoryOf(text: string): string {
+  for (const [re, cat] of KEYWORDS) if (re.test(text)) return cat;
+  return "default";
+}
+
 export const PLACEHOLDERS = [
   "I want to remodel my 12×14 kitchen with white shaker cabinets and quartz countertops…",
   "My roof is 15 years old and leaking around the chimney after storms…",

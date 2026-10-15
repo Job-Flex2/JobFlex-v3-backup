@@ -39,10 +39,8 @@ const LIVE = ["active", "trialing", "past_due"] as const;
 export async function findDuplicateSubscriptions(stripe: Stripe): Promise<DuplicateSubscriptions[]> {
   const live: Stripe.Subscription[] = [];
   for (const status of LIVE) {
-    for await (const sub of stripe.subscriptions.list({ status, limit: 100 })) {
-      live.push(sub);
-      if (live.length >= 5000) break;
-    }
+    live.push(...(await allPages((after) => stripe.subscriptions.list({ status, limit: 100, ...(after ? { starting_after: after } : {}) }), 5000 - live.length)));
+    if (live.length >= 5000) break;
   }
   if (live.length < 2) return [];
   const subIds = live.map((s) => s.id);
@@ -81,17 +79,54 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 // ONE ROW NEVER STOPS THE RUN. Each subscription and each invoice is synced in
 // its own try/catch: a subscription whose organization was deleted is skipped
 // and listed, any other failure is logged and listed, and the rest still sync.
+/** Every page of a Stripe list, newest first: `starting_after` the last id
+ *  until Stripe says there is no more (or the cap — a runaway list never
+ *  holds the cron). The SDK's own auto-paging is not used so the dev
+ *  stand-in (lib/sdk/stripeMock) pages the same way. */
+async function allPages<T extends { id?: string }>(
+  page: (startingAfter: string | undefined) => Promise<{ data: T[]; has_more: boolean }>,
+  cap = 5000,
+): Promise<T[]> {
+  const out: T[] = [];
+  let after: string | undefined;
+  for (;;) {
+    const res = await page(after);
+    out.push(...res.data);
+    const last = res.data[res.data.length - 1]?.id;
+    if (!res.has_more || !last || out.length >= cap) break;
+    after = last;
+  }
+  return out;
+}
+
+/** An ended subscription is read again for this long after it ended; past
+ *  it the mirror has long heard, and the list of ended ones only grows. */
+const RECHECK_ENDED_DAYS = 30;
+/** Paid invoices re-asserted for accruals: the last 35 days, every page. */
+const RECHECK_INVOICE_DAYS = 35;
+
 export async function reconcileStripe() {
   if (!isStripeEnabled()) return { skipped: "stripe-disabled", subscriptions: 0, invoices: 0 };
   const stripe = getStripe();
 
   let subscriptions = 0;
   let invoices = 0;
+  let endedLongAgo = 0;
   const missingOrganization: ReconcileSkip[] = [];
   const failed: ReconcileFailure[] = [];
 
-  const subList = await stripe.subscriptions.list({ limit: 100, status: "all" });
-  for (const sub of subList.data) {
+  // EVERY PAGE (2026-10-15). It read the first 100 only — Stripe's newest —
+  // and once signups passed 100 in two weeks the paying customers fell off
+  // the end: their rows were last re-read days or weeks ago, and a cancel or
+  // a renewal whose webhook was dropped was never repaired.
+  const nowSec = Math.floor(Date.now() / 1000);
+  const endedBefore = nowSec - RECHECK_ENDED_DAYS * 86400;
+  const subList = await allPages((after) => stripe.subscriptions.list({ limit: 100, status: "all", ...(after ? { starting_after: after } : {}) }));
+  for (const sub of subList) {
+    if ((sub.status === "canceled" || sub.status === "incomplete_expired") && (sub.ended_at ?? sub.canceled_at ?? sub.created) < endedBefore) {
+      endedLongAgo++;
+      continue;
+    }
     try {
       const res = await syncSubscriptionFromStripe(sub, stripe);
       if (!res.synced && res.reason === "organization-missing") {
@@ -105,8 +140,10 @@ export async function reconcileStripe() {
     }
   }
 
-  const invList = await stripe.invoices.list({ limit: 100, status: "paid" });
-  for (const inv of invList.data) {
+  const invList = await allPages((after) =>
+    stripe.invoices.list({ limit: 100, status: "paid", created: { gte: nowSec - RECHECK_INVOICE_DAYS * 86400 }, ...(after ? { starting_after: after } : {}) }),
+  );
+  for (const inv of invList) {
     try {
       await accrueForInvoice(inv, undefined, stripe);
       invoices++;
@@ -141,5 +178,5 @@ export async function reconcileStripe() {
     create: { key: "reconcile-stripe", cursor: String(Math.floor(Date.now() / 1000)) },
   });
 
-  return { subscriptions, invoices, missingOrganization, duplicateSubscriptions, failed };
+  return { subscriptions, listed: subList.length, endedLongAgo, invoices, missingOrganization, duplicateSubscriptions, failed };
 }

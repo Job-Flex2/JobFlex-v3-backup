@@ -34,6 +34,7 @@
 | trial-projection.check.ts | qa/tests/billing/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | trial-watch.check.ts | qa/tests/billing/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | usage-reset.check.ts | qa/tests/billing/ | live | живой — все импорты, маршруты и селекторы есть в src |
+| reconcile-pages.check.ts | qa/tests/billing/ | live | added upstream 2026-10-15 (bdec185d) in scripts/qa, moved in the merge; Stripe stand-in, throwaway company; forwarder left in scripts/qa |
 | roles.check.ts | qa/tests/roles/ | live | role × server action (the browser matrix is qa/tests/roles/access.spec.ts) |
 | tenant-isolation.check.ts | qa/tests/roles/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | everyday-work.check.ts | qa/tests/roles/ | live | живой — все импорты, маршруты и селекторы есть в src |
@@ -63,7 +64,9 @@
 | fixpass-smoke.js | qa/tests/visual/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | deck-zfight.check.ts | qa/tests/visual/ | live | geometry-level: no coplanar faces (3D flicker) |
 | admin-mail.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
+| ad-spend-today.check.ts | qa/tests/logic/ | live | added upstream 2026-10-15 (64ef854c) in scripts/qa, moved in the merge; forwarder left in scripts/qa |
 | admin-tasks.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
+| admin-tasks-team.check.ts | qa/tests/logic/ | live | added upstream 2026-10-15 (e7a1580a) in scripts/qa, moved in the merge; forwarder left in scripts/qa |
 | ai-desk-forwarding.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | ai-desk-minutes.check.ts | qa/tests/logic/ | live | its cleanup (slug qa-aidesk*) also removes ai-desk-route's orgs — never run the two at once |
 | ai-desk-overview.check.ts | qa/tests/logic/ | live | added upstream 2026-10-14 while the move was in progress |
@@ -73,7 +76,7 @@
 | ai-desk-step4.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | ai-desk-step5.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | changeOrders.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
-| crew-days.check.ts | qa/tests/logic/ | live | could text through Twilio if its keys were set — the runner blanks them |
+| crew-days.check.ts | qa/tests/logic/ | live | could text through Twilio if its keys were set — the runner preloads the recording twilio stand-in (_no-sms.js) |
 | crew-onsite.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | crm-brief.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
 | deck-autofix.check.ts | qa/tests/logic/ | live | живой — все импорты, маршруты и селекторы есть в src |
@@ -193,4 +196,4 @@
 | pitch-audit.ts | qa/tools/legacy/ | tool | reads c:/Projects/JobFlex-roofcore (this machine only); prints JSON, asserts nothing — was in run-all as a check that passes unless it throws |
 | trade-detect-check.ts | qa/tools/legacy/ | tool | real (paid) OpenAI calls; prints, asserts nothing |
 
-Итого: 188 файлов. smoke/live: 1 · signup/live: 4 · billing/live: 25 · roles/live: 9 · pages/live: 14 · visual/live: 5 · logic/live: 116 · logic/manual: 2 · _archive/dup: 3 · _archive/dead: 2 · tools/tool: 7
+Итого: 191 файлов. smoke/live: 1 · signup/live: 4 · billing/live: 26 · roles/live: 9 · pages/live: 14 · visual/live: 5 · logic/live: 118 · logic/manual: 2 · _archive/dup: 3 · _archive/dead: 2 · tools/tool: 7

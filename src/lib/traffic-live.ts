@@ -24,6 +24,7 @@
 //     utm_*), so the line names the company and the owner.
 //   · "On the site now" = an event in the last ACTIVE_MINUTES; up to
 //     WINDOW_MINUTES they are "just left", shown dimmer, then gone.
+import type { AdSpendToday } from "@/lib/adSpendTodayShared";
 import type { TrialProjection, TrialTier } from "./trialProjection";
 import { TRAFFIC_EVENTS as E, pageLabel, type StaleNote } from "./traffic-contract";
 // Who counts and what is "from an ad": one rule for the whole page (2026-10-01).
@@ -355,6 +356,8 @@ export interface LiveReport {
   stale?: StaleNote;
   /** Where a visit's session replay opens: this + the session id (2026-10-14). */
   replayBase?: string | null;
+  /** Spent on ads today (lib/adSpendToday, 2026-10-15) — filled in by the admin's server action. */
+  adSpend?: AdSpendToday | null;
 }
 
 /** The SyncState key a name for an ad or campaign id is kept under. */

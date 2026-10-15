@@ -306,3 +306,150 @@
   :global(.jf-blueprint .content) .iconBtn,
   :global(.jf-blueprint .content) .subIn { transition: none !important; }
 }
+
+/* ── Take it · Done · pictures · the team (2026-10-15) ───────── */
+:global(.jf-blueprint .content) .picCount { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; color: var(--blueprint); font-weight: 600; }
+:global(.jf-blueprint .content) .rowAct {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; height: 26px; padding: 0 10px;
+  border: 1.5px solid var(--blueprint); border-radius: 999px; background: #fff; color: var(--blueprint);
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap; vertical-align: middle;
+}
+:global(.jf-blueprint .content) .rowAct:hover { background: var(--blueprint); color: #fff; }
+:global(.jf-blueprint .content) .rowActDone { border-color: var(--success); color: var(--success); }
+:global(.jf-blueprint .content) .rowActDone:hover { background: var(--success); color: #fff; }
+:global(.jf-blueprint .content) .rowAct:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+
+:global(.jf-blueprint .content) .takeBar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  padding: 10px 12px; border: 1.5px solid var(--blueprint); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--blueprint) 6%, #fff); font-size: 13.5px; color: var(--ink);
+}
+:global(.jf-blueprint .content) .takeMine { border-color: var(--success); background: color-mix(in srgb, var(--success) 7%, #fff); }
+
+:global(.jf-blueprint .content) .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+:global(.jf-blueprint .content) .pic { position: relative; aspect-ratio: 1; border: 1.5px solid var(--hair); border-radius: var(--radius); overflow: hidden; background: var(--paper); }
+:global(.jf-blueprint .content) .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+:global(.jf-blueprint .content) .picOpen { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+:global(.jf-blueprint .content) .picDel {
+  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: rgba(10, 10, 10, 0.72); color: #fff; cursor: pointer;
+}
+:global(.jf-blueprint .content) .picDel:hover { background: var(--danger); }
+:global(.jf-blueprint .content) .picAdd {
+  aspect-ratio: 1; display: grid; place-content: center; justify-items: center; gap: 6px;
+  border: 1.5px dashed var(--hair); border-radius: var(--radius); background: #fff; color: var(--muted);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+:global(.jf-blueprint .content) .picAdd:hover:not(:disabled) { border-color: var(--blueprint); color: var(--blueprint); }
+:global(.jf-blueprint .content) .picAdd:disabled { cursor: wait; opacity: 0.7; }
+:global(.jf-blueprint .content) .picsNew { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+
+.lightbox { position: fixed; inset: 0; z-index: 2147483600; display: grid; place-items: center; padding: 48px 56px; background: rgba(8, 10, 14, 0.9); cursor: zoom-out; }
+.lbImg { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); cursor: default; }
+.lbClose,
+.lbNav { position: absolute; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.14); color: #fff; cursor: pointer; }
+.lbClose { top: 14px; right: 14px; width: 42px; height: 42px; }
+.lbNav { top: 50%; width: 48px; height: 48px; transform: translateY(-50%); }
+.lbPrev { left: 12px; }
+.lbNext { right: 12px; }
+.lbClose:hover,
+.lbNav:hover { background: rgba(255, 255, 255, 0.26); }
+.lbCap { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: rgba(255, 255, 255, 0.82); font-size: 13px; font-family: var(--font-mono, ui-monospace, monospace); }
+@media (max-width: 640px) {
+  .lightbox { padding: 56px 8px; }
+  .lbNav { top: auto; bottom: 8px; transform: none; }
+}
+
+:global(.jf-blueprint .content) .tmIntro { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+:global(.jf-blueprint .content) .tmCount { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+:global(.jf-blueprint .content) .tmList { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+:global(.jf-blueprint .content) .tmRow { display: grid; gap: 8px; padding: 12px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; }
+:global(.jf-blueprint .content) .tmRow[data-verified="1"] { border-color: color-mix(in srgb, var(--success) 45%, var(--hair)); }
+:global(.jf-blueprint .content) .tmHead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 6px 10px; }
+:global(.jf-blueprint .content) .tmWho { display: grid; gap: 2px; min-width: 0; }
+:global(.jf-blueprint .content) .tmWho b { font-size: 14.5px; color: var(--ink); }
+:global(.jf-blueprint .content) .tmWho span { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .tmYou { font-weight: 500; color: var(--muted); }
+:global(.jf-blueprint .content) .tmState { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; border: 1px solid var(--hair); color: var(--muted); }
+:global(.jf-blueprint .content) .tmOk { border-color: var(--success); color: var(--success); background: color-mix(in srgb, var(--success) 8%, #fff); }
+:global(.jf-blueprint .content) .tmOff { color: var(--muted); }
+:global(.jf-blueprint .content) .tmWait { border-color: var(--warning, #c98a10); color: var(--warning-dark, #8a5d00); background: var(--warning-soft, #fdf3e0); }
+:global(.jf-blueprint .content) .tmLine { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+:global(.jf-blueprint .content) .tmIc { color: var(--muted); }
+:global(.jf-blueprint .content) .tmFlags { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+:global(.jf-blueprint .content) .tmFlag { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink); cursor: pointer; }
+:global(.jf-blueprint .content) .tmFlag input { width: 16px; height: 16px; accent-color: var(--blueprint); }
+:global(.jf-blueprint .content) .tmFlag span { display: inline-flex; align-items: center; gap: 4px; }
+:global(.jf-blueprint .content) .tmFlag small { color: var(--muted); }
+:global(.jf-blueprint .content) .tmNote { margin: 0; font-size: 13px; color: var(--success); }
+:global(.jf-blueprint .content) .tmNoteBad { color: var(--danger); }
+:global(.jf-blueprint .content) .tmFoot { margin: 0; font-size: 13px; color: var(--muted); }
+:global(.jf-blueprint .content) .tmFoot a { color: var(--blueprint); text-decoration: underline; }
+@media (max-width: 640px) {
+  :global(.jf-blueprint .content) .tmLine { grid-template-columns: 18px minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .tmLine > button { grid-column: 2; justify-self: start; }
+}
+
+/* ── The team by name and phone, take it as…, speak instead of typing (2026-10-15, no logins) ── */
+:global(.jf-blueprint .content) .teamAdd { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--blueprint); }
+:global(.jf-blueprint .content) .rowTake { position: relative; }
+:global(.jf-blueprint .content) .rowTake select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 14px; }
+:global(.jf-blueprint .content) .rowTake:focus-within { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+:global(.jf-blueprint .content) .takeWho { flex: 1 1 260px; min-width: 0; line-height: 1.45; }
+:global(.jf-blueprint .content) .takePick { width: auto; min-width: 150px; height: 32px; padding-block: 0; font-size: 13px; }
+
+:global(.jf-blueprint .content) .tmTexting { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 9px 12px; border-radius: var(--radius); font-size: 13px; line-height: 1.45; }
+:global(.jf-blueprint .content) .tmTextingOk { background: color-mix(in srgb, var(--success) 8%, #fff); color: var(--ink); border: 1px solid color-mix(in srgb, var(--success) 40%, var(--hair)); }
+:global(.jf-blueprint .content) .tmTextingBad { background: var(--warning-soft, #fdf3e0); color: var(--warning-dark, #8a5d00); border: 1px solid var(--warning, #c98a10); }
+:global(.jf-blueprint .content) .tmDot { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: currentColor; }
+:global(.jf-blueprint .content) .tmTextingOk .tmDot { background: var(--success); }
+:global(.jf-blueprint .content) .tmAdd { display: grid; gap: 6px; padding: 12px; border: 1.5px dashed var(--hair); border-radius: var(--radius); }
+:global(.jf-blueprint .content) .tmAddRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 8px; align-items: center; }
+:global(.jf-blueprint .content) .tmPhone { position: relative; display: block; }
+:global(.jf-blueprint .content) .tmPhone svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+:global(.jf-blueprint .content) .tmPhone input { padding-left: 32px; }
+:global(.jf-blueprint .content) .tmRow[data-state="on"] { border-color: color-mix(in srgb, var(--success) 45%, var(--hair)); }
+:global(.jf-blueprint .content) .tmRow[data-state="stop"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--hair)); }
+:global(.jf-blueprint .content) .tmBad { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, #fff); }
+:global(.jf-blueprint .content) .tmSent { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+:global(.jf-blueprint .content) .tmSentOk { color: var(--success); }
+:global(.jf-blueprint .content) .tmSentWait { color: var(--warning-dark, #8a5d00); }
+:global(.jf-blueprint .content) .tmSentBad { color: var(--danger); }
+:global(.jf-blueprint .content) .tmEdit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+:global(.jf-blueprint .content) .tmBtns { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+:global(.jf-blueprint .content) .tmRemove { margin-left: auto; }
+
+:global(.jf-blueprint .content) .dictRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+:global(.jf-blueprint .content) .dict { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+:global(.jf-blueprint .content) .dictBtn {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1.5px solid var(--hair); border-radius: 999px; background: #fff; color: var(--ink);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+:global(.jf-blueprint .content) .dictBtn:hover { border-color: var(--blueprint); color: var(--blueprint); }
+:global(.jf-blueprint .content) .dictBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+:global(.jf-blueprint .content) .dictOn { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, #fff); color: var(--danger); animation: dictPulse 1.4s ease-in-out infinite; }
+:global(.jf-blueprint .content) .dictNote { font-size: 12px; color: var(--danger); }
+:global(.jf-blueprint .content) .composeBtns { justify-content: space-between; }
+@keyframes dictPulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 35%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--danger) 0%, transparent); } }
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .dictOn { animation: none; }
+}
+@media (max-width: 640px) {
+  :global(.jf-blueprint .content) .tmAddRow,
+  :global(.jf-blueprint .content) .tmEdit { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .tmAddRow > button { justify-self: start; }
+  :global(.jf-blueprint .content) .dictRow { grid-template-columns: minmax(0, 1fr) auto; }
+  :global(.jf-blueprint .content) .dictRow .dictBtn span { display: none; }
+  :global(.jf-blueprint .content) .takePick { flex: 1 1 100%; }
+}
+
+/* ── They said they'll do it: replied OK to the text, or took it in admin (2026-10-15) ── */
+:global(.jf-blueprint .content) .conf {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; line-height: 1.5; white-space: nowrap; vertical-align: middle; border: 1px solid;
+}
+:global(.jf-blueprint .content) .confOk { color: var(--success); border-color: color-mix(in srgb, var(--success) 55%, transparent); background: color-mix(in srgb, var(--success) 8%, #fff); }
+:global(.jf-blueprint .content) .confWait { color: var(--warning-dark, #8a5d00); border-color: var(--warning, #c98a10); background: var(--warning-soft, #fdf3e0); }
+:global(.jf-blueprint .content) .tdWho .conf { margin-right: 6px; }

@@ -25,6 +25,10 @@
 //
 // Plain server module — imported only by the page.
 import { db } from "@/lib/db";
+import { guessTrade } from "@/lib/tradeGuess";
+import { getStripeMode } from "@/lib/stripeMode";
+import { parsePaymentSettings } from "@/lib/settings";
+import { resolvePayOptions } from "@/lib/payments/payOptions";
 import { contractSchedule, contractTotal } from "@/lib/contractTotal";
 import { fromMinor, resolveSchedule } from "@/lib/paymentSchedule";
 import { orgReplyTo } from "@/lib/email/orgSend";
@@ -68,6 +72,12 @@ export interface PortalProposal {
   remaining: number;
   /** The stage payable next, when one is scheduled. */
   nextDue: { label: string; amount: number } | null;
+  /**
+   * The shop takes this payment online (a card processor or bank-transfer details) — the same answer the
+   * proposal page gives (lib/payments/payOptions). False: "the team will be in touch about payment", so the
+   * dashboard never offers a Pay button that leads nowhere (2026-10-14).
+   */
+  payOnline: boolean;
   stage: ProposalStage;
   sentAt: string | null;
   validUntil: string | null;
@@ -184,12 +194,30 @@ export async function buildRequestPortal(pl: RequestLeadRow): Promise<RequestPor
     orgIds.length
       ? db.organization.findMany({
           where: { id: { in: orgIds }, deletedAt: null },
-          select: { id: true, name: true, slug: true, phone: true, billingEmail: true, gmailSettingsJson: true, address: true, timezone: true },
+          select: { id: true, name: true, slug: true, phone: true, billingEmail: true, gmailSettingsJson: true, address: true, timezone: true, paymentSettingsJson: true, paymentConnections: true },
         })
       : Promise.resolve([]),
     orgRatingsByIds(orgIds),
   ]);
   const orgs = new Map<string, PortalOrg>();
+  // Whether each shop can take a payment online — the proposal page's own rule.
+  const stripeMode = orgRows.length ? await getStripeMode().catch(() => null) : null;
+  const payOnlineByOrg = new Map<string, boolean>();
+  for (const o of orgRows) {
+    try {
+      const opts = resolvePayOptions({
+        settings: parsePaymentSettings(o.paymentSettingsJson),
+        stripeConn: o.paymentConnections.find((c) => c.provider === "STRIPE") ?? null,
+        squareConn: o.paymentConnections.find((c) => c.provider === "SQUARE") ?? null,
+        staxConn: o.paymentConnections.find((c) => c.provider === "STAX") ?? null,
+        proposalCurrency: "USD",
+        stripeMode: stripeMode ?? "test",
+      });
+      payOnlineByOrg.set(o.id, opts.anyHosted || opts.bankTransfer.ok);
+    } catch {
+      payOnlineByOrg.set(o.id, false);
+    }
+  }
   for (const o of orgRows) {
     const ph = phoneParts(o.phone);
     const r = ratings.get(o.id);
@@ -282,6 +310,7 @@ export async function buildRequestPortal(pl: RequestLeadRow): Promise<RequestPor
       paid,
       remaining,
       nextDue,
+      payOnline: payOnlineByOrg.get(p.organizationId) ?? false,
       stage: st,
       sentAt: (p.sentAt ?? p.createdAt).toISOString(),
       validUntil: p.validUntil?.toISOString() ?? null,
@@ -356,7 +385,8 @@ export async function buildRequestPortal(pl: RequestLeadRow): Promise<RequestPor
     homeKey: pl.home?.accessToken ?? null,
     status2,
     clients: [...clientByOrg.entries()].map(([orgId, clientId]) => ({ orgId, clientId })),
-    trade: pl.detectedTrade ?? pl.projectType,
+    // The classifier's word, else the homeowner's own (lib/tradeGuess, 2026-10-14): never "Project · 98033".
+    trade: pl.detectedTrade ?? pl.projectType ?? guessTrade(pl.description),
     firstName: (pl.name || "").trim().split(/\s+/)[0] || "",
     submittedAt: pl.createdAt.toISOString(),
     place,

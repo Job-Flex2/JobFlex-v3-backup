@@ -48,6 +48,7 @@ scripts:
   - { file: trial-projection.check.ts, suite: billing, kind: check, status: live }
   - { file: trial-watch.check.ts, suite: billing, kind: check, status: live }
   - { file: usage-reset.check.ts, suite: billing, kind: check, status: live }
+  - { file: reconcile-pages.check.ts, suite: billing, kind: check, status: live, note: "added upstream 2026-10-15 (bdec185d) in scripts/qa, moved in the merge; Stripe stand-in, throwaway company; forwarder left in scripts/qa" }
 
   # ── roles ───────────────────────────────────────────────────────────────
   - { file: roles.check.ts, suite: roles, kind: check, status: live, note: "role × server action (the browser matrix is qa/tests/roles/access.spec.ts)" }
@@ -85,7 +86,9 @@ scripts:
 
   # ── logic (engines, server actions, data rules — no browser) ────────────
   - { file: admin-mail.check.ts, suite: logic, kind: check, status: live }
+  - { file: ad-spend-today.check.ts, suite: logic, kind: check, status: live, note: "added upstream 2026-10-15 (64ef854c) in scripts/qa, moved in the merge; forwarder left in scripts/qa" }
   - { file: admin-tasks.check.ts, suite: logic, kind: check, status: live }
+  - { file: admin-tasks-team.check.ts, suite: logic, kind: check, status: live, note: "added upstream 2026-10-15 (e7a1580a) in scripts/qa, moved in the merge; forwarder left in scripts/qa" }
   - { file: ai-desk-forwarding.check.ts, suite: logic, kind: check, status: live }
   - { file: ai-desk-minutes.check.ts, suite: logic, kind: check, status: live, note: "its cleanup (slug qa-aidesk*) also removes ai-desk-route's orgs — never run the two at once" }
   - { file: ai-desk-overview.check.ts, suite: logic, kind: check, status: live, note: "added upstream 2026-10-14 while the move was in progress" }

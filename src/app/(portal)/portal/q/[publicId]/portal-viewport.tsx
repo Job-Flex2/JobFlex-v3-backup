@@ -39,6 +39,7 @@
 import dynamic from "next/dynamic";
 import { useSyncExternalStore } from "react";
 import type { PortalView } from "@/components/v3/mobile-proposal-client/portal-view";
+import { HomeBackLink } from "./home-back-link";
 
 /** CLAUDE.md's handheld target: ≤768px. Same constant as the dashboard shell. */
 const HANDHELD = "(max-width: 768px)";
@@ -84,6 +85,13 @@ export function PortalViewport({
   children: React.ReactNode;
 }) {
   const isHandheld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  if (isHandheld) return <MobileProposalClient view={view} />;
+  if (isHandheld) {
+    return (
+      <>
+        <HomeBackLink phone />
+        <MobileProposalClient view={view} />
+      </>
+    );
+  }
   return <>{children}</>;
 }

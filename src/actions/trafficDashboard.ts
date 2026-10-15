@@ -1,5 +1,6 @@
 "use server";
 
+import { adSpendToday } from "@/lib/adSpendToday";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { fetchSignupDropoff, getLiveTraffic as liveTraffic, getMapHistory as mapHistory, getStageVisitors, getTrafficExperiments, getTrafficReport, posthogApiConfig } from "@/lib/traffic-server";
@@ -60,7 +61,9 @@ export async function getLiveTraffic(input: Record<string, unknown> = {}): Promi
     // Counted from TRAFFIC_SINCE unless the admin asks for the full history.
     fullHistory: input.fullHistory === true,
   });
-  return withNames(report);
+  // Spent on ads today (2026-10-15): independent of PostHog, so it rides along even on a stale or failed read.
+  const [named, adSpend] = await Promise.all([withNames(report), adSpendToday().catch(() => null)]);
+  return { ...named, adSpend };
 }
 
 /** The names the live view shows next to bare ids (owner, 2026-10-01): the

@@ -18,6 +18,9 @@ import { after } from "next/server";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { appBaseUrl } from "@/lib/appUrl";
 import { sendTaskNotices } from "@/lib/adminTasks/mail";
+import { PictureError, removeTaskPicture } from "@/lib/adminTasks/pictures";
+import { addMember, removeMember, sendTaskTexts, teamView, testMember, textingStatus, updateMember, type TeamWrite } from "@/lib/adminTasks/team";
+import type { TeamMemberView, TextingStatus } from "@/lib/adminTasks/teamShared";
 import {
   TaskError,
   addComment,
@@ -26,6 +29,8 @@ import {
   createTaskFromTicket,
   getTaskDetail,
   removeSubtask,
+  takeTask,
+  taskPeople,
   reorderSubtasks,
   updateSubtask,
   updateTaskField,
@@ -35,7 +40,7 @@ import {
   type TaskField,
   type TaskWrite,
 } from "@/lib/adminTasks/service";
-import type { TaskDetailDTO } from "@/lib/adminTasks/model";
+import { isConsoleEmail, type AdminPersonDTO, type TaskDetailDTO } from "@/lib/adminTasks/model";
 
 export type TaskResult = { ok: true; task: TaskDetailDTO } | { ok: false; error: string };
 
@@ -59,9 +64,11 @@ async function run(write: (actor: Actor) => Promise<TaskWrite>): Promise<TaskRes
   if (!actor) return { ok: false, error: DENIED };
   try {
     const w = await write(actor);
-    if (w.notices.length > 0) {
+    if (w.notices.length > 0 || w.texts?.length) {
       const base = await appBaseUrl();
-      after(() => sendTaskNotices(w.notices, base));
+      if (w.notices.length > 0) after(() => sendTaskNotices(w.notices, base));
+      // The team's texts (2026-10-15): who took it, who has it, what got done.
+      if (w.texts?.length) after(() => sendTaskTexts(w.texts!, base).then(() => undefined));
     }
     return { ok: true, task: w.task };
   } catch (err) {
@@ -123,4 +130,87 @@ export async function createTaskFromSupportTicket(ticketId: string): Promise<Tas
     return w;
   });
   return r.ok ? { ...r, existed } : r;
+}
+
+/* ── take it, pictures, the team (2026-10-15) ───────────────────────────────── */
+
+/** "I'll take it": the screen is shared, so it says who — someone on the team list ("m:<id>"). The team hears. */
+export async function takeAdminTask(taskId: string, who: string): Promise<TaskResult> {
+  if (!isId(taskId)) return { ok: false, error: "That task doesn't exist." };
+  if (!isId(who)) return { ok: false, error: "Pick who's taking it." };
+  return run((actor) => takeTask(actor, taskId, who));
+}
+
+/** A picture off a task (uploads go through /api/admin/tasks/[id]/pictures). */
+export async function removeAdminTaskPicture(taskId: string, pictureId: string): Promise<TaskResult> {
+  const actor = await asAdmin();
+  if (!actor) return { ok: false, error: DENIED };
+  if (!isId(taskId) || !isId(pictureId)) return { ok: false, error: "That picture doesn't exist." };
+  try {
+    await removeTaskPicture({ id: actor.id }, taskId, pictureId);
+    const task = await getTaskDetail(taskId);
+    return task ? { ok: true, task } : { ok: false, error: "This task no longer exists." };
+  } catch (err) {
+    if (err instanceof PictureError) return { ok: false, error: err.message };
+    console.error("[adminTasks] picture removal failed:", err);
+    return { ok: false, error: "Couldn't remove it. Try again." };
+  }
+}
+
+/** The team sheet's answer: the list, everyone a task can go to now, and whether texts can go at all. */
+export type TeamResult = { ok: true; team: TeamMemberView[]; people: AdminPersonDTO[]; texting: TextingStatus; note?: string } | { ok: false; error: string };
+
+async function teamNow(note?: string): Promise<TeamResult> {
+  const [team, people, texting] = await Promise.all([teamView(), taskPeople(), textingStatus()]);
+  return { ok: true, team, people, texting, note };
+}
+
+async function teamRun(write: (actor: Actor) => Promise<TeamWrite>): Promise<TeamResult> {
+  const actor = await asAdmin();
+  if (!actor) return { ok: false, error: DENIED };
+  try {
+    const w = await write(actor);
+    return w.ok ? await teamNow(w.note) : w;
+  } catch (err) {
+    console.error("[adminTasks] team write failed:", err);
+    return { ok: false, error: "Couldn't save that. Try again." };
+  }
+}
+
+const clip = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n) : "");
+
+/** The team: names, phones, did their texts arrive. */
+export async function getAdminTeam(): Promise<TeamResult> {
+  if (!(await asAdmin())) return { ok: false, error: DENIED };
+  return teamNow();
+}
+
+/** Someone onto the team — a name and a mobile; they get one welcome text. */
+export async function addAdminTeamMember(name: string, phone: string): Promise<TeamResult> {
+  return teamRun((actor) => addMember(clip(name, 120), clip(phone, 40), isConsoleEmail(actor.email) ? null : actor.name));
+}
+
+export async function updateAdminTeamMember(memberId: string, patch: { name?: string; phone?: string; on?: boolean; quietNights?: boolean }): Promise<TeamResult> {
+  if (!isId(memberId)) return { ok: false, error: "That person isn't on the team any more." };
+  const p = patch && typeof patch === "object" ? patch : {};
+  return teamRun(() =>
+    updateMember(memberId, {
+      name: typeof p.name === "string" ? clip(p.name, 120) : undefined,
+      phone: typeof p.phone === "string" ? clip(p.phone, 40) : undefined,
+      on: typeof p.on === "boolean" ? p.on : undefined,
+      quietNights: typeof p.quietNights === "boolean" ? p.quietNights : undefined,
+    }),
+  );
+}
+
+/** Off the team: their open tasks go back to nobody. */
+export async function removeAdminTeamMember(memberId: string): Promise<TeamResult> {
+  if (!isId(memberId)) return { ok: false, error: "That person isn't on the team any more." };
+  return teamRun(() => removeMember(memberId));
+}
+
+/** "Send a test text" — proves the number before a task needs it. */
+export async function testAdminTeamText(memberId: string): Promise<TeamResult> {
+  if (!isId(memberId)) return { ok: false, error: "That person isn't on the team any more." };
+  return teamRun(() => testMember(memberId));
 }

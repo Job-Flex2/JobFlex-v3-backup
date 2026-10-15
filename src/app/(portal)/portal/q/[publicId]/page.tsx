@@ -50,6 +50,7 @@ import { PortalActions } from "./portal-actions";
 import { PortalPayment } from "./portal-payment";
 import { PortalReveal } from "./portal-reveal";
 import { PortalViewport } from "./portal-viewport";
+import { HomeBackLink } from "./home-back-link";
 import "./proposal-portal.css";
 
 export const dynamic = "force-dynamic";
@@ -244,6 +245,8 @@ export default async function PublicProposalPortal({
     <PortalViewport view={view}>
     <div className="jf-proposal-portal">
       <div className="pv">
+        {/* Back to the home dashboard, when that is where the homeowner came from (2026-10-14). */}
+        <HomeBackLink />
 
         {/* ШАПКА */}
         {/* (RU: "Header") */}
