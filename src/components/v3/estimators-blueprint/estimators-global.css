@@ -392,6 +392,55 @@
   color: rgba(10, 10, 10, .38);
 }
 
+/* THE CARD'S TAG (2026-10-15) — on the plate's corner: "Preview · admins"
+   (Deck Studio for the admins who test it), "Coming soon" (everyone else),
+   "Add it" (once the edition is sold). Paper on the blue, like a stamp. */
+.estp .estp-tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 7px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+}
+.estp .estp-tag[data-tag="preview"],
+.estp .estp-tag[data-tag="add"] { color: var(--blueprint, #1854a0); }
+.estp .estp-tag[data-tag="soon"] { color: var(--muted); border-style: dashed; }
+/* A link card (Add it) reads as the button cards do. */
+.estp a.estp-card { text-decoration: none; }
+/* COMING SOON: named, not offered — no lift, no pointer, the drawing faded. */
+.estp .estp-card--soon { cursor: default; }
+.estp .estp-card--soon:hover { transform: none; box-shadow: none; }
+.estp .estp-card--soon .estp-dia { opacity: .5; }
+.estp .estp-card--soon .estp-name { color: var(--muted); }
+
+/* FOUR ACROSS ON A DESK (2026-10-15). Blueprint and Deck Studio made the
+   catalogue eight; two columns of eight is taller than a laptop screen. Where
+   there is room the box widens and the cards go four across (seven or more),
+   three (five or six), two below that — `data-cols` on the box, set by the
+   picker (columnsFor). The two-column odd rule is switched off there; the
+   picker marks the last card of a short row with `data-span` instead, so a
+   row never ends in a hole. Under 1101px the two-column layout above stands. */
+@media (min-width: 1101px) {
+  .estp .estp-box[data-cols="3"] { width: min(1040px, 100%); }
+  .estp .estp-box[data-cols="4"] { width: min(1240px, 100%); }
+  .estp .estp-box[data-cols="3"] .estp-grid { grid-template-columns: repeat(3, 1fr); }
+  .estp .estp-box[data-cols="4"] .estp-grid { grid-template-columns: repeat(4, 1fr); }
+  .estp .estp-box[data-cols="3"] .estp-grid > .estp-card:last-child:nth-child(odd),
+  .estp .estp-box[data-cols="4"] .estp-grid > .estp-card:last-child:nth-child(odd) { grid-column: auto; }
+  .estp .estp-box[data-cols] .estp-grid > .estp-card[data-span="2"]:last-child { grid-column: span 2; }
+  .estp .estp-box[data-cols] .estp-grid > .estp-card[data-span="3"]:last-child { grid-column: span 3; }
+}
+
 /* ============================================================
    HANDHELD LAYER — the dialog becomes a BOTTOM SHEET.  ≤768px.
    Last in the cascade before the reduced-motion overrides, per the house rule
@@ -657,6 +706,9 @@
   }
   .estp .estp-queue-label { flex: 0 0 100%; }
   .estp .estp-stub { padding: 6px 11px; }
+  /* The tag shrinks into the narrow plate; a Coming soon card does not press. */
+  .estp .estp-tag { top: 5px; right: 5px; padding: 2px 5px; font-size: 7.5px; letter-spacing: .1em; }
+  .estp .estp-card--soon:active { transform: none; box-shadow: 3px 3px 0 var(--shadow); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -677,4 +729,9 @@
 /* Where the estimate will be filed (2026-09-18) — opened from a project or a
    client, the kicker names it instead of the engine count. */
 .estp .estp-kick b { color: var(--blueprint, #1854a0); font-weight: 800; }
-.estp .estp-kick { max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+/* On a desk the kicker shares the head row with the title, so it is capped; on a
+   handheld sheet it has a row of its own (the grid above) and takes all of it —
+   capped there too, it cut "7 active · 1 soon · 2 queued" mid-word (2026-10-15). */
+@media (min-width: 769px) {
+  .estp .estp-kick { max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+}
