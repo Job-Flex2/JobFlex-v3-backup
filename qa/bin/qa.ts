@@ -34,6 +34,16 @@ async function answersAsJobFlex(url: string): Promise<boolean> {
   }
 }
 
+/** `next dev` serves its hot-reload client in every page; a production build does not. */
+async function isDevServer(url: string): Promise<boolean> {
+  try {
+    const r = await fetch(url + "/auth/login", { signal: AbortSignal.timeout(60_000) });
+    return /hmr-client|webpack-hmr|__nextDevClientId|react-refresh/.test(await r.text());
+  } catch {
+    return false;
+  }
+}
+
 async function pickServer(): Promise<string | null> {
   if (process.env.QA_BASE_URL) return process.env.QA_BASE_URL.replace(/\/+$/, "");
   for (const port of qaConfig().devPorts) {
@@ -86,6 +96,15 @@ async function main(): Promise<number> {
   const workers = values("workers")[0];
   if (workers) process.env.QA_WORKERS = workers;
   fs.mkdirSync(process.env.QA_RUN_DIR, { recursive: true });
+
+  // A `next dev` server: Lighthouse and the old dev ↔ prod compare (mobile-sweep) measure the dev
+  // server itself there — they are skipped, and the report says so in one line.
+  if (!process.env.QA_SERVER_KIND) process.env.QA_SERVER_KIND = (await isDevServer(base)) ? "dev" : "prod";
+  if (process.env.QA_SERVER_KIND === "dev" && (!suites.length || suites.includes("perf") || suites.includes("visual"))) {
+    fs.writeFileSync(path.join(process.env.QA_RUN_DIR, "notes.json"), JSON.stringify([
+      "Сервер — next dev: perf (Lighthouse) и mobile-sweep (сравнение dev ↔ prod) пропущены — на dev-сервере их цифры ничего не значат. Полный прогон на прод-сборке: npm run qa:build-run.",
+    ]));
+  }
 
   console.log(`QA Lab · run ${process.env.QA_RUN_ID} · ${base} (${kind}) · suites: ${process.env.QA_SUITES}`);
   const cli = require.resolve("@playwright/test/cli", { paths: [QA_DIR] });

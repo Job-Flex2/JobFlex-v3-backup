@@ -78,13 +78,48 @@ const cascade = routes.map((r) => {
 const a11y = test({ title: "/pricing as guest @pages", suite: "pages", file: "qa/tests/pages/pages.spec.ts", meta: { kind: "page", route: "/pricing", role: "guest", coldMs: 1500, warmMs: 700, layout: { scrollX: false, docWidth: 390, outside: [] }, brokenLinks: [], axe: [{ id: "color-contrast", impact: "serious", help: "Elements must meet minimum color contrast ratio thresholds", nodes: 3, sample: [".plan small"] }] } });
 const api = run("2026-10-14T20-20-00", [...cascade, a11y, test({ title: "home page opens with its headline @smoke @webkit", suite: "smoke", file: "qa/tests/smoke/smoke.spec.ts" })]);
 
+// ── the rules of 2026-10-15: one root = one finding, expected statuses, test-side timeouts ──
+n = 0;
+const noOrgBody = '0:{"a":"$@1","f":"","q":"","i":true,"b":"development"}\n1:D"$2"\n1:E{"digest":"848584365","name":"NoOrgError","message":"No active organization","stack":[["resolveOrg","C:\\\\Projects\\\\x\\\\.next\\\\server.js",138,19]]}';
+const admin = ["/dashboard", "/dashboard/jobs/new", "/dashboard/settings"].map((r) => {
+  const t = test({ title: `${r} as admin @pages`, suite: "pages", file: "qa/tests/pages/pages.spec.ts", meta: { kind: "page", route: r, role: "admin", path: r, realParams: true, coldMs: 1200, warmMs: 800, layout: { scrollX: false, docWidth: 390, outside: [] }, brokenLinks: [], axe: [] } });
+  Object.assign(t, fail("Error: 4xx/5xx from this server", "qa/tests/pages/pages.spec.ts", 72));
+  t.collected.httpErrors.push({ t: T0 + 3000, status: 500, method: "POST", url: `http://localhost:3005${r}`, resourceType: "fetch", sameOrigin: true, page: `http://localhost:3005${r}`, body: noOrgBody });
+  t.collected.console.push({ t: T0 + 3100, type: "error", text: "Failed to load resource: the server responded with a status of 500 (Internal Server Error)", url: `http://localhost:3005${r}` });
+  t.collected.console.push({ t: T0 + 3200, type: "error", text: "[route-error] 946371773 NoOrgError: No active organization\n    at resolveOrg (about://React/Server/C:%5CProjects%5Cx%5C.next/server.js:138:19)", url: `http://localhost:3005${r}` });
+  return t;
+});
+// a passing visual test that only SAW the same error: no finding of its own
+const seenOnly = test({ title: "/dashboard/clients at 390 as admin @visual", suite: "visual", file: "qa/tests/visual/visual.spec.ts", meta: { kind: "visual", route: "/dashboard/clients", role: "admin" } });
+seenOnly.collected.console.push({ t: T0 + 3300, type: "error", text: "%o %s NoOrgError: No active organization at resolveOrg (about://React/Server/C:%5CProjects%5Cx)", url: "http://localhost:3005/dashboard/clients" });
+// the smoke check that visits an unknown address on purpose
+const four04 = test({ title: "an unknown address answers 404 @smoke @expects-404", suite: "smoke", file: "qa/tests/smoke/smoke.spec.ts", tags: ["@smoke", "@expects-404"], meta: { expectStatus: [404] } });
+four04.collected.httpErrors.push({ t: T0 + 4000, status: 404, method: "GET", url: "http://localhost:3005/qa-no-such-page-1", resourceType: "document", sameOrigin: true, page: "http://localhost:3005/qa-no-such-page-1" });
+four04.collected.console.push({ t: T0 + 4001, type: "error", text: "Failed to load resource: the server responded with a status of 404 (Not Found)", url: "http://localhost:3005/qa-no-such-page-1" });
+// a signup test that could not find the card field: the test's selector — P2, not P0
+const cardMiss = test({ title: "plan → test card 4242 → dashboard: company, owner seat and trial are right @signup @writes", suite: "signup", file: "qa/tests/signup/signup.spec.ts" });
+Object.assign(cardMiss, fail("TimeoutError: locator.fill: Timeout 60000ms exceeded.\nCall log:\n  - waiting for locator('#cardNumber')", "qa/lib/signup.ts", 61));
+cardMiss.errors[0].stack = "TimeoutError: locator.fill: Timeout 60000ms exceeded.\n    at payWithTestCard (C:\\Projects\\JobFlex-v3-copy\\qa\\lib\\signup.ts:61:40)";
+// a hydration error on /auth/register that failed nothing: P2
+const hydr = test({ title: "leaving the code screen and coming back keeps the address @signup @webkit", suite: "signup", file: "qa/tests/signup/signup.spec.ts", project: "webkit" });
+hydr.collected.pageErrors.push({ t: T0 + 5000, message: "Hydration failed because the server rendered text didn't match the client.\n  <RegisterContent>\n    <ReferralBanner>", url: "http://localhost:3005/auth/register?flow=otp" });
+const rules = run("2026-10-15T09-00-00", [...admin, seenOnly, four04, cardMiss, hydr]);
+
 const EXPECTED = {
   green: { failedTests: 0, findings: [] as unknown[] },
+  rules: {
+    failedTests: 4,
+    findings: [
+      { kind: "api-error", severity: "P1", tests: 4, signature: "root NoOrgError @ resolveOrg", location: "src/lib/orgContext.ts" },
+      { kind: "timeout", severity: "P2", tests: 1, signature: "timeout qa/tests/signup/signup.spec.ts", location: "qa/lib/signup.ts" },
+      { kind: "page-error", severity: "P2", tests: 1, signature: "page-error Hydration failed" },
+    ],
+  },
   "signup-code": { failedTests: 3, findings: [{ kind: "api-error", severity: "P0", tests: 3, signature: "server-action 500" }] },
   "api-cascade": { failedTests: 12, findings: [{ kind: "api-error", severity: "P1", tests: 12, signature: "api 500 GET /api/notifications/summary" }, { kind: "a11y", severity: "P3", tests: 1, signature: "a11y color-contrast" }] },
 };
 
-for (const [name, raw] of [["green", green], ["signup-code", signup], ["api-cascade", api]] as const) {
+for (const [name, raw] of [["green", green], ["signup-code", signup], ["api-cascade", api], ["rules", rules]] as const) {
   const dir = path.join(__dirname, name);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "raw.json"), JSON.stringify(raw, null, 1));

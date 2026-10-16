@@ -30,6 +30,7 @@ for (const { path, role } of cfg.perf.pages) {
   for (const form of ["mobile", "desktop"] as const) {
     test(`lighthouse ${path} ${form} @perf`, async ({ qa }, info) => {
       test.skip(info.project.name !== "chromium", "Lighthouse runs in Chromium");
+      test.skip(process.env.QA_SERVER_KIND === "dev", "сервер — next dev: Lighthouse на нём не показателен (полный прогон — npm run qa:build-run)");
       test.setTimeout(6 * 60_000);
       const cookie = cookieHeader(role as RoleName);
       test.skip(role !== "guest" && !cookie, `no signed-in state for ${role}`);

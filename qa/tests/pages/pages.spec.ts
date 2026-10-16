@@ -9,7 +9,7 @@ import { appRoutes } from "../../lib/routes";
 import { concretePath } from "../../lib/params";
 import { readMatrix, matches, roleRequest, disposeRequests } from "../../lib/matrix";
 import { ROLES, type RoleName } from "../../lib/roles";
-import { qaConfig } from "../../lib/config";
+import { devOnlyHere, qaConfig } from "../../lib/config";
 import { brokenLinks, internalLinks, layoutProblems } from "../../lib/pagecheck";
 import { targetKind } from "../../lib/target";
 
@@ -38,6 +38,12 @@ for (const route of appRoutes()) {
         test.setTimeout(6 * 60_000);
         const { path, real } = await concretePath(route, { real: role !== "guest" });
         qa.meta({ kind: "page", route: route.pattern, file: route.file, role, path, realParams: real });
+        if (devOnlyHere(route.pattern)) {
+          qa.expectStatus(404);
+          const r = await test.step(`open ${path} (dev-only: 404 expected)`, () => open(page, path));
+          expect(r.status, `${path} is a dev-only page — a production build must answer 404`).toBe(404);
+          return;
+        }
 
         const cold = await test.step(`open ${path}`, () => open(page, path, { settleMs: 1500 }));
         // A dev server compiles a route on its first visit: the threshold applies to a warm load.

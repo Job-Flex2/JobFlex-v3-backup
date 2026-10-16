@@ -8,6 +8,7 @@ import type { RawRun } from "../lib/raw";
 import { knownIssues, qaConfig, type KnownIssue } from "../lib/config";
 import { RUNS_DIR } from "../lib/env";
 import { extractSignals } from "./signals";
+import { serverDigests } from "./roots";
 import { group } from "./group";
 import { modelWords, ruleWords } from "./words";
 import { fixPrompt, localize } from "./localize";
@@ -39,7 +40,10 @@ export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Pro
   if (llm.cost.mode === "offline") notes.push(opts.offline ? "Анализ без модели (--offline): группировка, важность и тексты — по правилам." : "ANTHROPIC_API_KEY не задан: группировка, важность и тексты — по правилам, без модели.");
 
   // 1–2. signals → groups → words by rule
-  const signals = extractSignals(raw);
+  // a production build's server log (qa:build-run) names the errors the browser saw only by digest
+  let digests;
+  try { digests = serverDigests(fs.readFileSync(path.join(runDir, "server.log"), "utf8")); } catch { /* a dev run: no log */ }
+  const signals = extractSignals(raw, digests);
   const groups = group(raw, signals);
   const bySig = new Map<string, Signal[]>();
   let findings: Finding[] = groups.map(({ finding, signals: list }) => {

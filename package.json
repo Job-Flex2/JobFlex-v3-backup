@@ -18,6 +18,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "qa": "tsx qa/bin/qa.ts",
     "qa:smoke": "tsx qa/bin/qa.ts --suite smoke",
+    "qa:build-run": "tsx qa/bin/build-run.ts",
     "qa:analyze": "tsx qa/bin/analyze.ts",
     "qa:accept": "tsx qa/bin/accept.ts",
     "qa:selftest": "tsx qa/bin/selftest.ts",

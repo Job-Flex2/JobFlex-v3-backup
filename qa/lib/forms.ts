@@ -17,21 +17,27 @@ export type FoundForm = { index: number; kind: "form" | "loose"; fields: number;
 
 const FIELD = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=password]):not([type=submit]):not([type=button]):not([type=range]):not([type=color]):not([type=date]):not([type=time]):not([type=datetime-local]):not([type=month]), textarea';
 const SUBMIT_TEXT = /^(save|create|add|submit|continue|update|next|apply|done|post|send|invite|confirm|book|request)\b/i;
+// Inputs with no <form> around them count as a form only with a button that plainly submits:
+// "Save", "Create client", "Update" — not a calendar's "Next" / "Add", an estimator's "Add run" or a material named "Post-on-pipe".
+const LOOSE_SUBMIT = /^(save|create|submit|update)(?: [a-z][a-z ]{0,30})?$/i;
 
 /** A button's text as a whole, case-insensitive (CSS upper-cases some labels in innerText). */
 const wholeText = (text: string) => new RegExp(`^\\s*${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
 
 /** Visible forms; a page with inputs but no <form> counts as one loose form. */
 export async function findForms(page: Page): Promise<FoundForm[]> {
-  return page.evaluate(({ FIELD, SUBMIT }) => {
+  return page.evaluate(({ FIELD, SUBMIT, LOOSE }) => {
     const re = new RegExp(SUBMIT, "i");
+    const strict = new RegExp(LOOSE, "i");
     const visible = (el: Element) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none"; };
     const usable = (el: Element) => visible(el) && !(el as HTMLInputElement).disabled && !(el as HTMLInputElement).readOnly && !el.closest("[aria-hidden=true], [inert], header, nav");
     const describe = (root: Element | Document, kind: "form" | "loose", index: number) => {
       const fields = Array.from(root.querySelectorAll(FIELD)).filter(usable) as HTMLInputElement[];
       const buttons = Array.from(root.querySelectorAll('button, input[type=submit], [role=button]')).filter(visible) as HTMLElement[];
       const label = (b: HTMLElement) => (b.innerText || (b as HTMLInputElement).value || b.getAttribute("aria-label") || "").trim();
-      let submit = (kind === "form" ? buttons.find((b) => (b as HTMLButtonElement).type === "submit") : undefined) ?? buttons.find((b) => re.test(label(b)));
+      let submit = kind === "form"
+        ? (buttons.find((b) => (b as HTMLButtonElement).type === "submit") ?? buttons.find((b) => re.test(label(b))))
+        : buttons.find((b) => strict.test(label(b).replace(/\s+/g, " ")));
       // a sheet's footer often holds the submit outside the <form> (form="id", or just beside it)
       if (!submit && kind === "form") {
         const f = root as HTMLFormElement;
@@ -57,7 +63,7 @@ export async function findForms(page: Page): Promise<FoundForm[]> {
       if (loose.fields > 0 && loose.submit) out.push(loose);
     }
     return out;
-  }, { FIELD, SUBMIT: SUBMIT_TEXT.source }).then((list) => list.map((f) => ({ ...f, submitForbidden: !!f.submit && submitIsForbidden(f.submit) })));
+  }, { FIELD, SUBMIT: SUBMIT_TEXT.source, LOOSE: LOOSE_SUBMIT.source }).then((list) => list.map((f) => ({ ...f, submitForbidden: !!f.submit && submitIsForbidden(f.submit) })));
 }
 
 const OPENER = /^\+?\s*(new|add|create)\b/i;
@@ -137,7 +143,7 @@ export async function submitAndRead(page: Page, form: FoundForm): Promise<Outcom
 async function visibleMessages(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const out = new Set<string>();
-    const sel = '[role="alert"], [aria-live], .error, .err, [data-error], [class*="error" i], [class*="invalid" i], [class*="toast" i], [data-sonner-toast]';
+    const sel = '[role="alert"], [role="status"], [aria-live], .error, .err, [data-error], [class*="error" i], [class*="invalid" i], [class*="toast" i], [data-sonner-toast]';
     for (const el of Array.from(document.querySelectorAll(sel))) {
       const r = el.getBoundingClientRect();
       const t = ((el as HTMLElement).innerText || "").replace(/\s+/g, " ").trim();

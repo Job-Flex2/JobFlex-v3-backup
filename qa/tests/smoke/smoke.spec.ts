@@ -50,7 +50,8 @@ test.describe("public pages", () => {
     cleanRun(qa);
   });
 
-  test("an unknown address answers 404 @smoke", async ({ page }) => {
+  test("an unknown address answers 404 @smoke @expects-404", async ({ page, qa }) => {
+    qa.expectStatus(404); // the 404 is the point of this test — not a finding
     const r = await open(page, "/qa-no-such-page-" + Date.now(), { settleMs: 0 });
     expect(r.status).toBe(404);
   });

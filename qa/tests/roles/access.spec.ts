@@ -5,6 +5,7 @@ import { test, expect } from "../../lib/fixtures";
 import { appRoutes } from "../../lib/routes";
 import { concretePath } from "../../lib/params";
 import { ROLES, hasAuth, type RoleName } from "../../lib/roles";
+import { devOnlyHere } from "../../lib/config";
 import { disposeRequests, matches, probe, readMatrix, saveObserved, type Cell } from "../../lib/matrix";
 
 test.describe.configure({ mode: "parallel" });
@@ -26,7 +27,9 @@ for (const route of appRoutes()) {
       cells[role] = r.cell;
       detail[role] = { path, status: r.status, location: r.location, ms: r.ms };
     }
-    saveObserved(route, cells);
+    // a dev-only page on a production build: 404 for everyone, and the matrix keeps its dev answer
+    const devOnly = devOnlyHere(route.pattern);
+    if (!devOnly) saveObserved(route, cells);
     qa.meta({ kind: "access", route: route.pattern, file: route.file, cells, detail, expected: row ?? null, review: row?.review ?? [] });
 
     if (!row) {
@@ -34,7 +37,8 @@ for (const route of appRoutes()) {
       test.info().annotations.push({ type: "unknown-access", description: `${route.pattern} is not in qa/config/access-matrix.yaml` });
       throw new Error(`unknown access: ${route.pattern} (${route.file}) is not in qa/config/access-matrix.yaml — observed ${JSON.stringify(cells)}`);
     }
-    const wrong = Object.entries(cells).filter(([role, cell]) => !matches(row[role as RoleName], cell!)).map(([role, cell]) => `${role}: expected ${row[role as RoleName] ?? "(no cell)"}, got ${cell}`);
+    const want = (role: RoleName) => (devOnly ? "not-found" : row[role]);
+    const wrong = Object.entries(cells).filter(([role, cell]) => !matches(want(role as RoleName), cell!)).map(([role, cell]) => `${role}: expected ${want(role as RoleName) ?? "(no cell)"}, got ${cell}`);
     if (updating) return;
     expect(wrong, `access differs from the matrix for ${route.pattern}`).toEqual([]);
   });

@@ -29,3 +29,25 @@ issues:
     message: "client id"
     why: "GOOGLE_CLIENT_ID is empty in the local .env, so the Google URL carries client_id=\"\" — environment, not code"
     confirmed: "owner, 2026-10-15"
+  # Old page scripts checked one by one on a live server, 2026-10-15 — each fails the same way twice,
+  # and each failure is the script's out-of-date expectation, not the product:
+  - id: reports-test-quarter-first-month
+    signature: '^legacy qa/tests/pages/reports-test\.js$'
+    why: "\"sheet recomputes on switch\" assumes Quarter differs from This month; in the first month of a quarter (Oct, Jan, Apr, Jul) Quarter = quarter-to-date = this month (src/actions/reports.ts) — calendar-dependent test"
+    confirmed: "QA Lab, 2026-10-15"
+  - id: roof-test-pitch-label-and-old-row
+    signature: '^legacy qa/tests/pages/roof-test\.js$'
+    why: "the hero's \"Predominant pitch\" is now \"Roof pitch\" (the script reads the old label → empty pitch), and QA Co holds an older 12629 NE 100th Pl measurement (Oct 7) besides the seeded one, so \"listed exactly once\" sees 2 rows"
+    confirmed: "QA Lab, 2026-10-15"
+  - id: sub-test-custom-plan-off
+    signature: '^legacy qa/tests/pages/sub-test\.js$'
+    why: "expects the Build-your-plan (custom) card; the server under test runs without CUSTOM_PLAN_ENABLED=true, so the card is rightly absent"
+    confirmed: "QA Lab, 2026-10-15"
+  - id: fence-test-price-book-link
+    signature: '^legacy qa/tests/pages/fence-test\.js$'
+    why: "expects the price-book link /dashboard/inventory?trade=fence; it now goes to the fence's own inventory, /dashboard/fence-estimator/inventory#book"
+    confirmed: "QA Lab, 2026-10-15"
+  - id: fence-tiers-test-two-tier-ladder
+    signature: '^legacy qa/tests/pages/fence-tiers-test\.js$'
+    why: "clicks Best for every fence type; for composite-privacy the ladder drops a tier that would quote the same fence as Better (fence-estimator-behavior renderTiers), so there is no Best to click"
+    confirmed: "QA Lab, 2026-10-15"

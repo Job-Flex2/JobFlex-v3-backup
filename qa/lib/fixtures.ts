@@ -31,6 +31,8 @@ export type Qa = {
   collector: Collector;
   /** Facts about this test for raw.json (route, role, measured numbers…). */
   meta: (m: Meta) => void;
+  /** Answers with these statuses are expected here (an unknown address → 404): not collected as errors. */
+  expectStatus: (...codes: number[]) => void;
   /** A screenshot with the secret fields masked, attached to the test. */
   shot: (page: Page, name: string) => Promise<string>;
 };
@@ -59,6 +61,8 @@ export const test = base.extend<{ role: RoleName; qa: Qa; _guard: void }>({
   context: async ({ context }, provide, testInfo) => {
     const collector = new Collector();
     collector.attach(context);
+    // a tag @expects-404 (or any @expects-NNN) declares an expected status for the whole test
+    for (const tag of testInfo.tags) { const m = tag.match(/^@expects-(d{3})$/); if (m) collector.expectStatus(Number(m[1])); }
     (testInfo as unknown as { __qaCollector: Collector }).__qaCollector = collector;
     await installForbidden(context, (hit) => collector.forbiddenHit(hit));
     const origin = new URL(baseUrl()).origin;
@@ -93,6 +97,10 @@ export const test = base.extend<{ role: RoleName; qa: Qa; _guard: void }>({
       const qa: Qa = {
         collector,
         meta: (m) => Object.assign(meta, m),
+        expectStatus: (...codes) => {
+          collector.expectStatus(...codes);
+          meta.expectStatus = [...new Set([...((meta.expectStatus as number[] | undefined) ?? []), ...codes])];
+        },
         shot: async (page, name) => {
           const file = testInfo.outputPath(`${String(++shots).padStart(2, "0")}-${name.replace(/[^a-z0-9-]+/gi, "-")}.png`);
           await page.screenshot({ path: file, mask: masks(page), fullPage: false, animations: "disabled" });

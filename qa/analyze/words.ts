@@ -36,11 +36,13 @@ export function ruleWords(f: Omit<Finding, "human" | "title">, list: Signal[]): 
   const where = f.evidence.routes.length ? ` (${f.evidence.routes.slice(0, 3).join(", ")}${f.evidence.routes.length > 3 ? ` и ещё ${f.evidence.routes.length - 3}` : ""})` : "";
   const many = n > 1 ? ` — роняет ${n} тестов` : "";
   const T: Record<string, string> = {
-    "api-error": `Сервер отвечает ${s.status} на ${s.method ?? "GET"} ${s.url ? pathOf(s.url) : ""}${many}`,
+    "api-error": f.signature.startsWith("root ")
+      ? `${f.signature.slice(5).replace(" @ ", " в ")} — сервер отвечает ${s.status} на ${f.evidence.routes.length || 1} стр.${many}`
+      : `Сервер отвечает ${s.status} на ${s.method ?? "GET"} ${s.url ? pathOf(s.url) : ""}${many}`,
     "page-error": `Ошибка JavaScript на странице: ${s.message.slice(0, 90)}${many}`,
     network: `Запрос не доходит до ответа: ${s.message.slice(0, 90)}`,
     "console-error": `Ошибка в консоли браузера${where}: ${s.message.slice(0, 80)}`,
-    timeout: `Тест не дождался шага: ${s.message.slice(0, 90)}`,
+    timeout: `${s.extra?.testSide ? "Вероятно, ошибка теста — " : ""}Тест не дождался шага: ${s.message.slice(0, 90)}`,
     assertion: `Проверка не прошла: ${s.testTitle.replace(/@\w+/g, "").trim().slice(0, 90)}`,
     access: `Доступ к странице не такой, как в матрице${where}`,
     "unknown-access": `Страницы, для которых не решено, кому они открыты (${n})`,

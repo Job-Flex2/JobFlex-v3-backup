@@ -52,6 +52,8 @@ export type RawRun = {
     finishedAt: string;
     durationMs: number;
     baseUrl: string;
+    /** "dev" (next dev) or "prod" (a production build); missing in runs before 2026-10-15 */
+    server?: string;
     target: string;
     suites: string[];
     grep: string | null;

@@ -17,9 +17,11 @@ export function visualId(viewport: string, role: string, urlPath: string): strin
   return `${viewport}--${role}--${slug}`;
 }
 
-export function baselinePath(id: string): string {
+/** A production build draws differently from `next dev` (no dev badge, other chunks and fonts
+ *  timing): its baselines live apart, in qa/baselines/prod/, and are never compared with dev's. */
+export function baselinePath(id: string, server = process.env.QA_SERVER_KIND): string {
   const [viewport, role, slug] = id.split("--");
-  return path.join(BASELINES_DIR, viewport, role, `${slug}.png`);
+  return path.join(BASELINES_DIR, ...(server === "prod" ? ["prod"] : []), viewport, role, `${slug}.png`);
 }
 
 /** The screenshot, steadied: animations off, the caret hidden, volatile parts invisible. */

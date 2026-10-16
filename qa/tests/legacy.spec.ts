@@ -7,7 +7,7 @@ import { redact } from "../lib/redact";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const legacy = require("./_lib/legacy-run.js") as {
-  runnable: () => { file: string; suite: string; kind: string; minutes: number; note?: string; seed?: string; path: string }[];
+  runnable: () => { file: string; suite: string; kind: string; minutes: number; note?: string; seed?: string; devSkip?: boolean; path: string }[];
   runEntry: (e: unknown, o: { baseUrl: string }) => Promise<{ verdict: string; code: number; out: string; ms: number; detail: string; failures: string[] }>;
   guard: () => Promise<string | null>;
 };
@@ -19,6 +19,7 @@ for (const e of legacy.runnable()) {
   const writes = e.kind === "page" || e.kind === "prod" ? " @writes" : "";
   test(`legacy ${e.suite}/${e.file} @${e.suite} @legacy${writes}`, async ({}, info) => {
     test.setTimeout((e.minutes + 3) * 60_000);
+    test.skip(!!e.devSkip && process.env.QA_SERVER_KIND === "dev", "сервер — next dev: сравнение dev ↔ prod на нём не показательно (полный прогон — npm run qa:build-run)");
     if (refused === undefined) refused = await legacy.guard();
     test.skip(!!refused, `QA guard refused: ${redact(refused ?? "")}`);
     if (e.note) info.annotations.push({ type: "note", description: e.note });
