@@ -1220,7 +1220,7 @@ function DeskPaneMobile({ data }: { data: SettingsData }) {
   }
   return (
     <div id="desk-status">
-      <DeskSteps desk={desk} registration={data.notifications.sms.registration} />
+      <DeskSteps desk={desk} registration={data.notifications.sms.registration} intro={RAIL_ITEMS.find((r) => r.key === "desk")?.sub} />
     </div>
   );
 }
