@@ -17,8 +17,9 @@ import { useRouter } from "next/navigation";
 
 import { composeDeskProfile, presetDeskProfile, saveDeskProfile } from "@/actions/aiDesk";
 import { DictateButton } from "@/components/estimator/DictateButton";
-import { briefCoverage, PROFILE_SECTIONS, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
-import { BUSINESS_SUGGESTIONS, faqKey, matchBusiness, type DeskFix, type DeskReviewItem } from "@/lib/aiDesk/tradePresets";
+import { briefCoverage, MAX_FAQS, PROFILE_SECTIONS, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
+// The light half of the presets — the trades' texts stay on the server (lib/aiDesk/tradeCore).
+import { BUSINESS_SUGGESTIONS, faqKey, matchBusinessLabels as matchBusiness, type DeskFix, type DeskReviewItem } from "@/lib/aiDesk/tradeCore";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
 
@@ -501,7 +502,7 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
                       <button
                         type="button"
                         className={s.btn}
-                        disabled={disabled || profile.faqs.length >= 12}
+                        disabled={disabled || profile.faqs.length >= MAX_FAQS}
                         onClick={() => {
                           setProfile((p) => ({ ...p, faqs: [...p.faqs, { q: "", a: "" }] }));
                           setDirty(true);
