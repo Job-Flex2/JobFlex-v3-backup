@@ -135,8 +135,7 @@
   white-space: nowrap;
 }
 .unit,
-.mono,
-.count {
+.mono {
   font-family: var(--font-mono);
 }
 .unit {
@@ -177,24 +176,31 @@
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  margin: -4px -6px;
-  padding: 4px 6px;
-  border: 1.5px solid transparent;
+  margin: -5px 0 -5px -9px;
+  padding: 4px 8px;
+  border: var(--k-frame-thin);
   border-radius: var(--k-r);
-  background: none;
+  background: var(--k-sheet);
   color: inherit;
   font: inherit;
   cursor: pointer;
-  transition: border-color 0.14s var(--k-ease), background 0.14s var(--k-ease);
+  transition: transform 0.12s var(--k-ease), box-shadow 0.12s var(--k-ease);
 }
 .desk .cellBtn.cellBtn > svg {
   align-self: center;
-  color: var(--k-muted);
+  color: var(--k-ink);
 }
-.desk .cellBtn.cellBtn:hover,
+.desk .cellBtn.cellBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--k-ink);
+}
+.desk .cellBtn.cellBtn:active {
+  transform: none;
+  box-shadow: none;
+}
 .desk .cellBtn.cellBtn[aria-expanded="true"] {
-  border-color: var(--k-ink);
-  background: var(--k-sheet);
+  border-color: var(--k-blue);
+  background: var(--k-blue-soft);
 }
 .desk .cellBtn.cellBtn[aria-expanded="true"] > svg {
   color: var(--k-blue);
@@ -208,8 +214,8 @@
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: var(--k-frame-thin);
   border-radius: var(--k-r);
@@ -221,18 +227,22 @@
 .desk .iconBtn.iconBtn::before {
   content: "";
   position: absolute;
-  inset: -7px;
+  inset: -4px;
 }
 .desk .iconBtn.iconBtn:hover {
   transform: translate(-1px, -1px);
   box-shadow: 2px 2px 0 var(--k-ink);
+}
+.desk .iconBtn.iconBtn:active {
+  transform: none;
+  box-shadow: none;
 }
 .desk .iconBtn.iconBtn:focus-visible {
   outline: 2px solid var(--k-blue);
   outline-offset: 2px;
 }
 
-/* ── the setup: four steps in one row, the sign-up stepper's squares ────── */
+/* ── the setup: four steps, a tile each, and the progress under them ───── */
 .stepper {
   display: grid;
   border: var(--k-frame);
@@ -244,41 +254,45 @@
 .steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding: 12px;
+  gap: 10px;
+  padding: 15px 18px;
 }
 .desk .step.step {
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  min-height: 56px;
-  padding: 8px 10px;
-  border: 1.5px solid transparent;
+  min-height: 60px;
+  padding: 10px 12px;
+  border: var(--k-frame-thin);
   border-radius: var(--k-r);
-  background: transparent;
+  background: var(--k-sheet);
   color: var(--k-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: transform 0.12s var(--k-ease), box-shadow 0.12s var(--k-ease), border-color 0.12s var(--k-ease), background 0.12s var(--k-ease);
+  transition: transform 0.12s var(--k-ease), box-shadow 0.12s var(--k-ease);
 }
 .desk .step.step:hover {
-  border-color: var(--k-ink);
-  background: var(--k-sheet);
   transform: translate(-1px, -1px);
   box-shadow: 2px 2px 0 var(--k-ink);
 }
-.desk .step.step[aria-selected="true"] {
-  border-color: var(--k-ink);
-  background: var(--k-sheet);
-  box-shadow: 2px 2px 0 var(--k-ink);
+.desk .step.step:active {
   transform: none;
+  box-shadow: none;
+}
+.desk .step.step[aria-selected="true"] {
+  padding: 9.5px 11.5px;
+  border: 2px solid var(--k-blue);
+  background: var(--k-blue-soft);
+  box-shadow: 3px 3px 0 var(--k-ink);
+  transform: none;
+  cursor: default;
 }
 .desk .step.step:focus-visible {
   outline: 2px solid var(--k-blue);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 .stepN {
   flex: none;
@@ -305,6 +319,7 @@
   color: var(--k-sheet);
 }
 .stepText {
+  flex: 1 1 auto;
   display: grid;
   justify-items: start;
   gap: 5px;
@@ -326,21 +341,57 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.stepGo {
+  color: var(--k-ink);
+}
+.step[aria-selected="true"] .stepGo {
+  display: none;
+}
 .stepFoot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
-  padding: 12px 14px;
+  gap: 12px 16px;
+  padding: 15px 18px;
   border-top: var(--k-frame-thin);
 }
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.segs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  width: 240px;
+  max-width: 100%;
+}
+.segs i {
+  display: block;
+  height: 8px;
+  border: var(--k-frame-thin);
+  border-radius: 1px;
+  background: var(--k-sheet);
+}
+.segs i[data-state="done"] {
+  border-color: var(--k-ok);
+  background: var(--k-ok);
+}
+.segs i[data-state="now"] {
+  border-color: var(--k-blue);
+  background: var(--k-blue);
+}
 .count {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
   text-transform: uppercase;
-  color: var(--k-muted);
+  white-space: nowrap;
+  color: var(--k-ink);
 }
 
 /* ── status stamps ─────────────────────────────────────────────────────── */
@@ -481,7 +532,52 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+/* a row: what it is on the left, its buttons pressed to the right */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+}
+.rowMain {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.rowActs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.numBig {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--k-ink);
+  overflow-wrap: anywhere;
+}
+/* nothing here yet — the project's dashed empty state */
+.empty {
+  padding: 16px;
+  border: 1.5px dashed var(--k-muted);
+  border-radius: var(--k-r);
+}
+.emptyText {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--k-soft);
+}
+.emptyText > svg {
+  color: var(--k-ink);
 }
 /* sections of one card are divided by a quiet rule, edge to edge */
 .status > .sec + .sec,
@@ -688,10 +784,12 @@
 .desk .codeCopy.codeCopy,
 .desk .answerIt.answerIt {
   appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
-  padding: 0 10px;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
   border: var(--k-frame-thin);
   border-radius: var(--k-r);
   background: var(--k-sheet);
@@ -710,6 +808,13 @@
 .desk .answerIt.answerIt:hover:not(:disabled) {
   transform: translate(-1px, -1px);
   box-shadow: 2px 2px 0 var(--k-ink);
+}
+.desk .suggestBtn.suggestBtn:active:not(:disabled),
+.desk .fix.fix:active:not(:disabled),
+.desk .codeCopy.codeCopy:active:not(:disabled),
+.desk .answerIt.answerIt:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
 }
 .desk .suggestBtn.suggestBtn:disabled,
 .desk .fix.fix:disabled,
@@ -739,10 +844,10 @@
   line-height: 1.5;
 }
 .confirm {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px 12px;
+  gap: 10px 16px;
   padding: 12px 14px;
   border: 2px solid var(--k-warn);
   border-left-width: 6px;
@@ -881,15 +986,18 @@
   color: var(--k-soft);
 }
 .desk .answerIt.answerIt {
-  min-height: 26px;
-  margin-left: 6px;
-  padding: 0 8px;
-  font-size: 10px;
-  vertical-align: 1px;
+  margin: 4px 0 4px 8px;
+  vertical-align: middle;
 }
 .sections {
   display: grid;
   gap: 18px;
+}
+.sections > .secHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 16px;
 }
 .fields {
   display: grid;
@@ -935,51 +1043,64 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border: var(--k-frame-thin);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: var(--k-frame);
   border-radius: var(--k-r);
-  background: var(--k-sheet);
-  overflow-x: auto;
-  scrollbar-width: none;
+  background: var(--k-paper);
+  overflow: hidden;
 }
 .desk .subnavBtn.subnavBtn {
   appearance: none;
-  flex: none;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1.5px solid transparent;
-  border-radius: var(--k-r);
-  background: transparent;
-  color: var(--k-soft);
+  justify-content: center;
+  gap: 4px 6px;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 0;
+  background: var(--k-paper);
+  color: var(--k-ink);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-align: center;
   text-transform: uppercase;
   cursor: pointer;
-  white-space: nowrap;
+  transition: background-color 0.14s var(--k-ease), color 0.14s var(--k-ease);
 }
-.desk .subnavBtn.subnavBtn:hover {
-  border-color: var(--k-ink);
-  color: var(--k-ink);
+.desk .subnavBtn.subnavBtn + .subnavBtn.subnavBtn {
+  border-left: var(--k-frame-thin);
+}
+.desk .subnavBtn.subnavBtn:hover:not([aria-current]) {
+  background: color-mix(in srgb, var(--k-ink) 7%, var(--k-paper));
+}
+.desk .subnavBtn.subnavBtn[aria-current] {
+  background: var(--k-ink);
+  color: var(--k-sheet);
 }
 .desk .subnavBtn.subnavBtn:focus-visible {
   outline: 2px solid var(--k-blue);
-  outline-offset: 1px;
+  outline-offset: -5px;
+}
+.desk .subnavBtn.subnavBtn[aria-current]:focus-visible {
+  outline-color: var(--k-sheet);
 }
 .subnavCount {
   padding: 1px 5px;
   border: 1.5px solid var(--k-warn);
   border-radius: var(--k-r);
-  background: var(--k-warn-soft);
+  background: var(--k-sheet);
   color: var(--k-warn-dark);
   font-size: 9.5px;
   font-weight: 800;
+  letter-spacing: 0.06em;
 }
 .panel[data-desk-panel="business"] .card {
   scroll-margin-top: 64px;
@@ -990,11 +1111,10 @@
 
 /* the parts to check */
 .checkBanner {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
+  gap: 10px 16px;
   padding: 12px 14px;
   border: 2px solid var(--k-warn);
   border-left-width: 6px;
@@ -1120,20 +1240,6 @@
 /* ── phone & forwarding ─────────────────────────────────────────────────── */
 .status {
   gap: 20px;
-}
-.statusLine {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  font-size: 13px;
-  color: var(--k-muted);
-}
-.statusLine b {
-  font-family: var(--font-mono);
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--k-ink);
 }
 /* a choice: a tile in a thin ink frame with a square mark; picked — blueprint frame, soft blue, filled square */
 .radios {
@@ -1297,10 +1403,8 @@
   background: var(--k-bad);
 }
 .fwdManual {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
+  padding-top: 10px;
+  border-top: 1.5px solid color-mix(in srgb, var(--k-ink) 12%, transparent);
 }
 
 /* the carrier's codes */
@@ -1319,13 +1423,16 @@
 }
 .codeRow {
   display: grid;
-  grid-template-columns: 130px minmax(0, 1fr) auto;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 6px 14px;
   align-items: center;
   padding: 10px 12px;
 }
 .codeRow + .codeRow {
   border-top: 1.5px solid var(--k-line);
+}
+.codeAct {
+  justify-self: end;
 }
 .codeCarrier {
   font-size: 13px;
@@ -1360,10 +1467,7 @@
   font-size: 13px;
   color: var(--k-soft);
 }
-.desk .codeCopy.codeCopy {
-  min-height: 28px;
-  font-size: 10px;
-}
+
 .codeNotes {
   margin: 0;
   padding-left: 18px;
@@ -1378,13 +1482,59 @@
 }
 
 /* ── booking ────────────────────────────────────────────────────────────── */
+/* a definition table, ruled like an estimate's lines */
 .kv {
+  margin: 0;
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
-  gap: 8px 14px;
-  align-items: start;
-  font-size: 14px;
-  line-height: 1.5;
+  border-bottom: 1.5px solid var(--k-line);
+}
+.kv > div {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 56px;
+  padding: 10px 0;
+}
+.kv > div + div {
+  border-top: 1.5px solid var(--k-line);
+}
+.kv dt {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--k-ink);
+}
+.kv dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.visits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.visit {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: var(--k-frame-thin);
+  border-radius: var(--k-r);
+  background: var(--k-sheet);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.visitPrice {
+  margin-left: 0.3em;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
 }
 .times {
   margin: 0;
@@ -1506,7 +1656,7 @@
 }
 .balance {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 .balanceBig {
   font-size: 30px;
@@ -1655,40 +1805,94 @@
     inset: -8px;
   }
 
-  /* ?v=a — the steps as a list, one full-width row each */
+  /* ?v=a — the steps as a list, a full-width tile each */
   .desk[data-v="a"] .steps {
     grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-    padding: 8px;
+    gap: 8px;
+    padding: 14px;
   }
   .desk[data-v="a"] .step.step {
-    min-height: 52px;
+    min-height: 56px;
   }
   .desk[data-v="a"] .stepText {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    width: 100%;
     gap: 10px;
   }
   /* ?v=b — the steps as one swiped row */
   .desk[data-v="b"] .steps {
     grid-template-columns: none;
     grid-auto-flow: column;
-    grid-auto-columns: minmax(150px, 46%);
+    grid-auto-columns: minmax(160px, 48%);
     overflow-x: auto;
-    padding: 10px 10px 12px;
+    padding: 14px 14px 16px;
     scroll-snap-type: x proximity;
-    scroll-padding-inline: 10px;
+    scroll-padding-inline: 14px;
     scrollbar-width: thin;
   }
   .desk[data-v="b"] .step.step {
     scroll-snap-align: start;
   }
   .stepFoot {
-    padding: 12px;
+    display: grid;
+    justify-content: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+  .progress {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .segs {
+    width: auto;
   }
   .stepFoot .btn.btn {
     width: 100%;
+  }
+  /* rows stack: the words, then the buttons at full width */
+  .row,
+  .confirm,
+  .checkBanner,
+  .sections > .secHead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rowActs {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+  .desk .rowActs > .fix.fix {
+    flex: 1 1 100%;
+  }
+  .desk .rowActs > .btn.btn,
+  .desk .rowActs > .fix.fix,
+  .desk .row > .btn.btn,
+  .desk .confirm .btn.btn,
+  .desk .checkBanner .btn.btn,
+  .desk .sections > .secHead .btn.btn {
+    flex: 1 1 0;
+    width: 100%;
+  }
+  .numBig {
+    font-size: 19px;
+  }
+  /* the business tab's menu: two by two */
+  .subnav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .desk .subnavBtn.subnavBtn + .subnavBtn.subnavBtn {
+    border-left: 0;
+  }
+  .desk .subnavBtn.subnavBtn:nth-child(even) {
+    border-left: var(--k-frame-thin);
+  }
+  .desk .subnavBtn.subnavBtn:nth-child(n + 3) {
+    border-top: var(--k-frame-thin);
+  }
+  .kv > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-height: 0;
+    padding: 12px 0;
   }
   .notice .btn.btn {
     width: 100%;
@@ -1717,10 +1921,23 @@
     padding: 14px;
   }
   .tryRow,
-  .voiceLine,
-  .kv,
-  .codeRow {
+  .voiceLine {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .codeRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .codeCarrier {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .codeAct {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .codeOn,
+  .codeOff {
+    grid-column: 1 / -1;
   }
   .desk .acts .btn.btn,
   .desk .tryRow .btn.btn,
@@ -1738,10 +1955,14 @@
   .desk .area.area {
     font-size: 16px;
   }
-  .desk .fix.fix,
-  .desk .codeCopy.codeCopy,
-  .desk .suggestBtn.suggestBtn {
-    min-height: 40px;
+  /* compact buttons stay 36px to the eye and take 44px of the thumb */
+  .desk .fix.fix::before,
+  .desk .codeCopy.codeCopy::before,
+  .desk .suggestBtn.suggestBtn::before,
+  .desk .answerIt.answerIt::before {
+    content: "";
+    position: absolute;
+    inset: -4px 0;
   }
   .history li {
     grid-template-columns: 88px 56px 52px minmax(0, 1fr);
@@ -1756,6 +1977,7 @@
   .desk .step.step,
   .desk .btn.btn,
   .desk .iconBtn.iconBtn,
+  .desk .cellBtn.cellBtn,
   .radio,
   .desk .mode.mode,
   .desk .fix.fix,
@@ -1767,6 +1989,7 @@
   .desk .step.step:hover,
   .desk .btn.btn:hover:not(:disabled),
   .desk .iconBtn.iconBtn:hover,
+  .desk .cellBtn.cellBtn:hover,
   .radio:hover:not(:has(input:disabled)),
   .desk .mode.mode:hover:not(:disabled):not([aria-pressed="true"]) {
     transform: none;

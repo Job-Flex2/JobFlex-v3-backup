@@ -1014,6 +1014,7 @@ export const DESK_COPY = {
   managersOnly: 'Owners and managers set up the AI desk.',
   noNumber: 'No number yet — the desk answers your company\u2019s own number.',
   getNumber: 'Get your number',
+  changeNumber: 'Change',
   // The desk answers a line JobFlex lent (2026-10-14); texting is set up under Texting, on a number in the company's name.
   lentLine: 'A line JobFlex lent you for calls. Texts need a number registered in your company\u2019s name — Texting → Your number sets that up; calls keep coming here meanwhile.',
   lentGo: 'Texting',

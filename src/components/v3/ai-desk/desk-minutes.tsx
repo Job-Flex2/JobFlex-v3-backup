@@ -132,19 +132,16 @@ export function DeskMinutes({ desk }: { desk: DeskSettingsData }) {
 
   return (
     <div className={s.root} data-desk-minutes-card data-out={balance.out ? "1" : "0"} data-low={balance.low ? "1" : "0"}>
-      {balance.out ? (
-        <p className={`${s.banner} ${s.bannerOut}`} role="alert" data-desk-out>
-          {C.outBanner}
-        </p>
-      ) : balance.low ? (
-        <p className={s.banner} data-desk-low>
-          {C.lowBanner}
-        </p>
-      ) : null}
-
       <div className={s.balance}>
-        <div className={s.balanceBig} data-desk-left>
-          {minutesLeftWords(balance)}
+        <div className={s.row}>
+          <div className={s.balanceBig} data-desk-left>
+            {minutesLeftWords(balance)}
+          </div>
+          {confirm ? null : (
+            <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || !m.billingOn || !desk.canManage} onClick={() => void start()} data-desk-buy>
+              {busy === "start" ? C.buying : C.buyPack(m.pack.minutes, price)}
+            </button>
+          )}
         </div>
         <div className={s.balanceRow} data-desk-balance-row>
           <span>{C.included(balance.includedMinutes)}</span>
@@ -156,24 +153,20 @@ export function DeskMinutes({ desk }: { desk: DeskSettingsData }) {
         </div>
       </div>
 
-      <div className={s.acts}>
-        {confirm ? (
-          <div className={s.confirm} data-desk-confirm>
-            <span>{C.confirmCharge(dollars(confirm.amountCents), confirm.brand, confirm.last4)}</span>
+      {confirm ? (
+        <div className={`${s.row} ${s.confirm}`} data-desk-confirm>
+          <span>{C.confirmCharge(dollars(confirm.amountCents), confirm.brand, confirm.last4)}</span>
+          <span className={s.rowActs}>
             <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null} onClick={() => void charge()} data-desk-charge>
               {busy === "charge" ? C.buying : C.charge}
             </button>
             <button type="button" className={s.btn} disabled={busy !== null} onClick={() => setConfirm(null)}>
               {C.notNow}
             </button>
-          </div>
-        ) : (
-          <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || !m.billingOn || !desk.canManage} onClick={() => void start()} data-desk-buy>
-            {busy === "start" ? C.buying : C.buyPack(m.pack.minutes, price)}
-          </button>
-        )}
-        {!m.billingOn ? <span className={`${s.note} ${s.noteErr}`}>{C.noBilling}</span> : null}
-      </div>
+          </span>
+        </div>
+      ) : null}
+      {!m.billingOn ? <p className={`${s.note} ${s.noteErr}`}>{C.noBilling}</p> : null}
 
       <label className={s.switch} data-desk-auto>
         <input type="checkbox" checked={auto} disabled={busy !== null || !m.card || !desk.canManage} onChange={(e) => void toggleAuto(e.target.checked)} />

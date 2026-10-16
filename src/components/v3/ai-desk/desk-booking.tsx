@@ -81,26 +81,42 @@ export function DeskBooking({ desk }: { desk: DeskSettingsData }) {
       </div>
 
       <div className={s.sec}>
-        <p className={`${s.note} ${desk.booking.enabled ? s.noteOk : s.noteErr}`} data-desk-booking-state>
-          {desk.booking.enabled ? C.bookingOn : C.bookingOff}
-        </p>
-        {desk.booking.hoursWords ? (
-          <div className={s.kv}>
-            <span className={s.h}>{C.bookingHours}</span>
-            <span>{desk.booking.hoursWords}</span>
-          </div>
-        ) : null}
-        {desk.booking.services.length ? (
-          <div className={s.kv}>
-            <span className={s.h}>{C.bookingServices}</span>
-            <span className={s.facts}>
-              {desk.booking.services.map((v) => (
-                <span key={v} className={s.fact}>
-                  {v}
-                </span>
-              ))}
-            </span>
-          </div>
+        {/* on or off is the card's stamp; off, the way to turn it on stays here */}
+        {desk.booking.enabled ? null : (
+          <p className={s.note} data-desk-booking-state>
+            {C.bookingOff}
+          </p>
+        )}
+        {desk.booking.hoursWords || desk.booking.services.length ? (
+          <dl className={s.kv}>
+            {desk.booking.hoursWords ? (
+              <div>
+                <dt>{C.bookingHours}</dt>
+                <dd>{desk.booking.hoursWords}</dd>
+              </div>
+            ) : null}
+            {desk.booking.services.length ? (
+              <div>
+                <dt>{C.bookingServices}</dt>
+                <dd className={s.visits}>
+                  {desk.booking.services.map((v) => {
+                    const [name, price] = v.split(" — ");
+                    return (
+                      <span key={v} className={s.visit}>
+                        {name}
+                        {price ? (
+                          <>
+                            {" — "}
+                            <span className={s.visitPrice}>{price}</span>
+                          </>
+                        ) : null}
+                      </span>
+                    );
+                  })}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
         ) : null}
         <div className={s.acts}>
           <a className={s.btn} href={desk.booking.url} data-desk-booking-link>

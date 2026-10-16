@@ -4,6 +4,7 @@
 // phone at the carrier — all calls, or only the missed ones), and who picks up.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Phone } from "lucide-react";
 
 import { confirmDeskForwarding, readDeskForwarding, setBusinessPhone, setDeskForwarding, setDeskMode, testDeskForwarding } from "@/actions/aiDesk";
 import type { ForwardCheck, ForwardStatus } from "@/lib/aiDesk/forwardCheck";
@@ -11,6 +12,32 @@ import { callsGo, forwardingCodes, type DeskForwarding, type DeskMode } from "@/
 import type { SmsRegistrationView } from "@/lib/sms/registrationShared";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
+
+const TEXTING_NUMBER = "/dashboard/settings?tab=texting#texting-own-number";
+
+/** Copy the desk's number — a secondary button in the number's row. */
+function CopyWords({ number }: { number: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className={s.btn}
+      aria-label={copied ? C.copied : `${C.copy} ${number}`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(number);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          setCopied(false);
+        }
+      }}
+      data-desk-copy-number
+    >
+      {copied ? C.copied : C.copy}
+    </button>
+  );
+}
 
 const whenWords = (at: number) => new Date(at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -105,27 +132,31 @@ function ForwardCheckBox({ initial, kind, phone, canManage, onStatus }: { initia
               : C.fwdUnknown(phone);
   return (
     <div className={s.fwd} data-fwd-status={status ?? "unknown"}>
-      <div className={s.h}>{C.fwdTitle}</div>
-      <p className={s.fwdLine} role="status" suppressHydrationWarning>
-        <span className={s.fwdDot} aria-hidden />
-        {line}
-      </p>
-      {phone ? (
-        <div className={s.acts}>
+      <div className={s.row}>
+        <div className={s.rowMain}>
+          <div className={s.h}>{C.fwdTitle}</div>
+          <p className={s.fwdLine} role="status" suppressHydrationWarning>
+            <span className={s.fwdDot} aria-hidden />
+            {line}
+          </p>
+        </div>
+        {phone ? (
           <button type="button" className={`${s.btn} ${status === "works" ? "" : s.btnPrimary}`} disabled={!canManage || busy || calling} onClick={() => void test()} data-fwd-test>
             {calling ? "Calling…" : status ? C.fwdTestAgain : C.fwdTest}
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
       {phone && status !== "works" && !calling ? (
-        <div className={s.fwdManual}>
+        <div className={`${s.row} ${s.fwdManual}`}>
           <span className={s.note}>{C.fwdManualAsk}</span>
-          <button type="button" className={s.fix} disabled={!canManage || busy} onClick={() => void manual(true)} data-fwd-manual="yes">
-            {C.fwdManualYes}
-          </button>
-          <button type="button" className={s.fix} disabled={!canManage || busy} onClick={() => void manual(false)} data-fwd-manual="no">
-            {C.fwdManualNo}
-          </button>
+          <span className={s.rowActs}>
+            <button type="button" className={s.fix} disabled={!canManage || busy} onClick={() => void manual(true)} data-fwd-manual="yes">
+              {C.fwdManualYes}
+            </button>
+            <button type="button" className={s.fix} disabled={!canManage || busy} onClick={() => void manual(false)} data-fwd-manual="no">
+              {C.fwdManualNo}
+            </button>
+          </span>
         </div>
       ) : null}
       {err ? (
@@ -164,13 +195,15 @@ function ForwardCodes({ number, kind, phone }: { number: string; kind: "all" | "
               <span className={s.codeOn} role="cell">
                 <small>{C.codesOn}</small>
                 <code data-code-on>{c.on}</code>
-                <button type="button" className={s.codeCopy} onClick={() => void copy(c.on)} aria-label={`${C.codesCopy} ${c.on}`}>
-                  {copied === c.on ? C.codesCopied : C.codesCopy}
-                </button>
               </span>
               <span className={s.codeOff} role="cell">
                 <small>{C.codesOff}</small>
                 <code>{c.off}</code>
+              </span>
+              <span className={s.codeAct} role="cell">
+                <button type="button" className={s.codeCopy} onClick={() => void copy(c.on)} aria-label={`${C.codesCopy} ${c.on}`}>
+                  {copied === c.on ? C.codesCopied : C.codesCopy}
+                </button>
               </span>
             </div>
           ))}
@@ -280,10 +313,10 @@ export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettin
       {/* the desk's number */}
       <div className={s.sec}>
         <div className={s.h}>{C.deskNumberTitle}</div>
-        <div className={s.statusLine}>
-          {number ? (
-            <>
-              <b>{number}</b>
+        {number ? (
+          <div className={s.row} data-desk-number-row>
+            <div className={s.rowMain}>
+              <b className={s.numBig}>{number}</b>
               <span className={s.note}>{callsWords}</span>
               {!registration?.number && desk.assigned ? (
                 <span className={s.note} data-desk-lent>
@@ -293,25 +326,44 @@ export function DeskNumbers({ desk, registration, onNumber }: { desk: DeskSettin
                       {C.lentGo}
                     </button>
                   ) : (
-                    <a href="/dashboard/settings?tab=texting#texting-own-number">{C.lentGo}</a>
+                    <a className={s.link} href={TEXTING_NUMBER}>
+                      {C.lentGo}
+                    </a>
                   )}
                 </span>
               ) : null}
-            </>
-          ) : (
-            <>
-              <span className={s.note}>{C.noNumber}</span>
+            </div>
+            <span className={s.rowActs}>
+              <CopyWords number={number} />
               {onNumber ? (
-                <button type="button" className={s.btn} onClick={onNumber}>
-                  {C.getNumber}
+                <button type="button" className={s.btn} onClick={onNumber} data-desk-change-number>
+                  {C.changeNumber}
                 </button>
               ) : (
-                <a className={s.btn} href="/dashboard/settings?tab=texting#texting-own-number">{C.getNumber}</a>
+                <a className={s.btn} href={TEXTING_NUMBER} data-desk-change-number>
+                  {C.changeNumber}
+                </a>
               )}
-            </>
-          )}
-        </div>
-        {!desk.assistantOnPlan ? <p className={`${s.note} ${s.noteErr}`}>{C.notOnPlan}</p> : null}
+            </span>
+          </div>
+        ) : (
+          <div className={`${s.row} ${s.empty}`} data-desk-number-empty>
+            <span className={s.emptyText}>
+              <Phone size={17} strokeWidth={2.2} aria-hidden />
+              {C.noNumber}
+            </span>
+            {onNumber ? (
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={onNumber} data-desk-get-number>
+                {C.getNumber}
+              </button>
+            ) : (
+              <a className={`${s.btn} ${s.btnPrimary}`} href={TEXTING_NUMBER} data-desk-get-number>
+                {C.getNumber}
+              </a>
+            )}
+          </div>
+        )}
+        {!desk.assistantOnPlan ? <p className={s.banner}>{C.notOnPlan}</p> : null}
       </div>
 
       {/* the business phone */}

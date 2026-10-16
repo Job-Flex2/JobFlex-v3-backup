@@ -60,6 +60,7 @@ function Stamp({ state }: { state: TabState }) {
 /** A step's stamp in the row: done, its count to check, or what is left — the panel's own stamp says the rest. */
 function stepState(k: (typeof SETUP_TABS)[number], done: boolean, tab: TabState): TabState {
   if (done) return { tone: "done", words: C.stepDone };
+  if (k === "numbers" && tab.tone === "check") return { tone: "check", words: C.checkThis };
   if (tab.tone === "check" || tab.tone === "warn") return tab;
   if (k === "voice") return tab;
   return { tone: "todo", words: C.stepTodo };
@@ -242,12 +243,20 @@ export function DeskSteps({
                   <b>{m.short}</b>
                   <Stamp state={stepState(k, done, o.tabs[k])} />
                 </span>
+                <ArrowRight size={15} strokeWidth={2.2} aria-hidden className={s.stepGo} />
               </button>
             );
           })}
         </div>
         <div className={s.stepFoot}>
-          <span className={s.count}>{C.progressWords(o.count)}</span>
+          <div className={s.progress}>
+            <span className={s.segs} aria-hidden>
+              {SETUP_TABS.map((k) => (
+                <i key={k} data-state={o.done[k] ? "done" : k === o.next ? "now" : "todo"} />
+              ))}
+            </span>
+            <span className={s.count}>{C.progressWords(o.count)}</span>
+          </div>
           {o.next ? (
             <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go(o.next!)} data-desk-next>
               {C.continueTo(META[o.next].title)}
