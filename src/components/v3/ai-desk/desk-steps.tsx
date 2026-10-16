@@ -8,8 +8,11 @@
 //   · the part picked, as a card: Phone & forwarding (desk-numbers), Your business (desk-brief), Booking
 //     (desk-booking), Voice & test (desk-voice) or Minutes (desk-minutes). It opens on the first thing not done.
 //     Every part stays mounted, so what is typed in one survives a look at another.
-// On a phone the steps are a list (`?v=a`, the default) or one swiped row (`?v=b`) — the owner picks one.
-import { useEffect, useState } from "react";
+// The setup's look is on trial (owner, 2026-10-16), `?s=` picks it — the other two go once one is chosen:
+//   1 (default) one segmented bar, like the plans' Monthly | Annual switch, a 4px line under each part;
+//   2 the steps as a list beside the part, like the settings menu, with one solid progress bar over it;
+//   3 a drawn line of four squares, like sign-up's steps — the line itself is the progress.
+import { useEffect, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowRight, Building2, CalendarDays, Check, CheckCircle2, Copy, Mic, Phone, Timer } from "lucide-react";
 
@@ -66,6 +69,23 @@ function stepState(k: (typeof SETUP_TABS)[number], done: boolean, tab: TabState)
   return { tone: "todo", words: C.stepTodo };
 }
 
+/** A step's status as a line: a square dot in its tone, then the words — no frame, so it never reads as a button. */
+type Dot = "ok" | "todo" | "idle" | "bad";
+function dotOf(k: (typeof SETUP_TABS)[number], state: TabState): Dot {
+  if (state.tone === "done") return "ok";
+  if (state.tone === "warn") return "bad";
+  if (state.tone === "check") return "todo";
+  return k === "voice" ? "idle" : "todo";
+}
+function StatusLine({ k, state, className }: { k: (typeof SETUP_TABS)[number]; state: TabState; className?: string }) {
+  return (
+    <span className={className ? `${s.st} ${className}` : s.st} data-dot={dotOf(k, state)} data-step-chip>
+      <i aria-hidden />
+      {state.words}
+    </span>
+  );
+}
+
 function CopyNumber({ number }: { number: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -102,7 +122,7 @@ export function DeskSteps({
   intro?: string;
 }) {
   const search = useSearchParams();
-  const variant = search?.get("v") === "b" ? "b" : "a";
+  const look = search?.get("s") === "2" ? "2" : search?.get("s") === "3" ? "3" : "1";
   const number = registration?.number ?? desk.assigned?.number ?? null;
   const [written, setWritten] = useState(desk.steps.profile);
   const [samples, setSamples] = useState<DeskFaq[]>([]);
@@ -153,8 +173,63 @@ export function DeskSteps({
     </a>
   );
 
+  // The one next thing to do: the first step not done, or — all four done — a call to the desk.
+  const nextBtn = o.next ? (
+    <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go(o.next!)} data-desk-next>
+      {C.continueTo(META[o.next].title)}
+      <ArrowRight size={15} strokeWidth={2.4} aria-hidden />
+    </button>
+  ) : (
+    <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go("voice", "desk-test")} data-desk-next>
+      <Mic size={15} strokeWidth={2.4} aria-hidden />
+      {C.callTheDesk}
+    </button>
+  );
+  // Every part stays mounted; the one picked shows.
+  const panels = TABS.map((k) => {
+    const m = META[k];
+    const stepAttrs = k !== "minutes" ? { "data-desk-step": SETUP_TABS.indexOf(k) + 1, "data-done": o.done[k] ? "1" : "0" } : {};
+    return (
+      <section
+        key={k}
+        role={k === "minutes" ? "region" : "tabpanel"}
+        id={`desk-panel-${k}`}
+        aria-labelledby={`desk-panel-${k}-t`}
+        hidden={tab !== k}
+        className={s.panel}
+        data-desk-panel={k}
+        {...stepAttrs}
+      >
+        <header className={s.panelHead}>
+          <m.Icon size={16} strokeWidth={2.2} aria-hidden className={s.panelIcon} />
+          <div className={s.panelTitles}>
+            <h3 id={`desk-panel-${k}-t`}>{m.title}</h3>
+            <p>{m.sub}</p>
+          </div>
+          <Stamp state={o.tabs[k]} />
+        </header>
+        <div className={s.panelBody}>
+          {k === "numbers" ? <DeskNumbers desk={desk} registration={registration} onNumber={onNumber} /> : null}
+          {k === "business" ? (
+            <DeskBrief
+              desk={desk}
+              onWritten={(xs) => {
+                setWritten(true);
+                setSamples(xs);
+              }}
+              onReview={setToCheck}
+            />
+          ) : null}
+          {k === "booking" ? <DeskBooking desk={desk} /> : null}
+          {k === "voice" ? <DeskVoiceAndTest desk={desk} samples={samples} /> : null}
+          {k === "minutes" ? <DeskMinutes desk={desk} /> : null}
+        </div>
+      </section>
+    );
+  });
+
   return (
-    <div className={s.desk} data-desk-steps data-v={variant}>
+    <div className={s.desk} data-desk-steps data-s={look}>
       {intro ? <p className={s.intro}>{intro}</p> : null}
 
       {/* the state: amber while something stands between the desk and the calls, green once it answers */}
@@ -217,101 +292,120 @@ export function DeskSteps({
         </div>
       </dl>
 
-      {/* the setup, four steps */}
-      <section className={s.stepper} aria-label={C.tabsLabel}>
-        <div className={s.steps} role="tablist" aria-label={C.tabsLabel} id="desk-panels">
-          {SETUP_TABS.map((k, i) => {
-            const m = META[k];
-            const done = o.done[k];
-            return (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                id={`desk-tab-${k}`}
-                aria-selected={tab === k}
-                aria-controls={`desk-panel-${k}`}
-                className={s.step}
-                data-done={done ? "1" : "0"}
-                data-desk-tab={k}
-                onClick={() => pick(k)}
-              >
-                <span className={s.stepN} aria-hidden>
-                  {done ? <Check size={15} strokeWidth={3} /> : i + 1}
-                </span>
-                <span className={s.stepText}>
-                  <b>{m.short}</b>
-                  <Stamp state={stepState(k, done, o.tabs[k])} />
-                </span>
-                <ArrowRight size={15} strokeWidth={2.2} aria-hidden className={s.stepGo} />
-              </button>
-            );
-          })}
-        </div>
-        <div className={s.stepFoot}>
-          <div className={s.progress}>
-            <span className={s.segs} aria-hidden>
-              {SETUP_TABS.map((k) => (
-                <i key={k} data-state={o.done[k] ? "done" : k === o.next ? "now" : "todo"} />
+      {look === "1" ? (
+        <>
+          {/* ?s=1 — one segmented bar: number, name, status; a 4px line under each part says how far */}
+          <section className={s.seg} aria-label={C.tabsLabel}>
+            <div className={s.segRow} role="tablist" aria-label={C.tabsLabel} id="desk-panels">
+              {SETUP_TABS.map((k, i) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  id={`desk-tab-${k}`}
+                  aria-selected={tab === k}
+                  aria-controls={`desk-panel-${k}`}
+                  className={s.segBtn}
+                  data-done={o.done[k] ? "1" : "0"}
+                  data-bar={o.done[k] ? "done" : k === o.next ? "now" : undefined}
+                  data-desk-tab={k}
+                  onClick={() => pick(k)}
+                >
+                  <span className={s.segN} aria-hidden>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <b className={s.segName}>{META[k].short}</b>
+                  <StatusLine k={k} state={stepState(k, o.done[k], o.tabs[k])} />
+                </button>
               ))}
-            </span>
-            <span className={s.count}>{C.progressWords(o.count)}</span>
-          </div>
-          {o.next ? (
-            <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go(o.next!)} data-desk-next>
-              {C.continueTo(META[o.next].title)}
-              <ArrowRight size={15} strokeWidth={2.4} aria-hidden />
-            </button>
-          ) : (
-            <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go("voice", "desk-test")} data-desk-next>
-              <Mic size={15} strokeWidth={2.4} aria-hidden />
-              {C.callTheDesk}
-            </button>
-          )}
-        </div>
-      </section>
-
-      {TABS.map((k) => {
-        const m = META[k];
-        const stepAttrs = k !== "minutes" ? { "data-desk-step": SETUP_TABS.indexOf(k) + 1, "data-done": o.done[k] ? "1" : "0" } : {};
-        return (
-          <section
-            key={k}
-            role={k === "minutes" ? "region" : "tabpanel"}
-            id={`desk-panel-${k}`}
-            aria-labelledby={`desk-panel-${k}-t`}
-            hidden={tab !== k}
-            className={s.panel}
-            data-desk-panel={k}
-            {...stepAttrs}
-          >
-            <header className={s.panelHead}>
-              <m.Icon size={16} strokeWidth={2.2} aria-hidden className={s.panelIcon} />
-              <div className={s.panelTitles}>
-                <h3 id={`desk-panel-${k}-t`}>{m.title}</h3>
-                <p>{m.sub}</p>
-              </div>
-              <Stamp state={o.tabs[k]} />
-            </header>
-            <div className={s.panelBody}>
-              {k === "numbers" ? <DeskNumbers desk={desk} registration={registration} onNumber={onNumber} /> : null}
-              {k === "business" ? (
-                <DeskBrief
-                  desk={desk}
-                  onWritten={(xs) => {
-                    setWritten(true);
-                    setSamples(xs);
-                  }}
-                  onReview={setToCheck}
-                />
-              ) : null}
-              {k === "booking" ? <DeskBooking desk={desk} /> : null}
-              {k === "voice" ? <DeskVoiceAndTest desk={desk} samples={samples} /> : null}
-              {k === "minutes" ? <DeskMinutes desk={desk} /> : null}
             </div>
           </section>
-        );
-      })}
+          <div className={s.segFoot}>
+            <span className={s.count}>{C.progressWords(o.count)}</span>
+            {nextBtn}
+          </div>
+          {panels}
+        </>
+      ) : null}
+
+      {look === "2" ? (
+        /* ?s=2 — the steps as a list beside the part, the settings menu's own items */
+        <div className={s.split}>
+          <aside className={s.side} aria-label={C.tabsLabel}>
+            <div className={s.sideHead}>
+              <span className={s.count}>{C.progressWords(o.count)}</span>
+              <span className={s.fill} role="progressbar" aria-label={C.tabsLabel} aria-valuemin={0} aria-valuemax={SETUP_TABS.length} aria-valuenow={o.count}>
+                <span style={{ "--p": o.count / SETUP_TABS.length } as CSSProperties} />
+              </span>
+            </div>
+            <div className={s.list} role="tablist" aria-label={C.tabsLabel} aria-orientation="vertical" id="desk-panels">
+              {SETUP_TABS.map((k, i) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  id={`desk-tab-${k}`}
+                  aria-selected={tab === k}
+                  aria-controls={`desk-panel-${k}`}
+                  className={s.item}
+                  data-done={o.done[k] ? "1" : "0"}
+                  data-desk-tab={k}
+                  onClick={() => pick(k)}
+                >
+                  <span className={s.itemN} aria-hidden>
+                    {o.done[k] ? <Check size={14} strokeWidth={3} /> : i + 1}
+                  </span>
+                  <span className={s.itemText}>
+                    <b>{META[k].short}</b>
+                    <StatusLine k={k} state={stepState(k, o.done[k], o.tabs[k])} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+          <div className={s.main}>
+            {panels}
+            <div className={s.mainFoot}>{nextBtn}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {look === "3" ? (
+        <>
+          {/* ?s=3 — a drawn line of four squares: done in green, the next in blue, the rest outlined */}
+          <section className={s.track} aria-label={C.tabsLabel}>
+            <div className={s.nodes} role="tablist" aria-label={C.tabsLabel} id="desk-panels">
+              {SETUP_TABS.map((k, i) => {
+                const after = SETUP_TABS[i + 1];
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    role="tab"
+                    id={`desk-tab-${k}`}
+                    aria-selected={tab === k}
+                    aria-controls={`desk-panel-${k}`}
+                    className={s.node}
+                    data-done={o.done[k] ? "1" : "0"}
+                    data-state={o.done[k] ? "done" : k === o.next ? "now" : "todo"}
+                    data-link={after && o.done[k] && o.done[after] ? "done" : undefined}
+                    data-desk-tab={k}
+                    onClick={() => pick(k)}
+                  >
+                    <span className={s.nodeSq} aria-hidden>
+                      {o.done[k] ? <Check size={16} strokeWidth={3} /> : i + 1}
+                    </span>
+                    <b className={s.nodeName}>{META[k].short}</b>
+                    <StatusLine k={k} state={stepState(k, o.done[k], o.tabs[k])} className={s.nodeSt} />
+                  </button>
+                );
+              })}
+            </div>
+            {nextBtn}
+          </section>
+          {panels}
+        </>
+      ) : null}
     </div>
   );
 }
