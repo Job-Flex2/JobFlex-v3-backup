@@ -579,8 +579,13 @@ export function UpgradeContent({
                       <svg viewBox="0 0 24 24" className="jf-up-fic" aria-hidden="true">
                         {has ? <path d="M20 6 9 17l-5-5" /> : <path d="M5 12h14" />}
                       </svg>
-                      {f}
-                      {lit ? <span className="jf-up-spot-tag">{has ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                      {/* The name and its tag (upgrade.css, .jf-up-ft): the tag drops
+                          under the name when the line cannot hold both, and the name
+                          never breaks inside a word. */}
+                      <span className="jf-up-ft">
+                        <span className="jf-up-fn">{f}</span>
+                        {lit ? <span className="jf-up-spot-tag">{has ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                      </span>
                     </span>
                   );
                 })}

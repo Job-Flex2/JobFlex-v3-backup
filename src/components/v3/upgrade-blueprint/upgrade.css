@@ -730,5 +730,16 @@
 .jf-upgrade .jf-up-f.spot.no { background: rgba(168, 50, 50, 0.07); box-shadow: inset 3px 0 0 var(--danger, #a83232); font-weight: 600; }
 .jf-upgrade .jf-up-spot-tag { display: inline-block; margin-left: 8px; padding: 2px 6px; border-radius: 2px; background: var(--blueprint, #1854a0); color: #fff; font-family: var(--font-mono, ui-monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; vertical-align: 1px; white-space: nowrap; }
 .jf-upgrade .jf-up-f.no .jf-up-spot-tag { background: var(--danger, #a83232); }
+/* THE ROW'S WORDS (2026-10-15, as on /pricing and the register's Plan step):
+   on a narrow card, or with the text zoomed to 125–150 %, the tag would not
+   shrink and the name was squeezed to one letter a line. The name is its own
+   item that breaks only between words; the tag keeps its width and, when the
+   two do not fit on one line, wraps under the name, flush left, 4 px down —
+   plain flex wrap, so it follows the text size, not the viewport. Only where
+   the tag alone is wider than the row does max-width hold it to the row, and
+   its words wrap rather than run off the card's edge. */
+.jf-upgrade .jf-up-ft { flex: 1 1 auto; min-width: 8ch; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.jf-upgrade .jf-up-fn { flex: 1 1 auto; min-width: 8ch; overflow-wrap: normal; word-break: keep-all; hyphens: none; }
+.jf-upgrade .jf-up-ft > .jf-up-spot-tag { flex: none; max-width: 100%; margin-left: 0; white-space: normal; text-wrap: balance; }
 @keyframes upSpotIn { 0% { background-color: rgba(24, 84, 160, 0.3); } 100% { background-color: rgba(24, 84, 160, 0.09); } }
 @media (prefers-reduced-motion: reduce) { .jf-upgrade .jf-up-f.spot { animation: none; } }
