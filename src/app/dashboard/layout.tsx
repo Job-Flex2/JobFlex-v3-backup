@@ -53,6 +53,8 @@ import { ResponsiveDashboardShell } from "@/components/v3/responsive-shell/respo
 import { SIDEBAR_FOLD_COOKIE } from "@/components/v3/blueprint-shell/sidebar-fold";
 import { LeadOfferPopup } from "@/components/leads/LeadOfferPopup";
 import { DashboardAnnouncementDismiss } from "@/app/(dashboard)/announcement-dismiss";
+import { AutoPlanWelcome } from "@/components/dashboard/AutoPlanWelcome";
+import { autoPlanWelcomeView, type AutoPlanWelcomeView } from "@/lib/autoPlanWelcome";
 import { TrafficContext } from "@/components/providers/traffic-context";
 import { TrialWatchMount } from "@/components/v3/trial-watch/trial-watch-mount";
 import { trialView, type TrialView } from "@/lib/cardlessTrial";
@@ -127,6 +129,8 @@ export default async function DashboardBlueprintLayout({
   // A declined renewal Stripe is retrying (PAST_DUE): "Payment failed ·
   // Update your card" over every page (components/v3/payment-ribbon).
   let paymentFailed = false;
+  // Came in by the short sign-up (lib/signupAutoPlan): "you're on Professional — change it any time", for the owner.
+  let autoWelcome: AutoPlanWelcomeView | null = null;
   try {
     const ctx = await requireOrg();
     role = ctx.role;
@@ -144,6 +148,7 @@ export default async function DashboardBlueprintLayout({
         select: { address: true, tradeTypesJson: true, name: true },
       });
       needsSetup = Boolean(org && needsCompanySetup(org));
+      autoWelcome = await autoPlanWelcomeView(ctx.organizationId);
     }
     user = { name, role: humanRole(ctx.role) };
     // SEPARATE awaits, each with its own failure story. Bundled in one
@@ -256,12 +261,20 @@ export default async function DashboardBlueprintLayout({
           <PaymentRibbon isOwner={role === "OWNER"} only="dock" />
         ) : null
       }
-      overviewNotice={announcements.length > 0 ? <DashboardAnnouncementDismiss announcements={announcements} /> : null}
+      overviewNotice={
+        autoWelcome || announcements.length > 0 ? (
+          <>
+            {autoWelcome ? <AutoPlanWelcome view={autoWelcome} /> : null}
+            {announcements.length > 0 ? <DashboardAnnouncementDismiss announcements={announcements} /> : null}
+          </>
+        ) : null
+      }
     >
       <TrafficContext role={role} plan={plan} organizationId={organizationId} userId={userId} />
       {organizationId && <TrialWatchMount organizationId={organizationId} email={email} />}
       {trial && !onTrialPage && !trialDismissed && <TrialRibbon view={trial} isOwner={role === "OWNER"} orgId={organizationId ?? ""} />}
       {paymentFailed && !trial && <PaymentRibbon isOwner={role === "OWNER"} />}
+      {autoWelcome && <AutoPlanWelcome view={autoWelcome} />}
       {announcements.length > 0 && <DashboardAnnouncementDismiss announcements={announcements} />}
       {customGate ?? children}
       {canHandleLeads ? <LeadOfferPopup /> : null}

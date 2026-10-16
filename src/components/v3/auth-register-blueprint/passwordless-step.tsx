@@ -51,11 +51,13 @@ import {
   resendOtpCode,
   startOtpGoogleSignup,
   startOtpSignup,
+  startQuickSignup,
   verifyOtpCode,
 } from "@/actions/signupOtp";
 import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/otp-code-field";
 import css from "./passwordless.module.css";
 import { markQaVisitor } from "@/lib/qaEmail";
+import { autoPlanPrice, type AutoPlanOffer } from "@/lib/signupAutoPlan";
 
 type Screen = "form" | "code" | "google" | "done";
 const STORE_KEY = "jf_otp_signup";
@@ -126,6 +128,9 @@ export function PasswordlessStep({
   google,
   inApp,
   requiresCard,
+  auto = null,
+  quick = false,
+  planMode = "pick",
   trialDays,
   industry,
   tool = null,
@@ -147,6 +152,11 @@ export function PasswordlessStep({
   google: { handle: string; email: string } | null;
   inApp: InAppBrowser | null;
   requiresCard: boolean;
+  /** Straight to Professional (lib/signupAutoPlan): the plan step 1 names, then the card page for it. */
+  auto?: AutoPlanOffer | null;
+  /** …with a card: no code — Continue goes on to the card page (startQuickSignup). */
+  quick?: boolean;
+  planMode?: "auto" | "pick";
   trialDays: number;
   industry: TradeType | null;
   /** The tool the visitor came for (lib/planSpotlight) — rides the draft so the return link keeps marking it. */
@@ -183,7 +193,7 @@ export function PasswordlessStep({
   const verifying = React.useRef(false);
   const handoff = useBrowserHandoff(inApp ?? "instagram");
   const track = (outcome: string, reason = "", message = "") => {
-    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp" });
+    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp", plan_mode: planMode, ...(quick ? { quick: true } : {}) });
     // The watcher's own reasons: a refusal the server answered in words is read from them (start_rejected).
     if (outcome === "error" || outcome === "code_error") signupProblem(reason === "start_rejected" ? reasonOfMessage(message) : reason, { message });
   };
@@ -203,8 +213,8 @@ export function PasswordlessStep({
   React.useEffect(() => {
     if (screen !== "code" || codeSeen.current) return;
     codeSeen.current = true;
-    trackTraffic(TRAFFIC_EVENTS.step, { step: "code", flow: "otp", variant: "e", steps: 2, mode: "otp" });
-  }, [screen]);
+    trackTraffic(TRAFFIC_EVENTS.step, { step: "code", flow: "otp", variant: "e", steps: 2, mode: "otp", plan_mode: planMode });
+  }, [screen, planMode]);
 
   /* The resend countdown. */
   React.useEffect(() => {
@@ -363,7 +373,7 @@ export function PasswordlessStep({
     if (draft) url.searchParams.set("d", draft);
     if (attribution && !url.searchParams.has("ref") && !url.searchParams.has("promo")) url.searchParams.set(attribution.kind, attribution.code);
     if (!url.searchParams.has("flow") && document.cookie.split("; ").includes(`${SIGNUP_MODE_COOKIE}=otp`)) url.searchParams.set("flow", "otp");
-    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome: "google_handoff", reason: inApp, variant: "e", steps: 2, mode: "otp" });
+    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome: "google_handoff", reason: inApp, variant: "e", steps: 2, mode: "otp", plan_mode: planMode });
     handoff.open(url.toString());
   }
 
@@ -389,6 +399,33 @@ export function PasswordlessStep({
     const backToEmail = () => document.getElementById("email")?.focus({ preventScroll: true });
     try {
       markQaVisitor(em); // a QA Lab address: no analytics from this browser (lib/qaEmail)
+      if (quick) {
+        /* No code with a card (lib/signupAutoPlan): straight on to the card page. The server says so itself; if the
+           rule changed meanwhile it answers needsCode and the code goes out as before. */
+        const q = await startQuickSignup({
+          name: n,
+          email: em,
+          analytics: analytics(),
+          displayedTrialDays: trialDays === 3 || trialDays === 7 ? trialDays : undefined,
+          industry: industry ?? undefined,
+          tool: tool ?? undefined,
+          utm: utm ?? undefined,
+          attribution,
+          meta: meta(),
+        });
+        if (q.ok) {
+          track("continue", "quick");
+          onLead(q.email);
+          proceed(q.signupToken);
+          return;
+        }
+        if (!q.needsCode) {
+          setErr(q.error);
+          backToEmail();
+          track("error", q.taken ? "email_taken" : /temporary|throwaway|disposable/i.test(q.error) ? "email_disposable" : /Too many/.test(q.error) ? "rate_limited" : "quick_rejected", q.error);
+          return;
+        }
+      }
       const res = await startOtpSignup({
         name: n,
         email: em,
@@ -521,7 +558,10 @@ export function PasswordlessStep({
     window.setTimeout(() => document.getElementById("email")?.focus(), 30);
   }
 
-  const trialText = `${trialDays}-day free trial · ${requiresCard ? "Card required" : "No card needed"} · Cancel anytime`;
+  const gmailTyped = /@(gmail|googlemail)\.com\s*$/i.test(email.trim());
+  const trialText = auto
+    ? `${trialDays}-day free trial · ${requiresCard ? `$0 today, then ${autoPlanPrice(auto)}` : "No card needed"} · Cancel anytime`
+    : `${trialDays}-day free trial · ${requiresCard ? "Card required" : "No card needed"} · Cancel anytime`;
 
   // The keyboard bridge stays put across the screens: the form hands the focus to it, the code field takes it.
   const view = (() => {
@@ -532,7 +572,7 @@ export function PasswordlessStep({
         <div className={css.otp} data-otp-screen="google">
           <h1 className="auth-h1">Start Your Free Trial</h1>
           <p className="auth-lede" role="status">
-            Signed in with Google as <b>{google?.email}</b>. Setting up your plan…
+            Signed in with Google as <b>{google?.email}</b>. {auto ? (requiresCard ? `Opening the card page for ${auto.name}…` : `Starting your ${auto.name} trial…`) : "Setting up your plan…"}
           </p>
         </div>
       );
@@ -599,19 +639,34 @@ export function PasswordlessStep({
     return (
       <div className={css.otp} data-otp-screen="form">
         <h1 className="auth-h1">Start Your Free Trial</h1>
-        <p className="auth-lede">Create your account in seconds. No password needed.</p>
+        {auto ? (
+          <p className="auth-lede" data-auto-plan-lede>
+            You&apos;ll start on <b>{auto.name}</b> — free for {trialDays} days, then {autoPlanPrice(auto)}. Change your plan any time.
+            {quick ? " Your name and email, then your card on Stripe's secure page." : " No password needed."}
+          </p>
+        ) : (
+          <p className="auth-lede">Create your account in seconds. No password needed.</p>
+        )}
 
         <button className={`btn btn--ghost ${css.google}`} type="button" id="googleBtn" onClick={googleTap}>
           <svg className="ic ic--brand" aria-hidden="true">
             <use href="#i-google" />
           </svg>
-          Continue with Google
+          Sign up with Google
         </button>
+        {/* SAY WHO EACH WAY IS FOR (owner, 2026-10-15: "people think the Google button is for those who already have
+            an account"): Google signs up too, and anyone else uses their email — whatever the address. */}
+        <p className={css.googleSub} id="googleSub">
+          Gmail or any Google account · one tap, nothing to type
+        </p>
         {inApp ? <HandoffHelp handoff={handoff} /> : null}
 
         <div className="divider">
-          <span className="kpi-lbl">or continue with email</span>
+          <span className="kpi-lbl">No Google? Use any email</span>
         </div>
+        <p className={css.anyEmail} id="anyEmail">
+          Yahoo, Outlook, iCloud, AOL, your work email — any address works.
+        </p>
 
         <form id="step1Form" className={css.form} noValidate onSubmit={(e) => void onContinue(e)}>
           <label className="fld">
@@ -622,8 +677,26 @@ export function PasswordlessStep({
             <span className="fld-lbl">Email</span>
             <input className="fld-in" type="email" id="email" placeholder="you@yourshop.com" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
+          {/* A Gmail address typed in: the Google button would have done it in one tap. Offered, never forced. Not in an
+              in-app browser — Google refuses to sign in there. */}
+          {gmailTyped && !inApp && !busy ? (
+            <p className={css.gmailHint} id="gmailHint" role="status">
+              That&apos;s a Gmail address —{" "}
+              <button
+                type="button"
+                className={css.gmailHintBtn}
+                onClick={() => {
+                  track("google_hint");
+                  googleTap();
+                }}
+              >
+                sign up with Google
+              </button>{" "}
+              in one tap instead, nothing else to type. Or just carry on below.
+            </p>
+          ) : null}
           <button className="btn" type="submit" id="nextBtn" disabled={busy}>
-            {busy ? "Sending code…" : "Continue"}
+            {busy ? (quick ? "One moment…" : "Sending code…") : quick ? "Continue to card · $0 today" : "Continue"}
             <svg className="ic" aria-hidden="true">
               <use href="#i-arrow-r" />
             </svg>

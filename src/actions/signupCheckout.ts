@@ -69,6 +69,8 @@ import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { storedTrialOffer, TRIAL_TEST_ENDED, type TrialOffer } from "@/lib/trialOffer";
 import { buildTrialConfirm } from "@/lib/email/build/trial";
 import { pendingSignupAlive } from "@/lib/pendingSignup";
+import { markUnclaimed } from "@/lib/accountClaim";
+import { autoPlanWelcomeKey } from "@/lib/autoPlanWelcome";
 
 const pendingSchema = z.object({
   analytics: trafficIdentitySchema.optional().catch(undefined),
@@ -159,6 +161,10 @@ export type PendingRecord = z.infer<typeof pendingSchema> extends infer T
       nameUnset?: boolean;
       /** Which of the owner's three sign-ups this came through (lib/signupMode). */
       signupMode?: SignupModeLabel;
+      /** Straight to Professional (lib/signupAutoPlan): the org gets the welcome card that says the plan can change. */
+      autoPlan?: boolean;
+      /** The short sign-up with a card: no code, so the address is unproven until a sign-in proves it (lib/accountClaim). */
+      quick?: boolean;
     }
   : never;
 
@@ -900,6 +906,13 @@ async function createAccountFromPending(
       if (rec.nameUnset) {
         await tx.syncState.upsert({ where: { key: orgNameUnsetKey(org.id) }, create: { key: orgNameUnsetKey(org.id), cursor: "1" }, update: { cursor: "1" } });
       }
+
+      // Straight to Professional (lib/signupAutoPlan): the dashboard's welcome card says the plan can change any time.
+      if (rec.autoPlan) {
+        await tx.syncState.upsert({ where: { key: autoPlanWelcomeKey(org.id) }, create: { key: autoPlanWelcomeKey(org.id), cursor: JSON.stringify({ at: new Date().toISOString() }) }, update: {} });
+      }
+      // No code at sign-up: the address waits for a sign-in that proves it (lib/accountClaim).
+      if (rec.quick) await markUnclaimed(tx, user.id);
 
       // THE TOOL THE VISITOR CAME FOR (lib/planSpotlight, 2026-10-14): on the
       // company, no schema change, read by lib/planSpotlightServer.

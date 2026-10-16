@@ -12,9 +12,10 @@ import { Fragment, Suspense, use, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import type { TrialCard, TrialPayments, TrialWatchData } from "@/actions/trialWatch";
-import type { SignupFlow, SignupTrialState } from "@/lib/trialPolicyServer";
+import type { SignupFlow, SignupPlanSetting, SignupTrialState } from "@/lib/trialPolicyServer";
 import { TrialPolicyPanel } from "./trial-policy-panel";
 import { SignupStepsPanel } from "./signup-steps-panel";
+import { SignupPlanPanel } from "./signup-plan-panel";
 import type { TrialLevel } from "@/lib/trialWatch";
 import { formatSpend, PAID_SERVICE_LABEL } from "@/lib/paidApiCosts";
 import { TRIAL_CAP_KEYS, TRIAL_CAP_NOUN } from "@/lib/trialCaps";
@@ -70,11 +71,13 @@ export function AdminTrialsContent({
   data,
   policy,
   signup,
+  plan,
   payments,
 }: {
   data: TrialWatchData;
   policy: SignupTrialState;
   signup: SignupFlow;
+  plan: SignupPlanSetting;
   payments: Promise<TrialPayments>;
 }) {
   const [level, setLevel] = useState<"" | TrialLevel>("");
@@ -122,6 +125,7 @@ export function AdminTrialsContent({
 
       <TrialPolicyPanel initial={policy} />
       <SignupStepsPanel initial={signup} />
+      <SignupPlanPanel initial={plan} requiresCard={policy.mode === "card"} />
 
       <div className="kpi-grid">
         <div className="kpi">

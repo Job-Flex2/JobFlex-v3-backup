@@ -25,6 +25,7 @@
 
 import { useSearchParams } from "next/navigation";
 import type { EditionId } from "@/lib/editions";
+import type { AutoPlanOffer } from "@/lib/signupAutoPlan";
 import { Suspense, useSyncExternalStore } from "react";
 import { RegisterContent } from "@/components/v3/auth-register-blueprint/register-content";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
@@ -98,8 +99,10 @@ function RegisterSwitch({
   steps,
   mode,
   otpRestore,
+  autoPlan,
 }: {
   mode: SignupMode;
+  autoPlan: AutoPlanOffer | null;
   otpRestore: OtpRestore | null;
   offerCustom: boolean;
   /** The sign-up's steps, the owner's switch (lib/trialPolicyServer): 3 as built, or 2. */
@@ -140,7 +143,7 @@ function RegisterSwitch({
   void isHandheld;
   void params;
   return <RegisterContent setup={setup} google={google} industry={industry} spotlight={spotlight}
-        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} otpRestore={otpRestore} />;
+        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />;
 }
 
 // The attribution capture under either tree reads the query string, so the
@@ -160,9 +163,12 @@ export function RegisterResponsive({
   steps = 3,
   mode = "password",
   otpRestore = null,
+  autoPlan = null,
 }: {
   /** The sign-up's mode (lib/signupMode): password as built, or passwordless. */
   mode?: SignupMode;
+  /** Straight to Professional (lib/signupAutoPlan): the plan the server picked, or null for the plan cards. */
+  autoPlan?: AutoPlanOffer | null;
   /** Where a passwordless sign-up was left (lib/signupOtp draftRestore). */
   otpRestore?: OtpRestore | null;
   /** CUSTOM_PLAN_ENABLED, read on the server (lib/customPlanFlag). */
@@ -189,7 +195,7 @@ export function RegisterResponsive({
   return (
     <Suspense fallback={null}>
       <RegisterSwitch setup={setup} google={google} industry={industry} spotlight={spotlight}
-        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} otpRestore={otpRestore} />
+        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />
     </Suspense>
   );
 }

@@ -38,6 +38,8 @@ import { HOUR, clientIp, rateLimitShared, retryInWords } from "@/lib/rateLimit";
 import { hashToken, tokensEqual } from "@/lib/tokens";
 import { mintSigninTicket } from "@/lib/signinTicket";
 import { signupNetworkBrake } from "@/lib/signupBrake";
+import { readSignupPlan } from "@/lib/trialPolicyServer";
+import { claimIfUnclaimed } from "@/lib/accountClaim";
 import { appBaseUrl } from "@/lib/appUrl";
 import { renderEmail } from "@/lib/email/renderEmail";
 import { buildOtpCode, buildOtpNoAccount } from "@/lib/email/build/otp";
@@ -266,6 +268,8 @@ async function finalize(token: string, d: OtpDraft, via: "code" | "link"): Promi
     if (d.linkHash) await db.syncState.deleteMany({ where: { key: linkKey(d.linkHash) } }).catch(() => {});
     await saveDraft(token, { ...d, code: null, linkHash: null, verifiedAt: Date.now(), via, userId: user.id });
     if (!user.emailVerified) await db.user.update({ where: { id: user.id }, data: { emailVerified: new Date() } }).catch(() => {});
+    // The code proved the address: an account from the short sign-up is theirs now (lib/accountClaim).
+    await claimIfUnclaimed(user.id);
     return { ok: true, kind: "signin", ticket: await mintSigninTicket(user.id), next: await nextForUser(user.id), email: d.email };
   }
   if (d.kind === "login" || d.noAccount) return { ok: false, error: "That code isn't right." };
@@ -273,7 +277,7 @@ async function finalize(token: string, d: OtpDraft, via: "code" | "link"): Promi
   // code stays good while it is refused — the visitor can try again within it.
   const braked = await newAccountBrake();
   if (braked) return { ok: false, error: braked };
-  const signupToken = await writeVerifiedPending(d, { viaGoogle: false, image: null });
+  const signupToken = await writeVerifiedPending(d, { viaGoogle: false, image: null, autoPlan: (await readSignupPlan()).mode === "auto" });
   if (d.linkHash) await db.syncState.deleteMany({ where: { key: linkKey(d.linkHash) } }).catch(() => {});
   await saveDraft(token, { ...d, code: null, linkHash: null, verifiedAt: Date.now(), via, signupToken });
   return { ok: true, kind: "signup", signupToken, email: d.email };
@@ -304,7 +308,7 @@ export async function nextForUser(userId: string): Promise<string> {
  */
 export async function writeVerifiedPending(
   d: Pick<OtpDraft, "email" | "name" | "industry" | "tool" | "utm" | "attribution" | "meta" | "analytics" | "trialOffer">,
-  opts: { viaGoogle: boolean; image: string | null },
+  opts: { viaGoogle: boolean; image: string | null; autoPlan?: boolean; unproven?: boolean },
 ): Promise<string> {
   const token = randomUUID();
   const name = d.name.trim() || d.email.split("@")[0];
@@ -326,9 +330,11 @@ export async function writeVerifiedPending(
     viaGoogle: opts.viaGoogle,
     image: opts.image,
     createdAt: Date.now(),
-    emailVerifiedAt: Date.now(),
+    // The short sign-up with a card proves nothing about the address (lib/accountClaim).
+    ...(opts.unproven ? { quick: true } : { emailVerifiedAt: Date.now() }),
     nameUnset: true,
     signupMode: "passwordless",
+    ...(opts.autoPlan ? { autoPlan: true } : {}),
   } as PendingRecord;
   await db.syncState.upsert({
     where: { key: `signup:${token}` },

@@ -1,0 +1,4 @@
+/* While the welcome card after the short sign-up is on the page (components/dashboard/AutoPlanWelcome), it carries the
+   "set up your specialties" ask — the Lead Center banner, which asks for the same thing in older words, waits until
+   the card is dismissed. Global on purpose: the banners live on other surfaces (Overview, Leads, the phone). */
+body:has([data-auto-plan-welcome]) [data-lead-banner] { display: none !important; }

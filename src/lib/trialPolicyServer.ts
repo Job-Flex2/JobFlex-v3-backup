@@ -27,6 +27,7 @@ import "server-only";
 //     costs no extra round trip; a flip or a reset clears this instance's copy.
 import { db } from "@/lib/db";
 import { trialRequiresCardEnv } from "@/lib/trialPolicy";
+import type { SignupPlanMode } from "@/lib/signupAutoPlan";
 import { cardlessCeilingReached, cardlessStartsInLastDay, cardlessTrialsPerDay } from "@/lib/trialDailyCap";
 
 export const TRIAL_POLICY_KEY = "trialPolicy";
@@ -192,4 +193,39 @@ export async function setSignupSteps(steps: SignupSteps, by: string | null, pass
   await db.syncState.upsert({ where: { key: SIGNUP_FLOW_KEY }, create: { key: SIGNUP_FLOW_KEY, cursor }, update: { cursor } });
   stepsCache = null;
   return readSignupFlow({ fresh: true });
+}
+
+/* ── THE PLAN AT SIGN-UP (owner, 2026-10-15: "they go automatically into the
+   Professional plan, add the card, and once in we tell them they can adjust
+   the plan any time" — lib/signupAutoPlan). "pick" = the plan cards, as
+   built; "auto" = the short sign-up (name and email, or Google) straight to
+   the card page for Professional. SyncState `signupPlan` = { mode, by, at };
+   no row = pick. Cached ten seconds per instance like the others. ───────── */
+export const SIGNUP_PLAN_KEY = "signupPlan";
+export interface SignupPlanSetting { mode: SignupPlanMode; source: "admin" | "default"; by: string | null; at: string | null }
+let planCache: { at: number; value: SignupPlanSetting } | null = null;
+
+/** The plan rule in force. Never throws: a hiccup reads as "pick", uncached. */
+export async function readSignupPlan({ fresh = false }: { fresh?: boolean } = {}): Promise<SignupPlanSetting> {
+  const now = Date.now();
+  if (!fresh && planCache && now - planCache.at < STEPS_CACHE_MS) return planCache.value;
+  let value: SignupPlanSetting = { mode: "pick", source: "default", by: null, at: null };
+  try {
+    const row = await db.syncState.findUnique({ where: { key: SIGNUP_PLAN_KEY }, select: { cursor: true } });
+    if (row?.cursor) {
+      const r = JSON.parse(row.cursor) as Record<string, unknown>;
+      if (r.mode === "auto" || r.mode === "pick") value = { mode: r.mode, source: "admin", by: typeof r.by === "string" ? r.by : null, at: typeof r.at === "string" ? r.at : null };
+    }
+  } catch (err) {
+    console.warn("[signup-plan] read failed, using the plan cards:", err);
+    return value;
+  }
+  planCache = { at: now, value };
+  return value;
+}
+export async function setSignupPlan(mode: SignupPlanMode, by: string | null): Promise<SignupPlanSetting> {
+  const cursor = JSON.stringify({ mode, by, at: new Date().toISOString() });
+  await db.syncState.upsert({ where: { key: SIGNUP_PLAN_KEY }, create: { key: SIGNUP_PLAN_KEY, cursor }, update: { cursor } });
+  planCache = null;
+  return readSignupPlan({ fresh: true });
 }

@@ -12,6 +12,7 @@ import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "@/lib/disposableEmail";
 import { readGoogleSignup } from "@/lib/googleSignup";
 import { mintSigninTicket } from "@/lib/signinTicket";
+import { readSignupPlan, signupTrialMode } from "@/lib/trialPolicyServer";
 import { db } from "@/lib/db";
 import {
   GONE,
@@ -288,11 +289,56 @@ export async function startOtpGoogleSignup(raw: unknown): Promise<{ ok: true; si
         analytics: data.analytics,
         trialOffer: offered,
       },
-      { viaGoogle: true, image: g.image },
+      { viaGoogle: true, image: g.image, autoPlan: (await readSignupPlan()).mode === "auto" },
     );
     return { ok: true, signupToken };
   } catch (err) {
     console.error("[otp] google start failed:", err);
+    return { ok: false, error: SERVER_TROUBLE };
+  }
+}
+
+/**
+ * THE SHORT SIGN-UP WITH A CARD (owner, 2026-10-15, lib/signupAutoPlan): name and email — no password, no code; the
+ * card at Stripe is the proof a real person is signing up, and the next screen is Stripe's card page for the plan.
+ * Only while the plan rule is "auto" AND a card is required (asked here, never taken from the browser): without a
+ * card the emailed code is the only check, so it stays. The address is unproven — the account waits for a sign-in
+ * that proves it (lib/accountClaim).
+ */
+export async function startQuickSignup(raw: unknown): Promise<{ ok: true; signupToken: string; email: string } | { ok: false; error: string; taken?: boolean; needsCode?: boolean }> {
+  try {
+    const parsed = startSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message || "Check your name and email." };
+    const data = parsed.data;
+    const [plan, trial] = await Promise.all([readSignupPlan(), signupTrialMode()]);
+    if (plan.mode !== "auto" || trial !== "card") return { ok: false, needsCode: true, error: "The sign-up just changed — we'll email you a code instead." };
+    if (isDisposableEmail(data.email)) return { ok: false, error: DISPOSABLE_EMAIL_MESSAGE };
+    if (await db.user.findUnique({ where: { email: data.email }, select: { id: true } })) {
+      return { ok: false, error: "That email already has an account. Sign in instead.", taken: true };
+    }
+    const offered = await signupTrialOffer();
+    if (data.displayedTrialDays !== undefined && data.displayedTrialDays > offered.days) {
+      return { ok: false, error: "Your trial offer changed. Reload this page to review the current offer before continuing." };
+    }
+    const braked = await newAccountBrake();
+    if (braked) return { ok: false, error: braked };
+    const signupToken = await writeVerifiedPending(
+      {
+        email: data.email,
+        name: data.name,
+        industry: data.industry,
+        tool: parseSpotlightTool(data.tool),
+        utm: data.utm,
+        attribution: data.attribution ?? null,
+        meta: await metaContextFor(data.meta),
+        analytics: data.analytics,
+        trialOffer: offered,
+      },
+      { viaGoogle: false, image: null, autoPlan: true, unproven: true },
+    );
+    return { ok: true, signupToken, email: data.email };
+  } catch (err) {
+    console.error("[otp] quick start failed:", err);
     return { ok: false, error: SERVER_TROUBLE };
   }
 }
