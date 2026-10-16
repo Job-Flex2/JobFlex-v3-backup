@@ -18,6 +18,8 @@ import {
 } from "@/components/v3/admin-support/admin-support-content";
 import { tasksForTicketsSafe } from "@/lib/adminTasks/service";
 import { recipientsForTickets, repliesForTickets } from "@/lib/supportReplies";
+import { readSupportAiMode, supportAiForTickets } from "@/lib/support/aiSupport";
+import { supportRecipients } from "@/lib/notify";
 import { MarkSupportSeen } from "./mark-seen";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +62,12 @@ export default async function AdminSupportPage({
   const { available: tasksAvailable, tasks } = await tasksForTicketsSafe(rows.map((t) => t.id));
   // The answers already given, and where a new one goes (2026-10-14, lib/supportReplies).
   const [replies, recipients] = await Promise.all([repliesForTickets(rows.map((t) => t.id)), recipientsForTickets(rows)]);
+  // The support AI (2026-10-15): what it did on each ticket, its switch, and the inbox it copies.
+  const [aiRecords, aiMode, aiCopyTo] = await Promise.all([
+    supportAiForTickets(rows.map((t) => t.id)),
+    readSupportAiMode(),
+    supportRecipients().catch(() => [] as string[]),
+  ]);
 
   const tickets: SupportTicketDTO[] = rows.map((t) => ({
     id: t.id,
@@ -76,6 +84,7 @@ export default async function AdminSupportPage({
     task: tasks[t.id] ?? null,
     replies: replies[t.id] ?? [],
     to: recipients[t.id] ?? null,
+    ai: aiRecords[t.id] ?? null,
   }));
 
   return (
@@ -89,6 +98,8 @@ export default async function AdminSupportPage({
         initialTicketId={openTicketId}
         tasksAvailable={tasksAvailable}
         signer={signer}
+        aiMode={aiMode}
+        aiCopyTo={aiCopyTo}
         // One clock, read on the server, so every age renders identically here
         // and after hydration.
         now={new Date().toISOString()}

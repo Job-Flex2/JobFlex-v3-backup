@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Send,
   CreditCard,
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { submitSupportTicket } from "@/actions/support";
+import { liveSupportAnswer } from "@/actions/supportLive";
 
 type Category = "billing" | "technical" | "account" | "feature" | "general";
 type Priority = "low" | "normal" | "high";
@@ -34,6 +36,53 @@ const PRIORITIES: { key: Priority; label: string; help: string }[] = [
 ];
 
 export function SupportForm() {
+  const router = useRouter();
+  // The watch for the support AI's answer to the ticket just filed: stopped on
+  // unmount, and replaced if another ticket is filed meanwhile.
+  const watch = React.useRef<{ stop: boolean; timer: number } | null>(null);
+  React.useEffect(
+    () => () => {
+      if (watch.current) {
+        watch.current.stop = true;
+        window.clearTimeout(watch.current.timer);
+      }
+    },
+    [],
+  );
+  const watchForAnswer = React.useCallback(
+    (id: string, ref: string) => {
+      if (watch.current) {
+        watch.current.stop = true;
+        window.clearTimeout(watch.current.timer);
+      }
+      const w = { stop: false, timer: 0 };
+      watch.current = w;
+      const started = Date.now();
+      const ask = async () => {
+        try {
+          const live = await liveSupportAnswer(id);
+          if (w.stop) return;
+          if (live.state === "answer") {
+            router.refresh();
+            toast.success("We answered your ticket", `Reference ${ref} — it's under Your conversations, and in your email.`);
+            return;
+          }
+          if (live.state === "held") {
+            router.refresh();
+            toast.info("We're on it", `Reference ${ref}. A member of our team is looking into it personally.`);
+            return;
+          }
+          if (live.state === "none") return;
+        } catch {
+          /* ask again */
+        }
+        if (w.stop || Date.now() - started > 90_000) return;
+        w.timer = window.setTimeout(ask, 2_000);
+      };
+      w.timer = window.setTimeout(ask, 1_200);
+    },
+    [router],
+  );
   const [category, setCategory] = React.useState<Category>("technical");
   const [priority, setPriority] = React.useState<Priority>("normal");
   const [subject, setSubject] = React.useState("");
@@ -71,6 +120,9 @@ export function SupportForm() {
       // operator alert actually went out; with no mail transport configured
       // this used to promise a follow-up email that nobody had been told to
       // send. The ticket is filed either way — that part is a database row.
+      // The support AI usually answers in seconds (owner, 2026-10-15): watch for
+      // it, and when it lands refresh "Your conversations" so it is right there.
+      watchForAnswer(filed.id, filed.ref);
       if (filed.notified) {
         toast.success("Ticket filed", `Reference ${filed.ref}. Our team has been alerted by email.`);
       } else {

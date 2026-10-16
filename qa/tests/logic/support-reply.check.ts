@@ -36,5 +36,9 @@ check("no image, no tracking", !/<img|pixel|track/i.test(letter.html));
 const longQuote = replyLetter({ body: "Thanks.", sender: "", ticket: { subject: "Long", body: "y".repeat(3000), ref: "X1", filedAt: "bad date" }, base: "https://jobflex.app" });
 check("a long ticket is quoted in part; a blank sender signs as JobFlex support; a bad date still reads", longQuote.html.includes("…") && longQuote.text.includes("JobFlex support\nJobFlex support") === false && longQuote.html.includes("You wrote:") && /JobFlex support<br>/.test(longQuote.html));
 
+const crewLetter = replyLetter({ body: "Thanks.", sender: "", ticket: { subject: "S", body: "B", ref: "X1Y2Z3", filedAt: "2026-10-15T00:00:00.000Z" }, base: "https://jobflex.app", supportPage: false });
+check("a recipient who can't open the support page gets no dead link — just the ticket number", !crewLetter.html.includes("/dashboard/support") && !crewLetter.text.includes("/dashboard/support") && crewLetter.text.includes("Your ticket is X1Y2Z3.") && crewLetter.html.includes("Your ticket is X1Y2Z3."));
+check("…and everyone else still gets the link", letter.text.includes("https://jobflex.app/dashboard/support"));
+
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

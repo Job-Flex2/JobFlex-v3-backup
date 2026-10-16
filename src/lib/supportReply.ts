@@ -14,6 +14,10 @@ export interface SupportReply {
   /** Where it went. */
   to: string;
   body: string;
+  /** Written and sent by the support AI (lib/support/aiSupport), signed by the team. */
+  ai?: boolean;
+  /** An AI send: the answer, the "a person is on it" note, or the "it's fixed" note. */
+  kind?: "answer" | "ack" | "fixed";
 }
 
 /** The reply as typed, tidied — or why it cannot go. */
@@ -59,7 +63,15 @@ export interface ReplyLetter {
  * where the ticket lives — and the ticket's own words quoted under it, so the
  * answer makes sense on its own. No images, no tracking.
  */
-export function replyLetter(input: { body: string; sender: string; ticket: { subject: string; body: string; ref: string; filedAt: string }; base: string }): ReplyLetter {
+export function replyLetter(input: {
+  body: string;
+  sender: string;
+  ticket: { subject: string; body: string; ref: string; filedAt: string };
+  base: string;
+  /** False when the recipient's role can't open /dashboard/support (crew,
+   *  sales, estimators file tickets but don't see the page): no dead link. */
+  supportPage?: boolean;
+}): ReplyLetter {
   const base = input.base.replace(/\/$/, "");
   const paras = paragraphsOf(input.body);
   // The team signs as itself on one line; a person signs over the team.
@@ -73,6 +85,7 @@ export function replyLetter(input: { body: string; sender: string; ticket: { sub
   const original = input.ticket.body.trim();
   const quoted = original.length > QUOTE_MAX ? `${original.slice(0, QUOTE_MAX).trimEnd()}…` : original;
   const link = `${base}/dashboard/support`;
+  const where = input.supportPage === false ? "" : link;
   const P = "style=\"margin:0 0 16px;font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;\"";
   const html = [
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(replySubject(input.ticket))}</title></head>`,
@@ -80,14 +93,14 @@ export function replyLetter(input: { body: string; sender: string; ticket: { sub
     '<div style="max-width:560px;margin:0 auto;padding:28px 20px;">',
     ...paras.map((x) => `<p ${P}>${br(x)}</p>`),
     `<p style="margin:24px 0 0;font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">${esc(signName)}<br><span style="color:#6a6a6a;">${esc(signLine)}</span></p>`,
-    `<p style="margin:20px 0 0;font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6a6a6a;">Reply to this email and it reaches us. Your ticket ${esc(input.ticket.ref)} is at <a href="${esc(link)}" style="color:#1854a0;">${esc(link)}</a>.</p>`,
+    `<p style="margin:20px 0 0;font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6a6a6a;">Reply to this email and it reaches us. ${where ? `Your ticket ${esc(input.ticket.ref)} is at <a href="${esc(where)}" style="color:#1854a0;">${esc(where)}</a>.` : `Your ticket is ${esc(input.ticket.ref)}.`}</p>`,
     `<div style="margin:28px 0 0;padding:12px 0 0 14px;border-left:3px solid #e5e5e5;font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#8a8a8a;">${when ? `On ${esc(when)} you wrote:` : "You wrote:"}<br>${br(quoted)}</div>`,
     "</div></body></html>",
   ].join("\n");
   const text = [
     ...paras,
     `${signName}\n${signLine}`,
-    `Reply to this email and it reaches us. Your ticket ${input.ticket.ref} is at ${link}`,
+    where ? `Reply to this email and it reaches us. Your ticket ${input.ticket.ref} is at ${where}` : `Reply to this email and it reaches us. Your ticket is ${input.ticket.ref}.`,
     `--\n${when ? `On ${when} you wrote:` : "You wrote:"}\n${quoted.split("\n").map((l) => `> ${l}`).join("\n")}`,
   ].join("\n\n");
   return { subject: replySubject(input.ticket), html, text };

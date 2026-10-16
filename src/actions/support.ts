@@ -1,10 +1,12 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { notifySupportTicket, supportTicketRef } from "@/lib/notify";
 import { rateLimitShared, retryInWords } from "@/lib/rateLimit";
+import { answerTicketWithAi } from "@/lib/support/aiSupport";
 
 // Support taxonomy — kept in lockstep with the customer form's chips, the
 // corner Help widget's categories and the admin triage tags. Not exported: a
@@ -114,6 +116,16 @@ export async function submitSupportTicket(raw: unknown): Promise<SubmitTicketRes
     orgName: org?.name ?? "A customer",
     submitterEmail: submitter?.email ?? null,
   });
+
+  // The support AI reads it and answers (owner, 2026-10-15) — after the
+  // response, so "Send" never waits on a model. What it may send on its own,
+  // and the copy every outcome sends to the support inbox: lib/support.
+  after(() =>
+    answerTicketWithAi(ticket.id, { trigger: "new" }).then(
+      () => undefined,
+      (err) => console.error(`[support-ai] ticket ${ref} was not answered:`, err instanceof Error ? err.message : err),
+    ),
+  );
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");

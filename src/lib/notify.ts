@@ -974,8 +974,9 @@ function undeliverable(email: string): boolean {
   return /@[^@]*\.local$/i.test(email.trim());
 }
 
-/** New tickets always reach the support inbox, plus configured operators. */
-async function supportRecipients(): Promise<string[]> {
+/** New tickets always reach the support inbox, plus configured operators.
+ *  Also where the support AI copies every answer (lib/support/aiSupport). */
+export async function supportRecipients(): Promise<string[]> {
   const inbox = "app@jobflex.app";
   const recipients = (extra: string[]) => [...new Set([inbox, ...extra].map((e) => e.trim().toLowerCase()).filter((e) => e && !undeliverable(e)))];
   const override = process.env.SUPPORT_NOTIFY_EMAIL?.trim();
