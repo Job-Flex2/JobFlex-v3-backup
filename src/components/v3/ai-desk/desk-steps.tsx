@@ -228,8 +228,10 @@ export function DeskSteps({
     );
   });
 
+  // data-nest: out of the shell's (0,1,0) margin/padding reset (dashboard-blueprint/blueprint.module.css), which the
+  // production build emits after this module and which then zeroed every single-class rule here (2026-10-16).
   return (
-    <div className={s.desk} data-desk-steps data-s={look}>
+    <div className={s.desk} data-desk-steps data-s={look} data-nest="">
       {intro ? <p className={s.intro}>{intro}</p> : null}
 
       {/* the state: amber while something stands between the desk and the calls, green once it answers */}
