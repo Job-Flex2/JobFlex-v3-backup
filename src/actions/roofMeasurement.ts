@@ -578,6 +578,7 @@ async function witnessInstant(p: {
       : undefined;
     provenance.pixelSizeM = recon.dsm.pixelSizeM;
     provenance.googleAreaSqft = recon.googleAreaSqft ?? null;
+    provenance.googleSegmentCount = recon.googleSegmentCount ?? null;
     // The raster's frame has its origin at the pin the tile was fetched
     // around (recon.origin) — the Places pin, or the cached tile's — not at
     // EagleView's own lat/lng. Rings are converted into THAT frame; the
@@ -731,8 +732,37 @@ export async function collectPendingInstant(measurementId: string): Promise<
   };
   const addressKey = instantAddressKey(input);
   if (addressKey === "|||") return { ok: true, pending: 0, updated: false };
+  // SELF-HEAL THE FACET COUNT (2026-10-16): the measured data sometimes
+  // comes back without structure_roof_facet_count at all — the tile sat
+  // on "—" forever. When the row has no measured count and the witnesses
+  // never kept Google's segment count, one building-insights call fills
+  // the ESTIMATE the page then shows as "≈N". Once per row (0 = Google
+  // saw none — tried, nothing there); an API failure leaves null so a
+  // later open may try again. Never touches the measured column.
+  let healed: typeof row | null = null;
+  if (row.facetCount == null && row.lat != null && row.lng != null && isSolarEnabled()) {
+    try {
+      const storedP = row.provenanceJson ? (JSON.parse(row.provenanceJson) as Partial<StoredProvenance>) : null;
+      const prov = (storedP?.provenance ?? {}) as MeasurementProvenance;
+      if (prov.googleSegmentCount == null) {
+        const insights = await getBuildingInsights(row.lat, row.lng);
+        prov.googleSegmentCount = insights?.segments?.length ?? 0;
+        healed = await db.roofMeasurement.update({
+          where: { id: row.id },
+          data: { provenanceJson: JSON.stringify({ calibration: storedP?.calibration ?? null, provenance: prov }) },
+        });
+      }
+    } catch (err) {
+      console.warn("[roofMeasurement] facet-estimate heal skipped:", errorMessage(err, String(err)));
+    }
+  }
   const open = await pendingOrdersFor(organizationId, addressKey, input);
-  if (!open.length) return { ok: true, pending: 0, updated: false };
+  if (!open.length) {
+    // Nothing on order — but a healed estimate is still news the page
+    // should swap in rather than keep its "—".
+    if (healed) return { ok: true, pending: 0, updated: true, measurement: toDTO(healed) };
+    return { ok: true, pending: 0, updated: false };
+  }
 
   const deps = orderDeps(organizationId, addressKey, input);
   const c = await collectPlacedOrders(open, input, deps, BACKGROUND_COLLECT_BUDGET_MS);

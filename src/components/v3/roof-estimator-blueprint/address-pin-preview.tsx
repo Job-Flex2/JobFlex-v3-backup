@@ -91,6 +91,17 @@ export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: 
   return (
     <div className={"rf-pin" + (scanning ? " is-scanning" : "")}>
       <div ref={hostRef} className="rf-pin-map" aria-label={`Map preview with a pin on ${label}`} />
+      {scanning ? (
+        // The scan is the app's own blueprint theatre: an opaque veil over
+        // the live map (which stays warm underneath for the reveal). While
+        // it is up no map imagery is on screen — so no provider chrome is
+        // either; hiding the attribution OVER visible imagery is something
+        // the imagery's terms do not allow.
+        <span className="rf-pin-veil" aria-hidden="true">
+          <span className="rf-pin-veil-dot" />
+          <span className="rf-pin-veil-label">{label}</span>
+        </span>
+      ) : null}
       {scanning ? <span className="rf-pin-sweep" aria-hidden="true" /> : null}
       {scanning ? null : (
         <p className="rf-note rf-pin-note">
