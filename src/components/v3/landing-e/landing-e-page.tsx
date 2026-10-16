@@ -82,7 +82,8 @@ import {
   type LandingVariantKey,
   type UtmParams,
 } from "./landing-variants";
-import { heroPriceLine } from "./hero-price";
+import { heroPriceLine, heroTrialLine } from "./hero-price";
+import { trialShortLine } from "@/lib/trialPolicy";
 import { MobileCta } from "./mobile-cta";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { Nav } from "./nav";
@@ -166,7 +167,20 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // The trade's price for the first screen (hero-price.ts): the cheapest plan
   // on sale that carries the trade's estimator. Null for a variant that names
   // no plan row, and when the catalogue could not be read.
-  const priceLine = deckSoon ? "Deck Studio is coming soon — price decks today with JobFlex's Smart Proposal." : heroPriceLine(v, plans);
+  // On a trade landing the line opens with the trial (hero-price.ts
+  // heroTrialLine) — unless the hero's own button already names it (the
+  // default page's "Start my 7-day free trial", the coming-soon Deck Studio's
+  // "free trial"): the first screen says the trial once.
+  const trial = trialShortLine(requiresCard, offer.days);
+  const heroButtonSaysTrial = /trial/i.test(v.heroCta ?? top);
+  const priceLine = deckSoon
+    ? "Deck Studio is coming soon — price decks today with JobFlex's Smart Proposal."
+    : variant && !heroButtonSaysTrial
+      ? heroTrialLine(v, plans, trial, requiresCard)
+      : heroPriceLine(v, plans);
+  // The sticky phone bar's note: the same few words under a button that does
+  // not say the trial itself.
+  const stickyNote = variant && !/trial/i.test(top) ? trial : null;
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is
@@ -207,7 +221,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
       <main>
         {order.map((key) => (blocks[key] ? <Fragment key={key}>{blocks[key]}</Fragment> : null))}
       </main>
-      <MobileCta registerHref={register} cta={top} />
+      <MobileCta registerHref={register} cta={top} note={stickyNote} />
       <ScrollFx />
       {/* Mouse-wheel notches glide, 0.7× the browser's step — on a desk only
           (hover, fine pointer, wider than 768px); phones, tablets and touch

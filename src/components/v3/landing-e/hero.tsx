@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { preload } from "react-dom";
 import { PhoneOverview } from "./blueprint-phone";
 import { REGISTER } from "./routes";
@@ -155,8 +156,22 @@ export function Hero({
           </div>
           </div>
           {/* The price, in the first screen (2026-10-04): under the buttons,
-              in the landing's mono caps. */}
-          {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
+              in the landing's mono caps. On a trade landing it opens with the
+              trial (2026-10-16, hero-price.ts heroTrialLine). Each "·" part
+              holds together, so a line that needs two rows breaks after a dot,
+              never inside "fence estimator included". */}
+          {priceLine ? (
+            <p className="lp-hero-price">
+              {priceLine.includes(" · ")
+                ? priceLine.split(" · ").map((part, i, parts) => (
+                    <Fragment key={i}>
+                      <span className="whitespace-nowrap">{i < parts.length - 1 ? `${part} ·` : part}</span>
+                      {i < parts.length - 1 ? " " : null}
+                    </Fragment>
+                  ))
+                : priceLine}
+            </p>
+          ) : null}
         </div>
         </HeroEntrance>
       </div>
