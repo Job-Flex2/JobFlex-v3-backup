@@ -12,6 +12,8 @@
 // projectType, description, status, source, aiCategory (specialty),
 // aiConfidence, assignee, createdAt.
 
+import { sourceFromCell } from "@/lib/leads/sources";
+
 export type Lead = {
   id: string;
   name: string;
@@ -87,6 +89,8 @@ export function splitCsvLine(line: string): string[] {
 }
 
 export function parseCsvRows(text: string): StagedRow[] {
+  // A "source" / "channel" column (2026-10-16) tags each row with where it came
+  // from (lib/leads/sources sourceFromCell); without one a row is "Imported list".
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length === 0) return [];
   const first = splitCsvLine(lines[0]).map((c) => c.toLowerCase());
@@ -97,6 +101,7 @@ export function parseCsvRows(text: string): StagedRow[] {
     phone: hasHeader ? first.findIndex((c) => c.includes("phone")) : 2,
     project: hasHeader ? first.findIndex((c) => c.includes("project")) : 3,
     description: hasHeader ? first.findIndex((c) => c.includes("desc")) : 4,
+    source: hasHeader ? first.findIndex((c) => c.includes("source") || c.includes("channel") || c === "from" || c.includes("lead from")) : -1,
   };
   const rows = hasHeader ? lines.slice(1) : lines;
   const pick = (cells: string[], i: number) => (i >= 0 && cells[i] ? cells[i] : null);
@@ -109,7 +114,7 @@ export function parseCsvRows(text: string): StagedRow[] {
       phone: pick(cells, idx.phone),
       project: pick(cells, idx.project),
       description: pick(cells, idx.description),
-      source: "IMPORT",
+      source: sourceFromCell(pick(cells, idx.source)),
     }));
 }
 

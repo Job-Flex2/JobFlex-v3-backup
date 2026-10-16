@@ -54,7 +54,8 @@ async function appointmentFacts(appointmentId: string) {
 
 /** A visit went on the calendar — by a member (`actorUserId`, who is not
  *  texted about their own click) or online (`by: "online"`). */
-export async function textAppointmentBooked(appointmentId: string, actorUserId: string | null, by: "online" | null = null): Promise<void> {
+/** `by`: "online" for the booking page, a name ("the AI desk") for anyone else who booked it. */
+export async function textAppointmentBooked(appointmentId: string, actorUserId: string | null, by: "online" | string | null = null): Promise<void> {
   try {
     const a = await appointmentFacts(appointmentId);
     if (!a) return;

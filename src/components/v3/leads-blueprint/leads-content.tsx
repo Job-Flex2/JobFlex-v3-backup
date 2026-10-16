@@ -24,6 +24,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { initLeadsContent, type LeadsHandle } from "./leads-behavior";
 import { STAGES, isMetaImportedLead, type Lead, type Offer } from "./leads-data";
+import { PICKABLE_SOURCES } from "@/lib/leads/sources";
 
 /**
  * @param leads the org's real pipeline, read in the page's server component.
@@ -106,6 +107,23 @@ export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Le
 
       {/* TAB: ALL */}
       <section className="ppanel" data-panel="all">
+        {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): the ones JobFlex sent
+            apart from the shop's own, and the shop's own by source. Counts and
+            chips are painted by the behavior module (renderOrigin). */}
+        <div className="lorigin" id="lOrigin">
+          <div className="lseg" role="group" aria-label="Where the leads came from">
+            <button className="lseg-btn on" type="button" data-side="" aria-pressed="true">
+              All<span className="lseg-n" data-side-n="all">0</span>
+            </button>
+            <button className="lseg-btn lseg-btn--jf" type="button" data-side="jobflex" aria-pressed="false">
+              <span className="ljf" aria-hidden="true">J</span>From JobFlex<span className="lseg-n" data-side-n="jobflex">0</span>
+            </button>
+            <button className="lseg-btn" type="button" data-side="own" aria-pressed="false">
+              Your own leads<span className="lseg-n" data-side-n="own">0</span>
+            </button>
+          </div>
+          <div className="lsrcs" id="lSrcs"></div>
+        </div>
         <div className="lbar">
           <label className="lsearch">
             <svg className="ic">
@@ -253,6 +271,15 @@ export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Le
               <label className="fld"><span className="fld-lbl">Email</span><input className="fld-in" id="mEmail" placeholder="name@mail.com" /></label>
               <label className="fld"><span className="fld-lbl">Phone</span><input className="fld-in" id="mPhone" placeholder="(425) 555-0112" /></label>
               <label className="fld"><span className="fld-lbl">Project type</span><input className="fld-in" id="mProject" placeholder="Metal roof repair" /></label>
+              {/* Where it came from — so "Your own leads" can say which source pays. */}
+              <label className="fld"><span className="fld-lbl">Where it came from</span>
+                <select className="fld-in" id="mSource" defaultValue="">
+                  <option value="">Added by hand</option>
+                  {PICKABLE_SOURCES.map((src) => (
+                    <option key={src.key} value={src.stored}>{src.label}</option>
+                  ))}
+                </select>
+              </label>
               <div className="fld-act"><button className="btn btn-ghost btn--sm" type="button" id="mAdd"><svg className="ic"><use href="#i-plus" /></svg>Add to import list</button></div>
             </div>
 
@@ -260,6 +287,7 @@ export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Le
               <label className="fld"><span className="fld-lbl">Paste the email</span>
                 <textarea className="fld-area" id="pasteBox" placeholder="Paste the full email here — we'll pull out the name, email and phone we can find." />
               </label>
+              <p className="fld-note">An email from Angi, Thumbtack, Yelp, Google, Houzz, Nextdoor or Facebook is tagged with that source by itself.</p>
               <div className="fld-act"><button className="btn btn-ghost btn--sm" type="button" id="pasteAdd"><svg className="ic"><use href="#i-plus" /></svg>Add to import list</button></div>
             </div>
 

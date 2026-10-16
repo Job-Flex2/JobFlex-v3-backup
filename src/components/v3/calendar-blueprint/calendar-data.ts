@@ -41,6 +41,20 @@ export type CalEvent = {
   selfOnly?: boolean;
   /** Spans whole days: rendered in the week's all-day band, never in the time grid. */
   allDay?: boolean;
+  /** Appointment only — how the visit was booked (lib/calendar/visitVia):
+   *  the AI desk on a call, the customer online, a service plan, or the team.
+   *  The card wears it as a tag; the sheet says it in words. */
+  via?: "ai-desk" | "online" | "plan" | "team";
+  /** "By the AI desk, on a phone call · Oct 16". */
+  booked?: string;
+  /** What the visit is for: the booked service, the plan visit, the lead's project. */
+  visitFor?: string;
+  /** Booked at the member price (an active service plan). */
+  member?: boolean;
+  leadId?: string;
+  clientId?: string;
+  /** The AI desk call that booked it. */
+  callSid?: string;
   /**
    * Lane this block last occupied in the week grid.
    *

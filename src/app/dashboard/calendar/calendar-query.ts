@@ -23,6 +23,7 @@ import {
 import { roleLabel } from "@/lib/prismaEnums";
 import { db } from "@/lib/db";
 import { countNewForSurface } from "@/lib/badgeCounts";
+import { aptSourceKey, bookedLine, parseAptSource, visitVia } from "@/lib/calendar/visitVia";
 import type {
   CalEvent,
   CalKind,
@@ -173,10 +174,15 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
       where: appointmentWhere,
       orderBy: { startsAt: "asc" },
       include: {
-        lead: { select: { name: true, projectType: true } },
+        lead: { select: { name: true, projectType: true, phone: true, address: true, city: true, state: true } },
         client: { select: { name: true, phone: true, address: true, city: true, state: true } },
         proposal: { select: { title: true } },
         assignments: { select: { workerId: true } },
+        // How the visit was booked (lib/calendar/visitVia): the booking page or
+        // the AI desk leave a Booking, a service plan a ServicePlanVisit.
+        booking: { select: { serviceLabel: true, notes: true, phone: true, address: true, member: true } },
+        planVisit: { select: { label: true, plan: { select: { name: true } } } },
+        createdBy: { select: { name: true } },
       },
     }),
     db.blockedTime.findMany({
@@ -192,6 +198,15 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
     }),
     db.membership.findMany({ where: { organizationId }, select: { userId: true, role: true } }),
   ]);
+
+  // Who booked each visit — the AI desk and the booking page leave a marker
+  // beside the appointment. Started now and awaited after the picker reads, so
+  // it rides alongside them instead of adding a round trip.
+  const aptMarkers = (
+    appointments.length
+      ? db.syncState.findMany({ where: { key: { in: appointments.map((a) => aptSourceKey(a.id)) } }, select: { key: true, cursor: true } })
+      : Promise.resolve([] as Array<{ key: string; cursor: string }>)
+  ).catch(() => [] as Array<{ key: string; cursor: string }>);
 
   // Dispatch surfaces are manager-only, same as the archived page.
   const [unscheduledJobs, pendingAssignments] = canManage
@@ -317,21 +332,35 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
     allDay: isAllDay(e.startsAt, e.endsAt) || undefined,
   }));
 
-  const appointmentEvents: CalEvent[] = appointments.map((a) => ({
-    id: `apt:${a.id}`,
-    rid: a.id,
-    kind: "appointment" as const,
-    title: a.title,
-    start: a.startsAt,
-    end: a.endsAt,
-    status: a.status,
-    workers: a.assignments.map((x) => x.workerId),
-    client: a.lead?.name ?? a.client?.name ?? a.proposal?.title ?? undefined,
-    phone: a.client?.phone ?? undefined,
-    addr: clientAddr(a.client) ?? undefined,
-    notes: a.notes ?? undefined,
-    allDay: isAllDay(a.startsAt, a.endsAt) || undefined,
-  }));
+  const markerById = new Map((await aptMarkers).map((r) => [r.key.slice(aptSourceKey("").length), parseAptSource(r.cursor)]));
+  const appointmentEvents: CalEvent[] = appointments.map((a) => {
+    const marker = markerById.get(a.id) ?? null;
+    const via = visitVia({ marker, booking: a.booking, planVisit: a.planVisit, notes: a.notes });
+    return {
+      id: `apt:${a.id}`,
+      rid: a.id,
+      kind: "appointment" as const,
+      title: a.title,
+      start: a.startsAt,
+      end: a.endsAt,
+      status: a.status,
+      workers: a.assignments.map((x) => x.workerId),
+      client: a.lead?.name ?? a.client?.name ?? a.proposal?.title ?? undefined,
+      // A lead's visit used to show no phone and no address: only the client's
+      // were read. The booking carries what the caller or the form gave.
+      phone: a.client?.phone ?? a.lead?.phone ?? a.booking?.phone ?? undefined,
+      addr: clientAddr(a.client) ?? a.booking?.address ?? clientAddr(a.lead) ?? undefined,
+      notes: a.notes ?? undefined,
+      allDay: isAllDay(a.startsAt, a.endsAt) || undefined,
+      via,
+      booked: bookedLine(via, { by: a.createdBy?.name ?? null, plan: a.planVisit?.plan.name ?? null, at: marker?.at ? new Date(marker.at) : a.createdAt }),
+      visitFor: a.booking?.serviceLabel ?? a.planVisit?.label ?? a.lead?.projectType ?? undefined,
+      member: a.booking?.member || undefined,
+      leadId: a.leadId ?? undefined,
+      clientId: a.clientId ?? undefined,
+      callSid: marker?.callSid ?? undefined,
+    };
+  });
 
   const blockedEvents: CalEvent[] = blockedTimes.map((b) => {
     // Personal blocks land on their owner's team row; an ownerless (org-wide)
