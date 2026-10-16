@@ -5,7 +5,8 @@
 // runtime mutations (drag-to-reschedule, create, delete, confirm) start from
 // the same state on every navigation.
 
-export type CalKind = "job" | "appointment" | "blocked";
+/** "desk": hours reserved for the AI desk to book into (2026-10-16). */
+export type CalKind = "job" | "appointment" | "blocked" | "desk";
 
 export type CalEvent = {
   /**
@@ -41,6 +42,9 @@ export type CalEvent = {
   selfOnly?: boolean;
   /** Spans whole days: rendered in the week's all-day band, never in the time grid. */
   allDay?: boolean;
+  /** "desk" only — hours reserved for the AI desk (lib/deskHours): whose (none = anyone), and whether every week. `rid` is the reservation. */
+  deskUserId?: string;
+  deskWeekly?: boolean;
   /** Appointment only — how the visit was booked (lib/calendar/visitVia):
    *  the AI desk on a call, the customer online, a service plan, or the team.
    *  The card wears it as a tag; the sheet says it in words. */
@@ -68,7 +72,8 @@ export type CalEvent = {
   lane?: number;
 };
 
-export type CalWorker = { id: string; name: string; role: string };
+/** `userId`: the login behind the crew profile — reserved AI desk hours are kept by user (lib/deskHours). */
+export type CalWorker = { id: string; name: string; role: string; userId?: string };
 /** Per-worker JobAssignment response for a job event's crew, keyed by
  *  workerId — PENDING | ACCEPTED | DECLINED | COMPLETED. Absent on fixture
  *  rows and non-job events. */
@@ -148,7 +153,7 @@ export const WG_ROW = 54;
 export const SNAP_MIN = 15;
 export const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const DOW1 = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-export const KIND_IC: Record<string, string> = { job: 'i-hardhat', appointment: 'i-cal', blocked: 'i-ban' };
+export const KIND_IC: Record<string, string> = { job: 'i-hardhat', appointment: 'i-cal', blocked: 'i-ban', desk: 'i-phone' };
 
 /** Link targets for the "link a record" picker. A job event links to work
  *  (jobs, proposals); an appointment is a meeting, so it also links to the
@@ -206,6 +211,8 @@ export type CalendarSeed = {
    * field worker gets them read-only rather than a server rejection per click.
    */
   canManage: boolean;
+  /** The AI desk's reserved hours: where it books from, the shop's clock, who I am, who hours can be reserved for. */
+  desk?: { mode: "open-hours" | "reserved"; timeZone: string; me: string; people: Array<{ userId: string; name: string }> };
 };
 
 /** Which tabs each event kind offers, in order. `all` is prepended by the UI. */

@@ -24,6 +24,7 @@ import { roleLabel } from "@/lib/prismaEnums";
 import { db } from "@/lib/db";
 import { countNewForSurface } from "@/lib/badgeCounts";
 import { aptSourceKey, bookedLine, parseAptSource, visitVia } from "@/lib/calendar/visitVia";
+import { deskHoursKey, expandWindows, parseDeskHours } from "@/lib/deskHours";
 import type {
   CalEvent,
   CalKind,
@@ -114,6 +115,8 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
   const createKinds: CalKind[] = [];
   if (!sales && !estimator) createKinds.push("job");
   if (!worker && !estimator) createKinds.push("appointment", "blocked");
+  // Hours reserved for the AI desk to book into (lib/deskHours, 2026-10-16): anyone who takes booked visits.
+  if (!worker) createKinds.push("desk");
 
   const self = limited
     ? await db.workerProfile.findUnique({ where: { userId }, select: { id: true } })
@@ -196,8 +199,14 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
       select: { id: true, userId: true, displayName: true },
       orderBy: { displayName: "asc" },
     }),
-    db.membership.findMany({ where: { organizationId }, select: { userId: true, role: true } }),
+    db.membership.findMany({ where: { organizationId }, select: { userId: true, role: true, user: { select: { name: true, email: true } } } }),
   ]);
+
+  // The hours reserved for the AI desk, and the shop's clock they are written on — beside the picker reads too.
+  const deskP = Promise.all([
+    db.syncState.findUnique({ where: { key: deskHoursKey(organizationId) }, select: { cursor: true } }),
+    db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } }),
+  ]).catch(() => [null, null] as const);
 
   // Who booked each visit — the AI desk and the booking page leave a marker
   // beside the appointment. Started now and awaited after the picker reads, so
@@ -304,6 +313,7 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
     id: w.id,
     name: w.displayName,
     role: roleLabel(roleByUser.get(w.userId) ?? "INSTALLER"),
+    userId: w.userId,
   }));
 
   const jobEvents: CalEvent[] = events.map((e) => ({
@@ -457,9 +467,42 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
     inboxUnseen = await countNewForSurface("crewInbox", organizationId, seen?.seenAt, userId);
   }
 
+  // Reserved hours as events (2026-10-16): from today to six months ahead, each on its person's row — a weekly
+  // reservation is not drawn on the weeks before it was made. A limited
+  // role sees their own and the company's; a manager everyone's.
+  const [deskRow, deskOrg] = await deskP;
+  const deskHours = parseDeskHours(deskRow?.cursor);
+  const deskTz = deskOrg?.timezone || "America/New_York";
+  const nameByUser = new Map(memberships.map((m) => [m.userId, m.user?.name || m.user?.email || "Team member"]));
+  const deskEvents: CalEvent[] = expandWindows(
+    deskHours.windows.filter((w) => canManage || !w.userId || w.userId === userId),
+    new Date(),
+    183,
+    deskTz,
+  ).map((sp) => {
+    const wid = sp.userId ? workerIdByUserId.get(sp.userId) : undefined;
+    return {
+      id: `desk:${sp.windowId}:${sp.startsAt.getTime()}`,
+      rid: sp.windowId,
+      kind: "desk" as const,
+      title: `AI desk hours · ${sp.userId ? nameByUser.get(sp.userId) ?? "Former team member" : "anyone"}`,
+      start: sp.startsAt,
+      end: sp.endsAt,
+      status: "SCHEDULED",
+      workers: wid ? [wid] : [],
+      deskUserId: sp.userId ?? undefined,
+      deskWeekly: sp.weekly || undefined,
+    };
+  });
+  // Who hours can be reserved for from the calendar: a manager picks anyone who takes visits; others reserve their own.
+  const deskPeople = canManage
+    ? memberships.filter((m) => !isWorkerRole(m.role)).map((m) => ({ userId: m.userId, name: nameByUser.get(m.userId) ?? "Team member" }))
+    : [{ userId, name: nameByUser.get(userId) ?? "Me" }];
+
   return {
     today: new Date().toISOString(),
-    events: [...jobEvents, ...appointmentEvents, ...blockedEvents],
+    events: [...jobEvents, ...appointmentEvents, ...blockedEvents, ...deskEvents],
+    desk: { mode: deskHours.mode, timeZone: deskTz, me: userId, people: deskPeople },
     workers,
     tray,
     inbox,

@@ -9,6 +9,7 @@ import { previewDeskTimes, setCompanyTimezone } from "@/actions/aiDesk";
 import { timezoneWords, US_TIMEZONES } from "@/lib/aiDesk/shared";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
+import { DeskHours } from "./desk-hours";
 
 export function DeskBooking({ desk }: { desk: DeskSettingsData }) {
   const router = useRouter();
@@ -126,6 +127,9 @@ export function DeskBooking({ desk }: { desk: DeskSettingsData }) {
           {previewNote ? <p className={s.note}>{previewNote}</p> : null}
         </div>
       ) : null}
+
+      {/* where the desk books from, and the hours reserved for it (2026-10-16) */}
+      <DeskHours hoursWords={desk.booking.hoursWords} />
 
       {note ? (
         <p className={`${s.note} ${s.noteOk}`} role="status">

@@ -2561,3 +2561,25 @@
 .bp :global(.content #trayBtn) { position: relative; }
 .bp :global(.content #trayBtn .ic) { transform: rotate(-90deg); }
 .bp :global(.content #trayBtn.active .ic) { transform: rotate(90deg); }
+
+/* AI DESK HOURS (2026-10-16) — hours a person, or anyone at the company, keeps open for the AI desk to book visits
+   into. Open time, not a booking: a dashed teal frame over light stripes, so a real visit booked inside it reads
+   on top of it at a glance. Not draggable — the sheet removes them, the form reserves new ones. */
+.bp :global(.content .evc--desk) {
+  border: 1.5px dashed #0f766e;
+  border-left: 3px solid #0f766e;
+  border-radius: 7px;
+  background: repeating-linear-gradient(135deg, rgba(15, 118, 110, 0.09) 0 6px, transparent 6px 12px), #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+.bp :global(.content .evc--desk:hover) {
+  border-top-color: #0f766e;
+  border-right-color: #0f766e;
+  border-bottom-color: #0f766e;
+}
+.bp :global(.content .evc--desk .evc-t .ic) { color: #0f766e; }
+.bp :global(.content .wg-ev.evc--desk:hover) { box-shadow: 3px 3px 0 #0f766e; }
+.bp :global(.content .sf-note) { margin: 0 0 14px; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); }
+.bp :global(.content .sf-check) { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+.bp :global(.content .sf-check input) { width: 16px; height: 16px; accent-color: #0f766e; }
