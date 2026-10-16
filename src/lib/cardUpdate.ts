@@ -19,6 +19,7 @@ import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/sdk/stripe";
 import { invoiceSubscriptionId } from "@/lib/stripeCompat";
 import { syncSubscriptionFromStripe } from "@/lib/stripeSync";
+import type { ShopOnJobflex } from "@/lib/email/build/billing";
 
 export const CARD_UPDATE_PURPOSE = "card-update";
 
@@ -158,6 +159,8 @@ export async function sendDunningEmail(invoice: Stripe.Invoice): Promise<"first"
   ]);
   const base = (await appBaseUrl()).replace(/\/$/, "");
   const planName = await getPlanDisplayName(mirror.plan).catch(() => mirror.plan);
+  // The letter leads with the shop's own work, not the bill (owner, 2026-10-16).
+  const [shop, tools] = await Promise.all([shopOnJobflex(mirror.organizationId), planTools(mirror.plan)]);
   const { subject, html } = renderEmail(
     buildPaymentFailed({
       name: to.name,
@@ -166,8 +169,38 @@ export async function sendDunningEmail(invoice: Stripe.Invoice): Promise<"first"
       nextAttemptAt: invoice.next_payment_attempt ? new Date(invoice.next_payment_attempt * 1000) : null,
       href: `${base}/dashboard/subscription`,
       final,
+      shop,
+      tools,
     }),
   );
   await sendEmail({ to: to.email, subject, html });
   return which;
+}
+
+/** What the shop has running on JobFlex — the payment letters lead with it (lib/email/build/billing). Never throws. */
+export async function shopOnJobflex(orgId: string, now = new Date()): Promise<ShopOnJobflex | null> {
+  try {
+    const since = new Date(now.getTime() - 30 * 86_400_000);
+    const [sent, clients, jobsOpen, leadsOffered] = await Promise.all([
+      db.proposal.aggregate({ where: { organizationId: orgId, sentAt: { gte: since } }, _count: { _all: true }, _sum: { total: true } }),
+      db.client.count({ where: { organizationId: orgId, deletedAt: null } }),
+      db.job.count({ where: { organizationId: orgId, status: { in: ["SCHEDULED", "IN_PROGRESS"] } } }),
+      db.leadOffer.count({ where: { organizationId: orgId, createdAt: { gte: since } } }),
+    ]);
+    return { proposalsSent: sent._count._all, quotedCents: Math.round((sent._sum.total ?? 0) * 100), clients, jobsOpen, leadsOffered };
+  } catch (err) {
+    console.warn("[cardUpdate] shop numbers unavailable:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/** The plan's headline tools — its own lines in the catalog, not the roll-up or the seat count. Never throws. */
+export async function planTools(plan: string): Promise<string[]> {
+  try {
+    const { getPlanCatalog } = await import("@/lib/planCatalogServer");
+    const row = (await getPlanCatalog({ includeInactive: true })).find((p) => p.slug === plan.toLowerCase());
+    return (row?.features ?? []).map((f) => f.trim()).filter((f) => f && !/^everything in/i.test(f) && !/\busers?\b/i.test(f));
+  } catch {
+    return [];
+  }
 }

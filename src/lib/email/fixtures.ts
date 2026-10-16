@@ -575,13 +575,19 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
     id: "b-payment-failed",
     label: "18f · buildPaymentFailed()",
     note: "A renewal charge was declined; Stripe will retry (webhook invoice.payment_failed, first attempt).",
-    doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: new Date("2026-10-16T17:00:00Z"), href: "https://example.com/dashboard/subscription", final: false }),
+    doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: new Date("2026-10-25T17:00:00Z"), href: "https://example.com/dashboard/subscription", final: false, shop: { proposalsSent: 6, quotedCents: 1840000, clients: 14, jobsOpen: 3, leadsOffered: 2 }, tools: ["Smart proposal generation", "Roof estimator", "Fence estimator"] }),
+  },
+  {
+    id: "b-payment-failed-new",
+    label: "18f′ · buildPaymentFailed() — a brand-new shop",
+    note: "The first charge after the trial declined, and the shop has no numbers yet: the plan's own tools stand in.",
+    doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: new Date("2026-10-25T17:00:00Z"), href: "https://example.com/dashboard/subscription", final: false, shop: { proposalsSent: 0, quotedCents: 0, clients: 0, jobsOpen: 0, leadsOffered: 0 }, tools: ["Smart proposal generation", "Roof estimator", "Fence estimator"] }),
   },
   {
     id: "b-payment-failed-final",
     label: "18g · buildPaymentFailed({ final: true })",
     note: "Stripe's last try was declined too: the account has moved to the Free plan (UNPAID or CANCELED).",
-    doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: null, href: "https://example.com/dashboard/subscription", final: true }),
+    doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: null, href: "https://example.com/dashboard/subscription", final: true, shop: { proposalsSent: 6, quotedCents: 1840000, clients: 14, jobsOpen: 3, leadsOffered: 2 }, tools: ["Smart proposal generation", "Roof estimator", "Fence estimator"] }),
   },
   {
     id: "b-free-switch",

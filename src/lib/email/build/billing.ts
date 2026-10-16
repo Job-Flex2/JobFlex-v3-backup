@@ -1,4 +1,4 @@
-// A FAILED SUBSCRIPTION PAYMENT (owner, 2026-10-07; lib/cardUpdate): the
+// A FAILED SUBSCRIPTION PAYMENT (owner, 2026-10-07; rewritten 2026-10-16 to lead with the shop, not the money; lib/cardUpdate): the
 // first failed charge, and Stripe's last try. Platform emails — JobFlex's own
 // lockup — built the way build/trial.ts builds its reminders: pure, no I/O,
 // one box, one button (to /dashboard/subscription, where the ribbon's
@@ -22,6 +22,24 @@ export interface PaymentFailedInput {
   href: string;
   /** True when Stripe has stopped retrying: the account has moved to Free. */
   final: boolean;
+  /** What the shop has running on JobFlex (lib/cardUpdate shopOnJobflex) — the email leads with it. Null or all zero:
+   *  the plan's own tools stand in. */
+  shop?: ShopOnJobflex | null;
+  /** The plan's headline tools ("Smart Proposal", "Roof estimator"…): said when the shop has no numbers yet, and on
+   *  the last email as what is paused. */
+  tools?: string[];
+}
+
+/** The shop's own work, as the payment emails say it. */
+export interface ShopOnJobflex {
+  /** Proposals sent in the last 30 days, and what they quoted. */
+  proposalsSent: number;
+  quotedCents: number;
+  clients: number;
+  /** Jobs scheduled or under way. */
+  jobsOpen: number;
+  /** Homeowner leads offered in the last 30 days. */
+  leadsOffered: number;
 }
 
 function money(cents: number): string {
@@ -29,46 +47,91 @@ function money(cents: number): string {
   return Number.isInteger(d) ? `$${d}` : `$${d.toFixed(2)}`;
 }
 
+/** "$18,400" — a quoted total, whole dollars. */
+function dollars(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+}
+
+
+/** "Smart Proposal, Roof estimator and Fence estimator". */
+function listWords(items: readonly string[]): string {
+  if (items.length < 2) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/** The shop's numbers as box rows — only the ones that are more than zero. */
+function shopRows(shop: ShopOnJobflex | null | undefined): BoxRow[] {
+  if (!shop) return [];
+  const rows: BoxRow[] = [];
+  if (shop.proposalsSent > 0)
+    rows.push({ type: "field", label: "Proposals sent · 30 days", value: shop.quotedCents > 0 ? `${shop.proposalsSent} · ${dollars(shop.quotedCents)} quoted` : String(shop.proposalsSent) });
+  if (shop.clients > 0) rows.push({ type: "field", label: "Clients", value: String(shop.clients) });
+  if (shop.jobsOpen > 0) rows.push({ type: "field", label: "Jobs on the schedule", value: String(shop.jobsOpen) });
+  if (shop.leadsOffered > 0) rows.push({ type: "field", label: "Homeowner leads · 30 days", value: String(shop.leadsOffered) });
+  return rows;
+}
+
+/* THE TONE (owner, 2026-10-16: "doesn't look like we're just chasing their money — they need JobFlex more than we
+   need their money"). Both letters lead with THEIR shop — the proposals, clients and jobs it has running on JobFlex,
+   in its own numbers when it has them — and say plainly that nothing is lost. The card is the small thing that keeps
+   that running; the amount is said once, in passing, never as the headline. Honest about what happens next: the
+   date of the next try, and on the last letter what is paused and what still works (Free keeps the client portal). */
 export function buildPaymentFailed(i: PaymentFailedInput): EmailDoc {
   const first = i.name?.trim().split(/\s+/)[0] || "there";
   const amount = money(i.amountCents);
-  const box: BoxRow[] = [
-    { type: "field", label: "Plan", value: i.planName },
-    { type: "field", label: "Amount due", value: amount },
-    i.final
-      ? { type: "cond", label: "Status", chip: "Moved to Free", tone: "bad" }
-      : { type: "cond", label: "Next try", chip: i.nextAttemptAt ? DATE_FMT.format(i.nextAttemptAt) : "Soon", tone: "warn" },
-  ];
+  const rows = shopRows(i.shop);
+  const tools = (i.tools ?? []).slice(0, 4);
+  const hasNumbers = rows.length > 0;
   if (i.final) {
+    const box: BoxRow[] = [
+      ...(hasNumbers ? rows : [{ type: "field" as const, label: "Plan", value: i.planName }]),
+      { type: "cond", label: "Paused for now", chip: tools.length ? `${tools.length} ${i.planName} tool${tools.length === 1 ? "" : "s"}` : i.planName, tone: "warn" },
+    ];
     return {
-      subject: "Your JobFlex plan has moved to Free — the payment didn't go through",
+      subject: `Everything you built is safe — ${i.planName} is paused`,
       lockup: PLATFORM_LOCKUP,
-      kicker: { text: "Payment failed", tone: "bad" },
-      headline: "Your plan has moved to Free",
+      kicker: { text: `${i.planName} paused`, tone: "warn" },
+      headline: "Everything you built is still here",
       prose: [
-        `Hi ${first} — we tried your card several times for ${i.planName} (${amount}) and every try was declined, so your account has moved to the Free plan.`,
-        `Everything you made is still there — proposals, clients and jobs stay open. Update your card to get ${i.planName} back.`,
+        `Hi ${first} — we tried the card for ${i.planName} a few times and the bank didn't approve it, so we've paused ${i.planName} and your shop is on the Free plan for now.`,
+        hasNumbers
+          ? "Nothing is deleted, and your clients can still open and sign what you've sent them. Here's your shop, waiting for you:"
+          : "Nothing is deleted, and your clients can still open and sign what you've sent them.",
       ],
       box,
-      cta: { label: `Update card to get ${i.planName} back`, href: i.href },
-      after: ["Questions? Reply to this email and we'll help."],
+      cta: { label: `Turn ${i.planName} back on`, href: i.href },
+      after: [
+        `It picks up exactly where you left off — same clients, same proposals, same settings.${tools.length ? ` ${listWords(tools)} ${tools.length === 1 ? "comes" : "come"} straight back.` : ""}`,
+        "Need something smaller right now? The same page has every plan — pick the one that fits your season.",
+        "Questions? Reply to this email and we'll help.",
+      ],
       footer: PLATFORM_FOOTER,
     };
   }
+  const nextTry = i.nextAttemptAt ? DATE_FMT.format(i.nextAttemptAt) : null;
+  const box: BoxRow[] = [
+    ...(hasNumbers ? rows : tools.length ? [{ type: "field" as const, label: `In ${i.planName}`, value: listWords(tools) }] : [{ type: "field" as const, label: "Plan", value: i.planName }]),
+    { type: "cond", label: "Your shop", chip: "Open — nothing paused", tone: "ok" },
+  ];
   return {
-    subject: "Your JobFlex payment didn't go through",
+    subject: "Your shop is still open — your card just needs a quick look",
     lockup: PLATFORM_LOCKUP,
-    kicker: { text: "Payment failed", tone: "warn" },
-    headline: "Update your card to keep your plan",
+    kicker: { text: "Card didn't go through", tone: "warn" },
+    headline: "Keep your shop running",
     prose: [
-      `Hi ${first} — the ${amount} charge for ${i.planName} was declined.`,
-      i.nextAttemptAt
-        ? `Your workspace stays open, and we'll try the card again on ${DATE_FMT.format(i.nextAttemptAt)}. Update it now and the payment goes through right away.`
-        : "Your workspace stays open for now. Update your card and the payment goes through right away.",
+      `Hi ${first} — your bank didn't approve this month's ${i.planName} (${amount}). It happens all the time: a new card, a daily limit, a bank being careful.`,
+      hasNumbers
+        ? "Nothing is locked and nothing is lost. Here's what your shop has running on JobFlex right now:"
+        : "Nothing is locked and nothing is lost — your proposals, clients and tools are right where you left them.",
     ],
     box,
-    cta: { label: "Update card", href: i.href },
-    after: ["Questions? Reply to this email and we'll help."],
+    cta: { label: "Keep my shop running", href: i.href },
+    after: [
+      nextTry
+        ? `Updating the card takes a minute and sorts it at once. If you'd rather, we'll simply try the same card again on ${nextTry}.`
+        : "Updating the card takes a minute and sorts it at once.",
+      "Questions, or want a different plan? Reply to this email and we'll help.",
+    ],
     footer: PLATFORM_FOOTER,
   };
 }
