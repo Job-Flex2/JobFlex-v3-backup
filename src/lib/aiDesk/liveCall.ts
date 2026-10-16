@@ -9,10 +9,11 @@
 //   finishCall  the transcript and outcome on the Phone page; the summary as before
 import { db } from "@/lib/db";
 import { toE164 } from "@/lib/phone";
-import { availabilityFor, createBooking, settingsOf } from "@/lib/bookingBook";
+import { createBooking, deskAvailabilityFor, settingsOf } from "@/lib/bookingBook";
 import { slotLabel, type BookingService } from "@/lib/booking";
 import { attachTranscript } from "@/lib/aiPhoneCalls";
 import { logActivity } from "@/lib/activityLog";
+import { emailFromNotes } from "./intakeNotes";
 import { companyFacts } from "./facts";
 import { readDeskSettings } from "./numbers";
 import { deskInstructions, profileFromFacts } from "./profile";
@@ -92,7 +93,8 @@ export async function openTimes(organizationId: string, serviceWords: string | n
   if (!settings.enabled) return { ok: false, error: "The company does not book visits by phone right now — offer to take a message instead." };
   const service = serviceFor(settings.services, serviceWords);
   if (!service) return { ok: false, error: "No visit types are set up — offer to take a message." };
-  const daysOut = await availabilityFor(org, service, now);
+  // Open hours, or — when the company chose them — only the hours someone reserved for the desk.
+  const { mode, days: daysOut } = await deskAvailabilityFor(org, service, now);
   const tz = org.timezone || "America/New_York";
   const times: OpenTime[] = [];
   for (const d of daysOut.slice(0, Math.max(1, Math.min(days, 14)))) {
@@ -100,7 +102,7 @@ export async function openTimes(organizationId: string, serviceWords: string | n
     for (const s of d.slots.slice(0, 2)) times.push({ id: `${service.key}|${s.startsAt.toISOString()}`, label: slotLabel(s, tz, settings.arrivalWindow), startsAt: s.startsAt.toISOString() });
     if (times.length >= 6) break;
   }
-  if (!times.length) return { ok: false, error: "Nothing is open in that time — offer to take a message so the office can find a time." };
+  if (!times.length) return { ok: false, error: mode === "reserved" ? "No reserved hours are open in that time — offer to take a message so the office can find a time." : "Nothing is open in that time — offer to take a message so the office can find a time." };
   return { ok: true, times, note: `${service.label} — ${service.priceText}${settings.arrivalWindow ? `, a ${settings.arrivalWindow / 60}-hour arrival window` : ""}.`, serviceKey: service.key };
 }
 
@@ -115,7 +117,7 @@ export async function bookVisit(organizationId: string, callSid: string, input: 
   // channel "ai-desk": the visit is tagged as the desk's on the calendar, the
   // office text says "by the AI desk", a caller the shop knows by this number
   // is booked as that client (or onto their open lead) instead of a new lead.
-  const r = await createBooking(org, { serviceKey, startsAtISO, name, phone, address: input.address?.trim().slice(0, 200) || null, notes: input.notes?.trim().slice(0, 300) || null, answers: [], channel: "ai-desk", callSid });
+  const r = await createBooking(org, { serviceKey, startsAtISO, name, phone, address: input.address?.trim().slice(0, 200) || null, email: emailFromNotes(input.notes), notes: input.notes?.trim().slice(0, 1500) || null, answers: [], channel: "ai-desk", callSid });
   if (!r.ok) return r;
   const appt = await db.booking.findUnique({ where: { manageToken: r.manageToken }, select: { appointmentId: true, leadId: true } });
   // The call row points at the lead it booked, so the phone log opens it.
@@ -126,8 +128,8 @@ export async function bookVisit(organizationId: string, callSid: string, input: 
 export async function takeMessage(organizationId: string, callSid: string, input: { name: string; phone: string; about: string }): Promise<{ ok: true } | { ok: false; error: string }> {
   const name = input.name.trim().slice(0, 80) || "Caller";
   const phone = toE164(input.phone) ?? input.phone.trim().slice(0, 30);
-  const about = input.about.trim().slice(0, 1000);
-  const lead = await db.lead.create({ data: { organizationId, name, phone, description: about, source: "phone", status: "NEW" }, select: { id: true } });
+  const about = input.about.trim().slice(0, 2000);
+  const lead = await db.lead.create({ data: { organizationId, name, phone, email: emailFromNotes(about), description: about, source: "phone", status: "NEW" }, select: { id: true } });
   await db.aiPhoneCall.updateMany({ where: { callSid }, data: { leadId: lead.id, summary: `Message from ${name}: ${about.slice(0, 100)}` } });
   await logActivity({ organizationId, actorId: null, kind: "CREATED", summary: `The AI desk took a message from ${name} (${phone}): ${about.slice(0, 120)}`, leadId: lead.id });
   return { ok: true };

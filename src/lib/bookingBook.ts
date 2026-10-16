@@ -14,6 +14,7 @@ import { textAppointmentBooked, textAppointmentCancelled, textAppointmentMoved a
 import { parseTradeTypes } from "@/lib/tradeTypes";
 import { toE164 } from "@/lib/phone";
 import { aptSourceKey, bookingNoteHead, type AptSource } from "@/lib/calendar/visitVia";
+import { deskHoursKey, parseDeskHours, reservedSlots, type DeskDaySlots, type DeskHours } from "@/lib/deskHours";
 import { availableSlots, bookingScope, parseBookingSettings, slotLabel, type BookingService, type BookingSettings, type Busy, type DaySlots } from "@/lib/booking";
 
 const ORG_SELECT = { id: true, name: true, slug: true, timezone: true, logoUrl: true, phone: true, billingEmail: true, gmailSettingsJson: true, gmailTokensJson: true, tradeTypesJson: true, bookingSettingsJson: true } as const;
@@ -73,6 +74,63 @@ export async function availabilityFor(org: OrgRow, service: BookingService, now 
   return availableSlots({ settings, service, busy, timeZone: org.timezone || "America/New_York", now });
 }
 
+// ── the AI desk's hours (lib/deskHours) ─────────────────────────────────────
+
+export async function readDeskHours(organizationId: string): Promise<DeskHours> {
+  const row = await db.syncState.findUnique({ where: { key: deskHoursKey(organizationId) }, select: { cursor: true } }).catch(() => null);
+  return parseDeskHours(row?.cursor);
+}
+
+/**
+ * What already takes each person's time: visits assigned to them or that they made, jobs they're on, their own
+ * blocked time — and the company's blocks, which take everyone's.
+ */
+export async function personBusy(organizationId: string, userIds: readonly string[], from: Date, to: Date): Promise<Map<string, Busy[]>> {
+  const out = new Map<string, Busy[]>(userIds.map((u) => [u, []]));
+  if (!userIds.length) return out;
+  const profiles = await db.workerProfile.findMany({ where: { organizationId, userId: { in: [...userIds] } }, select: { id: true, userId: true } });
+  const workerOf = new Map(profiles.map((p) => [p.id, p.userId]));
+  const workerIds = profiles.map((p) => p.id);
+  const live = { status: { notIn: ["CANCELED", "NO_SHOW"] }, startsAt: { lt: to }, endsAt: { gt: from } };
+  const [appts, blocks, jobs] = await Promise.all([
+    db.appointment.findMany({ where: { organizationId, ...live, OR: [{ createdById: { in: [...userIds] } }, ...(workerIds.length ? [{ assignments: { some: { workerId: { in: workerIds } } } }] : [])] }, select: { startsAt: true, endsAt: true, createdById: true, assignments: { select: { workerId: true } } } }),
+    db.blockedTime.findMany({ where: { organizationId, startsAt: { lt: to }, endsAt: { gt: from }, OR: [{ ownerId: null }, { ownerId: { in: [...userIds] } }] }, select: { startsAt: true, endsAt: true, ownerId: true } }),
+    workerIds.length
+      ? db.job.findMany({ where: { organizationId, status: { notIn: ["CANCELED", "DONE", "COMPLETED"] }, startsAt: { not: null, lt: to }, endsAt: { not: null, gt: from }, assignments: { some: { workerId: { in: workerIds } } } }, select: { startsAt: true, endsAt: true, assignments: { select: { workerId: true } } } })
+      : Promise.resolve([] as Array<{ startsAt: Date | null; endsAt: Date | null; assignments: Array<{ workerId: string }> }>),
+  ]);
+  const add = (u: string | null | undefined, b: Busy) => { if (u && out.has(u)) out.get(u)!.push(b); };
+  for (const a of appts) {
+    const who = new Set<string>([...(a.createdById ? [a.createdById] : []), ...a.assignments.map((x) => workerOf.get(x.workerId)).filter((x): x is string => !!x)]);
+    for (const u of who) add(u, { startsAt: a.startsAt, endsAt: a.endsAt });
+  }
+  for (const b of blocks) {
+    if (b.ownerId) add(b.ownerId, b);
+    else for (const u of userIds) add(u, b);
+  }
+  for (const j of jobs) for (const x of j.assignments) add(workerOf.get(x.workerId), { startsAt: j.startsAt!, endsAt: j.endsAt! });
+  return out;
+}
+
+/**
+ * The times the AI desk can offer: the open hours (as the booking page has them), or — when the company chose
+ * reserved hours — only inside what was reserved, each time carrying whose it is.
+ */
+export async function deskAvailabilityFor(org: OrgRow, service: BookingService, now = new Date()): Promise<{ mode: DeskHours["mode"]; days: DeskDaySlots[] }> {
+  const hours = await readDeskHours(org.id);
+  if (hours.mode !== "reserved") {
+    const days = await availabilityFor(org, service, now);
+    return { mode: "open-hours", days: days.map((d) => ({ ...d, slots: d.slots.map((x) => ({ ...x, userId: null, windowId: "" })) })) };
+  }
+  const settings = settingsOf(org);
+  const from = new Date(now.getTime() - DAY);
+  const to = new Date(now.getTime() + (settings.horizonDays + 2) * DAY);
+  const people = Array.from(new Set(hours.windows.map((w) => w.userId).filter((u): u is string => !!u)));
+  const [orgBusy, busy] = await Promise.all([busyBetween(org.id, from, to), personBusy(org.id, people, from, to)]);
+  const days = reservedSlots({ settings, service, windows: hours.windows, orgBusy, busyOf: (u) => busy.get(u) ?? [], timeZone: org.timezone || "America/New_York", now });
+  return { mode: "reserved", days };
+}
+
 async function emailCustomer(org: OrgRow, to: string | null | undefined, doc: Omit<EmailDoc, "lockup" | "footer">): Promise<boolean> {
   if (!to) return false;
   try {
@@ -126,13 +184,17 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
   if (!service) return { ok: false, error: "That service is no longer offered online." };
   const startsAt = new Date(input.startsAtISO);
   if (!Number.isFinite(startsAt.getTime())) return { ok: false, error: "Pick a time." };
-  const days = await availabilityFor(org, service, now);
-  const slot = days.flatMap((d) => d.slots).find((s) => s.startsAt.getTime() === startsAt.getTime());
-  if (!slot) return { ok: false, error: "That time was just taken — please pick another." };
-  const tz = org.timezone || "America/New_York";
-  const email = input.email?.trim().toLowerCase() || null;
   const channel = input.channel === "ai-desk" ? "ai-desk" : "online";
   const desk = channel === "ai-desk";
+  // The desk books from its own hours (open hours, or only what was reserved); the booking page from the open hours.
+  const days: DeskDaySlots[] = desk ? (await deskAvailabilityFor(org, service, now)).days : (await availabilityFor(org, service, now)).map((d) => ({ ...d, slots: d.slots.map((x) => ({ ...x, userId: null, windowId: "" })) }));
+  const slot = days.flatMap((d) => d.slots).find((s) => s.startsAt.getTime() === startsAt.getTime());
+  if (!slot) return { ok: false, error: "That time was just taken — please pick another." };
+  // A person's reserved hours: the visit is theirs — on their calendar (assigned, or made in their name when they have
+  // no crew profile), and in the text the office gets.
+  const owner = slot.userId ? await db.workerProfile.findFirst({ where: { organizationId: org.id, userId: slot.userId }, select: { id: true } }) : null;
+  const tz = org.timezone || "America/New_York";
+  const email = input.email?.trim().toLowerCase() || null;
   const phone = input.phone?.trim() || null;
   // A caller is matched by their number (the desk rarely has an email); a web
   // booking only by email — a number typed into a form proves nothing.
@@ -147,6 +209,13 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
   let bookedAppointmentId: string | null = null;
   await db.$transaction(async (tx) => {
     let leadId: string | null = knownLead?.id ?? null;
+    // A caller with an open lead: what the desk learned on this call joins what the lead already says.
+    if (knownLead) {
+      const cur = await tx.lead.findUnique({ where: { id: knownLead.id }, select: { scope: true, description: true, email: true } });
+      if (cur && !(cur.scope ?? "").includes(scope)) {
+        await tx.lead.update({ where: { id: knownLead.id }, data: { scope: [cur.scope, scope].filter(Boolean).join("\n\n").slice(0, 20000), ...(cur.description ? {} : { description: scope }), ...(!cur.email && email ? { email } : {}) } });
+      }
+    }
     if (!client && !leadId) {
       const lead = await tx.lead.create({
         data: { organizationId: org.id, name: input.name, email, phone, address: input.address?.trim() || null, projectType: service.label, description: scope, scope, source: desk ? "AI_DESK" : "BOOKING", status: "NEW", aiCategory: service.trade },
@@ -159,6 +228,8 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
         organizationId: org.id,
         clientId: client?.id ?? null,
         leadId,
+        ...(slot.userId && !owner ? { createdById: slot.userId } : {}),
+        ...(owner ? { assignments: { create: { workerId: owner.id } } } : {}),
         title: `${service.label} — ${input.name}`,
         startsAt: slot.startsAt,
         endsAt: slot.endsAt,
@@ -168,7 +239,7 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
       select: { id: true },
     });
     const booking = await tx.booking.create({
-      data: { organizationId: org.id, appointmentId: appt.id, leadId, clientId: client?.id ?? null, serviceKey: service.key, serviceLabel: service.label, minutes: service.minutes, name: input.name, email, phone: input.phone?.trim() || null, address: input.address?.trim() || null, notes: input.notes?.trim() || null, answersJson: JSON.stringify(input.answers), member, startsAt: slot.startsAt, endsAt: slot.endsAt },
+      data: { organizationId: org.id, appointmentId: appt.id, leadId, clientId: client?.id ?? null, serviceKey: service.key, serviceLabel: service.label, minutes: service.minutes, name: input.name, email: desk ? null : email, phone: input.phone?.trim() || null, address: input.address?.trim() || null, notes: input.notes?.trim() || null, answersJson: JSON.stringify(input.answers), member, startsAt: slot.startsAt, endsAt: slot.endsAt },
       select: { manageToken: true },
     });
     manageToken = booking.manageToken;
@@ -188,7 +259,10 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
     afterResponse(() => textAppointmentBooked(id, null, desk ? "the AI desk" : "online"));
   }
   const manageHref = `${await appBaseUrl()}/book/manage/${manageToken}`;
-  await emailCustomer(org, email, {
+  // A desk booking was read back on the call. Its email was heard, not typed — a misheard address would send the
+  // visit's details to a stranger, so it is kept on the lead only: no confirmation, and the booking row has no email
+  // for the day-before reminder to use.
+  if (!desk) await emailCustomer(org, email, {
     subject: `Booked: ${service.label} — ${when}`,
     kicker: { text: "Your visit", tone: "ok" },
     headline: when,

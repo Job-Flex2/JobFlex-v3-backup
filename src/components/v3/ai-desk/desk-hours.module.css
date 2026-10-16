@@ -1,0 +1,26 @@
+/* THE DESK'S HOURS — the reservation list and the reserve form. Colours, buttons, inputs and the radio cards come
+   from ai-desk.module.css; this file only lays them out. */
+.root { display: grid; gap: 4px; min-width: 0; }
+.list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "when act" "who act";
+  align-items: center;
+  gap: 2px 12px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--k-line, rgba(10, 10, 10, 0.18));
+  border-left: 4px solid #0f766e;
+  border-radius: var(--k-r, 6px);
+  background: color-mix(in srgb, #0f766e 6%, #fff);
+}
+.when { grid-area: when; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.who { grid-area: who; font-size: 13px; color: var(--k-muted, #6b6b6b); min-width: 0; overflow-wrap: anywhere; }
+.item > button { grid-area: act; }
+.form { margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; margin-top: 8px; }
+.fld { display: grid; gap: 5px; min-width: 0; }
+.lbl { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--k-muted, #6b6b6b); }
+@media (max-width: 520px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+}

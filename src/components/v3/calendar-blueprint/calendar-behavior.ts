@@ -38,6 +38,8 @@ import {
 import { assignWorker, markAssignmentAccepted, unassignWorker } from "@/actions/workers";
 import { markNavSeen } from "@/actions/notifications";
 import { VISIT_VIA } from "@/lib/calendar/visitVia";
+import { expandWindows, spanWords, zonedHhmm, zonedYmd } from "@/lib/deskHours";
+import { removeDeskHours, reserveDeskHours } from "@/actions/deskHours";
 import {
   TODAY as TODAY_FIXTURE,
   JOB_STATUSES,
@@ -180,6 +182,13 @@ export function initCalendarContent(
   };
   const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
   const byId = (id: string) => root.querySelector<HTMLElement>("#" + id);
+  // The page's own controls listen through `on`, so a second start of this module on the same page (React runs every
+  // effect twice in development) never leaves the first one's handlers behind — a stale copy acted on its own state
+  // and saved a second, wrong event from one click (2026-10-16).
+  const onId = (id: string, ev: string, fn: (e: Event) => void) => {
+    const el = byId(id);
+    if (el) on(el, ev, fn as EventListener);
+  };
   // Click targets inside a button are often the icon, and an <svg>/<use> is an
   // SVGElement — NOT an HTMLElement. Returning null for those made every
   // delegated handler ignore clicks that landed on an icon: the filter
@@ -474,6 +483,8 @@ export function initCalendarContent(
   }
   function statusCls(e: CalEvent) {
     if (e.kind === "job") return "evc--" + e.status.toLowerCase();
+    // Hours reserved for the AI desk: an open frame, not a booking (2026-10-16).
+    if (e.kind === "desk") return "evc--desk";
     // A visit wears its own card (2026-10-16): the channel's colour all round,
     // softer corners, and a tag saying who booked it — a job card never has one.
     if (e.kind === "appointment") return "evc--appointment evc--via-" + (e.via || "team") + (e.status === "CANCELED" ? " evc--apt-off" : "");
@@ -683,6 +694,8 @@ export function initCalendarContent(
    * blocked time stay draggable — those actions accept their role.
    */
   function canDrag(e: CalEvent) {
+    // Reserved desk hours are edited from their sheet (remove, reserve again) — a drag has no action behind it.
+    if (e.kind === "desk") return false;
     return canManage || e.kind !== "job";
   }
 
@@ -1669,6 +1682,7 @@ export function initCalendarContent(
   function openDetail(id: string) {
     const e = eventsData.find(function (x) { return x.id === id; });
     if (!e) return;
+    if (e.kind === "desk") { openDeskDetail(e); return; }
     cal.sheet = "detail"; cal.editing = id; cal.kind = e.kind;
     cal.form.start = new Date(e.start);
     cal.form.end = new Date(e.end);
@@ -1741,6 +1755,29 @@ export function initCalendarContent(
       "</div>");
   }
 
+  /** Reserved AI desk hours: what they are, whose, and the way to give them back. */
+  function openDeskDetail(e: CalEvent) {
+    cal.sheet = "detail"; cal.editing = e.id; cal.kind = "desk";
+    const desk = seed?.desk;
+    const mine = !!desk && e.deskUserId === desk.me;
+    const canRemove = canManage || mine;
+    const who = e.title.replace(/^AI desk hours · /, "");
+    openSheet("AI desk hours",
+      '<div class="sf-meta">' +
+        '<div class="sf-meta-row"><span class="kpi-lbl">When</span><span>' + fmtDate(e.start) + " · " + esc(spanWords(pad2(e.start.getHours()) + ":" + pad2(e.start.getMinutes()), pad2(e.end.getHours()) + ":" + pad2(e.end.getMinutes()))) + "</span></div>" +
+        '<div class="sf-meta-row"><span class="kpi-lbl">Repeats</span><span>' + (e.deskWeekly ? "Every " + e.start.toLocaleDateString("en-US", { weekday: "long" }) : "This day only") + "</span></div>" +
+        '<div class="sf-meta-row"><span class="kpi-lbl">For</span><span>' + esc(who === "anyone" ? "Anyone at the company" : who) + "</span></div>" +
+        '<div class="sf-meta-row"><span class="kpi-lbl">The desk</span><span>' + (desk && desk.mode === "reserved" ? "Books callers into these hours, skipping anything already on the calendar." : "Books from the open hours right now — these count once the company switches to reserved hours.") + "</span></div>" +
+      "</div>" +
+      '<div class="sf-act">' +
+        (canRemove
+          ? '<button class="btn btn-ghost btn--sm btn--danger" type="button" data-act="remove-desk" data-rid="' + esc(e.rid || "") + '"><svg class="ic"><use href="#i-trash"/></svg>' + (e.deskWeekly ? "Remove every week" : "Remove these hours") + "</button>"
+          : "") +
+        '<button class="btn btn-ghost btn--sm" type="button" data-sheet="close">Close</button>' +
+      "</div>");
+  }
+  function pad2(n: number) { return (n < 10 ? "0" : "") + n; }
+
   /** The create form. `start`/`end` come from the drag-to-create preview when
    *  there is one, otherwise from the clicked cell (2h default). */
   function openQuickAdd(start: Date | null, end: Date | null, allDay?: boolean) {
@@ -1788,19 +1825,13 @@ export function initCalendarContent(
       job: "Roof tear-off — 4812 Maple Ave",
       appointment: "Estimate visit — S. Rao",
       blocked: "Shop maintenance",
+      desk: "",
     };
+    if (cal.kind === "desk") return kindTabsHtml() + deskFormHtml();
     // A tab strip with one tab is a label pretending to be a choice — when the
     // role can only create one kind, the strip is dropped entirely and the
     // sheet's own title carries the meaning.
-    return (CREATE_KINDS.length > 1
-        ? '<div class="sf-kinds" id="kindTabs">' +
-            CREATE_KINDS.map(function (k) {
-              return '<button class="sf-kind' + (cal.kind === k ? " on" : "") + '" type="button" data-kind="' + k + '">' +
-                '<svg class="ic"><use href="#' + KIND_IC[k] + '"/></svg>' +
-                (k === "job" ? "Job event" : k === "appointment" ? "Appointment" : "Blocked") + "</button>";
-            }).join("") +
-          "</div>"
-        : "") +
+    return kindTabsHtml() +
       '<label class="sf"><span class="sf-lbl">Title</span><input class="sf-in" data-e="title" placeholder="' + ph[cal.kind] + '" value="' + esc(seedTitle) + '"></label>' +
       allDayFieldHtml() +
       dtpFieldHtml("start") +
@@ -1811,6 +1842,39 @@ export function initCalendarContent(
       '<div class="sf-act">' +
         '<button class="btn btn-primary btn--sm" type="button" data-act="create-event"><svg class="ic"><use href="#i-check"/></svg>' +
           (blocked ? "Block time" : "Create event") + "</button>" +
+        '<button class="btn btn-ghost btn--sm" type="button" data-sheet="close">Cancel</button>' +
+      "</div>";
+  }
+  function kindTabsHtml() {
+    return CREATE_KINDS.length > 1
+      ? '<div class="sf-kinds" id="kindTabs">' +
+          CREATE_KINDS.map(function (k) {
+            return '<button class="sf-kind' + (cal.kind === k ? " on" : "") + '" type="button" data-kind="' + k + '">' +
+              '<svg class="ic"><use href="#' + KIND_IC[k] + '"/></svg>' +
+              (k === "job" ? "Job event" : k === "appointment" ? "Appointment" : k === "desk" ? "AI desk hours" : "Blocked") + "</button>";
+          }).join("") +
+        "</div>"
+      : "";
+  }
+  /**
+   * AI desk hours (2026-10-16): the hours a person — or anyone at the company — keeps open for the AI desk to book
+   * visits into, by the hour, one day or every week. Saved to the same list as the AI desk's own panel.
+   */
+  function deskFormHtml() {
+    const desk = seed?.desk;
+    const people = desk ? desk.people : [];
+    const whoHtml = canManage
+      ? '<select class="sf-in" data-e="deskWho"><option value="">Anyone at the company</option>' +
+          people.map(function (p) { return '<option value="' + esc(p.userId) + '"' + (desk && p.userId === desk.me ? " selected" : "") + ">" + esc(p.name) + (desk && p.userId === desk.me ? " (me)" : "") + "</option>"; }).join("") +
+        "</select>"
+      : '<div class="sf-static"><svg class="ic"><use href="#i-user"/></svg><span>' + esc((people[0] && people[0].name) || "Me") + "</span></div>";
+    return '<p class="sf-note">The AI desk books callers into these hours' + (desk && desk.mode !== "reserved" ? " once the company switches it to “Only hours we reserve” (AI desk → When it can book visits)" : "") + ". Each visit goes to the person whose hours they are.</p>" +
+      dtpFieldHtml("start") +
+      dtpFieldHtml("end") +
+      '<div class="sf"><span class="sf-lbl">For</span>' + whoHtml + "</div>" +
+      '<label class="sf sf-check"><input type="checkbox" data-e="deskWeekly"> <span>Every week, same day and hours</span></label>' +
+      '<div class="sf-act">' +
+        '<button class="btn btn-primary btn--sm" type="button" data-act="create-event"><svg class="ic"><use href="#i-check"/></svg>Reserve hours</button>' +
         '<button class="btn btn-ghost btn--sm" type="button" data-sheet="close">Cancel</button>' +
       "</div>";
   }
@@ -1866,38 +1930,38 @@ export function initCalendarContent(
   }
 
   // ================= EVENTS =================
-  byId("calPrev")?.addEventListener("click", function () {
+  onId("calPrev", "click", function () {
     const c = new Date(cal.cursor);
     if (cal.view === "month") c.setMonth(c.getMonth() - 1); else c.setDate(c.getDate() - 7);
     cal.cursor = c; cal.nav = "prev"; renderCal();
   });
-  byId("calNext")?.addEventListener("click", function () {
+  onId("calNext", "click", function () {
     const c = new Date(cal.cursor);
     if (cal.view === "month") c.setMonth(c.getMonth() + 1); else c.setDate(c.getDate() + 7);
     cal.cursor = c; cal.nav = "next"; renderCal();
   });
-  byId("calToday")?.addEventListener("click", function () { cal.cursor = new Date(TODAY); renderCal(); });
-  byId("calViews")?.addEventListener("click", function (e) {
+  onId("calToday", "click", function () { cal.cursor = new Date(TODAY); renderCal(); });
+  onId("calViews", "click", function (e) {
     const b = asEl(e.target)?.closest<HTMLElement>(".vsw-btn");
     if (!b) return;
     cal.view = (b.dataset.view || "month") as "month" | "week" | "team";
     $$("#calViews .vsw-btn").forEach(function (x) { x.classList.toggle("active", x === b); });
     renderCal();
   });
-  byId("trayBtn")?.addEventListener("click", function () { cal.trayOpen = !cal.trayOpen; renderCal(); });
-  byId("inboxBtn")?.addEventListener("click", openInbox);
-  byId("newEventBtn")?.addEventListener("click", function () { openQuickAdd(null, null); });
+  onId("trayBtn", "click", function () { cal.trayOpen = !cal.trayOpen; renderCal(); });
+  onId("inboxBtn", "click", openInbox);
+  onId("newEventBtn", "click", function () { openQuickAdd(null, null); });
   const calSearch = root.querySelector<HTMLInputElement>("#calSearch");
   if (calSearch) {
     // Grid + Clear only. A full `renderCal()` per keystroke rebuilt the entire
     // filter row — including the worker menu — while the user was typing.
-    calSearch.addEventListener("input", function () {
+    on(calSearch, "input", function () {
       cal.query = calSearch.value;
       syncClear();
       renderGrid();
     });
   }
-  byId("calClear")?.addEventListener("click", function () {
+  onId("calClear", "click", function () {
     cal.workers = []; cal.statuses = []; cal.query = "";
     if (calSearch) calSearch.value = "";
     closeFdd();
@@ -1937,7 +2001,7 @@ export function initCalendarContent(
   }
 
   function bindFilter(hostId: string, key: "workers" | "statuses", attr: "w" | "s") {
-    byId(hostId)?.addEventListener("click", function (e) {
+    onId(hostId, "click", function (e) {
       const t = asEl(e.target);
       if (!t) return;
       const trigger = t.closest<HTMLElement>("[data-fdd]");
@@ -1964,7 +2028,7 @@ export function initCalendarContent(
   }
   bindFilter("workerFilter", "workers", "w");
   // Statuses are plain toggles, no menu to open or close.
-  byId("statusFilter")?.addEventListener("click", function (e) {
+  onId("statusFilter", "click", function (e) {
     const b = asEl(e.target)?.closest<HTMLElement>("[data-s]");
     if (!b || !b.dataset.s) return;
     closeFdd();
@@ -1976,7 +2040,7 @@ export function initCalendarContent(
   // calendar clicks: chip → details, empty cell → quick create.
   // Week cells are handled by the drag-to-create pointer flow below, which
   // opens the form on release — so they are skipped here to avoid two opens.
-  byId("calWrap")?.addEventListener("click", function (e) {
+  onId("calWrap", "click", function (e) {
     const t = asEl(e.target);
     if (!t) return;
     // Before the chip and empty-cell branches: the disclosure sits INSIDE a
@@ -2544,7 +2608,7 @@ export function initCalendarContent(
   }
 
   // panel: pickers, kind tabs, save, delete, create
-  byId("sheet")?.addEventListener("click", function (e) {
+  onId("sheet", "click", function (e) {
     const t = asEl(e.target);
     if (!t) return;
 
@@ -2680,6 +2744,21 @@ export function initCalendarContent(
     if (act.dataset.act === "save-event") {
       if (sheetBusy) return;
       void saveEvent(val);
+      return;
+    }
+    if (act.dataset.act === "remove-desk") {
+      const rid = act.dataset.rid;
+      if (!rid || sheetBusy) return;
+      void (async function () {
+        setSheetBusy(true, "Removing…");
+        let r: Awaited<ReturnType<typeof removeDeskHours>>;
+        try { r = await removeDeskHours(rid); } catch (err) { setSheetBusy(false); sheetError(actionError(err)); return; }
+        setSheetBusy(false);
+        if (!r.ok) { sheetError(r.error); return; }
+        for (let i = eventsData.length - 1; i >= 0; i--) if (eventsData[i].kind === "desk" && eventsData[i].rid === rid) eventsData.splice(i, 1);
+        closeSheet(); renderCal();
+        toast("Those hours are no longer reserved for the AI desk.", false);
+      })();
       return;
     }
     if (act.dataset.act === "delete-event") {
@@ -2921,6 +3000,7 @@ export function initCalendarContent(
   }
 
   async function createEvent(val: (f: string) => string) {
+    if (cal.kind === "desk") { await createDeskHours(); return; }
     const title = val("title").trim();
     // Was a bare `.focus()` and nothing else: pressing Create on an empty form
     // moved the caret and gave no reason, so the button read as broken. A
@@ -3006,6 +3086,43 @@ export function initCalendarContent(
       trayJobs = trayJobs.filter(function (x) { return x.id !== linkedId; });
     }
     closeSheet(); renderCal(); flashEvent();
+  }
+
+  /** Reserve the picked hours for the AI desk, then show every day they land on. */
+  async function createDeskHours() {
+    sheetError(null);
+    const desk = seed?.desk;
+    if (!wired || !desk) { sheetError("Reserving hours needs the live calendar."); return; }
+    const span = formSpan();
+    const tz = desk.timeZone;
+    const day = zonedYmd(span.start, tz);
+    if (zonedYmd(span.end, tz) !== day) { sheetError("Reserve hours inside one day — pick an end on the same day."); return; }
+    const weekly = !!root.querySelector<HTMLInputElement>('[data-e="deskWeekly"]')?.checked;
+    const who = canManage ? root.querySelector<HTMLSelectElement>('[data-e="deskWho"]')?.value || "" : desk.me;
+    setSheetBusy(true, "Reserving…");
+    let res: Awaited<ReturnType<typeof reserveDeskHours>>;
+    try {
+      res = await reserveDeskHours({ userId: who || null, date: weekly ? null : day, dow: weekly ? new Date(day + "T12:00:00Z").getUTCDay() : null, from: zonedHhmm(span.start, tz), to: zonedHhmm(span.end, tz) });
+    } catch (err) {
+      setSheetBusy(false);
+      sheetError(actionError(err));
+      return;
+    }
+    setSheetBusy(false);
+    if (!res.ok) { sheetError(res.error); return; }
+    const w = res.window;
+    const person = w.userId ? desk.people.find(function (p) { return p.userId === w.userId; }) : null;
+    const wid = w.userId ? workersData.find(function (x) { return x.userId === w.userId; })?.id : undefined;
+    const spans = expandWindows([w], TODAY, 183, tz);
+    let first: string | null = null;
+    for (const sp of spans) {
+      const id = "desk:" + w.id + ":" + sp.startsAt.getTime();
+      if (!first && sp.startsAt.getTime() >= span.start.getTime() - 60000) first = id;
+      eventsData.push({ id, rid: w.id, kind: "desk", title: "AI desk hours · " + (person ? person.name : "anyone"), start: sp.startsAt, end: sp.endsAt, status: "SCHEDULED", workers: wid ? [wid] : [], deskUserId: w.userId || undefined, deskWeekly: sp.weekly || undefined });
+    }
+    landed = first;
+    closeSheet(); renderCal(); flashEvent();
+    toast("Reserved for the AI desk: " + res.words + ".", false);
   }
 
   /**
@@ -3116,7 +3233,7 @@ export function initCalendarContent(
   }
 
   // Search inside the link picker (delegated: the input is re-rendered often).
-  byId("sheet")?.addEventListener("input", function (e) {
+  onId("sheet", "input", function (e) {
     const t = asEl(e.target);
     if (!t || t.id !== "lnkQ") return;
     cal.form.linkQuery = (t as HTMLInputElement).value;
@@ -3376,7 +3493,7 @@ export function initCalendarContent(
     // paint; everything inside a pop-over is injected later, so those press via
     // delegation on `.content` instead of per-node listeners.
     pressify(".cal-nav, .vsw-btn", "pressed");
-    root.addEventListener("click", (e) => {
+    on(root, "click", (e) => {
       const el = (e.target instanceof HTMLElement ? e.target : null)?.closest<HTMLElement>(
         ".fdd-btn, .fdd-opt, .dtp-btn, .dtp-day, .dtp-time, .dtp-done, .pdd-btn, .pdd-opt, .lnk-tab, .lnk-row, .sf-kind",
       );

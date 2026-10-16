@@ -96,6 +96,8 @@ import {
 import { assignWorker, markAssignmentAccepted, unassignWorker } from "@/actions/workers";
 import { markNavSeen } from "@/actions/notifications";
 import { VISIT_VIA } from "@/lib/calendar/visitVia";
+import { expandWindows, spanWords, zonedHhmm, zonedYmd } from "@/lib/deskHours";
+import { removeDeskHours, reserveDeskHours } from "@/actions/deskHours";
 import { MobileJobOffers } from "@/app/(mobile)/mobile-jobs-v2/mobile-jobs";
 import {
   ALL,
@@ -186,6 +188,7 @@ const TONE_BADGE: Record<string, string> = {
   canceled: styles.stCancel,
   appt: styles.stAppt,
   blocked: styles.stBlocked,
+  desk: styles.stDesk,
 };
 const TONE_DOT: Record<string, string> = {
   scheduled: styles.dotSched,
@@ -194,6 +197,7 @@ const TONE_DOT: Record<string, string> = {
   canceled: styles.dotCancel,
   appt: styles.dotAppt,
   blocked: styles.dotBlocked,
+  desk: styles.dotDesk,
 };
 
 /**
@@ -228,7 +232,7 @@ function EventRow({
   const visit = e.kind === "appointment" ? VISIT_VIA[e.via || "team"] : null;
   return (
     <div
-      className={`${styles.erow} ${blocked ? styles.isBlocked : ""} ${visit ? styles.isVisit : ""} ${visit && e.status === "CANCELED" ? styles.isVisitOff : ""} ${styles.rowIn} ${landed ? styles.landed : ""}`}
+      className={`${styles.erow} ${blocked ? styles.isBlocked : ""} ${e.kind === "desk" ? styles.isDesk : ""} ${visit ? styles.isVisit : ""} ${visit && e.status === "CANCELED" ? styles.isVisitOff : ""} ${styles.rowIn} ${landed ? styles.landed : ""}`}
       style={{ animationDelay: `${i * 45}ms`, ...(visit ? ({ "--via": visit.tone } as React.CSSProperties) : {}) }}
     >
       {/* Time is the one thing a calendar row is about, so it takes the left
@@ -293,6 +297,15 @@ function EventRow({
  * carries events with no phone, no address and no client.
  */
 function metaRowsFor(e: CalEvent): [string, string][] {
+  // Reserved AI desk hours: when, how often, whose — nothing else applies.
+  if (e.kind === "desk") {
+    const hh = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return [
+      ["When", `${fmtDate(e.start)} · ${spanWords(hh(e.start), hh(e.end))}`],
+      ["Repeats", e.deskWeekly ? `Every ${e.start.toLocaleDateString("en-US", { weekday: "long" })}` : "This day only"],
+      ["For", e.title.replace(/^AI desk hours · /, "").replace(/^anyone$/, "Anyone at the company")],
+    ];
+  }
   const rows: [string, string][] = [
     ["When", e.allDay ? fmtDate(e.start) : `${fmtDate(e.start)} · ${fmtRange(e.start, e.end)}`],
     ["Duration", e.allDay ? "All day" : durLabel(e.end.getTime() - e.start.getTime())],
@@ -746,6 +759,9 @@ type FormState = {
   notes: string;
   /** Set when the form was opened from the tray: creating consumes that job. */
   fromTray: string | null;
+  /** AI desk hours only: whose ("" = anyone at the company) and whether every week. */
+  deskWho?: string;
+  deskWeekly?: boolean;
 };
 
 /** Which picker panel is open. One at a time — two floating layers over one
@@ -1237,6 +1253,14 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
   const menuRows = useMemo<MenuRow[]>(() => {
     const e = actEvent;
     if (!e) return [];
+    // Reserved AI desk hours: see them, or give them back — they have no job, client, status or move.
+    if (e.kind === "desk") {
+      const canRemove = book.canManage || e.deskUserId === book.desk?.me;
+      return [
+        { act: "deskinfo", icon: "i-phone", tone: styles.miSky, title: "See these hours", sub: e.deskWeekly ? "Reserved every week for the AI desk" : "Reserved for the AI desk" },
+        { act: "deskdel", icon: "i-trash", tone: styles.miDanger, title: e.deskWeekly ? "Remove every week" : "Remove these hours", sub: canRemove ? "The AI desk stops booking into them" : "Only their owner or a manager can", danger: true, disabled: !canRemove },
+      ];
+    }
     const isJob = e.kind === "job";
     const done = e.status === "COMPLETED";
     return [
@@ -1261,7 +1285,7 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
       { act: "del", icon: "i-trash", tone: styles.miDanger, title: "Delete event",
         sub: "Removes it from the calendar", danger: true },
     ];
-  }, [actEvent]);
+  }, [actEvent, book.canManage, book.desk?.me]);
 
   /** The jobs board's own href shape (jobs-behavior.ts `jobHref`), so the two
    *  surfaces cannot disagree about where a job lives. A client-side push, not
@@ -1279,10 +1303,28 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
   // hand-feel; the matching action lands the change, and a reject rolls the
   // local state back so the calendar never lies about what the server holds.
   // Rows without `rid` (purely local, pre-wire) keep the local-only path.
+  /** Give reserved AI desk hours back — every day they land on. */
+  const removeDesk = async (e: CalEvent) => {
+    if (!e.rid) return;
+    const rid = e.rid;
+    const before = data.filter((x) => x.kind === "desk" && x.rid === rid);
+    setData((prev) => prev.filter((x) => !(x.kind === "desk" && x.rid === rid)));
+    const r = await removeDeskHours(rid).catch(() => ({ ok: false as const, error: "Couldn't remove. Try again." }));
+    if (!r.ok) setData((prev) => [...prev, ...before]);
+  };
+
   const runMenu = (act: string) => {
     const e = actEvent;
     setActId(null);
     if (!e) return;
+    if (act === "deskinfo") {
+      setDetailId(e.id);
+      return;
+    }
+    if (act === "deskdel") {
+      void removeDesk(e);
+      return;
+    }
     if (act === "job") {
       if (e.jobId) openJob(e.jobId);
       return;
@@ -1517,9 +1559,70 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
     for (const w of added) await assignWorker(row.jobId, w);
   };
 
+  /** AI desk hours (2026-10-16): reserve the picked hours, then show every day they land on. */
+  const reserveDesk = async () => {
+    const desk = book.desk;
+    if (!desk) {
+      setSaveErr("Reserving hours needs the live calendar.");
+      return;
+    }
+    const start = fromInputs(form.date, form.startT, sel);
+    const end = fromInputs(form.date, form.endT, sel);
+    if (end.getTime() <= start.getTime()) {
+      setSaveErr("The end has to be after the start.");
+      return;
+    }
+    const tz = desk.timeZone;
+    const day = zonedYmd(start, tz);
+    if (zonedYmd(end, tz) !== day) {
+      setSaveErr("Reserve hours inside one day.");
+      return;
+    }
+    const who = book.canManage ? (form.deskWho ?? desk.me) : desk.me;
+    setSaveErr(null);
+    setSaving(true);
+    let r: Awaited<ReturnType<typeof reserveDeskHours>>;
+    try {
+      r = await reserveDeskHours({ userId: who || null, date: form.deskWeekly ? null : day, dow: form.deskWeekly ? new Date(`${day}T12:00:00Z`).getUTCDay() : null, from: zonedHhmm(start, tz), to: zonedHhmm(end, tz) });
+    } catch (err) {
+      setSaving(false);
+      setSaveErr(actionError(err));
+      return;
+    }
+    setSaving(false);
+    if (!r.ok) {
+      setSaveErr(r.error);
+      return;
+    }
+    const w = r.window;
+    const person = w.userId ? desk.people.find((x) => x.userId === w.userId) : null;
+    const wid = w.userId ? workersData.find((x) => x.userId === w.userId)?.id : undefined;
+    const rows: CalEvent[] = expandWindows([w], TODAY, 183, tz).map((sp) => ({
+      id: `desk:${w.id}:${sp.startsAt.getTime()}`,
+      rid: w.id,
+      kind: "desk",
+      title: `AI desk hours · ${person ? person.name : "anyone"}`,
+      start: sp.startsAt,
+      end: sp.endsAt,
+      status: "SCHEDULED",
+      workers: wid ? [wid] : [],
+      deskUserId: w.userId ?? undefined,
+      deskWeekly: sp.weekly || undefined,
+    }));
+    setData((prev) => [...prev, ...rows]);
+    setCursor(new Date(start));
+    setSel(new Date(start));
+    setLandedId(rows.find((x) => x.start.getTime() >= start.getTime() - 60000)?.id ?? null);
+    closeForm();
+  };
+
   const submitForm = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (saving) return;
+    if (form.kind === "desk") {
+      await reserveDesk();
+      return;
+    }
     const title = form.title.trim();
     if (!title) {
       setTitleErr(true);
@@ -2336,17 +2439,35 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
           <button className={`${styles.btn} ${styles.btnGhost}`} type="button" onClick={() => setDetailId(null)}>
             Close
           </button>
-          <button
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            type="button"
-            onClick={() => {
-              const e = detailEvent;
-              setDetailId(null);
-              if (e) openEdit(e);
-            }}
-          >
-            <Icon id="i-file" />Edit event
-          </button>
+          {detailEvent?.kind === "desk" ? (
+            book.canManage || detailEvent.deskUserId === book.desk?.me ? (
+              <button
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                type="button"
+                onClick={() => {
+                  const e = detailEvent;
+                  setDetailId(null);
+                  void removeDesk(e);
+                }}
+                data-desk-remove
+              >
+                <Icon id="i-trash" />
+                {detailEvent.deskWeekly ? "Remove every week" : "Remove these hours"}
+              </button>
+            ) : null
+          ) : (
+            <button
+              className={`${styles.btn} ${styles.btnPrimary}`}
+              type="button"
+              onClick={() => {
+                const e = detailEvent;
+                setDetailId(null);
+                if (e) openEdit(e);
+              }}
+            >
+              <Icon id="i-file" />Edit event
+            </button>
+          )}
         </div>
       </div>
 
@@ -2512,7 +2633,7 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
                     }}
                   >
                     <Icon id={KIND_IC[k]} />
-                    {k === "job" ? "Job" : k === "appointment" ? "Visit" : "Blocked"}
+                    {k === "job" ? "Job" : k === "appointment" ? "Visit" : k === "desk" ? "AI desk" : "Blocked"}
                   </button>
                 ))}
               </div>
@@ -2534,38 +2655,40 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
             </div>
           )}
 
-          <div className={`${styles.fld} ${titleErr ? styles.invalid : ""}`}>
-            <label className={styles.fldLbl} htmlFor="mcalTitle">
-              Title<span className={styles.req}>*</span>
-            </label>
-            <input
-              ref={titleRef}
-              className={styles.pinput}
-              id="mcalTitle"
-              name="title"
-              type="text"
-              placeholder={
-                form.kind === "job"
-                  ? "Roof tear-off — 4812 Maple Ave"
-                  : form.kind === "appointment"
-                    ? "Estimate visit — S. Rao"
-                    : "Shop maintenance"
-              }
-              autoComplete="off"
-              value={form.title}
-              aria-invalid={titleErr}
-              aria-describedby={titleErr ? "mcalTitleErr" : undefined}
-              onChange={(e) => {
-                patchForm({ title: e.target.value });
-                if (e.target.value.trim()) setTitleErr(false);
-              }}
-            />
-            {titleErr ? (
-              <span className={styles.fldErr} id="mcalTitleErr">
-                Give the event a title
-              </span>
-            ) : null}
-          </div>
+          {form.kind !== "desk" ? (
+            <div className={`${styles.fld} ${titleErr ? styles.invalid : ""}`}>
+              <label className={styles.fldLbl} htmlFor="mcalTitle">
+                Title<span className={styles.req}>*</span>
+              </label>
+              <input
+                ref={titleRef}
+                className={styles.pinput}
+                id="mcalTitle"
+                name="title"
+                type="text"
+                placeholder={
+                  form.kind === "job"
+                    ? "Roof tear-off — 4812 Maple Ave"
+                    : form.kind === "appointment"
+                      ? "Estimate visit — S. Rao"
+                      : "Shop maintenance"
+                }
+                autoComplete="off"
+                value={form.title}
+                aria-invalid={titleErr}
+                aria-describedby={titleErr ? "mcalTitleErr" : undefined}
+                onChange={(e) => {
+                  patchForm({ title: e.target.value });
+                  if (e.target.value.trim()) setTitleErr(false);
+                }}
+              />
+              {titleErr ? (
+                <span className={styles.fldErr} id="mcalTitleErr">
+                  Give the event a title
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* The house month grid, not `<input type="date">` — see the DATE AND
               TIME FIELDS note at the top of this file. Value is still the
@@ -2582,21 +2705,23 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
             />
           </div>
 
-          <div className={styles.fld}>
-            <span className={styles.fldLbl}>Span</span>
-            <button
-              className={`${styles.fchk} ${styles.allDayToggle}`}
-              type="button"
-              aria-pressed={form.allDay}
-              onClick={() => patchForm({ allDay: !form.allDay })}
-            >
-              <span className={styles.fchkBox}>
-                <Icon id="i-check" />
-              </span>
-              All day
-              <span className={styles.fchkSub}>no clock</span>
-            </button>
-          </div>
+          {form.kind !== "desk" ? (
+            <div className={styles.fld}>
+              <span className={styles.fldLbl}>Span</span>
+              <button
+                className={`${styles.fchk} ${styles.allDayToggle}`}
+                type="button"
+                aria-pressed={form.allDay}
+                onClick={() => patchForm({ allDay: !form.allDay })}
+              >
+                <span className={styles.fchkBox}>
+                  <Icon id="i-check" />
+                </span>
+                All day
+                <span className={styles.fchkSub}>no clock</span>
+              </button>
+            </div>
+          ) : null}
 
           {/* Clock banks, not `<input type="time">`: the native control is an OS
               spinner on iOS and a Material dial on Android, and neither takes a
@@ -2730,6 +2855,43 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
             </div>
           ) : null}
 
+          {form.kind === "desk" ? (
+            <>
+              <div className={styles.fld}>
+                <label className={styles.fldLbl} htmlFor="mcalDeskWho">For</label>
+                {book.canManage ? (
+                  <select id="mcalDeskWho" className={styles.pinput} value={form.deskWho ?? book.desk?.me ?? ""} onChange={(e) => patchForm({ deskWho: e.target.value })} data-desk-who>
+                    <option value="">Anyone at the company</option>
+                    {(book.desk?.people ?? []).map((x) => (
+                      <option key={x.userId} value={x.userId}>
+                        {x.userId === book.desk?.me ? `${x.name} (me)` : x.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className={styles.crewStatic}>
+                    <Icon id="i-user" />
+                    <span>{book.desk?.people[0]?.name ?? "Me"}</span>
+                  </div>
+                )}
+              </div>
+              <div className={styles.fld}>
+                <button className={styles.fchk} type="button" aria-pressed={!!form.deskWeekly} onClick={() => patchForm({ deskWeekly: !form.deskWeekly })} data-desk-weekly>
+                  <span className={styles.fchkBox}>
+                    <Icon id="i-check" />
+                  </span>
+                  Every week
+                  <span className={styles.fchkSub}>same day and hours</span>
+                </button>
+                <span className={styles.fldHint}>
+                  {book.desk?.mode === "reserved"
+                    ? "The AI desk books callers into these hours. Each visit goes to the person whose hours they are."
+                    : "The AI desk books into these once the company switches to reserved hours (AI desk → When it can book visits). Each visit goes to the person whose hours they are."}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
           {/* CREW — the desktop WorkerMultiPicker's semantics on a bottom sheet:
               search the roster, tap to toggle, chosen crew reads back as
               removable chips, and the count rides the collapsed face. */}
@@ -2836,19 +2998,23 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
               </div>
             )}
           </div>
+            </>
+          )}
 
-          <div className={styles.fld}>
-            <label className={styles.fldLbl} htmlFor="mcalNotes">Notes</label>
-            <textarea
-              className={styles.parea}
-              id="mcalNotes"
-              name="notes"
-              rows={3}
-              placeholder="Anything the crew should know"
-              value={form.notes}
-              onChange={(e) => patchForm({ notes: e.target.value })}
-            />
-          </div>
+          {form.kind !== "desk" ? (
+            <div className={styles.fld}>
+              <label className={styles.fldLbl} htmlFor="mcalNotes">Notes</label>
+              <textarea
+                className={styles.parea}
+                id="mcalNotes"
+                name="notes"
+                rows={3}
+                placeholder="Anything the crew should know"
+                value={form.notes}
+                onChange={(e) => patchForm({ notes: e.target.value })}
+              />
+            </div>
+          ) : null}
 
           {/* A refusal from the server, in its own words. Above the foot rather
               than in it, so it cannot be pushed off by the keyboard. */}
@@ -2878,12 +3044,14 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
           >
             <Icon id="i-check" />
             {saving
-              ? form.kind === "blocked" ? "Blocking…" : "Creating…"
+              ? form.kind === "blocked" ? "Blocking…" : form.kind === "desk" ? "Reserving…" : "Creating…"
               : form.mode === "edit"
                 ? "Save changes"
                 : form.kind === "blocked"
                   ? "Block time"
-                  : "Create event"}
+                  : form.kind === "desk"
+                    ? "Reserve hours"
+                    : "Create event"}
           </button>
         </div>
       </div>

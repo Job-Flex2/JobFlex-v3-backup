@@ -27,7 +27,7 @@ export const DESK_TOOLS = [
         name: { type: "string" },
         phone: { type: "string", description: "The caller's phone number; the number they are calling from if they say so" },
         address: { type: "string", description: "The job address, if given" },
-        notes: { type: "string", description: "What the visit is for, in a few words" },
+        notes: { type: "string", description: "Everything you learned for the team, as short labelled lines: Job, Details, Timeline, Budget, Decision, Email, Heard about us, Access — only the ones you learned" },
       },
       required: ["time_id", "name", "phone"],
     },
@@ -36,7 +36,7 @@ export const DESK_TOOLS = [
     type: "function",
     name: "take_message",
     description: "Take a message for the company: who called, their number, what it is about. Use when you cannot help or the caller asks for a call back.",
-    parameters: { type: "object", properties: { name: { type: "string" }, phone: { type: "string" }, about: { type: "string" } }, required: ["name", "phone", "about"] },
+    parameters: { type: "object", properties: { name: { type: "string" }, phone: { type: "string" }, about: { type: "string", description: "What it is about, then everything you learned as short labelled lines: Job, Details, Timeline, Budget, Decision, Email, Heard about us, Access" } }, required: ["name", "phone", "about"] },
   },
   {
     type: "function",

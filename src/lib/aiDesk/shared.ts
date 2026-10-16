@@ -10,7 +10,7 @@
 //            the assistant's voicemail
 
 import { cleanProfile, EMPTY_PROFILE, type DeskProfile } from "./profile";
-import { cleanReview, type DeskReviewItem } from "./tradePresets";
+import { cleanReview, type DeskReviewItem } from "./tradeCore";
 
 export const DESK_MODES = ["ANSWER", "FORWARD"] as const;
 export type DeskMode = (typeof DESK_MODES)[number];
