@@ -1870,3 +1870,26 @@
 
   .bp :global(.pw-plans) { --pw-peek: calc(24px + 5vw); }
 }
+
+/* ── STRAIGHT TO THE CARD PAGE (2026-10-15, lib/signupAutoPlan): the plan the server picked, opening — the cards stay
+   out of sight until the visitor backs out of the card page or asks for them. ── */
+.bp :global(.plan-sheet-in[data-auto-going] #stepPlan > :not(.pw-auto)) { display: none !important; }
+.bp :global(.pw-auto) {
+  display: grid; gap: 12px; justify-items: start; max-width: 560px; margin: clamp(24px, 8vh, 80px) auto 0;
+  padding: 28px; border: 1.5px solid var(--blueprint); border-radius: var(--radius); background: #fff;
+}
+.bp :global(.pw-auto .auth-h1) { margin: 0; }
+.bp :global(.pw-auto-p) { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-soft); }
+.bp :global(.pw-auto-p b) { color: var(--ink); }
+.bp :global(.pw-auto-bar) { width: 100%; height: 4px; overflow: hidden; border-radius: 2px; background: rgba(24, 84, 160, 0.12); }
+.bp :global(.pw-auto-bar span) { display: block; width: 40%; height: 100%; background: var(--blueprint); animation: pwAutoRun 1.1s ease-in-out infinite; }
+@keyframes pwAutoRun { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+@media (prefers-reduced-motion: reduce) { .bp :global(.pw-auto-bar span) { animation: none; width: 100%; opacity: 0.5; } }
+.bp :global(.pw-auto-all) { font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; color: var(--ink-soft); }
+.bp :global(.pw-auto-all:hover) { color: var(--blueprint); }
+.bp :global(.pw-autonote) {
+  margin: 0 0 12px; padding: 10px 14px; border-left: 4px solid var(--blueprint); background: rgba(24, 84, 160, 0.06);
+  font-size: 14px; line-height: 1.5; color: var(--ink-soft);
+}
+.bp :global(.pw-autonote b) { color: var(--ink); }
+@media (max-width: 560px) { .bp :global(.pw-auto) { padding: 20px; margin-top: 16px; } }

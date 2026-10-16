@@ -40,7 +40,7 @@ export function CompleteLeadProfileBanner({
 
   return (
     // Same amber plate as the Overview banner (complete-lead-profile-banner.css).
-    <div className={`jf-lead-nudge${closing ? " is-closing" : ""}`}>
+    <div className={`jf-lead-nudge${closing ? " is-closing" : ""}`} data-lead-banner="">
       <MapPin className="jf-lead-nudge-pin" strokeWidth={1.75} aria-hidden />
       <div className="jf-lead-nudge-body">
         <div className="jf-lead-nudge-kicker">Lead Center</div>

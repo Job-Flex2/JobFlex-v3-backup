@@ -921,6 +921,7 @@ function DashboardView({ data, notice }: { data: DashboardData; notice?: React.R
               className={[styles.banner, banner === "closing" ? styles.bannerClosing : ""]
                 .filter(Boolean)
                 .join(" ")}
+              data-lead-banner={leadProfileNameOnly(gap) ? undefined : ""}
             >
               <Icon id="i-pin" className={`${styles.ic} ${styles.bannerPin}`} />
               <div className={styles.bannerBody}>

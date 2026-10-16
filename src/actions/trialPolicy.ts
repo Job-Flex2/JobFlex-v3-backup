@@ -1,7 +1,7 @@
 "use server";
 // THE TRIAL CARD SWITCH (2026-10-07) — platform admin only; lib/trialPolicyServer.
 import { requirePlatformAdmin } from "@/lib/orgContext";
-import { resetTrialPolicy, setSignupSteps, setTrialRequiresCard, signupTrialState, type SignupFlow, type SignupTrialState } from "@/lib/trialPolicyServer";
+import { resetTrialPolicy, setSignupPlan, setSignupSteps, setTrialRequiresCard, signupTrialState, type SignupFlow, type SignupPlanSetting, type SignupTrialState } from "@/lib/trialPolicyServer";
 
 type Result = { ok: true; policy: SignupTrialState } | { ok: false; error: string };
 
@@ -31,6 +31,17 @@ export async function setSignupStepsAction(input: Record<string, unknown> = {}):
   if (input.steps !== 2 && input.steps !== 3) return { ok: false, error: "Pick 2 or 3 steps." };
   try {
     return { ok: true, signup: await setSignupSteps(input.steps, admin.name || admin.email || null, input.passwordless === true) };
+  } catch {
+    return { ok: false, error: "The switch could not be saved. Try again." };
+  }
+}
+
+/** The plan at sign-up: the plan cards, or straight to Professional (lib/signupAutoPlan). */
+export async function setSignupPlanAction(input: Record<string, unknown> = {}): Promise<{ ok: true; plan: SignupPlanSetting } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  if (input.mode !== "auto" && input.mode !== "pick") return { ok: false, error: "Pick how the plan is chosen." };
+  try {
+    return { ok: true, plan: await setSignupPlan(input.mode, admin.name || admin.email || null) };
   } catch {
     return { ok: false, error: "The switch could not be saved. Try again." };
   }

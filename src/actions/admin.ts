@@ -15,7 +15,7 @@ import { appBaseUrl } from "@/lib/appUrl";
 import { supportTicketRef } from "@/lib/notify";
 import { isEmailEnabled, sendEmail } from "@/lib/sdk/resend";
 import { checkReply, replyLetter, statusAfterReply, type SupportReply } from "@/lib/supportReply";
-import { addSupportReply, recipientForTicket } from "@/lib/supportReplies";
+import { addSupportReply, canOpenSupportPage, recipientForTicket } from "@/lib/supportReplies";
 
 // ── Pricing plans ─────────────────────────────────────
 
@@ -227,7 +227,7 @@ export async function replyToSupportTicket(id: string, raw: unknown): Promise<Re
   if (!isEmailEnabled()) return { ok: false, error: "Email is not set up on this server, so the reply cannot be sent." };
   const who = admin as { name?: string | null; email?: string | null };
   const sender = who.name?.trim() || "JobFlex support";
-  const letter = replyLetter({ body: check.body, sender, ticket: { subject: ticket.subject, body: ticket.body, ref: supportTicketRef(ticket.id), filedAt: ticket.createdAt.toISOString() }, base: await appBaseUrl() });
+  const letter = replyLetter({ body: check.body, sender, ticket: { subject: ticket.subject, body: ticket.body, ref: supportTicketRef(ticket.id), filedAt: ticket.createdAt.toISOString() }, base: await appBaseUrl(), supportPage: await canOpenSupportPage(ticket, to) });
   try {
     await sendEmail({ to, subject: letter.subject, html: letter.html, text: letter.text, replyTo: "support@jobflex.app" });
   } catch (err) {

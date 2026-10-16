@@ -50,7 +50,7 @@ export function DashboardContent({ data }: { data: DashboardData }) {
           leads yet. The behavior module fills the missing-piece phrase and
           honours the 7-day localStorage snooze the classic banner wrote. */}
       {data.leadProfile && (
-        <div className="banner" id="leadBanner">
+        <div className="banner" id="leadBanner" data-lead-banner={leadProfileNameOnly(data.leadProfile) ? undefined : ""}>
           <svg className="ic banner-pin">
             <use href="#i-pin" />
           </svg>

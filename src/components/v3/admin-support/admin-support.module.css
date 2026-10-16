@@ -84,7 +84,12 @@
    Verbatim, wrapped, on paper — a quoted note on the drawing,
    not a paraphrase. `pre-wrap` keeps the submitter's own line
    breaks; `anywhere` stops one 200-character unbroken run from
-   widening the sheet (SKILL.md, user text never breaks layout). */
+   widening the sheet (SKILL.md, user text never breaks layout).
+   NO INNER SCROLL (2026-10-15). It had one, capped at 42vh — and
+   a scroll box in the sheet body's grid has no minimum height, so
+   once the AI's panel made the sheet taller than the screen the
+   message's row collapsed to one clipped line. The sheet body
+   scrolls as a whole; the message shows in full. */
 :global(.jf-blueprint .content) .msg {
   border: 1.5px solid var(--hair);
   border-radius: var(--radius);
@@ -94,8 +99,6 @@
   color: var(--ink);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 42vh;
-  overflow-y: auto;
 }
 
 /* ── The ticket's task (2026-10-11, /admin/tasks) ─────────────
@@ -117,13 +120,66 @@
 :global(.jf-blueprint .content) .replyActs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 :global(.jf-blueprint .content) .replySent { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--success-dark, #2c6335); }
 
+/* ── The support AI (2026-10-15) ───────────────────────────────
+   The switch above the queue, the chips for what waits, a state
+   chip per row, and in the sheet: what it did, its answer, its
+   notes, and a bug's fix proposal. Badges are the kit's `.st`. */
+:global(.jf-blueprint .content) .aiPanel { display: grid; gap: 10px; }
+:global(.jf-blueprint .content) .aiPanelRow { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+:global(.jf-blueprint .content) .aiPanelTxt { flex: 1 1 auto; min-width: 0; }
+:global(.jf-blueprint .content) .aiPanelT { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+:global(.jf-blueprint .content) .aiPanelS { margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--ink-soft, #333); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .aiMode { flex: 0 0 220px; }
+:global(.jf-blueprint .content) .aiChips { display: flex; flex-wrap: wrap; gap: 8px; }
+:global(.jf-blueprint .content) .aiChip {
+  border: 1.5px solid var(--hair); border-radius: 999px; background: #fff; color: var(--ink);
+  padding: 6px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+:global(.jf-blueprint .content) .aiChip--fix { border-color: var(--danger, #b3261e); color: var(--danger, #b3261e); }
+:global(.jf-blueprint .content) .aiChip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+:global(.jf-blueprint .content) .aiBadge { flex-shrink: 0; white-space: nowrap; }
+:global(.jf-blueprint .content) .aiCard {
+  display: grid; gap: 8px; margin-top: 12px; padding: 12px 14px;
+  border: 1.5px dashed var(--hair); border-radius: var(--radius); background: #fff; min-width: 0;
+}
+:global(.jf-blueprint .content) .aiHead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .aiMeta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted, #555); }
+:global(.jf-blueprint .content) .aiSummary { font-size: 13.5px; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .aiWhy { font-size: 12.5px; line-height: 1.45; color: var(--muted, #555); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .aiMore { min-width: 0; }
+:global(.jf-blueprint .content) .aiMore > summary { cursor: pointer; font-size: 12.5px; font-weight: 700; padding: 2px 0; }
+:global(.jf-blueprint .content) .aiMore > .replyBody { margin: 6px 0 8px; padding: 10px 12px; background: var(--paper); border-radius: var(--radius); }
+:global(.jf-blueprint .content) .aiFacts { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .aiTag {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 3px;
+  background: var(--ink); color: #fff; font-weight: 700;
+}
+:global(.jf-blueprint .content) .aiVerdict { padding: 8px 10px; border-radius: var(--radius); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .aiVerdict--ok { background: #eef6ef; color: var(--success-dark, #2c6335); }
+:global(.jf-blueprint .content) .aiVerdict--stuck { background: #fff7e6; color: #7a4b00; }
+:global(.jf-blueprint .content) .aiVerdictNote { margin-top: 4px; color: var(--ink); white-space: pre-wrap; }
+:global(.jf-blueprint .content) .fix {
+  display: grid; gap: 8px; margin-top: 4px; padding: 12px 14px;
+  border: 1.5px solid var(--hair); border-left: 4px solid var(--danger, #b3261e); border-radius: var(--radius); background: #fffafa; min-width: 0;
+}
+:global(.jf-blueprint .content) .fix--approved { border-left-color: var(--blueprint, #1854a0); background: #f7faff; }
+:global(.jf-blueprint .content) .fix--declined { border-left-color: var(--muted, #888); background: #fafafa; }
+:global(.jf-blueprint .content) .fix--done { border-left-color: var(--success-dark, #2c6335); background: #f6fbf6; }
+:global(.jf-blueprint .content) .fixHead { display: grid; gap: 2px; }
+:global(.jf-blueprint .content) .fixKicker { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted, #555); }
+:global(.jf-blueprint .content) .fixTitle { font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .fixList { display: grid; gap: 2px; margin: 0; font-size: 13px; line-height: 1.5; }
+:global(.jf-blueprint .content) .fixList dt { margin-top: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted, #555); }
+:global(.jf-blueprint .content) .fixList dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .fixAreas { font-family: var(--font-mono); font-size: 12px; }
+:global(.jf-blueprint .content) .fixActs { display: grid; gap: 8px; }
+
 /* ── Mobile layer — LAST in the cascade ─────────────────────── */
 @media (max-width: 860px) {
   :global(.jf-blueprint .content) .fSearch,
   :global(.jf-blueprint .content) .fSel { flex: 1 1 100%; }
   :global(.jf-blueprint .content) .count { margin-left: 0; }
+  :global(.jf-blueprint .content) .aiPanelRow { flex-direction: column; }
+  :global(.jf-blueprint .content) .aiMode { flex: 1 1 auto; width: 100%; }
 
-  /* A sheet that already fills the screen has nothing to protect against a
-     long message; the inner scroll would only add a second scrollbar. */
-  :global(.jf-blueprint .content) .msg { max-height: none; }
 }

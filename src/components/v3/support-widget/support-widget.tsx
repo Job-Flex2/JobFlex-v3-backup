@@ -39,6 +39,14 @@
 //                           `hidden md:flex`; below 768 that group draws NO top
 //                           bar at all, so the tab bar's More drawer carries
 //                           the same control as a row. Still exactly one.
+// THE ANSWER, RIGHT HERE (owner, 2026-10-15): once a ticket is filed the
+// window says "Looking into it…" and asks for the support AI's answer
+// (actions/supportLive) every two seconds for up to 90; the answer the
+// customer was also emailed lands in the window, with "That solved it"
+// (resolves the ticket) and "I still need help" (back to Open, a note for the
+// team, the support inbox told). A ticket the AI hands to a person says so; no
+// AI answer coming (switched off, drafts only) shows the plain confirmation.
+//
 // NOT the admin console (the operator does not file tickets to himself) and
 // not the public or auth routes, which render no shell.
 //
@@ -54,6 +62,8 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { submitSupportTicket } from "@/actions/support";
+import { answerSupportVerdict, liveSupportAnswer } from "@/actions/supportLive";
+import { answerParts, type LiveState } from "@/lib/support/aiState";
 import { lockScroll } from "@/lib/scrollLock";
 import "./support-widget.css";
 
@@ -77,6 +87,33 @@ const CATEGORIES = [
 
 /** `SupportTicket.body` is capped at 5000 by the action's validator. */
 const BODY_MAX = 5000;
+/** How long the window waits for the AI's answer before saying it will come by email. */
+const LIVE_WAIT_MS = 90_000;
+const LIVE_FIRST_MS = 1_200;
+const LIVE_EVERY_MS = 2_000;
+
+/** The AI's answer, as paragraphs; JobFlex's own links clickable (lib/support/aiState answerParts). */
+function AnswerBody({ body }: { body: string }) {
+  return (
+    <div className="jfsup-answer" data-support-live-answer>
+      {answerParts(body).map((para, i) => (
+        <p key={i}>
+          {para.map((piece, k) =>
+            "br" in piece ? (
+              <br key={k} />
+            ) : "path" in piece ? (
+              <a key={k} href={piece.path}>
+                {piece.label}
+              </a>
+            ) : (
+              <span key={k}>{piece.text}</span>
+            ),
+          )}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 /** Everything a Tab can land on inside the panel. */
 const FOCUSABLE =
@@ -433,7 +470,15 @@ export function SupportWidget({
   const [error, setError] = useState<string | null>(null);
   /** The filed ticket, and whether the operator alert actually went out.
    *  Non-null = the composer has collapsed. */
-  const [filed, setFiled] = useState<{ ref: string; notified: boolean } | null>(null);
+  const [filed, setFiled] = useState<{ id: string; ref: string; notified: boolean } | null>(null);
+  /** The AI's answer to the filed ticket: waiting, here, handed to a person, none coming, or late. */
+  const [live, setLive] = useState<LiveState | { state: "late" } | null>(null);
+  /** The customer's word on it: asking for more detail, or given. */
+  const [verdict, setVerdict] = useState<null | "asking" | "solved" | "needs-person">(null);
+  const [verdictBusy, setVerdictBusy] = useState(false);
+  const [verdictError, setVerdictError] = useState<string | null>(null);
+  const [stuckNote, setStuckNote] = useState("");
+  const stuckRef = useRef<HTMLTextAreaElement>(null);
 
   const popRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
@@ -460,6 +505,10 @@ export function SupportWidget({
         // closed by mistake is not something to throw away. A FILED one does
         // not: the next open starts a new ticket.
         setFiled(null);
+        setLive(null);
+        setVerdict(null);
+        setVerdictError(null);
+        setStuckNote("");
         setError(null);
         // Back to whatever opened this, and failing that to the dock — the
         // only launcher there is. The fallback matters for a host whose own
@@ -502,6 +551,10 @@ export function SupportWidget({
     openerRef.current = isRendered(opener) ? opener : focused;
     setError(null);
     setFiled(null);
+    setLive(null);
+    setVerdict(null);
+    setVerdictError(null);
+    setStuckNote("");
     setOpen(true);
     if (midExit) setOn(true);
   }, [signedIn]);
@@ -562,6 +615,59 @@ export function SupportWidget({
   useEffect(() => {
     if (filed) doneRef.current?.focus();
   }, [filed]);
+
+  // THE ANSWER, WHILE THE CUSTOMER WATCHES. Ask for it until it lands, the AI
+  // says a person has it, nothing is coming, or LIVE_WAIT_MS runs out. A failed
+  // ask (a blip, a deploy) just asks again.
+  const filedId = filed?.id ?? null;
+  useEffect(() => {
+    if (!filedId) return;
+    let stop = false;
+    let timer = 0;
+    const started = Date.now();
+    const ask = async () => {
+      try {
+        const next = await liveSupportAnswer(filedId);
+        if (stop) return;
+        if (next.state !== "pending") {
+          setLive(next);
+          return;
+        }
+      } catch {
+        /* ask again */
+      }
+      if (stop) return;
+      if (Date.now() - started > LIVE_WAIT_MS) {
+        setLive({ state: "late" });
+        return;
+      }
+      timer = window.setTimeout(ask, LIVE_EVERY_MS);
+    };
+    timer = window.setTimeout(ask, LIVE_FIRST_MS);
+    return () => {
+      stop = true;
+      window.clearTimeout(timer);
+    };
+  }, [filedId]);
+
+  useEffect(() => {
+    if (verdict === "asking") stuckRef.current?.focus();
+  }, [verdict]);
+
+  async function giveVerdict(next: "solved" | "needs-person") {
+    if (!filed || verdictBusy) return;
+    setVerdictBusy(true);
+    setVerdictError(null);
+    try {
+      const r = await answerSupportVerdict(filed.id, next, next === "needs-person" ? stuckNote : undefined);
+      if (r.ok) setVerdict(next);
+      else setVerdictError(r.error);
+    } catch {
+      setVerdictError("That didn't go through. Try again.");
+    } finally {
+      setVerdictBusy(false);
+    }
+  }
 
   // FOCUS CONTAINMENT. `aria-modal="true"` is a promise to a screen reader
   // that nothing outside the dialog is reachable; the app behind it has ~107
@@ -635,7 +741,9 @@ export function SupportWidget({
     setError(null);
     try {
       const result = await submitSupportTicket({ body, category });
-      setFiled({ ref: result.ref, notified: result.notified });
+      setFiled({ id: result.id, ref: result.ref, notified: result.notified });
+      setLive({ state: "pending" });
+      setVerdict(null);
       setMessage("");
     } catch (err: unknown) {
       setError(err instanceof Error && err.message ? err.message : "Could not send. Try again.");
@@ -680,18 +788,99 @@ export function SupportWidget({
 
         {filed ? (
           <div className="jfsup-body">
-            <div className="jfsup-ok">
-              <div className="jfsup-ok-t">Ticket filed</div>
-              <span className="jfsup-ref">{filed.ref}</span>
-              {/* What actually happened, not what usually happens: the action
-                  reports whether the operator alert went out, and a dead mail
-                  transport is the default in local and preview builds. */}
-              <div className="jfsup-ok-s">
-                {filed.notified
-                  ? "Our team has been alerted."
-                  : "The email alert did not go out. Quote this reference if you follow up."}
+            {live?.state === "pending" ? (
+              <div className="jfsup-live" aria-live="polite" data-support-live="pending">
+                <div className="jfsup-live-t">
+                  <span className="jfsup-dots" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  Looking into it…
+                </div>
+                <div className="jfsup-ok-s">
+                  Ticket <span className="jfsup-ref">{filed.ref}</span> is in. The answer usually takes a few seconds — it
+                  will also come by email.
+                </div>
               </div>
-            </div>
+            ) : live?.state === "answer" ? (
+              <div className="jfsup-live" aria-live="polite" data-support-live="answer">
+                <div className="jfsup-live-t">Here&apos;s what we found</div>
+                <AnswerBody body={live.body} />
+                <div className="jfsup-ok-s">
+                  Ticket <span className="jfsup-ref">{filed.ref}</span> · also sent to your email.
+                </div>
+                {verdict === null && !live.verdict ? (
+                  <div className="jfsup-acts">
+                    <button className="jfsup-send" type="button" onClick={() => giveVerdict("solved")} disabled={verdictBusy} data-support-solved>
+                      That solved it
+                    </button>
+                    <button className="jfsup-done" type="button" onClick={() => setVerdict("asking")} disabled={verdictBusy} data-support-stuck>
+                      I still need help
+                    </button>
+                  </div>
+                ) : verdict === "asking" ? (
+                  <div className="jfsup-stuck">
+                    <textarea
+                      ref={stuckRef}
+                      className="jfsup-in jfsup-in--short"
+                      value={stuckNote}
+                      maxLength={2000}
+                      disabled={verdictBusy}
+                      placeholder="What's still not working? (optional)"
+                      aria-label="What's still not working"
+                      onChange={(e) => setStuckNote(e.target.value)}
+                      data-support-stuck-note
+                    />
+                    <button className="jfsup-send" type="button" onClick={() => giveVerdict("needs-person")} disabled={verdictBusy} data-support-stuck-send>
+                      {verdictBusy ? "Sending" : "Send to our team"}
+                    </button>
+                  </div>
+                ) : (verdict ?? live.verdict) === "solved" ? (
+                  <div className="jfsup-thanks" data-support-thanks="solved">
+                    Glad that helped! Ticket {filed.ref} is closed — open Help any time you need us.
+                  </div>
+                ) : (
+                  <div className="jfsup-thanks" data-support-thanks="needs-person">
+                    Thanks for telling us. Someone from our team will pick this up personally and write back by email.
+                  </div>
+                )}
+                {verdictError ? (
+                  <div className="jfsup-err" role="alert">
+                    {verdictError}
+                  </div>
+                ) : null}
+              </div>
+            ) : live?.state === "held" ? (
+              <div className="jfsup-live" aria-live="polite" data-support-live="held">
+                <div className="jfsup-live-t">We&apos;re on it</div>
+                <div className="jfsup-ok-s">
+                  A member of our team is looking into this personally and will write back by email. Ticket{" "}
+                  <span className="jfsup-ref">{filed.ref}</span>.
+                </div>
+              </div>
+            ) : live?.state === "late" ? (
+              <div className="jfsup-live" aria-live="polite" data-support-live="late">
+                <div className="jfsup-live-t">Still working on it</div>
+                <div className="jfsup-ok-s">
+                  This one is taking a little longer — we&apos;ll email you the answer as soon as it&apos;s ready. Ticket{" "}
+                  <span className="jfsup-ref">{filed.ref}</span>.
+                </div>
+              </div>
+            ) : (
+              <div className="jfsup-ok">
+                <div className="jfsup-ok-t">Ticket filed</div>
+                <span className="jfsup-ref">{filed.ref}</span>
+                {/* What actually happened, not what usually happens: the action
+                    reports whether the operator alert went out, and a dead mail
+                    transport is the default in local and preview builds. */}
+                <div className="jfsup-ok-s">
+                  {filed.notified
+                    ? "Our team has been alerted."
+                    : "The email alert did not go out. Quote this reference if you follow up."}
+                </div>
+              </div>
+            )}
             <button className="jfsup-done" type="button" ref={doneRef} onClick={close}>
               Close
             </button>

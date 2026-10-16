@@ -96,6 +96,26 @@ async function hogql(query: string): Promise<unknown[][]> {
   return Array.isArray(body.results) ? body.results : [];
 }
 
+/**
+ * The server errors logged for one organization in the last `days` days, newest
+ * first, as short lines ("2026-10-14 18:02 UTC · proposals.sendProposal · 500 ·
+ * where") — what the support AI reads before it calls something a bug
+ * (lib/support/aiSupport). [] without PostHog. The id must look like a cuid
+ * before it goes anywhere near the query.
+ */
+export async function recentServerErrors(organizationId: string, days = 7): Promise<string[]> {
+  if (!isPostHogEnabled() || !/^[a-z0-9]{8,40}$/i.test(organizationId)) return [];
+  const span = Math.max(1, Math.min(30, Math.round(days)));
+  const rows = await hogql(
+    `SELECT timestamp, properties.scope, properties.code, properties.where FROM events WHERE event = 'server_error' AND properties.organizationId = '${organizationId}' AND timestamp > now() - INTERVAL ${span} DAY ORDER BY timestamp DESC LIMIT 12`,
+  );
+  return rows.map((r) => {
+    const at = r[0] instanceof Date ? r[0].toISOString() : String(r[0] ?? "");
+    const where = r[3] ? ` · ${String(r[3]).slice(0, 140)}` : "";
+    return `${at.slice(0, 16).replace("T", " ")} UTC · ${String(r[1] ?? "?")} · ${String(r[2] ?? "")}${where}`;
+  });
+}
+
 const num = (v: unknown): number => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : 0;

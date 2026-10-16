@@ -225,6 +225,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               }
             })();
           }
+          /* AN ACCOUNT FROM THE SHORT SIGN-UP (no code, lib/accountClaim):
+             Google vouching for the address claims it — every other session
+             ends and the address is marked confirmed. Unvouched: refused. */
+          const { isUnclaimed, claimIfUnclaimed } = await import("@/lib/accountClaim");
+          if (await isUnclaimed(existing.id)) {
+            if ((profile as { email_verified?: boolean } | undefined)?.email_verified !== true) return false;
+            await claimIfUnclaimed(existing.id);
+          }
           return true;
         }
         /* A NEW ADDRESS. Nothing is created here any more (owner's rule,

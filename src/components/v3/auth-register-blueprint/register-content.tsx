@@ -59,6 +59,7 @@ import { metaTrack, newEventId, readMetaCookies } from "@/lib/metaPixel";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
+import { autoPlanFor, autoPlanPrice, type AutoPlanOffer } from "@/lib/signupAutoPlan";
 import { rememberOtpDraft, rememberSignupMode, type SignupMode, type SignupModeLabel } from "@/lib/signupMode";
 import { forgetOtpDraft, otpPendingState } from "@/actions/signupOtp";
 import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
@@ -173,7 +174,12 @@ export function RegisterContent({
   steps = 3,
   mode = "password",
   otpRestore = null,
+  autoPlan = null,
 }: {
+  /* STRAIGHT TO PROFESSIONAL (owner, 2026-10-15, lib/signupAutoPlan): the plan
+     the server picked when the admin rule is "auto" — the short sign-up, then
+     the card page for it, no plan cards. Null: the plan cards, as built. */
+  autoPlan?: AutoPlanOffer | null;
   /* THE PASSWORDLESS SIGN-UP (2026-10-10, lib/signupMode): step 1 is
      ./passwordless-step — name, email, a code from an email — and the plan
      follows; no password, no company screen. "password" is the sign-up as
@@ -241,6 +247,9 @@ export function RegisterContent({
      setup mode, which is the company screen on its own). */
   const otp = mode === "otp" && !setupMode;
   const twoStep = steps === 2 && !setupMode && !otp;
+  /* Straight to the card page (lib/signupAutoPlan): only ever a new sign-up. */
+  const auto = autoPlan && !setupMode ? autoPlan : null;
+  const planMode = auto ? "auto" : "pick";
   /* THE FORM (landing-e pass A, 2026-09-11; the only form since 2026-09-16):
      step 1 is name, email, password and — since 2026-09-26 (owner) — a
      password confirmation, checked here in the browser only; the business
@@ -311,10 +320,10 @@ export function RegisterContent({
     // Parent route effects must record the entry pageview before this screen.
     const timer = window.setTimeout(() => {
       lastTrackedStep.current = key;
-      trackTraffic(TRAFFIC_EVENTS.step, { step, flow: trafficFlow, variant: "e", steps: twoStep || otp ? 2 : 3, mode: signupMode });
+      trackTraffic(TRAFFIC_EVENTS.step, { plan_mode: planMode, step, flow: trafficFlow, variant: "e", steps: twoStep || otp ? 2 : 3, mode: signupMode });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [step, trafficFlow, twoStep, otp, signupMode]);
+  }, [step, trafficFlow, twoStep, otp, signupMode, planMode]);
   /* `?flow=otp` / `?flow=off` are kept for this browser (lib/signupMode). */
   React.useEffect(() => {
     rememberSignupMode(searchParams?.get("flow") ?? null);
@@ -369,7 +378,8 @@ export function RegisterContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [plansErr, setPlansErr] = React.useState<string | null>(
-    ret?.cancelled ? "Checkout was cancelled — your account has not been created yet." : null,
+    // Straight-to-Professional says it calmly in its own note over the cards (data-auto-plan-back), not as an error.
+    ret?.cancelled && !auto ? "Checkout was cancelled — your account has not been created yet." : null,
   );
   /* THE PLAN STEP WITH NOTHING TO SELL (passwordless, 2026-10-14): the
      address has an account by now ("taken" — the plan step offers sign-in),
@@ -536,7 +546,7 @@ export function RegisterContent({
   const registrationSent = React.useRef(false);
   /** Step 1's outcome for the analyst: passed, or refused and why. */
   const step1Outcome = (outcome: "continue" | "error", reason = "", message = "") => {
-    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: twoStep ? 2 : 3, mode: signupMode });
+    trackTraffic(TRAFFIC_EVENTS.signupStep1, { plan_mode: planMode, outcome, reason, variant: "e", steps: twoStep ? 2 : 3, mode: signupMode });
     if (outcome === "error") signupProblem(reason, { message });
   };
   /* CompleteRegistration, the browser's copy. On the return from Checkout
@@ -657,7 +667,7 @@ export function RegisterContent({
     }
     // A form that took more than five seconds to come alive is ours to fix, whatever they did next.
     if (performance.now() > 5000) signupProblem("slow_form", { message: `ready after ${Math.round(performance.now() / 100) / 10} s` });
-    trackTraffic(TRAFFIC_EVENTS.signupStep1, {
+    trackTraffic(TRAFFIC_EVENTS.signupStep1, { plan_mode: planMode,
       outcome: "ready", ready_ms: Math.round(performance.now()),
       typed_before_ready: !!pre?.typedAt, typed_ms: pre?.typedAt || -1,
       early_submit: !!pre?.submitAt, submit_ms: pre?.submitAt || -1,
@@ -910,7 +920,7 @@ export function RegisterContent({
       ? customTrialDays
       : plans.find((p) => p.slug === slug)?.trialDays ?? 0;
     const term = termFor(slug);
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval: term, intent: clickedTrialDays > 0 ? "trial" : "purchase", flow: trafficFlow });
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: term, intent: clickedTrialDays > 0 ? "trial" : "purchase", flow: trafficFlow });
     if (!initiateSent.current) {
       initiateSent.current = true;
       const plan = plans.find((p) => p.slug === slug);
@@ -947,8 +957,10 @@ export function RegisterContent({
         body: JSON.stringify({ token, planSlug: slug, interval: term, customPages }),
       });
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      // "See all plans instead" pressed while the card page was being opened: stay on the cards.
+      if (res.ok && body.url && autoAbort.current) return;
       if (res.ok && body.url) {
-        trackTraffic(TRAFFIC_EVENTS.opened, { plan: slug, interval: term, flow: trafficFlow });
+        trackTraffic(TRAFFIC_EVENTS.opened, { plan_mode: planMode, plan: slug, interval: term, flow: trafficFlow });
         signupLeavingTo("checkout");
         leavingRef.current = true;
         window.location.href = body.url;
@@ -1024,7 +1036,7 @@ export function RegisterContent({
   const resendIn = Math.max(0, Math.ceil((resendAt - nowTick) / 1000));
   async function onStartCardless(slug: string | null = planSlug) {
     if (payBusy || !slug || !token) return;
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false });
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false });
     setPayBusy(true);
     setStartingSlug(slug);
     setPlansErr(null);
@@ -1116,6 +1128,31 @@ export function RegisterContent({
     setPlansErr(error);
   }
   const busyLabel = requiresCard ? "Opening checkout…" : "Starting your trial…";
+
+  /* STRAIGHT TO THE CARD PAGE (owner, 2026-10-15, lib/signupAutoPlan). Once the
+     plans are in, the plan the server picked opens Stripe's card page (or, with
+     no card, the trial starts) — no cards to compare. The cards come back when
+     the visitor backs out of the card page (?checkout=cancelled), asks for them
+     ("See all plans instead"), or anything on the way is refused. */
+  const [autoOff, setAutoOff] = React.useState(false);
+  const autoAbort = React.useRef(false);
+  const autoSlug = React.useMemo(() => {
+    if (!auto || plans.length === 0) return null;
+    if (plans.some((p) => p.slug === auto.slug)) return auto.slug;
+    const editionSlug = edition ? (plans.find((p) => isEditionPlan(p.slug, edition))?.slug ?? null) : null;
+    return autoPlanFor({ plans, tool: spotlight, editionSlug, asked: searchParams?.get("plan") ?? null })?.slug ?? null;
+  }, [auto, plans, spotlight, edition, searchParams]);
+  const autoView = !!auto && step === 3 && !ret?.cancelled && !autoOff && !plansErr && !gate && !confirmSentTo;
+  const autoRan = React.useRef(false);
+  React.useEffect(() => {
+    if (!autoView || autoRan.current || !autoSlug || !token) return;
+    autoRan.current = true;
+    // After this render, not in it (the start sets state as it goes).
+    void Promise.resolve().then(() => onStartPlan(autoSlug));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the plan and the intent are both in
+  }, [autoView, autoSlug, token]);
+  const autoName = (autoSlug && plans.find((p) => p.slug === autoSlug)?.name) || auto?.name || "Professional";
+  const autoPriceCents = (autoSlug && plans.find((p) => p.slug === autoSlug)?.priceCents) || auto?.priceCents || 0;
 
   /* ONCE. The intent is spent by its first completion, and React's development
      StrictMode mounts effects twice — the second call came back "That signup
@@ -1419,7 +1456,7 @@ export function RegisterContent({
      StartTrial carry the ids the server's copies used. */
   async function onStartCardlessVerified(slug: string | null = planSlug) {
     if (payBusy || !slug || !token) return;
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false, mode: signupMode });
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false, mode: signupMode });
     setPayBusy(true);
     setStartingSlug(slug);
     setPlansErr(null);
@@ -1647,6 +1684,9 @@ export function RegisterContent({
                   google={google}
                   inApp={inApp}
                   requiresCard={requiresCard}
+                  auto={auto}
+                  quick={!!auto && requiresCard}
+                  planMode={planMode}
                   trialDays={offer.days}
                   industry={industry}
                   tool={spotlight}
@@ -1836,7 +1876,7 @@ export function RegisterContent({
             ) : (
             <>
             <div className="divider">
-              <span className="kpi-lbl">or</span>
+              <span className="kpi-lbl">Have Gmail or a Google account?</span>
             </div>
             <button className="btn btn--ghost" type="button" id="googleBtn" onClick={onGoogle}>
               {googleBusy ? (
@@ -1851,7 +1891,7 @@ export function RegisterContent({
                   <svg className="ic ic--brand">
                     <use href="#i-google" />
                   </svg>
-                  Continue with Google
+                  Sign up with Google
                 </>
               )}
             </button>
@@ -1989,6 +2029,11 @@ export function RegisterContent({
                 <p className="auth-lede" id="doneNote">
                   {doneNote}
                 </p>
+                {auto ? (
+                  <p className="fld-note" id="doneAutoNote">
+                    Need different tools or another package? You can change your plan any time in Subscription.
+                  </p>
+                ) : null}
                 <div className="btn-pair">
                   <Link className="btn" href={doneHref}>
                     {signedIn ? "Open your dashboard" : "Sign in to your dashboard"}
@@ -2048,6 +2093,7 @@ export function RegisterContent({
             share one left and one right edge. */}
         <div
           className="plan-sheet-in"
+          data-auto-going={autoView || undefined}
           style={{ "--pw-cols": Math.max(1, orderedPlans.length + (offerCustom && plans.length > 0 ? 1 : 0)) } as React.CSSProperties}
         >
           {brand}
@@ -2085,6 +2131,42 @@ export function RegisterContent({
             {/* ONE ROW ON A DESK (owner, 2026-10-12): the question on the left; the trial's
                 stamp and the Monthly | Annual switch side by side on the right, so the head
                 takes one row (two when the window is narrow) and the cards fit the screen. */}
+            {autoView ? (
+              <div className="pw-auto" role="status" data-auto-plan={autoSlug ?? auto?.slug}>
+                <span className="pw-confirm-k">{trialDays}-day free trial</span>
+                <h1 className="auth-h1">{autoName}</h1>
+                <p className="pw-auto-p">
+                  {requiresCard ? (
+                    <>
+                      Opening Stripe&apos;s secure card page… <b>$0 today</b>, then {autoPlanPrice({ priceCents: autoPriceCents })} — cancel any time.
+                    </>
+                  ) : (
+                    <>Starting your free trial — no card needed…</>
+                  )}{" "}
+                  You can change your plan any time in JobFlex.
+                </p>
+                <div className="pw-auto-bar" aria-hidden="true">
+                  <span />
+                </div>
+                <button
+                  type="button"
+                  className="link-ink pw-auto-all"
+                  onClick={() => {
+                    autoAbort.current = true;
+                    setAutoOff(true);
+                    trackTraffic(TRAFFIC_EVENTS.step, { plan_mode: planMode, step: "plans_asked", flow: trafficFlow, variant: "e", mode: signupMode });
+                  }}
+                  data-auto-plan-all
+                >
+                  See all plans instead
+                </button>
+              </div>
+            ) : null}
+            {auto && ret?.cancelled && !gate ? (
+              <p className="pw-autonote" data-auto-plan-back>
+                No card yet, nothing charged. <b>{auto.name}</b> is picked for you — start it below, or choose another plan.
+              </p>
+            ) : null}
             {spotlight ? (
               <p className="pw-spot" data-plan-spotlight={spotlight} data-plan-spotlight-row={spotRow ?? ""}>
                 <span className="pw-spot-k">{SPOTLIGHT[spotlight].label}</span>

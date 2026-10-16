@@ -4,6 +4,7 @@ import "server-only";
 // who a ticket's answer goes to. The letter and the checks are the pure
 // lib/supportReply; the send is actions/admin replyToSupportTicket.
 import { db } from "@/lib/db";
+import { isLimitedRole } from "@/lib/orgContext";
 import type { SupportReply } from "@/lib/supportReply";
 
 const KEY = (ticketId: string) => `supportReplies:${ticketId}`;
@@ -43,6 +44,17 @@ export async function addSupportReply(ticketId: string, reply: SupportReply): Pr
   const cursor = JSON.stringify(list);
   await db.syncState.upsert({ where: { key: KEY(ticketId) }, create: { key: KEY(ticketId), cursor }, update: { cursor } });
   return list;
+}
+
+/** Whether the answer's "your ticket is at /dashboard/support" line can be
+ *  followed: crew, sales and estimators file tickets but can't open that page
+ *  (requireManager). An owner or billing address always can. */
+export async function canOpenSupportPage(ticket: { organizationId: string; userId?: string | null; user?: { email: string | null } | null }, to: string): Promise<boolean> {
+  if (!ticket.userId || !ticket.user?.email || ticket.user.email !== to) return true;
+  const m = await db.membership
+    .findFirst({ where: { organizationId: ticket.organizationId, userId: ticket.userId }, select: { role: true } })
+    .catch(() => null);
+  return !isLimitedRole(m?.role);
 }
 
 /** Where a ticket's answer goes: whoever filed it; else the account's owner; else its billing address. */
