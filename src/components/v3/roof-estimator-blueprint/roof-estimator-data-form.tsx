@@ -325,6 +325,14 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   const solarFacetCount = solar && Number.isSafeInteger(solar.segmentCount) && solar.segmentCount > 0
     ? solar.segmentCount
     : null;
+  // A measured report can come back with structure_roof_facet_count simply
+  // absent (657 Queen Ave NE, 2026-10-16: every other figure landed, facets
+  // "—" forever). Google's segment count — kept by the witnesses, or healed
+  // in by one building-insights call — stands in as an ESTIMATE, marked so.
+  const segmentFacetEstimate = !isSolar
+    && measurement?.provenance?.googleSegmentCount != null && measurement.provenance.googleSegmentCount > 0
+    ? measurement.provenance.googleSegmentCount
+    : null;
   // Pricing allocates sloped roofing squares, so weight families by surface
   // area rather than footprint; otherwise steep facets are underpriced.
   const solarSurfaceTotal = solar?.pitchFamilies.reduce((sum, family) => sum + family.surfaceSqft, 0) ?? 0;
@@ -414,7 +422,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // What the ledger may still hold for this address: the pending packs, and
   // — on rows saved before `pending` existed (2026-09-17) — packs counted as
   // failed or missing while a slow order was in fact still processing.
-  const packsToCollect = packsPendingList.length > 0 || (!!instantPacks && (instantPacks.failed.length > 0 || instantPacks.missing.length > 0));
+  const facetHealWanted = !!measurement && measurement.source !== "recon" && !isSolar && !!measurement.instant
+    && measurement.instant.totals?.facetCount == null && measurement.provenance?.googleSegmentCount == null;
+  const packsToCollect = packsPendingList.length > 0 || (!!instantPacks && (instantPacks.failed.length > 0 || instantPacks.missing.length > 0)) || facetHealWanted;
   // Keyed by measurement id, so a swap to another row never inherits a verdict.
   const [collecting, setCollecting] = React.useState<{ id: string; state: "checking" | "gave-up" | "done" } | null>(null);
   const collectFor = measurement && packsToCollect && measurement.id !== "unsaved" ? measurement.id : null;
@@ -2146,8 +2156,20 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               <HeroCell l="Roof pitch" v={pitchLabelShown} h={pitchHint} />
               <HeroCell
                 l="Roof facets"
-                v={isSolar ? (solarFacetCount != null ? `≈${solarFacetCount}` : "—") : (totals?.facetCount != null ? String(totals.facetCount) : "—")}
-                h={isSolar ? (solarFacetCount != null ? "estimated planes" : "unavailable") : "planes"}
+                v={isSolar
+                  ? (solarFacetCount != null ? `≈${solarFacetCount}` : "—")
+                  : totals?.facetCount != null
+                    ? String(totals.facetCount)
+                    : segmentFacetEstimate != null
+                      ? `≈${segmentFacetEstimate}`
+                      : "—"}
+                h={isSolar
+                  ? (solarFacetCount != null ? "estimated planes" : "unavailable")
+                  : totals?.facetCount != null
+                    ? "planes"
+                    : segmentFacetEstimate != null
+                      ? "estimated planes"
+                      : "not in this data"}
               />
               <HeroCell l="Eaves + rakes" v={edgeTiles.edges} h={isSolar ? "linear ft · estimated" : "linear ft"} />
               <HeroCell l="Ridge + hips" v={edgeTiles.ridge} h={isSolar ? "linear ft · estimated" : "linear ft"} />
