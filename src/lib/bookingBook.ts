@@ -12,6 +12,8 @@ import { appBaseUrl } from "@/lib/appUrl";
 import { afterResponse } from "@/lib/server-events";
 import { textAppointmentBooked, textAppointmentCancelled, textAppointmentMoved as textVisitMoved, visitFacts } from "@/lib/sms/schedule";
 import { parseTradeTypes } from "@/lib/tradeTypes";
+import { toE164 } from "@/lib/phone";
+import { aptSourceKey, bookingNoteHead, type AptSource } from "@/lib/calendar/visitVia";
 import { availableSlots, bookingScope, parseBookingSettings, slotLabel, type BookingService, type BookingSettings, type Busy, type DaySlots } from "@/lib/booking";
 
 const ORG_SELECT = { id: true, name: true, slug: true, timezone: true, logoUrl: true, phone: true, billingEmail: true, gmailSettingsJson: true, gmailTokensJson: true, tradeTypesJson: true, bookingSettingsJson: true } as const;
@@ -47,6 +49,24 @@ async function clientByEmail(organizationId: string, email: string): Promise<{ i
   return hit ? { id: hit.id, name: hit.name } : null;
 }
 
+/** A client the shop knows by this number (the AI desk's caller has a number, rarely an email). */
+async function clientByPhone(organizationId: string, phone: string): Promise<{ id: string; name: string } | null> {
+  const e164 = toE164(phone);
+  if (!e164) return null;
+  const same = await db.client.findMany({ where: { organizationId, deletedAt: null, phone: { contains: e164.slice(-4) } }, select: { id: true, name: true, phone: true }, take: 25 });
+  const hit = same.find((c) => toE164(c.phone ?? "") === e164);
+  return hit ? { id: hit.id, name: hit.name } : null;
+}
+
+/** An open lead with this number — the caller who left a message yesterday and calls back to book. */
+async function openLeadByPhone(organizationId: string, phone: string): Promise<{ id: string } | null> {
+  const e164 = toE164(phone);
+  if (!e164) return null;
+  const same = await db.lead.findMany({ where: { organizationId, status: { notIn: ["WON", "LOST", "ARCHIVED"] }, phone: { contains: e164.slice(-4) } }, orderBy: { createdAt: "desc" }, select: { id: true, phone: true }, take: 25 });
+  const hit = same.find((l) => toE164(l.phone ?? "") === e164);
+  return hit ? { id: hit.id } : null;
+}
+
 export async function availabilityFor(org: OrgRow, service: BookingService, now = new Date()): Promise<DaySlots[]> {
   const settings = settingsOf(org);
   const busy = await busyBetween(org.id, new Date(now.getTime() - DAY), new Date(now.getTime() + (settings.horizonDays + 2) * DAY));
@@ -75,6 +95,10 @@ export interface NewBooking {
   address?: string | null;
   notes?: string | null;
   answers: Array<{ key: string; label: string; value: string }>;
+  /** Who booked: the customer on the booking page (default) or the AI desk on a call. */
+  channel?: "online" | "ai-desk";
+  /** The desk's call, kept with the visit so the calendar can point back to it. */
+  callSid?: string | null;
 }
 
 export interface BookingReceipt {
@@ -107,19 +131,25 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
   if (!slot) return { ok: false, error: "That time was just taken — please pick another." };
   const tz = org.timezone || "America/New_York";
   const email = input.email?.trim().toLowerCase() || null;
-  const client = email ? await clientByEmail(org.id, email) : null;
+  const channel = input.channel === "ai-desk" ? "ai-desk" : "online";
+  const desk = channel === "ai-desk";
+  const phone = input.phone?.trim() || null;
+  // A caller is matched by their number (the desk rarely has an email); a web
+  // booking only by email — a number typed into a form proves nothing.
+  const client = (email ? await clientByEmail(org.id, email) : null) ?? (desk && phone ? await clientByPhone(org.id, phone) : null);
+  const knownLead = !client && desk && phone ? await openLeadByPhone(org.id, phone) : null;
   const memberPlan = client ? await db.servicePlan.findFirst({ where: { organizationId: org.id, clientId: client.id, status: "ACTIVE" }, select: { name: true } }) : null;
   const member = !!memberPlan;
-  const scope = bookingScope(service, input.answers.map((a) => ({ label: a.label, value: a.value })), input.notes);
+  const scope = bookingScope(service, input.answers.map((a) => ({ label: a.label, value: a.value })), input.notes, channel);
   const when = slotLabel(slot, tz, settings.arrivalWindow);
   const priceText = member && service.memberPriceText ? service.memberPriceText : service.priceText;
   let manageToken = "";
   let bookedAppointmentId: string | null = null;
   await db.$transaction(async (tx) => {
-    let leadId: string | null = null;
-    if (!client) {
+    let leadId: string | null = knownLead?.id ?? null;
+    if (!client && !leadId) {
       const lead = await tx.lead.create({
-        data: { organizationId: org.id, name: input.name, email, phone: input.phone?.trim() || null, address: input.address?.trim() || null, projectType: service.label, description: scope, scope, source: "BOOKING", status: "NEW", aiCategory: service.trade },
+        data: { organizationId: org.id, name: input.name, email, phone, address: input.address?.trim() || null, projectType: service.label, description: scope, scope, source: desk ? "AI_DESK" : "BOOKING", status: "NEW", aiCategory: service.trade },
         select: { id: true },
       });
       leadId = lead.id;
@@ -133,7 +163,7 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
         startsAt: slot.startsAt,
         endsAt: slot.endsAt,
         status: "SCHEDULED",
-        notes: [`Booked online · ${priceText}${member ? ` · member of the ${memberPlan!.name}` : ""}`, input.phone ? `Phone ${input.phone}` : null, input.address ? `Address ${input.address}` : null, "", scope].filter((x) => x !== null).join("\n"),
+        notes: [bookingNoteHead(channel, priceText, member ? memberPlan!.name : null), input.phone ? `Phone ${input.phone}` : null, input.address ? `Address ${input.address}` : null, "", scope].filter((x) => x !== null).join("\n"),
       },
       select: { id: true },
     });
@@ -143,12 +173,19 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
     });
     manageToken = booking.manageToken;
     bookedAppointmentId = appt.id;
-    await tx.activityEvent.create({ data: { organizationId: org.id, kind: "BOOKING_NEW", clientId: client?.id ?? null, leadId, summary: `${input.name} booked ${service.label.toLowerCase()} — ${when}${member ? " · member" : leadId ? " · new lead" : ""}`, meta: JSON.stringify({ href: "/dashboard/booking", appointmentId: appt.id }) } });
+    // How it was booked, beside the appointment (no schema change) — the
+    // calendar reads it to tag the visit (lib/calendar/visitVia).
+    const marker: AptSource = { channel, callSid: desk ? input.callSid?.trim().slice(0, 64) || null : null, at: now.toISOString() };
+    await tx.syncState.upsert({ where: { key: aptSourceKey(appt.id) }, create: { key: aptSourceKey(appt.id), cursor: JSON.stringify(marker) }, update: { cursor: JSON.stringify(marker) } });
+    const tail = member ? " · member" : knownLead ? " · lead on file" : leadId ? " · new lead" : "";
+    const summary = desk ? `The AI desk booked ${input.name} for ${service.label.toLowerCase()} on a call — ${when}${tail}` : `${input.name} booked ${service.label.toLowerCase()} — ${when}${tail}`;
+    await tx.activityEvent.create({ data: { organizationId: org.id, kind: "BOOKING_NEW", clientId: client?.id ?? null, leadId, summary, meta: JSON.stringify({ href: "/dashboard/booking", appointmentId: appt.id, channel }) } });
   });
   // The office hears about it by text (2026-09-29): "Booked: … · online."
+  // A desk booking says so: "Booked: … · by the AI desk."
   if (bookedAppointmentId) {
     const id = bookedAppointmentId;
-    afterResponse(() => textAppointmentBooked(id, null, "online"));
+    afterResponse(() => textAppointmentBooked(id, null, desk ? "the AI desk" : "online"));
   }
   const manageHref = `${await appBaseUrl()}/book/manage/${manageToken}`;
   await emailCustomer(org, email, {

@@ -95,6 +95,7 @@ import {
 } from "@/actions/blockedTime";
 import { assignWorker, markAssignmentAccepted, unassignWorker } from "@/actions/workers";
 import { markNavSeen } from "@/actions/notifications";
+import { VISIT_VIA } from "@/lib/calendar/visitVia";
 import { MobileJobOffers } from "@/app/(mobile)/mobile-jobs-v2/mobile-jobs";
 import {
   ALL,
@@ -222,10 +223,13 @@ function EventRow({
   // thing on the schedule. Matches the desktop's rose treatment for the same
   // rows (WeekGridA / TeamGridA).
   const blocked = e.kind === "blocked";
+  // A visit is its own card (2026-10-16): tinted in the colour of whoever
+  // booked it, with a rail and time plate in that colour — a job row never is.
+  const visit = e.kind === "appointment" ? VISIT_VIA[e.via || "team"] : null;
   return (
     <div
-      className={`${styles.erow} ${blocked ? styles.isBlocked : ""} ${styles.rowIn} ${landed ? styles.landed : ""}`}
-      style={{ animationDelay: `${i * 45}ms` }}
+      className={`${styles.erow} ${blocked ? styles.isBlocked : ""} ${visit ? styles.isVisit : ""} ${visit && e.status === "CANCELED" ? styles.isVisitOff : ""} ${styles.rowIn} ${landed ? styles.landed : ""}`}
+      style={{ animationDelay: `${i * 45}ms`, ...(visit ? ({ "--via": visit.tone } as React.CSSProperties) : {}) }}
     >
       {/* Time is the one thing a calendar row is about, so it takes the left
           plate. Today is ALWAYS filled blueprint — the reference's rule. */}
@@ -268,7 +272,10 @@ function EventRow({
       <div className={styles.ewho}>{whoWhere(e)}</div>
       {/* Row 3 — badge leads, the duration closes at the far right */}
       <div className={styles.erowFoot}>
-        <span className={`${styles.estatus} ${TONE_BADGE[tone] ?? ""}`}>{toneLabel(e)}</span>
+        <span className={`${styles.estatus} ${visit ? styles.stVia : TONE_BADGE[tone] ?? ""}`}>
+          {visit ? <Icon id={visit.icon} className={`${styles.ic} ${styles.stViaIc}`} /> : null}
+          {toneLabel(e)}
+        </span>
         <span className={styles.ecrew}>{crewLabel(e)}</span>
         <span className={`${styles.edur} ${e.allDay ? styles.isZero : ""}`}>
           {e.allDay ? "—" : durLabel(e.end.getTime() - e.start.getTime())}
@@ -290,7 +297,11 @@ function metaRowsFor(e: CalEvent): [string, string][] {
     ["When", e.allDay ? fmtDate(e.start) : `${fmtDate(e.start)} · ${fmtRange(e.start, e.end)}`],
     ["Duration", e.allDay ? "All day" : durLabel(e.end.getTime() - e.start.getTime())],
   ];
-  if (e.client) rows.push(["Client", e.client]);
+  if (e.kind === "appointment") {
+    rows.push(["Booked", e.booked || "By your team"]);
+    if (e.visitFor) rows.push(["Visit for", e.visitFor + (e.member ? " · member price" : "")]);
+  }
+  if (e.client) rows.push([e.kind === "appointment" && !e.clientId && e.leadId ? "Lead" : "Client", e.client]);
   if (e.phone) rows.push(["Phone", e.phone]);
   if (e.addr) rows.push(["Address", e.addr]);
   rows.push([
@@ -308,6 +319,16 @@ function metaRowsFor(e: CalEvent): [string, string][] {
   ]);
   if (e.scope) rows.push(["Scope", e.scope]);
   return rows;
+}
+
+/** Where a visit's sheet can go: its lead or client, the visit page, the desk's call log. */
+function visitLinks(e: CalEvent): Array<{ href: string; icon: string; title: string; sub: string }> {
+  const out: Array<{ href: string; icon: string; title: string; sub: string }> = [];
+  if (e.clientId) out.push({ href: `/dashboard/client-detail?client=${encodeURIComponent(e.clientId)}`, icon: "i-user", title: "Open client", sub: "Their record, jobs and proposals" });
+  else if (e.leadId) out.push({ href: `/dashboard/leads/${encodeURIComponent(e.leadId)}`, icon: "i-target", title: "Open lead", sub: "What they asked for and how to reach them" });
+  if (e.rid) out.push({ href: `/dashboard/visits/${encodeURIComponent(e.rid)}`, icon: "i-file", title: "Visit page", sub: "Equipment on file and the visit report" });
+  if (e.via === "ai-desk") out.push({ href: "/dashboard/phone", icon: "i-phone", title: "Call log", sub: "The AI desk call that booked it" });
+  return out;
 }
 
 /** Never blank: it says what happened AND what to do. Two distinct states —
@@ -1922,7 +1943,11 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
                       <span className={styles.mgNum}>{c.day.getDate()}</span>
                       <span className={styles.mgDots}>
                         {c.evs.slice(0, MG_CAP).map((e) => (
-                          <span key={e.id} className={`${styles.mgDot} ${TONE_DOT[toneKey(e)] ?? ""}`} />
+                          <span
+                            key={e.id}
+                            className={`${styles.mgDot} ${e.kind === "appointment" ? styles.dotVia : TONE_DOT[toneKey(e)] ?? ""}`}
+                            style={e.kind === "appointment" ? ({ "--via": VISIT_VIA[e.via || "team"].tone } as React.CSSProperties) : undefined}
+                          />
                         ))}
                       </span>
                       {extra ? <span className={styles.mgMore}>+{extra}</span> : null}
@@ -2214,7 +2239,11 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
               {/* Status leads, in its own tone; kind and span follow in the
                   neutral badge so three badges never read as three statuses. */}
               <div className={styles.dBadges}>
-                <span className={`${styles.estatus} ${TONE_BADGE[toneKey(detailEvent)] ?? ""}`}>
+                <span
+                  className={`${styles.estatus} ${detailEvent.kind === "appointment" ? styles.stVia : TONE_BADGE[toneKey(detailEvent)] ?? ""}`}
+                  style={detailEvent.kind === "appointment" ? ({ "--via": VISIT_VIA[detailEvent.via || "team"].tone } as React.CSSProperties) : undefined}
+                >
+                  {detailEvent.kind === "appointment" ? <Icon id={VISIT_VIA[detailEvent.via || "team"].icon} className={`${styles.ic} ${styles.stViaIc}`} /> : null}
                   {toneLabel(detailEvent)}
                 </span>
                 <span className={styles.estatus}>{KIND_LABEL[detailEvent.kind]}</span>
@@ -2270,6 +2299,34 @@ function CalendarBoard({ book }: { book: CalendarBook }) {
                       <span className={styles.mrowS}>Full record, crew and photos</span>
                     </span>
                   </button>
+                </div>
+              ) : null}
+
+              {/* A visit's ways out (2026-10-16): the lead or client it is
+                  for, the visit page (equipment + report), and — when the AI
+                  desk booked it — the call log. */}
+              {detailEvent.kind === "appointment" ? (
+                <div className={styles.dSec}>
+                  <div className={styles.dSecLbl}>Visit</div>
+                  {visitLinks(detailEvent).map((l) => (
+                    <button
+                      key={l.href}
+                      className={styles.mrow}
+                      type="button"
+                      onClick={() => {
+                        setDetailId(null);
+                        router.push(l.href as Route);
+                      }}
+                    >
+                      <span className={`${styles.mrowIc} ${styles.miBp}`}>
+                        <Icon id={l.icon} />
+                      </span>
+                      <span>
+                        <span className={styles.mrowT}>{l.title}</span>
+                        <span className={styles.mrowS}>{l.sub}</span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               ) : null}
             </>

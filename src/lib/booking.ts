@@ -207,9 +207,10 @@ export function slotLabel(s: Slot, timeZone: string, arrivalWindow: number): str
 }
 
 /** The scope a booking hands the lead: the service, the answers, the customer's words. */
-export function bookingScope(service: BookingService, answers: Array<{ label: string; value: string }>, notes: string | null | undefined): string {
-  const lines = [`${service.label} booked online.`];
+/** The lead's scope for a booked visit. `channel` "ai-desk": the desk booked it on a call, and the notes are what the caller said. */
+export function bookingScope(service: BookingService, answers: Array<{ label: string; value: string }>, notes: string | null | undefined, channel: "online" | "ai-desk" = "online"): string {
+  const lines = [channel === "ai-desk" ? `${service.label} booked by phone with the AI desk.` : `${service.label} booked online.`];
   for (const a of answers) if (a.value) lines.push(`${a.label} ${a.value}`);
-  if (notes?.trim()) lines.push(`In their words: ${notes.trim()}`);
+  if (notes?.trim()) lines.push(`${channel === "ai-desk" ? "On the call" : "In their words"}: ${notes.trim()}`);
   return lines.join("\n");
 }

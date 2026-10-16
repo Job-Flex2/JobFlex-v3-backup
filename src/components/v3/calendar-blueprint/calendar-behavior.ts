@@ -37,6 +37,7 @@ import {
 } from "@/actions/jobs";
 import { assignWorker, markAssignmentAccepted, unassignWorker } from "@/actions/workers";
 import { markNavSeen } from "@/actions/notifications";
+import { VISIT_VIA } from "@/lib/calendar/visitVia";
 import {
   TODAY as TODAY_FIXTURE,
   JOB_STATUSES,
@@ -472,7 +473,21 @@ export function initCalendarContent(
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function statusCls(e: CalEvent) {
-    return e.kind === "job" ? "evc--" + e.status.toLowerCase() : "evc--" + e.kind;
+    if (e.kind === "job") return "evc--" + e.status.toLowerCase();
+    // A visit wears its own card (2026-10-16): the channel's colour all round,
+    // softer corners, and a tag saying who booked it — a job card never has one.
+    if (e.kind === "appointment") return "evc--appointment evc--via-" + (e.via || "team") + (e.status === "CANCELED" ? " evc--apt-off" : "");
+    return "evc--" + e.kind;
+  }
+  /** The chip's leading icon: the channel's for a visit, the kind's otherwise. */
+  function evIcon(e: CalEvent) {
+    if (e.kind === "appointment") return VISIT_VIA[e.via || "team"].icon;
+    return KIND_IC[e.kind] || "i-cal";
+  }
+  /** "AI DESK" / "ONLINE" / "PLAN" / "OFFICE" — only visits carry one. */
+  function viaTag(e: CalEvent) {
+    if (e.kind !== "appointment") return "";
+    return '<span class="evc-via">' + esc(VISIT_VIA[e.via || "team"].tag) + "</span>";
   }
 
   function visibleEvents() {
@@ -481,7 +496,9 @@ export function initCalendarContent(
       if (cal.statuses.length && cal.statuses.indexOf(e.status) === -1) return false;
       if (cal.workers.length && !e.workers.some(function (w) { return cal.workers.indexOf(w) !== -1; })) return false;
       if (!q) return true;
-      return (e.title + " " + (e.client || "") + " " + (e.addr || "")).toLowerCase().indexOf(q) !== -1;
+      // "ai desk", "online", "plan" find the visits booked that way.
+      const via = e.kind === "appointment" ? " " + VISIT_VIA[e.via || "team"].tag + " " + (e.visitFor || "") : "";
+      return (e.title + " " + (e.client || "") + " " + (e.addr || "") + via).toLowerCase().indexOf(q) !== -1;
     });
   }
   function eventsOn(day: Date, workerId?: string) {
@@ -671,8 +688,10 @@ export function initCalendarContent(
 
   function chipHtml(e: CalEvent, compact: boolean) {
     return '<button class="evc ' + statusCls(e) + '" type="button" draggable="' + canDrag(e) + '" data-ev="' + e.id + '">' +
-      '<span class="evc-t"><svg class="ic"><use href="#' + (KIND_IC[e.kind] || "i-cal") + '"/></svg><span class="evc-txt">' + esc(e.title) + "</span></span>" +
-      (compact ? "" : '<span class="evc-time">' + (e.allDay ? "All day" : fmtTime(e.start)) + " · " + esc(workerNames(e).join(", ") || "unassigned") + "</span>") +
+      '<span class="evc-t"><svg class="ic"><use href="#' + evIcon(e) + '"/></svg><span class="evc-txt">' + esc(e.title) + "</span></span>" +
+      (compact
+        ? (e.kind === "appointment" ? '<span class="evc-time">' + viaTag(e) + "</span>" : "")
+        : '<span class="evc-time">' + viaTag(e) + (e.allDay ? "All day" : fmtTime(e.start)) + " · " + esc(workerNames(e).join(", ") || "unassigned") + "</span>") +
       "</button>";
   }
 
@@ -1073,9 +1092,9 @@ export function initCalendarContent(
       (flushTop(p.top, p.height).onLine ? " is-flush-top" : "") + '" type="button" draggable="' + canDrag(p.e) + '"' +
       ' data-ev="' + p.e.id + '"' +
       ' style="' + geoStyle(p) + '">' +
-      '<span class="evc-t"><svg class="ic"><use href="#' + (KIND_IC[p.e.kind] || "i-cal") + '"/></svg>' +
+      '<span class="evc-t"><svg class="ic"><use href="#' + evIcon(p.e) + '"/></svg>' +
       '<span class="evc-txt">' + esc(p.e.title) + "</span></span>" +
-      '<span class="wg-ev-time">' + fmtRange(p.e.start, p.e.end) + "</span>" +
+      '<span class="wg-ev-time">' + viaTag(p.e) + fmtRange(p.e.start, p.e.end) + "</span>" +
       // The two edge grips. Rendered inside the block (which is the containing
       // block for them) and marked aria-hidden: they are a pointer affordance
       // for a gesture the sheet's own start/end pickers already expose to the
@@ -1120,7 +1139,7 @@ export function initCalendarContent(
       adCols.push('<div class="wg-ad-cell" data-day="' + day.toISOString() + '">' +
         evs.map(function (e) {
           return '<button class="evc wg-ad-ev ' + statusCls(e) + '" type="button" draggable="true" data-ev="' + e.id + '">' +
-            '<span class="evc-t"><svg class="ic"><use href="#' + (KIND_IC[e.kind] || "i-cal") + '"/></svg>' +
+            '<span class="evc-t"><svg class="ic"><use href="#' + evIcon(e) + '"/></svg>' +
             '<span class="evc-txt">' + esc(e.title) + "</span></span></button>";
         }).join("") + "</div>");
     }
@@ -1628,6 +1647,24 @@ export function initCalendarContent(
     if (cal.form.pop) setPop(cal.form.pop);
   }
   const KIND_TITLE: Record<string, string> = { job: "Job event", appointment: "Appointment", blocked: "Blocked time" };
+  /** Where a visit's sheet can take you: the lead or client it is for, the
+   *  visit page (equipment + report), and the desk's call log. */
+  function visitLinksHtml(e: CalEvent) {
+    if (e.kind !== "appointment") return "";
+    const btn = function (href: string, icon: string, label: string) {
+      return '<button class="btn btn-ghost btn--sm" type="button" data-act="open-href" data-href="' + esc(href) + '"><svg class="ic"><use href="#' + icon + '"/></svg>' + label + "</button>";
+    };
+    return '<div class="sf-links">' + (e.clientId ? btn("/dashboard/client-detail?client=" + encodeURIComponent(e.clientId), "i-user", "Open client") : "") +
+      (!e.clientId && e.leadId ? btn("/dashboard/leads/" + encodeURIComponent(e.leadId), "i-target", "Open lead") : "") +
+      (e.rid ? btn("/dashboard/visits/" + encodeURIComponent(e.rid), "i-file", "Visit page") : "") +
+      (e.via === "ai-desk" ? btn("/dashboard/phone", "i-phone", "Call log") : "") + "</div>";
+  }
+  function visitMetaHtml(e: CalEvent) {
+    if (e.kind !== "appointment") return "";
+    const v = VISIT_VIA[e.via || "team"];
+    return '<div class="sf-meta-row sf-via evc--via-' + (e.via || "team") + '"><span class="kpi-lbl">Booked</span><span><span class="evc-via">' + esc(v.tag) + "</span>" + esc(e.booked || "By your team") + "</span></div>" +
+      (e.visitFor ? '<div class="sf-meta-row"><span class="kpi-lbl">Visit for</span><span>' + esc(e.visitFor) + (e.member ? " · member price" : "") + "</span></div>" : "");
+  }
 
   function openDetail(id: string) {
     const e = eventsData.find(function (x) { return x.id === id; });
@@ -1659,8 +1696,9 @@ export function initCalendarContent(
             return esc(w ? w.name : id) + chip;
           }).join(", ")
         : "Unassigned";
-    openSheet(KIND_TITLE[e.kind] || "Job event",
+    openSheet(e.kind === "appointment" && e.via && e.via !== "team" ? "Appointment · " + VISIT_VIA[e.via].tag : KIND_TITLE[e.kind] || "Job event",
       '<div class="sf-meta">' +
+        visitMetaHtml(e) +
         '<div class="sf-meta-row"><span class="kpi-lbl">When</span><span>' +
           (e.allDay
             ? fmtDate(e.start) + (sameDay(e.start, e.end) ? "" : " – " + fmtDate(e.end))
@@ -1669,8 +1707,8 @@ export function initCalendarContent(
           (e.allDay
             ? "All day" + (sameDay(e.start, e.end) ? "" : " · " + (Math.round((atMins(e.end, 0).getTime() - atMins(e.start, 0).getTime()) / 86400000) + 1) + " days")
             : durLabel(e.end.getTime() - e.start.getTime())) + "</span></div>" +
-        (e.client ? '<div class="sf-meta-row"><span class="kpi-lbl">Client</span><span>' + esc(e.client) + "</span></div>" : "") +
-        (e.phone ? '<div class="sf-meta-row"><span class="kpi-lbl">Phone</span><span>' + esc(e.phone) + "</span></div>" : "") +
+        (e.client ? '<div class="sf-meta-row"><span class="kpi-lbl">' + (e.kind === "appointment" && !e.clientId && e.leadId ? "Lead" : "Client") + "</span><span>" + esc(e.client) + "</span></div>" : "") +
+        (e.phone ? '<div class="sf-meta-row"><span class="kpi-lbl">Phone</span><span><a class="sf-tel" href="tel:' + esc(e.phone.replace(/[^\d+]/g, "")) + '">' + esc(e.phone) + "</a></span></div>" : "") +
         (e.addr ? '<div class="sf-meta-row"><span class="kpi-lbl">Address</span><span>' + esc(e.addr) + "</span></div>" : "") +
         '<div class="sf-meta-row"><span class="kpi-lbl">Crew</span><span>' + crewHtml + "</span></div>" +
         (e.scope ? '<div class="sf-meta-row"><span class="kpi-lbl">Scope</span><span>' + esc(e.scope) + "</span></div>" : "") +
@@ -1682,6 +1720,7 @@ export function initCalendarContent(
       (e.kind === "job" ? statusFieldHtml() : "") +
       crewFieldHtml() +
       '<label class="sf"><span class="sf-lbl">Notes</span><textarea class="sf-area" data-e="notes" placeholder="Anything the crew should know">' + esc(e.notes || "") + "</textarea></label>" +
+      visitLinksHtml(e) +
       '<div class="sf-act">' +
         '<button class="btn btn-primary btn--sm" type="button" data-act="save-event"><svg class="ic"><use href="#i-check"/></svg>Save changes</button>' +
         // Only a JobEvent with a job behind it has anything to open — an
@@ -2620,6 +2659,15 @@ export function initCalendarContent(
       return field ? field.value : "";
     };
 
+    if (act.dataset.act === "open-href") {
+      const href = act.dataset.href;
+      // Same-origin dashboard paths only — the value is built above, never typed.
+      if (!href || href.charAt(0) !== "/" || href.charAt(1) === "/") return;
+      closeSheet();
+      if (options.navigate) options.navigate(href);
+      else window.location.assign(href);
+      return;
+    }
     if (act.dataset.act === "open-job") {
       const jobId = act.dataset.job;
       if (!jobId) return;

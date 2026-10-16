@@ -32,6 +32,8 @@
 // module-level book has no second writer to race with. `installCalendarBook`
 // is identity-guarded, so re-renders are free.
 
+import { VISIT_VIA } from "@/lib/calendar/visitVia";
+
 export type CalKind = "job" | "appointment" | "blocked";
 
 export type CalEvent = {
@@ -71,6 +73,20 @@ export type CalEvent = {
   selfOnly?: boolean;
   /** Spans whole days: it has a date but no clock span, so it has no duration. */
   allDay?: boolean;
+  /** Appointment only — how the visit was booked (lib/calendar/visitVia):
+   *  the AI desk on a call, the customer online, a service plan, or the team.
+   *  The card wears it as a tag; the sheet says it in words. */
+  via?: "ai-desk" | "online" | "plan" | "team";
+  /** "By the AI desk, on a phone call · Oct 16". */
+  booked?: string;
+  /** What the visit is for: the booked service, the plan visit, the lead's project. */
+  visitFor?: string;
+  /** Booked at the member price (an active service plan). */
+  member?: boolean;
+  leadId?: string;
+  clientId?: string;
+  /** The AI desk call that booked it. */
+  callSid?: string;
 };
 
 export type CalWorker = { id: string; name: string; role: string };
@@ -406,7 +422,9 @@ export function toneKey(e: CalEvent): string {
 }
 
 export function toneLabel(e: CalEvent): string {
-  if (e.kind === "appointment") return "Appointment";
+  // Who booked the visit, in words (lib/calendar/visitVia): "AI desk booked",
+  // "Booked online", "Plan visit" — an office-made one stays "Appointment".
+  if (e.kind === "appointment") return VISIT_VIA[e.via || "team"].badge;
   if (e.kind === "blocked") return "Blocked";
   return JOB_STATUSES.find((s) => s.value === e.status)?.label ?? e.status;
 }

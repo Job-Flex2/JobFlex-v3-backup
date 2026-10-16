@@ -112,10 +112,14 @@ export async function bookVisit(organizationId: string, callSid: string, input: 
   const name = input.name.trim().slice(0, 80);
   if (!name) return { ok: false, error: "The caller's name is needed." };
   const phone = toE164(input.phone) ?? input.phone.trim().slice(0, 30);
-  const r = await createBooking(org, { serviceKey, startsAtISO, name, phone, address: input.address?.trim().slice(0, 200) || null, notes: `Booked by the AI desk on a call${input.notes ? ` — ${input.notes.trim().slice(0, 300)}` : ""}`, answers: [] });
+  // channel "ai-desk": the visit is tagged as the desk's on the calendar, the
+  // office text says "by the AI desk", a caller the shop knows by this number
+  // is booked as that client (or onto their open lead) instead of a new lead.
+  const r = await createBooking(org, { serviceKey, startsAtISO, name, phone, address: input.address?.trim().slice(0, 200) || null, notes: input.notes?.trim().slice(0, 300) || null, answers: [], channel: "ai-desk", callSid });
   if (!r.ok) return r;
-  const appt = await db.booking.findUnique({ where: { manageToken: r.manageToken }, select: { appointmentId: true } });
-  await db.aiPhoneCall.updateMany({ where: { callSid }, data: { summary: `Booked ${r.serviceLabel} — ${r.when}` } });
+  const appt = await db.booking.findUnique({ where: { manageToken: r.manageToken }, select: { appointmentId: true, leadId: true } });
+  // The call row points at the lead it booked, so the phone log opens it.
+  await db.aiPhoneCall.updateMany({ where: { callSid }, data: { summary: `Booked ${r.serviceLabel} — ${r.when}`, ...(appt?.leadId ? { leadId: appt.leadId } : {}) } });
   return { ok: true, appointmentId: appt?.appointmentId ?? "", when: r.when, serviceLabel: r.serviceLabel };
 }
 

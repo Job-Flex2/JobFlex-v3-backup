@@ -1929,10 +1929,55 @@
 .bp :global(.content .mg-cell.out .evc) { opacity: 0.62; }
 .bp :global(.content .mg-cell.out:hover) { background: repeating-linear-gradient(45deg, rgba(10, 10, 10, 0.07) 0 6px, transparent 6px 12px), rgba(24, 84, 160, 0.08); }
 /* events without dashed edges */
-/* Appointments read at the same weight as job events — the blue wash made them
-   look faded next to a job on the same day. The sky left edge and the calendar
-   icon are the whole distinction. */
-.bp :global(.content .evc--appointment) { border-left-style: solid; background: var(--paper); }
+/* VISITS HAVE THEIR OWN CARD (owner, 2026-10-16: "the appointment card should
+   look different from the job card"). The sky edge and the calendar icon were
+   the whole distinction, and at a glance a visit was a job. Now a visit is
+   drawn in the colour of whoever booked it — the AI desk, the customer online,
+   a service plan, the office — all the way round, with softer corners and a
+   tag naming the channel. It is a FULL-strength tint, not the 7% sky wash that
+   made appointments read as faded; the text stays ink. A job card keeps the
+   paper face, the hair border and the one status stripe. */
+.bp :global(.content .evc--appointment) {
+  --via: #6d28d9;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--via) 42%, var(--paper));
+  border-left-color: var(--via);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--via) 11%, #fff);
+}
+.bp :global(.content .evc--via-ai-desk) { --via: #0f766e; }
+.bp :global(.content .evc--via-online) { --via: #2563eb; }
+.bp :global(.content .evc--via-plan) { --via: #b45309; }
+.bp :global(.content .evc--via-team) { --via: #6d28d9; }
+.bp :global(.content .evc--appointment:hover) {
+  border-top-color: var(--via);
+  border-right-color: var(--via);
+  border-bottom-color: var(--via);
+}
+.bp :global(.content .evc--appointment .evc-t .ic) { color: var(--via); }
+.bp :global(.content .wg-ev.evc--appointment:hover) { box-shadow: 3px 3px 0 var(--via); }
+.bp :global(.content .wg-ev.evc--appointment.is-short:hover) { box-shadow: 2px 2px 0 var(--via); }
+.bp :global(.content .wg-ev.evc--appointment.is-flush-top) { border-top-color: color-mix(in srgb, var(--via) 42%, var(--paper)); }
+/* A cancelled visit stays on the day, struck through and greyed. */
+.bp :global(.content .evc--apt-off) { --via: #94a3b8; }
+.bp :global(.content .evc--apt-off .evc-txt) { text-decoration: line-through; color: var(--muted); }
+/* The channel tag: "AI DESK", "ONLINE", "PLAN", "OFFICE". */
+.bp :global(.content .evc-via) {
+  display: inline-flex; align-items: center; vertical-align: 1px;
+  height: 13px; padding: 0 5px; margin-right: 5px; border-radius: 999px;
+  background: var(--via, var(--ink)); color: #fff;
+  font-family: var(--font-mono); font-size: 8px; font-weight: 700; line-height: 1;
+  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+}
+.bp :global(.content .tg-cell .evc--appointment .evc-time) { margin-top: 2px; }
+/* The visit's sheet: the "Booked" row wears the same tag. */
+/* `.sf-meta-row span:last-child` paints value text ink-soft and would catch the tag too. */
+.bp :global(.content .sf-via .evc-via) { margin-right: 7px; color: #fff; }
+/* The visit's ways out — lead or client, visit page, call log — on their own
+   row above Save/Delete, which would not hold five equal buttons. */
+.bp :global(.content .sf-links) { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.bp :global(.content .sf-links .btn) { flex: 1 1 auto; justify-content: center; height: 36px; min-height: 36px; padding: 0 12px; }
+.bp :global(.content .sf-tel) { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 
 /* --- view switcher: a segmented button group --- */

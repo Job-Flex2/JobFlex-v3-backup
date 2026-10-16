@@ -55,7 +55,7 @@ export async function createBookingPublic(slug: string, raw: unknown): Promise<B
   const org = await orgBySlug(String(slug ?? "").slice(0, 80));
   if (!org) return { ok: false, error: "Not found." };
   const { smsOk, ...booking } = parsed.data;
-  const r = await createBooking(org, { ...booking, email: booking.email || null });
+  const r = await createBooking(org, { ...booking, email: booking.email || null, channel: "online" });
   if (r.ok) {
     // The client's yes to texts, kept for the company's own number (lib/sms/consent).
     if (smsOk && booking.phone) await recordTextConsent(org.id, booking.phone, { source: "booking", name: booking.name }).catch(() => false);
