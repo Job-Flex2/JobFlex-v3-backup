@@ -32,14 +32,13 @@ import { detectInAppBrowser } from "@/lib/inAppBrowser";
 import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { readPendingSignup } from "@/actions/signupCheckout";
 import { TrialOfferProvider } from "@/components/providers/trial-offer";
-import { readSignupFlow, readSignupPlan, signupTrialMode } from "@/lib/trialPolicyServer";
+import { readSignupFlow, signupTrialMode } from "@/lib/trialPolicyServer";
 import { SIGNUP_MODE_COOKIE, resolveSignupMode } from "@/lib/signupMode";
 import { OTP_DRAFT_COOKIE, draftRestore } from "@/lib/signupOtp";
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "@/lib/disposableEmail";
 import { customPlanOffered } from "@/lib/customPlanFlag";
-import { autoPlanFor, type AutoPlanOffer } from "@/lib/signupAutoPlan";
-import { getPlanCatalog } from "@/lib/planCatalogServer";
-import { isEditionPlan } from "@/lib/editions";
+import type { AutoPlanOffer } from "@/lib/signupAutoPlan";
+import { autoPlanOffer } from "@/lib/signupAutoPlanServer";
 import { RegisterResponsive, type GooglePrefill, type SetupPrefill } from "./register-responsive";
 import {
   INDUSTRY_COOKIE,
@@ -172,15 +171,11 @@ export default async function RegisterPage({
      short sign-up — name and email, or Google — and the card page for the
      plan, no company screen and no plan cards. It is the passwordless form
      (the code only when no card is taken), whatever the steps switch says. */
-  let autoPlan: AutoPlanOffer | null = null;
-  if ((await readSignupPlan()).mode === "auto" && !setup) {
-    // The plan is picked here by the same rule the form uses (lib/signupAutoPlan), so step 1 can name it and its price.
-    const catalog = (await getPlanCatalog().catch(() => [])).filter((p) => !p.isFree);
-    const editionSlug = sp.edition === "deck" ? (catalog.find((p) => isEditionPlan(p.slug, "deck"))?.slug ?? null) : null;
-    const pick = autoPlanFor({ plans: catalog, tool: spotlight, editionSlug, asked: typeof sp.plan === "string" ? sp.plan : null });
-    const plan = pick ? catalog.find((p) => p.slug === pick.slug) : null;
-    if (pick && plan) autoPlan = { slug: plan.slug, name: plan.name, priceCents: plan.priceCents, why: pick.why };
-  }
+  // The plan is picked here by the same rule the form uses (lib/signupAutoPlanServer), so step 1 can name it and its
+  // price; the plan step asks again as it opens (signupPlans), so this page's answer is never the last word.
+  const autoPlan: AutoPlanOffer | null = setup
+    ? null
+    : await autoPlanOffer({ asked: typeof sp.plan === "string" ? sp.plan : null, edition: sp.edition === "deck" ? "deck" : null, tool: spotlight });
   const mode = autoPlan ? "otp" : resolveSignupMode(sp.flow, jar.get(SIGNUP_MODE_COOKIE)?.value, signupFlow.passwordless);
   const otpRestore =
     mode === "otp" && !setup && !google && typeof sp.signup !== "string"

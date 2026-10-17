@@ -123,6 +123,24 @@ function recalledPlan(): string | null {
     return null;
   }
 }
+/* The intent this tab last handed to Stripe's card page. A `?checkout=cancelled` return to that same tab is the
+   visitor backing out — the plan cards, as built; the same address opened anywhere else (history, a restored tab,
+   another browser) is a return like any other (2026-10-17). */
+const HANDOFF_KEY = "jf_signup_handoff";
+function rememberHandoff(token: string) {
+  try {
+    sessionStorage.setItem(HANDOFF_KEY, token);
+  } catch {
+    /* storage blocked: a back-out reads as a return */
+  }
+}
+function recalledHandoff(): string | null {
+  try {
+    return sessionStorage.getItem(HANDOFF_KEY);
+  } catch {
+    return null;
+  }
+}
 
 // 1 account · 2 company · 3 THE PLAN (the paywall) · 4 done.
 /** The picker's exit, in step with the 0.22s transform in the stylesheet. */
@@ -248,8 +266,12 @@ export function RegisterContent({
      setup mode, which is the company screen on its own). */
   const otp = mode === "otp" && !setupMode;
   const twoStep = steps === 2 && !setupMode && !otp;
-  /* Straight to the card page (lib/signupAutoPlan): only ever a new sign-up. */
-  const auto = autoPlan && !setupMode ? autoPlan : null;
+  /* Straight to the card page (lib/signupAutoPlan): only ever a new sign-up. The page's answer is from when it was
+     drawn; the plan step asks the server again as it opens (signupPlans → `liveAuto`), and that answer wins — a tab
+     drawn before the owner turned the switch on (or off), a draft restored, an intent from an earlier visit all get
+     what the switch says now (2026-10-17: a returning visitor was shown the plan cards). */
+  const [liveAuto, setLiveAuto] = React.useState<AutoPlanOffer | null | undefined>(undefined);
+  const auto = setupMode ? null : liveAuto !== undefined ? liveAuto : autoPlan;
   const planMode = auto ? "auto" : "pick";
   /* THE FORM (landing-e pass A, 2026-09-11; the only form since 2026-09-16):
      step 1 is name, email, password and — since 2026-09-26 (owner) — a
@@ -775,10 +797,15 @@ export function RegisterContent({
   React.useEffect(() => {
     if (step !== 3) return;
     let live = true;
-    void signupPlans(token ?? undefined)
+    void signupPlans(token ?? undefined, { asked: searchParams?.get("plan") ?? null, edition: edition === "deck" ? "deck" : null, tool: spotlight })
       .then((res) => {
         if (!live) return;
         setPlans(res.plans);
+        // The switch as it stands now (an older server sends no `autoPlan`: the page's own answer stays). Straight to
+        // Professional opens on its plan — a card this tab remembered (Starter, say) does not override it.
+        const nowAuto = "autoPlan" in res ? (res.autoPlan ?? null) : autoPlan;
+        setLiveAuto(nowAuto);
+        if (nowAuto && res.plans.some((p) => p.slug === nowAuto.slug)) setPlanSlug(nowAuto.slug);
         // A phone reopens on the plan named by the link (?plan=) or chosen before in this
         // tab — a cancelled Checkout comes back to it (2026-10-12); the desk as before.
         const asked = window.matchMedia(HANDHELD).matches ? (searchParams?.get("plan") ?? recalledPlan()) : null;
@@ -966,6 +993,7 @@ export function RegisterContent({
         trackTraffic(TRAFFIC_EVENTS.opened, { plan_mode: planMode, plan: slug, interval: term, flow: trafficFlow });
         signupLeavingTo("checkout");
         leavingRef.current = true;
+        if (token) rememberHandoff(token);
         window.location.href = body.url;
         /* A hand-off that never happens (blocked, cancelled) must not leave
            the page stuck on "Opening checkout…" with every button off. */
@@ -1145,7 +1173,19 @@ export function RegisterContent({
     const editionSlug = edition ? (plans.find((p) => isEditionPlan(p.slug, edition))?.slug ?? null) : null;
     return autoPlanFor({ plans, tool: spotlight, editionSlug, asked: searchParams?.get("plan") ?? null })?.slug ?? null;
   }, [auto, plans, spotlight, edition, searchParams]);
-  const autoView = !!auto && step === 3 && !ret?.cancelled && !autoOff && !plansErr && !gate && !confirmSentTo;
+  /* Back from the card page in the tab that opened it: the cards with the calm note. Read after mount (sessionStorage);
+     until then a cancelled return is taken for a back-out, as before. */
+  const [handedOffHere, setHandedOffHere] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage exists only in the browser; read once
+    if (ret?.cancelled) setHandedOffHere(recalledHandoff() === ret.token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
+  }, []);
+  const backedOut = !!ret?.cancelled && handedOffHere !== false;
+  /* …and until it is read, straight-to-Professional draws neither the cards nor the card-page note: a returning
+     visitor must not see the cards flash (the server's HTML and the hydrating page both wait on it). */
+  const handoffUnread = !!auto && !!ret?.cancelled && handedOffHere === null;
+  const autoView = !!auto && step === 3 && !backedOut && !autoOff && !plansErr && !gate && !confirmSentTo;
   const autoRan = React.useRef(false);
   React.useEffect(() => {
     if (!autoView || autoRan.current || !autoSlug || !token) return;
@@ -2139,6 +2179,7 @@ export function RegisterContent({
           <div
             className={step === 3 ? "step" : "step is-hidden"}
             id="stepPlan"
+            style={handoffUnread ? { visibility: "hidden" } : undefined}
           >
             {/* Title and the billing switch on ONE line: the switch is the
                 control that rewrites every price under it, so it belongs beside
@@ -2184,7 +2225,7 @@ export function RegisterContent({
                 </button>
               </div>
             ) : null}
-            {auto && ret?.cancelled && !gate ? (
+            {auto && backedOut && !gate ? (
               <p className="pw-autonote" data-auto-plan-back>
                 No card yet, nothing charged. <b>{auto.name}</b> is picked for you — start it below, or choose another plan.
               </p>

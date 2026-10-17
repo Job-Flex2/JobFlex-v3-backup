@@ -20,6 +20,9 @@ import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { readPendingSignup } from "@/actions/signupCheckout";
 import { validateAttribution } from "@/lib/attribution";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
+import { autoPlanOffer, type AutoPlanAsk } from "@/lib/signupAutoPlanServer";
+import { parseSpotlightTool } from "@/lib/planSpotlight";
+import type { AutoPlanOffer } from "@/lib/signupAutoPlan";
 
 export interface SignupPlan {
   slug: string;
@@ -41,7 +44,7 @@ export interface SignupPromo {
   kind: "promo" | "ref";
 }
 
-export async function signupPlans(token?: string): Promise<{
+export async function signupPlans(token?: string, ask: AutoPlanAsk = {}): Promise<{
   plans: SignupPlan[];
   /** A code already stamped on this org (from a ?promo / ?ref link). */
   promo: SignupPromo | null;
@@ -54,6 +57,10 @@ export async function signupPlans(token?: string): Promise<{
    *  same saved offer's days that /api/checkout/signup sends Stripe as
    *  trial_period_days, and the card-less trial uses (lib/signupPricing). */
   firstChargeAt: number;
+  /** Straight to Professional, as the admin switch says NOW (lib/signupAutoPlanServer): the plan the step opens the
+   *  card page for, or null for the plan cards — never the page's own copy from when it was drawn, nor anything a
+   *  draft or intent kept from an earlier visit. */
+  autoPlan: AutoPlanOffer | null;
 }> {
   const catalog = await getPlanCatalog();
   const pending = token ? await readPendingSignup(token) : null;
@@ -83,6 +90,14 @@ export async function signupPlans(token?: string): Promise<{
     checkoutReady: isStripeEnabled(),
     customTrialDays: trialDays,
     firstChargeAt: Date.now() + trialDays * 24 * 60 * 60 * 1000,
+    autoPlan: await autoPlanOffer(
+      {
+        asked: typeof ask?.asked === "string" ? ask.asked.slice(0, 60) : null,
+        edition: ask?.edition === "deck" ? "deck" : null,
+        tool: typeof ask?.tool === "string" ? (parseSpotlightTool(ask.tool) ?? null) : null,
+      },
+      catalog,
+    ),
   };
 }
 
