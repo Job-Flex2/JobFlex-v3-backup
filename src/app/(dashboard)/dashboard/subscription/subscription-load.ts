@@ -104,6 +104,8 @@ export interface SubscriptionViewProps {
   usageUnavailable?: { resource: string; label: string; limit: number | null; scope: LimitScope; hint: string }[];
   /** The existing two-step cancellation flow's factual offer. */
   cancelOffer?: CancelOffer | null;
+  /** Existing Stripe card setup flow; the endpoint rechecks live eligibility. */
+  canUpdatePaymentCard?: boolean;
   /** Organization billing contact, edited by the existing Settings Billing pane. */
   billingInformation?: { name: string; billingEmail: string } | null;
   /** Plan caps do not apply to this user here (lib/limitsEngine). Provider
@@ -495,6 +497,10 @@ export async function loadSubscriptionData(
     usageUnavailable,
     usageExempt: limitOverview.exempt,
     cancelOffer,
+    canUpdatePaymentCard: isStripeEnabled()
+      && sub?.provider === "STRIPE"
+      && Boolean(sub.externalCustomerId && sub.externalSubId)
+      && ["ACTIVE", "TRIALING", "PAST_DUE", "UNPAID"].includes(storedStatus),
     billingInformation: billingInformation ? { name: billingInformation.name, billingEmail: billingInformation.billingEmail ?? "" } : null,
     invoices: invoiceResult,
     nextCharge,

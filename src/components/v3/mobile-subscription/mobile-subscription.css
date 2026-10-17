@@ -1131,6 +1131,8 @@ body:has(.jf-mobile-subscription) div:has(> nav[aria-label="Primary"]) { display
 .jf-mobile-subscription .jfms-billingInfo dt { margin-bottom: 4px; color: var(--ink-soft); font-size: 12px; }
 .jf-mobile-subscription .jfms-billingInfo dd { margin: 0; color: var(--ink); font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
 .jf-mobile-subscription a.jfms-billingEdit { width: 100%; font-size: 12px; }
+.jf-mobile-subscription .jf-card-update { margin-top: 12px; }
+.jf-mobile-subscription .jf-card-update button.jfms-billingEdit { width: 100%; font-size: 12px; }
 .jf-mobile-subscription .jfms-cancel .jffs-link { min-height: 44px; color: var(--danger); font-size: 14px; }
 .jf-mobile-subscription .jfms-disclosureHead { min-height: 64px; padding-block: var(--card-pad); cursor: pointer; list-style: none; }
 .jf-mobile-subscription .jfms-disclosureHead::-webkit-details-marker { display: none; }

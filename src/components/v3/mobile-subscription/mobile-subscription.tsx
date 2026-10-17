@@ -88,6 +88,7 @@ import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 import type { SubscriptionViewProps } from "@/app/(dashboard)/dashboard/subscription/subscription-load";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { UpdatePaymentCardButton } from "@/components/billing/PlanChangeNotes";
 import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgrade";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import "./mobile-subscription.css";
@@ -180,6 +181,7 @@ export function MobileSubscription({
   usageExempt,
   billingInformation,
   cancelOffer,
+  canUpdatePaymentCard,
   invoices,
   nextCharge,
   referral,
@@ -449,6 +451,7 @@ export function MobileSubscription({
                 <div><dt>Billing email</dt><dd>{billingInformation?.billingEmail || "Not set"}</dd></div>
               </dl>
               <Link className="jfms-btn jfms-billingEdit" href={"/dashboard/settings?tab=billing" as Route}>Edit billing email</Link>
+              {canUpdatePaymentCard ? <UpdatePaymentCardButton className="jfms-btn jfms-billingEdit" /> : null}
             </div>
           </section>
 

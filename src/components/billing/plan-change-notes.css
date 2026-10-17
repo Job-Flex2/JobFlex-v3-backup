@@ -64,3 +64,6 @@
   color: var(--danger, var(--rose, #a83232));
   font-size: 12px;
 }
+.jf-card-update .jf-pcn-btn.jf-pcn-btn { font-family: var(--font-sans); }
+.jf-card-update .jf-pcn-err { margin-top: 8px; line-height: 1.5; }
+.jf-card-update .jf-card-update-help { margin: 8px 0 0; max-width: 42ch; color: var(--ink-soft); font: 400 13px/1.5 var(--font-sans); }

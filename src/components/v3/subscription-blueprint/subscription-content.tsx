@@ -16,6 +16,7 @@ import { SubscriptionSprite } from "./subscription-sprite";
 import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 import type { SubscriptionViewProps } from "@/app/(dashboard)/dashboard/subscription/subscription-load";
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { UpdatePaymentCardButton } from "@/components/billing/PlanChangeNotes";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
 import styles from "./subscription.module.css";
 
@@ -412,6 +413,7 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
             </dl>
           ) : null}
           <Link className={cx("btn", "btn-ghost")} href={"/dashboard/settings?tab=billing" as Route}>Edit billing email</Link>
+          {props.canUpdatePaymentCard ? <UpdatePaymentCardButton className={cx("btn", "btn-ghost")} /> : null}
         </div>
         {props.cancelOffer ? <CancelPlanLink offer={props.cancelOffer} className={cx("cancel-plan")} /> : null}
       </section>

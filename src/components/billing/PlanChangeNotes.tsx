@@ -116,3 +116,25 @@ export function CardDeclinedNote({ message, className }: { message: string; clas
     </div>
   );
 }
+
+/** Opens the existing owner-only Stripe card form; eligibility comes from the server. */
+export function UpdatePaymentCardButton({ className }: { className?: string }) {
+  const card = useUpdateCard();
+  const helpId = React.useId();
+  return (
+    <div className="jf-card-update" data-nest="">
+      <button
+        type="button"
+        className={`jf-pcn-btn${className ? ` ${className}` : ""}`}
+        disabled={card.busy}
+        aria-busy={card.busy}
+        aria-describedby={helpId}
+        onClick={() => void card.go()}
+      >
+        {card.busy ? "Opening…" : "Update payment card"}
+      </button>
+      <p className="jf-card-update-help" id={helpId}>A new card will also be used to pay any outstanding invoices.</p>
+      {card.error ? <p className="jf-pcn-err" role="alert">{card.error}</p> : null}
+    </div>
+  );
+}
