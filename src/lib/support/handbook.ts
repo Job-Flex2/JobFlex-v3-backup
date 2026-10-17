@@ -193,7 +193,8 @@ Seven tools, in the sidebar under **Estimating tools** and the topbar **New esti
 4. Edit lines, tick extras under "Not in your description", set Discount (% or $) and Tax %.
 5. **Save as proposal** / **Convert to proposal**: saves (1 estimator use), opens the proposal.
 
-Prices: built-in trade prices × a city/state cost index — no store prices, no company price book. The proposal adds the company's default markup (its total can exceed the screen) and the job state's base tax rate. Trial: each Generate uses 2 AI runs. Can't reopen a saved estimate (edit the proposal) or read PDFs ("Photos only here — plan sets (PDF) go in the Blueprint estimator.").
+Prices: built-in trade prices × a city/state cost index — no store prices, no company price book. The proposal adds the company's default markup (its total can exceed the screen) and the job state's base tax rate — unless the company prices its own way (below).
+**Own pricing — Settings → Estimating (off by default):** an Owner/Admin/Manager turns on "Price estimates my company's way" and sets "Labor is charged" (**Per crew-hour** / **Per person-hour**), "People on a crew", the labor rate, "Materials markup", "Overhead", "Profit", and "Charge sales tax" (**On the whole job** / **On materials only** / **No sales tax**; a blank "Tax rate" = the job state's base rate). It saves by itself; until a rate is typed it says "Enter your labor rate — this turns on once the rate is in." and nothing changes. When on, new Smart Proposal and Video estimates: materials = book cost + the markup (permit fees at cost); labor on its own lines, "Labor · <the work> (crew-hours)", hours × the rate; overhead and profit inside the prices; a note "Priced your company's way (Settings → Estimating): …". A line the AI gave no hours says "Hours worked out from the price book's labor cost — check them" — the contractor edits the hours. The proposal adds no markup on top; tax on materials only is a proposal line "Sales tax on materials (X%)". Roof, fence, HVAC, deck, blueprint and manual proposals are not affected; estimates made earlier keep their prices. Trial: each Generate uses 2 AI runs. Can't reopen a saved estimate (edit the proposal) or read PDFs ("Photos only here — plan sets (PDF) go in the Blueprint estimator.").
 - "The estimator returned no line items — try a more specific description." → add detail.
 - "Placeholder pricing — no estimator key is configured on this environment." → sample numbers; escalate.
 
@@ -272,7 +273,7 @@ Testers: drafts save as you go; **Convert to proposal**; **Edit the deck design*
 
 ### Internal — for the team (not for customers)
 **Code map** (under \`src/\`: pages \`app/dashboard/\`, UI \`components/v3/\`, \`actions/\`, \`lib/\`):
-- Smart Proposal: \`advanced-ai-blueprint/\`, phone \`(mobile)/mobile-advanced-ai-v2\`; \`advancedEstimator.ts\`; \`estimate/\`. OpenAI.
+- Smart Proposal: \`advanced-ai-blueprint/\`, phone \`(mobile)/mobile-advanced-ai-v2\`; \`advancedEstimator.ts\`; \`estimate/\`. OpenAI. Own pricing: \`estimate/companyPricing.ts\`, \`actions/companyPricing.ts\`, \`company-pricing/\` (SyncState key companyPricing:<orgId>).
 - Blueprint: \`blueprint-estimator/\`; \`planEstimator.ts\` + \`pricePlanTrade\`; \`plans/\`. OpenAI.
 - Roof: \`roof-estimator-blueprint/\` (live \`roof-estimator-data-form.tsx\`); \`roofMeasurement.ts\`, \`roofEstimator.ts\`, \`eagleview.ts\`; \`roofPackage/\`. EagleView, Google Solar/Geocoding/Places, OpenAI.
 - Fence: \`fence-estimator-blueprint/\`; \`fenceEstimator.ts\`, \`fenceBoundary.ts\`; \`fence/\`. Google, ReportAll, Regrid, OSM Overpass, USGS, Vercel Blob.

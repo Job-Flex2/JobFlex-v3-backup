@@ -6,7 +6,7 @@
 // unless the contractor picks another (their pick is remembered per system — Prefs.brands), or "Any brand".
 
 import * as React from "react";
-import { brandHeadline, STATE_NAME, topPicks, type BrandHint, type RankedProduct } from "@/lib/roofPackage/brands";
+import { brandHeadline, STATE_NAME, topPicks, type BrandHint, type BrandPrice, type RankedProduct } from "@/lib/roofPackage/brands";
 
 const TOP = 4;
 
@@ -18,6 +18,7 @@ export function RoofBrandPicker({
   state,
   systemLabel,
   onPick,
+  priceOf,
   hint,
   onHint,
   disabled,
@@ -32,6 +33,8 @@ export function RoofBrandPicker({
   state: string | null;
   systemLabel: string;
   onPick: (productId: string | null) => void;
+  /** The line's price on this estimate (the contractor's own, else their system rate moved by retail). */
+  priceOf?: (productId: string) => BrandPrice;
   /** What the state asks of this roof (Class 4 credit, Title 24, the HVHZ) — and the system to switch to. */
   hint?: BrandHint | null;
   onHint?: (systemId: string) => void;
@@ -74,7 +77,7 @@ export function RoofBrandPicker({
       ) : null}
       <div className="rbd-brand-grid" role="radiogroup" aria-label="Brand and line">
         {shown.map((r) => (
-          <BrandTile key={r.product.id} r={r} on={r.product.id === selectedId} auto={auto && r.product.id === selectedId} usual={r.product.id === usualId} onPick={onPick} disabled={disabled} />
+          <BrandTile key={r.product.id} r={r} price={priceOf?.(r.product.id)} on={r.product.id === selectedId} auto={auto && r.product.id === selectedId} usual={r.product.id === usualId} onPick={onPick} disabled={disabled} />
         ))}
       </div>
       <div className="rbd-brands-foot">
@@ -90,7 +93,7 @@ export function RoofBrandPicker({
       {more && rest.length ? (
         <div className="rbd-brand-grid rbd-brand-grid--more" role="radiogroup" aria-label="More brands">
           {rest.map((r) => (
-            <BrandTile key={r.product.id} r={r} on={r.product.id === selectedId} auto={false} usual={r.product.id === usualId} onPick={onPick} disabled={disabled} />
+            <BrandTile key={r.product.id} r={r} price={priceOf?.(r.product.id)} on={r.product.id === selectedId} auto={false} usual={r.product.id === usualId} onPick={onPick} disabled={disabled} />
           ))}
         </div>
       ) : null}
@@ -98,7 +101,9 @@ export function RoofBrandPicker({
   );
 }
 
-function BrandTile({ r, on, auto, usual, onPick, disabled }: { r: RankedProduct; on: boolean; auto: boolean; usual: boolean; onPick: (id: string) => void; disabled?: boolean }) {
+const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+
+function BrandTile({ r, price, on, auto, usual, onPick, disabled }: { r: RankedProduct; price?: BrandPrice; on: boolean; auto: boolean; usual: boolean; onPick: (id: string) => void; disabled?: boolean }) {
   const reasons = r.held ? [r.held] : r.reasons.slice(0, 2);
   return (
     <button
@@ -119,6 +124,12 @@ function BrandTile({ r, on, auto, usual, onPick, disabled }: { r: RankedProduct;
           {r.product.class4 ? <span className="rbd-brand-tag">Class 4</span> : null}
         </span>
       )}
+      {price ? (
+        <span className="rbd-brand-price" data-roof-brand-price={price.basis}>
+          <b>{money(price.matPerSq)}</b> material + {money(price.laborPerSq)} labor /sq
+          {price.basis === "own" ? <span className="rbd-brand-price-k">your price</span> : price.factor != null && Math.round((price.factor - 1) * 100) !== 0 ? <span className="rbd-brand-price-k">{`${price.factor > 1 ? "+" : "−"}${Math.abs(Math.round((price.factor - 1) * 100))}% retail`}</span> : null}
+        </span>
+      ) : null}
       <span className="rbd-brand-why">{reasons.join(" · ")}</span>
       <span className="rbd-tile-mark" aria-hidden="true">
         <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">

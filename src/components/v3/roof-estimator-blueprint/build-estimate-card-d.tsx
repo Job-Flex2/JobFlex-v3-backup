@@ -132,7 +132,7 @@ import {
 import type { BuildEstimateCardProps, ReportProp } from "./build-estimate-card";
 import { BlueprintSelect, type SelectStyles } from "@/components/v3/advanced-ai-blueprint/blueprint-select";
 import "./build-estimate-card-d.css";
-import { brandHint, rankBrandsFor, withBrand } from "@/lib/roofPackage/brands";
+import { brandHint, brandPrice, rankBrandsFor, withBrand, withBrandPrice, type BrandRate } from "@/lib/roofPackage/brands";
 import { RoofBrandPicker } from "./roof-brand-picker";
 
 // ── Icons: the shell sprite for file / board / bulb; the small ones inline ──
@@ -550,6 +550,7 @@ function Section({
   onToggle,
   children,
   rates,
+  ratesLabel,
 }: {
   id: string;
   title: string;
@@ -559,6 +560,8 @@ function Section({
   onToggle: () => void;
   children: React.ReactNode;
   rates?: React.ReactNode;
+  /** The rates' heading when they belong to something narrower than the section ("Your rates · GAF Timberline HDZ"). */
+  ratesLabel?: string;
 }) {
   const bodyId = `rbd-body-${id}`;
   return (
@@ -582,7 +585,7 @@ function Section({
           {children}
           {rates && (
             <div className="rbd-g rbd-g--rates">
-              <h4 className="rbd-g-h">Your rates</h4>
+              <h4 className="rbd-g-h">{ratesLabel ?? "Your rates"}</h4>
               <div className="rbd-fields">{rates}</div>
             </div>
           )}
@@ -634,6 +637,8 @@ function PackageLedger({
   const [lists, setLists] = React.useState<CatalogLists>(() =>
     (typeof window === "undefined" ? null : saneLists(readLocal<CatalogLists>(LISTS_KEY))) ?? BUILTIN_LISTS,
   );
+  /** The contractor's own price per brand line (Prefs.brandRates) — saved with the defaults like the vent prices. */
+  const [brandRates, setBrandRates] = React.useState<Record<string, BrandRate>>(() => (typeof window === "undefined" ? null : readLocal<Prefs>(PREFS_KEY)?.brandRates) ?? {});
   const [spec, setSpec] = React.useState<RoofPackageSpec>(() => {
     const l = (typeof window === "undefined" ? null : saneLists(readLocal<CatalogLists>(LISTS_KEY))) ?? BUILTIN_LISTS;
     // A saved proposal opened again (2026-10-13): its own choices, on the roof they were made for.
@@ -716,6 +721,7 @@ function PackageLedger({
           );
           writeLocal(LISTS_KEY, l);
           writeLocal(PREFS_KEY, doc.prefs);
+          setBrandRates((doc.prefs as Prefs).brandRates ?? {});
           setSource("org");
         } else {
           setSource("browser");
@@ -800,7 +806,29 @@ function PackageLedger({
     return b && spec.systemId in b ? b[spec.systemId] : undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read when the pick changes: the pick is what writes it
   }, [spec.systemId, spec.productId, spec.productAuto]);
-  const live = React.useMemo(() => withBrand(spec, ranked, usualBrand), [spec, ranked, usualBrand]);
+  // …and priced for it (2026-10-16): the line's own price, else the system rate moved by the line's retail price.
+  const live = React.useMemo(() => withBrandPrice(withBrand(spec, ranked, usualBrand), brandRates), [spec, ranked, usualBrand, brandRates]);
+  const brandOn = !!live.productId && live.productFor === live.systemId;
+  const sysBase = { id: spec.systemId, label: spec.systemName, matPerSq: spec.systemMatPerSq, laborPerSq: spec.systemLaborPerSq, capPerFt: spec.capPerFt };
+  const priceOf = (productId: string) => brandPrice(productId, sysBase, brandRates[productId]);
+  const livePrice = brandOn ? priceOf(live.productId!) : null;
+  /** A rate edit while a line is on is THAT LINE's price — the system's own rate stays in Manage roof types. */
+  const setBrandRate = (field: keyof BrandRate, v: number | null) => {
+    const id = live.productId;
+    if (!id) return;
+    setBrandRates((prev) => {
+      const mine = { ...(prev[id] ?? {}) };
+      if (v == null) delete mine[field];
+      else mine[field] = v;
+      const next = { ...prev };
+      if (Object.keys(mine).length) next[id] = mine;
+      else delete next[id];
+      const saved = readLocal<Prefs>(PREFS_KEY) ?? {};
+      writeLocal(PREFS_KEY, { ...saved, brandRates: next });
+      return next;
+    });
+    setDirty(true);
+  };
   // What the state asks of this roof; its switch only when the shop's list has that system.
   const hint = React.useMemo(() => {
     const h = brandHint(spec.systemId, jobState);
@@ -1251,8 +1279,31 @@ function PackageLedger({
             summary={sumSystem}
             open={!!open.system}
             onToggle={() => toggle("system")}
+            ratesLabel={brandOn ? `Your rates · ${live.productName}` : undefined}
             rates={
-              manage === "systems" ? undefined : (
+              manage === "systems" ? undefined : brandOn && livePrice ? (
+                <>
+                  <Rate label="Material" unit="$/sq" value={live.systemMatPerSq} onChange={(v) => setBrandRate("mat", v)} disabled={disabled} />
+                  <Rate label="Install labor" unit="$/sq" value={live.systemLaborPerSq} onChange={(v) => setBrandRate("labor", v)} disabled={disabled} />
+                  {!lowSlope && <Rate label="Hip & ridge cap" unit="$/ft" value={live.capPerFt} onChange={(v) => setBrandRate("cap", v)} disabled={disabled} />}
+                  <p className="rbd-note rbd-brand-rate-note" data-brand-rate-note={livePrice.basis}>
+                    {livePrice.words}
+                    {livePrice.basis !== "own" ? ` · from your ${spec.systemName.split(" · ")[0].toLowerCase()} rate of $${spec.systemMatPerSq} + $${spec.systemLaborPerSq} labor` : ""}{". Edits here are this line's own price. "}
+                    {livePrice.basis === "own" ? (
+                      <TextBtn
+                        disabled={disabled}
+                        onClick={() => {
+                          setBrandRate("mat", null);
+                          setBrandRate("labor", null);
+                          setBrandRate("cap", null);
+                        }}
+                      >
+                        Back to the starting price
+                      </TextBtn>
+                    ) : null}
+                  </p>
+                </>
+              ) : (
                 <>
                   <Rate label="Material" unit="$/sq" value={spec.systemMatPerSq} onChange={(v) => setSystemRate("matPerSq", v)} disabled={disabled} />
                   <Rate label="Install labor" unit="$/sq" value={spec.systemLaborPerSq} onChange={(v) => setSystemRate("laborPerSq", v)} disabled={disabled} />
@@ -1331,6 +1382,7 @@ function PackageLedger({
                       state={jobState}
                       systemLabel={spec.systemName}
                       onPick={pickBrand}
+                      priceOf={priceOf}
                       hint={hint}
                       onHint={(id) => pickSystem(id)}
                       disabled={disabled}

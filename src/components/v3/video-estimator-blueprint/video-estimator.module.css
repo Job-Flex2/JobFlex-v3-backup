@@ -657,6 +657,9 @@
 :global(.jf-blueprint .content) .vr-add .ic { width: 13px; height: 13px; }
 /* The column sums under the ledger: Materials, Labor, the discount, the figure. */
 :global(.jf-blueprint .content) .vr-sums { margin-top: 22px; }
+/* Settings → Estimating's switch is on: one line saying whose prices these are. */
+:global(.jf-blueprint .content) .vr-company { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5;
+  color: rgba(10,10,10,.62); }
 
 /* ============================================================
    MATERIALS REQUEST — the shoppable list, full width under the two

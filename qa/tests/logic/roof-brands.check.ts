@@ -6,7 +6,7 @@
 import { BUILTIN_LISTS, ROOF_SYSTEMS } from "../../../src/lib/roofPackage/catalog";
 import {
   CLASS4_CREDIT_STATES, ROOF_BRANDS, ROOF_PRODUCTS, STATE_NAME, STATE_REGION,
-  brandHeadline, brandHint, brandPickFor, rankBrandsFor, topPicks, withBrand,
+  brandHeadline, brandHint, brandPickFor, brandPrice, rankBrandsFor, retailFactor, topPicks, typicalRetail, withBrand, withBrandPrice,
 } from "../../../src/lib/roofPackage/brands";
 import { buildRoofPackage, defaultSpec, systemDisplayName, type RoofFacts, type RoofPackageSpec } from "../../../src/lib/roofPackage/takeoff";
 
@@ -143,6 +143,49 @@ check("switching system: CertainTeed's Class 4 is held in TX → not picked; the
 const cedar = withBrand({ ...base, systemId: "cedar_shake", systemName: "Cedar shake", productId: undefined, productFor: undefined }, [], undefined);
 check("no brand data: nothing set", cedar.productId === undefined && cedar.productFor === undefined);
 check("a held line is never the auto pick in any state", Object.keys(STATE_NAME).every((st) => [...systemIds].every((sys) => !brandPickFor(sys, ROOF_SYSTEMS.find((x) => x.id === sys)!.family, st)?.held)));
+
+
+console.log("── the price of a line");
+const sysOf = (id: string) => ROOF_SYSTEMS.find((s) => s.id === id)!;
+const priced = ROOF_PRODUCTS.filter((p) => (p.retailPerSq ?? 0) > 0);
+check("every retail price is a sane $/sq (20–2,500)", priced.every((p) => p.retailPerSq! >= 20 && p.retailPerSq! <= 2500), priced.filter((p) => p.retailPerSq! < 20 || p.retailPerSq! > 2500).map((p) => p.id).join(","));
+check("architectural, 3-tab, Class 4 and designer each have a typical retail price", ["architectural", "three_tab", "impact_resistant", "designer"].every((s) => typicalRetail(s) != null), ["architectural", "three_tab", "impact_resistant", "designer"].map((s) => `${s}=${typicalRetail(s)}`).join(" "));
+check("a typical price sits inside its system's range", ["architectural", "impact_resistant"].every((s) => { const xs = ROOF_PRODUCTS.filter((p) => p.systems.includes(s) && p.retailPerSq).map((p) => p.retailPerSq!); const t = typicalRetail(s)!; return t >= Math.min(...xs) && t <= Math.max(...xs); }));
+check("Class 4 lines retail above architectural on the typical line", (typicalRetail("impact_resistant") ?? 0) > (typicalRetail("architectural") ?? 0));
+check("the factor is clamped to 0.7–1.6", ROOF_PRODUCTS.every((p) => p.systems.every((sys) => { const f = retailFactor(p.id, sys); return f == null || (f >= 0.7 && f <= 1.6); })));
+check("a line with no retail price has no factor", ROOF_PRODUCTS.filter((p) => !p.retailPerSq).every((p) => retailFactor(p.id, p.systems[0]) == null));
+const arch = sysOf("architectural");
+const archBase = { id: arch.id, label: arch.label, matPerSq: 140, laborPerSq: 210, capPerFt: 2.5 };
+const up = ROOF_PRODUCTS.find((p) => p.systems.includes("architectural") && (retailFactor(p.id, "architectural") ?? 1) > 1.04);
+const down = ROOF_PRODUCTS.find((p) => p.systems.includes("architectural") && (retailFactor(p.id, "architectural") ?? 1) < 0.96);
+check("some architectural line retails above typical and one below", !!up && !!down, `${up?.id} / ${down?.id}`);
+if (up) {
+  const bp = brandPrice(up.id, archBase, null);
+  check("an above-typical line costs more than the contractor's rate, from retail", bp.basis === "retail" && bp.matPerSq === Math.round(140 * retailFactor(up.id, "architectural")!) && bp.matPerSq > 140, `${bp.matPerSq}`);
+  check("…its labor and cap stay the contractor's", bp.laborPerSq === 210 && bp.capPerFt === 2.5);
+  check("…and it says where the price came from", /moved by retail: this line runs \d+% above a typical architectural shingle/.test(bp.words), bp.words);
+}
+if (down) check("a below-typical line costs less than the rate", brandPrice(down.id, archBase, null).matPerSq < 140);
+const noPrice = ROOF_PRODUCTS.find((p) => !p.retailPerSq)!;
+const np = brandPrice(noPrice.id, { ...archBase, id: noPrice.systems[0], label: sysOf(noPrice.systems[0]).label }, null);
+check("no public price: the contractor's rate, said so", np.basis === "system" && np.matPerSq === 140 && /No public price/.test(np.words), np.words);
+const own = brandPrice("gaf_hdz", archBase, { mat: 150 });
+check("the contractor's own material price wins", own.matPerSq === 150 && own.basis === "own" && own.words === "Your price for this line");
+const ownLabor = brandPrice("gaf_hdz", archBase, { labor: 230 });
+check("own labor only: labor theirs, material still from retail", ownLabor.laborPerSq === 230 && ownLabor.matPerSq === brandPrice("gaf_hdz", archBase, null).matPerSq && ownLabor.basis === "own");
+const plainSpec = { ...defaultSpec(facts("TX"), BUILTIN_LISTS), systemMatPerSq: 140, systemLaborPerSq: 210, capPerFt: 2.5 };
+check("no line on: the spec keeps its system rates", withBrandPrice({ ...plainSpec, productId: null, productFor: plainSpec.systemId }).systemMatPerSq === 140);
+check("a line picked for another system doesn't price this one", withBrandPrice({ ...plainSpec, productId: up?.id ?? "gaf_hdz", productFor: "metal_panel" }).systemMatPerSq === 140);
+if (up) {
+  const sp = withBrandPrice({ ...plainSpec, productId: up.id, productName: "x", productFor: plainSpec.systemId, productAuto: false });
+  check("with a line on: the spec carries the line's price", sp.systemMatPerSq === brandPrice(up.id, { ...archBase, id: plainSpec.systemId, label: plainSpec.systemName }, null).matPerSq, String(sp.systemMatPerSq));
+  const a = buildRoofPackage(sp, facts("TX")), b = buildRoofPackage({ ...plainSpec, productId: null, productFor: plainSpec.systemId }, facts("TX"));
+  const tot = (p: ReturnType<typeof buildRoofPackage>) => [...p.materials, ...p.labor].reduce((x, l) => x + l.quantity * l.unitPrice, 0);
+  check("picking the line changes the estimate's total", tot(a) > tot(b), `${Math.round(tot(a))} vs ${Math.round(tot(b))}`);
+  check("…through the system's material line only", a.labor.reduce((x, l) => x + l.quantity * l.unitPrice, 0) === b.labor.reduce((x, l) => x + l.quantity * l.unitPrice, 0));
+  const withOwn = withBrandPrice({ ...plainSpec, productId: up.id, productFor: plainSpec.systemId }, { [up.id]: { mat: 199, labor: 260 } });
+  check("the contractor's saved line price lands on the spec", withOwn.systemMatPerSq === 199 && withOwn.systemLaborPerSq === 260);
+}
 
 console.log("── the lines and the client's scope");
 check("display name: brand · system", systemDisplayName(auto) === `${flTop[0].name} · ${base.systemName}`, systemDisplayName(auto));

@@ -169,6 +169,7 @@ import { PasswordControl } from "@/components/account-password/password-control"
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
 import { isRefusal } from "@/lib/actionResult";
+import { CompanyPricingForm } from "@/components/v3/company-pricing/company-pricing-form";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
 
@@ -1202,6 +1203,19 @@ function NotificationsPane({ data }: { data: SettingsData }) {
 // Texting (2026-09-27) — the handheld build of the desk pane: who gets
 // texted (the office roster, a switch per group), your own mobile, the extra
 // numbers. Same actions as the desk; the copy comes from settings-data.
+/** Settings → Estimating on the phone (2026-10-16): the same form as the desk pane, in this page's card. */
+function EstimatingPaneMobile() {
+  const item = RAIL_ITEMS.find((r) => r.key === "estimating");
+  return (
+    <section className="mst-card" id="estimating">
+      <CardHeader card={{ title: "Your estimating method", sub: item?.sub ?? "" }} />
+      <div className="mst-cardB">
+        <CompanyPricingForm />
+      </div>
+    </section>
+  );
+}
+
 function TextingPane({ data }: { data: SettingsData }) {
   const sms = data.notifications.sms;
   const router = useRouter();
@@ -1380,6 +1394,7 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   notifications: "i-bell",
   texting: "i-phone",
   desk: "i-phone",
+  estimating: "i-hardhat",
 };
 
 export function MobileSettings({
@@ -1615,6 +1630,9 @@ export function MobileSettings({
             </div>
             <div className={active === "texting" ? "mst-pane is-on" : "mst-pane"}>
               <TextingPane data={data} />
+            </div>
+            <div className={active === "estimating" ? "mst-pane is-on" : "mst-pane"}>
+              <EstimatingPaneMobile />
             </div>
           </div>
 

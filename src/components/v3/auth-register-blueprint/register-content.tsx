@@ -2086,15 +2086,26 @@ export function RegisterContent({
           </div>
 
           {/* THE ART PANEL — see the note in the login page: a picture in the
-              product's own drawing language instead of an invented quote. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="side-art"
-            id="sideCard"
-            src="/auth/side-site-2.png"
-            alt=""
-            aria-hidden="true"
-          />
+              product's own drawing language instead of an invented quote.
+              DESK ONLY, AND LIGHT (2026-10-16): a phone hides this panel under
+              1000px, yet the plain <img> made every phone download the 1.3 MB
+              PNG first thing — React preloads a shell image at high priority —
+              and on an iPhone over cellular the form came alive after 13.9 s
+              ("The form was slow to start"). The <picture> sources match only
+              a desk, so a phone gets the 1×1 placeholder; the desk gets a 60 KB
+              WebP of the same picture (PNG for a browser without WebP). */}
+          <picture>
+            <source media="(min-width: 1001px)" srcSet="/auth/side-site-2.webp" type="image/webp" />
+            <source media="(min-width: 1001px)" srcSet="/auth/side-site-2.png" />
+            <img
+              className="side-art"
+              id="sideCard"
+              src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+              alt=""
+              aria-hidden="true"
+              decoding="async"
+            />
+          </picture>
         </aside>
       </main>
 
