@@ -49,7 +49,9 @@ export type LandingVariant = {
   /** One bold line under the sub (HVAC). */
   subStrong?: string;
   /** The hero's own primary button, when it differs from the top-of-page CTA
-   *  the nav, the showcase and the sticky bar carry (cta-copy.ts). */
+   *  the nav, the showcase and the sticky bar carry (cta-copy.ts).
+   *  NOT SHOWN since 2026-10-16 (owner): every hero's button says the trial,
+   *  as the default page's does (hero.tsx trialCta). Kept to bring back. */
   heroCta?: string;
   /** The two headline lines are two sentences (an ad's opening line and its
    *  answer): the break between them holds on a phone too. */

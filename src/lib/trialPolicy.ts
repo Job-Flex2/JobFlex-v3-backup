@@ -37,9 +37,3 @@ export const CARDLESS_TRIAL_DAYS = TRIAL_DAYS;
 export function trialLine(requiresCard: boolean, days: number = TRIAL_DAYS): string {
   return requiresCard ? `Start your ${days}-day free trial` : `${days}-Day Free Trial · No Credit Card Required`;
 }
-
-/** The trial as a few words, not a call: the trade hero's line under its
- *  buttons and the note under the sticky phone bar's button (2026-10-16). */
-export function trialShortLine(requiresCard: boolean, days: number = TRIAL_DAYS): string {
-  return requiresCard ? `${days}-day free trial` : `${days}-day free trial · no card needed`;
-}

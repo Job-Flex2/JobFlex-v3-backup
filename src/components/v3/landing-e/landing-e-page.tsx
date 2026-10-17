@@ -82,8 +82,6 @@ import {
   type LandingVariantKey,
   type UtmParams,
 } from "./landing-variants";
-import { heroPriceLine, heroTrialLine } from "./hero-price";
-import { trialShortLine } from "@/lib/trialPolicy";
 import { MobileCta } from "./mobile-cta";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { Nav } from "./nav";
@@ -148,7 +146,10 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // sections' own built-in kitchen.
   const g = groupContentFor(variant);
   // CTA copy (pass B): first person with the trade's outcome at the top of
-  // the page, "Start my free trial" from Proposals down.
+  // the page, "Start my free trial" from Proposals down. The hero's solid
+  // button, the nav's and the sticky phone bar's say the trial on every
+  // landing (owner, 2026-10-16); the trade's words stay on the button under
+  // the product shot and in the showcase.
   const top = variant ? firstPersonCta(variant) : `Start my ${offer.days}-day free trial`;
   const low = `Start my ${offer.days}-day free trial`;
   // The showcase's Smart slide plays the trade's own job: the variant's
@@ -164,23 +165,10 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // it is near the viewport — the mobile LCP's render delay was style/layout
   // of the whole page.
 
-  // The trade's price for the first screen (hero-price.ts): the cheapest plan
-  // on sale that carries the trade's estimator. Null for a variant that names
-  // no plan row, and when the catalogue could not be read.
-  // On a trade landing the line opens with the trial (hero-price.ts
-  // heroTrialLine) — unless the hero's own button already names it (the
-  // default page's "Start my 7-day free trial", the coming-soon Deck Studio's
-  // "free trial"): the first screen says the trial once.
-  const trial = trialShortLine(requiresCard, offer.days);
-  const heroButtonSaysTrial = /trial/i.test(v.heroCta ?? top);
-  const priceLine = deckSoon
-    ? "Deck Studio is coming soon — price decks today with JobFlex's Smart Proposal."
-    : variant && !heroButtonSaysTrial
-      ? heroTrialLine(v, plans, trial, requiresCard)
-      : heroPriceLine(v, plans);
-  // The sticky phone bar's note: the same few words under a button that does
-  // not say the trial itself.
-  const stickyNote = variant && !/trial/i.test(top) ? trial : null;
+  // No line under the hero's buttons (owner, 2026-10-16): the button says the
+  // trial, and the price line (hero-price.ts heroPriceLine, the Deck Studio's
+  // coming-soon note) is off on every landing. Hero still takes `priceLine`
+  // to bring it back.
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is
@@ -189,7 +177,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const order = landingSectionOrder(variant);
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
-    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={priceLine} />,
+    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
@@ -217,11 +205,11 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   return (
     <TrialOfferProvider offer={offer}>
     <div className="jf-lp min-h-full bg-white">
-      <Nav registerHref={register} pricingHref={pricing} cta={top} />
+      <Nav registerHref={register} pricingHref={pricing} cta={low} />
       <main>
         {order.map((key) => (blocks[key] ? <Fragment key={key}>{blocks[key]}</Fragment> : null))}
       </main>
-      <MobileCta registerHref={register} cta={top} note={stickyNote} />
+      <MobileCta registerHref={register} cta={low} />
       <ScrollFx />
       {/* Mouse-wheel notches glide, 0.7× the browser's step — on a desk only
           (hover, fine pointer, wider than 768px); phones, tablets and touch

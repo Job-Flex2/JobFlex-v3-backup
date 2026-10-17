@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import { preload } from "react-dom";
 import { PhoneOverview } from "./blueprint-phone";
 import { REGISTER } from "./routes";
@@ -37,10 +36,15 @@ export function Hero({
   utm,
   registerHref = REGISTER,
   cta,
+  trialCta,
   fbclid,
   inAppBrowser = null,
   priceLine = null,
 }: {
+  /** The solid button's words: the trial, as on the default page — "Start my
+   *  7-day free trial" on every landing (owner, 2026-10-16). A trade's own
+   *  heroCta stays in landing-variants.ts, unused here, to bring back. */
+  trialCta?: string;
   /** The trade's price for the first screen ("Then from $95/mo · roof
    *  estimator included"), read from the plan catalogue by the page
    *  (hero-price.ts). Null — every landing but an ad landing — renders nothing. */
@@ -127,10 +131,10 @@ export function Hero({
           <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
             <a
               href={registerHref}
-              className={`lp-btn-dark lp-cta lp-cta--solid${(variant.heroCta ?? cta ?? variant.primaryCta).length > 30 ? " lp-cta--long" : ""}`}
+              className={`lp-btn-dark lp-cta lp-cta--solid${(trialCta ?? cta ?? variant.primaryCta).length > 30 ? " lp-cta--long" : ""}`}
               data-cta="hero"
             >
-              {variant.heroCta ?? cta ?? variant.primaryCta}
+              {trialCta ?? cta ?? variant.primaryCta}
             </a>
             <GoogleSignupButton className="lp-cta lp-cta--ghost" industry={variantKey} utm={utm} fbclid={fbclid} inApp={inAppBrowser}>
               <svg viewBox="0 0 48 48" className="h-[18px] w-[18px]" aria-hidden>
@@ -156,22 +160,9 @@ export function Hero({
           </div>
           </div>
           {/* The price, in the first screen (2026-10-04): under the buttons,
-              in the landing's mono caps. On a trade landing it opens with the
-              trial (2026-10-16, hero-price.ts heroTrialLine). Each "·" part
-              holds together, so a line that needs two rows breaks after a dot,
-              never inside "fence estimator included". */}
-          {priceLine ? (
-            <p className="lp-hero-price">
-              {priceLine.includes(" · ")
-                ? priceLine.split(" · ").map((part, i, parts) => (
-                    <Fragment key={i}>
-                      <span className="whitespace-nowrap">{i < parts.length - 1 ? `${part} ·` : part}</span>
-                      {i < parts.length - 1 ? " " : null}
-                    </Fragment>
-                  ))
-                : priceLine}
-            </p>
-          ) : null}
+              in the landing's mono caps. The trial it follows is the button
+              above it (owner, 2026-10-16), so the line says only the price. */}
+          {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
         </div>
         </HeroEntrance>
       </div>

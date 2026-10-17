@@ -26,32 +26,12 @@ export function cheapestPlanWith(plans: readonly PricedPlan[], feature: string):
   return carrying.length ? carrying.reduce((a, b) => (b.priceCents < a.priceCents ? b : a)) : null;
 }
 
-/** "from $95/mo · roof estimator included" — or null when the variant names
- *  no row, or no plan on sale carries it. */
-function pricePart(v: Pick<LandingVariant, "priceFeature" | "priceNote">, plans: readonly PricedPlan[]): string | null {
+/** "Then from $95/mo · roof estimator included" — or null when the variant
+ *  names no row, or no plan on sale carries it. The trial it follows is the
+ *  hero's own button ("Start my 7-day free trial", owner 2026-10-16). */
+export function heroPriceLine(v: Pick<LandingVariant, "priceFeature" | "priceNote">, plans: readonly PricedPlan[]): string | null {
   if (!v.priceFeature) return null;
   const plan = cheapestPlanWith(plans, v.priceFeature);
   if (!plan) return null;
-  return `from ${formatPlanPrice(plan.priceCents)}${priceCadence(true)}${v.priceNote ? ` · ${v.priceNote}` : ""}`;
-}
-
-/** "Then from $95/mo · roof estimator included" — or null when the variant
- *  names no row, or no plan on sale carries it. */
-export function heroPriceLine(v: Pick<LandingVariant, "priceFeature" | "priceNote">, plans: readonly PricedPlan[]): string | null {
-  const price = pricePart(v, plans);
-  return price ? `Then ${price}` : null;
-}
-
-/* THE TRIAL LEADS THE LINE (owner, 2026-10-16). With the framed trial badge
-   gone (bc7ed723), a trade hero whose button says "Create My Free Estimate"
-   never said the first days are free. The line under the buttons now opens
-   with the trial: "7-day free trial · then from $95/mo · fence estimator
-   included" — and where the catalogue names no plan for the trade, the trial
-   alone: "7-day free trial · cancel anytime" (with a card; the card-less
-   trial's words already say there is nothing to cancel). `trial` is
-   lib/trialPolicy trialShortLine, with the offer's days. */
-export function heroTrialLine(v: Pick<LandingVariant, "priceFeature" | "priceNote">, plans: readonly PricedPlan[], trial: string, requiresCard: boolean): string {
-  const price = pricePart(v, plans);
-  if (price) return `${trial} · then ${price}`;
-  return requiresCard ? `${trial} · cancel anytime` : trial;
+  return `Then from ${formatPlanPrice(plan.priceCents)}${priceCadence(true)}${v.priceNote ? ` · ${v.priceNote}` : ""}`;
 }
