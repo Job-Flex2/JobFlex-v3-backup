@@ -152,7 +152,7 @@ export default class QaReporter implements Reporter {
   onEnd(result: FullResult): void {
     if (process.argv.includes("--list")) return; // a listing ran nothing
     const finished = new Date();
-    // The run's second pass (bin/qa.ts: "read" on the fresh QA Co, then "write") adds to the first's raw.json.
+    // A later pass of the run (bin/qa.ts: "read" on the fresh QA Co, "write", "legacy") adds to the raw.json before it.
     let earlier: RawRun | null = null;
     const phase = process.env.QA_PHASE;
     if (phase && phase !== "read") {
@@ -204,7 +204,7 @@ export default class QaReporter implements Reporter {
     const s = raw.stats;
     console.log(`\nQA Lab · ${s.total} tests: ${s.passed} passed, ${s.failed} failed, ${s.skipped} skipped, ${s.flaky} flaky${phase ? ` (after the ${phase} pass)` : ""}\n  raw:     ${path.relative(ROOT, path.join(this.dir, "raw.json"))}\n  analyse: npm run qa:analyze`);
     // the loud part: a run that tested much less than it says (lib/health.ts)
-    if (raw.run.health.status === "FAILED" && phase !== "read") {
+    if (raw.run.health.status === "FAILED" && (!phase || phase === "legacy")) {
       console.log(`\n${"!".repeat(72)}\nQA RUN FAILED — the run itself cannot be trusted:\n${raw.run.health.problems.map((p) => "  · " + p).join("\n")}\n${"!".repeat(72)}`);
     }
   }

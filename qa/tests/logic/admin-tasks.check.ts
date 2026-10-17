@@ -351,8 +351,9 @@ async function main() {
   // ── 9. access ──
   const actions = readFileSync(join(ROOT, "src/actions/adminTasks.ts"), "utf8");
   const exported = [...actions.matchAll(/export async function (\w+)\(([^)]*)\)[^{]*\{([\s\S]*?)\n\}/g)];
-  // 16 since 2026-10-15: take it, a picture off, and the team list (teamRun asks asAdmin() first).
-  check("every action asks for a platform admin first", exported.length === 16 && exported.every(([, , , body]) => /asAdmin\(\)|\brun\(|teamRun\(/.test(body)) && /requirePlatformAdmin\(\)/.test(actions) && /async function teamRun[\s\S]*?asAdmin\(\)/.test(actions), exported.map((m) => m[1]).join());
+  // 16 since 2026-10-15: take it, a picture off, and the team list (teamRun asks asAdmin() first);
+  // 17 since 2026-10-17: testAdminTeamText (8ae6efc2, the team's alert texts — through teamRun too).
+  check("every action asks for a platform admin first", exported.length === 17 && exported.every(([, , , body]) => /asAdmin\(\)|\brun\(|teamRun\(/.test(body)) && /requirePlatformAdmin\(\)/.test(actions) && /async function teamRun[\s\S]*?asAdmin\(\)/.test(actions), exported.map((m) => m[1]).join());
   const sms = readFileSync(join(ROOT, "src/app/api/twilio/sms/route.ts"), "utf8");
   check("the SMS webhook: signature first, STOP before a task reply, a task reply before START", sms.indexOf("verifyTwilioSignature(") < sms.indexOf("isStopWord(body)") && sms.indexOf("isStopWord(body)") < sms.indexOf("planTaskReply(") && sms.indexOf("planTaskReply(") < sms.indexOf("if (isStartWord(body)) {") && /smsFromNumber: to/.test(sms.slice(sms.indexOf("planTaskReply(") - 400, sms.indexOf("planTaskReply("))));
   const route = readFileSync(join(ROOT, "src/app/api/admin/tasks/changes/route.ts"), "utf8");

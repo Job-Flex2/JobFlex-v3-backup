@@ -17,6 +17,7 @@ const CAUSE_ORDER: SignalKind[] = ["environment", "forbidden", "legacy", "api-er
 /** `digests`: a production server's log (runs/<run>/server.log) — errors the browser knows only by digest. */
 export function extractSignals(raw: RawRun, digests?: Digests): Signal[] {
   const out: Signal[] = [];
+  const origin = (() => { try { return new URL(raw.run.baseUrl).origin; } catch { return ""; } })();
   raw.tests.forEach((t, i) => {
     const failed = t.outcome === "failed";
     const mine: Signal[] = [];
@@ -45,7 +46,9 @@ export function extractSignals(raw: RawRun, digests?: Digests): Signal[] {
     });
     c.pageErrors.forEach((e, j) => add({ kind: "page-error", message: e.message, stack: e.stack, url: e.url, step: e.step, extra: { root: rootOf([e.message, e.stack], digests) }, rawRef: `tests[${i}].collected.pageErrors[${j}]` }));
     c.failedRequests.forEach((e, j) => { if (e.sameOrigin) add({ kind: DOWN.test(e.error) ? "environment" : "network", message: `${e.method} ${pathOf(e.url)} failed: ${e.error}`, url: e.url, method: e.method, step: e.step, rawRef: `tests[${i}].collected.failedRequests[${j}]` }); });
-    c.console.forEach((e, j) => { if (e.type === "error" && !consoleExpected(e.text, expected)) add({ kind: "console-error", message: e.text, url: e.url, step: e.step, extra: { location: e.location, root: rootOf([e.text], digests) }, rawRef: `tests[${i}].collected.console[${j}]` }); });
+    // a line logged by another site's page (Stripe Checkout, hCaptcha) is that site's, never the cause of a failure here
+    const ours = (u?: string) => !u || !/^https?:/.test(u) || u.startsWith(origin);
+    c.console.forEach((e, j) => { if (e.type === "error" && !consoleExpected(e.text, expected)) add({ kind: "console-error", message: e.text, url: e.url, step: e.step, extra: { location: e.location, root: rootOf([e.text], digests), ...(ours(e.url) ? {} : { thirdParty: true }) }, rawRef: `tests[${i}].collected.console[${j}]` }); });
     c.hungRequests.forEach((e, j) => { if (e.sameOrigin) add({ kind: "network", message: `${e.method} ${pathOf(e.url)} never answered (${Math.round(e.ms / 1000)} s)`, url: e.url, step: e.step, rawRef: `tests[${i}].collected.hungRequests[${j}]` }); });
 
     const m = t.meta ?? {};
@@ -105,7 +108,7 @@ export function extractSignals(raw: RawRun, digests?: Digests): Signal[] {
         add({ kind, message: firstLine(e.message), stack: e.stack, extra: { location: e.location, snippet: e.snippet, testSide, money: t.tags.includes("@money") || t.meta?.money === true }, rawRef: `tests[${i}].errors[${j}]` });
       });
       // the cause: the most explaining signal seen
-      const cause = CAUSE_ORDER.map((k) => mine.find((s) => s.kind === k && !(k === "console-error" && mine.some((x) => x.kind === "api-error")))).find(Boolean);
+      const cause = CAUSE_ORDER.map((k) => mine.find((s) => s.kind === k && !s.extra?.thirdParty && !(k === "console-error" && mine.some((x) => x.kind === "api-error")))).find(Boolean);
       if (cause) cause.primary = true;
     }
     out.push(...mine);

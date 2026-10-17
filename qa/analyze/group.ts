@@ -82,6 +82,8 @@ export function severityOf(kind: SignalKind, signals: Signal[]): { severity: Sev
   const routes = failed.map((s) => s.route ?? pathOf(s.url ?? "")).filter(Boolean);
   // Money: a price, an amount to pay — wrong is P1 whatever kind of check saw it (@money tests)
   if (failed.some((s) => s.extra?.money)) return { severity: "P1", why: "деньги: цена или сумма не совпадает с каталогом" };
+  // another site's page (Stripe Checkout, hCaptcha) logging an error: not ours to fix
+  if (kind === "console-error" && signals.length && signals.every((s) => s.extra?.thirdParty)) return { severity: "P3", why: "ошибку пишет чужой сайт (Stripe, hCaptcha…), не наш сервер" };
   if (HARD.includes(kind) || kind === "console-error") {
     // the test could not find an element: most likely its own selector — P2, said so
     if (failed.length && failed.every((s) => s.extra?.testSide)) return { severity: "P2", why: "вероятно, ошибка теста: элемент не найден (locator), а не сбой продукта" };

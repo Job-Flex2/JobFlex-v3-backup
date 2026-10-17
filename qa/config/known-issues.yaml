@@ -78,3 +78,9 @@ issues:
     onlyTests: " as admin @"
     why: "a platform admin with no company of their own opens the company dashboard: NoOrgError → 500. Known (2026-10-14), only the platform admin is affected"
     confirmed: "owner, 2026-10-17"
+  - id: admin-live-pages-look
+    fold: true
+    signature: '^visual '
+    route: '^/admin/(traffic|activity)'
+    why: "/admin/traffic and /admin/activity draw live numbers (page views, sign-ups, events) — every run changes them, the picture can not be steady"
+    confirmed: "QA Lab, 2026-10-17"

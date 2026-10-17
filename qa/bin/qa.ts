@@ -145,16 +145,19 @@ async function main(): Promise<number> {
     if (flag("headed")) args.push("--headed");
     return spawnSync(process.execPath, args, { cwd: ROOT, stdio: "inherit", env: { ...process.env, ...(phase ? { QA_PHASE: phase } : {}) } }).status ?? 1;
   };
-  // Locally the run is two passes: the suites that only look (visual, roles, pages) first, on the
-  // fresh QA Co, then the ones that write — so no screenshot or access check sees a row a form
-  // test made a minute earlier (playwright.config.ts QA_PHASE). One raw.json for both.
+  // Locally the run is three passes: the suites that only look (visual, roles, pages) first, on the
+  // fresh QA Co, then the new suites that write — so no screenshot or access check sees a row a form
+  // test made a minute earlier — then the old checks alone, which flip global switches for minutes
+  // (playwright.config.ts QA_PHASE). One raw.json for all three.
   let code: number;
   if (local) {
-    console.log("  pass 1/2 · read: visual, roles, pages on the reset QA Co");
+    console.log("  pass 1/3 · read: visual, roles, pages on the reset QA Co");
     const a = pw("read");
-    console.log("  pass 2/2 · write: everything else");
+    console.log("  pass 2/3 · write: the other new suites");
     const b = pw("write");
-    code = Math.max(a, b);
+    console.log("  pass 3/3 · legacy: the old checks, alone");
+    const c = pw("legacy");
+    code = Math.max(a, b, c);
   } else code = pw();
   if (process.env.QA_UPDATE_MATRIX === "1") {
     const n = writeMatrixFromObserved(process.env.QA_RUN_DIR);
