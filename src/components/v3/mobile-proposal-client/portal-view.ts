@@ -27,13 +27,9 @@
 import type { PortalPayModel } from "@/lib/payments/portalModel";
 import { clientSplit, splitCaption } from "@/lib/pricing/markup";
 import { proposalLogoHref } from "@/lib/orgLogo";
+import { measureWords } from "@/lib/measureWords";
 
 /** Donor rule: "roof_squares" → "roof squares", empty → null. */
-function measurementLabel(t: string | null | undefined) {
-  if (!t) return null;
-  const cleaned = t.replace(/_/g, " ").trim().toLowerCase();
-  return cleaned.length ? cleaned : null;
-}
 
 export type PortalLineItem = {
   id: string;
@@ -206,7 +202,7 @@ export function buildPortalView(
     description: proposal.description?.trim() ? proposal.description : null,
     scope: proposal.scopeOfWork?.trim() ? proposal.scopeOfWork : null,
     lineItems: proposal.lineItems.map((item) => {
-      const measure = measurementLabel(item.measurementType);
+      const measure = measureWords(item.measurementType, item.quantity);
       const meta = [
         measure ? (item.quantity ? `${item.quantity} ${measure}` : measure) : null,
         item.quantity ? `${item.quantity} × ${money(item.unitPrice)}` : null,

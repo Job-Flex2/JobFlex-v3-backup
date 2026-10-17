@@ -267,6 +267,44 @@ export function pairEstimateLines(
   for (const l of est.labor) {
     if (!used.has(l)) out.push({ material: null, labor: l });
   }
+  return placeTaskLabor(out);
+}
+
+/** "i7-3f2a…" → 7: the task's place in the estimate, as the server numbers its rows. */
+const taskNo = (id: string | undefined): number | null => {
+  const m = /^i(\d+)-/.exec(id ?? "");
+  return m ? Number(m[1]) : null;
+};
+
+/**
+ * Company pricing (lib/estimate/companyPricing) writes a task's labor as its own row, id "<task id>-L". Left where
+ * the pairing puts unpaired rows, every labor line lands after every material line, and a client reads
+ * "Startup and commissioning $28" a page away from "Labor · Startup and commissioning $432" (owner, 2026-10-16).
+ * So each one goes right under its task's materials row, and a labor-only task (a design hour, a demo) back to its
+ * place among the tasks. Rows without the suffix keep the order they had.
+ */
+function placeTaskLabor<T extends { material: WireLine | null; labor: WireLine | null }>(rows: T[]): T[] {
+  const own = rows.filter((r) => !r.material && r.labor?.id?.endsWith("-L"));
+  if (!own.length) return rows;
+  const out = rows.filter((r) => !own.includes(r));
+  for (const r of own) {
+    const task = r.labor!.id!.slice(0, -2);
+    const under = out.findIndex((x) => x.material?.id === task);
+    if (under >= 0) {
+      out.splice(under + 1, 0, r);
+      continue;
+    }
+    const n = taskNo(task);
+    if (n == null) {
+      out.push(r);
+      continue;
+    }
+    const later = out.findIndex((x) => {
+      const k = taskNo((x.material ?? x.labor)?.id);
+      return k != null && k > n;
+    });
+    out.splice(later < 0 ? out.length : later, 0, r);
+  }
   return out;
 }
 
