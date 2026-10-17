@@ -23,6 +23,7 @@ import {
   isWithinCommissionWindow,
 } from "@/lib/commission";
 import { planSnapshot, reportPlanChange } from "@/lib/activation-events";
+import { alertTrialCanceled, alertTrialConverted } from "@/lib/adminAlerts";
 import { isCardlessTrialLapse, mirrorPeriodEnd, mirrorStatusFor } from "@/lib/stripeStatus";
 import { mirrorSubAtKey, recordMirrorReference } from "@/lib/subscriptionRecord";
 import { patchCardlessRecord, readCardlessRecord } from "@/lib/trialState";
@@ -359,6 +360,11 @@ export async function syncSubscriptionFromStripe(
   const subCreatedMs = (sub.created ?? Math.floor(Date.now() / 1000)) * 1000;
   if (await mirrorAccepts(organizationId, externalSubId, status, subCreatedMs)) {
     const planWas = await planSnapshot(organizationId);
+    // What the mirror held before this write — the team's alert texts read the
+    // transition off it (lib/adminAlerts), not PostHog's snapshot above.
+    const beforeWrite = await db.subscription
+      .findUnique({ where: { organizationId }, select: { status: true, canceledAt: true, createdAt: true } })
+      .catch(() => null);
     await db.subscription.upsert({
       where: { organizationId },
       update: {
@@ -390,6 +396,23 @@ export async function syncSubscriptionFromStripe(
     });
     reportPlanChange(organizationId, "stripe", planWas);
     await recordMirrorReference(organizationId, subCreatedMs);
+
+    // The team's alert texts (lib/adminAlerts), best effort, never the sync's problem:
+    //  · a trial that now pays — the mirror moved TRIALING → ACTIVE;
+    //  · a trial canceled to end at its period end — still trialing on Stripe, but
+    //    canceled_at just appeared (the immediate cancel lands in markSubscriptionCanceled).
+    try {
+      const daysIn = beforeWrite?.createdAt ? Math.max(0, Math.floor((Date.now() - beforeWrite.createdAt.getTime()) / 86_400_000)) : null;
+      if (beforeWrite?.status === SubscriptionStatus.TRIALING && status === SubscriptionStatus.ACTIVE) {
+        const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }).catch(() => null);
+        await alertTrialConverted({ orgName: org?.name ?? "A company", plan: planSlug });
+      } else if (beforeWrite?.status === SubscriptionStatus.TRIALING && !beforeWrite.canceledAt && sub.canceled_at && sub.status === "trialing") {
+        const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }).catch(() => null);
+        await alertTrialCanceled({ orgName: org?.name ?? "A company", daysIn });
+      }
+    } catch (err) {
+      console.warn("[adminAlerts] subscription text:", err instanceof Error ? err.message : err);
+    }
 
     // A card may have been attached through Stripe's subscription/card-update
     // flow rather than our trial Checkout. The trial meter reads this local
@@ -535,7 +558,7 @@ export async function syncSubscriptionFromStripe(
 export async function markSubscriptionCanceled(sub: Stripe.Subscription) {
   const externalSubId = sub.id;
   // plan_changed → "CANCELED" is per organization; a subscription never mirrored has none.
-  const mirror = await db.subscription.findFirst({ where: { externalSubId }, select: { organizationId: true } });
+  const mirror = await db.subscription.findFirst({ where: { externalSubId }, select: { organizationId: true, status: true, canceledAt: true, createdAt: true } });
   const planWas = mirror ? await planSnapshot(mirror.organizationId) : undefined;
   /* CANCELED is the Free plan (lib/freePlan). The row keeps when the owner
      asked (Stripe's canceled_at) and when it ended (currentPeriodEnd) — both
@@ -550,6 +573,17 @@ export async function markSubscriptionCanceled(sub: Stripe.Subscription) {
     },
   });
   if (mirror) reportPlanChange(mirror.organizationId, "stripe", planWas);
+  // The team's "Trial cancels" text — only when this cancellation is news (the
+  // scheduled cancel during the trial already told them, and left canceledAt set).
+  if (mirror && mirror.status === SubscriptionStatus.TRIALING && !mirror.canceledAt && mirrorStatusFor(sub) !== SubscriptionStatus.TRIAL_ENDED) {
+    try {
+      const daysIn = mirror.createdAt ? Math.max(0, Math.floor((Date.now() - mirror.createdAt.getTime()) / 86_400_000)) : null;
+      const org = await db.organization.findUnique({ where: { id: mirror.organizationId }, select: { name: true } }).catch(() => null);
+      await alertTrialCanceled({ orgName: org?.name ?? "A company", daysIn });
+    } catch (err) {
+      console.warn("[adminAlerts] cancel text:", err instanceof Error ? err.message : err);
+    }
+  }
   await db.attribution.updateMany({
     where: { stripeSubscriptionId: externalSubId, status: AttributionStatus.ACTIVE },
     data: { status: AttributionStatus.ENDED, endedAt: new Date() },

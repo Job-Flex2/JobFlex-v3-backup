@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { notifySupportTicket, supportTicketRef } from "@/lib/notify";
 import { rateLimitShared, retryInWords } from "@/lib/rateLimit";
 import { answerTicketWithAi } from "@/lib/support/aiSupport";
+import { alertSupportTicket } from "@/lib/adminAlerts";
 
 // Support taxonomy — kept in lockstep with the customer form's chips, the
 // corner Help widget's categories and the admin triage tags. Not exported: a
@@ -116,6 +117,8 @@ export async function submitSupportTicket(raw: unknown): Promise<SubmitTicketRes
     orgName: org?.name ?? "A customer",
     submitterEmail: submitter?.email ?? null,
   });
+  // The team's "Support" alert texts (lib/adminAlerts) — best-effort like the email.
+  await alertSupportTicket({ orgName: org?.name ?? "A customer", subject, ref });
 
   // The support AI reads it and answers (owner, 2026-10-15) — after the
   // response, so "Send" never waits on a model. What it may send on its own,

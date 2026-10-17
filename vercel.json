@@ -23,6 +23,7 @@
     { "path": "/api/cron/lead-setup-reminders", "schedule": "0 16 * * *" },
     { "path": "/api/cron/trial-winback", "schedule": "30 15 * * *" },
     { "path": "/api/cron/signup-watch", "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/support-ai", "schedule": "*/10 * * * *" }
+    { "path": "/api/cron/support-ai", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/traffic-surge", "schedule": "*/5 * * * *" }
   ]
 }
