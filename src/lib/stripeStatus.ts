@@ -12,7 +12,7 @@
 import type Stripe from "stripe";
 import { SubscriptionStatus } from "@/lib/prismaEnums";
 import { FREE_SWITCH_META } from "@/lib/freePlan";
-import { subscriptionPeriodEndDate } from "@/lib/stripeCompat";
+import { subscriptionPeriodEndDate, subscriptionPeriodStart } from "@/lib/stripeCompat";
 
 function mapStripeStatus(s: Stripe.Subscription.Status): string {
   switch (s) {
@@ -54,10 +54,30 @@ export function mirrorStatusFor(sub: Stripe.Subscription): string {
   return isCardlessTrialLapse(sub) ? SubscriptionStatus.TRIAL_ENDED : mapStripeStatus(sub.status);
 }
 
+/** The subscription is in its first paid period after a trial: that period
+ *  began the moment the trial ended (within the hour Stripe takes to bill). */
+export function firstPeriodAfterTrial(sub: Stripe.Subscription): boolean {
+  if (!sub.trial_end) return false;
+  const start = subscriptionPeriodStart(sub);
+  return start != null && Math.abs(start - sub.trial_end) <= 3600;
+}
+
+/** THE FIRST CHARGE AFTER A TRIAL FAILED (owner, 2026-10-16: "yes, a short
+ *  grace, not instantly"): the shop has never paid, so it keeps its plan for
+ *  three days from the trial's end — lib/planStatus's LAPSE_GRACE on a period
+ *  end set to the trial's end — not for the whole month Stripe has already
+ *  opened. A renewal that fails for a shop that has paid keeps the period. */
+export function firstChargeFailed(sub: Stripe.Subscription): boolean {
+  return (sub.status === "past_due" || sub.status === "unpaid") && firstPeriodAfterTrial(sub);
+}
+
 /** The mirror's currentPeriodEnd: for an ENDED subscription, the moment it
  *  ended — the day the company moved to the Free plan (lib/freePlan), which
- *  an immediate cancel puts before the period's end — else the period's end. */
+ *  an immediate cancel puts before the period's end; for a first charge after
+ *  a trial that failed, the trial's end (the 3-day grace counts from it);
+ *  else the period's end. */
 export function mirrorPeriodEnd(sub: Stripe.Subscription): Date | null {
   if ((sub.status === "canceled" || sub.status === "incomplete_expired") && sub.ended_at) return new Date(sub.ended_at * 1000);
+  if (firstChargeFailed(sub) && sub.trial_end) return new Date(sub.trial_end * 1000);
   return subscriptionPeriodEndDate(sub);
 }

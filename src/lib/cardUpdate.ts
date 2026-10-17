@@ -116,7 +116,7 @@ export async function finishCardUpdate(orgId: string, sessionOrId: string | Stri
 
 const DUNNING_KEY = (invoiceId: string, which: "first" | "final") => `dunning:${invoiceId}:${which}`;
 
-async function ownerContact(orgId: string): Promise<{ email: string; name: string | null } | null> {
+export async function ownerContact(orgId: string): Promise<{ email: string; name: string | null } | null> {
   const owner = await db.membership.findFirst({
     where: { organizationId: orgId, role: "OWNER", organization: { deletedAt: null } },
     orderBy: { createdAt: "asc" },
@@ -160,7 +160,7 @@ export async function sendDunningEmail(invoice: Stripe.Invoice): Promise<"first"
   const base = (await appBaseUrl()).replace(/\/$/, "");
   const planName = await getPlanDisplayName(mirror.plan).catch(() => mirror.plan);
   // The letter leads with the shop's own work, not the bill (owner, 2026-10-16).
-  const [shop, tools] = await Promise.all([shopOnJobflex(mirror.organizationId), planTools(mirror.plan)]);
+  const [shop, tools, pausesAt] = await Promise.all([shopOnJobflex(mirror.organizationId), planTools(mirror.plan), final ? null : firstChargePause(subId)]);
   const { subject, html } = renderEmail(
     buildPaymentFailed({
       name: to.name,
@@ -171,6 +171,7 @@ export async function sendDunningEmail(invoice: Stripe.Invoice): Promise<"first"
       final,
       shop,
       tools,
+      pausesAt,
     }),
   );
   await sendEmail({ to: to.email, subject, html });
@@ -202,5 +203,19 @@ export async function planTools(plan: string): Promise<string[]> {
     return (row?.features ?? []).map((f) => f.trim()).filter((f) => f && !/^everything in/i.test(f) && !/\busers?\b/i.test(f));
   } catch {
     return [];
+  }
+}
+
+/** The first charge after a trial failed: when its plan pauses (3 days after the trial ended — lib/stripeStatus,
+ *  lib/planStatus LAPSE_GRACE_MS). Null for a renewal, or when Stripe can't say. Never throws. */
+export async function firstChargePause(subId: string): Promise<Date | null> {
+  try {
+    const { stripe } = await getStripeClient();
+    const sub = await stripe.subscriptions.retrieve(subId);
+    const { firstPeriodAfterTrial } = await import("@/lib/stripeStatus");
+    const { LAPSE_GRACE_MS } = await import("@/lib/planStatus");
+    return firstPeriodAfterTrial(sub) && sub.trial_end ? new Date(sub.trial_end * 1000 + LAPSE_GRACE_MS) : null;
+  } catch {
+    return null;
   }
 }
