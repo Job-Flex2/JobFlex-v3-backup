@@ -324,7 +324,7 @@ function shotDateLabel(v: string | undefined): string | null {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string } = {}) {
+export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId, homeState = null }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string; homeState?: string | null } = {}) {
   const router = useRouter();
 
   // ── Screen ──
@@ -1753,6 +1753,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           storeys: manual || isSolar ? null : storeysFromEaves(eaveHeights),
           measured: manual || isSolar ? null : report.state === "measured" ? report.footage ?? null : null,
           existingMaterial: manual || isSolar ? null : structure?.material ?? null,
+          // The job's state for the brand picker: the roof's address, the intake's state, else the shop's own.
+          state: (measurement?.state || stateCode || homeState || null)?.toUpperCase() ?? null,
           facetConfidence: manual || isSolar ? null : structure?.confidence?.facetCount ?? null,
           // The footprints the valleys are read off (every inside corner is one, 2026-10-13); the fallback's roof-plane
           // count stands in for a facet count there — an estimate, never a measured fact.

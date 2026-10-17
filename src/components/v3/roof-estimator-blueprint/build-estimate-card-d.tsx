@@ -62,6 +62,7 @@ import {
 } from "@/lib/roofPackage/catalog";
 import {
   buildRoofPackage,
+  systemDisplayName,
   checkVentilation,
   defaultSpec,
   estimateEdges,
@@ -131,6 +132,8 @@ import {
 import type { BuildEstimateCardProps, ReportProp } from "./build-estimate-card";
 import { BlueprintSelect, type SelectStyles } from "@/components/v3/advanced-ai-blueprint/blueprint-select";
 import "./build-estimate-card-d.css";
+import { brandHint, rankBrandsFor, withBrand } from "@/lib/roofPackage/brands";
+import { RoofBrandPicker } from "./roof-brand-picker";
 
 // ── Icons: the shell sprite for file / board / bulb; the small ones inline ──
 const IcChev = () => (
@@ -788,7 +791,31 @@ function PackageLedger({
     }
   }
 
-  const pkg = React.useMemo(() => buildRoofPackage(spec, facts), [spec, facts]);
+  // THE BRAND (2026-10-16, lib/roofPackage/brands): the lines that ARE this system, ranked for the job's state; the
+  // estimate is built on `live` — the contractor's pick for this system, else their usual line, else the state's first.
+  const jobState = facts?.state ?? null;
+  const ranked = React.useMemo(() => rankBrandsFor(spec.systemId, spec.systemFamily, jobState), [spec.systemId, spec.systemFamily, jobState]);
+  const usualBrand = React.useMemo<string | null | undefined>(() => {
+    const b = typeof window === "undefined" ? null : readLocal<Prefs>(PREFS_KEY)?.brands;
+    return b && spec.systemId in b ? b[spec.systemId] : undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read when the pick changes: the pick is what writes it
+  }, [spec.systemId, spec.productId, spec.productAuto]);
+  const live = React.useMemo(() => withBrand(spec, ranked, usualBrand), [spec, ranked, usualBrand]);
+  // What the state asks of this roof; its switch only when the shop's list has that system.
+  const hint = React.useMemo(() => {
+    const h = brandHint(spec.systemId, jobState);
+    return h?.switchTo && !lists.systems.some((x) => x.id === h.switchTo) ? { text: h.text } : h;
+  }, [spec.systemId, jobState, lists.systems]);
+  const pickBrand = (productId: string | null) => {
+    const r = productId ? ranked.find((x) => x.product.id === productId) ?? null : null;
+    setSpec((prev) => {
+      const next = { ...prev, productId: r?.product.id ?? null, productName: r?.name ?? null, productFor: prev.systemId, productAuto: false };
+      writeLocal(PREFS_KEY, prefsOf(next));
+      return next;
+    });
+    setDirty(true);
+  };
+  const pkg = React.useMemo(() => buildRoofPackage(live, facts), [live, facts]);
   const vent = React.useMemo(() => checkVentilation(spec, facts), [spec, facts]);
   const total = [...pkg.materials, ...pkg.labor].reduce((a, l) => a + l.quantity * l.unitPrice, 0);
   const materialsTotal = pkg.materials.reduce((a, l) => a + l.quantity * l.unitPrice, 0);
@@ -1011,7 +1038,7 @@ function PackageLedger({
   const steepest = facts.pitchFamilies.reduce((m, f) => Math.max(m, displayPitch12(f.pitch12)), 0);
   const lowSlope = spec.systemFamily === "low-slope";
   const noStarter = lowSlope || spec.systemFamily === "metal";
-  const sumSystem = `${spec.systemName} · ${spec.wastePct}% waste`;
+  const sumSystem = `${systemDisplayName(live)} · ${spec.wastePct}% waste`;
   const iceLabel = ICE_WATER.find((i) => i.id === spec.iceWater)?.label ?? spec.iceWater;
   const sumUnder = `${spec.underlaymentName} · ${spec.iceWater === "none" ? "no ice & water" : `ice & water ${iceLabel.split(" (")[0].toLowerCase()}`}`;
   const noEdges = spec.eaveFt + spec.rakeFt + spec.ridgeFt + spec.hipFt <= 0;
@@ -1153,7 +1180,7 @@ function PackageLedger({
       className="rbd-btn rbd-btn--primary"
       disabled={disabled || converting || needsPitch}
       aria-busy={converting || undefined}
-      onClick={() => onConvert(pkg, spec)}
+      onClick={() => onConvert(pkg, live)}
       title={needsPitch ? blockedReason : "Straight to a proposal with these lines — lines you already edited below are what gets converted"}
     >
       <svg className="ic" aria-hidden="true"><use href="#i-file" /></svg>
@@ -1294,6 +1321,22 @@ function PackageLedger({
                   />
                   <Sel label="Waste" value={String(spec.wastePct)} options={WASTE_OPTIONS.map((w) => ({ id: String(w), label: `${w}%` }))} onChange={(v) => set("wastePct", Number(v))} disabled={disabled} short />
                 </Group>
+                {ranked.length > 0 && (
+                  <Group>
+                    <RoofBrandPicker
+                      ranked={ranked}
+                      selectedId={live.productFor === live.systemId ? live.productId ?? null : null}
+                      auto={!!live.productAuto}
+                      usualId={typeof usualBrand === "string" ? usualBrand : null}
+                      state={jobState}
+                      systemLabel={spec.systemName}
+                      onPick={pickBrand}
+                      hint={hint}
+                      onHint={(id) => pickSystem(id)}
+                      disabled={disabled}
+                    />
+                  </Group>
+                )}
               </>
             )}
           </Section>
@@ -2087,7 +2130,7 @@ function PackageLedger({
               className="rbd-btn rbd-btn--ghost"
               disabled={disabled || needsPitch}
               data-blocked={needsPitch ? blockedReason : undefined}
-              onClick={() => onBuild(pkg, spec)}
+              onClick={() => onBuild(pkg, live)}
               title={needsPitch ? "Enter pitch to price." : "Fill the estimate tables below to review and adjust before converting"}
             >
               <svg className="ic" aria-hidden="true"><use href="#i-board" /></svg>

@@ -106,6 +106,9 @@ export type Prefs = Partial<Pick<RoofPackageSpec, (typeof PREF_KEYS)[number]>> &
   };
   /** Commercial rates and the shop's wage regime — never whether a job is commercial. */
   commercial?: { rates?: Record<string, number>; wage?: string };
+  /** The contractor's own brand and line per system (lib/roofPackage/brands, 2026-10-16): systemId → product id, or
+   *  null for "any brand". Only their picks — never the state's automatic one. */
+  brands?: Record<string, string | null>;
 };
 
 /** The system fields: a pick, not a price. */
@@ -191,6 +194,8 @@ export function prefsOf(spec: RoofPackageSpec, base?: Prefs | null): Prefs {
     };
   }
   if (spec.commercial) p.commercial = { rates: { ...spec.commercial.rates }, wage: spec.commercial.wage };
+  // The contractor's own brand for this system — never the state's automatic pick.
+  if (spec.productAuto === false && spec.productFor === spec.systemId) p.brands = { ...(p.brands ?? {}), [spec.systemId]: spec.productId ?? null };
   return p;
 }
 export function readLocal<T>(key: string): T | null {

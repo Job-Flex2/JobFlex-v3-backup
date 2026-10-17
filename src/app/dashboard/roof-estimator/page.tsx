@@ -21,6 +21,8 @@ import { readEstimateSeed } from "@/lib/estimateSeed";
 import { EstimateSeedStrip } from "@/components/v3/estimate-seed-strip";
 import { looksLikeStreetAddress } from "@/lib/leadRules";
 import { requireOrg } from "@/lib/orgContext";
+import { db } from "@/lib/db";
+import { parseStateZip } from "@/lib/fence/market";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
 
 /** The hand-off seed for this company's roof estimator, or null — never an error. */
@@ -76,6 +78,15 @@ export default async function RoofEstimatorPage({ searchParams }: { searchParams
   // the estimator loads it (loadRoofFromProposal checks it is this company's).
   const raw = (await searchParams).proposal;
   const proposalId = (Array.isArray(raw) ? raw[0] : raw)?.slice(0, 64) || undefined;
+  // The shop's own state (2026-10-16): the roofing brands are ranked for it until the roof's address says otherwise.
+  let homeState: string | null = null;
+  try {
+    const { organizationId } = await requireOrg();
+    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { address: true } });
+    homeState = parseStateZip(org?.address).state;
+  } catch {
+    /* no company yet: the roof's own address decides */
+  }
 
   return (
     <>
@@ -87,6 +98,7 @@ export default async function RoofEstimatorPage({ searchParams }: { searchParams
         drawingEnabled={drawingEnabled}
         initialAddress={seed?.address && looksLikeStreetAddress(seed.address) ? seed.address : undefined}
         proposalId={proposalId}
+        homeState={homeState}
       />
     </>
   );

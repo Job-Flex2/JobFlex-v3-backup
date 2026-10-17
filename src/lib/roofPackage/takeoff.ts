@@ -112,6 +112,9 @@ export interface RoofFacts {
    * start like-for-like from it.
    */
   existingMaterial?: string | null;
+  /** The job's US state (two letters) — the roof's address, else the shop's own: the brand picker ranks for it
+   *  (lib/roofPackage/brands). Not part of the price. */
+  state?: string | null;
   /**
    * The aerial provider's own 0..1 score for facetCount, when it scored one.
    * The valley estimate's facet model refuses a facet count scored under 0.5.
@@ -286,6 +289,24 @@ export interface RoofPackageSpec {
    * a tile house must not make the next plain house open on tile.
    */
   systemAuto: boolean;
+  /** THE BRAND AND LINE (owner, 2026-10-16: "show the brands most popular per state … make sure it applies the
+   *  brands popular in the state"; lib/roofPackage/brands). Named in front of the system on the lines and in the
+   *  client's scope while `productFor` is the system in use; the prices stay the system's. undefined = not decided
+   *  yet (the state's pick is applied); null = "any brand", the contractor's word. */
+  productId?: string | null;
+  productName?: string | null;
+  /** The system the product was picked for — a product never names a different system. */
+  productFor?: string | null;
+  /** True while the product is the state's pick, not the contractor's: re-picked when the system or state changes. */
+  productAuto?: boolean;
+}
+
+/** The system as the proposal names it — the brand and line in front when one is picked for THIS system
+ *  ("GAF Timberline HDZ · Architectural shingle · 30-yr"). */
+export function systemDisplayName(spec: Pick<RoofPackageSpec, "systemName" | "systemId" | "productName" | "productFor">): string {
+  const sys = spec.systemName.trim();
+  const product = spec.productName?.trim();
+  return product && spec.productFor === spec.systemId && sys ? `${product} · ${sys}` : sys;
 }
 
 /** Perimeter of a lat/lng ring in feet; null when there is no ring. A closed ring's repeated last point adds nothing. */
@@ -1210,7 +1231,7 @@ function buildSteep(spec: RoofPackageSpec, facts: RoofFacts): BuiltPackage {
   const assumptions: string[] = [];
   const sq = Math.max(0, facts.squares);
   const sqWaste = r1(sq * (1 + spec.wastePct / 100));
-  const sysName = spec.systemName.trim() || "Roofing";
+  const sysName = systemDisplayName(spec) || "Roofing";
   const family: RoofFamily = spec.systemFamily ?? "asphalt";
   const edgeB = spec.edgesBasis;
   const perimeter = spec.eaveFt + spec.rakeFt;
@@ -1507,7 +1528,7 @@ function buildLowSlope(spec: RoofPackageSpec, facts: RoofFacts): BuiltPackage {
   const sq = Math.max(0, facts.squares);
   const sqR = r1(sq);
   const sqWaste = r1(sq * (1 + spec.wastePct / 100));
-  const sysName = spec.systemName.trim() || "Flat roof system";
+  const sysName = systemDisplayName(spec) || "Flat roof system";
   const SQ = facts.squaresBasis;
   const edgeB = spec.edgesBasis;
   const R = (k: Parameters<typeof rate>[1]) => rate(f, k);
