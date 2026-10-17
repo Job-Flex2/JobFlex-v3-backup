@@ -41,6 +41,26 @@ test.describe("public pages", () => {
     cleanRun(qa);
   });
 
+  // Money (2026-10-17): "a $ and a digit" passed while every plan read $0. Each paid plan of the
+  // local catalogue (PricingPlan, the one source every plan surface reads) must show its own monthly
+  // price on /pricing. A failure here is P1 (analyze/group.ts, @money).
+  test("pricing shows the catalogue's own prices @smoke @money", async ({ page, qa }) => {
+    test.skip(targetKind() !== "local", "reads the local catalogue — not against a deployment");
+    const plans = (await prisma().pricingPlan.findMany({ where: { active: true, priceCents: { gt: 0 } }, select: { slug: true, name: true, priceCents: true } })).filter((p) => !/deck/i.test(p.slug));
+    expect(plans.length, "the catalogue has paid plans").toBeGreaterThan(0);
+    const r = await open(page, "/pricing", { settleMs: 1500 });
+    expect(r.status).toBe(200);
+    const text = await page.evaluate(() => document.body.innerText);
+    for (const p of plans) {
+      const dollars = p.priceCents / 100;
+      const price = "$" + (Number.isInteger(dollars) ? String(dollars) : dollars.toFixed(2));
+      const shown = new RegExp(price.replace(/[$.]/g, "\\$&") + "(?![\\d.,])").test(text);
+      expect.soft(shown, `${p.name}: the catalogue's ${price}/month is not on /pricing`).toBe(true);
+    }
+    qa.meta({ route: "/pricing", money: true, plans: plans.map((p) => `${p.slug} ${p.priceCents}`) });
+    cleanRun(qa);
+  });
+
   test("register page shows Google above the email form @smoke", async ({ page, qa }) => {
     const r = await open(page, "/auth/register?flow=otp");
     expect(r.status).toBe(200);

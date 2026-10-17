@@ -67,9 +67,74 @@ function grep(re: RegExp, dir: string, depth = 0): { file: string; line: number 
   return null;
 }
 
+/** The QA role → the membership role whose gate src/lib/roleRoutes.ts holds. */
+const GATE_ROLE: Record<string, string> = { worker: "INSTALLER", manager: "MANAGER", sales: "SALES", estimator: "ESTIMATOR" };
+
+/** Lines of `file` (repo path) that contain `needle`, 1-based. */
+function linesWith(file: string, needle: string): number[] {
+  try {
+    return fs.readFileSync(path.join(ROOT, file), "utf8").split("\n").map((l, i) => (l.includes(needle) ? i + 1 : 0)).filter(Boolean);
+  } catch { return []; }
+}
+
+/**
+ * An access leak is decided by the access rules, never by the page: for a member role the gate in
+ * src/lib/roleRoutes.ts (the line of its allow-list that lets the route through, else the gate),
+ * for a guest the middleware / proxy, for the platform admin the admin guard (2026-10-17).
+ */
+function accessRules(signals: Signal[]): Location[] {
+  const out: Location[] = [];
+  for (const s of signals) {
+    const cells = (s.extra?.cells ?? {}) as Record<string, string>;
+    const exp = (s.extra?.expected ?? {}) as Record<string, string>;
+    const route = s.route ?? "";
+    for (const [role, cell] of Object.entries(cells)) {
+      if (!exp[role] || exp[role].split("|").includes(cell)) continue;
+      const gate = GATE_ROLE[role];
+      if (gate && exists("src/lib/roleRoutes.ts")) {
+        const text = fs.readFileSync(path.join(ROOT, "src/lib/roleRoutes.ts"), "utf8").split("\n");
+        const start = text.findIndex((l) => new RegExp(`^\\s*${gate}:\\s*\\{`).test(l));
+        const end = start >= 0 ? text.findIndex((l, i) => i > start && /^\s{2}\},?\s*$/.test(l)) : -1;
+        // the deepest prefix of the route the gate's block names: that entry is what lets it through
+        let hit = -1;
+        if (start >= 0) {
+          const segs = route.split("/").filter(Boolean);
+          for (let n = segs.length; n > 0 && hit < 0; n--) {
+            const prefix = "/" + segs.slice(0, n).join("/");
+            hit = text.findIndex((l, i) => i > start && (end < 0 || i <= end) && l.includes(`"${prefix}"`));
+          }
+        }
+        out.push({ file: "src/lib/roleRoutes.ts", line: hit >= 0 ? hit + 1 : start >= 0 ? start + 1 : null, why: hit >= 0 ? `правило доступа роли ${gate}: эта строка пропускает ${route} (${role}: ожидалось ${exp[role]}, получено ${cell})` : `правила доступа роли ${gate} (${role}: ожидалось ${exp[role]}, получено ${cell})`, confidence: hit >= 0 ? "high" : "medium", source: "route" });
+      } else if (role === "guest" || role === "homeowner") {
+        for (const f of ["src/middleware.ts", "src/proxy.ts"]) if (exists(f)) out.push({ file: f, line: null, why: `вход и перенаправления гостя (${role}: ожидалось ${exp[role]}, получено ${cell})`, confidence: "medium", source: "route" });
+      } else if (role === "admin") {
+        const f = "src/lib/orgContext.ts";
+        if (exists(f)) out.push({ file: f, line: null, why: `проверки ролей и компании (admin: ожидалось ${exp[role]}, получено ${cell})`, confidence: "low", source: "route" });
+      }
+    }
+  }
+  return out;
+}
+
+/** Where a broken link's address is written in src/ (a nav map, a component): the quoted path. */
+function linkSource(signals: Signal[]): Location[] {
+  const out: Location[] = [];
+  for (const s of signals) {
+    const href = s.message.replace(/^link on the page leads to /, "").replace(/ → \d+$/, "").replace(/[?#].*$/, "").trim();
+    if (!href.startsWith("/")) continue;
+    const hit = grep(new RegExp(`["'\`]${href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`?#]`), path.join(ROOT, "src"));
+    if (hit && !out.some((o) => o.file === hit.file)) out.push({ file: hit.file, line: hit.line, why: `здесь записана ссылка ${href}, которая ведёт на 404`, confidence: "high", source: "route" });
+    if (out.length) break;
+  }
+  return out;
+}
+
 export function candidates(f: Finding, signals: Signal[]): Location[] {
   const out: Location[] = [];
   const add = (l: Location | null) => { if (l && !out.some((o) => o.file === l.file)) out.push(l); };
+  if (f.kind === "access") accessRules(signals).forEach(add);
+  if (f.kind === "broken-link") linkSource(signals).forEach(add);
+  if (f.kind === "coverage") add({ file: f.evidence.tests.some((t) => /forms/.test(t.file)) ? "qa/lib/forms.ts" : f.evidence.tests[0]?.file ?? "qa/tests", line: null, why: "QA перестал проверять: поиск формы / условие пропуска теста", confidence: "medium", source: "route" });
   for (const s of signals.slice(0, 6)) {
     fromStack(s.stack).forEach(add);
     fromStack(s.message).forEach(add);
@@ -130,18 +195,21 @@ You get one finding from automated tests (the error, stack, test names, pages) a
 Answer with the file and line most likely responsible, and why (Russian, one or two sentences). Use only files shown to you.
 If the excerpts do not show the cause, answer found=false with file "" — do not guess.`;
 
-export async function localize(llm: Llm, f: Finding, signals: Signal[]): Promise<{ location: Location | null; note?: string; byModel: boolean }> {
+/** `called`: the strong model was asked (counts toward analysis.maxLocalize whatever it answered). */
+export async function localize(llm: Llm, f: Finding, signals: Signal[]): Promise<{ location: Location | null; note?: string; byModel: boolean; called: boolean }> {
   const cands = candidates(f, signals);
-  if (!cands.length) return { location: null, note: "не найдено: ни стек, ни маршрут, ни компонент не указывают на файл в src/", byModel: false };
-  if (!llm.available || f.severity === "P3") return { location: cands[0], byModel: false };
+  if (!cands.length) return { location: null, note: "не найдено: ни стек, ни маршрут, ни компонент не указывают на файл в src/", byModel: false, called: false };
+  if (!llm.available || f.severity === "P3") return { location: cands[0], byModel: false, called: false };
+  // a rule that names the exact line (an access gate, a link's address) needs no model
+  if (cands[0].confidence === "high" && cands[0].line) return { location: cands[0], byModel: false, called: false };
   const text = JSON.stringify({
     finding: { title: f.title, kind: f.kind, message: f.evidence.message, stack: f.evidence.stack?.slice(0, 3000), tests: f.evidence.tests.slice(0, 5).map((t) => t.title), routes: f.evidence.routes.slice(0, 5), alsoSeen: f.evidence.alsoSeen },
     candidates: cands.slice(0, 4).map((c) => ({ file: c.file, line: c.line, why: c.why, code: excerpt(c) })),
   });
   const r = await llm.json<{ found: boolean; file: string; line: number | null; why: string; confidence: "high" | "medium" | "low" }>({ model: "strong", system: SYSTEM, text, schema: SCHEMA, maxTokens: 6000, effort: "medium" });
-  if (!r) return { location: cands[0], byModel: false };
-  if (!r.found || !exists(r.file)) return { location: cands[0], note: "модель не нашла причину в коде кандидатов; показан ближайший файл по правилу", byModel: true };
-  return { location: { file: r.file, line: r.line, why: r.why, confidence: r.confidence, source: "model" }, byModel: true };
+  if (!r) return { location: cands[0], byModel: false, called: true };
+  if (!r.found || !exists(r.file)) return { location: cands[0], note: "модель не нашла причину в коде кандидатов; показан ближайший файл по правилу", byModel: true, called: true };
+  return { location: { file: r.file, line: r.line, why: r.why, confidence: r.confidence, source: "model" }, byModel: true, called: true };
 }
 
 /** The fix prompt for Claude Code under every P0–P2 finding. */

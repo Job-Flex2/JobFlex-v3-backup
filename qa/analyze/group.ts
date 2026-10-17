@@ -7,6 +7,7 @@ import type { RawRun } from "../lib/raw";
 import { normalisePath } from "../lib/matrix";
 import { pathOf } from "./signals";
 import type { Finding, Severity, Signal, SignalKind } from "./types";
+import { qaConfig } from "../lib/config";
 
 export function norm(s: string): string {
   return s
@@ -79,6 +80,8 @@ export function severityOf(kind: SignalKind, signals: Signal[]): { severity: Sev
   // Only a test that FAILED counts toward P0/P1; an error a passing test merely saw is P2 at most.
   const failed = signals.filter((s) => s.primary);
   const routes = failed.map((s) => s.route ?? pathOf(s.url ?? "")).filter(Boolean);
+  // Money: a price, an amount to pay — wrong is P1 whatever kind of check saw it (@money tests)
+  if (failed.some((s) => s.extra?.money)) return { severity: "P1", why: "деньги: цена или сумма не совпадает с каталогом" };
   if (HARD.includes(kind) || kind === "console-error") {
     // the test could not find an element: most likely its own selector — P2, said so
     if (failed.length && failed.every((s) => s.extra?.testSide)) return { severity: "P2", why: "вероятно, ошибка теста: элемент не найден (locator), а не сбой продукта" };
@@ -97,19 +100,34 @@ export function severityOf(kind: SignalKind, signals: Signal[]): { severity: Sev
     return { severity: "P2", why: "a function works with a defect" };
   }
   switch (kind) {
-    case "environment": return { severity: "P2", why: "the server under test went away during the run — not a product defect; re-run these tests on a steady server" };
+    case "environment": return { severity: "P3", why: "не дефект продукта: сервер под тестом пропадал или браузер теста не смог сделать снимок — перепрогнать" };
+    case "coverage": return { severity: "P1", why: "QA потерял покрытие: то, что прошлый прогон проверял, этот не проверил" };
     case "forbidden": return { severity: "P2", why: "a test pressed a forbidden control — the guard stopped it; the test or the control's label needs a look" };
     case "access": {
-      const leak = signals.some((s) => /guest:|homeowner:/.test(signatureOf(s)) && /→open/.test(signatureOf(s))) || signals.some((s) => /\/admin/.test(s.route ?? "") && /→open/.test(signatureOf(s)) && !/admin:/.test(signatureOf(s)));
-      return leak ? { severity: "P1", why: "a page opens to someone who should not see it" } : { severity: "P2", why: "access differs from the matrix" };
+      // a leak: ANY role gets "open" where the matrix says it must not (a worker on the financials,
+      // a guest on the dashboard) — P1 (2026-10-17: before, only guest / homeowner / admin pages were)
+      const leak = signals.some((s) => {
+        const cells = (s.extra?.cells ?? {}) as Record<string, string>;
+        const exp = (s.extra?.expected ?? {}) as Record<string, string>;
+        // a refusal (login / forbidden / redirect) that became "open" — not a "not-found" that found its record
+        return Object.entries(cells).some(([r, c]) => c === "open" && !!exp[r] && exp[r].split("|").every((e) => e === "login" || e === "forbidden" || e.startsWith("redirect:")));
+      });
+      return leak ? { severity: "P1", why: "утечка доступа: страница открывается роли, которой её видеть нельзя" } : { severity: "P2", why: "access differs from the matrix" };
+    }
+    case "broken-link": {
+      const pages = new Set(signals.map((s) => s.route).filter(Boolean)).size;
+      const min = qaConfig().severity?.sharedLinkPages ?? 5;
+      return pages >= min ? { severity: "P1", why: `битая ссылка общего элемента (меню, шапка): видна на ${pages} страницах` } : { severity: "P2", why: "works with a defect" };
+    }
+    case "slow": {
+      const key = (qaConfig().severity?.slowKeyRoutes ?? []).map((r) => new RegExp(r));
+      return signals.some((s) => key.some((r) => r.test(s.route ?? ""))) ? { severity: "P2", why: "ключевая страница грузится дольше порога" } : { severity: "P3", why: "speed, accessibility or a warning" };
     }
     case "forms": return signals.some((s) => /ran in the page|broke/.test(s.message)) ? { severity: "P1", why: "a form breaks or runs typed HTML" } : signals.some((s) => /saved without/.test(s.message)) ? { severity: "P2", why: "a form saves invalid input" } : { severity: "P3", why: "a form shows no validation message" };
     case "unknown-access":
-    case "broken-link":
     case "layout":
     case "visual":
       return { severity: "P2", why: kind === "unknown-access" ? "pages nobody has decided the access for" : kind === "layout" ? "the page does not fit a 390 phone" : "works with a defect" };
-    case "slow":
     case "a11y":
     case "perf":
     default:

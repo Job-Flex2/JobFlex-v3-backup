@@ -52,6 +52,28 @@ perf:
   # axe-core impacts reported by the pages suite.
   axeImpacts: [critical, serious]
 
+# Is the run itself to be trusted (lib/health.ts)? A suite with every test skipped, or with more
+# than maxSkipShare of its tests skipped for a reason NOT listed in expectedSkips, marks the run
+# FAILED (first line of the report, non-zero exit). expectedSkips: modes this server is not in,
+# said by the test itself — listed in the report, not counted.
+health:
+  maxSkipShare: 0.2
+  expectedSkips:
+    - "needs Stripe test clocks"
+    - "the custom plan is off on this server"
+    - "has no Stripe key"
+    - "against production"
+    - "сервер — next dev"
+
+# Severity rules that depend on the page (analyze/group.ts).
+severity:
+  # a key page past the load threshold is P2, not P3
+  slowKeyRoutes: ["^/dashboard$", "^/dashboard/proposals$", "^/dashboard/clients$", "^/dashboard/projects$", "^/dashboard/jobs$", "^/dashboard/leads$"]
+  # pages that show a price: a wrong one is P1
+  moneyRoutes: ["^/pricing$", "^/dashboard/upgrade$", "^/dashboard/subscription", "^/auth/register"]
+  # one broken link seen on this many pages or more is the shell's own (sidebar, topbar): P1
+  sharedLinkPages: 5
+
 # Third-party traffic answered with 204 in every test: analytics and ads never see a QA run.
 blockThirdParty:
   - "posthog"

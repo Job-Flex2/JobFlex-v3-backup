@@ -395,14 +395,14 @@ routes:
     homeowner: login
   /dashboard/clients/[id]:
     guest: login
-    owner: not-found
-    manager: not-found
+    owner: open
+    manager: open
     worker: redirect:/dashboard/jobs
     admin: open
     homeowner: login
     review:
       - admin
-    why: "auto: admin: a platform admin with no company opens the dashboard"
+    why: "owner and manager open QA Co's fixture client (qa/lib/seed.ts, 2026-10-17); auto: admin: a platform admin with no company opens the dashboard"
   /dashboard/company:
     guest: login
     owner: open
@@ -693,11 +693,12 @@ routes:
     homeowner: login
   /dashboard/jobs/[id]:
     guest: login
-    owner: not-found
-    manager: not-found
+    owner: open
+    manager: open
     worker: not-found
     admin: redirect:/dashboard
     homeowner: login
+    why: "owner and manager open QA Co's fixture job (qa/lib/seed.ts, put back before every run, 2026-10-17); the worker is not on that job → not found"
   /dashboard/jobs/new:
     guest: login
     owner: open
@@ -1351,11 +1352,12 @@ routes:
     homeowner: login
   /mobile-job-detail-v1/[id]:
     guest: login
-    owner: not-found
-    manager: not-found
+    owner: open
+    manager: open
     worker: not-found
     admin: redirect:/dashboard
     homeowner: login
+    why: "owner and manager open QA Co's fixture job (qa/lib/seed.ts, put back before every run, 2026-10-17); the worker is not on that job → not found"
   /mobile-jobs-v2:
     guest: login
     owner: open

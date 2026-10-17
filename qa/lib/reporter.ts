@@ -9,6 +9,7 @@ import { targetKind } from "./target";
 import { redact, redactDeep } from "./redact";
 import { SCHEMA, SUITES, type RawRun, type RawStep, type RawTest } from "./raw";
 import { emptyCollected, type Collected } from "./collect";
+import { runHealth } from "./health";
 
 const slug = (s: string) => s.replace(/@\w+/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 70) || "test";
 
@@ -151,6 +152,14 @@ export default class QaReporter implements Reporter {
   onEnd(result: FullResult): void {
     if (process.argv.includes("--list")) return; // a listing ran nothing
     const finished = new Date();
+    // The run's second pass (bin/qa.ts: "read" on the fresh QA Co, then "write") adds to the first's raw.json.
+    let earlier: RawRun | null = null;
+    const phase = process.env.QA_PHASE;
+    if (phase && phase !== "read") {
+      try { earlier = JSON.parse(fs.readFileSync(path.join(this.dir, "raw.json"), "utf8")) as RawRun; } catch { /* no first pass */ }
+      for (const t of earlier?.tests ?? []) if (!this.tests.has(t.id)) this.tests.set(t.id, t);
+      if (earlier) this.started = new Date(earlier.run.startedAt);
+    }
     const tests = [...this.tests.values()];
     const count = (list: RawTest[]) => ({
       total: list.length,
@@ -184,13 +193,20 @@ export default class QaReporter implements Reporter {
         status: result.status,
         setup: redactDeep(setup),
         notes: notes.map((n) => redact(n)),
+        phases: [...(earlier?.run.phases ?? []), ...(phase ? [phase] : [])],
       },
       stats: { ...count(tests), bySuite },
       tests: tests.sort((a, b) => a.suite.localeCompare(b.suite) || a.file.localeCompare(b.file) || a.line - b.line || a.project.localeCompare(b.project)),
     };
+    raw.run.health = runHealth(raw);
+    if (earlier && result.status === "passed" && earlier.run.status !== "passed") raw.run.status = earlier.run.status;
     fs.writeFileSync(path.join(this.dir, "raw.json"), JSON.stringify(raw, null, 1));
     const s = raw.stats;
-    console.log(`\nQA Lab · ${s.total} tests: ${s.passed} passed, ${s.failed} failed, ${s.skipped} skipped, ${s.flaky} flaky\n  raw:     ${path.relative(ROOT, path.join(this.dir, "raw.json"))}\n  analyse: npm run qa:analyze`);
+    console.log(`\nQA Lab · ${s.total} tests: ${s.passed} passed, ${s.failed} failed, ${s.skipped} skipped, ${s.flaky} flaky${phase ? ` (after the ${phase} pass)` : ""}\n  raw:     ${path.relative(ROOT, path.join(this.dir, "raw.json"))}\n  analyse: npm run qa:analyze`);
+    // the loud part: a run that tested much less than it says (lib/health.ts)
+    if (raw.run.health.status === "FAILED" && phase !== "read") {
+      console.log(`\n${"!".repeat(72)}\nQA RUN FAILED — the run itself cannot be trusted:\n${raw.run.health.problems.map((p) => "  · " + p).join("\n")}\n${"!".repeat(72)}`);
+    }
   }
 
   printsToStdio(): boolean {

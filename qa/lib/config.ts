@@ -15,6 +15,10 @@ export type QaConfig = {
   visual: { pixelThreshold: number; maxDiffRatio: number; hide: string[] };
   perf: { pages: { path: string; role: string }[]; minScores: Record<string, number>; axeImpacts: string[] };
   blockThirdParty: string[];
+  /** A run whose suites skipped too much is FAILED (lib/health.ts). */
+  health?: { maxSkipShare: number; expectedSkips: string[] };
+  /** Severity rules that name pages (analyze/group.ts). */
+  severity?: { slowKeyRoutes: string[]; moneyRoutes: string[]; sharedLinkPages: number };
   ignoreConsole: string[];
   analysis: {
     budgetUsd: number;
@@ -33,7 +37,8 @@ export type ForbiddenConfig = {
   formsNoSubmit: string[];
 };
 
-export type KnownIssue = { id: string; signature?: string; message?: string; test?: string; route?: string; why?: string; confirmed?: string };
+/** fold: not hidden, but moved to the folded "old, known and noise" part of the report and kept out of the headline counts. */
+export type KnownIssue = { id: string; signature?: string; message?: string; test?: string; onlyTests?: string; route?: string; why?: string; confirmed?: string; fold?: boolean };
 
 const cache = new Map<string, unknown>();
 export function readYaml<T>(name: string): T {

@@ -29,6 +29,32 @@ export async function steadyShot(page: Page, file: string): Promise<void> {
   const hide = qaConfig().visual.hide.join(", ");
   await page.addStyleTag({ content: `*, *::before, *::after { caret-color: transparent !important; transition: none !important; animation: none !important; } ${hide} { visibility: hidden !important; }` }).catch(() => {});
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
+  // Text that changes by itself between two runs of the same day — "17m ago", "Oct 17", "9:00 AM",
+  // "Good evening" — is made invisible in place (its box stays, so the layout is the same): a
+  // baseline compares the page, not the clock (2026-10-17: such words were most visual "findings").
+  await page.evaluate(() => {
+    const VOLATILE = [
+      /\b\d+\s?(?:s|m|h|d|w|mo|min|mins|minutes?|hrs?|hours?|days?|weeks?|months?)\s+ago\b/i,
+      /\b(?:just now|yesterday|today|tomorrow)\b/i,
+      /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}\b/i,
+      /\b\d{1,2}:\d{2}(?::\d{2})?\s?(?:AM|PM)?\b/i,
+      /\bgood (?:morning|afternoon|evening)\b/i,
+      /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/,
+    ];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const hits: Text[] = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const t = n as Text;
+      if (t.data.trim() && VOLATILE.some((r) => r.test(t.data)) && !t.parentElement?.closest("script, style")) hits.push(t);
+    }
+    for (const t of hits) {
+      const span = document.createElement("span");
+      span.style.visibility = "hidden";
+      span.setAttribute("data-qa-volatile", "");
+      t.replaceWith(span);
+      span.appendChild(t);
+    }
+  }).catch(() => {});
   await page.waitForTimeout(400);
   const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0)).catch(() => 0);
   const vp = page.viewportSize() ?? { width: 390, height: 844 };
@@ -36,7 +62,22 @@ export async function steadyShot(page: Page, file: string): Promise<void> {
   await page.screenshot({ path: file, fullPage: true, clip: { x: 0, y: 0, width: vp.width, height }, mask: masks(page), animations: "disabled", timeout: 60_000 });
 }
 
-export type VisualResult = { id: string; baseline?: string; actual: string; diff?: string; ratio?: number; created?: boolean; sizeChanged?: boolean; note?: string };
+/** box: where the changed pixels are (x, y, width, height), for "one change on many pages" (analyze/group.ts). */
+export type VisualResult = { id: string; baseline?: string; actual: string; diff?: string; ratio?: number; created?: boolean; sizeChanged?: boolean; note?: string; box?: { x: number; y: number; w: number; h: number } };
+
+/** The bounding box of pixelmatch's red (changed) pixels. */
+function changedBox(img: PNG): VisualResult["box"] {
+  let x0 = img.width, y0 = img.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const i = (y * img.width + x) * 4;
+      if (img.data[i] === 255 && img.data[i + 1] === 0 && img.data[i + 2] === 0) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  }
+  return x1 < 0 ? undefined : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
 
 /** Compares the shot with its baseline; creates the baseline when there is none. */
 export async function compare(id: string, actualFile: string): Promise<VisualResult> {
@@ -74,6 +115,7 @@ export async function compare(id: string, actualFile: string): Promise<VisualRes
     const diffFile = path.join(dir, "diff.png");
     fs.writeFileSync(diffFile, PNG.sync.write(diff));
     res.diff = diffFile;
+    res.box = changedBox(diff);
   } else {
     // within the threshold: keep nothing but the record
     fs.rmSync(dir, { recursive: true, force: true });

@@ -58,16 +58,19 @@ export function extractSignals(raw: RawRun, digests?: Digests): Signal[] {
     (m.axe as { id: string; impact: string; help: string; nodes: number }[] | undefined)?.forEach((v, j) => add({ kind: "a11y", message: `${v.id} (${v.impact}): ${v.help} — ${v.nodes} element(s)`, extra: { rule: v.id, impact: v.impact }, rawRef: `tests[${i}].meta.axe[${j}]` }));
     if (m.kind === "lighthouse" && Array.isArray(m.below) && (m.below as string[]).length) add({ kind: "perf", message: `Lighthouse ${m.formFactor}: ${(m.below as string[]).join(", ")}`, extra: { formFactor: m.formFactor, scores: m.scores }, rawRef: `tests[${i}].meta.below` });
     if (m.kind === "access" && failed) add({ kind: "access", message: firstLine(t.errors[0]?.message ?? "access differs"), extra: { cells: m.cells, expected: m.expected }, rawRef: `tests[${i}].errors[0]` });
-    for (const a of t.annotations) {
-      if (a.type === "unknown-access") add({ kind: "unknown-access", message: a.description ?? "unknown access", rawRef: `tests[${i}].annotations` });
-      if (a.type === "warning" && /validation/.test(a.description ?? "")) add({ kind: "forms", message: a.description ?? "", rawRef: `tests[${i}].annotations` });
-    }
+    // forms (before the annotations below): a wrong value SAVED explains a failed forms test better than
+    // "no message was shown" — as the first forms signal it is the one that leads (2026-10-17: the
+    // Settings → Proposals form that wrote 0 came out P3 "no validation message").
     if (m.kind === "forms") {
       (m.formResults as { scenario: string; savedRequests: number; validation: string[]; pressed: boolean; xss: boolean; crashed: boolean }[] | undefined)?.forEach((r, j) => {
         if (r.xss) add({ kind: "forms", message: `HTML typed into a field ran in the page (${r.scenario})`, rawRef: `tests[${i}].meta.formResults[${j}]` });
         else if (r.crashed) add({ kind: "forms", message: `the page broke on a ${r.scenario} submit`, rawRef: `tests[${i}].meta.formResults[${j}]` });
         else if (r.scenario === "invalid" && r.pressed && !r.validation.length && r.savedRequests > 0) add({ kind: "forms", message: "a wrong email / phone / number was saved without a word to the person", rawRef: `tests[${i}].meta.formResults[${j}]` });
       });
+    }
+    for (const a of t.annotations) {
+      if (a.type === "unknown-access") add({ kind: "unknown-access", message: a.description ?? "unknown access", rawRef: `tests[${i}].annotations` });
+      if (a.type === "warning" && /validation/.test(a.description ?? "")) add({ kind: "forms", message: a.description ?? "", rawRef: `tests[${i}].annotations` });
     }
     if (/^legacy /.test(t.title) && failed) {
       // the old script itself is the subject: qa/tests/<suite>/<file>, and its first FAIL line
@@ -76,7 +79,7 @@ export function extractSignals(raw: RawRun, digests?: Digests): Signal[] {
       const why = lines.slice(1).find((l) => /FAIL|✗|✘|Error|expected/i.test(l) && !/^Expected:|^Received:/.test(l)) ?? lines[0] ?? "the script failed";
       add({ kind: "legacy", file: `qa/tests/${script}`, message: `${script}: ${why}`.slice(0, 400), stack: t.errors[0]?.message, rawRef: `tests[${i}].errors[0]` });
     }
-    if (m.kind === "visual" && failed) add({ kind: "visual", message: firstLine(t.errors[0]?.message ?? "visual difference"), extra: { visualId: m.visualId, ratio: m.ratio }, rawRef: `tests[${i}].errors[0]` });
+    if (m.kind === "visual" && failed) add({ kind: "visual", message: firstLine(t.errors[0]?.message ?? "visual difference"), extra: { visualId: m.visualId, ratio: m.ratio, box: m.box ?? null, viewport: m.viewport }, rawRef: `tests[${i}].errors[0]` });
 
     // The browser's "Failed to load resource: … status of 500" is the same answer an api-error
     // above already holds: it takes that answer's root, so it never stands as a finding alone.
@@ -94,11 +97,12 @@ export function extractSignals(raw: RawRun, digests?: Digests): Signal[] {
     if (failed) {
       // the test's own error: a timeout or a failed check — or the server or browser gone
       t.errors.forEach((e, j) => {
-        if (DOWN.test(e.message)) add({ kind: "environment", message: firstLine(e.message), rawRef: `tests[${i}].errors[${j}]` });
+        if (DOWN.test(e.message) || INFRA.test(e.message)) add({ kind: "environment", message: firstLine(e.message), rawRef: `tests[${i}].errors[${j}]` });
         const kind: SignalKind = /Timeout \d+ms exceeded|Test timeout of/.test(e.message) ? "timeout" : "assertion";
         // the test could not find an element: most likely the test's selector, not the product
         const testSide = LOCATOR_MISS.test(e.message);
-        add({ kind, message: firstLine(e.message), stack: e.stack, extra: { location: e.location, snippet: e.snippet, testSide }, rawRef: `tests[${i}].errors[${j}]` });
+        // @money: a price / an amount the person pays (lib/… smoke "pricing shows the catalogue's own prices")
+        add({ kind, message: firstLine(e.message), stack: e.stack, extra: { location: e.location, snippet: e.snippet, testSide, money: t.tags.includes("@money") || t.meta?.money === true }, rawRef: `tests[${i}].errors[${j}]` });
       });
       // the cause: the most explaining signal seen
       const cause = CAUSE_ORDER.map((k) => mine.find((s) => s.kind === k && !(k === "console-error" && mine.some((x) => x.kind === "api-error")))).find(Boolean);
@@ -121,6 +125,8 @@ function consoleExpected(text: string, expected: Set<number>): boolean {
 }
 
 /** The server under test (or the test's own browser) went away: not a product defect. */
+/** The test's own browser could not take its picture — not the product. */
+const INFRA = /Protocol error \(Page\.captureScreenshot\)|Unable to capture screenshot/;
 const DOWN = /ERR_CONNECTION_REFUSED|ECONNREFUSED|ERR_CONNECTION_RESET|ECONNRESET|ERR_EMPTY_RESPONSE|socket hang up|Target page, context or browser has been closed|Page crashed|worker process exited unexpectedly/;
 
 export function pathOf(url: string): string {

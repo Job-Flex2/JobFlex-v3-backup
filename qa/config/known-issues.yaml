@@ -51,3 +51,30 @@ issues:
     signature: '^legacy qa/tests/pages/fence-tiers-test\.js$'
     why: "clicks Best for every fence type; for composite-privacy the ladder drops a tier that would quote the same fence as Better (fence-estimator-behavior renderTiers), so there is no Best to click"
     confirmed: "QA Lab, 2026-10-15"
+
+  # ── Folded, not hidden (fold: true, 2026-10-17) ─────────────────────────────────────────────
+  # Old, known or noise: shown at the bottom of the report under "Старое, известное и шум", out of
+  # the headline counts. `onlyTests` (regex): EVERY test of the finding must match — a new test of
+  # another role that hits the same cause un-folds it.
+  - id: v3-prototypes-layout
+    fold: true
+    signature: "^layout /v3/"
+    why: "/v3/* are the old design prototypes (calendar-a, manual-builder-a, workers-new), not pages a customer opens"
+    confirmed: "owner, 2026-10-17"
+  - id: crm-sandboxed-frame-console
+    fold: true
+    message: "Blocked script execution in 'about:(blank|srcdoc)' because the document's frame is sandboxed"
+    why: "the email preview is a sandboxed iframe on purpose; Chrome logs that its scripts stay off — no defect"
+    confirmed: "owner, 2026-10-17"
+  - id: stripe-checkout-401
+    fold: true
+    message: "^Failed to load resource: the server responded with a status of 401"
+    onlyTests: "test card|annual|monthly|custom plan|Checkout"
+    why: "a request of Stripe's own Checkout page (third party) answers 401 in test mode; our server is not involved"
+    confirmed: "owner, 2026-10-17"
+  - id: platform-admin-without-company
+    fold: true
+    signature: '^root NoOrgError @ resolveOrg$|^console Failed to load resource: the server responded with a status of # \(Internal Server Error\)$'
+    onlyTests: " as admin @"
+    why: "a platform admin with no company of their own opens the company dashboard: NoOrgError → 500. Known (2026-10-14), only the platform admin is affected"
+    confirmed: "owner, 2026-10-17"

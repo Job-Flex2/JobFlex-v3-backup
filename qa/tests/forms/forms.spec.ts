@@ -11,7 +11,7 @@ import { test, expect, open } from "../../lib/fixtures";
 import { appRoutes } from "../../lib/routes";
 import { readMatrix, matches } from "../../lib/matrix";
 import { runDir } from "../../lib/env";
-import { SCENARIOS, fillScenario, findForms, findOpener, pressOpener, restoreQaCo, snapshotQaCo, submitAndRead } from "../../lib/forms";
+import { SCENARIOS, fillScenario, findForms, findOpener, pressOpener, removeMarked, restoreQaCo, snapshotQaCo, submitAndRead } from "../../lib/forms";
 
 test.describe.configure({ mode: "parallel" });
 test.use({ role: "owner" });
@@ -24,6 +24,12 @@ test.beforeAll(async () => {
   if (fs.existsSync(SNAP())) return;
   const s = await snapshotQaCo();
   try { fs.writeFileSync(SNAP(), JSON.stringify(s), { flag: "wx" }); } catch { /* another worker was first */ }
+});
+// After every test: the rows that carry the suite's own values (the too-long "QAAAA…", the XSS
+// probe) — at once, not at the end, so the calendar's cap and the dashboard never see them.
+test.afterEach(async () => {
+  const notes = await removeMarked().catch(() => [] as string[]);
+  if (notes.length) fs.appendFileSync(path.join(runDir(), "forms-cleanup.log"), notes.join("\n") + "\n");
 });
 test.afterAll(async () => {
   if (!fs.existsSync(SNAP())) return;
@@ -47,8 +53,14 @@ for (const route of pages) {
     const opener = forms.length ? null : await findOpener(page);
     if (opener && (await pressOpener(page, opener))) forms = (await findForms(page)).slice(0, 2);
     qa.meta({ kind: "forms", route: route.pattern, file: route.file, forms, opener });
-    // No <form> and no plain submit beside the inputs (a calendar's "Next", a material toggle): skipped.
-    test.skip(!forms.length, "пропущено: нет формы на странице");
+    // No <form> and no plain submit beside the inputs (a calendar's "Next", a material toggle): the
+    // page was checked and has nothing to fill — a result, not a skip (a skip would count against
+    // the run, lib/health.ts). A page whose form USED to be found is the analysis' "QA потерял
+    // покрытие" (analyze/coverage.ts), from meta.forms of the run before.
+    if (!forms.length) {
+      test.info().annotations.push({ type: "no-form", description: "нет формы на странице" });
+      return;
+    }
     const results: Record<string, unknown>[] = [];
     let dialogs = 0;
     page.on("dialog", (d) => { dialogs++; void d.dismiss().catch(() => {}); });

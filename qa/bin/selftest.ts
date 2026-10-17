@@ -83,6 +83,39 @@ const withModel = process.argv.includes("--with-model");
     check("prod: a digest-only answer has the dev run's root (NoOrgError @ resolveOrg)", root === "NoOrgError @ resolveOrg", String(root));
     check("prod: the route-error console line with the digest has the same root", rootOf(["[route-error] 575467423 Error: Minified React error #441"], digests) === root);
   }
+  // the rules of 2026-10-17: run health, money, leaks, saved-wrong forms, shared links, slow key pages
+  {
+    const t = (n: number, o: Partial<Record<string, unknown>>) => ({
+      id: `t${n}`, title: `test ${n}`, titlePath: [], file: "qa/tests/x.spec.ts", line: n, project: "chromium", suite: "pages", tags: [], status: "passed", expectedStatus: "passed", outcome: "passed",
+      durationMs: 1, retry: 0, startedAt: "2026-10-17T00:00:00.000Z", annotations: [], errors: [], steps: [],
+      collected: { console: [], pageErrors: [], httpErrors: [], failedRequests: [], slowRequests: [], hungRequests: [], navigations: [], forbidden: [] }, artifacts: {}, meta: {}, ...o,
+    });
+    const fail = (msg: string) => ({ status: "failed", outcome: "failed", errors: [{ message: msg }] });
+    const tests = [
+      t(1, { suite: "smoke", tags: ["@smoke", "@money"], title: "pricing shows the catalogue's own prices @smoke @money", ...fail("Error: Starter: the catalogue's $45/month is not on /pricing"), meta: { route: "/pricing", money: true } }),
+      t(2, { suite: "roles", title: "access /dashboard/financials @roles", ...fail("Error: access differs from the matrix for /dashboard/financials"), meta: { kind: "access", route: "/dashboard/financials", cells: { owner: "open", worker: "open" }, expected: { owner: "open", worker: "redirect:/dashboard/jobs" } } }),
+      t(3, { suite: "forms", title: "forms on /dashboard/settings/proposals @forms", ...fail("Error: invalid email/phone/number: saved without a word to the person"), annotations: [{ type: "warning", description: "/dashboard/settings/proposals page fields + «Save pricing»: empty submit showed no validation message" }], meta: { kind: "forms", route: "/dashboard/settings/proposals", forms: [{ submit: "Save pricing" }], formResults: [{ scenario: "invalid", pressed: true, validation: [], savedRequests: 1, xss: false, crashed: false }] } }),
+      ...[4, 5, 6, 7, 8, 9].map((n) => t(n, { title: `/dashboard/p${n} as owner @pages`, ...fail("Error: links on the page that lead to 404 / 5xx"), meta: { kind: "page", route: `/dashboard/p${n}`, role: "owner", brokenLinks: ["/dashboard/job-board → 404"] } })),
+      t(10, { title: "/dashboard/proposals as owner @pages", ...fail("Error: warm load 9767 ms (threshold 8000 ms)"), meta: { kind: "page", route: "/dashboard/proposals", role: "owner", warmMs: 9767 } }),
+      ...[11, 12, 13].map((n) => t(n, { suite: "logic", title: `legacy logic/x${n}.check.ts @logic @legacy`, status: "skipped", outcome: "skipped", annotations: [{ type: "skip", description: "QA guard refused: Environment variable not found: DATABASE_URL" }] })),
+    ];
+    const raw = { schema: "jobflex-qa-raw/1", run: { id: "2026-10-17T00-00-00", startedAt: "", finishedAt: "", durationMs: 1, baseUrl: "http://localhost:3999", target: "local", suites: ["all"], grep: null, projects: ["chromium"], git: { commit: null, branch: null, dirty: null }, playwright: "", node: "", status: "failed", setup: [], notes: [] }, stats: { total: tests.length, passed: 0, failed: 10, skipped: 3, flaky: 0, bySuite: {} }, tests };
+    const dir = path.join(runs, "rules17", raw.run.id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "raw.json"), JSON.stringify(raw));
+    const a = await analyzeRun(dir, { offline: true, runsDir: path.join(runs, "rules17"), known: [] });
+    const by = (p: (f: (typeof a.findings)[number]) => boolean) => a.findings.find(p);
+    check("health: a suite skipped whole marks the run FAILED", a.summary.health.status === "FAILED" && /logic/.test(a.summary.health.problems.join(" ")), JSON.stringify(a.summary.health.problems));
+    check("money: a wrong price is P1", by((f) => /\$45/.test(f.evidence.message))?.severity === "P1", by((f) => /\$45/.test(f.evidence.message))?.severity);
+    const leak = by((f) => f.kind === "access");
+    check("access: a worker let into the financials is a P1 leak, placed in src/lib/roleRoutes.ts", leak?.severity === "P1" && leak.location?.file === "src/lib/roleRoutes.ts", `${leak?.severity} ${leak?.location?.file}:${leak?.location?.line}`);
+    const form = by((f) => f.kind === "forms");
+    check("forms: a wrong value saved is P2 (not P3 \"no message\")", form?.severity === "P2" && /saved without/.test(form.evidence.message), `${form?.severity} ${form?.evidence.message}`);
+    const link = by((f) => f.kind === "broken-link");
+    check("broken link on 6 pages: one P1 finding", a.findings.filter((f) => f.kind === "broken-link").length === 1 && link?.severity === "P1", `${link?.severity} ${link?.evidence.routes.length}`);
+    check("a slow key page is P2", by((f) => f.kind === "slow")?.severity === "P2");
+    check("report: the top block opens report.md with the run's state", fs.readFileSync(path.join(dir, "report.md"), "utf8").includes("ПРОГОН FAILED"));
+  }
   fs.rmSync(runs, { recursive: true, force: true });
   console.log(bad ? `\n${bad} check(s) failed` : "\nselftest: all checks passed");
   process.exit(bad ? 1 : 0);

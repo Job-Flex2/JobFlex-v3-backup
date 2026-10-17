@@ -14,8 +14,11 @@ import net from "node:net";
 import path from "node:path";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { ROOT, RUNS_DIR, stamp } from "../lib/env";
+import { PreflightError, prismaPreflight } from "../lib/preflight";
 
-const DIST = ".cache/next-qa-build";
+// QA_DIST_DIR / QA_BUILD_PORT: a session that shares the checkout with others builds into its own
+// folder and serves on its own port (CLAUDE.md: own port, own JOBFLEX_DIST_DIR).
+const DIST = process.env.QA_DIST_DIR || ".cache/next-qa-build";
 const AVOID = new Set([3000, 3001, 3005, 3008]);
 const BLANK = ["STRIPE_SECRET_KEY", "RESEND_API_KEY", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "TWILIO_VERIFY_SERVICE_SID", "META_CAPI_ACCESS_TOKEN"];
 
@@ -23,6 +26,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const listening = (port: number) => new Promise<boolean>((res) => { const s = net.connect(port, "127.0.0.1"); s.once("connect", () => { s.destroy(); res(true); }); s.once("error", () => res(false)); });
 
 async function freePort(): Promise<number> {
+  const asked = Number(process.env.QA_BUILD_PORT);
+  if (asked) { if (await listening(asked)) throw new Error(`QA_BUILD_PORT ${asked} is taken`); return asked; }
   for (let p = 3420; p < 3500; p++) if (!AVOID.has(p) && !(await listening(p))) return p;
   throw new Error("no free port between 3420 and 3499");
 }
@@ -47,6 +52,13 @@ function stop(child: ChildProcess | null) {
 
 async function main(): Promise<number> {
   const next = path.join("node_modules", "next", "dist", "bin", "next");
+  // 0. the Prisma client the old checks need — before minutes of building (bin/qa.ts asks again)
+  try {
+    console.log(`qa:build-run · preflight · ${prismaPreflight()}`);
+  } catch (e) {
+    if (e instanceof PreflightError) { console.error(`\n${"!".repeat(72)}\n${e.message}\n${"!".repeat(72)}`); return 3; }
+    throw e;
+  }
   // 1. build
   console.log(`qa:build-run · next build → ${DIST} (a few minutes)`);
   const tsconfig = fs.readFileSync(path.join(ROOT, "tsconfig.json"));

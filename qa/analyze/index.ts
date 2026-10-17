@@ -17,6 +17,8 @@ import { compareHistory, earlierAnalyses } from "./history";
 import { renderHtml, renderMarkdown } from "./report";
 import { Llm } from "./llm";
 import { redact } from "../lib/redact";
+import { runHealth } from "../lib/health";
+import { coverageFindings, mergeSameCause, sharedVisual } from "./merge";
 import { SEVERITIES, type Analysis, type Finding, type Severity, type Signal } from "./types";
 
 export type AnalyzeOptions = { offline?: boolean; budgetUsd?: number; runsDir?: string; known?: KnownIssue[]; write?: boolean };
@@ -30,7 +32,10 @@ function matchesKnown(f: Finding, k: KnownIssue): boolean {
     [re(k.route), f.evidence.routes],
   ];
   const used = checks.filter(([r]) => r);
-  return used.length > 0 && used.every(([r, vals]) => vals.some((v) => r!.test(v)));
+  // onlyTests: every test of the finding must match (a new role hitting the same cause un-folds it)
+  const only = re(k.onlyTests);
+  if (only && !f.evidence.tests.every((t) => only.test(t.title))) return false;
+  return (used.length > 0 || !!only) && used.every(([r, vals]) => vals.some((v) => r!.test(v)));
 }
 
 export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Promise<Analysis> {
@@ -50,6 +55,15 @@ export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Pro
     bySig.set(finding.id, list);
     return { ...finding, ...ruleWords(finding, list) } as Finding;
   });
+  // QA's own coverage against the runs before (analyze/coverage.ts): one P1 per suite
+  for (const g of coverageFindings(raw, opts.runsDir ?? RUNS_DIR)) {
+    bySig.set(g.finding.id, g.signals);
+    findings.push({ ...g.finding, ...ruleWords(g.finding, g.signals) } as Finding);
+  }
+  // one change on many pages is one finding (a shared header / sidebar), not N "maybe noise" pairs
+  findings = sharedVisual(findings, bySig);
+  // one cause, several signatures: merged by rule (the model may merge more below)
+  findings = mergeSameCause(findings, bySig);
 
   // 3. the cheap model: the words, the severity (with its reason) and merges of one cause
   const words = await modelWords(llm, findings);
@@ -86,7 +100,7 @@ export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Pro
   const known = opts.known ?? knownIssues();
   const hidden: Analysis["hiddenByKnown"] = [];
   findings = findings.filter((f) => {
-    const k = known.find((x) => matchesKnown(f, x));
+    const k = known.find((x) => !x.fold && matchesKnown(f, x));
     if (k) hidden.push({ id: f.id, knownId: k.id, title: f.title });
     return !k;
   });
@@ -97,9 +111,11 @@ export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Pro
   let strong = 0;
   for (const f of findings) {
     const list = bySig.get(f.id) ?? [];
+    // maxLocalize counts the strong model's CALLS — an answer that found nothing cost the same
     const allowModel = f.severity !== "P3" && strong < qaConfig().analysis.maxLocalize;
     const r = await localize(allowModel ? llm : new Llm({ offline: true }), f, list);
-    if (r.byModel) { strong++; f.model = { ...f.model, localizedBy: "strong model" }; }
+    if (r.called) strong++;
+    if (r.byModel) f.model = { ...f.model, localizedBy: "strong model" };
     f.location = r.location;
     if (r.note) f.locationNote = r.note;
     if (!f.location && !f.locationNote) f.locationNote = "не найдено";
@@ -117,6 +133,16 @@ export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Pro
 
   // 7. history
   const hist = compareHistory(findings, earlierAnalyses(raw.run.id, opts.runsDir ?? RUNS_DIR));
+
+  // 7b. folded, not hidden: known noise (known-issues.yaml `fold: true`), P3, and P2 seen run after
+  // run — at the bottom of the report, out of the headline counts. P0 and P1 are never folded.
+  for (const f of findings) {
+    const k = known.find((x) => x.fold && matchesKnown(f, x));
+    if (k) f.folded = `известное / шум: ${k.why ?? k.id}`;
+    else if (f.severity === "P3") f.folded = "P3: косметика, скорость, предупреждения";
+    else if (f.severity === "P2" && f.history?.stale) f.folded = `старое: ${f.history.seenRuns} прогона подряд`;
+  }
+  const shown = findings.filter((f) => !f.folded);
 
   // 8. speed by page, and role × page
   const perf: Analysis["perf"] = [];
@@ -136,7 +162,8 @@ export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Pro
   }
   matrix.routes.sort();
 
-  const counts = Object.fromEntries(SEVERITIES.map((s) => [s, findings.filter((f) => f.severity === s).length])) as Record<Severity, number>;
+  const counts = Object.fromEntries(SEVERITIES.map((s) => [s, shown.filter((f) => f.severity === s).length])) as Record<Severity, number>;
+  const health = raw.run.health ?? runHealth(raw);
   if (llm.cost.stoppedForBudget) notes.push(`Бюджет анализа $${llm.cost.budgetUsd.toFixed(2)} исчерпан: остальное — по правилам.`);
   const analysis: Analysis = {
     schema: "jobflex-qa-analysis/1",
@@ -153,6 +180,8 @@ export async function analyzeRun(runDir: string, opts: AnalyzeOptions = {}): Pro
       previousRun: hist.previous,
       diff: hist.counts,
       gone: hist.gone,
+      health,
+      folded: findings.length - shown.length,
     },
     findings,
     hiddenByKnown: hidden,

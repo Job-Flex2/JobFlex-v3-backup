@@ -1,6 +1,8 @@
 // The analysis' own types. analysis.json (beside raw.json) is written in this shape; the next
 // run's analysis reads it for the "new / gone / still there" comparison, and qa:accept reads
 // its visual verdicts.
+import type { RunHealth } from "../lib/health";
+
 export type Severity = "P0" | "P1" | "P2" | "P3";
 export const SEVERITIES: Severity[] = ["P0", "P1", "P2", "P3"];
 
@@ -22,7 +24,8 @@ export type SignalKind =
   | "visual"
   | "a11y"
   | "perf" // Lighthouse under the threshold
-  | "environment"; // the server under test went away (connection refused / reset, a crashed browser)
+  | "environment" // the server under test went away (connection refused / reset, a crashed browser)
+  | "coverage"; // QA itself stopped testing something it tested in the run before (analyze/coverage.ts)
 
 /** One observation, with the exact place in raw.json it came from. */
 export type Signal = {
@@ -65,6 +68,8 @@ export type Finding = {
   fixPrompt?: string;
   history?: { status: "new" | "still" | "returned"; seenRuns: number; stale: boolean };
   known?: string; // id of the known-issues.yaml entry that hides it
+  /** why it is in the folded "old, known and noise" part of the report (not in the headline counts) */
+  folded?: string;
   model?: { describedBy?: string; localizedBy?: string };
 };
 
@@ -87,6 +92,10 @@ export type Analysis = {
     previousRun: string | null;
     diff: { new: number; gone: number; still: number; stale: number };
     gone: { id: string; title: string; severity: Severity }[];
+    /** the run itself: FAILED when a suite skipped too much (lib/health.ts) */
+    health: RunHealth;
+    /** findings moved to the folded part (known noise, old, P3) — not counted in findings above */
+    folded: number;
   };
   findings: Finding[];
   hiddenByKnown: { id: string; knownId: string; title: string }[];

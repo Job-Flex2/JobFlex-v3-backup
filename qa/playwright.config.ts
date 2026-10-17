@@ -9,6 +9,13 @@ const RUN = runDir();
 const grepAll = process.env.QA_GREP ? new RegExp(process.env.QA_GREP) : undefined;
 // WebKit runs only what is tagged @webkit (the phone checks), inside the selected suites.
 const grepWebkit = new RegExp(`^(?=.*@webkit)${process.env.QA_GREP ? `(?=.*(?:${process.env.QA_GREP}))` : ""}`);
+// Two passes of one run (bin/qa.ts): "read" — the suites that only look (visual, roles, pages) on
+// the freshly reset QA Co, before anything writes; then "write" — everything else. Without
+// QA_PHASE (a bare `npx playwright test`) all tests run in one pass, as before.
+const READ = "(?=.*@(?:visual|roles|pages)\\b)(?!.*@legacy\\b)";
+const phase = process.env.QA_PHASE;
+const phaseGrep = phase === "read";
+const phaseInvert = phase === "write" ? new RegExp(`^${READ}`) : undefined;
 
 const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 
@@ -40,13 +47,16 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      grep: grepAll,
+      grep: phaseGrep ? new RegExp(`^${READ}${process.env.QA_GREP ? `(?=.*(?:${process.env.QA_GREP}))` : ""}`) : grepAll,
+      grepInvert: phaseInvert,
       use: { ...devices["Desktop Chrome"], ...phone, userAgent: devices["iPhone 15"].userAgent },
     },
-    {
+    // the phone checks write (sign-up, the smoke draft): the second pass only
+    ...(phase === "read" ? [] : [{
       name: "webkit",
       grep: grepWebkit,
+      grepInvert: phaseInvert,
       use: { ...devices["iPhone 15"], viewport: phone.viewport },
-    },
+    }]),
   ],
 });

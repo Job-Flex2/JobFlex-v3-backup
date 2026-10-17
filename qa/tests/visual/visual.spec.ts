@@ -45,7 +45,7 @@ for (const vp of VIEWPORTS) {
           await steadyShot(page, shot);
           const res = await compare(id, shot);
           await info.attach("qa-visual", { body: JSON.stringify(res), contentType: "application/json" });
-          qa.meta({ kind: "visual", route: route.pattern, role, viewport: vp.name, visualId: id, ratio: res.ratio ?? null, created: !!res.created, note: res.note ?? null });
+          qa.meta({ kind: "visual", route: route.pattern, role, viewport: vp.name, visualId: id, ratio: res.ratio ?? null, created: !!res.created, note: res.note ?? null, box: res.box ?? null });
           if (res.created) info.annotations.push({ type: "baseline-created", description: id });
           expect(res.ratio ?? 0, `visual difference ${(((res.ratio ?? 0) * 100)).toFixed(2)}% (over ${(cfg.visual.maxDiffRatio * 100).toFixed(2)}%) — npm run qa:accept -- ${id}`).toBeLessThanOrEqual(cfg.visual.maxDiffRatio);
         });

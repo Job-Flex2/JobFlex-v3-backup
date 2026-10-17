@@ -4,7 +4,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { RawRun } from "../lib/raw";
-import { dataUri, shrinkPng } from "./images";
 import { SEVERITIES, type Analysis, type Finding } from "./types";
 
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -15,11 +14,40 @@ const SEV_NAME = { P0: "P0 — нельзя зарегистрироваться
 const loc = (f: Finding) => (f.location ? `${f.location.file}${f.location.line ? ":" + f.location.line : ""}` : "не найдено");
 const histBadge = (f: Finding) => (!f.history ? "" : f.history.stale ? `застарелое (${f.history.seenRuns} прогона подряд)` : f.history.status === "new" ? "новое" : f.history.status === "returned" ? "вернулось" : `осталось (${f.history.seenRuns}-й прогон)`);
 
+const ORDER = { P0: 0, P1: 1, P2: 2, P3: 3 } as const;
+const isNew = (f: Finding) => !f.history || f.history.status !== "still";
+
+/**
+ * The block at the very top — at most five lines: is the run to be trusted, what is new and
+ * important (with its file and line), what to do. Everything else is below it.
+ */
+export function topLines(a: Analysis): { text: string; bad: boolean }[] {
+  const s = a.summary;
+  const out: { text: string; bad: boolean }[] = [];
+  const h = s.health;
+  if (h?.status === "FAILED") out.push({ text: `ПРОГОН FAILED — ему нельзя верить: ${h.problems.join("; ")}`, bad: true });
+  else out.push({ text: `Прогон в порядке: ${s.tests.total} тестов, упало ${s.tests.failed}; находки P0 ${s.findings.P0} · P1 ${s.findings.P1} · P2 ${s.findings.P2}${s.folded ? ` (ещё ${s.folded} свёрнуто внизу: старое, известное, шум)` : ""}`, bad: false });
+  const shown = a.findings.filter((f) => !f.folded && f.severity !== "P3");
+  const important = [...shown].sort((x, y) => ORDER[x.severity] - ORDER[y.severity] || Number(isNew(y)) - Number(isNew(x)) || y.evidence.tests.length - x.evidence.tests.length).slice(0, 3);
+  for (const f of important) out.push({ text: `${f.severity}${isNew(f) ? " · новое" : ""} · ${f.title.slice(0, 110)} — ${loc(f)} (${f.id})`, bad: f.severity === "P0" || f.severity === "P1" });
+  if (h?.status === "FAILED") out.push({ text: "Что делать: сначала починить прогон (причина выше), затем перезапустить — находки этого прогона неполны.", bad: true });
+  else if (important.length) out.push({ text: `Что делать: начать с ${important[0].id} — внутри находки «Промпт на починку» и тот же тест для проверки.`, bad: false });
+  else out.push({ text: "Что делать: новых важных находок нет; свёрнутое внизу — справочно.", bad: false });
+  return out.slice(0, 5);
+}
+
+/** A picture of the run folder, by its relative path — never embedded (report.html stays small). */
+function rel(p: string | undefined): string {
+  return (p ?? "").split("\\").join("/");
+}
+
 // ── Markdown ────────────────────────────────────────────────────────────────
 export function renderMarkdown(a: Analysis, raw: RawRun): string {
   const s = a.summary;
   const L: string[] = [];
   L.push(`# QA Lab — отчёт прогона ${a.runId}`, "");
+  for (const t of topLines(a)) L.push(`> ${t.bad ? "**" + mdEsc(t.text) + "**" : mdEsc(t.text)}  `);
+  L.push("");
   L.push(`Сервер: ${s.baseUrl} (${s.target}) · коммит ${raw.run.git.commit ?? "?"}${raw.run.git.dirty ? " + незакоммиченные правки" : ""} · наборы: ${raw.run.suites.join(", ")}`, "");
   L.push("## Сводка", "");
   L.push(`| Тестов | Прошло | Упало | Пропущено | Нестабильных | Длительность | Стоимость анализа |`, `|---|---|---|---|---|---|---|`);
@@ -33,7 +61,7 @@ export function renderMarkdown(a: Analysis, raw: RawRun): string {
   if (a.notes.length) L.push(...a.notes.map((n) => `> ${n}`), "");
 
   for (const sev of SEVERITIES) {
-    const list = a.findings.filter((f) => f.severity === sev);
+    const list = a.findings.filter((f) => f.severity === sev && !f.folded);
     if (!list.length) continue;
     L.push(`## ${SEV_NAME[sev]} (${list.length})`, "");
     for (const f of list) {
@@ -46,7 +74,15 @@ export function renderMarkdown(a: Analysis, raw: RawRun): string {
       if (f.fixPrompt) L.push("<details><summary>Промпт на починку для Claude Code</summary>", "", "```text", f.fixPrompt, "```", "", "</details>", "");
     }
   }
-  if (!a.findings.length) L.push("## Находок нет", "");
+  if (!a.findings.some((f) => !f.folded)) L.push("## Важных находок нет", "");
+
+  const folded = a.findings.filter((f) => f.folded).sort((x, y) => ORDER[x.severity] - ORDER[y.severity]);
+  if (folded.length) {
+    L.push(`<details><summary>Старое, известное и шум (${folded.length}) — свёрнуто</summary>`, "");
+    L.push("| Важность | Находка | Почему свёрнуто | Место | Тестов |", "|---|---|---|---|---|");
+    for (const f of folded) L.push(`| ${f.severity} | ${f.id} · ${mdEsc(f.title)} | ${mdEsc(f.folded)} | ${loc(f)} | ${f.evidence.tests.length} |`);
+    L.push("", "</details>", "");
+  }
 
   L.push("## Скорость по страницам", "");
   const pages = a.perf.filter((p) => p.coldMs !== undefined).sort((x, y) => (y.warmMs ?? 0) - (x.warmMs ?? 0));
@@ -87,10 +123,14 @@ export function renderMarkdown(a: Analysis, raw: RawRun): string {
 }
 
 // ── HTML ────────────────────────────────────────────────────────────────────
-function img(runDir: string, rel: string | undefined, w = 420, h = 900): string {
-  if (!rel) return "";
-  const file = path.isAbsolute(rel) ? rel : path.join(runDir, rel);
-  try { return `<img src="${dataUri(shrinkPng(fs.readFileSync(file), w, h))}" alt="">`; } catch { return ""; }
+// Pictures are the run folder's own files, linked by relative path and loaded lazily — the report
+// opens from the run folder (2026-10-17: embedded as base64 it was 16 MB).
+function img(runDir: string, p: string | undefined, w = 420): string {
+  if (!p) return "";
+  const file = path.isAbsolute(p) ? p : path.join(runDir, p);
+  if (!fs.existsSync(file)) return "";
+  const href = rel(path.relative(runDir, file));
+  return `<a href="${esc(href)}"><img src="${esc(href)}" loading="lazy" style="max-width:${w}px" alt=""></a>`;
 }
 
 const CSS = `:root{--paper:#f6f3ec;--card:#fff;--ink:#14161a;--muted:#5b6170;--line:#d9d4c7;--p0:#b3261e;--p1:#c25e00;--p2:#8a6d00;--p3:#3b6e8f;--ok:#2e7d4f;--mono-bg:#f1eee6;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -104,24 +144,26 @@ pre,code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}pre{
 .col img{max-width:100%;border:1px solid var(--line);margin-top:6px}ol{margin:4px 0 0;padding-left:20px}details{margin-top:10px}summary{cursor:pointer;font-weight:600}
 table{border-collapse:collapse;width:100%;background:var(--card);font-size:13px}th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}th{background:#ece8dd;position:sticky;top:0}
 .wrap{overflow:auto;max-height:640px;border:1.5px solid var(--ink)}.bad{background:#fbe3e1}.rev{background:#fff4d6}.cell-open{color:var(--ok)}
-.vis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.vis img{width:100%;border:1px solid var(--line)}.note{background:#fff4d6;border-left:4px solid var(--p2);padding:8px 12px;margin:6px 0}`;
+.vis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.vis img{width:100%;max-height:900px;object-fit:cover;object-position:top;border:1px solid var(--line)}.top{background:var(--card);border:2px solid var(--ink);padding:10px 14px;margin:12px 0}.top p{margin:3px 0}.top .bad{background:none;color:var(--p0);font-weight:700}details.folded{margin-top:28px}details.folded>summary{font-size:17px}.note{background:#fff4d6;border-left:4px solid var(--p2);padding:8px 12px;margin:6px 0}`;
 
 export function renderHtml(a: Analysis, raw: RawRun, runDir: string): string {
   const s = a.summary;
   const h: string[] = [];
   h.push(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QA Lab ${esc(a.runId)}</title><style>${CSS}</style></head><body><main>`);
-  h.push(`<h1>QA Lab — отчёт прогона ${esc(a.runId)}</h1><div class="meta">${esc(s.baseUrl)} (${esc(s.target)}) · коммит ${esc(raw.run.git.commit ?? "?")}${raw.run.git.dirty ? " + незакоммиченные правки" : ""} · наборы: ${esc(raw.run.suites.join(", "))} · анализ ${esc(a.analyzedAt.slice(0, 16).replace("T", " "))} UTC</div>`);
+  h.push(`<h1>QA Lab — отчёт прогона ${esc(a.runId)}</h1>`);
+  h.push(`<div class="top">${topLines(a).map((t, i) => `<p${t.bad ? ' class="bad"' : ""}>${i === 0 || /^Что делать/.test(t.text) ? `<b>${esc(t.text)}</b>` : esc(t.text).replace(/(\(F-[0-9a-f]{8}\))$/, (m) => `<a href="#${m.slice(1, -1)}">${m}</a>`)}</p>`).join("")}</div>`);
+  h.push(`<div class="meta">${esc(s.baseUrl)} (${esc(s.target)}) · коммит ${esc(raw.run.git.commit ?? "?")}${raw.run.git.dirty ? " + незакоммиченные правки" : ""} · наборы: ${esc(raw.run.suites.join(", "))} · анализ ${esc(a.analyzedAt.slice(0, 16).replace("T", " "))} UTC</div>`);
   h.push(`<h2>Сводка</h2><div class="kpis">`);
   const k = (v: unknown, l: string) => h.push(`<div class="kpi"><b>${esc(v)}</b><span>${esc(l)}</span></div>`);
   k(s.tests.total, "тестов"); k(s.tests.passed, "прошло"); k(s.tests.failed, "упало"); k(s.tests.skipped, "пропущено"); k(s.tests.flaky, "нестабильных"); k(dur(s.durationMs), "длительность");
-  k(`${s.findings.P0} / ${s.findings.P1} / ${s.findings.P2} / ${s.findings.P3}`, "находки P0 / P1 / P2 / P3"); k(s.known, "известные ложные"); k(usd(a.cost.usd), a.cost.mode === "model" ? `анализ, ${a.cost.calls} вызовов` : "анализ без модели");
+  k(`${s.findings.P0} / ${s.findings.P1} / ${s.findings.P2}`, "находки P0 / P1 / P2"); k(s.folded ?? 0, "свёрнуто: старое, шум, P3"); k(s.known, "известные ложные"); k(usd(a.cost.usd), a.cost.mode === "model" ? `анализ, ${a.cost.calls} вызовов` : "анализ без модели");
   h.push(`</div><p>${s.previousRun ? `С прошлым прогоном (${esc(s.previousRun)}): новых <b>${s.diff.new}</b>, исчезло <b>${s.diff.gone}</b>, осталось <b>${s.diff.still}</b>, застарелых <b>${s.diff.stale}</b>.` : "Прошлого проанализированного прогона нет — все находки новые."}</p>`);
   if (s.gone.length) h.push(`<p class="meta">Исчезли: ${s.gone.map((g) => `${esc(g.id)} ${esc(g.severity)} ${esc(g.title)}`).join("; ")}</p>`);
   h.push(`<table><tr><th>Набор</th><th>Тестов</th><th>Прошло</th><th>Упало</th><th>Пропущено</th></tr>${Object.entries(s.bySuite).map(([n, v]) => `<tr><td>${esc(n)}</td><td>${v.total}</td><td>${v.passed}</td><td${v.failed ? ' class="bad"' : ""}>${v.failed}</td><td>${v.skipped}</td></tr>`).join("")}</table>`);
   for (const n of a.notes) h.push(`<div class="note">${esc(n)}</div>`);
 
   for (const sev of SEVERITIES) {
-    const list = a.findings.filter((f) => f.severity === sev);
+    const list = a.findings.filter((f) => f.severity === sev && !f.folded);
     if (!list.length) continue;
     h.push(`<h2>${esc(SEV_NAME[sev])} · ${list.length}</h2>`);
     for (const f of list) {
@@ -137,7 +179,13 @@ export function renderHtml(a: Analysis, raw: RawRun, runDir: string): string {
       h.push(`</section>`);
     }
   }
-  if (!a.findings.length) h.push(`<h2>Находок нет</h2>`);
+  if (!a.findings.some((f) => !f.folded)) h.push(`<h2>Важных находок нет</h2>`);
+  const folded = a.findings.filter((f) => f.folded).sort((x, y) => ORDER[x.severity] - ORDER[y.severity]);
+  if (folded.length) {
+    h.push(`<details class="folded"><summary>Старое, известное и шум · ${folded.length} — свёрнуто, в счёт находок не входит</summary><table><tr><th>Важность</th><th>Находка</th><th>Почему свёрнуто</th><th>Место</th><th>Тестов</th></tr>`);
+    for (const f of folded) h.push(`<tr id="${esc(f.id)}"><td><span class="sev ${f.severity}">${f.severity}</span></td><td>${esc(f.title)}<br><span class="meta">${esc(f.id)} · ${esc(f.evidence.message.slice(0, 200))}</span></td><td>${esc(f.folded)}</td><td><code>${esc(loc(f))}</code></td><td>${f.evidence.tests.length}</td></tr>`);
+    h.push(`</table></details>`);
+  }
 
   h.push(`<h2>Скорость по страницам</h2>`);
   const pages = a.perf.filter((p) => p.coldMs !== undefined).sort((x, y) => (y.warmMs ?? 0) - (x.warmMs ?? 0));
@@ -155,7 +203,7 @@ export function renderHtml(a: Analysis, raw: RawRun, runDir: string): string {
 
   h.push(`<h2>Визуальные диффы</h2>`);
   if (a.visual.length) {
-    for (const v of a.visual) h.push(`<section class="finding"><header><h3>${esc(v.route)} · ${esc(v.viewport)} px · ${esc(v.role)}</h3><span class="badge">${(v.ratio * 100).toFixed(2)}%</span><span class="sev ${v.verdict === "bug" ? "P1" : v.verdict === "intended" ? "P3" : "P2"}">${esc(v.verdict)}</span><span class="meta">${esc(v.reviewedBy)}</span></header><p>${esc(v.why)}</p><div class="vis"><div>было${img(runDir, v.before, 360, 1400)}</div><div>стало${img(runDir, v.after, 360, 1400)}</div><div>дифф${img(runDir, v.diff, 360, 1400)}</div></div><p>Принять новый эталон: <code>${esc(v.accept)}</code></p></section>`);
+    for (const v of a.visual) h.push(`<section class="finding"><header><h3>${esc(v.route)} · ${esc(v.viewport)} px · ${esc(v.role)}</h3><span class="badge">${(v.ratio * 100).toFixed(2)}%</span><span class="sev ${v.verdict === "bug" ? "P1" : v.verdict === "intended" ? "P3" : "P2"}">${esc(v.verdict)}</span><span class="meta">${esc(v.reviewedBy)}</span></header><p>${esc(v.why)}</p><div class="vis"><div>было${img(runDir, v.before, 360)}</div><div>стало${img(runDir, v.after, 360)}</div><div>дифф${img(runDir, v.diff, 360)}</div></div><p>Принять новый эталон: <code>${esc(v.accept)}</code></p></section>`);
     h.push(`<p>Принять все намеренные: <code>npm run qa:accept -- --intended</code></p>`);
   } else h.push(`<p class="meta">Отличий от эталонов сверх порога нет (или набор visual не запускался; первый прогон создаёт эталоны).</p>`);
 

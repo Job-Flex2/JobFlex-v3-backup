@@ -2,6 +2,7 @@
 // (qa/analyze) reads only this file and the artefacts it names, and stage 2 will store it as is.
 // Change it only by adding fields; a breaking change bumps SCHEMA.
 import type { Collected } from "./collect";
+import type { RunHealth } from "./health";
 
 export const SCHEMA = "jobflex-qa-raw/1";
 
@@ -64,6 +65,10 @@ export type RawRun = {
     status: string;
     setup: { role: string; ok: boolean; note: string }[];
     notes: string[];
+    /** FAILED when a suite skipped too much (lib/health.ts); missing in runs before 2026-10-17 */
+    health?: RunHealth;
+    /** the Playwright passes the run was made of (bin/qa.ts: "read" first on the fresh QA Co, then "write") */
+    phases?: string[];
   };
   stats: { total: number; passed: number; failed: number; skipped: number; flaky: number; bySuite: Record<string, { total: number; passed: number; failed: number; skipped: number; flaky: number }> };
   tests: RawTest[];
