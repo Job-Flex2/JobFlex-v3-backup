@@ -67,12 +67,17 @@ side by side as choices (the lead page's Estimate this job), each wears one
 identity hue on its card edge and icon plate — Smart Proposal `--blueprint`,
 roof `--danger`, fence `--success`, HVAC `--sky`, manual proposal `--ink`.
 Amber stays reserved there for what an estimator still needs.
-The desktop sidebar's Estimating tools are ordinary sidebar rows (owner,
-2026-10-16, replacing that day's coloured icon squares): same icon, type and
-plate as every other row. A subpage toggle is a small white square in a 1.5px
-ink frame with a down arrow (up when open); a subpage row (an inventory) has
-the same ink, size and weight as the rows above it, indented on a guide line.
-The handheld drawer (mobile-shell) still reads `--tool-*`.
+A second (owner, 2026-10-17, overriding the 2026-10-16 entry that made them
+ordinary rows): the sidebar's Estimating tools, desk and drawer, give each
+tool one colour from `--tool-smart`, `--tool-plan`, `--tool-roof`,
+`--tool-fence`, `--tool-video`, `--tool-hvac`, `--tool-deck` (globals.css).
+A tool row is one line: a white icon square in an ink frame on a hard offset
+shadow in the tool's colour, the square filled with that colour while the
+tool is open; then the name (no caption under it), "Soon" beside it when it
+is coming. The tools sit in one bay with no frame and no grid. A subpage
+toggle is a small white square in a 1.5px ink frame with a down arrow (up
+when open); a subpage row (an inventory) has the same ink, size and weight
+as the rows above it, indented on a guide line. Nothing else reads `--tool-*`.
 The AI desk (owner, 2026-10-16): its two tabs, Calls | AI desk setup, are one
 framed switch, the open tab filled with ink. The setup is a checklist card —
 a full-width row per step (numbered square, name, status stamp, an
