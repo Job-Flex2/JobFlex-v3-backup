@@ -10,22 +10,50 @@
 // The same shape actions/influencers.requestPayout and the payout decisions
 // already answer with; this names it once.
 
-import { ZodError } from "zod";
+// Type-only: the save bars import `isRefusal` from here on the client, and a
+// runtime import would ship zod in their bundles for one instanceof.
+import type { ZodError } from "zod";
 
-export type ActionResult<T = Record<never, never>> = ({ ok: true } & T) | { ok: false; error: string };
+const isZodError = (err: unknown): err is ZodError =>
+  err instanceof Error && err.name === "ZodError" && Array.isArray((err as ZodError).issues);
 
-export const refused = (error: string): { ok: false; error: string } => ({ ok: false, error });
+/** `field` names the input a form refusal belongs to, so the page can print it
+ *  under that field; without it the page prints `error` above the form. */
+export type Refusal = { ok: false; error: string; field?: string };
+
+export type ActionResult<T = Record<never, never>> = ({ ok: true } & T) | Refusal;
+
+export const refused = (error: string, field?: string): Refusal => (field ? { ok: false, error, field } : { ok: false, error });
+
+/** A value an action answered with is a refusal — the client-side test the
+ *  shared save bars use, so a refused save never reads as "Saved". */
+export function isRefusal(value: unknown): value is Refusal {
+  return typeof value === "object" && value !== null && (value as { ok?: unknown }).ok === false && typeof (value as { error?: unknown }).error === "string";
+}
+
+/** A refusal's words for the slot under its own field: the label is already
+ *  printed above the input, so "Email: enter a valid address." reads
+ *  "Enter a valid address." there. */
+export function underField(r: Refusal): string {
+  const at = r.field ? r.error.indexOf(": ") : -1;
+  const rest = at >= 0 ? r.error.slice(at + 2) : r.error;
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
 
 /**
  * A refusal from something that threw: a ZodError's first issue as
  * "field: message" (what the sheets show today), any other Error's message.
+ * `labels` swaps the schema key for the words the form prints ("phone" →
+ * "Phone"), so a schema's messages are written as the half after the colon.
  * Auth and infrastructure errors are re-thrown — they are not for the reader.
  */
-export function refusal(err: unknown): { ok: false; error: string } {
-  if (err instanceof ZodError) {
+export function refusal(err: unknown, labels?: Record<string, string>): Refusal {
+  if (isZodError(err)) {
     const first = err.issues[0];
     const field = first?.path?.[0];
-    return refused(field !== undefined ? `${String(field)}: ${first.message}` : (first?.message ?? "Check the form."));
+    if (field === undefined) return refused(first?.message ?? "Check the form.");
+    const key = String(field);
+    return refused(`${labels?.[key] ?? key}: ${first.message}`, key);
   }
   if (err instanceof Error && err.name !== "UnauthorizedError" && err.name !== "NoOrgError" && !/prisma|database|ECONN/i.test(err.message)) {
     return refused(err.message);

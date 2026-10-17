@@ -367,6 +367,11 @@ export interface OtpRestore {
   stage: "code" | "verified" | "expired" | "taken";
   resendAt: number;
   expiresAt: number;
+  /** The server's clock when this was read. The code screen starts its resend
+   *  countdown from it, so the server's HTML and the hydrating page print the
+   *  same "Resend code in N s" (a Date.now() on each side drifted a second
+   *  apart — QA F-c53b585f); the page ticks on its own clock after mount. */
+  now: number;
   burned: boolean;
   signupToken: string | null;
 }
@@ -377,7 +382,7 @@ export async function draftRestore(token: string | null, cookieToken: string | n
   const own = cookieToken === t;
   if (d.verifiedAt) {
     if (!own || !d.signupToken) return null;
-    const at = { draft: t, name: d.name, email: d.email, resendAt: 0, expiresAt: 0, burned: true };
+    const at = { draft: t, name: d.name, email: d.email, resendAt: 0, expiresAt: 0, now: Date.now(), burned: true };
     const state = await pendingStateOf(d);
     if (state === "taken") return { ...at, stage: "taken", signupToken: null };
     if (state === "expired") {
@@ -386,7 +391,7 @@ export async function draftRestore(token: string | null, cookieToken: string | n
     }
     return { ...at, stage: "verified", signupToken: d.signupToken };
   }
-  return { draft: t, name: d.name, email: d.email, stage: "code", ...draftClock(d), burned: !d.code, signupToken: null };
+  return { draft: t, name: d.name, email: d.email, stage: "code", ...draftClock(d), now: Date.now(), burned: !d.code, signupToken: null };
 }
 
 /** How the pending signup a proven draft became stands: the address has an

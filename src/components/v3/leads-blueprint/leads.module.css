@@ -716,6 +716,63 @@
    ============================================================ */
 .bp :global(.content .is-hidden) { display: none !important; }
 
+/* ── WHERE THE LEADS CAME FROM (2026-10-16) ───────────────────
+   The switch (All / From JobFlex / Your own leads) and, under
+   it, the shop's own leads by source as dot chips with counts.
+   JobFlex's leads wear the J monogram plate everywhere — the
+   switch, the row badge — so the two books never blur. */
+.bp :global(.content .lorigin) { display: grid; gap: 10px; margin: 0 0 14px; }
+.bp :global(.content .lseg) {
+  display: inline-flex; flex-wrap: wrap; gap: 0; justify-self: start;
+  border: 1.5px solid var(--ink); border-radius: var(--radius); overflow: hidden; background: #fff;
+}
+.bp :global(.content .lseg-btn) {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px;
+  border: 0; border-right: 1.5px solid var(--ink); background: transparent; color: var(--ink);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+}
+.bp :global(.content .lseg-btn:last-child) { border-right: 0; }
+.bp :global(.content .lseg-btn.on) { background: var(--ink); color: #fff; }
+.bp :global(.content .lseg-btn--jf.on) { background: var(--blueprint); }
+.bp :global(.content .lseg-n) {
+  min-width: 20px; padding: 1px 6px; border-radius: 999px; background: rgba(10, 10, 10, 0.08);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0; text-align: center;
+}
+.bp :global(.content .lseg-btn.on .lseg-n) { background: rgba(255, 255, 255, 0.2); }
+.bp :global(.content .ljf) {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px;
+  background: var(--blueprint); color: #fff; font-size: 11px; font-weight: 900; letter-spacing: 0;
+}
+.bp :global(.content .lseg-btn--jf.on .ljf) { background: #fff; color: var(--blueprint); }
+.bp :global(.content .lsrcs) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 30px; }
+.bp :global(.content .lsrcs-lbl) {
+  margin-right: 4px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.bp :global(.content .lsrcs-note) { font-size: 12.5px; color: var(--muted); }
+.bp :global(.content .lsrcs-note b) { color: var(--ink); }
+.bp :global(.content .lsrc-chip) {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px;
+  border: 1.5px solid var(--hair-soft, rgba(10, 10, 10, 0.14)); border-radius: 999px; background: #fff;
+  color: var(--ink); font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.bp :global(.content .lsrc-chip i),
+.bp :global(.content .lsrc-b i) { width: 8px; height: 8px; border-radius: 50%; background: var(--t, var(--muted)); flex: 0 0 auto; }
+.bp :global(.content .lsrc-chip b) { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.bp :global(.content .lsrc-chip.on) { border-color: var(--ink); background: var(--ink); color: #fff; }
+.bp :global(.content .lsrc-chip.on b) { color: rgba(255, 255, 255, 0.75); }
+.bp :global(.content .lsrc-b) {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 1px 7px 1px 6px;
+  border: 1px solid var(--hair-soft, rgba(10, 10, 10, 0.14)); border-radius: 999px; background: #fff;
+  font-size: 11px; font-weight: 700; color: var(--ink); vertical-align: 1px; white-space: nowrap;
+}
+.bp :global(.content .lsrc-b--jobflex) { border-color: var(--blueprint); color: var(--blueprint); }
+.bp :global(.content .lsrc-b--jobflex b) {
+  display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 3px;
+  background: var(--blueprint); color: #fff; font-size: 9px; font-weight: 900;
+}
+.bp :global(.content .fld-note) { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
 .bp :global(.content .ptabs) { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
 /* Import sits in the tab row but is an action, so it parks on the right. It
    stays a .ptab so the active state still marks which panel you are on. */
@@ -1821,3 +1878,9 @@
 .bp :global(.content .cname a.pt-link:focus-visible) { color: var(--blueprint); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
 .bp :global(.content .cname a.pt-link:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
 .bp :global(.content .ptable tbody tr.prow--link td.num) { white-space: nowrap; }
+
+/* The origin switch on narrow widths: one row, three equal parts. */
+@media (max-width: 860px) {
+  .bp :global(.content .lseg) { display: grid; grid-template-columns: repeat(3, 1fr); justify-self: stretch; }
+  .bp :global(.content .lseg-btn) { justify-content: center; padding: 0 6px; font-size: 11px; letter-spacing: 0.03em; }
+}

@@ -173,6 +173,7 @@ export default class QaReporter implements Reporter {
         finishedAt: finished.toISOString(),
         durationMs: finished.getTime() - this.started.getTime(),
         baseUrl: baseUrl(),
+        server: process.env.QA_SERVER_KIND,
         target: targetKind(),
         suites: (process.env.QA_SUITES || "all").split(","),
         grep: process.env.QA_GREP || null,

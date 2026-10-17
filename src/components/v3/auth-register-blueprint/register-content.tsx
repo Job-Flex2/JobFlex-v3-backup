@@ -94,6 +94,7 @@ import {
 import styles from "./auth-register.module.css";
 import { ProductMark } from "@/components/brand/ProductMark";
 import { markQaVisitor } from "@/lib/qaEmail";
+import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
 
 /* A PHONE (≤768px) — the plan step's cards are a two-column grid there
    (auth-register.module.css); a few behaviours follow the width too. A media
@@ -679,6 +680,8 @@ export function RegisterContent({
   const [addr, setAddr] = React.useState("");
   const [phone, setPhone] = React.useState(setup?.companyPhone || setup?.phone || "");
   const [trades, setTrades] = React.useState<TradeType[]>(industry ? [industry] : []);
+  // A homeowner who came in on a trade's contractor ad: the way to a quote instead (lib/home/homeownerDoor, 2026-10-16).
+  const homeDoor = homeownerDoorFor(industry);
   /* The two-step sign-up's trades fold: open until something is picked (a
      landing's ?industry= pre-picks one, so that visitor sees it folded). */
   const [foldOpen, setFoldOpen] = React.useState(!industry);
@@ -1904,6 +1907,14 @@ export function RegisterContent({
                 Sign in
               </Link>
             </div>
+            {homeDoor ? (
+              <div className="foot foot-home" data-home-door={homeDoor.key}>
+                Homeowner looking for {homeDoor.thing}?{" "}
+                <a className="link-ink" href={homeDoor.href}>
+                  Get quotes from local pros
+                </a>
+              </div>
+            ) : null}
             {/* Google One Tap (pass A): step 1 only, and only with
                 NEXT_PUBLIC_GOOGLE_CLIENT_ID set. */}
             {step === 1 && !google && !setupMode && !inApp ? <GoogleOneTap /> : null}
@@ -2339,8 +2350,13 @@ export function RegisterContent({
                             <svg className="ic">
                               <use href={included ? "#i-check" : "#i-minus"} />
                             </svg>
-                            {f}
-                            {lit ? <span className="pw-spot-tag">{included ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                            {/* The name and its tag (.pw-ft): the tag drops under the
+                                name when the line cannot hold both, and the name never
+                                breaks inside a word. */}
+                            <span className="pw-ft">
+                              <span className="pw-fn">{f}</span>
+                              {lit ? <span className="pw-spot-tag">{included ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
+                            </span>
                           </span>
                         );
                       })}

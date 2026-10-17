@@ -438,7 +438,7 @@ export function ProposalsSection({ proposal = KITCHEN, registerHref = "/auth/reg
             the bordered secondary, the trial stays the blue primary; on a
             phone they stack full width, primary first. */}
         <Reveal className="mt-[12vmin] flex flex-col items-stretch gap-3 sm:mt-[8vmin] sm:flex-row sm:items-center sm:gap-4">
-          <a href={registerHref} className="lp-btn-lime w-full sm:w-auto" data-cta="proposals">
+          <a href={registerHref} className="lp-btn-lime lp-trial-cta w-full sm:w-auto" data-cta="proposals">
             {cta}
             <span aria-hidden>→</span>
           </a>

@@ -34,7 +34,7 @@ export function AutoPlanWelcome({ view }: { view: AutoPlanWelcomeView }) {
   };
   const price = view.priceCents ? `${formatPlanPrice(view.priceCents)}/${view.interval === "YEAR" ? "year" : "month"}` : null;
   return (
-    <section className={s.card} aria-label="Welcome to JobFlex" data-auto-plan-welcome>
+    <section className={s.card} aria-label="Welcome to JobFlex" data-auto-plan-welcome data-nest="">
       <Sparkles className={s.icon} size={20} aria-hidden />
       <div className={s.copy}>
         <p className={s.kicker}>Welcome to JobFlex</p>

@@ -1,0 +1,655 @@
+{
+ "schema": "jobflex-qa-raw/1",
+ "run": {
+  "id": "2026-10-15T09-00-00",
+  "startedAt": "2026-10-14T20:00:00.000Z",
+  "finishedAt": "2026-10-14T20:10:00.000Z",
+  "durationMs": 600000,
+  "baseUrl": "http://localhost:3005",
+  "target": "local",
+  "suites": [
+   "all"
+  ],
+  "grep": null,
+  "projects": [
+   "chromium",
+   "webkit"
+  ],
+  "git": {
+   "commit": "fixture",
+   "branch": "main",
+   "dirty": false
+  },
+  "playwright": "1.64.1",
+  "node": "v24",
+  "status": "failed",
+  "setup": [
+   {
+    "role": "owner",
+    "ok": true,
+    "note": "fixture"
+   }
+  ],
+  "notes": []
+ },
+ "stats": {
+  "total": 7,
+  "passed": 3,
+  "failed": 4,
+  "skipped": 0,
+  "flaky": 0,
+  "bySuite": {
+   "pages": {
+    "total": 3,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "visual": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "smoke": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+   },
+   "signup": {
+    "total": 2,
+    "passed": 1,
+    "failed": 1,
+    "skipped": 0,
+    "flaky": 0
+   }
+  }
+ },
+ "tests": [
+  {
+   "id": "fixture-001",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard as admin @pages"
+   ],
+   "line": 11,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:02.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server",
+     "stack": "Error: Error: 4xx/5xx from this server\n    at qa/tests/pages/pages.spec.ts:72:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 72,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008003100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard"
+     },
+     {
+      "t": 1792008003200,
+      "type": "error",
+      "text": "[route-error] 946371773 NoOrgError: No active organization\n    at resolveOrg (about://React/Server/C:%5CProjects%5Cx%5C.next/server.js:138:19)",
+      "url": "http://localhost:3005/dashboard"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008003000,
+      "status": 500,
+      "method": "POST",
+      "url": "http://localhost:3005/dashboard",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard",
+      "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:E{\"digest\":\"848584365\",\"name\":\"NoOrgError\",\"message\":\"No active organization\",\"stack\":[[\"resolveOrg\",\"C:\\\\Projects\\\\x\\\\.next\\\\server.js\",138,19]]}"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008002300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard",
+    "role": "admin",
+    "path": "/dashboard",
+    "realParams": true,
+    "coldMs": 1200,
+    "warmMs": 800,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard as admin @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-002",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/jobs/new as admin @pages"
+   ],
+   "line": 12,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:04.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server",
+     "stack": "Error: Error: 4xx/5xx from this server\n    at qa/tests/pages/pages.spec.ts:72:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 72,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008003100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/jobs/new"
+     },
+     {
+      "t": 1792008003200,
+      "type": "error",
+      "text": "[route-error] 946371773 NoOrgError: No active organization\n    at resolveOrg (about://React/Server/C:%5CProjects%5Cx%5C.next/server.js:138:19)",
+      "url": "http://localhost:3005/dashboard/jobs/new"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008003000,
+      "status": 500,
+      "method": "POST",
+      "url": "http://localhost:3005/dashboard/jobs/new",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/jobs/new",
+      "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:E{\"digest\":\"848584365\",\"name\":\"NoOrgError\",\"message\":\"No active organization\",\"stack\":[[\"resolveOrg\",\"C:\\\\Projects\\\\x\\\\.next\\\\server.js\",138,19]]}"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008004300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/jobs/new",
+    "role": "admin",
+    "path": "/dashboard/jobs/new",
+    "realParams": true,
+    "coldMs": 1200,
+    "warmMs": 800,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/jobs/new as admin @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-003",
+   "titlePath": [
+    "chromium",
+    "qa/tests/pages/pages.spec.ts",
+    "/dashboard/settings as admin @pages"
+   ],
+   "line": 13,
+   "project": "chromium",
+   "tags": [
+    "@pages"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:06.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "Error: 4xx/5xx from this server",
+     "stack": "Error: Error: 4xx/5xx from this server\n    at qa/tests/pages/pages.spec.ts:72:9",
+     "location": {
+      "file": "qa/tests/pages/pages.spec.ts",
+      "line": 72,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008003100,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "url": "http://localhost:3005/dashboard/settings"
+     },
+     {
+      "t": 1792008003200,
+      "type": "error",
+      "text": "[route-error] 946371773 NoOrgError: No active organization\n    at resolveOrg (about://React/Server/C:%5CProjects%5Cx%5C.next/server.js:138:19)",
+      "url": "http://localhost:3005/dashboard/settings"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008003000,
+      "status": 500,
+      "method": "POST",
+      "url": "http://localhost:3005/dashboard/settings",
+      "resourceType": "fetch",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/dashboard/settings",
+      "body": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":true,\"b\":\"development\"}\n1:D\"$2\"\n1:E{\"digest\":\"848584365\",\"name\":\"NoOrgError\",\"message\":\"No active organization\",\"stack\":[[\"resolveOrg\",\"C:\\\\Projects\\\\x\\\\.next\\\\server.js\",138,19]]}"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008006300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "page",
+    "route": "/dashboard/settings",
+    "role": "admin",
+    "path": "/dashboard/settings",
+    "realParams": true,
+    "coldMs": 1200,
+    "warmMs": 800,
+    "layout": {
+     "scrollX": false,
+     "docWidth": 390,
+     "outside": []
+    },
+    "brokenLinks": [],
+    "axe": []
+   },
+   "title": "/dashboard/settings as admin @pages",
+   "suite": "pages",
+   "file": "qa/tests/pages/pages.spec.ts"
+  },
+  {
+   "id": "fixture-004",
+   "titlePath": [
+    "chromium",
+    "qa/tests/visual/visual.spec.ts",
+    "/dashboard/clients at 390 as admin @visual"
+   ],
+   "line": 14,
+   "project": "chromium",
+   "tags": [
+    "@visual"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:08.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008003300,
+      "type": "error",
+      "text": "%o %s NoOrgError: No active organization at resolveOrg (about://React/Server/C:%5CProjects%5Cx)",
+      "url": "http://localhost:3005/dashboard/clients"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008008300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "kind": "visual",
+    "route": "/dashboard/clients",
+    "role": "admin"
+   },
+   "title": "/dashboard/clients at 390 as admin @visual",
+   "suite": "visual",
+   "file": "qa/tests/visual/visual.spec.ts"
+  },
+  {
+   "id": "fixture-005",
+   "titlePath": [
+    "chromium",
+    "qa/tests/smoke/smoke.spec.ts",
+    "an unknown address answers 404 @smoke @expects-404"
+   ],
+   "line": 15,
+   "project": "chromium",
+   "tags": [
+    "@smoke",
+    "@expects-404"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:10.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [
+     {
+      "t": 1792008004001,
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "url": "http://localhost:3005/qa-no-such-page-1"
+     }
+    ],
+    "pageErrors": [],
+    "httpErrors": [
+     {
+      "t": 1792008004000,
+      "status": 404,
+      "method": "GET",
+      "url": "http://localhost:3005/qa-no-such-page-1",
+      "resourceType": "document",
+      "sameOrigin": true,
+      "page": "http://localhost:3005/qa-no-such-page-1"
+     }
+    ],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008010300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {
+    "expectStatus": [
+     404
+    ]
+   },
+   "title": "an unknown address answers 404 @smoke @expects-404",
+   "suite": "smoke",
+   "file": "qa/tests/smoke/smoke.spec.ts"
+  },
+  {
+   "id": "fixture-006",
+   "titlePath": [
+    "chromium",
+    "qa/tests/signup/signup.spec.ts",
+    "plan → test card 4242 → dashboard: company, owner seat and trial are right @signup @writes"
+   ],
+   "line": 16,
+   "project": "chromium",
+   "tags": [
+    "@signup"
+   ],
+   "status": "failed",
+   "expectedStatus": "passed",
+   "outcome": "failed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:12.000Z",
+   "annotations": [],
+   "errors": [
+    {
+     "message": "TimeoutError: locator.fill: Timeout 60000ms exceeded.\nCall log:\n  - waiting for locator('#cardNumber')",
+     "stack": "TimeoutError: locator.fill: Timeout 60000ms exceeded.\n    at payWithTestCard (C:\\Projects\\JobFlex-v3-copy\\qa\\lib\\signup.ts:61:40)",
+     "location": {
+      "file": "qa/lib/signup.ts",
+      "line": 61,
+      "column": 9
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008012300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "plan → test card 4242 → dashboard: company, owner seat and trial are right @signup @writes",
+   "suite": "signup",
+   "file": "qa/tests/signup/signup.spec.ts"
+  },
+  {
+   "id": "fixture-007",
+   "titlePath": [
+    "chromium",
+    "qa/tests/signup/signup.spec.ts",
+    "leaving the code screen and coming back keeps the address @signup @webkit"
+   ],
+   "line": 17,
+   "project": "webkit",
+   "tags": [
+    "@signup"
+   ],
+   "status": "passed",
+   "expectedStatus": "passed",
+   "outcome": "passed",
+   "durationMs": 1500,
+   "retry": 0,
+   "startedAt": "2026-10-14T20:00:14.000Z",
+   "annotations": [],
+   "errors": [],
+   "steps": [
+    {
+     "title": "open",
+     "category": "test.step",
+     "startMs": 0,
+     "durationMs": 1200
+    }
+   ],
+   "collected": {
+    "console": [],
+    "pageErrors": [
+     {
+      "t": 1792008005000,
+      "message": "Hydration failed because the server rendered text didn't match the client.\n  <RegisterContent>\n    <ReferralBanner>",
+      "url": "http://localhost:3005/auth/register?flow=otp"
+     }
+    ],
+    "httpErrors": [],
+    "failedRequests": [],
+    "slowRequests": [],
+    "hungRequests": [],
+    "navigations": [
+     {
+      "t": 1792008014300,
+      "url": "http://localhost:3005/",
+      "ttfbMs": 80,
+      "domContentLoadedMs": 300,
+      "loadMs": 600,
+      "transferKb": 40,
+      "status": 200,
+      "step": "open"
+     }
+    ],
+    "forbidden": []
+   },
+   "artifacts": {},
+   "meta": {},
+   "title": "leaving the code screen and coming back keeps the address @signup @webkit",
+   "suite": "signup",
+   "file": "qa/tests/signup/signup.spec.ts"
+  }
+ ]
+}

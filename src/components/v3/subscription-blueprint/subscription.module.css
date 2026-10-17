@@ -155,7 +155,10 @@
 /* ============================================================
    RESET / BASE
    ============================================================ */
-:global(.jf-blueprint) *:not(:where([data-mnav], [data-mnav] *, [data-nest], [data-nest] *)) { margin: 0; padding: 0; box-sizing: border-box; }
+/* Bound to this page's shell root (2026-10-16): unbound, the reset stayed in the document after a client-side
+   navigation away from /dashboard/subscription and zeroed other pages' single-class rules (the leads filter bar's
+   `margin-left: auto`). `:where()` keeps it at (0,1,0) — at (0,2,0) it would outrank the shell's own rules here. */
+:global(.jf-blueprint:where([data-page="subscription"])) *:not(:where([data-mnav], [data-mnav] *, [data-nest], [data-nest] *)) { margin: 0; padding: 0; box-sizing: border-box; }
 /* [chrome / shell-supplied — dropped in the port: html, body, body] */
 :global(.jf-blueprint) button { font-family: inherit; border: none; background: none; cursor: pointer; color: inherit; }
 :global(.jf-blueprint) a { text-decoration: none; color: inherit; }

@@ -1,16 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TrialLine } from "./trial-line";
 import { REGISTER } from "./routes";
 
 export function MobileCta({
   registerHref = REGISTER,
   cta,
-  requiresCard = true,
 }: {
-  /** signupTrialMode (lib/trialPolicyServer): the words of the trial's line, compact. */
-  requiresCard?: boolean;
   registerHref?: string;
   /** A trade variant's primary CTA words; the default page keeps its own. */
   cta?: string;
@@ -41,13 +37,12 @@ export function MobileCta({
       }`}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      {/* One full-width button with the note under it: a trade's CTA ("Start
-          free — measure a roof") needs the whole bar's width on a phone. */}
-      <div className="flex flex-col items-stretch gap-1.5 px-5 py-2.5">
-        <a href={registerHref} className="lp-btn-dark h-12 w-full text-[16px] font-semibold" data-cta="sticky">
+      {/* One full-width button, and nothing under it: the button says the
+          trial itself on every landing (owner, 2026-10-16). */}
+      <div className="flex flex-col items-stretch px-5 py-2.5">
+        <a href={registerHref} className="lp-btn-dark lp-trial-cta h-12 w-full text-[16px]" data-cta="sticky">
           {cta ?? "Start FREE Trial"}
         </a>
-        <TrialLine size="sm" className="mx-auto flex w-fit" requiresCard={requiresCard} />
       </div>
     </div>
   );

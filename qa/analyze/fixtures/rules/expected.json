@@ -1,0 +1,25 @@
+{
+ "failedTests": 4,
+ "findings": [
+  {
+   "kind": "api-error",
+   "severity": "P1",
+   "tests": 4,
+   "signature": "root NoOrgError @ resolveOrg",
+   "location": "src/lib/orgContext.ts"
+  },
+  {
+   "kind": "timeout",
+   "severity": "P2",
+   "tests": 1,
+   "signature": "timeout qa/tests/signup/signup.spec.ts",
+   "location": "qa/lib/signup.ts"
+  },
+  {
+   "kind": "page-error",
+   "severity": "P2",
+   "tests": 1,
+   "signature": "page-error Hydration failed"
+  }
+ ]
+}

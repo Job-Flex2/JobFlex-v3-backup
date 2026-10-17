@@ -12,17 +12,25 @@
 //                               every question from (profile.knowledge), the structured parts updated and what the AI
 //                               changed highlighted; what is covered so far ticks as they talk; "Answer it" puts a
 //                               question the desk still has into the box
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { composeDeskProfile, presetDeskProfile, saveDeskProfile } from "@/actions/aiDesk";
 import { DictateButton } from "@/components/estimator/DictateButton";
-import { briefCoverage, PROFILE_SECTIONS, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
-import { BUSINESS_SUGGESTIONS, faqKey, matchBusiness, type DeskFix, type DeskReviewItem } from "@/lib/aiDesk/tradePresets";
+import { briefCoverage, MAX_FAQS, PROFILE_SECTIONS, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
+// The light half of the presets — the trades' texts stay on the server (lib/aiDesk/tradeCore).
+import { BUSINESS_SUGGESTIONS, faqKey, matchBusinessLabels as matchBusiness, type DeskFix, type DeskReviewItem } from "@/lib/aiDesk/tradeCore";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
 
 const asLines = (xs: string[]) => xs.join("\n");
+const JUMPS = [
+  ["desk-kind", C.navKind],
+  ["desk-describe", C.navDescribe],
+  ["desk-know", C.navKnow],
+  ["desk-instructions", C.navInstructions],
+] as const;
+type JumpId = (typeof JUMPS)[number][0];
 const fromLines = (t: string) => t.split("\n").map((x) => x.trim()).filter(Boolean);
 
 /** The highlight on a part to check: why, the one-click fixes, and "Looks right". */
@@ -60,6 +68,23 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<null | "preset" | "compose" | "save">(null);
+  // The part on screen, lit in the tab's own menu: the last part whose top has passed under the menu.
+  const [here, setHere] = useState<JumpId>("desk-kind");
+  useEffect(() => {
+    const els = JUMPS.map(([id]) => document.getElementById(id)).filter((el): el is HTMLElement => !!el);
+    if (!els.length || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      () => {
+        if (!els[0].offsetParent) return; // the tab is hidden
+        const passed = els.filter((el) => el.getBoundingClientRect().top < 160);
+        const last = passed[passed.length - 1] ?? els[0];
+        setHere(last.id as JumpId);
+      },
+      { threshold: [0, 0.25, 0.5, 0.75, 1], rootMargin: "-120px 0px -40% 0px" },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
 
@@ -194,15 +219,18 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
     <div className={s.root} data-desk-setup data-written={written ? "1" : "0"}>
       {/* the four parts of this tab, one tap away — the tab is long by nature */}
       <nav className={s.subnav} aria-label={C.subnavLabel} data-desk-subnav>
-        {(
-          [
-            ["desk-kind", C.navKind],
-            ["desk-describe", C.navDescribe],
-            ["desk-know", C.navKnow],
-            ["desk-instructions", C.navInstructions],
-          ] as const
-        ).map(([id, label]) => (
-          <button key={id} type="button" className={s.subnavBtn} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })} data-desk-jump={id}>
+        {JUMPS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={s.subnavBtn}
+            aria-current={here === id ? "true" : undefined}
+            onClick={() => {
+              setHere(id);
+              document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            data-desk-jump={id}
+          >
             {label}
             {id === "desk-instructions" && review.length ? <span className={s.subnavCount}>{C.toCheck(review.length)}</span> : null}
           </button>
@@ -474,7 +502,7 @@ export function DeskBrief({ desk, onWritten, onReview }: { desk: DeskSettingsDat
                       <button
                         type="button"
                         className={s.btn}
-                        disabled={disabled || profile.faqs.length >= 12}
+                        disabled={disabled || profile.faqs.length >= MAX_FAQS}
                         onClick={() => {
                           setProfile((p) => ({ ...p, faqs: [...p.faqs, { q: "", a: "" }] }));
                           setDirty(true);

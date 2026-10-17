@@ -116,6 +116,9 @@ export interface ReconBuild {
   diagnostics: DsmSurvey;
   /** Google's own whole-roof area for the same building, as an independent check. */
   googleAreaSqft: number | null;
+  /** How many roof segments Google saw — the stand-in for a facet count
+   *  when the measured data doesn't carry one. */
+  googleSegmentCount: number | null;
   /** True when several structures on the parcel were measured together. */
   multiStructure: boolean;
   /** Other structures in the tile that were NOT measured, plan-view sqft. */
@@ -289,12 +292,14 @@ export async function buildReconModel(input: ReconBuildInput): Promise<ReconBuil
 
   const googleAreaSqft =
     insights?.wholeRoofAreaM2 != null ? insights.wholeRoofAreaM2 * M2_TO_SQFT : null;
+  const googleSegmentCount = insights?.segments?.length ? insights.segments.length : null;
 
   return {
     dsm,
     mask,
     diagnostics,
     googleAreaSqft,
+    googleSegmentCount,
     multiStructure: diagnostics.keptComponents > 1,
     excludedSqft: diagnostics.maskComponentsSqft.slice(diagnostics.keptComponents),
     ...(parcelLookup.blocked ? { parcelBlocked: parcelLookup.blocked } : {}),

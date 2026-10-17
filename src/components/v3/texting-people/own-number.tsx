@@ -100,7 +100,7 @@ export function OwnNumber({ view, configured }: { view: SmsRegistrationView | nu
   };
 
   return (
-    <div className={`${s.root} ${s.own}`} data-own-number data-stage={view.stage} data-assigned={lent ? (view.assigned?.house ? "house" : view.assigned?.jobflexOwn ? "jobflex" : view.assigned?.registrable ? "registrable" : "local") : undefined}>
+    <div className={`${s.root} ${s.own}`} data-own-number data-nest="" data-stage={view.stage} data-assigned={lent ? (view.assigned?.house ? "house" : view.assigned?.jobflexOwn ? "jobflex" : view.assigned?.registrable ? "registrable" : "local") : undefined}>
       {!configured ? <p className={s.note}>{C.notConfigured}</p> : null}
       {lent && view.assigned ? (
         <>

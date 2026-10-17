@@ -6,11 +6,10 @@ import { HeroVisual } from "./hero-visual";
 import { DEFAULT_LANDING, type LandingVariant, type LandingVariantKey, type UtmParams } from "./landing-variants";
 import { Reveal } from "./reveal";
 import { GoogleSignupButton } from "./google-signup-button";
-import { TrialLine } from "./trial-line";
-import { trialLine } from "@/lib/trialPolicy";
 import { HeroEntrance } from "./hero-entrance";
 import { HeroExperiment } from "./hero-experiment";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
+import { HomeownerDoor } from "./homeowner-door";
 
 /* THE ENTRANCE IS ARMED BY THE PAGE, NOT ASSUMED BY THE STYLESHEET
    (2026-10-04). The copy used to be server-rendered invisible and shown by
@@ -38,12 +37,15 @@ export function Hero({
   utm,
   registerHref = REGISTER,
   cta,
+  trialCta,
   fbclid,
-  requiresCard = true,
-  trialDays = 7,
   inAppBrowser = null,
   priceLine = null,
 }: {
+  /** The solid button's words: the trial, as on the default page — "Start my
+   *  7-day free trial" on every landing (owner, 2026-10-16). A trade's own
+   *  heroCta stays in landing-variants.ts, unused here, to bring back. */
+  trialCta?: string;
   /** The trade's price for the first screen ("Then from $95/mo · roof
    *  estimator included"), read from the plan catalogue by the page
    *  (hero-price.ts). Null — every landing but an ad landing — renders nothing. */
@@ -51,10 +53,6 @@ export function Hero({
   /** The in-app browser the server read from the request (lib/inAppBrowser):
    *  no Google button there, from the first paint. */
   inAppBrowser?: InAppBrowser | null;
-  /** signupTrialMode (lib/trialPolicyServer): the words of the trial's badge
-   *  under the buttons (lib/trialPolicy trialLine). */
-  requiresCard?: boolean;
-  trialDays?: number;
   variant?: LandingVariant;
   /** The variant's key, for the Google button's cookie and callback. */
   variantKey?: LandingVariantKey;
@@ -126,22 +124,18 @@ export function Hero({
         )}
         </HeroExperiment>
         <div className="lp-enter w-full sm:w-auto" data-entrance="cta">
-          {/* The pair and, under it, the trial badge (owner, 2026-10-01): the
-              badge is exactly as wide as the pair's outer edges (the column
-              is sized by the buttons alone) and sits the pair's own 12 px gap
-              below it. The hero keeps its height to the pixel without the
-              card-first note: from 640 px the badge gives back, as a negative
-              bottom margin, the room it takes beyond that note; under 640 it
-              keeps its ~30 px to the dashboard and the hero's bottom padding
-              gives it back instead (.lp-trial-line--bar, .lp-hero-vis). */}
-          <div className={`mx-auto mt-4 flex w-full max-w-[22rem] flex-col gap-3 sm:w-auto sm:max-w-none${priceLine ? " lp-hero-pair--priced" : ""}`}>
+          {/* The pair, and nothing under it (owner, 2026-10-15): the framed
+              "Start your 7-day free trial" badge that sat beneath it is gone
+              from every landing — it read as a third button. The product shot
+              follows at the hero's own 8vmin. */}
+          <div className="mx-auto mt-4 flex w-full max-w-[22rem] flex-col gap-3 sm:w-auto sm:max-w-none">
           <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
             <a
               href={registerHref}
-              className={`lp-btn-dark lp-cta lp-cta--solid${(variant.heroCta ?? cta ?? variant.primaryCta).length > 30 ? " lp-cta--long" : ""}`}
+              className={`lp-btn-dark lp-cta lp-cta--solid lp-trial-cta${(trialCta ?? cta ?? variant.primaryCta).length > 30 ? " lp-cta--long" : ""}`}
               data-cta="hero"
             >
-              {variant.heroCta ?? cta ?? variant.primaryCta}
+              {trialCta ?? cta ?? variant.primaryCta}
             </a>
             <GoogleSignupButton className="lp-cta lp-cta--ghost" industry={variantKey} utm={utm} fbclid={fbclid} inApp={inAppBrowser}>
               <svg viewBox="0 0 48 48" className="h-[18px] w-[18px]" aria-hidden>
@@ -165,16 +159,16 @@ export function Hero({
               Sign up with Google
             </GoogleSignupButton>
           </div>
-          <TrialLine tone="dark" size="bar" href={registerHref} spot="hero" requiresCard={requiresCard} />
           </div>
-          {/* The price, in the first screen (2026-10-04): under the trial's
-              line, in the same mono caps as the card-first note. */}
+          {/* The price, in the first screen (2026-10-04): under the buttons,
+              in the landing's mono caps. The trial it follows is the button
+              above it (owner, 2026-10-16), so the line says only the price. */}
           {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
         </div>
         </HeroEntrance>
       </div>
 
-      <div className={`lp-hero-vis lp-hero-vis--badge relative z-[1] mt-[8vmin] px-5 pb-[26vmin] sm:px-6${adScreen ? " lp-hero-vis--cta" : ""}`}>
+      <div className={`lp-hero-vis relative z-[1] mt-[8vmin] px-5 pb-[26vmin] sm:px-6${adScreen ? " lp-hero-vis--cta" : ""}`}>
         {/* Two builds of the same screen, not one build clipped: the desktop
             plate's 208px sidebar and four-across KPI row cannot survive a
             phone column (owner, 2026-08-25). The phone build also skips
@@ -192,8 +186,8 @@ export function Hero({
         {/* THE BUTTON UNDER THE SHOT (2026-10-04; the analyst: "they leave at
             the hero — put a sign-up button right there, at the point where
             they stop"). The shot has just shown the estimate being made; the
-            next thing under it is the way to make one. The top-of-page words
-            and the trial's own line, the blue of every section's button.
+            next thing under it is the way to make one. The top-of-page words,
+            the blue of every section's button.
             Clicks are `cta_click` with placement "hero-shot". */}
         {adScreen ? (
           <div className="lp-hero-after">
@@ -201,7 +195,8 @@ export function Hero({
               {cta ?? variant.primaryCta}
               <span aria-hidden>→</span>
             </a>
-            <span className="lp-hero-after-note">{trialLine(requiresCard, trialDays)}</span>
+            {/* The homeowner who clicked a contractor ad, sent where they belong (2026-10-16). */}
+            <HomeownerDoor trade={variantKey} />
           </div>
         ) : null}
       </div>

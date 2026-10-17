@@ -14,6 +14,9 @@ if (!dir || !fs.existsSync(dir)) {
   console.error("no run folder with raw.json under qa/runs — run npm run qa first");
   process.exit(1);
 }
+// the run's server decides which baselines its pictures replace (dev, or qa/baselines/prod)
+let server: string | undefined;
+try { server = (JSON.parse(fs.readFileSync(path.join(dir, "raw.json"), "utf8")) as { run?: { server?: string } }).run?.server; } catch { /* an old run: dev */ }
 let ids = argv.filter((a, i) => !a.startsWith("--") && !(runArg >= 0 && i === runArg + 1));
 if (argv.includes("--intended")) {
   const file = path.join(dir, "analysis.json");
@@ -39,7 +42,7 @@ for (const id of [...new Set(ids)]) {
     console.error(`skipped ${id}: no after.png in ${path.relative(ROOT, dir)}`);
     continue;
   }
-  const base = baselinePath(id);
+  const base = baselinePath(id, server);
   fs.mkdirSync(path.dirname(base), { recursive: true });
   fs.copyFileSync(after, base);
   console.log(`accepted ${id} → ${path.relative(ROOT, base)}`);

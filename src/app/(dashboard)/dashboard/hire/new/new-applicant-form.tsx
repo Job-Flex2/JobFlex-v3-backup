@@ -9,6 +9,15 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
 import { createApplicant } from "@/actions/applicants";
+import { underField } from "@/lib/actionResult";
+
+type Field = "fullName" | "email" | "phone" | "role" | "source" | "notes";
+const FIELDS: Field[] = ["fullName", "email", "phone", "role", "source", "notes"];
+// The ceilings actions/applicants applicantInput enforces, typed into the
+// inputs so nobody can write past them.
+const MAX = { fullName: 120, email: 254, phone: 32, role: 120, notes: 2000 } as const;
+// A shape check only — the server's zod email() has the final word.
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function NewApplicantForm() {
   const router = useRouter();
@@ -19,12 +28,17 @@ export function NewApplicantForm() {
   const [source, setSource] = React.useState<string>("Indeed");
   const [notes, setNotes] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [errors, setErrors] = React.useState<Partial<Record<Field | "form", string>>>({});
 
   async function save() {
-    if (!fullName.trim() || !email.trim() || !role.trim()) {
-      toast.error("Fill name, email, and role");
-      return;
-    }
+    const errs: Partial<Record<Field, string>> = {};
+    if (!fullName.trim()) errs.fullName = "Enter the applicant's name.";
+    if (!role.trim()) errs.role = "Enter the role they applied for.";
+    if (!email.trim()) errs.email = "Enter an email address.";
+    else if (!EMAIL_SHAPE.test(email.trim())) errs.email = "Enter a valid address, like name@company.com.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
     setBusy(true);
     try {
       const res = await createApplicant({
@@ -35,6 +49,12 @@ export function NewApplicantForm() {
         source,
         notes: notes || null,
       });
+      if (!res.ok) {
+        // The server's refusal lands under the field it names, else above the buttons.
+        const field = res.field as Field | undefined;
+        setErrors(field && FIELDS.includes(field) && field !== "source" ? { [field]: underField(res) } : { form: res.error });
+        return;
+      }
       toast.success("Added");
       router.push(`/dashboard/hire/${res.id}` as any);
     } catch (err: any) {
@@ -57,13 +77,19 @@ export function NewApplicantForm() {
           <Input
             label="Full name"
             value={fullName}
+            maxLength={MAX.fullName}
             onChange={(e) => setFullName(e.target.value)}
+            error={errors.fullName}
+            aria-invalid={!!errors.fullName}
           />
           <Input
             label="Role"
             value={role}
+            maxLength={MAX.role}
             onChange={(e) => setRole(e.target.value)}
             placeholder="Roofer, Estimator, Foreman…"
+            error={errors.role}
+            aria-invalid={!!errors.role}
           />
         </div>
         <div className="grid md:grid-cols-2 gap-3">
@@ -71,9 +97,20 @@ export function NewApplicantForm() {
             label="Email"
             type="email"
             value={email}
+            maxLength={MAX.email}
             onChange={(e) => setEmail(e.target.value)}
+            error={errors.email}
+            aria-invalid={!!errors.email}
           />
-          <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input
+            label="Phone"
+            type="tel"
+            value={phone}
+            maxLength={MAX.phone}
+            onChange={(e) => setPhone(e.target.value)}
+            error={errors.phone}
+            aria-invalid={!!errors.phone}
+          />
         </div>
         <Select label="Source" value={source} onChange={(e) => setSource(e.target.value)}>
           <option>Indeed</option>
@@ -87,10 +124,18 @@ export function NewApplicantForm() {
           label="Notes"
           rows={4}
           value={notes}
+          maxLength={MAX.notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Years of experience, specialties, schedule constraints…"
+          error={errors.notes}
+          aria-invalid={!!errors.notes}
         />
       </div>
+      {errors.form ? (
+        <p role="alert" className="mt-4 text-[11px] text-[color:var(--rose)]">
+          {errors.form}
+        </p>
+      ) : null}
       <div className="mt-5 flex gap-2">
         <Button loading={busy} onClick={save} icon={<Save className="h-3.5 w-3.5" />}>
           Add applicant

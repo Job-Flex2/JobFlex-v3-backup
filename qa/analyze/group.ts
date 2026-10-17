@@ -31,6 +31,9 @@ const area = (route: string | null) => (route ? route.split("/").slice(0, 3).joi
 
 /** What makes two signals the same cause. */
 export function signatureOf(s: Signal): string {
+  // One root (error name + the function it was thrown in) is one cause, however it surfaced:
+  // a server action's 500, the dev overlay's console line, a page error.
+  if (s.extra?.root && (s.kind === "api-error" || s.kind === "page-error" || s.kind === "console-error")) return `root ${String(s.extra.root)}`;
   switch (s.kind) {
     case "api-error":
       // a server action's error is one cause wherever the page is; group by it (and the role)
@@ -73,18 +76,24 @@ const HARD: SignalKind[] = ["api-error", "page-error", "timeout", "assertion", "
 /** The rule-based severity and its reason. P0 — cannot sign up / sign in / pay; P1 — a key
  *  function broken; P2 — works with a defect; P3 — cosmetic, speed, warnings. */
 export function severityOf(kind: SignalKind, signals: Signal[]): { severity: Severity; why: string } {
-  const suites = new Set(signals.map((s) => s.suite));
-  const failingTitles = signals.filter((s) => s.primary).map((s) => s.testTitle);
-  const routes = signals.map((s) => s.route ?? pathOf(s.url ?? "")).filter(Boolean);
-  const urls = signals.map((s) => pathOf(s.url ?? ""));
-  if (HARD.includes(kind)) {
-    if ((suites.has("signup") || suites.has("billing")) && failingTitles.some((t) => MAIN_PATH.test(t) && !/google/i.test(t))) return { severity: "P0", why: "the sign-up or payment path fails" };
-    if (suites.has("smoke") && failingTitles.some((t) => /sign-?in|sign-?up|dashboard loads|register/i.test(t))) return { severity: "P0", why: "a smoke check of signing in / signing up / the dashboard fails" };
-    if ((kind === "api-error" || kind === "page-error") && [...urls, ...routes].some((u) => SIGNIN.test(u))) return { severity: "P0", why: "the sign-in, sign-up or checkout endpoints break" };
-    if (suites.has("smoke") && failingTitles.length) return { severity: "P1", why: "a smoke check fails" };
-    if ((kind === "api-error" || kind === "page-error") && routes.some((r) => KEY_PAGES.test(r))) return { severity: "P1", why: "a key dashboard page breaks" };
-    if (suites.has("billing") || suites.has("signup")) return { severity: "P1", why: "a sign-up or billing check fails" };
-    if (signals.filter((s) => s.primary).length >= 5) return { severity: "P1", why: "one cause fails five or more tests" };
+  // Only a test that FAILED counts toward P0/P1; an error a passing test merely saw is P2 at most.
+  const failed = signals.filter((s) => s.primary);
+  const routes = failed.map((s) => s.route ?? pathOf(s.url ?? "")).filter(Boolean);
+  if (HARD.includes(kind) || kind === "console-error") {
+    // the test could not find an element: most likely its own selector — P2, said so
+    if (failed.length && failed.every((s) => s.extra?.testSide)) return { severity: "P2", why: "вероятно, ошибка теста: элемент не найден (locator), а не сбой продукта" };
+    // P0: the sign-up, sign-in or payment step itself did not go through — a signup/billing test
+    // (or the smoke sign-in / sign-up check) failed on its action
+    const actionFailed = failed.some((s) => !s.extra?.testSide && (s.suite === "signup" || s.suite === "billing" || (s.suite === "smoke" && /sign-?in|sign-?up|code step|register/i.test(s.testTitle))) && MAIN_PATH.test(s.testTitle) && !/google/i.test(s.testTitle));
+    if (actionFailed) return { severity: "P0", why: "шаг регистрации, входа или оплаты не прошёл — тест упал на действии" };
+    if (!failed.length) {
+      // seen, nothing failed: a console line or a hydration error on /auth/*, /pricing … — P2
+      return { severity: "P2", why: `ошибка видна (${kind === "console-error" ? "консоль" : kind === "page-error" ? "страница" : kind}), но ни один тест из-за неё не упал` };
+    }
+    if (failed.some((s) => s.suite === "smoke")) return { severity: "P1", why: "a smoke check fails" };
+    if ((kind === "api-error" || kind === "page-error") && routes.some((r) => KEY_PAGES.test(r) || SIGNIN.test(r))) return { severity: "P1", why: "a key page breaks" };
+    if (failed.some((s) => s.suite === "billing" || s.suite === "signup")) return { severity: "P1", why: "a sign-up or billing check fails" };
+    if (failed.length >= 5) return { severity: "P1", why: "one cause fails five or more tests" };
     return { severity: "P2", why: "a function works with a defect" };
   }
   switch (kind) {
@@ -96,7 +105,6 @@ export function severityOf(kind: SignalKind, signals: Signal[]): { severity: Sev
     }
     case "forms": return signals.some((s) => /ran in the page|broke/.test(s.message)) ? { severity: "P1", why: "a form breaks or runs typed HTML" } : signals.some((s) => /saved without/.test(s.message)) ? { severity: "P2", why: "a form saves invalid input" } : { severity: "P3", why: "a form shows no validation message" };
     case "unknown-access":
-    case "console-error":
     case "broken-link":
     case "layout":
     case "visual":
@@ -127,13 +135,24 @@ export function group(raw: RawRun, signals: Signal[]): { finding: Omit<Finding, 
     push(`assertion ${t.file} ${norm(t.title)}`, { kind: "assertion", testId: t.id, testTitle: t.title, suite: t.suite, project: t.project, file: t.file, route: null, role: null, message: t.title, rawRef: `tests[${raw.tests.indexOf(t)}]`, primary: true });
   }
   const out: { finding: Omit<Finding, "human" | "title">; signals: Signal[] }[] = [];
-  for (const [sig, list] of buckets) {
+  for (const [sig, unsorted] of buckets) {
+    // the signal that failed a test leads (its kind names the finding); the ones only seen follow
+    const list = [...unsorted].sort((a, b) => Number(b.primary) - Number(a.primary));
     const kind = list[0].kind;
     const sev = severityOf(kind, list);
     const testIds = [...new Set(list.map((s) => s.testId))];
     const tests = testIds.map((id) => raw.tests.find((t) => t.id === id)!).filter(Boolean).map((t) => ({ id: t.id, title: t.title, project: t.project, file: t.file, outcome: t.outcome }));
     const also = new Set<string>();
     for (const id of testIds) for (const s of signals) if (s.testId === id && !s.primary && signatureOf(s) !== sig && HARD.concat(["console-error"]).includes(s.kind)) also.add(`${s.kind}: ${s.message.slice(0, 160)}`);
+    // the same root seen elsewhere (the dev overlay's console lines, a page error): shown here, not a finding of its own
+    if (sig.startsWith("root ")) {
+      const seen = new Set<string>();
+      for (const s of signals) {
+        if (signatureOf(s) !== sig || list.includes(s)) continue;
+        const line = `${s.kind === "console-error" ? "консоль" : s.kind}: ${norm(s.message).slice(0, 140)}`;
+        if (!seen.has(line)) { seen.add(line); also.add(line); }
+      }
+    }
     const first = list.find((s) => s.primary) ?? list[0];
     out.push({
       finding: {

@@ -25,6 +25,7 @@ import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
 import { markSubscriptionCanceled } from "@/lib/stripeSync";
 import { disconnectSquareFor, disconnectStripeConnectFor } from "@/lib/payments/connections";
 import { ActivityKind } from "@/lib/prismaEnums";
+import { refusal, type ActionResult } from "@/lib/actionResult";
 
 const SETTINGS_PATH = "/dashboard/settings";
 
@@ -63,20 +64,26 @@ export async function updateProfile(raw: unknown) {
 // Business card sends name/address/website/phone, the Billing pane's Billing
 // contact card sends billingEmail alone. An absent key is left untouched
 // rather than blanked.
+// Messages are the half after "Business name: " — `refusal` adds the label.
 const businessSchema = z.object({
-  name: z.string().trim().min(1, "Business name is required.").max(160).optional(),
-  address: z.string().trim().max(300).optional(),
-  website: z.string().trim().max(200).optional(),
-  phone: z.string().trim().max(40).optional(),
+  name: z.string().trim().min(1, "required.").max(160, "160 characters at most.").optional(),
+  address: z.string().trim().max(300, "300 characters at most.").optional(),
+  website: z.string().trim().max(200, "200 characters at most.").optional(),
+  phone: z.string().trim().max(40, "40 characters at most.").optional(),
   billingEmail: z
-    .union([z.literal(""), z.string().trim().email("Enter a valid billing email.").max(200)])
+    .union([z.literal(""), z.string().trim().email("enter a valid address, like name@company.com.").max(200, "200 characters at most.")])
     .optional(),
 });
+const BUSINESS_LABELS = { name: "Business name", address: "Address", website: "Website", phone: "Phone", billingEmail: "Billing email" };
 
-/** Org identity. Manager-gated: a limited role may read the page, never edit it. */
-export async function updateBusiness(raw: unknown) {
+/** Org identity. Manager-gated: a limited role may read the page, never edit it.
+ *  A wrong field comes back as a refusal the card's save bar prints — thrown,
+ *  the ZodError reached the page as a 500 (QA F-1f3f6da5). */
+export async function updateBusiness(raw: unknown): Promise<ActionResult> {
   const { organizationId } = await requireManager();
-  const data = businessSchema.parse(raw);
+  const parsed = businessSchema.safeParse(raw);
+  if (!parsed.success) return refusal(parsed.error, BUSINESS_LABELS);
+  const data = parsed.data;
 
   const patch: {
     name?: string;

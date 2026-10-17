@@ -64,7 +64,8 @@ export function FollowUpsClient({ rules, pending, smsEnabled }: Props) {
             : null
         }
         onSubmit={async (values) => {
-          await upsertFollowUpRule(values);
+          const res = await upsertFollowUpRule(values);
+          if (!res.ok) return res;
           router.refresh();
         }}
       />

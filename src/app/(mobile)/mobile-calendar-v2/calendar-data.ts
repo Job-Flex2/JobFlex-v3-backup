@@ -32,7 +32,10 @@
 // module-level book has no second writer to race with. `installCalendarBook`
 // is identity-guarded, so re-renders are free.
 
-export type CalKind = "job" | "appointment" | "blocked";
+import { VISIT_VIA } from "@/lib/calendar/visitVia";
+
+/** "desk": hours reserved for the AI desk to book into (2026-10-16). */
+export type CalKind = "job" | "appointment" | "blocked" | "desk";
 
 export type CalEvent = {
   /** DOM identity. On real data it carries a KIND PREFIX (`apt:…`, `block:…`,
@@ -71,9 +74,26 @@ export type CalEvent = {
   selfOnly?: boolean;
   /** Spans whole days: it has a date but no clock span, so it has no duration. */
   allDay?: boolean;
+  /** "desk" only — hours reserved for the AI desk (lib/deskHours): whose (none = anyone), and whether every week. `rid` is the reservation. */
+  deskUserId?: string;
+  deskWeekly?: boolean;
+  /** Appointment only — how the visit was booked (lib/calendar/visitVia):
+   *  the AI desk on a call, the customer online, a service plan, or the team.
+   *  The card wears it as a tag; the sheet says it in words. */
+  via?: "ai-desk" | "online" | "plan" | "team";
+  /** "By the AI desk, on a phone call · Oct 16". */
+  booked?: string;
+  /** What the visit is for: the booked service, the plan visit, the lead's project. */
+  visitFor?: string;
+  /** Booked at the member price (an active service plan). */
+  member?: boolean;
+  leadId?: string;
+  clientId?: string;
+  /** The AI desk call that booked it. */
+  callSid?: string;
 };
 
-export type CalWorker = { id: string; name: string; role: string };
+export type CalWorker = { id: string; name: string; role: string; userId?: string };
 export type TrayJob = { id: string; title: string; client: string; city: string; duration: string };
 export type InboxItem = {
   id: string;
@@ -132,6 +152,8 @@ export type CalendarBook = {
   links: LinkOption[];
   createKinds: CalKind[];
   canManage: boolean;
+  /** The AI desk's reserved hours (see the desktop seed). */
+  desk?: { mode: "open-hours" | "reserved"; timeZone: string; me: string; people: Array<{ userId: string; name: string }> };
 };
 
 /** The book last installed — the identity guard, so a re-render is a no-op. */
@@ -161,10 +183,10 @@ export const SNAP_MIN = 15;
 export const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const DOW1 = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 export const KIND_IC: Record<CalKind, string> = {
-  job: 'i-hardhat', appointment: 'i-cal', blocked: 'i-calendar-ban',
+  job: 'i-hardhat', appointment: 'i-cal', blocked: 'i-calendar-ban', desk: 'i-phone',
 };
 export const KIND_LABEL: Record<CalKind, string> = {
-  job: 'Job event', appointment: 'Appointment', blocked: 'Blocked time',
+  job: 'Job event', appointment: 'Appointment', blocked: 'Blocked time', desk: 'AI desk hours',
 };
 
 /** Link targets for the "link a record" picker. The seed carries all four
@@ -402,12 +424,16 @@ export function whoWhere(e: CalEvent): string {
 export function toneKey(e: CalEvent): string {
   if (e.kind === "appointment") return "appt";
   if (e.kind === "blocked") return "blocked";
+  if (e.kind === "desk") return "desk";
   return e.status.toLowerCase();
 }
 
 export function toneLabel(e: CalEvent): string {
-  if (e.kind === "appointment") return "Appointment";
+  // Who booked the visit, in words (lib/calendar/visitVia): "AI desk booked",
+  // "Booked online", "Plan visit" — an office-made one stays "Appointment".
+  if (e.kind === "appointment") return VISIT_VIA[e.via || "team"].badge;
   if (e.kind === "blocked") return "Blocked";
+  if (e.kind === "desk") return e.deskWeekly ? "AI desk · every week" : "AI desk hours";
   return JOB_STATUSES.find((s) => s.value === e.status)?.label ?? e.status;
 }
 

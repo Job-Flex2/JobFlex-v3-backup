@@ -25,7 +25,7 @@ const number = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits:
 type Step = "materials" | "scope" | "review";
 type Scope = "edges" | "flashing" | "penetrations" | "vents" | "tearoff" | "extras";
 type Catalog = "systems" | "underlayments";
-type NumericKey = { [K in keyof RoofPackageSpec]: RoofPackageSpec[K] extends number ? K : never }[keyof RoofPackageSpec];
+type NumericKey = { [K in keyof RoofPackageSpec]-?: RoofPackageSpec[K] extends number ? K : never }[keyof RoofPackageSpec];
 
 function initialSpec(facts: RoofFacts, lists: CatalogLists, preferences: Prefs | Record<string, unknown> | null = null) {
   const base = defaultSpec(facts, lists);

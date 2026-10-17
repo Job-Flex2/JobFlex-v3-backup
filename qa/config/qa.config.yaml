@@ -12,6 +12,11 @@ productionHosts: [jobflex.app, www.jobflex.app]
 # Suites that may run against production. The rest are refused by code (lib/target.ts).
 productionSuites: [smoke, pages, perf]
 
+# Pages only `next dev` serves (regex on the route): src/app/dev/* call notFound() when NODE_ENV is
+# production. On a production build (qa:build-run, a deployment) pages and roles expect 404 there —
+# a dev page that opens in production is the finding.
+devOnlyRoutes: ["^/dev/"]
+
 thresholds:
   # A page counts as slow past this (navigation start → load event), per viewport.
   # A dev server compiles a route on its first hit; the first visit of a route gets compileGraceMs on top.

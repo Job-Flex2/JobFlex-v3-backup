@@ -82,7 +82,6 @@ import {
   type LandingVariantKey,
   type UtmParams,
 } from "./landing-variants";
-import { heroPriceLine } from "./hero-price";
 import { MobileCta } from "./mobile-cta";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { Nav } from "./nav";
@@ -147,9 +146,17 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // sections' own built-in kitchen.
   const g = groupContentFor(variant);
   // CTA copy (pass B): first person with the trade's outcome at the top of
-  // the page, "Start my free trial" from Proposals down.
-  const top = variant ? firstPersonCta(variant) : `Start my ${offer.days}-day free trial`;
-  const low = `Start my ${offer.days}-day free trial`;
+  // the page, "Start my free trial" from Proposals down. The hero's solid
+  // button, the nav's and the sticky phone bar's say the trial on every
+  // landing (owner, 2026-10-16); the trade's words stay on the button under
+  // the product shot and in the showcase.
+  // "FREE TRIAL" in capitals, in the text itself (owner, 2026-10-16), on every
+  // button that says this line — hero, nav, sticky bar, Proposals, the final
+  // block (and the default page's showcase). The FAQ's button keeps the
+  // sentence-case line; the plan cards have their own ("Start 7-day …").
+  const top = variant ? firstPersonCta(variant) : `Start my ${offer.days}-day FREE TRIAL`;
+  const low = `Start my ${offer.days}-day FREE TRIAL`;
+  const faqCta = `Start my ${offer.days}-day free trial`;
   // The showcase's Smart slide plays the trade's own job: the variant's
   // scenario, or the roofing / fencing scenarios written for the pages whose
   // hero is the roof or fence shot (smart-scenarios.ts).
@@ -163,10 +170,11 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // it is near the viewport — the mobile LCP's render delay was style/layout
   // of the whole page.
 
-  // The trade's price for the first screen (hero-price.ts): the cheapest plan
-  // on sale that carries the trade's estimator. Null for a variant that names
-  // no plan row, and when the catalogue could not be read.
-  const priceLine = deckSoon ? "Deck Studio is coming soon — price decks today with JobFlex's Smart Proposal." : heroPriceLine(v, plans);
+  // The line under the hero's buttons (owner, 2026-10-16): one sentence, the
+  // same for every trade, where the price line was (.lp-hero-price) — the
+  // button says the trial. The price line (hero-price.ts heroPriceLine) and the
+  // Deck Studio's coming-soon note are off. The default page has no line.
+  const heroLine = variant ? "Build your free estimates" : null;
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is
@@ -175,7 +183,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const order = landingSectionOrder(variant);
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
-    hero: <Hero trialDays={offer.days} variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} fbclid={fbclid} requiresCard={requiresCard} inAppBrowser={inAppBrowser} priceLine={priceLine} />,
+    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
@@ -196,18 +204,18 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     integrations: <div className="lp-cv lp-cv--integrations"><Integrations registerHref={register} /></div>,
     stats: <div className="lp-cv lp-cv--stats"><StatsSection rows={g?.stats} /></div>,
     built: <div className="lp-cv lp-cv--built"><BuiltSection jobs={g?.jobs} phoneJobs={g?.phoneJobs} /></div>,
-    pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} requiresCard={requiresCard} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
-    faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={low} requiresCard={requiresCard} /></div>,
-    final: <CtaFooter registerHref={register} cta={low} requiresCard={requiresCard} />,
+    pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
+    faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={faqCta} requiresCard={requiresCard} /></div>,
+    final: <CtaFooter registerHref={register} cta={low} />,
   };
   return (
     <TrialOfferProvider offer={offer}>
     <div className="jf-lp min-h-full bg-white">
-      <Nav registerHref={register} pricingHref={pricing} cta={top} />
+      <Nav registerHref={register} pricingHref={pricing} cta={low} />
       <main>
         {order.map((key) => (blocks[key] ? <Fragment key={key}>{blocks[key]}</Fragment> : null))}
       </main>
-      <MobileCta registerHref={register} cta={top} requiresCard={requiresCard} />
+      <MobileCta registerHref={register} cta={low} />
       <ScrollFx />
       {/* Mouse-wheel notches glide, 0.7× the browser's step — on a desk only
           (hover, fine pointer, wider than 768px); phones, tablets and touch

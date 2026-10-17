@@ -58,6 +58,7 @@ import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/o
 import css from "./passwordless.module.css";
 import { markQaVisitor } from "@/lib/qaEmail";
 import { autoPlanPrice, type AutoPlanOffer } from "@/lib/signupAutoPlan";
+import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
 
 type Screen = "form" | "code" | "google" | "done";
 const STORE_KEY = "jf_otp_signup";
@@ -184,7 +185,10 @@ export function PasswordlessStep({
   const [said, setSaid] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [code, setCode] = React.useState("");
-  const [now, setNow] = React.useState(() => Date.now());
+  // Seeded from the server's clock (restore.now), never this render's
+  // Date.now(): the SSR'd countdown and the hydrating one must print the same
+  // second. A fresh visit has no countdown (resendAt 0), so any seed reads 0 s.
+  const [now, setNow] = React.useState(() => restore?.now ?? 0);
   const codeRef = React.useRef<HTMLInputElement>(null);
   const bridgeRef = React.useRef<HTMLInputElement>(null);
   const headRef = React.useRef<HTMLHeadingElement>(null);
@@ -192,6 +196,8 @@ export function PasswordlessStep({
   useKeepInView(headRef, goRef, screen === "code");
   const verifying = React.useRef(false);
   const handoff = useBrowserHandoff(inApp ?? "instagram");
+  // A homeowner who came in on a trade's contractor ad: the way to a quote instead (lib/home/homeownerDoor, 2026-10-16).
+  const homeDoor = homeownerDoorFor(industry);
   const track = (outcome: string, reason = "", message = "") => {
     trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp", plan_mode: planMode, ...(quick ? { quick: true } : {}) });
     // The watcher's own reasons: a refusal the server answered in words is read from them (start_rejected).
@@ -216,7 +222,9 @@ export function PasswordlessStep({
     trackTraffic(TRAFFIC_EVENTS.step, { step: "code", flow: "otp", variant: "e", steps: 2, mode: "otp", plan_mode: planMode });
   }, [screen, planMode]);
 
-  /* The resend countdown. */
+  /* The resend countdown — on this browser's clock from the first effect on. */
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- the browser's clock, read once after hydration
+  React.useEffect(() => setNow(Date.now()), []);
   React.useEffect(() => {
     if (screen !== "code" || resendAt <= Date.now()) return;
     const t = window.setInterval(() => setNow(Date.now()), 1000);
@@ -713,6 +721,14 @@ export function PasswordlessStep({
             Sign in
           </Link>
         </div>
+        {homeDoor ? (
+          <div className="foot foot-home" data-home-door={homeDoor.key}>
+            Homeowner looking for {homeDoor.thing}?{" "}
+            <a className="link-ink" href={homeDoor.href}>
+              Get quotes from local pros
+            </a>
+          </div>
+        ) : null}
       </div>
     );
   })();

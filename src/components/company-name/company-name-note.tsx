@@ -46,7 +46,7 @@ export function CompanyNameNote({ inputId, unset, canEdit = true }: { inputId: s
   }
 
   return (
-    <span className={s.note} role="status" data-company-name-note>
+    <span className={s.note} role="status" data-company-name-note data-nest="">
       <b>Not set yet</b> — this is your own name for now. Clients see it on proposals, emails and texts.
       {canEdit ? (
         <>

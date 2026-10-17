@@ -23,6 +23,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { MDL_EXIT_MS } from "@/components/v3/blueprint-shell/mdl-motion";
 import { OverlayPortal } from "@/components/v3/blueprint-shell/overlay-layer";
 import { lockScroll } from "@/lib/scrollLock";
+import { isRefusal } from "@/lib/actionResult";
 
 /* ─────────────────────────────── Field ─────────────────────────────── */
 
@@ -399,7 +400,14 @@ function AutoSave({ extra, onSave, disabled, watch }: SaveBarProps) {
       setState("saving");
       setError("");
       try {
-        await run();
+        // A refusal (lib/actionResult) is an answer, not a save: the values
+        // stay unsaved and the slot carries the action's own words.
+        const res = await run();
+        if (isRefusal(res)) {
+          setState("error");
+          setError(res.error);
+          return;
+        }
         saved.current = target;
         setState("saved");
       } catch (err) {
@@ -490,7 +498,12 @@ function ManualSave({ extra, onSave, disabled }: SaveBarProps) {
     inFlight.current = true;
     setBusy(true);
     try {
-      await onSave();
+      const res = await onSave();
+      if (isRefusal(res)) {
+        setSaved(false);
+        setError(res.error);
+        return;
+      }
       setSaved(true);
       timer.current = setTimeout(() => setSaved(false), 2200);
     } catch (err) {

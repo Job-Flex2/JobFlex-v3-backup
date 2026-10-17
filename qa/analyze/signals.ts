@@ -2,6 +2,7 @@
 // grouping and the severities can be self-tested without a model (qa/analyze/fixtures).
 import type { RawRun, RawTest } from "../lib/raw";
 import type { Signal, SignalKind } from "./types";
+import { digestError, rootOf, type Digests } from "./roots";
 
 const route = (t: RawTest) => (typeof t.meta?.route === "string" ? (t.meta.route as string) : null);
 const role = (t: RawTest) => (typeof t.meta?.role === "string" ? (t.meta.role as string) : null);
@@ -11,19 +12,23 @@ function base(t: RawTest): Omit<Signal, "kind" | "message" | "rawRef" | "primary
 }
 
 /** Which collected event made the test fail, in order of how much it explains. */
-const CAUSE_ORDER: SignalKind[] = ["environment", "forbidden", "api-error", "page-error", "network", "timeout", "access", "unknown-access", "legacy", "forms", "layout", "broken-link", "slow", "console-error", "assertion", "visual"];
+const CAUSE_ORDER: SignalKind[] = ["environment", "forbidden", "legacy", "api-error", "page-error", "network", "timeout", "access", "unknown-access", "forms", "layout", "broken-link", "slow", "console-error", "visual", "assertion"];
 
-export function extractSignals(raw: RawRun): Signal[] {
+/** `digests`: a production server's log (runs/<run>/server.log) — errors the browser knows only by digest. */
+export function extractSignals(raw: RawRun, digests?: Digests): Signal[] {
   const out: Signal[] = [];
   raw.tests.forEach((t, i) => {
     const failed = t.outcome === "failed";
     const mine: Signal[] = [];
     const add = (s: Omit<Signal, keyof ReturnType<typeof base> | "primary"> & Partial<Signal>) => mine.push({ ...base(t), primary: false, ...s } as Signal);
     const c = t.collected;
+    const fromLog = (body?: string): [string, string, string] | null => { const d = digestError([body], digests); return d ? ["", d.name, d.message] : null; };
+    // statuses the test said it expects (qa.expectStatus(404) in lib/fixtures, or a tag @expects-404)
+    const expected = new Set<number>([...((t.meta?.expectStatus as number[] | undefined) ?? []), ...t.tags.map((g) => Number(g.match(/^@expects-(\d{3})$/)?.[1])).filter(Boolean)]);
 
     c.forbidden.forEach((f, j) => add({ kind: "forbidden", message: `forbidden ${f.kind}: ${f.what}${f.why ? ` (${f.why})` : ""}`, url: f.url, step: f.step, rawRef: `tests[${i}].collected.forbidden[${j}]` }));
     c.httpErrors.forEach((e, j) => {
-      if (!e.sameOrigin) return;
+      if (!e.sameOrigin || expected.has(e.status)) return;
       const api = /\/api\//.test(e.url) || e.resourceType === "fetch" || e.resourceType === "xhr";
       // a made-up link token answering 404 is the expected answer
       if (e.status === 404 && t.meta?.realParams === false && e.resourceType === "document") return;
@@ -32,15 +37,15 @@ export function extractSignals(raw: RawRun): Signal[] {
         // server's error, as the dev overlay logs it to the console ("NoOrgError: …"), is.
         const serverAction = e.method === "POST" && !/\/api\//.test(e.url);
         // the RSC answer itself names the error ({"name":"NoOrgError","message":…}); else the console
-        const cause = !serverAction ? null : (e.body?.match(/"name":"(\w+)","message":"([^"]{0,120})"/) ?? c.console.map((x) => x.text.match(/\b([A-Z][A-Za-z]*Error): ([^\n]{3,120}?)(?:\s+at |\n|$)/)).find(Boolean) ?? null);
-        add({ kind: "api-error", message: `HTTP ${e.status} ${e.method} ${pathOf(e.url)}${cause ? ` — ${cause[1]}: ${cause[2]}` : e.body ? ` — ${e.body.slice(0, 200)}` : ""}`, url: e.url, status: e.status, method: e.method, step: e.step, extra: serverAction ? { serverAction: true, cause: cause ? `${cause[1]}: ${cause[2]}` : null } : undefined, rawRef: `tests[${i}].collected.httpErrors[${j}]` });
+        const cause = !serverAction ? null : (e.body?.match(/"name":"(\w+)","message":"([^"]{0,120})"/) ?? c.console.map((x) => x.text.match(/\b([A-Z][A-Za-z]*Error): ([^\n]{3,120}?)(?:\s+at |\n|$)/)).find(Boolean) ?? fromLog(e.body) ?? null);
+        add({ kind: "api-error", message: `HTTP ${e.status} ${e.method} ${pathOf(e.url)}${cause ? ` — ${cause[1]}: ${cause[2]}` : e.body ? ` — ${e.body.slice(0, 200)}` : ""}`, url: e.url, status: e.status, method: e.method, step: e.step, extra: { ...(serverAction ? { serverAction: true, cause: cause ? `${cause[1]}: ${cause[2]}` : null } : {}), body: e.body, root: rootOf([e.body, ...(serverAction ? c.console.map((x) => x.text) : [])], digests) }, rawRef: `tests[${i}].collected.httpErrors[${j}]` });
       } else if (e.status >= 400) {
         add({ kind: "broken-link", message: `HTTP ${e.status} ${e.method} ${pathOf(e.url)} (${e.resourceType})`, url: e.url, status: e.status, method: e.method, step: e.step, rawRef: `tests[${i}].collected.httpErrors[${j}]` });
       }
     });
-    c.pageErrors.forEach((e, j) => add({ kind: "page-error", message: e.message, stack: e.stack, url: e.url, step: e.step, rawRef: `tests[${i}].collected.pageErrors[${j}]` }));
+    c.pageErrors.forEach((e, j) => add({ kind: "page-error", message: e.message, stack: e.stack, url: e.url, step: e.step, extra: { root: rootOf([e.message, e.stack], digests) }, rawRef: `tests[${i}].collected.pageErrors[${j}]` }));
     c.failedRequests.forEach((e, j) => { if (e.sameOrigin) add({ kind: DOWN.test(e.error) ? "environment" : "network", message: `${e.method} ${pathOf(e.url)} failed: ${e.error}`, url: e.url, method: e.method, step: e.step, rawRef: `tests[${i}].collected.failedRequests[${j}]` }); });
-    c.console.forEach((e, j) => { if (e.type === "error") add({ kind: "console-error", message: e.text, url: e.url, step: e.step, extra: { location: e.location }, rawRef: `tests[${i}].collected.console[${j}]` }); });
+    c.console.forEach((e, j) => { if (e.type === "error" && !consoleExpected(e.text, expected)) add({ kind: "console-error", message: e.text, url: e.url, step: e.step, extra: { location: e.location, root: rootOf([e.text], digests) }, rawRef: `tests[${i}].collected.console[${j}]` }); });
     c.hungRequests.forEach((e, j) => { if (e.sameOrigin) add({ kind: "network", message: `${e.method} ${pathOf(e.url)} never answered (${Math.round(e.ms / 1000)} s)`, url: e.url, step: e.step, rawRef: `tests[${i}].collected.hungRequests[${j}]` }); });
 
     const m = t.meta ?? {};
@@ -73,12 +78,27 @@ export function extractSignals(raw: RawRun): Signal[] {
     }
     if (m.kind === "visual" && failed) add({ kind: "visual", message: firstLine(t.errors[0]?.message ?? "visual difference"), extra: { visualId: m.visualId, ratio: m.ratio }, rawRef: `tests[${i}].errors[0]` });
 
+    // The browser's "Failed to load resource: … status of 500" is the same answer an api-error
+    // above already holds: it takes that answer's root, so it never stands as a finding alone.
+    for (const s of mine) {
+      if (s.kind !== "console-error" || s.extra?.root) continue;
+      const st = Number(s.message.match(/Failed to load resource: the server responded with a status of (\d{3})/)?.[1]);
+      const twin = st ? mine.find((x) => x.kind === "api-error" && x.status === st && x.extra?.root) : null;
+      if (twin) s.extra = { ...s.extra, root: twin.extra!.root };
+    }
+    // React's own line for the same failure ("Minified React error #441" beside "[route-error] <digest>"):
+    // a console error with no root of its own, in a test where exactly one root was seen, is that root's
+    const roots = new Set(mine.map((x) => x.extra?.root).filter(Boolean));
+    if (roots.size === 1) for (const s of mine) if (s.kind === "console-error" && !s.extra?.root && /Minified React error|status of 5\d\d/.test(s.message)) s.extra = { ...s.extra, root: [...roots][0] };
+
     if (failed) {
       // the test's own error: a timeout or a failed check — or the server or browser gone
       t.errors.forEach((e, j) => {
         if (DOWN.test(e.message)) add({ kind: "environment", message: firstLine(e.message), rawRef: `tests[${i}].errors[${j}]` });
         const kind: SignalKind = /Timeout \d+ms exceeded|Test timeout of/.test(e.message) ? "timeout" : "assertion";
-        add({ kind, message: firstLine(e.message), stack: e.stack, extra: { location: e.location, snippet: e.snippet }, rawRef: `tests[${i}].errors[${j}]` });
+        // the test could not find an element: most likely the test's selector, not the product
+        const testSide = LOCATOR_MISS.test(e.message);
+        add({ kind, message: firstLine(e.message), stack: e.stack, extra: { location: e.location, snippet: e.snippet, testSide }, rawRef: `tests[${i}].errors[${j}]` });
       });
       // the cause: the most explaining signal seen
       const cause = CAUSE_ORDER.map((k) => mine.find((s) => s.kind === k && !(k === "console-error" && mine.some((x) => x.kind === "api-error")))).find(Boolean);
@@ -87,6 +107,17 @@ export function extractSignals(raw: RawRun): Signal[] {
     out.push(...mine);
   });
   return out;
+}
+
+/** A locator that never matched: "waiting for locator(…)", "element(s) not found", a fill/click timeout. */
+// … or the test's own fixture never came up ("Test timeout … while setting up "page"": the sign-in
+// state, the browser) — the product never got to answer
+const LOCATOR_MISS = /locator\.\w+: Timeout \d+ms exceeded|waiting for (?:locator|getBy\w+)\(|element\(s\) not found|while setting up "/;
+
+/** "Failed to load resource: … status of 404" for a status the test expects. */
+function consoleExpected(text: string, expected: Set<number>): boolean {
+  const m = text.match(/status of (\d{3})/);
+  return !!m && expected.has(Number(m[1]));
 }
 
 /** The server under test (or the test's own browser) went away: not a product defect. */

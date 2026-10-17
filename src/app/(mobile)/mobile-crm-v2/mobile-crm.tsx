@@ -64,6 +64,7 @@ import {
   TEXT_NEEDS_TWILIO,
   channelLabel,
   delayLabel,
+  readDelayDays,
   followUpEmailDoc,
   followUpSmsText,
   previewContext,
@@ -354,6 +355,7 @@ export function MobileCrm() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", trigger: "SENT", days: "2", channel: "EMAIL" as FollowUpChannel });
   const [nameErr, setNameErr] = useState(false);
+  const [daysErr, setDaysErr] = useState<string | null>(null);
 
   /* ---- preview card ----
      What the "What they receive" card is showing. Seeded from the first rule,
@@ -943,6 +945,8 @@ export function MobileCrm() {
     setPrev({ trigger: r?.triggerStatus ?? "SENT", channel: r?.channel ?? "EMAIL", days });
     setEditingId(r?.id ?? null);
     setNameErr(false);
+    setDaysErr(null);
+    setActionErr(null);
     setSheet(null);
     setTab("rules");
     setFilterOpen(false);
@@ -964,19 +968,29 @@ export function MobileCrm() {
       nameRef.current?.focus();
       return;
     }
+    // Whole days in range, or the field says so — `parseInt(...) || 1` sent 40
+    // nines on as 1.44e43 minutes and the save came back a 500 (QA F-fd2683fc).
+    const days = readDelayDays(form.days);
+    if (typeof days === "string") {
+      setDaysErr(days);
+      return;
+    }
     const existing = editingId ? rules.find((r) => r.id === editingId) : null;
     setSaving(true);
-    const ok = await commit(editingId, () =>
-      upsertFollowUpRule({
+    // A refusal is thrown on here, client-side, so `commit` reports it the
+    // way it reports any write that didn't go through — and the sheet stays open.
+    const ok = await commit(editingId, async () => {
+      const res = await upsertFollowUpRule({
         id: editingId ?? undefined,
         name,
         triggerStatus: form.trigger,
-        delayMinutes: Math.max(1, parseInt(form.days, 10) || 1) * 60 * 24,
+        delayMinutes: days * 60 * 24,
         // A new rule starts live; an edit keeps whatever the switch says.
         enabled: existing ? existing.enabled : true,
         channel: form.channel,
-      }),
-    );
+      });
+      if (!res.ok) throw new Error(res.error);
+    });
     setSaving(false);
     if (ok) {
       if (editingId) setLandedId(editingId);
@@ -1768,6 +1782,7 @@ export function MobileCrm() {
               type="text"
               placeholder="Nudge after send"
               autoComplete="off"
+              maxLength={120}
               value={form.name}
               aria-invalid={nameErr}
               aria-describedby={nameErr ? "mcrNameErr" : undefined}
@@ -1810,7 +1825,7 @@ export function MobileCrm() {
             </span>
           </div>
 
-          <div className={styles.fld}>
+          <div className={`${styles.fld} ${daysErr ? styles.invalid : ""}`}>
             <label className={styles.fldLbl} htmlFor="mcrDays">
               Delay (days)
             </label>
@@ -1822,17 +1837,26 @@ export function MobileCrm() {
               min="1"
               inputMode="numeric"
               value={form.days}
+              aria-invalid={!!daysErr}
+              aria-describedby={daysErr ? "mcrDaysErr" : undefined}
               onChange={(e) => {
                 setForm((f) => ({ ...f, days: e.target.value }));
+                setDaysErr(null);
                 // The prose says the delay out loud ("we sent this over 2 days
                 // ago"), so the preview follows it as it is typed.
                 prevSeeded.current = true;
                 setPrev((p) => ({ ...p, days: Math.max(1, parseInt(e.target.value, 10) || 1) }));
               }}
             />
-            <span className={styles.fldHint}>
-              How long after the trigger the follow-up is scheduled.
-            </span>
+            {daysErr ? (
+              <span className={styles.fldErr} id="mcrDaysErr">
+                {daysErr}
+              </span>
+            ) : (
+              <span className={styles.fldHint}>
+                How long after the trigger the follow-up is scheduled.
+              </span>
+            )}
           </div>
 
           {/* No template field. A rule's wording is written for its trigger
@@ -1870,6 +1894,13 @@ export function MobileCrm() {
                 : TEXT_NEEDS_TWILIO}
             </span>
           </div>
+          {/* The write the server refused, where the person is looking — the
+              page's own note sits under this sheet. */}
+          {ruleOpen && actionErr ? (
+            <span className={styles.fldErr} role="alert">
+              {actionErr}
+            </span>
+          ) : null}
         </form>
         <div className={styles.formFoot}>
           <button

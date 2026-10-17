@@ -191,3 +191,249 @@
 .sentTo b { font-variant-numeric: tabular-nums; }
 .linkBtn { padding: 0; border: 0; background: none; font: inherit; color: var(--blueprint, #1854a0); text-decoration: underline; cursor: pointer; }
 .linkBtn:disabled { opacity: .5; cursor: default; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   QUIET BLUEPRINT (2026-10-16) — the same elements in the same places, only how
+   each one looks: Inter caps where mono sat (mono kept on figures and phone
+   numbers), squares instead of circles and pills, thin light frames inside the
+   card, no dashes, no red but the one "No mobile" badge. Overrides the rules
+   above at the same weight, so the originals stay readable.
+   ════════════════════════════════════════════════════════════════════════════ */
+.root {
+  --q-line: rgba(10, 10, 10, 0.18);
+  --q-rule: var(--ink-line, rgba(10, 10, 10, 0.12));
+  --q-blue: var(--blueprint, var(--accent, #1854a0));
+  --q-ok: var(--success, var(--emerald, #3a7d44));
+}
+
+/* type: kickers and labels in Inter caps; mono only on phone numbers and figures */
+.secH b,
+.who em,
+.edit label,
+.ex summary,
+.done b,
+.uses li b,
+.root .ruleMain em,
+.root .ideasH,
+.root .edRow > label,
+.root .edLabel,
+.root .preview em,
+.root .form label {
+  font-family: var(--font, "Inter", system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.who em,
+.root .ruleMain em,
+.root .preview em {
+  font-size: 10px;
+}
+.phone b,
+.ownHead b,
+.root .edit.edit input,
+.sentTo b {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.ex q,
+.root .ruleMain q,
+.root .preview q {
+  font-family: var(--font, "Inter", system-ui, sans-serif);
+  font-size: 12.5px;
+}
+
+/* buttons: the same ones, Inter caps, a 1.5px ink outline, near-square; a small lift on hover */
+.root .btn.btn {
+  border-width: 1.5px;
+  border-radius: 2px;
+  font-family: var(--font, "Inter", system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+}
+.root .btn.btn:hover:not(:disabled) {
+  background: #fff;
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--ink, #0a0a0a);
+}
+.root .btn.btnPrimary:hover:not(:disabled) {
+  background: var(--blue-dark, var(--blueprint-dark, #0e3d7a));
+}
+.root .btn.btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
+/* badges: quiet — a 1px frame, Inter */
+.tag {
+  border-width: 1px;
+  border-radius: 2px;
+  font-family: var(--font, "Inter", system-ui, sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+}
+.tagWarn {
+  background: var(--danger-soft, rgba(168, 50, 50, 0.08));
+}
+
+/* frames inside the card: thin and light; row rules quieter still */
+.people,
+.done,
+.root .steps,
+.root .ruleList,
+.root .form,
+.root .editor {
+  border: 1px solid var(--q-line);
+  border-radius: 2px;
+}
+.root .editor {
+  box-shadow: none;
+}
+.person + .person,
+.root .step + .step,
+.root .rule + .rule {
+  border-top-color: var(--q-rule);
+}
+
+/* the steps: squares, the size they were; done — green with a tick */
+.root .stepN {
+  border-radius: 2px;
+}
+.root .step[data-tone="ok"] .stepN {
+  position: relative;
+  color: transparent;
+}
+.root .step[data-tone="ok"] .stepN::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: no-repeat center / 14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='square'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5'/%3E%3C/svg%3E");
+}
+
+/* the info line: amber, a 4px left edge, no shadow */
+.root .status {
+  border-width: 1.5px;
+  border-left-width: 4px;
+  border-radius: 2px;
+}
+
+/* the switches: the same size, square; off — paper with an ink knob, on — green */
+.root .switch.switch {
+  border-radius: 2px;
+  font-family: var(--font, "Inter", system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--muted, #555);
+}
+.root .switch i {
+  border-radius: 2px;
+  background: var(--paper, #f2f0eb);
+  box-shadow: inset 0 0 0 1px rgba(10, 10, 10, 0.18);
+}
+.root .switch i::after {
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--ink, #0a0a0a);
+}
+.root .switch.switchOn {
+  color: var(--success-dark, var(--q-ok));
+}
+.root .switch.switchOn i {
+  background: var(--q-ok);
+  box-shadow: none;
+}
+.root .switch.switchOn i::after {
+  background: #fff;
+}
+.root .sw.sw {
+  border-radius: 2px;
+}
+.root .sw.sw i {
+  border-radius: 1px;
+  background: var(--ink, #0a0a0a);
+}
+.root .sw.swOn {
+  border-color: var(--q-ok);
+  background: var(--q-ok);
+}
+.root .sw.swOn i {
+  background: #fff;
+}
+
+/* chips: no dashes, no pills — a thin light frame, white, ink words; picked is the filled square alone */
+.root .ev.ev,
+.root .idea.idea {
+  border: 1px solid var(--q-line);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--ink, #0a0a0a);
+  font-size: 13px;
+  font-weight: 500;
+}
+.root .ev.ev i {
+  border: 1px solid rgba(10, 10, 10, 0.45);
+  border-radius: 2px;
+  background: #fff no-repeat center / 9px;
+}
+.root .ev.evOn {
+  border-color: var(--q-line);
+  background: #fff;
+  color: var(--ink, #0a0a0a);
+  font-weight: 500;
+}
+.root .ev.evOn i {
+  border-color: var(--q-blue);
+  background-color: var(--q-blue);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='square'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5'/%3E%3C/svg%3E");
+  box-shadow: none;
+}
+/* nobody is texted on this row yet: the ticks are kept, and look it — grey, not dashed */
+.root .quiet .ev.evOn {
+  border-style: solid;
+}
+.root .quiet .ev.evOn i {
+  border-color: var(--muted, #555);
+  background-color: var(--muted, #555);
+}
+.root .ev.ev:disabled {
+  color: var(--muted, #555);
+}
+.root .idea.idea:hover {
+  background: var(--paper, #f2f0eb);
+}
+
+/* All / None: words, blueprint, no underline */
+.root .link.link {
+  font-family: var(--font, "Inter", system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--q-blue);
+}
+.root .link.link:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.root .link.link:disabled {
+  color: var(--muted, #555);
+}
+
+/* the fill-in tokens in the editor */
+.root .field.field {
+  border: 1px solid var(--q-line);
+  border-radius: 2px;
+  background: #fff;
+  font-family: var(--font, "Inter", system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 600;
+}
+.root .btn.btnDanger:hover:not(:disabled) {
+  background: var(--danger, #a83232);
+}

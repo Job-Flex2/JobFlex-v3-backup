@@ -32,7 +32,8 @@ export function instantTotalsOf(structures: readonly InstantStructure[]): Instan
   };
 }
 
-export type MainStructureHow = "single" | "area+parcel" | "nearest-pin" | "area" | "none";
+/** "at-pin": the address pin stands on this building's outline (2026-10-16). */
+export type MainStructureHow = "single" | "at-pin" | "area+parcel" | "nearest-pin" | "area" | "none";
 
 export interface MainStructurePick {
   /** Index into `structures`, or null when there are none. */
@@ -43,6 +44,57 @@ export interface MainStructurePick {
 function centroid(ring: ReadonlyArray<{ lat: number; lng: number }>): { lat: number; lng: number } {
   const n = ring.length;
   return { lat: ring.reduce((a, p) => a + p.lat, 0) / n, lng: ring.reduce((a, p) => a + p.lng, 0) / n };
+}
+
+/** Whether a point stands inside a lat/lng ring (ray casting — a building is small enough to be flat). */
+export function pointInRing(p: { lat: number; lng: number }, ring: ReadonlyArray<{ lat: number; lng: number }> | null | undefined): boolean {
+  if (!ring || ring.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (a.lat > p.lat !== b.lat > p.lat && p.lng < ((b.lng - a.lng) * (p.lat - a.lat)) / (b.lat - a.lat) + a.lng) inside = !inside;
+  }
+  return inside;
+}
+
+/** Feet between two points (equirectangular — exact enough across one block). */
+export function feetBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const D2R = Math.PI / 180;
+  const dx = (b.lng - a.lng) * Math.cos(((a.lat + b.lat) / 2) * D2R) * D2R * 6378137;
+  const dy = (b.lat - a.lat) * D2R * 6378137;
+  return Math.sqrt(dx * dx + dy * dy) * 3.28084;
+}
+
+export type OtherStructure = {
+  /** Index into `structures` — what a tick is saved as. */
+  i: number;
+  s: InstantStructure;
+  /** Wholly outside the lot by the parcel check (provenance.parcelVeto) — a neighbour's, not this property's. */
+  offLot: boolean;
+  /** From the main building (or the pin), centre to centre; null without an outline. */
+  feet: number | null;
+};
+
+/**
+ * The structures besides the main one, in the order the page lists them (2026-10-16, owner: "it's a single family,
+ * but it shows two dozen buildings"): the ones on this lot first, then the ones the parcel check put outside it —
+ * each group nearest the house first, buildings with no outline last. The page numbers them in this order, so a
+ * row's number is its pin's.
+ */
+export function otherStructuresOf(input: {
+  structures: readonly InstantStructure[];
+  mainIndex: number | null;
+  foreign?: readonly number[];
+  origin?: { lat: number; lng: number } | null;
+}): OtherStructure[] {
+  const foreign = new Set(input.foreign ?? []);
+  const main = input.mainIndex != null ? input.structures[input.mainIndex] : null;
+  const from = main?.outline && main.outline.length >= 3 ? centroid(main.outline) : input.origin ?? null;
+  const rows = input.structures
+    .map((s, i) => ({ i, s, offLot: foreign.has(i), feet: from && s.outline && s.outline.length >= 3 ? feetBetween(from, centroid(s.outline)) : null }))
+    .filter((r) => r.i !== input.mainIndex);
+  return rows.sort((a, b) => Number(a.offLot) - Number(b.offLot) || (a.feet ?? Infinity) - (b.feet ?? Infinity) || a.i - b.i);
 }
 
 /**
@@ -65,6 +117,13 @@ export function pickMainStructure(
   const pool = candidates.length ? candidates : structures.map((_, i) => i);
   const byArea = (idx: readonly number[]) =>
     idx.slice().sort((a, b) => (structures[b].areaSqft ?? structures[b].footprintSqft ?? -1) - (structures[a].areaSqft ?? structures[a].footprintSqft ?? -1))[0];
+  // The address pin standing on a building is the strongest word there is about which one this is — stronger than
+  // size: the largest roof in reach can be a neighbour's when the lot check misses it (2026-10-16).
+  if (opts.origin) {
+    const o = opts.origin;
+    const under = pool.filter((i) => pointInRing(o, structures[i].outline));
+    if (under.length) return { index: byArea(under), how: "at-pin" };
+  }
   if (opts.parcelKnown) return { index: byArea(pool), how: "area+parcel" };
   if (opts.origin) {
     const withOutline = pool.filter((i) => (structures[i].outline?.length ?? 0) >= 3);

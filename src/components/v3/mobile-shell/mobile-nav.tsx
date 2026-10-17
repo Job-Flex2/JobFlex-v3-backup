@@ -385,12 +385,12 @@ export function MobileNav() {
                     data-tone={item.tool?.tone}
                     href={item.href as Route}
                     aria-current={isActive ? "page" : undefined}
-                    aria-describedby={item.tool ? `mnav-does-${item.icon}` : undefined}
                     onClick={() => setOpen(false)}
                   >
-                    {/* An estimating tool (owner, 2026-10-12) — the desk
-                        sidebar's tool bay in the drawer's grammar: a tile in
-                        the tool's colour, and what it turns into what. */}
+                    {/* An estimating tool (owner, 2026-10-12; one line since
+                        2026-10-16) — the desk sidebar's tool row: an icon
+                        square on a shadow in the tool's colour, the name,
+                        and "Soon" right after it. */}
                     {item.tool ? (
                       <>
                         <span className={styles.sbTile} aria-hidden="true">
@@ -398,24 +398,11 @@ export function MobileNav() {
                         </span>
                         <span className={styles.sbTxt}>
                           <span className={styles.sbName}>{item.label}</span>
-                          {/* Coming soon rides the spec line, so the name keeps the row. */}
-                          <span className={styles.sbDoes} aria-hidden="true">
-                            {item.soon && !item.locked ? (
-                              <>
-                                <span className={styles.sbSoonTag}>Soon</span>
-                                {item.tool.to}
-                              </>
-                            ) : (
-                              <>
-                                {item.tool.from}
-                                <span className={styles.sbArrow}>→</span>
-                                {item.tool.to}
-                              </>
-                            )}
-                          </span>
-                          <span id={`mnav-does-${item.icon}`} hidden>
-                            {`${item.soon && !item.locked ? "Coming soon. " : ""}${item.tool.from} to ${item.tool.to}`}
-                          </span>
+                          {item.soon && !item.locked && (
+                            <span className={styles.sbSoonTag} aria-label="Coming soon">
+                              Soon
+                            </span>
+                          )}
                         </span>
                       </>
                     ) : (

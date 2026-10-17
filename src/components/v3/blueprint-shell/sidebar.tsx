@@ -158,12 +158,11 @@ export function Sidebar({
     // open inside the estimator.
     const here = !child && (item.href === active || !!item.children?.some((c) => c.href === active));
     const current = child && item.href === active;
-    // AN ESTIMATING TOOL (owner, 2026-10-12): a tile in its own colour and,
-    // under the name, what it turns into what. "Soon" moves down to that line,
-    // so the name is never cut short beside it ("Deck estim…").
+    // AN ESTIMATING TOOL (owner, 2026-10-12; one line since 2026-10-16): an
+    // icon square on an offset shadow in its own colour, then the name, with
+    // "Soon" right after the name on the same line.
     const tool = child ? undefined : item.tool;
     const soonMark = !!item.soon && !item.locked;
-    const doesId = tool ? `sb-does-${item.icon}` : undefined;
     return item.href === "#" ? (
                 <a key={item.label} className="sb-link" href="#" {...tipProps(item.label)}>
                   <svg className="ic">
@@ -179,11 +178,10 @@ export function Sidebar({
                   className={`sb-link${tool ? " sb-tool" : ""}${here ? " active" : ""}${child ? " sb-sub-link" : ""}${current ? " sb-sub-on" : ""}${item.locked ? " sb-lockd" : ""}${tool && soonMark ? " sb-tool-soon" : ""}`}
                   data-tone={tool?.tone}
                   aria-current={current ? "page" : undefined}
-                  aria-describedby={doesId}
                   href={item.href as Route}
                   onClick={(e) => onRowClick(e, item.href)}
                   {...tipProps(
-                    (badges[item.href] ?? 0) > 0 ? `${item.label} · ${badges[item.href]} new` : item.locked ? `${item.label} · not in your plan` : item.soon ? `${item.label} · coming soon` : quota ? `${item.label} · ${quota.text}` : tool ? `${item.label} · ${tool.from} → ${tool.to}` : item.label,
+                    (badges[item.href] ?? 0) > 0 ? `${item.label} · ${badges[item.href]} new` : item.locked ? `${item.label} · not in your plan` : item.soon ? `${item.label} · coming soon` : quota ? `${item.label} · ${quota.text}` : item.label,
                   )}
                 >
                   {tool ? (
@@ -199,29 +197,11 @@ export function Sidebar({
                   )}
                   {/* The label in its own span so the folded rail can hide it
                       and keep it for screen readers; the row's name is still
-                      its text. A tool's spec line is its description, not
-                      part of its name. */}
+                      its text. */}
                   {tool ? (
                     <span className="sb-txt">
-                      <span className="sb-lbl">{item.label}</span>
-                      <span className="sb-does" aria-hidden="true">
-                        {soonMark && <span className="sb-soon">Soon</span>}
-                        {/* Coming soon says what it will make; the tag takes the input's room. */}
-                        <span className="sb-does-t">
-                          {soonMark ? (
-                            tool.to
-                          ) : (
-                            <>
-                              {tool.from}
-                              <span className="sb-arrow">→</span>
-                              {tool.to}
-                            </>
-                          )}
-                        </span>
-                      </span>
-                      <span id={doesId} hidden>
-                        {`${soonMark ? "Coming soon. " : ""}${tool.from} to ${tool.to}`}
-                      </span>
+                      <span className="sb-lbl">{tool.short ?? item.label}</span>
+                      {soonMark && <span className="sb-soon" aria-label="Coming soon">Soon</span>}
                     </span>
                   ) : (
                     <span className="sb-lbl">{item.label}</span>

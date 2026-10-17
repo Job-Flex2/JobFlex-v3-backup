@@ -23,7 +23,7 @@ import styles from "./frontend-card.module.css";
 
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 const count = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
-type NumericKey = { [K in keyof RoofPackageSpec]: RoofPackageSpec[K] extends number ? K : never }[keyof RoofPackageSpec];
+type NumericKey = { [K in keyof RoofPackageSpec]-?: RoofPackageSpec[K] extends number ? K : never }[keyof RoofPackageSpec];
 type NumberDefinition = readonly [NumericKey, string, string?];
 const PIPE_BOOT_RATES = PIPE_BOOT_SIZES.flatMap((size) => [
   { size, key: "each" as const, label: `Boot ${size.label} material` },

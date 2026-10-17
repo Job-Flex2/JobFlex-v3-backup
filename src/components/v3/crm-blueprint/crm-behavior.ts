@@ -40,9 +40,11 @@ import { whoHtml } from "@/lib/team/who";
 import { renderEmail } from "@/lib/email/renderEmail";
 import {
   FOLLOW_UP_CHANNELS,
+  MAX_DELAY_DAYS,
   TEXT_NEEDS_TWILIO,
   channelLabel,
   delayLabel,
+  readDelayDays,
   followUpEmailDoc,
   followUpSmsText,
   previewContext,
@@ -591,7 +593,7 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
       (r ? r.id : "new") +
       '">' +
       '<div class="rf-grid">' +
-      '<label><span class="rf-lbl">Rule name</span><input class="rf-in" data-f="name" value="' +
+      '<label><span class="rf-lbl">Rule name</span><input class="rf-in" data-f="name" maxlength="120" value="' +
       (r ? escapeAttr(r.name) : "") +
       '" placeholder="Nudge after send"></label>' +
       // Both selects use the shared blueprint treatment published in
@@ -612,7 +614,7 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
         );
       }).join("") +
       "</select></span></label>" +
-      '<label><span class="rf-lbl">Delay (days)</span><input class="rf-in" type="number" min="1" data-f="days" value="' +
+      '<label><span class="rf-lbl">Delay (days)</span><input class="rf-in" type="number" min="1" max="' + MAX_DELAY_DAYS + '" step="1" inputmode="numeric" data-f="days" value="' +
       days +
       '"></label>' +
       // The rule has no template any more — the wording is derived from the
@@ -1176,6 +1178,14 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
       field("name")?.focus();
       return;
     }
+    // Whole days in range — `parseInt(...) || 1` sent 40 nines on as 1.44e43
+    // minutes and the save came back a 500 (QA F-fd2683fc).
+    const days = readDelayDays(get("days"));
+    if (typeof days === "string") {
+      setFormErr("Delay: " + days);
+      field("days")?.focus();
+      return;
+    }
     const id = body.dataset.form;
     const editing = id && id !== "new" ? id : undefined;
     const existing = editing ? rulesData.find((x) => x.id === editing) : undefined;
@@ -1183,7 +1193,7 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
       id: editing,
       name,
       triggerStatus: get("trigger"),
-      delayMinutes: Math.max(1, parseInt(get("days"), 10) || 1) * 60 * 24,
+      delayMinutes: days * 60 * 24,
       // A new rule starts active, exactly as the donor's form implied; an edit
       // must not silently re-enable a rule the user switched off.
       enabled: existing ? existing.enabled : true,
@@ -1195,6 +1205,14 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
     setBtnBusy(btn, true, "Saving…");
     try {
       const res = await upsertFollowUpRule(payload);
+      if (!res.ok) {
+        // A refusal is the action's answer, in words for the person.
+        crm.savingRule = false;
+        setBtnBusy(btn, false, "Save rule");
+        setFormErr(res.error);
+        if (res.field === "name" || res.field === "delayMinutes") field(res.field === "name" ? "name" : "days")?.focus();
+        return;
+      }
       if (existing) {
         Object.assign(existing, {
           name: payload.name,

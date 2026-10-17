@@ -172,6 +172,9 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
         break;
       }
       await markSubscriptionPastDue(invoice);
+      // The mirror's dates follow at once: a first charge after a trial that
+      // failed keeps the plan 3 days from the trial's end (lib/stripeStatus).
+      if (live) await syncSubscriptionFromStripe(live, stripe).catch((err) => console.warn("[webhook] past-due sync:", err));
       // The owner's two emails: the first failure, and Stripe's last try.
       await sendDunningEmail(invoice).catch((err) => console.warn("[webhook] dunning email failed:", err));
       break;

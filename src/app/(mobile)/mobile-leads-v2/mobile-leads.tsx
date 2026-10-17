@@ -89,6 +89,7 @@ import { buyLead, LeadPurchaseHost, priceLabel, PURCHASED_EVENT } from "@/compon
 // guesses, so a file that stages five rows there stages the same five here.
 import { parseCsvRows, ownLeads, isMetaImportedLead } from "@/components/v3/leads-blueprint/leads-data";
 import { loadMobileLeads } from "./leads-source";
+import { PICKABLE_SOURCES, leadSide, leadSourceKey, leadSourceOf, ownSourceCounts, sideCounts } from "@/lib/leads/sources";
 import {
   LEAD_STATUSES,
   METHODS,
@@ -198,6 +199,10 @@ export function MobileLeads() {
 
   const [tab, setTab] = useState<TabKey>("all");
   const [status, setStatus] = useState<string>("ALL");
+  /** Where the leads came from (2026-10-16): all, the ones JobFlex sent, the shop's own. */
+  const [side, setSide] = useState<"" | "jobflex" | "own">("");
+  /** One of the shop's own sources (a lib/leads/sources KEY), under "Your own". */
+  const [srcKey, setSrcKey] = useState<string>("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -211,7 +216,7 @@ export function MobileLeads() {
   const [landedId, setLandedId] = useState<string | null>(null);
 
   /* ---- add-leads form ---- */
-  const [form, setForm] = useState({ name: "", email: "", phone: "", project: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", project: "", source: "" });
   const [nameErr, setNameErr] = useState(false);
   const [paste, setPaste] = useState("");
   const [fileErr, setFileErr] = useState<string | null>(null);
@@ -492,7 +497,17 @@ export function MobileLeads() {
   // (leads-blueprint/leads-data → ownLeads), which is the whole point: the two
   // editions used to disagree about how many leads this shop had.
   const own = useMemo(() => ownLeads(data), [data]);
-  const pool = useMemo(() => own.filter((l) => matchesQuery(l, query)), [own, query]);
+  // The search alone — what the origin switch and its source menu count from.
+  const searched = useMemo(() => own.filter((l) => matchesQuery(l, query)), [own, query]);
+  const sides = useMemo(() => sideCounts(searched), [searched]);
+  const srcCounts = useMemo(() => ownSourceCounts(searched), [searched]);
+  const pool = useMemo(
+    () =>
+      searched.filter(
+        (l) => (!side || leadSide(l.source) === side) && (!srcKey || leadSourceKey(l.source) === srcKey),
+      ),
+    [searched, side, srcKey],
+  );
   const visible = useMemo(
     () => pool.filter((l) => status === "ALL" || l.status === status),
     [pool, status],
@@ -526,6 +541,8 @@ export function MobileLeads() {
 
   const clearFilters = () => {
     setStatus("ALL");
+    setSide("");
+    setSrcKey("");
     setQuery("");
     setPage(1);
   };
@@ -722,7 +739,7 @@ export function MobileLeads() {
           phone: row.phone,
           projectType: row.project,
           description: row.description,
-          source: row.source as "MANUAL" | "EMAIL" | "IMPORT",
+          source: row.source,
         },
       ]);
       setAddOpen(false);
@@ -759,11 +776,12 @@ export function MobileLeads() {
         phone: form.phone.trim() || null,
         project: form.project.trim() || null,
         description: null,
-        source: "MANUAL",
+        // Where it came from (2026-10-16): a call, a referral, Facebook, Angi…
+        source: form.source || "MANUAL",
       });
       // The form is only cleared once the row is really in the pipeline — a
       // quota refusal must not also eat what was typed.
-      if (ok) setForm({ name: "", email: "", phone: "", project: "" });
+      if (ok) setForm({ name: "", email: "", phone: "", project: "", source: "" });
     })();
   };
 
@@ -812,7 +830,7 @@ export function MobileLeads() {
           phone: r.phone,
           projectType: r.project,
           description: r.description,
-          source: r.source as "MANUAL" | "EMAIL" | "IMPORT",
+          source: r.source,
         })),
       );
       setStaged([]);
@@ -1018,6 +1036,60 @@ export function MobileLeads() {
             </div>
           )}
 
+          {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): All / JobFlex / Your
+              own as one three-part switch that fits 320px, and under "Your own"
+              one native menu of sources with counts — not a chip rail, which
+              does not survive a phone's width (see the note at the top). */}
+          {tab === "all" && own.length > 0 && (
+            <div className={styles.origin}>
+              <div className={styles.oseg} role="group" aria-label="Where the leads came from">
+                {([
+                  ["", "All", sides.all],
+                  ["jobflex", "JobFlex", sides.jobflex],
+                  ["own", "Your own", sides.own],
+                ] as const).map(([k, label, n]) => (
+                  <button
+                    key={k || "all"}
+                    type="button"
+                    className={`${styles.osegBtn} ${side === k ? styles.on : ""} ${k === "jobflex" ? styles.osegJf : ""}`}
+                    aria-pressed={side === k}
+                    data-side={k}
+                    onClick={() => {
+                      setSide(k);
+                      if (k === "jobflex") setSrcKey("");
+                      setPage(1);
+                    }}
+                  >
+                    {k === "jobflex" ? <span className={styles.ljf} aria-hidden="true">J</span> : null}
+                    {label}
+                    <span className={styles.osegN}>{n}</span>
+                  </button>
+                ))}
+              </div>
+              {side === "own" && srcCounts.length > 1 ? (
+                <label className={styles.osrc}>
+                  <span className={styles.osrcLbl}>Source</span>
+                  <select
+                    className={styles.osrcSel}
+                    value={srcKey}
+                    aria-label="Your own leads by source"
+                    onChange={(e) => {
+                      setSrcKey(e.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">Every source · {sides.own}</option>
+                    {srcCounts.map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.label} · {c.count}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+          )}
+
           {tab === "all" && (
             visible.length === 0 ? (
               <div className={styles.lempty}>
@@ -1073,7 +1145,14 @@ export function MobileLeads() {
                             the row sheet, one tap away. */}
                         {l.email || l.phone || "No contact on file"}
                       </span>
-                      <span className={styles.lsrc}>{srcLabel(l.source)}</span>
+                      {leadSide(l.source) === "jobflex" ? (
+                        <span className={`${styles.lsrc} ${styles.lsrcJf}`}><b aria-hidden="true">J</b>JobFlex</span>
+                      ) : (
+                        <span className={styles.lsrc}>
+                          <i style={{ "--t": leadSourceOf(l.source).tone } as React.CSSProperties} aria-hidden="true" />
+                          {leadSourceOf(l.source).short}
+                        </span>
+                      )}
                     </div>
                     <div className={styles.lrowFoot}>
                       <span className={styles.lrowBadges}>
@@ -1421,6 +1500,18 @@ export function MobileLeads() {
                 <span className={styles.fldHint}>
                   Leave it blank and the lead lands as a general enquiry, ready to sort on the board.
                 </span>
+              </div>
+
+              {/* Where it came from — so "Your own" can say which source pays. */}
+              <div className={styles.fld}>
+                <label className={styles.fldLbl} htmlFor="mlSource">Where it came from</label>
+                <select className={styles.pinput} id="mlSource" name="source" value={form.source}
+                  onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}>
+                  <option value="">Added by hand</option>
+                  {PICKABLE_SOURCES.map((src) => (
+                    <option key={src.key} value={src.stored}>{src.label}</option>
+                  ))}
+                </select>
               </div>
             </form>
           ) : null}

@@ -3,6 +3,7 @@
 // own lockup — built the way build/planGrant.ts builds its one: pure, no I/O,
 // one box, one button (to /dashboard/trial, where the card is added).
 import type { BoxRow, EmailDoc, Lockup } from "../doc";
+import { listWords, shopRows, type ShopOnJobflex } from "./billing";
 
 const PLATFORM_LOCKUP: Lockup = { kind: "platform" };
 const PLATFORM_FOOTER = { name: "JobFlex" };
@@ -78,6 +79,55 @@ export function buildTrialConfirm(i: TrialConfirmInput): EmailDoc {
     box,
     cta: { label: "Confirm and start my trial", href: i.href },
     after: ["Didn't sign up for JobFlex? Ignore this email — nothing is created without the link."],
+    footer: PLATFORM_FOOTER,
+  };
+}
+
+/* THE CARD TRIAL'S "TWO DAYS LEFT" (owner, 2026-10-16: "yes — two days before"). A trial that took a card turns
+   into a paid plan by itself; this says so before it happens, in the payment letters' voice: the shop's own first
+   week first, then the plain facts — the day, the price, that nothing needs doing, and the two ways out (another plan,
+   or cancel before the day and nothing is charged). Sent once, ~48 hours before the trial ends (lib/trialEndingMail). */
+export interface TrialEndingSoonInput {
+  name: string | null;
+  planName: string;
+  /** "$95/month". */
+  price: string;
+  endsAt: Date;
+  /** Absolute link to /dashboard/subscription (change plan). */
+  href: string;
+  shop?: ShopOnJobflex | null;
+  tools?: string[];
+}
+
+const SHORT_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
+
+export function buildTrialEndingSoon(i: TrialEndingSoonInput): EmailDoc {
+  const first = i.name?.trim().split(/\s+/)[0] || "there";
+  const day = SHORT_DATE.format(i.endsAt);
+  const rows = shopRows(i.shop);
+  const tools = (i.tools ?? []).slice(0, 4);
+  const hasNumbers = rows.length > 0;
+  const box: BoxRow[] = [
+    ...(hasNumbers ? rows : tools.length ? [{ type: "field" as const, label: `In ${i.planName}`, value: listWords(tools) }] : []),
+    { type: "cond", label: `From ${day}`, chip: `${i.planName} · ${i.price}`, tone: "neutral" },
+  ];
+  return {
+    subject: `Your first week on JobFlex — ${i.planName} continues ${day}`,
+    lockup: PLATFORM_LOCKUP,
+    kicker: { text: "Free trial · 2 days left", tone: "neutral" },
+    headline: hasNumbers ? "Here's your first week" : `${i.planName} continues on ${day}`,
+    prose: [
+      hasNumbers
+        ? `Hi ${first} — your free week of ${i.planName} ends on ${day}. Here's what your shop has set up so far:`
+        : `Hi ${first} — your free week of ${i.planName} ends on ${day}.${tools.length ? ` ${listWords(tools)} ${tools.length === 1 ? "is" : "are"} ready whenever you are.` : ""}`,
+    ],
+    box,
+    cta: { label: "Review my plan", href: i.href },
+    after: [
+      `Nothing to do if ${i.planName} fits — it carries on by itself on ${day}.`,
+      `Want a smaller or bigger plan? Change it any time on the same page. Not for you? Cancel in Settings → Billing before ${day} and nothing is charged.`,
+      "Questions? Reply to this email and we'll help.",
+    ],
     footer: PLATFORM_FOOTER,
   };
 }

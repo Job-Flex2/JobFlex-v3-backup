@@ -14,8 +14,10 @@ import { Toggle } from "@/components/settings/Toggle";
 import { toast } from "@/components/ui/Toast";
 import {
   FOLLOW_UP_CHANNELS,
+  MAX_DELAY_DAYS,
   TEXT_NEEDS_TWILIO,
   channelLabel,
+  readDelayDays,
   triggerMoment,
   type FollowUpChannel,
 } from "@/lib/followUps/copy";
@@ -24,6 +26,7 @@ import {
   setFollowUpRuleEnabled,
   deleteFollowUpRule,
 } from "@/actions/followUps";
+import { underField } from "@/lib/actionResult";
 
 export interface RuleRow {
   id: string;
@@ -249,28 +252,39 @@ function RuleForm({
 }) {
   const [name, setName] = React.useState(rule?.name ?? "");
   const [trigger, setTrigger] = React.useState(rule?.triggerStatus ?? "SENT");
+  // The typed text: the old `Math.max(1, Number(v) || 1)` turned 40 nines into
+  // 1e40 days and the save into a 500 (QA F-fd2683fc).
   const [delayDays, setDelayDays] = React.useState(
-    rule ? Math.max(1, Math.round(rule.delayMinutes / 60 / 24)) : 2,
+    String(rule ? Math.max(1, Math.round(rule.delayMinutes / 60 / 24)) : 2),
   );
   const [enabled, setEnabled] = React.useState(rule?.enabled ?? true);
   const [channel, setChannel] = React.useState<FollowUpChannel>(rule?.channel ?? "EMAIL");
   const [busy, setBusy] = React.useState(false);
+  const [errors, setErrors] = React.useState<{ name?: string; delayMinutes?: string; form?: string }>({});
 
   async function save() {
-    if (!name.trim()) {
-      toast.error("Name required");
-      return;
-    }
+    const errs: typeof errors = {};
+    if (!name.trim()) errs.name = "Enter a rule name.";
+    const days = readDelayDays(delayDays);
+    if (typeof days === "string") errs.delayMinutes = days;
+    setErrors(errs);
+    if (errs.name || typeof days === "string") return;
+
     setBusy(true);
     try {
-      await upsertFollowUpRule({
+      const res = await upsertFollowUpRule({
         id: rule?.id,
         name,
         triggerStatus: trigger,
-        delayMinutes: delayDays * 60 * 24,
+        delayMinutes: days * 60 * 24,
         enabled,
         channel,
       });
+      if (!res.ok) {
+        // The server's refusal: under the field it names, else above the buttons.
+        setErrors(res.field === "name" || res.field === "delayMinutes" ? { [res.field]: underField(res) } : { form: res.error });
+        return;
+      }
       toast.success(rule ? "Rule updated" : "Rule created");
       onSaved();
     } catch (err: any) {
@@ -293,8 +307,11 @@ function RuleForm({
             <Input
               label="Name"
               value={name}
+              maxLength={120}
               onChange={(e) => setName(e.target.value)}
               placeholder="Day-2 nudge"
+              error={errors.name}
+              aria-invalid={!!errors.name}
             />
           </div>
           <div className="md:col-span-4">
@@ -310,10 +327,15 @@ function RuleForm({
             <Input
               label="Delay (days)"
               type="number"
+              inputMode="numeric"
               min={1}
+              max={MAX_DELAY_DAYS}
+              step={1}
               value={delayDays}
-              onChange={(e) => setDelayDays(Math.max(1, Number(e.target.value) || 1))}
+              onChange={(e) => setDelayDays(e.target.value)}
               hint="From the trigger event"
+              error={errors.delayMinutes}
+              aria-invalid={!!errors.delayMinutes}
             />
           </div>
           <div className="md:col-span-12 space-y-2">
@@ -344,6 +366,11 @@ function RuleForm({
             </div>
           </div>
         </div>
+        {errors.form ? (
+          <p role="alert" className="mt-3 text-[11px] text-[color:var(--rose)]">
+            {errors.form}
+          </p>
+        ) : null}
         <div className="mt-4 flex items-center justify-between gap-3">
           <Toggle
             checked={enabled}

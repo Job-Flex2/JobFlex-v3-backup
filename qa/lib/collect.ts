@@ -40,6 +40,12 @@ export class Collector {
   private readonly open = new Map<Request, { t: number; page: string }>();
   private readonly ignore = qaConfig().ignoreConsole.map((r) => new RegExp(r, "i"));
   private readonly pages: Page[] = [];
+  /** Statuses the test expects (qa.expectStatus, @expects-NNN): not recorded as errors. */
+  readonly expected = new Set<number>();
+
+  expectStatus(...codes: number[]): void {
+    for (const c of codes) this.expected.add(c);
+  }
 
   attach(ctx: BrowserContext): void {
     ctx.on("page", (p) => this.watch(p));
@@ -68,11 +74,13 @@ export class Collector {
       if (type !== "error" && type !== "warning" && type !== "assert") return;
       const text = m.text();
       if (this.ignore.some((r) => r.test(text))) return;
+      const st = text.match(/status of (d{3})/);
+      if (st && this.expected.has(Number(st[1]))) return; // the browser's line for an expected answer
       const loc = m.location();
       this.data.console.push({ t: Date.now(), type, text: redact(text).slice(0, 2000), url: where(), location: loc?.url ? redact(`${loc.url}:${loc.lineNumber}:${loc.columnNumber}`) : undefined });
     });
     page.on("pageerror", (e) => {
-      this.data.pageErrors.push({ t: Date.now(), message: redact(String(e?.message ?? e)).slice(0, 2000), stack: e?.stack ? redact(e.stack).slice(0, 6000) : undefined, url: where() });
+      this.data.pageErrors.push({ t: Date.now(), message: redact(String(e?.message ?? e)).slice(0, 8000), stack: e?.stack ? redact(e.stack).slice(0, 6000) : undefined, url: where() });
     });
     page.on("request", (r) => this.open.set(r, { t: Date.now(), page: where() }));
     page.on("requestfinished", async (r) => {
@@ -82,7 +90,7 @@ export class Collector {
       const resp = await r.response().catch(() => null);
       const status = resp?.status() ?? 0;
       const sameOrigin = this.same(r.url());
-      if (status >= 400) {
+      if (status >= 400 && !this.expected.has(status)) {
         let body: string | undefined;
         if (sameOrigin && (r.resourceType() === "fetch" || r.resourceType() === "xhr" || r.resourceType() === "document")) {
           body = await resp!.text().then((t) => redact(t).slice(0, 600)).catch(() => undefined);

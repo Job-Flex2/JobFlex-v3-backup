@@ -1446,13 +1446,35 @@ function DashboardView({ data, notice }: { data: DashboardData; notice?: React.R
                 ) : (
                   <Link
                     key={item.label}
-                    className={cls + (item.locked ? ` ${styles.sbLockd}` : "")}
+                    className={cls + (item.locked ? ` ${styles.sbLockd}` : "") + (item.tool ? ` ${styles.sbTool}` : "") + (item.tool && item.soon && !item.locked ? ` ${styles.sbToolSoon}` : "")}
+                    data-tone={item.tool?.tone}
                     href={item.href as Route}
                     aria-current={isActive ? "page" : undefined}
                     onClick={() => setNavOpen(false)}
                   >
-                    <Icon id={item.icon} />
-                    {item.label}
+                    {/* An estimating tool (2026-10-16): the shared drawer's
+                        tool row (mobile-shell/mobile-nav) — an icon square on
+                        a shadow in the tool's colour, the name, "Soon". */}
+                    {item.tool ? (
+                      <>
+                        <span className={styles.sbTile} aria-hidden="true">
+                          <Icon id={item.icon} />
+                        </span>
+                        <span className={styles.sbTxt}>
+                          <span className={styles.sbName}>{item.label}</span>
+                          {item.soon && !item.locked && (
+                            <span className={styles.sbSoonTag} aria-label="Coming soon">
+                              Soon
+                            </span>
+                          )}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon id={item.icon} />
+                        {item.label}
+                      </>
+                    )}
                     {/* Custom-plan lock: page not in the org's plan; the link
                         opens the upgrade offer. Inline svg — this surface's
                         sprite has no padlock. */}
@@ -1714,6 +1736,31 @@ function Sprite() {
         <symbol id="i-card" viewBox="0 0 24 24">
           <rect x="2" y="5" width="20" height="14" rx="1" />
           <path d="M2 10h20" />
+        </symbol>
+        {/* …and these three (2026-10-16): Blueprint, HVAC and Deck drew an
+            empty icon square in this page's drawer. */}
+        <symbol id="i-plans" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="1" />
+          <path d="M3 10h6" />
+          <path d="M13 10h8" />
+          <path d="M11 3v10" />
+          <path d="M14 21v-6h7" />
+          <path d="M6 15v3" />
+        </symbol>
+        <symbol id="i-heatpump" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <circle cx="12" cy="12" r="4.5" />
+          <path d="M12 12V8.5" />
+          <path d="m12 12 3 1.8" />
+          <path d="m12 12-3 1.8" />
+        </symbol>
+        <symbol id="i-deck" viewBox="0 0 24 24">
+          <path d="M2 10h20" />
+          <path d="M2 13h20" />
+          <path d="M4 13v8" />
+          <path d="M20 13v8" />
+          <path d="M12 13v8" />
+          <path d="M5 10V5h14v5" />
         </symbol>
         <symbol id="i-pen" viewBox="0 0 24 24">
           <path d="M12 20h9" />

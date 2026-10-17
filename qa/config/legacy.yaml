@@ -11,6 +11,7 @@
 #           network or a paid key — not run by the suite; run by hand) · tool (no assertions; qa/tools)
 #   seed    a script run `up` before and `down` after
 #   minutes the test's time limit (default 5)
+#   devSkip not run when the server under test is `next dev` (its dev ↔ prod compare means nothing there)
 defaults: { minutes: 5 }
 scripts:
   # ── smoke ───────────────────────────────────────────────────────────────
@@ -78,7 +79,7 @@ scripts:
   - { file: seed-roof.js, suite: pages, kind: seed, status: live, note: "seed for roof-test" }
 
   # ── visual ──────────────────────────────────────────────────────────────
-  - { file: mobile-sweep.check.ts, suite: visual, kind: prod, status: live, minutes: 35, note: "WebKit phone sweep; compares against QA_DEV_URL (the runner passes the dev server)" }
+  - { file: mobile-sweep.check.ts, suite: visual, kind: prod, status: live, minutes: 35, devSkip: true, note: "WebKit phone sweep; compares against QA_DEV_URL (the runner passes the dev server)" }
   - { file: plan-terms.check.ts, suite: visual, kind: prod, status: live, minutes: 25 }
   - { file: sidebar-motion.check.ts, suite: visual, kind: prod, status: live, minutes: 25 }
   - { file: fixpass-smoke.js, suite: visual, kind: page, status: live }

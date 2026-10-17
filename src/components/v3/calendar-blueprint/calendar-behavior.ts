@@ -37,6 +37,9 @@ import {
 } from "@/actions/jobs";
 import { assignWorker, markAssignmentAccepted, unassignWorker } from "@/actions/workers";
 import { markNavSeen } from "@/actions/notifications";
+import { VISIT_VIA } from "@/lib/calendar/visitVia";
+import { expandWindows, spanWords, zonedHhmm, zonedYmd } from "@/lib/deskHours";
+import { removeDeskHours, reserveDeskHours } from "@/actions/deskHours";
 import {
   TODAY as TODAY_FIXTURE,
   JOB_STATUSES,
@@ -179,6 +182,13 @@ export function initCalendarContent(
   };
   const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
   const byId = (id: string) => root.querySelector<HTMLElement>("#" + id);
+  // The page's own controls listen through `on`, so a second start of this module on the same page (React runs every
+  // effect twice in development) never leaves the first one's handlers behind — a stale copy acted on its own state
+  // and saved a second, wrong event from one click (2026-10-16).
+  const onId = (id: string, ev: string, fn: (e: Event) => void) => {
+    const el = byId(id);
+    if (el) on(el, ev, fn as EventListener);
+  };
   // Click targets inside a button are often the icon, and an <svg>/<use> is an
   // SVGElement — NOT an HTMLElement. Returning null for those made every
   // delegated handler ignore clicks that landed on an icon: the filter
@@ -472,7 +482,23 @@ export function initCalendarContent(
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function statusCls(e: CalEvent) {
-    return e.kind === "job" ? "evc--" + e.status.toLowerCase() : "evc--" + e.kind;
+    if (e.kind === "job") return "evc--" + e.status.toLowerCase();
+    // Hours reserved for the AI desk: an open frame, not a booking (2026-10-16).
+    if (e.kind === "desk") return "evc--desk";
+    // A visit wears its own card (2026-10-16): the channel's colour all round,
+    // softer corners, and a tag saying who booked it — a job card never has one.
+    if (e.kind === "appointment") return "evc--appointment evc--via-" + (e.via || "team") + (e.status === "CANCELED" ? " evc--apt-off" : "");
+    return "evc--" + e.kind;
+  }
+  /** The chip's leading icon: the channel's for a visit, the kind's otherwise. */
+  function evIcon(e: CalEvent) {
+    if (e.kind === "appointment") return VISIT_VIA[e.via || "team"].icon;
+    return KIND_IC[e.kind] || "i-cal";
+  }
+  /** "AI DESK" / "ONLINE" / "PLAN" / "OFFICE" — only visits carry one. */
+  function viaTag(e: CalEvent) {
+    if (e.kind !== "appointment") return "";
+    return '<span class="evc-via">' + esc(VISIT_VIA[e.via || "team"].tag) + "</span>";
   }
 
   function visibleEvents() {
@@ -481,7 +507,9 @@ export function initCalendarContent(
       if (cal.statuses.length && cal.statuses.indexOf(e.status) === -1) return false;
       if (cal.workers.length && !e.workers.some(function (w) { return cal.workers.indexOf(w) !== -1; })) return false;
       if (!q) return true;
-      return (e.title + " " + (e.client || "") + " " + (e.addr || "")).toLowerCase().indexOf(q) !== -1;
+      // "ai desk", "online", "plan" find the visits booked that way.
+      const via = e.kind === "appointment" ? " " + VISIT_VIA[e.via || "team"].tag + " " + (e.visitFor || "") : "";
+      return (e.title + " " + (e.client || "") + " " + (e.addr || "") + via).toLowerCase().indexOf(q) !== -1;
     });
   }
   function eventsOn(day: Date, workerId?: string) {
@@ -666,13 +694,17 @@ export function initCalendarContent(
    * blocked time stay draggable — those actions accept their role.
    */
   function canDrag(e: CalEvent) {
+    // Reserved desk hours are edited from their sheet (remove, reserve again) — a drag has no action behind it.
+    if (e.kind === "desk") return false;
     return canManage || e.kind !== "job";
   }
 
   function chipHtml(e: CalEvent, compact: boolean) {
     return '<button class="evc ' + statusCls(e) + '" type="button" draggable="' + canDrag(e) + '" data-ev="' + e.id + '">' +
-      '<span class="evc-t"><svg class="ic"><use href="#' + (KIND_IC[e.kind] || "i-cal") + '"/></svg><span class="evc-txt">' + esc(e.title) + "</span></span>" +
-      (compact ? "" : '<span class="evc-time">' + (e.allDay ? "All day" : fmtTime(e.start)) + " · " + esc(workerNames(e).join(", ") || "unassigned") + "</span>") +
+      '<span class="evc-t"><svg class="ic"><use href="#' + evIcon(e) + '"/></svg><span class="evc-txt">' + esc(e.title) + "</span></span>" +
+      (compact
+        ? (e.kind === "appointment" ? '<span class="evc-time">' + viaTag(e) + "</span>" : "")
+        : '<span class="evc-time">' + viaTag(e) + (e.allDay ? "All day" : fmtTime(e.start)) + " · " + esc(workerNames(e).join(", ") || "unassigned") + "</span>") +
       "</button>";
   }
 
@@ -1073,9 +1105,9 @@ export function initCalendarContent(
       (flushTop(p.top, p.height).onLine ? " is-flush-top" : "") + '" type="button" draggable="' + canDrag(p.e) + '"' +
       ' data-ev="' + p.e.id + '"' +
       ' style="' + geoStyle(p) + '">' +
-      '<span class="evc-t"><svg class="ic"><use href="#' + (KIND_IC[p.e.kind] || "i-cal") + '"/></svg>' +
+      '<span class="evc-t"><svg class="ic"><use href="#' + evIcon(p.e) + '"/></svg>' +
       '<span class="evc-txt">' + esc(p.e.title) + "</span></span>" +
-      '<span class="wg-ev-time">' + fmtRange(p.e.start, p.e.end) + "</span>" +
+      '<span class="wg-ev-time">' + viaTag(p.e) + fmtRange(p.e.start, p.e.end) + "</span>" +
       // The two edge grips. Rendered inside the block (which is the containing
       // block for them) and marked aria-hidden: they are a pointer affordance
       // for a gesture the sheet's own start/end pickers already expose to the
@@ -1120,7 +1152,7 @@ export function initCalendarContent(
       adCols.push('<div class="wg-ad-cell" data-day="' + day.toISOString() + '">' +
         evs.map(function (e) {
           return '<button class="evc wg-ad-ev ' + statusCls(e) + '" type="button" draggable="true" data-ev="' + e.id + '">' +
-            '<span class="evc-t"><svg class="ic"><use href="#' + (KIND_IC[e.kind] || "i-cal") + '"/></svg>' +
+            '<span class="evc-t"><svg class="ic"><use href="#' + evIcon(e) + '"/></svg>' +
             '<span class="evc-txt">' + esc(e.title) + "</span></span></button>";
         }).join("") + "</div>");
     }
@@ -1628,10 +1660,29 @@ export function initCalendarContent(
     if (cal.form.pop) setPop(cal.form.pop);
   }
   const KIND_TITLE: Record<string, string> = { job: "Job event", appointment: "Appointment", blocked: "Blocked time" };
+  /** Where a visit's sheet can take you: the lead or client it is for, the
+   *  visit page (equipment + report), and the desk's call log. */
+  function visitLinksHtml(e: CalEvent) {
+    if (e.kind !== "appointment") return "";
+    const btn = function (href: string, icon: string, label: string) {
+      return '<button class="btn btn-ghost btn--sm" type="button" data-act="open-href" data-href="' + esc(href) + '"><svg class="ic"><use href="#' + icon + '"/></svg>' + label + "</button>";
+    };
+    return '<div class="sf-links">' + (e.clientId ? btn("/dashboard/client-detail?client=" + encodeURIComponent(e.clientId), "i-user", "Open client") : "") +
+      (!e.clientId && e.leadId ? btn("/dashboard/leads/" + encodeURIComponent(e.leadId), "i-target", "Open lead") : "") +
+      (e.rid ? btn("/dashboard/visits/" + encodeURIComponent(e.rid), "i-file", "Visit page") : "") +
+      (e.via === "ai-desk" ? btn("/dashboard/phone", "i-phone", "Call log") : "") + "</div>";
+  }
+  function visitMetaHtml(e: CalEvent) {
+    if (e.kind !== "appointment") return "";
+    const v = VISIT_VIA[e.via || "team"];
+    return '<div class="sf-meta-row sf-via evc--via-' + (e.via || "team") + '"><span class="kpi-lbl">Booked</span><span><span class="evc-via">' + esc(v.tag) + "</span>" + esc(e.booked || "By your team") + "</span></div>" +
+      (e.visitFor ? '<div class="sf-meta-row"><span class="kpi-lbl">Visit for</span><span>' + esc(e.visitFor) + (e.member ? " · member price" : "") + "</span></div>" : "");
+  }
 
   function openDetail(id: string) {
     const e = eventsData.find(function (x) { return x.id === id; });
     if (!e) return;
+    if (e.kind === "desk") { openDeskDetail(e); return; }
     cal.sheet = "detail"; cal.editing = id; cal.kind = e.kind;
     cal.form.start = new Date(e.start);
     cal.form.end = new Date(e.end);
@@ -1659,8 +1710,9 @@ export function initCalendarContent(
             return esc(w ? w.name : id) + chip;
           }).join(", ")
         : "Unassigned";
-    openSheet(KIND_TITLE[e.kind] || "Job event",
+    openSheet(e.kind === "appointment" && e.via && e.via !== "team" ? "Appointment · " + VISIT_VIA[e.via].tag : KIND_TITLE[e.kind] || "Job event",
       '<div class="sf-meta">' +
+        visitMetaHtml(e) +
         '<div class="sf-meta-row"><span class="kpi-lbl">When</span><span>' +
           (e.allDay
             ? fmtDate(e.start) + (sameDay(e.start, e.end) ? "" : " – " + fmtDate(e.end))
@@ -1669,8 +1721,8 @@ export function initCalendarContent(
           (e.allDay
             ? "All day" + (sameDay(e.start, e.end) ? "" : " · " + (Math.round((atMins(e.end, 0).getTime() - atMins(e.start, 0).getTime()) / 86400000) + 1) + " days")
             : durLabel(e.end.getTime() - e.start.getTime())) + "</span></div>" +
-        (e.client ? '<div class="sf-meta-row"><span class="kpi-lbl">Client</span><span>' + esc(e.client) + "</span></div>" : "") +
-        (e.phone ? '<div class="sf-meta-row"><span class="kpi-lbl">Phone</span><span>' + esc(e.phone) + "</span></div>" : "") +
+        (e.client ? '<div class="sf-meta-row"><span class="kpi-lbl">' + (e.kind === "appointment" && !e.clientId && e.leadId ? "Lead" : "Client") + "</span><span>" + esc(e.client) + "</span></div>" : "") +
+        (e.phone ? '<div class="sf-meta-row"><span class="kpi-lbl">Phone</span><span><a class="sf-tel" href="tel:' + esc(e.phone.replace(/[^\d+]/g, "")) + '">' + esc(e.phone) + "</a></span></div>" : "") +
         (e.addr ? '<div class="sf-meta-row"><span class="kpi-lbl">Address</span><span>' + esc(e.addr) + "</span></div>" : "") +
         '<div class="sf-meta-row"><span class="kpi-lbl">Crew</span><span>' + crewHtml + "</span></div>" +
         (e.scope ? '<div class="sf-meta-row"><span class="kpi-lbl">Scope</span><span>' + esc(e.scope) + "</span></div>" : "") +
@@ -1682,6 +1734,7 @@ export function initCalendarContent(
       (e.kind === "job" ? statusFieldHtml() : "") +
       crewFieldHtml() +
       '<label class="sf"><span class="sf-lbl">Notes</span><textarea class="sf-area" data-e="notes" placeholder="Anything the crew should know">' + esc(e.notes || "") + "</textarea></label>" +
+      visitLinksHtml(e) +
       '<div class="sf-act">' +
         '<button class="btn btn-primary btn--sm" type="button" data-act="save-event"><svg class="ic"><use href="#i-check"/></svg>Save changes</button>' +
         // Only a JobEvent with a job behind it has anything to open — an
@@ -1701,6 +1754,29 @@ export function initCalendarContent(
         '<button class="btn btn-ghost btn--sm btn--danger" type="button" data-act="delete-event"><svg class="ic"><use href="#i-trash"/></svg>Delete</button>' +
       "</div>");
   }
+
+  /** Reserved AI desk hours: what they are, whose, and the way to give them back. */
+  function openDeskDetail(e: CalEvent) {
+    cal.sheet = "detail"; cal.editing = e.id; cal.kind = "desk";
+    const desk = seed?.desk;
+    const mine = !!desk && e.deskUserId === desk.me;
+    const canRemove = canManage || mine;
+    const who = e.title.replace(/^AI desk hours · /, "");
+    openSheet("AI desk hours",
+      '<div class="sf-meta">' +
+        '<div class="sf-meta-row"><span class="kpi-lbl">When</span><span>' + fmtDate(e.start) + " · " + esc(spanWords(pad2(e.start.getHours()) + ":" + pad2(e.start.getMinutes()), pad2(e.end.getHours()) + ":" + pad2(e.end.getMinutes()))) + "</span></div>" +
+        '<div class="sf-meta-row"><span class="kpi-lbl">Repeats</span><span>' + (e.deskWeekly ? "Every " + e.start.toLocaleDateString("en-US", { weekday: "long" }) : "This day only") + "</span></div>" +
+        '<div class="sf-meta-row"><span class="kpi-lbl">For</span><span>' + esc(who === "anyone" ? "Anyone at the company" : who) + "</span></div>" +
+        '<div class="sf-meta-row"><span class="kpi-lbl">The desk</span><span>' + (desk && desk.mode === "reserved" ? "Books callers into these hours, skipping anything already on the calendar." : "Books from the open hours right now — these count once the company switches to reserved hours.") + "</span></div>" +
+      "</div>" +
+      '<div class="sf-act">' +
+        (canRemove
+          ? '<button class="btn btn-ghost btn--sm btn--danger" type="button" data-act="remove-desk" data-rid="' + esc(e.rid || "") + '"><svg class="ic"><use href="#i-trash"/></svg>' + (e.deskWeekly ? "Remove every week" : "Remove these hours") + "</button>"
+          : "") +
+        '<button class="btn btn-ghost btn--sm" type="button" data-sheet="close">Close</button>' +
+      "</div>");
+  }
+  function pad2(n: number) { return (n < 10 ? "0" : "") + n; }
 
   /** The create form. `start`/`end` come from the drag-to-create preview when
    *  there is one, otherwise from the clicked cell (2h default). */
@@ -1749,19 +1825,13 @@ export function initCalendarContent(
       job: "Roof tear-off — 4812 Maple Ave",
       appointment: "Estimate visit — S. Rao",
       blocked: "Shop maintenance",
+      desk: "",
     };
+    if (cal.kind === "desk") return kindTabsHtml() + deskFormHtml();
     // A tab strip with one tab is a label pretending to be a choice — when the
     // role can only create one kind, the strip is dropped entirely and the
     // sheet's own title carries the meaning.
-    return (CREATE_KINDS.length > 1
-        ? '<div class="sf-kinds" id="kindTabs">' +
-            CREATE_KINDS.map(function (k) {
-              return '<button class="sf-kind' + (cal.kind === k ? " on" : "") + '" type="button" data-kind="' + k + '">' +
-                '<svg class="ic"><use href="#' + KIND_IC[k] + '"/></svg>' +
-                (k === "job" ? "Job event" : k === "appointment" ? "Appointment" : "Blocked") + "</button>";
-            }).join("") +
-          "</div>"
-        : "") +
+    return kindTabsHtml() +
       '<label class="sf"><span class="sf-lbl">Title</span><input class="sf-in" data-e="title" placeholder="' + ph[cal.kind] + '" value="' + esc(seedTitle) + '"></label>' +
       allDayFieldHtml() +
       dtpFieldHtml("start") +
@@ -1772,6 +1842,39 @@ export function initCalendarContent(
       '<div class="sf-act">' +
         '<button class="btn btn-primary btn--sm" type="button" data-act="create-event"><svg class="ic"><use href="#i-check"/></svg>' +
           (blocked ? "Block time" : "Create event") + "</button>" +
+        '<button class="btn btn-ghost btn--sm" type="button" data-sheet="close">Cancel</button>' +
+      "</div>";
+  }
+  function kindTabsHtml() {
+    return CREATE_KINDS.length > 1
+      ? '<div class="sf-kinds" id="kindTabs">' +
+          CREATE_KINDS.map(function (k) {
+            return '<button class="sf-kind' + (cal.kind === k ? " on" : "") + '" type="button" data-kind="' + k + '">' +
+              '<svg class="ic"><use href="#' + KIND_IC[k] + '"/></svg>' +
+              (k === "job" ? "Job event" : k === "appointment" ? "Appointment" : k === "desk" ? "AI desk hours" : "Blocked") + "</button>";
+          }).join("") +
+        "</div>"
+      : "";
+  }
+  /**
+   * AI desk hours (2026-10-16): the hours a person — or anyone at the company — keeps open for the AI desk to book
+   * visits into, by the hour, one day or every week. Saved to the same list as the AI desk's own panel.
+   */
+  function deskFormHtml() {
+    const desk = seed?.desk;
+    const people = desk ? desk.people : [];
+    const whoHtml = canManage
+      ? '<select class="sf-in" data-e="deskWho"><option value="">Anyone at the company</option>' +
+          people.map(function (p) { return '<option value="' + esc(p.userId) + '"' + (desk && p.userId === desk.me ? " selected" : "") + ">" + esc(p.name) + (desk && p.userId === desk.me ? " (me)" : "") + "</option>"; }).join("") +
+        "</select>"
+      : '<div class="sf-static"><svg class="ic"><use href="#i-user"/></svg><span>' + esc((people[0] && people[0].name) || "Me") + "</span></div>";
+    return '<p class="sf-note">The AI desk books callers into these hours' + (desk && desk.mode !== "reserved" ? " once the company switches it to “Only hours we reserve” (AI desk → When it can book visits)" : "") + ". Each visit goes to the person whose hours they are.</p>" +
+      dtpFieldHtml("start") +
+      dtpFieldHtml("end") +
+      '<div class="sf"><span class="sf-lbl">For</span>' + whoHtml + "</div>" +
+      '<label class="sf sf-check"><input type="checkbox" data-e="deskWeekly"> <span>Every week, same day and hours</span></label>' +
+      '<div class="sf-act">' +
+        '<button class="btn btn-primary btn--sm" type="button" data-act="create-event"><svg class="ic"><use href="#i-check"/></svg>Reserve hours</button>' +
         '<button class="btn btn-ghost btn--sm" type="button" data-sheet="close">Cancel</button>' +
       "</div>";
   }
@@ -1827,38 +1930,38 @@ export function initCalendarContent(
   }
 
   // ================= EVENTS =================
-  byId("calPrev")?.addEventListener("click", function () {
+  onId("calPrev", "click", function () {
     const c = new Date(cal.cursor);
     if (cal.view === "month") c.setMonth(c.getMonth() - 1); else c.setDate(c.getDate() - 7);
     cal.cursor = c; cal.nav = "prev"; renderCal();
   });
-  byId("calNext")?.addEventListener("click", function () {
+  onId("calNext", "click", function () {
     const c = new Date(cal.cursor);
     if (cal.view === "month") c.setMonth(c.getMonth() + 1); else c.setDate(c.getDate() + 7);
     cal.cursor = c; cal.nav = "next"; renderCal();
   });
-  byId("calToday")?.addEventListener("click", function () { cal.cursor = new Date(TODAY); renderCal(); });
-  byId("calViews")?.addEventListener("click", function (e) {
+  onId("calToday", "click", function () { cal.cursor = new Date(TODAY); renderCal(); });
+  onId("calViews", "click", function (e) {
     const b = asEl(e.target)?.closest<HTMLElement>(".vsw-btn");
     if (!b) return;
     cal.view = (b.dataset.view || "month") as "month" | "week" | "team";
     $$("#calViews .vsw-btn").forEach(function (x) { x.classList.toggle("active", x === b); });
     renderCal();
   });
-  byId("trayBtn")?.addEventListener("click", function () { cal.trayOpen = !cal.trayOpen; renderCal(); });
-  byId("inboxBtn")?.addEventListener("click", openInbox);
-  byId("newEventBtn")?.addEventListener("click", function () { openQuickAdd(null, null); });
+  onId("trayBtn", "click", function () { cal.trayOpen = !cal.trayOpen; renderCal(); });
+  onId("inboxBtn", "click", openInbox);
+  onId("newEventBtn", "click", function () { openQuickAdd(null, null); });
   const calSearch = root.querySelector<HTMLInputElement>("#calSearch");
   if (calSearch) {
     // Grid + Clear only. A full `renderCal()` per keystroke rebuilt the entire
     // filter row — including the worker menu — while the user was typing.
-    calSearch.addEventListener("input", function () {
+    on(calSearch, "input", function () {
       cal.query = calSearch.value;
       syncClear();
       renderGrid();
     });
   }
-  byId("calClear")?.addEventListener("click", function () {
+  onId("calClear", "click", function () {
     cal.workers = []; cal.statuses = []; cal.query = "";
     if (calSearch) calSearch.value = "";
     closeFdd();
@@ -1898,7 +2001,7 @@ export function initCalendarContent(
   }
 
   function bindFilter(hostId: string, key: "workers" | "statuses", attr: "w" | "s") {
-    byId(hostId)?.addEventListener("click", function (e) {
+    onId(hostId, "click", function (e) {
       const t = asEl(e.target);
       if (!t) return;
       const trigger = t.closest<HTMLElement>("[data-fdd]");
@@ -1925,7 +2028,7 @@ export function initCalendarContent(
   }
   bindFilter("workerFilter", "workers", "w");
   // Statuses are plain toggles, no menu to open or close.
-  byId("statusFilter")?.addEventListener("click", function (e) {
+  onId("statusFilter", "click", function (e) {
     const b = asEl(e.target)?.closest<HTMLElement>("[data-s]");
     if (!b || !b.dataset.s) return;
     closeFdd();
@@ -1937,7 +2040,7 @@ export function initCalendarContent(
   // calendar clicks: chip → details, empty cell → quick create.
   // Week cells are handled by the drag-to-create pointer flow below, which
   // opens the form on release — so they are skipped here to avoid two opens.
-  byId("calWrap")?.addEventListener("click", function (e) {
+  onId("calWrap", "click", function (e) {
     const t = asEl(e.target);
     if (!t) return;
     // Before the chip and empty-cell branches: the disclosure sits INSIDE a
@@ -2505,7 +2608,7 @@ export function initCalendarContent(
   }
 
   // panel: pickers, kind tabs, save, delete, create
-  byId("sheet")?.addEventListener("click", function (e) {
+  onId("sheet", "click", function (e) {
     const t = asEl(e.target);
     if (!t) return;
 
@@ -2620,6 +2723,15 @@ export function initCalendarContent(
       return field ? field.value : "";
     };
 
+    if (act.dataset.act === "open-href") {
+      const href = act.dataset.href;
+      // Same-origin dashboard paths only — the value is built above, never typed.
+      if (!href || href.charAt(0) !== "/" || href.charAt(1) === "/") return;
+      closeSheet();
+      if (options.navigate) options.navigate(href);
+      else window.location.assign(href);
+      return;
+    }
     if (act.dataset.act === "open-job") {
       const jobId = act.dataset.job;
       if (!jobId) return;
@@ -2632,6 +2744,21 @@ export function initCalendarContent(
     if (act.dataset.act === "save-event") {
       if (sheetBusy) return;
       void saveEvent(val);
+      return;
+    }
+    if (act.dataset.act === "remove-desk") {
+      const rid = act.dataset.rid;
+      if (!rid || sheetBusy) return;
+      void (async function () {
+        setSheetBusy(true, "Removing…");
+        let r: Awaited<ReturnType<typeof removeDeskHours>>;
+        try { r = await removeDeskHours(rid); } catch (err) { setSheetBusy(false); sheetError(actionError(err)); return; }
+        setSheetBusy(false);
+        if (!r.ok) { sheetError(r.error); return; }
+        for (let i = eventsData.length - 1; i >= 0; i--) if (eventsData[i].kind === "desk" && eventsData[i].rid === rid) eventsData.splice(i, 1);
+        closeSheet(); renderCal();
+        toast("Those hours are no longer reserved for the AI desk.", false);
+      })();
       return;
     }
     if (act.dataset.act === "delete-event") {
@@ -2873,6 +3000,7 @@ export function initCalendarContent(
   }
 
   async function createEvent(val: (f: string) => string) {
+    if (cal.kind === "desk") { await createDeskHours(); return; }
     const title = val("title").trim();
     // Was a bare `.focus()` and nothing else: pressing Create on an empty form
     // moved the caret and gave no reason, so the button read as broken. A
@@ -2958,6 +3086,43 @@ export function initCalendarContent(
       trayJobs = trayJobs.filter(function (x) { return x.id !== linkedId; });
     }
     closeSheet(); renderCal(); flashEvent();
+  }
+
+  /** Reserve the picked hours for the AI desk, then show every day they land on. */
+  async function createDeskHours() {
+    sheetError(null);
+    const desk = seed?.desk;
+    if (!wired || !desk) { sheetError("Reserving hours needs the live calendar."); return; }
+    const span = formSpan();
+    const tz = desk.timeZone;
+    const day = zonedYmd(span.start, tz);
+    if (zonedYmd(span.end, tz) !== day) { sheetError("Reserve hours inside one day — pick an end on the same day."); return; }
+    const weekly = !!root.querySelector<HTMLInputElement>('[data-e="deskWeekly"]')?.checked;
+    const who = canManage ? root.querySelector<HTMLSelectElement>('[data-e="deskWho"]')?.value || "" : desk.me;
+    setSheetBusy(true, "Reserving…");
+    let res: Awaited<ReturnType<typeof reserveDeskHours>>;
+    try {
+      res = await reserveDeskHours({ userId: who || null, date: weekly ? null : day, dow: weekly ? new Date(day + "T12:00:00Z").getUTCDay() : null, from: zonedHhmm(span.start, tz), to: zonedHhmm(span.end, tz) });
+    } catch (err) {
+      setSheetBusy(false);
+      sheetError(actionError(err));
+      return;
+    }
+    setSheetBusy(false);
+    if (!res.ok) { sheetError(res.error); return; }
+    const w = res.window;
+    const person = w.userId ? desk.people.find(function (p) { return p.userId === w.userId; }) : null;
+    const wid = w.userId ? workersData.find(function (x) { return x.userId === w.userId; })?.id : undefined;
+    const spans = expandWindows([w], TODAY, 183, tz);
+    let first: string | null = null;
+    for (const sp of spans) {
+      const id = "desk:" + w.id + ":" + sp.startsAt.getTime();
+      if (!first && sp.startsAt.getTime() >= span.start.getTime() - 60000) first = id;
+      eventsData.push({ id, rid: w.id, kind: "desk", title: "AI desk hours · " + (person ? person.name : "anyone"), start: sp.startsAt, end: sp.endsAt, status: "SCHEDULED", workers: wid ? [wid] : [], deskUserId: w.userId || undefined, deskWeekly: sp.weekly || undefined });
+    }
+    landed = first;
+    closeSheet(); renderCal(); flashEvent();
+    toast("Reserved for the AI desk: " + res.words + ".", false);
   }
 
   /**
@@ -3068,7 +3233,7 @@ export function initCalendarContent(
   }
 
   // Search inside the link picker (delegated: the input is re-rendered often).
-  byId("sheet")?.addEventListener("input", function (e) {
+  onId("sheet", "input", function (e) {
     const t = asEl(e.target);
     if (!t || t.id !== "lnkQ") return;
     cal.form.linkQuery = (t as HTMLInputElement).value;
@@ -3328,7 +3493,7 @@ export function initCalendarContent(
     // paint; everything inside a pop-over is injected later, so those press via
     // delegation on `.content` instead of per-node listeners.
     pressify(".cal-nav, .vsw-btn", "pressed");
-    root.addEventListener("click", (e) => {
+    on(root, "click", (e) => {
       const el = (e.target instanceof HTMLElement ? e.target : null)?.closest<HTMLElement>(
         ".fdd-btn, .fdd-opt, .dtp-btn, .dtp-day, .dtp-time, .dtp-done, .pdd-btn, .pdd-opt, .lnk-tab, .lnk-row, .sf-kind",
       );

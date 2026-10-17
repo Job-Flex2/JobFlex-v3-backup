@@ -9,6 +9,7 @@ export type QaConfig = {
   devPorts: number[];
   productionHosts: string[];
   productionSuites: string[];
+  devOnlyRoutes?: string[];
   thresholds: { pageLoadMs: number; compileGraceMs: number; slowRequestMs: number; hungRequestMs: number };
   viewports: { phone: Viewport; desk: Viewport };
   visual: { pixelThreshold: number; maxDiffRatio: number; hide: string[] };
@@ -41,5 +42,10 @@ export function readYaml<T>(name: string): T {
 }
 
 export const qaConfig = (): QaConfig => readYaml<QaConfig>("qa.config.yaml");
+
+/** A page only `next dev` serves (devOnlyRoutes): on a production build it must answer 404. */
+export function devOnlyHere(pattern: string): boolean {
+  return process.env.QA_SERVER_KIND === "prod" && (qaConfig().devOnlyRoutes ?? []).some((r) => new RegExp(r).test(pattern));
+}
 export const forbiddenConfig = (): ForbiddenConfig => readYaml<ForbiddenConfig>("forbidden.yaml");
 export const knownIssues = (): KnownIssue[] => readYaml<{ issues: KnownIssue[] | null }>("known-issues.yaml").issues ?? [];

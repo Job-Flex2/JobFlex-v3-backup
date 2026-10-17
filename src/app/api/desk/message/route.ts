@@ -7,5 +7,5 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const r = await deskRequest(req);
   if (!r.ok) return r.res;
-  return json(await takeMessage(r.token.organizationId, r.token.callSid, { name: str(r.body.name, 120), phone: str(r.body.phone, 40) || r.token.from, about: str(r.body.about, 1000) }));
+  return json(await takeMessage(r.token.organizationId, r.token.callSid, { name: str(r.body.name, 120), phone: str(r.body.phone, 40) || r.token.from, about: str(r.body.about, 2000) }));
 }

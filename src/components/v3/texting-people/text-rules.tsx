@@ -83,7 +83,7 @@ export function TextRules({ rules, roster, clientsOn, company }: { rules: TextRu
   const toText = (r: TextRuleRow) =>
     [r.toClient ? "the client" : null, r.toOffice ? "owner & managers" : null, r.toRep ? "the rep" : null, r.toCrew ? "the crew" : null, ...r.toUserIds.map(nameOf)].filter(Boolean).join(", ");
   return (
-    <div className={`${s.root} ${s.rules}`} data-text-rules>
+    <div className={`${s.root} ${s.rules}`} data-text-rules data-nest="">
       {rules.length ? (
         <ul className={s.ruleList}>
           {rules.map((r) => (

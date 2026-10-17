@@ -37,6 +37,20 @@ export function channelLabel(c: FollowUpChannel): string {
  *  dialog uses, so the two surfaces explain the gap identically. */
 export const TEXT_NEEDS_TWILIO = "Texting needs a Twilio number — set one up on the Phone page.";
 
+/** A rule's longest delay — a year, in minutes. actions/followUps refuses
+ *  more, and every editor checks it before sending: an unbounded delay
+ *  overflowed the Int column (QA F-fd2683fc) or scheduled an Invalid Date. */
+export const MAX_DELAY_MINUTES = 525_600;
+export const MAX_DELAY_DAYS = MAX_DELAY_MINUTES / 1440;
+
+/** The typed day count as whole days, or the sentence the field shows. */
+export function readDelayDays(text: string): number | string {
+  const t = text.trim();
+  const n = Number(t);
+  if (!t || !Number.isInteger(n) || n < 1 || n > MAX_DELAY_DAYS) return `Enter whole days, 1 to ${MAX_DELAY_DAYS}.`;
+  return n;
+}
+
 /**
  * `FollowUpRule.template` is a free-form `String?`. Reusing it for the channel
  * keeps the rule on one row with no schema change; rows written before this

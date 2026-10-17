@@ -606,6 +606,11 @@
   transition: transform 0.2s, background-color 0.2s;
 }
 .jf-lp .lp-btn-lime:hover { background: #0e3d7a; transform: scale(1.02); }
+/* The "Start my 7-day FREE TRIAL" buttons read bold (owner, 2026-10-16):
+   hero, nav, sticky phone bar, Proposals, the final block. After .lp-cta
+   (600) and .lp-btn-dark (500) at the same weight of selector, so it wins;
+   size, colour and the text's capitals are the buttons' own. */
+.jf-lp .lp-trial-cta { font-weight: 700; }
 
 .jf-lp .lp-arrow-link {
   display: inline-flex;
@@ -1892,111 +1897,6 @@ html[data-lp-entrance] .jf-lp .lp-enter { visibility: hidden; }
   .jf-lp .lp-cmp-body > .lp-compare-plate .lp-compare-table { min-width: 680px; }
 }
 
-/* ── The card-less trial's line (2026-10-01, trial-line.tsx) ───────────
-   Its own line under the heading, as a stamp: frame, heavy uppercase, the
-   tick in blueprint blue (sky on the ink ground, 6.5:1). Not mono — it is
-   the offer, read before the button. */
-/* inline-block, the tick in the text's own flow: when the line wraps on a
-   phone the tick stays beside the words and both centre together, instead
-   of the tick pinned to a stretched box's left edge. */
-.jf-lp .lp-trial-line {
-  display: inline-block;
-  max-width: 100%;
-  padding: 9px 16px;
-  border: 2px solid currentColor;
-  border-radius: 2px;
-  font-family: var(--font-sans);
-  font-size: clamp(14px, 1.25vw, 17px);
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  text-align: center;
-  text-wrap: balance;
-}
-.jf-lp .lp-trial-line svg {
-  display: inline-block;
-  vertical-align: -3px;
-  margin-right: 9px;
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.jf-lp .lp-trial-line--dark { color: #fff; }
-.jf-lp .lp-trial-line--dark svg { stroke: #4a9eff; }
-.jf-lp .lp-trial-line--light { color: #0a0a0a; background: #fff; }
-.jf-lp .lp-trial-line--light svg { stroke: #1854a0; }
-.jf-lp .lp-trial-line--sm { padding: 5px 10px; border-width: 1.5px; font-size: 11.5px; letter-spacing: 0.05em; }
-.jf-lp .lp-trial-line--sm svg { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
-@media (max-width: 639px) {
-  .jf-lp .lp-trial-line--lg { padding: 8px 12px; font-size: 13.5px; letter-spacing: 0.04em; }
-}
-
-/* THE BADGE AS A LINK (owner, 2026-10-02): the stamp unchanged at rest; a
-   faint wash of its own ink on hover and a sky (or blue) ring on keyboard
-   focus — nothing that makes it a third button. The ::after reaches 4 px
-   past the frame above and below, so the 38 px hero badge is a 46 px target
-   without moving a pixel of the layout. */
-.jf-lp .lp-trial-line--link {
-  position: relative;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background-color 0.2s;
-}
-.jf-lp .lp-trial-line--link::after { content: ""; position: absolute; inset: -4px 0; }
-.jf-lp .lp-trial-line--link.lp-trial-line--dark:hover { background-color: rgba(255, 255, 255, 0.08); }
-.jf-lp .lp-trial-line--link.lp-trial-line--light:hover { background-color: #f1f4f8; }
-.jf-lp .lp-trial-line--link:focus-visible { outline: 2px solid #4a9eff; outline-offset: 3px; }
-.jf-lp .lp-trial-line--link.lp-trial-line--light:focus-visible { outline-color: #1854a0; }
-
-/* THE HERO'S BADGE (owner, 2026-10-01): under the button pair, exactly as
-   wide as the pair's outer edges (width 0 + min-width 100%: it takes the
-   column's width and never widens it), the pair's 12 px gap above it, the
-   tick at the left edge and the words centred, lower than a button.
-
-   THE HERO KEEPS ITS HEIGHT. The card-first note it replaces took 12 px +
-   one line (16.5 px under 1024, 18 px from it); the badge takes 12 + 38. From
-   640 px the badge hands the difference back as a negative bottom margin, so
-   everything under the buttons — and the hero photo, sized to the section —
-   stays where it was. Under 640 the badge keeps the hero's 8vmin (~30 px) to
-   the dashboard, and the hero's bottom padding hands the 21.5 px back
-   instead (.lp-hero-vis--badge). */
-.jf-lp .lp-trial-line--bar {
-  position: relative;
-  width: 0;
-  min-width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  padding: 0 38px;
-  font-size: 13.5px;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-.jf-lp .lp-trial-line--bar svg {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  margin: -8px 0 0;
-  width: 16px;
-  height: 16px;
-}
-@media (min-width: 640px) {
-  .jf-lp .lp-trial-line--bar { margin-bottom: -21.5px; }
-}
-@media (min-width: 1024px) {
-  .jf-lp .lp-trial-line--bar { margin-bottom: -20px; }
-}
-@media (max-width: 639px) {
-  .jf-lp .lp-hero-vis--badge { padding-bottom: calc(26vmin - 21.5px); }
-  .jf-lp .lp-trial-line--bar { padding: 0 28px; font-size: 11px; letter-spacing: 0.02em; }
-  .jf-lp .lp-trial-line--bar svg { left: 10px; width: 14px; height: 14px; margin-top: -7px; }
-}
-
 /* A hero button with a sentence on it (roofing, 2026-10-01): on a phone it
    wraps to two lines and keeps the full width, never squeezes. */
 @media (max-width: 640px) {
@@ -2020,7 +1920,7 @@ html[data-lp-entrance] .jf-lp .lp-enter { visibility: hidden; }
    / Reports."). */
 .jf-lp .lp-h1--lines { text-wrap: balance; }
 
-/* THE PRICE, under the trial's line (hero.tsx, hero-price.ts): the landing's
+/* THE PRICE, under the buttons (hero.tsx, hero-price.ts): the landing's
    mono caps, as the card-first note is lettered; white at 72% on the ink is
    9:1. It may wrap on a narrow phone, and then its two lines balance. */
 .jf-lp .lp-hero-price {
@@ -2043,19 +1943,28 @@ html[data-lp-entrance] .jf-lp .lp-enter { visibility: hidden; }
 @media (max-width: 374px) {
   .jf-lp .lp-hero-price { letter-spacing: 0.05em; }
 }
-/* The hero's badge hands its extra height back as a negative bottom margin
-   from 640 px (.lp-trial-line--bar, above), so the default hero keeps its
-   height to the pixel. With a line under it that margin would pull the
-   price up over the badge: here the badge keeps its own height. */
-@media (min-width: 640px) {
-  .jf-lp .lp-hero-pair--priced .lp-trial-line--bar { margin-bottom: 0; }
-}
 
 /* THE BUTTON UNDER THE SHOT (hero.tsx): where the hero's readers stop. One
    column a thumb wide on a phone, centred under the plate from 640 px; the
    plate drifts ±18 px against the scroll there (data-parallax), so the gap
-   above the button is wider than the drift. The trial's line under it in
-   the same mono caps as the price. */
+   above the button is wider than the drift. */
+/* The homeowner's door under the button below the shot (lib/home/homeownerDoor, 2026-10-16): one quiet line, the
+   link in the page's ink, never a second button. */
+.jf-lp .lp-home-door {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+.jf-lp .lp-home-door a {
+  display: inline-block;
+  padding: 6px 0;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .jf-lp .lp-hero-after {
   display: flex;
   flex-direction: column;
@@ -2065,19 +1974,8 @@ html[data-lp-entrance] .jf-lp .lp-enter { visibility: hidden; }
   margin: 20px auto 0;
   text-align: center;
 }
-.jf-lp .lp-hero-after-note {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
-}
 @media (min-width: 640px) {
   .jf-lp .lp-hero-after { align-items: center; max-width: none; margin-top: 44px; }
-}
-@media (min-width: 1024px) {
-  .jf-lp .lp-hero-after-note { font-size: 12px; }
 }
 
 /* THE HERO NO TALLER FOR IT ("shorten the hero": 99% of the measured ad

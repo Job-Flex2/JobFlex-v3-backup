@@ -13,6 +13,7 @@ import { EstimateCardButton } from "./estimate-card-button";
 import { JobFolder, type JobFolderProps } from "./job-folder";
 import styles from "./lead-detail.module.css";
 import { metaLeadPresentation } from "@/lib/meta/leadPresentation";
+import { leadSourceOf } from "@/lib/leads/sources";
 
 const cx = (...names: Array<string | false | null | undefined>) =>
   names.filter(Boolean).map((n) => styles[n as string] ?? n).join(" ");
@@ -110,7 +111,10 @@ export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLock
   const words = (lead.description ?? "").trim();
   const meta = metaLeadPresentation(lead);
   const canWriteScope = !lead.scope && canEstimate && words.length >= 12 && (!meta || meta.answers.length > 0);
-  const source = lead.source === "FACEBOOK" ? "Facebook" : lead.source === "LEAD_CENTER" ? "Lead Center" : lead.source === "HOMEOWNER" ? "Homeowner form" : (lead.source ?? "Manual");
+  // One vocabulary with the leads list (lib/leads/sources): JobFlex's own leads
+  // say so, and the shop's own say where they came from.
+  const src = leadSourceOf(lead.source);
+  const source = src.side === "jobflex" ? "From JobFlex · Lead Center" : `Your own lead · ${src.label}`;
 
   return (
     <>

@@ -67,6 +67,11 @@ side by side as choices (the lead page's Estimate this job), each wears one
 identity hue on its card edge and icon plate — Smart Proposal `--blueprint`,
 roof `--danger`, fence `--success`, HVAC `--sky`, manual proposal `--ink`.
 Amber stays reserved there for what an estimator still needs.
+A second (October 16, 2026): the sidebar's Estimating tools rows, desk and
+drawer, give each tool one colour from `--tool-smart`, `--tool-plan`,
+`--tool-roof`, `--tool-fence`, `--tool-video`, `--tool-hvac`, `--tool-deck`
+(globals.css) — the hard offset shadow under its white icon square, and the
+square's fill while the tool is open. Nothing else reads these tokens.
 
 Light mode only. Keep the existing drafting grid behind content, never over
 type. Resting cards have no shadow (`--shadow-sm` and `--shadow-md` are `none`).

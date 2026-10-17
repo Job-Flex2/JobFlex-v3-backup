@@ -790,6 +790,37 @@
 /* The title stays ink — a rose headline on a rose wash is the "everything is
    an alert" failure. Only the frame and the annotation layer carry the tone. */
 .erow.isBlocked .ewho { color: var(--danger); }
+
+/* ---- VISIT ROW (owner, 2026-10-16: "the appointment card should look
+   different from the job card") -------------------------------------------
+   A visit is tinted in the colour of whoever booked it — the AI desk (teal),
+   the customer online (blue), a service plan (amber), the office (violet) —
+   set inline as `--via` from lib/calendar/visitVia. A 4px rail, a time plate
+   framed in the same colour and a filled badge that names the booker. The
+   title stays ink; the wash is light enough to keep the mono lines at AA.
+   Declared after `.etime.isToday` like the blocked row. A visit on today
+   still gets the filled plate, in its own colour instead of blueprint. */
+.erow.isVisit {
+  background: color-mix(in srgb, var(--via) 9%, #fff);
+  box-shadow: inset 4px 0 0 var(--via);
+}
+.erow.isVisit:active { background: color-mix(in srgb, var(--via) 16%, #fff); }
+.erow.isVisit .etime { border-color: var(--via); background: #fff; }
+.erow.isVisit .etimeH,
+.erow.isVisit .etimeM,
+.erow.isVisit .etimeD { color: var(--via); }
+.erow.isVisit .etime.isToday { background: var(--via); }
+.erow.isVisit .etime.isToday .etimeH,
+.erow.isVisit .etime.isToday .etimeM,
+.erow.isVisit .etime.isToday .etimeD { color: #fff; }
+.erow.isVisitOff .etitleTxt { text-decoration: line-through; color: var(--muted); }
+.stVia {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-color: var(--via); background: var(--via); color: #fff;
+}
+.stViaIc { width: 12px; height: 12px; flex: 0 0 auto; }
+.dotVia { background: var(--via); }
+
 .ecrew {
   font-family: var(--font-mono);
   font-size: 11.5px; font-weight: 600;
@@ -1784,3 +1815,18 @@
 .allDayToggle[aria-pressed="true"] { border-color: var(--emerald); background: color-mix(in srgb, var(--emerald) 6%, var(--paper-deep)); }
 .allDayToggle[aria-pressed="true"] .fchkBox { background: var(--emerald); border-color: var(--emerald); color: var(--paper-deep); }
 .tab, .dpkLead, .dpkTgl, .tpkVal, .dpkDow span, .mgHeadCell { color: var(--ink); }
+
+/* ---- AI DESK HOURS (2026-10-16) --------------------------------------------
+   Hours kept open for the AI desk to book into — open time, not a booking: a
+   dashed teal rail and light stripes, so a visit booked inside them reads on
+   top. The badge and the month dot carry the same teal. */
+.erow.isDesk {
+  background: repeating-linear-gradient(135deg, rgba(15, 118, 110, 0.07) 0 8px, transparent 8px 16px), #fff;
+  box-shadow: inset 4px 0 0 #0f766e;
+}
+.erow.isDesk .etime { border-style: dashed; border-color: #0f766e; background: #fff; }
+.erow.isDesk .etimeH,
+.erow.isDesk .etimeM,
+.erow.isDesk .etimeD { color: #0f766e; }
+.stDesk { border-color: #0f766e; border-style: dashed; background: #fff; color: #0f766e; }
+.dotDesk { background: transparent; box-shadow: inset 0 0 0 1.5px #0f766e; }

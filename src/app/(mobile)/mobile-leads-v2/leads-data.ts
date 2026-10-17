@@ -16,6 +16,8 @@
 // they stop agreeing.
 import { isPlatformIncoming } from "@/components/v3/leads-blueprint/leads-data";
 
+import { detectEmailSource, leadSourceOf } from "@/lib/leads/sources";
+
 export type Lead = {
   /** Prisma cuid — the id every lead server action takes. */
   id: string;
@@ -107,8 +109,10 @@ export const METHODS: Array<{ key: MethodKey; label: string; icon: string }> = [
   { key: 'file', label: 'CSV', icon: 'i-file' }
 ];
 
+/** Where a lead came from, as a contractor says it (lib/leads/sources — the
+ *  desk sheet reads the same vocabulary). */
 export function srcLabel(v: string | null): string {
-  return v ? SRC[v] || v : 'Direct';
+  return leadSourceOf(v).label;
 }
 
 /**
@@ -140,7 +144,8 @@ export function parsePastedEmail(raw: string): StagedRow | null {
     project: null,
     // The email itself is the most valuable thing in the paste; keep it.
     description: t.length > 320 ? t.slice(0, 320) + '…' : t,
-    source: 'EMAIL',
+    // Angi, Thumbtack, Yelp, Google… notifications are that source, not "Email".
+    source: detectEmailSource(t),
   };
 }
 

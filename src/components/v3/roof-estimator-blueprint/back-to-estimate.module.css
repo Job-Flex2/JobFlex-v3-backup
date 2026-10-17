@@ -1,0 +1,29 @@
+/* The way back from the roof-types page to the estimate: one pill at the foot of the page. */
+.back {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1.5px solid #0a0a0a;
+  border-radius: 999px;
+  background: #1854a0;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  white-space: nowrap;
+}
+/* The page's own link colour would paint the words ink on blue — a tripled class outranks it. */
+.back.back.back,
+.back.back.back:visited,
+.back.back.back:hover { color: #fff; text-decoration: none; }
+.back:hover { background: #12437f; }
+.back:focus-visible { outline: 2px solid #4a9eff; outline-offset: 3px; }

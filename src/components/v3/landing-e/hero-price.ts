@@ -27,7 +27,8 @@ export function cheapestPlanWith(plans: readonly PricedPlan[], feature: string):
 }
 
 /** "Then from $95/mo · roof estimator included" — or null when the variant
- *  names no row, or no plan on sale carries it. */
+ *  names no row, or no plan on sale carries it. The trial it follows is the
+ *  hero's own button ("Start my 7-day free trial", owner 2026-10-16). */
 export function heroPriceLine(v: Pick<LandingVariant, "priceFeature" | "priceNote">, plans: readonly PricedPlan[]): string | null {
   if (!v.priceFeature) return null;
   const plan = cheapestPlanWith(plans, v.priceFeature);

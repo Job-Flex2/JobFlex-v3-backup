@@ -16,6 +16,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { longDate, money, relative, shortDate } from "@/lib/format";
+import { TEAM_TZ } from "@/lib/adminTasks/teamShared";
 import { Chip, Empty, Ic, KpiStrip, Sheet, type Tone, cx, useMdl, useReveal } from "@/components/v3/admin-influencers/admin-ui";
 import ui from "@/components/v3/admin-influencers/admin-ui.module.css";
 import styles from "./activity.module.css";
@@ -199,13 +200,23 @@ export function AdminActivityContent({
   feed,
   proposals,
   totals,
+  now,
 }: {
   range: ActivityRange;
   users: ActivityUserRow[];
   feed: ActivityEventDTO[];
   proposals: Record<string, ProposalPeek>;
   totals: ActivityTotals;
+  /** The server's clock at render. "4m ago" is drawn from it, so the server's
+   *  HTML and the hydrating page agree (QA F-7f3279fd); this browser's clock
+   *  takes over after mount. */
+  now: number;
 }) {
+  const [clock, setClock] = useState(now);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- the browser's clock, read once after hydration
+  useEffect(() => setClock(Date.now()), []);
+  // Days on the team's clock, never the machine's: the server runs on UTC.
+  const when = { now: clock, timeZone: TEAM_TZ };
   const rootRef = useRef<HTMLDivElement>(null);
   useReveal(rootRef);
   const feedRef = useRef<HTMLElement>(null);
@@ -367,7 +378,7 @@ export function AdminActivityContent({
                 </div>
                 <div>
                   <span className={ui.tdLbl}>Last seen</span>
-                  <span className={styles.when}>{u.lastActive ? relative(u.lastActive) : "—"}</span>
+                  <span className={styles.when}>{u.lastActive ? relative(u.lastActive, when) : "—"}</span>
                   {u.actions ? <span className={styles.whenSub}>{u.actions} actions</span> : null}
                 </div>
                 <div className={ui.tdAct}>
@@ -430,10 +441,10 @@ export function AdminActivityContent({
                 return (
                   <div key={e.id} className={cx(ui.tr, styles.feedCols)} role="row">
                     <div>
-                      <span className={styles.when} title={longDate(e.at)}>
-                        {relative(e.at)}
+                      <span className={styles.when} title={longDate(e.at, when)}>
+                        {relative(e.at, when)}
                       </span>
-                      <span className={styles.whenSub}>{shortDate(e.at)}</span>
+                      <span className={styles.whenSub}>{shortDate(e.at, when)}</span>
                     </div>
                     <div>
                       <span className={ui.tdLbl}>Member</span>
@@ -558,7 +569,7 @@ function ProposalSheet({ handleRef }: { handleRef: React.RefObject<PeekHandle | 
           <ul className={styles.pTimeline}>
             {timeline.map((row) => (
               <li key={row.key}>
-                <span className={styles.pWhen}>{longDate(row.at)}</span>
+                <span className={styles.pWhen}>{longDate(row.at, { timeZone: TEAM_TZ })}</span>
                 <span>{row.text}</span>
               </li>
             ))}

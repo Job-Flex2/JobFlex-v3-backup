@@ -33,6 +33,9 @@ test.afterAll(async () => {
   if (notes.length) fs.appendFileSync(path.join(runDir(), "forms-cleanup.log"), notes.join("\n") + "\n");
 });
 
+/** "form 0 (Create client)" or, for inputs with no <form>, "page fields + «Save»". */
+const formName = (f: { kind: string; index: number; submit: string | null }) => (f.kind === "loose" ? `page fields + «${f.submit ?? "?"}»` : `form ${f.index} (${f.submit ?? "no submit"})`);
+
 const pages = appRoutes().filter((r) => r.pattern.startsWith("/dashboard") && !r.params.length && (matrix.routes[r.pattern] ? matches(matrix.routes[r.pattern].owner, "open") : true));
 
 for (const route of pages) {
@@ -44,17 +47,15 @@ for (const route of pages) {
     const opener = forms.length ? null : await findOpener(page);
     if (opener && (await pressOpener(page, opener))) forms = (await findForms(page)).slice(0, 2);
     qa.meta({ kind: "forms", route: route.pattern, file: route.file, forms, opener });
-    if (!forms.length) {
-      test.info().annotations.push({ type: "note", description: "no form on the page" });
-      return;
-    }
+    // No <form> and no plain submit beside the inputs (a calendar's "Next", a material toggle): skipped.
+    test.skip(!forms.length, "пропущено: нет формы на странице");
     const results: Record<string, unknown>[] = [];
     let dialogs = 0;
     page.on("dialog", (d) => { dialogs++; void d.dismiss().catch(() => {}); });
     for (const form of forms) {
       for (const scenario of SCENARIOS) {
         if (scenario === "invalid" && !(form.hasEmail || form.hasTel || form.hasNumber || form.hasUrl)) continue;
-        await test.step(`form ${form.index} (${form.submit ?? "no submit"}) · ${scenario}`, async () => {
+        await test.step(`${formName(form)} · ${scenario}`, async () => {
           await open(page, route.pattern, { settleMs: 1200 });
           if (opener) await pressOpener(page, opener);
           const fresh = (await findForms(page)).find((f) => f.index === form.index && f.kind === form.kind) ?? form;
@@ -68,7 +69,7 @@ for (const route of pages) {
             expect.soft(out.validation.length > 0 || out.savedRequests === 0, `invalid email/phone/number: saved without a word to the person`).toBeTruthy();
           }
           if ((scenario === "empty" || scenario === "invalid") && out.pressed && !out.validation.length) {
-            test.info().annotations.push({ type: "warning", description: `${route.pattern} form ${form.index}: ${scenario} submit showed no validation message` });
+            test.info().annotations.push({ type: "warning", description: `${route.pattern} ${formName(form)}: ${scenario} submit showed no validation message` });
           }
         });
       }

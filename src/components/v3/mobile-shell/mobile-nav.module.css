@@ -466,39 +466,56 @@
   color: var(--muted); white-space: nowrap;
 }
 
-/* ── THE ESTIMATING TOOLS (owner, 2026-10-12: "make it look advanced") ──────
-   The desk sidebar draws them in a framed bay (blueprint-global.css, "THE
-   TOOL BAY"); the drawer's rows are already framed, so here each tool keeps
-   its row and gains the bay's tile — in the same six colours — and its spec
-   line, what it turns into what (nav-map `tool`). */
-.sbScroll [data-tone="violet"] { --tone: #6a4bd1; }
-.sbScroll [data-tone="blue"] { --tone: #1854a0; }
-.sbScroll [data-tone="spruce"] { --tone: #2c7a5a; }
-.sbScroll [data-tone="berry"] { --tone: #b8406a; }
-.sbScroll [data-tone="teal"] { --tone: #0d7a8a; }
-.sbScroll [data-tone="cedar"] { --tone: #a0582a; }
-.sbScroll [data-tone="navy"] { --tone: #2f4a7a; }
-.sbScroll .sbLink.sbTool { min-height: 58px; padding: 8px 11px 8px 9px; }
+/* ── THE ESTIMATING TOOLS (owner, 2026-10-12: "make it look advanced"; one
+   line a tool since 2026-10-16) ──────────────────────────────────────────────
+   The desk sidebar's tool row (blueprint-global.css, "THE TOOL BAY") at the
+   drawer's full width: a white icon square on a hard offset shadow in the
+   tool's colour (globals.css --tool-*), then the name. Open, the square fills
+   with the colour on an ink shadow, inside the drawer's ink plate; coming
+   soon, the shadow drops to 35%, the name goes muted and "Soon" follows it. */
+.sbScroll [data-tone="violet"] { --tone: var(--tool-smart); }
+.sbScroll [data-tone="navy"] { --tone: var(--tool-plan); }
+.sbScroll [data-tone="blue"] { --tone: var(--tool-roof); }
+.sbScroll [data-tone="spruce"] { --tone: var(--tool-fence); }
+.sbScroll [data-tone="berry"] { --tone: var(--tool-video); }
+.sbScroll [data-tone="teal"] { --tone: var(--tool-hvac); }
+.sbScroll [data-tone="cedar"] { --tone: var(--tool-deck); }
+.sbScroll .sbLink.sbTool {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center;
+  column-gap: 11px; padding: 7px 8px; border-radius: var(--radius);
+}
 .sbScroll .sbTile {
-  flex: 0 0 auto; width: 36px; height: 36px;
+  width: 34px; height: 34px;
   display: inline-flex; align-items: center; justify-content: center;
-  border: 1.5px solid var(--tone); border-radius: var(--radius);
-  background: color-mix(in srgb, var(--tone) 10%, #fff); color: var(--tone);
+  border: 1.5px solid var(--ink); border-radius: var(--radius);
+  background: #fff; box-shadow: 3px 3px 0 var(--tone);
+  transition: transform 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out), background 0.14s;
 }
-.sbScroll .sbLink .sbTile .ic { width: 19px; height: 19px; opacity: 1; color: inherit; }
-.sbScroll .sbLink.sbTool.active .sbTile { background: var(--tone); color: #fff; }
-.sbScroll .sbLink.sbTool.active { background: color-mix(in srgb, var(--tone) 7%, #fff); }
-.sbScroll .sbLink.sbToolSoon .sbTile { border-style: dashed; background: var(--paper-deep); }
-.sbScroll .sbTxt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.sbScroll .sbName { font-weight: 700; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sbScroll .sbDoes {
-  font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; font-weight: 500; line-height: 14px;
-  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.sbScroll .sbLink.sbTool .sbTile .ic { width: 18px; height: 18px; opacity: 1; color: var(--ink); }
+.sbScroll .sbTxt { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.sbScroll .sbTxt .sbName {
+  flex: 0 1 auto; min-width: 0;
+  font-family: var(--font-sans); font-size: 14px; font-weight: 800; line-height: 18px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.sbScroll .sbArrow { margin: 0 0.4em; color: var(--tone); font-weight: 700; }
-.sbScroll .sbSoonTag {
-  display: inline-flex; align-items: center; height: 16px; padding: 0 5px; margin-right: 7px; vertical-align: 1px;
-  border: 1px solid var(--muted-light, rgba(10, 10, 10, 0.35)); border-radius: var(--radius);
-  font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;
+.sbScroll .sbTxt .sbSoonTag {
+  flex: none; display: inline-flex; align-items: center; height: 16px; padding: 0 4px;
+  border: 1.5px solid var(--warning, var(--amber)); border-radius: var(--radius); color: var(--warning, var(--amber));
+  font-family: var(--font-sans); font-size: 8.5px; font-weight: 900; letter-spacing: 0.08em; line-height: 1; text-transform: uppercase;
 }
+@media (hover: hover) {
+  .sbScroll .sbLink.sbTool:not(.active):hover { background: var(--paper-deep); }
+  .sbScroll .sbLink.sbTool:not(.active):hover .sbTile { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--tone); }
+  .sbScroll .sbLink.sbToolSoon:not(.active):hover .sbTile { box-shadow: 4px 4px 0 color-mix(in srgb, var(--tone) 35%, transparent); }
+}
+.sbScroll .sbLink.sbTool.active { background: #fff; }
+.sbScroll .sbLink.sbTool.active .sbTile { background: var(--tone); box-shadow: 3px 3px 0 var(--ink); }
+.sbScroll .sbLink.sbTool.active .sbTile .ic { color: #fff; }
+.sbScroll .sbLink.sbToolSoon .sbTile { box-shadow: 3px 3px 0 color-mix(in srgb, var(--tone) 35%, transparent); }
+.sbScroll .sbLink.sbToolSoon:not(.active) .sbTile .ic,
+.sbScroll .sbLink.sbToolSoon:not(.active) .sbName { color: var(--muted); }
 .sbScroll .sbLink.sbLockd .sbTile { filter: grayscale(1); }
+@media (prefers-reduced-motion: reduce) {
+  .sbScroll .sbTile { transition: none; }
+  .sbScroll .sbLink.sbTool:not(.active):hover .sbTile { transform: none; }
+}

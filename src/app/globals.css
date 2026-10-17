@@ -19,6 +19,19 @@
   --rose: #a83232;
   --amber: #b88420;
 
+  /* ─── estimating tools (sidebar only) ─────────────
+     One colour per tool for the sidebar's Estimating tools rows, desk and
+     drawer: the offset shadow under each icon square and its fill when the
+     tool is open. Values are the tile colours the bay has worn since
+     2026-10-12; nothing else reads these. */
+  --tool-smart: #6a4bd1;
+  --tool-plan: #2f4a7a;
+  --tool-roof: #1854a0;
+  --tool-fence: #2c7a5a;
+  --tool-video: #b8406a;
+  --tool-hvac: #0d7a8a;
+  --tool-deck: #a0582a;
+
   /* ─── typography ──────────────────────────────── */
   --font-display: var(--font-inter);
   --font-sans: var(--font-inter);

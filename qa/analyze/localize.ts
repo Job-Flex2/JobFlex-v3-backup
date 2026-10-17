@@ -8,6 +8,7 @@ import { ROOT } from "../lib/env";
 import { appRoutes } from "../lib/routes";
 import { pathOf } from "./signals";
 import type { Llm } from "./llm";
+import { browserOnlyDensity, declared, hydrationComponent, namesIn } from "./roots";
 import type { Finding, Location, Signal } from "./types";
 
 const exists = (rel: string) => { try { return fs.statSync(path.join(ROOT, rel)).isFile(); } catch { return false; } };
@@ -72,8 +73,35 @@ export function candidates(f: Finding, signals: Signal[]): Location[] {
   for (const s of signals.slice(0, 6)) {
     fromStack(s.stack).forEach(add);
     fromStack(s.message).forEach(add);
-    components(s.stack).forEach(add);
   }
+  // Names in the stack, the console and a server action's answer → where they are declared.
+  // A test's own failure (a locator it never found) looks in qa/ first, everything else in src/.
+  const testSide = signals.some((s) => s.primary && s.extra?.testSide);
+  const texts = signals.slice(0, 12).flatMap((s) => [s.stack, s.message, typeof s.extra?.body === "string" ? s.extra.body : null]);
+  const hydration = signals.find((s) => s.kind === "page-error" && /hydrat/i.test(s.message));
+  if (hydration) {
+    const marked = hydrationComponent(hydration.message);
+    const hit = marked ? declared(marked) : null;
+    if (hit) add({ file: hit.file, line: hit.line, why: `вероятное место, по стеку: компонент ${marked} — над первой строкой расхождения в дереве гидрации`, confidence: "medium", source: "stack" });
+    // the diff did not survive: of the tree's components declared in src/, the one that reads
+    // browser-only values most densely (window, storage, cookies, Date.now) — React's own list of causes
+    const tree = namesIn([hydration.message]).map((n) => ({ n, hit: declared(n) })).filter((x) => x.hit && x.hit.file.startsWith("src/"));
+    const best = tree.map((x) => ({ ...x, d: browserOnlyDensity(x.hit!.file) })).filter((x) => x.d > 0).sort((a, b) => b.d - a.d)[0];
+    if (best) add({ file: best.hit!.file, line: best.hit!.line, why: `вероятное место, по стеку: компонент ${best.n} из дерева гидрации — читает значения браузера (window / storage / cookie)`, confidence: "low", source: "stack" });
+  }
+  // the root's own function first ("NoOrgError @ resolveOrg") — a production stack is minified,
+  // so this is often the only name there is
+  const root = signals.map((s) => s.extra?.root).find((r): r is string => typeof r === "string" && !/ @ \?$/.test(r));
+  if (root) {
+    const fn = root.split(" @ ")[1];
+    const hit = fn ? declared(fn) : null;
+    if (hit) add({ file: hit.file, line: hit.line, why: `вероятное место, по стеку: функция ${fn} (бросает ${root.split(" @ ")[0]})`, confidence: "medium", source: "stack" });
+  }
+  const names = namesIn(texts);
+  const hits = names.map((n) => ({ n, hit: declared(n) })).filter((x) => x.hit);
+  const ordered = testSide ? [...hits.filter((x) => x.hit!.file.startsWith("qa/")), ...hits.filter((x) => !x.hit!.file.startsWith("qa/"))] : hits.filter((x) => x.hit!.file.startsWith("src/"));
+  for (const x of ordered.slice(0, 3)) add({ file: x.hit!.file, line: x.hit!.line, why: `вероятное место, по стеку: ${/^[A-Z]/.test(x.n) ? "компонент" : "функция"} ${x.n}`, confidence: "medium", source: "stack" });
+  for (const s of signals.slice(0, 6)) components(s.stack).forEach(add);
   if (f.kind === "api-error" || f.kind === "network") {
     const url = signals.find((s) => s.url)?.url;
     const p = url ? pathOf(url) : "";

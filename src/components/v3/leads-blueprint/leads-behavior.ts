@@ -28,9 +28,17 @@ import { buyLead, priceLabel } from "@/components/leads/LeadPurchase";
 import { closeMdl, openMdl } from "@/components/v3/blueprint-shell/mdl-motion";
 import { leaveRow, staggerIn } from "@/components/v3/blueprint-shell/list-motion";
 import {
+  detectEmailSource,
+  leadSide,
+  leadSourceByKey,
+  leadSourceKey,
+  leadSourceOf,
+  ownSourceCounts,
+  sideCounts,
+} from "@/lib/leads/sources";
+import {
   STAGES,
   LEAD_STATUSES,
-  SRC,
   PAGE_SIZE,
   isPlatformIncoming,
   ownLeads as ownLeadsOf,
@@ -202,6 +210,9 @@ export function initLeadsContent(
     tab: "all",
     view: "table",
     status: "ALL",
+    /** Where the leads came from (2026-10-16): all, the ones JobFlex sent, or the shop's own. */
+    side: "" as "" | "jobflex" | "own",
+    /** A source KEY (lib/leads/sources) — "phone" and "AI_DESK" are one source. */
     source: null as string | null,
     spec: null as string | null,
     query: "",
@@ -251,7 +262,14 @@ export function initLeadsContent(
   }
 
   function srcLabel(v: string | null) {
-    return v ? SRC[v] || v : "Direct";
+    return leadSourceOf(v).label;
+  }
+  /** The source as a badge: JobFlex's own monogram plate, or the source's dot and name. */
+  function srcBadge(v: string | null) {
+    const s = leadSourceOf(v);
+    return s.side === "jobflex"
+      ? '<span class="lsrc-b lsrc-b--jobflex" title="Sent to you by JobFlex"><b>J</b>JobFlex</span>'
+      : '<span class="lsrc-b" title="' + esc(s.label) + '"><i style="--t:' + s.tone + '"></i>' + esc(s.short) + "</span>";
   }
   function initials(n: string) {
     const p = n
@@ -299,8 +317,10 @@ export function initLeadsContent(
   function renderFilters() {
     const sources: string[] = [];
     const specs: string[] = [];
-    leadsData.forEach(function (l) {
-      if (l.source && sources.indexOf(l.source) === -1) sources.push(l.source);
+    ownLeads().forEach(function (l) {
+      if (lstate.side && leadSide(l.source) !== lstate.side) return;
+      const key = leadSourceKey(l.source);
+      if (sources.indexOf(key) === -1) sources.push(key);
       if (l.spec && specs.indexOf(l.spec) === -1) specs.push(l.spec);
     });
     // Status is a dropdown (.dd, the shell's own pattern): the closed button
@@ -342,15 +362,20 @@ export function initLeadsContent(
         (!lstate.source ? " on" : "") +
         '" type="button" data-fsrc="">Any</button>' +
         sources
-          .sort()
+          .map(function (k) {
+            return { k: k, label: leadSourceByKey(k)?.label ?? k };
+          })
+          .sort(function (a, b) {
+            return a.label.localeCompare(b.label);
+          })
           .map(function (v) {
             return (
               '<button class="fchip' +
-              (lstate.source === v ? " on" : "") +
+              (lstate.source === v.k ? " on" : "") +
               '" type="button" data-fsrc="' +
-              v +
+              v.k +
               '">' +
-              srcLabel(v) +
+              esc(v.label) +
               "</button>"
             );
           })
@@ -383,6 +408,73 @@ export function initLeadsContent(
       badge.textContent = String(n);
       badge.classList.toggle("is-hidden", n === 0);
     }
+    renderOrigin();
+  }
+
+  /**
+   * WHERE THE LEADS CAME FROM (2026-10-16). The switch — All / From JobFlex /
+   * Your own leads — with a live count on each, and under it the shop's own
+   * leads by source (Facebook 4 · Email 2 · AI desk 1 …), each a filter. With
+   * "From JobFlex" picked the row says how JobFlex's leads are doing instead.
+   * Counts follow the search, never the status filter, so they answer "where
+   * are my leads coming from" whatever stage is in view.
+   */
+  function renderOrigin() {
+    const q = lstate.query.trim().toLowerCase();
+    const pool = ownLeads().filter(function (l) {
+      if (!q) return true;
+      return (l.name + " " + (l.email || "") + " " + l.project + " " + l.desc).toLowerCase().indexOf(q) !== -1;
+    });
+    const n = sideCounts(pool);
+    root.querySelectorAll<HTMLElement>("[data-side-n]").forEach(function (el) {
+      const k = el.dataset.sideN as "all" | "jobflex" | "own";
+      el.textContent = String(n[k] ?? 0);
+    });
+    root.querySelectorAll<HTMLButtonElement>("#lOrigin [data-side]").forEach(function (b) {
+      const on = (b.dataset.side ?? "") === lstate.side;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    const row = $("#lSrcs");
+    if (!row) return;
+    if (lstate.side === "jobflex") {
+      const jf = pool.filter(function (l) {
+        return leadSide(l.source) === "jobflex";
+      });
+      const won = jf.filter(function (l) {
+        return l.status === "WON";
+      }).length;
+      const quoted = jf.filter(function (l) {
+        return l.status === "QUOTED";
+      }).length;
+      row.innerHTML = jf.length
+        ? '<span class="lsrcs-note"><b>' + jf.length + "</b> lead" + (jf.length === 1 ? "" : "s") + " JobFlex sent you · " + quoted + " quoted · " + won + " won. New ones wait under Incoming.</span>"
+        : '<span class="lsrcs-note">No JobFlex leads in your book yet — new ones arrive under Incoming.</span>';
+      return;
+    }
+    const counts = ownSourceCounts(pool);
+    row.innerHTML = counts.length
+      ? '<span class="lsrcs-lbl">Your own leads by source</span>' +
+        counts
+          .map(function (c) {
+            return (
+              '<button class="lsrc-chip' +
+              (lstate.source === c.key ? " on" : "") +
+              '" type="button" data-osrc="' +
+              c.key +
+              '" aria-pressed="' +
+              (lstate.source === c.key) +
+              '"><i style="--t:' +
+              c.tone +
+              '"></i>' +
+              esc(c.label) +
+              "<b>" +
+              c.count +
+              "</b></button>"
+            );
+          })
+          .join("")
+      : '<span class="lsrcs-note">Leads you add — by hand, from an email, a list, Facebook or the AI desk — show here by where they came from.</span>';
   }
   /**
    * Everything except the status filter. The status list in the popover counts
@@ -403,7 +495,8 @@ export function initLeadsContent(
   function filteredExceptStatus() {
     const q = lstate.query.trim().toLowerCase();
     return ownLeads().filter(function (l) {
-      if (lstate.source && l.source !== lstate.source) return false;
+      if (lstate.side && leadSide(l.source) !== lstate.side) return false;
+      if (lstate.source && leadSourceKey(l.source) !== lstate.source) return false;
       if (lstate.spec && l.spec !== lstate.spec) return false;
       if (!q) return true;
       return (
@@ -475,8 +568,7 @@ export function initLeadsContent(
             "</a>" +
             '<span class="pt-sub" style="display:block">' +
             esc(l.email || l.phone || "—") +
-            " · " +
-            srcLabel(l.source) +
+            srcBadge(l.source) +
             "</span></span></div></td>" +
             '<td><span class="pt-sub">' +
             esc(l.project) +
@@ -1019,8 +1111,31 @@ export function initLeadsContent(
     setFilterPop(false);
     $("#filterBtn")?.focus();
   });
+  // The origin switch and the source chips under it (renderOrigin).
+  onEl($("#lOrigin"), "click", function (e) {
+    const target = e.target as HTMLElement;
+    const side = target.closest<HTMLElement>("[data-side]");
+    if (side) {
+      const v = (side.dataset.side ?? "") as "" | "jobflex" | "own";
+      lstate.side = v;
+      // A source of the shop's own makes no sense on JobFlex's side.
+      if (v === "jobflex") lstate.source = null;
+    }
+    const chip = target.closest<HTMLElement>("[data-osrc]");
+    if (chip) {
+      const k = chip.dataset.osrc ?? "";
+      lstate.source = !k || lstate.source === k ? null : k;
+      if (lstate.source && lstate.side === "jobflex") lstate.side = "own";
+    }
+    if (!side && !chip) return;
+    lstate.page = 1;
+    renderFilters();
+    renderTable();
+    renderBoard();
+  });
   onEl($("#fClear"), "click", function () {
     lstate.status = "ALL";
+    lstate.side = "";
     lstate.source = null;
     lstate.spec = null;
     lstate.page = 1;
@@ -1169,7 +1284,8 @@ export function initLeadsContent(
       phone: root.querySelector<HTMLInputElement>("#mPhone")?.value.trim() || null,
       project: root.querySelector<HTMLInputElement>("#mProject")?.value.trim() || null,
       description: null,
-      source: "MANUAL",
+      // Where it came from (2026-10-16): a call, a referral, Facebook, Angi…
+      source: root.querySelector<HTMLSelectElement>("#mSource")?.value || "MANUAL",
     });
     ["mName", "mEmail", "mPhone", "mProject"].forEach(function (id) {
       const el = root.querySelector<HTMLInputElement>("#" + id);
@@ -1185,6 +1301,9 @@ export function initLeadsContent(
       box.focus();
       return;
     }
+    // An Angi / Thumbtack / Yelp / Google / Facebook notification is that
+    // source, not "Email" (lib/leads/sources detectEmailSource).
+    const pastedFrom = detectEmailSource(text);
     text
       .split("\n")
       .map(function (x) {
@@ -1209,7 +1328,7 @@ export function initLeadsContent(
           phone: tel ? tel[0] : null,
           project: parts[1] || null,
           description: null,
-          source: "EMAIL",
+          source: pastedFrom,
         });
       });
     box.value = "";

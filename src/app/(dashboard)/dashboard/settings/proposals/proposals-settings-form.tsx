@@ -10,11 +10,30 @@ import { Badge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/settings/Toggle";
 import { toast } from "@/components/ui/Toast";
 import { updateProposalDefaults } from "@/actions/settings";
+import { underField } from "@/lib/actionResult";
 
 interface ScheduleStep {
   id: string;
   label: string;
   pct: number;
+}
+
+type PricingField = "materialMarkupPct" | "laborMarkupPct" | "defaultTaxRate";
+const PRICING_FIELDS: PricingField[] = ["materialMarkupPct", "laborMarkupPct", "defaultTaxRate"];
+// The same ceilings actions/settings proposalDefaultsSchema enforces (tax there
+// is the fraction, 1 = 100%).
+const MARKUP_MAX = 1000;
+const TAX_MAX = 100;
+
+/** The typed percent as a number, or the sentence the field shows instead. */
+function readPercent(text: string, max: number): number | string {
+  const t = text.trim();
+  if (!t) return "Enter a number — 0 for none.";
+  const n = Number(t);
+  if (!Number.isFinite(n)) return "Enter a number, like 12.5.";
+  if (n < 0) return "Can't be below 0.";
+  if (n > max) return `${max} at most.`;
+  return n;
 }
 
 const DEFAULT_STEPS: ScheduleStep[] = [
@@ -39,22 +58,42 @@ export function ProposalsSettingsForm({
 
   // Real, persisted org-wide markup defaults (hidden from the client). Seeded
   // into every new proposal; overridable per proposal in the Estimate breakdown.
-  const [matMk, setMatMk] = React.useState(initialMaterialMarkup);
-  const [labMk, setLabMk] = React.useState(initialLaborMarkup);
+  // Held as the TYPED text: Number("") is 0, so a number state turned a cleared
+  // field into a saved 0% markup without a word (QA F-1f3f6da5).
+  const [matMk, setMatMk] = React.useState(String(initialMaterialMarkup));
+  const [labMk, setLabMk] = React.useState(String(initialLaborMarkup));
   // Markup is a whole percent (20 = 20%). Tax is stored as a FRACTION (0.08),
   // so the field shows a percent (seed from fraction*100) and we divide by 100
   // on save. Do NOT treat these two the same way.
-  const [taxPct, setTaxPct] = React.useState(initialTaxRate * 100);
+  const [taxPct, setTaxPct] = React.useState(String(+(initialTaxRate * 100).toFixed(4)));
+  const [pricingErr, setPricingErr] = React.useState<Partial<Record<PricingField | "form", string>>>({});
   const [savingMarkup, setSavingMarkup] = React.useState(false);
 
   async function savePricing() {
+    // A wrong value is the person's to fix: nothing is sent, the saved
+    // defaults stay as they were, and the field says what it needs.
+    const errs: Partial<Record<PricingField, string>> = {};
+    const mat = readPercent(matMk, MARKUP_MAX);
+    const lab = readPercent(labMk, MARKUP_MAX);
+    const tax = readPercent(taxPct, TAX_MAX);
+    if (typeof mat === "string") errs.materialMarkupPct = mat;
+    if (typeof lab === "string") errs.laborMarkupPct = lab;
+    if (typeof tax === "string") errs.defaultTaxRate = tax;
+    setPricingErr(errs);
+    if (typeof mat === "string" || typeof lab === "string" || typeof tax === "string") return;
+
     setSavingMarkup(true);
     try {
-      await updateProposalDefaults({
-        materialMarkupPct: Number.isFinite(matMk) ? matMk : 0,
-        laborMarkupPct: Number.isFinite(labMk) ? labMk : 0,
-        defaultTaxRate: Number.isFinite(taxPct) ? taxPct / 100 : 0,
+      const res = await updateProposalDefaults({
+        materialMarkupPct: mat,
+        laborMarkupPct: lab,
+        defaultTaxRate: tax / 100,
       });
+      if (!res.ok) {
+        const field = res.field as PricingField | undefined;
+        setPricingErr(field && PRICING_FIELDS.includes(field) ? { [field]: underField(res) } : { form: res.error });
+        return;
+      }
       toast.success("Saved", "Default pricing updated for new proposals.");
     } catch {
       toast.error("Couldn't save", "Please try again.");
@@ -127,31 +166,48 @@ export function ProposalsSettingsForm({
             <Input
               label="Materials markup %"
               type="number"
+              inputMode="decimal"
               step="0.1"
               min={0}
+              max={MARKUP_MAX}
               value={matMk}
-              onChange={(e) => setMatMk(Number(e.target.value))}
+              onChange={(e) => setMatMk(e.target.value)}
+              error={pricingErr.materialMarkupPct}
+              aria-invalid={!!pricingErr.materialMarkupPct}
             />
             <Input
               label="Labor markup %"
               type="number"
+              inputMode="decimal"
               step="0.1"
               min={0}
+              max={MARKUP_MAX}
               value={labMk}
-              onChange={(e) => setLabMk(Number(e.target.value))}
+              onChange={(e) => setLabMk(e.target.value)}
+              error={pricingErr.laborMarkupPct}
+              aria-invalid={!!pricingErr.laborMarkupPct}
             />
           </div>
           <div className="mt-3">
             <Input
               label="Default tax rate %"
               type="number"
+              inputMode="decimal"
               step="0.1"
               min={0}
+              max={TAX_MAX}
               value={taxPct}
-              onChange={(e) => setTaxPct(Number(e.target.value))}
+              onChange={(e) => setTaxPct(e.target.value)}
+              error={pricingErr.defaultTaxRate}
+              aria-invalid={!!pricingErr.defaultTaxRate}
               hint="Applied on top of the subtotal, after markup. Enter 0 for no tax."
             />
           </div>
+          {pricingErr.form ? (
+            <p role="alert" className="mt-3 text-[11px] text-[color:var(--rose)]">
+              {pricingErr.form}
+            </p>
+          ) : null}
           <p className="mt-4 text-[11px] text-[color:var(--ink-muted)] leading-relaxed">
             New proposals start with this markup and tax. Markup is hidden — clients never
             see it as a separate line; it&apos;s folded into each item&apos;s price. Tax shows

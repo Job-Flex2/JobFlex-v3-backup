@@ -295,5 +295,7 @@ export default async function AdminActivityPage({ searchParams }: { searchParams
     feedTruncated: events.length >= FEED_LIMIT || roofRows.length >= ESTIMATE_LIMIT || hvacRows.length >= ESTIMATE_LIMIT,
   };
 
-  return <AdminActivityContent range={range} users={userRows} feed={feed} proposals={proposals} totals={totals} />;
+  // eslint-disable-next-line react-hooks/purity -- one read per request: the clock the trail's "4m ago" is drawn from on both sides
+  const now = Date.now();
+  return <AdminActivityContent range={range} users={userRows} feed={feed} proposals={proposals} totals={totals} now={now} />;
 }

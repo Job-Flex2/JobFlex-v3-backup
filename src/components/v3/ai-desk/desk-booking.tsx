@@ -9,6 +9,7 @@ import { previewDeskTimes, setCompanyTimezone } from "@/actions/aiDesk";
 import { timezoneWords, US_TIMEZONES } from "@/lib/aiDesk/shared";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
+import { DeskHours } from "./desk-hours";
 
 export function DeskBooking({ desk }: { desk: DeskSettingsData }) {
   const router = useRouter();
@@ -80,50 +81,55 @@ export function DeskBooking({ desk }: { desk: DeskSettingsData }) {
         </p>
       </div>
 
-      <div className={s.sec}>
-        <p className={`${s.note} ${desk.booking.enabled ? s.noteOk : s.noteErr}`} data-desk-booking-state>
-          {desk.booking.enabled ? C.bookingOn : C.bookingOff}
+      {/* on or off is the card's stamp; off, the way to turn it on stays here */}
+      {desk.booking.enabled ? null : (
+        <p className={s.note} data-desk-booking-state>
+          {C.bookingOff}
         </p>
-        {desk.booking.hoursWords ? (
-          <div className={s.kv}>
-            <span className={s.h}>{C.bookingHours}</span>
-            <span>{desk.booking.hoursWords}</span>
-          </div>
-        ) : null}
-        {desk.booking.services.length ? (
-          <div className={s.kv}>
-            <span className={s.h}>{C.bookingServices}</span>
-            <span className={s.facts}>
-              {desk.booking.services.map((v) => (
-                <span key={v} className={s.fact}>
-                  {v}
-                </span>
+      )}
+      {/* the hours and the visits as a ruled table, its rules the card's full width */}
+      {desk.booking.hoursWords || desk.booking.services.length ? (
+        <dl className={s.kv}>
+          {desk.booking.hoursWords ? (
+            <div>
+              <dt>{C.bookingHours}</dt>
+              <dd>{desk.booking.hoursWords}</dd>
+            </div>
+          ) : null}
+          {desk.booking.services.length ? (
+            <div>
+              <dt>{C.bookingServices}</dt>
+              <dd className={s.visits}>
+                {desk.booking.services.map((v) => {
+                  const [name, price] = v.split(" — ");
+                  return (
+                    <span key={v} className={s.visit}>
+                      {name}
+                      {price ? <span className={s.visitPrice}>&nbsp;— {price}</span> : null}
+                    </span>
+                  );
+                })}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+      {times ? (
+        <div className={s.sec} data-desk-preview-times>
+          <div className={s.h}>{C.previewTitle}</div>
+          {times.length ? (
+            <ul className={s.times}>
+              {times.map((t) => (
+                <li key={t.id}>{t.label}</li>
               ))}
-            </span>
-          </div>
-        ) : null}
-        <div className={s.acts}>
-          <a className={s.btn} href={desk.booking.url} data-desk-booking-link>
-            {C.bookingEdit}
-          </a>
-          <button type="button" className={s.btn} disabled={busy !== null} onClick={() => void preview()} data-desk-preview>
-            {busy === "preview" ? C.previewLoading : C.previewLoad}
-          </button>
+            </ul>
+          ) : null}
+          {previewNote ? <p className={s.note}>{previewNote}</p> : null}
         </div>
-        {times ? (
-          <div className={s.sec} data-desk-preview-times>
-            <div className={s.h}>{C.previewTitle}</div>
-            {times.length ? (
-              <ul className={s.times}>
-                {times.map((t) => (
-                  <li key={t.id}>{t.label}</li>
-                ))}
-              </ul>
-            ) : null}
-            {previewNote ? <p className={s.note}>{previewNote}</p> : null}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
+
+      {/* where the desk books from, and the hours reserved for it (2026-10-16) */}
+      <DeskHours hoursWords={desk.booking.hoursWords} />
 
       {note ? (
         <p className={`${s.note} ${s.noteOk}`} role="status">
@@ -135,6 +141,18 @@ export function DeskBooking({ desk }: { desk: DeskSettingsData }) {
           {err}
         </p>
       ) : null}
+
+      {/* the card's foot: the two ways on, one size, at the right */}
+      <div className={s.bookFoot}>
+        <div className={s.bookActs}>
+          <a className={s.btn} href={desk.booking.url} data-desk-booking-link>
+            {C.bookingEdit}
+          </a>
+          <button type="button" className={s.btn} disabled={busy !== null} onClick={() => void preview()} data-desk-preview>
+            {busy === "preview" ? C.previewLoading : C.previewLoad}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

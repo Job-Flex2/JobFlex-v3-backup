@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { storableSource } from "@/lib/leads/sources";
 import {
   requireManager,
   requireSalesOrManager,
@@ -111,7 +112,13 @@ const importLeadInput = z.object({
   phone: z.string().nullable().optional(),
   projectType: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
-  source: z.enum(["MANUAL", "EMAIL", "IMPORT"]).default("IMPORT"),
+  // Any of the contractor's own sources (lib/leads/sources) — picked by hand,
+  // detected in a pasted email, or read off a CSV column. Never LEAD_CENTER:
+  // only the platform says a lead came from JobFlex.
+  source: z
+    .string()
+    .default("IMPORT")
+    .transform((v) => storableSource(v, "IMPORT")),
 });
 const importLeadsInput = z.array(importLeadInput).min(1).max(500);
 

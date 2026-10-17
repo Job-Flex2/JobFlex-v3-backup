@@ -72,7 +72,7 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
     void run(`${row.userId}:ev`, () => setMemberTextEvents(row.userId, patch));
   };
   return (
-    <div className={s.root} data-texting-people>
+    <div className={s.root} data-texting-people data-nest="">
       {AUDIENCES.map((aud) => {
         const events = textEventsFor(aud);
         const people = rows.filter((r) => r.audience === aud);
