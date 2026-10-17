@@ -49,9 +49,9 @@ const answerFor = (requestId: string, packs: readonly string[]): InstantRoofData
   const st = structure({
     ...(packs.includes(P.ROOF_AREA) ? { areaSqft: 2400, squares: 24 } : {}),
     ...(packs.includes(P.PITCH_EAVE) ? { pitch: "6/12", eaveHeightFt: { N: 10, S: 10 } } : {}),
-    ...(packs.includes(P.PROPERTY_DETAILS) ? { facetCount: 4, shape: "Gable", chimney: true } : {}),
+    ...(packs.includes(P.PROPERTY_DETAILS) ? { chimney: true } : {}),
     ...(packs.includes(P.OUTLINES) ? { outline: [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.0002 }, { lat: 0.0001, lng: 0.0002 }, { lat: 0.0001, lng: 0 }], footprintSqft: 2000 } : {}),
-    ...(packs.includes(P.MATERIAL_CONDITION) ? { material: "Asphalt shingle" } : {}),
+    ...(packs.includes(P.MATERIAL_CONDITION) ? { material: "Asphalt shingle", facetCount: 4, shape: "Gable" } : {}),
   });
   return { requestId, address: "1 Main St", lat: 0, lng: 0, structures: [st], imagery: packs.includes(P.ORTHO) ? [{ token: "t-" + requestId, view: "ortho", bbox: null }] : [], totals: { areaSqft: st.areaSqft ?? 0, squares: (st.areaSqft ?? 0) / 100, predominantPitch: null, pitchLabel: st.pitch, maxEaveFt: null, facetCount: st.facetCount, footprintSqft: st.footprintSqft } };
 };
