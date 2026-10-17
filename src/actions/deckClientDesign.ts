@@ -47,6 +47,7 @@ import {
   type ClientLinkRow,
   type ClientStart,
   type ClientUnsure,
+  linkTitle,
 } from "@/lib/deck/clientDesign";
 import { markClientLinkSeen, unseenClientReturns, withProposals } from "@/lib/deck/clientLinksServer";
 
@@ -151,6 +152,7 @@ export async function createDeckClientLink(input: {
       clientId,
       address: (input.address ?? "").trim().slice(0, 300) || null,
       title: ((input.title ?? "").trim() || structureWords(theirs)).slice(0, 120),
+      titleAuto: !(input.title ?? "").trim(),
       start,
       base,
       work: null,
@@ -336,7 +338,10 @@ export async function sendDeckClientDesign(
       }
     }
     // The draft remembers the proposal it belongs to (the studio then updates that one) and the link it came through.
-    const body = JSON.stringify({ v: 1, title: returnedTitle({ clientName: name, title: link.title }), address: link.address, updatedAt: at, by: `${name} (client)`, proposalId: link.proposalId, clientToken: link.token, design: settled });
+    // The title says what came back (2026-10-17 audit: a client who made the 16 × 12 an 18 × 14 came back titled
+    // "16 ft × 12 ft deck"). A title the contractor typed on the link stays theirs; the automatic one — the words of
+    // the design the link started from — is redrawn from the client's design.
+    const body = JSON.stringify({ v: 1, title: returnedTitle({ clientName: name, title: linkTitle({ ...link, work: settled }) }), address: link.address, updatedAt: at, by: `${name} (client)`, proposalId: link.proposalId, clientToken: link.token, design: settled });
     await db.syncState.upsert({ where: { key }, create: { key, cursor: body }, update: { cursor: body } });
     const sent: ClientDesignLink = { ...link, clientName: name, clientPhone: phone, work, workAt: at, openedAt: link.openedAt ?? at, note, unsure, status: "sent", sentAt: at, sends: link.sends + 1, draftId };
     await writeLink(sent);

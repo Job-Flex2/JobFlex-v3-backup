@@ -1657,7 +1657,8 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               <div className={s.inboxText}>
                 <b>{l.clientName}</b> sent back a deck design{l.sentAt ? <span className={s.inboxWhen}> · {ago(l.sentAt)}</span> : null}
                 <span className={s.inboxJob}>for {jobLine(l)}</span>
-                {l.words ? <span className={s.inboxWords}>{l.words}</span> : null}
+                {/* What she designed — unless the job's name already says it (an untitled link is named by the design). */}
+                {l.words && (l.proposal || l.words !== l.title) ? <span className={s.inboxWords}>{l.words}</span> : null}
                 {l.note ? <span className={s.inboxNote}>“{l.note.length > 120 ? `${l.note.slice(0, 120)}…` : l.note}”</span> : null}
               </div>
               <div className={s.rowActs}>
@@ -1778,7 +1779,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
               </div>
             </details>
             {/* The client designs it (2026-10-11): a link to their own page, no prices; it comes back as a draft. */}
-            <DeckClientLink design={design} address={address} title={draftTitle || structureWords(design)} clientId={clientId} proposalId={linkedId} unseen={inbox.length} onOpened={(token) => setInbox((list) => list.filter((l) => l.token !== token))} />
+            <DeckClientLink design={design} address={address} title={draftTitle.trim()} clientId={clientId} proposalId={linkedId} unseen={inbox.length} onOpened={(token) => setInbox((list) => list.filter((l) => l.token !== token))} />
           </div>
         </div>
       </section>

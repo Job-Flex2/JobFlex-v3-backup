@@ -1861,3 +1861,53 @@
 .bp :global(.content .pt-cd--new .ic) { color: var(--success); }
 .bp :global(.content .pt-cd-open) { color: var(--blueprint); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
 .bp :global(.content .pt-cd--new .pt-cd-open) { color: #fff; background: var(--success); padding: 1px 8px; border-radius: var(--radius); text-decoration: none; }
+
+/* ── WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind) ───────────────────
+   A square in the work's colour (the estimating tools' own colours: deck cedar,
+   roof blue, fence spruce, HVAC teal; a remodel the blueprint navy; anything
+   else grey), the work's word, and the tool that made it. Smart Proposal speaks
+   in its violet. The type bar narrows every tab, chip and figure to one family. */
+.bp :global([data-fam]) { --fam: var(--muted); }
+.bp :global([data-fam="deck"]) { --fam: var(--tool-deck); }
+.bp :global([data-fam="roof"]) { --fam: var(--tool-roof); }
+.bp :global([data-fam="fence"]) { --fam: var(--tool-fence); }
+.bp :global([data-fam="hvac"]) { --fam: var(--tool-hvac); }
+.bp :global([data-fam="remodel"]) { --fam: var(--tool-plan); }
+.bp :global(.pkind-sq) { display: inline-block; width: 9px; height: 9px; flex: none; background: var(--fam); box-shadow: 1.5px 1.5px 0 var(--ink); }
+.bp :global(.pkind) {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-bottom: 5px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; line-height: 1.2;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink);
+}
+.bp :global(.pkind b) { font-weight: 700; color: var(--fam); }
+.bp :global(.pkind[data-fam="other"] b) { color: var(--ink); }
+.bp :global(.pkind-tool) { font-weight: 600; color: var(--muted); }
+.bp :global(.pkind-tool::before) { content: "·"; margin-right: 7px; color: var(--muted); }
+.bp :global(.pkind-tool[data-tool="smart"]) { color: var(--tool-smart); font-weight: 700; }
+.bp :global(.pkind-tool[data-tool="video"]) { color: var(--tool-video); }
+.bp :global(.pkind-tool[data-tool="blueprint"]) { color: var(--tool-plan); }
+.bp :global(.pjob-head .pkind), .bp :global(.psheet-head .pkind) { margin-bottom: 7px; }
+
+.bp :global(.pkinds) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -6px 0 18px; }
+.bp :global(.pkinds[hidden]) { display: none; }
+.bp :global(.pk-lbl) { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.bp :global(.pkchip) {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink);
+  transition: background 0.12s, box-shadow 0.12s, transform 0.12s;
+}
+.bp :global(.pkchip b) { font-weight: 700; color: var(--muted); }
+.bp :global(.pkchip:hover) { background: var(--paper-deep); }
+.bp :global(.pkchip.active) { background: var(--ink); color: #fff; box-shadow: 3px 3px 0 var(--fam, var(--blueprint)); transform: translate(-1px, -1px); }
+.bp :global(.pkchip.active b) { color: rgba(255, 255, 255, 0.72); }
+.bp :global(.pkchip.active .pkind-sq) { box-shadow: 1.5px 1.5px 0 #fff; }
+.bp :global(.pkchip:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .bp :global(.pkchip) { transition: none; } .bp :global(.pkchip.active) { transform: none; } }

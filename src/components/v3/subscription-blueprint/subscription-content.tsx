@@ -107,6 +107,16 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
         ? props.status.charAt(0).toUpperCase() + props.status.slice(1).toLowerCase().replace(/_/g, " ")
         : "—";
   const isTrial = props.status === "TRIALING" && !comp;
+  /** Why there is no cancel button, when there is none. */
+  const cancelReason = comp
+    ? `Your plan is a complimentary grant from JobFlex — nothing is billed, so there is nothing to cancel.${comp.endsAt ? ` It ends ${longDate(comp.endsAt)}.` : ""}`
+    : freePlan
+      ? "You're on the Free plan — there is no paid subscription to cancel."
+      : freeSwitch
+        ? `Already canceled — your plan switches to Free${freeSwitch.at ? ` on ${longDate(freeSwitch.at)}` : " at the end of this cycle"}.`
+        : ended
+          ? "Your plan has ended — there is nothing to cancel."
+          : "There is no paid subscription on this account to cancel. Plans set up by JobFlex are canceled through support.";
   const nextCharge = props.nextCharge;
   const nextChargeItems = useMemo(() => (nextCharge ? nextChargeLines(nextCharge) : []), [nextCharge]);
 
@@ -481,7 +491,26 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
         </div>
       </section>
 
-      {props.cancelOffer ? <CancelPlanLink offer={props.cancelOffer} className={cx("cancel-plan")} /> : null}
+      {/* CANCEL (owner, 2026-10-17: "where is the cancel subscription button"):
+          always its own card, last on the page. When there is nothing to
+          cancel, the card says why instead of disappearing. */}
+      <section className={cx("card", "cancel-card", RV)} id="cancelCard">
+        <div className={cx("card-head")}>
+          <h2>Cancel subscription</h2>
+        </div>
+        {props.cancelOffer ? (
+          <div className={cx("cancel-body")}>
+            <p className={cx("cancel-text")}>
+              {props.cancelOffer.accessAlreadyFree
+                ? "Stop the billing subscription from renewing. Your access stays on the Free plan."
+                : `You keep ${props.cancelOffer.planName} until the end of the cycle you've paid for, then move to the Free plan. You won't be billed again.`}
+            </p>
+            <CancelPlanLink offer={props.cancelOffer} className={cx("cancel-plan")} />
+          </div>
+        ) : (
+          <p className={cx("cancel-text")}>{cancelReason}</p>
+        )}
+      </section>
 
       {/* Out of flow, so it is not a flex item and adds no gap. Last, so it
           cannot shift the reveal cascade's stagger indices. */}

@@ -146,7 +146,7 @@ export function DeckClientLink({ design, address, title, clientId, proposalId = 
             <div key={l.token} className={cx(s.draftRow, l.unseen && s.draftRowNew)} data-client-link-row={l.token} data-client-link-unseen={l.unseen ? "1" : undefined}>
               <div style={{ minWidth: 0 }}>
                 <div className={s.draftName}>{l.clientName}</div>
-                <div className={s.draftMeta} data-client-link-job>{jobLine(l)}{l.words ? ` · ${l.words}` : ""}</div>
+                <div className={s.draftMeta} data-client-link-job>{jobLine(l)}{l.words && (l.proposal || l.words !== l.title) ? ` · ${l.words}` : ""}</div>
                 <Stages l={l} />
                 <div className={s.draftMeta}>
                   link sent {ago(l.createdAt)}{l.byName ? ` by ${l.byName}` : ""}

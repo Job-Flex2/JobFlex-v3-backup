@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "JobFlex Admin · Investors" };
 
 export default async function AdminInvestorsPage() {
   await requirePlatformAdmin();
-  const report = await investorReport({ refreshMeta: true });
+  const report = await investorReport({ refreshMeta: "admin" });
   // The shared link is printed with this deployment's own host.
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "www.jobflex.app";

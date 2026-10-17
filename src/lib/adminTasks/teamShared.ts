@@ -20,14 +20,17 @@
 /* THE PLATFORM ALERTS a team member can subscribe to (owner, 2026-10-17: "set the
  * text messaging for when someone signs up … converted from free trial … anything
  * comes from support … canceled his trial … live users more than 10 at the same
- * time"). Off for everyone until ticked — an alert text costs money and attention.
+ * time"; then "text when payment got charged in Stripe or failed"). Off for everyone
+ * until ticked — an alert text costs money and attention.
  * The texts themselves: lib/adminAlerts. */
-export const ALERT_KEYS = ["signup", "converted", "canceled", "support", "surge"] as const;
+export const ALERT_KEYS = ["signup", "converted", "canceled", "paid", "failed", "support", "surge"] as const;
 export type AlertKey = (typeof ALERT_KEYS)[number];
 export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
   signup: { label: "Sign-ups", hint: "a company signs up" },
   converted: { label: "Conversions", hint: "a trial becomes a paid plan" },
   canceled: { label: "Trial cancels", hint: "a trial cancels before it ends" },
+  paid: { label: "Payments", hint: "Stripe charges a company — plans, leads, minute packs" },
+  failed: { label: "Failed payments", hint: "a plan charge is declined — the first try and the last" },
   support: { label: "Support", hint: "a support ticket arrives" },
   surge: { label: "Traffic surge", hint: "the site is busy right now" },
 };

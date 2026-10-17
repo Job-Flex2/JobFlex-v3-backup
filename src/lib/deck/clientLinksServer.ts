@@ -79,6 +79,19 @@ export async function tieClientLinkToProposal(token: string | null | undefined, 
   }
 }
 
+/** WHO DESIGNED IT (2026-10-17): the contact the contractor typed on the link — name, phone, email, the job's
+ *  address and the client record it was made from — so the priced design is filed under its client instead
+ *  of "Unassigned". Null for a token that is not this org's. */
+export async function clientOfLink(token: string | null | undefined, organizationId: string): Promise<Pick<ClientDesignLink, "clientName" | "clientPhone" | "clientEmail" | "clientId" | "address"> | null> {
+  if (!token) return null;
+  try {
+    const link = await readOwnLink(token, organizationId);
+    return link ? { clientName: link.clientName, clientPhone: link.clientPhone, clientEmail: link.clientEmail, clientId: link.clientId, address: link.address } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A draft that came back before the link's token was written on it (before 2026-10-13): its link, by the draft id. */
 export async function clientLinkOfDraft(draftId: string, organizationId: string): Promise<ClientDesignLink | null> {
   if (!/^[a-f0-9-]{8,40}$/i.test(draftId)) return null;

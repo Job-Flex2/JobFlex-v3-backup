@@ -1112,3 +1112,49 @@
 .prowClientNew a { color: #fff; background: var(--success, #3a7d44); border-color: var(--success, #3a7d44); }
 @keyframes prowBloom { 0% { box-shadow: 0 0 0 0 rgba(58, 125, 68, 0.55); } 70% { box-shadow: 0 0 0 10px rgba(58, 125, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(58, 125, 68, 0); } }
 @media (prefers-reduced-motion: reduce) { .prowClientNew { animation: none; } }
+
+/* ── WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind) ─────────────────
+   The desk list's mark and type bar, on the phone: the work's square in the
+   estimating tools' colours, its word, the tool (Smart Proposal in violet); a
+   strip of type chips that narrows every tab, list and figure. */
+.pkind, .pkchip { --fam: var(--muted, #6b6b6b); }
+.pkind[data-fam="deck"], .pkchip[data-fam="deck"] { --fam: var(--tool-deck); }
+.pkind[data-fam="roof"], .pkchip[data-fam="roof"] { --fam: var(--tool-roof); }
+.pkind[data-fam="fence"], .pkchip[data-fam="fence"] { --fam: var(--tool-fence); }
+.pkind[data-fam="hvac"], .pkchip[data-fam="hvac"] { --fam: var(--tool-hvac); }
+.pkind[data-fam="remodel"], .pkchip[data-fam="remodel"] { --fam: var(--tool-plan); }
+.pkSq { display: inline-block; width: 9px; height: 9px; flex: none; background: var(--fam); box-shadow: 1.5px 1.5px 0 var(--ink, #0a0a0a); }
+.pkind {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin: 6px 0 4px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; line-height: 1.2;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink, #0a0a0a);
+}
+.pkind b { font-weight: 700; color: var(--fam); }
+.pkind[data-fam="other"] b { color: var(--ink, #0a0a0a); }
+.pkTool { font-weight: 600; color: var(--muted, #6b6b6b); }
+.pkTool::before { content: "·"; margin-right: 7px; }
+.pkTool[data-tool="smart"] { color: var(--tool-smart); font-weight: 700; }
+.pkTool[data-tool="video"] { color: var(--tool-video); }
+.pkTool[data-tool="blueprint"] { color: var(--tool-plan); }
+
+.pkinds {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  margin: 0 calc(-1 * var(--pad-x)) 16px; padding: 2px var(--pad-x) 6px;
+  -webkit-overflow-scrolling: touch;
+}
+.pkinds::-webkit-scrollbar { display: none; }
+.pkchip {
+  flex: none; display: inline-flex; align-items: center; gap: 7px;
+  min-height: 40px; padding: 0 14px;
+  border: 1.5px solid var(--ink, #0a0a0a); border-radius: 0;
+  background: #fff;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  color: var(--ink, #0a0a0a);
+}
+.pkchip b { font-weight: 700; color: var(--muted, #6b6b6b); }
+.pkchip.active { background: var(--ink, #0a0a0a); color: #fff; box-shadow: 3px 3px 0 var(--fam, var(--blueprint, #1854a0)); }
+.pkchip.active b { color: rgba(255, 255, 255, 0.72); }
+.pkchip.active .pkSq { box-shadow: 1.5px 1.5px 0 #fff; }

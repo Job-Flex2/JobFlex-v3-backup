@@ -15,6 +15,9 @@
      reverted; paper-deep stays a shade RECESSED from the sheet. */
   --paper: #f2f0eb;
   --paper-deep: #ebe8e1;
+  /* the white card surface (owner, 2026-10-17: "white cards on mobile, like the desktop"); also read by the
+     AI desk setup nested here (ai-desk.module.css --k-sheet) */
+  --sheet: #ffffff;
   --ink: #0a0a0a;
   --ink-soft: #2a2a2a;
   --blueprint: #1854a0;
@@ -274,7 +277,7 @@
 .mast {
   border: var(--border);
   border-radius: var(--radius);
-  background: var(--paper);
+  background: var(--sheet);
   box-shadow: 3px 3px 0 var(--shadow);
   overflow: hidden;
 }
@@ -322,7 +325,7 @@
   padding: 0 14px;
   border: var(--border);
   border-radius: var(--radius);
-  background: var(--paper);
+  background: var(--sheet);
   box-shadow: 3px 3px 0 var(--shadow);
 }
 .srch .ic { width: 17px; height: 17px; color: var(--muted); }
@@ -351,7 +354,7 @@
   padding: 0 14px;
   border: var(--border);
   border-radius: var(--radius);
-  background: var(--paper);
+  background: var(--sheet);
   font-size: 12.5px; font-weight: 800;
   letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--ink);
@@ -374,7 +377,7 @@
   position: absolute;
   top: calc(100% + 6px); left: 0; right: 0;
   z-index: 40;
-  background: var(--paper);
+  background: var(--sheet);
   border: var(--border);
   border-radius: var(--radius);
   /* No offset shadow — the hard ink drop read as a black slab; the 2px ink
@@ -490,7 +493,7 @@
 .glog {
   border: var(--border);
   border-radius: var(--radius);
-  background: var(--paper);
+  background: var(--sheet);
   box-shadow: 3px 3px 0 var(--shadow);
   overflow: hidden;
 }
@@ -695,7 +698,7 @@
   position: absolute;
   left: 0; right: 0; bottom: 0;
   z-index: var(--msheet-z);
-  background: var(--paper);
+  background: var(--sheet);
   border-top: var(--border);
   transform: translateY(100%);
   visibility: hidden;

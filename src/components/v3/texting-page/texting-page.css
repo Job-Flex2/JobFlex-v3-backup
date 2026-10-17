@@ -84,14 +84,14 @@
   color: var(--ink);
 }
 .jf-texting .txp-usageL {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .jf-texting .txp-usageS {
-  font-size: 12.5px;
-  color: var(--ink-muted);
+  font-size: 13.5px;
+  color: var(--ink-soft);
 }
 
 /* ── the setup cards ───────────────────────────────────────────────────── */
@@ -138,7 +138,7 @@
 }
 .jf-texting .txp-cardT > p {
   max-width: 72ch;
-  font-size: 14.5px;
+  font-size: 15px;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -209,9 +209,9 @@
 .jf-texting .txp-note {
   margin-top: 12px;
   max-width: 72ch;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.5;
-  color: var(--ink-muted);
+  color: var(--ink-soft);
 }
 .jf-texting .txp-cardB > .txp-note:first-child {
   margin-top: 0;
@@ -252,7 +252,7 @@
   padding: 3px 7px;
   border: 1px solid var(--ink);
   border-radius: var(--r-sm);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -466,6 +466,238 @@
   color: var(--ink-soft);
 }
 
+/* ── THE STATUS AND THE SETUP CHECKLIST (owner, 2026-10-17: the AI desk's
+   pattern, so the two pages read alike) ───────────────────────────────────
+   One status line in its tone (amber until texting is live, green once it
+   is), then one framed card: its title and how far along, and a row per step
+   — a numbered square (green with a tick once done), the name and where it
+   stands, a stamp, and "Open"/"Close" with a chevron. The open step turns
+   blue-soft with a blue bar on its left edge and its part unfolds under it. */
+.jf-texting .txp-status {
+  padding: 14px 16px;
+  border: 2px solid var(--amber);
+  border-left-width: 6px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--amber) 8%, var(--paper-deep));
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.jf-texting .txp-status.is-live {
+  border-color: var(--emerald);
+  background: color-mix(in srgb, var(--emerald) 8%, var(--paper-deep));
+}
+.jf-texting .txp-setup {
+  min-width: 0;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-texting .txp-setupH {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  padding: 18px 22px;
+  border-bottom: 2px solid var(--ink);
+}
+.jf-texting .txp-setupH h2 {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.jf-texting .txp-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.jf-texting .txp-count {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+.jf-texting .txp-fill {
+  position: relative;
+  display: block;
+  width: 160px;
+  height: 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  overflow: hidden;
+}
+.jf-texting .txp-fill > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--emerald);
+  transition: width 0.3s var(--ease-out);
+}
+.jf-texting .txp-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.jf-texting .txp-stepRow + .txp-stepRow {
+  border-top: 1.5px solid var(--ink);
+}
+.jf-texting .txp-stepBtn {
+  appearance: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 16px;
+  width: 100%;
+  min-height: 72px;
+  margin: 0;
+  padding: 14px 22px;
+  border: 0;
+  border-radius: 0;
+  background: var(--paper-deep);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.14s var(--ease-out);
+}
+.jf-texting .txp-stepBtn:hover {
+  background: color-mix(in srgb, var(--ink) 4%, var(--paper-deep));
+}
+.jf-texting .txp-stepBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+.jf-texting .txp-stepRow[data-open="1"] > .txp-stepBtn {
+  background: var(--accent-soft);
+  border-bottom: 1.5px solid var(--ink);
+}
+.jf-texting .txp-stepRow[data-open="1"] > .txp-stepBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--accent);
+}
+.jf-texting .txp-stepN {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.jf-texting .txp-stepRow[data-tone="ok"] .txp-stepN {
+  border-color: var(--emerald);
+  background: var(--emerald);
+  color: #fff;
+}
+.jf-texting .txp-stepT {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.jf-texting .txp-stepT > b {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.jf-texting .txp-stepT > span {
+  max-width: 72ch;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.jf-texting .txp-stamp {
+  padding: 4px 8px;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.jf-texting .txp-stamp[data-tone="ok"] {
+  border-color: var(--emerald);
+  background: color-mix(in srgb, var(--emerald) 8%, var(--paper-deep));
+  color: var(--emerald);
+}
+.jf-texting .txp-stamp[data-tone="wait"] {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 8%, var(--paper-deep));
+  color: var(--amber);
+}
+.jf-texting .txp-stamp[data-tone="bad"] {
+  border-color: var(--rose);
+  background: color-mix(in srgb, var(--rose) 8%, var(--paper-deep));
+  color: var(--rose);
+}
+.jf-texting .txp-stepGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: transform 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+.jf-texting .txp-stepGo > svg {
+  transition: transform 0.16s var(--ease-out);
+}
+.jf-texting .txp-stepBtn:hover .txp-stepGo {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.jf-texting .txp-stepRow[data-open="1"] .txp-stepGo {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.jf-texting .txp-stepRow[data-open="1"] .txp-stepGo > svg {
+  transform: rotate(180deg);
+}
+.jf-texting .txp-stepB {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px 22px 26px;
+}
+.jf-texting .txp-stepB[hidden] {
+  display: none;
+}
+.jf-texting .txp-stepB > .txp-note {
+  margin-top: 0;
+}
+.jf-texting .txp-lead {
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
 /* ── narrow content (a 1024px desk with the sidebar open) ─────────────── */
 @container (max-width: 860px) {
   .jf-texting .txp-pair {
@@ -480,6 +712,35 @@
 @container (max-width: 600px) {
   .jf-texting .txp-title {
     font-size: 36px;
+  }
+  /* the stamp drops under the name; the control is the chevron alone, a 44px square */
+  .jf-texting .txp-stepBtn {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px 12px;
+    padding: 14px;
+  }
+  .jf-texting .txp-stamp {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+  .jf-texting .txp-stepGo {
+    grid-column: 3;
+    grid-row: 1;
+    justify-content: center;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+  .jf-texting .txp-stepGoT {
+    display: none;
+  }
+  .jf-texting .txp-stepB {
+    padding: 18px 14px 20px;
+  }
+  .jf-texting .txp-setupH {
+    padding: 16px 14px;
   }
   .jf-texting .txp-cardH {
     padding: 16px 18px;
@@ -496,6 +757,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .jf-texting .txp-stepBtn,
+  .jf-texting .txp-stepGo,
+  .jf-texting .txp-stepGo > svg,
+  .jf-texting .txp-fill > span,
   .jf-texting .txp-btn,
   .jf-texting .txp-onoff > button,
   .jf-texting .txp-how > summary::before {

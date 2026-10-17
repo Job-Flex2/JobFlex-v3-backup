@@ -16,6 +16,7 @@
 // would show rows whose menu items all fail with "Not found". This function
 // never widens that scope and never takes an org id from its caller.
 
+import { proposalKindOf, type KindEvent } from "@/lib/proposalKind";
 import { requireProposalStaff } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { contractSchedule, contractTotal } from "@/lib/contractTotal";
@@ -115,6 +116,25 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
     },
   });
 
+  // WHAT KIND, MADE BY WHAT (2026-10-17, owner: "show which proposal belongs to — deck, roof, fence, or it's
+  // a remodel; if it uses Smart Proposal"): the trail line each proposal was made with, oldest first.
+  const eventsBy = new Map<string, KindEvent[]>();
+  if (proposals.length) {
+    const made = await db.activityEvent
+      .findMany({
+        where: { organizationId, proposalId: { in: proposals.map((p) => p.id) }, kind: { in: ["CREATED", "ESTIMATE"] } },
+        orderBy: { createdAt: "asc" },
+        select: { proposalId: true, summary: true, meta: true },
+      })
+      .catch(() => []);
+    for (const e of made) {
+      if (!e.proposalId) continue;
+      const list = eventsBy.get(e.proposalId) ?? [];
+      list.push({ summary: e.summary, meta: e.meta });
+      eventsBy.set(e.proposalId, list);
+    }
+  }
+
   // WHO MADE IT (2026-09-24): the Owner column carries the member's mark —
   // name, role and their color (lib/team/who). The role lives on the
   // membership, not the user, so it is looked up once for the whole book.
@@ -208,6 +228,7 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
       accepted: plateDate(p.acceptedAt),
       paid: plateDate(p.paidAt),
       decided: p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID" ? (p.acceptedAt ? `accepted ${plateDate(p.acceptedAt)}` : "accepted") : p.status === "DECLINED" ? "declined" : null,
+      kind: proposalKindOf({ trade: p.trade, title: p.title, scope: p.scopeOfWork, description: p.description, events: eventsBy.get(p.id), lineNames: p.lineItems.map((l) => l.name) }),
       clientDesign: clientDesignState(clientLinks.get(p.id)),
       fresh: (() => {
         const f = freshBy.get(p.id);

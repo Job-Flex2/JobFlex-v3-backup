@@ -21,11 +21,11 @@ export function DeskWorkspaceHeader({ settings }: { settings?: DeskWorkspaceData
       <h1>AI desk</h1>
       <nav className={s.tabs} aria-label="AI desk">
         <Link href="/dashboard/phone" aria-current={!settingsOpen ? "page" : undefined}>
-          <PhoneCall size={17} strokeWidth={2.2} aria-hidden />
+          <PhoneCall size={15} strokeWidth={2.2} aria-hidden />
           Calls
         </Link>
         <Link href="/dashboard/phone?tab=settings" aria-current={settingsOpen ? "page" : undefined}>
-          <SlidersHorizontal size={17} strokeWidth={2.2} aria-hidden />
+          <SlidersHorizontal size={15} strokeWidth={2.2} aria-hidden />
           AI desk setup
         </Link>
       </nav>

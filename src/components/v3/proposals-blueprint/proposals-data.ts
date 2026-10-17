@@ -15,6 +15,7 @@
 // menu item), `materials` is the line-item set the materials sheet shops, and
 // `before` / `after` are the persisted completion photos.
 
+import type { ProposalKind } from "@/lib/proposalKind";
 import type { MaterialLine } from "@/components/proposal/MaterialsSheet";
 import type { ProposalPhoto } from "@/components/v3/proposals-c/types";
 
@@ -113,6 +114,9 @@ export type ProposalRow = {
   fresh?: { accepted?: string; declined?: string; design?: boolean } | null;
   /** "accepted Sep 20" / "declined Sep 21" for the row's sub line. */
   decided?: string | null;
+  /** What kind of job and which tool made it (2026-10-17, lib/proposalKind): "Deck · Deck Studio",
+   *  "Kitchen remodel · Smart Proposal". The list marks every row and filters by `kind.family`. */
+  kind?: ProposalKind;
 };
 
 export type ClientDesignState = {

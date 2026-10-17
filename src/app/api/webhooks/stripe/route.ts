@@ -22,7 +22,8 @@ import { CARD_UPDATE_PURPOSE, finishCardUpdate, sendDunningEmail } from "@/lib/c
 import { completeFromCheckoutSession, completeFromPaymentIntent } from "@/lib/leadCenter/purchase";
 import { completeFromPackSession } from "@/lib/aiDesk/packs";
 import { cancelReplacedSubscription } from "@/lib/checkoutReturn";
-import { invoiceSubscriptionId } from "@/lib/stripeCompat";
+import { invoiceSubscriptionId, refId } from "@/lib/stripeCompat";
+import { alertInvoiceFailed, alertInvoicePaid, alertOneTimeCharge } from "@/lib/adminAlertsPayments";
 
 export const runtime = "nodejs";
 
@@ -59,10 +60,16 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       const session = event.data.object as Stripe.Checkout.Session;
       // A Lead Center lead paid through Checkout (lib/leadCenter/purchase):
       // the contacts open here, or on the return page if it got there first.
-      if (await completeFromCheckoutSession(session)) break;
+      if (await completeFromCheckoutSession(session)) {
+        await sessionChargeAlert(session, event.livemode);
+        break;
+      }
       // An AI desk minute pack paid through Checkout (lib/aiDesk/packs): on the
       // balance here, or on the return page if it got there first.
-      if (await completeFromPackSession(session)) break;
+      if (await completeFromPackSession(session)) {
+        await sessionChargeAlert(session, event.livemode);
+        break;
+      }
       // A card added to a card-less trial (setup mode), or the plan restarted
       // after one ended (subscription mode) — lib/cardlessTrial. The return
       // page usually got there first; both are safe to run twice.
@@ -135,19 +142,33 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       // Member-referral side: convert PENDING referrals on the referred org's
       // first real payment + apply owed 50%-of-a-month referrer credits.
       await processReferralEffectsForInvoice(invoice);
+      // The team's "Payments" text (lib/adminAlertsPayments) — once per invoice, $0 skipped.
+      await alertInvoicePaid(invoice, event.livemode).catch((err) => console.warn("[adminAlerts] paid text:", err));
       break;
     }
     // A lead paid through Checkout with a method that settles later (a Link
     // bank debit): the session completes unpaid and this is the "paid".
     case "checkout.session.async_payment_succeeded": {
-      await completeFromCheckoutSession(event.data.object as Stripe.Checkout.Session);
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (await completeFromCheckoutSession(session)) await sessionChargeAlert(session, event.livemode);
       break;
     }
     // The backstop for a lead charged to the card on file: the synchronous
     // "succeeded" opens it at once, and this repairs the rare charge whose
     // answer never got written. Ignores every PaymentIntent that is not a lead's.
     case "payment_intent.succeeded": {
-      await completeFromPaymentIntent(event.data.object as Stripe.PaymentIntent);
+      const pi = event.data.object as Stripe.PaymentIntent;
+      await completeFromPaymentIntent(pi);
+      // A lead or minute pack charged to the card on file never passes a Checkout
+      // session; the same charge bought through Checkout is told once (by its id).
+      await alertOneTimeCharge({
+        paymentIntentId: pi.id,
+        purpose: pi.metadata?.jf_purpose,
+        organizationId: pi.metadata?.organizationId,
+        cents: pi.amount_received || pi.amount,
+        currency: pi.currency,
+        livemode: event.livemode,
+      }).catch((err) => console.warn("[adminAlerts] one-time paid text:", err));
       break;
     }
     case "invoice.payment_failed": {
@@ -172,6 +193,8 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       if (live) await syncSubscriptionFromStripe(live, stripe).catch((err) => console.warn("[webhook] past-due sync:", err));
       // The owner's two emails: the first failure, and Stripe's last try.
       await sendDunningEmail(invoice).catch((err) => console.warn("[webhook] dunning email failed:", err));
+      // The team's "Failed payments" text, on the same two tries (lib/adminAlertsPayments).
+      await alertInvoiceFailed(invoice, event.livemode, stripe).catch((err) => console.warn("[adminAlerts] failed text:", err));
       break;
     }
     case "charge.refunded": {
@@ -206,6 +229,20 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
     default:
       break;
   }
+}
+
+/** A lead or minute pack paid through Checkout → the team's "Payments" text, keyed by the
+ *  charge's payment intent so the payment_intent.succeeded of the same charge is silent. */
+async function sessionChargeAlert(session: Stripe.Checkout.Session, livemode: boolean) {
+  if (session.payment_status !== "paid") return;
+  await alertOneTimeCharge({
+    paymentIntentId: refId(session.payment_intent),
+    purpose: session.metadata?.jf_purpose,
+    organizationId: session.metadata?.organizationId,
+    cents: session.amount_total ?? 0,
+    currency: session.currency,
+    livemode,
+  }).catch((err) => console.warn("[adminAlerts] checkout paid text:", err));
 }
 
 /* THE EVENT IS A SIGNAL, STRIPE IS THE STATE (owner, 2026-10-14). A

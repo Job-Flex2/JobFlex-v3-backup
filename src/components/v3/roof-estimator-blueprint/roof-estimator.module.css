@@ -1442,18 +1442,17 @@
 .bp :global(.content .ms-track) { margin-top: 12px; height: 10px; border: 1.5px solid var(--ink); background: #fff; overflow: hidden; }
 .bp :global(.content .ms-fill) { display: block; height: 100%; width: 0; background: var(--blueprint); transition: width 300ms linear; }
 /* The step list: what is done, what is under way, what is still to come. */
-.bp :global(.content .ms-steps) { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
-.bp :global(.content .ms-step) { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
-.bp :global(.content .ms-step-mark) { width: 10px; height: 10px; border: 1.5px solid currentColor; background: #fff; }
-.bp :global(.content .ms-step-state) { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+/* The steps wear the Smart estimator's squares (estimators-blueprint/work-square, owner 2026-10-17). */
+.bp :global(.content .ms-steps) { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 0; }
+.bp :global(.content .ms-step) { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--hair-soft, rgba(10, 10, 10, 0.16)); font-size: 14px; color: var(--muted); }
+.bp :global(.content .ms-step:last-child) { border-bottom: none; }
+.bp :global(.content .ms-step-state) { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
 .bp :global(.content .ms-step.is-done) { color: var(--ink); }
-.bp :global(.content .ms-step.is-done .ms-step-mark) { background: var(--ink); border-color: var(--ink); }
 .bp :global(.content .ms-step.is-active) { color: var(--ink); font-weight: 700; }
-.bp :global(.content .ms-step.is-active .ms-step-mark) { background: var(--blueprint); border-color: var(--blueprint); animation: roofWaitPulse 0.9s ease-in-out infinite alternate; }
 .bp :global(.content .ms-step.is-active .ms-step-state) { color: var(--blueprint); }
 @keyframes roofWaitPulse { from { opacity: .35; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .bp :global(.content .ms-step.is-active .ms-step-mark), .bp :global(.content .rf-status-dot) { animation: none; }
+  .bp :global(.content .rf-status-dot) { animation: none; }
   .bp :global(.content .ms-fill) { transition: none; }
 }
 .bp :global(.content .ms-hint) { margin-top: 14px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }

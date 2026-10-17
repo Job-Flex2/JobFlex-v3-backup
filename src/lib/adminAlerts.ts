@@ -16,6 +16,8 @@ import "server-only";
 // when the count crosses the threshold — once per surge, not once per five minutes:
 // it arms again only after the crowd thins to 60% of the threshold or three hours pass.
 // No schema: the threshold and the surge state live in SyncState JSON.
+//
+// Payments (charged / failed) are lib/adminAlertsPayments — the Stripe webhook's half.
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { sendText } from "@/lib/sms/send";
@@ -70,10 +72,21 @@ function hearers(members: TeamMember[], key: AlertKey, now = new Date()): TeamMe
   return members.filter((m) => m.on && (m.alerts ?? []).includes(key) && !(m.quietNights && quiet));
 }
 
-/** Text everyone subscribed to `key`. Never throws; a dead transport loses a text, not the caller. */
-export async function fireAdminAlert(key: AlertKey, body: string): Promise<number> {
+/** Text everyone subscribed to `key`. Never throws; a dead transport loses a text, not the caller.
+ *  `once`: a SyncState key claimed before the first text — a webhook Stripe delivers again
+ *  (a retry after a 500, a duplicate event for the same charge) texts nobody twice. Claimed
+ *  only when someone is listening, so an alert nobody ticked writes nothing. */
+export async function fireAdminAlert(key: AlertKey, body: string, once?: string): Promise<number> {
   try {
     const list = hearers(await readMembers(), key);
+    if (!list.length) return 0;
+    if (once) {
+      try {
+        await db.syncState.create({ data: { key: `adminAlerts:once:${once}`, cursor: new Date().toISOString() } });
+      } catch {
+        return 0; // already told
+      }
+    }
     let sent = 0;
     for (const m of list) {
       const r = await sendText({ organizationId: null, to: m.phone, body, kind: KIND }).catch(() => null);
@@ -87,11 +100,11 @@ export async function fireAdminAlert(key: AlertKey, body: string): Promise<numbe
   }
 }
 
-const short = (s: string, n = 48) => {
+export const short = (s: string, n = 48) => {
   const t = (s ?? "").replace(/\s+/g, " ").trim();
   return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t;
 };
-const admin = async (path: string) => `${await appBaseUrl()}${path}`;
+export const admin = async (path: string) => `${await appBaseUrl()}${path}`;
 
 /* ── the four event texts ─────────────────────────────────────────────────── */
 
