@@ -1,110 +1,111 @@
-// The investor figures (lib/investorModel, 2026-10-06): spend, trials, the
-// realistic share, the payback curve and its break-even — on fixtures with
-// hand-checked answers.
-//   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/investor-model.check.ts
-import { addDays, cohortFigures, daysBetween, dollars, investorFigures, noCardShareByDay, paybackSentence, perDay, spendPeriods, type ModelInput } from "../../../src/lib/investorModel";
+// The investor figures, facts only (lib/investorModel, 2026-10-17): the spend as booked, the no-card days' share
+// left out, the signups and trials of the card trials, every paying customer counted (the no-card ones and the ones
+// from before too), what Stripe collected, and the unit costs — on a fixture with hand-checked answers.
+//   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/investor-model.check.ts
+import { addDays, daysBetween, daysFrom, dollars, factsLines, investorFacts, noCardDays, noCardShareByDay, spendPeriods, type FactsInput } from "../../../src/lib/investorModel";
+import { buildInvestorVisitorsQuery } from "../../../src/lib/traffic-live";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
   if (!ok) bad++;
   console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
 };
-const near = (a: number, b: number, tol = 1) => Math.abs(a - b) <= tol;
+const near = (a: number, b: number, tol = 0.001) => Math.abs(a - b) <= tol;
 
-const base: ModelInput = {
+// Sep 30 → Oct 10. Meta $100 a day; Google $20 booked by hand on Oct 9. Trials needed no card Oct 5 – Oct 6.
+const meta = daysFrom("2026-09-30", "2026-10-10").map((date) => ({ date, cents: 10000, platform: "meta" as const, source: "meta" as const }));
+const base: FactsInput = {
   since: "2026-09-30",
-  today: "2026-10-06",
-  spend: [
-    { date: "2026-09-30", cents: 10000 }, { date: "2026-10-01", cents: 10000 }, { date: "2026-10-02", cents: 10000 },
-    { date: "2026-10-03", cents: 10000 }, { date: "2026-10-04", cents: 10000 }, { date: "2026-10-05", cents: 10000 }, { date: "2026-10-06", cents: 10000 },
-    { date: "2026-09-01", cents: 99999 }, // before the launch: not counted
+  today: "2026-10-10",
+  spend: [...meta, { date: "2026-10-09", cents: 2000, platform: "google", source: "manual" }, { date: "2026-09-01", cents: 99999, platform: "meta", source: "meta" }],
+  signups: [
+    { date: "2026-09-30", cohort: "card" }, // paid (A)
+    { date: "2026-10-01", cohort: "card" }, // paid (B)
+    { date: "2026-10-02", cohort: "card" }, // lapsed
+    { date: "2026-10-08", cohort: "card" }, // on trial, $79
+    { date: "2026-10-09", cohort: "card" }, // on trial, no price
+    { date: "2026-10-05", cohort: "nocard" }, // paid (C)
+    { date: "2026-10-05", cohort: "nocard" }, // lapsed
+    { date: "2026-10-06", cohort: "nocard" }, // lapsed
   ],
-  paying: [{ startedAt: "2026-10-02", monthlyCents: 7900 }, { startedAt: "2026-10-06", monthlyCents: 7900 }],
-  trials: [
-    { createdAt: "2026-10-04", endsAt: "2026-10-11", monthlyCents: 7900, chance: 0.45 },
-    { createdAt: "2026-10-05", endsAt: "2026-10-12", monthlyCents: 2900, chance: 0.2 },
-    { createdAt: "2026-10-06", endsAt: "2026-10-13", monthlyCents: 19900, chance: 0.15 },
-    { createdAt: "2026-10-06", endsAt: null, monthlyCents: null, chance: 0.15 },
+  policy: [{ from: "2026-10-05", mode: "nocard" }, { from: "2026-10-07", mode: "card" }],
+  paying: [
+    { startedAt: "2026-10-08", monthlyCents: 7900, from: "card" },
+    { startedAt: "2026-10-09", monthlyCents: 9900, from: "card" },
+    { startedAt: "2026-10-09", monthlyCents: 7900, from: "nocard" },
+    { startedAt: "2026-09-01", monthlyCents: 4900, from: "before" },
   ],
-  lapsed: 1,
-  assumptions: { realisticPct: 60, spendPerDayCents: null, horizonDays: 180, trialDays: 7, dailyBudgetCents: null, budgetFrom: null },
-  visitors: 700,
+  trials: [{ createdAt: "2026-10-08", monthlyCents: 7900, cohort: "card" }, { createdAt: "2026-10-09", monthlyCents: null, cohort: "card" }],
+  lapsed: { card: 1, nocard: 2 },
+  visitors: 460,
+  payments: [
+    { date: "2026-10-08", cents: 7900 }, { date: "2026-10-09", cents: 9900 }, { date: "2026-10-09", cents: 7900 },
+    { date: "2026-10-03", cents: 4900 }, { date: "2026-09-20", cents: 4900 }, // the last before the start day: not counted
+  ],
 };
+const f = investorFacts(base);
 
 console.log("── dates");
-check("a day after Oct 6 is Oct 7; Sep 30 → Oct 6 is six days apart", addDays("2026-10-06", 1) === "2026-10-07" && daysBetween("2026-09-30", "2026-10-06") === 6);
-check("a pace over the last seven days (or since the launch when younger)", near(perDay(["2026-10-06", "2026-10-05", "2026-10-05", "2026-09-29"], "2026-09-30", "2026-10-06"), 3 / 7, 0.001) && near(perDay(["2026-10-06"], "2026-10-05", "2026-10-06"), 0.5, 0.001));
+check("a day after Oct 6 is Oct 7; Sep 30 → Oct 6 is six days apart; Sep 30 → Oct 10 is eleven days", addDays("2026-10-06", 1) === "2026-10-07" && daysBetween("2026-09-30", "2026-10-06") === 6 && daysFrom("2026-09-30", "2026-10-10").length === 11);
 
-const f = investorFigures(base);
-console.log("── spend");
-check("spend since the launch only: $700 over 7 days, $100 a day", f.spend.totalCents === 70000 && f.spend.daysWithSpend === 7 && f.spend.perDayRecentCents === 10000 && f.spend.perDayProjectedCents === 10000 && f.spend.lastDate === "2026-10-06");
-check("a set projected figure projects instead of the recent average", investorFigures({ ...base, assumptions: { ...base.assumptions, spendPerDayCents: 5000 } }).spend.perDayProjectedCents === 5000);
-console.log("── the daily budget");
-const budgetOnly = investorFigures({ ...base, spend: [], assumptions: { ...base.assumptions, dailyBudgetCents: 5000, budgetFrom: "2026-10-01" } });
-check("a $50 daily budget since Oct 1 with nothing booked: six days spent, $300, projected at $50", budgetOnly.spend.totalCents === 30000 && budgetOnly.spend.budgetDays === 6 && budgetOnly.spend.bookedDays === 0 && budgetOnly.spend.perDayProjectedCents === 5000 && budgetOnly.curve[1].spendSource === "budget" && budgetOnly.curve[0].spendSource === "none" && budgetOnly.curve[7].spendDayCents === 5000 && budgetOnly.curve[7].spendSource === "projected");
-const budgetAndBooked = investorFigures({ ...base, assumptions: { ...base.assumptions, dailyBudgetCents: 5000, budgetFrom: "2026-10-01" } });
-check("a booked day overrides the budget: all seven days booked, still $700, no budget days", budgetAndBooked.spend.totalCents === 70000 && budgetAndBooked.spend.budgetDays === 0 && budgetAndBooked.spend.bookedDays === 7 && budgetAndBooked.curve[3].spendSource === "booked");
-const budgetEarly = investorFigures({ ...base, spend: [], assumptions: { ...base.assumptions, dailyBudgetCents: 5000, budgetFrom: "2026-09-01" } });
-check("a budget from before the start day counts from the start day: 7 days, $350", budgetEarly.spend.totalCents === 35000 && budgetEarly.spend.budgetFrom === "2026-09-30" && budgetEarly.spend.budgetDays === 7);
-check("the owner's projected figure beats the budget for tomorrow on", investorFigures({ ...base, spend: [], assumptions: { ...base.assumptions, dailyBudgetCents: 5000, budgetFrom: null, spendPerDayCents: 8000 } }).spend.perDayProjectedCents === 8000);
-console.log("── spend by period");
-const per = Object.fromEntries(spendPeriods(f.curve, "2026-10-06").map((p) => [p.key, p]));
-check("today $100, yesterday $100, this week (Mon Oct 5 →) $200 over 2 days", per.today.cents === 10000 && per.yesterday.cents === 10000 && per.week.cents === 20000 && per.week.days === 2 && per.week.perDayCents === 10000);
-check("this month (Oct 1 →) $600 over 6 days; last 7 and since the start $700 over 7", per.month.cents === 60000 && per.month.days === 6 && per.last7.cents === 70000 && per.all.cents === 70000 && per.all.days === 7);
-check("last 30 days clips to the start day: 7 days, not 30", per.last30.days === 7 && per.last30.cents === 70000 && per.last30.perDayCents === 10000);
-check("a budget-filled day counts like a booked one", Object.fromEntries(spendPeriods(budgetOnly.curve, "2026-10-06").map((p) => [p.key, p])).last7.cents === 30000);
-console.log("── the curve's run-rate and accounts");
-const t0 = f.curve[6];
-check("today: MRR $158 (two paying, no trial ended), 2 paying, 6 signed up (trial or paying)", t0.mrrRealisticCents === 15800 && t0.mrrAllPayCents === 15800 && t0.payingRealistic === 2 && t0.payingAllPay === 2 && t0.signups === 6);
-const t11 = f.curve.find((p) => p.date === "2026-10-11")!;
-check("Oct 11: the first trial counts as 0.6 of a paying account realistically, 1 if all pay; MRR all-pay $237", t11.payingAllPay === 3 && t11.payingRealistic === 2.6 && t11.mrrAllPayCents === 15800 + 7900 && t11.mrrRealisticCents === Math.round(15800 + 7900 * 0.6));
-const tEnd = f.curve.at(-1)!;
-check("at the horizon: signups grew at 0.86 a day, realistic paying under all-pay, MRR grew", tEnd.signups > 6 + 0.86 * 179 && tEnd.payingRealistic < tEnd.payingAllPay && tEnd.mrrRealisticCents > t0.mrrRealisticCents, `${tEnd.signups} signups, ${tEnd.payingRealistic}/${tEnd.payingAllPay} paying, MRR ${tEnd.mrrRealisticCents}`);
+console.log("── the spend: what was booked, the no-card days left out");
+check("counted: $100 × 9 card days + $20 Google = $920; left out: $200 over Oct 5 – Oct 6", f.spend.cents === 92000 && f.leftOut.cents === 20000 && f.leftOut.days === 2 && f.leftOut.from === "2026-10-05" && f.leftOut.to === "2026-10-06", `${f.spend.cents} / ${f.leftOut.cents}`);
+check("…and counted + left out is every dollar booked since the start (nothing before it)", f.spend.cents + f.leftOut.cents === 11 * 10000 + 2000);
+const day = (d: string) => f.spend.days.find((r) => r.date === d)!;
+check("a no-card day: nothing counted, all of it left out", day("2026-10-05").cents === 0 && day("2026-10-05").leftOutCents === 10000);
+check("a day with Meta and a hand-booked platform reads 'mixed'; a Meta day 'meta'", day("2026-10-09").source === "mixed" && day("2026-10-09").cents === 12000 && day("2026-10-10").source === "meta");
+check("one row a day from the start to today, with the card signups of the day", f.spend.days.length === 11 && day("2026-10-08").signups === 1 && day("2026-10-05").signups === 0);
+check("Meta's days and the days booked by hand alone", f.spend.metaDays === 11 && f.spend.handDays === 0);
+check("the last week: $520 over 7 days = $74/day (Oct 5–6 left out)", f.spend.perDayLast7Cents === Math.round(52000 / 7), String(f.spend.perDayLast7Cents));
+check("the last day with spend is today", f.spend.lastDay === "2026-10-10");
+check("by platform: Meta $900 over 9 days, Google $20 over 1", f.spend.byPlatform.length === 2 && f.spend.byPlatform[0].platform === "meta" && f.spend.byPlatform[0].cents === 90000 && f.spend.byPlatform[0].days === 9 && f.spend.byPlatform[1].cents === 2000 && f.spend.byPlatform[1].days === 1);
+const per = Object.fromEntries(f.spend.periods.map((p) => [p.key, p]));
+check("today $100 so far, yesterday $120", per.today.cents === 10000 && per.today.label === "Today, so far" && per.yesterday.cents === 12000);
+check("this week (Mon Oct 5 →): $420 over 6 days", per.week.cents === 42000 && per.week.days === 6 && per.week.perDayCents === 7000);
+check("this month (Oct 1 →): $820 over 10 days; since the start $920 over 11", per.month.cents === 82000 && per.month.days === 10 && per.all.cents === 92000 && per.all.days === 11);
+check("last 30 days clips to the start day: 11 days, not 30", per.last30.days === 11 && per.last30.cents === 92000);
+check("periods off plain day rows: one day, $5", spendPeriods([{ date: "2026-10-10", cents: 500 }], "2026-10-10")[0].cents === 500);
 
-console.log("── trials and paying");
-check("4 trials, 3 priced: $307 if all pay, $184 realistic at 60%, average $102", f.trials.count === 4 && f.trials.priced === 3 && f.trials.maxMrrCents === 30700 && f.trials.realisticMrrCents === 18420 && f.trials.avgMonthlyCents === 10233);
-check("by behaviour: 0.45×79 + 0.2×29 + 0.15×199 = $71 (23%)", f.trials.byBehaviourMrrCents === 3555 + 580 + 2985 && f.trials.byBehaviourPct === 23);
-check("paying: 2 accounts, $158 MRR, $1,896 ARR", f.paying.count === 2 && f.paying.mrrCents === 15800 && f.paying.arrCents === 189600);
-check("revenue to date at list price: 5 days of $79 + 1 day of $79 = $15.80", f.paying.revenueToDateCents === Math.round((7900 * 5) / 30) + Math.round(7900 / 30));
-check("signups = trials + paying + lapsed = 7; observed share paid 2 of 3 = 67%", f.signups === 7 && f.observed.paid === 2 && f.observed.lapsed === 1 && f.observed.pct === 67);
-check("projected MRR: all pay $465, realistic $342, by behaviour $229", f.projected.mrrAllPayCents === 46500 && f.projected.mrrRealisticCents === 34220 && f.projected.mrrByBehaviourCents === 15800 + 7120);
+console.log("── the accounts");
+check("trial signups are the card trials': 2 on trial + 2 paid + 1 lapsed = 5; 2 this past week", f.signups === 5 && f.signupsLast7 === 2);
+check("on trial now: 2, one priced, $79 a month of plans", f.onTrial.count === 2 && f.onTrial.priced === 1 && f.onTrial.listMrrCents === 7900);
+check("trials ended: 2 paid, 1 not — 67%", f.ended.paid === 2 && f.ended.lapsed === 1 && f.ended.pct === 67);
+check("paying: 4 — 2 from card trials, 1 from the no-card test, 1 from before", f.paying.count === 4 && f.paying.card === 2 && f.paying.nocard === 1 && f.paying.before === 1);
+check("monthly revenue counts every paying customer: $306, $3,672 a year", f.paying.mrrCents === 30600 && f.paying.arrCents === 367200 && f.paying.cardMrrCents === 17800 && f.paying.nocardMrrCents === 7900 && f.paying.beforeMrrCents === 4900);
+check("the no-card test: 3 trials, 1 paid ($79 a month)", f.leftOut.signups === 3 && f.leftOut.paid === 1 && f.leftOut.paidMrrCents === 7900);
 
-console.log("── unit economics");
-check("cost per visitor $1, per signup $100, per paying (2 + 4×0.6) $159", f.unit.costPerVisitorCents === 100 && f.unit.costPerSignupCents === 10000 && f.unit.costPerPayingRealisticCents === Math.round(70000 / 4.4));
-check("visitor → signup 1%, 6 signups over 7 days = 0.86 a day", f.unit.visitorToSignupPct === 1 && f.unit.signupsPerDay === 0.86);
-check("payback: $700 ÷ $342 a month = 2 months; return to date 2%", f.unit.paybackMonths === 2 && f.unit.returnToDatePct === 2);
+console.log("── the money in");
+check("paid so far: $306 in 4 payments since the start (Sep 20 not counted)", f.collected !== null && f.collected.cents === 30600 && f.collected.payments === 4);
+check("…33% of the counted ad spend", f.collected?.recoveredPct === 33);
+const noStripe = investorFacts({ ...base, payments: null });
+check("Stripe not read: no 'paid so far', and the chart's line is null — never a guess", noStripe.collected === null && noStripe.chart.every((p) => p.collectedCents === null));
 
-console.log("── the curve");
-check("one point per day from the launch to the horizon, booked then projected", f.curve.length === 7 + 180 && f.curve[0].date === "2026-09-30" && !f.curve[6].projected && f.curve[7].projected);
-check("spend runs: $700 today, $800 tomorrow", f.curve[6].spendCents === 70000 && f.curve[7].spendCents === 80000);
-const today = f.curve[6];
-check("revenue today (all-pay = realistic while only paying accounts earn): $15.80", today.allPayCents === today.realisticCents && near(today.realisticCents, 1580, 2));
-const oct11 = f.curve.find((p) => p.date === "2026-10-11")!;
-const oct10 = f.curve.find((p) => p.date === "2026-10-10")!;
-check("the first trial starts earning on its end day, Oct 11 ($79/30 all-pay, 60% of it realistic)", near(oct11.allPayCents - oct10.allPayCents, (15800 + 7900) / 30, 2) && near(oct11.realisticCents - oct10.realisticCents, (15800 + 7900 * 0.6) / 30, 2));
-check("the realistic line stays under the all-pay line once trials earn", f.curve.at(-1)!.realisticCents < f.curve.at(-1)!.allPayCents);
-check("future signups (0.86 a day at $102) start earning seven days after they arrive", f.curve[14].allPayCents - f.curve[13].allPayCents > f.curve[13].allPayCents - f.curve[12].allPayCents);
-check("break-even: a date within the horizon, after today", f.breakEven.withinHorizon && f.breakEven.date !== null && f.breakEven.daysFromToday! > 0 && f.breakEven.daysFromToday! < 180, `${f.breakEven.date} in ${f.breakEven.daysFromToday} days`);
-const cross = f.curve.find((p) => p.date === f.breakEven.date)!;
-const before = f.curve[f.curve.indexOf(cross) - 1];
-check("…and it is the first day realistic revenue meets the spend", cross.realisticCents >= cross.spendCents && before.realisticCents < before.spendCents);
+console.log("── what a customer costs");
+check("per visitor $2, per trial $184", f.unit.perVisitorCents === 200 && f.unit.perSignupCents === 18400);
+check("per paying customer: $920 ÷ the 2 card trials that paid = $460 (the no-card one is not counted in, its spend is out)", f.unit.perPayingCents === 46000);
+check("visitor → trial 1.1%", f.unit.visitorToSignupPct === 1.1);
+check("paid back in: $460 ÷ $89 a month = 5.2 months", f.unit.paybackMonths === 5.2, String(f.unit.paybackMonths));
+const noCardWins = investorFacts({ ...base, paying: base.paying.filter((p) => p.from !== "card"), signups: base.signups.filter((s) => !(s.cohort === "card" && s.date < "2026-10-02")) });
+check("no card trial paid yet: no cost per paying customer and no payback — not a cheaper one from the no-card test", noCardWins.unit.perPayingCents === null && noCardWins.unit.paybackMonths === null && noCardWins.paying.count === 2);
+check("no visitors known → no per-visitor figures", investorFacts({ ...base, visitors: null }).unit.perVisitorCents === null && investorFacts({ ...base, visitors: 0 }).unit.visitorToSignupPct === null);
 
-console.log("── what moves it");
-const allPay = investorFigures({ ...base, assumptions: { ...base.assumptions, realisticPct: 100 } });
-check("at 100% the realistic line is the all-pay line and break-even comes sooner", allPay.curve.every((p) => p.realisticCents === p.allPayCents) && allPay.breakEven.daysFromToday! < f.breakEven.daysFromToday!);
-const heavy = investorFigures({ ...base, assumptions: { ...base.assumptions, spendPerDayCents: 100000 } });
-check("$1,000 a day with this revenue never breaks even in the horizon, and the sentence says so", !heavy.breakEven.withinHorizon && /do not pay for themselves/.test(paybackSentence(heavy)));
-const none = investorFigures({ ...base, spend: [] });
-check("no spend: nothing to recover, no unit costs", none.spend.totalCents === 0 && none.unit.costPerSignupCents === null && none.unit.paybackMonths === null && /No ad spend is set yet/.test(paybackSentence(none)));
-const covered = investorFigures({ ...base, spend: [{ date: "2026-09-30", cents: 500 }] });
-check("$5 of spend is already covered: the sentence says so", /already covered/.test(paybackSentence(covered)));
-check("the sentence names the pace, the share and the date", /\$100 a day on ads, 0\.86 signups a day, 60% of trials paying/.test(paybackSentence(f)) && /on [A-Z][a-z]+ \d+, 202\d\./.test(paybackSentence(f)), paybackSentence(f));
-check("no visitors known → no per-visitor figures", investorFigures({ ...base, visitors: null }).unit.costPerVisitorCents === null && investorFigures({ ...base, visitors: 0 }).unit.visitorToSignupPct === null);
+console.log("── the chart");
+const first = f.chart[0];
+const last = f.chart.at(-1)!;
+check("a point a day, from the start to today", f.chart.length === 11 && first.date === "2026-09-30" && last.date === "2026-10-10");
+check("running totals: $920 spent, $306 paid, 5 trial signups", last.spentCents === 92000 && last.collectedCents === 30600 && last.signups === 5);
+check("paying customers by day: the one from before from day one; 4 by today", first.paying === 1 && f.chart.find((p) => p.date === "2026-10-08")!.paying === 2 && last.paying === 4);
+check("the spend stands still over the no-card days", f.chart.find((p) => p.date === "2026-10-06")!.spentCents === f.chart.find((p) => p.date === "2026-10-04")!.spentCents);
+
+console.log("── the words");
+const lines = factsLines(f);
+check("first: the cost and what it brought", lines[0] === "Since September 30, 2026 the ads have cost $920 and brought 460 visitors and 5 trial signups.", lines[0]);
+check("then: who pays, and what has been paid against the spend", lines[1] === "4 customers pay $306 a month — $3,672 a year; $306 has been paid so far, 33% of the ad spend.", lines[1]);
+check("then: what a customer costs and how soon it pays back", lines[2] === "A customer from the ads cost $460 to win and pays $89 a month: the ads behind each one are paid back in 5.2 months.", lines[2]);
+check("no spend yet: one line, no figures made up", factsLines(investorFacts({ ...base, spend: [] })).length === 1 && /No ad spend is on record/.test(factsLines(investorFacts({ ...base, spend: [] }))[0]));
 check("dollars read as written", dollars(34220) === "$342" && dollars(158) === "$1.58" && dollars(0) === "$0");
 
-
-// ── THE TWO KINDS OF TRIAL (2026-10-13): a day's spend follows the switch where recorded, else who signed up
-console.log("── cohorts");
+console.log("── which kind of trial a day went to");
 const days = ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06"];
 const su = [
   { date: "2026-10-01", cohort: "card" as const },
@@ -113,60 +114,17 @@ const su = [
 ];
 const sh = noCardShareByDay(days, su, []);
 check("a day of card signups is a card day; a day of no-card signups a no-card day", sh.get("2026-10-01") === 0 && sh.get("2026-10-03") === 1);
-check("a mixed day splits in proportion (1 card, 2 no-card → two thirds)", near(sh.get("2026-10-04") ?? -1, 2 / 3, 0.001));
-check("a day with no signups follows the nearest earlier day that had some", sh.get("2026-10-02") === 0 && near(sh.get("2026-10-05") ?? -1, 2 / 3, 0.001) && near(sh.get("2026-10-06") ?? -1, 2 / 3, 0.001));
+check("a mixed day splits in proportion (1 card, 2 no-card → two thirds)", near(sh.get("2026-10-04") ?? -1, 2 / 3));
+check("a day with no signups follows the nearest earlier day that had some", sh.get("2026-10-02") === 0 && near(sh.get("2026-10-05") ?? -1, 2 / 3) && near(sh.get("2026-10-06") ?? -1, 2 / 3));
 const sh2 = noCardShareByDay(days, su, [{ from: "2026-10-05", mode: "card" }]);
-check("a recorded flip outranks the signups from its day on", sh2.get("2026-10-05") === 0 && sh2.get("2026-10-06") === 0 && near(sh2.get("2026-10-04") ?? -1, 2 / 3, 0.001));
-check("with no signups and no flips every day is a card day (the only kind before the switch)", [...noCardShareByDay(days, [], []).values()].every((v) => v === 0));
+check("a recorded flip outranks the signups from its day on", sh2.get("2026-10-05") === 0 && sh2.get("2026-10-06") === 0 && near(sh2.get("2026-10-04") ?? -1, 2 / 3));
+check("with no signups and no flips every day is a card day", [...noCardShareByDay(days, [], []).values()].every((v) => v === 0));
+const mixed = investorFacts({ ...base, policy: [], signups: [...base.signups.filter((s) => s.date !== "2026-10-05" && s.date !== "2026-10-06"), { date: "2026-10-05", cohort: "card" }, { date: "2026-10-05", cohort: "nocard" }] });
+check("a half-and-half day: half its spend counted, half left out, to the cent", mixed.spend.days.find((r) => r.date === "2026-10-05")!.cents === 5000 && mixed.spend.days.find((r) => r.date === "2026-10-05")!.leftOutCents === 5000);
+check("the visitor count skips the days that went wholly to no-card trials", JSON.stringify(noCardDays(base.since, base.today, base.signups, base.policy)) === JSON.stringify(["2026-10-05", "2026-10-06"]));
+const q = buildInvestorVisitorsQuery("America/Los_Angeles", "2026-09-30", ["2026-10-05", "2026-10-06"]);
+check("…and the query says so", q.includes("toString(day) NOT IN ('2026-10-05', '2026-10-06')") && !buildInvestorVisitorsQuery("America/Los_Angeles", "2026-09-30").includes("NOT IN"));
+check("…a day that is not a date never reaches the query", !buildInvestorVisitorsQuery("America/Los_Angeles", "2026-09-30", ["2026-10-05'); DROP"]).includes("DROP"));
 
-const withCohorts: ModelInput = {
-  ...base,
-  paying: [{ startedAt: "2026-10-02", monthlyCents: 7900, cohort: "card" }, { startedAt: "2026-10-06", monthlyCents: 7900, signedUpAt: "2026-10-05", cohort: "nocard" }],
-  trials: [
-    { createdAt: "2026-10-04", endsAt: "2026-10-11", monthlyCents: 7900, chance: 0.45, cohort: "card" },
-    { createdAt: "2026-10-05", endsAt: "2026-10-12", monthlyCents: 2900, chance: 0.2, cohort: "nocard" },
-    { createdAt: "2026-10-06", endsAt: "2026-10-13", monthlyCents: 19900, chance: 0.15, cohort: "nocard" },
-    { createdAt: "2026-10-06", endsAt: null, monthlyCents: null, chance: 0.15, cohort: "nocard" },
-  ],
-  lapsed: 1,
-  cohorts: {
-    lapsed: { card: 1, nocard: 0 },
-    signups: [
-      { date: "2026-09-30", cohort: "card" }, { date: "2026-10-02", cohort: "card" }, { date: "2026-10-04", cohort: "card" },
-      { date: "2026-10-05", cohort: "nocard" }, { date: "2026-10-05", cohort: "nocard" }, { date: "2026-10-06", cohort: "nocard" }, { date: "2026-10-06", cohort: "nocard" },
-    ],
-    policy: [],
-    current: "nocard",
-  },
-};
-const whole = investorFigures(withCohorts);
-const card = cohortFigures(withCohorts, "card", whole);
-const nocard = cohortFigures(withCohorts, "nocard", whole);
-check("the two cohorts' spend adds up to the whole ($700: $500 card days, $200 no-card days)", card.attributedCents + nocard.attributedCents === whole.spend.totalCents && card.attributedCents === 50000 && nocard.attributedCents === 20000, `${card.attributedCents} + ${nocard.attributedCents}`);
-check("…over the days each fell on (Sep 30–Oct 4 card, Oct 5–6 no card)", card.attributedDays === 5 && nocard.attributedDays === 2 && card.firstDay === "2026-09-30" && nocard.firstDay === "2026-10-05");
-check("each cohort counts its own accounts", card.figures.trials.count === 1 && card.figures.paying.count === 1 && card.figures.lapsed === 1 && nocard.figures.trials.count === 3 && nocard.figures.paying.count === 1 && nocard.figures.lapsed === 0);
-check("…and its signups add up to the whole", card.signups + nocard.signups === whole.signups);
-check("the kind a new signup gets today keeps spending forward; the other stands still", nocard.current && nocard.figures.spend.perDayProjectedCents === whole.spend.perDayProjectedCents && !card.current && card.figures.spend.perDayProjectedCents === 0);
-check("…so the card cohort's spend curve is flat past today", card.figures.curve.filter((p) => p.projected).every((p) => p.spendCents === card.attributedCents));
-check("visitors are not split", card.figures.visitors === null && nocard.figures.visitors === null && card.figures.unit.costPerVisitorCents === null);
-check("cost per signup is each cohort's own", card.figures.unit.costPerSignupCents === Math.round(50000 / card.signups) && nocard.figures.unit.costPerSignupCents === Math.round(20000 / nocard.signups));
-const plain = cohortFigures(base, "card");
-check("an input without the cohort block reads as all card, no spend split lost", plain.attributedCents === investorFigures(base).spend.totalCents && plain.figures.trials.count === base.trials.length);
-
-
-// ── PAYING FROM BEFORE THE START DAY (2026-10-13): counted as paying, in the revenue and the payback; not a signup
-console.log("── pre-period paying");
-const withBefore: ModelInput = { ...base, paying: [...base.paying, { startedAt: "2026-09-01", monthlyCents: 9900, signedUpAt: "2026-08-20", cohort: "card", preexisting: true }] };
-const fb = investorFigures(withBefore);
-const f0 = investorFigures(base);
-check("it counts as paying, in the run rate", fb.paying.count === f0.paying.count + 1 && fb.paying.mrrCents === f0.paying.mrrCents + 9900 && fb.paying.preexisting === 1 && fb.paying.preexistingMrrCents === 9900);
-check("…its revenue counts from the start day only (7 days of $99 = $23.10)", fb.paying.revenueToDateCents === f0.paying.revenueToDateCents + 2310, `${fb.paying.revenueToDateCents - f0.paying.revenueToDateCents}`);
-check("…it is not a signup, and does not move the pace, the cost per signup or the observed share", fb.signups === f0.signups && fb.unit.signupsPerDay === f0.unit.signupsPerDay && fb.unit.costPerSignupCents === f0.unit.costPerSignupCents && fb.observed.pct === f0.observed.pct);
-check("…nor the cost per paying customer (the ads did not win it)", fb.unit.costPerPayingRealisticCents === f0.unit.costPerPayingRealisticCents);
-check("…but it pays into the curve from the first day", fb.curve[0].mrrAllPayCents === f0.curve[0].mrrAllPayCents + 9900 && fb.curve[0].payingAllPay === f0.curve[0].payingAllPay + 1);
-const cardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "card");
-const nocardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "nocard");
-check("it sits in the card cohort's paying, not in no card's, and not in either's signups", cardB.figures.paying.count === card.figures.paying.count + 1 && cardB.figures.paying.preexisting === 1 && cardB.signups === card.signups && nocardB.figures.paying.count === nocard.figures.paying.count);
-
-console.log(bad === 0 ? "\nAll investor model checks passed." : `\n${bad} investor model check(s) FAILED.`);
-process.exit(bad === 0 ? 0 : 1);
+console.log(bad ? `\n${bad} FAILED` : "\nall good");
+process.exit(bad ? 1 : 0);
