@@ -583,7 +583,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
             </Section>
 
             {design.placement !== "detached" ? (
-              <Section n={next()} id="step-house" title="Your house's back wall" sub={<>Go outside with a tape and shape the wall the deck goes on — its corners, the parts that stick out or sit back. The deck fits itself around them.</>}>
+              <Section n={next()} id="step-house" title="Your house's back wall" sub={<>Pick the shape of the wall the deck goes on and how your house looks. Measuring it is optional — the deck fits itself around the corners you add.</>}>
                 <ClientHouse shape={design.shape} house={design.house} shopName={shopName} onChange={(n2) => change(applyDeckPatch(design, { ...(n2.house ? { house: n2.house } : {}), ...(n2.shape ? { shape: n2.shape } : {}) }))} />
               </Section>
             ) : null}

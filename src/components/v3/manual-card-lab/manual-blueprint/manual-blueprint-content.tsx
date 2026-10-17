@@ -635,8 +635,20 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
       <EstimateSeedStrip seed={!data.proposal ? data.seed : null} />
       <div className={cx("page-head", styles.head)} data-rv="">
         <div>
-          <div className="kicker">Proposal builder</div>
-          <h1 className="page-title">Manual proposal</h1>
+          {/* The job and the tool that made it (2026-10-17, lib/proposalKind): "Deck proposal" over "made in Deck
+              Studio"; a proposal written here, or a new one, is still the Manual proposal. */}
+          {(() => {
+            const k = data.proposal?.kind;
+            const made = k && k.tool !== "manual";
+            return (
+              <>
+                <div className="kicker" data-proposal-kind={k ? `${k.family}:${k.tool}` : undefined}>
+                  Proposal builder{k ? ` · ${made ? k.toolWords : k.work}` : ""}
+                </div>
+                <h1 className="page-title">{made ? `${k.work} proposal` : "Manual proposal"}</h1>
+              </>
+            );
+          })()}
         </div>
         {/* ── THE MASTHEAD'S ANNOTATIONS, IN TWO BUILDS ────────────────
             On the desk they are a right-aligned column hanging off the

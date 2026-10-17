@@ -81,6 +81,7 @@ import {
   type TabKey,
 } from "./proposals-data";
 import { chainsOf, chained, paidTier, type PaidTier } from "@/components/v3/proposals-blueprint/proposals-data";
+import { familyCounts, type ProposalKind, type WorkFamily } from "@/lib/proposalKind";
 import { clientProposalUrl, proposalTextMessage, smsHref } from "@/lib/proposalLink";
 import { ensureCompanyName } from "@/components/company-name/company-name-gate";
 
@@ -330,6 +331,8 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   }
   const [tab, setTab] = useState<TabKey>("all");
   const [filter, setFilter] = useState<FilterKey>("ALL");
+  /** The type strip's pick (2026-10-17, lib/proposalKind): every tab, list and figure narrows to one family. */
+  const [kind, setKind] = useState<"ALL" | WorkFamily>("ALL");
   const [pageAll, setPageAll] = useState(1);
   const [pageAcc, setPageAcc] = useState(1);
   const [pageDone, setPageDone] = useState(1);
@@ -538,26 +541,31 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   }, [sheetId]);
 
   /* ---------- derived lists ------------------------------------------ */
+  // THE TYPE STRIP (2026-10-17): the families of work the book holds; a pick that left the book reads as All.
+  const kindChips = useMemo(() => familyCounts(data.map((p) => ({ family: p.kind?.family ?? "other" }))), [data]);
+  const kindNow = kind !== "ALL" && !kindChips.some((f) => f.key === kind) ? "ALL" : kind;
+  const book = useMemo(() => (kindNow === "ALL" ? data : data.filter((p) => (p.kind?.family ?? "other") === kindNow)), [data, kindNow]);
+  const pickKind = (k: "ALL" | WorkFamily) => { setKind(k); setPageAll(1); setPageAcc(1); setPageDone(1); };
   // A project's proposals sit together under its name (2026-09-18).
   const listAll = useMemo(
-    () => chained(filter === "ALL" ? data : data.filter((p) => p.status === filter)),
-    [data, filter],
+    () => chained(filter === "ALL" ? book : book.filter((p) => p.status === filter)),
+    [book, filter],
   );
   const chains = useMemo(() => chainsOf(listAll), [listAll]);
-  const listAcc = useMemo(() => data.filter((p) => p.status === "ACCEPTED"), [data]);
-  const listDone = useMemo(() => data.filter((p) => p.status === "COMPLETED" || p.status === "PAID"), [data]);
+  const listAcc = useMemo(() => book.filter((p) => p.status === "ACCEPTED"), [book]);
+  const listDone = useMemo(() => book.filter((p) => p.status === "COMPLETED" || p.status === "PAID"), [book]);
 
   const counts = useMemo(
-    () => ({ all: data.length, accepted: listAcc.length, completed: listDone.length }),
-    [data.length, listAcc.length, listDone.length],
+    () => ({ all: book.length, accepted: listAcc.length, completed: listDone.length }),
+    [book.length, listAcc.length, listDone.length],
   );
   const chipCounts = useMemo(() => {
-    const out: Record<string, number> = { ALL: data.length };
+    const out: Record<string, number> = { ALL: book.length };
     FILTERS.forEach((f) => {
-      if (f.key !== "ALL") out[f.key] = data.filter((p) => p.status === f.key).length;
+      if (f.key !== "ALL") out[f.key] = book.filter((p) => p.status === f.key).length;
     });
     return out;
-  }, [data]);
+  }, [book]);
   const activeFilterLabel = FILTERS.find((f) => f.key === filter)?.label ?? "All";
 
   /* ---------- masthead: one numeral, mono kicker, TWO annotations ----- */
@@ -570,13 +578,13 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       // read "$0 · 0 proposals" — under two rows that plainly existed. The
       // COUNT is the whole book, declined included: a declined proposal is
       // still a proposal that was written.
-      const counted = data.filter((p) => p.status !== "DECLINED" && p.status !== "EXPIRED");
+      const counted = book.filter((p) => p.status !== "DECLINED" && p.status !== "EXPIRED");
       const t = sumOf(counted);
       return {
         kicker: "Pipeline value",
         value: t,
         good: false,
-        a1: { l: "Proposals", v: String(data.length) },
+        a1: { l: "Proposals", v: String(book.length) },
         a2: { l: "Avg deal", v: money(counted.length ? t / counted.length : 0) },
       };
     }
@@ -598,7 +606,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       a1: { l: "Jobs filed", v: String(listDone.length) },
       a2: { l: "Avg value", v: money(listDone.length ? t / listDone.length : 0) },
     };
-  }, [tab, data, listAcc, listDone]);
+  }, [tab, book, listAcc, listDone]);
 
   /* ---------- paging returns you to the top of the list ---------------
      Done in an effect rather than in the click handler: the ref must not
@@ -956,6 +964,20 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             </div>
           </div>
 
+          {/* TYPE (2026-10-17): deck · roof · fence · HVAC · remodel · other — drawn when there is a choice */}
+          {kindChips.length > 1 ? (
+            <div className={styles.pkinds} role="group" aria-label="Type of work">
+              <button type="button" className={`${styles.pkchip} ${kindNow === "ALL" ? styles.active : ""}`} aria-pressed={kindNow === "ALL"} onClick={() => pickKind("ALL")}>
+                All types <b>{data.length}</b>
+              </button>
+              {kindChips.map((f) => (
+                <button key={f.key} type="button" data-fam={f.key} className={`${styles.pkchip} ${kindNow === f.key ? styles.active : ""}`} aria-pressed={kindNow === f.key} onClick={() => pickKind(f.key)}>
+                  <i className={styles.pkSq} aria-hidden="true" />{f.label} <b>{f.count}</b>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           {/* TABS */}
           <div className={styles.ptabs}>
             <span className={styles.ptabInd} style={{ transform: `translateX(${tabIndex * 100}%)` }} />
@@ -1033,6 +1055,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                           {/* The owner only when it is someone else (2026-09-25). */}
                           {p.updated}{p.mine ? null : <> · {p.ownerWho ? <Who who={p.ownerWho} compact /> : p.owner}</>}
                         </div>
+                        <KindMark k={p.kind} />
                         <div className={styles.prowTitle}>{p.title}</div>
                       </div>
                       <button className={styles.prowOpen} type="button"
@@ -1084,6 +1107,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                     <div key={p.id} className={`${styles.pjob} ${styles.rowIn}`} style={{ animationDelay: `${i * 60}ms` }}>
                       <div className={`${styles.pjobHead} ${styles.prowTap}`} role="link" tabIndex={0} aria-label={`Open ${p.title}`}
                         onClick={(e) => openFromTap(e, p.id)} onKeyDown={(e) => { if (e.key === "Enter") router.push(`/dashboard/proposals/${p.id}`); }}>
+                        <KindMark k={p.kind} />
                         <div className={styles.pjobTitle}>{p.title}</div>
                         <div className={styles.pjobSub}>
                           <span>{p.client}</span>{p.city ? <span>{p.city}</span> : null}
@@ -1184,6 +1208,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                         <Icon id="i-check" />
                         {p.owed > 0 ? "Completed" : "Paid in full"}
                       </div>
+                      <KindMark k={p.kind} />
                       <div className={styles.pjobTitle}>{p.title}</div>
                       <div className={styles.pjobSub}>
                         <span>{p.client}</span>{p.city ? <span>{p.city}</span> : null}
@@ -1405,3 +1430,17 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
    original lucide paths; i-bulb is the reference's hand-drawn
    "switched-on" bulb (Smart Proposal).
    ============================================================ */
+
+/** WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind): the work's square and word, then the tool —
+ *  "Deck · Deck Studio", "Kitchen remodel · Smart Proposal". */
+function KindMark({ k }: { k?: ProposalKind }) {
+  if (!k) return null;
+  const tool = k.tool === "template" && k.via ? `Template · ${k.via}` : k.toolWords;
+  return (
+    <div className={styles.pkind} data-fam={k.family}>
+      <i className={styles.pkSq} aria-hidden="true" />
+      <b>{k.work}</b>
+      <span className={styles.pkTool} data-tool={k.tool}>{tool}</span>
+    </div>
+  );
+}

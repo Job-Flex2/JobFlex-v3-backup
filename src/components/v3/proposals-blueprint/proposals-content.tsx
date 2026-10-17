@@ -90,6 +90,9 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
       {/* KPI STRIP */}
       <div className="pmast" id="pMast"></div>
 
+      {/* TYPE (2026-10-17): the families of work the book holds — painted by proposals-behavior renderKinds */}
+      <div className="pkinds" id="pKinds" role="group" aria-label="Type of work" hidden></div>
+
       {/* TABS */}
       <div className="ptabs" id="pTabs">
         <button className="ptab active" type="button" data-tab="all">

@@ -989,6 +989,8 @@ export async function saveEstimate(raw: {
 // Convert estimate → new Proposal
 const convertInput = z.object({
   projectType: z.string(),
+  /** Which tool is converting (2026-10-17, lib/proposalKind): the proposals list names it. Smart Proposal when absent. */
+  source: z.enum(["smart", "video", "blueprint"]).optional(),
   title: z.string(),
   scope: z.string().optional(),
   materials: z.array(lineSchema).default([]),
@@ -1222,6 +1224,8 @@ export async function convertEstimateToProposal(raw: unknown) {
       proposalId: proposal.id,
       kind: "CREATED",
       summary: `Converted "${data.projectType}" AI estimate to proposal "${proposal.title}"`,
+      // The tool that made it — Smart Proposal, the video or the blueprint estimator (lib/proposalKind reads it).
+      meta: JSON.stringify({ source: data.source ?? "smart", projectType: data.projectType }),
     },
   });
   trackProposalCreated(organizationId, "smart");

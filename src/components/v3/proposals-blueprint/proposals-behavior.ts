@@ -61,6 +61,7 @@ import { MDL_EXIT_MS, closeMdl, openMdl } from "@/components/v3/blueprint-shell/
 import { mountIsland, type Island } from "@/components/v3/blueprint-shell/react-island";
 import { clientProposalUrl } from "@/lib/proposalLink";
 import { whoHtml } from "@/lib/team/who";
+import { familyCounts, type WorkFamily } from "@/lib/proposalKind";
 import {
   PAGE_ACC,
   PAGE_ALL,
@@ -186,6 +187,8 @@ export function initProposalsContent(
   const pstate = {
     tab: "all",
     filter: "ALL",
+    /** The type bar's pick (2026-10-17): every tab, chip and figure narrows to one family of work. */
+    kind: "ALL" as "ALL" | WorkFamily,
     pageAll: 1,
     pageAcc: 1,
     pageDone: 1,
@@ -359,7 +362,38 @@ export function initProposalsContent(
    *  filtering this list; it was removed with the box rather than left as a
    *  filter nothing can set. */
   function book() {
-    return proposalsData;
+    return pstate.kind === "ALL" ? proposalsData : proposalsData.filter((p) => (p.kind?.family ?? "other") === pstate.kind);
+  }
+  /** WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind): a square in the work's colour, the work's word,
+   *  and the tool that made it — Smart Proposal in its own violet. Above the title on the row and the cards. */
+  function kindHtml(p: ProposalRow): string {
+    const k = p.kind;
+    if (!k) return "";
+    const tool = k.tool === "template" && k.via ? "Template · " + k.via : k.toolWords;
+    const tip = k.work + " — made with " + k.toolWords + (k.tool === "copy" && k.via ? ', a copy of "' + k.via + '"' : k.tool === "template" && k.via ? ' "' + k.via + '"' : "");
+    return (
+      '<div class="pkind" data-fam="' + esc(k.family) + '" title="' + esc(tip) + '">' +
+      '<i class="pkind-sq" aria-hidden="true"></i><b>' + esc(k.work) + '</b>' +
+      '<span class="pkind-tool" data-tool="' + esc(k.tool) + '">' + esc(tool) + "</span></div>"
+    );
+  }
+  /** The type bar: All types + each family the book holds, with counts — drawn only when there is a choice. */
+  function renderKinds() {
+    const bar = $("#pKinds");
+    if (!bar) return;
+    const fams = familyCounts(proposalsData.map((p) => ({ family: p.kind?.family ?? "other" })));
+    if (pstate.kind !== "ALL" && !fams.some((f) => f.key === pstate.kind)) pstate.kind = "ALL";
+    if (fams.length < 2) {
+      bar.hidden = true;
+      bar.innerHTML = "";
+      return;
+    }
+    bar.hidden = false;
+    const chip = (key: string, label: string, n: number) =>
+      '<button class="pkchip' + (pstate.kind === key ? " active" : "") + '" type="button" data-k="' + key + '" aria-pressed="' + (pstate.kind === key) + '"' +
+      (key === "ALL" ? "" : ' data-fam="' + key + '"') + ">" +
+      (key === "ALL" ? "" : '<i class="pkind-sq" aria-hidden="true"></i>') + esc(label) + " <b>" + n + "</b></button>";
+    bar.innerHTML = '<span class="pk-lbl">Type</span>' + chip("ALL", "All types", proposalsData.length) + fams.map((f) => chip(f.key, f.label, f.count)).join("");
   }
   function filteredAll() {
     const base = book();
@@ -559,7 +593,9 @@ export function initProposalsContent(
       ">" +
       // The title is a real link to the proposal (⌘-click opens a tab); a
       // click anywhere else on the row follows it too — see openFromRow.
-      '<td><a class="pt-title pt-link" href="' +
+      "<td>" +
+      kindHtml(p) +
+      '<a class="pt-title pt-link" href="' +
       proposalHref(p.id) +
       '">' +
       esc(p.title) +
@@ -778,7 +814,9 @@ export function initProposalsContent(
       esc(p.id) +
       '">' +
       '<div class="pjob-head">' +
-      '<div><a class="pjob-title pt-link" href="' +
+      "<div>" +
+      kindHtml(p) +
+      '<a class="pjob-title pt-link" href="' +
       proposalHref(p.id) +
       '">' +
       esc(p.title) +
@@ -899,7 +937,9 @@ export function initProposalsContent(
       esc(p.id) +
       '">' +
       '<div class="psheet-head">' +
-      '<div><a class="pjob-title pt-link" href="' +
+      "<div>" +
+      kindHtml(p) +
+      '<a class="pjob-title pt-link" href="' +
       proposalHref(p.id) +
       '">' +
       esc(p.title) +
@@ -984,6 +1024,7 @@ export function initProposalsContent(
     }
   }
   function renderProposals(stagger = false) {
+    renderKinds();
     renderKpis();
     renderTabCounts();
     renderChipCounts();
@@ -998,6 +1039,7 @@ export function initProposalsContent(
    * list to its caller, which patches or removes exactly one node.
    */
   function repaintExcept(acted: "all" | "acc" | "done") {
+    renderKinds();
     renderKpis();
     renderTabCounts();
     renderChipCounts();
@@ -1458,6 +1500,18 @@ export function initProposalsContent(
         pstate.tab === "accepted" ? $("#propStack") : pstate.tab === "completed" ? $("#doneStack") : $("#propTableBody");
       if (stack) staggerIn(Array.from(stack.querySelectorAll<HTMLElement>(".prow, .pjob, .psheet")));
     }
+  });
+  $("#pKinds")?.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".pkchip");
+    if (!chip) return;
+    const k = (chip.dataset.k || "ALL") as "ALL" | WorkFamily;
+    if (k === pstate.kind) return;
+    pstate.kind = k;
+    pstate.pageAll = 1;
+    pstate.pageAcc = 1;
+    pstate.pageDone = 1;
+    // Narrowing by type is a repaint, not a list arriving — silently, every panel and figure at once.
+    renderProposals();
   });
   $("#pChips")?.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>(".pchip");

@@ -264,3 +264,14 @@
 @media (min-width: 560px) {
   .stretchGrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: start; }
 }
+
+/* Measure it exactly — optional (2026-10-17): the wall's tape measures and drawing, folded under the quick shapes. */
+.exact { border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; }
+.exactSum { list-style: none; cursor: pointer; min-height: 52px; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 10px; padding: 10px 12px; }
+.exactSum::-webkit-details-marker { display: none; }
+.exactSum b { font-size: 14.5px; font-weight: 900; color: var(--ink); }
+.exactSum span { grid-column: 1; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.exactSum::after { content: "▾"; grid-column: 2; grid-row: 1 / span 2; font-size: 14px; color: var(--ink); }
+.exact[open] .exactSum::after { content: "▴"; }
+.exact[open] .exactSum { border-bottom: 1.5px solid var(--hair); }
+.exactBody { display: grid; gap: 10px; padding: 12px; }

@@ -37,8 +37,9 @@ import { deckBookKey as bookKey } from "@/lib/deck/rateBookStore";
 import { DECK_PLAN_EVENT, DECK_PLAN_VERSION, deckConvertSchema, deckUpdateSchema, firstIssue, type DeckConvertInput } from "@/lib/deck/convertSchema";
 import { DECK_LOCK_WORDS, deckProposalLock, deckProposalSeen, readDeckWritten, type DeckProposalLock, type DeckWritten, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import { deckUpdatePayload } from "@/lib/deck/proposalUpdate";
-import { clientLinkOfDraft, markClientLinkSeen, tieClientLinkToProposal } from "@/lib/deck/clientLinksServer";
-import { CLIENT_TOKEN_RE } from "@/lib/deck/clientDesign";
+import { clientLinkOfDraft, clientOfLink, markClientLinkSeen, tieClientLinkToProposal } from "@/lib/deck/clientLinksServer";
+import { findClientForLead } from "@/lib/leadClient";
+import { CLIENT_TOKEN_RE, linkTitle } from "@/lib/deck/clientDesign";
 import { saveProposal } from "@/actions/proposals";
 import { proposalRef } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-bridge";
 import { isPrivateFileUnder, putPrivate } from "@/lib/media/privateStore";
@@ -185,12 +186,46 @@ export async function convertDeckEstimateToProposal(raw: unknown): Promise<DeckC
 const unitToType = (unit: string | undefined) => (unit === "sqft" ? "SQFT" : unit === "ln ft" ? "LINEAR_FT" : unit === "lot" ? "LUMP_SUM" : "UNIT");
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** A design the client sent back through their link is THEIR job (2026-10-17 audit: four priced client designs
+ *  sat "Unassigned" though the link carried the client's name and phone). The link's own client record when it
+ *  was made from one; else the client with that email or phone; else a new client from what the contractor typed
+ *  on the link — within the plan's client cap (over the cap it stays unassigned, as before). Never throws. */
+async function clientFromDesignLink(organizationId: string, userId: string, token: string | null | undefined, title: string): Promise<string | null> {
+  try {
+    const c = await clientOfLink(token, organizationId);
+    if (!c) return null;
+    if (c.clientId) {
+      const own = await db.client.findFirst({ where: { id: c.clientId, organizationId, deletedAt: null }, select: { id: true } });
+      if (own) return own.id;
+    }
+    const known = c.clientEmail || c.clientPhone ? await findClientForLead(organizationId, { email: c.clientEmail, phone: c.clientPhone }) : null;
+    if (known) return known.id;
+    const name = c.clientName.trim();
+    if (!name) return null;
+    // A link with only a name: the client already on file by that exact name — when there is just the one.
+    if (!c.clientEmail && !c.clientPhone) {
+      const same = (await db.client.findMany({ where: { organizationId, deletedAt: null }, select: { id: true, name: true }, take: 5000 })).filter((x) => x.name.trim().toLowerCase() === name.toLowerCase());
+      if (same.length === 1) return same[0].id;
+    }
+    const cap = await checkPlanLimit(organizationId, "clients");
+    if (!cap.allowed) return null;
+    const made = await db.client.create({
+      data: { organizationId, name, email: c.clientEmail?.trim() || null, phone: c.clientPhone?.trim() || null, address: c.address?.trim() || null },
+      select: { id: true, name: true },
+    });
+    await logActivity({ organizationId, actorId: userId, kind: TRAIL_KINDS.CLIENT, clientId: made.id, summary: `Added client ${made.name} from their deck design ("${title}")`, meta: { from: "deck-client-design" } });
+    return made.id;
+  } catch {
+    return null;
+  }
+}
+
 async function writeProposal(organizationId: string, userId: string, role: string, data: DeckConvertInput): Promise<string> {
   // A client id from the browser must belong to this org.
   const named = data.clientId ? ((await db.client.findFirst({ where: { id: data.clientId, organizationId }, select: { id: true } }))?.id ?? null) : null;
   // Started from a project, a client or a lead, the picker recorded where this estimate files (lib/filingContext).
   const filing = await readFilingContext(organizationId);
-  const clientId = named ?? (await filedClientId(organizationId, role, filing));
+  const clientId = named ?? (await filedClientId(organizationId, role, filing)) ?? (await clientFromDesignLink(organizationId, userId, data.clientToken, data.title));
   const projectId = filing?.projectId ?? null;
   const text = leadProposalText(filing?.lead ?? null, data.scope ?? "");
 
@@ -402,7 +437,7 @@ export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: Deck
   }
   if (token) {
     const link = await markClientLinkSeen(token, g.organizationId);
-    if (link) client = { token: link.token, name: link.clientName, phone: link.clientPhone, note: link.note, unsure: link.unsure, sentAt: link.sentAt, sends: link.sends, url: `${(await appBaseUrl()).replace(/\/$/, "")}/deck-design/${link.token}`, address: link.address, title: link.title };
+    if (link) client = { token: link.token, name: link.clientName, phone: link.clientPhone, note: link.note, unsure: link.unsure, sentAt: link.sentAt, sends: link.sends, url: `${(await appBaseUrl()).replace(/\/$/, "")}/deck-design/${link.token}`, address: link.address, title: linkTitle(link) };
   }
   // A draft opened from a proposal goes on updating it, while the proposal is there.
   const proposalId = draft.proposalId ?? (client ? (await db.syncState.findUnique({ where: { key: `deckclient:${client.token}` }, select: { cursor: true } }).then((r) => (r ? (JSON.parse(r.cursor) as { proposalId?: unknown }).proposalId : null)).catch(() => null)) : null);
@@ -513,6 +548,12 @@ export async function updateDeckProposal(raw: unknown): Promise<DeckUpdateResult
       }
     }
     await logActivity({ organizationId: g.organizationId, actorId: g.userId, kind: TRAIL_KINDS.ESTIMATE, proposalId: row.id, summary: `Re-priced the deck from its design — ${data.plan?.scene.facts ?? data.title}, $${Math.round(next.subtotal).toLocaleString("en-US")}`, meta: { trade: "deck", amount: Math.round(next.subtotal) } });
+    // A proposal with no client yet, re-priced from the design a client sent through its link: it is that client's
+    // job (2026-10-17 audit — the walk's proposal stayed "Unassigned" after Jane's design priced it).
+    if (!row.clientId && data.clientToken) {
+      const clientId = await clientFromDesignLink(g.organizationId, g.userId, data.clientToken, row.title);
+      if (clientId) await db.proposal.updateMany({ where: { id: row.id, organizationId: g.organizationId, clientId: null }, data: { clientId } });
+    }
     await tieClientLinkToProposal(data.clientToken, g.organizationId, row.id);
     return { ok: true, id: row.id, kept: next.kept, titleKept: next.titleKept, scopeKept: next.scopeKept };
   } catch (err) {

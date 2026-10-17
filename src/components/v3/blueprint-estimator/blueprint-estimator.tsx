@@ -649,6 +649,7 @@ export function BlueprintEstimator() {
       await saveEstimate({ projectType: result.scope.title, location: site, data });
       const res = await convertEstimateToProposal({
         projectType: result.scope.title,
+        source: "blueprint",
         title: data.title,
         scope: data.scope,
         materials: data.materials,

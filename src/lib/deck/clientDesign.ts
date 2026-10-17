@@ -62,6 +62,9 @@ export interface ClientDesignLink {
   address: string | null;
   /** The contractor's name for it ("Smith deck"). */
   title: string;
+  /** True when nobody typed the title — it is the words of the design on the studio's screen when the link was
+   *  made, and what comes back is titled by the client's own design instead (2026-10-17). Absent on older links. */
+  titleAuto?: boolean;
   start: ClientStart;
   /** The contractor's design when the link was made — or a blank one with the contractor's site, house and lumber. */
   base: DeckDesign;
@@ -140,6 +143,7 @@ export function parseClientLink(cursor: string): ClientDesignLink | null {
       clientId: strOrNull(raw.clientId, 64),
       address: strOrNull(raw.address, 300),
       title: str(raw.title, 120) || structureWords(base),
+      ...(typeof raw.titleAuto === "boolean" ? { titleAuto: raw.titleAuto } : {}),
       start: raw.start === "blank" ? "blank" : "mine",
       base,
       work: raw.work ? normalizeDeckDesign(raw.work) : null,
@@ -167,7 +171,7 @@ export function clientLinkRow(l: ClientDesignLink, now: number): ClientLinkRow {
     clientName: l.clientName,
     clientPhone: l.clientPhone,
     clientEmail: l.clientEmail,
-    title: l.title,
+    title: linkTitle(l),
     start: l.start,
     createdAt: l.createdAt,
     openedAt: l.openedAt,
@@ -311,6 +315,14 @@ export function mergeClientDesign(base: DeckDesign, raw: unknown, opts: { settle
 }
 
 /** "Jane Smith's deck design" — the draft's name in the studio. */
+/** The job's name as every surface says it (2026-10-17): a title somebody typed stays; the automatic one — the
+ *  words of the design the link started from — follows the client's own design once they have changed it. Older
+ *  links (no `titleAuto`) count as automatic when the title is still the starting design's words. */
+export function linkTitle(l: Pick<ClientDesignLink, "title" | "titleAuto" | "base" | "work">): string {
+  const auto = l.titleAuto ?? l.title === structureWords(l.base).slice(0, 120);
+  return auto && l.work ? structureWords(l.work).slice(0, 120) : l.title;
+}
+
 export function returnedTitle(link: Pick<ClientDesignLink, "clientName" | "title">): string {
   const who = link.clientName.trim();
   const own = who && who !== "Your client" ? `${who}${/s$/i.test(who) ? "'" : "'s"} design` : "The client's design";
