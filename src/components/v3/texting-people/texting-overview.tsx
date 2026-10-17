@@ -8,10 +8,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AlertTriangle, Check, CheckCircle2 } from "lucide-react";
 
 import { setClientTextsOn } from "@/actions/sms";
 import type { SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
-import { TEXTING_COPY } from "@/components/v3/settings-blueprint/settings-data";
+import { TEXTING_COPY, TEXTS_COPY } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./texting-people.module.css";
 
 type Tone = "ok" | "wait" | "todo" | "bad";
@@ -58,15 +59,26 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
     }
   };
   const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // The steps' squares (sign-up's and the AI desk's): done — a tick; the first one not done — blue; the rest — outlined.
+  const doneSteps = { number: number.tone === "ok", team: on > 0, clients: sms.clientsOn, rules: sms.rules.length > 0 };
+  const current = (["number", "team", "clients", "rules"] as const).find((k) => !doneSteps[k]) ?? null;
+  const square = (k: keyof typeof doneSteps, n: number) => (
+    <span className={s.stepN} aria-hidden="true">
+      {doneSteps[k] ? <Check size={15} strokeWidth={3} /> : n}
+    </span>
+  );
+  const stateOf = (k: keyof typeof doneSteps) => (doneSteps[k] ? "done" : current === k ? "current" : "todo");
+  const live = Boolean(approvedNumber && sms.configured);
 
   return (
     <div className={s.root} data-texting-overview data-nest="">
-      <p className={`${s.status}${approvedNumber && sms.configured ? ` ${s.statusLive}` : ""}`} data-texting-status>
-        {status}
+      <p className={`${s.status}${live ? ` ${s.statusLive}` : ""}`} data-texting-status>
+        {live ? <CheckCircle2 size={17} strokeWidth={2.2} aria-hidden /> : <AlertTriangle size={17} strokeWidth={2.2} aria-hidden />}
+        <span>{status}</span>
       </p>
       <ol className={s.steps}>
-        <li className={s.step} data-step="number" data-tone={number.tone}>
-          <span className={s.stepN} aria-hidden="true">1</span>
+        <li className={s.step} data-step="number" data-state={stateOf("number")} data-tone={number.tone}>
+          {square("number", 1)}
           <span className={s.stepT}>
             <b>{C.stepNumber}</b>
             <span>{number.line}</span>
@@ -75,8 +87,8 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
             {number.go}
           </button>
         </li>
-        <li className={s.step} data-step="team" data-tone={on ? "ok" : "todo"}>
-          <span className={s.stepN} aria-hidden="true">2</span>
+        <li className={s.step} data-step="team" data-state={stateOf("team")} data-tone={on ? "ok" : "todo"}>
+          {square("team", 2)}
           <span className={s.stepT}>
             <b>{C.stepTeam}</b>
             <span>{C.teamLine(on, off, none)}</span>
@@ -85,8 +97,8 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
             {C.teamGo}
           </button>
         </li>
-        <li className={s.step} data-step="clients" data-tone={sms.clientsOn ? "ok" : "todo"}>
-          <span className={s.stepN} aria-hidden="true">3</span>
+        <li className={s.step} data-step="clients" data-state={stateOf("clients")} data-tone={sms.clientsOn ? "ok" : "todo"}>
+          {square("clients", 3)}
           <span className={s.stepT}>
             <b>{C.stepClients}</b>
             <span>{C.clientsLine}</span>
@@ -105,8 +117,8 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
             <span>{sms.clientsOn ? C.switchOn : C.switchOff}</span>
           </button>
         </li>
-        <li className={s.step} data-step="rules" data-tone={sms.rules.length ? "ok" : "todo"}>
-          <span className={s.stepN} aria-hidden="true">4</span>
+        <li className={s.step} data-step="rules" data-state={stateOf("rules")} data-tone={sms.rules.length ? "ok" : "todo"}>
+          {square("rules", 4)}
           <span className={s.stepT}>
             <b>{C.stepRules}</b>
             <span>{C.rulesLine(sms.rules.length)}</span>
@@ -155,6 +167,59 @@ export function ClientTextsSwitch({ on }: { on: boolean }) {
         <span>{on ? TEXTING_COPY.switchOn : TEXTING_COPY.switchOff}</span>
       </button>
       {err ? <p className={`${s.note} ${s.noteErr}`} role="alert">{err}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * ON | OFF in one framed switch (the Monthly | Annual pattern, components/billing/PlanTermSwitch): a radio group,
+ * the picked half filled ink. Lead texts from JobFlex on the desk and the phone (2026-10-16).
+ */
+export function OnOffSegment({
+  on,
+  label,
+  onPick,
+  disabled,
+  onDisabled,
+  wide,
+}: {
+  on: boolean;
+  label: string;
+  onPick: (next: boolean) => void;
+  disabled?: boolean;
+  /** "On" can't be picked (no company phone yet); "Off" still can. */
+  onDisabled?: boolean;
+  wide?: boolean;
+}) {
+  const halves = [
+    { v: true, words: TEXTS_COPY.clientsOn, off: Boolean(disabled || onDisabled) },
+    { v: false, words: TEXTS_COPY.clientsOff, off: Boolean(disabled) },
+  ];
+  return (
+    <div className={`${s.seg}${wide ? ` ${s.segWide}` : ""}`} role="radiogroup" aria-label={label} data-nest="" data-on-off={on ? "on" : "off"}>
+      {halves.map((h) => (
+        <button
+          key={String(h.v)}
+          type="button"
+          role="radio"
+          aria-checked={on === h.v}
+          tabIndex={on === h.v ? 0 : -1}
+          className={`${s.segBtn}${on === h.v ? ` ${s.segOn}` : ""}`}
+          disabled={h.off && on !== h.v}
+          onClick={() => {
+            if (on !== h.v) onPick(h.v);
+          }}
+          onKeyDown={(e) => {
+            if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+              e.preventDefault();
+              const next = !on;
+              if (!(next ? disabled || onDisabled : disabled)) onPick(next);
+            }
+          }}
+        >
+          {h.words}
+        </button>
+      ))}
     </div>
   );
 }

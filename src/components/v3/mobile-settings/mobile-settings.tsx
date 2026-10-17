@@ -82,7 +82,7 @@ import {
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
-import { TextingOverview } from "@/components/v3/texting-people/texting-overview";
+import { OnOffSegment, TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
 import type { PaymentConnectionStatusView } from "@/lib/payments/connections";
 import type {
@@ -1345,14 +1345,7 @@ function TextingPane({ data }: { data: SettingsData }) {
           <CardHeader card={{ title: TEXTS_COPY.leadTitle, sub: TEXTS_COPY.leadSub }} />
           <div className="mst-cardB">
             <div className="mst-note">{sms.leadTexts.phone ? `To ${sms.leadTexts.phone}` : TEXTS_COPY.leadNoPhone}</div>
-            <button
-              className={`mst-btn ${sms.leadTexts.on ? "mst-btn--ghost" : "mst-btn--primary"} mst-btn--wide`}
-              type="button"
-              disabled={busy !== null || (!sms.leadTexts.on && !sms.leadTexts.phone)}
-              onClick={() => run("lead", () => setLeadTexts(!sms.leadTexts.on))}
-            >
-              {sms.leadTexts.on ? "Turn lead texts off" : "Turn lead texts on"}
-            </button>
+            <OnOffSegment on={sms.leadTexts.on} label={TEXTS_COPY.leadTitle} disabled={busy !== null} onDisabled={!sms.leadTexts.phone} onPick={(next) => run("lead", () => setLeadTexts(next))} wide />
             <div className="mst-note" data-lead-consent>
               <span>
                 {TEXTS_COPY.leadConsent} <a href="/terms#sms">{TEXTS_COPY.terms}</a> · <a href="/privacy#sms">{TEXTS_COPY.privacy}</a>

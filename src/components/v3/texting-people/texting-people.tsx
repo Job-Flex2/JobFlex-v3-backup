@@ -15,6 +15,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 
 import { confirmPhoneVerification, setMemberMobile, setMemberTextEvents, setMemberTextsOn, startPhoneVerification, type SmsActionResult } from "@/actions/sms";
 import { textEventsFor, type PrefEventMeta, type TextAudience } from "@/lib/notificationPrefsShared";
@@ -93,7 +94,10 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
               <p className={s.note}>{TEXTING_COPY.emptySection}</p>
             )}
             <details className={s.ex}>
-              <summary>{TEXTING_COPY.examplesTitle}</summary>
+              <summary>
+                <ChevronRight size={15} strokeWidth={2.4} aria-hidden className={s.exArrow} />
+                {TEXTING_COPY.examplesTitle}
+              </summary>
               <ul>
                 {events.map((e) => (
                   <li key={e.key}>
@@ -167,7 +171,7 @@ function PersonRow({
           {row.phone ? (
             <>
               <b>{row.phone}</b>
-              <span className={`${s.tag}${row.stopped ? ` ${s.tagWarn}` : ""}`}>{row.stopped ? TEXTS_COPY.stopped : row.phoneBy === "office" ? TEXTING_COPY.byOffice : TEXTING_COPY.bySelf}</span>
+              <span className={`${s.tag}${row.stopped ? ` ${s.tagWarn}` : row.phoneBy === "office" ? "" : ` ${s.tagOk}`}`}>{row.stopped ? TEXTS_COPY.stopped : row.phoneBy === "office" ? TEXTING_COPY.byOffice : TEXTING_COPY.bySelf}</span>
             </>
           ) : row.phoneOnFile ? (
             <>

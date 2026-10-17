@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 
 import {
   addNotificationPhone,
@@ -30,7 +31,7 @@ import {
   type SmsActionResult,
 } from "@/actions/sms";
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
-import { ClientTextsSwitch, TextingOverview } from "@/components/v3/texting-people/texting-overview";
+import { ClientTextsSwitch, OnOffSegment, TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
@@ -52,7 +53,7 @@ export function TextingPane({ data }: PaneProps) {
               <div className="sc-t">{TEXTING_COPY.overviewTitle}</div>
               <div className="sc-s">{TEXTING_COPY.overviewSub}</div>
             </div>
-            <span className="sc-badge" title={TEXTS_COPY.overage}>{TEXTS_COPY.usage(sms.monthCount, sms.allowance)}</span>
+            <span className="sc-badge" title={TEXTS_COPY.overage}>{monoDigits(TEXTS_COPY.usage(sms.monthCount, sms.allowance))}</span>
           </div>
           <div className="sc-b">
             <TextingOverview sms={sms} />
@@ -61,7 +62,10 @@ export function TextingPane({ data }: PaneProps) {
       ) : !sms.configured ? (
         <section className="sc" id="texting-status">
           <div className="sc-b">
-            <p className="tx-note tx-note--warn" style={{ margin: 0 }}>{TEXTING_COPY.notConfiguredLong}</p>
+            <p className="tx-banner" role="note">
+              <AlertTriangle size={17} strokeWidth={2.2} aria-hidden />
+              <span>{TEXTING_COPY.notConfiguredLong}</span>
+            </p>
           </div>
         </section>
       ) : null}
@@ -100,6 +104,11 @@ export function TextingPane({ data }: PaneProps) {
       {sms.canManage ? <LeadTextsCard sms={sms} /> : null}
     </>
   );
+}
+
+/** "0 of 4000 texts this month" with the figures in mono — the only mono on the pane besides phone numbers. */
+function monoDigits(words: string) {
+  return words.split(/(\d[\d,]*)/).map((part, i) => (i % 2 ? <b key={i}>{part}</b> : part));
 }
 
 /** One `run` for every button on the pane: the action's note or its error. */
@@ -303,14 +312,9 @@ function LeadTextsCard({ sms }: { sms: SmsSettingsData }) {
         </div>
       </div>
       <div className="sc-b">
-        <div className="tx-row-a tx-row-a--left">
-          <button type="button" className={`btn btn-sm ${sms.leadTexts.on ? "btn-primary" : "btn-ghost"}`} disabled={busy !== null || sms.leadTexts.on || !sms.leadTexts.phone} onClick={() => run("lead", () => setLeadTexts(true))}>
-            {TEXTS_COPY.clientsOn}
-          </button>
-          <button type="button" className={`btn btn-sm ${sms.leadTexts.on ? "btn-ghost" : "btn-primary"}`} disabled={busy !== null || !sms.leadTexts.on} onClick={() => run("lead", () => setLeadTexts(false))}>
-            {TEXTS_COPY.clientsOff}
-          </button>
-          <span className="tx-note" style={{ margin: 0, alignSelf: "center" }}>{sms.leadTexts.phone ? `To ${sms.leadTexts.phone}` : TEXTS_COPY.leadNoPhone}</span>
+        <div className="tx-lead">
+          <OnOffSegment on={sms.leadTexts.on} label={TEXTS_COPY.leadTitle} disabled={busy !== null} onDisabled={!sms.leadTexts.phone} onPick={(next) => run("lead", () => setLeadTexts(next))} />
+          <span className="tx-note tx-lead-to">{sms.leadTexts.phone ? `To ${sms.leadTexts.phone}` : TEXTS_COPY.leadNoPhone}</span>
         </div>
         <p className="tx-note" data-lead-consent>
           {TEXTS_COPY.leadConsent} <a href="/terms#sms">{TEXTS_COPY.terms}</a> · <a href="/privacy#sms">{TEXTS_COPY.privacy}</a>
