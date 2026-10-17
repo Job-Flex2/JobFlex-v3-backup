@@ -10,8 +10,8 @@
 import { useEffect, useState } from "react";
 import { BellOff, Check, Moon, Pencil, Phone, Send, Trash2, UserPlus } from "lucide-react";
 import { Note, SheetBody, SheetFoot } from "@/components/v3/admin-users/admin-kit";
-import { addAdminTeamMember, getAdminTeam, removeAdminTeamMember, testAdminTeamText, updateAdminTeamMember, type TeamResult } from "@/actions/adminTasks";
-import { deliveryWords, type TeamMemberView, type TextingStatus } from "@/lib/adminTasks/teamShared";
+import { addAdminTeamMember, getAdminTeam, removeAdminTeamMember, setAdminSurgeThreshold, testAdminTeamText, updateAdminTeamMember, type TeamResult } from "@/actions/adminTasks";
+import { ALERT_KEYS, ALERT_WORDS, deliveryWords, type TeamMemberView, type TextingStatus } from "@/lib/adminTasks/teamShared";
 import type { AdminPersonDTO } from "@/lib/adminTasks/model";
 import { cx } from "./task-bits";
 
@@ -113,6 +113,21 @@ function Member({ m, onTeam }: { m: TeamMemberView; onTeam: (r: TeamResult) => s
         </label>
       </div>
 
+      <div className={cx("tmAlerts")} data-team-alerts>
+        <p className={cx("tmAlertsHead")}>Alert texts — what&apos;s happening on JobFlex itself:</p>
+        <div className={cx("tmFlags")}>
+          {ALERT_KEYS.map((k) => {
+            const onNow = m.alerts.includes(k);
+            return (
+              <label key={k} className={cx("tmFlag")} title={ALERT_WORDS[k].hint}>
+                <input type="checkbox" checked={onNow} disabled={busy !== null || !m.on} onChange={() => void act("flags", () => updateAdminTeamMember(m.id, { alertSet: { key: k, on: !onNow } }))} data-team-alert={k} />
+                <span>{ALERT_WORDS[k].label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
       <div className={cx("tmBtns")}>
         <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} disabled={busy !== null || m.stopped} onClick={() => void act("test", () => testAdminTeamText(m.id))} data-team-test>
           <Send size={14} aria-hidden />
@@ -202,12 +217,51 @@ function AddMember({ onTeam }: { onTeam: (r: TeamResult) => string | null }) {
   );
 }
 
+function SurgeDial({ threshold, onTeam }: { threshold: number; onTeam: (r: TeamResult) => string | null }) {
+  const [value, setValue] = useState(String(threshold));
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => setValue(String(threshold)), [threshold]);
+  const dirty = value.trim() !== String(threshold);
+  return (
+    <form
+      className={cx("tmDial")}
+      data-team-surge-dial
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setNote(null);
+        const r = await setAdminSurgeThreshold(Number(value)).catch(() => NO_LINE);
+        setBusy(false);
+        const err = onTeam(r);
+        setNote(err);
+      }}
+    >
+      <span>
+        <b>Traffic surge</b> texts when the site holds{" "}
+        <input className={cx("in", "tmDialIn")} value={value} inputMode="numeric" aria-label="Visitors at once" onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, 3))} data-team-surge-threshold />{" "}
+        or more visitors at once (checked every 5 minutes, told once per surge).
+      </span>
+      {dirty ? (
+        <button type="submit" className={cx("btn", "btn-primary", "btn-sm")} disabled={busy || !value.trim()}>
+          {busy ? "Saving…" : "Save"}
+        </button>
+      ) : null}
+      {note ? (
+        <p className={cx("tmNote", "tmNoteBad")} role="alert">
+          {note}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 export function TeamSheetContent({ onClose, onPeople }: { onClose: () => void; onPeople: (people: AdminPersonDTO[]) => void }) {
-  const [data, setData] = useState<{ team: TeamMemberView[]; texting: TextingStatus } | null>(null);
+  const [data, setData] = useState<{ team: TeamMemberView[]; texting: TextingStatus; surgeThreshold: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const take = (r: Ok) => {
-    setData({ team: r.team, texting: r.texting });
+    setData({ team: r.team, texting: r.texting, surgeThreshold: r.surgeThreshold });
     onPeople(r.people);
   };
 
@@ -274,6 +328,7 @@ export function TeamSheetContent({ onClose, onPeople }: { onClose: () => void; o
                 <Member key={m.id} m={m} onTeam={onTeam} />
               ))}
             </ul>
+            {data.team.length ? <SurgeDial threshold={data.surgeThreshold} onTeam={onTeam} /> : null}
           </>
         ) : null}
       </SheetBody>

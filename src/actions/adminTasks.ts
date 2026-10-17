@@ -20,7 +20,8 @@ import { appBaseUrl } from "@/lib/appUrl";
 import { sendTaskNotices } from "@/lib/adminTasks/mail";
 import { PictureError, removeTaskPicture } from "@/lib/adminTasks/pictures";
 import { addMember, removeMember, sendTaskTexts, teamView, testMember, textingStatus, updateMember, type TeamWrite } from "@/lib/adminTasks/team";
-import type { TeamMemberView, TextingStatus } from "@/lib/adminTasks/teamShared";
+import { isAlertKey, type AlertKey, type TeamMemberView, type TextingStatus } from "@/lib/adminTasks/teamShared";
+import { alertSettings, setSurgeThreshold, SURGE_DEFAULT } from "@/lib/adminAlerts";
 import {
   TaskError,
   addComment,
@@ -157,12 +158,12 @@ export async function removeAdminTaskPicture(taskId: string, pictureId: string):
   }
 }
 
-/** The team sheet's answer: the list, everyone a task can go to now, and whether texts can go at all. */
-export type TeamResult = { ok: true; team: TeamMemberView[]; people: AdminPersonDTO[]; texting: TextingStatus; note?: string } | { ok: false; error: string };
+/** The team sheet's answer: the list, everyone a task can go to now, whether texts can go at all, and the alert dial. */
+export type TeamResult = { ok: true; team: TeamMemberView[]; people: AdminPersonDTO[]; texting: TextingStatus; surgeThreshold: number; note?: string } | { ok: false; error: string };
 
 async function teamNow(note?: string): Promise<TeamResult> {
-  const [team, people, texting] = await Promise.all([teamView(), taskPeople(), textingStatus()]);
-  return { ok: true, team, people, texting, note };
+  const [team, people, texting, alerts] = await Promise.all([teamView(), taskPeople(), textingStatus(), alertSettings().catch(() => ({ surgeThreshold: SURGE_DEFAULT }))]);
+  return { ok: true, team, people, texting, surgeThreshold: alerts.surgeThreshold, note };
 }
 
 async function teamRun(write: (actor: Actor) => Promise<TeamWrite>): Promise<TeamResult> {
@@ -190,17 +191,31 @@ export async function addAdminTeamMember(name: string, phone: string): Promise<T
   return teamRun((actor) => addMember(clip(name, 120), clip(phone, 40), isConsoleEmail(actor.email) ? null : actor.name));
 }
 
-export async function updateAdminTeamMember(memberId: string, patch: { name?: string; phone?: string; on?: boolean; quietNights?: boolean }): Promise<TeamResult> {
+export async function updateAdminTeamMember(memberId: string, patch: { name?: string; phone?: string; on?: boolean; quietNights?: boolean; alerts?: string[]; alertSet?: { key: string; on: boolean } }): Promise<TeamResult> {
   if (!isId(memberId)) return { ok: false, error: "That person isn't on the team any more." };
   const p = patch && typeof patch === "object" ? patch : {};
+  const alerts = Array.isArray(p.alerts) ? (p.alerts.filter(isAlertKey) as AlertKey[]).slice(0, 8) : undefined;
+  const alertSet = p.alertSet && isAlertKey(p.alertSet.key) && typeof p.alertSet.on === "boolean" ? { key: p.alertSet.key as AlertKey, on: p.alertSet.on } : undefined;
   return teamRun(() =>
     updateMember(memberId, {
       name: typeof p.name === "string" ? clip(p.name, 120) : undefined,
       phone: typeof p.phone === "string" ? clip(p.phone, 40) : undefined,
       on: typeof p.on === "boolean" ? p.on : undefined,
       quietNights: typeof p.quietNights === "boolean" ? p.quietNights : undefined,
+      alerts,
+      alertSet,
     }),
   );
+}
+
+/** The traffic-surge dial: how many visitors at once count as "busy" (the five-minute cron reads it). */
+export async function setAdminSurgeThreshold(n: number): Promise<TeamResult> {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return { ok: false, error: "A number of visitors, like 10." };
+  return teamRun(async () => {
+    await setSurgeThreshold(v);
+    return { ok: true, note: "Saved." };
+  });
 }
 
 /** Off the team: their open tasks go back to nobody. */

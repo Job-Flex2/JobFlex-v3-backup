@@ -17,6 +17,22 @@
 // (lib/adminTasks/textReply). Not YES: Twilio keeps it as a re-subscribe word (it is still understood).
 // Never a switched-off phone; nothing 9 PM–7 AM (Los Angeles) to a phone that keeps quiet nights — unless Urgent.
 
+/* THE PLATFORM ALERTS a team member can subscribe to (owner, 2026-10-17: "set the
+ * text messaging for when someone signs up … converted from free trial … anything
+ * comes from support … canceled his trial … live users more than 10 at the same
+ * time"). Off for everyone until ticked — an alert text costs money and attention.
+ * The texts themselves: lib/adminAlerts. */
+export const ALERT_KEYS = ["signup", "converted", "canceled", "support", "surge"] as const;
+export type AlertKey = (typeof ALERT_KEYS)[number];
+export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
+  signup: { label: "Sign-ups", hint: "a company signs up" },
+  converted: { label: "Conversions", hint: "a trial becomes a paid plan" },
+  canceled: { label: "Trial cancels", hint: "a trial cancels before it ends" },
+  support: { label: "Support", hint: "a support ticket arrives" },
+  surge: { label: "Traffic surge", hint: "the site is busy right now" },
+};
+export const isAlertKey = (v: unknown): v is AlertKey => typeof v === "string" && (ALERT_KEYS as readonly string[]).includes(v);
+
 export type TeamMember = {
   id: string;
   name: string;
@@ -25,6 +41,8 @@ export type TeamMember = {
   on: boolean;
   quietNights: boolean;
   addedAt: string;
+  /** Which platform alerts they asked to be texted about (lib/adminAlerts). */
+  alerts?: AlertKey[];
 };
 
 /** A team member as a task's assignee: "m:<id>". */
@@ -126,7 +144,8 @@ export function cleanMembers(raw: unknown): TeamMember[] {
     const phone = typeof o.phone === "string" ? phoneE164(o.phone) : null;
     if (!id || !name || !phone || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, name, phone, on: o.on !== false, quietNights: o.quietNights !== false, addedAt: typeof o.addedAt === "string" ? o.addedAt : "" });
+    const alerts = Array.isArray(o.alerts) ? (ALERT_KEYS as readonly string[]).filter((k) => (o.alerts as unknown[]).includes(k)) as AlertKey[] : [];
+    out.push({ id, name, phone, on: o.on !== false, quietNights: o.quietNights !== false, addedAt: typeof o.addedAt === "string" ? o.addedAt : "", ...(alerts.length ? { alerts } : {}) });
   }
   return out.slice(0, TEAM_MAX);
 }
@@ -150,6 +169,8 @@ export type TeamMemberView = {
   last: LastText | null;
   /** They replied STOP: nothing reaches them until they text START. */
   stopped: boolean;
+  /** The platform alerts they get texts about (lib/adminAlerts). */
+  alerts: AlertKey[];
 };
 
 /** The carrier's error codes a person can act on (Twilio's 2xxxx/3xxxx). */
