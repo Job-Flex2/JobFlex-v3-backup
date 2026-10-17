@@ -606,6 +606,11 @@
   transition: transform 0.2s, background-color 0.2s;
 }
 .jf-lp .lp-btn-lime:hover { background: #0e3d7a; transform: scale(1.02); }
+/* The "Start my 7-day FREE TRIAL" buttons read bold (owner, 2026-10-16):
+   hero, nav, sticky phone bar, Proposals, the final block. After .lp-cta
+   (600) and .lp-btn-dark (500) at the same weight of selector, so it wins;
+   size, colour and the text's capitals are the buttons' own. */
+.jf-lp .lp-trial-cta { font-weight: 700; }
 
 .jf-lp .lp-arrow-link {
   display: inline-flex;

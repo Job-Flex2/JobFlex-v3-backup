@@ -174,7 +174,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // same for every trade, where the price line was (.lp-hero-price) — the
   // button says the trial. The price line (hero-price.ts heroPriceLine) and the
   // Deck Studio's coming-soon note are off. The default page has no line.
-  const heroLine = variant ? "Build your first estimate free" : null;
+  const heroLine = variant ? "Build your free estimates" : null;
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is

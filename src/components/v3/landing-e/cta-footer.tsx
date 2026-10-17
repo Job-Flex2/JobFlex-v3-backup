@@ -44,7 +44,7 @@ export function CtaFooter({
               two primaries stacked is a choice, not a CTA. Blue keeps the page
               on one accent and is the only colour in this black section. */}
           <div className="mt-10 w-full sm:mt-12 sm:w-auto">
-            <a href={registerHref} className="lp-btn-lime w-full sm:w-auto" data-cta="footer">
+            <a href={registerHref} className="lp-btn-lime lp-trial-cta w-full sm:w-auto" data-cta="footer">
               {cta ?? <TrialStartLabel />}
               <span aria-hidden>→</span>
             </a>

@@ -132,7 +132,7 @@ export function Hero({
           <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
             <a
               href={registerHref}
-              className={`lp-btn-dark lp-cta lp-cta--solid${(trialCta ?? cta ?? variant.primaryCta).length > 30 ? " lp-cta--long" : ""}`}
+              className={`lp-btn-dark lp-cta lp-cta--solid lp-trial-cta${(trialCta ?? cta ?? variant.primaryCta).length > 30 ? " lp-cta--long" : ""}`}
               data-cta="hero"
             >
               {trialCta ?? cta ?? variant.primaryCta}
