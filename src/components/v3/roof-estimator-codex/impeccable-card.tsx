@@ -22,7 +22,7 @@ import {
 } from "../roof-estimator-blueprint/roof-package-builder";
 import styles from "./impeccable-card.module.css";
 
-type NumericKey = { [K in keyof RoofPackageSpec]: RoofPackageSpec[K] extends number ? K : never }[keyof RoofPackageSpec];
+type NumericKey = { [K in keyof RoofPackageSpec]-?: RoofPackageSpec[K] extends number ? K : never }[keyof RoofPackageSpec];
 type RateField = readonly [NumericKey, string, string];
 type WorkTab = "roofing" | "details" | "site";
 const WORK_TABS: Array<{ id: WorkTab; label: string }> = [

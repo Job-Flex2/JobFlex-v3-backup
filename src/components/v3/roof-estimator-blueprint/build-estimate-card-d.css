@@ -1074,3 +1074,37 @@
 .jf-blueprint .content .rbd-ply-what { display: grid; grid-template-columns: minmax(0, 1.4fr) auto; gap: 10px 14px; align-items: end; }
 .jf-blueprint .content .rbd-ply-what .rbd-f--wide { grid-column: auto; }
 @media (max-width: 520px) { .jf-blueprint .content .rbd-ply-what { grid-template-columns: 1fr; } }
+
+/* ── THE BRAND AND LINE (2026-10-16, roof-brand-picker.tsx): the tile language of the roof-type picker, two lines of
+   words per tile — the brand and line, then why it is a pick in this state. ── */
+.jf-blueprint .content .rbd-brands { display: grid; gap: 10px; width: 100%; grid-column: 1 / -1; }
+.jf-blueprint .content .rbd-brands-why, .jf-blueprint .content .rbd-brands-hint { max-width: 72ch; }
+.jf-blueprint .content .rbd-brands-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.jf-blueprint .content .rbd-brands-t { font-family: var(--font-sans); font-size: 14px; font-weight: 700; color: var(--ink); }
+.jf-blueprint .content .rbd-brands-why { margin: 0; }
+.jf-blueprint .content .rbd-brands-hint { margin: 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--paper-deep); }
+.jf-blueprint .content .rbd-brand-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-width: 880px; }
+.jf-blueprint .content .rbd-brand {
+  position: relative; display: grid; align-content: start; gap: 4px; min-height: 76px; padding: 10px 40px 10px 14px; text-align: left;
+  border: 1.5px solid var(--ink); border-radius: var(--r-sm); background: var(--paper-deep); color: var(--ink); cursor: pointer;
+  font-family: var(--font-sans);
+}
+.jf-blueprint .content .rbd-brand:hover:not(:disabled) { background: var(--paper); }
+.jf-blueprint .content .rbd-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.jf-blueprint .content .rbd-brand.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--paper); }
+.jf-blueprint .content .rbd-brand.is-on .rbd-tile-mark { display: inline-flex; top: 12px; transform: none; }
+.jf-blueprint .content .rbd-brand.is-held { border-style: dashed; }
+.jf-blueprint .content .rbd-brand-name { font-size: 14px; line-height: 1.3; }
+.jf-blueprint .content .rbd-brand-name b { font-weight: 800; }
+.jf-blueprint .content .rbd-brand-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.jf-blueprint .content .rbd-brand-tag {
+  display: inline-flex; align-items: center; padding: 1px 6px; border: 1px solid var(--ink); border-radius: var(--r-sm);
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.jf-blueprint .content .rbd-brand-tag.is-auto { border-color: var(--accent); color: var(--accent); }
+.jf-blueprint .content .rbd-brand-why { font-size: 12.5px; line-height: 1.4; color: var(--ink-soft, var(--ink)); }
+.jf-blueprint .content .rbd-brand.is-held .rbd-brand-why { color: var(--rbd-warn-ink); }
+.jf-blueprint .content .rbd-brands-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+@media (max-width: 560px) {
+  .jf-blueprint .content .rbd-brand-grid { grid-template-columns: minmax(0, 1fr); }
+}
