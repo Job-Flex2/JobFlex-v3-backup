@@ -78,11 +78,17 @@ is coming. The tools sit in one bay with no frame and no grid. A subpage
 toggle is a small white square in a 1.5px ink frame with a down arrow (up
 when open); a subpage row (an inventory) has the same ink, size and weight
 as the rows above it, indented on a guide line. Nothing else reads `--tool-*`.
+The handheld drawer folds each estimator's inventory the same way (2026-10-17).
 The AI desk (owner, 2026-10-16): its two tabs, Calls | AI desk setup, are one
 framed switch, the open tab filled with ink. The setup is a checklist card —
 a full-width row per step (numbered square, name, status stamp, an
 "Open"/"Close" control with a chevron), the open step's part unfolding under
-its own row.
+its own row. Every step starts closed unless a link names one (2026-10-17).
+Texting (owner, 2026-10-17) uses the same checklist on the desk and the phone:
+one status line in its tone, then "Set up texting" with Number, Team, Clients
+and Your own texts as rows; the extras stay as two cards at the foot. The
+estimators' working cards (Blueprint, Roof) mark their steps with the Smart
+estimator's squares (estimators-blueprint/work-square).
 
 Light mode only. Keep the existing drafting grid behind content, never over
 type. Resting cards have no shadow (`--shadow-sm` and `--shadow-md` are `none`).
