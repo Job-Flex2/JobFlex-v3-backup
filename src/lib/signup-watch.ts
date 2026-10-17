@@ -10,7 +10,7 @@
 // nothing here can stop a sign-up — and nothing is sent off /auth/register.
 import { flushTrafficNow, trackTraffic } from "@/lib/traffic-client";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
-import { fieldName, reasonOfMessage, reasonSide, scrubWords, type SignupSide } from "@/lib/signup-watch-shared";
+import { fieldName, isOutsideScriptError, reasonOfMessage, reasonSide, scrubWords, type SignupSide } from "@/lib/signup-watch-shared";
 
 type Leaving = "closed" | "google" | "checkout" | "done";
 interface Position {
@@ -168,6 +168,8 @@ export function startSignupWatch(): () => void {
   const onError = (e: ErrorEvent) => {
     const file = e.filename || "";
     if (/^(chrome|moz|safari)-extension:/.test(file) || /ResizeObserver loop/i.test(e.message || "")) return;
+    // A script from another site failing tells us only "Script error." — not ours, and not theirs: said as such.
+    if (isOutsideScriptError(e.message, file, e.lineno)) return signupProblem("outside_script", { message: "Script error." });
     signupProblem("page_error", { message: e.message || "Script error" });
   };
   const onRejection = (e: PromiseRejectionEvent) => {

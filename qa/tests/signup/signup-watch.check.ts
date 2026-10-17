@@ -2,7 +2,8 @@
 // story from a visit's events (lib/traffic-live formWatchOf / formSentence) — where they are, which box, every
 // problem and whose side, away and back, the leave and its verdict.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/signup/signup-watch.check.ts
-import { fieldName, reasonOfMessage, reasonSide, reasonWords, scrubWords } from "../../../src/lib/signup-watch-shared";
+import { fieldName, isOutsideScriptError, reasonOfMessage, reasonSide, reasonWords, scrubWords, sideOf } from "../../../src/lib/signup-watch-shared";
+import { signupAlertsOf } from "../../../src/lib/signup-dropoff";
 import { formSentence, formWatchOf, type LiveEvent } from "../../../src/lib/traffic-live";
 import { TRAFFIC_EVENTS as E } from "../../../src/lib/traffic-contract";
 
@@ -85,6 +86,16 @@ const reloaded = [...quiet, ev("$pageview", 60)];
 f = formWatchOf(reloaded)!;
 check("a move after the leave (a reload) means they did not leave", f.left === null);
 check("a visit that never reached the form has no watch", formWatchOf([ev("$pageview", 0, { pathname: "/" })]) === null);
+
+// ── an outside script's failure (2026-10-16): seen, never ours, never the verdict ──
+check("a bare cross-origin \"Script error.\" is an outside script's", isOutsideScriptError("Script error.") && isOutsideScriptError("Script error") && !isOutsideScriptError("Script error.", "https://www.jobflex.app/_next/x.js") && !isOutsideScriptError("Cannot read properties of undefined (reading 'x')") && !isOutsideScriptError("Script error.", "", 12));
+check("its side is outside — neither ours nor theirs", reasonSide("outside_script") === "outside" && sideOf("outside", "page_error") === "outside" && sideOf("bogus", "page_error") === "ours" && reasonWords("outside_script") === "An outside script failed — no details");
+const outside = [...typing, ev(E.signupProblem, 20, { reason: "outside_script", side: "outside", message: "Script error.", screen: "account" }), ev(E.signupLeave, 31, { kind: "closed", screen: "account", field: "Email", ms: "30000" })];
+f = formWatchOf(outside, t0 + 60_000)!;
+check("a visitor who left after only an outside failure: their choice, not ours to fix", f.verdict === "choice" && f.problems[0]?.side === "outside" && !/ours to fix|failure of ours/.test(formSentence(f, false, t0 + 60_000)), `${f.verdict} · ${formSentence(f, false, t0 + 60_000)}`);
+const both = [...typing, ev(E.signupProblem, 18, { reason: "server_error", side: "ours", message: "Something went wrong on our side.", screen: "account" }), ev(E.signupProblem, 20, { reason: "outside_script", side: "outside", message: "Script error.", screen: "account" }), ev(E.signupLeave, 31, { kind: "closed", screen: "account", field: "Email", ms: "30000" })];
+check("…a real failure of ours beside it still makes it ours", formWatchOf(both, t0 + 60_000)!.verdict === "ours");
+check("an outside failure never raises the alarm, however many visitors met it", signupAlertsOf([{ reason: "outside_script", side: "outside", visits: 9, times: 12, message: "Script error.", screen: "account" }]).length === 0 && signupAlertsOf([{ reason: "server_error", side: "ours", visits: 3, times: 3, message: "", screen: "account" }]).length === 1);
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

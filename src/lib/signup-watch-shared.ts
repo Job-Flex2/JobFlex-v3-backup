@@ -9,7 +9,18 @@
 //   theirs — the form refused what they gave it (an empty box, a wrong code, an address already in use) or they chose
 //            to go.
 
-export type SignupSide = "ours" | "theirs";
+//   outside — a script that is not ours failed with no details the browser would give (a cross-origin "Script
+//            error." — Google sign-in, the Meta pixel, a Facebook or Instagram in-app browser's own code): neither ours
+//            to fix nor the visitor's doing, and never the verdict on why they stopped (2026-10-16).
+export type SignupSide = "ours" | "theirs" | "outside";
+/** A side read back from an event or a row; anything unknown is the reason's own side. */
+export function sideOf(raw: unknown, reason: string): SignupSide {
+  return raw === "ours" || raw === "theirs" || raw === "outside" ? raw : reasonSide(reason);
+}
+/** The browser's whole word on a cross-origin script failure: "Script error." with no file, no line — nothing to act on. */
+export function isOutsideScriptError(message: string | null | undefined, filename?: string | null, lineno?: number | null): boolean {
+  return /^\s*script error\.?\s*$/i.test(message ?? "") && !filename && !lineno;
+}
 
 /** Element id → the box's name on the admin's screen. */
 export const SIGNUP_FIELDS: Readonly<Record<string, string>> = {
@@ -91,6 +102,7 @@ export const SIGNUP_REASONS: Readonly<Record<string, { words: string; side: Sign
   trial_rejected: { words: "Trial start refused", side: "ours" },
   trial_unavailable: { words: "Trial start unavailable", side: "ours" },
   page_error: { words: "The page threw an error", side: "ours" },
+  outside_script: { words: "An outside script failed — no details", side: "outside" },
   page_crash: { words: "The page crashed", side: "ours" },
   slow_form: { words: "The form was slow to start", side: "ours" },
   network: { words: "The connection dropped mid-step", side: "ours" },

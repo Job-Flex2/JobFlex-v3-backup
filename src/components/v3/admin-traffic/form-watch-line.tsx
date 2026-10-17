@@ -38,9 +38,11 @@ export function FormWatchLine({ f, active, timezone }: { f: LiveFormWatch; activ
         <span className={s.fwRow}>
           {f.problems.map((p) => (
             <em key={p.at + p.reason} className={s.fwProblem} data-form-problem={p.reason} data-side={p.side} title={p.message || p.words}>
-              {p.side === "ours" ? "Ours · " : ""}
+              {p.side === "ours" ? "Ours · " : p.side === "outside" ? "Not ours · " : ""}
               {p.words}
               <i>{clock(p.at, timezone)}</i>
+              {/* What the browser said, in plain sight — it used to wait in a hover (2026-10-16). */}
+              {p.message && p.message !== p.words ? <b className={s.fwMsg} data-form-problem-message>“{p.message}”</b> : null}
             </em>
           ))}
         </span>

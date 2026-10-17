@@ -14,7 +14,7 @@
 // The alert rule is here too: the last hour's problems by reason, and which of them is worth an email.
 import { TRAFFIC_EVENTS as E } from "./traffic-contract";
 import { BROWSER_TYPE_SQL, HOST_SQL, IN_APP_SQL, UA_SQL, visitorRuleSql, type VisitorScope } from "./traffic-visitor";
-import { SIGNUP_REASONS, durationWords, reasonSide, reasonWords, screenName, type SignupSide } from "./signup-watch-shared";
+import { SIGNUP_REASONS, durationWords, reasonWords, screenName, sideOf, type SignupSide } from "./signup-watch-shared";
 
 export const DROPOFF_DAYS = [7, 30] as const;
 export type DropoffDays = (typeof DROPOFF_DAYS)[number];
@@ -125,7 +125,7 @@ export function dropoffVisitFromRow(row: unknown[]): DropoffVisit | null {
     const parts = s.split("|");
     const reason = parts[0];
     if (!reason) return null;
-    const side: SignupSide = parts[1] === "ours" || parts[1] === "theirs" ? parts[1] : reasonSide(reason);
+    const side: SignupSide = sideOf(parts[1], reason);
     return { reason, side, screen: parts[2] || "", field: parts[3] || "", at: num(parts[4]) * 1000, message: parts.slice(5).join("|") };
   }).filter((p): p is DropoffProblem => !!p);
   const leaveRaw = text(row[17]);
@@ -421,13 +421,14 @@ export function problemGroupFromRow(row: unknown[]): SignupProblemGroup | null {
   const reason = text(row[0]);
   if (!reason) return null;
   const side = text(row[1]);
-  return { reason, side: side === "ours" || side === "theirs" ? side : reasonSide(reason), visits: num(row[2]), times: num(row[3]), message: text(row[4]), screen: text(row[5]) };
+  return { reason, side: sideOf(side, reason), visits: num(row[2]), times: num(row[3]), message: text(row[4]), screen: text(row[5]) };
 }
 
 /** The last hour's reasons worth a person's attention: three visitors on one reason, or two on a hard fault of ours. */
 export function signupAlertsOf(groups: SignupProblemGroup[]): SignupAlert[] {
   return groups
-    .filter((g) => g.visits >= ALERT_VISITS || (g.side === "ours" && HARD_FAULTS.has(g.reason) && g.visits >= ALERT_HARD_VISITS))
+    // An outside script's failure is noted on the page, never an alarm: there is nothing of ours to fix.
+    .filter((g) => g.side !== "outside" && (g.visits >= ALERT_VISITS || (g.side === "ours" && HARD_FAULTS.has(g.reason) && g.visits >= ALERT_HARD_VISITS)))
     .map((g) => ({ ...g, words: reasonWords(g.reason) }))
     .sort((a, b) => (a.side === b.side ? 0 : a.side === "ours" ? -1 : 1) || b.visits - a.visits);
 }

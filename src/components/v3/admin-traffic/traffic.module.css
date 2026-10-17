@@ -839,6 +839,11 @@
 :global(.jf-blueprint) .fwBox[data-filled="false"], :global(.jf-blueprint) .fwBox[data-valid="false"] { border-color:var(--warning, #c98a10) !important; color:var(--warning-dark, #8a5d00) !important; }
 :global(.jf-blueprint) .fwProblem[data-side="theirs"] { border-color:var(--warning, #c98a10) !important; background:var(--warning-soft, #fdf3e0) !important; color:var(--warning-dark, #8a5d00) !important; }
 :global(.jf-blueprint) .fwProblem[data-side="ours"] { border-color:var(--danger, #a83232) !important; background:var(--danger-soft, #fbeaea) !important; color:var(--danger, #a83232) !important; }
+:global(.jf-blueprint) .fwProblem[data-side="outside"] { border-color:var(--hair, #c9c6bf) !important; background:var(--paper, #f2f0eb) !important; color:var(--muted, #6b6b6b) !important; }
+/* The error's own words under the badge's (2026-10-16): mono, wrapping, the badge's colour. */
+:global(.jf-blueprint) .fwMsg { display:block; margin-top:3px; font-family:var(--font-mono); font-size:11px; font-weight:500; font-style:normal; line-height:1.35; white-space:normal; overflow-wrap:anywhere; opacity:.9; }
+/* A badge carrying the error's words may wrap — the rest stay one line. */
+:global(.jf-blueprint) .fwRow em:has(.fwMsg) { white-space:normal; max-width:100%; }
 :global(.jf-blueprint) .fwAway, :global(.jf-blueprint) .fwBack { border-style:dashed !important; }
 :global(.jf-blueprint) .fwLeft { border-color:var(--ink) !important; color:var(--ink) !important; }
 :global(.jf-blueprint) .fwVerdict[data-tone="ours"] { background:var(--danger, #a83232) !important; border-color:var(--danger, #a83232) !important; color:#fff !important; }

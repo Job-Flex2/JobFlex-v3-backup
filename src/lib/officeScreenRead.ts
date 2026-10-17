@@ -260,7 +260,8 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
     sentToday: sentT,
     sentYesterday: sentY,
     recentOffers: invOffers.filter((o) => now - Date.parse(o.at) < 3 * 24 * HOUR).map((o) => ({ company: o.company, amount: o.amount, at: Date.parse(o.at) })),
-    signupAlerts: signupAlerts.map((a) => ({ words: a.words, side: a.side, visits: a.visits, times: a.times, screen: a.screen })),
+    // Alarms never carry an outside script's failure (signupAlertsOf drops them), so the side here is ours or theirs.
+    signupAlerts: signupAlerts.map((a) => ({ words: a.words, side: a.side === "ours" ? ("ours" as const) : ("theirs" as const), visits: a.visits, times: a.times, screen: a.screen })),
   });
 
   return {

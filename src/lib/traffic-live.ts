@@ -30,7 +30,7 @@ import { TRAFFIC_EVENTS as E, pageLabel, type StaleNote } from "./traffic-contra
 // Who counts and what is "from an ad": one rule for the whole page (2026-10-01).
 import { BROWSER_TYPE_SQL, HOST_SQL, TRAFFIC_SINCE, UA_SQL, carriesAdTag, isCountedEvent, sinceSql, trafficDayStartMs, visitorRuleSql } from "./traffic-visitor";
 import { resolveLandingVariant, VARIANT_TRADE } from "@/components/v3/landing-e/landing-variants";
-import { durationWords, reasonSide, reasonWords, screenName } from "./signup-watch-shared";
+import { durationWords, reasonWords, screenName, sideOf, type SignupSide } from "./signup-watch-shared";
 
 export const LIVE_WINDOW_MINUTES = 30;
 export const LIVE_ACTIVE_MINUTES = 5;
@@ -118,7 +118,7 @@ export interface LiveFormWatch {
   /** Each box they used, first touch first: time in it, left filled / valid, edits. */
   boxes: Array<{ field: string; secs: number; filled: boolean; valid: boolean; edits: number; visits: number }>;
   /** Every refusal and failure they met, newest first. */
-  problems: Array<{ at: string; reason: string; words: string; side: "ours" | "theirs"; message: string; screen: string; field: string }>;
+  problems: Array<{ at: string; reason: string; words: string; side: SignupSide; message: string; screen: string; field: string }>;
   /** The tab is away (hidden) since then — on the code screen, usually reading the email. */
   away: { since: string } | null;
   /** They came back after being away, and how long they were gone. */
@@ -617,7 +617,7 @@ export function formWatchOf(visit: readonly LiveEvent[], now = Date.now()): Live
       boxes.set(e.field, b);
       if (inBox && inBox.field === e.field) inBox = null;
     } else if (e.event === E.signupProblem && e.reason) {
-      const side = e.side === "ours" || e.side === "theirs" ? e.side : reasonSide(e.reason);
+      const side = sideOf(e.side, e.reason);
       problems.unshift({ at: iso, reason: e.reason, words: reasonWords(e.reason), side, message: e.message || "", screen: e.screen || screen, field: e.field || "" });
     } else if (e.event === E.signupAway) {
       away = { since: iso };
@@ -641,7 +641,9 @@ export function formWatchOf(visit: readonly LiveEvent[], now = Date.now()): Live
   if (left && last && last.at > leftAt && last.event !== E.signupLeave && !closing(last)) left = null;
   // Gone for good, and why: a failure of ours outranks the rest; then the form's last refusal; else their choice.
   const stopped = !!left && left.kind === "closed";
-  const verdict: LiveFormWatch["verdict"] = !stopped && !away ? null : problems.some((p) => p.side === "ours") ? "ours" : problems.length ? "theirs" : stopped ? "choice" : null;
+  // An outside script's failure is shown, never the verdict.
+  const counted = problems.filter((p) => p.side !== "outside");
+  const verdict: LiveFormWatch["verdict"] = !stopped && !away ? null : counted.some((p) => p.side === "ours") ? "ours" : counted.length ? "theirs" : stopped ? "choice" : null;
   return {
     screen: screenName(screen || "account"),
     screenSecs: Math.max(0, Math.round(((last?.at ?? now) - screenAt) / 1000)),
@@ -657,7 +659,7 @@ export function formWatchOf(visit: readonly LiveEvent[], now = Date.now()): Live
 
 /** The live line's sentence for a visitor the watcher saw on the sign-up form. */
 export function formSentence(f: LiveFormWatch, active: boolean, now = Date.now()): string {
-  const lastProblem = f.problems[0];
+  const lastProblem = f.problems.find((p) => p.side !== "outside");
   const ours = f.problems.find((p) => p.side === "ours");
   const why = ours ? ` — after a failure of ours: ${ours.words.toLowerCase()}` : lastProblem ? ` — right after “${lastProblem.words}”` : " — no error shown: their choice";
   if (f.left && f.left.kind === "closed") {
