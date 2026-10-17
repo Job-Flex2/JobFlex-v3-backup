@@ -1924,6 +1924,23 @@
 .bp :global(.content .rf-attach input) { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; margin: 0; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; cursor: pointer; }
 .bp :global(.content .rf-attach input:checked) { background: var(--ink); box-shadow: inset 0 0 0 2.5px #fff; }
 .bp :global(.content .rf-attach input:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+/* Many buildings (2026-10-16): the row's name, its "Show on map" and its notes wrap together on the left; the
+   fold button under the first few; a building outside the lot reads quieter and says so. */
+.bp :global(.content .rf-others .rf-details-row dt) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.bp :global(.content .rf-others .rf-details-row dt .rf-attach-note) { flex-basis: 100%; margin-top: 0; }
+.bp :global(.content .rf-locate) { display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1.5px solid var(--hair-soft); border-radius: var(--radius); background: #fff; font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); cursor: pointer; }
+.bp :global(.content .rf-locate:hover), .bp :global(.content .rf-locate.is-on) { border-color: var(--ink); color: var(--ink); }
+.bp :global(.content .rf-locate:focus-visible), .bp :global(.content .rf-fold-btn:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.bp :global(.content .rf-others .rf-details-row.is-offlot dt .rf-attach) { border-style: dashed; }
+.bp :global(.content .rf-offlot-note) { color: var(--ink-soft); }
+.bp :global(.content .rf-offlot-sec) { padding-top: 18px; }
+.bp :global(.content .rf-fold) { padding: 12px 0 2px; }
+.bp :global(.content .rf-fold-btn) { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; font-size: 12.5px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.bp :global(.content .rf-fold-btn:hover) { background: var(--paper, #f2f0eb); }
+@media (max-width: 560px) {
+  .bp :global(.content .rf-others .rf-details-row) { flex-wrap: wrap; }
+  .bp :global(.content .rf-others .rf-details-row dd) { flex-basis: 100%; text-align: left; }
+}
 .bp :global(.content .rf-measurement-details > summary) { display: list-item; min-height: var(--roof-touch-h); cursor: pointer; }
 .bp :global(.content .rf-measurement-details:not([open]) > summary) { border-bottom: 0; }
 .bp :global(.content .rf-measurement-details > summary:focus-visible) { outline: var(--border-thin); outline-color: var(--blueprint); outline-offset: calc(-1 * var(--radius)); }

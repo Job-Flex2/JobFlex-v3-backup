@@ -23,7 +23,6 @@ import { nanoid } from "nanoid";
 import type { InstantRoofData, InstantStructure } from "@/lib/eagleview";
 import { toast } from "@/components/ui/Toast";
 import type { EstimateLine } from "@/components/estimator/EstimatorBreakdown";
-import { assessRoof, confidenceLabel } from "@/lib/roofDiagram/confidence";
 import type { MeasurementSource, RoofMeasurementDTO, RoofMeasurementSummary } from "@/lib/roofDiagram/types";
 import {
   collectPendingInstant,
@@ -51,7 +50,7 @@ import { EstimateLinesTable, type EditableLine } from "./estimate-lines-table";
 import { estimateEdges, likeForLikeFamily, ringPerimeterFt, type MeasuredFootage, type RoofFacts, type RoofPackage, type RoofPackageSpec } from "@/lib/roofPackage/takeoff";
 import { evOrderRoof, evPriceRoof, evReportFootages, evReportStatus, evRoofModel } from "@/actions/eagleview";
 import { isMapsBrowserEnabled, loadMapsLibrary } from "@/lib/googleMaps";
-import { displayedPitchLabel, footprintRead, instantTotalsOf, mainStructureOf, pitchFamilyShares } from "@/lib/roofDiagram/instantTotals";
+import { displayedPitchLabel, footprintRead, foreignIndices, instantTotalsOf, mainStructureOf, otherStructuresOf, pitchFamilyShares } from "@/lib/roofDiagram/instantTotals";
 import { AERIAL } from "@/lib/vendorLabels";
 import { familyOfMaterial, WASTE_OPTIONS } from "@/lib/roofPackage/catalog";
 import { isFlatRoof } from "@/lib/roofPackage/flatRule";
@@ -146,6 +145,38 @@ const HOLD_STEP = 3;
 const HOLD_CREEP_MS = 2_500;
 /** The wall clock, read only from timers and click handlers. */
 const nowMs = () => Date.now();
+
+/**
+ * THE WAY BACK FROM "MANAGE ROOF TYPES" (owner, 2026-10-16: "there is no way to come back to the estimate builder").
+ * Following that link keeps, for this tab, the measurement on screen and what was built on it; the roof-types page
+ * offers "Back to the estimate", and the estimator reopens it all — with the roof types just edited, because the
+ * builder reads them fresh.
+ */
+const RETURN_KEY = "jf-roof-return";
+/** How long a kept estimate waits to be reopened. */
+const RETURN_TTL_MS = 2 * 60 * 60 * 1000;
+type RoofReturn = {
+  id: string;
+  at: number;
+  extra: number[];
+  pitchEntered: string | null;
+  spec: RoofPackageSpec | null;
+  factsKey: string | null;
+  materials: Array<{ name: string; quantity: number; unitPrice: number; unit: string }>;
+  labor: Array<{ name: string; quantity: number; unitPrice: number; unit: string }>;
+  title: string;
+  scope: string;
+  assumptions: string[];
+  tablesEdited: boolean;
+};
+function readReturn(): RoofReturn | null {
+  try {
+    const v = JSON.parse(window.sessionStorage.getItem(RETURN_KEY) ?? "null") as RoofReturn | null;
+    return v && typeof v.id === "string" && typeof v.at === "number" ? v : null;
+  } catch {
+    return null;
+  }
+}
 /** Where the timed progress stands `elapsedMs` into a measurement. */
 function msProgressAt(elapsedMs: number): MsProgress {
   const w = MS_WAYPOINTS;
@@ -254,6 +285,7 @@ type MarkerCtor = new (opts: Record<string, unknown>) => LiveMapMarker;
 /** What the building outlines need of the SDK: a shape that can be taken off the map, bounds to frame it. */
 interface MapOverlay {
   setMap(map: unknown): void;
+  setAnimation?(a: unknown): void;
 }
 interface MapBounds {
   extend(p: { lat: number; lng: number }): MapBounds;
@@ -264,7 +296,10 @@ type OutlineSdk = {
   Marker?: OverlayCtor;
   LatLngBounds?: new () => MapBounds;
   Point?: PointCtor;
+  Animation?: { BOUNCE: unknown };
 };
+/** Other buildings shown before the rest fold away (owner, 2026-10-16). */
+const BUILDINGS_SHOWN = 3;
 /**
  * One colour per other building, the same on its row's dot and its pin on
  * the map — bright enough to read on a satellite roof (sky, amber, violet, mint).
@@ -361,47 +396,10 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // The other-building row under the pointer or focus: its pin shows faintly
   // on the map so the contractor sees which one it is before ticking it.
   const [hoverBuilding, setHoverBuilding] = React.useState<number | null>(null);
+  // "Show on map": the building asked for — its pin shown and framed with the house, ticked or not (a phone has no hover).
+  const [focusBuilding, setFocusBuilding] = React.useState<number | null>(null);
+  const [allBuildings, setAllBuildings] = React.useState(false);
 
-  // The data path never draws, so the CONFIDENCE verdict comes straight from
-  // the stored provenance (coverage, completeness, EagleView's own occlusion
-  // survey) — the same assessRoof, on its data-only inputs.
-  const assessment = React.useMemo(() => {
-    if (!measurement || measurement.source === "solar") return null;
-    const p = measurement.provenance;
-    return assessRoof({
-      coverage: p.coverage ?? null,
-      structures:
-        p.structures?.map((st) => ({
-          prefix: st.prefix,
-          contourSqft: st.contourSqft,
-          share: st.coverage?.insetShare ?? st.coverage?.share ?? null,
-        })) ?? null,
-      // Rows from before 2026-09-08 carry no instantPitch12: fall back to the
-      // published label the row has, so "published figure" is only claimed
-      // when a figure exists.
-      pitchSource: p.pitchSource
-        ? {
-            ...p.pitchSource,
-            instantPitch12:
-              p.pitchSource.instantPitch12 !== undefined
-                ? p.pitchSource.instantPitch12
-                : measurement.instant?.totals.pitchLabel
-                  ? Number(measurement.instant.totals.pitchLabel.split("/")[0])
-                  : null,
-          }
-        : null,
-      completeness: p.completeness ?? null,
-      parcelBlocked: p.parcelBlocked ?? null,
-      instantOcclusion: p.instantSurvey
-        ? {
-            occlusion: p.instantSurvey.occlusion,
-            treeOverhang: p.instantSurvey.treeOverhang,
-            occlusionConfidence: p.instantSurvey.confidence?.occlusion ?? null,
-            overhangConfidence: p.instantSurvey.confidence?.treeOverhang ?? null,
-          }
-        : null,
-    });
-  }, [measurement]);
   /**
    * Built by the OLD calibrated pipeline. Only that path stores a calibration
    * report, so this is the reliable discriminator — and a saved row always
@@ -1105,6 +1103,44 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   }
 
   // The proposal's roof, opened once on arrival: nothing is measured or
+  // Back from Manage roof types: the same measurement, the buildings ticked, the pitch, the builder's choices and
+  // any lines already built — once, then the note is spent.
+  const returnedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (returnedRef.current || proposalId || initialAddress) return;
+    returnedRef.current = true;
+    const back = readReturn();
+    try {
+      window.sessionStorage.removeItem(RETURN_KEY);
+    } catch {}
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("reopen")) {
+      url.searchParams.delete("reopen");
+      window.history.replaceState(window.history.state, "", url.pathname + (url.search ? url.search : "") + url.hash);
+    }
+    if (!back || nowMs() - back.at > RETURN_TTL_MS) return;
+    void (async () => {
+      if (!(await openRecent(back.id))) return;
+      setExtra(new Set(back.extra));
+      setPitchEntered(back.pitchEntered);
+      const toLine = (l: { name: string; quantity: number; unitPrice: number; unit: string }): EditableLine => ({ id: nanoid(6), name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, unit: l.unit });
+      if (back.materials.length || back.labor.length) {
+        setMaterials(back.materials.map(toLine));
+        setLabor(back.labor.map(toLine));
+        setTitle(back.title);
+        setScopeText(back.scope);
+        setAssumptions(back.assumptions);
+        setTablesEdited(back.tablesEdited);
+      }
+      if (back.spec && back.factsKey) {
+        lastSpecRef.current = back.spec;
+        setSeedSpec({ spec: back.spec, key: back.factsKey });
+      }
+    })();
+    // openRecent is this render's handler; the return is read once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // billed — the stored measurement (or hand takeoff) comes back, then the
   // proposal's own lines and the package choices they were built with.
   const openedProposalRef = React.useRef<string | null>(null);
@@ -1507,7 +1543,17 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         origin: { lat: measurement?.lat, lng: measurement?.lng },
       });
   const structure: InstantStructure | null = inst && mainPick.index != null ? (inst.structures[mainPick.index] ?? null) : null;
-  const otherStructures = inst ? inst.structures.map((s, i) => ({ s, i })).filter(({ i }) => i !== mainPick.index) : [];
+  // The rest: this lot's buildings first, then the ones the parcel check put outside it (a neighbour's), nearest the
+  // house first — numbered in this order on the rows and the pins (lib/roofDiagram/instantTotals.otherStructuresOf).
+  const parcelVeto = (prov as Record<string, unknown> | null | undefined)?.parcelVeto as { foreignStructures?: string[] } | undefined;
+  const otherStructures = inst
+    ? otherStructuresOf({
+        structures: inst.structures,
+        mainIndex: mainPick.index,
+        foreign: foreignIndices(parcelVeto?.foreignStructures),
+        origin: measurement?.lat != null && measurement?.lng != null ? { lat: measurement.lat, lng: measurement.lng } : null,
+      })
+    : [];
 
   // The other buildings on the map (owner, 2026-10-10: "when I tick a box,
   // show on the map which one that is" — then "don't outline buildings, just
@@ -1516,50 +1562,75 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // head; the row under the pointer shows its pin faintly. A building the map
   // cannot see yet is brought into view once, when ticked.
   const overlaysRef = React.useRef<MapOverlay[]>([]);
-  const framedRef = React.useRef<{ on: string | null; ticked: ReadonlySet<number> }>({ on: null, ticked: new Set() });
+  const framedRef = React.useRef<{ on: string | null; ticked: ReadonlySet<number>; focus: number | null }>({ on: null, ticked: new Set(), focus: null });
   const outlineKey = otherStructures.map(({ s, i }) => `${i}:${s.outline?.length ?? 0}`).join(",");
   React.useEffect(() => {
     const live = liveMapRef.current;
     const sdk = (window as unknown as { google?: { maps?: OutlineSdk } }).google?.maps;
+    const timers: number[] = [];
     const clear = () => {
       for (const o of overlaysRef.current) o.setMap(null);
       overlaysRef.current = [];
+      for (const t of timers) window.clearTimeout(t);
     };
     clear();
     if (!live || !sdk?.Marker || !mapReadyFor || view !== "satellite" || panel !== "report") return clear;
-    const map = live.map as LiveGoogleMap & { getBounds?: () => MapBounds | null | undefined; fitBounds?: (b: MapBounds, pad?: number) => void };
+    const map = live.map as LiveGoogleMap & {
+      fitBounds?: (b: MapBounds, pad?: number) => void;
+      getZoom?: () => number;
+      addListener?: (ev: string, fn: () => void) => { remove(): void };
+    };
     const shown = otherStructures
-      .map(({ s, i }, k) => ({ i, k, at: (s.outline?.length ?? 0) >= 3 ? ringCenter(s.outline!) : null, ticked: extra.has(i) }))
-      .filter((b): b is { i: number; k: number; at: { lat: number; lng: number }; ticked: boolean } => (b.ticked || b.i === hoverBuilding) && b.at != null);
+      .map(({ s, i }, k) => ({ i, k, at: (s.outline?.length ?? 0) >= 3 ? ringCenter(s.outline!) : null, ticked: extra.has(i), focus: i === focusBuilding }))
+      .filter((b): b is { i: number; k: number; at: { lat: number; lng: number }; ticked: boolean; focus: boolean } => (b.ticked || b.focus || b.i === hoverBuilding) && b.at != null);
+    // What was just chosen — ticked this moment, or asked for with "Show on map" — is framed with the house and
+    // bounces once, so it is plain which roof it is (owner, 2026-10-16), even when it was already somewhere on screen.
+    const before = framedRef.current.on === mapReadyFor ? framedRef.current : { on: mapReadyFor, ticked: new Set<number>(), focus: null };
+    const fresh = shown.filter((b) => b.ticked && !before.ticked.has(b.i));
+    const asked = focusBuilding != null && focusBuilding !== before.focus ? shown.find((b) => b.i === focusBuilding) : undefined;
+    const target = asked ?? fresh[fresh.length - 1];
     for (const b of shown) {
-      overlaysRef.current.push(
-        new sdk.Marker({
-          map,
-          position: b.at,
-          clickable: false,
-          zIndex: b.ticked ? 4 : 3,
-          opacity: b.ticked ? 1 : 0.6,
-          title: `Building ${b.k + 1}`,
-          label: { text: String(b.k + 1), color: "#0a0a0a", fontSize: "11px", fontWeight: "800" },
-          icon: { ...blueprintPinIcon(sdk.Point, buildingColor(b.k)), ...(sdk.Point ? { labelOrigin: new sdk.Point(12, 9) } : {}) },
-        }),
-      );
+      const bounce = !!sdk.Animation && b === target;
+      const marker = new sdk.Marker({
+        map,
+        position: b.at,
+        clickable: false,
+        zIndex: b === target ? 6 : b.focus ? 5 : b.ticked ? 4 : 3,
+        opacity: b.ticked || b.focus ? 1 : 0.6,
+        title: `Building ${b.k + 1}`,
+        label: { text: String(b.k + 1), color: "#0a0a0a", fontSize: "11px", fontWeight: "800" },
+        icon: { ...blueprintPinIcon(sdk.Point, buildingColor(b.k)), ...(sdk.Point ? { labelOrigin: new sdk.Point(12, 9) } : {}) },
+        ...(bounce ? { animation: sdk.Animation!.BOUNCE } : {}),
+      });
+      overlaysRef.current.push(marker);
+      if (bounce) timers.push(window.setTimeout(() => marker.setAnimation?.(null), 1500));
     }
-    // Frame a building ticked just now when the map cannot see it.
-    const before = framedRef.current.on === mapReadyFor ? framedRef.current.ticked : new Set<number>();
-    const fresh = shown.filter((b) => b.ticked && !before.has(b.i));
-    framedRef.current = { on: mapReadyFor, ticked: new Set(shown.filter((b) => b.ticked).map((b) => b.i)) };
-    const view0 = map.getBounds?.();
-    if (fresh.length && sdk.LatLngBounds && map.fitBounds && view0 && fresh.some((b) => !view0.contains(b.at))) {
+    framedRef.current = { on: mapReadyFor, ticked: new Set(shown.filter((b) => b.ticked).map((b) => b.i)), focus: focusBuilding };
+    if (target && sdk.LatLngBounds && map.fitBounds) {
       const bounds = new sdk.LatLngBounds();
       if (mapLat != null && mapLng != null) bounds.extend({ lat: mapLat, lng: mapLng });
-      for (const b of shown.filter((x) => x.ticked)) bounds.extend(b.at);
-      map.fitBounds(bounds, 72);
+      bounds.extend(target.at);
+      map.fitBounds(bounds, 90);
+      // Two pins a few yards apart would zoom past the imagery; stop at the house's own zoom.
+      const once = map.addListener?.("idle", () => {
+        once?.remove();
+        if ((map.getZoom?.() ?? 0) > LIVE_MAP_ZOOM) map.setZoom(LIVE_MAP_ZOOM);
+      });
     }
     return clear;
     // outlineKey stands for otherStructures' outlines; the array itself is rebuilt every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReadyFor, view, panel, extra, hoverBuilding, outlineKey, mapLat, mapLng]);
+  }, [mapReadyFor, view, panel, extra, hoverBuilding, focusBuilding, outlineKey, mapLat, mapLng]);
+  /** "Show on map": the satellite view, the map in sight on a phone, and the building framed with the house. */
+  const showOnMap = (i: number) => {
+    if (view !== "satellite") setView("satellite");
+    setFocusBuilding(i);
+    const host = liveMapRef.current?.host;
+    if (host) {
+      const r = host.getBoundingClientRect();
+      if (r.bottom < 60 || r.top > window.innerHeight - 60) host.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
   const includedStructures: InstantStructure[] = structure
     ? [structure, ...otherStructures.filter(({ i }) => extra.has(i)).map(({ s }) => s)]
     : [];
@@ -1798,6 +1869,41 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       </div>
     </div>
   ) : null;
+
+  // Leaving for Manage roof types: keep where this estimate stands (see RETURN_KEY). Read at the click, from the
+  // latest render — the ref is refreshed after every render.
+  const keepReturnRef = React.useRef<() => void>(() => {});
+  React.useEffect(() => {
+    keepReturnRef.current = () => {
+      if (!measurement || measurement.id === "unsaved" || manual) return;
+      const plain = (l: EditableLine) => ({ name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, unit: l.unit ?? "" });
+      const keep: RoofReturn = {
+        id: measurement.id,
+        at: nowMs(),
+        extra: [...extra],
+        pitchEntered,
+        spec: lastSpecRef.current,
+        factsKey: roofFacts ? factsKey(roofFacts) : null,
+        materials: materials.map(plain),
+        labor: labor.map(plain),
+        title,
+        scope: scopeText,
+        assumptions,
+        tablesEdited,
+      };
+      try {
+        window.sessionStorage.setItem(RETURN_KEY, JSON.stringify(keep));
+      } catch {}
+    };
+  });
+  React.useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.('a[href*="/roof-estimator/inventory"]');
+      if (a) keepReturnRef.current();
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
 
   return (
     <>
@@ -2342,58 +2448,96 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                         ? `Main structure ${structure.areaSqft != null ? num(structure.areaSqft) + " sq ft" : "— no area"}${footprint.sqft != null ? ` · footprint ${num(footprint.sqft)} sq ft${footprint.source === "outline" ? " (outline)" : ""}` : ""}`
                         : `${measurement.instant?.structures.length ?? 0} on the property`}
                     </div>
-                    {structure && (mainPick.how === "nearest-pin" || mainPick.how === "area+parcel") && (
-                      <div className="rf-pick">{mainPick.how === "nearest-pin" ? "Picked as nearest the pin" : "Picked as largest on the parcel"}</div>
+                    {structure && (mainPick.how === "nearest-pin" || mainPick.how === "area+parcel" || mainPick.how === "at-pin") && (
+                      <div className="rf-pick">{mainPick.how === "at-pin" ? "Picked as the building at the address pin" : mainPick.how === "nearest-pin" ? "Picked as nearest the pin" : "Picked as largest on the parcel"}</div>
                     )}
                   </div>
-                  {otherStructures.length > 0 && (
-                    /* The Details card's own <dl> rhythm; each other building
-                       is a drawn checkbox with a plain name, its figures right. */
-                    <dl className="rf-details rf-others">
-                      <div className="rf-details-sec">
-                        Other structures on the parcel · {otherStructures.length} ·{" "}
-                        {num(otherStructures.reduce((a, { s }) => a + (s.areaSqft ?? 0), 0))} sq ft
-                      </div>
-                      <div className="rf-note">
-                        Tick a building to add it to the total and the estimate{liveMap && view === "satellite" ? " — its pin shows on the map" : ""}.
-                      </div>
-                      {otherStructures.map(({ s, i }, k) => (
-                        <div
-                          className="rf-details-row"
-                          key={i}
-                          onMouseEnter={() => setHoverBuilding(i)}
-                          onMouseLeave={() => setHoverBuilding((h) => (h === i ? null : h))}
-                          onFocus={() => setHoverBuilding(i)}
-                          onBlur={() => setHoverBuilding((h) => (h === i ? null : h))}
-                        >
-                          <dt>
-                            <label className={"rf-attach" + (extra.has(i) ? "" : " is-off")}>
-                              <input
-                                type="checkbox"
-                                checked={extra.has(i)}
-                                onChange={(e) => {
-                                  const next = new Set(extra);
-                                  if (e.target.checked) next.add(i); else next.delete(i);
-                                  setExtra(next);
-                                }}
-                              />
-                              <span className="rf-swatch" style={{ background: buildingColor(k) }} aria-hidden="true" />
-                              Building {k + 1}
-                            </label>
-                            {extra.has(i) && liveMap && view === "satellite" && (s.outline?.length ?? 0) < 3 && (
-                              <span className="rf-attach-note">no location in the report — no pin on the map</span>
-                            )}
-                          </dt>
-                          <dd>
-                            {s.areaSqft != null ? num(s.areaSqft) : "—"}
-                            <span>sq ft</span>
-                            {s.pitch && <span>· {s.pitch}</span>}
-                            {s.footprintSqft != null && <span>· footprint {num(s.footprintSqft)}</span>}
-                          </dd>
+                  {otherStructures.length > 0 && (() => {
+                    // Folded when there are many (owner, 2026-10-16): the first few of this lot's buildings, anything
+                    // ticked, and the rest behind one button. A building the parcel check put outside the lot is a
+                    // neighbour's — said so on its row and counted apart, never as "on the parcel".
+                    const onLot = otherStructures.filter((o) => !o.offLot);
+                    const offLot = otherStructures.filter((o) => o.offLot);
+                    const folds = otherStructures.length > BUILDINGS_SHOWN + 1;
+                    const visible = (o: (typeof otherStructures)[number], k: number) => allBuildings || !folds || extra.has(o.i) || o.i === focusBuilding || (!o.offLot && k < BUILDINGS_SHOWN);
+                    const hidden = otherStructures.filter((o, k) => !visible(o, k)).length;
+                    const mapOn = liveMap && !!mapReadyFor;
+                    return (
+                      /* The Details card's own <dl> rhythm; each other building is a drawn checkbox with a plain name, its figures right. */
+                      <dl className="rf-details rf-others" data-rf-others data-folded={folds && !allBuildings ? "1" : "0"}>
+                        <div className="rf-details-sec">
+                          {onLot.length
+                            ? <>Other structures on the parcel · {onLot.length} · {num(onLot.reduce((a, { s }) => a + (s.areaSqft ?? 0), 0))} sq ft</>
+                            : <>No other structures on this lot</>}
                         </div>
-                      ))}
-                    </dl>
-                  )}
+                        {offLot.length > 0 && (
+                          <div className="rf-note rf-offlot-note" data-rf-offlot>
+                            {offLot.length} nearby {offLot.length === 1 ? "building is" : "buildings are"} outside this lot — a neighbour&rsquo;s, not part of this property, and not in the estimate.
+                          </div>
+                        )}
+                        <div className="rf-note">
+                          Tick a building to add it to the total and the estimate{mapOn ? " — “Show on map” points to it" : ""}.
+                        </div>
+                        {otherStructures.map((o, k) => {
+                          const { s, i } = o;
+                          if (!visible(o, k)) return null;
+                          const firstOff = o.offLot && otherStructures.findIndex((x) => x.offLot) === k;
+                          return (
+                            <React.Fragment key={i}>
+                              {firstOff && onLot.length > 0 && <div className="rf-details-sec rf-offlot-sec">Outside this lot · {offLot.length}</div>}
+                              <div
+                                className={"rf-details-row" + (o.offLot ? " is-offlot" : "")}
+                                data-building={k + 1}
+                                onMouseEnter={() => setHoverBuilding(i)}
+                                onMouseLeave={() => setHoverBuilding((h) => (h === i ? null : h))}
+                                onFocus={() => setHoverBuilding(i)}
+                                onBlur={() => setHoverBuilding((h) => (h === i ? null : h))}
+                              >
+                                <dt>
+                                  <label className={"rf-attach" + (extra.has(i) ? "" : " is-off")}>
+                                    <input
+                                      type="checkbox"
+                                      checked={extra.has(i)}
+                                      onChange={(e) => {
+                                        const next = new Set(extra);
+                                        if (e.target.checked) next.add(i); else next.delete(i);
+                                        setExtra(next);
+                                      }}
+                                    />
+                                    <span className="rf-swatch" style={{ background: buildingColor(k) }} aria-hidden="true" />
+                                    Building {k + 1}
+                                  </label>
+                                  {mapOn && (s.outline?.length ?? 0) >= 3 ? (
+                                    <button type="button" className={"rf-locate" + (focusBuilding === i ? " is-on" : "")} onClick={() => showOnMap(i)} aria-label={`Show Building ${k + 1} on the map`} data-rf-locate={k + 1}>
+                                      Show on map
+                                    </button>
+                                  ) : null}
+                                  {o.offLot && <span className="rf-attach-note">outside the lot</span>}
+                                  {extra.has(i) && liveMap && view === "satellite" && (s.outline?.length ?? 0) < 3 && (
+                                    <span className="rf-attach-note">no location in the report — no pin on the map</span>
+                                  )}
+                                </dt>
+                                <dd>
+                                  {s.areaSqft != null ? num(s.areaSqft) : "—"}
+                                  <span>sq ft</span>
+                                  {s.pitch && <span>· {s.pitch}</span>}
+                                  {s.footprintSqft != null && <span>· footprint {num(s.footprintSqft)}</span>}
+                                  {o.feet != null && <span>· {num(Math.max(10, Math.round(o.feet / 10) * 10))} ft away</span>}
+                                </dd>
+                              </div>
+                            </React.Fragment>
+                          );
+                        })}
+                        {folds && (hidden > 0 || allBuildings) && (
+                          <div className="rf-fold">
+                            <button type="button" className="rf-fold-btn" onClick={() => setAllBuildings((v) => !v)} aria-expanded={allBuildings} data-rf-fold>
+                              {allBuildings ? "Show fewer" : `Show ${hidden} more building${hidden === 1 ? "" : "s"}${offLot.length && onLot.length <= BUILDINGS_SHOWN ? " — outside this lot" : ""}`}
+                            </button>
+                          </div>
+                        )}
+                      </dl>
+                    );
+                  })()}
                 </div>}
               </div>
             </div>
@@ -2446,12 +2590,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                           }),
                       },
                     }
-                  : assessment?.estimable === false
-                    ? {
-                        stamp: confidenceLabel(assessment.confidence),
-                        text: "Part of this property is missing from the figures — check them before you price.",
-                      }
-                    : null
+                  : /* "Low confidence · part of this property is missing" no longer rides the builder (owner,
+                       2026-10-16: "do not show it") — the report screen above keeps the full account. */
+                    null
               }
               facts={roofFacts}
               onBuildingUse={manual ? undefined : answerUse}
