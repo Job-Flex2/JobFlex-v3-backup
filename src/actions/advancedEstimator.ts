@@ -1099,7 +1099,8 @@ export async function convertEstimateToProposal(raw: unknown) {
     const quantity = m?.quantity ?? l?.quantity ?? 0;
     return {
       name,
-      description: src.unit ? `Measured in ${src.unit}` : null,
+      // "Measured in hours", not "in hour" — a company-priced labor line is counted in hours.
+      description: src.unit ? `Measured in ${/^(hour|hr|hrs|hours)$/i.test(src.unit.trim()) ? "hours" : src.unit}` : null,
       measurementType: measurementForUnit(src.unit),
       quantity,
       unitPrice: sell,

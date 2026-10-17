@@ -17,6 +17,7 @@ import {
 } from "../../../src/lib/estimate/companyPricing";
 import { computeTotals, estimateFromLines, linesFromEstimate, pairEstimateLines } from "../../../src/lib/estimate/console-model";
 import { parseAiDraftResponse } from "../../../src/lib/estimate/legacy/parse";
+import { measureWords } from "../../../src/lib/measureWords";
 import { pricingSnapshotSchema, estimateSchema } from "../../../src/lib/estimatorSchema";
 
 let bad = 0;
@@ -47,7 +48,8 @@ check("overhead then profit, the proposal's chain", near(overheadProfitFactor(pe
 
 // ── Pricing the estimate's items ────────────────────────────────────────
 let n = 0;
-const idFor = () => `i${++n}`;
+// The server's ids: "i<task number>-<random>".
+const idFor = () => `i${++n}-x`;
 const items = [
   { name: "Composite decking", unit: "sq ft", quantity: 300, materialUnitPrice: 6, laborUnitPrice: 4, laborHours: 14 },
   { name: "Demo old deck", unit: "sq ft", quantity: 300, materialUnitPrice: 0, laborUnitPrice: 1.3 },
@@ -58,7 +60,7 @@ const priced = applyCompanyPricing(items, doneRight, idFor);
 const deckMat = priced.materials.find((m) => m.name === "Composite decking");
 const deckLab = priced.labor.find((l) => l.name.startsWith("Labor · Composite decking"));
 check("materials: cost × (1 + 30%)", !!deckMat && deckMat.unitPrice === 7.8 && deckMat.quantity === 300 && deckMat.unit === "sq ft", JSON.stringify(deckMat));
-check("labor: its own row, in crew-hours, at the company's rate", !!deckLab && deckLab.id === "i1-L" && deckLab.unit === "hour" && deckLab.quantity === 14 && deckLab.unitPrice === 220 && deckLab.name === "Labor · Composite decking (crew-hours)", JSON.stringify(deckLab));
+check("labor: its own row, in crew-hours, at the company's rate", !!deckLab && deckLab.id === "i1-x-L" && deckLab.unit === "hour" && deckLab.quantity === 14 && deckLab.unitPrice === 220 && deckLab.name === "Labor · Composite decking (crew-hours)", JSON.stringify(deckLab));
 const demoLab = priced.labor.find((l) => l.name.startsWith("Labor · Demo"));
 // $1.30 × 300 = $390 of book labor ÷ $65 = 6 person-hours ÷ 2 people = 3 crew-hours.
 check("no hours from the model: worked out from the book's labor, and the line says so", !!demoLab && demoLab.quantity === 3 && /check them/.test(demoLab.notes ?? "") && priced.derivedHours === 1, JSON.stringify(demoLab));
@@ -78,11 +80,26 @@ const est = estimateSchema.parse({ title: "Deck", scope: "Deck", materials: pric
 check("the snapshot passes the wire schema", pricingSnapshotSchema.safeParse(snapshotOf(doneRight)).success && est.pricing?.laborRate === 220);
 const pairs = pairEstimateLines(est);
 check("a labor row never folds into its material row (hours ≠ square feet)", pairs.every((p) => !(p.material && p.labor)), JSON.stringify(pairs.map((p) => [p.material?.id, p.labor?.id])));
+const order = pairs.map((p) => (p.material ?? p.labor)!.id);
+check("each task's labor reads right under its materials; a labor-only task keeps its place", JSON.stringify(order) === JSON.stringify(["i1-x", "i1-x-L", "i2-x-L", "i3-x", "i4-x"]), JSON.stringify(order));
+const plain = pairEstimateLines({
+  materials: [{ id: "a", name: "Shingles", quantity: 30, unit: "squares", unitPrice: 120 }, { id: "b", name: "Dumpster", quantity: 1, unit: "fixed", unitPrice: 480 }],
+  labor: [{ id: "c", name: "Haul-off", quantity: 1, unit: "fixed", unitPrice: 200 }, { id: "a", name: "Shingles", quantity: 30, unit: "squares", unitPrice: 90 }],
+});
+check("…an estimate priced the usual way keeps its order and pairs", JSON.stringify(plain.map((p) => [p.material?.id ?? null, p.labor?.id ?? null])) === JSON.stringify([["a", "a"], ["b", null], [null, "c"]]));
 const lines = linesFromEstimate(est);
-const labLine = lines.find((l) => l.id === "i1-L");
+check("on screen too: the labor line sits under its task", lines.findIndex((l) => l.id === "i1-x-L") === lines.findIndex((l) => l.id === "i1-x") + 1);
+const labLine = lines.find((l) => l.id === "i1-x-L");
 check("on screen: the labor line reads in hours at the rate", !!labLine && labLine.unit === "hour" && labLine.qty === 14 && labLine.laborPrice === 220 && labLine.materialPrice === 0);
 const back = estimateFromLines(lines, { title: "Deck", scope: "Deck", assumptions: [] });
-check("screen → wire keeps the separate rows", back.labor.some((l) => l.id === "i1-L" && l.unit === "hour") && !back.labor.some((l) => l.id === "i1"));
+check("screen → wire keeps the separate rows", back.labor.some((l) => l.id === "i1-x-L" && l.unit === "hour") && !back.labor.some((l) => l.id === "i1-x"));
+
+const again = pairEstimateLines(estimateFromLines(lines, { title: "Deck", scope: "Deck", assumptions: [] })).map((p) => (p.material ?? p.labor)!.id);
+check("…and the order survives screen → save → proposal", JSON.stringify(again) === JSON.stringify(order), JSON.stringify(again));
+
+// ── The client's words for the measurement ──────────────────────────────
+check("16 hours, 1 hour", measureWords("HOUR", 16) === "hours" && measureWords("HOUR", 1) === "hour" && measureWords("HOUR", 2.5) === "hours");
+check("2 units, 24 squares; sqft and lump sum as they were", measureWords("UNIT", 2) === "units" && measureWords("SQUARE", 24) === "squares" && measureWords("SQFT", 600) === "sqft" && measureWords("LUMP_SUM", 1) === "lump sum" && measureWords(null, 3) === null);
 
 // ── Sales tax on materials only ─────────────────────────────────────────
 const tl = (materials: number, labor: number) => [

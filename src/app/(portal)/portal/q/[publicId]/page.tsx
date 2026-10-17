@@ -36,6 +36,7 @@ import { db } from "@/lib/db";
 import { clientSplit, splitCaption } from "@/lib/pricing/markup";
 import { contractTotal } from "@/lib/contractTotal";
 import { money, longDate } from "@/lib/format";
+import { measureWords } from "@/lib/measureWords";
 import { parseProposalSettings } from "@/lib/settings";
 import { buildPortalView, type PortalRating } from "@/components/v3/mobile-proposal-client/portal-view";
 import { proposalLogoHref } from "@/lib/orgLogo";
@@ -67,12 +68,6 @@ export async function generateMetadata({
   });
   // The donor's own <title>: "Reyes & Sons Roofing · Proposal".
   return { title: proposal ? `${proposal.organization.name} · Proposal` : "Proposal" };
-}
-
-function measurementLabel(t: string | null | undefined) {
-  if (!t) return null;
-  const cleaned = t.replace(/_/g, " ").trim().toLowerCase();
-  return cleaned.length ? cleaned : null;
 }
 
 export default async function PublicProposalPortal({
@@ -358,7 +353,7 @@ export default async function PublicProposalPortal({
           <h2 className="pv-sec-h">Estimate detail</h2>
           <div className="pv-ledger">
             {proposal.lineItems.map((item) => {
-              const measure = measurementLabel(item.measurementType);
+              const measure = measureWords(item.measurementType, item.quantity);
               // The donor's meta line reads "24 sq · 24 × $310" — the quantity
               // leads the measurement, then repeats against the unit price.
               const meta = [
