@@ -165,10 +165,11 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // it is near the viewport — the mobile LCP's render delay was style/layout
   // of the whole page.
 
-  // No line under the hero's buttons (owner, 2026-10-16): the button says the
-  // trial, and the price line (hero-price.ts heroPriceLine, the Deck Studio's
-  // coming-soon note) is off on every landing. Hero still takes `priceLine`
-  // to bring it back.
+  // The line under the hero's buttons (owner, 2026-10-16): one sentence, the
+  // same for every trade, where the price line was (.lp-hero-price) — the
+  // button says the trial. The price line (hero-price.ts heroPriceLine) and the
+  // Deck Studio's coming-soon note are off. The default page has no line.
+  const heroLine = variant ? "Build your first estimate free" : null;
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is
@@ -177,7 +178,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const order = landingSectionOrder(variant);
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
-    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} />,
+    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
