@@ -334,6 +334,8 @@ export type LegacyItem = {
   quantity: number;
   materialUnitPrice: number;
   laborUnitPrice: number;
+  /** The estimator's hours for the whole line, when the company prices labor by the hour. */
+  laborHours?: number;
   notes?: string;
   searchQuery: string | null;
   /** Set by the post-generation validation pass, never by the model
@@ -402,6 +404,7 @@ export function legacyLineToItem(l: AiDraftPricingLineItem): LegacyItem | null {
     quantity: qty,
     materialUnitPrice: money(material / qty),
     laborUnitPrice: money(labor / qty),
+    ...(Number.isFinite(l.laborHours) && (l.laborHours ?? 0) > 0 ? { laborHours: Math.round((l.laborHours as number) * 100) / 100 } : {}),
     notes: desc || undefined,
     // The shop list's query: the line itself names the product ("Supply
     // contractor-grade Class A architectural laminated asphalt shingles…").

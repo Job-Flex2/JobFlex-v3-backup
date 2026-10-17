@@ -661,6 +661,12 @@ export function VideoEstimatorContent({
                 <span>Total</span>
                 <b>{money(ve.totals.total)}</b>
               </div>
+              {ve.pricing ? (
+                <p className={cx("vr-company")} data-ve-company>
+                  Priced your company&rsquo;s way (Settings &rarr; Estimating): {ve.pricing.words}.
+                  Sales tax goes on in the proposal.
+                </p>
+              ) : null}
             </div>
           </div>
 

@@ -55,6 +55,7 @@ import {
 import { attachPlacesSuggest } from "@/components/v3/blueprint-shell/places-suggest";
 import { MDL_EXIT_MS } from "@/components/v3/blueprint-shell/mdl-motion";
 import { stateTaxPct } from "@/app/(mobile)/mobile-advanced-ai-v2/state-tax";
+import { stateFromAddress } from "@/lib/pricing/salesTax";
 import { DictateButton } from "@/components/estimator/DictateButton";
 import {
   analyzeEstimatePrompt,
@@ -62,7 +63,7 @@ import {
   saveEstimate,
   convertEstimateToProposal,
 } from "@/actions/advancedEstimator";
-import type { ClarifyQuestion } from "@/lib/estimatorSchema";
+import type { ClarifyQuestion, PricingSnapshotWire } from "@/lib/estimatorSchema";
 import {
   briefWithAnswers,
   computeTotals,
@@ -197,6 +198,8 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   // pins itself: picking a state afterwards must not silently overwrite a
   // number the contractor deliberately entered.
   const [tax, setTax] = useState<{ pct: number; pinned: boolean }>({ pct: 0, pinned: false });
+  /** Priced the company's way (Settings → Estimating): its tax rule, and how the proposal is to be priced. */
+  const [pricing, setPricing] = useState<PricingSnapshotWire | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   // The overlay is held mounted through its exit keyframes; `genExit` is what
   // plays them. Without it the box is cut out of the frame instantly while the
@@ -296,8 +299,8 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
 
   // ── Derived money ────────────────────────────────────────────────
   const totals = useMemo(
-    () => computeTotals({ lines, discount, taxPct: tax.pct }),
-    [lines, discount, tax.pct],
+    () => computeTotals({ lines, discount, taxPct: tax.pct, taxOn: pricing?.taxMode === "materials" ? "materials" : "all" }),
+    [lines, discount, tax.pct, pricing],
   );
 
   // The intake no longer asks for a project type (owner, 2026-09-02): the
@@ -430,6 +433,19 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
 
       const est = res.data;
       setLines(linesFromEstimate(est));
+      // The company's own method: its tax rule and rate go on the sheet, and on to the proposal.
+      const pr = est.pricing ?? null;
+      setPricing(pr);
+      if (pr) {
+        setTax((t) => {
+          if (pr.taxMode === "none") return { pct: 0, pinned: true };
+          if (pr.taxRatePct != null) return { pct: pr.taxRatePct, pinned: true };
+          // The job state's rate: the state picked, else the one in the address the estimate was priced at.
+          if (t.pinned || t.pct > 0) return t;
+          const st = stateFromAddress(useLocation);
+          return st ? { pct: stateTaxPct(st), pinned: false } : t;
+        });
+      }
       setCheckNotes(est.notes ?? []);
       setTitle(est.title);
       setScope(est.scope || description);
@@ -462,6 +478,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
 
   /** The plan set's trades, merged, land in the same ledger a brief's estimate does. */
   function landPlanEstimate(r: PlanEstimateDone) {
+    setPricing(null);
     setLines(r.lines);
     setCheckNotes(r.notes);
     setTitle(r.title);
@@ -493,6 +510,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   function startOver() {
     setPanel("intake");
     setLines([]);
+    setPricing(null);
     setAssumptions([]);
     setCheckNotes([]);
     setTitle("");
@@ -529,13 +547,15 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
         return;
       }
       // A suggestion counts in no total until it is added, so it never reaches the proposal.
-      const data = estimateFromLines(lines.filter((l) => l.flag !== "suggested"), {
+      // An estimate priced the company's way keeps saying so — saved, and handed to the proposal.
+      const built = estimateFromLines(lines.filter((l) => l.flag !== "suggested"), {
         title: title || projectType || "Estimate",
         scope: scope || briefUsed,
         assumptions: cleanAssumptions,
         estimatedTimelineDays: timelineDays ?? undefined,
         discount: discountToSchema(discount),
       });
+      const data = pricing ? { ...built, pricing } : built;
       await saveEstimate({
         projectType: typeUsed || projectType,
         location: addrUsed || location || null,
@@ -552,6 +572,8 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
         // The site, not the pricing market — this becomes `Proposal.address`.
         location: addrUsed || location || undefined,
         discount: data.discount ?? undefined,
+        // The company's way: final prices, and the tax at the rate on this sheet.
+        ...(pricing ? { pricing, taxPct: tax.pct } : {}),
       });
       toast.success("Proposal created", "Opening it now.");
       // The record is written; everything from here is navigation. Hold the
@@ -1165,7 +1187,12 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
                 </span>
               </label>
             </div>
-            {tax.pinned && (
+            {pricing?.taxMode === "materials" ? (
+              <div className={cx("sp-adj-note")} data-sp-tax-materials>
+                Tax on materials only — your company&apos;s rule (Settings → Estimating).
+              </div>
+            ) : null}
+            {tax.pinned && !pricing && (
               // Honest caveat: convertEstimateToProposal derives the proposal's
               // tax from the job's state (lib/pricing/salesTax — the same table
               // this field seeds from), so a manual rate moves this sheet but

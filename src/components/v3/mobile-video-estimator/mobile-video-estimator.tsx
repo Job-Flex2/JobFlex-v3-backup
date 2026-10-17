@@ -746,6 +746,12 @@ export function MobileVideoEstimator({
                   <span>Total</span>
                   <b>{money(ve.totals.total)}</b>
                 </div>
+                {ve.pricing ? (
+                  <p className="mve-company" data-ve-company>
+                    Priced your company&rsquo;s way (Settings &rarr; Estimating): {ve.pricing.words}.
+                    Sales tax goes on in the proposal.
+                  </p>
+                ) : null}
               </div>
 
               {/* No Materials request card under this one any more (owner,
