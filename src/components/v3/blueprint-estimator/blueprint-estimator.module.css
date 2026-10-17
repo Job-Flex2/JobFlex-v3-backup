@@ -421,77 +421,24 @@
 }
 
 /* ── 3 · working ──────────────────────────────────────────── */
-.be.be .work {
-  max-width: 640px;
-  gap: 18px;
-}
-.be.be .steps {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.be.be .steps li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--be-muted);
-}
-.be.be .stepMark {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--be-line);
-  border-radius: 50%;
-}
-.be.be .stepDone {
-  color: var(--be-ink);
-}
-.be.be .stepDone .stepMark {
-  border-color: var(--be-ok);
-  background: var(--be-ok);
-  box-shadow: inset 0 0 0 3px var(--be-paper);
-}
-.be.be .stepNow {
-  color: var(--be-ink);
-}
-.be.be .stepNow .stepMark {
-  border-color: var(--be-blue);
-  border-top-color: transparent;
-  /* bePlanSpin is declared in blueprint-global.css: Lightning CSS rejects @keyframes in a module. */
-  animation: bePlanSpin 0.9s linear infinite;
-}
-.be.be .stepNote {
-  font-weight: 500;
-  color: var(--be-muted);
-}
-.be.be .meter {
-  height: 6px;
-  border: 1px solid var(--be-ink);
-  background: var(--be-paper-2);
-}
-.be.be .meter span {
-  display: block;
-  height: 100%;
-  background: var(--be-blue);
-  transition: width 0.35s var(--ease-soft, ease);
-}
-.be.be .work .btnGhost {
-  align-self: flex-start;
-}
-.be.be .clock {
-  align-self: flex-end;
-  margin-bottom: -8px;
-  font-family: var(--be-mono);
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--be-muted);
-}
+.be.be .work { width: 100%; max-width: 520px; gap: 0; padding: 26px 22px 24px; }
+.be.be .workRequest { font-family: var(--be-mono); font-size: 12px; font-weight: 700; letter-spacing: .14em; color: var(--be-muted); overflow-wrap: anywhere; }
+.be.be .workHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.be.be .workStage { font-size: 18px; font-weight: 900; letter-spacing: -.005em; }
+.be.be .workPercent { font-family: var(--be-mono); font-size: 14px; font-weight: 700; letter-spacing: .06em; color: var(--be-blue); font-variant-numeric: tabular-nums; }
+.be.be .steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
+.be.be .steps li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; color: var(--be-muted); }
+.be.be .stepMark { width: 10px; height: 10px; border: 1.5px solid currentColor; background: var(--be-paper); }
+.be.be .stepState { font-family: var(--be-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.be.be .stepDone, .be.be .stepNow { color: var(--be-ink); }
+.be.be .stepNow { font-weight: 700; }
+.be.be .stepDone .stepMark { background: var(--be-ink); border-color: var(--be-ink); }
+.be.be .stepNow .stepMark { background: var(--be-blue); border-color: var(--be-blue); }
+.be.be .stepNow .stepState { color: var(--be-blue); }
+.be.be .meter { margin-top: 12px; height: 10px; border: 1.5px solid var(--be-ink); background: var(--be-paper); overflow: hidden; }
+.be.be .meter span { display: block; height: 100%; background: var(--be-blue); transition: width 300ms linear; }
+.be.be .workHint { margin: 14px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--be-muted); }
+.be.be .work .btnGhost { align-self: flex-start; margin-top: 14px; min-height: 44px; }
 .be.be .timing {
   margin: -6px 0 0;
   font-family: var(--be-mono);

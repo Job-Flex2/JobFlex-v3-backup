@@ -23,7 +23,6 @@ import { nanoid } from "nanoid";
 import type { InstantRoofData, InstantStructure } from "@/lib/eagleview";
 import { toast } from "@/components/ui/Toast";
 import type { EstimateLine } from "@/components/estimator/EstimatorBreakdown";
-import { assessRoof, confidenceLabel } from "@/lib/roofDiagram/confidence";
 import type { MeasurementSource, RoofMeasurementDTO, RoofMeasurementSummary } from "@/lib/roofDiagram/types";
 import {
   collectPendingInstant,
@@ -98,16 +97,6 @@ const FACADE: Record<string, string> = { N: "North", E: "East", S: "South", W: "
 // only the answer itself makes it 100. Each waypoint names the step under
 // way from that moment; the step list ticks the ones before it.
 const MS_STEPS = ["Locate the property", "Confirm the roof outline", "Measure the roof area", "Read the pitch, edges and details", "Finish the report"] as const;
-/** While the roof is measured (owner, 2026-10-13: "get some interactivity when roofing waiting"): what the page does
- *  next, a line at a time — every one of them true of this page. */
-const WAIT_TIPS = [
-  "Squares, pitch, facets, eaves, rakes, ridges, hips and valleys land on one screen.",
-  "Pick the roof system in the estimate builder and every line prices itself — shingles, underlayment, flashing, vents, tear-off.",
-  "The prices you set in the builder are kept for your next roof.",
-  "An address you measured before opens from Recent — nothing is billed twice.",
-  "Convert makes the proposal. Edit the roof estimate on it brings you back here to change anything.",
-] as const;
-const WAIT_TIP_MS = 7_000;
 /** "5/12 on 60% · 11/12 on 40%" — how much of the roof is at each measured pitch, largest first. */
 function pitchSharesWords(families: ReadonlyArray<{ pitch12: number; planSqft: number }>): string {
   const byPitch = new Map<number, number>();
@@ -306,11 +295,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   const revealRef = React.useRef<() => void>(() => {});
   const [msReport, setMsReport] = React.useState<string>("—");
   const [msHint, setMsHint] = React.useState<string | null>(null);
-  // The wait, made watchable (2026-10-13): seconds gone, the address on the map, a tip at a time.
-  const [msElapsed, setMsElapsed] = React.useState(0);
-  const [msWhere, setMsWhere] = React.useState<{ lat: number; lng: number; label: string } | null>(null);
-  const [tip, setTip] = React.useState(0);
-  const [tipHeld, setTipHeld] = React.useState(false);
 
   // ── Measurement / photo viewer ──
   const [measurement, setMeasurement] = React.useState<RoofMeasurementDTO | null>(null);
@@ -354,46 +338,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // on the map so the contractor sees which one it is before ticking it.
   const [hoverBuilding, setHoverBuilding] = React.useState<number | null>(null);
 
-  // The data path never draws, so the CONFIDENCE verdict comes straight from
-  // the stored provenance (coverage, completeness, EagleView's own occlusion
-  // survey) — the same assessRoof, on its data-only inputs.
-  const assessment = React.useMemo(() => {
-    if (!measurement || measurement.source === "solar") return null;
-    const p = measurement.provenance;
-    return assessRoof({
-      coverage: p.coverage ?? null,
-      structures:
-        p.structures?.map((st) => ({
-          prefix: st.prefix,
-          contourSqft: st.contourSqft,
-          share: st.coverage?.insetShare ?? st.coverage?.share ?? null,
-        })) ?? null,
-      // Rows from before 2026-09-08 carry no instantPitch12: fall back to the
-      // published label the row has, so "published figure" is only claimed
-      // when a figure exists.
-      pitchSource: p.pitchSource
-        ? {
-            ...p.pitchSource,
-            instantPitch12:
-              p.pitchSource.instantPitch12 !== undefined
-                ? p.pitchSource.instantPitch12
-                : measurement.instant?.totals.pitchLabel
-                  ? Number(measurement.instant.totals.pitchLabel.split("/")[0])
-                  : null,
-          }
-        : null,
-      completeness: p.completeness ?? null,
-      parcelBlocked: p.parcelBlocked ?? null,
-      instantOcclusion: p.instantSurvey
-        ? {
-            occlusion: p.instantSurvey.occlusion,
-            treeOverhang: p.instantSurvey.treeOverhang,
-            occlusionConfidence: p.instantSurvey.confidence?.occlusion ?? null,
-            overhangConfidence: p.instantSurvey.confidence?.treeOverhang ?? null,
-          }
-        : null,
-    });
-  }, [measurement]);
   /**
    * Built by the OLD calibrated pipeline. Only that path stores a calibration
    * report, so this is the reliable discriminator — and a saved row always
@@ -686,25 +630,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   function runProgress(): () => void {
     const startedAt = nowMs();
     setMs(msProgressAt(0));
-    setMsElapsed(0);
-    setTip(0);
-    setTipHeld(false);
-    const timer = setInterval(() => {
-      const gone = nowMs() - startedAt;
-      setMs(msProgressAt(gone));
-      setMsElapsed(Math.floor(gone / 1000));
-    }, MS_TICK_MS);
+    const timer = setInterval(() => setMs(msProgressAt(nowMs() - startedAt)), MS_TICK_MS);
     return () => clearInterval(timer);
   }
-
-  // A tip at a time while the roof is measured; a click on a dot holds the one chosen.
-  const waiting = panel === "measuring" && !ms.done;
-  const mapsOn = isMapsBrowserEnabled();
-  React.useEffect(() => {
-    if (!waiting || tipHeld) return;
-    const timer = setInterval(() => setTip((i) => (i + 1) % WAIT_TIPS.length), WAIT_TIP_MS);
-    return () => clearInterval(timer);
-  }, [waiting, tipHeld]);
 
   type OrderInput = { address: string; city: string; state: string; zip: string; lat?: number; lng?: number };
   function orderInput(): OrderInput {
@@ -921,13 +849,10 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setMeasurementBusy(true);
     setMs({ pct: 0, step: 0, done: false });
     setMsReport(input.address);
-    setMsWhere(input.lat != null && input.lng != null ? { lat: input.lat, lng: input.lng, label: input.address } : null);
-    setMsHint("Usually under a minute. The report opens as soon as the roof is measured.");
+    setMsHint("Checking the roof at this address. The report opens when the measurements are ready.");
     setPanel("measuring");
-    const stop = runProgress();
     try {
       const res = await measureRoof(input);
-      stop();
       if (!res.ok) {
         setPanel("intake");
         setIntakeError({ text: res.error, kind: res.noRoof ? "no-roof" : res.stillProcessing ? "processing" : "failed", target: input, reorder: res.canReorder === true });
@@ -946,7 +871,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         startHoldProgress();
         return;
       }
-      setMs({ pct: 100, step: MS_STEPS.length, done: true });
       showMeasurement(res.measurement, !!res.unsaved);
       if (solarResult) {
         toast.success(res.unsaved ? "Roof estimate ready — not saved" : "Roof estimate ready", "Review the roof and measurements before pricing.");
@@ -954,7 +878,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         measuredToast(res.measurement, !!res.unsaved, res.reusedInstant?.how ?? null);
       }
     } catch (err) {
-      stop();
       setPanel("intake");
       const text = "The measurement request did not complete. Check the connection and try again.";
       setIntakeError({ text, kind: "failed", target: input });
@@ -998,7 +921,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setInstantBusy(true);
     setReusedInstant(null);
     setMsReport(input.address);
-    setMsWhere(input.lat != null && input.lng != null ? { lat: input.lat, lng: input.lng, label: input.address } : null);
     setMsHint("Usually under a minute. The roof opens as soon as it is measured; any detail that finishes later fills into the report by itself.");
     setPanel("measuring");
     const stop = runProgress();
@@ -1940,61 +1862,31 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
 
       {/* ===== MEASUREMENT IN PROGRESS ===== */}
       <section className={"ppanel" + (panel === "measuring" ? "" : " is-hidden")} data-panel="measuring">
-        <div className={"card rf-card measuring" + (msWhere && mapsOn ? " has-map" : "")}>
+        <div className="card rf-card measuring">
           <div className="ms-body">
             <div className="ms-num">{msReport}</div>
             <div className="ms-head">
               <div className="ms-stage" role="status" aria-live="polite">
-                {ms.done ? "Report ready" : `${stepLabel(Math.min(ms.step, MS_STEPS.length - 1))}…`}
+                {measurementBusy ? "Measuring the roof…" : ms.done ? "Report ready" : `${stepLabel(Math.min(ms.step, MS_STEPS.length - 1))}…`}
               </div>
-              <div className="ms-pct">{ms.pct}%</div>
+              {!measurementBusy && <div className="ms-pct">{ms.pct}%</div>}
             </div>
+            {!measurementBusy && <>
             <div className="ms-track" role="progressbar" aria-label="Measurement progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={ms.pct}>
               <span className="ms-fill" style={{ width: `${ms.pct}%` }} />
             </div>
-            <div className={"ms-grid" + (msWhere && mapsOn ? " has-map" : "")}>
-              <div>
-                <ol className="ms-steps" aria-label="Measurement steps">
-                  {MS_STEPS.map((label, i) => (
-                    <li key={label} className={"ms-step" + (ms.done || i < ms.step ? " is-done" : i === ms.step ? " is-active" : "")}>
-                      <span className="ms-step-mark" aria-hidden="true" />
-                      <span>{stepLabel(i, label)}</span>
-                      <span className="ms-step-state">{ms.done || i < ms.step ? "done" : i === ms.step ? "in progress" : ""}</span>
-                    </li>
-                  ))}
-                </ol>
-                <div className="ms-clock" data-ms-elapsed={msElapsed}>
-                  <span>{Math.floor(msElapsed / 60)}:{String(msElapsed % 60).padStart(2, "0")}</span> elapsed
-                </div>
-              </div>
-              {msWhere && mapsOn ? (
-                <div className="ms-map" data-ms-map>
-                  <AddressPinPreview lat={msWhere.lat} lng={msWhere.lng} label={msWhere.label} scanning />
-                </div>
-              ) : null}
-            </div>
+            <ol className="ms-steps" aria-label="Measurement steps">
+              {MS_STEPS.map((label, i) => (
+                <li key={label} className={"ms-step" + (ms.done || i < ms.step ? " is-done" : i === ms.step ? " is-active" : "")}>
+                  <span className="ms-step-mark" aria-hidden="true" />
+                  <span>{stepLabel(i, label)}</span>
+                  <span className="ms-step-state">{ms.done || i < ms.step ? "done" : i === ms.step ? "in progress" : ""}</span>
+                </li>
+              ))}
+            </ol>
+            </>}
             <div className="ms-hint">
               {msHint ?? "Measuring the structure, pitch by pitch."}
-            </div>
-            {/* While it works: what comes next, one line at a time; the dots pick one and hold it. */}
-            <div className="ms-tips" data-ms-tips>
-              <span className="ms-tips-k">While you wait</span>
-              <p className="ms-tip" aria-live="polite" key={tip}>{WAIT_TIPS[tip]}</p>
-              <div className="ms-tip-dots" role="group" aria-label="Tips">
-                {WAIT_TIPS.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={"ms-tip-dot" + (i === tip ? " is-on" : "")}
-                    aria-label={`Tip ${i + 1} of ${WAIT_TIPS.length}`}
-                    aria-pressed={i === tip}
-                    onClick={() => {
-                      setTip(i);
-                      setTipHeld(true);
-                    }}
-                  />
-                ))}
-              </div>
             </div>
             {holding && (
               <div className="ms-acts">
@@ -2424,12 +2316,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                           }),
                       },
                     }
-                  : assessment?.estimable === false
-                    ? {
-                        stamp: confidenceLabel(assessment.confidence),
-                        text: "Part of this property is missing from the figures — check them before you price.",
-                      }
-                    : null
+                  : null
               }
               facts={roofFacts}
               onBuildingUse={manual ? undefined : answerUse}

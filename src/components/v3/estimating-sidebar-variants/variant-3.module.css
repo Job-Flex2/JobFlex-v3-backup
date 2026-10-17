@@ -1,0 +1,103 @@
+.root {
+  min-width: 0;
+  padding: 20px 16px 12px;
+  color: var(--ink);
+  font-family: var(--font-sans), sans-serif;
+}
+
+.root *, .root *::before, .root *::after { box-sizing: border-box; }
+
+.root .heading {
+  margin: 0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--ink);
+  font: 800 11px/1.4 var(--font-sans), sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.list, .children { margin: 0; padding: 0; list-style: none; }
+.item { position: relative; border-bottom: 1px solid var(--ink-line); }
+.item:last-child { border-bottom: 0; }
+.row { display: flex; align-items: stretch; min-width: 0; }
+
+.root .link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 68px;
+  padding: 12px 8px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color 140ms var(--ease-out);
+}
+
+.root .link:hover, .root .childLink:hover { background: var(--paper); }
+.root .label { font-size: 13px; line-height: 1.35; font-weight: 650; overflow-wrap: anywhere; }
+.root .description { display: grid; gap: 3px; color: var(--ink-muted); font: 400 10px/1.5 var(--font-mono), monospace; overflow-wrap: anywhere; }
+.root .description:empty { display: none; }
+.root .status { font: 600 10px/1.4 var(--font-sans), sans-serif; }
+
+.active > .row::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: -8px;
+  width: 3px;
+  height: 28px;
+  background: var(--ink);
+}
+
+.root .active .label { font-weight: 850; }
+.root .active .description { color: var(--ink-soft); }
+.root .locked { color: var(--ink-muted); }
+
+.root .toggle {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--ink-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.root .toggle:hover, .root .toggle[aria-expanded="true"] { background: var(--paper); color: var(--ink); }
+.root :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.children { margin: 0 0 12px 8px; border-left: 1px solid var(--ink-line); }
+.children[hidden] { display: none; }
+
+.root .childLink {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 8px 12px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: background-color 140ms var(--ease-out);
+}
+
+.root .currentChild { color: var(--ink); font-weight: 750; text-decoration: underline; text-underline-offset: 4px; }
+.root .childStatus { color: var(--ink-muted); font-size: 10px; font-weight: 500; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .root .link, .root .childLink, .root .toggle { transition: none; }
+}

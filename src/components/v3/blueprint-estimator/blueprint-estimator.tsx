@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import s from "./blueprint-estimator.module.css";
+import { BlueprintLoadingCard } from "./blueprint-loading-card";
 import { clientErrorText } from "@/lib/staleDeploy";
 import { askPlan, getPlanPriceChecks, measurePlanSheet, readPlanSheet, skimPlanSheet, startPlanSession } from "@/actions/planEstimator";
 import { convertEstimateToProposal, pricePlanTrade, saveEstimate } from "@/actions/advancedEstimator";
@@ -38,7 +39,7 @@ import { toast } from "@/components/ui/Toast";
 import { ensureWithinLimit, reportPlanLimit, reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 
 type Stage = "upload" | "ask" | "work" | "result";
-type ReadState = { status: "run" | "ok" | "fail"; sheet?: SheetRead };
+type ReadState = { status: "run" | "ok" | "fail"; sheet?: SheetRead; error?: string };
 type Failure = { ok: false; error: string; code?: string; resource?: string };
 
 type Result = {
@@ -181,6 +182,7 @@ export function BlueprintEstimator() {
   const pagesRef = useRef<PlanPage[]>([]);
   const readsRef = useRef<Record<number, ReadState>>({});
   const tokenRef = useRef<string | null>(null);
+  const tokenPendingRef = useRef<Promise<string | null> | null>(null);
   const kindsRef = useRef<Record<number, SheetSkim | null>>({});
   /** Each sheet in the reading queue: settled when it is read (or could not be). */
   const settledRef = useRef<Map<number, Promise<void>>>(new Map());
@@ -214,6 +216,7 @@ export function BlueprintEstimator() {
       settledRef.current = new Map();
       skimRef.current = null;
       tokenRef.current = null;
+      tokenPendingRef.current = null;
       setPages(kept);
       setReads({});
       setKinds({});
@@ -221,7 +224,9 @@ export function BlueprintEstimator() {
       setResult(null);
       setSkipped([...why, ...(opened.length > MAX_PLAN_PAGES ? [`Only the first ${MAX_PLAN_PAGES} pages are kept.`] : [])]);
       setStage("ask");
-      readingRef.current = readAll(kept, run);
+      readingRef.current = readAll(kept, run).catch((e) => {
+        if (run === setRun.current) setErr(clientErrorText(e, "The plans could not be read. Open the plans again."));
+      });
     } catch (e) {
       setErr(clientErrorText(e, "The files could not be opened."));
     } finally {
@@ -231,13 +236,22 @@ export function BlueprintEstimator() {
 
   async function ensureToken(): Promise<string | null> {
     if (tokenRef.current) return tokenRef.current;
-    const res = await startPlanSession();
-    if (!res.ok) {
-      setErr(failText(res));
-      return null;
+    // Upload reading and an immediate estimate share one session and trial use.
+    if (tokenPendingRef.current) return tokenPendingRef.current;
+    const run = setRun.current;
+    const pending = (async () => {
+      const res = await startPlanSession();
+      if (run !== setRun.current) return null;
+      if (!res.ok) throw new Error(failText(res));
+      tokenRef.current = res.token;
+      return res.token;
+    })();
+    tokenPendingRef.current = pending;
+    try {
+      return await pending;
+    } finally {
+      if (tokenPendingRef.current === pending) tokenPendingRef.current = null;
     }
-    tokenRef.current = res.token;
-    return res.token;
   }
 
   async function readOne(p: PlanPage, tok: string, total: number, run: number, light: boolean) {
@@ -251,6 +265,7 @@ export function BlueprintEstimator() {
     // light that turns out to be one jobs measure on (a floor plan the first look took for
     // something else) is read again, close.
     let lightNow = light;
+    let error = "This sheet could not be read.";
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const { overview, tiles, grid } = await p.render({ light: lightNow });
@@ -269,11 +284,12 @@ export function BlueprintEstimator() {
           continue;
         }
         if (res.ok) return mark({ status: "ok", sheet: res.sheet });
-      } catch {
-        // tried again below
+        error = failText(res);
+      } catch (e) {
+        error = clientErrorText(e, "The sheet-reading request did not complete.");
       }
     }
-    mark({ status: "fail" });
+    mark({ status: "fail", error });
   }
 
   /** A first look at one sheet: what kind it is, from its title block. Null when it could not be told. */
@@ -387,6 +403,17 @@ export function BlueprintEstimator() {
   }, [stage]);
 
   const readDone = Object.values(reads).filter((r) => r.status === "ok" || r.status === "fail").length;
+  // A lost response must not strand the estimate on its first step. Keep the
+  // existing read queue and files so returning to the question does not rebill them.
+  useEffect(() => {
+    if (stage !== "work" || step !== 0) return;
+    const timer = setTimeout(() => {
+      askRun.current++;
+      setErr("No new sheet has finished reading for three minutes. Your plans are still open. Let the reading finish and try the estimate again, or open the plans again if it stays stalled.");
+      setStage("ask");
+    }, 180_000);
+    return () => clearTimeout(timer);
+  }, [stage, step, readDone]);
   const ready = stage !== "upload" && (baseReady || (readTotal > 0 && readDone >= readTotal));
   const sheetsRead = useMemo(() => Object.values(reads).filter((r) => r.status === "ok" && r.sheet).map((r) => r.sheet!), [reads]);
   const planName = useMemo(() => sheetsRead.map((x) => x.project.name).find(Boolean) ?? null, [sheetsRead]);
@@ -433,7 +460,10 @@ export function BlueprintEstimator() {
       if (!alive()) return;
       sheets = readSheets();
       base = computeTakeoff(sheets);
-      if (!base.house.levels.length) throw new Error("No floor plan could be read from these sheets. Add the floor plans and ask again.");
+      if (!base.house.levels.length) {
+        const failedRead = Object.values(readsRef.current).find((r) => r.status === "fail" && r.error);
+        throw new Error(failedRead?.error ?? "No floor plan could be read from these sheets. Add the floor plans and ask again.");
+      }
       lap("Reading the plans");
       const house = houseBriefOf(base.house);
       const readPages = new Set(sheets.map((x) => x.page));
@@ -645,6 +675,7 @@ export function BlueprintEstimator() {
     pagesRef.current = [];
     readsRef.current = {};
     tokenRef.current = null;
+    tokenPendingRef.current = null;
     readingRef.current = null;
     setPages([]);
     setReads({});
@@ -674,7 +705,6 @@ export function BlueprintEstimator() {
 
   const head = (title: string, sub?: string | null) => (
     <div className={s.head}>
-      <div className={s.kicker}>Blueprint estimator</div>
       <h1 className={s.title}>{title}</h1>
       {sub ? <p className={s.sub}>{sub}</p> : null}
     </div>
@@ -715,7 +745,7 @@ export function BlueprintEstimator() {
     return (
       <div className={s.be}>
         {chooser}
-        {head("Blueprint estimator", "Upload the plans. Ask for the job. Get it measured and priced.")}
+        {head("Blueprint estimator")}
         <section
           className={`${s.card} ${s.drop} ${drag ? s.dropOn : ""}`}
           onDragOver={(e) => {
@@ -760,48 +790,19 @@ export function BlueprintEstimator() {
     );
   }
 
-  // 3 · working
+  // 3 · working — the roof estimator's compact progress-card layout.
   if (stage === "work") {
-    const STEPS = ["Reading your plans", "Working out the job", "Measuring it on the sheets", "Pricing"];
-    const pct = Math.round(((step + (step === 0 && readTotal ? readDone / readTotal : 0.5)) / STEPS.length) * 100);
+    const hint = step === 0
+      ? (readTotal ? `${readDone} of ${readTotal} sheets read. ` : "Opening the reading session. ") + (baseReady ? "Reading the sheets this job needs." : "Floor plans and schedules first.")
+      : step === 2 && working.measuring?.length
+        ? working.measuring.slice(0, 4).join(", ")
+        : "The estimate opens as soon as the measurements and pricing are ready.";
     return (
       <div className={s.be}>
-        {head(working.title ?? "Working on it", `“${request.trim()}”`)}
-        <section className={`${s.card} ${s.work}`} aria-live="polite">
-          <div className={s.clock} aria-label="Time so far">
-            {clockText(clock - (startedAt ?? clock))}
-          </div>
-          <ol className={s.steps}>
-            {STEPS.map((label, i) => (
-              <li key={label} className={i < step ? s.stepDone : i === step ? s.stepNow : undefined}>
-                <span className={s.stepMark} aria-hidden="true" />
-                <span className={s.stepLabel}>
-                  {label}
-                  {i === 0 && i === step ? <span className={s.stepNote}> · {baseReady ? "the sheets this job needs" : "floor plans and schedules first"}</span> : null}
-                  {i === 2 && (working.measuring?.length || working.notes?.length) ? (
-                    <span className={s.stepNote}>
-                      {" "}
-                      · {[...(working.measuring ?? []).slice(0, 4).map((x) => x.toLowerCase()), ...(working.notes?.length ? [`the notes on p. ${working.notes.join(", ")}`] : [])].join(", ")}
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ol>
-          <div className={s.meter} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-            <span style={{ width: `${pct}%` }} />
-          </div>
-          <button
-            type="button"
-            className={s.btnGhost}
-            onClick={() => {
-              askRun.current++;
-              setStage("ask");
-            }}
-          >
-            Cancel
-          </button>
-        </section>
+        {head("Working on it", working.title)}
+        <BlueprintLoadingCard request={request.trim()} step={step} readDone={readDone} readTotal={readTotal}
+          hint={hint + (clock - (startedAt ?? clock) >= 60_000 ? " Larger plan sets can take several minutes." : "")}
+          onCancel={() => { askRun.current++; setStage("ask"); }} />
       </div>
     );
   }

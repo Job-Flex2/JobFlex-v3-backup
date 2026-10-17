@@ -1,0 +1,45 @@
+.directory.directory {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-sans);
+}
+
+.directory *, .directory *::before, .directory *::after { box-sizing: border-box; }
+.directory .heading { margin: 0; padding: 16px 12px 8px; font-size: 10px; font-weight: 800; line-height: 1.4; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.directory .list, .directory .children { margin: 0; padding: 0; list-style: none; }
+.directory .list { position: relative; }
+.directory .list::before { content: ""; position: absolute; top: 16px; bottom: 16px; left: 17px; width: 1px; background: var(--ink-line); }
+.directory .entry { position: relative; margin: 0; padding: 0; }
+.directory .row { position: relative; display: flex; align-items: stretch; min-width: 0; }
+.directory .row::before { content: ""; position: absolute; z-index: 1; left: 16px; top: 16px; width: 3px; height: 20px; background: transparent; pointer-events: none; }
+.directory .row[data-active]::before { background: var(--accent); }
+.directory .link { display: flex; flex: 1; align-items: flex-start; gap: 12px; min-width: 0; min-height: 52px; padding: 10px 0 10px 28px; color: inherit; text-decoration: none; }
+.directory .icon, .directory .childIcon { display: block; flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.directory .copy { display: flex; flex: 1; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
+.directory .name { width: 100%; font-size: 13px; font-weight: 600; line-height: 19px; overflow-wrap: anywhere; }
+.directory .description { color: var(--ink-muted); font-family: var(--font-mono); font-size: 10px; line-height: 16px; }
+.directory .availability { color: var(--ink-muted); font-family: var(--font-mono); font-size: 10px; font-weight: 600; line-height: 16px; }
+.directory .availability::before { content: "·"; padding-right: 6px; }
+.directory .row[data-active] .link { color: var(--accent); }
+.directory .row[data-active] .name { font-weight: 800; }
+.directory .fold, .directory .foldSpace { flex: 0 0 44px; width: 44px; min-height: 44px; }
+.directory .fold { display: flex; align-items: center; justify-content: center; align-self: flex-start; margin-top: 4px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink-muted); cursor: pointer; }
+.directory .fold svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform 150ms var(--ease-out); }
+.directory .fold[aria-expanded="true"] svg { transform: rotate(90deg); }
+.directory .children { position: relative; margin-left: 36px; padding-left: 20px; border-left: 1px solid var(--ink-line); }
+.directory .children[hidden] { display: none; }
+.directory .child { position: relative; }
+.directory .child::before { content: ""; position: absolute; top: 22px; left: -20px; width: 12px; height: 1px; background: var(--ink-line); }
+.directory .childLink { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 6px 8px 6px 0; color: var(--ink-muted); text-decoration: none; }
+.directory .childIcon { width: 14px; height: 14px; margin-top: 0; }
+.directory .childLink .name { font-size: 12px; font-weight: 500; }
+.directory .childLink[aria-current="page"] { color: var(--accent); }
+.directory .childLink[aria-current="page"] .name { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.directory .link:hover, .directory .childLink:hover { color: var(--accent); }
+.directory .fold:hover { color: var(--accent); background: var(--accent-soft); }
+.directory .link:focus-visible, .directory .childLink:focus-visible, .directory .fold:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.directory .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .directory .fold svg { transition: none; }
+}

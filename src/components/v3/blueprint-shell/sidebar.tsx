@@ -57,12 +57,15 @@ export function Sidebar({
   user,
   folded = false,
   onToggleFold,
+  renderEstimatingTools,
 }: {
   user?: SidebarUser;
   /** Drawn as the icon rail (desktop only; the drawer ignores it). */
   folded?: boolean;
   /** Flips the fold; without it no arrow is drawn on the sidebar's edge. */
   onToggleFold?: () => void;
+  /** Optional design-preview slot; production keeps the established tool bay. */
+  renderEstimatingTools?: (items: NavItem[], active: string) => React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
   // HOVER LABELS for the folded rail. One plate, positioned against the
@@ -319,6 +322,9 @@ export function Sidebar({
         {/* Section labels and estimator trees share the scroll container.
             The indicator accounts for positioned wrappers inside each tree. */}
         {sections.map((section) => {
+          if (renderEstimatingTools && section.items.length && section.items.every((i) => !!i.tool)) {
+            return <Fragment key={section.label}>{renderEstimatingTools(section.items, active)}</Fragment>;
+          }
           // THE TOOL BAY (owner, 2026-10-12). Tools that follow each other
           // share one framed bay; a section made only of tools puts its label
           // on the bay's frame instead of above it. A role's mixed section
