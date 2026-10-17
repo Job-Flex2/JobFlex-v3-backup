@@ -1,1356 +1,193 @@
-/* Settings → Texting — Blueprint (2026-10-16; owner: "it looks like another product"). Shared by the desk's
-   Settings → Texting and the handheld settings page, so it carries its own type and controls and reads the hosts'
-   Blueprint tokens (the settings page's `.content`, the handheld page's root), the global `:root` names as fallback.
-   Every block's root carries `data-nest` — out of the shell's margin/padding reset, which the production build
-   emits after this sheet (CLAUDE.md). Interactive selectors double a class so neither host's reset wins. */
+/* Who gets texted — person by person (2026-09-29). Shared by the desk's
+   Settings → Texting and the handheld settings page, so it carries its own
+   type and buttons and reads the shell's tokens with fallbacks. */
 
-.root {
-  --t-ink: var(--ink, #0a0a0a);
-  --t-soft: var(--ink-soft, #2a2a2a);
-  --t-muted: var(--muted, var(--ink-muted, #555));
-  --t-line: var(--ink-line, rgba(10, 10, 10, 0.12));
-  --t-paper: var(--paper, #f2f0eb);
-  --t-sheet: var(--sheet, #fff);
-  --t-blue: var(--blueprint, var(--accent, #1854a0));
-  --t-blue-dark: var(--blueprint-dark, var(--accent-ink, #0e3d7a));
-  --t-blue-soft: var(--accent-soft, rgba(24, 84, 160, 0.08));
-  --t-ok: var(--success, var(--emerald, #3a7d44));
-  --t-ok-dark: var(--success-dark, var(--t-ok));
-  --t-ok-soft: color-mix(in srgb, var(--t-ok) 8%, transparent);
-  --t-warn: var(--warning, var(--amber, #b88420));
-  --t-warn-dark: var(--warning-dark, var(--t-warn));
-  --t-warn-soft: color-mix(in srgb, var(--t-warn) 8%, transparent);
-  --t-bad: var(--danger, var(--rose, #a83232));
-  --t-bad-soft: color-mix(in srgb, var(--t-bad) 8%, transparent);
-  --t-r: var(--r-sm, 2px);
-  --t-ease: var(--ease-out, cubic-bezier(0.22, 0.61, 0.36, 1));
-  --t-mono: var(--font-mono, ui-monospace, monospace);
-  --t-sw: 124px; /* the switch with its words — the chips line up under the name after it */
-  display: grid;
-  gap: 22px;
-  min-width: 0;
-  font-family: var(--font-sans, var(--font, "Inter", system-ui, sans-serif));
-  color: var(--t-ink);
-}
-.root *,
-.root *::before,
-.root *::after {
-  box-sizing: border-box;
-}
-.root svg {
-  flex: none;
-}
-/* labels and kickers: Inter caps — mono is kept for phone numbers and counts */
-.secH b,
-.who em,
-.edit label,
-.ex summary,
-.ruleMain em,
-.ideasH,
-.edRow > label,
-.edLabel,
-.preview em,
-.form label,
-.done b,
-.uses li b {
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  line-height: 1.35;
-  text-transform: uppercase;
-}
+.root { display: grid; gap: 22px; font-family: var(--font, "Inter", system-ui, sans-serif); color: var(--ink, #0a0a0a); }
 
-/* ── buttons: the project's — Inter caps, 44px; 36px inside a row ───────── */
-.root .btn.btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  max-width: 100%;
-  margin: 0;
-  padding: 0 16px;
-  border: 2px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-transform: uppercase;
-  text-align: center;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: transform 0.12s var(--t-ease), box-shadow 0.12s var(--t-ease), background 0.12s var(--t-ease);
-}
-.root .btn.btn:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 2px 2px 0 var(--t-ink);
-}
-.root .btn.btn:active:not(:disabled) {
-  transform: none;
-  box-shadow: none;
-}
-.root .btn.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.root .btn.btn:focus-visible,
-.root .ev.ev:focus-visible,
-.root .link.link:focus-visible,
-.root .idea.idea:focus-visible,
-.root .field.field:focus-visible,
-.root .switch.switch:focus-visible,
-.root .segBtn.segBtn:focus-visible {
-  outline: 2px solid var(--t-blue);
-  outline-offset: 2px;
-}
-.root .btn.btnPrimary,
-.root .btn.btnPrimary:hover:not(:disabled) {
-  background: var(--t-blue);
-  color: var(--t-sheet);
-}
-.root .btn.btnPrimary:hover:not(:disabled) {
-  background: var(--t-blue-dark);
-}
-.root .btn.btnDanger,
-.root .btn.btnDanger:hover:not(:disabled) {
-  background: var(--t-bad);
-  color: var(--t-sheet);
-}
-/* in a row: compact */
-.root .person .btn.btn,
-.root .rule .btn.btn,
-.root .edit .btn.btn {
-  min-height: 36px;
-  padding: 0 12px;
-}
-.root .person .btn.btnSm,
-.root .btn.btnSm {
-  min-height: 32px;
-  padding: 0 12px;
-  font-size: 11px;
+.sec { display: grid; gap: 8px; }
+.secH { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; }
+.secH b { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+.secH span { font-size: 12.5px; color: var(--muted, #6b6760); }
+
+.people { border: 1.5px solid var(--ink, #0a0a0a); border-radius: var(--radius, 0); background: #fff; }
+.person { padding: 12px 14px; display: grid; gap: 10px; }
+.person + .person { border-top: 1px solid var(--hair, rgba(10, 10, 10, .14)); }
+
+.head { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.who { display: flex; align-items: baseline; gap: 8px; min-width: 170px; }
+.who b { font-size: 14px; font-weight: 700; }
+.who em { font-style: normal; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #6b6760); }
+.phone { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.phone b { font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 600; }
+.tag { font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; padding: 3px 7px; border: 1.5px solid var(--ink, #0a0a0a); color: var(--ink, #0a0a0a); white-space: nowrap; }
+.tagWarn { border-color: var(--danger, #a83232); color: var(--danger, #a83232); }
+.acts { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+
+.root .btn.btn { appearance: none; height: 30px; padding: 0 12px; border: 1.5px solid var(--ink, #0a0a0a); border-radius: var(--radius, 0); background: #fff; color: var(--ink, #0a0a0a); font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.root .btn.btn:hover:not(:disabled) { background: var(--paper, #f2f0eb); }
+.root .btn.btn:disabled { opacity: .45; cursor: default; }
+.root .btn.btn:focus-visible, .root .ev.ev:focus-visible, .root .link.link:focus-visible { outline: 2px solid var(--blue, #1854a0); outline-offset: 2px; }
+.root .btn.btnPrimary { background: var(--blue, #1854a0); border-color: var(--blue, #1854a0); color: #fff; }
+.root .btn.btnPrimary:hover:not(:disabled) { background: var(--blue-dark, #0e3d7a); }
+
+.edit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.edit label { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #6b6760); }
+.root .edit.edit input { flex: 1 1 200px; height: 34px; padding: 0 10px; border: 1.5px solid var(--ink, #0a0a0a); border-radius: var(--radius, 0); font: inherit; font-size: 15px; font-variant-numeric: tabular-nums; background: #fff; color: var(--ink, #0a0a0a); min-width: 0; }
+.root .edit.edit input:focus { outline: 2px solid var(--blue, #1854a0); outline-offset: 1px; }
+
+.evs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.root .ev.ev { appearance: none; display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border: 1.5px solid var(--hair, rgba(10, 10, 10, .25)); border-radius: 999px; background: var(--paper, #f2f0eb); font: inherit; font-size: 12.5px; color: var(--muted, #6b6760); cursor: pointer; }
+.root .ev.ev i { width: 13px; height: 13px; border: 1.5px solid currentColor; border-radius: 3px; flex: none; }
+.root .ev.evOn { border-color: var(--ink, #0a0a0a); background: #fff; color: var(--ink, #0a0a0a); font-weight: 600; }
+.root .ev.evOn i { background: var(--blue, #1854a0); border-color: var(--blue, #1854a0); box-shadow: inset 0 0 0 2px #fff; }
+/* Nobody is texted yet: the ticks are kept, and look it. */
+.root .quiet .ev.evOn { border-style: dashed; }
+.allNone { display: inline-flex; gap: 10px; margin-left: 4px; }
+.root .link.link { appearance: none; border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--blue, #1854a0); text-decoration: underline; cursor: pointer; }
+.root .link.link:disabled { color: var(--muted, #6b6760); text-decoration: none; cursor: default; }
+
+.ex { font-size: 12.5px; }
+.ex summary { cursor: pointer; color: var(--muted, #6b6760); font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; }
+.ex ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.ex li { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; gap: 10px; align-items: baseline; }
+.ex q { quotes: none; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; line-height: 1.5; color: var(--ink, #0a0a0a); background: var(--paper, #f2f0eb); border-left: 3px solid var(--blue, #1854a0); padding: 6px 10px; overflow-wrap: anywhere; }
+
+.note { margin: 0; font-size: 13px; color: var(--muted, #6b6760); }
+.noteErr { color: var(--danger, #a83232); }
+
+@media (max-width: 720px) {
+  .acts { margin-left: 0; width: 100%; }
+  .root .acts .btn.btn { flex: 1 1 auto; }
+  .ex li { grid-template-columns: 1fr; gap: 4px; }
+  .who { min-width: 0; }
 }
 
-/* ── status badges ─────────────────────────────────────────────────────── */
-.tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 7px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  line-height: 1.3;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.tagWarn {
-  border-color: var(--t-bad);
-  background: var(--t-bad-soft);
-  color: var(--t-bad);
-}
-.tagOk {
-  border-color: var(--t-ok);
-  background: var(--t-ok-soft);
-  color: var(--t-ok-dark);
+/* ── your own texts (2026-09-29) ─────────────────────────────────────── */
+.rules { gap: 14px; }
+.root .ruleList { list-style: none; margin: 0; padding: 0; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; }
+.root .rule { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; }
+.root .rule + .rule { border-top: 1px solid var(--hair, rgba(10, 10, 10, .14)); }
+.root .ruleOff .ruleMain { opacity: .55; }
+.root .ruleMain { display: grid; gap: 4px; min-width: 0; }
+.root .ruleMain b { font-size: 14px; }
+.root .ruleMain span { font-size: 12.5px; color: var(--ink-soft, #333); }
+.root .ruleMain em { font-style: normal; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #6b6760); }
+.root .ruleMain q, .root .preview q { quotes: none; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; line-height: 1.5; color: var(--ink, #0a0a0a); background: var(--paper, #f2f0eb); border-left: 3px solid var(--blue, #1854a0); padding: 6px 10px; overflow-wrap: anywhere; }
+.root .ruleActs { display: flex; gap: 6px; }
+.root .sw.sw { appearance: none; width: 42px; height: 24px; margin-top: 2px; border: 1.5px solid var(--ink, #0a0a0a); background: var(--paper, #f2f0eb); padding: 0; position: relative; cursor: pointer; border-radius: 0; }
+.root .sw.sw i { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; background: var(--muted, #6b6760); transition: left .12s; }
+.root .sw.swOn { background: #e3efe5; }
+.root .sw.swOn i { left: 21px; background: #2f7a45; }
+.root .btn.btnDanger { border-color: var(--danger, #a83232); color: #fff; background: var(--danger, #a83232); }
+.root .ideas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.root .ideasH { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #6b6760); margin-right: 4px; }
+.root .idea.idea { appearance: none; border: 1.5px dashed var(--ink, #0a0a0a); background: #fff; padding: 6px 11px; font: inherit; font-size: 12.5px; cursor: pointer; border-radius: 999px; color: var(--ink, #0a0a0a); }
+.root .idea.idea:hover { background: var(--paper, #f2f0eb); }
+.root .editor { display: grid; gap: 12px; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; padding: 14px; box-shadow: 6px 6px 0 var(--ink, #0a0a0a); }
+.root .edRow { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 12px; align-items: start; }
+.root .edRow > label, .root .edLabel { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #6b6760); padding-top: 9px; }
+.root .edRow input.edRow, .root .edRow > input, .root .edRow > select { height: 34px; padding: 0 10px; border: 1.5px solid var(--ink, #0a0a0a); border-radius: 0; font: inherit; font-size: 14px; background: #fff; color: var(--ink, #0a0a0a); min-width: 0; }
+.root .edRow > select { max-width: 420px; }
+.root .offset { grid-column: 2; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.root .offset input { width: 72px; height: 32px; padding: 0 8px; border: 1.5px solid var(--ink, #0a0a0a); font: inherit; font-size: 14px; }
+.root .bodyBox { display: grid; gap: 6px; }
+.root .bodyBox textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1.5px solid var(--ink, #0a0a0a); border-radius: 0; font: inherit; font-size: 14px; line-height: 1.45; resize: vertical; background: #fff; color: var(--ink, #0a0a0a); }
+.root .fields { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 12px; color: var(--muted, #6b6760); }
+.root .field.field { appearance: none; border: 1.5px solid var(--hair, rgba(10, 10, 10, .3)); background: var(--paper, #f2f0eb); padding: 3px 8px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; cursor: pointer; border-radius: 0; color: var(--ink, #0a0a0a); }
+.root .field.field:hover { border-color: var(--blue, #1854a0); color: var(--blue, #1854a0); }
+.root .count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.root .preview { display: grid; gap: 6px; }
+.root .preview p { margin: 0; display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.root .preview em { font-style: normal; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #6b6760); }
+.root .edActs { display: flex; gap: 8px; flex-wrap: wrap; }
+.noteWarn { color: var(--warning, #b88420); }
+@media (max-width: 720px) {
+  .root .rule { grid-template-columns: auto minmax(0, 1fr); }
+  .root .ruleActs { grid-column: 2; }
+  .root .edRow { grid-template-columns: 1fr; }
+  .root .edRow > label, .root .edLabel { padding-top: 0; }
+  .root .offset { grid-column: 1; }
+  .root .preview p { grid-template-columns: 1fr; gap: 4px; }
 }
 
-/* ── the switch: square; off — paper with an ink knob, on — green (2026-10-16: red read as an error); its words
-   outside on the right ── */
+
+/* The company's own texting number (2026-10-02, own-number.tsx) */
+.own { gap: 12px; }
+.ownHead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ownHead b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.root .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 14px; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; padding: 14px; }
+.root .form label { display: grid; gap: 5px; align-content: start; font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted, #6b6760); }
+.root .form .wide { grid-column: 1 / -1; }
+.root .form input, .root .form select { height: 38px; padding: 0 10px; border: 1.5px solid var(--ink, #0a0a0a); border-radius: var(--radius, 0); font-family: var(--font, "Inter", system-ui, sans-serif); font-size: 16px; letter-spacing: normal; text-transform: none; color: var(--ink, #0a0a0a); background: #fff; min-width: 0; width: 100%; }
+.root .form input:focus, .root .form select:focus { outline: 2px solid var(--blue, #1854a0); outline-offset: 1px; }
+.root .form .bad input, .root .form .bad select { border-color: var(--danger, #a83232); }
+.root .form .why, .root .form .hint { font-family: var(--font, "Inter", system-ui, sans-serif); font-size: 12px; letter-spacing: normal; text-transform: none; line-height: 1.4; }
+.root .form .why { color: var(--danger, #a83232); }
+.root .form .hint { color: var(--muted, #6b6760); }
+/* What JobFlex does for the contractor, before they ask (2026-10-13). */
+.done { display: grid; gap: 8px; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; padding: 12px 14px; }
+.done b { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.done ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.done li { position: relative; padding-left: 22px; font-size: 13.5px; line-height: 1.4; }
+.done li::before { content: "✓"; position: absolute; left: 0; top: 0; font-weight: 700; color: var(--blue, #1854a0); }
+.done p { margin: 0; font-size: 12.5px; color: var(--muted, #6b6760); }
+/* What the number does (2026-10-13): calls from the day it is bought, texts once approved. */
+.uses { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.uses li { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: baseline; font-size: 13px; line-height: 1.4; }
+.uses li b { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+.uses li[data-on="1"] b { color: var(--success, #2c7a5a); }
+.uses li[data-on="0"] b { color: var(--muted, #6b6760); }
+.reasons { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--danger, #a83232); }
+
+/* The pages Twilio is handed (2026-10-12): links that read as links. */
+.note a { color: var(--blueprint, #1854a0); text-decoration: underline; text-underline-offset: 2px; }
+/* The one tick in the registration form: a row, words beside the box (2026-10-13). */
+.root .form label.checkRow { display: flex; gap: 10px; align-items: flex-start; font-family: var(--font, "Inter", system-ui, sans-serif); font-size: 13px; letter-spacing: normal; text-transform: none; color: var(--ink, #0a0a0a); }
+.root .form label.checkRow input { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+
+/* ── TEXTS ON / OFF (2026-10-13) — one switch per person, and for clients ── */
 .root .switch.switch {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-  width: var(--t-sw);
-  min-height: 36px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--t-muted);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-align: left;
-  white-space: nowrap;
-  cursor: pointer;
+  appearance: none; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 4px;
+  border: 1.5px solid var(--ink, #0a0a0a); border-radius: 999px; background: #fff; color: var(--ink, #0a0a0a);
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap; flex: none;
 }
-.root .switch i {
-  position: relative;
-  flex: none;
-  width: 46px;
-  height: 25px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-paper);
-  transition: background 0.2s var(--t-ease);
-}
-.root .switch i::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 2px;
-  width: 17px;
-  height: 17px;
-  background: var(--t-ink);
-  transform: translateY(-50%);
-  transition: transform 0.2s var(--t-ease), background 0.2s var(--t-ease);
-}
-.root .switch.switchOn {
-  color: var(--t-ok-dark);
-}
-.root .switch.switchOn i {
-  background: color-mix(in srgb, var(--t-ok) 16%, transparent);
-}
-.root .switch.switchOn i::after {
-  transform: translate(22px, -50%);
-  background: var(--t-ok);
-}
-.root .switch.switch:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
+.root .switch i { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--muted-faint, #b0aea8); transition: background .15s; }
+.root .switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.root .switch.switchOn { border-color: var(--success, #3a7d44); color: var(--success-dark, #2c6335); }
+.root .switch.switchOn i { background: var(--success, #3a7d44); }
+.root .switch.switchOn i::after { transform: translateX(14px); }
+.root .switch.switch:disabled { opacity: .45; cursor: default; }
+.root .switch.switch:focus-visible { outline: 2px solid var(--blue, #1854a0); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .root .switch i, .root .switch i::after { transition: none; } }
 
-/* ── ON | OFF, one framed switch (the Monthly | Annual pattern) ──────────── */
-.seg {
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  width: 200px;
-  max-width: 100%;
-  border: 2px solid var(--ink, #0a0a0a);
-  border-radius: var(--r-sm, 2px);
-  background: var(--paper, #f2f0eb);
-  font-family: var(--font-sans, var(--font, "Inter", system-ui, sans-serif));
+/* ── TEXTING AT A GLANCE (2026-10-13): what is texted now, and the steps ── */
+.root .status { margin: 0; padding: 12px 14px; border: 1.5px solid var(--warning, #b88420); background: var(--warning-soft, rgba(184, 132, 32, .08)); font-size: 14px; line-height: 1.45; }
+.root .status.statusLive { border-color: var(--success, #3a7d44); background: var(--success-soft, rgba(58, 125, 68, .07)); }
+.root .steps { margin: 0; padding: 0; list-style: none; display: grid; border: 1.5px solid var(--ink, #0a0a0a); background: #fff; }
+.root .step { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; }
+.root .step + .step { border-top: 1px solid var(--hair, rgba(10, 10, 10, .14)); }
+.root .stepN { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--ink, #0a0a0a); font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; font-weight: 700; }
+.root .step[data-tone="ok"] .stepN { background: var(--success, #3a7d44); border-color: var(--success, #3a7d44); color: #fff; }
+.root .step[data-tone="wait"] .stepN { background: var(--warning, #b88420); border-color: var(--warning, #b88420); color: #fff; }
+.root .step[data-tone="bad"] .stepN { background: var(--danger, #a83232); border-color: var(--danger, #a83232); color: #fff; }
+.root .stepT { display: grid; gap: 2px; min-width: 0; }
+.root .stepT b { font-size: 14px; }
+.root .stepT span { font-size: 13px; line-height: 1.4; color: var(--muted, #6b6760); }
+@media (max-width: 560px) {
+  .root .step { grid-template-columns: 26px minmax(0, 1fr); }
+  .root .step > button { grid-column: 2; justify-self: start; }
 }
-.seg.segWide {
-  width: 100%;
-}
-.seg .segBtn.segBtn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  margin: 0;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 0;
-  background: var(--paper, #f2f0eb);
-  color: var(--ink, #0a0a0a);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background-color 0.14s, color 0.14s;
-}
-.seg .segBtn.segBtn + .segBtn.segBtn {
-  border-left: 1.5px solid var(--ink, #0a0a0a);
-}
-.seg .segBtn.segBtn:hover:not(:disabled):not(.segOn) {
-  background: color-mix(in srgb, var(--ink, #0a0a0a) 7%, var(--paper, #f2f0eb));
-}
-.seg .segBtn.segOn {
-  background: var(--ink, #0a0a0a);
-  color: var(--sheet, #fff);
-  cursor: default;
-}
-.seg .segBtn.segBtn:disabled {
-  color: var(--muted, #555);
-  cursor: not-allowed;
-}
-.seg .segBtn.segBtn:focus-visible {
-  outline: 2px solid var(--blueprint, #1854a0);
-  outline-offset: -5px;
-}
-.seg .segBtn.segOn:focus-visible {
-  outline-color: var(--sheet, #fff);
-}
+/* A switch on its own in a card keeps its own width. */
+.root.inline { justify-items: start; gap: 8px; }
 
-/* ── texting at a glance: the state, then the steps ─────────────────────── */
-.root .status {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 0;
-  padding: 12px 14px;
-  border: 2px solid var(--t-warn);
-  border-left-width: 6px;
-  border-radius: var(--t-r);
-  background: var(--t-warn-soft);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-.root .status > svg {
-  margin-top: 1px;
-  color: var(--t-warn-dark);
-}
-.root .status.statusLive {
-  border-color: var(--t-ok);
-  background: var(--t-ok-soft);
-}
-.root .status.statusLive > svg {
-  color: var(--t-ok);
-}
-.root .steps {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  border-block: 1.5px solid var(--t-ink);
-}
-.root .step {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-}
-/* a step is the way to its section */
-.root .stepLink {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  min-width: 0;
-  padding: 14px 0;
-  color: inherit;
-  text-decoration: none;
-  cursor: pointer;
-}
-.root .stepLink:hover .stepT b {
-  color: var(--t-blue);
-}
-.root .stepGo {
-  color: var(--t-ink);
-  transition: transform 0.14s var(--t-ease);
-}
-.root .stepLink:hover .stepGo {
-  transform: translateX(3px);
-  color: var(--t-blue);
-}
-.root .step + .step {
-  border-top: 1.5px solid var(--t-ink);
-}
-.root .stepN {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  font-family: var(--t-mono);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--t-ink);
-}
-.root .step[data-state="current"] .stepN {
-  background: var(--t-blue);
-  border-color: var(--t-blue-dark);
-  color: var(--t-sheet);
-}
-.root .step[data-state="done"] .stepN {
-  background: var(--t-ok);
-  border-color: var(--t-ok-dark);
-  color: var(--t-sheet);
-}
-.root .stepT {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.root .stepT b {
-  font-size: 14px;
-  font-weight: 800;
-}
-.root .stepT span {
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--t-muted);
-}
-.root .step > .btn.btn,
-.root .step > .switch.switch {
-  justify-self: end;
-}
-.root .step > .switch.switch {
-  width: auto;
-}
-/* a switch on its own in a card keeps its own width */
-.root.inline {
-  justify-items: start;
-  gap: 8px;
-}
+/* The consent under your own mobile, and the note under a typed-in one (2026-10-14). */
+.consent { grid-column: 1 / -1; margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted, #555); }
+.consent a { color: var(--blueprint, #1854a0); }
 
-/* ── who gets texted ────────────────────────────────────────────────────── */
-.sec {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-.secH {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-.secH span {
-  font-size: 12.5px;
-  color: var(--t-muted);
-}
-.people {
-  display: grid;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-}
-.person {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 16px;
-}
-.person + .person {
-  border-top: 1px solid var(--t-line);
-}
-.head {
-  display: grid;
-  grid-template-columns: var(--t-sw) minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px 16px;
-  min-height: 36px;
-}
-.who {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-  min-width: 0;
-}
-.who b {
-  font-size: 14.5px;
-  font-weight: 800;
-  overflow-wrap: anywhere;
-}
-.who em {
-  font-style: normal;
-  font-size: 10px;
-  color: var(--t-muted);
-}
-.quietWords {
-  font-size: 13px;
-  color: var(--t-muted);
-}
-/* "12 of 13 texts" with its arrow: opens the person's texts under the row */
-.root .more.more {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  margin: 0;
-  padding: 0 2px;
-  border: 0;
-  background: none;
-  color: var(--t-ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.root .more.more:hover {
-  color: var(--t-blue);
-}
-.root .more.more:focus-visible,
-.root .textAct.textAct:focus-visible,
-.root .stepLink:focus-visible {
-  outline: 2px solid var(--t-blue);
-  outline-offset: 2px;
-}
-.moreArrow {
-  transition: transform 0.16s var(--t-ease);
-}
-.more[aria-expanded="true"] .moreArrow {
-  transform: rotate(180deg);
-}
-/* the person's texts, open: plain square ticks in two columns, All / None as words */
-.pick {
-  display: grid;
-  gap: 4px;
-  padding: 2px 0 6px calc(var(--t-sw) + 16px);
-}
-.pickHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.root .textAct.textAct {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--t-blue);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.root .textAct.textAct:hover:not(:disabled) {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.root .textAct.textAct:disabled {
-  color: var(--t-muted);
-  cursor: default;
-}
-.pickHead .allNone {
-  gap: 14px;
-}
-.root .checks {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 24px;
-}
-.root .checks .ev.ev {
-  height: 28px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-size: 13.5px;
-  font-weight: 500;
-  white-space: normal;
-  text-align: left;
-}
-.root .checks .ev.ev:hover:not(:disabled),
-.root .checks .ev.ev:active:not(:disabled) {
-  transform: none;
-  box-shadow: none;
-  color: var(--t-blue);
-}
-.root .checks .ev.evOn {
-  background: none;
-}
-.phone {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-}
-.phone b {
-  font-family: var(--t-mono);
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.acts {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.edit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding-left: calc(var(--t-sw) + 14px);
-}
-.edit label {
-  color: var(--t-ink);
-}
-.root .edit.edit input {
-  flex: 1 1 200px;
-  min-width: 0;
-  height: 36px;
-  padding: 0 10px;
-  border: 2px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font: inherit;
-  font-family: var(--t-mono);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-.root .edit.edit input:focus {
-  outline: none;
-  border-color: var(--t-blue);
-}
-.rowNote {
-  margin: 0;
-  padding-left: calc(var(--t-sw) + 14px);
-}
-.sentTo {
-  flex-basis: 100%;
-  margin: 0;
-  font-size: 14px;
-}
-.sentTo b {
-  font-family: var(--t-mono);
-  font-variant-numeric: tabular-nums;
-}
-.root .linkBtn.linkBtn {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-weight: 700;
-  color: var(--t-blue);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-.root .linkBtn.linkBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* the texts a person gets: tiles with a square tick */
-.evs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.root .ev.ev {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  margin: 0;
-  padding: 0 11px 0 9px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: transform 0.12s var(--t-ease), box-shadow 0.12s var(--t-ease);
-}
-.root .ev.ev:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 2px 2px 0 var(--t-ink);
-}
-.root .ev.ev:active:not(:disabled) {
-  transform: none;
-  box-shadow: none;
-}
-.root .ev.ev i {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: 1px;
-  background: var(--t-sheet) no-repeat center / 10px;
-}
-.root .ev.evOn {
-  border-color: var(--t-blue);
-  background: var(--t-blue-soft);
-}
-.root .ev.evOn i {
-  border-color: var(--t-blue);
-  background-color: var(--t-blue);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.8' stroke-linecap='square'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5'/%3E%3C/svg%3E");
-}
-.root .ev.ev:disabled {
-  border-color: var(--t-line);
-  color: var(--t-muted);
-  cursor: not-allowed;
-}
-.root .ev.ev:disabled i {
-  border-color: var(--t-line);
-}
-/* nobody is texted on this row yet: the ticks are kept, and look it */
-.root .quiet .ev.ev {
-  opacity: 0.6;
-}
-.allNone {
-  display: inline-flex;
-  gap: 6px;
-  margin-left: 4px;
-}
-.root .link.link {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  margin: 0;
-  padding: 0 9px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font: inherit;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: transform 0.12s var(--t-ease), box-shadow 0.12s var(--t-ease);
-}
-.root .link.link:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 2px 2px 0 var(--t-ink);
-}
-.root .link.link:disabled {
-  border-color: var(--t-line);
-  color: var(--t-muted);
-  cursor: not-allowed;
-}
-
-/* How it works: a card's longer words, folded */
-.how {
-  margin: 0 0 14px;
-  font-family: var(--font-sans, var(--font, "Inter", system-ui, sans-serif));
-  color: var(--ink, #0a0a0a);
-}
-.root > .how {
-  margin: 0;
-}
-.how summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  list-style: none;
-  cursor: pointer;
-}
-.how summary::-webkit-details-marker {
-  display: none;
-}
-.how summary:hover {
-  color: var(--blueprint, #1854a0);
-}
-.how summary:focus-visible {
-  outline: 2px solid var(--blueprint, #1854a0);
-  outline-offset: 2px;
-}
-.how[open] .exArrow {
-  transform: rotate(90deg);
-}
-.howBody {
-  display: grid;
-  gap: 10px;
-  padding: 4px 0 2px 21px;
-}
-.howBody > p {
-  margin: 0;
-  max-width: 72ch;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted, #555);
-}
-
-/* what the texts say */
-.ex {
-  font-size: 13px;
-}
-.ex summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  color: var(--t-ink);
-  list-style: none;
-  cursor: pointer;
-}
-.ex summary::-webkit-details-marker {
-  display: none;
-}
-.ex summary:hover {
-  color: var(--t-blue);
-}
-.ex summary:focus-visible {
-  outline: 2px solid var(--t-blue);
-  outline-offset: 2px;
-}
-.exArrow {
-  transition: transform 0.16s var(--t-ease);
-}
-.ex[open] .exArrow {
-  transform: rotate(90deg);
-}
-.ex ul {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: grid;
-  border-top: 1.5px solid var(--t-line);
-}
-.ex li {
-  display: grid;
-  grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
-  gap: 12px;
-  align-items: baseline;
-  padding: 10px 0;
-  border-bottom: 1.5px solid var(--t-line);
-}
-.ex li b {
-  font-weight: 700;
-}
-.ex q,
-.root .ruleMain q,
-.root .preview q {
-  quotes: none;
-  padding: 7px 10px;
-  border-left: 3px solid var(--t-blue);
-  background: var(--t-paper);
-  color: var(--t-ink);
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.note {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--t-muted);
-}
-.noteErr {
-  color: var(--t-bad);
-  font-weight: 600;
-}
-.noteWarn {
-  color: var(--t-warn-dark);
-  font-weight: 600;
-}
-.consent {
-  flex-basis: 100%;
-  margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--t-muted);
-}
-.consent a,
-.note a {
-  color: var(--t-blue);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* ── your own texts ─────────────────────────────────────────────────────── */
-.rules {
-  gap: 16px;
-}
-.root .ruleList {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-}
-.root .rule {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px 16px;
-  align-items: start;
-  padding: 14px 16px;
-}
-.root .rule + .rule {
-  border-top: 1px solid var(--t-line);
-}
-.root .rule > .switch.switch {
-  width: 92px;
-}
-.root .ruleOff .ruleMain {
-  opacity: 0.55;
-}
-.root .ruleMain {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-.root .ruleMain b {
-  font-size: 14.5px;
-  font-weight: 800;
-}
-.root .ruleMain span {
-  font-size: 13px;
-  color: var(--t-soft);
-}
-.root .ruleMain em {
-  font-style: normal;
-  font-size: 10px;
-  color: var(--t-muted);
-}
-.root .ruleActs {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.root .ideas {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 24px;
-  align-items: center;
-}
-.root .ideasH {
-  grid-column: 1 / -1;
-  margin-bottom: 4px;
-  color: var(--t-ink);
-}
-.root .idea.idea {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--t-ink);
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-}
-.root .idea.idea::before {
-  content: "+";
-  font-weight: 800;
-  color: var(--t-blue);
-}
-.root .idea.idea:hover {
-  color: var(--t-blue);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.root .ideas > .btn.btn {
-  grid-column: 1 / -1;
-  justify-self: start;
-  margin-top: 12px;
-}
-.root .editor {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
-  border: 2px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--t-ink) 6%, transparent);
-}
-.root .edRow {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
-  gap: 6px 14px;
-  align-items: start;
-}
-.root .edRow > label,
-.root .edLabel {
-  padding-top: 12px;
-  color: var(--t-ink);
-}
-.root .edRow > input,
-.root .edRow > select,
-.root .offset input,
-.root .bodyBox textarea {
-  min-width: 0;
-  border: 2px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font: inherit;
-  font-size: 15px;
-}
-.root .edRow > input,
-.root .edRow > select {
-  height: 44px;
-  padding: 0 12px;
-}
-.root .edRow > select {
-  max-width: 420px;
-}
-.root .edRow > input:focus,
-.root .edRow > select:focus,
-.root .offset input:focus,
-.root .bodyBox textarea:focus {
-  outline: none;
-  border-color: var(--t-blue);
-}
-.root .offset {
-  grid-column: 2;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-.root .offset input {
-  width: 80px;
-  height: 36px;
-  padding: 0 8px;
-  font-family: var(--t-mono);
-}
-.root .bodyBox {
-  display: grid;
-  gap: 8px;
-}
-.root .bodyBox textarea {
-  width: 100%;
-  padding: 10px 12px;
-  line-height: 1.5;
-  resize: vertical;
-}
-.root .fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--t-muted);
-}
-.root .field.field {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  margin: 0;
-  padding: 0 8px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.12s var(--t-ease), box-shadow 0.12s var(--t-ease);
-}
-.root .field.field:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 2px 2px 0 var(--t-ink);
-}
-.root .count {
-  margin-left: auto;
-  font-family: var(--t-mono);
-  font-variant-numeric: tabular-nums;
-}
-.root .preview {
-  display: grid;
-  gap: 8px;
-}
-.root .preview p {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 10px;
-  align-items: baseline;
-  margin: 0;
-}
-.root .preview em {
-  font-style: normal;
-  font-size: 10px;
-  color: var(--t-muted);
-}
-.root .edActs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* ── the company's own number ───────────────────────────────────────────── */
-.own {
-  gap: 14px;
-}
-.ownHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.ownHead b {
-  font-family: var(--t-mono);
-  font-size: 20px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.uses {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-block: 1.5px solid var(--t-line);
-}
-.uses li {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 12px;
-  align-items: baseline;
-  padding: 9px 0;
-  font-size: 13.5px;
-  line-height: 1.45;
-}
-.uses li + li {
-  border-top: 1.5px solid var(--t-line);
-}
-.uses li[data-on="1"] b {
-  color: var(--t-ok-dark);
-}
-.uses li[data-on="0"] b {
-  color: var(--t-muted);
-}
-.reasons {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--t-bad);
-}
-/* what JobFlex does for the contractor, before they ask */
-.done {
-  display: grid;
-  gap: 8px;
-  padding: 14px 16px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-}
-.done ul {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.done li {
-  position: relative;
-  padding-left: 22px;
-  font-size: 13.5px;
-  line-height: 1.45;
-}
-.done li::before {
-  content: "✓";
-  position: absolute;
-  top: 0;
-  left: 0;
-  font-weight: 800;
-  color: var(--t-ok);
-}
-.done p {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--t-muted);
-}
-/* the registration form */
-.root .form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 14px 16px;
-  padding: 16px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-}
-.root .form label {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  color: var(--t-ink);
-}
-.root .form .wide {
-  grid-column: 1 / -1;
-}
-.root .form input,
-.root .form select {
-  width: 100%;
-  min-width: 0;
-  height: 44px;
-  padding: 0 12px;
-  border: 2px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
-  color: var(--t-ink);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
-}
-.root .form input:focus,
-.root .form select:focus {
-  outline: none;
-  border-color: var(--t-blue);
-}
-.root .form .bad input,
-.root .form .bad select {
-  border-color: var(--t-bad);
-}
-.root .form .why,
-.root .form .hint {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: normal;
-  line-height: 1.4;
-  text-transform: none;
-}
-.root .form .why {
-  color: var(--t-bad);
-}
-.root .form .hint {
-  color: var(--t-muted);
-}
-.root .form label.checkRow {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: normal;
-  text-transform: none;
-}
-.root .form label.checkRow input {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-}
-
-@media (max-width: 768px) {
-  .root {
-    gap: 18px;
-  }
-  /* steps: number, words, then the button under them at full width */
-  .root .step {
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 10px 12px;
-  }
-  .root .step > .btn.btn,
-  .root .step > .switch.switch {
-    grid-column: 2;
-    justify-self: stretch;
-  }
-  .root .step > .switch.switch {
-    justify-self: start;
-  }
-  /* one line a person: the switch's track, the name with its state under it, the action */
-  .person {
-    padding: 10px 12px;
-  }
-  .head {
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-    gap: 2px 12px;
-  }
-  .root .head .switch.switch {
-    grid-row: 1 / span 2;
-    width: 46px;
-  }
-  .root .head .switch.switch > span {
-    display: none;
-  }
-  .head .who {
-    grid-column: 2;
-  }
-  .head .phone {
-    grid-column: 2;
-    grid-row: 2;
-    justify-content: flex-start;
-  }
-  .head .acts {
-    grid-column: 3;
-    grid-row: 1 / span 2;
-  }
-  .pick,
-  .edit,
-  .rowNote {
-    padding-left: 0;
-  }
-  .root .checks {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .root .ideas {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .ex li {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-  }
-  .root .rule {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .root .ruleActs {
-    justify-content: stretch;
-  }
-  .root .ruleActs .btn.btn {
-    flex: 1 1 0;
-  }
-  .root .ideas > .btn.btn {
-    justify-self: stretch;
-  }
-  .root .edRow {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .root .edRow > label,
-  .root .edLabel {
-    padding-top: 0;
-  }
-  .root .offset {
-    grid-column: 1;
-  }
-  .root .preview p {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-  }
-  .root .edActs .btn.btn,
-  .root .form > .acts .btn.btn,
-  .root.own > .acts .btn.btn {
-    flex: 1 1 100%;
-  }
-  .ex q,
-  .root .ruleMain q {
-    font-size: 12.5px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .root .switch i,
-  .root .switch i::after,
-  .exArrow,
-  .root .btn.btn,
-  .root .ev.ev,
-  .root .idea.idea,
-  .root .link.link,
-  .root .field.field {
-    transition: none;
-  }
-  .root .btn.btn:hover:not(:disabled),
-  .root .ev.ev:hover:not(:disabled),
-  .root .idea.idea:hover,
-  .root .link.link:hover:not(:disabled),
-  .root .field.field:hover {
-    transform: none;
-  }
-}
+/* The row's own answer (2026-10-14), the "We texted …" line and its link-button. */
+.rowNote { margin: 6px 0 0; }
+.sentTo { grid-column: 1 / -1; flex-basis: 100%; margin: 0; font-size: 14px; }
+.sentTo b { font-variant-numeric: tabular-nums; }
+.linkBtn { padding: 0; border: 0; background: none; font: inherit; color: var(--blueprint, #1854a0); text-decoration: underline; cursor: pointer; }
+.linkBtn:disabled { opacity: .5; cursor: default; }

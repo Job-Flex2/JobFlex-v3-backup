@@ -15,7 +15,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 
 import { confirmPhoneVerification, setMemberMobile, setMemberTextEvents, setMemberTextsOn, startPhoneVerification, type SmsActionResult } from "@/actions/sms";
 import { textEventsFor, type PrefEventMeta, type TextAudience } from "@/lib/notificationPrefsShared";
@@ -67,9 +66,6 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
       setBusy(null);
     }
   };
-  // One person's texts open at a time (2026-10-16): the rows rest on one line each.
-  const [open, setOpen] = useState<string | null>(null);
-  const noMobile = rows.filter((r) => !r.phone && !r.phoneOnFile).length;
   const flip = (row: SmsRosterRow, keys: string[], on: boolean) => {
     const patch = Object.fromEntries(keys.map((k) => [k, on]));
     setRows((rs) => rs.map((r) => (r.userId === row.userId ? { ...r, cells: { ...r.cells, ...patch } } : r)));
@@ -77,12 +73,6 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
   };
   return (
     <div className={s.root} data-texting-people data-nest="">
-      {noMobile ? (
-        <p className={s.status} data-texting-no-mobile={noMobile}>
-          <AlertTriangle size={17} strokeWidth={2.2} aria-hidden />
-          <span>{TEXTING_COPY.noMobileLine(noMobile)}</span>
-        </p>
-      ) : null}
       {AUDIENCES.map((aud) => {
         const events = textEventsFor(aud);
         const people = rows.filter((r) => r.audience === aud);
@@ -96,27 +86,14 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
             {people.length ? (
               <div className={s.people}>
                 {people.map((r) => (
-                  <PersonRow
-                    key={r.userId}
-                    row={r}
-                    events={events}
-                    busy={busy}
-                    run={run}
-                    onFlip={flip}
-                    msg={msg?.forRow === r.userId ? msg : null}
-                    open={open === r.userId}
-                    onOpen={(v) => setOpen(v ? r.userId : null)}
-                  />
+                  <PersonRow key={r.userId} row={r} events={events} busy={busy} run={run} onFlip={flip} msg={msg?.forRow === r.userId ? msg : null} />
                 ))}
               </div>
             ) : (
               <p className={s.note}>{TEXTING_COPY.emptySection}</p>
             )}
             <details className={s.ex}>
-              <summary>
-                <ChevronRight size={15} strokeWidth={2.4} aria-hidden className={s.exArrow} />
-                {TEXTING_COPY.examplesTitle}
-              </summary>
+              <summary>{TEXTING_COPY.examplesTitle}</summary>
               <ul>
                 {events.map((e) => (
                   <li key={e.key}>
@@ -140,8 +117,6 @@ function PersonRow({
   run,
   onFlip,
   msg,
-  open,
-  onOpen,
 }: {
   row: SmsRosterRow;
   events: readonly PrefEventMeta[];
@@ -149,9 +124,6 @@ function PersonRow({
   run: Run;
   onFlip: (row: SmsRosterRow, keys: string[], on: boolean) => void;
   msg: RowMessage | null;
-  /** This row's texts are open under it. */
-  open: boolean;
-  onOpen: (open: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState("");
@@ -191,40 +163,41 @@ function PersonRow({
             {row.isMe ? ` · ${TEXTING_COPY.whoMe}` : ""}
           </em>
         </span>
-        {/* at rest: what stands, in words, and one action */}
         <span className={s.phone}>
-          {mobile ? (
+          {row.phone ? (
             <>
-              {row.stopped ? <span className={s.quietWords}>{TEXTS_COPY.stopped}</span> : null}
-              <b title={row.phone ? (row.phoneBy === "office" ? TEXTING_COPY.byOffice : TEXTING_COPY.bySelf) : TEXTING_COPY.onFileOff}>{mobile}</b>
+              <b>{row.phone}</b>
+              <span className={`${s.tag}${row.stopped ? ` ${s.tagWarn}` : ""}`}>{row.stopped ? TEXTS_COPY.stopped : row.phoneBy === "office" ? TEXTING_COPY.byOffice : TEXTING_COPY.bySelf}</span>
+            </>
+          ) : row.phoneOnFile ? (
+            <>
+              <b>{row.phoneOnFile}</b>
+              <span className={`${s.tag} ${s.tagWarn}`}>{row.stopped ? TEXTS_COPY.stopped : TEXTING_COPY.onFileOff}</span>
             </>
           ) : (
-            <span className={s.quietWords}>{TEXTING_COPY.noMobileShort}</span>
+            <span className={`${s.tag} ${s.tagWarn}`}>{TEXTING_COPY.noMobileLong}</span>
           )}
         </span>
         {!editing ? (
           <span className={s.acts}>
-            {mobile ? (
-              <button type="button" className={s.more} aria-expanded={open} onClick={() => onOpen(!open)} data-texting-more>
-                {TEXTING_COPY.countLine(onCount, events.length)}
-                <ChevronDown size={15} strokeWidth={2.4} aria-hidden className={s.moreArrow} />
+            {mobile && !texting && !row.stopped ? (
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null} onClick={() => run(`${row.userId}:switch`, () => setMemberTextsOn(row.userId, true))} data-texting-turn-on>
+                {TEXTING_COPY.turnOn}
               </button>
-            ) : (
-              <button
-                type="button"
-                className={`${s.btn} ${s.btnSm}`}
-                disabled={busy !== null}
-                onClick={() => {
-                  setEditing(true);
-                  setPhone("");
-                  setCode("");
-                  setStage("phone");
-                }}
-                data-texting-add-mobile
-              >
-                {TEXTING_COPY.addMobile}
-              </button>
-            )}
+            ) : null}
+            <button
+              type="button"
+              className={`${s.btn}${row.phone || row.phoneOnFile ? "" : ` ${s.btnPrimary}`}`}
+              disabled={busy !== null}
+              onClick={() => {
+                setEditing(true);
+                setPhone("");
+                setCode("");
+                setStage("phone");
+              }}
+            >
+              {row.phone || row.phoneOnFile ? TEXTING_COPY.changeMobile : TEXTING_COPY.addMobile}
+            </button>
           </span>
         ) : null}
       </div>
@@ -319,44 +292,25 @@ function PersonRow({
           <p className={s.consent}>{TEXTING_COPY.typedInNote}</p>
         </div>
       ) : null}
-      {open && mobile && !editing ? (
-        <div className={s.pick} data-texting-pick>
-          <div className={s.pickHead}>
-            <button
-              type="button"
-              className={s.textAct}
-              disabled={busy !== null}
-              onClick={() => {
-                setEditing(true);
-                setPhone("");
-                setCode("");
-                setStage("phone");
-              }}
-            >
-              {TEXTING_COPY.changeMobileLong}
+      <div className={s.evs} role="group" aria-label={`Texts to ${row.name}`}>
+        {events.map((e) => {
+          const on = Boolean(row.cells[e.key]);
+          return (
+            <button key={e.key} type="button" className={`${s.ev}${on ? ` ${s.evOn}` : ""}`} aria-pressed={on} title={e.sub} data-event={e.key} onClick={() => onFlip(row, [e.key], !on)}>
+              <i aria-hidden="true" />
+              {e.name}
             </button>
-            <span className={s.allNone}>
-              <button type="button" className={s.textAct} disabled={onCount === events.length} onClick={() => onFlip(row, events.map((e) => e.key), true)}>
-                {TEXTING_COPY.all}
-              </button>
-              <button type="button" className={s.textAct} disabled={onCount === 0} onClick={() => onFlip(row, events.map((e) => e.key), false)}>
-                {TEXTING_COPY.none}
-              </button>
-            </span>
-          </div>
-          <div className={`${s.evs} ${s.checks}`} role="group" aria-label={`Texts to ${row.name}`}>
-            {events.map((e) => {
-              const on = Boolean(row.cells[e.key]);
-              return (
-                <button key={e.key} type="button" className={`${s.ev}${on ? ` ${s.evOn}` : ""}`} aria-pressed={on} title={e.sub} data-event={e.key} onClick={() => onFlip(row, [e.key], !on)}>
-                  <i aria-hidden="true" />
-                  {e.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+          );
+        })}
+        <span className={s.allNone}>
+          <button type="button" className={s.link} disabled={onCount === events.length} onClick={() => onFlip(row, events.map((e) => e.key), true)}>
+            {TEXTING_COPY.all}
+          </button>
+          <button type="button" className={s.link} disabled={onCount === 0} onClick={() => onFlip(row, events.map((e) => e.key), false)}>
+            {TEXTING_COPY.none}
+          </button>
+        </span>
+      </div>
     </div>
   );
 }

@@ -82,7 +82,7 @@ import {
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
-import { firstSentence, HowItWorks, OnOffSegment, TextingOverview } from "@/components/v3/texting-people/texting-overview";
+import { TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
 import type { PaymentConnectionStatusView } from "@/lib/payments/connections";
 import type {
@@ -210,7 +210,7 @@ function CardHeader({ card, badge }: { card: CardHead; badge?: Badge | null }) {
     <div className="mst-cardH">
       <div className="mst-cardHt">
         <div className="mst-cardT">{card.title}</div>
-        {card.sub ? <div className="mst-cardS">{card.sub}</div> : null}
+        <div className="mst-cardS">{card.sub}</div>
       </div>
       {shown ? <Badge2 badge={shown} /> : null}
     </div>
@@ -1258,9 +1258,9 @@ function TextingPane({ data }: { data: SettingsData }) {
       {/* The steps first, then the number (2026-10-13) — the same order as the desk. */}
       {sms.canManage ? (
         <section className="mst-card" id="texting-overview">
-          <CardHeader card={{ title: TEXTING_COPY.overviewTitle, sub: "" }} />
+          <CardHeader card={{ title: TEXTING_COPY.overviewTitle, sub: TEXTING_COPY.overviewSub }} />
           <div className="mst-cardB">
-            <TextingOverview sms={sms} clientsInline />
+            <TextingOverview sms={sms} />
           </div>
         </section>
       ) : !sms.configured ? (
@@ -1268,17 +1268,16 @@ function TextingPane({ data }: { data: SettingsData }) {
       ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-own-number">
-          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: firstSentence(REGISTRATION_COPY.sub).lead }} />
+          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: REGISTRATION_COPY.sub }} />
           <div className="mst-cardB">
-            <OwnNumber view={sms.registration} configured={sms.configured} how={firstSentence(REGISTRATION_COPY.sub).rest} />
+            <OwnNumber view={sms.registration} configured={sms.configured} />
           </div>
         </section>
       ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-roster" data-roster>
-          <CardHeader card={{ title: TEXTING_COPY.peopleTitle, sub: firstSentence(TEXTING_COPY.peopleSub).lead }} />
+          <CardHeader card={{ title: TEXTING_COPY.peopleTitle, sub: TEXTING_COPY.peopleSub }} />
           <div className="mst-cardB">
-            <HowItWorks words={firstSentence(TEXTING_COPY.peopleSub).rest} />
             <TextingPeople roster={sms.roster} />
             <div className="mst-note">{TEXTS_COPY.usage(sms.monthCount, sms.allowance)}</div>
           </div>
@@ -1286,9 +1285,8 @@ function TextingPane({ data }: { data: SettingsData }) {
       ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-rules" data-rules>
-          <CardHeader card={{ title: TEXTING_COPY.rulesTitle, sub: firstSentence(TEXTING_COPY.rulesSub).lead }} />
+          <CardHeader card={{ title: TEXTING_COPY.rulesTitle, sub: TEXTING_COPY.rulesSub }} />
           <div className="mst-cardB">
-            <HowItWorks words={firstSentence(TEXTING_COPY.rulesSub).rest} />
             <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
           </div>
         </section>
@@ -1347,7 +1345,14 @@ function TextingPane({ data }: { data: SettingsData }) {
           <CardHeader card={{ title: TEXTS_COPY.leadTitle, sub: TEXTS_COPY.leadSub }} />
           <div className="mst-cardB">
             <div className="mst-note">{sms.leadTexts.phone ? `To ${sms.leadTexts.phone}` : TEXTS_COPY.leadNoPhone}</div>
-            <OnOffSegment on={sms.leadTexts.on} label={TEXTS_COPY.leadTitle} disabled={busy !== null} onDisabled={!sms.leadTexts.phone} onPick={(next) => run("lead", () => setLeadTexts(next))} wide />
+            <button
+              className={`mst-btn ${sms.leadTexts.on ? "mst-btn--ghost" : "mst-btn--primary"} mst-btn--wide`}
+              type="button"
+              disabled={busy !== null || (!sms.leadTexts.on && !sms.leadTexts.phone)}
+              onClick={() => run("lead", () => setLeadTexts(!sms.leadTexts.on))}
+            >
+              {sms.leadTexts.on ? "Turn lead texts off" : "Turn lead texts on"}
+            </button>
             <div className="mst-note" data-lead-consent>
               <span>
                 {TEXTS_COPY.leadConsent} <a href="/terms#sms">{TEXTS_COPY.terms}</a> · <a href="/privacy#sms">{TEXTS_COPY.privacy}</a>

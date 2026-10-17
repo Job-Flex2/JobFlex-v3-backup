@@ -24,7 +24,6 @@ import {
   type SmsRegistrationDetails,
   type SmsRegistrationView,
 } from "@/lib/sms/registrationShared";
-import { HowItWorks } from "./texting-overview";
 import s from "./texting-people.module.css";
 
 type FieldKey = Exclude<keyof SmsRegistrationDetails, "businessType" | "showEmail">;
@@ -53,7 +52,7 @@ const STAGE_TAG: Record<SmsRegistrationView["stage"], string> = {
   failed: "not sent",
 };
 
-export function OwnNumber({ view, configured, how }: { view: SmsRegistrationView | null; configured: boolean; /** The card description past its first line, folded under "How it works". */ how?: string }) {
+export function OwnNumber({ view, configured }: { view: SmsRegistrationView | null; configured: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [d, setD] = useState<SmsRegistrationDetails>(view?.details ?? EMPTY_DETAILS);
@@ -102,7 +101,7 @@ export function OwnNumber({ view, configured, how }: { view: SmsRegistrationView
 
   return (
     <div className={`${s.root} ${s.own}`} data-own-number data-nest="" data-stage={view.stage} data-assigned={lent ? (view.assigned?.house ? "house" : view.assigned?.jobflexOwn ? "jobflex" : view.assigned?.registrable ? "registrable" : "local") : undefined}>
-      {/* "Not set up on this platform" is the overview's banner already (it always shows above this card). */}
+      {!configured ? <p className={s.note}>{C.notConfigured}</p> : null}
       {lent && view.assigned ? (
         <>
           <div className={s.ownHead}>
@@ -156,25 +155,21 @@ export function OwnNumber({ view, configured, how }: { view: SmsRegistrationView
       {view.error && (view.stage === "failed" || view.stage === "rejected") ? <p className={`${s.note} ${s.noteErr}`}>{view.error}</p> : null}
 
       {view.stage === "none" && !open && !view.legacy && !view.assigned?.house ? (
-        <HowItWorks words={how}>
-          <div className={s.done} data-sms-done-for-you>
-            <b>{C.doneTitle}</b>
-            <ul>
-              {(lent && view.assigned?.registrable && !view.assigned.jobflexOwn ? [C.doneRegisters(view.assigned.number), ...C.done.slice(1)] : C.done).map((x) => (
-                <li key={x}>{x}</li>
-              ))}
-            </ul>
-            <p>{C.doneYou}</p>
-          </div>
-        </HowItWorks>
-      ) : how ? (
-        <HowItWorks words={how} />
+        <div className={s.done} data-sms-done-for-you>
+          <b>{C.doneTitle}</b>
+          <ul>
+            {(lent && view.assigned?.registrable && !view.assigned.jobflexOwn ? [C.doneRegisters(view.assigned.number), ...C.done.slice(1)] : C.done).map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+          <p>{C.doneYou}</p>
+        </div>
       ) : null}
 
       {fresh && !open && !view.legacy ? (
         view.paying ? (
           <div className={s.acts}>
-            <button type="button" className={s.btn} disabled={!configured || busy !== null} onClick={() => setOpen(true)} data-get-number>
+            <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={!configured || busy !== null} onClick={() => setOpen(true)} data-get-number>
               {view.stage === "failed" ? C.resubmit : lent ? lent.button : C.get}
             </button>
           </div>

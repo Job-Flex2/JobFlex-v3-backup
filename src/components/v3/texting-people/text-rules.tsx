@@ -29,7 +29,6 @@ import {
 } from "@/lib/sms/textRules";
 import { roleLabel } from "@/lib/team/who";
 import type { SmsRosterRow, TextRuleRow } from "@/components/v3/settings-blueprint/settings-data";
-import { TEXTS_COPY } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./texting-people.module.css";
 
 type Draft = {
@@ -91,15 +90,14 @@ export function TextRules({ rules, roster, clientsOn, company }: { rules: TextRu
             <li key={r.id} className={`${s.rule}${r.active ? "" : ` ${s.ruleOff}`}`} data-rule={r.id}>
               <button
                 type="button"
-                className={`${s.switch}${r.active ? ` ${s.switchOn}` : ""}`}
+                className={`${s.sw}${r.active ? ` ${s.swOn}` : ""}`}
                 role="switch"
                 aria-checked={r.active}
                 aria-label={`${r.name} ${r.active ? "on" : "off"}`}
                 disabled={busy !== null}
                 onClick={() => run(`${r.id}:sw`, () => setTextRuleActive(r.id, !r.active))}
               >
-                <i aria-hidden="true" />
-                <span aria-hidden="true">{r.active ? TEXTS_COPY.clientsOn : TEXTS_COPY.clientsOff}</span>
+                <i />
               </button>
               <div className={s.ruleMain}>
                 <b>{r.name}</b>
@@ -135,8 +133,8 @@ export function TextRules({ rules, roster, clientsOn, company }: { rules: TextRu
               {p.name}
             </button>
           ))}
-          <button type="button" className={s.btn} onClick={() => setDraft({ ...EMPTY })} data-new-rule>
-            New text
+          <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => setDraft({ ...EMPTY })} data-new-rule>
+            + New text
           </button>
         </div>
       ) : (

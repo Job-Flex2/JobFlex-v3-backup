@@ -757,51 +757,40 @@
    The verified mobile as a row with its tag and actions; the quiet-hours
    pair; the extra numbers as a short ledger. Everything sits inside the
    card's own frame and gutters. */
-/* Blueprint pass (2026-10-16, Settings → Texting): Inter caps, mono only on figures and phone numbers; the
-   project's buttons (44px, 36px inside a row); status badges in their tone; no frame inside the card's frame. */
-.bp :global(.content .sc-badge) { margin-left: auto; align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
-.bp :global(.content .sc-badge b) { font-family: var(--font-mono); font-weight: 600; letter-spacing: 0; color: var(--ink); }
+.bp :global(.content .sc-badge) { margin-left: auto; align-self: center; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .bp :global(.content .tx-note) { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
 .bp :global(.content .tx-note--warn) { color: var(--warning, #b88420); }
 .bp :global(.content .tx-note--err) { color: var(--danger, #a83232); }
-/* the info banner: amber, a 6px left edge, the icon with no box */
-.bp :global(.content .tx-banner) { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border: 2px solid var(--warning); border-left-width: 6px; border-radius: var(--radius); background: var(--warning-soft); font-size: 14px; font-weight: 600; line-height: 1.45; color: var(--ink); }
-.bp :global(.content .tx-banner svg) { flex: none; margin-top: 1px; color: var(--warning-dark, var(--warning)); }
-.bp :global(.content .tx-row) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; padding: 14px 16px; border: var(--border-thin); border-radius: var(--radius); background: #fff; }
-.bp :global(.content .tx-row-t) { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
-.bp :global(.content .tx-row-t b) { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
-.bp :global(.content .tx-row-a) { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.bp :global(.content .tx-row) { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 12px; border: var(--border); border-radius: var(--radius); background: var(--paper, #f2f0eb); }
+.bp :global(.content .tx-row-t) { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bp :global(.content .tx-row-t b) { font-variant-numeric: tabular-nums; font-size: 14px; }
+.bp :global(.content .tx-row-a) { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; margin-top: 10px; }
 .bp :global(.content .tx-row .tx-row-a) { margin-top: 0; }
-.bp :global(.content .tx-tag) { display: inline-flex; align-items: center; padding: 3px 7px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; color: var(--ink); font-size: 10px; font-weight: 800; letter-spacing: .12em; line-height: 1.3; text-transform: uppercase; white-space: nowrap; }
-.bp :global(.content .tx-tag--warn) { border-color: var(--danger, #a83232); background: var(--danger-soft, rgba(168,50,50,.08)); color: var(--danger, #a83232); }
+.bp :global(.content .tx-tag) { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; padding: 3px 7px; border: 1.5px solid var(--ink); border-radius: var(--radius); color: var(--ink); }
+.bp :global(.content .tx-tag--warn) { border-color: var(--danger, #a83232); color: var(--danger, #a83232); }
 .bp :global(.content .tx-verify .fgrid) { margin-top: 4px; }
 .bp :global(.content .tx-sub) { margin-top: 18px; padding-top: 16px; border-top: 1.5px solid var(--hair, rgba(10,10,10,.12)); }
 .bp :global(.content .tx-sub-h) { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
 .bp :global(.content .tx-sub-h b) { font-size: 13.5px; }
 .bp :global(.content .tx-sub-h span) { font-size: 12.5px; color: var(--muted); }
 .bp :global(.content .tx-quiet) { display: flex; gap: 14px; flex-wrap: wrap; }
-.bp :global(.content .tx-quiet label) { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); }
+.bp :global(.content .tx-quiet label) { display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .bp :global(.content .tx-quiet input) { font-family: var(--font); font-size: 14px; padding: 8px 10px; border: var(--border); border-radius: var(--radius); background: #fff; color: var(--ink); }
-/* the numbers outside the team: rows between ink rules, no frame inside the card's */
-.bp :global(.content .tx-list) { list-style: none; margin: 0 0 16px; padding: 0; border-block: 1.5px solid var(--ink); }
-.bp :global(.content .tx-list li) { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 8px 14px; padding: 12px 0; font-size: 13.5px; }
-.bp :global(.content .tx-list li + li) { border-top: 1.5px solid var(--ink); }
+.bp :global(.content .tx-list) { list-style: none; margin: 0 0 12px; padding: 0; border: var(--border); border-radius: var(--radius); background: #fff; }
+.bp :global(.content .tx-list li) { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 9px 12px; border-top: 1px solid var(--hair, rgba(10,10,10,.12)); font-size: 13px; }
+.bp :global(.content .tx-list li:first-child) { border-top: 0; }
 .bp :global(.content .tx-list li.is-paused .tx-list-n), .bp :global(.content .tx-list li.is-paused .tx-list-p) { color: var(--muted); text-decoration: line-through; }
-.bp :global(.content .tx-list-n) { font-weight: 800; }
-.bp :global(.content .tx-list-p) { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
-.bp :global(.content .tx-list-a) { grid-column: -2; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-/* the pane's buttons: the project's — Inter caps; 36px in a row, 44px under the fields */
-.bp :global(.content .tx-list-a .btn), .bp :global(.content .tx-row-a .btn) { width: auto; min-width: 0; height: 44px; padding: 0 16px; font-family: var(--font); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.bp :global(.content .tx-list-a .btn), .bp :global(.content .tx-row .tx-row-a .btn) { height: 36px; padding: 0 12px; }
+.bp :global(.content .tx-list-n) { font-weight: 700; }
+.bp :global(.content .tx-list-p) { font-variant-numeric: tabular-nums; color: var(--muted); }
+.bp :global(.content .tx-list-a) { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+/* The card's own buttons are short: a Pause or Remove beside a name must
+   not take the width the page-level buttons claim. */
+.bp :global(.content .tx-list-a .btn), .bp :global(.content .tx-row-a .btn) { min-width: 0; padding-left: 14px; padding-right: 14px; }
+.bp :global(.content .tx-list li) { overflow: hidden; }
 @media (max-width: 640px) {
-  .bp :global(.content .tx-row), .bp :global(.content .tx-list li) { grid-template-columns: minmax(0, 1fr); }
-  .bp :global(.content .tx-list-a), .bp :global(.content .tx-row-a) { grid-column: auto; justify-content: stretch; }
-  .bp :global(.content .tx-list-a .btn), .bp :global(.content .tx-row-a .btn) { flex: 1 1 auto; }
+  .bp :global(.content .tx-row-a), .bp :global(.content .tx-list-a) { margin-left: 0; width: 100%; }
 }
 .bp :global(.content .tx-row-a--left) { margin-left: 0; margin-top: 0; }
-/* lead texts from JobFlex: ON | OFF, and where they go */
-.bp :global(.content .tx-lead) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
-.bp :global(.content .tx-lead .tx-lead-to) { margin: 0; }
 
 /* ============================================================
    OWNER PASS 2026-09-26 — field names, field frames, the rail, autosave
