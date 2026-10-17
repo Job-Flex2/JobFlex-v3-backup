@@ -8,6 +8,8 @@
 //     that handed off → Professional, no cards;
 //   · a tab drawn while the switch was OFF, the code typed after it went ON → Professional, no cards (the step asks
 //     the server as it opens, not the page's copy);
+//   · the tab remembering Annual (and ?billing=annual) → the screen prints the MONTHLY price and Checkout is opened on
+//     it — read back from Stripe's sandbox when dev.db is in test mode;
 //   · backing out of the card page in the same tab → the cards with the calm note, Professional chosen (as built);
 //   · the switch OFF → the plan cards, as before;
 //   · on every step: no console error, no page error, no 4xx/5xx from this server.
@@ -20,7 +22,10 @@
 import type { ChildProcess } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { ensureBuild, playwright, startServer, stopServer } from "../_lib/_prod-server";
+import fs from "node:fs";
+import path from "node:path";
+import { ROOT, ensureBuild, playwright, startServer, stopServer } from "../_lib/_prod-server";
+import { autoPlanPrice } from "../../../src/lib/signupAutoPlan";
 
 const PORT = Number(process.env.QA_AUTO_PORT || 3314);
 const BASE = (process.env.QA_AUTO_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
@@ -51,24 +56,27 @@ async function setSwitch(mode: "auto" | "pick") {
 // Playwright is loaded at run time (../_lib/_prod-server); its types come from wherever it was found.
 type Browser = Awaited<ReturnType<ReturnType<typeof playwright>["chromium"]["launch"]>>;
 type Req = { url(): string; method(): string; headers(): Record<string, string>; postData(): string | null };
-type Route = { request(): Req; continue(o?: object): Promise<void>; fulfill(o: object): Promise<void> };
+type Route = { request(): Req; continue(o?: object): Promise<void>; fulfill(o: object): Promise<void>; fetch(o?: object): Promise<{ json(): Promise<unknown> }> };
 type Msg = { type(): string; text(): string };
 type Res = { status(): number; url(): string; request(): Req };
 
 /* A phone, its own made-up IP; the card page answered here. `seen()` says whether plan cards were ever on screen
    (sampled every 50 ms from the first script on), `asked` which plan the page sent to the card page. */
-async function visitor(browser: Browser) {
+async function visitor(browser: Browser, opts: { realCheckout?: boolean } = {}) {
   const ip = `10.${octet()}.${octet()}.${octet()}`;
   IPS.push(ip);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, userAgent: IPHONE, locale: "en-US" });
   await ctx.addInitScript({ content: "window.__name = function (f) { return f; };" });
-  const out: { asked: string | null; checkout: boolean; cardsSeen: number } = { asked: null, checkout: false, cardsSeen: 0 };
+  const out: { asked: string | null; interval: string | null; session: string | null; checkout: boolean; cardsSeen: number; autoText: string } = { asked: null, interval: null, session: null, checkout: false, cardsSeen: 0, autoText: "" };
   // Every 50 ms on the register page: how many plan cards are on screen — reported out, so a hand-off can't lose it.
   await ctx.exposeBinding("__qaCards", (_src: unknown, n: number) => { out.cardsSeen = Math.max(out.cardsSeen, n); });
+  // …and the straight-to-Professional screen's own words (its price line), the moment it is drawn.
+  await ctx.exposeBinding("__qaAuto", (_src: unknown, t: string) => { if (t) out.autoText = t; });
   await ctx.addInitScript({
     content: `(function(){ if (location.pathname !== "/auth/register") return; setInterval(function(){
       var n = [].slice.call(document.querySelectorAll("section.plan-sheet.is-in .pw-plan")).filter(function(c){ return c.offsetParent !== null && getComputedStyle(c).visibility !== "hidden"; }).length;
-      if (n && window.__qaCards) window.__qaCards(n); }, 50); })();`,
+      if (n && window.__qaCards) window.__qaCards(n);
+      var a = document.querySelector(".pw-auto .pw-auto-p"); if (a && window.__qaAuto) window.__qaAuto(a.textContent || ""); }, 50); })();`,
   });
   const host = new URL(BASE).hostname;
   await ctx.addCookies([{ name: "jf_consent", value: encodeURIComponent(JSON.stringify({ v: 1, at: new Date().toISOString(), analytics: false, marketing: false, ack: true })), domain: host, path: "/" }]);
@@ -76,7 +84,15 @@ async function visitor(browser: Browser) {
     const req = route.request();
     const u = req.url();
     if (u.startsWith(`${BASE}/api/checkout/signup`) && req.method() === "POST") {
-      try { out.asked = JSON.parse(req.postData() || "{}").planSlug ?? null; } catch { out.asked = "?"; }
+      try { const b = JSON.parse(req.postData() || "{}"); out.asked = b.planSlug ?? null; out.interval = b.interval ?? null; } catch { out.asked = "?"; }
+      // The real route (Stripe's sandbox), when the run can read the session it makes; a stand-in address otherwise.
+      if (opts.realCheckout) {
+        return route.fetch({ headers: { ...req.headers(), "x-forwarded-for": ip } }).then(async (resp) => {
+          const body = (await resp.json().catch(() => ({}))) as { url?: string };
+          out.session = body.url?.match(/cs_test_[A-Za-z0-9]+/)?.[0] ?? null;
+          return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url: "https://checkout.stripe.com/c/pay/qa-auto-return" }) });
+        });
+      }
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url: "https://checkout.stripe.com/c/pay/qa-auto-return" }) });
     }
     if (u.startsWith(BASE)) return route.continue({ headers: { ...req.headers(), "x-forwarded-for": ip } });
@@ -169,6 +185,63 @@ async function scenario(browser: Browser, name: string, run: (v: V) => Promise<v
 }
 const straightToPro = (s: Seen) => s.asked === "professional" && s.checkout && s.cardsSeen === 0;
 
+/* The sandbox key, for reading back the Checkout session the route made (never the live key). */
+function sandboxKey(): string | null {
+  for (const file of [".env.local", ".env"]) {
+    try {
+      for (const line of fs.readFileSync(path.join(ROOT, file), "utf8").split(/\r?\n/)) {
+        const m = line.match(/^\s*STRIPE_SECRET_KEY_TEST\s*=\s*"?([^"\s]+)"?/);
+        if (m && m[1].startsWith("sk_test_")) return m[1];
+      }
+    } catch { /* no file */ }
+  }
+  return null;
+}
+
+/* A REMEMBERED ANNUAL (2026-10-17): the tab chose Annual earlier and the link says ?billing=annual; straight to
+   Professional has no term switch, so it prints the MONTHLY price and opens Checkout on the monthly price. With the
+   sandbox in reach the session the route made is read back from Stripe: its price is the catalog's monthly one. */
+async function rememberedAnnual(browser: Browser) {
+  const pro = await db.pricingPlan.findUnique({ where: { slug: "professional" }, select: { priceCents: true, yearlyPriceCents: true } });
+  if (!pro) return note("remembered Annual", "no professional plan in the catalog — skipped");
+  const mode = (await db.syncState.findUnique({ where: { key: "stripe:mode" } }))?.cursor;
+  const key = mode === "test" ? sandboxKey() : null;
+  if (!key) note("remembered Annual", `dev.db stripe:mode is "${mode ?? "live"}" or no sandbox key — the session is not read back, only the term asked`);
+  const v = await visitor(browser, { realCheckout: !!key });
+  const name = "switch ON: the tab remembers Annual (and the link says ?billing=annual) → the screen shows the monthly price, Checkout on the monthly price";
+  try {
+    v.step(name);
+    const { draft } = await plantReturning(`back.annual.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
+    await holdDraft(v, draft);
+    await tabMemory(v, { jf_billing_term: "YEAR" });
+    await v.page.goto(`${BASE}/auth/register?billing=annual`, { waitUntil: "load", timeout: 180000 });
+    const s = await outcome(v);
+    // The words lib/signupAutoPlan autoPlanPrice prints for the catalog's monthly price.
+    const monthly = autoPlanPrice({ priceCents: pro.priceCents });
+    const said = v.out.autoText.replace(/\s+/g, " ");
+    const yearly = pro.yearlyPriceCents ? said.includes(`$${pro.yearlyPriceCents / 100}`) : false;
+    check(`${name}: the screen`, said.includes(monthly) && !yearly && !/\/yr|\/year/.test(said), `"${said}" · expected ${monthly}`);
+    check(`${name}: Checkout asked for`, straightToPro(s) && v.out.interval === "MONTH", JSON.stringify({ ...s, interval: v.out.interval }));
+    if (key) {
+      const sessionId = v.out.session;
+      type StripePrice = { unit_amount: number | null; recurring: { interval: string } | null };
+      let price = null as StripePrice | null;
+      if (sessionId) {
+        const r = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}/line_items?expand[]=data.price`, { headers: { Authorization: `Bearer ${key}` } });
+        const b = (await r.json().catch(() => ({}))) as { data?: { price?: StripePrice }[] };
+        price = b.data?.[0]?.price ?? null;
+      }
+      check(`${name}: the Stripe session's price = the catalog's monthly price`, !!price && price.unit_amount === pro.priceCents && price.recurring?.interval === "month", JSON.stringify({ sessionId, unitAmount: price?.unit_amount ?? null, interval: price?.recurring?.interval ?? null, catalogMonthly: pro.priceCents }));
+    }
+    const e = v.take();
+    check(`${name} — no console / page / HTTP errors`, !e, e);
+  } catch (e) {
+    check(`${name} ran through`, false, failed(e, v));
+  } finally {
+    await v.ctx.close();
+  }
+}
+
 async function main() {
   const pw = playwright();
   let server: ChildProcess | null = null;
@@ -181,6 +254,7 @@ async function main() {
     const browser = await pw.chromium.launch({ channel: "chrome", args: ["--disable-blink-features=AutomationControlled"] }).catch(() => pw.chromium.launch());
     try {
       await setSwitch("auto");
+      await rememberedAnnual(browser);
       await scenario(browser, "switch ON: returning with a live draft → landing \"Start my 7-day FREE TRIAL\" → Professional's card page, no plan cards", async (v) => {
         const { draft } = await plantReturning(`back.landing.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
         await holdDraft(v, draft);

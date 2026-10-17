@@ -109,6 +109,8 @@ function subscribeHandheld(onChange: () => void) {
 /* The plan this tab last chose, so a cancelled Checkout (or the Google return)
    reopens the phone's plan step on it; `?plan=<slug>` names one from a link. */
 const PLAN_KEY = "jf_signup_plan";
+/* Straight to Professional bills monthly — the term its screen prints (see autoPriceCents). */
+const AUTO_TERM: BillingTerm = "MONTH";
 function rememberPlan(slug: string | null) {
   try {
     if (slug) sessionStorage.setItem(PLAN_KEY, slug);
@@ -805,6 +807,8 @@ export function RegisterContent({
         // Professional opens on its plan — a card this tab remembered (Starter, say) does not override it.
         const nowAuto = "autoPlan" in res ? (res.autoPlan ?? null) : autoPlan;
         setLiveAuto(nowAuto);
+        // …and on Monthly: a remembered or linked Annual is not this tab's choice on this page (it can switch on the cards).
+        if (nowAuto) setIntervalState(AUTO_TERM);
         if (nowAuto && res.plans.some((p) => p.slug === nowAuto.slug)) setPlanSlug(nowAuto.slug);
         // A phone reopens on the plan named by the link (?plan=) or chosen before in this
         // tab — a cancelled Checkout comes back to it (2026-10-12); the desk as before.
@@ -943,13 +947,13 @@ export function RegisterContent({
      the plan and interval and auto-applies whatever promo is stamped on the org
      — which is what `applySignupPromo` above writes. Nothing about discounts is
      re-implemented here. */
-  async function onStartTrial(slug: string | null = planSlug) {
+  async function onStartTrial(slug: string | null = planSlug, termAsked?: BillingTerm) {
     if (payBusy || !slug) return;
     // The clicked card can differ from the selection until React commits it.
     const clickedTrialDays = slug === CUSTOM_PLAN_SLUG
       ? customTrialDays
       : plans.find((p) => p.slug === slug)?.trialDays ?? 0;
-    const term = termFor(slug);
+    const term = termAsked ?? termFor(slug);
     trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: term, intent: clickedTrialDays > 0 ? "trial" : "purchase", flow: trafficFlow });
     if (!initiateSent.current) {
       initiateSent.current = true;
@@ -1065,9 +1069,10 @@ export function RegisterContent({
     return () => window.clearInterval(t);
   }, [confirmSentTo, resendAt, nowTick]);
   const resendIn = Math.max(0, Math.ceil((resendAt - nowTick) / 1000));
-  async function onStartCardless(slug: string | null = planSlug) {
+  async function onStartCardless(slug: string | null = planSlug, termAsked?: BillingTerm) {
     if (payBusy || !slug || !token) return;
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false });
+    const term = termAsked ?? termFor(slug);
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: term, intent: "trial", flow: trafficFlow, card: false });
     setPayBusy(true);
     setStartingSlug(slug);
     setPlansErr(null);
@@ -1084,7 +1089,7 @@ export function RegisterContent({
         setPlansErr(stamped.error);
         return;
       }
-      const res = await requestCardlessTrial(token, slug, termFor(slug));
+      const res = await requestCardlessTrial(token, slug, term);
       if (!res.ok) {
         trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected" }); signupProblem(res.requiresCard ? "trial_needs_card" : "trial_rejected");
         // The day's card-less trials are taken: the same plan step now opens
@@ -1122,7 +1127,8 @@ export function RegisterContent({
      to sell (otpPendingState): an account for the address by now, or an
      intent that ran out, answers with the gate instead of a payment. */
   const gatingRef = React.useRef(false);
-  async function onStartPlan(slug: string) {
+  /** `term`: the term to bill when it is not the one the cards show (straight to Professional: AUTO_TERM). */
+  async function onStartPlan(slug: string, term?: BillingTerm) {
     if (otp && token && !payBusy) {
       if (gatingRef.current) return;
       gatingRef.current = true;
@@ -1133,7 +1139,7 @@ export function RegisterContent({
       });
       if (shut) return;
     }
-    void (requiresCard ? onStartTrial(slug) : otp ? onStartCardlessVerified(slug) : onStartCardless(slug));
+    void (requiresCard ? onStartTrial(slug, term) : otp ? onStartCardlessVerified(slug, term) : onStartCardless(slug, term));
   }
 
   /** The gate, when the passwordless intent has nothing left to sell. True: shown. */
@@ -1191,10 +1197,13 @@ export function RegisterContent({
     if (!autoView || autoRan.current || !autoSlug || !token) return;
     autoRan.current = true;
     // After this render, not in it (the start sets state as it goes).
-    void Promise.resolve().then(() => onStartPlan(autoSlug));
+    void Promise.resolve().then(() => onStartPlan(autoSlug, AUTO_TERM));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the plan and the intent are both in
   }, [autoView, autoSlug, token]);
   const autoName = (autoSlug && plans.find((p) => p.slug === autoSlug)?.name) || auto?.name || "Professional";
+  /* MONTHLY, ALWAYS (owner, 2026-10-17: "the person pays exactly what they see"). The screen has no term switch, so a
+     remembered or linked Annual is not what it bills: the price it prints and the term the card page is opened for are
+     one pair — the plan's monthly catalog price, the price lib/signupPricing bills for MONTH. */
   const autoPriceCents = (autoSlug && plans.find((p) => p.slug === autoSlug)?.priceCents) || auto?.priceCents || 0;
 
   /* ONCE. The intent is spent by its first completion, and React's development
@@ -1497,9 +1506,10 @@ export function RegisterContent({
      created at once — no "Check your email" here (actions/signupCheckout
      startVerifiedCardlessTrial). The browser's CompleteRegistration and
      StartTrial carry the ids the server's copies used. */
-  async function onStartCardlessVerified(slug: string | null = planSlug) {
+  async function onStartCardlessVerified(slug: string | null = planSlug, termAsked?: BillingTerm) {
     if (payBusy || !slug || !token) return;
-    trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: termFor(slug), intent: "trial", flow: trafficFlow, card: false, mode: signupMode });
+    const term = termAsked ?? termFor(slug);
+    trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: term, intent: "trial", flow: trafficFlow, card: false, mode: signupMode });
     setPayBusy(true);
     setStartingSlug(slug);
     setPlansErr(null);
@@ -1516,7 +1526,7 @@ export function RegisterContent({
         await planRefused(stamped.error);
         return;
       }
-      const res = await startVerifiedCardlessTrial(token, slug, termFor(slug));
+      const res = await startVerifiedCardlessTrial(token, slug, term);
       if (!res.ok) {
         trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: res.requiresCard ? "trial_needs_card" : "trial_rejected", mode: signupMode }); signupProblem(res.requiresCard ? "trial_needs_card" : "trial_rejected");
         if (res.requiresCard) setRequiresCard(true);
