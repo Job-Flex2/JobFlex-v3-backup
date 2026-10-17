@@ -129,6 +129,12 @@
   min-height: 36px;
   padding: 0 12px;
 }
+.root .person .btn.btnSm,
+.root .btn.btnSm {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 11px;
+}
 
 /* ── status badges ─────────────────────────────────────────────────────── */
 .tag {
@@ -158,7 +164,8 @@
   color: var(--t-ok-dark);
 }
 
-/* ── the switch: the settings toggle (.tg — square, green on, red off), its words outside on the right ── */
+/* ── the switch: square; off — paper with an ink knob, on — green (2026-10-16: red read as an error); its words
+   outside on the right ── */
 .root .switch.switch {
   appearance: none;
   display: inline-flex;
@@ -188,7 +195,7 @@
   height: 25px;
   border: 1.5px solid var(--t-ink);
   border-radius: var(--t-r);
-  background: color-mix(in srgb, var(--t-bad) 14%, transparent);
+  background: var(--t-paper);
   transition: background 0.2s var(--t-ease);
 }
 .root .switch i::after {
@@ -198,7 +205,7 @@
   left: 2px;
   width: 17px;
   height: 17px;
-  background: var(--t-bad);
+  background: var(--t-ink);
   transform: translateY(-50%);
   transition: transform 0.2s var(--t-ease), background 0.2s var(--t-ease);
 }
@@ -309,10 +316,32 @@
 }
 .root .step {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+/* a step is the way to its section */
+.root .stepLink {
+  display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
+  min-width: 0;
   padding: 14px 0;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.root .stepLink:hover .stepT b {
+  color: var(--t-blue);
+}
+.root .stepGo {
+  color: var(--t-ink);
+  transition: transform 0.14s var(--t-ease);
+}
+.root .stepLink:hover .stepGo {
+  transform: translateX(3px);
+  color: var(--t-blue);
 }
 .root .step + .step {
   border-top: 1.5px solid var(--t-ink);
@@ -385,22 +414,25 @@
 }
 .people {
   display: grid;
-  gap: 8px;
-}
-.person {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-  padding: 14px 16px;
   border: 1.5px solid var(--t-ink);
   border-radius: var(--t-r);
   background: var(--t-sheet);
+}
+.person {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 16px;
+}
+.person + .person {
+  border-top: 1px solid var(--t-line);
 }
 .head {
   display: grid;
   grid-template-columns: var(--t-sw) minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px 14px;
+  gap: 8px 16px;
+  min-height: 36px;
 }
 .who {
   display: flex;
@@ -418,6 +450,107 @@
   font-style: normal;
   font-size: 10px;
   color: var(--t-muted);
+}
+.quietWords {
+  font-size: 13px;
+  color: var(--t-muted);
+}
+/* "12 of 13 texts" with its arrow: opens the person's texts under the row */
+.root .more.more {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--t-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.root .more.more:hover {
+  color: var(--t-blue);
+}
+.root .more.more:focus-visible,
+.root .textAct.textAct:focus-visible,
+.root .stepLink:focus-visible {
+  outline: 2px solid var(--t-blue);
+  outline-offset: 2px;
+}
+.moreArrow {
+  transition: transform 0.16s var(--t-ease);
+}
+.more[aria-expanded="true"] .moreArrow {
+  transform: rotate(180deg);
+}
+/* the person's texts, open: plain square ticks in two columns, All / None as words */
+.pick {
+  display: grid;
+  gap: 4px;
+  padding: 2px 0 6px calc(var(--t-sw) + 16px);
+}
+.pickHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.root .textAct.textAct {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--t-blue);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.root .textAct.textAct:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.root .textAct.textAct:disabled {
+  color: var(--t-muted);
+  cursor: default;
+}
+.pickHead .allNone {
+  gap: 14px;
+}
+.root .checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.root .checks .ev.ev {
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: normal;
+  text-align: left;
+}
+.root .checks .ev.ev:hover:not(:disabled),
+.root .checks .ev.ev:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  color: var(--t-blue);
+}
+.root .checks .ev.evOn {
+  background: none;
 }
 .phone {
   display: flex;
@@ -503,9 +636,6 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-.person > .evs {
-  padding-left: calc(var(--t-sw) + 14px);
 }
 .root .ev.ev {
   appearance: none;
@@ -595,6 +725,53 @@
   border-color: var(--t-line);
   color: var(--t-muted);
   cursor: not-allowed;
+}
+
+/* How it works: a card's longer words, folded */
+.how {
+  margin: 0 0 14px;
+  font-family: var(--font-sans, var(--font, "Inter", system-ui, sans-serif));
+  color: var(--ink, #0a0a0a);
+}
+.root > .how {
+  margin: 0;
+}
+.how summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  list-style: none;
+  cursor: pointer;
+}
+.how summary::-webkit-details-marker {
+  display: none;
+}
+.how summary:hover {
+  color: var(--blueprint, #1854a0);
+}
+.how summary:focus-visible {
+  outline: 2px solid var(--blueprint, #1854a0);
+  outline-offset: 2px;
+}
+.how[open] .exArrow {
+  transform: rotate(90deg);
+}
+.howBody {
+  display: grid;
+  gap: 10px;
+  padding: 4px 0 2px 21px;
+}
+.howBody > p {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted, #555);
 }
 
 /* what the texts say */
@@ -694,7 +871,9 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 8px;
+  border: 1.5px solid var(--t-ink);
+  border-radius: var(--t-r);
+  background: var(--t-sheet);
 }
 .root .rule {
   display: grid;
@@ -702,9 +881,9 @@
   gap: 12px 16px;
   align-items: start;
   padding: 14px 16px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
+}
+.root .rule + .rule {
+  border-top: 1px solid var(--t-line);
 }
 .root .rule > .switch.switch {
   width: 92px;
@@ -736,33 +915,32 @@
   gap: 8px;
 }
 .root .ideas {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
   align-items: center;
-  gap: 8px;
 }
 .root .ideasH {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
   color: var(--t-ink);
 }
 .root .idea.idea {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
+  gap: 8px;
+  min-height: 30px;
   margin: 0;
-  padding: 0 11px 0 9px;
-  border: 1.5px solid var(--t-ink);
-  border-radius: var(--t-r);
-  background: var(--t-sheet);
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--t-ink);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: transform 0.12s var(--t-ease), box-shadow 0.12s var(--t-ease);
 }
 .root .idea.idea::before {
   content: "+";
@@ -770,15 +948,14 @@
   color: var(--t-blue);
 }
 .root .idea.idea:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 2px 2px 0 var(--t-ink);
-}
-.root .idea.idea:active {
-  transform: none;
-  box-shadow: none;
+  color: var(--t-blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .root .ideas > .btn.btn {
-  margin-left: auto;
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 12px;
 }
 .root .editor {
   display: grid;
@@ -1080,26 +1257,43 @@
   .root .step > .switch.switch {
     justify-self: start;
   }
+  /* one line a person: the switch's track, the name with its state under it, the action */
   .person {
-    padding: 12px 14px;
+    padding: 10px 12px;
   }
   .head {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 2px 12px;
   }
-  .phone {
+  .root .head .switch.switch {
+    grid-row: 1 / span 2;
+    width: 46px;
+  }
+  .root .head .switch.switch > span {
+    display: none;
+  }
+  .head .who {
+    grid-column: 2;
+  }
+  .head .phone {
+    grid-column: 2;
+    grid-row: 2;
     justify-content: flex-start;
   }
-  .acts {
-    justify-content: stretch;
+  .head .acts {
+    grid-column: 3;
+    grid-row: 1 / span 2;
   }
-  .root .acts .btn.btn {
-    flex: 1 1 auto;
-  }
-  .person > .evs,
+  .pick,
   .edit,
   .rowNote {
     padding-left: 0;
+  }
+  .root .checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .root .ideas {
+    grid-template-columns: minmax(0, 1fr);
   }
   .ex li {
     grid-template-columns: minmax(0, 1fr);
@@ -1115,8 +1309,7 @@
     flex: 1 1 0;
   }
   .root .ideas > .btn.btn {
-    margin-left: 0;
-    flex-basis: 100%;
+    justify-self: stretch;
   }
   .root .edRow {
     grid-template-columns: minmax(0, 1fr);

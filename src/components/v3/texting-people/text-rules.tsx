@@ -135,8 +135,8 @@ export function TextRules({ rules, roster, clientsOn, company }: { rules: TextRu
               {p.name}
             </button>
           ))}
-          <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => setDraft({ ...EMPTY })} data-new-rule>
-            + New text
+          <button type="button" className={s.btn} onClick={() => setDraft({ ...EMPTY })} data-new-rule>
+            New text
           </button>
         </div>
       ) : (

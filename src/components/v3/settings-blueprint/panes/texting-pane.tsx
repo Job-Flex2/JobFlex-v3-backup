@@ -31,7 +31,7 @@ import {
   type SmsActionResult,
 } from "@/actions/sms";
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
-import { ClientTextsSwitch, OnOffSegment, TextingOverview } from "@/components/v3/texting-people/texting-overview";
+import { ClientTextsSwitch, firstSentence, HowItWorks, OnOffSegment, TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
@@ -51,7 +51,6 @@ export function TextingPane({ data }: PaneProps) {
           <div className="sc-h">
             <div>
               <div className="sc-t">{TEXTING_COPY.overviewTitle}</div>
-              <div className="sc-s">{TEXTING_COPY.overviewSub}</div>
             </div>
             <span className="sc-badge" title={TEXTS_COPY.overage}>{monoDigits(TEXTS_COPY.usage(sms.monthCount, sms.allowance))}</span>
           </div>
@@ -74,11 +73,11 @@ export function TextingPane({ data }: PaneProps) {
           <div className="sc-h">
             <div>
               <div className="sc-t">1 · {REGISTRATION_COPY.title}</div>
-              <div className="sc-s">{REGISTRATION_COPY.sub}</div>
+              <div className="sc-s">{firstSentence(REGISTRATION_COPY.sub).lead}</div>
             </div>
           </div>
           <div className="sc-b">
-            <OwnNumber view={sms.registration} configured={sms.configured} />
+            <OwnNumber view={sms.registration} configured={sms.configured} how={firstSentence(REGISTRATION_COPY.sub).rest} />
           </div>
         </section>
       ) : null}
@@ -90,10 +89,11 @@ export function TextingPane({ data }: PaneProps) {
           <div className="sc-h">
             <div>
               <div className="sc-t">4 · {TEXTING_COPY.rulesTitle}</div>
-              <div className="sc-s">{TEXTING_COPY.rulesSub}</div>
+              <div className="sc-s">{firstSentence(TEXTING_COPY.rulesSub).lead}</div>
             </div>
           </div>
           <div className="sc-b">
+            <HowItWorks words={firstSentence(TEXTING_COPY.rulesSub).rest} />
             <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
           </div>
         </section>
@@ -151,10 +151,11 @@ function PeopleCard({ sms }: { sms: SmsSettingsData }) {
       <div className="sc-h">
         <div>
           <div className="sc-t">2 · {TEXTING_COPY.peopleTitle}</div>
-          <div className="sc-s">{TEXTING_COPY.peopleSub}</div>
+          <div className="sc-s">{firstSentence(TEXTING_COPY.peopleSub).lead}</div>
         </div>
       </div>
       <div className="sc-b">
+        <HowItWorks words={firstSentence(TEXTING_COPY.peopleSub).rest} />
         <TextingPeople roster={sms.roster} />
       </div>
     </section>
@@ -173,10 +174,11 @@ function MobileCard({ sms }: { sms: SmsSettingsData }) {
       <div className="sc-h">
         <div>
           <div className="sc-t">{TEXTING_COPY.mineTitle}</div>
-          <div className="sc-s">{TEXTING_COPY.mineSub}</div>
+          <div className="sc-s">{firstSentence(TEXTING_COPY.mineSub).lead}</div>
         </div>
       </div>
       <div className="sc-b">
+        <HowItWorks words={firstSentence(TEXTING_COPY.mineSub).rest} />
         {sms.phone && stage === "idle" ? (
           <div className="tx-row">
             <div className="tx-row-t">

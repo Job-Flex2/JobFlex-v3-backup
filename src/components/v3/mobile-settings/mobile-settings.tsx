@@ -82,7 +82,7 @@ import {
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
-import { OnOffSegment, TextingOverview } from "@/components/v3/texting-people/texting-overview";
+import { firstSentence, HowItWorks, OnOffSegment, TextingOverview } from "@/components/v3/texting-people/texting-overview";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
 import type { PaymentConnectionStatusView } from "@/lib/payments/connections";
 import type {
@@ -210,7 +210,7 @@ function CardHeader({ card, badge }: { card: CardHead; badge?: Badge | null }) {
     <div className="mst-cardH">
       <div className="mst-cardHt">
         <div className="mst-cardT">{card.title}</div>
-        <div className="mst-cardS">{card.sub}</div>
+        {card.sub ? <div className="mst-cardS">{card.sub}</div> : null}
       </div>
       {shown ? <Badge2 badge={shown} /> : null}
     </div>
@@ -1258,9 +1258,9 @@ function TextingPane({ data }: { data: SettingsData }) {
       {/* The steps first, then the number (2026-10-13) — the same order as the desk. */}
       {sms.canManage ? (
         <section className="mst-card" id="texting-overview">
-          <CardHeader card={{ title: TEXTING_COPY.overviewTitle, sub: TEXTING_COPY.overviewSub }} />
+          <CardHeader card={{ title: TEXTING_COPY.overviewTitle, sub: "" }} />
           <div className="mst-cardB">
-            <TextingOverview sms={sms} />
+            <TextingOverview sms={sms} clientsInline />
           </div>
         </section>
       ) : !sms.configured ? (
@@ -1268,16 +1268,17 @@ function TextingPane({ data }: { data: SettingsData }) {
       ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-own-number">
-          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: REGISTRATION_COPY.sub }} />
+          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: firstSentence(REGISTRATION_COPY.sub).lead }} />
           <div className="mst-cardB">
-            <OwnNumber view={sms.registration} configured={sms.configured} />
+            <OwnNumber view={sms.registration} configured={sms.configured} how={firstSentence(REGISTRATION_COPY.sub).rest} />
           </div>
         </section>
       ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-roster" data-roster>
-          <CardHeader card={{ title: TEXTING_COPY.peopleTitle, sub: TEXTING_COPY.peopleSub }} />
+          <CardHeader card={{ title: TEXTING_COPY.peopleTitle, sub: firstSentence(TEXTING_COPY.peopleSub).lead }} />
           <div className="mst-cardB">
+            <HowItWorks words={firstSentence(TEXTING_COPY.peopleSub).rest} />
             <TextingPeople roster={sms.roster} />
             <div className="mst-note">{TEXTS_COPY.usage(sms.monthCount, sms.allowance)}</div>
           </div>
@@ -1285,8 +1286,9 @@ function TextingPane({ data }: { data: SettingsData }) {
       ) : null}
       {sms.canManage ? (
         <section className="mst-card" id="texting-rules" data-rules>
-          <CardHeader card={{ title: TEXTING_COPY.rulesTitle, sub: TEXTING_COPY.rulesSub }} />
+          <CardHeader card={{ title: TEXTING_COPY.rulesTitle, sub: firstSentence(TEXTING_COPY.rulesSub).lead }} />
           <div className="mst-cardB">
+            <HowItWorks words={firstSentence(TEXTING_COPY.rulesSub).rest} />
             <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
           </div>
         </section>

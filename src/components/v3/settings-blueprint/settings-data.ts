@@ -960,6 +960,11 @@ export const TEXTING_COPY = {
   byOffice: 'added by the office',
   bySelf: 'verified',
   noMobileLong: 'No mobile — nothing is texted',
+  // the roster at rest, one line a person (2026-10-16)
+  noMobileShort: 'No mobile',
+  noMobileLine: (n: number) => `${n} ${n === 1 ? 'person has' : 'people have'} no mobile — they get email and in-app alerts only.`,
+  countLine: (on: number, all: number) => `${on} of ${all} texts`,
+  changeMobileLong: 'Change mobile',
   onFileOff: 'texts off — number kept',
   switchOn: 'Texts on',
   switchOff: 'Texts off',

@@ -6,9 +6,9 @@
 // it), the team, clients, your own texts — each with where it stands and the button that goes there. Clients switch
 // on and off right here.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronRight } from "lucide-react";
 
 import { setClientTextsOn } from "@/actions/sms";
 import type { SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
@@ -17,7 +17,7 @@ import s from "./texting-people.module.css";
 
 type Tone = "ok" | "wait" | "todo" | "bad";
 
-export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
+export function TextingOverview({ sms, clientsInline = false }: { sms: SmsSettingsData; /** No clients card on this page (the phone): step 3 keeps its switch. */ clientsInline?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -69,6 +69,12 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
   );
   const stateOf = (k: keyof typeof doneSteps) => (doneSteps[k] ? "done" : current === k ? "current" : "todo");
   const live = Boolean(approvedNumber && sms.configured);
+  const steps: Array<{ key: keyof typeof doneSteps; n: number; title: string; line: string; target: string; go: string; tone: Tone }> = [
+    { key: "number", n: 1, title: C.stepNumber, line: number.line, target: "texting-own-number", go: number.go, tone: number.tone },
+    { key: "team", n: 2, title: C.stepTeam, line: C.teamLine(on, off, none), target: "texting-roster", go: C.teamGo, tone: on ? "ok" : "todo" },
+    { key: "clients", n: 3, title: C.stepClients, line: C.clientsLine, target: "texting-clients", go: "", tone: sms.clientsOn ? "ok" : "todo" },
+    { key: "rules", n: 4, title: C.stepRules, line: C.rulesLine(sms.rules.length), target: "texting-rules", go: C.rulesGo, tone: sms.rules.length ? "ok" : "todo" },
+  ];
 
   return (
     <div className={s.root} data-texting-overview data-nest="">
@@ -76,57 +82,50 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
         {live ? <CheckCircle2 size={17} strokeWidth={2.2} aria-hidden /> : <AlertTriangle size={17} strokeWidth={2.2} aria-hidden />}
         <span>{status}</span>
       </p>
+      {/* The steps are the way to their sections (owner, 2026-10-16): a tap on a step goes there. Only the current step
+          — the first not done — carries its button; the others an arrow. */}
       <ol className={s.steps}>
-        <li className={s.step} data-step="number" data-state={stateOf("number")} data-tone={number.tone}>
-          {square("number", 1)}
-          <span className={s.stepT}>
-            <b>{C.stepNumber}</b>
-            <span>{number.line}</span>
-          </span>
-          <button type="button" className={`${s.btn}${number.tone === "todo" || number.tone === "bad" ? ` ${s.btnPrimary}` : ""}`} onClick={() => go("texting-own-number")}>
-            {number.go}
-          </button>
-        </li>
-        <li className={s.step} data-step="team" data-state={stateOf("team")} data-tone={on ? "ok" : "todo"}>
-          {square("team", 2)}
-          <span className={s.stepT}>
-            <b>{C.stepTeam}</b>
-            <span>{C.teamLine(on, off, none)}</span>
-          </span>
-          <button type="button" className={s.btn} onClick={() => go("texting-roster")}>
-            {C.teamGo}
-          </button>
-        </li>
-        <li className={s.step} data-step="clients" data-state={stateOf("clients")} data-tone={sms.clientsOn ? "ok" : "todo"}>
-          {square("clients", 3)}
-          <span className={s.stepT}>
-            <b>{C.stepClients}</b>
-            <span>{C.clientsLine}</span>
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={sms.clientsOn}
-            aria-label={C.stepClients}
-            className={`${s.switch}${sms.clientsOn ? ` ${s.switchOn}` : ""}`}
-            disabled={busy}
-            onClick={() => void flipClients()}
-            data-clients-switch
-          >
-            <i aria-hidden="true" />
-            <span>{sms.clientsOn ? C.switchOn : C.switchOff}</span>
-          </button>
-        </li>
-        <li className={s.step} data-step="rules" data-state={stateOf("rules")} data-tone={sms.rules.length ? "ok" : "todo"}>
-          {square("rules", 4)}
-          <span className={s.stepT}>
-            <b>{C.stepRules}</b>
-            <span>{C.rulesLine(sms.rules.length)}</span>
-          </span>
-          <button type="button" className={s.btn} onClick={() => go("texting-rules")}>
-            {C.rulesGo}
-          </button>
-        </li>
+        {steps.map((st) => {
+          const state = stateOf(st.key);
+          return (
+            <li key={st.key} className={s.step} data-step={st.key} data-state={state} data-tone={st.tone}>
+              <a
+                className={s.stepLink}
+                href={`#${st.target}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  go(st.target);
+                }}
+              >
+                {square(st.key, st.n)}
+                <span className={s.stepT}>
+                  <b>{st.title}</b>
+                  <span>{st.line}</span>
+                </span>
+                {state === "current" || (st.key === "clients" && clientsInline) ? null : <ArrowRight size={16} strokeWidth={2.2} aria-hidden className={s.stepGo} />}
+              </a>
+              {state !== "current" && !(st.key === "clients" && clientsInline) ? null : st.key === "clients" ? (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={sms.clientsOn}
+                  aria-label={C.stepClients}
+                  className={`${s.switch}${sms.clientsOn ? ` ${s.switchOn}` : ""}`}
+                  disabled={busy}
+                  onClick={() => void flipClients()}
+                  data-clients-switch
+                >
+                  <i aria-hidden="true" />
+                  <span>{sms.clientsOn ? C.switchOn : C.switchOff}</span>
+                </button>
+              ) : (
+                <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go(st.target)} data-step-go>
+                  {st.go}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ol>
       {err ? <p className={`${s.note} ${s.noteErr}`} role="alert">{err}</p> : null}
     </div>
@@ -221,5 +220,28 @@ export function OnOffSegment({
         </button>
       ))}
     </div>
+  );
+}
+
+/** A card's description cut to its first sentence; the rest goes under "How it works". */
+export function firstSentence(words: string): { lead: string; rest: string } {
+  const m = /^(.+?[.!?])\s+(.+)$/s.exec(words.trim());
+  return m ? { lead: m[1], rest: m[2] } : { lead: words.trim(), rest: "" };
+}
+
+/** "How it works ▾" — what a card used to say up front, folded (2026-10-16). Renders nothing when there is nothing more. */
+export function HowItWorks({ words, children }: { words?: string; children?: ReactNode }) {
+  if (!words && !children) return null;
+  return (
+    <details className={s.how} data-nest="" data-how-it-works>
+      <summary>
+        <ChevronRight size={15} strokeWidth={2.4} aria-hidden className={s.exArrow} />
+        How it works
+      </summary>
+      <div className={s.howBody}>
+        {words ? <p>{words}</p> : null}
+        {children}
+      </div>
+    </details>
   );
 }
