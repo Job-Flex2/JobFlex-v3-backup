@@ -8,7 +8,6 @@
 //
 // PORTED HERE
 //   · usage bar fill (`fill`)        — IntersectionObserver, 250ms, then width
-//   · `subLayoutSync`                — billing card matches usage card height
 //   · MOTION SYSTEM "BALANCED":      reveal cascade (scroll-velocity aware),
 //                                    KPI count-up (`frame`), `pressify`
 //
@@ -177,41 +176,6 @@ export function initSubscriptionContent(content: HTMLElement): () => void {
       window.clearTimeout(timer);
     });
   })();
-
-  // ================= USAGE / BILLING HEIGHT SYNC =================
-  // Above 1220px the two cards sit side by side and the shorter one is padded
-  // to match; below it they stack and the floor is released.
-  const subLayoutSync = () => {
-    const a = $("#usageCard");
-    const b = $("#billCard");
-    if (!a || !b) return;
-    b.style.minHeight = "";
-    if (window.innerWidth > 1220) b.style.minHeight = a.offsetHeight + "px";
-  };
-  // The source binds this to `load` ONLY, and gets away with it because its
-  // script is inline in the document: `load` is always still to come. Neither
-  // half of that holds here. `load` never fires on a client-side navigation,
-  // and on a hard load React can hydrate — and run this module — AFTER `load`
-  // has already gone. Measured, that is not theoretical: the immediate call
-  // lands before the web fonts do and reads the usage card at 472px instead of
-  // its settled 452px, which padded the billing card 20px too tall.
-  //
-  // So: measure now (the client-nav path, where fonts are already resident),
-  // keep `load` (harmless when it still fires), and add `document.fonts.ready`
-  // — the guarantee the source was actually relying on `load` for. Same device
-  // dashboard-blueprint/blueprint-behavior.ts uses for its own layoutSync.
-  let alive = true;
-  subLayoutSync();
-  on(window, "load", subLayoutSync);
-  on(window, "resize", subLayoutSync);
-  document.fonts?.ready.then(() => {
-    if (alive) subLayoutSync();
-  });
-  disposers.push(() => {
-    alive = false;
-    const b = $("#billCard");
-    if (b) b.style.minHeight = "";
-  });
 
   // ================= REDUCED MOTION — the source's own gap, closed =========
   // The markup carries `rv` (opacity 0, translateY(14px)) on all six blocks,

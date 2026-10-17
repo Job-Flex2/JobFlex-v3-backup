@@ -68,40 +68,6 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Delivery",
-    items: [
-      { label: "Calendar", icon: "i-cal", href: "/dashboard/calendar" },
-      // Online booking (2026-09-23): the public /book/<slug> page's office side.
-      { label: "Online booking", icon: "i-cal", href: "/dashboard/booking" },
-      { label: "Jobs", icon: "i-jobs", href: "/dashboard/jobs" },
-      { label: "Workers", icon: "i-hardhat", href: "/dashboard/workers" },
-      { label: "Hire", icon: "i-userplus", href: "/dashboard/hire" },
-      { label: "Company", icon: "i-building", href: "/dashboard/company" },
-    ],
-  },
-  {
-    label: "Money",
-    items: [
-      { label: "Financials", icon: "i-bank", href: "/dashboard/financials" },
-      // Memberships (2026-09-22): the plans a shop sells, its members, the
-      // visits and the bills they bring.
-      { label: "Service plans", icon: "i-check", href: "/dashboard/service-plans" },
-      // /dashboard/subscription IS the blueprint page now (owner promoted the
-      // port 2026-08-12; the classic "Well-Kept Ledger" donor was deleted with
-      // it and this URL taken over). The responsive staging build — desktop
-      // fixture above 768px, handheld on REAL data at or below — still stands
-      // at /dashboard/subscription-blueprint until its halves are folded into
-      // the promoted route; nothing links to it.
-      //
-      // OWNER-only, enforced by OWNER_ONLY_HREFS below (2026-08-17). The gap
-      // this comment used to record — "the blueprint shell filters NAV_SECTIONS
-      // by nothing at all" — is closed: navSectionsFor() is now the one rule
-      // both shells and the palette read. Financials, one line above, is NOT
-      // owner-only: the production sidebar shows it to every office role.
-      { label: "Subscription", icon: "i-card", href: "/dashboard/subscription" },
-    ],
-  },
-  {
     // THE TOOLS GET THEIR OWN SECTION (owner, 2026-10-12): they were the first
     // six rows of Automation, drawn like every other row. The sidebar draws a
     // section made only of tools as one framed bay with this label on its
@@ -166,6 +132,41 @@ export const NAV_SECTIONS: NavSection[] = [
       },
     ],
   },
+  {
+    label: "Delivery",
+    items: [
+      { label: "Calendar", icon: "i-cal", href: "/dashboard/calendar" },
+      // Online booking (2026-09-23): the public /book/<slug> page's office side.
+      { label: "Online booking", icon: "i-cal", href: "/dashboard/booking" },
+      { label: "Jobs", icon: "i-jobs", href: "/dashboard/jobs" },
+      { label: "Workers", icon: "i-hardhat", href: "/dashboard/workers" },
+      { label: "Hire", icon: "i-userplus", href: "/dashboard/hire" },
+      { label: "Company", icon: "i-building", href: "/dashboard/company" },
+    ],
+  },
+  {
+    label: "Money",
+    items: [
+      { label: "Financials", icon: "i-bank", href: "/dashboard/financials" },
+      // Memberships (2026-09-22): the plans a shop sells, its members, the
+      // visits and the bills they bring.
+      { label: "Service plans", icon: "i-check", href: "/dashboard/service-plans" },
+      // /dashboard/subscription IS the blueprint page now (owner promoted the
+      // port 2026-08-12; the classic "Well-Kept Ledger" donor was deleted with
+      // it and this URL taken over). The responsive staging build — desktop
+      // fixture above 768px, handheld on REAL data at or below — still stands
+      // at /dashboard/subscription-blueprint until its halves are folded into
+      // the promoted route; nothing links to it.
+      //
+      // OWNER-only, enforced by OWNER_ONLY_HREFS below (2026-08-17). The gap
+      // this comment used to record — "the blueprint shell filters NAV_SECTIONS
+      // by nothing at all" — is closed: navSectionsFor() is now the one rule
+      // both shells and the palette read. Financials, one line above, is NOT
+      // owner-only: the production sidebar shows it to every office role.
+      { label: "Subscription", icon: "i-card", href: "/dashboard/subscription" },
+    ],
+  },
+
   {
     label: "Automation",
     items: [

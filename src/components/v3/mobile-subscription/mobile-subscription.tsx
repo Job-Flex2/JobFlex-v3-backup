@@ -87,7 +87,7 @@ import type { SubscriptionInvoice } from "@/actions/billing";
 import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 import type { SubscriptionViewProps } from "@/app/(dashboard)/dashboard/subscription/subscription-load";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
-import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgrade";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import "./mobile-subscription.css";
@@ -175,7 +175,11 @@ export function MobileSubscription({
   freePlan,
   complimentary,
   usage,
+  usageUnlimited = [],
+  usageUnavailable = [],
   usageExempt,
+  billingInformation,
+  cancelOffer,
   invoices,
   nextCharge,
   referral,
@@ -208,7 +212,7 @@ export function MobileSubscription({
       .sort((a, b) => b.pct - a.pct || a.i - b.i);
   }, [usage]);
 
-  const tightest = usageSorted[0];
+  const tightest = usageSorted.find((u) => !u.informational);
   const showBanner = bannerOpen && !!tightest && tightest.pct >= PRESSURE_ALERT;
 
   /* THE CARDS are the upgrade page's own (owner, 2026-09-04: one set of
@@ -264,61 +268,6 @@ export function MobileSubscription({
     const raf = requestAnimationFrame(() => requestAnimationFrame(paint));
     return () => cancelAnimationFrame(raf);
   }, [usageSorted]);
-
-  /* ---------- Motion: reveal on load + adaptive reveal on scroll ------- */
-  useEffect(() => {
-    if (prefersReducedMotion()) return;
-    const host = scrollRef.current;
-    const content = contentRef.current;
-    if (!host || !content) return;
-
-    let velLastY = host.scrollTop;
-    let velLastT = performance.now();
-    let vel = 0;
-    const onScroll = () => {
-      const now = performance.now();
-      vel = Math.abs(host.scrollTop - velLastY) / Math.max(1, now - velLastT);
-      velLastY = host.scrollTop;
-      velLastT = now;
-    };
-    host.addEventListener("scroll", onScroll, { passive: true });
-
-    const vpH = window.innerHeight;
-    const blocks = Array.from(content.children) as HTMLElement[];
-    blocks.forEach((el, i) => {
-      el.classList.add("jfms-rv");
-      const initial = el.getBoundingClientRect().top < vpH;
-      if (!initial) el.dataset.rvScroll = "1";
-      el.style.transitionDelay = initial ? `${i * 60}ms` : "200ms";
-    });
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((en) => {
-          if (!en.isIntersecting) return;
-          const t = en.target as HTMLElement;
-          // Below the fold the duration follows scroll speed — slow ≈ 900ms,
-          // fast never shorter than 550ms.
-          if (t.dataset.rvScroll) {
-            t.style.transitionDuration = `${Math.round(Math.max(550, 900 - vel * 160))}ms`;
-          }
-          t.classList.add("jfms-rvIn");
-          io.unobserve(t);
-          const done = () => {
-            t.style.transitionDelay = "";
-            t.style.transitionDuration = "";
-            t.removeEventListener("transitionend", done);
-          };
-          t.addEventListener("transitionend", done);
-        });
-      },
-      { threshold: 0, rootMargin: "0px 0px 60px 0px" },
-    );
-    blocks.forEach((el) => io.observe(el));
-    return () => {
-      io.disconnect();
-      host.removeEventListener("scroll", onScroll);
-    };
-  }, []);
 
   /* ---------- Motion: graph-paper parallax ----------------------------- */
   useEffect(() => {
@@ -488,6 +437,21 @@ export function MobileSubscription({
             ) : null}
           </section>
 
+          {cancelOffer ? <CancelPlanLink offer={cancelOffer} className="jfms-cancel" /> : null}
+
+          <section className="jfms-card" aria-labelledby="jfmsBillingInfoT">
+            <div className="jfms-cardHead">
+              <h2 className="jfms-cardTitle" id="jfmsBillingInfoT">Billing information</h2>
+            </div>
+            <div className="jfms-cardBody">
+              <dl className="jfms-billingInfo">
+                <div><dt>Business</dt><dd>{billingInformation?.name || "Not set"}</dd></div>
+                <div><dt>Billing email</dt><dd>{billingInformation?.billingEmail || "Not set"}</dd></div>
+              </dl>
+              <Link className="jfms-btn jfms-billingEdit" href={"/dashboard/settings?tab=billing" as Route}>Edit billing email</Link>
+            </div>
+          </section>
+
           {/* ============ THE SWITCH TO FREE, BOOKED ============
               The date and the way back (lib/freePlan). Cancelling itself
               lives in Settings → Billing. */}
@@ -496,14 +460,16 @@ export function MobileSubscription({
           ) : null}
 
           {/* ============ USAGE ============ */}
-          <section className="jfms-card" aria-labelledby="jfmsUsageT">
-            <div className="jfms-cardHead">
+          <details className="jfms-card jfms-usage" aria-labelledby="jfmsUsageT">
+            <summary className="jfms-cardHead jfms-disclosureHead">
               <h2 className="jfms-cardTitle" id="jfmsUsageT">
                 Usage
               </h2>
-            </div>
+              <span className="jfms-usageCount">{usageSorted.length + usageUnlimited.length + usageUnavailable.length} quotas</span>
+              <svg className="jfms-disclosureArrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            </summary>
             <div className="jfms-cardBody">
-              {usageSorted.length === 0 ? (
+              {usageSorted.length === 0 && usageUnlimited.length === 0 && usageUnavailable.length === 0 ? (
                 <div className="jfms-empty">
                   <div className="jfms-emptyT">{usageExempt ? "Unlimited · platform admin" : "No caps on this plan"}</div>
                   <div className="jfms-emptyS">
@@ -512,7 +478,7 @@ export function MobileSubscription({
                 </div>
               ) : (
                 usageSorted.map((u) => {
-                  const tone = u.pct >= 90 ? "jfms-hot" : u.pct >= 60 ? "jfms-warn" : "";
+                  const tone = u.informational ? "" : u.pct >= 90 ? "jfms-hot" : u.pct >= 60 ? "jfms-warn" : "";
                   return (
                     <div key={u.resource} className={`jfms-usRow ${tone}`}>
                       <div className="jfms-usTop">
@@ -530,20 +496,41 @@ export function MobileSubscription({
                           aria-valuenow={u.used}
                           aria-valuemin={0}
                           aria-valuemax={u.limit}
+                          style={{ "--w": `${u.pct.toFixed(1)}%` } as React.CSSProperties}
                         />
                       </div>
+                      {u.hint ? <p className="jfms-usHint">{u.hint}</p> : null}
                     </div>
                   );
                 })
               )}
+              {usageUnlimited.map((u) => (
+                <div key={u.resource} className="jfms-usRow">
+                  <div className="jfms-usTop">
+                    <span className="jfms-usLbl">{u.label}</span>
+                    <span className="jfms-usNum">{u.used.toLocaleString()} / Unlimited</span>
+                  </div>
+                  {u.hint ? <p className="jfms-usHint">{u.hint}</p> : null}
+                </div>
+              ))}
+              {usageUnavailable.map((u) => (
+                <div key={u.resource} className="jfms-usRow">
+                  <div className="jfms-usTop">
+                    <span className="jfms-usLbl">{u.label}</span>
+                    <span className="jfms-usNum">Unavailable / {u.limit === null ? "Unlimited" : u.limit.toLocaleString()}</span>
+                  </div>
+                  <p className="jfms-usHint">{u.hint}</p>
+                </div>
+              ))}
+              {usageExempt ? <p className="jfms-usHint">Plan limits do not apply to a platform admin in their own organization.</p> : null}
             </div>
-            <div className="jfms-cardFoot jfms-cardFoot--quiet">Limits reset each billing cycle.</div>
-          </section>
+          </details>
 
           {/* ============ PLANS — the upgrade page's cards, as a carousel ============ */}
           <div className="jfms-plansEmbed" ref={plansRef}>
             <MobileUpgradeContent
               embedded
+              compactFeatures
               plans={upgradePlans}
               currentPlan={currentSlug}
               currentInterval={interval ?? null}
@@ -567,6 +554,7 @@ export function MobileSubscription({
               <Icon id="i-file" className="jfms-ic jfms-cardHeadIc" />
             </div>
             <div className="jfms-cardBody">
+              <p className="jfms-billingNote">Your invoices and payment history appear here.</p>
               {/* THE NEXT BILL (owner, 2026-09-14): date, amount, and what the
                   people who used the referral code take off it. */}
               {nextCharge ? (
@@ -665,10 +653,10 @@ function InvoiceRows({ data }: { data: { available: boolean; invoices: Subscript
     return (
       <div className="jfms-empty">
         <Icon id="i-card" className="jfms-ic jfms-emptyIc" />
-        <div className="jfms-emptyT">No billing history yet</div>
         <div className="jfms-emptyS">
           Invoices appear here once Stripe subscription billing is active for your account.
         </div>
+        <div className="jfms-emptyT">No invoices yet</div>
       </div>
     );
   }
@@ -676,8 +664,8 @@ function InvoiceRows({ data }: { data: { available: boolean; invoices: Subscript
     return (
       <div className="jfms-empty">
         <Icon id="i-card" className="jfms-ic jfms-emptyIc" />
-        <div className="jfms-emptyT">No invoices yet</div>
         <div className="jfms-emptyS">Your first invoice will show up here after it is issued.</div>
+        <div className="jfms-emptyT">No invoices yet</div>
       </div>
     );
   }

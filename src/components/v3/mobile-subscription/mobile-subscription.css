@@ -1051,7 +1051,7 @@ body:has(.jf-mobile-subscription) div:has(> nav[aria-label="Primary"]) { display
 /* ============================================================
    REFER & EARN
    ============================================================ */
-.jf-mobile-subscription .jfms-refRow { display: flex; align-items: center; gap: 12px; }
+.jf-mobile-subscription .jfms-refRow { display: flex; align-items: stretch; gap: 12px; }
 /* A referral code is a technical annotation, not an amount — mono.
    The plate itself is the tap target, as the desktop's is. */
 .jf-mobile-subscription button.jfms-refCode {
@@ -1074,7 +1074,8 @@ body:has(.jf-mobile-subscription) div:has(> nav[aria-label="Primary"]) { display
 .jf-mobile-subscription .jfms-refCode:active { background: var(--blueprint-dark); }
 .jf-mobile-subscription button.jfms-refCopy {
   width: 52px;
-  height: 52px;
+  min-height: 52px;
+  height: auto;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -1100,6 +1101,9 @@ body:has(.jf-mobile-subscription) div:has(> nav[aria-label="Primary"]) { display
   background: var(--paper-deep);
 }
 .jf-mobile-subscription .jfms-kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   padding: 12px var(--card-pad) 14px;
   border-right: 1.5px solid var(--ink);
   min-width: 0;
@@ -1121,6 +1125,22 @@ body:has(.jf-mobile-subscription) div:has(> nav[aria-label="Primary"]) { display
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+
+.jf-mobile-subscription .jfms-billingInfo { display: grid; gap: 16px; margin: 0 0 16px; }
+.jf-mobile-subscription .jfms-billingInfo div { min-width: 0; }
+.jf-mobile-subscription .jfms-billingInfo dt { margin-bottom: 4px; color: var(--ink-soft); font-size: 12px; }
+.jf-mobile-subscription .jfms-billingInfo dd { margin: 0; color: var(--ink); font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+.jf-mobile-subscription a.jfms-billingEdit { width: 100%; font-size: 12px; }
+.jf-mobile-subscription .jfms-cancel .jffs-link { min-height: 44px; color: var(--danger); font-size: 14px; }
+.jf-mobile-subscription .jfms-disclosureHead { min-height: 64px; padding-block: var(--card-pad); cursor: pointer; list-style: none; }
+.jf-mobile-subscription .jfms-disclosureHead::-webkit-details-marker { display: none; }
+.jf-mobile-subscription .jfms-disclosureArrow { width: 20px; height: 20px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; }
+.jf-mobile-subscription .jfms-usage[open] .jfms-disclosureArrow { transform: rotate(180deg); }
+.jf-mobile-subscription .jfms-usageCount { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.jf-mobile-subscription .jfms-usHint { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-soft); }
+.jf-mobile-subscription .jfms-billingNote { margin: 0 0 16px; font-size: 15px; line-height: 1.5; color: var(--ink-soft); }
+.jf-mobile-subscription .jfms-emptyS { margin: 0; font-size: 14px; color: var(--ink-soft); }
+.jf-mobile-subscription .jfms-emptyS + .jfms-emptyT { margin-top: 16px; }
 
 /* ============================================================
    CHANGE-PLAN SHEET — bottom sheet, never a modal dialog.

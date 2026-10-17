@@ -1,0 +1,12 @@
+.workspace.workspace { width: 100%; min-width: 0; color: var(--ink); }
+.workspace.workspace h1 { margin: 0 0 16px; font-size: 32px; line-height: 1.1; font-weight: 900; text-transform: uppercase; }
+.workspace .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 24px; }
+.workspace nav { display: flex; border-bottom: 1px solid var(--ink-line); }
+.workspace nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 18px; color: var(--ink); font-weight: 700; text-decoration: none; border-bottom: 3px solid transparent; }
+.workspace nav a[aria-current] { border-bottom-color: var(--ink); }
+.workspace .setup { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 16px; border: 1px solid var(--ink); color: var(--ink); font-weight: 700; text-decoration: none; }
+.workspace a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.workspace .settings { min-width: 0; }
+.workspace[data-ai-desk-tab="settings"] ~ * { display: none !important; }
+
+.workspace .settings[hidden] { display: none; }

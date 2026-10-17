@@ -912,7 +912,7 @@
 :global(.jf-blueprint) .st-badge.warn { border-color: var(--warning); background: rgba(184,132,32,.08);
   color: var(--warning); }
 
-:global(.jf-blueprint) .ref-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 26px; align-items: center; }
+:global(.jf-blueprint) .ref-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 26px; align-items: center; }
 :global(.jf-blueprint) .ref-code-row { display: flex; align-items: center; gap: 12px; }
 :global(.jf-blueprint) .ref-code { padding: 12px 18px; background: var(--ink); color: var(--paper);
   border-radius: var(--radius); font-family: var(--font-mono); font-size: 17px;
@@ -1090,6 +1090,33 @@
 }
 :global(.jf-blueprint) .bill-empty { border-top: none; padding-top: 0; margin-top: 4px;
   text-transform: none; letter-spacing: 0; font-family: var(--font); font-size: 13px; font-weight: 500; }
+
+/* Secondary subscription details open independently without stretching invoices. */
+:global(.jf-blueprint) .usage-details summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 44px; font-size: 14px; font-weight: 700; color: var(--ink-soft);
+  cursor: pointer; list-style: none;
+}
+:global(.jf-blueprint) .usage-details summary::-webkit-details-marker { display: none; }
+:global(.jf-blueprint) .usage-details summary:hover { color: var(--accent); }
+:global(.jf-blueprint) .usage-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:global(.jf-blueprint) .usage-details[open] summary { margin-bottom: 16px; }
+:global(.jf-blueprint) .usage-details[open] summary svg { transform: rotate(180deg); }
+:global(.jf-blueprint) .us-hint { margin-top: 6px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+:global(.jf-blueprint) .bill-description { color: var(--ink-soft); font-size: 15px; font-weight: 500; line-height: 1.5; }
+:global(.jf-blueprint) .bill-count { margin: 12px 0 20px; font-size: 12px; color: var(--ink-soft); }
+:global(.jf-blueprint) .ref-code-row { align-items: stretch; min-width: 0; }
+:global(.jf-blueprint) .ref-code { display: flex; align-items: center; min-width: 0; min-height: 48px; overflow-wrap: anywhere; }
+:global(.jf-blueprint) .ref-code-row .ref-copy { height: auto; min-height: 48px; justify-content: center; }
+:global(.jf-blueprint) .kpi-grid--3 .kpi { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; text-align: center; padding: 20px 16px; }
+:global(.jf-blueprint) .kpi-grid--3 .kpi-lbl { margin-bottom: 0; }
+:global(.jf-blueprint) .billing-information-body { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; }
+:global(.jf-blueprint) .billing-fields { display: flex; flex-wrap: wrap; gap: 20px 40px; min-width: 0; }
+:global(.jf-blueprint) .billing-fields > div { min-width: 0; }
+:global(.jf-blueprint) .billing-fields dt { font: 600 11px/1.5 var(--font-mono); letter-spacing: .08em; color: var(--ink-muted); text-transform: uppercase; }
+:global(.jf-blueprint) .billing-fields dd { margin-top: 6px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+:global(.jf-blueprint) .billing-information .cancel-plan { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint) .billing-information .cancel-plan button { min-height: 44px; }
 
 /* THE TOOL THE SIGNUP CAME FOR (lib/planSpotlight, owner 2026-10-14): the matrix row, first and marked. */
 :global(.jf-blueprint) .mx-row--spot th, :global(.jf-blueprint) .mx-row--spot td { background: rgba(24, 84, 160, 0.08); }

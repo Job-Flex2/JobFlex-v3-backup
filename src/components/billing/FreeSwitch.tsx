@@ -136,6 +136,8 @@ export interface CancelOffer {
   keepsUntil: string | null;
   losses: FreeLoss[];
   made: string | null;
+  /** Access already lapsed to Free while an external billing subscription remains. */
+  accessAlreadyFree?: boolean;
 }
 
 export function CancelPlanLink({ offer, className }: { offer: CancelOffer; className?: string }) {
@@ -145,6 +147,7 @@ export function CancelPlanLink({ offer, className }: { offer: CancelOffer; class
   const [err, setErr] = useState<string | null>(null);
   const plan = offer.planName;
   const until = untilWords(offer.keepsUntil);
+  const accessAlreadyFree = offer.accessAlreadyFree === true;
 
   const book = useCallback(async () => {
     if (busy) return;
@@ -157,40 +160,44 @@ export function CancelPlanLink({ offer, className }: { offer: CancelOffer; class
         return;
       }
       setStep(0);
-      toast.success(
-        res.endsAt ? `Your plan switches to Free on ${longDate(res.endsAt)}` : "Your plan switches to Free at the end of this cycle",
-        "You won't be billed again. Change your mind any time before then.",
-      );
+      if (accessAlreadyFree) {
+        toast.success("Billing renewal canceled", "Your account remains on the Free plan.");
+      } else {
+        toast.success(
+          res.endsAt ? `Your plan switches to Free on ${longDate(res.endsAt)}` : "Your plan switches to Free at the end of this cycle",
+          "You won't be billed again. Change your mind any time before then.",
+        );
+      }
       router.refresh();
     } catch {
       setErr("Something went wrong. Try again.");
     } finally {
       setBusy(false);
     }
-  }, [busy, router]);
+  }, [accessAlreadyFree, busy, router]);
 
   return (
     <>
       <div className={"jffs-cancel" + (className ? ` ${className}` : "")}>
-        <button type="button" className="jffs-link" onClick={() => { setErr(null); setStep(1); }}>
-          Cancel subscription
+        <button type="button" className="jffs-link" onClick={() => { setErr(null); setStep(accessAlreadyFree ? 2 : 1); }}>
+          {accessAlreadyFree ? "Cancel billing subscription" : "Cancel subscription"}
         </button>
       </div>
 
-      <BeforeYouGo
+      {!accessAlreadyFree ? <BeforeYouGo
         open={step === 1}
         offer={offer}
         until={until}
         onKeep={() => setStep(0)}
         onContinue={() => setStep(2)}
-      />
+      /> : null}
 
       <ConfirmPlanChange
-        open={step === 2}
+        open={step === 2 || (accessAlreadyFree && step === 1)}
         kicker="Cancel subscription"
-        title={`Cancel ${plan}?`}
-        confirmLabel="Cancel subscription"
-        cancelLabel={`Keep ${plan}`}
+        title={accessAlreadyFree ? "Cancel billing subscription?" : `Cancel ${plan}?`}
+        confirmLabel={accessAlreadyFree ? "Cancel billing subscription" : "Cancel subscription"}
+        cancelLabel={accessAlreadyFree ? "Go back" : `Keep ${plan}`}
         busy={busy}
         onConfirm={() => void book()}
         onCancel={() => {
@@ -199,7 +206,9 @@ export function CancelPlanLink({ offer, className }: { offer: CancelOffer; class
         body={
           <>
             <p>
-              {`You keep ${plan} until ${until} — the cycle you've already paid for — and you won't be billed again. Then your account moves to the Free plan. Nothing is refunded for the days you don't use.`}
+              {accessAlreadyFree
+                ? "Your access is already on the Free plan. Canceling this billing subscription stops future renewal. Your access remains Free."
+                : `You keep ${plan} until ${until} — the cycle you've already paid for — and you won't be billed again. Then your account moves to the Free plan. Nothing is refunded for the days you don't use.`}
             </p>
             {err ? (
               <p className="jffs-err" role="alert">

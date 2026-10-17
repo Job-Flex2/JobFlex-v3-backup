@@ -11,6 +11,8 @@
 // the handheld build at or below — so both describe the same line, and both
 // create leads through the real `createLeadFromCall` action.
 
+import { requireOrg } from "@/lib/orgContext";
+import { loadDeskWorkspace } from "@/lib/settings/loadSettingsData";
 import type { Metadata } from "next";
 import { MarkNavSeen } from "@/components/layout/MarkNavSeen";
 import { loadPhoneProps } from "./load-phone";
@@ -28,6 +30,7 @@ export default async function PhonePage() {
   const gate = await customPageGate("phone");
   if (gate) return gate;
   const props = await loadPhoneProps("/dashboard/phone");
+  const deskSettings = await loadDeskWorkspace(await requireOrg());
 
   return (
     <>
@@ -35,7 +38,7 @@ export default async function PhonePage() {
           editions: the page owns the viewport switch, so this mounts on a
           phone too (the shell's HANDHELD_SEEN stamp for this route is gone). */}
       <MarkNavSeen surface="phone" />
-      <PhoneResponsive {...props} />
+      <PhoneResponsive {...props} deskSettings={deskSettings} />
     </>
   );
 }

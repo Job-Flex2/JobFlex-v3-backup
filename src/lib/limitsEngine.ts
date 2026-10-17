@@ -298,6 +298,7 @@ async function countUsage(
   resource: LimitResource,
   organizationId: string,
   cycleStart: Date,
+  strict = false,
 ): Promise<number> {
   const since = { gte: cycleStart };
   switch (resource) {
@@ -339,7 +340,9 @@ async function countUsage(
       // Saved HVAC estimates: a re-save updates its row, so only new ones count.
       // A database without the HVAC tables yet counts none (the estimator
       // answers its defaults there too) instead of failing every check.
-      return db.hvacEstimate.count({ where: { organizationId, createdAt: since } }).catch(() => 0);
+      return strict
+        ? db.hvacEstimate.count({ where: { organizationId, createdAt: since } })
+        : db.hvacEstimate.count({ where: { organizationId, createdAt: since } }).catch(() => 0);
     case "conversationsStarted":
       // JOB-kind threads are auto-created from a job's crew (ensureJobConversation)
       // and must not burn quota; only user-started threads count.
@@ -357,6 +360,14 @@ async function countUsage(
       return db.aiPhoneCall.count({ where: { organizationId, startedAt: since } });
     case "deskMinutes": {
       // The desk's own month row (calendar month), not the cycle — lib/aiDesk/usage.
+      if (strict) {
+        const { monthKey, parseDeskUse, EMPTY_USE, minutesOf } = await import("@/lib/aiDesk/shared");
+        const row = await db.syncState.findUnique({ where: { key: `deskuse:${organizationId}:${monthKey(new Date())}` }, select: { cursor: true } });
+        // A missing row means no use; a failed read is unavailable, never zero.
+        if (row) JSON.parse(row.cursor);
+        const use = row ? parseDeskUse(row.cursor) : EMPTY_USE;
+        return minutesOf(use.callSeconds + use.testSeconds);
+      }
       const { readDeskUse } = await import("@/lib/aiDesk/usage");
       const { minutesOf } = await import("@/lib/aiDesk/shared");
       const use = await readDeskUse(organizationId);
@@ -576,10 +587,49 @@ export async function getOrgLimitUsage(organizationId: string, actor?: LimitActo
  * The snapshot plus whether the caps apply to the asker at all — for the
  * surfaces that say "Unlimited · platform admin" rather than count.
  */
+export type UsageSnapshot = Omit<LimitStatus, "used"> & { used: number | null };
+
+export function getOrgLimitOverview(
+  organizationId: string,
+  actor?: LimitActor,
+): Promise<{ exempt: boolean; usage: LimitStatus[] }>;
+export function getOrgLimitOverview(
+  organizationId: string,
+  actor: LimitActor | undefined,
+  options: { includeUnlimitedUsage: true },
+): Promise<{ exempt: boolean; usage: UsageSnapshot[] }>;
 export async function getOrgLimitOverview(
   organizationId: string,
   actor?: LimitActor,
-): Promise<{ exempt: boolean; usage: LimitStatus[] }> {
+  options?: { includeUnlimitedUsage: true },
+): Promise<{ exempt: boolean; usage: UsageSnapshot[] }> {
+  if (options?.includeUnlimitedUsage) {
+    // Billing-only read: count every resource with the very same counters,
+    // windows and reset marks enforcement uses. Sidebar/enforcement callers
+    // keep their cheap unlimited fast path. A failed count stays unknown.
+    const plan = await resolvePlan(organizationId, actor);
+    const own = await Promise.all(LIMIT_DEFS.map(async (def): Promise<UsageSnapshot> => {
+      const resetAt = def.scope === "absolute" ? null : usageResetInForce(plan.resets[def.key], plan.cycleStart);
+      const configured = LIMITS_DISABLED ? undefined : plan.limits[def.key];
+      const limit = isUnlimited(configured) ? null : configured as number;
+      const used = await countUsage(def.key, organizationId, resetAt ?? plan.cycleStart, true).catch(() => null);
+      return {
+        resource: def.key,
+        limit,
+        used,
+        remaining: limit === null || used === null ? null : Math.max(0, limit - used),
+        allowed: used === null || limit === null || used < limit,
+        ...(resetAt ? { resetAt: resetAt.toISOString() } : {}),
+        ...(plan.exempt ? { exempt: true as const } : {}),
+      };
+    }));
+    const usage = own.map((entry) => {
+      const cap = own.find((item) => item.resource === CAPPED_BY[entry.resource]);
+      if (entry.used === null || !cap || cap.used === null) return entry;
+      return applyCap(entry as LimitStatus, cap as LimitStatus, 1);
+    });
+    return { exempt: plan.exempt, usage };
+  }
   const usage = await getOrgLimitUsage(organizationId, actor);
   return { exempt: usage.some((u) => u.exempt === true), usage };
 }

@@ -213,9 +213,9 @@ const storeysFromEaves = (eaves: Array<{ ft: number }>): number | null => {
 const PACK_WORDS: Record<string, string> = {
   property_data_id_001: "roof area",
   property_data_id_002: "pitch and eave height",
-  property_data_id_003: "material and condition",
+  property_data_id_003: "material, condition and facets",
   property_data_id_004: "roof age",
-  property_data_id_005: "shape, facets and details",
+  property_data_id_005: "property details",
   property_data_id_007: "the building outline",
   property_data_id_008: "imagery",
 };
@@ -1776,7 +1776,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // field, 0..1; "not scored" was dropped at parse). Identical classes on all
   // four sides read as suspicious — this says how much the provider itself
   // stands behind them.
-  const eaveConf = structure?.confidence?.eaveHeightFt ?? null;
   const propertyDetails = [
     { label: "Roof", value: roofReadsFlat ? "Flat / low slope" : null },
     { label: "Material", value: structure?.material },
@@ -2095,7 +2094,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                     real; the missing packs can be ordered on their own — nothing already bought is bought again.
                     <span className="rf-use-acts">
                       <button type="button" className="btn btn-primary btn--sm" disabled={busy} onClick={() => void runInstant(true, reportInput())}>
-                        Order the missing packs — billed
+                        Order the missing packs (billed)
                       </button>
                     </span>
                   </div>
@@ -2327,7 +2326,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                         <section className="rf-detail-section" aria-label="Eave height">
                           <div className="rf-detail-heading">
                             <h3>Eave height</h3>
-                            <span className="rf-detail-confidence">{eaveConf != null ? Math.round(eaveConf * 100) + "% confidence" : "Confidence unavailable"}</span>
                           </div>
                           <p className="rf-details-note">Ground to roof edge · reported in 10 ft steps.</p>
                           <dl className="rf-eave-grid">
@@ -2366,7 +2364,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                             {measurement.chimneys.map((c, i) => (
                               <div className="rf-details-row" key={i}>
                                 <dt>{c.kind.charAt(0).toUpperCase() + c.kind.slice(1)}</dt>
-                                <dd>{Math.round(c.confidence * 100)}<span>% confidence</span></dd>
+                                <dd>Detected</dd>
                               </div>
                             ))}
                           </dl>
@@ -2375,7 +2373,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                     </div>
                   </div>
                 )}
-                {!isSolar && <div className="card rf-card">
+                {!isSolar && <div className="card rf-card rf-structures">
                   <div className="rf-head">
                     <div className="card-title">Structures</div>
                     <div className="card-sub">
@@ -2411,7 +2409,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                           </div>
                         )}
                         <div className="rf-note">
-                          Tick a building to add it to the total and the estimate{mapOn ? " — “Show on map” points to it" : ""}.
+                          Select a building to include it in your estimate{mapOn ? " — “Show on map” points to it" : ""}.
                         </div>
                         {otherStructures.map((o, k) => {
                           const { s, i } = o;
@@ -2597,7 +2595,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           window.requestAnimationFrame(() => addrRef.current?.focus());
         }}
         showRemeasure={panel === "report" && !manual && !isSolar && evEnabled && reusedInstant != null}
-        remeasureLabel={packsMissing ? "Order the missing packs — billed" : "Re-measure — new paid lookup"}
+        remeasureLabel={packsMissing ? "Order the missing packs (billed)" : "Re-measure (new paid lookup)"}
         onRemeasure={() => void runInstant(true, reportInput())}
       />
       {/* The photo CARD is square (owner's call): the card hugs the square
@@ -2752,11 +2750,12 @@ function AgainPortal({
           onClick={onRemeasure}
           title="This result reused already-paid aerial data. A new order is billed; packs the address already has are not bought again."
         >
-          {remeasureLabel ?? "Re-measure — new paid lookup"}
+          <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 6" /></svg>
+          {remeasureLabel ?? "Re-measure (new paid lookup)"}
         </button>
       )}
       <button className={"btn btn-ghost" + (show ? "" : " is-hidden")} type="button" id="againBtn" disabled={disabled} onClick={onClick}>
-        <svg className="ic"><use href="#i-roof" /></svg>
+        <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="10" cy="10" r="6" /><path d="m15 15 6 6" /></svg>
         Measure another
       </button>
     </>,

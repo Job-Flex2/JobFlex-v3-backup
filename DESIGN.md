@@ -81,6 +81,10 @@ do not give static cards decorative elevation. One owner-approved exception
 on signup step 3 are white with a hard offset shadow, no blur: ink on every
 plan, blueprint blue on the "Most picked" one. The offset is 3px, 4px under
 a pointer (owner, 2026-10-12), on every one of those cards.
+Subscription overview exception (owner, 2026-10-16): plan cards start with
+their full feature lists collapsed behind a per-card disclosure, and Usage
+opens as its own disclosure. Other plan surfaces keep their lists open.
+
 Plan cards, everywhere a customer sees them (owner, 2026-10-12): one
 Monthly | Annual switch over the row ([PlanTermSwitch](src/components/billing/PlanTermSwitch.tsx)),
 never per-card term buttons; its Annual half always wears a sticker on its

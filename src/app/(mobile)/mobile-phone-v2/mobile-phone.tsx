@@ -67,6 +67,7 @@ import styles from "./mobile-phone.module.css";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
 import { useSheetDrag } from "@/components/v3/mobile-shell/use-sheet-drag";
 import { lockScroll } from "@/lib/scrollLock";
+import { DeskWorkspaceHeader } from "@/components/v3/ai-desk/desk-workspace-header";
 import { createLeadFromCall } from "@/actions/aiPhoneCalls";
 import type { PhoneProps } from "@/app/dashboard/phone/load-phone";
 import {
@@ -185,7 +186,7 @@ function copyText(text: string) {
   }
 }
 
-export function MobilePhone({ entries, stats, webhookUrl, twilioConfigured }: MobilePhoneProps) {
+export function MobilePhone({ entries, stats, webhookUrl, twilioConfigured, deskSettings }: MobilePhoneProps) {
   const router = useRouter();
   const scrollRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -608,10 +609,9 @@ export function MobilePhone({ entries, stats, webhookUrl, twilioConfigured }: Mo
       {/* ============ SCROLLER ============ */}
       <main className={styles.scroll} ref={scrollRef}>
         <div className={styles.content} ref={contentRef}>
-          {/* PAGE HEAD */}
+          <DeskWorkspaceHeader settings={deskSettings} />
+          {/* CALL ACTIONS */}
           <div className={styles.pageHead}>
-            <div className={styles.kicker}>Calls · the desk&apos;s log</div>
-            <h1 className={styles.pageTitle}>AI desk</h1>
             <div className={styles.pageActions}>
               <button
                 className={`${styles.btn} ${styles.btnPrimary}`}

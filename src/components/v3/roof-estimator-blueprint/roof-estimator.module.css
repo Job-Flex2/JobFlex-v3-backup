@@ -2047,21 +2047,21 @@
 
 /* The details card's plain-words lines: what a section means, and the one
    sentence that sums it up before the rows. */
-.bp :global(.content .rf-details-note) { padding: 8px 0 2px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.bp :global(.content .rf-details-note) { padding: 8px 0 2px; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .bp :global(.content .rf-details-sum) { padding: 6px 0 4px; font-size: 13px; font-weight: 700; line-height: 1.4; color: var(--ink); }
 
 /* The residential / commercial question and its answer. */
 .bp :global(.content .rf-use-acts) { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .bp :global(.content .rf-dd-link) { margin-left: 10px; padding: 0; border: 0; background: none; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: none; color: var(--blueprint); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
-.bp :global(.content .rf-detail-section) { padding: 18px 0; border-bottom: 1px solid var(--hair-soft); }
+.bp :global(.content .rf-detail-section) { margin: 0 -18px; padding: 18px; border-bottom: 1px solid var(--ink-line); }
 .bp :global(.content .rf-detail-section:last-child) { border-bottom: 0; padding-bottom: 0; }
-.bp :global(.content .rf-detail-heading) { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin: 0; font-size: 13px; font-weight: 800; }
+.bp :global(.content .rf-detail-heading) { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin: 0; font-size: 17px; font-weight: 800; color: var(--ink); }
 .bp :global(.content .rf-detail-heading h3) { margin: 0; font: inherit; }
 .bp :global(.content .rf-detail-confidence) { color: var(--muted); font-size: 11px; font-weight: 500; }
 .bp :global(.content .rf-eave-grid) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 12px; border: 1px solid var(--hair-soft); background: var(--hair-soft); }
 .bp :global(.content .rf-eave-grid > div) { padding: 12px; background: var(--paper-deep); }
-.bp :global(.content .rf-eave-grid dt) { color: var(--muted); font-size: 11px; }
+.bp :global(.content .rf-eave-grid dt) { color: var(--ink); font-size: 14px; font-weight: 700; }
 .bp :global(.content .rf-eave-grid dd) { margin: 4px 0 0; font-size: 22px; line-height: 1.2; font-weight: 800; font-variant-numeric: tabular-nums; }
 .bp :global(.content .rf-eave-grid dd span) { font-size: 12px; font-weight: 500; }
 .bp :global(.content .rf-detail-use) { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
@@ -2120,3 +2120,18 @@
 .bp :global(.content .rf-pin-sweep) { position: absolute; left: 0; right: 0; top: 0; height: 34%; pointer-events: none; background: linear-gradient(180deg, rgba(24, 84, 160, 0) 0%, rgba(24, 84, 160, 0.22) 85%, rgba(24, 84, 160, 0.75) 100%); border-bottom: 2px solid var(--blueprint); animation: roofSweep 2.6s linear infinite; }
 @keyframes roofSweep { from { transform: translateY(-100%); } to { transform: translateY(300%); } }
 @media (prefers-reduced-motion: reduce) { .bp :global(.content .rf-pin-sweep), .bp :global(.content .rf-pin-veil-dot) { animation: none; } }
+
+/* Clear, consistent hierarchy for the property and optional buildings. */
+.bp :global(.content .rf-card .card-title) { color: var(--ink); font-size: 20px; font-weight: 800; }
+.bp :global(.content .rf-structures .card-sub),
+.bp :global(.content .rf-structures .rf-note),
+.bp :global(.content .rf-structures .rf-pick),
+.bp :global(.content .rf-structures .rf-details-row dt),
+.bp :global(.content .rf-structures .rf-details-row dd span),
+.bp :global(.content .rf-structures .rf-attach.is-off) { color: var(--ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; letter-spacing: normal; text-transform: none; }
+.bp :global(.content .rf-structures .rf-pick) { margin-top: 8px; }
+.bp :global(.content .rf-structures .rf-details-sec) { color: var(--ink); font-family: var(--font-sans); font-size: 15px; font-weight: 700; letter-spacing: normal; text-transform: none; padding: 16px 0 10px; }
+.bp :global(.content .rf-structures .rf-details-row) { padding: 14px 0; font-size: 15px; }
+.bp :global(.content .rf-structures .rf-attach) { min-height: 44px; color: var(--ink); }
+
+.bp :global(.content .rf-structures .rf-attach.is-off) { opacity: 1; }

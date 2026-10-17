@@ -62,6 +62,21 @@ export type UpgradePlan = {
   highlight: boolean;
 };
 
+function PlanFeatures({ compact, name, children }: { compact: boolean; name: string; children: React.ReactNode }) {
+  const features = <span className="jf-up-feats" data-plan-feats>{children}</span>;
+  if (!compact) return features;
+  return (
+    <details className="jf-up-features">
+      <summary aria-label={`${name} features`}>
+        <span className="jf-up-show-features">View features</span>
+        <span className="jf-up-hide-features">Hide features</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </summary>
+      {features}
+    </details>
+  );
+}
+
 /** Whole dollars when round, cents otherwise — a prorated charge rarely is. */
 function dollarsOf(cents: number): string {
   const d = cents / 100;
@@ -80,6 +95,7 @@ export function UpgradeContent({
   upgradedDirection = "up",
   cancelled,
   embedded = false,
+  compactFeatures = false,
   devTools,
   customOffered = false,
   focusSlug = null,
@@ -122,6 +138,8 @@ export function UpgradeContent({
   /** Rendered inside another page (the subscription page's plan section):
    *  no page head, no return-leg banners — just the cards and their dialogs. */
   embedded?: boolean;
+  /** Subscription overview: keep each full feature list behind a disclosure. */
+  compactFeatures?: boolean;
   /** TEMP (2026-09-19): the DEV ONLY block, handed in by the page behind the
    *  server gate; undefined everywhere else. */
   devTools?: React.ReactNode;
@@ -470,7 +488,7 @@ export function UpgradeContent({
   }, [devTools, plans, cur]);
 
   return (
-    <div className={"jf-upgrade" + (embedded ? " jf-up-embed" : "")}>
+    <div className={"jf-upgrade" + (embedded ? " jf-up-embed" : "") + (compactFeatures ? " jf-up-compact" : "")}>
       <div className={"jf-up-head" + (embedded ? " jf-up-head--embed" : "")}>
         {embedded ? (
           <div className="jf-up-embed-lbl">Plans</div>
@@ -570,7 +588,7 @@ export function UpgradeContent({
               />
               <PlanPrice term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} figureClassName="jf-up-price" />
               <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
-              <span className="jf-up-feats" data-plan-feats>
+              <PlanFeatures compact={compactFeatures} name={p.name}>
                 {featureRows.map((f) => {
                   const has = included.get(p.slug)?.has(f.toLowerCase()) ?? false;
                   const lit = spotRow !== null && f === spotRow;
@@ -589,7 +607,7 @@ export function UpgradeContent({
                     </span>
                   );
                 })}
-              </span>
+              </PlanFeatures>
               {isCur ? (
                 <span className="jf-up-curlbl">Current plan</span>
               ) : (
@@ -643,7 +661,7 @@ export function UpgradeContent({
             {/* ON THE PLAN: only the pages it holds — nothing when it holds
                 none (owner, 2026-09-04). OFF it: every page, ticked as picked.
                 The base and the page price head the list. */}
-            <span className="jf-up-feats" data-plan-feats>
+            <PlanFeatures compact={compactFeatures} name={onCustom ? "Custom" : "Build your plan"}>
               <span className="jf-up-f jf-up-f--base">
                 ${(CUSTOM_BASE_CENTS / 100).toFixed(0)} base · ${(CUSTOM_PAGE_CENTS / 100).toFixed(0)} per page a month
               </span>
@@ -670,7 +688,7 @@ export function UpgradeContent({
               {onCustom && owned.length === 0 ? (
                 <span className="jf-up-f no jf-up-f--none">No add-on pages yet</span>
               ) : null}
-            </span>
+            </PlanFeatures>
             <button
               className="jf-up-go"
               type="button"
@@ -691,7 +709,7 @@ export function UpgradeContent({
       {!isOwner ? (
         <p className="jf-up-note">Plan changes are owner-only — ask the account owner.</p>
       ) : null}
-      {!onCustom && customOffered ? (
+      {!compactFeatures && !onCustom && customOffered ? (
         <p className="jf-up-note">
           Build your plan: ${(CUSTOM_BASE_CENTS / 100).toFixed(0)} base covers proposals, clients,
           projects, jobs, invoices and financials; each extra page is $

@@ -169,8 +169,6 @@ import { PasswordControl } from "@/components/account-password/password-control"
 import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
 import { isRefusal } from "@/lib/actionResult";
-import { DeskSteps } from "@/components/v3/ai-desk/desk-steps";
-import { DESK_COPY } from "@/components/v3/settings-blueprint/settings-data";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
 
@@ -1204,27 +1202,6 @@ function NotificationsPane({ data }: { data: SettingsData }) {
 // Texting (2026-09-27) — the handheld build of the desk pane: who gets
 // texted (the office roster, a switch per group), your own mobile, the extra
 // numbers. Same actions as the desk; the copy comes from settings-data.
-/** The AI desk on the phone (2026-10-13): the same two pieces as the desk pane, in this page's cards. */
-function DeskPaneMobile({ data }: { data: SettingsData }) {
-  const desk = data.desk;
-  // The desk's own overview and tabs (minutes included) — the same piece as the desk pane.
-  if (!desk.canManage) {
-    return (
-      <section className="mst-card" id="desk-status">
-        <CardHeader card={{ title: DESK_COPY.title, sub: DESK_COPY.sub }} />
-        <div className="mst-cardB">
-          <div className="mst-note">{DESK_COPY.managersOnly}</div>
-        </div>
-      </section>
-    );
-  }
-  return (
-    <div id="desk-status">
-      <DeskSteps desk={desk} registration={data.notifications.sms.registration} intro={RAIL_ITEMS.find((r) => r.key === "desk")?.sub} />
-    </div>
-  );
-}
-
 function TextingPane({ data }: { data: SettingsData }) {
   const sms = data.notifications.sms;
   const router = useRouter();
@@ -1638,9 +1615,6 @@ export function MobileSettings({
             </div>
             <div className={active === "texting" ? "mst-pane is-on" : "mst-pane"}>
               <TextingPane data={data} />
-            </div>
-            <div className={active === "desk" ? "mst-pane is-on" : "mst-pane"}>
-              <DeskPaneMobile data={data} />
             </div>
           </div>
 

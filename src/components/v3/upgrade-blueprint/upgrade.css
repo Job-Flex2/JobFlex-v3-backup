@@ -743,3 +743,22 @@
 .jf-upgrade .jf-up-ft > .jf-up-spot-tag { flex: none; max-width: 100%; margin-left: 0; white-space: normal; text-wrap: balance; }
 @keyframes upSpotIn { 0% { background-color: rgba(24, 84, 160, 0.3); } 100% { background-color: rgba(24, 84, 160, 0.09); } }
 @media (prefers-reduced-motion: reduce) { .jf-upgrade .jf-up-f.spot { animation: none; } }
+
+/* The subscription overview keeps secondary plan details closed until asked. */
+.jf-upgrade.jf-up-compact .jf-up-features { min-width: 0; align-self: start; }
+.jf-upgrade.jf-up-compact .jf-up-features summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px; padding: 8px 0; border-top: 1px solid var(--ink-line);
+  color: var(--ink-soft); font-size: 13px; font-weight: 700; cursor: pointer; list-style: none;
+}
+.jf-upgrade.jf-up-compact .jf-up-features summary::-webkit-details-marker { display: none; }
+.jf-upgrade.jf-up-compact .jf-up-features summary:hover { color: var(--accent); }
+.jf-upgrade.jf-up-compact .jf-up-features summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.jf-upgrade.jf-up-compact .jf-up-features summary svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+.jf-upgrade.jf-up-compact .jf-up-hide-features,
+.jf-upgrade.jf-up-compact .jf-up-features[open] .jf-up-show-features { display: none; }
+.jf-upgrade.jf-up-compact .jf-up-features[open] .jf-up-hide-features { display: inline; }
+.jf-upgrade.jf-up-compact .jf-up-features[open] summary svg { transform: rotate(180deg); }
+.jf-upgrade.jf-up-compact .custom .jf-card-head { flex-wrap: wrap; }
+.jf-upgrade.jf-up-compact .custom .jf-card-head > .jf-up-n { flex: 1 0 100%; white-space: nowrap; }
+.jf-upgrade.jf-up-compact .custom .jf-card-head-r { margin-left: auto; }

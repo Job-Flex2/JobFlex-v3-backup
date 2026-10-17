@@ -101,6 +101,8 @@ export type MobileUpgradeProps = {
   /** Rendered inside the subscription page: no shell, no head, no return-leg
    *  banners — the cards as a swipe carousel plus their sheets. */
   embedded?: boolean;
+  /** The subscription page opens compact cards; upgrade keeps full lists. */
+  compactFeatures?: boolean;
   /** TEMP (2026-09-19): the DEV ONLY block, handed in by the page behind the
    *  server gate; undefined everywhere else. */
   devTools?: React.ReactNode;
@@ -134,6 +136,7 @@ export function MobileUpgradeContent({
   upgradedDirection = "up",
   cancelled,
   embedded = false,
+  compactFeatures = false,
   devTools,
   customOffered = false,
   currentInterval = null,
@@ -604,8 +607,7 @@ export function MobileUpgradeContent({
           <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
         </div>
 
-        {/* EVERY ROW, OPEN (owner, 2026-10-12): the catalog's whole list in its
-            own order, ticked or dashed — the rows line up card to card. */}
+        <PlanFeatures compact={compactFeatures} name={p.name}>
         <ul className="mu-feats" data-plan-feats>
           {featureRows.map((f) => {
             const on = has?.has(f.toLowerCase()) ?? false;
@@ -617,6 +619,7 @@ export function MobileUpgradeContent({
             );
           })}
         </ul>
+        </PlanFeatures>
 
         <div className="mu-foot">
           {isCur ? (
@@ -989,9 +992,9 @@ export function MobileUpgradeContent({
               name={
                 <div className="mu-card-id">
                   <span className="mu-name">{onCustom ? "Custom" : "Build your plan"}</span>
-                  <span className="mu-desc">
+                  {!compactFeatures ? <span className="mu-desc">
                     {dollars(CUSTOM_BASE_CENTS)} base · {dollars(CUSTOM_PAGE_CENTS)} per page
-                  </span>
+                  </span> : null}
                 </div>
               }
               aside={onCustom ? <span className="mu-tag is-cur">Current</span> : null}
@@ -1019,6 +1022,7 @@ export function MobileUpgradeContent({
 
             {/* ON THE PLAN: only the pages it holds, nothing when none
                 (owner, 2026-09-04). OFF it: the add-on list, ticked as picked. */}
+            <PlanFeatures compact={compactFeatures} name="Build your plan">
             <ul className="mu-feats" data-plan-feats>
               {onCustom
                 ? CUSTOM_PAGES.filter((pg) => owned.includes(pg.id)).map((pg) => (
@@ -1040,6 +1044,7 @@ export function MobileUpgradeContent({
                 <li className="mu-f is-no mu-f--none">No add-on pages yet</li>
               ) : null}
             </ul>
+            </PlanFeatures>
 
             <div className="mu-foot">
               <button
@@ -1064,7 +1069,7 @@ export function MobileUpgradeContent({
      sheets still portal to <body>, so they work the same either way. */
   if (embedded) {
     return (
-      <div className="jf-mobile-upgrade mu-embed" onClick={onRootClick} onAnimationEnd={onRootAnimEnd}>
+      <div className={`jf-mobile-upgrade mu-embed${compactFeatures ? " mu-compact" : ""}`} data-nest="" onClick={onRootClick} onAnimationEnd={onRootAnimEnd}>
         <div className="mu-embed-head">
           <div className="mu-embed-lbl">Plans</div>
           {termSwitch}
@@ -1094,7 +1099,7 @@ export function MobileUpgradeContent({
 
   return (
     <div
-      className={`jf-mobile-upgrade mu-shell${sheetUp ? " is-locked" : ""}`}
+      className={`jf-mobile-upgrade mu-shell${sheetUp ? " is-locked" : ""}${compactFeatures ? " mu-compact" : ""}`}
       onClick={onRootClick}
       onAnimationEnd={onRootAnimEnd}
     >
@@ -1177,7 +1182,7 @@ export function MobileUpgradeContent({
           {!checkoutReady ? (
             <p className="mu-fine">Checkout is not configured on this deployment yet.</p>
           ) : null}
-          {!onCustom && customOffered ? (
+          {!compactFeatures && !onCustom && customOffered ? (
             <p className="mu-fine">
               Build your plan: {dollars(CUSTOM_BASE_CENTS)} base covers proposals, clients,
               projects, jobs, invoices and financials; each extra page is{" "}
@@ -1190,5 +1195,19 @@ export function MobileUpgradeContent({
       {confirm?.kind === "custom" || confirm?.kind === "pages" ? confirmSheet : planDialog}
       {pickerSheet}
     </div>
+  );
+}
+
+function PlanFeatures({ compact, name, children }: { compact: boolean; name: string; children: React.ReactNode }) {
+  if (!compact) return children;
+  return (
+    <details className="mu-feature-details">
+      <summary aria-label={`View features for ${name}`}>
+        <span className="mu-features-closed">View features</span>
+        <span className="mu-features-open">Hide features</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </summary>
+      {children}
+    </details>
   );
 }

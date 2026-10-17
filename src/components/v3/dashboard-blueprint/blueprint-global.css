@@ -719,14 +719,14 @@ body:has(.jf-blueprint) {
 /* The bay. Not positioned on purpose: the plate sums offsets up through
    positioned wrappers and a positioned bay's frame would sit between them. */
 .jf-blueprint .sb .sb-bay {
-  margin: 24px 10px 6px; padding: 9px 0 5px;
-  border: 1.5px solid var(--ink); border-radius: var(--radius);
-  background: var(--paper);
+  margin: 18px 10px 6px; padding: 0;
+  border: 0;
+  background: transparent;
 }
 /* Its name sits on the top line of the frame. */
 .jf-blueprint .sb .sb-bay-head {
-  display: table; margin: -17px 0 5px 10px; padding: 0 7px;
-  background: var(--paper); color: var(--ink); line-height: 14px;
+  display: table; margin: 0 0 8px 10px; padding: 0;
+  background: transparent; color: var(--ink); line-height: 14px;
 }
 .jf-blueprint .sb .sb-bay .sb-link { margin: 1px 5px; }
 
@@ -809,3 +809,10 @@ body:has(.jf-blueprint) {
   .jf-blueprint .sb .sb-bay .sb-tile { transition: none; }
   .jf-blueprint .sb .sb-bay .sb-link.sb-tool:not(.active):hover .sb-tile { transform: none; }
 }
+
+/* Inventory disclosure: a plain downward arrow, with a full touch target. */
+.jf-blueprint .sb .sb-bay .sb-fold-btn::before { display: none; }
+.jf-blueprint .sb .sb-bay .sb-fold-btn { background: transparent; border: 0; color: var(--ink); box-shadow: none; }
+.jf-blueprint .sb .sb-bay .sb-fold-btn:hover, .jf-blueprint .sb .sb-bay .sb-fold-btn:focus-visible { color: var(--blueprint); }
+.jf-blueprint .sb .sb-bay .sb-fold-btn svg { transform: rotate(90deg); }
+.jf-blueprint .sb .sb-bay .sb-tree.is-open .sb-fold-btn svg { transform: rotate(270deg); }

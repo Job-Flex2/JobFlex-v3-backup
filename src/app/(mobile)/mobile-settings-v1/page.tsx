@@ -51,9 +51,19 @@ const PANE_KEYS = ["account", "payments", "billing", "integrations", "notificati
 export default async function MobileSettingsV1Page({
   searchParams,
 }: {
-  searchParams: Promise<{ pane?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const rawPane = (await searchParams).pane;
+  const params = await searchParams;
+  const value = params.tab ?? params.pane;
+  const rawPane = Array.isArray(value) ? value[0] : value;
+  if (rawPane === "desk") {
+    const destination = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value == null) continue;
+      for (const item of Array.isArray(value) ? value : [value]) destination.append(key, item);
+    }
+    redirect(`/dashboard/settings?${destination.toString()}`);
+  }
   const initialPane = PANE_KEYS.includes(rawPane as RailKey) ? (rawPane as RailKey) : undefined;
 
   let ctx;

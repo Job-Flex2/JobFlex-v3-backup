@@ -481,6 +481,18 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
 }
 
 /** The AI desk (2026-10-13, lib/aiDesk): who answers and what the desk knows. A missing piece costs the pane, never the page. */
+/** The AI Desk workspace reuses the same reads without loading unrelated billing/integration settings. */
+export async function loadDeskWorkspace(ctx: SettingsOrgContext) {
+  if (!["OWNER", "ADMIN", "MANAGER"].includes(ctx.role)) {
+    return { desk: null, registration: null };
+  }
+  const [desk, registration] = await Promise.all([
+    loadDeskSettings(ctx.organizationId, ctx.role),
+    loadRegistrationView(ctx.organizationId, ctx.user.id),
+  ]);
+  return { desk, registration };
+}
+
 async function loadDeskSettings(organizationId: string, role: string): Promise<DeskSettingsData> {
   const { readDeskSettings } = await import("@/lib/aiDesk/numbers");
   const { companyFacts } = await import("@/lib/aiDesk/facts");

@@ -1,4 +1,4 @@
-// SUBSCRIPTION — BLUEPRINT · page fixtures.
+// SUBSCRIPTION — BLUEPRINT · usage page mapping and legacy fixtures.
 // Route: /dashboard/subscription (promoted 2026-08-12; ported at
 // /dashboard/subscription-blueprint, which no longer exists).
 //
@@ -9,12 +9,41 @@
 // caps and the invoice amounts were re-authored for that story; everything
 // else ships as the mockup wrote it.
 //
-// STATIC BY DESIGN. There is no data layer here: no server action, no API
+// The live loader uses USAGE_ACCESS_PAGES below to ask the existing page gate
+// which quota resources are accessible. The historical fixtures that follow
+// remain unused by the live subscription components.
+//
+// There is no data layer here: no server action, no API
 // route, no Prisma query and — deliberately, on a billing surface — no Stripe
 // call. Written while this layout was under review at the staging route; the
 // rationale stands after promotion, because a mock that silently talked to the
 // real billing system would be the worst possible way to find out it was still
 // a mock. Live wiring is a separate, not-yet-assigned task.
+
+import type { CustomPageId } from "@/lib/customPlan";
+import type { LimitKey } from "@/lib/planLimits";
+import type { TrialCapKey } from "@/lib/trialCaps";
+
+/** Only add-on meters need a page entitlement. Base workspace and office
+ * seats are always available; arrays follow requirePage's any-of rule. */
+export const USAGE_ACCESS_PAGES: Partial<Record<LimitKey, readonly CustomPageId[]>> = {
+  calendarCards: ["calendar"],
+  calendarEvents: ["calendar"],
+  workers: ["workers"],
+  leads: ["leads"],
+  aiPhoneCalls: ["phone"],
+  deskMinutes: ["phone"],
+  hvacEstimates: ["hvac-estimator"],
+  estimatorUses: ["smart-proposal", "roof-estimator", "fence-estimator", "hvac-estimator", "video-estimator", "deck-estimator"],
+};
+
+export const TRIAL_USAGE_ACCESS_PAGES: Partial<Record<TrialCapKey, readonly CustomPageId[]>> = {
+  roofMeasurements: ["roof-estimator"],
+  eagleViewOrders: ["roof-estimator"],
+  fenceLookups: ["fence-estimator"],
+  hvacLookups: ["hvac-estimator"],
+  hvacReports: ["hvac-estimator"],
+};
 
 export type Plan = {
   slug: string;

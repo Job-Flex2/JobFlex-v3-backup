@@ -46,11 +46,22 @@ type PaneKey = (typeof PANE_KEYS)[number];
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pane?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   // ?pane= deep-link: the legacy /dashboard/settings/* child routes redirect
   // here and land on their pane. An unknown value falls back to the default.
-  const rawPane = (await searchParams).pane;
+  const params = await searchParams;
+  const paneValue = params.tab ?? params.pane;
+  const rawPane = Array.isArray(paneValue) ? paneValue[0] : paneValue;
+  if (rawPane === "desk") {
+    const destination = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (key === "pane" || key === "tab" || value == null) continue;
+      for (const item of Array.isArray(value) ? value : [value]) destination.append(key, item);
+    }
+    destination.set("tab", "settings");
+    redirect(`/dashboard/phone?${destination.toString()}`);
+  }
   const initialPane = PANE_KEYS.includes(rawPane as PaneKey) ? (rawPane as PaneKey) : undefined;
   let ctx;
   try {

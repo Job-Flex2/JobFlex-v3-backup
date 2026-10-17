@@ -156,7 +156,6 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   // numbers — the owner's own place for it, the way SmartSpace Pro has one.
   { key: 'texting', label: 'Texting', icon: 'i-phone', sub: 'The texts your company sends — from your own number: who on the team gets them, which clients, and texts you write yourself.' },
   // The AI desk (2026-10-13): who answers the company's number, and what the desk knows and says.
-  { key: 'desk', label: 'AI desk', icon: 'i-phone', isNew: true, sub: 'Answers calls to your number. Texts are set up under Texting.' },
 ];
 
 export const RAIL_NEW_BADGE = 'NEW' as const;

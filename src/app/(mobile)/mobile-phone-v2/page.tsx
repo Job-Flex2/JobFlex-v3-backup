@@ -19,6 +19,8 @@
 
 import type { Metadata, Viewport } from "next";
 import { loadPhoneProps } from "@/app/dashboard/phone/load-phone";
+import { requireOrg } from "@/lib/orgContext";
+import { loadDeskWorkspace } from "@/lib/settings/loadSettingsData";
 import { MobilePhone } from "./mobile-phone";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
 
@@ -44,5 +46,6 @@ export default async function MobilePhoneV2Page() {
   const gate = await customPageGate("phone", { handheld: true });
   if (gate) return gate;
   const props = await loadPhoneProps("/mobile-phone-v2");
-  return <MobilePhone {...props} />;
+  const deskSettings = await loadDeskWorkspace(await requireOrg());
+  return <MobilePhone {...props} deskSettings={deskSettings} />;
 }

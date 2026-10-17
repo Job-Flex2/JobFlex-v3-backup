@@ -30,6 +30,7 @@
 // classic page did. The reveal cascade indexes `.content > *` at runtime, so
 // dropping it just shifts the remaining blocks up one step.
 
+import { DeskWorkspaceHeader, type DeskWorkspaceData } from "../ai-desk/desk-workspace-header";
 import { useCallback, useRef } from "react";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { initPhoneContent } from "./phone-behavior";
@@ -38,6 +39,7 @@ import "./phone-global.css";
 
 export type PhoneContentProps = {
   /** The org's 100 most recent calls, read in the page's server component. */
+  deskSettings?: DeskWorkspaceData;
   entries: Call[];
   /** Whole-table counts, not counts over `entries`. */
   stats: PhoneStats;
@@ -50,6 +52,7 @@ export type PhoneContentProps = {
 
 export function PhoneContent({
   entries,
+  deskSettings,
   stats,
   webhookUrl,
   twilioConfigured,
@@ -77,16 +80,7 @@ export function PhoneContent({
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <div className="kicker">Calls · the desk&apos;s log</div>
-          <h1 className="page-title">AI desk</h1>
-        </div>
-        {/* The AI desk's settings (2026-10-13): who answers, what the desk knows and says. */}
-        <a className="btn btn-ghost" href="/dashboard/settings?pane=desk" data-desk-setup-link>
-          Set up the desk
-        </a>
-      </div>
+      <DeskWorkspaceHeader settings={deskSettings} />
 
       {/* The desk's line: the number, who answers, the voice, the month's minutes. */}
       {desk ? (
@@ -97,11 +91,11 @@ export function PhoneContent({
             {desk.minutes ? `${desk.minutes} min this month` : "No minutes used this month"} · {desk.left}
           </span>
           {desk.out || desk.low ? (
-            <a className="desk-strip-a" href="/dashboard/settings?pane=desk#desk-minutes" data-desk-minutes-link>
+            <a className="desk-strip-a" href="/dashboard/phone?tab=settings&step=minutes" data-desk-minutes-link>
               Add minutes
             </a>
           ) : (
-            <a className="desk-strip-a" href="/dashboard/settings?pane=desk#desk-test" data-desk-test-link>
+            <a className="desk-strip-a" href="/dashboard/phone?tab=settings&step=voice" data-desk-test-link>
               Test it here
             </a>
           )}

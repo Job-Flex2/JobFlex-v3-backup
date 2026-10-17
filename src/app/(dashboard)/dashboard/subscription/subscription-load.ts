@@ -4,12 +4,10 @@ import type { SpotlightTool } from "@/lib/planSpotlight";
 import { getStripeMode } from "@/lib/stripeMode";
 // The subscription surface's ONE data read.
 //
-// Extracted verbatim from this folder's page.tsx on 2026-08-12 so the handheld
-// preview route (/mobile-subscription-v2) and the live URL (/dashboard/
-// subscription) run exactly the same query set instead of two copies that can
-// drift. NOTHING was added, removed or changed in the process: same calls, same
-// arguments, same order, same derived values. No new query, no new server
-// action, no new API route, no schema change.
+// Shared by the handheld preview and the live URL. Billing contact and the
+// complete usage snapshot are read here too, so both editions agree. Counts
+// reuse the limits engine; provider allowances retain their own rules. No
+// new server action, API route or schema is needed.
 //
 // Server-only by construction — it imports Prisma and two server actions, so a
 // client component importing it would fail the build rather than leak.
@@ -21,22 +19,30 @@ import { getStripeMode } from "@/lib/stripeMode";
 // re-assert it themselves through requireOwner().
 
 import { db } from "@/lib/db";
-import { customPriceCents, normalizeCustomPages } from "@/lib/customPlan";
+import { customPriceCents, normalizeCustomPages, CUSTOM_PLAN_LIMITS_SLUG } from "@/lib/customPlan";
+import { isPageLocked } from "@/lib/customPageAccess";
+import { USAGE_ACCESS_PAGES, TRIAL_USAGE_ACCESS_PAGES } from "@/components/v3/subscription-blueprint/subscription-data";
+import type { CancelOffer } from "@/components/billing/FreeSwitch";
 import { customPlanOffered } from "@/lib/customPlanFlag";
 import { REFERRAL_REWARD_PCT, settleReferralsForCode } from "@/lib/referralRewards";
 import { getOrCreateMyReferralCode } from "@/actions/referrals";
 import { listSubscriptionInvoices, type UpcomingInvoice } from "@/actions/billing";
 import { getPlanCatalog, getOrgPlanContext } from "@/lib/planCatalogServer";
 import { getOrgLimitOverview } from "@/lib/limitsEngine";
-import { LIMIT_DEFS } from "@/lib/planLimits";
+import { LIMIT_DEFS, DEFAULT_FREE_LIMITS, isUnlimited, type LimitScope } from "@/lib/planLimits";
 import { titleCaseSlug, type PlanDTO } from "@/lib/planCatalog";
 import type { SubscriptionInvoice } from "@/actions/billing";
 import { readPlanGrant } from "@/lib/planGrant";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { planLapsed } from "@/lib/planStatus";
-import { FREE_PLAN_NAME, freeSince, freeSwitchBooked, freeSwitchDate, onFreePlan } from "@/lib/freePlan";
+import { FREE_PLAN_NAME, LIVE_STATUSES, freePlanLosses, freeSince, freeSwitchBooked, freeSwitchDate, onFreePlan } from "@/lib/freePlan";
 import { trialCardLine, type TrialCardLine } from "@/lib/trialCardLine";
 import { planTermState } from "@/lib/planChange";
+import { includedDeskMinutes } from "@/lib/aiDesk/minutes";
+import { deskBalance, EMPTY_PACKS, EMPTY_USE, minutesOf, monthKey, parseDeskPacks, parseDeskUse } from "@/lib/aiDesk/shared";
+import { smsAllowanceFor } from "@/lib/entitlements";
+import { cardlessTrialState } from "@/lib/trialState";
+import { TRIAL_CAPS, TRIAL_CAP_KEYS, TRIAL_CAP_NOUN } from "@/lib/trialCaps";
 
 // The result shape. These interfaces lived in ./subscription-view.tsx until
 // 2026-08-13, when that desktop view was superseded by the blueprint page at
@@ -49,6 +55,10 @@ export interface UsageRow {
   label: string;
   used: number;
   limit: number;
+  scope?: LimitScope;
+  hint?: string;
+  /** Included allowance; extra usage may be covered by a separate provider pool. */
+  informational?: boolean;
 }
 
 export interface SubscriptionViewProps {
@@ -88,10 +98,16 @@ export interface SubscriptionViewProps {
   complimentary: { endsAt: string | null; after: "free" | "expired" } | null;
   /** The limits engine's enforced caps for this org (unlimited keys omitted). */
   usage: UsageRow[];
-  /** What the org has used on keys the plan does not cap — shown as counts. */
-  usageUnlimited?: { resource: string; label: string; used: number }[];
-  /** The caps do not apply to this user here — a platform admin in an
-   *  organization they own (lib/limitsEngine). The card says so instead. */
+  /** Every accessible uncapped resource, including a real zero count. */
+  usageUnlimited?: { resource: string; label: string; used: number; scope?: LimitScope; hint?: string }[];
+  /** Failed reads remain unknown instead of appearing as zero usage. */
+  usageUnavailable?: { resource: string; label: string; limit: number | null; scope: LimitScope; hint: string }[];
+  /** The existing two-step cancellation flow's factual offer. */
+  cancelOffer?: CancelOffer | null;
+  /** Organization billing contact, edited by the existing Settings Billing pane. */
+  billingInformation?: { name: string; billingEmail: string } | null;
+  /** Plan caps do not apply to this user here (lib/limitsEngine). Provider
+   *  allowances, including AI desk minutes, still apply. */
   usageExempt?: boolean;
   invoices: { available: boolean; invoices: SubscriptionInvoice[]; upcoming?: UpcomingInvoice | null };
   /** The next charge and what the org's referrals take off it; null when
@@ -167,18 +183,23 @@ function referralsBehind(rewardsNewestFirst: number[], balanceCents: number, spe
 export async function loadSubscriptionData(
   organizationId: string,
 ): Promise<SubscriptionViewProps> {
-  const [sub, planContext, plans, limitOverview, code, trialCard, term] = await Promise.all([
+  const [sub, planContext, plans, limitOverview, code, trialCard, term, billingInformation] = await Promise.all([
     readAccessSubscription(organizationId),
     getOrgPlanContext(organizationId),
     getPlanCatalog(),
-    getOrgLimitOverview(organizationId),
+    getOrgLimitOverview(organizationId, undefined, { includeUnlimitedUsage: true }),
     getOrCreateMyReferralCode(),
     trialCardLine(organizationId).catch(() => null),
     planTermState(organizationId).catch(() => ({ currentInterval: null, scheduledSwitch: null })),
+    db.organization.findUnique({ where: { id: organizationId }, select: { name: true, billingEmail: true } }),
   ]);
-  // No meters for a platform admin in their own organization: the card says
-  // "Unlimited · platform admin" instead of counting what is not capped.
-  const limitUsage = limitOverview.exempt ? [] : limitOverview.usage;
+  // Follow the same fail-closed page entitlement check as each add-on's
+  // server boundary. A zero quota is still an accessible resource, not hidden.
+  const access = await Promise.all(limitOverview.usage.map(async (entry) => {
+    const pages = USAGE_ACCESS_PAGES[entry.resource];
+    return !pages || !(await isPageLocked(organizationId, pages));
+  }));
+  const limitUsage = limitOverview.usage.filter((_, index) => access[index]);
 
   // Referral catch-up: a referred shop that has since started its
   // subscription flips the referrer's PENDING row and lands the credit.
@@ -215,7 +236,8 @@ export async function loadSubscriptionData(
 
   // No subscription row → the stamp reads "inactive" (the Free tier is gone,
   // so absence of a subscription is no longer presented as a free plan).
-  const status = sub?.status ?? "INACTIVE";
+  const storedStatus = sub?.status ?? "INACTIVE";
+  const accessBlocked = planLapsed(sub);
   /* A COMPLIMENTARY PLAN (owner, 2026-09-22). A MANUAL row that is ACTIVE is a
      grant from JobFlex: the page says so, shows when it ends, and previews no
      bill — there is no Stripe subscription to bill, and the "estimate" the
@@ -223,30 +245,116 @@ export async function loadSubscriptionData(
      coming. The grant's own record has the end date; an older grant written
      before the record existed falls back to the row's period end. */
   const grant = sub?.provider === "MANUAL" && sub.status === "ACTIVE" ? await readPlanGrant(organizationId) : null;
+  // Stripe may be unavailable while the local row still says TRIALING or
+  // ACTIVE after its access date. Project the same lapse the page gate and
+  // quotas already enforce; this changes only the summary, never billing.
+  const status = accessBlocked && storedStatus === "TRIALING"
+    ? "TRIAL_ENDED"
+    : accessBlocked && storedStatus === "ACTIVE"
+      ? sub?.provider === "MANUAL" && grant?.fallback === "free" ? "FREE" : "EXPIRED"
+      : storedStatus;
   const complimentary =
-    sub?.provider === "MANUAL" && sub.status === "ACTIVE"
+    !accessBlocked && sub?.provider === "MANUAL" && sub.status === "ACTIVE"
       ? { endsAt: grant ? grant.endsAt : sub.currentPeriodEnd?.toISOString() ?? null, after: grant?.fallback ?? ("free" as const) }
       : null;
   const { plan: planDto, rawPlan } = planContext;
 
-  // Only finite caps render as usage bars; unlimited keys are omitted.
+  // The desk has a separate allowance-and-packs rule: an absent plan limit
+  // means the tier's included minutes, NOT unlimited provider minutes.
+  const deskEntry = limitUsage.find((entry) => entry.resource === "deskMinutes");
+  let deskHint: string | null = null;
+  if (deskEntry) {
+    const included = await includedDeskMinutes(organizationId);
+    deskEntry.limit = included;
+    try {
+      const [useRow, packsRow] = await Promise.all([
+        db.syncState.findUnique({ where: { key: `deskuse:${organizationId}:${monthKey()}` }, select: { cursor: true } }),
+        db.syncState.findUnique({ where: { key: `deskpacks:${organizationId}` }, select: { cursor: true } }),
+      ]);
+      if (useRow) JSON.parse(useRow.cursor);
+      if (packsRow) JSON.parse(packsRow.cursor);
+      const use = useRow ? parseDeskUse(useRow.cursor) : EMPTY_USE;
+      const packs = packsRow ? parseDeskPacks(packsRow.cursor) : EMPTY_PACKS;
+      const balance = deskBalance(included, use, packs);
+      deskEntry.used = minutesOf(balance.usedSeconds);
+      deskHint = `Included minutes per calendar month · ${minutesOf(balance.packSeconds)} prepaid minutes remaining`;
+    } catch {
+      deskEntry.used = null;
+    }
+  }
+  const usageMeta = (resource: string) => {
+    const def = LIMIT_DEFS.find((d) => d.key === resource)!;
+    const entry = limitUsage.find((item) => item.resource === resource);
+    const capping = entry?.cappedBy ? LIMIT_DEFS.find((item) => item.key === entry.cappedBy) : null;
+    const ownHint = resource === "deskMinutes" && deskHint ? deskHint : def.hint;
+    const hint = capping
+      ? `${ownHint} · Also limited by ${capping.label.toLowerCase()}${entry?.remaining === null ? "" : `: ${entry?.remaining} remaining`}`
+      : ownHint;
+    return { label: def.label, scope: def.scope, hint };
+  };
+  // Every accessible resource is represented, including unused unlimited
+  // resources. A failed count is its own state, never a fabricated zero.
   const usage: UsageRow[] = limitUsage
-    .filter((u) => u.limit !== null)
+    .filter((u) => u.limit !== null && u.used !== null)
     .map((u) => ({
       resource: u.resource,
-      label: LIMIT_DEFS.find((d) => d.key === u.resource)?.label ?? u.resource,
-      used: u.used,
+      ...usageMeta(u.resource),
+      used: u.used as number,
       limit: u.limit as number,
+      ...(u.resource === "deskMinutes" ? { informational: true } : {}),
     }));
-  // The rest of the meters, so a plan with no caps still shows what it has
-  // used this cycle instead of "nothing metered" (owner, 2026-09-02).
+  // Uncapped resources still report counts, including when unused.
   const usageUnlimited = limitUsage
-    .filter((u) => u.limit === null && u.used > 0)
+    .filter((u) => u.limit === null && u.used !== null)
     .map((u) => ({
       resource: u.resource,
-      label: LIMIT_DEFS.find((d) => d.key === u.resource)?.label ?? u.resource,
-      used: u.used,
+      ...usageMeta(u.resource),
+      used: u.used as number,
     }));
+  const usageUnavailable: NonNullable<SubscriptionViewProps["usageUnavailable"]> = limitUsage.filter((u) => u.used === null).map((u) => ({
+    resource: u.resource,
+    ...usageMeta(u.resource),
+    limit: u.limit,
+  }));
+  // Texts have an included allowance separate from in-app messages. Match
+  // Settings' real outgoing-message count and UTC calendar-month boundary.
+  if (sub && !planLapsed(sub)) {
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const texts = await db.smsMessage.count({ where: {
+      organizationId, direction: "OUT", status: { in: ["SENT", "DELIVERED", "QUEUED"] }, createdAt: { gte: monthStart },
+    } }).catch(() => null);
+    const row = { resource: "smsAllowance", label: "Text messages", scope: "monthly" as const, hint: "Included text allowance per calendar month", limit: smsAllowanceFor(planContext.tier) };
+    if (texts === null) usageUnavailable.push(row);
+    else usage.push({ ...row, used: texts, informational: true });
+  }
+  const trial = await cardlessTrialState(organizationId).catch(() => null);
+  if (trial?.kind === "trialing" && !trial.hasCard) {
+    // Card-less trials have ceilings of their own, even where the plan is
+    // uncapped. Read the existing ledger directly so a failed read is unknown.
+    let uses: Record<string, unknown> | null = null;
+    try {
+      const meter = await db.syncState.findUnique({ where: { key: `trialMeter:${organizationId}` }, select: { cursor: true } });
+      const parsed = meter ? JSON.parse(meter.cursor) : { uses: {} };
+      if (parsed && typeof parsed === "object" && parsed.uses && typeof parsed.uses === "object") uses = parsed.uses;
+    } catch { /* Each applicable trial meter below remains unavailable. */ }
+    for (const key of TRIAL_CAP_KEYS) {
+      const pages = TRIAL_USAGE_ACCESS_PAGES[key];
+      if (pages && await isPageLocked(organizationId, pages)) continue;
+      const noun = TRIAL_CAP_NOUN[key][1];
+      const row = {
+        resource: `trial:${key}`,
+        label: `Trial ${noun}`,
+        scope: "absolute" as const,
+        hint: "Current card-less trial · add a card to unlock full limits",
+        limit: TRIAL_CAPS[key],
+      };
+      const value = uses?.[key] ?? (uses ? 0 : null);
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0) usageUnavailable.push(row);
+      else usage.push({ ...row, used: value });
+    }
+  }
 
   const stripeMode = await getStripeMode();
   const rewardSummary =
@@ -279,23 +387,50 @@ export async function loadSubscriptionData(
     .filter((r) => r.status === "PAID" && r.rewardAppliedAt)
     .map((r) => r.rewardCents ?? perReferralCents);
   const upcoming = invoiceResult.upcoming ?? null;
-  const billable = ["ACTIVE", "TRIALING", "PAST_DUE"].includes(status.toUpperCase()) && !complimentary;
+  const billable = !accessBlocked && ["ACTIVE", "TRIALING", "PAST_DUE"].includes(status.toUpperCase()) && !complimentary;
+  const billDate = sub?.currentPeriodEnd ?? sub?.trialEndsAt ?? null;
+  const futureBillDate = billDate && billDate.getTime() > Date.now() ? billDate : null;
   /* THE FREE PLAN (owner, 2026-10-13; lib/freePlan). Booked: the plan runs
      to the end of the cycle and nothing more is billed — no next bill, the
      date it switches instead. Ended (CANCELED): the company is on Free. A
      grant that expired (EXPIRED) still reads "Access ended". */
-  const freeSwitch = !complimentary && freeSwitchBooked(sub) ? { at: freeSwitchDate(sub)?.toISOString() ?? null } : null;
+  const freeSwitch = !accessBlocked && !complimentary && freeSwitchBooked(sub) ? { at: freeSwitchDate(sub)?.toISOString() ?? null } : null;
   const wasName = planDto?.name ?? titleCaseSlug(rawPlan);
   // A grant that ran out onto "free" kept no plan of its own to name: no "Was".
-  const freePlan = !complimentary && onFreePlan(sub)
-    ? { since: freeSince(sub)?.toISOString() ?? null, wasName: wasName.toLowerCase() === "free" ? "" : wasName }
+  const freePlan = !complimentary && onFreePlan({ status })
+    ? { since: (status === "TRIAL_ENDED" ? sub?.trialEndsAt ?? sub?.currentPeriodEnd : freeSince(sub))?.toISOString() ?? null, wasName: wasName.toLowerCase() === "free" ? "" : wasName }
     : null;
-  const endedStatus = status.toUpperCase() === "EXPIRED";
+  const endedStatus = status.toUpperCase() === "EXPIRED" || (accessBlocked && !freePlan);
   const cancellation = !complimentary && endedStatus
     ? { accessUntil: (sub?.currentPeriodEnd ?? sub?.trialEndsAt)?.toISOString() ?? null, ended: true }
     : null;
+  let cancelOffer: CancelOffer | null = null;
+  // Local access expiry cannot prove that Stripe stopped billing. Keep the
+  // existing cancellation path for a still-live provider mirror that can be
+  // contacted, while never promising access until a past date.
+  const canCancelUnverifiedProvider = sub?.provider === "STRIPE" && Boolean(sub.externalSubId) && isStripeEnabled();
+  if ((!accessBlocked || canCancelUnverifiedProvider) && sub && sub.provider !== "MANUAL" && !sub.canceledAt && (LIVE_STATUSES as readonly string[]).includes(storedStatus) && !freeSwitch) {
+    // Same rules and copy as Settings Billing; no Stripe request or mutation.
+    const { parsePlanLimits } = await import("@/lib/planLimits");
+    const catalog = await db.pricingPlan.findMany({ select: { slug: true, limitsJson: true } });
+    const limitsOf = (slug: string) => {
+      const row = catalog.find((p) => p.slug.toLowerCase() === slug);
+      return row ? parsePlanLimits(row.limitsJson) : null;
+    };
+    const slug = sub.plan.toLowerCase();
+    const own = limitsOf(slug === "custom" ? CUSTOM_PLAN_LIMITS_SLUG : slug);
+    const free = limitsOf("free") ?? DEFAULT_FREE_LIMITS;
+    const cap = (value: number | undefined) => isUnlimited(value) ? null : value as number;
+    cancelOffer = {
+      planName: wasName,
+      keepsUntil: futureBillDate?.toISOString() ?? null,
+      ...(accessBlocked ? { accessAlreadyFree: true as const } : {}),
+      losses: freePlanLosses({ pages: slug === "custom" ? customPages : null, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated) }),
+      made: null,
+    };
+  }
   let nextCharge: NextCharge | null = null;
-  if (complimentary || cancellation || freeSwitch || freePlan) {
+  if (accessBlocked || complimentary || cancellation || freeSwitch || freePlan) {
     nextCharge = null;
   } else if (upcoming) {
     nextCharge = {
@@ -311,7 +446,7 @@ export async function loadSubscriptionData(
       amountDueCents: upcoming.amountDueCents,
       estimated: false,
     };
-  } else if (billable && priceCents !== null && priceCents > 0) {
+  } else if (billable && futureBillDate && priceCents !== null && priceCents > 0) {
     // Unspent = owed (not on Stripe yet) + landed since the last invoice.
     const lastInvoiceAt = invoiceResult.invoices.reduce((t, v) => Math.max(t, v.created), 0) * 1000;
     const unspent = earned
@@ -324,7 +459,7 @@ export async function loadSubscriptionData(
     const balance = unspent.reduce((n, c) => n + c, 0);
     const credit = Math.min(priceCents, balance);
     nextCharge = {
-      dueAt: sub?.currentPeriodEnd?.toISOString() ?? sub?.trialEndsAt?.toISOString() ?? null,
+      dueAt: futureBillDate.toISOString(),
       subtotalCents: priceCents,
       discountNotes: [],
       discountCents: 0,
@@ -340,30 +475,33 @@ export async function loadSubscriptionData(
 
   return {
     planName: freePlan ? FREE_PLAN_NAME : wasName,
-    priceCents: freePlan ? 0 : priceCents,
-    interval: freePlan ? null : term.currentInterval,
-    scheduledSwitch: freePlan ? null : term.scheduledSwitch,
+    priceCents: freePlan ? 0 : accessBlocked ? null : priceCents,
+    interval: accessBlocked || freePlan ? null : term.currentInterval,
+    scheduledSwitch: accessBlocked || freePlan ? null : term.scheduledSwitch,
     // On Free no plan card is "current": every one is an upgrade, paid at once.
-    currentSlug: freePlan ? "free" : (planDto?.slug ?? rawPlan.toLowerCase()),
+    currentSlug: accessBlocked || freePlan ? "free" : (planDto?.slug ?? rawPlan.toLowerCase()),
     plans,
     status,
-    accessBlocked: planLapsed(sub),
-    nextBill: !complimentary && !freePlan && sub?.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
-    trialEndsAt: sub?.trialEndsAt ? sub.trialEndsAt.toISOString() : null,
-    cancelAtPeriodEnd: Boolean(sub?.canceledAt),
+    accessBlocked,
+    nextBill: !accessBlocked && !complimentary && !freePlan && !freeSwitch ? futureBillDate?.toISOString() ?? null : null,
+    trialEndsAt: !accessBlocked && status === "TRIALING" && sub?.trialEndsAt ? sub.trialEndsAt.toISOString() : null,
+    cancelAtPeriodEnd: !accessBlocked && Boolean(sub?.canceledAt),
     cancellation,
     freeSwitch,
     freePlan,
     complimentary,
     usage,
     usageUnlimited,
+    usageUnavailable,
     usageExempt: limitOverview.exempt,
+    cancelOffer,
+    billingInformation: billingInformation ? { name: billingInformation.name, billingEmail: billingInformation.billingEmail ?? "" } : null,
     invoices: invoiceResult,
     nextCharge,
     customPages,
     spotlight: await orgSpotlight(organizationId),
     // The card line belongs to a running card-less trial, never to the Free plan.
-    trialCard: freePlan ? null : trialCard,
+    trialCard: accessBlocked || freePlan ? null : trialCard,
     checkoutReady: isStripeEnabled(),
     customOffered: customPlanOffered(),
     sandbox: stripeMode === "test",
