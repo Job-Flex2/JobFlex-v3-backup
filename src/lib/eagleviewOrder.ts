@@ -114,9 +114,13 @@ export function packsFromContent(instant: InstantRoofData): { have: PdPack[]; un
   const have: PdPack[] = [];
   if (any((s) => s.areaSqft != null)) have.push(PD_PACK.ROOF_AREA);
   if (any((s) => s.pitch != null || s.eaveHeightFt != null)) have.push(PD_PACK.PITCH_EAVE);
-  if (any((s) => s.material != null || s.conditionRating != null)) have.push(PD_PACK.MATERIAL_CONDITION);
+  // Facet count and shape arrive in 003 with the material, NOT in 005 — read
+  // off the stored raw bodies (2026-10-16): every order carrying
+  // structure_roof_facet_count included 003, none without it ever had one,
+  // and a completed 005 body holds only chimney / solar / AC / occlusion.
+  if (any((s) => s.material != null || s.conditionRating != null || s.facetCount != null || s.shape != null)) have.push(PD_PACK.MATERIAL_CONDITION);
   if (any((s) => s.roofAgeYears != null)) have.push(PD_PACK.ROOF_AGE);
-  if (any((s) => s.facetCount != null || s.shape != null || s.chimney != null || s.solarPanels != null || s.rooftopAcCount != null)) have.push(PD_PACK.PROPERTY_DETAILS);
+  if (any((s) => s.chimney != null || s.solarPanels != null || s.rooftopAcCount != null)) have.push(PD_PACK.PROPERTY_DETAILS);
   if (any((s) => (s.outline?.length ?? 0) >= 3)) have.push(PD_PACK.OUTLINES);
   if ((instant.imagery ?? []).length > 0) have.push(PD_PACK.ORTHO);
   return { have, unknown: PD_DIAGRAM_PACKS.filter((p) => !have.includes(p)) };
