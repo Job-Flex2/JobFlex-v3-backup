@@ -1,80 +1,151 @@
 /* Settings → Estimating — the company's own estimating method. One piece for the desk pane and the phone pane, so it
-   reads the shared tokens (--ink, --muted, --hair, --blueprint …) with fallbacks of its own. */
+   reads the shared tokens (--ink, --muted, --hair, --blueprint …) with fallbacks of its own, and repeats the values the
+   other Settings tabs show rather than borrowing their global names: on the desk settings-blueprint/settings.module.css
+   (.prow, .tg, .fgrid, and .fld > span / .fin as the owner pass of 2026-09-26 left them); on the phone page
+   mobile-settings.css (.mst-fldL, .mst-in, .mst-tg) — so a field here reads as the Account tab's field on each.
 
-.form { display: grid; gap: 18px; color: var(--ink, #0a0a0a); }
+   The root carries data-nest, so the dashboard shell's `margin/padding: 0` reset (blueprint.module.css) skips this
+   tree, and every rule below weighs two classes or more — a one-class rule ties that reset, and the production build
+   emits the reset later, which zeroed the fields' padding, the switch's track and the tiles' frames on prod. */
 
-.switchRow { display: flex; align-items: center; gap: 16px; padding: 14px 16px;
-  border: 2px solid var(--ink, #0a0a0a); border-radius: var(--radius, 2px); background: var(--sheet, #fff); }
-.switchTxt { flex: 1; min-width: 0; display: grid; gap: 4px; }
-.switchTxt b { font-size: 15px; font-weight: 800; }
-.switchTxt span { font-size: 13px; line-height: 1.45; color: var(--muted, #555); }
+.form[data-nest] { display: block; min-width: 0; color: var(--ink, #0a0a0a); }
+.form[data-nest],
+.form[data-nest] *,
+.form[data-nest] *::before,
+.form[data-nest] *::after { box-sizing: border-box; }
 
-/* The app's switch: green on, grey off — the colour carries the state. */
-.tg { position: relative; flex-shrink: 0; width: 50px; height: 28px; padding: 0; border: 1.5px solid var(--ink, #0a0a0a);
-  border-radius: 999px; background: var(--paper-deep, #ebe8e1); cursor: pointer; transition: background .16s ease; }
-.tg::after { content: ""; position: absolute; top: 50%; left: 3px; width: 19px; height: 19px; border-radius: 50%;
-  background: var(--muted-light, #888); transform: translateY(-50%); transition: transform .18s ease, background .18s ease; }
-.tg[aria-checked="true"] { background: rgba(58, 125, 68, .18); }
-.tg[aria-checked="true"]::after { transform: translate(22px, -50%); background: var(--success, #3a7d44); }
-.tg:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
-.tg:disabled { cursor: not-allowed; opacity: .55; }
+/* The switch row — the other tabs' `.prow`: name 13.5/800, description 12 muted, the switch at the right. */
+.form .switchRow { display: flex; align-items: center; gap: 13px; margin: 0; padding: 0 0 16px;
+  border: 0; border-bottom: 1.5px solid var(--hair, rgba(10,10,10,.12)); background: none; }
+.form .switchTxt { flex: 1; min-width: 0; }
+.form .switchTxt b { display: block; font-size: 13.5px; font-weight: 800; }
+.form .switchTxt span { display: block; margin-top: 3px; font-size: 12px; line-height: 1.45; color: var(--muted, #555); }
 
-.body { display: grid; gap: 18px; transition: opacity .16s ease; }
+/* The app's switch (`.tg`): square, red off, green on — the colour carries the state. ::before only widens the touch
+   area past 44px; the drawing stays 46 × 25. */
+.form .tg { position: relative; flex-shrink: 0; width: 46px; height: 25px; margin: 0; padding: 0;
+  border: 1.5px solid var(--ink, #0a0a0a); border-radius: var(--radius, 2px); background: rgba(168,50,50,.14);
+  cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: background .2s var(--ease, ease), border-color .2s var(--ease, ease); }
+.form .tg::before { content: ""; position: absolute; inset: -11px -4px; }
+.form .tg::after { content: ""; position: absolute; top: 50%; left: 2px; width: 17px; height: 17px; border-radius: 0;
+  background: var(--danger, #a83232); transform: translateY(-50%);
+  transition: transform .2s var(--ease-out, ease-out), background .2s var(--ease, ease); }
+.form .tg[aria-checked="true"] { background: rgba(58,125,68,.16); }
+.form .tg[aria-checked="true"]::after { transform: translate(22px, -50%); background: var(--success, #3a7d44); }
+.form .tg:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
+.form .tg:disabled { cursor: not-allowed; opacity: .55; }
+
+.form .body { padding-top: 22px; transition: opacity .16s ease; }
 /* Off: still fillable, so a company can set its numbers before it turns them on. */
-.body.isOff { opacity: .62; }
-.body.isOff:focus-within { opacity: 1; }
+.form .body.isOff { opacity: .62; }
+.form .body.isOff:focus-within { opacity: 1; }
 
-.group { display: grid; gap: 12px; padding-top: 14px; border-top: 1.5px solid var(--hair, rgba(10,10,10,.12)); }
-.gh { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+/* Groups: 22px between them, 14px inside. The first one sits under the switch row's own rule. */
+.form .group { display: block; margin: 0; padding: 0; }
+.form .group + .group { margin-top: 22px; padding-top: 22px; border-top: 1.5px solid var(--hair, rgba(10,10,10,.12)); }
+/* :not(:first-child) weighs three classes, over the two-class `margin: 0` of the pieces below. */
+.form .group > :not(:first-child) { margin-top: 14px; }
+.form .gh { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink, #0a0a0a); }
 
-.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* `.fgrid`: 14px gaps; Materials markup / Overhead / Profit run three across. */
+/* Fields align on their boxes: a name that wraps to two lines on a phone pushes its own label up, not its box down. */
+.form .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 14px; }
+.form .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 14px; }
 
-.fld { display: grid; gap: 7px; min-width: 0; }
-.lbl { font-size: 12.5px; font-weight: 700; color: var(--ink, #0a0a0a); }
-/* min-width 0 and the input's 100%: an input's natural width (20 characters) would otherwise widen its column. */
-.box { display: flex; align-items: center; min-width: 0; height: 46px; padding: 0 12px; gap: 6px; border: 2px solid var(--ink, #0a0a0a);
-  border-radius: var(--radius, 2px); background: var(--sheet, #fff); transition: border-color .14s ease, box-shadow .14s ease; }
-.box:focus-within { border-color: var(--blueprint, #1854a0); box-shadow: 0 0 0 2px rgba(24, 84, 160, .2); }
-.box.isFlag { border-color: var(--warning, #b88420); box-shadow: 0 0 0 2px rgba(184, 132, 32, .18); }
-.in { flex: 1; width: 100%; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent;
-  font: inherit; font-size: 16px; /* 16: iOS zooms the page on focus under 16px */ font-weight: 600;
+/* The field name — the Account tab's `.fld > span`: the page's sans, 12/800 caps, ink. */
+.form .fld { display: block; min-width: 0; }
+.form .lbl { display: block; margin: 0 0 8px; font-family: var(--font-sans, var(--font, inherit)); font-size: 12px;
+  font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+
+/* The field — the Account tab's `.fin`: 46 tall, 2px ink frame, 14.5/500; focus turns the frame blueprint with a ring.
+   min-width 0 and the input's 100%: an input's natural width (20 characters) would otherwise widen its column. */
+.form .box { display: flex; align-items: center; gap: 6px; min-width: 0; height: 46px; margin: 0; padding: 0 12px;
+  border: 2px solid var(--ink, #0a0a0a); border-radius: var(--radius, 2px);
+  background: var(--paper-deep, #fff); box-shadow: none;
+  transition: border-color .15s var(--ease, ease), box-shadow .15s var(--ease, ease); }
+.form .box:focus-within { border-color: var(--blueprint, #1854a0);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--blueprint, #1854a0) 25%, transparent); }
+.form .box.isFlag { border-color: var(--warning, #b88420); }
+.form .box:has(.in:disabled) { border-color: color-mix(in srgb, var(--ink, #0a0a0a) 30%, transparent);
+  background: var(--paper, #f2f0eb); }
+.form .in { flex: 1; width: 100%; min-width: 0; height: 100%; margin: 0; padding: 0; border: 0; outline: none;
+  background: transparent; box-shadow: none; font: inherit; font-size: 14.5px; font-weight: 500;
   font-variant-numeric: tabular-nums; color: var(--ink, #0a0a0a); }
-.in::placeholder { color: var(--muted-light, #888); font-weight: 500; }
-.in:disabled { color: var(--muted, #555); cursor: not-allowed; }
-.affix { font-style: normal; font-weight: 700; color: var(--muted, #555); }
-.hint { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted, #555); }
+.form .in::placeholder { color: var(--muted-light, #888); opacity: 1; }
+.form .in:disabled { color: var(--muted, #555); cursor: not-allowed; }
+.form .affix { flex-shrink: 0; font-style: normal; font-size: 13px; font-weight: 700; color: var(--muted, #555); }
 
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
-.segBtn { display: grid; gap: 3px; min-height: 56px; padding: 9px 12px; text-align: left; cursor: pointer;
-  border: 1.5px solid var(--hair, rgba(10,10,10,.12)); border-radius: var(--radius, 2px); background: var(--sheet, #fff);
-  color: var(--ink, #0a0a0a); font: inherit; transition: border-color .14s ease, background .14s ease; }
-.segBtn b { font-size: 14px; font-weight: 800; }
-.segBtn span { font-size: 12px; color: var(--muted, #555); }
-.segBtn:hover:not(:disabled) { border-color: var(--ink, #0a0a0a); }
-.segBtn[aria-checked="true"] { border: 2px solid var(--blueprint, #1854a0); background: rgba(24, 84, 160, .06); }
-.segBtn[aria-checked="true"] b { color: var(--blueprint, #1854a0); }
-.segBtn:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
-.segBtn:disabled { cursor: not-allowed; }
+.form .hint { display: block; margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted, #555); }
+.form .group > .hint { margin-top: 8px; }
 
-.example { margin: 0; padding: 10px 12px; border-left: 3px solid var(--blueprint, #1854a0); background: rgba(24, 84, 160, .05);
-  font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums; }
-.preview { display: grid; gap: 4px; margin: 0; padding: 12px 14px; border: 1.5px dashed var(--hair, rgba(10,10,10,.2));
-  border-radius: var(--radius, 2px); font-size: 13px; line-height: 1.5; }
-.preview span { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted, #555); }
+/* The two choices: tiles of one height. Chosen — a 2px blueprint frame (padding gives back the extra half pixel, so
+   nothing moves). */
+.form .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.form .segBtn { display: grid; align-content: center; gap: 3px; min-height: 60px; margin: 0; padding: 10px 12px;
+  text-align: left; cursor: pointer; border: 1.5px solid var(--hair, rgba(10,10,10,.12)); border-radius: var(--radius, 2px);
+  background: var(--sheet, #fff); color: var(--ink, #0a0a0a); font: inherit; -webkit-appearance: none; appearance: none;
+  transition: border-color .14s ease, background .14s ease; }
+.form .segBtn b { display: block; font-size: 13.5px; font-weight: 800; }
+.form .segBtn span { display: block; font-size: 12px; line-height: 1.35; color: var(--muted, #555); }
+.form .segBtn:hover:not(:disabled):not([aria-checked="true"]) { border-color: var(--ink, #0a0a0a); }
+.form .segBtn[aria-checked="true"] { padding: 9.5px 11.5px; border: 2px solid var(--blueprint, #1854a0);
+  background: rgba(24,84,160,.06); }
+.form .segBtn[aria-checked="true"] b { color: var(--blueprint, #1854a0); }
+.form .segBtn:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
+.form .segBtn:disabled { cursor: not-allowed; }
 
-.note { margin: 0; font-size: 13px; color: var(--muted, #555); }
-.status { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--muted, #555); }
-.isOk { color: var(--success, #3a7d44); }
-.isWarn { color: var(--warning-dark, #96691a); }
-.isErr { color: var(--danger, #a83232); }
+/* Info lines, as in Settings: a 3px blueprint edge on a faint blueprint wash. Dashes stay for empty states. */
+.form .example,
+.form .preview { display: block; margin: 0; padding: 10px 12px; border: 0; border-left: 3px solid var(--blueprint, #1854a0);
+  border-radius: 0; background: rgba(24,84,160,.05); font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.form .preview { margin-top: 22px; }
+.form .preview span { display: block; margin-bottom: 4px; font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted, #555); }
+.form .group + .hint { margin-top: 22px; }
 
-@media (max-width: 640px) {
-  .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid3 > :first-child { grid-column: 1 / -1; }
-  .seg { grid-auto-flow: row; grid-auto-columns: auto; }
-  .segBtn { min-height: 52px; }
+.form .note,
+.form.note { margin: 0; font-size: 13px; color: var(--muted, #555); }
+.form .status { margin: 18px 0 0; text-align: right; font-size: 11px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted, #555); }
+.form .isOk { color: var(--success, #3a7d44); }
+.form .isWarn { color: var(--warning-dark, #96691a); }
+.form .isErr,
+.form.isErr { color: var(--danger, #a83232); }
+
+/* Narrow desk: the Settings `.fin` goes to 16px (iOS zooms the page on focus under 16px). */
+@media (max-width: 1080px) {
+  .form .in { font-size: 16px; }
 }
+@media (max-width: 640px) {
+  .form .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form .grid3 > :first-child { grid-column: 1 / -1; }
+  /* Tax rate stands alone in its grid: the full width, so "Job's state rate" is not cut. */
+  .form .grid > :only-child { grid-column: 1 / -1; }
+  .form .seg { grid-auto-flow: row; grid-auto-columns: auto; }
+}
+
+/* The phone page (mobile-settings.css): its Account fields and switches, value for value. */
+:global(.jf-mobile-settings) .form .lbl { margin-bottom: 7px; font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px; font-weight: 700; letter-spacing: .14em; color: var(--ink-soft, #2a2a2a); }
+:global(.jf-mobile-settings) .form .box { height: var(--field-h, 48px); border: 1.5px solid var(--ink, #0a0a0a);
+  background: var(--sheet, #fff); }
+:global(.jf-mobile-settings) .form .box:focus-within { border-color: var(--blueprint, #1854a0); box-shadow: none; }
+:global(.jf-mobile-settings) .form .box.isFlag { border-color: var(--warning, #b88420); }
+:global(.jf-mobile-settings) .form .box:has(.in:disabled) { border-color: var(--hair, rgba(10,10,10,.12));
+  background: var(--paper-deep, #ebe8e1); }
+:global(.jf-mobile-settings) .form .in { font-size: 16px; font-weight: 600; }
+/* The page's keyboard ring (`.jf-mobile-settings :focus-visible`) goes round the field, not the bare input inside it. */
+:global(.jf-mobile-settings) .form .in:focus-visible { outline: none; }
+:global(.jf-mobile-settings) .form .box:has(.in:focus-visible) { outline: 2px solid var(--sky, #4a9eff); outline-offset: 2px; }
+:global(.jf-mobile-settings) .form .in::placeholder { color: var(--muted, #555); }
+/* `.mst-tg`: a 52 × 30 track, a 20px knob; ::before keeps the touch area at 44. */
+:global(.jf-mobile-settings) .form .tg { width: 52px; height: 30px; }
+:global(.jf-mobile-settings) .form .tg::before { inset: -7px 0; }
+:global(.jf-mobile-settings) .form .tg::after { left: 1.5px; width: 20px; height: 20px; }
+:global(.jf-mobile-settings) .form .tg[aria-checked="true"] { background: rgba(58,125,68,.18); }
+:global(.jf-mobile-settings) .form .tg[aria-checked="true"]::after { transform: translate(23px, -50%); }
 @media (max-width: 380px) {
-  .grid { grid-template-columns: 1fr; }
+  .form .grid { grid-template-columns: 1fr; }
 }

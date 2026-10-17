@@ -138,8 +138,8 @@ export function CompanyPricingForm() {
     return () => document.removeEventListener("visibilitychange", onHide);
   }, []);
 
-  if (loadErr) return <p className={`${styles.note} ${styles.isErr}`}>{loadErr}</p>;
-  if (!draft || !next) return <p className={styles.note}>Loading your estimating settings…</p>;
+  if (loadErr) return <p className={`${styles.form} ${styles.note} ${styles.isErr}`} data-nest="">{loadErr}</p>;
+  if (!draft || !next) return <p className={`${styles.form} ${styles.note}`} data-nest="">Loading your estimating settings…</p>;
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d));
   const rate = rateOf(draft);
@@ -209,7 +209,7 @@ export function CompanyPricingForm() {
   );
 
   return (
-    <div className={styles.form} data-company-pricing data-on={next.on ? "1" : "0"}>
+    <div className={styles.form} data-nest="" data-company-pricing data-on={next.on ? "1" : "0"}>
       <div className={styles.switchRow}>
         <div className={styles.switchTxt}>
           <b>Price estimates my company&rsquo;s way</b>
