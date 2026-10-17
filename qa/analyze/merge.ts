@@ -69,7 +69,14 @@ export function sharedVisual(findings: Finding[], bySig: Map<string, Signal[]>, 
     const members = vis.filter((g) => !used.has(g.id) && (() => { const b = boxOf(g); return !!b && b.vp === a.vp && near(a.box, b.box); })());
     if (members.length < min) continue;
     for (const m of members) used.add(m.id);
-    const sig = `visual-shared ${a.vp} ${Math.round(a.box.y / 16) * 16}x${Math.round(a.box.x / 16) * 16}`;
+    const sig = `visual-shared ${a.vp} at ${Math.round(a.box.x / 16) * 16},${Math.round(a.box.y / 16) * 16} size ${Math.round(a.box.w / 64) * 64}x${Math.round(a.box.h / 64) * 64}`;
+    // two groups that round to one place are one finding
+    const same = out.find((x) => x.signature === sig);
+    if (same) {
+      for (const m of members) { absorb(same, m, bySig, "та же область"); out.splice(out.indexOf(m), 1); }
+      same.title = same.title.replace(/на \d+ страницах/, `на ${same.evidence.tests.length} страницах`);
+      continue;
+    }
     const signals = members.flatMap((m) => bySig.get(m.id) ?? []);
     const shared: Finding = {
       ...members[0],
@@ -108,18 +115,33 @@ export function mergeSameCause(findings: Finding[], bySig: Map<string, Signal[]>
     if (f.kind !== "console-error" || !/status of 5\d\d/.test(f.evidence.message)) continue;
     const sigs = bySig.get(f.id) ?? [];
     const servers = live().filter((x) => x !== f && (x.kind === "api-error" || x.signature.startsWith("root ")));
-    const target = (role: string | null) => servers.filter((x) => !!role && rolesOf(x).has(role))
-      .sort((a, b) => b.evidence.routes.filter((r) => f.evidence.routes.includes(r)).length - a.evidence.routes.filter((r) => f.evidence.routes.includes(r)).length || b.evidence.tests.length - a.evidence.tests.length)[0];
-    const plan = f.evidence.tests.map((t) => { const s = sigs.find((x) => x.testId === t.id); return { t, s, into: target(s?.role ?? null) }; });
-    if (!plan.length || plan.some((p) => !p.into)) continue;
-    for (const p of plan) {
+    // the server finding of the same role on the same page, else of the same role, else of the same page
+    const target = (role: string | null, route: string | null) =>
+      servers.find((x) => !!role && rolesOf(x).has(role) && !!route && x.evidence.routes.includes(route)) ??
+      servers.filter((x) => !!role && rolesOf(x).has(role))
+        .sort((a, b) => b.evidence.routes.filter((r) => f.evidence.routes.includes(r)).length - a.evidence.routes.filter((r) => f.evidence.routes.includes(r)).length || b.evidence.tests.length - a.evidence.tests.length)[0] ??
+      // a guest's line on a page where only another role's 500 was recorded: the 500 of a guest / homeowner there
+      servers.find((x) => !!route && x.evidence.routes.includes(route) && [...rolesOf(x)].some((r) => r === "guest" || r === "homeowner") === (role === "guest" || role === "homeowner"));
+    const plan = f.evidence.tests.map((t) => { const s = sigs.find((x) => x.testId === t.id); return { t, s, into: target(s?.role ?? null, s?.route ?? null) }; });
+    const movable = plan.filter((p) => p.into);
+    if (!movable.length) continue;
+    for (const p of movable) {
       const into = p.into!;
       if (!into.evidence.tests.some((x) => x.id === p.t.id)) into.evidence.tests.push(p.t);
       if (p.s?.route && !into.evidence.routes.includes(p.s.route)) into.evidence.routes.push(p.s.route);
       into.evidence.alsoSeen = [...new Set([...into.evidence.alsoSeen, "(та же причина) консоль: Failed to load resource — status of 5xx"])].slice(0, 12);
       bySig.set(into.id, [...(bySig.get(into.id) ?? []), ...sigs.filter((x) => x.testId === p.t.id)]);
     }
-    gone.add(f.id);
+    if (movable.length === plan.length) { gone.add(f.id); continue; }
+    // the rest stays a finding of its own, with only its own tests and pages
+    const left = new Set(plan.filter((p) => !p.into).map((p) => p.t.id));
+    f.evidence.tests = f.evidence.tests.filter((t) => left.has(t.id));
+    bySig.set(f.id, sigs.filter((x) => left.has(x.testId)));
+    f.evidence.routes = [...new Set((bySig.get(f.id) ?? []).map((x) => x.route).filter(Boolean) as string[])];
+    const sev = severityOf(f.kind, bySig.get(f.id) ?? []);
+    f.severity = sev.severity;
+    f.severityWhy = sev.why;
+    f.title = `Ошибка в консоли браузера (${f.evidence.routes.slice(0, 3).join(", ")}): ${f.evidence.message.slice(0, 80)}`;
   }
   // 2. console lines / requests on exactly the same page(s): one cause there (a 404 and the request
   //    that never answered; two lines of one sandboxed frame)

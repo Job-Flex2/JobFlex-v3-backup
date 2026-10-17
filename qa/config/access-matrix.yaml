@@ -1716,3 +1716,36 @@ routes:
     worker: not-found
     admin: not-found
     homeowner: not-found
+  /dashboard/texting:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+    review:
+      - owner
+      - manager
+    why: "auto: a page added on 2026-10-17 (7b108e3d AI desk / Texting); written as observed by the QA Lab — confirm who may open it"
+  /mobile-ai-desk-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+    review:
+      - owner
+      - manager
+    why: "auto: a page added on 2026-10-17 (7b108e3d AI desk / Texting); written as observed by the QA Lab — confirm who may open it"
+  /mobile-texting-v1:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
+    review:
+      - owner
+      - manager
+    why: "auto: a page added on 2026-10-17 (7b108e3d AI desk / Texting); written as observed by the QA Lab — confirm who may open it"
