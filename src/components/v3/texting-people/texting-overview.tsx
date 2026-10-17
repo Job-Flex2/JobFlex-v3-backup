@@ -60,7 +60,7 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
   const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <div className={s.root} data-texting-overview>
+    <div className={s.root} data-texting-overview data-nest="">
       <p className={`${s.status}${approvedNumber && sms.configured ? ` ${s.statusLive}` : ""}`} data-texting-status>
         {status}
       </p>
@@ -140,7 +140,7 @@ export function ClientTextsSwitch({ on }: { on: boolean }) {
     }
   };
   return (
-    <div className={`${s.root} ${s.inline}`} data-clients-card>
+    <div className={`${s.root} ${s.inline}`} data-clients-card data-nest="">
       <button
         type="button"
         role="switch"

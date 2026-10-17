@@ -25,6 +25,8 @@
 - Light mode only. Do not add `.dark` variants.
 - Do not use Radix patterns. Modals here are hand-rolled — see [InboxSheet.tsx](src/components/calendar/InboxSheet.tsx) for the in-house style.
 - DESIGN.md and the `jobflex-page-styler` skill references are hand-authored. Do not regenerate them with a doc tool.
+- A component inside the dashboard shell with its own CSS: put `data-nest` on its root, or give its selectors ≥ 2 classes (e.g. `:global(.jf-blueprint .content) .cls`). A single-class rule ties the shell's `margin/padding: 0` reset (`blueprint.module.css`), and the production build emits that reset later — every padding and margin goes to 0 on prod while `next dev` looks right.
+- Check visual changes on `next build` + `next start` (own `JOBFLEX_DIST_DIR`), not only on dev.
 
 ## Mobile
 - Target viewport is handheld (≤768px). Design the layout for that first.
