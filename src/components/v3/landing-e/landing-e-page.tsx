@@ -150,8 +150,13 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // button, the nav's and the sticky phone bar's say the trial on every
   // landing (owner, 2026-10-16); the trade's words stay on the button under
   // the product shot and in the showcase.
-  const top = variant ? firstPersonCta(variant) : `Start my ${offer.days}-day free trial`;
-  const low = `Start my ${offer.days}-day free trial`;
+  // "FREE TRIAL" in capitals, in the text itself (owner, 2026-10-16), on every
+  // button that says this line — hero, nav, sticky bar, Proposals, the final
+  // block (and the default page's showcase). The FAQ's button keeps the
+  // sentence-case line; the plan cards have their own ("Start 7-day …").
+  const top = variant ? firstPersonCta(variant) : `Start my ${offer.days}-day FREE TRIAL`;
+  const low = `Start my ${offer.days}-day FREE TRIAL`;
+  const faqCta = `Start my ${offer.days}-day free trial`;
   // The showcase's Smart slide plays the trade's own job: the variant's
   // scenario, or the roofing / fencing scenarios written for the pages whose
   // hero is the roof or fence shot (smart-scenarios.ts).
@@ -200,7 +205,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     stats: <div className="lp-cv lp-cv--stats"><StatsSection rows={g?.stats} /></div>,
     built: <div className="lp-cv lp-cv--built"><BuiltSection jobs={g?.jobs} phoneJobs={g?.phoneJobs} /></div>,
     pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
-    faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={low} requiresCard={requiresCard} /></div>,
+    faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={faqCta} requiresCard={requiresCard} /></div>,
     final: <CtaFooter registerHref={register} cta={low} />,
   };
   return (
