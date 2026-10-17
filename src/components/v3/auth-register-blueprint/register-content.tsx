@@ -53,6 +53,7 @@ import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
+import { trackMetaLeadOnce } from "@/lib/metaLead";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
@@ -1125,18 +1126,21 @@ export function RegisterContent({
     return autoPlanFor({ plans, tool: spotlight, editionSlug, asked: searchParams?.get("plan") ?? null })?.slug ?? null;
   }, [auto, plans, spotlight, edition, searchParams]);
   /* Back from the card page in the tab that opened it: the cards with the calm note. Read after mount (sessionStorage);
-     until then a cancelled return is taken for a back-out, as before. */
+     until then a cancelled return is taken for a back-out, as before. The browser's own Back lands on the plan step's
+     address (`?signup=` alone): in the tab that handed this intent over it is the same back-out, not a new hand-off —
+     straight-to-Professional opened a second card page there, so Back never left Stripe (2026-10-17). */
+  const returned = !!ret && !ret.sessionId;
   const [handedOffHere, setHandedOffHere] = React.useState<boolean | null>(null);
   React.useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage exists only in the browser; read once
-    if (ret?.cancelled) setHandedOffHere(recalledHandoff() === ret.token);
+    if (returned) setHandedOffHere(recalledHandoff() === ret.token);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
   }, []);
-  const backedOut = !!ret?.cancelled && handedOffHere !== false;
-  /* …and until it is read, straight-to-Professional draws neither the cards nor the card-page note: a returning
-     visitor must not see the cards flash (the server's HTML and the hydrating page both wait on it). */
-  const handoffUnread = !!auto && !!ret?.cancelled && handedOffHere === null;
-  const autoView = !!auto && step === 3 && !backedOut && !autoOff && !plansErr && !gate && !confirmSentTo;
+  const backedOut = ret?.cancelled ? handedOffHere !== false : returned && handedOffHere === true;
+  /* …and until it is read, straight-to-Professional draws neither the cards nor the card-page note, nor hands off:
+     a returning visitor must not see the cards flash (the server's HTML and the hydrating page both wait on it). */
+  const handoffUnread = !!auto && returned && handedOffHere === null;
+  const autoView = !!auto && step === 3 && !backedOut && !handoffUnread && !autoOff && !plansErr && !gate && !confirmSentTo;
   const autoRan = React.useRef(false);
   React.useEffect(() => {
     if (!autoView || autoRan.current || !autoSlug || !token) return;
@@ -1306,6 +1310,7 @@ export function RegisterContent({
       setChecking(false);
     }
     step1Outcome("continue");
+    trackMetaLeadOnce(); // Meta Lead: step 1 passed with an address (lib/metaLead)
     if (twoStep) {
       /* The company's part of the one step: the business name and the
          trades are checked and the pending signup starts right here. */

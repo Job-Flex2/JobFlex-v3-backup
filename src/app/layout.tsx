@@ -56,12 +56,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${jbMono.variable}`} suppressHydrationWarning>
       <head>
         {/* Meta Pixel Code — the ad owner's snippet, word for word (2026-10-17).
-            Every page, no consent gate, no other events. */}
-        <Script
-          id="meta-pixel"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
+            Every page of the live site only (VERCEL_ENV=production: not preview,
+            not local, not the QA Lab), no consent gate. The one other event is
+            Lead (lib/metaLead). */}
+        {process.env.VERCEL_ENV === "production" ? (
+          <>
+            <Script
+              id="meta-pixel"
+              strategy="afterInteractive"
+              dangerouslySetInnerHTML={{
+                __html: `
 !function(f,b,e,v,n,t,s)
 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -73,12 +77,14 @@ s.parentNode.insertBefore(t,s)}(window, document,'script',
 fbq('init', '1086396204114658');
 fbq('track', 'PageView');
 `,
-          }}
-        />
-        <noscript>
-          {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text -- Meta's tag as given, no attributes added */}
-          <img height="1" width="1" style={{ display: "none" }} src="https://www.facebook.com/tr?id=1086396204114658&ev=PageView&noscript=1" />
-        </noscript>
+              }}
+            />
+            <noscript>
+              {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text -- Meta's tag as given, no attributes added */}
+              <img height="1" width="1" style={{ display: "none" }} src="https://www.facebook.com/tr?id=1086396204114658&ev=PageView&noscript=1" />
+            </noscript>
+          </>
+        ) : null}
         {/* End Meta Pixel Code */}
       </head>
       {/* suppressHydrationWarning: browser extensions (e.g. Grammarly) inject
