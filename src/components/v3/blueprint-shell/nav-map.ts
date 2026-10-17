@@ -45,7 +45,9 @@ export type NavItem = {
 };
 /** The tool colours (globals.css `--tool-*`, mapped by `[data-tone]`). One per tool. */
 export type ToolTone = "violet" | "blue" | "spruce" | "berry" | "teal" | "cedar" | "navy";
-export type NavTool = { tone: ToolTone };
+/** `short`: the name the desk sidebar's tool row prints when the full one would
+ *  not fit beside its "Soon" tag and subpage button (2026-10-16: "Deck"). */
+export type NavTool = { tone: ToolTone; short?: string };
 export type NavSection = { label: string; items: NavItem[] };
 
 /** A section's rows in reading order, children after their parent. */
@@ -158,7 +160,7 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: "i-deck",
         href: "/dashboard/deck-estimator",
         soon: true,
-        tool: { tone: "cedar" },
+        tool: { tone: "cedar", short: "Deck" },
         // Its inventory (the deck price book and stock, 2026-10-10) folds under it like the others'; the same Coming-soon door guards it.
         children: [{ label: "Deck inventory", icon: "i-folder", href: "/dashboard/deck-estimator/inventory", soon: true }],
       },

@@ -197,7 +197,7 @@ export function Sidebar({
                       its text. */}
                   {tool ? (
                     <span className="sb-txt">
-                      <span className="sb-lbl">{item.label}</span>
+                      <span className="sb-lbl">{tool.short ?? item.label}</span>
                       {soonMark && <span className="sb-soon" aria-label="Coming soon">Soon</span>}
                     </span>
                   ) : (
