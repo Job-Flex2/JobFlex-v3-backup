@@ -9,7 +9,7 @@ import {
   buildReviewReminder,
 } from "./build/client";
 import { buildOwnerAccepted, buildNewLead, buildLeadOffer, buildSupportTicket } from "./build/operator";
-import { buildTrialConfirm, buildTrialReminder } from "./build/trial";
+import { buildTrialConfirm, buildTrialEndingSoon, buildTrialReminder } from "./build/trial";
 import { buildOtpCode, buildOtpNoAccount } from "./build/otp";
 import { buildPasswordSet } from "./build/accountPassword";
 import { buildFreeSwitchBooked, buildPaymentFailed } from "./build/billing";
@@ -576,6 +576,24 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
     label: "18f · buildPaymentFailed()",
     note: "A renewal charge was declined; Stripe will retry (webhook invoice.payment_failed, first attempt).",
     doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: new Date("2026-10-25T17:00:00Z"), href: "https://example.com/dashboard/subscription", final: false, shop: { proposalsSent: 6, quotedCents: 1840000, clients: 14, jobsOpen: 3, leadsOffered: 2 }, tools: ["Smart proposal generation", "Roof estimator", "Fence estimator"] }),
+  },
+  {
+    id: "b-payment-failed-first-charge",
+    label: "18f″ · buildPaymentFailed({ pausesAt }) — the first charge after the trial",
+    note: "The shop has never paid: the plan stays fully open 3 days from the trial's end, then its tools pause until the card goes through (lib/stripeStatus firstChargeFailed).",
+    doc: buildPaymentFailed({ name: "Jordan Rivera", planName: "Professional", amountCents: 9500, nextAttemptAt: new Date("2026-10-24T17:00:00Z"), href: "https://example.com/dashboard/subscription", final: false, pausesAt: new Date("2026-10-25T17:00:00Z"), shop: { proposalsSent: 4, quotedCents: 2160000, clients: 9, jobsOpen: 1, leadsOffered: 0 }, tools: ["Smart proposal generation", "Roof estimator", "Fence estimator"] }),
+  },
+  {
+    id: "b-trial-ending-soon",
+    label: "18i · buildTrialEndingSoon() — a card trial, two days left",
+    note: "~48 hours before a trial that took a card turns into the paid plan (lib/trialEndingMail, hourly from /api/cron/trials).",
+    doc: buildTrialEndingSoon({ name: "Jordan Rivera", planName: "Professional", price: "$95/month", endsAt: new Date("2026-10-22T17:00:00Z"), href: "https://example.com/dashboard/subscription", shop: { proposalsSent: 4, quotedCents: 2160000, clients: 9, jobsOpen: 1, leadsOffered: 2 }, tools: ["Smart proposal generation", "Roof estimator", "Fence estimator"] }),
+  },
+  {
+    id: "b-trial-ending-soon-new",
+    label: "18i′ · buildTrialEndingSoon() — nothing set up yet",
+    note: "The same letter for a shop with no numbers: the plan's tools stand in.",
+    doc: buildTrialEndingSoon({ name: "Jordan Rivera", planName: "Professional", price: "$95/month", endsAt: new Date("2026-10-22T17:00:00Z"), href: "https://example.com/dashboard/subscription", shop: { proposalsSent: 0, quotedCents: 0, clients: 0, jobsOpen: 0, leadsOffered: 0 }, tools: ["Smart proposal generation", "Roof estimator", "Fence estimator"] }),
   },
   {
     id: "b-payment-failed-new",

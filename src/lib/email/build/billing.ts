@@ -9,6 +9,8 @@ import type { BoxRow, EmailDoc, Lockup } from "../doc";
 const PLATFORM_LOCKUP: Lockup = { kind: "platform" };
 const PLATFORM_FOOTER = { name: "JobFlex" };
 const DATE_FMT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" });
+/** "Oct 25" — a day inside the next week, no year. */
+const SHORT_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
 
 export interface PaymentFailedInput {
   name: string | null;
@@ -28,6 +30,10 @@ export interface PaymentFailedInput {
   /** The plan's headline tools ("Smart Proposal", "Roof estimator"…): said when the shop has no numbers yet, and on
    *  the last email as what is paused. */
   tools?: string[];
+  /** The first charge after a free trial (the shop has never paid): the plan's tools pause at this moment unless the
+   *  card goes through first — 3 days after the trial ended (lib/stripeStatus firstChargeFailed). Null: a renewal,
+   *  which keeps the paid period. */
+  pausesAt?: Date | null;
 }
 
 /** The shop's own work, as the payment emails say it. */
@@ -54,13 +60,13 @@ function dollars(cents: number): string {
 
 
 /** "Smart Proposal, Roof estimator and Fence estimator". */
-function listWords(items: readonly string[]): string {
+export function listWords(items: readonly string[]): string {
   if (items.length < 2) return items[0] ?? "";
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 /** The shop's numbers as box rows — only the ones that are more than zero. */
-function shopRows(shop: ShopOnJobflex | null | undefined): BoxRow[] {
+export function shopRows(shop: ShopOnJobflex | null | undefined): BoxRow[] {
   if (!shop) return [];
   const rows: BoxRow[] = [];
   if (shop.proposalsSent > 0)
@@ -109,9 +115,10 @@ export function buildPaymentFailed(i: PaymentFailedInput): EmailDoc {
     };
   }
   const nextTry = i.nextAttemptAt ? DATE_FMT.format(i.nextAttemptAt) : null;
+  const pauseDay = i.pausesAt ? SHORT_DATE.format(i.pausesAt) : null;
   const box: BoxRow[] = [
     ...(hasNumbers ? rows : tools.length ? [{ type: "field" as const, label: `In ${i.planName}`, value: listWords(tools) }] : [{ type: "field" as const, label: "Plan", value: i.planName }]),
-    { type: "cond", label: "Your shop", chip: "Open — nothing paused", tone: "ok" },
+    { type: "cond", label: "Your shop", chip: pauseDay ? `Fully open until ${pauseDay}` : "Open — nothing paused", tone: "ok" },
   ];
   return {
     subject: "Your shop is still open — your card just needs a quick look",
@@ -119,7 +126,9 @@ export function buildPaymentFailed(i: PaymentFailedInput): EmailDoc {
     kicker: { text: "Card didn't go through", tone: "warn" },
     headline: "Keep your shop running",
     prose: [
-      `Hi ${first} — your bank didn't approve this month's ${i.planName} (${amount}). It happens all the time: a new card, a daily limit, a bank being careful.`,
+      pauseDay
+        ? `Hi ${first} — your free week is over, and your bank didn't approve the first month of ${i.planName} (${amount}). It happens all the time: a new card, a daily limit, a bank being careful.`
+        : `Hi ${first} — your bank didn't approve this month's ${i.planName} (${amount}). It happens all the time: a new card, a daily limit, a bank being careful.`,
       hasNumbers
         ? "Nothing is locked and nothing is lost. Here's what your shop has running on JobFlex right now:"
         : "Nothing is locked and nothing is lost — your proposals, clients and tools are right where you left them.",
@@ -130,6 +139,9 @@ export function buildPaymentFailed(i: PaymentFailedInput): EmailDoc {
       nextTry
         ? `Updating the card takes a minute and sorts it at once. If you'd rather, we'll simply try the same card again on ${nextTry}.`
         : "Updating the card takes a minute and sorts it at once.",
+      ...(pauseDay
+        ? [`Your shop stays fully open until ${pauseDay}. If the card hasn't gone through by then, the ${i.planName} tools pause until it does — nothing is deleted, and your clients can still open what you've sent.`]
+        : []),
       "Questions, or want a different plan? Reply to this email and we'll help.",
     ],
     footer: PLATFORM_FOOTER,
