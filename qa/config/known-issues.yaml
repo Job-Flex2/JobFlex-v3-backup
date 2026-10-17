@@ -81,6 +81,6 @@ issues:
   - id: admin-live-pages-look
     fold: true
     signature: '^visual '
-    route: '^/admin/(traffic|activity)'
-    why: "/admin/traffic and /admin/activity draw live numbers (page views, sign-ups, events) — every run changes them, the picture can not be steady"
+    route: '^/admin/(traffic|activity|ab-testing|revenue)'
+    why: "the admin's analytics pages (/admin/traffic, /activity, /ab-testing, /revenue) draw live numbers — page views, sign-ups, experiment visitors, revenue — that every QA run itself changes; their picture can not be steady"
     confirmed: "QA Lab, 2026-10-17"

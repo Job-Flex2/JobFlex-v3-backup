@@ -29,6 +29,8 @@ export async function steadyShot(page: Page, file: string): Promise<void> {
   const hide = qaConfig().visual.hide.join(", ");
   await page.addStyleTag({ content: `*, *::before, *::after { caret-color: transparent !important; transition: none !important; animation: none !important; } ${hide} { visibility: hidden !important; }` }).catch(() => {});
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
+  // a page that fetches after it loads ("Loading recorded experiment results…") is pictured when it is done
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
   // Text that changes by itself between two runs of the same day — "17m ago", "Oct 17", "9:00 AM",
   // "Good evening" — is made invisible in place (its box stays, so the layout is the same): a
   // baseline compares the page, not the clock (2026-10-17: such words were most visual "findings").
@@ -40,6 +42,7 @@ export async function steadyShot(page: Page, file: string): Promise<void> {
       /\b\d{1,2}:\d{2}(?::\d{2})?\s?(?:AM|PM)?\b/i,
       /\bgood (?:morning|afternoon|evening)\b/i,
       /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/,
+      /\b20\d\d-\d\d-\d\d\b/,
     ];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const hits: Text[] = [];
