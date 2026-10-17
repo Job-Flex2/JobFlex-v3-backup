@@ -1,0 +1,59 @@
+// The buildings a roof scan finds (2026-10-16, owner: "a single family, and it lists two dozen buildings"): the main
+// one is the building the address pin stands on, ahead of the largest; the rest list this lot's first, then the ones
+// the parcel check put outside the lot, nearest first. Pure.
+//   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/roof-structures.check.ts
+import { feetBetween, otherStructuresOf, pickMainStructure, pointInRing } from "../../../src/lib/roofDiagram/instantTotals";
+import type { InstantStructure } from "../../../src/lib/eagleview";
+
+let bad = 0;
+const check = (name: string, ok: boolean, extra = "") => {
+  if (!ok) bad++;
+  console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " — " + extra : ""}`);
+};
+// A square roof `w` metres wide whose centre is `east`/`north` metres from the pin (47.58, -122.15 — Bellevue).
+const PIN = { lat: 47.58, lng: -122.15 };
+const M_LAT = 1 / 111320;
+const M_LNG = 1 / (111320 * Math.cos((PIN.lat * Math.PI) / 180));
+const box = (east: number, north: number, w: number) => {
+  const h = w / 2;
+  return [
+    { lat: PIN.lat + (north - h) * M_LAT, lng: PIN.lng + (east - h) * M_LNG },
+    { lat: PIN.lat + (north - h) * M_LAT, lng: PIN.lng + (east + h) * M_LNG },
+    { lat: PIN.lat + (north + h) * M_LAT, lng: PIN.lng + (east + h) * M_LNG },
+    { lat: PIN.lat + (north + h) * M_LAT, lng: PIN.lng + (east - h) * M_LNG },
+  ];
+};
+const st = (areaSqft: number, outline: Array<{ lat: number; lng: number }> | null): InstantStructure => ({ areaSqft, outline } as unknown as InstantStructure);
+
+check("a point inside a ring is inside; beside it is not", pointInRing(PIN, box(0, 0, 20)) && !pointInRing(PIN, box(40, 0, 20)) && !pointInRing(PIN, null));
+check("feet between: 100 m north is about 328 ft", Math.abs(feetBetween(PIN, { lat: PIN.lat + 100 * M_LAT, lng: PIN.lng }) - 328) < 2);
+
+// 2680 139th Ave SE, as it came back: a house under the pin, and two dozen larger neighbours all around.
+const house = st(3200, box(0, 0, 18));
+const garage = st(500, box(14, 4, 7));
+const neighbours = Array.from({ length: 24 }, (_, n) => st(4000 + n * 90, box(40 + (n % 6) * 35, -60 + Math.floor(n / 6) * 35, 22)));
+const all = [...neighbours.slice(0, 5), house, ...neighbours.slice(5), garage];
+const houseAt = all.indexOf(house);
+const garageAt = all.indexOf(garage);
+const foreign = all.map((s, i) => i).filter((i) => i !== houseAt && i !== garageAt);
+
+const atPin = pickMainStructure(all, { origin: PIN, parcelKnown: true });
+check("the building under the address pin is the main one, though two dozen roofs are larger", atPin.index === houseAt && atPin.how === "at-pin", JSON.stringify(atPin));
+const vetoed = pickMainStructure(all, { origin: PIN, parcelKnown: true, foreign });
+check("…with the lot check's vetoes too", vetoed.index === houseAt && vetoed.how === "at-pin");
+const pinOff = { lat: PIN.lat + 30 * M_LAT, lng: PIN.lng };
+check("a pin on no roof: the largest building on the lot, as before", pickMainStructure(all, { origin: pinOff, parcelKnown: true, foreign }).index === houseAt && pickMainStructure(all, { origin: pinOff, parcelKnown: true, foreign }).how === "area+parcel");
+check("…and with no lot known, the nearest the pin", pickMainStructure(all, { origin: pinOff, parcelKnown: false }).how === "nearest-pin");
+check("a vetoed neighbour is never the main one, even under the pin", pickMainStructure([st(9000, box(0, 0, 30)), house], { origin: PIN, parcelKnown: true, foreign: [0] }).index === 1);
+
+const others = otherStructuresOf({ structures: all, mainIndex: houseAt, foreign, origin: PIN });
+check("the main one is not in the list", others.length === all.length - 1 && !others.some((o) => o.i === houseAt));
+check("this lot's buildings first — the garage — then the neighbours", others[0].i === garageAt && !others[0].offLot && others.slice(1).every((o) => o.offLot));
+check("each group nearest the house first, with its distance", others.slice(1).every((o, k, a) => k === 0 || (a[k - 1].feet ?? 0) <= (o.feet ?? 0)) && Math.round((others[0].feet ?? 0) / 10) * 10 === 50, `${Math.round(others[0].feet ?? 0)} ft`);
+const noOutline = otherStructuresOf({ structures: [house, st(800, null), garage], mainIndex: 0, origin: PIN });
+check("a building with no outline comes last, without a distance", noOutline[1].i === 1 && noOutline[1].feet === null && noOutline[0].i === 2);
+const noParcel = otherStructuresOf({ structures: all, mainIndex: houseAt, origin: PIN });
+check("with no lot check, every building counts as on the lot, nearest first", noParcel.every((o) => !o.offLot) && noParcel[0].i === garageAt);
+
+console.log(bad ? `\n${bad} FAILED` : "\nall passed");
+process.exit(bad ? 1 : 0);
