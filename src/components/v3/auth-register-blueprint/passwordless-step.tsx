@@ -58,6 +58,7 @@ import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/o
 import css from "./passwordless.module.css";
 import { markQaVisitor } from "@/lib/qaEmail";
 import { autoPlanPrice, type AutoPlanOffer } from "@/lib/signupAutoPlan";
+import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
 
 type Screen = "form" | "code" | "google" | "done";
 const STORE_KEY = "jf_otp_signup";
@@ -195,6 +196,8 @@ export function PasswordlessStep({
   useKeepInView(headRef, goRef, screen === "code");
   const verifying = React.useRef(false);
   const handoff = useBrowserHandoff(inApp ?? "instagram");
+  // A homeowner who came in on a trade's contractor ad: the way to a quote instead (lib/home/homeownerDoor, 2026-10-16).
+  const homeDoor = homeownerDoorFor(industry);
   const track = (outcome: string, reason = "", message = "") => {
     trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp", plan_mode: planMode, ...(quick ? { quick: true } : {}) });
     // The watcher's own reasons: a refusal the server answered in words is read from them (start_rejected).
@@ -718,6 +721,14 @@ export function PasswordlessStep({
             Sign in
           </Link>
         </div>
+        {homeDoor ? (
+          <div className="foot foot-home" data-home-door={homeDoor.key}>
+            Homeowner looking for {homeDoor.thing}?{" "}
+            <a className="link-ink" href={homeDoor.href}>
+              Get quotes from local pros
+            </a>
+          </div>
+        ) : null}
       </div>
     );
   })();

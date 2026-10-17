@@ -157,6 +157,8 @@
 .bp :global(.divider)::before, .bp :global(.divider)::after { content: ''; flex: 1; height: 1.5px; background: var(--hair-soft); }
 .bp :global(.foot) { margin-top: 32px; font-size: 13px; color: var(--muted); }
 .bp :global(.foot-note) { margin-top: 18px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; color: var(--muted-faint); }
+/* A homeowner on a contractor ad's sign-up: the way to a quote, right under "Sign in" (lib/home/homeownerDoor). */
+.bp :global(.foot.foot-home) { margin-top: 10px; }
 
 /* ── правая панель ── */
 

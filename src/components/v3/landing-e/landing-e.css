@@ -1943,6 +1943,23 @@ html[data-lp-entrance] .jf-lp .lp-enter { visibility: hidden; }
    column a thumb wide on a phone, centred under the plate from 640 px; the
    plate drifts ±18 px against the scroll there (data-parallax), so the gap
    above the button is wider than the drift. */
+/* The homeowner's door under the button below the shot (lib/home/homeownerDoor, 2026-10-16): one quiet line, the
+   link in the page's ink, never a second button. */
+.jf-lp .lp-home-door {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+.jf-lp .lp-home-door a {
+  display: inline-block;
+  padding: 6px 0;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .jf-lp .lp-hero-after {
   display: flex;
   flex-direction: column;

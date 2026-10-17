@@ -40,6 +40,7 @@
 import type { Metadata } from "next";
 import { HomeownerResponsive } from "./homeowner-responsive";
 import { loadWizardPrefill } from "@/lib/home/portal";
+import { projectStarter } from "@/lib/home/homeownerDoor";
 
 export const metadata: Metadata = {
   title: "JobFlex Homeowner Portal — Describe your project, get real quotes",
@@ -60,6 +61,10 @@ export const metadata: Metadata = {
 // that dashboard. Anything else is the plain intake.
 export default async function HomeownerLandingPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
-  const prefill = await loadWizardPrefill(typeof sp.home === "string" ? sp.home : null, typeof sp.plan === "string" ? sp.plan : null, typeof sp.with === "string" ? sp.with : null);
+  const fromHome = await loadWizardPrefill(typeof sp.home === "string" ? sp.home : null, typeof sp.plan === "string" ? sp.plan : null, typeof sp.with === "string" ? sp.with : null);
+  // ?project=fencing — a homeowner sent here from a trade's contractor page (lib/home/homeownerDoor): their request
+  // starts in their words, "I'm looking for a fence. ", and the rest is theirs to write.
+  const starter = !fromHome && typeof sp.project === "string" ? projectStarter(sp.project) : "";
+  const prefill = fromHome ?? (starter ? { name: "", email: "", phone: "", address: "", zip: "", homeKey: "", planId: null, description: starter } : null);
   return <HomeownerResponsive prefill={prefill} />;
 }

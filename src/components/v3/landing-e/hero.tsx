@@ -9,6 +9,7 @@ import { GoogleSignupButton } from "./google-signup-button";
 import { HeroEntrance } from "./hero-entrance";
 import { HeroExperiment } from "./hero-experiment";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
+import { HomeownerDoor } from "./homeowner-door";
 
 /* THE ENTRANCE IS ARMED BY THE PAGE, NOT ASSUMED BY THE STYLESHEET
    (2026-10-04). The copy used to be server-rendered invisible and shown by
@@ -194,6 +195,8 @@ export function Hero({
               {cta ?? variant.primaryCta}
               <span aria-hidden>→</span>
             </a>
+            {/* The homeowner who clicked a contractor ad, sent where they belong (2026-10-16). */}
+            <HomeownerDoor trade={variantKey} />
           </div>
         ) : null}
       </div>
