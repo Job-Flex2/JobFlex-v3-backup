@@ -159,9 +159,15 @@ function LoginInner() {
               panel in the product's own drawing language (cream ground, ink
               outlines, hard offset shadows, one blue, no lettering).
               public/auth/side-blueprint.png is the drawn alternative, kept beside
-              it; swapping is this one src. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className={cx("side-art")} src="/auth/side-site-2.png" alt="" aria-hidden="true" />
+              it; swapping is these sources. Desk only and light (2026-10-16):
+              a phone hides this column, so the sources match only a desk and a
+              phone gets the 1×1 placeholder instead of the 1.3 MB PNG; the desk
+              gets the 60 KB WebP (PNG without WebP). See register-content. */}
+          <picture>
+            <source media="(min-width: 1001px)" srcSet="/auth/side-site-2.webp" type="image/webp" />
+            <source media="(min-width: 1001px)" srcSet="/auth/side-site-2.png" />
+            <img className={cx("side-art")} src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" aria-hidden="true" decoding="async" />
+          </picture>
         </aside>
       </main>
     </div>

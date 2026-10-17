@@ -10,9 +10,14 @@ import { CookieBanner } from "@/components/consent/cookie-banner";
 
 /* Bundle the official variable fonts so local and production builds never
    depend on a Google Fonts request. Keep the complete weight ranges and
-   character sets; licenses and sources live alongside the font files. */
+   character sets; licenses and sources live alongside the font files.
+   Served as WOFF2 (2026-10-16): the same fonts losslessly recompressed —
+   every glyph, axis and character kept — 351 KB + 72 KB on the wire instead
+   of 448 KB + 92 KB of TTF. Both are preloaded on every page, so on a phone
+   they shared the line with the sign-up form's script. The .ttf originals
+   stay beside them (README). */
 const inter = localFont({
-  src: "./fonts/Inter-variable.ttf",
+  src: "./fonts/Inter-variable.woff2",
   weight: "100 900",
   style: "normal",
   variable: "--font-inter",
@@ -20,7 +25,7 @@ const inter = localFont({
 });
 
 const jbMono = localFont({
-  src: "./fonts/JetBrainsMono-variable.ttf",
+  src: "./fonts/JetBrainsMono-variable.woff2",
   weight: "100 800",
   style: "normal",
   adjustFontFallback: false,
