@@ -188,8 +188,8 @@ export default function PrivacyPage() {
         independent businesses for their own services; their privacy notices also apply.
       </p>
       <p id="sms">
-        <strong>Mobile numbers and text messages:</strong> we use the mobile number you add in
-        Settings → Texting only to send the texts you turned on and to honor STOP and HELP. We do not
+        <strong>Mobile numbers and text messages:</strong> we use the mobile number you add on
+        the Texting page only to send the texts you turned on and to honor STOP and HELP. We do not
         sell, rent, or share mobile numbers or text-message opt-in data with third parties or affiliates
         for their marketing or promotional purposes; Twilio receives them only to deliver our messages.
       </p>

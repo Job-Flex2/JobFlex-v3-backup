@@ -13,7 +13,7 @@ import type { SmsRegistrationView } from "@/lib/sms/registrationShared";
 import { DESK_COPY as C, type DeskSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./ai-desk.module.css";
 
-const TEXTING_NUMBER = "/dashboard/settings?tab=texting#texting-own-number";
+const TEXTING_NUMBER = "/dashboard/texting#texting-own-number";
 
 /** Copy the desk's number — a secondary button in the number's row. */
 function CopyWords({ number }: { number: string }) {

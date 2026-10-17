@@ -28,11 +28,13 @@
 }
 
 /* ── head ─────────────────────────────────────────────────── */
+/* 16px of air above the title (owner, 2026-10-16), the same as the AI desk's */
 .be.be .head {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  padding-top: 16px;
 }
 .be.be .kicker {
   font-family: var(--be-mono);

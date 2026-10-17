@@ -132,7 +132,6 @@ export type RailKey =
   | 'billing'
   | 'integrations'
   | 'notifications'
-  | 'texting'
   | 'desk'
   | 'estimating';
 
@@ -153,9 +152,8 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   { key: 'billing', label: 'Billing', icon: 'i-receipt' },
   { key: 'integrations', label: 'Integrations', icon: 'i-globe' },
   { key: 'notifications', label: 'Notifications', icon: 'i-bell' },
-  // Texting (2026-09-27): who gets texted, your mobile, the company's
-  // numbers — the owner's own place for it, the way SmartSpace Pro has one.
-  { key: 'texting', label: 'Texting', icon: 'i-phone', sub: 'The texts your company sends — from your own number: who on the team gets them, which clients, and texts you write yourself.' },
+  // Texting left Settings on 2026-10-16 for its own page, /dashboard/texting (sidebar → Automation, under AI desk);
+  // ?pane=texting and ?tab=texting redirect there (app/dashboard/settings/page.tsx).
   // Estimating (2026-10-16): the company's own estimating method — labor by the crew-hour or person-hour, its markup,
   // overhead, profit and sales-tax rule — for Smart Proposal and the video estimator. Off until the company turns it on.
   { key: 'estimating', label: 'Estimating', icon: 'i-hardhat', isNew: true, sub: 'Your own labor rate, markup and sales-tax rule for Smart Proposal and video estimates.' },
@@ -1083,6 +1081,10 @@ export const DESK_COPY = {
   statCalls: 'Calls this month',
   statVoice: 'Voice',
   progressWords: (n: number) => `${n} of 4 set up`,
+  // the setup as a checklist (owner, 2026-10-16): every step a row that says it opens
+  checklistTitle: 'Set up the desk',
+  stepOpen: 'Open',
+  stepClose: 'Close',
   continueTo: (t: string) => `Continue: ${t}`,
   callTheDesk: 'Call the desk to test it',
   reachNone: 'Get the desk a number first — then customers can call it.',

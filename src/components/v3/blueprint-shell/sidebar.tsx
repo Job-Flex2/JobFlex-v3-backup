@@ -155,10 +155,8 @@ export function Sidebar({
     // open inside the estimator.
     const here = !child && (item.href === active || !!item.children?.some((c) => c.href === active));
     const current = child && item.href === active;
-    // AN ESTIMATING TOOL (owner, 2026-10-12; one line since 2026-10-16): an
-    // icon square on an offset shadow in its own colour, then the name, with
-    // "Soon" right after the name on the same line.
-    const tool = child ? undefined : item.tool;
+    // The estimating tools are ordinary rows again (owner, 2026-10-16: "look the
+    // way every section and button look in sidebar") — no icon square, no bay.
     const soonMark = !!item.soon && !item.locked;
     return item.href === "#" ? (
                 <a key={item.label} className="sb-link" href="#" {...tipProps(item.label)}>
@@ -172,8 +170,7 @@ export function Sidebar({
               ) : (
                 <Link
                   key={item.label}
-                  className={`sb-link${tool ? " sb-tool" : ""}${here ? " active" : ""}${child ? " sb-sub-link" : ""}${current ? " sb-sub-on" : ""}${item.locked ? " sb-lockd" : ""}${tool && soonMark ? " sb-tool-soon" : ""}`}
-                  data-tone={tool?.tone}
+                  className={`sb-link${here ? " active" : ""}${child ? " sb-sub-link" : ""}${current ? " sb-sub-on" : ""}${item.locked ? " sb-lockd" : ""}`}
                   aria-current={current ? "page" : undefined}
                   href={item.href as Route}
                   onClick={(e) => onRowClick(e, item.href)}
@@ -181,28 +178,14 @@ export function Sidebar({
                     (badges[item.href] ?? 0) > 0 ? `${item.label} · ${badges[item.href]} new` : item.locked ? `${item.label} · not in your plan` : item.soon ? `${item.label} · coming soon` : quota ? `${item.label} · ${quota.text}` : item.label,
                   )}
                 >
-                  {tool ? (
-                    <span className="sb-tile" aria-hidden="true">
-                      <svg className="ic">
-                        <use href={`#${item.icon}`} />
-                      </svg>
-                    </span>
-                  ) : (
-                    <svg className="ic">
-                      <use href={`#${item.icon}`} />
-                    </svg>
-                  )}
+                  <svg className="ic">
+                    <use href={`#${item.icon}`} />
+                  </svg>
                   {/* The label in its own span so the folded rail can hide it
                       and keep it for screen readers; the row's name is still
                       its text. */}
-                  {tool ? (
-                    <span className="sb-txt">
-                      <span className="sb-lbl">{tool.short ?? item.label}</span>
-                      {soonMark && <span className="sb-soon" aria-label="Coming soon">Soon</span>}
-                    </span>
-                  ) : (
-                    <span className="sb-lbl">{item.label}</span>
-                  )}
+                  {/* `tool.short` where the full name would not fit beside "Soon" and the subpage button ("Deck"). */}
+                  <span className="sb-lbl">{child ? item.label : (item.tool?.short ?? item.label)}</span>
                   <span className="sb-slot sb-slot-b">
                   {/* CUSTOM-PLAN LOCK — the page is not in this org's plan.
                       Still a live link on purpose: the route renders the
@@ -214,7 +197,7 @@ export function Sidebar({
                       {badges[item.href] > 99 ? "99+" : badges[item.href]}
                     </span>
                   ) : soonMark ? (
-                    tool ? null : <span className="sb-soon" aria-label="Coming soon">Soon</span>
+                    <span className="sb-soon" aria-label="Coming soon">Soon</span>
                   ) : item.locked ? (
                     <svg className="sb-lock-ic" viewBox="0 0 24 24" aria-label="Not in your plan">
                       <rect x="5" y="11" width="14" height="10" rx="1.5" />
@@ -298,35 +281,12 @@ export function Sidebar({
         <div className="sb-indicator" id="sbIndicator"></div>
         {/* Section labels and estimator trees share the scroll container.
             The indicator accounts for positioned wrappers inside each tree. */}
-        {sections.map((section) => {
-
-          // THE TOOL BAY (owner, 2026-10-12). Tools that follow each other
-          // share one framed bay; a section made only of tools puts its label
-          // on the bay's frame instead of above it. A role's mixed section
-          // (an estimator's Automation) keeps its label and frames its tools.
-          const bayOnly = section.items.length > 0 && section.items.every((i) => !!i.tool);
-          const runs: (NavItem | NavItem[])[] = [];
-          for (const item of section.items) {
-            const last = runs[runs.length - 1];
-            if (item.tool && Array.isArray(last)) last.push(item);
-            else runs.push(item.tool ? [item] : item);
-          }
-          return (
-            <Fragment key={section.label}>
-              {!bayOnly && <div className="sb-sec-label">{section.label}</div>}
-              {runs.map((run) =>
-                Array.isArray(run) ? (
-                  <div key={`bay:${run[0].href}`} className="sb-bay">
-                    {bayOnly && <div className="sb-sec-label sb-bay-head">{section.label}</div>}
-                    {run.map(renderItem)}
-                  </div>
-                ) : (
-                  renderItem(run)
-                ),
-              )}
-            </Fragment>
-          );
-        })}
+        {sections.map((section) => (
+          <Fragment key={section.label}>
+            <div className="sb-sec-label">{section.label}</div>
+            {section.items.map(renderItem)}
+          </Fragment>
+        ))}
       </nav>
 
       {/* The account block was a dead <button> showing the hardcoded literals

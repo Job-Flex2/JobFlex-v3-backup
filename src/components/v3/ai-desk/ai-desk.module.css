@@ -242,61 +242,92 @@
   outline-offset: 2px;
 }
 
-/* ── the setup: four steps, three looks on trial (?s=, desk-steps.tsx) ──── */
-/* a step's status: a square dot in its tone, then the words — never a frame */
-.st {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+/* ── the setup: a checklist (owner, 2026-10-16: "a person will not understand that you have to click") ──
+   One framed card. Its head: the title, how far along (words and a solid bar), the next step's button. Then a row per
+   step, each a full-width button that reads as one: a numbered square (green with a tick once done, blue for the next),
+   the step's name, its stamp, and "Open" / "Close" with a chevron. The open row turns blue-soft with a blue bar on its
+   left edge, and its part unfolds right under it, inside the same card. */
+.setup {
   min-width: 0;
-  max-width: 100%;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--k-soft);
-}
-.st > i {
-  display: block;
-  flex: none;
-  width: 8px;
-  height: 8px;
-  background: var(--k-muted);
-}
-.st[data-dot="ok"] > i {
-  background: var(--k-ok);
-}
-.st[data-dot="todo"] > i {
-  background: var(--k-warn);
-}
-.st[data-dot="bad"] > i {
-  background: var(--k-bad);
-}
-
-/* ?s=1 — one segmented bar, the Monthly | Annual switch's build: one 2px frame, 1.5px rules, no frame per part */
-.seg {
   border: var(--k-frame);
   border-radius: var(--k-r);
   background: var(--k-sheet);
-  overflow: hidden;
+  box-shadow: var(--k-card-shadow);
   scroll-margin-top: 80px;
 }
-.segRow {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.setupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 18px 22px;
+  border-bottom: var(--k-frame);
 }
-.desk .segBtn.segBtn {
+.setupTitles {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.desk .setupTitles h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--k-ink);
+}
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.count {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--k-soft);
+}
+.fill {
+  position: relative;
+  display: block;
+  width: 160px;
+  height: 8px;
+  border: var(--k-frame-thin);
+  border-radius: var(--k-r);
+  background: var(--k-sheet);
+  overflow: hidden;
+}
+.fill > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--p, 0) * 100%);
+  background: var(--k-ok);
+  transition: width 0.3s var(--k-ease);
+}
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step + .step {
+  border-top: var(--k-frame-thin);
+}
+.desk .stepBtn.stepBtn {
   appearance: none;
   position: relative;
   display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: 4px;
-  min-width: 0;
-  min-height: 92px;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 16px;
+  width: 100%;
+  min-height: 68px;
   margin: 0;
-  padding: 12px 16px 18px;
+  padding: 14px 22px;
   border: 0;
   border-radius: 0;
   background: var(--k-sheet);
@@ -306,287 +337,105 @@
   cursor: pointer;
   transition: background-color 0.14s var(--k-ease);
 }
-.desk .segBtn.segBtn + .segBtn.segBtn {
-  border-left: var(--k-frame-thin);
-}
-.desk .segBtn.segBtn:hover:not([aria-selected="true"]) {
+.desk .stepBtn.stepBtn:hover {
   background: color-mix(in srgb, var(--k-ink) 4%, var(--k-sheet));
 }
-.desk .segBtn.segBtn[aria-selected="true"] {
-  background: var(--k-blue-soft);
-  cursor: default;
+.desk .stepBtn.stepBtn:focus-visible {
+  outline: 2px solid var(--k-blue);
+  outline-offset: -4px;
 }
-/* the 4px line along the bottom: done in green, the next and the open one in blue, the rest none */
-.desk .segBtn.segBtn::after {
+.step[data-open="1"] .stepBtn.stepBtn {
+  background: var(--k-blue-soft);
+  border-bottom: var(--k-frame-thin);
+}
+.step[data-open="1"] .stepBtn.stepBtn::before {
   content: "";
   position: absolute;
-  inset: auto 0 0;
-  height: 4px;
-  background: transparent;
-}
-.desk .segBtn.segBtn[data-bar="done"]::after {
-  background: var(--k-ok);
-}
-.desk .segBtn.segBtn[data-bar="now"]::after,
-.desk .segBtn.segBtn[aria-selected="true"]::after {
+  inset: 0 auto 0 0;
+  width: 5px;
   background: var(--k-blue);
 }
-.desk .segBtn.segBtn:focus-visible {
-  outline: 2px solid var(--k-blue);
-  outline-offset: -5px;
-}
-.segN {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.3;
-  color: var(--k-muted);
-}
-.segName {
-  max-width: 100%;
-  margin-bottom: 2px;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  line-height: 1.25;
-  text-transform: uppercase;
-}
-.segFoot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 16px;
-  margin-top: -4px;
-}
-
-/* ?s=2 — the steps as a list beside the part, the settings menu's own items */
-.split {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-.side {
-  position: sticky;
-  top: 8px;
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-}
-.sideHead {
-  display: grid;
-  gap: 8px;
-}
-.fill {
-  display: block;
-  height: 8px;
-  border: var(--k-frame-thin);
-  border-radius: var(--k-r);
-  background: var(--k-sheet);
-  overflow: hidden;
-}
-.fill > span {
-  display: block;
-  height: 100%;
-  background: var(--k-blue);
-  transform: scaleX(var(--p, 0));
-  transform-origin: left center;
-  transition: transform 0.3s var(--k-ease);
-}
-.list {
-  display: grid;
-  gap: 8px;
-}
-.desk .item.item {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-  min-height: 58px;
-  margin: 0;
-  padding: 10px 12px;
-  border: var(--k-frame-thin);
-  border-radius: var(--k-r);
-  background: var(--k-sheet);
-  color: var(--k-ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.14s var(--k-ease), box-shadow 0.14s var(--k-ease);
-}
-.desk .item.item:hover:not([aria-selected="true"]) {
-  background: color-mix(in srgb, var(--k-ink) 4%, var(--k-sheet));
-}
-.desk .item.item[aria-selected="true"] {
-  box-shadow: 3px 3px 0 var(--k-ink);
-  cursor: default;
-}
-.desk .item.item:focus-visible {
-  outline: 2px solid var(--k-blue);
-  outline-offset: 3px;
-}
-.itemN {
-  flex: none;
-  display: grid;
+.stepN {
+  display: inline-grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  border: var(--k-frame-thin);
-  border-radius: var(--k-r);
-  background: var(--k-sheet);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--k-ink);
-}
-.item[aria-selected="true"] .itemN {
-  background: var(--k-blue);
-  border-color: var(--k-blue-dark);
-  color: var(--k-sheet);
-}
-.item[data-done="1"] .itemN {
-  background: var(--k-ok);
-  border-color: var(--k-ok-dark);
-  color: var(--k-sheet);
-}
-.itemText {
-  display: grid;
-  justify-items: start;
-  gap: 3px;
-  min-width: 0;
-}
-.itemText b {
-  max-width: 100%;
-  font-size: 13.5px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-.main {
-  display: grid;
-  gap: 16px;
-  min-width: 0;
-}
-.mainFoot {
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* ?s=3 — a drawn line of four squares; the line between two done steps is green, the rest a quiet ink */
-.track {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 16px 28px;
-  padding: 20px 20px 18px;
+  width: 36px;
+  height: 36px;
   border: var(--k-frame);
   border-radius: var(--k-r);
   background: var(--k-sheet);
-  scroll-margin-top: 80px;
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--k-ink);
 }
-.nodes {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.step[data-state="done"] .stepN {
+  border-color: var(--k-ok);
+  background: var(--k-ok);
+  color: #fff;
 }
-.desk .node.node {
-  appearance: none;
-  position: relative;
+.step[data-state="now"] .stepN {
+  border-color: var(--k-blue);
+  background: var(--k-blue);
+  color: #fff;
+}
+.stepText {
   display: grid;
-  justify-items: center;
-  align-content: start;
   gap: 4px;
   min-width: 0;
-  margin: 0;
-  padding: 0 4px 2px;
-  border: 0;
-  border-radius: var(--k-r);
-  background: none;
-  color: var(--k-ink);
-  font: inherit;
-  text-align: center;
-  cursor: pointer;
 }
-.desk .node.node::after {
-  content: "";
-  position: absolute;
-  top: 15px;
-  left: calc(50% + 24px);
-  width: calc(100% - 48px);
-  height: 2px;
-  background: color-mix(in srgb, var(--k-ink) 25%, transparent);
-  pointer-events: none;
+.stepName {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
-.desk .node.node:last-child::after {
-  display: none;
+.stepSub {
+  max-width: 72ch;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--k-soft);
 }
-.desk .node.node[data-link="done"]::after {
-  background: var(--k-ok);
-}
-.desk .node.node:focus-visible {
-  outline: 2px solid var(--k-blue);
-  outline-offset: 3px;
-}
-.nodeSq {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  margin-bottom: 6px;
-  border: var(--k-frame);
+/* the row's own control: says what a click does */
+.stepGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: var(--k-frame-thin);
   border-radius: var(--k-r);
   background: var(--k-sheet);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--k-ink);
-  transition: transform 0.12s var(--k-ease), box-shadow 0.12s var(--k-ease);
-}
-.node[data-state="done"] .nodeSq {
-  background: var(--k-ok);
-  border-color: var(--k-ok-dark);
-  color: var(--k-sheet);
-}
-.node[data-state="now"] .nodeSq {
-  background: var(--k-blue);
-  border-color: var(--k-blue-dark);
-  color: var(--k-sheet);
-}
-/* under a pointer, and on the open step, the square stands up off the line */
-.desk .node.node:hover .nodeSq,
-.desk .node.node[aria-selected="true"] .nodeSq {
-  transform: translate(-2px, -2px);
-  box-shadow: 3px 3px 0 var(--k-ink);
-}
-.desk .node.node[aria-selected="true"] {
-  cursor: default;
-}
-.nodeName {
-  max-width: 100%;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  line-height: 1.25;
-  text-transform: uppercase;
-}
-.node[aria-selected="true"] .nodeName {
-  color: var(--k-blue);
-}
-.nodeSt {
-  justify-content: center;
-  text-align: left;
-}
-
-.count {
-
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  line-height: 1.2;
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--k-ink);
+  transition: transform 0.12s var(--k-ease), box-shadow 0.12s var(--k-ease);
+}
+.stepGo > svg {
+  transition: transform 0.16s var(--k-ease);
+}
+.desk .stepBtn.stepBtn:hover .stepGo {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--k-ink);
+}
+.step[data-open="1"] .stepGo {
+  border-color: var(--k-blue);
+  color: var(--k-blue);
+}
+.step[data-open="1"] .stepGo > svg {
+  transform: rotate(180deg);
+}
+.stepBody {
+  min-width: 0;
+  scroll-margin-top: 80px;
+}
+.stepBody[hidden] {
+  display: none;
 }
 
 /* ── status stamps ─────────────────────────────────────────────────────── */
@@ -594,12 +443,12 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 7px;
-  border: 1.5px solid var(--k-muted);
+  padding: 4px 8px;
+  border: 1.5px solid var(--k-soft);
   border-radius: var(--k-r);
   background: var(--k-sheet);
-  color: var(--k-muted);
-  font-size: 10px;
+  color: var(--k-soft);
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
   line-height: 1.3;
@@ -645,11 +494,11 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 4px 12px;
   align-items: start;
-  padding: 15px 18px;
+  padding: 18px 22px;
   border-bottom: var(--k-frame-thin);
 }
 .panelIcon {
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--k-blue);
 }
 .panelTitles {
@@ -657,25 +506,25 @@
 }
 .desk .panelTitles h3 {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 900;
-  letter-spacing: 0.09em;
-  line-height: 1.35;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
   text-transform: uppercase;
   color: var(--k-ink);
 }
 .desk .panelTitles p {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   max-width: 72ch;
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.5;
-  color: var(--k-muted);
+  color: var(--k-soft);
 }
 .panelBody {
-  --k-bx: 18px;
-  --k-bb: 22px;
+  --k-bx: 22px;
+  --k-bb: 26px;
   min-width: 0;
-  padding: 20px var(--k-bx) var(--k-bb);
+  padding: 22px var(--k-bx) var(--k-bb);
 }
 
 /* ── what goes inside ───────────────────────────────────────────────────── */
@@ -1299,7 +1148,7 @@
   font-weight: 800;
   letter-spacing: 0.06em;
 }
-.panel[data-desk-panel="business"] .card {
+[data-desk-panel="business"] .card {
   scroll-margin-top: 64px;
 }
 .root [id="desk-know"] {
@@ -2023,73 +1872,47 @@
     inset: -8px;
   }
 
-  /* ?s=1 — the bar two by two, the same 1.5px rules between the four */
-  .segRow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* the checklist: the stamp and the control drop under the name */
+  .setupHead {
+    padding: 16px 14px;
   }
-  .desk .segBtn.segBtn + .segBtn.segBtn:nth-child(odd) {
-    border-left: 0;
-  }
-  .desk .segBtn.segBtn:nth-child(n + 3) {
-    border-top: var(--k-frame-thin);
-  }
-  .desk .segBtn.segBtn {
-    min-height: 88px;
-    padding: 11px 14px 16px;
-  }
-  .segFoot {
-    display: grid;
-    justify-content: stretch;
-    gap: 10px;
-    margin-top: -2px;
-  }
-  /* ?s=2 — the list on top at full width, the part under it */
-  .split {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
-  .side {
-    position: static;
-  }
-  /* room for the open item's 3px shadow at the full width */
-  .list {
-    padding-right: 3px;
-  }
-  .desk .item.item {
-    min-height: 56px;
-  }
-  /* ?s=3 — the same line; the open step's status alone, under it */
-  .track {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 18px 12px 14px;
-  }
-  .desk .node.node {
-    padding-inline: 2px;
-  }
-  .desk .node.node::after {
-    left: calc(50% + 22px);
-    width: calc(100% - 44px);
-  }
-  .nodeName {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-  }
-  .node:not([aria-selected="true"]) .nodeSt {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .nodeSt {
-    margin-top: 2px;
-    font-size: 11.5px;
-  }
-  .segFoot .btn.btn,
-  .mainFoot .btn.btn,
-  .track .btn.btn {
+  .setupHead .btn.btn {
     width: 100%;
+  }
+  .fill {
+    flex: 1 1 auto;
+    width: auto;
+  }
+  .progress {
+    width: 100%;
+  }
+  .desk .stepBtn.stepBtn {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 14px;
+  }
+  .desk .stepBtn.stepBtn > .chip {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+  .desk .stepBtn.stepBtn {
+    align-items: start;
+  }
+  /* on a phone the control is the chevron alone, a 44px square: the name keeps the width */
+  .stepGo {
+    grid-column: 3;
+    grid-row: 1;
+    justify-content: center;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+  .stepGoText {
+    display: none;
+  }
+  .stepName {
+    font-size: 15px;
   }
   /* rows stack: the words, then the buttons at full width */
   .row,
@@ -2222,10 +2045,10 @@
   .testState[data-live="1"]::before {
     animation: none;
   }
-  .nodeSq,
   .fill > span,
-  .desk .segBtn.segBtn,
-  .desk .item.item,
+  .desk .stepBtn.stepBtn,
+  .stepGo,
+  .stepGo > svg,
   .desk .btn.btn,
   .desk .iconBtn.iconBtn,
   .desk .cellBtn.cellBtn,
@@ -2237,8 +2060,7 @@
   .desk .answerIt.answerIt {
     transition: none;
   }
-  .desk .node.node:hover .nodeSq,
-  .desk .node.node[aria-selected="true"] .nodeSq,
+  .desk .stepBtn.stepBtn:hover .stepGo,
   .desk .btn.btn:hover:not(:disabled),
   .desk .iconBtn.iconBtn:hover,
   .desk .cellBtn.cellBtn:hover,

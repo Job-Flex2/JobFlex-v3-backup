@@ -59,6 +59,8 @@ export function Sprite() {
             straight top and bottom runs land on half-pixels at the 17px sidebar
             size and read grey next to i-file / i-users. 2.5 snaps it solid. */}
         <symbol id="i-msg" viewBox="0 0 24 24" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></symbol>
+        {/* Texting (2026-10-16, nav-map): a phone with a text on it — lucide smartphone, two lines in the screen. */}
+        <symbol id="i-sms" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M9 7h6" /><path d="M9 11h4" /><path d="M12 18h.01" /></symbol>
         {/* Sign out. lucide log-out, same 24×24 line style as the rest. */}
         <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></symbol>
         <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 13z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></symbol>

@@ -41,7 +41,6 @@ import { PaymentsPane } from "./panes/payments-pane";
 import { BillingPane } from "./panes/billing-pane";
 import { IntegrationsPane } from "./panes/integrations-pane";
 import { NotificationsPane } from "./panes/notifications-pane";
-import { TextingPane } from "./panes/texting-pane";
 import { DeskPane } from "./panes/desk-pane";
 import { EstimatingPane } from "./panes/estimating-pane";
 
@@ -51,7 +50,7 @@ const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
   billing: BillingPane,
   integrations: IntegrationsPane,
   notifications: NotificationsPane,
-  texting: TextingPane,
+  // Texting is its own page since 2026-10-16 (/dashboard/texting).
   desk: DeskPane,
   estimating: EstimatingPane,
 };

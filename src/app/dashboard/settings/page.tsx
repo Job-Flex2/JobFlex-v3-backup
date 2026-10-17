@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     "Settings — account, payments, billing, integrations and notifications on one sheet.",
 };
 
-const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "texting", "desk", "estimating"] as const;
+const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "desk", "estimating"] as const;
 type PaneKey = (typeof PANE_KEYS)[number];
 
 export default async function SettingsPage({
@@ -61,6 +61,17 @@ export default async function SettingsPage({
     }
     destination.set("tab", "settings");
     redirect(`/dashboard/phone?${destination.toString()}`);
+  }
+  // Texting is its own page since 2026-10-16: old ?pane=texting / ?tab=texting links land there, other params kept.
+  // (A #texting-own-number fragment never reaches the server; the browser carries it across the redirect.)
+  if (rawPane === "texting") {
+    const destination = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (key === "pane" || key === "tab" || value == null) continue;
+      for (const item of Array.isArray(value) ? value : [value]) destination.append(key, item);
+    }
+    const query = destination.toString();
+    redirect(`/dashboard/texting${query ? `?${query}` : ""}`);
   }
   const initialPane = PANE_KEYS.includes(rawPane as PaneKey) ? (rawPane as PaneKey) : undefined;
   let ctx;

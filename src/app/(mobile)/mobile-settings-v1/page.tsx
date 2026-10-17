@@ -46,7 +46,7 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0a",
 };
 
-const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "texting", "desk", "estimating"] as const;
+const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "desk", "estimating"] as const;
 
 export default async function MobileSettingsV1Page({
   searchParams,
@@ -56,6 +56,8 @@ export default async function MobileSettingsV1Page({
   const params = await searchParams;
   const value = params.tab ?? params.pane;
   const rawPane = Array.isArray(value) ? value[0] : value;
+  // Texting left Settings for its own page (2026-10-16).
+  if (rawPane === "texting") redirect("/dashboard/texting");
   if (rawPane === "desk") {
     const destination = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {

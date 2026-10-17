@@ -1511,3 +1511,24 @@
   /* Touch target: min-height beats the chip's 28px height above. */
   .bp :global(.content .ph-chip) { min-height: 44px; }
 }
+
+/* ── Calls, readable at a glance (owner, 2026-10-16) ─────────────────────
+   The figures' labels and notes, the log's column heads, its filters and the
+   empty state were 10–11px mono in the faint greys. Same layout, larger type
+   in the readable ink tones; the filters take a 36px row. Later in the file at
+   the same weight, so these win without touching the rules above. */
+.bp :global(.content .stat-grid) { gap: 16px; margin-bottom: 24px; }
+.bp :global(.content .stat) { padding: 18px 20px; }
+.bp :global(.content .stat .kpi-lbl) { margin-bottom: 0; font-size: 12px; letter-spacing: 0.14em; color: var(--ink-soft); }
+.bp :global(.content .stat-val) { margin-top: 12px; font-size: 34px; }
+.bp :global(.content .stat-hint) { margin-top: 10px; font-family: var(--font-sans); font-size: 13.5px; font-weight: 500; color: var(--ink-soft); }
+.bp :global(.content .tb-head) { padding: 14px 20px; }
+.bp :global(.content .tb-head .kpi-lbl) { font-size: 13px; letter-spacing: 0.14em; color: var(--ink); }
+.bp :global(.content .ph-filters) { gap: 8px; }
+.bp :global(.content .ph-chip) { height: 36px; padding: 0 14px; border-color: var(--ink-line); font-size: 13px; color: var(--ink-soft); }
+.bp :global(.content .ph-table th) { font-size: 11px; color: var(--ink-soft); padding: 14px 20px; }
+.bp :global(.content .pempty) { padding: 40px 24px; border-color: var(--ink-line); font-size: 15px; line-height: 1.5; color: var(--ink-soft); }
+.bp :global(.content .pempty b) { font-size: 16px; font-weight: 800; color: var(--ink); }
+@media (max-width: 860px) {
+  .bp :global(.content .stat-val) { font-size: 26px; }
+}

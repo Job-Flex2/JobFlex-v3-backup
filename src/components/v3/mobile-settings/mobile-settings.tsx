@@ -70,20 +70,6 @@ import {
   setStripeAchEnabled,
 } from "@/actions/paymentConnections";
 import { sendTestNotification } from "@/actions/notifications";
-import {
-  addNotificationPhone,
-  confirmPhoneVerification,
-  removeNotificationPhone,
-  removeSmsPhone,
-  sendTestText,
-  startPhoneVerification,
-  setLeadTexts,
-} from "@/actions/sms";
-import { TextingPeople } from "@/components/v3/texting-people/texting-people";
-import { TextRules } from "@/components/v3/texting-people/text-rules";
-import { OwnNumber } from "@/components/v3/texting-people/own-number";
-import { TextingOverview } from "@/components/v3/texting-people/texting-overview";
-import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
 import type { PaymentConnectionStatusView } from "@/lib/payments/connections";
 import type {
   Badge,
@@ -160,8 +146,6 @@ import {
   squareConnLine,
   staxConnLine,
   stripeConnLine,
-  TEXTING_COPY,
-  TEXTS_COPY,
 } from "@/components/v3/settings-blueprint/settings-data";
 import { ProviderKeyForm } from "@/components/v3/settings-blueprint/panes/stripe-key-form";
 import { MobileSettingsSprite } from "./sprite";
@@ -1198,11 +1182,6 @@ function NotificationsPane({ data }: { data: SettingsData }) {
   );
 }
 
-/* ══════════════════════════════ TEXTING ══════════════════════════════ */
-
-// Texting (2026-09-27) — the handheld build of the desk pane: who gets
-// texted (the office roster, a switch per group), your own mobile, the extra
-// numbers. Same actions as the desk; the copy comes from settings-data.
 /** Settings → Estimating on the phone (2026-10-16): the same form as the desk pane, in this page's card. */
 function EstimatingPaneMobile() {
   const item = RAIL_ITEMS.find((r) => r.key === "estimating");
@@ -1213,171 +1192,6 @@ function EstimatingPaneMobile() {
         <CompanyPricingForm />
       </div>
     </section>
-  );
-}
-
-function TextingPane({ data }: { data: SettingsData }) {
-  const sms = data.notifications.sms;
-  const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState("");
-  const [err, setErr] = useState("");
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [stage, setStage] = useState<"idle" | "code">("idle");
-  const [extraName, setExtraName] = useState("");
-  const [extraPhone, setExtraPhone] = useState("");
-  async function run(label: string, fn: () => Promise<{ ok: true; note?: string } | { ok: false; error: string }>, after?: () => void) {
-    setBusy(label);
-    setNote("");
-    setErr("");
-    try {
-      const r = await fn();
-      if (r.ok) {
-        setNote(r.note ?? "Done.");
-        after?.();
-        router.refresh();
-      } else setErr(r.error);
-    } catch (e) {
-      setErr(actionError(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-  return (
-    <>
-      {/* The steps first, then the number (2026-10-13) — the same order as the desk. */}
-      {sms.canManage ? (
-        <section className="mst-card" id="texting-overview">
-          <CardHeader card={{ title: TEXTING_COPY.overviewTitle, sub: TEXTING_COPY.overviewSub }} />
-          <div className="mst-cardB">
-            <TextingOverview sms={sms} />
-          </div>
-        </section>
-      ) : !sms.configured ? (
-        <div className="mst-note">{TEXTING_COPY.notConfiguredLong}</div>
-      ) : null}
-      {sms.canManage ? (
-        <section className="mst-card" id="texting-own-number">
-          <CardHeader card={{ title: REGISTRATION_COPY.title, sub: REGISTRATION_COPY.sub }} />
-          <div className="mst-cardB">
-            <OwnNumber view={sms.registration} configured={sms.configured} />
-          </div>
-        </section>
-      ) : null}
-      {sms.canManage ? (
-        <section className="mst-card" id="texting-roster" data-roster>
-          <CardHeader card={{ title: TEXTING_COPY.peopleTitle, sub: TEXTING_COPY.peopleSub }} />
-          <div className="mst-cardB">
-            <TextingPeople roster={sms.roster} />
-            <div className="mst-note">{TEXTS_COPY.usage(sms.monthCount, sms.allowance)}</div>
-          </div>
-        </section>
-      ) : null}
-      {sms.canManage ? (
-        <section className="mst-card" id="texting-rules" data-rules>
-          <CardHeader card={{ title: TEXTING_COPY.rulesTitle, sub: TEXTING_COPY.rulesSub }} />
-          <div className="mst-cardB">
-            <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
-          </div>
-        </section>
-      ) : null}
-      {/* The office verifies its own mobile on its roster row (2026-10-14); this card is for a rep or a worker. */}
-      {sms.canManage ? null : (
-        <section className="mst-card">
-          <CardHeader card={{ title: TEXTING_COPY.mineTitle, sub: TEXTING_COPY.mineSub }} />
-          <div className="mst-cardB">
-            {sms.phone && stage === "idle" ? (
-              <>
-                <div className="mst-trow">
-                  <span className="mst-trowB">
-                    <span className="mst-trowN">{sms.phone}</span>
-                    <span className="mst-trowD">{sms.stopped ? TEXTS_COPY.stopped : TEXTS_COPY.verified}</span>
-                  </span>
-                </div>
-                <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => run("test", sendTestText)}>
-                  {TEXTS_COPY.testText}
-                </button>
-                <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => run("remove", removeSmsPhone)}>
-                  {TEXTS_COPY.remove}
-                </button>
-              </>
-            ) : (
-              <>
-                {!sms.phone ? <div className="mst-note">{TEXTS_COPY.noPhone}</div> : null}
-                <Field label={TEXTS_COPY.mobileLabel} value={phone} placeholder={TEXTS_COPY.mobilePlaceholder} onChange={setPhone} disabled={stage === "code"} inputMode="tel" />
-                {stage === "code" ? <Field label={TEXTS_COPY.codeLabel} value={code} placeholder="482913" onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))} inputMode="tel" /> : null}
-                {stage === "idle" ? (
-                  <button className="mst-btn mst-btn--primary mst-btn--wide" type="button" disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => run("code", () => startPhoneVerification(phone), () => setStage("code"))}>
-                    {busy === "code" ? "Sending…" : TEXTS_COPY.sendCode}
-                  </button>
-                ) : (
-                  <>
-                    <button className="mst-btn mst-btn--primary mst-btn--wide" type="button" disabled={busy !== null || code.length !== 6} onClick={() => run("verify", () => confirmPhoneVerification(code), () => { setStage("idle"); setCode(""); setPhone(""); })}>
-                      {busy === "verify" ? "Checking…" : TEXTS_COPY.verify}
-                    </button>
-                    <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null} onClick={() => { setStage("idle"); setCode(""); }}>
-                      {TEXTS_COPY.change}
-                    </button>
-                  </>
-                )}
-                <div className="mst-note" data-sms-consent>
-                  <span>
-                    {TEXTS_COPY.consent} <a href="/terms">{TEXTS_COPY.terms}</a> · <a href="/privacy">{TEXTS_COPY.privacy}</a>
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-      )}
-      {sms.canManage ? (
-        <section className="mst-card" id="texting-lead-texts" data-lead-texts={sms.leadTexts.on ? "on" : "off"}>
-          <CardHeader card={{ title: TEXTS_COPY.leadTitle, sub: TEXTS_COPY.leadSub }} />
-          <div className="mst-cardB">
-            <div className="mst-note">{sms.leadTexts.phone ? `To ${sms.leadTexts.phone}` : TEXTS_COPY.leadNoPhone}</div>
-            <button
-              className={`mst-btn ${sms.leadTexts.on ? "mst-btn--ghost" : "mst-btn--primary"} mst-btn--wide`}
-              type="button"
-              disabled={busy !== null || (!sms.leadTexts.on && !sms.leadTexts.phone)}
-              onClick={() => run("lead", () => setLeadTexts(!sms.leadTexts.on))}
-            >
-              {sms.leadTexts.on ? "Turn lead texts off" : "Turn lead texts on"}
-            </button>
-            <div className="mst-note" data-lead-consent>
-              <span>
-                {TEXTS_COPY.leadConsent} <a href="/terms#sms">{TEXTS_COPY.terms}</a> · <a href="/privacy#sms">{TEXTS_COPY.privacy}</a>
-              </span>
-            </div>
-          </div>
-        </section>
-      ) : null}
-      {sms.canManage ? (
-        <section className="mst-card">
-          <CardHeader card={{ title: TEXTS_COPY.extrasTitle, sub: TEXTS_COPY.extrasSub }} />
-          <div className="mst-cardB">
-            {sms.extras.map((x) => (
-              <div className="mst-trow" key={x.id}>
-                <span className="mst-trowB">
-                  <span className="mst-trowN">{x.name}</span>
-                  <span className="mst-trowD">{x.phone}{x.stopped ? ` · ${TEXTS_COPY.stopped}` : !x.active ? " · paused" : ""}</span>
-                </span>
-                <button className="mst-btn mst-btn--ghost" type="button" disabled={busy !== null} onClick={() => run("drop", () => removeNotificationPhone(x.id))}>
-                  {TEXTS_COPY.removeExtra}
-                </button>
-              </div>
-            ))}
-            <Field label={TEXTS_COPY.extraName} value={extraName} placeholder="Dispatch" onChange={setExtraName} />
-            <Field label={TEXTS_COPY.extraPhone} value={extraPhone} placeholder={TEXTS_COPY.mobilePlaceholder} onChange={setExtraPhone} inputMode="tel" />
-            <button className="mst-btn mst-btn--ghost mst-btn--wide" type="button" disabled={busy !== null || !extraName.trim() || extraPhone.replace(/\D/g, "").length < 10} onClick={() => run("add", () => addNotificationPhone({ name: extraName, phone: extraPhone }), () => { setExtraName(""); setExtraPhone(""); })}>
-              {busy === "add" ? "Adding…" : TEXTS_COPY.addExtra}
-            </button>
-          </div>
-        </section>
-      ) : null}
-      {note ? <div className="mst-note" role="status">{note}</div> : null}
-      {err ? <div className="mst-note" role="alert">{err}</div> : null}
-    </>
   );
 }
 
@@ -1392,7 +1206,6 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   billing: "i-receipt",
   integrations: "i-globe",
   notifications: "i-bell",
-  texting: "i-phone",
   desk: "i-phone",
   estimating: "i-hardhat",
 };
@@ -1627,9 +1440,6 @@ export function MobileSettings({
             </div>
             <div className={active === "notifications" ? "mst-pane is-on" : "mst-pane"}>
               <NotificationsPane data={data} />
-            </div>
-            <div className={active === "texting" ? "mst-pane is-on" : "mst-pane"}>
-              <TextingPane data={data} />
             </div>
             <div className={active === "estimating" ? "mst-pane is-on" : "mst-pane"}>
               <EstimatingPaneMobile />

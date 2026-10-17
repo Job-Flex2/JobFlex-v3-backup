@@ -1,0 +1,504 @@
+/* ============================================================================
+   TEXTING · DESK PAGE — /dashboard/texting (2026-10-16)
+   ============================================================================
+   Texting left Settings for its own page under AI desk. This sheet draws the
+   PAGE around the shared texting components (texting-people/*, their
+   712ecad9 quiet-blueprint look kept as the owner accepted it): the page head
+   with the month's count, the status, four numbered setup cards and the two
+   extras side by side.
+
+   PLAIN STYLESHEET, NOT A CSS MODULE, on purpose (the "style CSS that ruined
+   the whole design" lesson): every selector starts with the one literal root
+   class `.jf-texting`; nothing is unscoped. The root carries `data-nest`, so
+   the shell's `* { margin: 0; padding: 0 }` reset skips this tree and cannot
+   tie these rules in a production build; Tailwind preflight still zeroes
+   headings, paragraphs and lists, so no reset of our own is needed — and none
+   is wanted, because the nested texting components carry single-class rules a
+   (0,1,0) reset here would tie. Element prefix `txp-`, new in the repo.
+   Values come from globals.css tokens. Light mode only.
+   ========================================================================= */
+
+.jf-texting {
+  --txp-line: rgba(10, 10, 10, 0.18);
+  container-type: inline-size;
+  display: grid;
+  gap: 24px;
+  width: 100%;
+  max-width: 1120px;
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+/* deep links (#texting-own-number …) land below the sticky topbar */
+.jf-texting [id] {
+  scroll-margin-top: 84px;
+}
+
+/* ── page head ─────────────────────────────────────────────────────────── */
+.jf-texting .txp-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 32px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+.jf-texting .txp-headT {
+  min-width: 0;
+}
+.jf-texting .txp-title {
+  font-size: 46px;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+.jf-texting .txp-job {
+  margin-top: 12px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+/* the month's count: a real counter, quiet, at the head's right edge */
+.jf-texting .txp-usage {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
+.jf-texting .txp-usageN {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+.jf-texting .txp-usageN b {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.jf-texting .txp-usageL {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.jf-texting .txp-usageS {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+/* ── the setup cards ───────────────────────────────────────────────────── */
+.jf-texting .txp-card {
+  min-width: 0;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-texting .txp-cardH {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--ink);
+}
+.jf-texting .txp-cardH:not(:has(> .txp-step)) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.jf-texting .txp-step {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.jf-texting .txp-cardT {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.jf-texting .txp-cardT h2 {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  padding-top: 4px;
+}
+.jf-texting .txp-cardT > p {
+  max-width: 72ch;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.jf-texting .txp-cardA {
+  align-self: center;
+}
+.jf-texting .txp-cardB {
+  padding: 24px;
+}
+
+/* "How it works" — the long instructions, one click away */
+.jf-texting .txp-how {
+  margin-top: 2px;
+}
+.jf-texting .txp-how > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.jf-texting .txp-how > summary::-webkit-details-marker {
+  display: none;
+}
+.jf-texting .txp-how > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s var(--ease-out);
+}
+.jf-texting .txp-how[open] > summary::before {
+  transform: rotate(90deg);
+}
+.jf-texting .txp-how > summary:hover {
+  color: var(--accent-ink);
+}
+.jf-texting .txp-how > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.jf-texting .txp-how > p {
+  max-width: 72ch;
+  margin-top: 8px;
+  padding-left: 13px;
+  border-left: 1px solid var(--txp-line);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* the two extras, side by side when there is room */
+.jf-texting .txp-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: stretch;
+}
+
+/* ── notes, info, tags, phone numbers ──────────────────────────────────── */
+.jf-texting .txp-note {
+  margin-top: 12px;
+  max-width: 72ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.jf-texting .txp-cardB > .txp-note:first-child {
+  margin-top: 0;
+}
+.jf-texting .txp-note a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.jf-texting .txp-note--ok {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.jf-texting .txp-note--err {
+  color: var(--rose);
+  font-weight: 600;
+}
+.jf-texting .txp-info {
+  padding: 12px 14px;
+  border: 1.5px solid var(--amber);
+  border-left-width: 4px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--amber) 8%, var(--paper-deep));
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.jf-texting .txp-phone {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.jf-texting .txp-phone--big {
+  font-size: 18px;
+}
+.jf-texting .txp-tag {
+  padding: 3px 7px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r-sm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.jf-texting .txp-tag--ok {
+  border-color: var(--emerald);
+  color: var(--emerald);
+}
+.jf-texting .txp-tag--warn {
+  border-color: var(--rose);
+  color: var(--rose);
+  background: color-mix(in srgb, var(--rose) 8%, var(--paper-deep));
+}
+
+/* ── the extra numbers ─────────────────────────────────────────────────── */
+.jf-texting .txp-list {
+  margin-bottom: 20px;
+  border: 1px solid var(--txp-line);
+  border-radius: var(--r-sm);
+}
+.jf-texting .txp-list > li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 12px 14px;
+}
+.jf-texting .txp-list > li + li {
+  border-top: 1px solid var(--ink-line);
+}
+.jf-texting .txp-listT {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.jf-texting .txp-listT b {
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.jf-texting .txp-list > li.is-paused .txp-listT b,
+.jf-texting .txp-list > li.is-paused .txp-phone {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+.jf-texting .txp-listA {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ── forms ─────────────────────────────────────────────────────────────── */
+.jf-texting .txp-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.jf-texting .txp-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.jf-texting .txp-field > span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.jf-texting .txp-field > input {
+  width: 100%;
+  height: 46px;
+  padding: 0 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+.jf-texting .txp-field > input::placeholder {
+  color: var(--ink-muted);
+  font-weight: 400;
+  opacity: 1;
+}
+.jf-texting .txp-field > input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.jf-texting .txp-field > input:disabled {
+  background: var(--paper);
+  color: var(--ink-muted);
+}
+.jf-texting .txp-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.jf-texting .txp-mine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+/* ── buttons: coloured, Inter caps, a 1.5px frame, near-square, a small lift on hover ── */
+.jf-texting .txp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out), background 0.12s var(--ease-out);
+}
+.jf-texting .txp-btn--sm {
+  min-height: 32px;
+  padding: 0 12px;
+}
+.jf-texting .txp-btn--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.jf-texting .txp-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.jf-texting .txp-btn--primary:hover:not(:disabled) {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+.jf-texting .txp-btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.jf-texting .txp-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.jf-texting .txp-btn:focus-visible,
+.jf-texting .txp-onoff > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Lead texts: ON | OFF as one switch ────────────────────────────────── */
+.jf-texting .txp-lead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.jf-texting .txp-onoff {
+  display: inline-flex;
+}
+.jf-texting .txp-onoff > button {
+  min-width: 96px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.12s var(--ease-out);
+}
+.jf-texting .txp-onoff > button:first-child {
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+}
+.jf-texting .txp-onoff > button + button {
+  margin-left: -1.5px;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.jf-texting .txp-onoff > button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, var(--paper));
+}
+.jf-texting .txp-onoff > button.is-on {
+  background: var(--ink);
+  color: #fff;
+  cursor: default;
+}
+.jf-texting .txp-onoff > button:disabled:not(.is-on) {
+  opacity: 0.45;
+  cursor: default;
+}
+.jf-texting .txp-leadTo {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+/* ── narrow content (a 1024px desk with the sidebar open) ─────────────── */
+@container (max-width: 860px) {
+  .jf-texting .txp-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* the count wraps under the title: read it from the left */
+  .jf-texting .txp-usage {
+    justify-items: start;
+    text-align: left;
+  }
+}
+@container (max-width: 600px) {
+  .jf-texting .txp-title {
+    font-size: 36px;
+  }
+  .jf-texting .txp-cardH {
+    padding: 16px 18px;
+  }
+  .jf-texting .txp-cardB {
+    padding: 18px;
+  }
+  .jf-texting .txp-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jf-texting .txp-listA {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jf-texting .txp-btn,
+  .jf-texting .txp-onoff > button,
+  .jf-texting .txp-how > summary::before {
+    transition: none;
+  }
+}
