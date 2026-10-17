@@ -21,6 +21,8 @@ import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/n
 import styles from "./subscription.module.css";
 
 const UPGRADE = "/dashboard/upgrade" as Route;
+/** Usage rows in view before "View all usage". */
+const USAGE_IN_VIEW = 3;
 
 /** Epoch seconds → the fixture's date voice ("Jul 1, 2026"). */
 function fmtDate(sec: number): string {
@@ -107,6 +109,35 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
   const isTrial = props.status === "TRIALING" && !comp;
   const nextCharge = props.nextCharge;
   const nextChargeItems = useMemo(() => (nextCharge ? nextChargeLines(nextCharge) : []), [nextCharge]);
+
+  const [usageOpen, setUsageOpen] = useState(false);
+  // Only what the plan caps; a resource with no cap is left out (owner, 2026-10-17).
+  const usageRows = [
+    ...props.usage.map((u) => {
+      const pct = u.limit > 0 ? Math.min(100, (u.used / u.limit) * 100) : 0;
+      const cls = u.informational ? "" : pct >= 90 ? "hot" : pct >= 60 ? "warn" : "";
+      return (
+        <div key={u.label} className={cx("us-row")}>
+          <div className={cx("us-top")}>
+            <span className={cx("us-lbl")}>{u.label}</span>
+            <span className={cx("us-num")}>{u.used + " / " + u.limit}</span>
+          </div>
+          <div className={cx("us-bar")}>
+            {/* width is written by the behavior module from data-w,
+                never by React — see its "USAGE BARS" note. */}
+            <span className={cx("us-fill", cls)} data-w={pct.toFixed(1)}></span>
+          </div>
+          {u.hint ? <p className={cx("us-hint")}>{u.hint}</p> : null}
+        </div>
+      );
+    }),
+    ...(props.usageUnavailable ?? []).map((u) => (
+      <div key={u.resource} className={cx("us-row")}>
+        <div className={cx("us-top")}><span className={cx("us-lbl")}>{u.label}</span><span className={cx("us-num")}>Unavailable</span></div>
+        <p className={cx("us-hint")}>{u.hint}</p>
+      </div>
+    )),
+  ];
 
   const copyCode = useCallback(() => {
     const code = props.referral.code;
@@ -277,49 +308,37 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
           <div className={cx("card-head")}>
             <h2>Usage</h2>
           </div>
-          <details className={cx("usage-details")}>
-            <summary>View usage details<svg className={cx("ic")} aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
-          <div className={cx("us-list")} id="usList">
-            {props.usageExempt ? (
-              <div className={cx("us-note")}>Unlimited · platform admin</div>
-            ) : props.usage.length === 0 && (props.usageUnlimited ?? []).length === 0 && !(props.usageUnavailable ?? []).length ? (
-              <div className={cx("us-note")}>Nothing used yet this cycle.</div>
-            ) : null}
-            {props.usage.map((u) => {
-              const pct = u.limit > 0 ? Math.min(100, (u.used / u.limit) * 100) : 0;
-              const cls = u.informational ? "" : pct >= 90 ? "hot" : pct >= 60 ? "warn" : "";
-              return (
-                <div key={u.label} className={cx("us-row")}>
-                  <div className={cx("us-top")}>
-                    <span className={cx("us-lbl")}>{u.label}</span>
-                    <span className={cx("us-num")}>{u.used + " / " + u.limit}</span>
+          {/* USAGE (owner, 2026-10-17): what the plan caps, the first rows in
+              view and the rest behind one smooth fold; a resource with no cap
+              is not listed. */}
+          {props.usageExempt ? (
+            <div className={cx("us-note")}>Unlimited · platform admin</div>
+          ) : usageRows.length === 0 ? (
+            <div className={cx("us-note")}>Nothing on your plan has a cap.</div>
+          ) : (
+            <div className={cx("usage-fold")} data-open={usageOpen ? "1" : "0"}>
+              <div className={cx("us-list")} id="usList">
+                {usageRows.slice(0, USAGE_IN_VIEW)}
+                {usageRows.length > USAGE_IN_VIEW ? (
+                  <div className={cx("us-more")} id="usMore" inert={!usageOpen}>
+                    <div className={cx("us-more-in")}>{usageRows.slice(USAGE_IN_VIEW)}</div>
                   </div>
-                  <div className={cx("us-bar")}>
-                    {/* width is written by the behavior module from data-w,
-                        never by React — see its "USAGE BARS" note. */}
-                    <span className={cx("us-fill", cls)} data-w={pct.toFixed(1)}></span>
-                  </div>
-                  {u.hint ? <p className={cx("us-hint")}>{u.hint}</p> : null}
-                </div>
-              );
-            })}
-            {(props.usageUnlimited ?? []).map((u) => (
-              <div key={u.label} className={cx("us-row")}>
-                <div className={cx("us-top")}>
-                  <span className={cx("us-lbl")}>{u.label}</span>
-                  <span className={cx("us-num")}>{u.used + " · no cap"}</span>
-                </div>
-                {u.hint ? <p className={cx("us-hint")}>{u.hint}</p> : null}
+                ) : null}
               </div>
-            ))}
-            {(props.usageUnavailable ?? []).map((u) => (
-              <div key={u.resource} className={cx("us-row")}>
-                <div className={cx("us-top")}><span className={cx("us-lbl")}>{u.label}</span><span className={cx("us-num")}>Unavailable</span></div>
-                <p className={cx("us-hint")}>{u.hint}</p>
-              </div>
-            ))}
-          </div>
-          </details>
+              {usageRows.length > USAGE_IN_VIEW ? (
+                <button
+                  type="button"
+                  className={cx("us-toggle")}
+                  aria-expanded={usageOpen}
+                  aria-controls="usMore"
+                  onClick={() => setUsageOpen((o) => !o)}
+                >
+                  <span>{usageOpen ? "Show less" : `View all usage · ${usageRows.length - USAGE_IN_VIEW} more`}</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+              ) : null}
+            </div>
+          )}
         </div>
         <div className={cx("card", "bill-card")} id="billCard">
           <div className={cx("card-head")}>

@@ -32,7 +32,7 @@ import { PlanConfetti } from "@/components/billing/PlanConfetti";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import { DEV_EVENT, type DevUpgradeEvent } from "@/lib/devSimulation";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Children, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { expandPlanFeatures } from "@/lib/planCatalog";
@@ -62,18 +62,56 @@ export type UpgradePlan = {
   highlight: boolean;
 };
 
-function PlanFeatures({ compact, name, children }: { compact: boolean; name: string; children: React.ReactNode }) {
-  const features = <span className="jf-up-feats" data-plan-feats>{children}</span>;
-  if (!compact) return features;
+/** How many rows a compact card shows before "View all features". */
+const COMPACT_FEATURES = 4;
+
+/** A card's feature list. Compact (the subscription overview, owner 2026-10-17): the first few rows stay in view,
+ *  the rest fold behind one toggle. Every card's toggle drives ONE state, so the row's cards open and close together
+ *  — the subgrid gives them one height, and each now fills it with its own list. The fold slides on
+ *  grid-template-rows (0fr → 1fr), so it eases at any length. */
+function PlanFeatures({
+  compact,
+  id,
+  name,
+  open = false,
+  onToggle,
+  children,
+}: {
+  compact: boolean;
+  id: string;
+  name: string;
+  open?: boolean;
+  onToggle?: () => void;
+  children: React.ReactNode;
+}) {
+  if (!compact) return <span className="jf-up-feats" data-plan-feats>{children}</span>;
+  const rows = Children.toArray(children);
+  const head = rows.slice(0, COMPACT_FEATURES);
+  const rest = rows.slice(COMPACT_FEATURES);
   return (
-    <details className="jf-up-features">
-      <summary aria-label={`${name} features`}>
-        <span className="jf-up-show-features">View features</span>
-        <span className="jf-up-hide-features">Hide features</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-      </summary>
-      {features}
-    </details>
+    <div className="jf-up-features" data-open={open ? "1" : "0"}>
+      <span className="jf-up-feats" data-plan-feats>
+        {head}
+        {rest.length ? (
+          <span className="jf-up-more" id={`jf-feats-${id}`} inert={!open}>
+            <span className="jf-up-more-in">{rest}</span>
+          </span>
+        ) : null}
+      </span>
+      {rest.length ? (
+        <button
+          type="button"
+          className="jf-up-feat-toggle"
+          aria-expanded={open}
+          aria-controls={`jf-feats-${id}`}
+          aria-label={open ? `Show fewer ${name} features` : `View all ${name} features`}
+          onClick={onToggle}
+        >
+          <span>{open ? "Show fewer" : `View all features · ${rest.length} more`}</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -166,6 +204,9 @@ export function UpgradeContent({
     [interval, plans],
   );
   const [busy, setBusy] = useState<string | null>(null);
+  // The compact cards' feature lists open and close together.
+  const [featsOpen, setFeatsOpen] = useState(false);
+  const toggleFeats = useCallback(() => setFeatsOpen((o) => !o), []);
   const [err, setErr] = useState<string | null>(null);
   /** "Card declined — update your card" after a change the card did not pay for. */
   const [declined, setDeclined] = useState<string | null>(null);
@@ -588,7 +629,7 @@ export function UpgradeContent({
               />
               <PlanPrice term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} figureClassName="jf-up-price" />
               <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
-              <PlanFeatures compact={compactFeatures} name={p.name}>
+              <PlanFeatures compact={compactFeatures} id={p.slug} name={p.name} open={featsOpen} onToggle={toggleFeats}>
                 {featureRows.map((f) => {
                   const has = included.get(p.slug)?.has(f.toLowerCase()) ?? false;
                   const lit = spotRow !== null && f === spotRow;
@@ -661,7 +702,7 @@ export function UpgradeContent({
             {/* ON THE PLAN: only the pages it holds — nothing when it holds
                 none (owner, 2026-09-04). OFF it: every page, ticked as picked.
                 The base and the page price head the list. */}
-            <PlanFeatures compact={compactFeatures} name={onCustom ? "Custom" : "Build your plan"}>
+            <PlanFeatures compact={compactFeatures} id={CUSTOM_PLAN_SLUG} name={onCustom ? "Custom" : "Build your plan"} open={featsOpen} onToggle={toggleFeats}>
               <span className="jf-up-f jf-up-f--base">
                 ${(CUSTOM_BASE_CENTS / 100).toFixed(0)} base · ${(CUSTOM_PAGE_CENTS / 100).toFixed(0)} per page a month
               </span>

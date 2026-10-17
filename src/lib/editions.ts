@@ -58,6 +58,8 @@ const DECK_NAV: readonly string[] = [
   "/dashboard/deck-estimator",
   "/dashboard/deck-estimator/inventory",
   "/dashboard/phone",
+  // Texting left Settings for its own page (2026-10-16); the studio had it under Settings, so it keeps it.
+  "/dashboard/texting",
   "/dashboard/messages",
   "/dashboard/reviews",
   "/dashboard/referrals",

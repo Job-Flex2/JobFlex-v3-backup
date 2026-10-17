@@ -24,6 +24,7 @@
 //
 // The skip path (testing only) calls `completePendingSignup(token, null)`,
 // which creates the same account with no subscription attached.
+import { alertSignup } from "@/lib/adminAlerts";
 import { randomUUID, randomBytes, createHash } from "crypto";
 import { SPOTLIGHT_KEY } from "@/lib/planSpotlightServer";
 import { parseSpotlightTool } from "@/lib/planSpotlight";
@@ -935,6 +936,16 @@ async function createAccountFromPending(
 
   // Sent after the response, so it reads the subscription row written below.
   trackActivation("organization_created", orgId, { flow: billing.flow === "cardless" ? "cardless" : "checkout" });
+  // The team's "Sign-ups" alert texts (lib/adminAlerts) — after the response; the
+  // name is read back so the passwordless stand-in name is what the text carries.
+  {
+    const signupFlow = billing.flow === "cardless" ? "cardless" : "checkout";
+    const alertOrgId = orgId;
+    after(async () => {
+      const org = await db.organization.findUnique({ where: { id: alertOrgId }, select: { name: true } }).catch(() => null);
+      await alertSignup({ orgName: org?.name ?? "A new company", flow: signupFlow }).catch((err) => console.warn("[adminAlerts] signup text:", err));
+    });
+  }
 
   // The subscription row, written here rather than by the webhook: at session
   // creation there was no organization for the webhook's metadata to name.

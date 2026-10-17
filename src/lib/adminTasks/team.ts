@@ -15,7 +15,7 @@ import { taskPath } from "./model";
 import { sendTaskNotices } from "./mail";
 import type { TaskReplyPlan } from "./textReply";
 import { dropMemberAssignments, readAssignments, readMembers, writeMembers } from "./teamStore";
-import { NAME_MAX, phoneE164, phoneWords, TEAM_MAX, TEAM_TZ, taskTextBody, textRecipients, welcomeTextBody, type LastText, type TaskText, type TeamMember, type TeamMemberView, type TextingStatus } from "./teamShared";
+import { NAME_MAX, phoneE164, phoneWords, TEAM_MAX, TEAM_TZ, taskTextBody, textRecipients, welcomeTextBody, type AlertKey, type LastText, type TaskText, type TeamMember, type TeamMemberView, type TextingStatus } from "./teamShared";
 
 const KIND = "jobflex-admin-task";
 
@@ -47,6 +47,7 @@ export async function teamView(): Promise<TeamMemberView[]> {
     open: count.get(m.id) ?? 0,
     last: last.get(m.phone) ?? null,
     stopped: stopped.has(m.phone),
+    alerts: m.alerts ?? [],
   }));
 }
 
@@ -107,7 +108,7 @@ export async function addMember(nameRaw: string, phoneRaw: string, by: string | 
 }
 
 /** A name, a number, texts on/off, quiet nights. */
-export async function updateMember(id: string, patch: { name?: string; phone?: string; on?: boolean; quietNights?: boolean }): Promise<TeamWrite> {
+export async function updateMember(id: string, patch: { name?: string; phone?: string; on?: boolean; quietNights?: boolean; alerts?: AlertKey[]; alertSet?: { key: AlertKey; on: boolean } }): Promise<TeamWrite> {
   const list = await readMembers();
   const i = list.findIndex((m) => m.id === id);
   if (i < 0) return { ok: false, error: "That person isn't on the team any more." };
@@ -125,6 +126,19 @@ export async function updateMember(id: string, patch: { name?: string; phone?: s
   }
   if (typeof patch.on === "boolean") next.on = patch.on;
   if (typeof patch.quietNights === "boolean") next.quietNights = patch.quietNights;
+  if (Array.isArray(patch.alerts)) {
+    if (patch.alerts.length) next.alerts = patch.alerts;
+    else delete next.alerts;
+  }
+  // One alert flipped — applied against the STORED set, so two quick ticks (or a
+  // stale 15-second refresh under the sheet) can never un-tick each other.
+  if (patch.alertSet) {
+    const has = new Set(next.alerts ?? []);
+    if (patch.alertSet.on) has.add(patch.alertSet.key);
+    else has.delete(patch.alertSet.key);
+    if (has.size) next.alerts = [...has];
+    else delete next.alerts;
+  }
   const renamed = next.name !== list[i].name;
   list[i] = next;
   await writeMembers(list);

@@ -1,12 +1,33 @@
-.workspace.workspace { width: 100%; min-width: 0; color: var(--ink); }
-.workspace.workspace h1 { margin: 0 0 16px; font-size: 32px; line-height: 1.1; font-weight: 900; text-transform: uppercase; }
-.workspace .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 24px; }
-.workspace nav { display: flex; border-bottom: 1px solid var(--ink-line); }
-.workspace nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 18px; color: var(--ink); font-weight: 700; text-decoration: none; border-bottom: 3px solid transparent; }
-.workspace nav a[aria-current] { border-bottom-color: var(--ink); }
-.workspace .setup { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 16px; border: 1px solid var(--ink); color: var(--ink); font-weight: 700; text-decoration: none; }
-.workspace a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.workspace.workspace { width: 100%; min-width: 0; padding-top: 16px; color: var(--ink); }
+.workspace.workspace h1 { margin: 0 0 20px; font-size: 32px; line-height: 1.1; font-weight: 900; text-transform: uppercase; }
+
+/* Calls | AI desk setup — one 2px ink frame, the open tab filled with ink (the plans' Monthly | Annual switch). */
+.workspace .tabs { display: inline-flex; max-width: 100%; margin-bottom: 28px; border: 2px solid var(--ink); border-radius: var(--r-sm, 2px); background: var(--sheet, var(--paper-deep)); }
+.workspace .tabs a {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 48px; padding: 0 22px;
+  color: var(--ink); font-size: 13px; font-weight: 800; letter-spacing: 0.1em; line-height: 1.1; text-transform: uppercase; white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 0.14s var(--ease-out), color 0.14s var(--ease-out);
+}
+.workspace .tabs a + a { border-left: 2px solid var(--ink); }
+.workspace .tabs a[aria-current] { background: var(--ink); color: #fff; }
+@media (hover: hover) and (pointer: fine) {
+  .workspace .tabs a:not([aria-current]):hover { background: var(--paper); }
+}
+.workspace .tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: -5px; }
+.workspace .tabs a[aria-current]:focus-visible { outline-color: #fff; }
 .workspace .settings { min-width: 0; }
 .workspace[data-ai-desk-tab="settings"] ~ * { display: none !important; }
 
 .workspace .settings[hidden] { display: none; }
+
+@media (max-width: 768px) {
+  .workspace.workspace { padding-top: 8px; }
+  .workspace.workspace h1 { font-size: 28px; margin-bottom: 16px; }
+  .workspace .tabs { display: flex; width: 100%; margin-bottom: 20px; }
+  .workspace .tabs a { flex: 1 1 0; padding: 0 10px; gap: 8px; font-size: 12px; letter-spacing: 0.06em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace .tabs a { transition: none; }
+}

@@ -493,6 +493,20 @@ export async function loadDeskWorkspace(ctx: SettingsOrgContext) {
   return { desk, registration };
 }
 
+/** The Texting page (2026-10-16: texting moved out of Settings onto /dashboard/texting, desk and handheld). The same
+ *  `SmsSettingsData` Settings built, from the same reads — without the billing, integration and desk reads beside it.
+ *  `null` = the org row is gone; each page answers that in its own words. */
+export async function loadTextingWorkspace(ctx: SettingsOrgContext): Promise<SmsSettingsData | null> {
+  const { organizationId, user, role } = ctx;
+  const [me, org, sub] = await Promise.all([
+    db.user.findUnique({ where: { id: user.id }, select: { smsPhone: true, smsVerifiedAt: true } }),
+    db.organization.findUnique({ where: { id: organizationId }, select: { id: true } }),
+    db.subscription.findUnique({ where: { organizationId }, select: { plan: true } }),
+  ]);
+  if (!org) return null;
+  return loadSmsSettings(organizationId, me?.smsPhone ?? null, me?.smsVerifiedAt ?? null, role, sub?.plan ?? null, user.id);
+}
+
 async function loadDeskSettings(organizationId: string, role: string): Promise<DeskSettingsData> {
   const { readDeskSettings } = await import("@/lib/aiDesk/numbers");
   const { companyFacts } = await import("@/lib/aiDesk/facts");

@@ -1091,17 +1091,24 @@
 :global(.jf-blueprint) .bill-empty { border-top: none; padding-top: 0; margin-top: 4px;
   text-transform: none; letter-spacing: 0; font-family: var(--font); font-size: 13px; font-weight: 500; }
 
-/* Secondary subscription details open independently without stretching invoices. */
-:global(.jf-blueprint) .usage-details summary {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  min-height: 44px; font-size: 14px; font-weight: 700; color: var(--ink-soft);
-  cursor: pointer; list-style: none;
+/* USAGE (owner, 2026-10-17): the capped rows, the first three in view, the
+   rest behind one fold that slides on grid-template-rows 0fr -> 1fr. */
+:global(.jf-blueprint) .us-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms var(--ease-out, cubic-bezier(0.22, 0.61, 0.36, 1)); }
+:global(.jf-blueprint) .usage-fold[data-open="1"] .us-more { grid-template-rows: 1fr; }
+:global(.jf-blueprint) .us-more-in { display: flex; flex-direction: column; gap: inherit; min-height: 0; overflow: hidden; opacity: 0; transition: opacity 220ms var(--ease-out, ease); }
+:global(.jf-blueprint) .usage-fold[data-open="1"] .us-more-in { opacity: 1; transition-delay: 60ms; }
+:global(.jf-blueprint) .us-toggle {
+  appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 44px; margin-top: 16px; padding: 10px 0 0; border: 0; border-top: 1px solid var(--ink-line);
+  background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; text-align: left; cursor: pointer;
 }
-:global(.jf-blueprint) .usage-details summary::-webkit-details-marker { display: none; }
-:global(.jf-blueprint) .usage-details summary:hover { color: var(--accent); }
-:global(.jf-blueprint) .usage-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-:global(.jf-blueprint) .usage-details[open] summary { margin-bottom: 16px; }
-:global(.jf-blueprint) .usage-details[open] summary svg { transform: rotate(180deg); }
+:global(.jf-blueprint) .us-toggle:hover { color: var(--accent); }
+:global(.jf-blueprint) .us-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:global(.jf-blueprint) .us-toggle svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform 240ms var(--ease-out, ease); }
+:global(.jf-blueprint) .usage-fold[data-open="1"] .us-toggle svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint) .us-more, :global(.jf-blueprint) .us-more-in, :global(.jf-blueprint) .us-toggle svg { transition: none; }
+}
 :global(.jf-blueprint) .us-hint { margin-top: 6px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
 :global(.jf-blueprint) .bill-description { color: var(--ink-soft); font-size: 15px; font-weight: 500; line-height: 1.5; }
 :global(.jf-blueprint) .bill-count { margin: 12px 0 20px; font-size: 12px; color: var(--ink-soft); }

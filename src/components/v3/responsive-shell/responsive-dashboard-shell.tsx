@@ -226,6 +226,9 @@ const PAGE_OWNED_STATIC = new Set([
   // (app/dashboard/settings/settings-responsive.tsx). Until this entry, a phone
   // following the sidebar's Settings link got the desktop hub.
   "/dashboard/settings",
+  // Texting, its own page since 2026-10-16 (it was Settings → Texting): both
+  // editions take the page's one sms read (app/dashboard/texting/texting-responsive.tsx).
+  "/dashboard/texting",
 ]);
 
 /** Mapped handheld surfaces that do NOT render <MobileNav />.

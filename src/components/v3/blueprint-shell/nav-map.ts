@@ -171,6 +171,9 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Automation",
     items: [
       { label: "AI desk", icon: "i-phone", href: "/dashboard/phone" },
+      // Texting (2026-10-16): its own page, out of Settings — who gets texted, from which number, saying what.
+      // `i-sms` is drawn in every sprite the nav reads (desk shell, MobileNav, the /dashboard handheld page).
+      { label: "Texting", icon: "i-sms", href: "/dashboard/texting" },
       { label: "Messages", icon: "i-msg", href: "/dashboard/messages" },
       { label: "Reviews", icon: "i-thumb", href: "/dashboard/reviews" },
       { label: "Trade board", icon: "i-board", href: "/dashboard/trade" },
@@ -203,6 +206,8 @@ const SURFACE_ALIASES: Record<string, string> = {
   "/mobile-roof-estimator-v2": "/dashboard/roof-estimator",
   "/mobile-fence-estimator-v2": "/dashboard/fence-estimator",
   "/mobile-phone-v2": "/dashboard/phone",
+  "/mobile-ai-desk-v1": "/dashboard/phone",
+  "/mobile-texting-v1": "/dashboard/texting",
   "/mobile-messages-v2": "/dashboard/messages",
   "/mobile-reviews-v2": "/dashboard/reviews",
   "/mobile-trade-v2": "/dashboard/trade",

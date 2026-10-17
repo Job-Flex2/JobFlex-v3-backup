@@ -753,63 +753,9 @@
 .bp :global(.content .note--ok) { border-color: var(--success); background: var(--success-soft, rgba(58, 125, 68, .07)); }
 .bp :global(.content .note--ok .ic) { color: var(--success); }
 
-/* ── TEXT MESSAGES CARD (2026-09-24, panes/notifications-pane.tsx) ──────
-   The verified mobile as a row with its tag and actions; the quiet-hours
-   pair; the extra numbers as a short ledger. Everything sits inside the
-   card's own frame and gutters. */
-.bp :global(.content .sc-badge) { margin-left: auto; align-self: center; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+/* ── THE QUIET NOTE (2026-09-24) — once the Text messages card and Settings → Texting; Texting left for
+   /dashboard/texting on 2026-10-16 (its own plain texting-page.css), and the AI desk pane still says one line in it. */
 .bp :global(.content .tx-note) { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
-.bp :global(.content .tx-note--warn) { color: var(--warning, #b88420); }
-.bp :global(.content .tx-note--err) { color: var(--danger, #a83232); }
-.bp :global(.content .tx-row) { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 12px; border: var(--border); border-radius: var(--radius); background: var(--paper, #f2f0eb); }
-.bp :global(.content .tx-row-t) { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.bp :global(.content .tx-row-t b) { font-variant-numeric: tabular-nums; font-size: 14px; }
-.bp :global(.content .tx-row-a) { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; margin-top: 10px; }
-.bp :global(.content .tx-row .tx-row-a) { margin-top: 0; }
-.bp :global(.content .tx-tag) { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; padding: 3px 7px; border: 1.5px solid var(--ink); border-radius: var(--radius); color: var(--ink); }
-.bp :global(.content .tx-tag--warn) { border-color: var(--danger, #a83232); color: var(--danger, #a83232); }
-.bp :global(.content .tx-verify .fgrid) { margin-top: 4px; }
-.bp :global(.content .tx-sub) { margin-top: 18px; padding-top: 16px; border-top: 1.5px solid var(--hair, rgba(10,10,10,.12)); }
-.bp :global(.content .tx-sub-h) { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
-.bp :global(.content .tx-sub-h b) { font-size: 13.5px; }
-.bp :global(.content .tx-sub-h span) { font-size: 12.5px; color: var(--muted); }
-.bp :global(.content .tx-quiet) { display: flex; gap: 14px; flex-wrap: wrap; }
-.bp :global(.content .tx-quiet label) { display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.bp :global(.content .tx-quiet input) { font-family: var(--font); font-size: 14px; padding: 8px 10px; border: var(--border); border-radius: var(--radius); background: #fff; color: var(--ink); }
-.bp :global(.content .tx-list) { list-style: none; margin: 0 0 12px; padding: 0; border: var(--border); border-radius: var(--radius); background: #fff; }
-.bp :global(.content .tx-list li) { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 9px 12px; border-top: 1px solid var(--hair, rgba(10,10,10,.12)); font-size: 13px; }
-.bp :global(.content .tx-list li:first-child) { border-top: 0; }
-.bp :global(.content .tx-list li.is-paused .tx-list-n), .bp :global(.content .tx-list li.is-paused .tx-list-p) { color: var(--muted); text-decoration: line-through; }
-.bp :global(.content .tx-list-n) { font-weight: 700; }
-.bp :global(.content .tx-list-p) { font-variant-numeric: tabular-nums; color: var(--muted); }
-.bp :global(.content .tx-list-a) { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-/* The card's own buttons are short: a Pause or Remove beside a name must
-   not take the width the page-level buttons claim. */
-.bp :global(.content .tx-list-a .btn), .bp :global(.content .tx-row-a .btn) { min-width: 0; padding-left: 14px; padding-right: 14px; }
-.bp :global(.content .tx-list li) { overflow: hidden; }
-@media (max-width: 640px) {
-  .bp :global(.content .tx-row-a), .bp :global(.content .tx-list-a) { margin-left: 0; width: 100%; }
-}
-.bp :global(.content .tx-row-a--left) { margin-left: 0; margin-top: 0; }
-/* Settings → Texting, quiet Blueprint (2026-10-16): the pane's own buttons in Inter caps with a 1.5px outline; inner
-   frames thin and light; the tags quiet; Lead texts' ON / OFF side by side as one switch (the Monthly | Annual
-   pattern) — the one change of place on the pane. */
-.bp :global(.content [data-pane="texting"] .tx-row-a .btn),
-.bp :global(.content [data-pane="texting"] .tx-list-a .btn) { border-width: 1.5px; border-radius: 2px; font-family: var(--font); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.bp :global(.content [data-pane="texting"] .tx-row-a .btn:hover:not(:disabled)),
-.bp :global(.content [data-pane="texting"] .tx-list-a .btn:hover:not(:disabled)) { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
-.bp :global(.content [data-pane="texting"] .tx-list) { border: 1px solid rgba(10,10,10,.18); }
-.bp :global(.content [data-pane="texting"] .tx-list li) { border-top-color: rgba(10,10,10,.12); }
-.bp :global(.content [data-pane="texting"] .tx-row) { border: 1px solid rgba(10,10,10,.18); background: #fff; }
-.bp :global(.content [data-pane="texting"] .tx-tag) { border-width: 1px; font-family: var(--font); font-size: 10px; font-weight: 700; }
-.bp :global(.content [data-pane="texting"] .tx-tag--warn) { background: var(--danger-soft, rgba(168,50,50,.08)); }
-.bp :global(.content #texting-lead-texts .tx-row-a--left) { flex-wrap: wrap; gap: 8px 0; align-items: center; margin-bottom: 12px; }
-.bp :global(.content #texting-lead-texts .tx-row-a--left .btn) { flex: 0 0 100px; width: 100px; border: 1.5px solid var(--ink); border-radius: 0; box-shadow: none; transform: none; }
-.bp :global(.content #texting-lead-texts .tx-row-a--left .btn:first-child) { border-radius: 2px 0 0 2px; }
-.bp :global(.content #texting-lead-texts .tx-row-a--left .btn:nth-child(2)) { margin-left: -1.5px; margin-right: 14px; border-radius: 0 2px 2px 0; }
-.bp :global(.content #texting-lead-texts .tx-row-a--left .btn-primary) { background: var(--ink); color: #fff; opacity: 1; cursor: default; }
-.bp :global(.content #texting-lead-texts .tx-row-a--left .btn-ghost) { background: var(--paper); color: var(--ink); }
-.bp :global(.content #texting-lead-texts .tx-row-a--left .btn-ghost:hover:not(:disabled)) { background: color-mix(in srgb, var(--ink) 7%, var(--paper)); transform: none; box-shadow: none; }
 
 /* ============================================================
    OWNER PASS 2026-09-26 — field names, field frames, the rail, autosave

@@ -3,18 +3,15 @@
 // another product — bring it to the JobFlex Blueprint"):
 //   · the state, one line in the status tones (desk-overview.ts says which);
 //   · one strip — the desk's number, minutes left (opens the minutes), calls this month, the voice;
-//   · the setup, four steps in one row the way sign-up shows its steps — Phone, Business, Booking, Voice & test —
-//     with the one next thing to do under it;
-//   · the part picked, as a card: Phone & forwarding (desk-numbers), Your business (desk-brief), Booking
-//     (desk-booking), Voice & test (desk-voice) or Minutes (desk-minutes). It opens on the first thing not done.
-//     Every part stays mounted, so what is typed in one survives a look at another.
-// The setup's look is on trial (owner, 2026-10-16), `?s=` picks it — the other two go once one is chosen:
-//   1 (default) one segmented bar, like the plans' Monthly | Annual switch, a 4px line under each part;
-//   2 the steps as a list beside the part, like the settings menu, with one solid progress bar over it;
-//   3 a drawn line of four squares, like sign-up's steps — the line itself is the progress.
+//   · the setup as a checklist (owner, 2026-10-16: "a person will not understand that you have to click on those
+//     things"). One framed card, a row per step — Phone & forwarding, Your business, Booking, Voice & test — each a
+//     full-width button that says what it does ("Open" / "Close" and a chevron). The open step's part unfolds right
+//     under its own row, so the click and what it opened sit together. It opens on the first thing not done.
+//   · Minutes, opened from the strip, as its own card under the checklist.
+// Every part stays mounted, so what is typed in one survives a look at another.
 import { useEffect, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowRight, Building2, CalendarDays, Check, CheckCircle2, Copy, Mic, Phone, Timer } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, CalendarDays, Check, CheckCircle2, ChevronDown, Copy, Mic, Phone, Timer } from "lucide-react";
 
 import type { DeskFaq } from "@/lib/aiDesk/profile";
 import type { SmsRegistrationView } from "@/lib/sms/registrationShared";
@@ -43,12 +40,12 @@ function rememberedTab(): DeskTab | null {
     return null;
   }
 }
-const META: Record<DeskTab, { title: string; short: string; sub: string; Icon: typeof Phone }> = {
-  numbers: { title: C.tabNumbers, short: C.tabNumbersShort, sub: C.step1Sub, Icon: Phone },
-  business: { title: C.tabBusiness, short: C.tabBusinessShort, sub: C.step2Sub, Icon: Building2 },
-  booking: { title: C.tabBooking, short: C.tabBooking, sub: C.step3Sub, Icon: CalendarDays },
-  voice: { title: C.tabVoice, short: C.tabVoice, sub: C.step4Sub, Icon: Mic },
-  minutes: { title: C.minutesTitle, short: C.minutesTitle, sub: C.minutesSub, Icon: Timer },
+const META: Record<DeskTab, { title: string; sub: string; Icon: typeof Phone }> = {
+  numbers: { title: C.tabNumbers, sub: C.step1Sub, Icon: Phone },
+  business: { title: C.tabBusiness, sub: C.step2Sub, Icon: Building2 },
+  booking: { title: C.tabBooking, sub: C.step3Sub, Icon: CalendarDays },
+  voice: { title: C.tabVoice, sub: C.step4Sub, Icon: Mic },
+  minutes: { title: C.minutesTitle, sub: C.minutesSub, Icon: Timer },
 };
 
 /** A status stamp: the tone's frame, its soft fill, the words in caps. */
@@ -60,30 +57,13 @@ function Stamp({ state }: { state: TabState }) {
   );
 }
 
-/** A step's stamp in the row: done, its count to check, or what is left — the panel's own stamp says the rest. */
+/** A step's stamp in the checklist: done, its count to check, or what is left. */
 function stepState(k: (typeof SETUP_TABS)[number], done: boolean, tab: TabState): TabState {
   if (done) return { tone: "done", words: C.stepDone };
   if (k === "numbers" && tab.tone === "check") return { tone: "check", words: C.checkThis };
   if (tab.tone === "check" || tab.tone === "warn") return tab;
   if (k === "voice") return tab;
   return { tone: "todo", words: C.stepTodo };
-}
-
-/** A step's status as a line: a square dot in its tone, then the words — no frame, so it never reads as a button. */
-type Dot = "ok" | "todo" | "idle" | "bad";
-function dotOf(k: (typeof SETUP_TABS)[number], state: TabState): Dot {
-  if (state.tone === "done") return "ok";
-  if (state.tone === "warn") return "bad";
-  if (state.tone === "check") return "todo";
-  return k === "voice" ? "idle" : "todo";
-}
-function StatusLine({ k, state, className }: { k: (typeof SETUP_TABS)[number]; state: TabState; className?: string }) {
-  return (
-    <span className={className ? `${s.st} ${className}` : s.st} data-dot={dotOf(k, state)} data-step-chip>
-      <i aria-hidden />
-      {state.words}
-    </span>
-  );
 }
 
 function CopyNumber({ number }: { number: string }) {
@@ -122,7 +102,6 @@ export function DeskSteps({
   intro?: string;
 }) {
   const search = useSearchParams();
-  const look = search?.get("s") === "2" ? "2" : search?.get("s") === "3" ? "3" : "1";
   const number = registration?.number ?? desk.assigned?.number ?? null;
   const [written, setWritten] = useState(desk.steps.profile);
   const [samples, setSamples] = useState<DeskFaq[]>([]);
@@ -131,6 +110,8 @@ export function DeskSteps({
   const o = deskOverview(desk, number, toCheck, written);
   // A rebuild of the page (another width) keeps the tab picked since it loaded; a fresh load reads the address.
   const [tab, setTab] = useState<DeskTab>(() => rememberedTab() ?? firstTab(o, typeof window !== "undefined" ? window.location.search : search ? `?${search.toString()}` : ""));
+  // A click on the open step's row folds it; picking any part opens it again.
+  const [folded, setFolded] = useState(false);
   useEffect(() => {
     pageHydrated = true;
   }, []);
@@ -138,6 +119,7 @@ export function DeskSteps({
   // The tab goes in the address too, so a reload — or the page rebuilding itself at another width — keeps it.
   const pick = (t: DeskTab) => {
     setTab(t);
+    setFolded(false);
     try {
       window.sessionStorage.setItem(TAB_KEY, t);
     } catch {
@@ -154,10 +136,11 @@ export function DeskSteps({
   const go = (t: DeskTab, then?: string) => {
     pick(t);
     window.setTimeout(() => {
-      const el = (then && document.getElementById(then)) || document.getElementById(`desk-panel-${t}`);
+      const el = (then && document.getElementById(then)) || document.getElementById(t === "minutes" ? "desk-panel-minutes" : `desk-tab-${t}`);
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 40);
   };
+  const isOpen = (t: DeskTab) => tab === t && !folded;
 
   const phone = desk.businessPhone ?? "";
   const b = desk.minutes.balance;
@@ -168,76 +151,56 @@ export function DeskSteps({
       {C.getNumber}
     </button>
   ) : (
-    <a className={s.btn} href="/dashboard/settings?tab=texting#texting-own-number" data-desk-get-number>
+    <a className={s.btn} href="/dashboard/texting#texting-own-number" data-desk-get-number>
       {C.getNumber}
     </a>
   );
 
-  // The one next thing to do: the first step not done, or — all four done — a call to the desk.
+  // The one next thing to do: the first step not done, or — all four done — a call to the desk. Drawn only while
+  // that step is not already the open one, so it never points at what is in front of you.
   const nextBtn = o.next ? (
-    <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go(o.next!)} data-desk-next>
-      {C.continueTo(META[o.next].title)}
-      <ArrowRight size={15} strokeWidth={2.4} aria-hidden />
-    </button>
+    isOpen(o.next) ? null : (
+      <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go(o.next!)} data-desk-next>
+        {C.continueTo(META[o.next].title)}
+        <ArrowRight size={15} strokeWidth={2.4} aria-hidden />
+      </button>
+    )
   ) : (
     <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => go("voice", "desk-test")} data-desk-next>
       <Mic size={15} strokeWidth={2.4} aria-hidden />
       {C.callTheDesk}
     </button>
   );
-  // Every part stays mounted; the one picked shows.
-  const panels = TABS.map((k) => {
-    const m = META[k];
-    const stepAttrs = k !== "minutes" ? { "data-desk-step": SETUP_TABS.indexOf(k) + 1, "data-done": o.done[k] ? "1" : "0" } : {};
-    return (
-      <section
-        key={k}
-        role={k === "minutes" ? "region" : "tabpanel"}
-        id={`desk-panel-${k}`}
-        aria-labelledby={`desk-panel-${k}-t`}
-        hidden={tab !== k}
-        className={s.panel}
-        data-desk-panel={k}
-        {...stepAttrs}
-      >
-        <header className={s.panelHead}>
-          <m.Icon size={16} strokeWidth={2.2} aria-hidden className={s.panelIcon} />
-          <div className={s.panelTitles}>
-            <h3 id={`desk-panel-${k}-t`}>{m.title}</h3>
-            <p>{m.sub}</p>
-          </div>
-          <Stamp state={o.tabs[k]} />
-        </header>
-        <div className={s.panelBody}>
-          {k === "numbers" ? <DeskNumbers desk={desk} registration={registration} onNumber={onNumber} /> : null}
-          {k === "business" ? (
-            <DeskBrief
-              desk={desk}
-              onWritten={(xs) => {
-                setWritten(true);
-                setSamples(xs);
-              }}
-              onReview={setToCheck}
-            />
-          ) : null}
-          {k === "booking" ? <DeskBooking desk={desk} /> : null}
-          {k === "voice" ? <DeskVoiceAndTest desk={desk} samples={samples} /> : null}
-          {k === "minutes" ? <DeskMinutes desk={desk} /> : null}
-        </div>
-      </section>
-    );
-  });
+
+  const body = (k: DeskTab) => (
+    <>
+      {k === "numbers" ? <DeskNumbers desk={desk} registration={registration} onNumber={onNumber} /> : null}
+      {k === "business" ? (
+        <DeskBrief
+          desk={desk}
+          onWritten={(xs) => {
+            setWritten(true);
+            setSamples(xs);
+          }}
+          onReview={setToCheck}
+        />
+      ) : null}
+      {k === "booking" ? <DeskBooking desk={desk} /> : null}
+      {k === "voice" ? <DeskVoiceAndTest desk={desk} samples={samples} /> : null}
+      {k === "minutes" ? <DeskMinutes desk={desk} /> : null}
+    </>
+  );
 
   // data-nest: out of the shell's (0,1,0) margin/padding reset (dashboard-blueprint/blueprint.module.css), which the
   // production build emits after this module and which then zeroed every single-class rule here (2026-10-16).
   return (
-    <div className={s.desk} data-desk-steps data-s={look} data-nest="">
+    <div className={s.desk} data-desk-steps data-nest="">
       {intro ? <p className={s.intro}>{intro}</p> : null}
 
       {/* the state: amber while something stands between the desk and the calls, green once it answers */}
       {o.forwardingPending ? (
         <div className={s.notice} data-tone="warn" role="note" data-desk-fwd-banner data-desk-live>
-          <AlertTriangle size={17} strokeWidth={2.2} aria-hidden />
+          <AlertTriangle size={18} strokeWidth={2.2} aria-hidden />
           <span>{C.fwdBanner(phone)}</span>
           <button type="button" className={s.btn} onClick={() => go("numbers", "desk-forward")} data-desk-fwd-show>
             {C.fwdBannerBtn}
@@ -245,7 +208,7 @@ export function DeskSteps({
         </div>
       ) : (
         <div className={s.notice} data-tone={o.status.tone} role="status" data-desk-live>
-          {o.status.tone === "live" ? <CheckCircle2 size={17} strokeWidth={2.2} aria-hidden /> : <AlertTriangle size={17} strokeWidth={2.2} aria-hidden />}
+          {o.status.tone === "live" ? <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> : <AlertTriangle size={18} strokeWidth={2.2} aria-hidden />}
           <span>{o.status.words}</span>
           {!number && desk.assistantOnPlan ? getNumber : null}
         </div>
@@ -270,8 +233,8 @@ export function DeskSteps({
               className={s.cellBtn}
               id="desk-tab-minutes"
               aria-controls="desk-panel-minutes"
-              aria-expanded={tab === "minutes"}
-              onClick={() => go("minutes")}
+              aria-expanded={isOpen("minutes")}
+              onClick={() => (isOpen("minutes") ? setFolded(true) : go("minutes"))}
               data-desk-tab="minutes"
             >
               <span className={s.big}>{minutesLeft}</span>
@@ -294,120 +257,95 @@ export function DeskSteps({
         </div>
       </dl>
 
-      {look === "1" ? (
-        <>
-          {/* ?s=1 — one segmented bar: number, name, status; a 4px line under each part says how far */}
-          <section className={s.seg} aria-label={C.tabsLabel}>
-            <div className={s.segRow} role="tablist" aria-label={C.tabsLabel} id="desk-panels">
-              {SETUP_TABS.map((k, i) => (
-                <button
-                  key={k}
-                  type="button"
-                  role="tab"
-                  id={`desk-tab-${k}`}
-                  aria-selected={tab === k}
-                  aria-controls={`desk-panel-${k}`}
-                  className={s.segBtn}
-                  data-done={o.done[k] ? "1" : "0"}
-                  data-bar={o.done[k] ? "done" : k === o.next ? "now" : undefined}
-                  data-desk-tab={k}
-                  onClick={() => pick(k)}
-                >
-                  <span className={s.segN} aria-hidden>
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <b className={s.segName}>{META[k].short}</b>
-                  <StatusLine k={k} state={stepState(k, o.done[k], o.tabs[k])} />
-                </button>
-              ))}
-            </div>
-          </section>
-          <div className={s.segFoot}>
-            <span className={s.count}>{C.progressWords(o.count)}</span>
-            {nextBtn}
-          </div>
-          {panels}
-        </>
-      ) : null}
-
-      {look === "2" ? (
-        /* ?s=2 — the steps as a list beside the part, the settings menu's own items */
-        <div className={s.split}>
-          <aside className={s.side} aria-label={C.tabsLabel}>
-            <div className={s.sideHead}>
+      {/* the setup: a checklist, every step a row that opens its part right under it */}
+      <section className={s.setup} aria-labelledby="desk-setup-t" id="desk-panels">
+        <header className={s.setupHead}>
+          <div className={s.setupTitles}>
+            <h3 id="desk-setup-t">{C.checklistTitle}</h3>
+            <div className={s.progress}>
               <span className={s.count}>{C.progressWords(o.count)}</span>
-              <span className={s.fill} role="progressbar" aria-label={C.tabsLabel} aria-valuemin={0} aria-valuemax={SETUP_TABS.length} aria-valuenow={o.count}>
-                <span style={{ "--p": o.count / SETUP_TABS.length } as CSSProperties} />
+              <span
+                className={s.fill}
+                role="progressbar"
+                aria-label={C.tabsLabel}
+                aria-valuemin={0}
+                aria-valuemax={SETUP_TABS.length}
+                aria-valuenow={o.count}
+                style={{ "--p": o.count / SETUP_TABS.length } as CSSProperties}
+              >
+                <span />
               </span>
             </div>
-            <div className={s.list} role="tablist" aria-label={C.tabsLabel} aria-orientation="vertical" id="desk-panels">
-              {SETUP_TABS.map((k, i) => (
+          </div>
+          {nextBtn}
+        </header>
+        <ol className={s.steps}>
+          {SETUP_TABS.map((k, i) => {
+            const open = isOpen(k);
+            const m = META[k];
+            const done = o.done[k];
+            return (
+              <li key={k} className={s.step} data-open={open ? "1" : "0"} data-state={done ? "done" : k === o.next ? "now" : "todo"}>
                 <button
-                  key={k}
                   type="button"
-                  role="tab"
+                  className={s.stepBtn}
                   id={`desk-tab-${k}`}
-                  aria-selected={tab === k}
+                  aria-expanded={open}
                   aria-controls={`desk-panel-${k}`}
-                  className={s.item}
-                  data-done={o.done[k] ? "1" : "0"}
                   data-desk-tab={k}
-                  onClick={() => pick(k)}
+                  data-done={done ? "1" : "0"}
+                  onClick={() => (open ? setFolded(true) : pick(k))}
                 >
-                  <span className={s.itemN} aria-hidden>
-                    {o.done[k] ? <Check size={14} strokeWidth={3} /> : i + 1}
+                  <span className={s.stepN} aria-hidden>
+                    {done ? <Check size={16} strokeWidth={3} /> : i + 1}
                   </span>
-                  <span className={s.itemText}>
-                    <b>{META[k].short}</b>
-                    <StatusLine k={k} state={stepState(k, o.done[k], o.tabs[k])} />
+                  <span className={s.stepText}>
+                    <b className={s.stepName}>{m.title}</b>
+                    {open ? <span className={s.stepSub}>{m.sub}</span> : null}
+                  </span>
+                  <Stamp state={stepState(k, done, o.tabs[k])} />
+                  <span className={s.stepGo} aria-hidden>
+                    <span className={s.stepGoText}>{open ? C.stepClose : C.stepOpen}</span>
+                    <ChevronDown size={16} strokeWidth={2.4} />
                   </span>
                 </button>
-              ))}
-            </div>
-          </aside>
-          <div className={s.main}>
-            {panels}
-            <div className={s.mainFoot}>{nextBtn}</div>
-          </div>
-        </div>
-      ) : null}
+                <div
+                  role="region"
+                  id={`desk-panel-${k}`}
+                  aria-labelledby={`desk-tab-${k}`}
+                  hidden={!open}
+                  className={s.stepBody}
+                  data-desk-panel={k}
+                  data-desk-step={i + 1}
+                  data-done={done ? "1" : "0"}
+                >
+                  <div className={s.panelBody}>{body(k)}</div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
-      {look === "3" ? (
-        <>
-          {/* ?s=3 — a drawn line of four squares: done in green, the next in blue, the rest outlined */}
-          <section className={s.track} aria-label={C.tabsLabel}>
-            <div className={s.nodes} role="tablist" aria-label={C.tabsLabel} id="desk-panels">
-              {SETUP_TABS.map((k, i) => {
-                const after = SETUP_TABS[i + 1];
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    role="tab"
-                    id={`desk-tab-${k}`}
-                    aria-selected={tab === k}
-                    aria-controls={`desk-panel-${k}`}
-                    className={s.node}
-                    data-done={o.done[k] ? "1" : "0"}
-                    data-state={o.done[k] ? "done" : k === o.next ? "now" : "todo"}
-                    data-link={after && o.done[k] && o.done[after] ? "done" : undefined}
-                    data-desk-tab={k}
-                    onClick={() => pick(k)}
-                  >
-                    <span className={s.nodeSq} aria-hidden>
-                      {o.done[k] ? <Check size={16} strokeWidth={3} /> : i + 1}
-                    </span>
-                    <b className={s.nodeName}>{META[k].short}</b>
-                    <StatusLine k={k} state={stepState(k, o.done[k], o.tabs[k])} className={s.nodeSt} />
-                  </button>
-                );
-              })}
-            </div>
-            {nextBtn}
-          </section>
-          {panels}
-        </>
-      ) : null}
+      {/* Minutes, opened from the strip */}
+      <section
+        role="region"
+        id="desk-panel-minutes"
+        aria-labelledby="desk-panel-minutes-t"
+        hidden={!isOpen("minutes")}
+        className={s.panel}
+        data-desk-panel="minutes"
+      >
+        <header className={s.panelHead}>
+          <Timer size={18} strokeWidth={2.2} aria-hidden className={s.panelIcon} />
+          <div className={s.panelTitles}>
+            <h3 id="desk-panel-minutes-t">{META.minutes.title}</h3>
+            <p>{META.minutes.sub}</p>
+          </div>
+          <Stamp state={o.tabs.minutes} />
+        </header>
+        <div className={s.panelBody}>{body("minutes")}</div>
+      </section>
     </div>
   );
 }

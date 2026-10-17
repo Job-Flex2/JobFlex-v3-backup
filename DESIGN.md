@@ -67,11 +67,17 @@ side by side as choices (the lead page's Estimate this job), each wears one
 identity hue on its card edge and icon plate — Smart Proposal `--blueprint`,
 roof `--danger`, fence `--success`, HVAC `--sky`, manual proposal `--ink`.
 Amber stays reserved there for what an estimator still needs.
-A second (October 16, 2026): the sidebar's Estimating tools rows, desk and
-drawer, give each tool one colour from `--tool-smart`, `--tool-plan`,
-`--tool-roof`, `--tool-fence`, `--tool-video`, `--tool-hvac`, `--tool-deck`
-(globals.css) — the hard offset shadow under its white icon square, and the
-square's fill while the tool is open. Nothing else reads these tokens.
+The desktop sidebar's Estimating tools are ordinary sidebar rows (owner,
+2026-10-16, replacing that day's coloured icon squares): same icon, type and
+plate as every other row. A subpage toggle is a small white square in a 1.5px
+ink frame with a down arrow (up when open); a subpage row (an inventory) has
+the same ink, size and weight as the rows above it, indented on a guide line.
+The handheld drawer (mobile-shell) still reads `--tool-*`.
+The AI desk (owner, 2026-10-16): its two tabs, Calls | AI desk setup, are one
+framed switch, the open tab filled with ink. The setup is a checklist card —
+a full-width row per step (numbered square, name, status stamp, an
+"Open"/"Close" control with a chevron), the open step's part unfolding under
+its own row.
 
 Light mode only. Keep the existing drafting grid behind content, never over
 type. Resting cards have no shadow (`--shadow-sm` and `--shadow-md` are `none`).
@@ -81,9 +87,12 @@ do not give static cards decorative elevation. One owner-approved exception
 on signup step 3 are white with a hard offset shadow, no blur: ink on every
 plan, blueprint blue on the "Most picked" one. The offset is 3px, 4px under
 a pointer (owner, 2026-10-12), on every one of those cards.
-Subscription overview exception (owner, 2026-10-16): plan cards start with
-their full feature lists collapsed behind a per-card disclosure, and Usage
-opens as its own disclosure. Other plan surfaces keep their lists open.
+Subscription overview exception (owner, 2026-10-16; reworked 2026-10-17):
+plan cards show their first four features, the rest behind one toggle that
+opens every card of the row at once, sliding open (grid rows 0fr → 1fr).
+Usage lists only what the plan caps — the first three rows in view, the rest
+behind the same kind of fold; a resource with no cap is not listed. Other plan
+surfaces keep their lists open.
 
 Plan cards, everywhere a customer sees them (owner, 2026-10-12): one
 Monthly | Annual switch over the row ([PlanTermSwitch](src/components/billing/PlanTermSwitch.tsx)),

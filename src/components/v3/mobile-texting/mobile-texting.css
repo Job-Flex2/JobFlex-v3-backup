@@ -1,0 +1,897 @@
+/* ============================================================================
+   TEXTING · HANDHELD — /dashboard/texting at ≤768px, preview /mobile-texting-v1
+   ============================================================================
+
+   The Texting page on a phone (component: ./mobile-texting.tsx). It stands
+   beside the desk edition (components/v3/texting-page, untouched) and renders
+   the same server read and the same shared texting components
+   (components/v3/texting-people/*, their 712ecad9 "quiet blueprint" look kept).
+
+   ── PLAIN STYLESHEET, NOT A CSS MODULE (the "style CSS that ruined the whole
+   design" lesson) ─────────────────────────────────────────────────────────
+   A module hashes classes but leaves `*`, `button`, `input`, `[hidden]`
+   unscoped, and a page reset written there flattens every page in the app.
+   Here EVERY selector starts with the one literal root class
+   `.jf-mobile-texting`; element prefix `mtx-` (new in the repo). The only rules
+   that reach outside are the two host neutralizers, `:has()`-gated so they
+   undo themselves on unmount. globals.css is not touched.
+
+   ── THE SHARED COMPONENTS, SIZED FOR A HAND ──────────────────────────────
+   The texting-people components carry their own CSS module (desk sizes:
+   30px buttons, 34px inputs, 11px labels). Section C below re-sizes them for
+   a phone FROM THIS ROOT ONLY — 44px targets, 16px inputs (iOS zooms on
+   anything smaller), 48px fields with a 2px ink frame, single-column forms,
+   full-width actions. Colours, shapes, switches and chips stay theirs. Their
+   class names are hashed, so these rules reach them through their stable
+   data-* hooks and element structure, behind `.mtx-host` — every rule there
+   scores at least (0,3,1), above the module's strongest (0,3,0) layout rules
+   and its (0,5,0) hover rules where those are touched.
+
+   Values come from the globals.css tokens. Light mode only, no `md:`/`lg:`,
+   no layout breakpoint — fluid from 320px to 768px.
+   ========================================================================= */
+
+.jf-mobile-texting {
+  /* the shared MobileNav's token contract (mobile-nav.module.css), from the
+     global tokens; the texting-people module reads the same names */
+  --sheet: var(--paper-deep);
+  --blueprint: var(--accent);
+  --blueprint-dark: var(--accent-ink);
+  --blue: var(--accent);
+  --blue-dark: var(--accent-ink);
+  --sky: color-mix(in srgb, var(--accent) 55%, var(--paper-deep));
+  --muted: var(--ink-muted);
+  --muted-light: var(--ink-faint);
+  --muted-faint: var(--ink-faint);
+  --success: var(--emerald);
+  --warning: var(--amber);
+  --danger: var(--rose);
+  --font: var(--font-sans);
+  --border: 2px solid var(--ink);
+  --border-thin: 1.5px solid var(--ink);
+  --radius: var(--r-sm);
+  --topbar-h: 64px;
+  --tbar-gap: clamp(6px, 1.8vw, 11px);
+  --sidebar-w: min(84vw, 288px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+
+  /* this page */
+  --pad-x: clamp(12px, 4vw, 20px);
+  --gap: 16px;
+  --card-pad: clamp(14px, 4.2vw, 18px);
+  --tap: 44px;
+  --field-h: 48px;
+  --mtx-line: color-mix(in srgb, var(--ink) 18%, transparent);
+  --mtx-grid: color-mix(in srgb, var(--ink) 4%, transparent);
+
+  /* pinned by its edges and sized 100% (docs/design/mobile.md), never vh/dvh */
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr);
+  /* minmax(0, 1fr), not auto: the topbar's max-content is wider than 320px */
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+  line-height: normal;
+  text-rendering: auto;
+  font-feature-settings: "cv11", "ss01", "ss03";
+}
+
+/* Scoped reset at (0,0,0) — it beats the UA defaults and loses to every author
+   rule, and it steps around the shared nav and the nested texting components
+   (docs/design/mobile.md: "Resets stop at nested components"). */
+:where(.jf-mobile-texting, .jf-mobile-texting *):not(:where([data-mnav], [data-mnav] *, [data-nest], [data-nest] *)) {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+:where(.jf-mobile-texting) :where(button, input):not(:where([data-mnav] *, [data-nest] *)) {
+  font-family: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.jf-mobile-texting [hidden] {
+  display: none !important;
+}
+.jf-mobile-texting ::selection {
+  background: var(--accent);
+  color: var(--paper-deep);
+}
+
+/* HOST NEUTRALIZERS — globals.css paints a drafting grid on <body> and a grain
+   overlay on body::before (multiply), which would tint every white card. This
+   page paints its own grid in its scroller. Off only while the page is mounted. */
+body:has(.jf-mobile-texting) {
+  background-image: none;
+}
+body:has(.jf-mobile-texting)::before {
+  content: none;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   A · THE PAGE
+   ════════════════════════════════════════════════════════════════════════ */
+
+.jf-mobile-texting .mtx-scroll {
+  position: relative;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--mtx-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mtx-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-attachment: local;
+}
+.jf-mobile-texting .mtx-content {
+  display: grid;
+  gap: var(--gap);
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px var(--pad-x) calc(40px + var(--safe-b));
+}
+/* deep links and the steps' buttons land a breath under the topbar */
+.jf-mobile-texting .mtx-content [id] {
+  scroll-margin-top: 12px;
+}
+
+/* ── head: the title, the job, the month's count ── */
+.jf-mobile-texting .mtx-head {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.jf-mobile-texting .mtx-title {
+  font-size: clamp(30px, 9vw, 40px);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+.jf-mobile-texting .mtx-job {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.jf-mobile-texting .mtx-usage {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ink);
+}
+.jf-mobile-texting .mtx-usageN {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+.jf-mobile-texting .mtx-usageN b {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+}
+.jf-mobile-texting .mtx-usageL {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.jf-mobile-texting .mtx-usageS {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+/* ── the setup cards ── */
+.jf-mobile-texting .mtx-card {
+  min-width: 0;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-mobile-texting .mtx-cardH {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: var(--card-pad) var(--card-pad) 0;
+}
+.jf-mobile-texting .mtx-cardH:not(:has(> .mtx-step)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.jf-mobile-texting .mtx-step {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.jf-mobile-texting .mtx-cardT {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.jf-mobile-texting .mtx-cardT h2 {
+  padding-top: 5px;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.jf-mobile-texting .mtx-cardT > p {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.jf-mobile-texting .mtx-cardB {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin-top: var(--card-pad);
+  padding: var(--card-pad);
+  border-top: 1px solid var(--ink);
+}
+
+/* "How it works" — the long instructions, one tap away */
+.jf-mobile-texting .mtx-how {
+  padding: 4px var(--card-pad) 0;
+}
+.jf-mobile-texting .mtx-how > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  list-style: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  -webkit-tap-highlight-color: transparent;
+}
+.jf-mobile-texting .mtx-how > summary::-webkit-details-marker {
+  display: none;
+}
+.jf-mobile-texting .mtx-how > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 6px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  transition: transform 0.15s var(--ease-out);
+}
+.jf-mobile-texting .mtx-how[open] > summary::before {
+  transform: rotate(90deg);
+}
+.jf-mobile-texting .mtx-how > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.jf-mobile-texting .mtx-how > p {
+  margin: 0 0 4px;
+  padding-left: 14px;
+  border-left: 1px solid var(--mtx-line);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.jf-mobile-texting .mtx-how + .mtx-cardB {
+  margin-top: 8px;
+}
+
+/* the two extras: one under the other */
+.jf-mobile-texting .mtx-extras {
+  display: grid;
+  gap: var(--gap);
+}
+
+/* ── notes, messages, the info line, tags, phone numbers ── */
+.jf-mobile-texting .mtx-note {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.jf-mobile-texting .mtx-note a,
+.jf-mobile-texting .mtx-host [data-nest] p a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.jf-mobile-texting .mtx-msg {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.jf-mobile-texting .mtx-msg--err {
+  color: var(--rose);
+}
+.jf-mobile-texting .mtx-info {
+  padding: 14px 16px;
+  border: 1.5px solid var(--amber);
+  border-left-width: 4px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--amber) 8%, var(--paper-deep));
+  font-size: 15px;
+  line-height: 1.45;
+}
+.jf-mobile-texting .mtx-phone {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.jf-mobile-texting .mtx-phone--big {
+  font-size: 22px;
+  font-weight: 700;
+}
+.jf-mobile-texting .mtx-tag {
+  padding: 4px 8px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.jf-mobile-texting .mtx-tag--ok {
+  border-color: var(--emerald);
+  color: var(--emerald);
+}
+.jf-mobile-texting .mtx-tag--warn {
+  border-color: var(--rose);
+  color: var(--rose);
+  background: color-mix(in srgb, var(--rose) 8%, var(--paper-deep));
+}
+
+/* ── the extra numbers ── */
+.jf-mobile-texting .mtx-list {
+  list-style: none;
+  border: 1px solid var(--mtx-line);
+  border-radius: var(--r-sm);
+}
+.jf-mobile-texting .mtx-list > li {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+.jf-mobile-texting .mtx-list > li + li {
+  border-top: 1px solid var(--ink-line);
+}
+.jf-mobile-texting .mtx-listT {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.jf-mobile-texting .mtx-listT b {
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.jf-mobile-texting .mtx-list > li.is-paused .mtx-listT b,
+.jf-mobile-texting .mtx-list > li.is-paused .mtx-phone {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+.jf-mobile-texting .mtx-listA {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.jf-mobile-texting .mtx-mine {
+  display: grid;
+  gap: 10px;
+}
+
+/* ── fields: bold ink label, 2px ink frame, 48px, 16px type ── */
+.jf-mobile-texting .mtx-form {
+  display: grid;
+  gap: 14px;
+}
+.jf-mobile-texting .mtx-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.jf-mobile-texting .mtx-field > span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.jf-mobile-texting .mtx-field > input {
+  width: 100%;
+  height: var(--field-h);
+  padding: 0 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  font-size: 16px;
+  font-weight: 500;
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+.jf-mobile-texting .mtx-field > input::placeholder {
+  color: var(--ink-muted);
+  font-weight: 400;
+  opacity: 1;
+}
+.jf-mobile-texting .mtx-field > input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.jf-mobile-texting .mtx-field > input:disabled {
+  background: var(--paper);
+  color: var(--ink-muted);
+}
+
+/* ── buttons: coloured — blue fill + white words for the one primary, white
+      with an ink frame for the rest; Inter caps, near-square ── */
+.jf-mobile-texting .mtx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out), background 0.12s var(--ease-out);
+}
+.jf-mobile-texting .mtx-btn--wide {
+  width: 100%;
+}
+.jf-mobile-texting .mtx-btn--primary {
+  min-height: var(--field-h);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--paper-deep);
+}
+.jf-mobile-texting .mtx-btn:active:not(:disabled) {
+  background: var(--paper);
+}
+.jf-mobile-texting .mtx-btn--primary:active:not(:disabled) {
+  border-color: var(--accent-ink);
+  background: var(--accent-ink);
+}
+.jf-mobile-texting .mtx-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.jf-mobile-texting .mtx-btn:focus-visible,
+.jf-mobile-texting .mtx-onoff > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .jf-mobile-texting .mtx-btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .jf-mobile-texting .mtx-btn--primary:hover:not(:disabled) {
+    border-color: var(--accent-ink);
+    background: var(--accent-ink);
+  }
+}
+
+/* ── Lead texts: ON | OFF as one switch, the chosen half filled with ink ── */
+.jf-mobile-texting .mtx-onoff {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 280px;
+}
+.jf-mobile-texting .mtx-onoff > button {
+  min-height: var(--field-h);
+  padding: 0 16px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s var(--ease-out);
+}
+.jf-mobile-texting .mtx-onoff > button:first-child {
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+}
+.jf-mobile-texting .mtx-onoff > button + button {
+  margin-left: -1.5px;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.jf-mobile-texting .mtx-onoff > button.is-on {
+  background: var(--ink);
+  color: var(--paper-deep);
+  cursor: default;
+}
+.jf-mobile-texting .mtx-onoff > button:disabled:not(.is-on) {
+  opacity: 0.45;
+  cursor: default;
+}
+.jf-mobile-texting .mtx-leadTo {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   B · THE STATUS — the shared overview, first thing under the head
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* "Texting is on from …" / "Nothing is texted yet …" — larger, it is the answer */
+.jf-mobile-texting .mtx-status [data-texting-overview] > [data-texting-status] {
+  padding: 14px 16px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] {
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+  padding: 14px 16px;
+}
+.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span[aria-hidden="true"] {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span:not([aria-hidden]) {
+  gap: 4px;
+  padding-top: 4px;
+}
+.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span:not([aria-hidden]) > b {
+  font-size: 16px;
+}
+.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span:not([aria-hidden]) > span {
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > button {
+  grid-column: 2;
+  justify-self: start;
+  min-width: 132px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   C · THE SHARED COMPONENTS, SIZED FOR A HAND (sizes and layout only)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* every button a thumb can hit: 44px, 13px words */
+.jf-mobile-texting .mtx-host [data-nest] button {
+  min-height: var(--tap);
+  font-size: 13px;
+  -webkit-tap-highlight-color: transparent;
+}
+/* the texts on/off switches (people, clients): 44px, their own 12px caps */
+.jf-mobile-texting .mtx-host [data-nest] button[role="switch"] {
+  font-size: 12px;
+  padding-right: 14px;
+}
+/* the rule switches keep their drawn 42×24 track (the knob is placed in px);
+   the hit area grows around it instead */
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > button[role="switch"] {
+  min-height: 0;
+  overflow: visible;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > button[role="switch"]::before {
+  content: "";
+  position: absolute;
+  inset: -11px -6px;
+}
+/* chips: the texts a person gets, who a text goes to, the ideas, the fill-ins */
+.jf-mobile-texting .mtx-host [data-nest] button[data-event],
+.jf-mobile-texting .mtx-host [data-nest] button[data-to],
+.jf-mobile-texting .mtx-host [data-nest] button[data-preset],
+.jf-mobile-texting .mtx-host [data-rule-editor] button[aria-pressed],
+.jf-mobile-texting .mtx-host [data-rule-editor] button[title]:not([aria-pressed]) {
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 1.25;
+  text-align: left;
+}
+/* sticky hover on a touch screen: no lift left behind after a tap */
+@media (hover: none) {
+  .jf-mobile-texting .mtx-host [data-nest] button:hover:not(:disabled) {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* inputs: 48px, 16px type (no focus zoom on iOS), a 2px ink frame */
+.jf-mobile-texting .mtx-host [data-nest] input:not([type="checkbox"]),
+.jf-mobile-texting .mtx-host [data-nest] select {
+  min-height: var(--field-h);
+  border-width: 2px;
+  font-size: 16px;
+}
+.jf-mobile-texting .mtx-host [data-nest] textarea {
+  min-height: 132px;
+  border-width: 2px;
+  font-size: 16px;
+}
+/* field labels: bold ink, 12px */
+.jf-mobile-texting .mtx-host [data-own-number] form > label,
+.jf-mobile-texting .mtx-host [data-rule-editor] > div > label,
+.jf-mobile-texting .mtx-host [data-rule-editor] > div > span:first-child,
+.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > label {
+  font-size: 12px;
+  color: var(--ink);
+}
+.jf-mobile-texting .mtx-host [data-nest] p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── the roster ── */
+.jf-mobile-texting .mtx-host [data-texting-people] [data-audience] > div:first-child > b {
+  font-size: 12px;
+}
+.jf-mobile-texting .mtx-host [data-texting-people] [data-audience] > div:first-child > span {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.jf-mobile-texting .mtx-host [data-texting-people] [data-member] {
+  gap: 12px;
+  padding: 14px;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:first-child {
+  gap: 10px 12px;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span {
+  flex: 1 1 140px;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span > b {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span > em {
+  font-size: 11px;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span + span {
+  flex-basis: 100%;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span + span > b {
+  font-size: 15px;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span + span > span {
+  font-size: 11px;
+}
+/* the mobile editor on a row: label, a full-width field, the actions under it */
+.jf-mobile-texting .mtx-host [data-member] > div:has(> input) {
+  gap: 10px;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > label {
+  flex-basis: 100%;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > input {
+  flex: 1 1 100%;
+}
+.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > button {
+  flex: 1 1 120px;
+}
+.jf-mobile-texting .mtx-host [data-member] [data-texting-sent-to] {
+  font-size: 15px;
+}
+.jf-mobile-texting .mtx-host [data-member] [data-texting-sent-to] > button {
+  font-size: inherit;
+}
+/* the chips under a name, and All / None */
+/* one even column of chips (two when they fit), not a ragged run */
+.jf-mobile-texting .mtx-host [data-member] > div[role="group"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+}
+.jf-mobile-texting .mtx-host [data-member] > div[role="group"] > span {
+  grid-column: 1 / -1;
+  gap: 4px;
+  margin-left: 0;
+}
+.jf-mobile-texting .mtx-host [data-member] > div[role="group"] > span > button {
+  padding: 0 10px;
+  font-size: 12px;
+}
+/* "What the texts say" */
+.jf-mobile-texting .mtx-host [data-audience] > details > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: 12px;
+}
+.jf-mobile-texting .mtx-host [data-audience] > details li > b {
+  font-size: 14px;
+}
+.jf-mobile-texting .mtx-host [data-audience] > details q {
+  font-size: 14px;
+}
+
+/* ── the number ── */
+.jf-mobile-texting .mtx-host [data-own-number] {
+  gap: 14px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] > div:not([data-sms-done-for-you]) > b:first-child {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+.jf-mobile-texting .mtx-host [data-own-number] [data-number-uses] li {
+  grid-template-columns: 56px minmax(0, 1fr);
+  font-size: 15px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] [data-number-uses] li > b {
+  font-size: 11px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] [data-sms-done-for-you] {
+  gap: 10px;
+  padding: 14px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] [data-sms-done-for-you] > b {
+  font-size: 12px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] [data-sms-done-for-you] li {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.jf-mobile-texting .mtx-host [data-own-number] > ul:not([data-number-uses]) {
+  font-size: 14.5px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] > div:has(> button) > button,
+.jf-mobile-texting .mtx-host [data-own-number] form > div:last-child > button {
+  flex: 1 1 140px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] button[data-get-number] {
+  min-height: var(--field-h);
+}
+/* the registration form: one column, roomy */
+.jf-mobile-texting .mtx-host [data-own-number] form {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] form > label {
+  gap: 8px;
+}
+.jf-mobile-texting .mtx-host [data-own-number] form > label:not(:has(> input[type="checkbox"])) > span {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.jf-mobile-texting .mtx-host [data-own-number] form > label:has(> input[type="checkbox"]) {
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+.jf-mobile-texting .mtx-host [data-own-number] form > label:has(> input[type="checkbox"]) > input {
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+}
+.jf-mobile-texting .mtx-host [data-own-number] form > div:last-child > button[type="submit"] {
+  min-height: var(--field-h);
+  flex-basis: 100%;
+}
+
+/* ── your own texts ── */
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] {
+  gap: 10px 14px;
+  padding: 14px;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:nth-child(2) > b {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:nth-child(2) > span {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] q,
+.jf-mobile-texting .mtx-host [data-rule-editor] q {
+  font-size: 14px;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:last-child {
+  grid-column: 2;
+  gap: 8px;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:last-child > button {
+  flex: 1 1 0;
+}
+/* the ideas and + New text */
+.jf-mobile-texting .mtx-host [data-text-rules] > div:has(> [data-new-rule]) {
+  gap: 8px;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] > div:has(> [data-new-rule]) > span {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ink);
+}
+.jf-mobile-texting .mtx-host [data-text-rules] button[data-preset] {
+  flex: 1 1 100%;
+}
+.jf-mobile-texting .mtx-host [data-text-rules] button[data-new-rule] {
+  flex: 1 1 100%;
+  min-height: var(--field-h);
+  margin-top: 4px;
+}
+/* the editor */
+.jf-mobile-texting .mtx-host [data-rule-editor] {
+  gap: 16px;
+  padding: 14px;
+}
+.jf-mobile-texting .mtx-host [data-rule-editor] > div {
+  gap: 8px;
+}
+.jf-mobile-texting .mtx-host [data-rule-editor] input[type="number"] {
+  width: 96px;
+}
+.jf-mobile-texting .mtx-host [data-rule-editor] > div:last-child {
+  gap: 8px;
+}
+.jf-mobile-texting .mtx-host [data-rule-editor] > div:last-child > button {
+  flex: 1 1 120px;
+}
+.jf-mobile-texting .mtx-host [data-rule-editor] > div:last-child > button:first-child {
+  flex-basis: 100%;
+  min-height: var(--field-h);
+}
+
+/* ── the clients switch ── */
+.jf-mobile-texting .mtx-host [data-clients-card] button[role="switch"] {
+  min-height: var(--field-h);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jf-mobile-texting .mtx-btn,
+  .jf-mobile-texting .mtx-onoff > button,
+  .jf-mobile-texting .mtx-how > summary::before,
+  .jf-mobile-texting .mtx-field > input {
+    transition: none;
+  }
+}

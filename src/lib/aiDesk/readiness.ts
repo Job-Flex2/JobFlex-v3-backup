@@ -200,7 +200,7 @@ export async function deskReadiness(adminUserId: string | null = null): Promise<
       ? `${numbers.length} number${numbers.length === 1 ? "" : "s"} · ${pointed} pointed at the voice webhook${client ? "" : " (not checked: Twilio off)"}${assignedLines.length ? ` · ${assignedLines.length} of JobFlex's own assigned` : ""}`
       : assignedLines.length
         ? `No company bought a number yet; JobFlex's own ${assignedLines.map((p) => `${p.number} answers for ${p.answeredFor}`).join(", ")} — it shows on that company's AI desk and Phone pages.`
-        : `No company has a number yet — Settings → Texting buys one (it takes calls the same day).${firstLine ? ` Until then, a call to the platform's own ${firstLine.number} is answered for ${firstLine.answeredFor ?? "the first company"} (the oldest company — assign it below).` : ""}`,
+        : `No company has a number yet — the Texting page buys one (it takes calls the same day).${firstLine ? ` Until then, a call to the platform's own ${firstLine.number} is answered for ${firstLine.answeredFor ?? "the first company"} (the oldest company — assign it below).` : ""}`,
   });
 
   // Each plan's included minutes: set in the plan editor, or the tier's default.
@@ -234,7 +234,7 @@ export async function deskReadiness(adminUserId: string | null = null): Promise<
   for (const n of numbers.filter((x) => x.webhook === "wrong")) steps.push(`Point ${n.number} (${n.company}) at the voice webhook — the button below.`);
   for (const p of platform.filter((x) => x.webhook === "wrong")) steps.push(`Point the platform's ${p.number} at the voice webhook — the button below (its calls are answered for ${p.answeredFor ?? "the first company"}).`);
   for (const p of platform.filter((x) => !x.assigned)) steps.push(`Assign the platform's ${p.number} to your own company — the picker below. Until then its calls reach ${p.answeredFor ?? "the oldest company"} (the oldest company, the old fallback): a test call would land on their Phone page and could book on their calendar.`);
-  if (!numbers.length) steps.push(`For a first test, ${firstLine ? `call the platform's ${firstLine.number} once it is assigned, or ` : ""}buy a company a number on Settings → Texting — it takes calls the same day.`);
+  if (!numbers.length) steps.push(`For a first test, ${firstLine ? `call the platform's ${firstLine.number} once it is assigned, or ` : ""}buy a company a number on the Texting page — it takes calls the same day.`);
   if (defaults.length) steps.push(`Set AI desk minutes on ${defaults.map((p) => p.name).join(", ")} in Plans (the defaults apply until then).`);
   steps.push("Rehearse without a phone: `cd voice && OPENAI_API_KEY=… node test/live.mjs` — the real OpenAI realtime API, a scripted caller, the desk's voice saved to a WAV.");
   steps.push("Then the real thing: call a company's number from your phone. The call appears on its Phone page within a minute, with what the desk did; then try \"Test it here\" in Settings → AI desk.");

@@ -50,6 +50,8 @@ const DESKTOP_TWIN: Record<string, string> = {
   "/mobile-roof-estimator-v2": "/dashboard/roof-estimator",
   "/mobile-fence-estimator-v2": "/dashboard/fence-estimator",
   "/mobile-phone-v2": "/dashboard/phone",
+  "/mobile-ai-desk-v1": "/dashboard/phone",
+  "/mobile-texting-v1": "/dashboard/texting",
   "/mobile-messages-v2": "/dashboard/messages",
   "/mobile-reviews-v2": "/dashboard/reviews",
   "/mobile-trade-v2": "/dashboard/trade",

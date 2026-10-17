@@ -1,4 +1,6 @@
 "use server";
+import { after } from "next/server";
+import { alertSignup } from "@/lib/adminAlerts";
 import { z } from "zod";
 import { randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
@@ -139,6 +141,10 @@ export async function registerAccount(raw: unknown): Promise<{ ok: true }> {
   }
 
   trackActivation("organization_created", orgId, { flow: "password" });
+  // The team's "Sign-ups" alert texts (lib/adminAlerts) — after the response, never in the signup's way.
+  after(async () => {
+    await alertSignup({ orgName: data.businessName, flow: "password" }).catch((err) => console.warn("[adminAlerts] signup text:", err));
+  });
 
   // Best-effort attribution bind — permanently links the new org to a captured
   // ?promo/?ref code (explicit pill value first, 30-day capture cookie as
