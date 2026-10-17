@@ -813,6 +813,8 @@ export async function duplicateProposal(id: string) {
       organizationId,
       ownerId: user.id,
       clientId: p.clientId,
+      // A copy is still that trade's job (2026-10-17): its trade board, its stock and the list's kind keep it.
+      trade: p.trade,
       title: `${p.title} (copy)`,
       description: p.description,
       scopeOfWork: p.scopeOfWork,

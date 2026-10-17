@@ -168,6 +168,8 @@ export type ManualProposal = {
   deckEditable?: boolean;
   /** `Proposal.trade` — "roof", "fence", "hvac", "deck"… or null for a builder proposal. */
   trade?: string | null;
+  /** What kind of job and which tool made it (2026-10-17, lib/proposalKind) — the page's heading says it. */
+  kind?: import("@/lib/proposalKind").ProposalKind;
   /** A roof proposal this member may open again in the roof estimator and update from there (2026-10-13). */
   roofEditable?: boolean;
   /** The client's design link on this proposal (2026-10-13): one line on where it stands, Open when it came back. */

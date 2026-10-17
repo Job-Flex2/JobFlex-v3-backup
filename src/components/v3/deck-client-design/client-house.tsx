@@ -119,75 +119,13 @@ export function ClientHouse({ shape, house, shopName, onChange }: { shape: DeckS
   const fit = deckShapeForHouse(shape, house);
   const fixes = fit.note ? wallFixes(shape, house, { minWidthFt: DECK_LIMITS.widthFt.min, maxWidthFt: DECK_LIMITS.widthFt.max }) : [];
   const quick = quickWallOf(shape, house);
+  const [exactOpen, setExactOpen] = React.useState(() => quick === null || !!fit.note);
 
   return (
     <div className={s.house} data-client-house>
-      <details className={s.guide} data-client-measure-guide>
-        <summary className={s.guideSum}>How to measure your wall — 2 minutes with a tape</summary>
-        <div className={s.guideBody}>
-          <MeasureFigure />
-          <ol className={s.guideSteps}>
-            <li>Stand in the yard facing the back of the house. Start at the <b>left corner</b>.</li>
-            <li>Measure along the bottom of the wall to the first corner where the wall turns — that is <b>wall 1</b>.</li>
-            <li>At that corner, measure how far the next part <b>sticks out</b> or <b>sits back</b>, face to face. Then measure its length — <b>wall 2</b>. Keep going to the right corner.</li>
-            <li>Last, measure from the left corner to where you want the deck to <b>start</b>.</li>
-          </ol>
-          <p className={s.hint}>Measure the siding, not the trim. Half a foot is close enough — type 12.5 for 12 ft 6 in. {shopName} checks it on site before building.</p>
-        </div>
-      </details>
-
       <div className={s.lbl}>Start from</div>
       <Chips label="The wall's shape" value={quick} options={QUICK_WALLS.map((k) => ({ value: k, name: QUICK_NAMES[k].name, words: QUICK_NAMES[k].words }))} onChange={(k) => { setSheetNote(null); onChange({ house: quickWall(k, shape, house) }); }} />
 
-      <div className={s.lbl}>Your measurements — left corner to right corner</div>
-      <ol className={s.stretches} data-client-stretches>
-        {sheet.stretches.map((st, i) => {
-          const main = i === sheet.mainIndex;
-          const lean = leanOf(st.offsetFt);
-          return (
-            <li key={i} className={cx(s.stretch, main && s.stretchMain)} data-client-stretch={i}>
-              <div className={s.stretchHead}>
-                <b>Wall {i + 1}</b>
-                {main ? <span className={s.tag}>The deck is on this wall</span> : null}
-                <span className={s.stretchSpacer} />
-                {!main && sheet.stretches.length > 1 ? (
-                  <button type="button" className={s.removeBtn} onClick={() => removeStretch(i)} aria-label={`Remove wall ${i + 1}`}>Remove</button>
-                ) : null}
-              </div>
-              <div className={s.stretchGrid}>
-                <Stepper label={`Wall ${i + 1} length, ft`} data={`stretch-${i}-length`} feet value={st.lengthFt} min={1} max={80} step={0.5} words={ftWords} onChange={(v) => setStretch(i, { lengthFt: v })} />
-                {main ? (
-                  <p className={s.hint}>The wall the deck attaches to — the others are measured against it.</p>
-                ) : (
-                  <div className={s.leanBox}>
-                    <Chips small label={`Wall ${i + 1} against the deck's wall`} value={lean} options={[{ value: "out" as Lean, name: "Sticks out" }, { value: "flush" as Lean, name: "In line" }, { value: "back" as Lean, name: "Sits back" }]} onChange={(v) => setLean(i, v)} />
-                    {lean !== "flush" ? (
-                      <Stepper compact label={`Wall ${i + 1} ${lean === "out" ? "sticks out" : "sits back"} by, ft`} data={`stretch-${i}-offset`} feet value={Math.abs(st.offsetFt)} min={0.5} max={HOUSE_LIMITS.depthFt.max} step={0.5} words={(v) => `${lean === "out" ? "sticks out" : "sits back"} ${ftWords(v)}`} onChange={(v) => setStretch(i, { offsetFt: lean === "out" ? v : -v })} />
-                    ) : null}
-                  </div>
-                )}
-              </div>
-              {!main ? (
-                <button type="button" className={s.linkBtn} onClick={() => fromSheet(sheet.stretches, centreOn(sheet, i, W))} data-client-deck-on={i}>Put the deck on this wall</button>
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
-      {sheet.stretches.length < STRETCH_MAX ? (
-        <button type="button" className={s.ghostBtn} onClick={addStretch} data-client-add-stretch>+ The wall turns — add the next part</button>
-      ) : (
-        <p className={s.hint}>That is the most corners the drawing takes ({STRETCH_MAX} wall parts) — the far ones can be left out.</p>
-      )}
-
-      <div className={s.grid2}>
-        <Stepper label="Deck starts from the left corner, ft" data="deck-start" feet value={sheet.deckStartFt} min={0} max={Math.max(0, sheet.totalFt - 1)} step={0.5} words={ftWords} onChange={(v) => fromSheet(sheet.stretches, v)} />
-        <div className={s.centreBox}>
-          <button type="button" className={s.ghostBtn} onClick={() => fromSheet(sheet.stretches, centreOn(sheet, sheet.mainIndex, W))} data-client-centre>Centre the deck on its wall</button>
-        </div>
-      </div>
-      <p className={s.hint} data-client-sheet-words>Corner to corner: <b>{ftWords(sheet.totalFt)}</b> — {sheetWords(sheet)}.</p>
-      {sheetNote ? <p className={s.warn} role="status">{sheetNote}</p> : null}
       <p className={fit.note ? s.warn : s.hint} data-client-wall-words>{wallWords(shape, house)}</p>
       {fixes.length ? (
         <div className={s.fixes} data-client-wall-fixes>
@@ -197,11 +135,6 @@ export function ClientHouse({ shape, house, shopName, onChange }: { shape: DeckS
         </div>
       ) : null}
 
-      <div className={s.lbl}>Or draw it — drag the walls, the corners and the deck</div>
-      <div className={s.drawing} data-client-wall-drawing>
-        <HouseWallPlan shape={shape} house={house} onChange={(n2) => { setSheetNote(null); onChange(n2); }} />
-      </div>
-
       <div className={s.lbl}>Your house</div>
       <div className={s.lookGrid}>
         <Chips small label="Storeys" value={house.storeys} options={[{ value: 1 as const, name: "One storey" }, { value: 2 as const, name: "Two storeys" }]} onChange={(v) => onChange({ house: { ...house, storeys: v } })} />
@@ -209,6 +142,85 @@ export function ClientHouse({ shape, house, shopName, onChange }: { shape: DeckS
       </div>
       <Chips small label="Siding colour" value={house.siding} options={SIDINGS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: SidingId) => onChange({ house: { ...house, siding: v } })} />
       <Chips small label="Roof colour" value={house.roofColour} options={ROOF_COLOURS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: RoofColourId) => onChange({ house: { ...house, roofColour: v } })} />
+
+      {/* MEASURE IT EXACTLY — OPTIONAL (2026-10-17 audit: the wall step ran over two phone screens of tape
+          measures before the client had sized the deck). The quick shapes and the house's look stay out; the
+          measuring guide, the wall parts and the drawing fold in here. It opens itself when the wall is already
+          custom, or the deck does not fit it — and every part of it still works as before. */}
+      <details className={s.exact} open={exactOpen} onToggle={(e) => setExactOpen(e.currentTarget.open)} data-client-exact>
+        <summary className={s.exactSum}>
+          <b>Measure it exactly</b>
+          <span>Optional — {shopName} measures on site before building</span>
+        </summary>
+        <div className={s.exactBody}>
+          <details className={s.guide} data-client-measure-guide>
+            <summary className={s.guideSum}>How to measure your wall — 2 minutes with a tape</summary>
+            <div className={s.guideBody}>
+              <MeasureFigure />
+              <ol className={s.guideSteps}>
+                <li>Stand in the yard facing the back of the house. Start at the <b>left corner</b>.</li>
+                <li>Measure along the bottom of the wall to the first corner where the wall turns — that is <b>wall 1</b>.</li>
+                <li>At that corner, measure how far the next part <b>sticks out</b> or <b>sits back</b>, face to face. Then measure its length — <b>wall 2</b>. Keep going to the right corner.</li>
+                <li>Last, measure from the left corner to where you want the deck to <b>start</b>.</li>
+              </ol>
+              <p className={s.hint}>Measure the siding, not the trim. Half a foot is close enough — type 12.5 for 12 ft 6 in. {shopName} checks it on site before building.</p>
+            </div>
+          </details>
+          <div className={s.lbl}>Your measurements — left corner to right corner</div>
+          <ol className={s.stretches} data-client-stretches>
+            {sheet.stretches.map((st, i) => {
+              const main = i === sheet.mainIndex;
+              const lean = leanOf(st.offsetFt);
+              return (
+                <li key={i} className={cx(s.stretch, main && s.stretchMain)} data-client-stretch={i}>
+                  <div className={s.stretchHead}>
+                    <b>Wall {i + 1}</b>
+                    {main ? <span className={s.tag}>The deck is on this wall</span> : null}
+                    <span className={s.stretchSpacer} />
+                    {!main && sheet.stretches.length > 1 ? (
+                      <button type="button" className={s.removeBtn} onClick={() => removeStretch(i)} aria-label={`Remove wall ${i + 1}`}>Remove</button>
+                    ) : null}
+                  </div>
+                  <div className={s.stretchGrid}>
+                    <Stepper label={`Wall ${i + 1} length, ft`} data={`stretch-${i}-length`} feet value={st.lengthFt} min={1} max={80} step={0.5} words={ftWords} onChange={(v) => setStretch(i, { lengthFt: v })} />
+                    {main ? (
+                      <p className={s.hint}>The wall the deck attaches to — the others are measured against it.</p>
+                    ) : (
+                      <div className={s.leanBox}>
+                        <Chips small label={`Wall ${i + 1} against the deck's wall`} value={lean} options={[{ value: "out" as Lean, name: "Sticks out" }, { value: "flush" as Lean, name: "In line" }, { value: "back" as Lean, name: "Sits back" }]} onChange={(v) => setLean(i, v)} />
+                        {lean !== "flush" ? (
+                          <Stepper compact label={`Wall ${i + 1} ${lean === "out" ? "sticks out" : "sits back"} by, ft`} data={`stretch-${i}-offset`} feet value={Math.abs(st.offsetFt)} min={0.5} max={HOUSE_LIMITS.depthFt.max} step={0.5} words={(v) => `${lean === "out" ? "sticks out" : "sits back"} ${ftWords(v)}`} onChange={(v) => setStretch(i, { offsetFt: lean === "out" ? v : -v })} />
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                  {!main ? (
+                    <button type="button" className={s.linkBtn} onClick={() => fromSheet(sheet.stretches, centreOn(sheet, i, W))} data-client-deck-on={i}>Put the deck on this wall</button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+          {sheet.stretches.length < STRETCH_MAX ? (
+            <button type="button" className={s.ghostBtn} onClick={addStretch} data-client-add-stretch>+ The wall turns — add the next part</button>
+          ) : (
+            <p className={s.hint}>That is the most corners the drawing takes ({STRETCH_MAX} wall parts) — the far ones can be left out.</p>
+          )}
+
+          <div className={s.grid2}>
+            <Stepper label="Deck starts from the left corner, ft" data="deck-start" feet value={sheet.deckStartFt} min={0} max={Math.max(0, sheet.totalFt - 1)} step={0.5} words={ftWords} onChange={(v) => fromSheet(sheet.stretches, v)} />
+            <div className={s.centreBox}>
+              <button type="button" className={s.ghostBtn} onClick={() => fromSheet(sheet.stretches, centreOn(sheet, sheet.mainIndex, W))} data-client-centre>Centre the deck on its wall</button>
+            </div>
+          </div>
+          <p className={s.hint} data-client-sheet-words>Corner to corner: <b>{ftWords(sheet.totalFt)}</b> — {sheetWords(sheet)}.</p>
+          {sheetNote ? <p className={s.warn} role="status">{sheetNote}</p> : null}
+          <div className={s.lbl}>Or draw it — drag the walls, the corners and the deck</div>
+          <div className={s.drawing} data-client-wall-drawing>
+            <HouseWallPlan shape={shape} house={house} onChange={(n2) => { setSheetNote(null); onChange(n2); }} />
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

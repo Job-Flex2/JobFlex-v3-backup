@@ -58,6 +58,10 @@
 :global(.jf-blueprint .content) .kindOn ~ .turn { right: 16px; top: 44px; }
 @media (hover: none) {
   :global(.jf-blueprint .content) .turn { opacity: 0.9; }
+  /* A thumb's ↻ (2026-10-17 audit: 24–28 px on a phone, and on the picked card it sat on the ✓). */
+  :global(.jf-blueprint .content) .turn { width: 36px; height: 36px; font-size: 17px; }
+  :global(.jf-blueprint .content) .turnSmall { width: 32px; height: 32px; font-size: 15px; }
+  :global(.jf-blueprint .content) .kindOn ~ .turn { top: 54px; }
 }
 /* The build-up: each step of the build fades in and settles down, one after the other. */
 :global(.jf-blueprint .content) .play .layer { animation: deckRise 0.42s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }

@@ -45,6 +45,8 @@ import { agoLabel } from "@/components/v3/proposals-blueprint/proposals-query";
 import { ManualBlueprintContent } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-content";
 import { loadManualBuilder } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-load";
 import { readEstimateSeed } from "@/lib/estimateSeed";
+import { proposalKindOf } from "@/lib/proposalKind";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +90,15 @@ export default async function ManualBlueprintPage({
     projectId: one(params.project),
     seed,
   });
+
+  // WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind): the heading names the job and the tool that made it.
+  if (data.proposal) {
+    const made = await db.activityEvent
+      .findMany({ where: { organizationId: ctx.organizationId, proposalId: data.proposal.id, kind: { in: ["CREATED", "ESTIMATE"] } }, orderBy: { createdAt: "asc" }, select: { summary: true, meta: true }, take: 20 })
+      .catch(() => []);
+    const d = data.proposal.draft;
+    data.proposal.kind = proposalKindOf({ trade: data.proposal.trade, title: d.title, scope: d.scopeOfWork, description: d.description, events: made, lineNames: d.lines.map((l) => l.name) });
+  }
 
   // A deck made in the Deck Studio opens there again to be changed — for whoever may use the studio (2026-10-12).
   if (data.proposal?.deckDrawing && !isLimitedRole(ctx.role)) {

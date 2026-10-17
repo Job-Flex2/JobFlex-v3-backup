@@ -808,6 +808,7 @@ export function useVideoEstimator(opts: {
       }
       const res = await convertEstimateToProposal({
         projectType,
+        source: "video",
         title: data.title,
         scope: data.scope,
         materials: data.materials,
