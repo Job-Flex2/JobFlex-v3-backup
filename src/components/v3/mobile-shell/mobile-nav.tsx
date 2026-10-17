@@ -41,7 +41,6 @@ import {
   navSectionsFor,
   type NavItem,
   type NavSection,
-  flattenNavItems,
 } from "@/components/v3/blueprint-shell/nav-map";
 import {
   quotaPill,
@@ -141,6 +140,9 @@ export function MobileNav() {
   // the shared resolver returns null for them; the raw path is then the
   // item's own href.
   const active = activeHref(pathname) ?? pathname;
+  // Which estimator trees are open. Unset: open when the estimator or its sub-page is the page shown.
+  const [folds, setFolds] = useState<Record<string, boolean>>({});
+  const isTreeOpen = (item: NavItem) => folds[item.href] ?? (active === item.href || !!item.children?.some((c) => c.href === active));
 
   /* Who is looking, from the provider the blueprint layout mounts. The drawer
      drew the full 22-item map for everybody until 2026-08-17, so an installer
@@ -195,7 +197,7 @@ export function MobileNav() {
       requestAnimationFrame(() => ind.classList.add(styles.ready));
     });
     return () => cancelAnimationFrame(raf);
-  }, [open, active]);
+  }, [open, active, folds]);
 
   useEffect(() => {
     if (!open) return;
@@ -219,6 +221,94 @@ export function MobileNav() {
     void el.offsetWidth;
     el.classList.add(styles.pressed);
     el.addEventListener("animationend", () => el.classList.remove(styles.pressed), { once: true });
+  };
+
+
+  // One row. An estimating tool keeps its coloured icon square (owner, 2026-10-17, as on the desk sidebar); a
+  // sub-page row is indented under its estimator and marks itself when it is the page shown.
+  const row = (item: NavItem, child = false) => {
+    const isActive = item.href === active;
+    const tool = child ? undefined : item.tool;
+    const soonMark = !!item.soon && !item.locked;
+    const cls = `${styles.sbLink} ${isActive ? styles.active : ""}${child ? ` ${styles.sbSubLink}` : ""}`;
+    const count = badges[item.href] ?? 0;
+    // The quota only when it is low or gone (quotaPill): a full
+    // meter is not news, and a row never carries a bare "0".
+    const quota = limits[item.href] ? quotaPill(limits[item.href]) : null;
+    // Surfaces with no page yet stay dead, but must not jump the
+    // scroller to the top on the way — the drawer just closes.
+    return item.href === "#" ? (
+      <a
+        key={item.label}
+        className={cls}
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen(false);
+        }}
+      >
+        <Icon id={item.icon} />
+        {item.label}
+      </a>
+    ) : (
+      <Link
+        key={item.label}
+        className={cls + (item.locked ? ` ${styles.sbLockd}` : "") + (tool ? ` ${styles.sbTool}` : "") + (tool && soonMark ? ` ${styles.sbToolSoon}` : "")}
+        data-tone={tool?.tone}
+        href={item.href as Route}
+        aria-current={isActive ? "page" : undefined}
+        onClick={() => setOpen(false)}
+      >
+        {tool ? (
+          <>
+            <span className={styles.sbTile} aria-hidden="true">
+              <Icon id={item.icon} />
+            </span>
+            <span className={styles.sbTxt}>
+              <span className={styles.sbName}>{item.label}</span>
+              {soonMark && (
+                <span className={styles.sbSoonTag} aria-label="Coming soon">
+                  Soon
+                </span>
+              )}
+            </span>
+          </>
+        ) : (
+          <>
+            <Icon id={item.icon} />
+            <span className={styles.sbName}>{item.label}</span>
+          </>
+        )}
+        {/* Custom-plan lock beats the badge: a page the plan does
+            not include has no unread anything worth advertising.
+            Still a live link — the route shows the upgrade offer. */}
+        {soonMark ? (
+          tool ? null : <span className={styles.sbSoon}>Soon</span>
+        ) : item.locked ? (
+          <svg className={styles.sbLockIc} viewBox="0 0 24 24" aria-label="Not in your plan">
+            <rect x="5" y="11" width="14" height="10" rx="1.5" />
+            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+          </svg>
+        ) : (
+          <>
+            {count > 0 && (
+              <span className={styles.sbBadge} aria-label={`${count} new`}>
+                {count > 99 ? "99+" : count}
+              </span>
+            )}
+            {quota ? (
+              <span
+                className={`${styles.sbQuota}${quota.out ? ` ${styles.isOut}` : ""}${count > 0 ? "" : ` ${styles.sbQuotaEnd}`}`}
+                title={quotaTip(limits[item.href])}
+                aria-label={quotaTip(limits[item.href])}
+              >
+                {quota.text}
+              </span>
+            ) : null}
+          </>
+        )}
+      </Link>
+    );
   };
 
   return (
@@ -356,92 +446,35 @@ export function MobileNav() {
           {sections.map((sec) => (
             <div key={sec.label}>
               <div className={styles.sbSecLabel}>{sec.label}</div>
-              {flattenNavItems(sec.items).map((item) => {
-                const isActive = item.href === active;
-                const cls = `${styles.sbLink} ${isActive ? styles.active : ""}`;
-                const count = badges[item.href] ?? 0;
-                // The quota only when it is low or gone (quotaPill): a full
-                // meter is not news, and a row never carries a bare "0".
-                const quota = limits[item.href] ? quotaPill(limits[item.href]) : null;
-                // Surfaces with no page yet stay dead, but must not jump the
-                // scroller to the top on the way — the drawer just closes.
-                return item.href === "#" ? (
-                  <a
-                    key={item.label}
-                    className={cls}
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setOpen(false);
-                    }}
-                  >
-                    <Icon id={item.icon} />
-                    {item.label}
-                  </a>
+              {sec.items.map((item) =>
+                item.children?.length ? (
+                  // An estimator with its inventory folded under it — the desk sidebar's tree (owner, 2026-10-17:
+                  // "apply the sidebar changes to the mobile too"): the row, a small white square with the arrow
+                  // beside it, and the sub-page rows indented on a guide line, in the rows' own ink.
+                  <div key={item.label} className={styles.sbTree}>
+                    <div className={styles.sbParent}>
+                      {row(item)}
+                      <button
+                        type="button"
+                        className={styles.sbFoldBtn}
+                        aria-expanded={isTreeOpen(item)}
+                        aria-controls={`msb-sub-${item.icon}`}
+                        aria-label={`${isTreeOpen(item) ? "Hide" : "Show"} ${item.label} subpages`}
+                        onClick={() => setFolds((f) => ({ ...f, [item.href]: !isTreeOpen(item) }))}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div id={`msb-sub-${item.icon}`} className={styles.sbSub} hidden={!isTreeOpen(item)}>
+                      {item.children.map((c) => row(c, true))}
+                    </div>
+                  </div>
                 ) : (
-                  <Link
-                    key={item.label}
-                    className={cls + (item.locked ? ` ${styles.sbLockd}` : "") + (item.tool ? ` ${styles.sbTool}` : "") + (item.tool && item.soon && !item.locked ? ` ${styles.sbToolSoon}` : "")}
-                    data-tone={item.tool?.tone}
-                    href={item.href as Route}
-                    aria-current={isActive ? "page" : undefined}
-                    onClick={() => setOpen(false)}
-                  >
-                    {/* An estimating tool (owner, 2026-10-12; one line since
-                        2026-10-16) — the desk sidebar's tool row: an icon
-                        square on a shadow in the tool's colour, the name,
-                        and "Soon" right after it. */}
-                    {item.tool ? (
-                      <>
-                        <span className={styles.sbTile} aria-hidden="true">
-                          <Icon id={item.icon} />
-                        </span>
-                        <span className={styles.sbTxt}>
-                          <span className={styles.sbName}>{item.label}</span>
-                          {item.soon && !item.locked && (
-                            <span className={styles.sbSoonTag} aria-label="Coming soon">
-                              Soon
-                            </span>
-                          )}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Icon id={item.icon} />
-                        {item.label}
-                      </>
-                    )}
-                    {/* Custom-plan lock beats the badge: a page the plan does
-                        not include has no unread anything worth advertising.
-                        Still a live link — the route shows the upgrade offer. */}
-                    {item.soon && !item.locked ? (
-                      item.tool ? null : <span className={styles.sbSoon}>Coming soon</span>
-                    ) : item.locked ? (
-                      <svg className={styles.sbLockIc} viewBox="0 0 24 24" aria-label="Not in your plan">
-                        <rect x="5" y="11" width="14" height="10" rx="1.5" />
-                        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                      </svg>
-                    ) : (
-                      <>
-                        {count > 0 && (
-                          <span className={styles.sbBadge} aria-label={`${count} new`}>
-                            {count > 99 ? "99+" : count}
-                          </span>
-                        )}
-                        {quota ? (
-                          <span
-                            className={`${styles.sbQuota}${quota.out ? ` ${styles.isOut}` : ""}${count > 0 ? "" : ` ${styles.sbQuotaEnd}`}`}
-                            title={quotaTip(limits[item.href])}
-                            aria-label={quotaTip(limits[item.href])}
-                          >
-                            {quota.text}
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </Link>
-                );
-              })}
+                  row(item)
+                ),
+              )}
             </div>
           ))}
         </nav>

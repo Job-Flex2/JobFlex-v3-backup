@@ -44,12 +44,7 @@ import {
   type SmsActionResult,
 } from "@/actions/sms";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
-import { TextingPeople } from "@/components/v3/texting-people/texting-people";
-import { ClientTextsSwitch, TextingOverview } from "@/components/v3/texting-people/texting-overview";
-import { TextRules } from "@/components/v3/texting-people/text-rules";
-import { OwnNumber } from "@/components/v3/texting-people/own-number";
-import { TEXTING_PAGE_COPY } from "@/components/v3/texting-page/texting-page";
-import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
+import { TEXTING_PAGE_COPY, TextingSetup } from "@/components/v3/texting-page/texting-page";
 import { actionError } from "@/components/v3/settings-blueprint/ui";
 import type { SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import { TEXTING_COPY, TEXTS_COPY } from "@/components/v3/settings-blueprint/settings-data";
@@ -100,27 +95,10 @@ export function MobileTexting({ sms }: { sms: SmsSettingsData }) {
 
           {sms.canManage ? (
             <>
-              {/* Status first: what is texted now, and the four steps with where each stands. */}
-              <section className="mtx-host mtx-status" id="texting-overview" aria-label="Where texting stands">
-                <TextingOverview sms={sms} />
-              </section>
-
-              <Card id="texting-own-number" step={1} title={REGISTRATION_COPY.title} sub={P.number}>
-                <OwnNumber view={sms.registration} configured={sms.configured} />
-              </Card>
-
-              <Card id="texting-roster" step={2} title={TEXTING_COPY.stepTeam} sub={P.team} how={TEXTING_COPY.peopleSub} data={{ "data-roster": "" }}>
-                <TextingPeople roster={sms.roster} />
-              </Card>
-
-              <Card id="texting-clients" step={3} title={TEXTING_COPY.stepClients} sub={TEXTS_COPY.clientsSub}>
-                <ClientTextsSwitch on={sms.clientsOn} />
-                <p className="mtx-note">{REGISTRATION_COPY.consent}</p>
-              </Card>
-
-              <Card id="texting-rules" step={4} title={TEXTING_COPY.rulesTitle} sub={P.rules} how={TEXTING_COPY.rulesSub}>
-                <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
-              </Card>
+              {/* The desk page's status line and setup checklist (owner, 2026-10-17), in its own `.jf-texting` root. */}
+              <div className="jf-texting mtx-setup" data-nest="">
+                <TextingSetup sms={sms} />
+              </div>
 
               <div className="mtx-extras" role="group" aria-label={P.extras}>
                 <ExtrasCard sms={sms} />

@@ -17,6 +17,7 @@
 // reset skips this tree (it tied single-class rules in production builds).
 
 import { useEffect, useState, type ReactNode } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -31,7 +32,7 @@ import {
   type SmsActionResult,
 } from "@/actions/sms";
 import { TextingPeople } from "@/components/v3/texting-people/texting-people";
-import { ClientTextsSwitch, TextingOverview } from "@/components/v3/texting-people/texting-overview";
+import { ClientTextsSwitch, textingSteps, type TextingTone } from "@/components/v3/texting-people/texting-overview";
 import { TextRules } from "@/components/v3/texting-people/text-rules";
 import { OwnNumber } from "@/components/v3/texting-people/own-number";
 import { REGISTRATION_COPY } from "@/lib/sms/registrationShared";
@@ -51,17 +52,20 @@ export const TEXTING_PAGE_COPY = {
   rules: "A text for any moment — when it goes out, who gets it, what it says.",
   howItWorks: "How it works",
   extras: "Extra numbers",
+  setupTitle: "Set up texting",
+  progress: (n: number) => `${n} of 4 set up`,
+  open: "Open",
+  close: "Close",
+  stamp: { ok: "Done", wait: "Pending", todo: "To do", bad: "Needs a fix" } as Record<TextingTone, string>,
+  clientsStamp: (on: boolean) => (on ? "On" : "Off"),
 } as const;
+
+type StepKey = "number" | "team" | "clients" | "rules";
+/** Each step's card id — the deep links (#texting-own-number from the AI desk) open the step they name. */
+const STEP_ID: Record<StepKey, string> = { number: "texting-own-number", team: "texting-roster", clients: "texting-clients", rules: "texting-rules" };
 
 export function TextingPageDesk({ sms }: { sms: SmsSettingsData }) {
   const P = TEXTING_PAGE_COPY;
-  // A deep link (#texting-own-number from the AI desk) lands on its card even when the shell's scroller settles late.
-  useEffect(() => {
-    const id = window.location.hash.slice(1);
-    if (!id) return;
-    const t = window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 120);
-    return () => window.clearTimeout(t);
-  }, []);
 
   return (
     <div className="jf-texting" data-nest="" data-texting-page data-manager={sms.canManage ? "1" : "0"}>
@@ -85,26 +89,7 @@ export function TextingPageDesk({ sms }: { sms: SmsSettingsData }) {
 
       {sms.canManage ? (
         <>
-          {/* Status first: what is texted now, and the four steps with where each stands. */}
-          <section className="txp-status" id="texting-overview" aria-label="Where texting stands">
-            <TextingOverview sms={sms} />
-          </section>
-
-          <Card id="texting-own-number" step={1} title={REGISTRATION_COPY.title} sub={P.number}>
-            <OwnNumber view={sms.registration} configured={sms.configured} />
-          </Card>
-
-          <Card id="texting-roster" step={2} title={TEXTING_COPY.stepTeam} sub={P.team} how={TEXTING_COPY.peopleSub} data={{ "data-roster": "" }}>
-            <TextingPeople roster={sms.roster} />
-          </Card>
-
-          <Card id="texting-clients" step={3} title={TEXTING_COPY.stepClients} sub={TEXTS_COPY.clientsSub} aside={<ClientTextsSwitch on={sms.clientsOn} />}>
-            <p className="txp-note">{REGISTRATION_COPY.consent}</p>
-          </Card>
-
-          <Card id="texting-rules" step={4} title={TEXTING_COPY.rulesTitle} sub={P.rules} how={TEXTING_COPY.rulesSub}>
-            <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
-          </Card>
+          <TextingSetup sms={sms} />
 
           <div className="txp-pair" aria-label={P.extras} role="group">
             <ExtrasCard sms={sms} />
@@ -123,7 +108,135 @@ export function TextingPageDesk({ sms }: { sms: SmsSettingsData }) {
   );
 }
 
-/* ── one framed card: marker, title, one line; an optional control at the right and "How it works" ── */
+/** The status line and the setup checklist — the Texting page's body, drawn by the desk page and the handheld build
+ *  alike (inside a `.jf-texting` root, whose stylesheet it uses). */
+export function TextingSetup({ sms }: { sms: SmsSettingsData }) {
+  const P = TEXTING_PAGE_COPY;
+  const st = textingSteps(sms);
+  // The checklist (owner, 2026-10-17 — the AI desk's pattern): every step closed until picked, except the one a deep
+  // link names (#texting-own-number from the AI desk), which opens and is scrolled to.
+  const [open, setOpen] = useState<StepKey | null>(null);
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    const key = (Object.keys(STEP_ID) as StepKey[]).find((k) => STEP_ID[k] === id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the hash is only readable after mount
+    if (key) setOpen(key);
+    const t = window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 120);
+    return () => window.clearTimeout(t);
+  }, []);
+  const done = (["number", "team", "clients", "rules"] as StepKey[]).filter((k) => st[k].tone === "ok").length;
+  return (
+    <>
+    {/* Status first: one line on what is texted now. */}
+    <p className={`txp-status${st.live ? " is-live" : ""}`} id="texting-overview" role="status" data-texting-status>
+      {st.status}
+    </p>
+
+    {/* The setup: one checklist, a row per step that opens its part right under it. */}
+    <section className="txp-setup" aria-labelledby="txp-setup-t">
+      <header className="txp-setupH">
+        <h2 id="txp-setup-t">{P.setupTitle}</h2>
+        <div className="txp-progress">
+          <span className="txp-count">{P.progress(done)}</span>
+          <span className="txp-fill" role="progressbar" aria-label={P.setupTitle} aria-valuemin={0} aria-valuemax={4} aria-valuenow={done}>
+            <span style={{ width: `${(done / 4) * 100}%` }} />
+          </span>
+        </div>
+      </header>
+      <ol className="txp-steps">
+        <Step k="number" n={1} title={REGISTRATION_COPY.title} line={st.number.line} tone={st.number.tone} stamp={P.stamp[st.number.tone]} open={open} onPick={setOpen}>
+          <p className="txp-lead">{P.number}</p>
+          <OwnNumber view={sms.registration} configured={sms.configured} />
+        </Step>
+        <Step k="team" n={2} title={TEXTING_COPY.stepTeam} line={st.team.line} tone={st.team.tone} stamp={P.stamp[st.team.tone]} open={open} onPick={setOpen} data={{ "data-roster": "" }}>
+          <p className="txp-lead">{P.team}</p>
+          <How text={TEXTING_COPY.peopleSub} />
+          <TextingPeople roster={sms.roster} />
+        </Step>
+        <Step k="clients" n={3} title={TEXTING_COPY.stepClients} line={TEXTS_COPY.clientsSub} tone={st.clients.tone} stamp={P.clientsStamp(sms.clientsOn)} open={open} onPick={setOpen}>
+          <ClientTextsSwitch on={sms.clientsOn} />
+          <p className="txp-note">{REGISTRATION_COPY.consent}</p>
+        </Step>
+        <Step k="rules" n={4} title={TEXTING_COPY.rulesTitle} line={st.rules.line} tone={st.rules.tone} stamp={P.stamp[st.rules.tone]} open={open} onPick={setOpen}>
+          <p className="txp-lead">{P.rules}</p>
+          <How text={TEXTING_COPY.rulesSub} />
+          <TextRules rules={sms.rules} roster={sms.roster} clientsOn={sms.clientsOn} company={sms.companyName || "Your company"} />
+        </Step>
+      </ol>
+    </section>
+    </>
+  );
+}
+
+/* ── a checklist row: number (a tick once done), name, its line, stamp, Open/Close; its part unfolds under it ── */
+
+function Step({
+  k,
+  n,
+  title,
+  line,
+  tone,
+  stamp,
+  open,
+  onPick,
+  data,
+  children,
+}: {
+  k: StepKey;
+  n: number;
+  title: string;
+  line: string;
+  tone: TextingTone;
+  stamp: string;
+  open: StepKey | null;
+  onPick: (k: StepKey | null) => void;
+  data?: Record<string, string>;
+  children: ReactNode;
+}) {
+  const isOpen = open === k;
+  const id = STEP_ID[k];
+  return (
+    <li className="txp-stepRow" id={id} data-open={isOpen ? "1" : "0"} data-tone={tone} {...data}>
+      <button
+        type="button"
+        className="txp-stepBtn"
+        id={`${id}-h`}
+        aria-expanded={isOpen}
+        aria-controls={`${id}-b`}
+        onClick={() => onPick(isOpen ? null : k)}
+      >
+        <span className="txp-stepN" aria-hidden="true">
+          {tone === "ok" ? <Check size={16} strokeWidth={3} /> : n}
+        </span>
+        <span className="txp-stepT">
+          <b>{title}</b>
+          <span>{line}</span>
+        </span>
+        <span className="txp-stamp" data-tone={tone}>{stamp}</span>
+        <span className="txp-stepGo" aria-hidden="true">
+          <span className="txp-stepGoT">{isOpen ? TEXTING_PAGE_COPY.close : TEXTING_PAGE_COPY.open}</span>
+          <ChevronDown size={16} strokeWidth={2.4} />
+        </span>
+      </button>
+      <div className="txp-stepB" id={`${id}-b`} role="region" aria-labelledby={`${id}-h`} hidden={!isOpen}>
+        {children}
+      </div>
+    </li>
+  );
+}
+
+/** The long instructions, one click away. */
+function How({ text }: { text: string }) {
+  return (
+    <details className="txp-how">
+      <summary>{TEXTING_PAGE_COPY.howItWorks}</summary>
+      <p>{text}</p>
+    </details>
+  );
+}
+
+/* ── one framed card: title, one line; an optional control at the right and "How it works" ── */
 
 function Card({
   id,

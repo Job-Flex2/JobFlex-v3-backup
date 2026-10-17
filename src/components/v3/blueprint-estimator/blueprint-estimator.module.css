@@ -428,18 +428,18 @@
 .be.be .workHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .be.be .workStage { font-size: 18px; font-weight: 900; letter-spacing: -.005em; }
 .be.be .workPercent { font-family: var(--be-mono); font-size: 14px; font-weight: 700; letter-spacing: .06em; color: var(--be-blue); font-variant-numeric: tabular-nums; }
-.be.be .steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
-.be.be .steps li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; color: var(--be-muted); }
-.be.be .stepMark { width: 10px; height: 10px; border: 1.5px solid currentColor; background: var(--be-paper); }
-.be.be .stepState { font-family: var(--be-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+/* The steps wear the Smart estimator's squares (estimators-blueprint/work-square, owner 2026-10-17). */
+.be.be .steps { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 0; }
+.be.be .steps li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--be-line); font-size: 14px; color: var(--be-muted); }
+.be.be .steps li:last-child { border-bottom: none; }
+.be.be .stepState { font-family: var(--be-mono); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
 .be.be .stepDone, .be.be .stepNow { color: var(--be-ink); }
 .be.be .stepNow { font-weight: 700; }
-.be.be .stepDone .stepMark { background: var(--be-ink); border-color: var(--be-ink); }
-.be.be .stepNow .stepMark { background: var(--be-blue); border-color: var(--be-blue); }
 .be.be .stepNow .stepState { color: var(--be-blue); }
+.be.be .workNow { margin: 10px 0 0; font-size: 13px; font-weight: 600; line-height: 1.45; color: var(--be-soft); overflow-wrap: anywhere; }
 .be.be .meter { margin-top: 12px; height: 10px; border: 1.5px solid var(--be-ink); background: var(--be-paper); overflow: hidden; }
 .be.be .meter span { display: block; height: 100%; background: var(--be-blue); transition: width 300ms linear; }
-.be.be .workHint { margin: 14px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--be-muted); }
+.be.be .workHint { margin: 14px 0 0; font-size: 14px; line-height: 1.5; color: var(--be-soft); }
 .be.be .work .btnGhost { align-self: flex-start; margin-top: 14px; min-height: 44px; }
 .be.be .timing {
   margin: -6px 0 0;
@@ -447,12 +447,6 @@
   font-size: 11.5px;
   color: var(--be-muted);
   overflow-wrap: anywhere;
-}
-@media (prefers-reduced-motion: reduce) {
-  .be.be .stepNow .stepMark {
-    animation: none;
-    border-top-color: var(--be-blue);
-  }
 }
 
 /* ── 4 · result ───────────────────────────────────────────── */

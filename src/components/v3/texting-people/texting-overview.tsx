@@ -14,12 +14,12 @@ import type { SmsSettingsData } from "@/components/v3/settings-blueprint/setting
 import { TEXTING_COPY } from "@/components/v3/settings-blueprint/settings-data";
 import s from "./texting-people.module.css";
 
-type Tone = "ok" | "wait" | "todo" | "bad";
+export type TextingTone = "ok" | "wait" | "todo" | "bad";
+type Tone = TextingTone;
 
-export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+/** Where texting stands, pure: the one status sentence and each step's tone and line. The Texting page's checklist
+ *  (texting-page) and this overview both read it. */
+export function textingSteps(sms: SmsSettingsData) {
   const C = TEXTING_COPY;
   const reg = sms.registration;
   // JobFlex's own company: the lent JobFlex line is its number (lib/sms/houseLine, 2026-10-14).
@@ -43,6 +43,22 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
           ? { tone: "bad", line: C.numberRejected, go: C.numberOpen }
           : { tone: "bad", line: C.numberFailed, go: C.numberOpen };
   const status = !sms.configured ? C.notConfiguredLong : approvedNumber ? C.statusLive(approvedNumber, on, sms.clientsOn) : C.statusWaiting;
+  return {
+    status,
+    live: !!approvedNumber && sms.configured,
+    number,
+    team: { tone: (on ? "ok" : "todo") as Tone, line: C.teamLine(on, off, none) },
+    clients: { tone: (sms.clientsOn ? "ok" : "todo") as Tone, line: C.clientsLine },
+    rules: { tone: (sms.rules.length ? "ok" : "todo") as Tone, line: C.rulesLine(sms.rules.length) },
+  };
+}
+
+export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const C = TEXTING_COPY;
+  const { status, live, number, team, clients, rules } = textingSteps(sms);
 
   const flipClients = async () => {
     setBusy(true);
@@ -61,7 +77,7 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
 
   return (
     <div className={s.root} data-texting-overview data-nest="">
-      <p className={`${s.status}${approvedNumber && sms.configured ? ` ${s.statusLive}` : ""}`} data-texting-status>
+      <p className={`${s.status}${live ? ` ${s.statusLive}` : ""}`} data-texting-status>
         {status}
       </p>
       <ol className={s.steps}>
@@ -75,21 +91,21 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
             {number.go}
           </button>
         </li>
-        <li className={s.step} data-step="team" data-tone={on ? "ok" : "todo"}>
+        <li className={s.step} data-step="team" data-tone={team.tone}>
           <span className={s.stepN} aria-hidden="true">2</span>
           <span className={s.stepT}>
             <b>{C.stepTeam}</b>
-            <span>{C.teamLine(on, off, none)}</span>
+            <span>{team.line}</span>
           </span>
           <button type="button" className={s.btn} onClick={() => go("texting-roster")}>
             {C.teamGo}
           </button>
         </li>
-        <li className={s.step} data-step="clients" data-tone={sms.clientsOn ? "ok" : "todo"}>
+        <li className={s.step} data-step="clients" data-tone={clients.tone}>
           <span className={s.stepN} aria-hidden="true">3</span>
           <span className={s.stepT}>
             <b>{C.stepClients}</b>
-            <span>{C.clientsLine}</span>
+            <span>{clients.line}</span>
           </span>
           <button
             type="button"
@@ -105,11 +121,11 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
             <span>{sms.clientsOn ? C.switchOn : C.switchOff}</span>
           </button>
         </li>
-        <li className={s.step} data-step="rules" data-tone={sms.rules.length ? "ok" : "todo"}>
+        <li className={s.step} data-step="rules" data-tone={rules.tone}>
           <span className={s.stepN} aria-hidden="true">4</span>
           <span className={s.stepT}>
             <b>{C.stepRules}</b>
-            <span>{C.rulesLine(sms.rules.length)}</span>
+            <span>{rules.line}</span>
           </span>
           <button type="button" className={s.btn} onClick={() => go("texting-rules")}>
             {C.rulesGo}

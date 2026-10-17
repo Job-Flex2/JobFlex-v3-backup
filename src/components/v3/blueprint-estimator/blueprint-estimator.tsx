@@ -65,6 +65,9 @@ const SKIM_AT_ONCE = 6;
 const READ_AT_ONCE = 3;
 const MEASURE_AT_ONCE = 3;
 const PRICE_AT_ONCE = 3;
+/** A trade that has not come back in this long is marked failed (it joins "Try again") instead of holding the
+ *  whole estimate at "Pricing" forever (owner, 2026-10-17: stuck at 88% for minutes). */
+const PRICE_TRADE_LIMIT_MS = 240_000;
 
 /** One tap fills the question. */
 const ASKS: Array<{ label: string; ask: string }> = [
@@ -164,6 +167,8 @@ export function BlueprintEstimator() {
   const [request, setRequest] = useState("");
   const [locEdit, setLocEdit] = useState<string | null>(null);
   const [step, setStep] = useState(0);
+  /** Pricing, as it goes: trades done of all, and the ones being priced now. */
+  const [pricing, setPricing] = useState<{ done: number; total: number; now: PlanTrade[] }>({ done: 0, total: 0, now: [] });
   /** What each sheet is, from its text or a first look (lib/plans/readOrder). */
   const [kinds, setKinds] = useState<Record<number, SheetSkim | null>>({});
   /** The sheets every job rests on are read: a job can be asked without waiting on the rest. */
@@ -431,6 +436,7 @@ export function BlueprintEstimator() {
     setErr("");
     setStage("work");
     setStep(0);
+    setPricing({ done: 0, total: 0, now: [] });
     setWorking({});
     const began = nowMs();
     setStartedAt(began);
@@ -538,10 +544,21 @@ export function BlueprintEstimator() {
       const partial = partialTrades(scope, takeoff.items);
       const results: TradeResult[] = [];
       const failed: Result["failed"] = [];
+      setPricing({ done: 0, total: trades.length, now: [] });
       await pool(trades, PRICE_AT_ONCE, async (trade) => {
-        const out = await priceTrade({ tok, trade, house: houseNow, items, trades, scope, req, partial: partial.has(trade), location: loc, specs: found.specs });
+        if (alive()) setPricing((p) => ({ ...p, now: [...p.now, trade] }));
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeUp = new Promise<{ ok: false; error: string }>((resolve) => {
+          timer = setTimeout(() => resolve({ ok: false, error: `${TRADE_LABEL[trade]} took too long to price. Try it again.` }), PRICE_TRADE_LIMIT_MS);
+        });
+        const out = await Promise.race([
+          priceTrade({ tok, trade, house: houseNow, items, trades, scope, req, partial: partial.has(trade), location: loc, specs: found.specs }),
+          timeUp,
+        ]);
+        clearTimeout(timer);
         if (out.ok) results.push({ trade, est: out.est });
         else failed.push({ trade, error: out.error });
+        if (alive()) setPricing((p) => ({ ...p, done: p.done + 1, now: p.now.filter((x) => x !== trade) }));
       });
       if (!alive()) return;
       if (!results.length) throw new Error(failed[0]?.error ?? "The job could not be priced.");
@@ -801,6 +818,7 @@ export function BlueprintEstimator() {
       <div className={s.be}>
         {head("Working on it", working.title)}
         <BlueprintLoadingCard request={request.trim()} step={step} readDone={readDone} readTotal={readTotal}
+          priced={pricing.done} priceTotal={pricing.total} pricingNow={pricing.now.map((t) => TRADE_LABEL[t])}
           hint={hint + (clock - (startedAt ?? clock) >= 60_000 ? " Larger plan sets can take several minutes." : "")}
           onCancel={() => { askRun.current++; setStage("ask"); }} />
       </div>

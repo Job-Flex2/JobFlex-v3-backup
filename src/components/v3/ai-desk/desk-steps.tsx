@@ -110,8 +110,12 @@ export function DeskSteps({
   const o = deskOverview(desk, number, toCheck, written);
   // A rebuild of the page (another width) keeps the tab picked since it loaded; a fresh load reads the address.
   const [tab, setTab] = useState<DeskTab>(() => rememberedTab() ?? firstTab(o, typeof window !== "undefined" ? window.location.search : search ? `?${search.toString()}` : ""));
+  // Every step starts closed (owner, 2026-10-17) unless the address names one (?step=, back from a minutes purchase).
   // A click on the open step's row folds it; picking any part opens it again.
-  const [folded, setFolded] = useState(false);
+  const [folded, setFolded] = useState(() => {
+    const q = typeof window !== "undefined" ? window.location.search : search ? `?${search.toString()}` : "";
+    return !/[?&](step|pack_paid)=/.test(q);
+  });
   useEffect(() => {
     pageHydrated = true;
   }, []);

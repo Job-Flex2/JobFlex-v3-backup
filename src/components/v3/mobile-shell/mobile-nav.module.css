@@ -519,3 +519,36 @@
   .sbScroll .sbTile { transition: none; }
   .sbScroll .sbLink.sbTool:not(.active):hover .sbTile { transform: none; }
 }
+
+/* ── THE ROW'S NAME, AND THE ESTIMATOR TREES (owner, 2026-10-17: the desk
+   sidebar's changes, here too) ─────────────────────────────────────────────
+   An estimator with an inventory (its tool row above, coloured — owner,
+   2026-10-17) has
+   the arrow beside it — a 44px target drawn as a small white square in a
+   1.5px ink frame, pointing down, up when open — and its sub-pages indented
+   on a guide line in the rows' own ink, size and weight. Not positioned:
+   the plate measures rows by offsetTop against .sbScroll. */
+.sbScroll .sbName { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbScroll .sbParent { display: flex; align-items: center; }
+.sbScroll .sbParent .sbLink { flex: 1 1 auto; min-width: 0; margin-right: 0; }
+.sbScroll .sbFoldBtn {
+  flex: none; display: inline-grid; place-items: center;
+  width: 44px; height: 44px; margin: 4px 6px 4px 2px; padding: 0;
+  border: 0; background: transparent; color: var(--ink); cursor: pointer;
+}
+.sbScroll .sbFoldBtn svg {
+  width: 24px; height: 24px; padding: 4px; box-sizing: border-box;
+  border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff;
+  fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform 160ms var(--ease-out, ease);
+}
+.sbScroll .sbTree:has(.sbSub:not([hidden])) .sbFoldBtn svg { transform: rotate(180deg); }
+.sbScroll .sbFoldBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: -4px; }
+.sbScroll .sbSub { position: relative; padding: 0 0 4px; }
+.sbScroll .sbSub[hidden] { display: none; }
+.sbScroll .sbSub::before { content: ""; position: absolute; left: 32px; top: 0; bottom: 10px; border-left: 1.5px solid var(--ink-line, var(--muted-faint)); }
+.sbScroll .sbLink.sbSubLink { margin-left: 44px; color: var(--ink); border-color: transparent; }
+.sbScroll .sbLink.sbSubLink .ic { opacity: 0.72; }
+@media (prefers-reduced-motion: reduce) {
+  .sbScroll .sbFoldBtn svg { transition: none; }
+}

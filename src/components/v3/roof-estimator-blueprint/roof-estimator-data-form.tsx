@@ -16,6 +16,7 @@
 // Actions: measureRoof / measureRoofInstant / listRoofMeasurements / getRoofMeasurement
 // (src/actions/roofMeasurement.ts, data-only) + getMeasurementPhoto (Google
 // Static Maps, disk-cached) + getMeasurementOrtho (EagleView clear).
+import { WorkSquare } from "@/components/v3/estimators-blueprint/work-square";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -2036,7 +2037,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
             <ol className="ms-steps" aria-label="Measurement steps">
               {MS_STEPS.map((label, i) => (
                 <li key={label} className={"ms-step" + (ms.done || i < ms.step ? " is-done" : i === ms.step ? " is-active" : "")}>
-                  <span className="ms-step-mark" aria-hidden="true" />
+                  <WorkSquare state={ms.done || i < ms.step ? "done" : i === ms.step ? "now" : "wait"} />
                   <span>{stepLabel(i, label)}</span>
                   <span className="ms-step-state">{ms.done || i < ms.step ? "done" : i === ms.step ? "in progress" : ""}</span>
                 </li>

@@ -1,0 +1,76 @@
+/* The step square (work-square.tsx). Two classes deep where the shell's
+   prod margin/padding reset could reach (CLAUDE.md). The keyframes live in
+   this module so Lightning CSS hashes them in the same pass as the rule that
+   uses them (advanced-ai.module.css, genRing). */
+.mark.mark {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  color: #fff;
+}
+.mark .ring {
+  position: absolute;
+  inset: 0;
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+}
+.mark .ring rect {
+  stroke-width: 1.5;
+  transition: fill 200ms var(--ease-out, ease), stroke 200ms var(--ease-out, ease);
+}
+.mark .track {
+  fill: #fff;
+  stroke: rgba(10, 10, 10, 0.3);
+  stroke-dasharray: 3 3;
+}
+.mark .run {
+  fill: none;
+  stroke: none;
+}
+.mark .tick {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out, ease);
+}
+
+.mark[data-state="now"] .track {
+  stroke: color-mix(in srgb, var(--blueprint, var(--accent, #1854a0)) 30%, transparent);
+  stroke-dasharray: none;
+}
+.mark[data-state="now"] .run {
+  stroke: var(--blueprint, var(--accent, #1854a0));
+  stroke-linecap: square;
+  stroke-dasharray: 18 54;
+  animation: workRing 1.5s linear infinite;
+}
+.mark[data-state="done"] .track {
+  fill: var(--blueprint, var(--accent, #1854a0));
+  stroke: var(--blueprint, var(--accent, #1854a0));
+  stroke-dasharray: none;
+}
+.mark[data-state="done"] .tick {
+  opacity: 1;
+}
+
+/* 18×18 at a 1.5px inset: a 72-unit perimeter, so one full walk has no seam. */
+@keyframes workRing {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -72; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark[data-state="now"] .run { animation: none; }
+  .mark .ring rect, .mark .tick { transition: none; }
+}
