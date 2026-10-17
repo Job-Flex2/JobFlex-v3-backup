@@ -31,6 +31,58 @@ These rules also apply:
   - Owens Corning, Prattville AL (2027)
   - Malarkey, Franklin IN
 
+## Prices — how a brand moves the estimate (2026-10-16)
+
+A line is priced from the contractor's own rate for its roof type (Manage roof types). That rate is moved by how far
+the line's retail price sits from a typical line of the same type: the median of the lines that have a price. The
+move is clamped between ×0.7 and ×1.6. Labor and hip & ridge stay the contractor's. Once the contractor types a
+material, labor or cap price while a line is on, that becomes the line's own price (`Prefs.brandRates`). It is saved
+with the defaults, and "Back to the starting price" clears it. A line with no public price starts on the type's rate,
+and the page says so.
+
+**One basis, so lines compare fairly.** `retailPerSq` is a supply-house shelf price where the line is stocked there.
+That is A+ Roofing Supply in Sugar Hill GA (aroofingsupply.com), read 2026-10-16. Otherwise it is a big-box listing
+scaled by that store's measured gap to the supply house, taken from the lines both carry:
+
+| Store | Median gap to A+ | Lines it was measured on |
+| --- | --- | --- |
+| Home Depot | ×0.82 | HDZ, UHDZ, Royal Sovereign, Heritage, Camelot II |
+| Lowe's | ×0.75 | HDZ, UHDZ, Duration, Oakridge, Royal Sovereign, XT 25, Supreme |
+| Menards | ×0.81 | Duration, Oakridge, Pinnacle Pristine, Supreme |
+
+Home Depot and Lowe's pages refuse automated reads, so their prices are search-result snippets, some of them months
+old. Menards prices are taken before its mail-in rebate. Bundle coverage is the listing's own:
+- Owens Corning, Atlas and TAMKO bundles cover 32.8 sq ft (3 per 98.4 sq ft).
+- GAF Camelot II and Woodland are 4 bundles per square.
+
+**Left out on purpose:**
+- Lines with low-confidence prices: Malarkey Highlander, Atlas Briarwood Pro, CertainTeed Landmark ClimateFlex.
+- Lines whose bundle count is unresolved: CertainTeed Grand Manor and Belmont.
+- Systems with fewer than three priced lines get no "typical", so every line in them starts on the contractor's rate.
+  That covers synthetic, TPO, PVC and metal, which are mostly sold by quote.
+
+Supply-house basis $/sq used (only the ratios matter):
+- Architectural (typical 110):
+  - HDZ 110, UHDZ 147, HDZ RS 135
+  - Duration 114, Oakridge 104
+  - Landmark 110, Landmark PRO 120, Landmark Solaris 131
+  - Cambridge 100, Dynasty 107
+  - Pinnacle Pristine 112, Castlebrook 94, Pinnacle Sun 123
+  - Heritage 98, Titan XT 108
+- 3-tab (typical 93): Royal Sovereign 96, Supreme 93, XT 25 92, Marathon 93, Elite Glass-Seal 91.
+- Class 4 (typical 144.5): Timberline AS II 156, Duration STORM 123, Duration FLEX 162, StormFighter FLEX 133.
+- Designer (typical 220): Camelot II 228, Slateline 191, Woodland 220.
+- Self-adhered mod bit, cap plus base (typical 180): Liberty 182, Flintlastic SA 180, DeckSeal SA 178.
+- Synthetic, one store (Green Building Supply): EcoStar Majestic 753, Seneca 845; Brava slate 856, shake 900.
+- Single ply: EverGuard TPO 96, EverGuard PVC 156.
+
+Price sources:
+- A+ Roofing Supply categories: https://aroofingsupply.com/product-category/roofing-materials/architectural-shingles/, …/3-tab-shingles/, …/designer-shingles/
+- Menards Pinnacle Pristine: https://www.menards.com/main/building-materials/roofing/roofing-shingles/atlas-pinnacle-reg-pristine-architectural-roofing-shingles-32-8-sq-ft/1516712/p-1536647321035-c-5814.htm
+- Green Building Supply, EcoStar slate: https://greenbuildingsupply.com/products/ecostar-traditional-slate-roof-tiles
+- Green Building Supply, Brava slate: https://greenbuildingsupply.com/products/brava-slate-composite-roof-tiles
+- GAF EverGuard TPO 60 mil (Builders Warehouse): https://builderswarehouse.com/gaf-everguard-tpo-roofing-membrane-60mil-10x100-white.html
+
 ## Sources
 
 Florida approvals:

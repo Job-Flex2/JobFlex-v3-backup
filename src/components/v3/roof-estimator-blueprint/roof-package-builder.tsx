@@ -109,6 +109,9 @@ export type Prefs = Partial<Pick<RoofPackageSpec, (typeof PREF_KEYS)[number]>> &
   /** The contractor's own brand and line per system (lib/roofPackage/brands, 2026-10-16): systemId → product id, or
    *  null for "any brand". Only their picks — never the state's automatic one. */
   brands?: Record<string, string | null>;
+  /** The contractor's own price per brand line (product id → material / labor / cap), 2026-10-16. A line without one
+   *  starts on the system's rate moved by its retail price (lib/roofPackage/brands brandPrice). */
+  brandRates?: Record<string, { mat?: number; labor?: number; cap?: number }>;
 };
 
 /** The system fields: a pick, not a price. */

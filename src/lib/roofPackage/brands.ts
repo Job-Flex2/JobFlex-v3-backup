@@ -91,6 +91,11 @@ export type RoofProduct = {
   soldIn?: string[];
   /** The words for `soldIn`: "the North and East". */
   soldWords?: string;
+  /** Retail price per square (100 sq ft) on ONE basis so lines compare fairly: a supply house's shelf price where it
+   *  stocks the line (A+ Roofing Supply, read 2026-10-16), else a big-box listing scaled by that store's measured gap
+   *  to the supply house (Home Depot ×0.82, Lowe's ×0.75, Menards ×0.81 — docs/roof-brands.md). Only the RATIO to a
+   *  typical line of the system is used. Absent: no public price — the line starts on the contractor's own rate. */
+  retailPerSq?: number;
 };
 
 /* ── The signals by state ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -167,46 +172,46 @@ const PVC = ["pvc", "pvc_adhered", "pvc_80", "pvc_fleece_adhered"];
 /** Each brand's flagship line first — a tie in the ranking keeps this order. */
 export const ROOF_PRODUCTS: RoofProduct[] = [
   /* Architectural */
-  { id: "gaf_hdz", brand: "gaf", line: "Timberline HDZ", systems: ["architectural"], flApproved: true, hvhz: true },
-  { id: "oc_duration", brand: "owens_corning", line: "TruDefinition Duration", systems: ["architectural"], flApproved: true, hvhz: true },
-  { id: "ct_landmark", brand: "certainteed", line: "Landmark", systems: ["architectural"], flApproved: true },
-  { id: "iko_dynasty", brand: "iko", line: "Dynasty", systems: ["architectural"], flApproved: true, hvhz: true },
-  { id: "iko_cambridge", brand: "iko", line: "Cambridge", systems: ["architectural"], flApproved: true, hvhz: true },
-  { id: "atlas_pristine", brand: "atlas", line: "Pinnacle Pristine", systems: ["architectural"], flApproved: true },
-  { id: "tamko_heritage", brand: "tamko", line: "Heritage", systems: ["architectural"], flApproved: true, hvhz: true },
-  { id: "tamko_titan", brand: "tamko", line: "Titan XT", systems: ["architectural"], flApproved: true, hvhz: true },
+  { id: "gaf_hdz", brand: "gaf", line: "Timberline HDZ", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 110 },
+  { id: "oc_duration", brand: "owens_corning", line: "TruDefinition Duration", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 114 },
+  { id: "ct_landmark", brand: "certainteed", line: "Landmark", systems: ["architectural"], flApproved: true, retailPerSq: 110 },
+  { id: "iko_dynasty", brand: "iko", line: "Dynasty", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 107 },
+  { id: "iko_cambridge", brand: "iko", line: "Cambridge", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 100 },
+  { id: "atlas_pristine", brand: "atlas", line: "Pinnacle Pristine", systems: ["architectural"], flApproved: true, retailPerSq: 112 },
+  { id: "tamko_heritage", brand: "tamko", line: "Heritage", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 98 },
+  { id: "tamko_titan", brand: "tamko", line: "Titan XT", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 108 },
   { id: "malarkey_highlander", brand: "malarkey", line: "Highlander AR", systems: ["architectural"] },
   { id: "pabco_premier", brand: "pabco", line: "Premier", systems: ["architectural"], flApproved: false },
   { id: "pabco_radiance", brand: "pabco", line: "Premier Radiance", systems: ["architectural"], cool: true, flApproved: false },
-  { id: "gaf_uhdz", brand: "gaf", line: "Timberline UHDZ", systems: ["architectural"], flApproved: true, hvhz: true },
+  { id: "gaf_uhdz", brand: "gaf", line: "Timberline UHDZ", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 147 },
   { id: "gaf_cs", brand: "gaf", line: "Timberline CS", systems: ["architectural"], cool: true, flApproved: true, hvhz: true },
-  { id: "gaf_hdz_rs", brand: "gaf", line: "Timberline HDZ RS", systems: ["architectural"], cool: true },
-  { id: "oc_oakridge", brand: "owens_corning", line: "Oakridge", systems: ["architectural"], flApproved: true, hvhz: true },
+  { id: "gaf_hdz_rs", brand: "gaf", line: "Timberline HDZ RS", systems: ["architectural"], cool: true, retailPerSq: 135 },
+  { id: "oc_oakridge", brand: "owens_corning", line: "Oakridge", systems: ["architectural"], flApproved: true, hvhz: true, retailPerSq: 104 },
   { id: "oc_cool", brand: "owens_corning", line: "Duration Premium COOL", systems: ["architectural"], cool: true, flApproved: true },
-  { id: "ct_landmark_pro", brand: "certainteed", line: "Landmark PRO", systems: ["architectural"], flApproved: true, hvhz: true, hvhzNote: "from its Georgia, Missouri and North Carolina plants" },
+  { id: "ct_landmark_pro", brand: "certainteed", line: "Landmark PRO", systems: ["architectural"], flApproved: true, hvhz: true, hvhzNote: "from its Georgia, Missouri and North Carolina plants", retailPerSq: 120 },
   { id: "ct_landmark_premium", brand: "certainteed", line: "Landmark Premium", systems: ["architectural"], flApproved: true },
-  { id: "ct_solaris", brand: "certainteed", line: "Landmark Solaris", systems: ["architectural"], cool: true, flApproved: true },
+  { id: "ct_solaris", brand: "certainteed", line: "Landmark Solaris", systems: ["architectural"], cool: true, flApproved: true, retailPerSq: 131 },
   { id: "iko_cool", brand: "iko", line: "Cambridge Cool Colors Plus", systems: ["architectural"], cool: true },
   { id: "atlas_prolam", brand: "atlas", line: "ProLAM", systems: ["architectural"] },
   { id: "atlas_briarwood", brand: "atlas", line: "Briarwood Pro", systems: ["architectural"] },
-  { id: "atlas_castlebrook", brand: "atlas", line: "Castlebrook", systems: ["architectural"] },
-  { id: "atlas_sun", brand: "atlas", line: "Pinnacle Sun", systems: ["architectural"], cool: true },
+  { id: "atlas_castlebrook", brand: "atlas", line: "Castlebrook", systems: ["architectural"], retailPerSq: 94 },
+  { id: "atlas_sun", brand: "atlas", line: "Pinnacle Sun", systems: ["architectural"], cool: true, retailPerSq: 123 },
   /* 3-tab */
-  { id: "gaf_royal_sovereign", brand: "gaf", line: "Royal Sovereign", systems: ["three_tab"], flApproved: true, hvhz: true },
-  { id: "oc_supreme", brand: "owens_corning", line: "Supreme", systems: ["three_tab"], flApproved: true },
-  { id: "ct_xt25", brand: "certainteed", line: "XT 25", systems: ["three_tab"], flApproved: true },
-  { id: "iko_marathon", brand: "iko", line: "Marathon Plus AR", systems: ["three_tab"] },
+  { id: "gaf_royal_sovereign", brand: "gaf", line: "Royal Sovereign", systems: ["three_tab"], flApproved: true, hvhz: true, retailPerSq: 96 },
+  { id: "oc_supreme", brand: "owens_corning", line: "Supreme", systems: ["three_tab"], flApproved: true, retailPerSq: 93 },
+  { id: "ct_xt25", brand: "certainteed", line: "XT 25", systems: ["three_tab"], flApproved: true, retailPerSq: 92 },
+  { id: "iko_marathon", brand: "iko", line: "Marathon Plus AR", systems: ["three_tab"], retailPerSq: 93 },
   { id: "atlas_glassmaster", brand: "atlas", line: "GlassMaster", systems: ["three_tab"], flApproved: true },
-  { id: "tamko_elite", brand: "tamko", line: "Elite Glass-Seal", systems: ["three_tab"] },
+  { id: "tamko_elite", brand: "tamko", line: "Elite Glass-Seal", systems: ["three_tab"], retailPerSq: 91 },
   /* Class 4 */
-  { id: "gaf_as2", brand: "gaf", line: "Timberline AS II", systems: ["impact_resistant"], class4: true, cold: true, flApproved: true },
-  { id: "oc_storm", brand: "owens_corning", line: "Duration STORM", systems: ["impact_resistant"], class4: true, flApproved: true, hvhz: true },
-  { id: "oc_flex", brand: "owens_corning", line: "Duration FLEX", systems: ["impact_resistant"], class4: true, cold: true, flApproved: true, hvhz: true },
+  { id: "gaf_as2", brand: "gaf", line: "Timberline AS II", systems: ["impact_resistant"], class4: true, cold: true, flApproved: true, retailPerSq: 156 },
+  { id: "oc_storm", brand: "owens_corning", line: "Duration STORM", systems: ["impact_resistant"], class4: true, flApproved: true, hvhz: true, retailPerSq: 123 },
+  { id: "oc_flex", brand: "owens_corning", line: "Duration FLEX", systems: ["impact_resistant"], class4: true, cold: true, flApproved: true, hvhz: true, retailPerSq: 162 },
   { id: "ct_climateflex", brand: "certainteed", line: "Landmark ClimateFlex", systems: ["impact_resistant"], class4: true, cold: true, flApproved: true, soldIn: NORTH_EAST, soldWords: "the North and East" },
   { id: "ct_northgate", brand: "certainteed", line: "NorthGate ClimateFlex", systems: ["impact_resistant"], class4: true, cold: true, soldIn: NORTH_EAST, soldWords: "the North and East" },
   { id: "iko_nordic", brand: "iko", line: "Nordic", systems: ["impact_resistant"], class4: true, flApproved: true, hvhz: true },
   { id: "atlas_impact", brand: "atlas", line: "Pinnacle Impact", systems: ["impact_resistant"], class4: true },
-  { id: "tamko_stormfighter", brand: "tamko", line: "StormFighter FLEX", systems: ["impact_resistant"], class4: true, cold: true, flApproved: true, hvhz: true },
+  { id: "tamko_stormfighter", brand: "tamko", line: "StormFighter FLEX", systems: ["impact_resistant"], class4: true, cold: true, flApproved: true, hvhz: true, retailPerSq: 133 },
   { id: "tamko_hailguard", brand: "tamko", line: "HailGuard", systems: ["impact_resistant"], class4: true, flApproved: true, hvhz: true },
   { id: "malarkey_vista", brand: "malarkey", line: "Vista AR", systems: ["impact_resistant"], class4: true, cold: true },
   { id: "malarkey_legacy", brand: "malarkey", line: "Legacy", systems: ["impact_resistant"], class4: true, cold: true },
@@ -214,7 +219,7 @@ export const ROOF_PRODUCTS: RoofProduct[] = [
   { id: "pabco_paramount", brand: "pabco", line: "Paramount Advantage", systems: ["impact_resistant"], class4: true, flApproved: false },
   /* Designer */
   { id: "ct_presidential", brand: "certainteed", line: "Presidential Shake", systems: ["designer"], flApproved: true },
-  { id: "gaf_camelot", brand: "gaf", line: "Camelot II", systems: ["designer"] },
+  { id: "gaf_camelot", brand: "gaf", line: "Camelot II", systems: ["designer"], retailPerSq: 228 },
   { id: "oc_berkshire", brand: "owens_corning", line: "Berkshire", systems: ["designer"] },
   { id: "ct_grand_manor", brand: "certainteed", line: "Grand Manor", systems: ["designer"], flApproved: true },
   { id: "ct_belmont", brand: "certainteed", line: "Belmont", systems: ["designer"], flApproved: true },
@@ -222,8 +227,8 @@ export const ROOF_PRODUCTS: RoofProduct[] = [
   { id: "ct_highland_slate", brand: "certainteed", line: "Highland Slate", systems: ["designer"], flApproved: true },
   { id: "ct_presidential_solaris", brand: "certainteed", line: "Presidential Solaris", systems: ["designer"], cool: true, flApproved: true },
   { id: "gaf_grand_sequoia", brand: "gaf", line: "Grand Sequoia", systems: ["designer"] },
-  { id: "gaf_slateline", brand: "gaf", line: "Slateline", systems: ["designer"] },
-  { id: "gaf_woodland", brand: "gaf", line: "Woodland", systems: ["designer"] },
+  { id: "gaf_slateline", brand: "gaf", line: "Slateline", systems: ["designer"], retailPerSq: 191 },
+  { id: "gaf_woodland", brand: "gaf", line: "Woodland", systems: ["designer"], retailPerSq: 220 },
   { id: "oc_woodcrest", brand: "owens_corning", line: "Woodcrest", systems: ["designer"] },
   { id: "oc_woodmoor", brand: "owens_corning", line: "Woodmoor", systems: ["designer"] },
   { id: "malarkey_windsor", brand: "malarkey", line: "Windsor", systems: ["designer"], class4: true },
@@ -271,11 +276,11 @@ export const ROOF_PRODUCTS: RoofProduct[] = [
   /* Synthetic */
   { id: "davinci_multi_slate", brand: "davinci", line: "Multi-Width Slate", systems: ["synthetic_slate"], class4: true, flApproved: true, hvhz: true },
   { id: "davinci_bellaforte", brand: "davinci", line: "Bellaforté Slate", systems: ["synthetic_slate"], class4: true },
-  { id: "brava_slate", brand: "brava", line: "Old World Slate", systems: ["synthetic_slate"], class4: true, flApproved: true, hvhz: true },
-  { id: "ecostar_majestic", brand: "ecostar", line: "Majestic Slate", systems: ["synthetic_slate"], class4: true },
+  { id: "brava_slate", brand: "brava", line: "Old World Slate", systems: ["synthetic_slate"], class4: true, flApproved: true, hvhz: true, retailPerSq: 856 },
+  { id: "ecostar_majestic", brand: "ecostar", line: "Majestic Slate", systems: ["synthetic_slate"], class4: true, retailPerSq: 753 },
   { id: "davinci_multi_shake", brand: "davinci", line: "Multi-Width Shake", systems: ["synthetic_shake"], class4: true, flApproved: true, hvhz: true },
-  { id: "brava_shake", brand: "brava", line: "Cedar Shake", systems: ["synthetic_shake"], class4: true, flApproved: true, hvhz: true },
-  { id: "ecostar_seneca", brand: "ecostar", line: "Seneca Shake", systems: ["synthetic_shake"], class4: true },
+  { id: "brava_shake", brand: "brava", line: "Cedar Shake", systems: ["synthetic_shake"], class4: true, flApproved: true, hvhz: true, retailPerSq: 900 },
+  { id: "ecostar_seneca", brand: "ecostar", line: "Seneca Shake", systems: ["synthetic_shake"], class4: true, retailPerSq: 845 },
   { id: "cedur_shake", brand: "cedur", line: "", systems: ["synthetic_shake"] },
   /* Natural slate */
   { id: "greenstone", brand: "greenstone", line: "", systems: ["slate"] },
@@ -284,19 +289,19 @@ export const ROOF_PRODUCTS: RoofProduct[] = [
   { id: "evergreen", brand: "evergreen", line: "", systems: ["slate"] },
   { id: "sheldon", brand: "sheldon", line: "", systems: ["slate"] },
   /* Flat — self-adhered and torch mod bit */
-  { id: "gaf_liberty", brand: "gaf", line: "Liberty SBS", systems: ["mod_bit_sa"] },
-  { id: "ct_flintlastic", brand: "certainteed", line: "Flintlastic SA", systems: ["mod_bit_sa"] },
-  { id: "oc_deckseal", brand: "owens_corning", line: "DeckSeal SA", systems: ["mod_bit_sa"] },
+  { id: "gaf_liberty", brand: "gaf", line: "Liberty SBS", systems: ["mod_bit_sa"], retailPerSq: 182 },
+  { id: "ct_flintlastic", brand: "certainteed", line: "Flintlastic SA", systems: ["mod_bit_sa"], retailPerSq: 180 },
+  { id: "oc_deckseal", brand: "owens_corning", line: "DeckSeal SA", systems: ["mod_bit_sa"], retailPerSq: 178 },
   { id: "polyglass_mb", brand: "polyglass", line: "", systems: ["mod_bit_sa", "mod_bit"] },
   /* Flat — single ply */
-  { id: "gaf_everguard_tpo", brand: "gaf", line: "EverGuard TPO", systems: TPO },
+  { id: "gaf_everguard_tpo", brand: "gaf", line: "EverGuard TPO", systems: TPO, retailPerSq: 96 },
   { id: "carlisle_tpo", brand: "carlisle", line: "Sure-Weld TPO", systems: TPO },
   { id: "elevate_tpo", brand: "elevate", line: "UltraPly TPO", systems: TPO },
   { id: "jm_tpo", brand: "jm", line: "JM TPO", systems: TPO },
   { id: "carlisle_epdm", brand: "carlisle", line: "Sure-Seal EPDM", systems: EPDM },
   { id: "elevate_epdm", brand: "elevate", line: "RubberGard EPDM", systems: EPDM },
   { id: "carlisle_pvc", brand: "carlisle", line: "Sure-Flex PVC", systems: PVC },
-  { id: "gaf_everguard_pvc", brand: "gaf", line: "EverGuard PVC", systems: PVC },
+  { id: "gaf_everguard_pvc", brand: "gaf", line: "EverGuard PVC", systems: PVC, retailPerSq: 156 },
 ];
 
 /* ── Ranking ──────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -456,6 +461,84 @@ export function brandHint(systemId: string, state: string | null | undefined): B
   if (st === "FL" && systemId !== "slate")
     return { text: "In Miami-Dade and Broward (the HVHZ) only lines with a Miami-Dade approval go on — they're first here." };
   return null;
+}
+
+/* ── The price of a line ───────────────────────────────────────────────────────────────────────────────────────── */
+// (owner, 2026-10-16: "when I click on a brand the price should change — and the contractor adjusts labor and
+// material — make it smart"). A line is priced from the CONTRACTOR'S OWN rate for the system — their market, their
+// supplier — moved by how far the line's public retail price sits from a typical line of that system (the median of
+// the lines with a price). Their own price for the line, once they set one, wins outright.
+
+/** The contractor's own price for a line: any field they set wins; the rest follow the system. */
+export type BrandRate = { mat?: number; labor?: number; cap?: number };
+
+/** The typical retail $/sq for a system — the median of its lines that have a public price. */
+export function typicalRetail(systemId: string): number | null {
+  const xs = ROOF_PRODUCTS.filter((p) => p.systems.includes(systemId) && (p.retailPerSq ?? 0) > 0)
+    .map((p) => p.retailPerSq!)
+    .sort((a, b) => a - b);
+  if (xs.length < 3) return null;
+  const m = Math.floor(xs.length / 2);
+  return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2;
+}
+
+/** How the line's retail compares with a typical line of the system: 1.08 = 8% above. Null: no price to compare. */
+export function retailFactor(productId: string | null | undefined, systemId: string): number | null {
+  const p = productById(productId);
+  const typical = typicalRetail(systemId);
+  if (!p || !p.systems.includes(systemId) || !p.retailPerSq || !typical) return null;
+  // Clamped: a listing that reads wildly off (a clearance price, a per-bundle slip) never doubles or halves a bid.
+  return Math.min(1.6, Math.max(0.7, p.retailPerSq / typical));
+}
+
+export type BrandPrice = {
+  matPerSq: number;
+  laborPerSq: number;
+  capPerFt: number;
+  /** "own": the contractor's price for this line; "retail": their system rate moved by retail; "system": their rate. */
+  basis: "own" | "retail" | "system";
+  factor: number | null;
+  /** One line for the contractor: where the material price came from. */
+  words: string;
+};
+
+const pct = (f: number) => {
+  const d = Math.round((f - 1) * 100);
+  return d === 0 ? "the same as" : d > 0 ? `${d}% above` : `${-d}% below`;
+};
+
+/** The line's rates on THIS estimate, from the contractor's system rates. */
+export function brandPrice(
+  productId: string,
+  system: { id: string; label: string; matPerSq: number; laborPerSq: number; capPerFt: number },
+  own?: BrandRate | null,
+): BrandPrice {
+  const factor = retailFactor(productId, system.id);
+  const sysWord = system.label.split(" · ")[0].toLowerCase();
+  const fromRetail = factor == null ? system.matPerSq : Math.round(system.matPerSq * factor);
+  const mat = own?.mat ?? fromRetail;
+  const labor = own?.labor ?? system.laborPerSq;
+  const cap = own?.cap ?? system.capPerFt;
+  const ownAny = own != null && (own.mat != null || own.labor != null || own.cap != null);
+  const basis: BrandPrice["basis"] = ownAny ? "own" : factor == null ? "system" : "retail";
+  const words =
+    own?.mat != null
+      ? "Your price for this line"
+      : factor == null
+        ? `No public price for this line — it starts on your ${sysWord} rate`
+        : `Your ${sysWord} rate, moved by retail: this line runs ${pct(factor)} a typical ${sysWord}`;
+  return { matPerSq: mat, laborPerSq: labor, capPerFt: cap, basis, factor, words };
+}
+
+type PricedSpec = { systemId: string; systemName: string; systemMatPerSq: number; systemLaborPerSq: number; capPerFt: number; productId?: string | null; productFor?: string | null };
+
+/** The spec priced for its brand: with a line on THIS system its rates are the line's; otherwise unchanged. The
+ *  spec's own rates are the system's (they follow the catalog row), so they are the base. */
+export function withBrandPrice<T extends PricedSpec>(spec: T, own?: Record<string, BrandRate> | null): T {
+  if (!spec.productId || spec.productFor !== spec.systemId) return spec;
+  const p = brandPrice(spec.productId, { id: spec.systemId, label: spec.systemName, matPerSq: spec.systemMatPerSq, laborPerSq: spec.systemLaborPerSq, capPerFt: spec.capPerFt }, own?.[spec.productId] ?? null);
+  if (p.matPerSq === spec.systemMatPerSq && p.laborPerSq === spec.systemLaborPerSq && p.capPerFt === spec.capPerFt) return spec;
+  return { ...spec, systemMatPerSq: p.matPerSq, systemLaborPerSq: p.laborPerSq, capPerFt: p.capPerFt };
 }
 
 /* ── The brand on an estimate ─────────────────────────────────────────────────────────────────────────────────── */
