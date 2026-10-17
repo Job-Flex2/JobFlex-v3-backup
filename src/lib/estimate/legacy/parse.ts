@@ -15,6 +15,8 @@ export type AiDraftPricingLineItem = {
   laborCost?: number;
   materialCost?: number;
   total?: number;
+  /** Only asked for when the company prices labor by the hour (lib/estimate/companyPricing). */
+  laborHours?: number;
 };
 
 export type AiDraftPricingScheduleItem = {
@@ -176,6 +178,7 @@ function sanitizePricing(value: unknown): AiDraftPricing | undefined {
     const laborCost = sanitizeNumber(record.laborCost);
     const materialCost = sanitizeNumber(record.materialCost);
     const total = sanitizeNumber(record.total);
+    const laborHours = sanitizeNumber(record.laborHours);
     const measurementType =
       typeof record.measurementType === "string" && record.measurementType.trim().length
         ? record.measurementType.trim()
@@ -192,6 +195,7 @@ function sanitizePricing(value: unknown): AiDraftPricing | undefined {
       laborCost,
       materialCost,
       total,
+      ...(laborHours != null && laborHours > 0 ? { laborHours } : {}),
     });
     return acc;
   }, []);

@@ -1,0 +1,80 @@
+/* Settings → Estimating — the company's own estimating method. One piece for the desk pane and the phone pane, so it
+   reads the shared tokens (--ink, --muted, --hair, --blueprint …) with fallbacks of its own. */
+
+.form { display: grid; gap: 18px; color: var(--ink, #0a0a0a); }
+
+.switchRow { display: flex; align-items: center; gap: 16px; padding: 14px 16px;
+  border: 2px solid var(--ink, #0a0a0a); border-radius: var(--radius, 2px); background: var(--sheet, #fff); }
+.switchTxt { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.switchTxt b { font-size: 15px; font-weight: 800; }
+.switchTxt span { font-size: 13px; line-height: 1.45; color: var(--muted, #555); }
+
+/* The app's switch: green on, grey off — the colour carries the state. */
+.tg { position: relative; flex-shrink: 0; width: 50px; height: 28px; padding: 0; border: 1.5px solid var(--ink, #0a0a0a);
+  border-radius: 999px; background: var(--paper-deep, #ebe8e1); cursor: pointer; transition: background .16s ease; }
+.tg::after { content: ""; position: absolute; top: 50%; left: 3px; width: 19px; height: 19px; border-radius: 50%;
+  background: var(--muted-light, #888); transform: translateY(-50%); transition: transform .18s ease, background .18s ease; }
+.tg[aria-checked="true"] { background: rgba(58, 125, 68, .18); }
+.tg[aria-checked="true"]::after { transform: translate(22px, -50%); background: var(--success, #3a7d44); }
+.tg:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
+.tg:disabled { cursor: not-allowed; opacity: .55; }
+
+.body { display: grid; gap: 18px; transition: opacity .16s ease; }
+/* Off: still fillable, so a company can set its numbers before it turns them on. */
+.body.isOff { opacity: .62; }
+.body.isOff:focus-within { opacity: 1; }
+
+.group { display: grid; gap: 12px; padding-top: 14px; border-top: 1.5px solid var(--hair, rgba(10,10,10,.12)); }
+.gh { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
+.fld { display: grid; gap: 7px; min-width: 0; }
+.lbl { font-size: 12.5px; font-weight: 700; color: var(--ink, #0a0a0a); }
+/* min-width 0 and the input's 100%: an input's natural width (20 characters) would otherwise widen its column. */
+.box { display: flex; align-items: center; min-width: 0; height: 46px; padding: 0 12px; gap: 6px; border: 2px solid var(--ink, #0a0a0a);
+  border-radius: var(--radius, 2px); background: var(--sheet, #fff); transition: border-color .14s ease, box-shadow .14s ease; }
+.box:focus-within { border-color: var(--blueprint, #1854a0); box-shadow: 0 0 0 2px rgba(24, 84, 160, .2); }
+.box.isFlag { border-color: var(--warning, #b88420); box-shadow: 0 0 0 2px rgba(184, 132, 32, .18); }
+.in { flex: 1; width: 100%; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent;
+  font: inherit; font-size: 16px; /* 16: iOS zooms the page on focus under 16px */ font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--ink, #0a0a0a); }
+.in::placeholder { color: var(--muted-light, #888); font-weight: 500; }
+.in:disabled { color: var(--muted, #555); cursor: not-allowed; }
+.affix { font-style: normal; font-weight: 700; color: var(--muted, #555); }
+.hint { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted, #555); }
+
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.segBtn { display: grid; gap: 3px; min-height: 56px; padding: 9px 12px; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--hair, rgba(10,10,10,.12)); border-radius: var(--radius, 2px); background: var(--sheet, #fff);
+  color: var(--ink, #0a0a0a); font: inherit; transition: border-color .14s ease, background .14s ease; }
+.segBtn b { font-size: 14px; font-weight: 800; }
+.segBtn span { font-size: 12px; color: var(--muted, #555); }
+.segBtn:hover:not(:disabled) { border-color: var(--ink, #0a0a0a); }
+.segBtn[aria-checked="true"] { border: 2px solid var(--blueprint, #1854a0); background: rgba(24, 84, 160, .06); }
+.segBtn[aria-checked="true"] b { color: var(--blueprint, #1854a0); }
+.segBtn:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
+.segBtn:disabled { cursor: not-allowed; }
+
+.example { margin: 0; padding: 10px 12px; border-left: 3px solid var(--blueprint, #1854a0); background: rgba(24, 84, 160, .05);
+  font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.preview { display: grid; gap: 4px; margin: 0; padding: 12px 14px; border: 1.5px dashed var(--hair, rgba(10,10,10,.2));
+  border-radius: var(--radius, 2px); font-size: 13px; line-height: 1.5; }
+.preview span { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted, #555); }
+
+.note { margin: 0; font-size: 13px; color: var(--muted, #555); }
+.status { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--muted, #555); }
+.isOk { color: var(--success, #3a7d44); }
+.isWarn { color: var(--warning-dark, #96691a); }
+.isErr { color: var(--danger, #a83232); }
+
+@media (max-width: 640px) {
+  .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid3 > :first-child { grid-column: 1 / -1; }
+  .seg { grid-auto-flow: row; grid-auto-columns: auto; }
+  .segBtn { min-height: 52px; }
+}
+@media (max-width: 380px) {
+  .grid { grid-template-columns: 1fr; }
+}

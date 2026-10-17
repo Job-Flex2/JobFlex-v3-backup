@@ -49,7 +49,7 @@ import {
   refineAdvancedEstimate,
   saveEstimate,
 } from "@/actions/advancedEstimator";
-import type { ClarifyQuestion, GeneratedEstimate } from "@/lib/estimatorSchema";
+import type { ClarifyQuestion, GeneratedEstimate, PricingSnapshotWire } from "@/lib/estimatorSchema";
 import {
   briefFromAnalysis,
   openQuestionsAsAssumptions,
@@ -213,6 +213,10 @@ export function useVideoEstimator(opts: {
   const [openQuestions, setOpenQuestions] = useState<string[]>([]);
   const [timelineDays, setTimelineDays] = useState<number | null>(null);
   const [discount, setDiscount] = useState<DiscountState>(NO_DISCOUNT);
+  /** The company's own pricing (Settings → Estimating) the estimate was built
+   *  with, when its switch is on — kept through refine, save and convert so the
+   *  proposal keeps the company's prices and sales-tax rule. */
+  const [pricing, setPricing] = useState<PricingSnapshotWire | null>(null);
   const [projectType, setProjectType] = useState<VideoProjectType>("other");
   /** The pricing market ("City, ST"), from the reading. Not the site address. */
   const [locationUsed, setLocationUsed] = useState("");
@@ -286,6 +290,7 @@ export function useVideoEstimator(opts: {
     setOpenQuestions([]);
     setTimelineDays(null);
     setDiscount(NO_DISCOUNT);
+    setPricing(null);
     setHistory([]);
     setPending(null);
     setRefineText("");
@@ -566,6 +571,7 @@ export function useVideoEstimator(opts: {
       setOpenQuestions(open.map((q) => q.question));
       setTimelineDays(est.estimatedTimelineDays ?? null);
       setDiscount(NO_DISCOUNT);
+      setPricing(est.pricing ?? null);
       setProjectType(a.projectType);
       setLocationUsed(market ?? "");
       setBriefUsed(brief);
@@ -596,15 +602,17 @@ export function useVideoEstimator(opts: {
     [assumptions],
   );
   const currentEstimate = useCallback(
-    (): GeneratedEstimate =>
-      estimateFromLines(lines, {
+    (): GeneratedEstimate => {
+      const built = estimateFromLines(lines, {
         title: title || analysis?.title || "Video estimate",
         scope: scope || briefUsed,
         assumptions: cleanAssumptions,
         estimatedTimelineDays: timelineDays ?? undefined,
         discount: discountToSchema(discount),
-      }),
-    [lines, title, analysis, scope, briefUsed, cleanAssumptions, timelineDays, discount],
+      });
+      return pricing ? { ...built, pricing } : built;
+    },
+    [lines, title, analysis, scope, briefUsed, cleanAssumptions, timelineDays, discount, pricing],
   );
 
   const totals = useMemo(() => computeTotals({ lines, discount }), [lines, discount]);
@@ -808,6 +816,8 @@ export function useVideoEstimator(opts: {
         // The site, not the pricing market — this becomes Proposal.address.
         location: addr.trim() || locationUsed || undefined,
         discount: data.discount ?? undefined,
+        // The company's rule picks the tax (its rate, else the site's state rate).
+        ...(data.pricing ? { pricing: data.pricing } : {}),
       });
       toast.success("Proposal created", "Opening it now.");
       // Held in "opening" on purpose — releasing it in a finally would fire
@@ -915,6 +925,7 @@ export function useVideoEstimator(opts: {
     removeLine,
     addLine,
     totals,
+    pricing,
     framesRead,
     refineText,
     setRefineText,

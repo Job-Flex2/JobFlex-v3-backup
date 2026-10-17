@@ -133,7 +133,8 @@ export type RailKey =
   | 'integrations'
   | 'notifications'
   | 'texting'
-  | 'desk';
+  | 'desk'
+  | 'estimating';
 
 export interface RailItem {
   readonly key: RailKey;
@@ -157,6 +158,9 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   { key: 'texting', label: 'Texting', icon: 'i-phone', sub: 'The texts your company sends — from your own number: who on the team gets them, which clients, and texts you write yourself.' },
   // The AI desk (2026-10-13): who answers the company's number, and what the desk knows and says.
   { key: 'desk', label: 'AI desk', icon: 'i-phone', isNew: true, sub: 'Answers calls to your number. Texts are set up under Texting.' },
+  // Estimating (2026-10-16): the company's own estimating method — labor by the crew-hour or person-hour, its markup,
+  // overhead, profit and sales-tax rule — for Smart Proposal and the video estimator. Off until the company turns it on.
+  { key: 'estimating', label: 'Estimating', icon: 'i-hardhat', isNew: true, sub: 'Your own labor rate, markup and sales-tax rule for Smart Proposal and video estimates.' },
 ];
 
 export const RAIL_NEW_BADGE = 'NEW' as const;

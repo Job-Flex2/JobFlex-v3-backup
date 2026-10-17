@@ -72,6 +72,7 @@ import { useSheetDrag } from "@/components/v3/mobile-shell/use-sheet-drag";
 import { AddressField } from "@/components/v3/mobile-shell/address-field";
 import { StatePicker } from "@/components/v3/mobile-shell/state-picker";
 import { stateTaxPct } from "./state-tax";
+import { stateFromAddress } from "@/lib/pricing/salesTax";
 import { lockScroll } from "@/lib/scrollLock";
 import { SAMPLES, STAGES, STATES } from "./advanced-ai-data";
 import {
@@ -98,7 +99,7 @@ import {
   generateAdvancedEstimate,
   saveEstimate,
 } from "@/actions/advancedEstimator";
-import type { ClarifyQuestion, GeneratedEstimate } from "@/lib/estimatorSchema";
+import type { ClarifyQuestion, GeneratedEstimate, PricingSnapshotWire } from "@/lib/estimatorSchema";
 import { InventoryLinkChoice } from "@/components/v3/inventory-link/inventory-link-choice";
 import { isTradeId } from "@/lib/inventory";
 import { takePlanEstimate, type PlanEstimateDone } from "@/lib/plans/handoff";
@@ -317,6 +318,10 @@ export function MobileSmartProposal() {
      fighting — an effect that re-set the rate on every `locState` change would
      also clobber a hand-typed rate, and costs a render besides. */
   const [taxOverride, setTaxOverride] = useState<number | null>(null);
+  /* The company's own pricing (Settings → Estimating) the estimate was built
+     with, when its switch is on. It rides with the save and the convert, so the
+     proposal keeps the company's prices and its sales-tax rule. */
+  const [pricing, setPricing] = useState<PricingSnapshotWire | null>(null);
   /* The location string the estimate was actually priced against — the intake
      gate normalizes "bothel wa" to "Bothell, WA", and refine / save must use
      what was priced, not what was typed. */
@@ -530,8 +535,15 @@ export function MobileSmartProposal() {
   const taxPct = taxOverride ?? taxAuto;
   const taxTouched = taxOverride !== null;
   const totals = useMemo(
-    () => computeTotals({ lines, discount, taxPct, marginPct: margin }),
-    [lines, discount, taxPct, margin],
+    () =>
+      computeTotals({
+        lines,
+        discount,
+        taxPct,
+        marginPct: margin,
+        taxOn: pricing?.taxMode === "materials" ? "materials" : "all",
+      }),
+    [lines, discount, taxPct, margin, pricing],
   );
 
   // No project type is asked any more; the actions still take the field, so it
@@ -638,6 +650,7 @@ export function MobileSmartProposal() {
     setTimelineDays(r.timelineDays);
     setDiscount(NO_DISCOUNT);
     setLocUsed(r.location);
+    setPricing(null);
     setBanner(null);
     setPhase("studio");
   };
@@ -671,6 +684,25 @@ export function MobileSmartProposal() {
     setTimelineDays(est.estimatedTimelineDays ?? null);
     setDiscount(discountFromSchema(est.discount));
     setLocUsed(opts.location);
+    // Priced the company's way: its prices already carry the markup and any
+    // overhead/profit, so no margin goes on top; its tax rule seeds the rate
+    // (none → 0, its own rate → that rate, else the job state's rate).
+    const company = est.pricing ?? null;
+    setPricing(company);
+    if (company) {
+      setMargin(0);
+      // The job state's rate when none was picked: the state in the address the estimate was priced at.
+      const priced = stateFromAddress(opts.location);
+      setTaxOverride(
+        company.taxMode === "none"
+          ? 0
+          : company.taxRatePct != null
+            ? company.taxRatePct
+            : taxAuto === 0 && priced
+              ? stateTaxPct(priced)
+              : null,
+      );
+    }
     setBanner(
       opts.disabled
         ? {
@@ -839,6 +871,11 @@ export function MobileSmartProposal() {
     setAssumptions([]);
     setTimelineDays(null);
     setDiscount(NO_DISCOUNT);
+    if (pricing) {
+      setMargin(18);
+      setTaxOverride(null);
+    }
+    setPricing(null);
     setBanner(null);
     setPhase("intake");
     setDir("back");
@@ -916,13 +953,14 @@ export function MobileSmartProposal() {
     setSaveBusy(true);
     setBanner(null);
     // A suggestion counts in no total until it is added, so it never reaches the proposal.
-    const payload = estimateFromLines(lines.filter((l) => l.flag !== "suggested"), {
+    const built = estimateFromLines(lines.filter((l) => l.flag !== "suggested"), {
       title: estTitle,
       scope,
       assumptions,
       estimatedTimelineDays: timelineDays ?? undefined,
       discount: discountToSchema(discount),
     });
+    const payload = pricing ? { ...built, pricing } : built;
     try {
       await saveEstimate({
         projectType: typeLabel,
@@ -939,6 +977,7 @@ export function MobileSmartProposal() {
         assumptions,
         location: locUsed || undefined,
         discount: payload.discount ?? null,
+        ...(pricing ? { pricing, taxPct } : {}),
       });
       // router.push, never location.assign — a hard nav replays the blueprint
       // entrance and the user sees the page build itself twice.
@@ -1658,7 +1697,9 @@ export function MobileSmartProposal() {
                       </span>
                     </div>
                     <div className={styles.marginRow}>
-                      <span className={styles.marginAdd}>Added to the client price</span>
+                      <span className={styles.marginAdd}>
+                        {pricing ? "Your prices already carry your markup" : "Added to the client price"}
+                      </span>
                       <span className={`${styles.totVal} ${totals.marginCash ? "" : styles.isZero}`}>
                         {totals.marginCash ? money(totals.marginCash) : "—"}
                       </span>
@@ -1804,9 +1845,13 @@ export function MobileSmartProposal() {
                     </div>
                     <div className={styles.marginRow}>
                       <span className={styles.marginAdd}>
-                        {locState && !taxTouched
-                          ? `${locState} base rate · excludes county and city`
-                          : "Charged on the discounted price"}
+                        {pricing?.taxMode === "materials"
+                          ? "On materials only · your company's rule"
+                          : pricing?.taxMode === "none"
+                            ? "No sales tax · your company's rule"
+                            : locState && !taxTouched
+                              ? `${locState} base rate · excludes county and city`
+                              : "Charged on the discounted price"}
                       </span>
                       <span className={`${styles.totVal} ${totals.taxCash ? "" : styles.isZero}`}>
                         {totals.taxCash ? money(totals.taxCash) : "—"}

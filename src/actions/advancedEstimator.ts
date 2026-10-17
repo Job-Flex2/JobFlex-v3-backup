@@ -34,10 +34,13 @@ import { floorNote, floorToRange, fullerAnswer, linesTotal, retryReasons } from 
 import { bindEstimateToBrief, bindLinesToBrief, bindTextToBrief, keepCostCritical, readBrief, scrubUnaskedText, scrubUnaskedWork } from "@/lib/estimate/brief";
 import { holdPermitDecision, permitSummary } from "@/lib/estimate/permits";
 import { stateFromAddress, stateTaxRate } from "@/lib/pricing/salesTax";
+import { applyCompanyPricing, companyPricingActive, hoursPromptBlock, materialsTaxLine, snapshotOf } from "@/lib/estimate/companyPricing";
+import { readCompanyPricing } from "@/lib/estimate/companyPricingServer";
 import {
   discountSchema,
   estimateSchema,
   lineSchema,
+  pricingSnapshotSchema,
   promptAnalysisSchema,
   type GeneratedEstimate,
   type PromptAnalysis,
@@ -424,7 +427,13 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
     // specialty preamble, material profile, price book, tax guidance, template
     // rules, pricing rules, key questions) and parses the reply with the old
     // parser. One call at temperature 0 with seed 42, as it always ran.
-    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true, materialMarkupPct: true, laborMarkupPct: true } });
+    const [org, company] = await Promise.all([
+      db.organization.findUnique({ where: { id: organizationId }, select: { name: true, materialMarkupPct: true, laborMarkupPct: true } }),
+      plan ? Promise.resolve(null) : readCompanyPricing(organizationId),
+    ]);
+    // The company's own method (Settings → Estimating, lib/estimate/companyPricing): on, with a rate. A blueprint
+    // trade keeps the builder price book — the method is for Smart Proposal and the video estimator.
+    const companyOn = companyPricingActive(company) ? company : null;
     // gpt-5-class models (what the previous JobFlex ran) get the verbatim old
     // prompt. gpt-4o-class models answer it with 4-6 lines, so they also get
     // the trade profile + hard rules in the old "extra admin" slot, which
@@ -553,7 +562,8 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
         `[advancedEstimator] Step 1a · ${computed.lines.length} computed line(s) [${computed.lines.map((l) => `${l.phaseId}:${l.quantity}${l.unit}`).join(", ")}], ${computed.skipped.length} phase(s) left to the model`,
       );
     }
-    const computedBlock = computedPromptBlock(computed.lines);
+    // With the company's method on, every ask also says to give each line its hours.
+    const computedBlock = computedPromptBlock(computed.lines) + (companyOn ? hoursPromptBlock(companyOn) : "");
 
     /** Every answer, first or re-ask, gets the computed lines merged over it. */
     const withComputed = (r: Awaited<ReturnType<typeof askEstimateOnce>>) => {
@@ -691,7 +701,26 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
     // so the client pairs them exactly (console-model pairEstimateLines).
     const materials: GeneratedEstimate["materials"] = [];
     const labor: GeneratedEstimate["labor"] = [];
-    items.forEach((it, i) => {
+    if (companyOn) {
+      // THE COMPANY'S WAY (2026-10-16): materials at cost × its markup, labor its own rows in hours × its rate,
+      // overhead and profit inside the prices — the screens and the proposal show what the company would charge.
+      const priced = applyCompanyPricing(items, companyOn, (i) => `i${i + 1}-${randomUUID().slice(0, 8)}`);
+      materials.push(...priced.materials);
+      labor.push(...priced.labor);
+      estimateNotes.unshift(`Priced your company's way (Settings → Estimating): ${snapshotOf(companyOn).words}.`);
+      if (priced.derivedHours) {
+        estimateNotes.push(`${priced.derivedHours} labor line${priced.derivedHours === 1 ? "" : "s"} came without hours from the estimator — the hours were worked out from the price book's labor cost. Check ${priced.derivedHours === 1 ? "it" : "them"}.`);
+      }
+      // A price named in the brief was fitted at the price book's rates; the company's own rates decide here, so the
+      // contractor sees both figures rather than a stated price quietly missed.
+      if (bound.fitted && bound.sellTotal) {
+        const own = [...materials, ...labor].reduce((a, r) => a + r.quantity * r.unitPrice, 0);
+        if (Math.abs(own - bound.sellTotal) >= 1) {
+          estimateNotes.push(`Your brief named $${Math.round(bound.sellTotal).toLocaleString("en-US")}; priced your company's way the lines come to $${Math.round(own).toLocaleString("en-US")} before tax.`);
+        }
+      }
+      console.info(`[advancedEstimator] company pricing · ${materials.length} material row(s), ${labor.length} labor row(s) in hours, ${priced.derivedHours} hours worked out`);
+    } else items.forEach((it, i) => {
       const id = `i${i + 1}-${randomUUID().slice(0, 8)}`;
       materials.push({
         id,
@@ -718,6 +747,7 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
       materials,
       labor,
       notes: estimateNotes.length ? estimateNotes : undefined,
+      ...(companyOn ? { pricing: snapshotOf(companyOn) } : {}),
     };
     console.info(`[advancedEstimator] Step 2 complete · ${materials.length} lines, ${labor.length} carry labor`);
 
@@ -838,7 +868,11 @@ export async function refineAdvancedEstimate(raw: unknown): Promise<
             "(6) Every existing line carries an `id`. Keep the SAME `id` on every line you keep or edit — including renamed or re-specced lines. A task's material row and its labor row share one id and one name (material and labor are two prices of ONE line item); keep them paired, and when you add a task that has both, give its material row and its labor row the same new id and name. Omit `id` only on brand-new lines. " +
             "(7) Renaming or rewording a line is NOT a spec change: keep its id, price, and quantity unchanged unless the request explicitly changes the product itself. " +
             "(8) If the request asks for a discount ('10% off', 'knock $500 off'), do NOT alter any line prices — set `discount` to {label, amount, isPercent} (isPercent=true means amount is a 0-100 percentage). If asked to remove the discount, set it to null. Otherwise copy the existing discount through unchanged. " +
-            "(9) Update `scope` and `estimatedTimelineDays` when the changes affect them; otherwise copy them through unchanged. Return JSON only.",
+            "(9) Update `scope` and `estimatedTimelineDays` when the changes affect them; otherwise copy them through unchanged. Return JSON only." +
+            // Priced the company's way (lib/estimate/companyPricing): labor is its own rows, in hours, at the company's rate.
+            (input.current.pricing
+              ? ` (10) THIS ESTIMATE IS PRICED THE COMPANY'S WAY (${input.current.pricing.words}). Labor is NOT paired with materials here: every labor row is its own line, unit "hour", quantity = ${input.current.pricing.laborBasis === "crew" ? "crew-hours" : "person-hours"}, id ending in "-L", named "Labor · <the work> (${input.current.pricing.laborBasis === "crew" ? "crew-hours" : "person-hours"})", and every one keeps the SAME unitPrice it has now. A new task gets a material row and its own labor row of that shape; a change in work changes the HOURS, never the rate. Material prices already include the company's markup — keep them as they are unless a material itself changes. Never add an overhead, profit or tax line.`
+              : ""),
         },
         {
           role: "user",
@@ -868,6 +902,8 @@ ${JSON.stringify(input.current)}`,
     });
     const text = completion.choices[0]?.message?.content ?? "{}";
     const parsed = estimateSchema.parse(JSON.parse(text));
+    // How it was priced is the estimate's, not the model's to drop.
+    if (input.current.pricing) parsed.pricing = input.current.pricing;
 
     // The estimate carries no shop list any more (owner, 2026-10-09), so no
     // store, link, picture or listing price survives an edit — not even one an
@@ -967,6 +1003,10 @@ const convertInput = z.object({
   // Order-level discount from the estimator ("10% off") — materializes as a
   // Discount row + discountTotal on the proposal.
   discount: discountSchema.nullish(),
+  // Priced the company's way (lib/estimate/companyPricing): the prices are final — no markup is added — and the
+  // tax follows the company's rule at the rate the screen showed (`taxPct`, %).
+  pricing: pricingSnapshotSchema.optional(),
+  taxPct: z.number().min(0).max(30).optional(),
 });
 
 /**
@@ -1032,7 +1072,9 @@ export async function convertEstimateToProposal(raw: unknown) {
     where: { id: organizationId },
     select: { materialMarkupPct: true, laborMarkupPct: true, defaultTaxRate: true },
   });
-  const markupRates = resolveMarkupRates(null, org);
+  // An estimate priced the company's way already carries its markup, overhead and profit in every price.
+  const company = data.pricing ?? null;
+  const markupRates = company ? { materialMarkupPct: 0, laborMarkupPct: 0 } : resolveMarkupRates(null, org);
 
   // ONE LINE ITEM PER TASK. A material row and the labor row that shares its
   // id (or name + unit) become one proposal line with both costs — the shape
@@ -1074,6 +1116,32 @@ export async function convertEstimateToProposal(raw: unknown) {
     };
   });
 
+  // The company's tax rule: on materials only, the tax is a line of its own ("Sales tax on materials (8.25%)") —
+  // the proposal's own tax is on the whole job; on the whole job, the proposal's tax at the company's rate; none.
+  const address = data.location?.trim() || null;
+  const stateRate = stateTaxRate(stateFromAddress(address));
+  const companyTaxPct = company ? (company.taxMode === "none" ? 0 : (data.taxPct ?? company.taxRatePct ?? (stateRate ?? org?.defaultTaxRate ?? 0) * 100)) : 0;
+  if (company && company.taxMode === "materials" && companyTaxPct > 0) {
+    const materialsTotal = lines.filter((l) => l.materialCost > 0 && l.laborCost === 0).reduce((a, l) => a + l.total, 0);
+    const before = lines.reduce((a, l) => a + l.total, 0);
+    const tax = materialsTaxLine({ materialsTotal, subtotal: before, discount: data.discount, ratePct: companyTaxPct });
+    if (tax > 0) {
+      lines.push({
+        name: `Sales tax on materials (${Math.round(companyTaxPct * 100) / 100}%)`,
+        description: null,
+        measurementType: "FIXED",
+        quantity: 1,
+        unitPrice: tax,
+        materialCost: 0,
+        laborCost: 0,
+        total: tax,
+        store: null,
+        productUrl: null,
+        imageUrl: null,
+        dimensions: null,
+      });
+    }
+  }
   const subtotal = lines.reduce((a, l) => a + l.total, 0);
   // Order-level discount (estimator "10% off" etc). Percent clamps to 100,
   // dollars clamp to the subtotal, and tax applies to the DISCOUNTED base.
@@ -1089,8 +1157,7 @@ export async function convertEstimateToProposal(raw: unknown) {
   // The estimate's location wins when its state resolves (the contractor gave
   // a market, so tax that market); the org default is the fallback. taxRate is
   // a FRACTION (0.08 = 8%), not a percent.
-  const address = data.location?.trim() || null;
-  const taxRate = stateTaxRate(stateFromAddress(address)) ?? org?.defaultTaxRate ?? 0;
+  const taxRate = company ? (company.taxMode === "job" ? companyTaxPct / 100 : 0) : stateRate ?? org?.defaultTaxRate ?? 0;
   const taxTotal = (subtotal - discountTotal) * taxRate;
 
   // Scope only — assumptions stay on the estimate (AiEstimate), never baked into

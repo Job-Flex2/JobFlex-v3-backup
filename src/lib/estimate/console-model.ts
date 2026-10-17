@@ -426,6 +426,8 @@ export function discountFromSchema(d: EstimateDiscount | null | undefined): Disc
 }
 
 export type TotalsInput = {
+  /** "materials": tax only the materials' share (a company that charges sales tax on materials only). */
+  taxOn?: "all" | "materials";
   lines: ConsoleLine[];
   discount?: DiscountState;
   /** Percent, e.g. 6.5. Seeded from the state, overridable. */
@@ -456,7 +458,7 @@ export type Totals = {
  * pays for, and margin lands before the discount because a discount is given
  * off the quoted price, not off cost.
  */
-export function computeTotals({ lines, discount, taxPct, marginPct }: TotalsInput): Totals {
+export function computeTotals({ lines, discount, taxPct, marginPct, taxOn }: TotalsInput): Totals {
   const materials = sumMaterials(lines);
   const labor = sumLabor(lines);
   const subtotal = materials + labor;
@@ -467,7 +469,10 @@ export function computeTotals({ lines, discount, taxPct, marginPct }: TotalsInpu
   // A discount can be typed larger than the job; it may zero the price, never invert it.
   const discountCash = Math.min(Math.max(rawDiscount, 0), clientPrice);
   const taxable = clientPrice - discountCash;
-  const taxCash = taxable * ((Number(taxPct) || 0) / 100);
+  // Sales tax on materials only (the company's rule, lib/estimate/companyPricing): the materials' share of what is
+  // charged — margin and discount fall on every line alike, so the share carries through them.
+  const taxBase = taxOn === "materials" ? (subtotal > 0 ? taxable * (materials / subtotal) : 0) : taxable;
+  const taxCash = taxBase * ((Number(taxPct) || 0) / 100);
   return {
     materials,
     labor,

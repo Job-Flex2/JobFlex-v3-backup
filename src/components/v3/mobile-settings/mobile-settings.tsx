@@ -170,6 +170,7 @@ import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitc
 import "./mobile-settings.css";
 import { isRefusal } from "@/lib/actionResult";
 import { DeskSteps } from "@/components/v3/ai-desk/desk-steps";
+import { CompanyPricingForm } from "@/components/v3/company-pricing/company-pricing-form";
 import { DESK_COPY } from "@/components/v3/settings-blueprint/settings-data";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
@@ -1225,6 +1226,19 @@ function DeskPaneMobile({ data }: { data: SettingsData }) {
   );
 }
 
+/** Settings → Estimating on the phone (2026-10-16): the same form as the desk pane, in this page's card. */
+function EstimatingPaneMobile() {
+  const item = RAIL_ITEMS.find((r) => r.key === "estimating");
+  return (
+    <section className="mst-card" id="estimating">
+      <CardHeader card={{ title: "Your estimating method", sub: item?.sub ?? "" }} />
+      <div className="mst-cardB">
+        <CompanyPricingForm />
+      </div>
+    </section>
+  );
+}
+
 function TextingPane({ data }: { data: SettingsData }) {
   const sms = data.notifications.sms;
   const router = useRouter();
@@ -1403,6 +1417,7 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   notifications: "i-bell",
   texting: "i-phone",
   desk: "i-phone",
+  estimating: "i-hardhat",
 };
 
 export function MobileSettings({
@@ -1641,6 +1656,9 @@ export function MobileSettings({
             </div>
             <div className={active === "desk" ? "mst-pane is-on" : "mst-pane"}>
               <DeskPaneMobile data={data} />
+            </div>
+            <div className={active === "estimating" ? "mst-pane is-on" : "mst-pane"}>
+              <EstimatingPaneMobile />
             </div>
           </div>
 

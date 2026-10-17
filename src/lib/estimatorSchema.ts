@@ -71,6 +71,21 @@ export const discountSchema = z.object({
 });
 export type EstimateDiscount = z.infer<typeof discountSchema>;
 
+/** How an estimate was priced when the company's own method was on (lib/estimate/companyPricing, 2026-10-16). */
+export const pricingSnapshotSchema = z.object({
+  mode: z.literal("company"),
+  laborBasis: z.enum(["crew", "person"]),
+  crewSize: z.number().min(1).max(20),
+  laborRate: z.number().min(0).max(5000),
+  materialMarkupPct: z.number().min(0).max(300),
+  overheadPct: z.number().min(0).max(100),
+  profitPct: z.number().min(0).max(100),
+  taxMode: z.enum(["none", "materials", "job"]),
+  taxRatePct: z.number().min(0).max(30).nullable(),
+  words: z.string().max(400),
+});
+export type PricingSnapshotWire = z.infer<typeof pricingSnapshotSchema>;
+
 export const estimateSchema = z.object({
   title: z.string(),
   scope: z.string(),
@@ -85,6 +100,8 @@ export const estimateSchema = z.object({
   // added from standard scope"). Shown under the estimate, never on the
   // proposal the client reads.
   notes: z.array(z.string()).optional(),
+  // Priced the company's way (labor in hours at its rate, its markup, its tax rule) — absent: the price book's way.
+  pricing: pricingSnapshotSchema.optional(),
 });
 
 export type GeneratedEstimate = z.infer<typeof estimateSchema>;
