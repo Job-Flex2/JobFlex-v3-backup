@@ -12,10 +12,10 @@
 //   · the customer email is taken from the INTENT, never from the request body;
 //   · `client_reference_id` carries the token, which is what
 //     `completePendingSignup` checks the returned session against.
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripeClient, isStripeEnabled } from "@/lib/sdk/stripe";
-import { readPendingSignup, sendSignupInitiateCheckout } from "@/actions/signupCheckout";
+import { readPendingSignup } from "@/actions/signupCheckout";
 import { resolveSignupDiscount, resolveSignupPrice } from "@/lib/signupPricing";
 import { customMetadata } from "@/lib/customBilling";
 import { signupTrialMode } from "@/lib/trialPolicyServer";
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
   });
   if (!priced.ok) return NextResponse.json({ error: priced.error }, { status: priced.status });
   // The saved offer determines the duration; then Stripe charges the selected price.
-  const { trialDays, planLabel, isCustom, cents } = priced;
+  const { trialDays, planLabel, isCustom } = priced;
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = priced.lineItems;
   const discount = await resolveSignupDiscount({
     stripe,
@@ -129,12 +129,6 @@ export async function POST(req: Request) {
       success_url: `${origin}/auth/register?signup=${encodeURIComponent(String(token))}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/auth/register?signup=${encodeURIComponent(String(token))}&checkout=cancelled`,
     });
-    // Meta InitiateCheckout, the server copy of the browser's (same event_id).
-    after(() =>
-      sendSignupInitiateCheckout(String(token), { planSlug: planLabel, cents }).catch((err) =>
-        console.warn("[meta:capi] InitiateCheckout failed", err),
-      ),
-    );
     return NextResponse.json({ url: session.url });
   } catch (err) {
     console.error("[checkout/signup] failed:", err);

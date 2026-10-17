@@ -15,7 +15,7 @@ import type { SpotlightTool } from "@/lib/planSpotlight";
 // The sign-in page's "Email me a code" runs the same machine (kind "login").
 //
 // THE DRAFT. Everything typed and carried in (name, email, trade, utm_*,
-// fbclid, the referral, Meta's ids, the trial offer shown) is kept in a
+// fbclid, the referral, the trial offer shown) is kept in a
 // SyncState row `otp:<draft>` for a day, so leaving for the mail app, a reload
 // or the in-app browser being thrown away loses nothing: the draft token rides
 // in a cookie and in the page address. The code itself is never stored — only
@@ -45,7 +45,6 @@ import { renderEmail } from "@/lib/email/renderEmail";
 import { buildOtpCode, buildOtpNoAccount } from "@/lib/email/build/otp";
 import { sendEmail } from "@/lib/sdk/resend";
 import { storedTrialOffer, type TrialOffer } from "@/lib/trialOffer";
-import type { MetaSignupContext } from "@/lib/metaCapi";
 import type { TradeType } from "@/lib/tradeTypes";
 import type { PendingRecord } from "@/actions/signupCheckout";
 import { pendingSignupAlive } from "@/lib/pendingSignup";
@@ -76,7 +75,8 @@ export interface OtpDraft {
   tool?: SpotlightTool;
   utm?: Utm;
   attribution?: { kind: "promo" | "ref"; code: string } | null;
-  meta?: MetaSignupContext;
+  /** The ad's click id (`?fbclid=`), back on the register address the emailed button opens. */
+  fbclid?: string;
   analytics?: unknown;
   trialOffer?: TrialOffer;
   /** The salted hash of the live code; null once used, burned or replaced by nothing. */
@@ -251,7 +251,7 @@ function carriedQuery(d: OtpDraft): string {
   if (d.industry) q.set("industry", d.industry.toLowerCase());
   if (d.tool) q.set("tool", d.tool);
   for (const [k, v] of Object.entries(d.utm ?? {})) if (v) q.set(k, v);
-  if (d.meta?.fbclid) q.set("fbclid", d.meta.fbclid);
+  if (d.fbclid) q.set("fbclid", d.fbclid);
   return q.toString();
 }
 
@@ -307,7 +307,7 @@ export async function nextForUser(userId: string): Promise<string> {
  * the one the landing was opened on, or none.
  */
 export async function writeVerifiedPending(
-  d: Pick<OtpDraft, "email" | "name" | "industry" | "tool" | "utm" | "attribution" | "meta" | "analytics" | "trialOffer">,
+  d: Pick<OtpDraft, "email" | "name" | "industry" | "tool" | "utm" | "attribution" | "analytics" | "trialOffer">,
   opts: { viaGoogle: boolean; image: string | null; autoPlan?: boolean; unproven?: boolean },
 ): Promise<string> {
   const token = randomUUID();
@@ -323,7 +323,6 @@ export async function writeVerifiedPending(
     landingTool: d.tool,
     signupVariant: "e",
     utm: d.utm,
-    meta: d.meta,
     attribution: d.attribution ?? null,
     customPages: [],
     hashedPassword: null,

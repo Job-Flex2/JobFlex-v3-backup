@@ -18,23 +18,7 @@ import { RoofShot } from "./roof-shot";
 import { SmartProposalShot } from "./smart-proposal-shot";
 import { SMART_SCENARIOS } from "./smart-scenarios";
 import { useEffect, useState } from "react";
-import { metaCustomEvent } from "@/lib/metaEvents";
 import { useInView } from "./use-in-view";
-
-/* Meta EstimatorDemoStep from the roof and fence hero windows (2026-10-01):
-   each step once per page load — the hero mounts a phone and a desk twin,
-   and only the visible one plays, but the set makes sure. Autoplay only:
-   these windows have no controls (the HVAC window reports its own, taps and
-   tiers included, from hvac-estimator-shot). */
-const stepsSent = new Set<string>();
-const reportStep = (trade: string) => (step: string) => {
-  const key = `${trade}:${step}`;
-  if (stepsSent.has(key)) return;
-  stepsSent.add(key);
-  metaCustomEvent("EstimatorDemoStep", { trade, step, how: "auto" });
-};
-const roofStep = reportStep("Roofing");
-const fenceStep = reportStep("Fencing");
 
 export function HeroVisual({ variant }: { variant: LandingVariant }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.2);
@@ -57,8 +41,8 @@ export function HeroVisual({ variant }: { variant: LandingVariant }) {
   const now = instant === true && !variant.playOnPhone;
   return (
     <div ref={ref}>
-      {variant.visual === "fence" && <FenceShot active={active} instant={now} onStep={fenceStep} />}
-      {variant.visual === "roof" && <RoofShot active={active} instant={now} hero onStep={roofStep} />}
+      {variant.visual === "fence" && <FenceShot active={active} instant={now} />}
+      {variant.visual === "roof" && <RoofShot active={active} instant={now} hero />}
       {variant.visual === "hvac" && <HvacEstimatorShot active={active} instant={now} hero />}
       {variant.visual === "deck" && <DeckShot />}
       {variant.visual === "smart" && (

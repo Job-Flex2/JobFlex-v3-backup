@@ -49,12 +49,9 @@ import { settleReferralsForSignupOrg } from "@/lib/referralRewards";
 import { after } from "next/server";
 import { isQaEmail } from "@/lib/qaEmail";
 import { captureSignupOutcome, trafficIdentitySchema } from "@/lib/traffic-capture-server";
-import { sendMetaEvent, type MetaSignupContext } from "@/lib/metaCapi";
-import { metaContextFor } from "@/lib/metaSignupContext";
 import { orgNameUnsetKey } from "@/lib/orgName";
 import { signupNetworkBrake } from "@/lib/signupBrake";
 import type { SignupModeLabel } from "@/lib/signupMode";
-import { metaStartTrial } from "@/lib/metaSignupEvents";
 import { sendWelcomeFirstEstimate } from "@/lib/email/welcome";
 import { trackActivation } from "@/lib/activation-events";
 import { signupTrialState } from "@/lib/trialPolicyServer";
@@ -115,22 +112,6 @@ const pendingSchema = z.object({
   attribution: z
     .object({ kind: z.enum(["promo", "ref"]), code: z.string().trim().min(3).max(40) })
     .nullish(),
-  /** Meta Pixel context from the browser (2026-09-09): the marketing consent
-   *  the banner recorded, the event ids the browser's own events carry (so
-   *  the server copies deduplicate), and the pixel's cookies when consented. */
-  meta: z
-    .object({
-      consent: z.boolean(),
-      registrationEventId: z.string().min(8).max(80),
-      checkoutEventId: z.string().min(8).max(80).optional(),
-      fbp: z.string().max(120).optional(),
-      fbc: z.string().max(400).optional(),
-      /** Meta's click id from the register link (`?fbclid=`). A malformed one
-       *  is dropped rather than failing the signup. */
-      fbclid: z.string().regex(/^[\w-]{1,500}$/).optional().catch(undefined),
-      sourceUrl: z.string().max(400).optional(),
-    })
-    .optional(),
   /** Add-on pages, when the custom plan is the one being bought. Stored with
    *  the intent so checkout and account creation price and record the SAME
    *  selection — the client never gets to name a price. */
@@ -138,9 +119,7 @@ const pendingSchema = z.object({
 });
 
 export type PendingRecord = z.infer<typeof pendingSchema> extends infer T
-  ? Omit<Extract<T, object>, "password" | "googleToken" | "meta" | "signupMode"> & {
-      /** The browser's Meta context plus, with consent, the request's IP and UA. */
-      meta?: MetaSignupContext;
+  ? Omit<Extract<T, object>, "password" | "googleToken" | "signupMode"> & {
       /** Null for a Google-backed signup — the finished account signs in with Google. */
       hashedPassword: string | null;
       viaGoogle?: boolean;
@@ -150,8 +129,6 @@ export type PendingRecord = z.infer<typeof pendingSchema> extends infer T
       /** Set by requestCardlessTrial: the plan the card-less trial is for, and
        *  when the confirmation link went out (the intent then lives 24 hours). */
       cardless?: { planSlug: string; interval?: "MONTH" | "YEAR"; requestedAt: number };
-      /** When Meta's InitiateCheckout went out (sendSignupInitiateCheckout). */
-      checkoutSentAt?: number;
       /** The passwordless sign-up (lib/signupOtp, 2026-10-10): when the address
        *  was proven — by the emailed code or link, or by Google — before this
        *  intent was written. Only that server code sets it; the card-less
@@ -229,7 +206,6 @@ export async function startPendingSignup(raw: unknown): Promise<{ ok: true; toke
     signupVariant: data.signupVariant,
     signupMode: data.signupMode,
     utm: data.utm,
-    meta: await metaContextFor(data.meta),
     attribution: data.attribution ?? null,
     customPages: normalizeCustomPages(data.customPages),
     hashedPassword: google ? null : await bcrypt.hash(data.password as string, 10),
@@ -243,9 +219,6 @@ export async function startPendingSignup(raw: unknown): Promise<{ ok: true; toke
     update: { cursor: JSON.stringify(record) },
     create: { key: key(token), cursor: JSON.stringify(record) },
   });
-  // Meta InitiateCheckout is not sent here any more (2026-10-06): it belongs
-  // to the moment Stripe Checkout opens — sendSignupInitiateCheckout, from
-  // /api/checkout/signup — not to reaching the plan step.
   return { ok: true, token };
 }
 
@@ -267,43 +240,6 @@ export async function readPendingSignup(token: string): Promise<{
         attribution: rec.attribution ?? null,
       }
     : null;
-}
-
-/**
- * Meta InitiateCheckout, the server copy (owner, 2026-10-06: "when the person
- * goes to Checkout"). Called by /api/checkout/signup once Stripe has handed
- * back the session for the picked plan; the browser fires the same event_id
- * (meta.checkoutEventId) as the start button is pressed, so the pair is one.
- * Once per signup: the intent is stamped, so a second checkout (cancelled and
- * opened again) sends nothing more.
- */
-export async function sendSignupInitiateCheckout(
-  token: string,
-  checkout: { planSlug: string; cents: number },
-): Promise<void> {
-  const rec = await loadPending(token);
-  const meta = rec?.meta;
-  if (!rec || !meta?.checkoutEventId || rec.checkoutSentAt) return;
-  await db.syncState
-    .update({ where: { key: key(token) }, data: { cursor: JSON.stringify({ ...rec, checkoutSentAt: Date.now() }) } })
-    .catch(() => {});
-  await sendMetaEvent({
-    eventName: "InitiateCheckout",
-    eventId: meta.checkoutEventId,
-    sourceUrl: meta.sourceUrl ?? null,
-    consent: meta.consent,
-    value: checkout.cents / 100,
-    currency: "USD",
-    user: { email: rec.email, phone: rec.companyPhone ?? null, fbp: meta.fbp, fbc: meta.fbc, clientIp: meta.clientIp, userAgent: meta.userAgent },
-    custom: {
-      content_category: rec.landingIndustry ?? "default",
-      plan: checkout.planSlug,
-      utm_source: rec.utm?.utm_source,
-      utm_medium: rec.utm?.utm_medium,
-      utm_campaign: rec.utm?.utm_campaign,
-      utm_content: rec.utm?.utm_content,
-    },
-  });
 }
 
 /* THE RELOAD PROBLEM. The intent is spent by its first completion, so a
@@ -459,9 +395,6 @@ export async function completePendingSignup(
   // client) rather than from the intent, which updatePendingSignupPages can
   // still rewrite after the session was priced.
   let paidCustomPages: string[] | null = null;
-  // What the checkout charged, for Meta's StartTrial value.
-  let checkoutAmount: number | null = null;
-  let checkoutCurrency: string | null = null;
 
   if (sessionId) {
     if (!isStripeEnabled()) return { ok: false, error: "Checkout is not configured." };
@@ -480,8 +413,6 @@ export async function completePendingSignup(
       const paid = session.status === "complete" || session.payment_status === "paid";
       if (!paid) return { ok: false, error: "The payment has not completed yet." };
       analyticsLive = session.livemode;
-      checkoutAmount = session.amount_total;
-      checkoutCurrency = session.currency;
       if (session.payment_status === "paid" && (session.amount_total ?? 0) > 0) analyticsOutcome = "subscription_purchased";
       stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
       const sub = session.subscription;
@@ -517,8 +448,6 @@ export async function completePendingSignup(
     paidCustomPages,
     analyticsOutcome,
     analyticsLive,
-    checkoutAmount,
-    checkoutCurrency,
   });
 }
 
@@ -627,7 +556,7 @@ export async function startVerifiedCardlessTrial(
   /** The term picked on the plan step — see requestCardlessTrial. */
   interval: "MONTH" | "YEAR" = "MONTH",
 ): Promise<
-  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null; signupMode: string | null }
+  | { ok: true; email: string; ticket: string | null; subscriptionId: string | null; signupMode: string | null }
   | { ok: false; error: string; requiresCard?: true; done?: boolean; email?: string }
 > {
   try {
@@ -668,14 +597,14 @@ export async function startVerifiedCardlessTrial(
  * then creates the trialing subscription (no payment method —
  * lib/cardlessTrial) and the same account the paid return creates, with
  * everything that waited for completePendingSignup — the welcome email, the
- * attribution, metaSignupJson, CompleteRegistration and StartTrial. Answers a
+ * attribution. Answers a
  * sign-in ticket the confirmation page redeems. Reusing the link sends the
  * visitor to sign-in without issuing another ticket or changing the trial.
  */
 export async function confirmCardlessTrial(
   secret: string,
 ): Promise<
-  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null; signupMode: string | null }
+  | { ok: true; email: string; ticket: string | null; subscriptionId: string | null; signupMode: string | null }
   | { ok: false; error: string; done?: boolean; email?: string; cardHref?: string }
 > {
   if (!secret || secret.length > 200) return { ok: false, error: "That link is not valid." };
@@ -701,7 +630,7 @@ function cardlessSignupAlreadyUsed(email: string) {
 async function finishCardlessTrial(
   token: string,
 ): Promise<
-  | { ok: true; email: string; ticket: string | null; registrationEventId: string | null; subscriptionId: string | null; signupMode: string | null }
+  | { ok: true; email: string; ticket: string | null; subscriptionId: string | null; signupMode: string | null }
   | { ok: false; error: string; done?: boolean; email?: string; cardHref?: string }
 > {
   const rec = await loadPending(token);
@@ -753,8 +682,6 @@ async function finishCardlessTrial(
     paidCustomPages: started.customPages,
     analyticsOutcome: "trial_started",
     analyticsLive: sub.livemode,
-    checkoutAmount: 0,
-    checkoutCurrency: sub.currency ?? "usd",
   });
   if (!created.ok) {
     // Stripe's per-token idempotency key makes overlapping confirmations share
@@ -783,7 +710,7 @@ async function finishCardlessTrial(
   // Counted against the day's ceiling; support hears at 80% (lib/trialDailyCap).
   await noteCardlessTrialStarted(created.orgId);
   after(() => nameOrgOnSubscription(sub.id, created.orgId));
-  return { ok: true, email: created.email, ticket: created.ticket, registrationEventId: rec.meta?.registrationEventId ?? null, subscriptionId: sub.id, signupMode: rec.signupMode ?? null };
+  return { ok: true, email: created.email, ticket: created.ticket, subscriptionId: sub.id, signupMode: rec.signupMode ?? null };
 }
 
 /** The done record's "session" for a card-less trial — there is no Checkout. */
@@ -806,15 +733,13 @@ type AccountBilling = {
   paidCustomPages: string[] | null;
   analyticsOutcome: string;
   analyticsLive: boolean;
-  checkoutAmount: number | null;
-  checkoutCurrency: string | null;
 };
 
 /**
  * The account itself: Organization + owner User + Membership, the
  * Subscription row, the Lead Center pin, the custom pages, the attribution,
  * the done marker, the sign-in ticket, and after the response the welcome
- * email, the analytics outcome and Meta's CompleteRegistration / StartTrial.
+ * email and the analytics outcome.
  * Shared by the paid return (completePendingSignup) and the card-less trial
  * (completeCardlessSignup) — split out of completePendingSignup unchanged
  * (2026-10-01), so the two flows create the same account.
@@ -838,8 +763,6 @@ async function createAccountFromPending(
     paidCustomPages,
     analyticsOutcome,
     analyticsLive,
-    checkoutAmount,
-    checkoutCurrency,
   } = billing;
   // Re-check the address: somebody may have registered it while the card was
   // being typed.
@@ -869,9 +792,6 @@ async function createAccountFromPending(
           utmMedium: rec.utm?.utm_medium || null,
           utmCampaign: rec.utm?.utm_campaign || null,
           utmContent: rec.utm?.utm_content || null,
-          // The mode rides in the stored Meta context, so StartTrial / Purchase
-          // sent later by the webhook carry it too (lib/metaSignupEvents).
-          metaSignupJson: rec.meta ? JSON.stringify({ ...rec.meta, ...(rec.signupMode ? { signupMode: rec.signupMode } : {}) }) : null,
         },
         select: { id: true },
       });
@@ -1066,7 +986,7 @@ async function createAccountFromPending(
   // at the login wall with a password it typed two screens and one Stripe
   // round-trip ago.
   const ticket = await mintSigninTicket(userId);
-  // Not for the QA Lab's own accounts (@qa.jobflex.test, lib/qaTestMode); nor Meta below.
+  // Not for the QA Lab's own accounts (@qa.jobflex.test, lib/qaTestMode).
   if (sessionId && rec.analytics && !isQaEmail(rec.email)) {
     after(() => captureSignupOutcome(rec.analytics, billing.flow === "cardless" && stripeSubscriptionId ? stripeSubscriptionId : sessionId, analyticsOutcome, planSlug, analyticsLive, rec.landingIndustry ?? null, rec.utm ?? null, rec.signupVariant ?? null, rec.signupMode ?? null));
   }
@@ -1085,42 +1005,6 @@ async function createAccountFromPending(
       pages: planSlug === CUSTOM_PLAN_SLUG ? chosen : null,
     };
     after(() => sendWelcomeFirstEstimate(welcome).catch((e) => console.warn("[signup] welcome email failed:", e)));
-  }
-  // Meta CompleteRegistration — the server copy of the browser's event (same
-  // event_id). Goes with or without consent; consent decides whether fbp/fbc,
-  // IP and UA ride along (lib/metaCapi).
-  if (rec.meta) {
-    const meta = rec.meta;
-    after(() =>
-      sendMetaEvent({
-        eventName: "CompleteRegistration",
-        eventId: meta.registrationEventId,
-        sourceUrl: meta.sourceUrl ?? null,
-        consent: meta.consent,
-        user: { email: rec.email, phone: rec.companyPhone ?? null, fbp: meta.fbp, fbc: meta.fbc, clientIp: meta.clientIp, userAgent: meta.userAgent, externalId: orgId },
-        custom: {
-          industry: rec.landingIndustry ?? "default",
-          plan: planSlug ?? "none",
-          billing_mode: analyticsLive ? "live" : "test",
-          ...(rec.signupMode ? { signup_mode: rec.signupMode } : {}),
-          utm_source: rec.utm?.utm_source,
-          utm_medium: rec.utm?.utm_medium,
-          utm_campaign: rec.utm?.utm_campaign,
-          utm_content: rec.utm?.utm_content,
-        },
-      }),
-    );
-  }
-  // Meta StartTrial on the return from Stripe. The webhook sends it too, but
-  // when it arrives before this return has created the organization it finds
-  // nothing to name and sent nothing; metaStartTrial sends it once either way.
-  if (rec.meta && stripeSubscription?.status === "trialing") {
-    const sub = stripeSubscription;
-    after(() =>
-      metaStartTrial(orgId, sub, { amountTotal: checkoutAmount, currency: checkoutCurrency }).catch((err) =>
-        console.warn("[meta:capi] StartTrial failed", err),
-      ),
-    );
   }
   return { ok: true, email: rec.email, ticket, orgId, userId };
 }

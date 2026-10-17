@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { CONSENT_OPEN_EVENT, effectiveConsent, pageConsentMode, readConsent, writeConsent, type Consent } from "@/lib/consent";
 
 /* The cookie banner (2026-09-09; by country 2026-09-30). Essential cookies are
-   always on; Analytics (PostHog) and Marketing (Meta Pixel and Conversions
-   API) are the two choices. Which visitors see it (lib/consent):
+   always on; Analytics (PostHog) and Marketing are the two choices. Which visitors see it (lib/consent):
      optin   — EU, EEA, UK and Switzerland: the card opens by itself until
                "Accept all" / "Essential only" / Manage → Save.
      notice  — everyone else: never opens by itself (owner, 2026-09-30); the
@@ -97,7 +96,7 @@ export function CookieBanner() {
           <label className="flex cursor-pointer items-center justify-between gap-3 text-[14px]">
             <span>
               <span className="font-semibold">Marketing</span>
-              <span className="text-[color:var(--ink-muted)]"> · Meta Pixel and Conversions API: advertising measurement (_fbp, _fbc)</span>
+              <span className="text-[color:var(--ink-muted)]"> · Meta Pixel: advertising measurement (_fbp, _fbc)</span>
             </span>
             <button type="button" role="switch" aria-checked={marketing} className={toggle(marketing)} onClick={() => setMarketing((v) => !v)} data-consent-toggle="marketing">
               <span className={knob(marketing)} />

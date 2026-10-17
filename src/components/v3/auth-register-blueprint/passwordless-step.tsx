@@ -110,16 +110,6 @@ function setDraftInUrl(draft: string | null) {
   }
 }
 
-export interface PasswordlessMeta {
-  consent: boolean;
-  registrationEventId: string;
-  checkoutEventId?: string;
-  fbp?: string;
-  fbc?: string;
-  fbclid?: string;
-  sourceUrl?: string;
-}
-
 export function PasswordlessStep({
   name,
   setName,
@@ -138,11 +128,10 @@ export function PasswordlessStep({
   utm,
   attribution,
   analytics,
-  meta,
+  fbclid,
   initialError,
   onGoogle,
   onVerified,
-  onLead,
 }: {
   name: string;
   setName: (v: string) => void;
@@ -165,13 +154,12 @@ export function PasswordlessStep({
   utm: UtmParams | null;
   attribution: { kind: "promo" | "ref"; code: string } | null;
   analytics: () => unknown;
-  meta: () => PasswordlessMeta;
+  /** The ad's click id from the page address, for the emailed button's return. */
+  fbclid?: string;
   initialError: string | null;
   onGoogle: () => void;
   /** The address is proven and the pending signup exists: the plan step. */
   onVerified: (signupToken: string) => void;
-  /** Meta Lead, once: step 1 passed with an address (lib/metaEvents). */
-  onLead: (email: string) => void;
 }) {
   const [screen, setScreen] = React.useState<Screen>(google ? "google" : restore?.stage === "code" ? "code" : "form");
   const [draft, setDraft] = React.useState<string | null>(restore && restore.stage !== "expired" ? restore.draft : null);
@@ -336,7 +324,7 @@ export function PasswordlessStep({
       tool: tool ?? undefined,
       utm: utm ?? undefined,
       attribution,
-      meta: meta(),
+      fbclid,
     })
       .then((res) => {
         if (res.ok) {
@@ -419,11 +407,10 @@ export function PasswordlessStep({
           tool: tool ?? undefined,
           utm: utm ?? undefined,
           attribution,
-          meta: meta(),
+          fbclid,
         });
         if (q.ok) {
           track("continue", "quick");
-          onLead(q.email);
           proceed(q.signupToken);
           return;
         }
@@ -443,7 +430,7 @@ export function PasswordlessStep({
         tool: tool ?? undefined,
         utm: utm ?? undefined,
         attribution,
-        meta: meta(),
+        fbclid,
       });
       if (!res.ok) {
         setErr(res.error);
@@ -452,7 +439,6 @@ export function PasswordlessStep({
         return;
       }
       track("continue");
-      onLead(res.email);
       rememberOtpDraft(res.draft);
       setDraft(res.draft);
       setSentTo(res.email);

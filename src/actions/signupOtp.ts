@@ -7,7 +7,6 @@ import { parseSpotlightTool } from "@/lib/planSpotlight";
 import { z } from "zod";
 import { TRADE_TYPES } from "@/lib/tradeTypes";
 import { trafficIdentitySchema } from "@/lib/traffic-capture-server";
-import { metaContextFor } from "@/lib/metaSignupContext";
 import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "@/lib/disposableEmail";
 import { readGoogleSignup } from "@/lib/googleSignup";
@@ -45,18 +44,6 @@ const utmSchema = z
   })
   .optional()
   .catch(undefined);
-const metaSchema = z
-  .object({
-    consent: z.boolean(),
-    registrationEventId: z.string().min(8).max(80),
-    checkoutEventId: z.string().min(8).max(80).optional(),
-    fbp: z.string().max(120).optional(),
-    fbc: z.string().max(400).optional(),
-    fbclid: z.string().regex(/^[\w-]{1,500}$/).optional().catch(undefined),
-    sourceUrl: z.string().max(400).optional(),
-  })
-  .optional()
-  .catch(undefined);
 /** What the register form carries besides the name and email. */
 const carriedSchema = z.object({
   analytics: trafficIdentitySchema.optional().catch(undefined),
@@ -69,7 +56,7 @@ const carriedSchema = z.object({
     .object({ kind: z.enum(["promo", "ref"]), code: z.string().trim().min(3).max(40) })
     .nullish()
     .catch(null),
-  meta: metaSchema,
+  fbclid: z.string().regex(/^[\w-]{1,500}$/).optional().catch(undefined),
 });
 const startSchema = carriedSchema.extend({
   name: z.string().trim().min(1, "Enter your name.").max(120, "That name is too long."),
@@ -116,7 +103,7 @@ export async function startOtpSignup(raw: unknown): Promise<Sent | Refused> {
       tool: parseSpotlightTool(data.tool),
       utm: data.utm,
       attribution: data.attribution ?? null,
-      meta: await metaContextFor(data.meta),
+      fbclid: data.fbclid,
       analytics: data.analytics,
       trialOffer: offered,
       code: reuse && prev ? prev.code : null,
@@ -285,7 +272,6 @@ export async function startOtpGoogleSignup(raw: unknown): Promise<{ ok: true; si
         tool: parseSpotlightTool(data.tool),
         utm: data.utm,
         attribution: data.attribution ?? null,
-        meta: await metaContextFor(data.meta),
         analytics: data.analytics,
         trialOffer: offered,
       },
@@ -330,7 +316,6 @@ export async function startQuickSignup(raw: unknown): Promise<{ ok: true; signup
         tool: parseSpotlightTool(data.tool),
         utm: data.utm,
         attribution: data.attribution ?? null,
-        meta: await metaContextFor(data.meta),
         analytics: data.analytics,
         trialOffer: offered,
       },

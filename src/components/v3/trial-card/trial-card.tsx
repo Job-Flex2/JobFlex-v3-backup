@@ -21,7 +21,6 @@ import { usePathname } from "next/navigation";
 import type { Route } from "next";
 import type { TrialView } from "@/lib/cardlessTrial";
 import { TRIAL_CAP_NOUN, TRIAL_CAP_TITLE, trialCapAllowance, type TrialCapKey } from "@/lib/trialCaps";
-import { metaTrack, newEventId } from "@/lib/metaPixel";
 import { TRIAL_NOTICE_DAYS, trialDismissCookie, trialNoticeDismissed, trialNoticeStep } from "@/lib/trialNotice";
 import s from "./trial-card.module.css";
 import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
@@ -48,17 +47,9 @@ function useAddCard() {
     setBusy(true);
     setError(null);
     try {
-      // Meta InitiateCheckout as the card form opens: the browser's copy here,
-      // the server's from the route, one event id between them.
-      const eventId = newEventId();
-      const res = await fetch("/api/billing/trial-card", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId }),
-      });
+      const res = await fetch("/api/billing/trial-card", { method: "POST" });
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string; purpose?: string };
       if (res.ok && body.url) {
-        metaTrack("InitiateCheckout", { content_category: body.purpose ?? "trial-card" }, eventId);
         leaving.current = true;
         window.location.href = body.url;
         return;

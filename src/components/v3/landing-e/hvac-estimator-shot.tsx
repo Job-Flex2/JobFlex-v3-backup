@@ -26,7 +26,6 @@ import { Sprite } from "@/components/v3/proposals-blueprint/sprite";
 import proposalStyles from "@/components/v3/proposals-blueprint/proposals.module.css";
 import dashboardStyles from "@/components/v3/dashboard-blueprint/blueprint.module.css";
 import s from "@/components/v3/hvac-estimator-blueprint/hvac-estimator.module.css";
-import { metaCustomEvent } from "@/lib/metaEvents";
 import { trackTraffic } from "@/lib/traffic-client";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import { AppFrame, READ_HOLD, TYPE_MS } from "./showcase-kit";
@@ -158,12 +157,9 @@ export function HvacEstimatorShot({ active, hero = false }: { active: boolean; i
     onStep: (k) => {
       setStep(k);
       trackTraffic(TRAFFIC_EVENTS.hvacDemoStep, { step: k, how: manualRef.current ? "tap" : "auto", hero, industry: "hvac", variant: "e" });
-      // Meta's copy, from the hero window only (lib/metaEvents).
-      if (hero) metaCustomEvent("EstimatorDemoStep", { trade: "HVAC", step: k, how: manualRef.current ? "tap" : "auto" });
     },
     onPick: (p) => {
       trackTraffic(TRAFFIC_EVENTS.hvacDemoTier, { tier: p.tier, unit: p.id, subtotal: Math.round(p.subtotal), hero, industry: "hvac", variant: "e" });
-      if (hero) metaCustomEvent("EstimatorDemoTier", { trade: "HVAC", tier: p.tier, how: manualRef.current ? "tap" : "auto", value: Math.round(p.subtotal), currency: "USD" });
     },
     // The landing's "Convert to proposal": the page's own proposal section,
     // which carries this same job (landing-groups HVAC_PROPOSAL).

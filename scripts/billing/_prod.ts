@@ -67,7 +67,6 @@ export function openEnvironment(opts: {
   loadEnvConfig(ROOT, true, { info: () => {}, error: console.error });
   process.env.EMAIL_DEV_OUTBOX = path.join(opts.out, "outbox");
   process.env.NEXT_PUBLIC_POSTHOG_KEY = "";
-  process.env.META_CAPI_ACCESS_TOKEN = "";
   delete process.env.STRIPE_MOCK_FILE;
   process.env.STRIPE_ALLOW_LIVE_WRITES = opts.allowLiveWrites ? "true" : "";
 

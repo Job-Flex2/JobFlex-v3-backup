@@ -3,11 +3,10 @@
 // trial runs, the same plan with no new trial once it has ended. A route, not
 // a server action, so it stays open while the workspace is read-only after
 // the trial (lib/trialLock locks server-action writes only).
-import { NextResponse, after } from "next/server";
+import { NextResponse } from "next/server";
 import { requireOwner, UnauthorizedError, NoOrgError } from "@/lib/orgContext";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { openCardCheckout } from "@/lib/cardlessTrial";
-import { metaTrialCardCheckout } from "@/lib/metaSignupEvents";
 
 export const runtime = "nodejs";
 
@@ -25,11 +24,6 @@ export async function POST(req: Request) {
   try {
     const opened = await openCardCheckout(organizationId, new URL(req.url).origin);
     if (!opened) return NextResponse.json({ error: "There is no trial to add a card to." }, { status: 409 });
-    // Meta InitiateCheckout, the server's copy of the browser's (same id).
-    const { eventId } = (await req.json().catch(() => ({}))) as { eventId?: unknown };
-    if (typeof eventId === "string" && /^[\w-]{8,80}$/.test(eventId)) {
-      after(() => metaTrialCardCheckout(organizationId, eventId, opened.purpose).catch((err) => console.warn("[meta:capi] InitiateCheckout failed", err)));
-    }
     return NextResponse.json({ url: opened.url, purpose: opened.purpose });
   } catch (err) {
     console.error("[trial-card] checkout failed:", err);

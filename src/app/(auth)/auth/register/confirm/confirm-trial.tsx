@@ -6,7 +6,6 @@ import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { confirmCardlessTrial } from "@/actions/signupCheckout";
-import { metaTrack } from "@/lib/metaPixel";
 import styles from "@/components/v3/auth-register-blueprint/auth-register.module.css";
 
 type View =
@@ -35,15 +34,6 @@ export function ConfirmTrial() {
           }
           setView({ kind: "error", text: res.error, done: res.done, cardHref: res.cardHref });
           return;
-        }
-        // The browser's CompleteRegistration, with the id the server's copy
-        // carried (lib/metaPixel is a no-op without marketing consent).
-        if (res.registrationEventId) {
-          metaTrack("CompleteRegistration", { status: "true", ...(res.signupMode ? { signup_mode: res.signupMode } : {}) }, res.registrationEventId);
-        }
-        // StartTrial with the server's id, `<subscription>:trial`, so the pair is one event.
-        if (res.subscriptionId) {
-          metaTrack("StartTrial", { value: 0, currency: "USD", ...(res.signupMode ? { signup_mode: res.signupMode } : {}) }, `${res.subscriptionId}:trial`);
         }
         const auth = res.ticket ? await signIn("signup-ticket", { ticket: res.ticket, redirect: false }) : null;
         const signedIn = Boolean(auth && !auth.error);

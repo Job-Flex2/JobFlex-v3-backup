@@ -16,7 +16,6 @@ import {
 } from "@/lib/stripeSync";
 import { confirmSyncingFromStripe } from "@/lib/planGrant";
 import { processReferralEffectsForInvoice } from "@/lib/referralRewards";
-import { metaOnCheckoutCompleted, metaOnInvoicePaid } from "@/lib/metaSignupEvents";
 import { trackActivation } from "@/lib/activation-events";
 import { finishCardCheckout, noteCardlessTrialEnded } from "@/lib/cardlessTrial";
 import { CARD_UPDATE_PURPOSE, finishCardUpdate, sendDunningEmail } from "@/lib/cardUpdate";
@@ -92,8 +91,6 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
         if (sub.status === "active" || sub.status === "trialing") {
           await cancelReplacedSubscription(stripe, session, sub.id, "webhook");
         }
-        // Meta StartTrial when the checkout came back trialing (lib/metaSignupEvents).
-        await metaOnCheckoutCompleted(session, sub).catch((err) => console.warn("[meta:capi] StartTrial failed", err));
       } else {
         await handleProposalPayment(session); // existing one-time proposal payment flow
       }
@@ -138,8 +135,6 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       // Member-referral side: convert PENDING referrals on the referred org's
       // first real payment + apply owed 50%-of-a-month referrer credits.
       await processReferralEffectsForInvoice(invoice);
-      // Meta Purchase + Subscribe on the first paid invoice, once per organization.
-      await metaOnInvoicePaid(invoice).catch((err) => console.warn("[meta:capi] Purchase failed", err));
       break;
     }
     // A lead paid through Checkout with a method that settles later (a Link

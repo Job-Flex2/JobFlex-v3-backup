@@ -98,9 +98,9 @@ model Organization {
   utmMedium             String?
   utmCampaign           String?
   utmContent            String?
-  // What the signup remembered for Meta's Conversions API (lib/metaCapi
-  // MetaSignupContext): consent, fbp/fbc, IP and UA (only with consent), the
-  // browser's event ids, and when StartTrial / Purchase went. JSON.
+  // What the signup remembered for Meta's Conversions API: consent, fbp/fbc,
+  // IP and UA, the browser's event ids. JSON. No longer written since the
+  // Conversions API was removed (2026-10-17); kept for the rows that have it.
   metaSignupJson        String?
   // Soft delete (Settings → Danger zone). A deleted org is invisible to
   // requireOrg() and every public surface at once; the purge cron hard-deletes

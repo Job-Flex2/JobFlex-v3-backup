@@ -701,9 +701,8 @@ export function hasUtm(utm: UtmParams | undefined): boolean {
 }
 
 /* Meta's click id (2026-09-30). An ad link arrives with `?fbclid=…`; the
-   register link carries it on, so the signup can hand the Conversions API an
-   fbc built from it when the pixel's own _fbc cookie is missing (consent
-   given after the landing). Only Meta's own alphabet passes. */
+   register link carries it on, so the visit stays attributed to the ad
+   (lib/traffic-visitor). Only Meta's own alphabet passes. */
 export function pickFbclid(params: Record<string, string | string[] | undefined>): string | undefined {
   const raw = params.fbclid;
   const value = (Array.isArray(raw) ? raw[0] : raw)?.trim();

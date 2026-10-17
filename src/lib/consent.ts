@@ -1,9 +1,8 @@
 /* Cookie consent — the one record every optional tracker reads (2026-09-09).
    Two categories on top of the essential cookies:
      analytics  — PostHog (page views, session replay on public pages)
-     marketing  — Meta Pixel + Conversions API (advertising measurement)
-   Stored as a first-party cookie so the server can read it too (the
-   Conversions API sends fbp/fbc/IP/UA only with marketing consent).
+     marketing  — advertising measurement
+   Stored as a first-party cookie so the server can read it too.
 
    TWO MODELS BY COUNTRY (owner, 2026-09-30). The middleware reads Vercel's
    x-vercel-ip-country and stores the model — never the country — in the
@@ -78,7 +77,7 @@ export function effectiveConsent(): { analytics: boolean; marketing: boolean; ex
 }
 
 /** effectiveConsent() from the two cookie values — the same rule, for the
- *  server, which reads them off the request (api/meta/event). */
+ *  server, which reads them off the request. */
 export function consentFromCookies(
   consentValue: string | undefined | null,
   regionValue: string | undefined | null,

@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import localFont from "next/font/local";
+import Script from "next/script";
 import "./globals.css";
 import { ToastHostLazy } from "@/components/ui/toast-host-lazy";
 import { AttributionCapture } from "@/components/attribution-capture";
 import { PostHogCapture } from "@/components/providers/posthog-capture";
-import { MetaPixel } from "@/components/providers/meta-pixel";
 import { CookieBanner } from "@/components/consent/cookie-banner";
 
 /* Bundle the official variable fonts so local and production builds never
@@ -54,6 +54,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // ENTRANCE_PRELUDE) — on purpose, desk-width only. Covers <html>'s own
     // attributes, nothing below it.
     <html lang="en" className={`${inter.variable} ${jbMono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Meta Pixel Code — the ad owner's snippet, word for word (2026-10-17).
+            Every page, no consent gate, no other events. */}
+        <Script
+          id="meta-pixel"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '1086396204114658');
+fbq('track', 'PageView');
+`,
+          }}
+        />
+        <noscript>
+          {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text -- Meta's tag as given, no attributes added */}
+          <img height="1" width="1" style={{ display: "none" }} src="https://www.facebook.com/tr?id=1086396204114658&ev=PageView&noscript=1" />
+        </noscript>
+        {/* End Meta Pixel Code */}
+      </head>
       {/* suppressHydrationWarning: browser extensions (e.g. Grammarly) inject
           data-gr-* attributes on <body> before React hydrates — benign mismatch. */}
       {/* No `antialiased`: default subpixel rendering keeps text crisper
@@ -70,12 +97,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             null and no-ops entirely when NEXT_PUBLIC_POSTHOG_KEY is unset. */}
         <Suspense fallback={null}>
           <PostHogCapture />
-        </Suspense>
-        {/* Meta Pixel: only with NEXT_PUBLIC_META_PIXEL_ID, and only while
-            marketing is allowed (lib/consent: the record, else the country);
-            the standard PageView on the landing, /pricing and register. */}
-        <Suspense fallback={null}>
-          <MetaPixel />
         </Suspense>
         {/* Opens by itself only in the opt-in countries while no choice is
             recorded; the footer's "Cookie settings" opens it for everyone. */}

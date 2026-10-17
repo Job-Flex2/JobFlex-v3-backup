@@ -52,15 +52,12 @@ import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
-import { effectiveConsent } from "@/lib/consent";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
-import { metaTrackWithServer } from "@/lib/metaEvents";
-import { metaTrack, newEventId, readMetaCookies } from "@/lib/metaPixel";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
 import { autoPlanFor, autoPlanPrice, type AutoPlanOffer } from "@/lib/signupAutoPlan";
-import { rememberOtpDraft, rememberSignupMode, type SignupMode, type SignupModeLabel } from "@/lib/signupMode";
+import { rememberOtpDraft, rememberSignupMode, type SignupMode } from "@/lib/signupMode";
 import { forgetOtpDraft, otpPendingState } from "@/actions/signupOtp";
 import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import type { OtpRestore } from "@/lib/signupOtp";
@@ -327,9 +324,6 @@ export function RegisterContent({
      code signup); every step event also says which mode it ran in. */
   const trafficFlow = setupMode ? "setup" : google ? "google" : otp ? "otp" : "standard";
   const signupMode: SignupMode = otp ? "otp" : "password";
-  /* The same mode as the reports split completions (lib/signupMode), on the
-     browser's copies of CompleteRegistration / StartTrial. */
-  const modeLabel: SignupModeLabel = otp ? "passwordless" : twoStep ? "2-step" : "3-step";
   /* THE FORM, WATCHED (owner, 2026-10-14: "where exactly do they stop, and is it us?"): which box, how long, every
      refusal with whose side it is, the tab going away and the page closing — lib/signup-watch. */
   React.useEffect(() => startSignupWatch(), []);
@@ -547,46 +541,11 @@ export function RegisterContent({
    *  back from Stripe on the return URL. */
   const [token, setToken] = React.useState<string | null>(ret?.token ?? otpRestore?.signupToken ?? null);
 
-  /* META EVENT IDS (2026-09-09). One id for the browser's CompleteRegistration
-     and the server's Conversions API copy, one for InitiateCheckout. The
-     registration id is minted here and kept in sessionStorage under the
-     intent token, so the return from Stripe (a fresh page) fires the browser
-     event with the same id the server used. The pixel itself only runs after
-     marketing consent; metaTrack is a no-op otherwise. */
-  const metaIds = React.useRef<{ registration: string; checkout: string }>({ registration: newEventId(), checkout: newEventId() });
-  React.useEffect(() => {
-    if (!ret?.token) return;
-    try {
-      const saved = sessionStorage.getItem("jf_meta_reg:" + ret.token);
-      if (saved) metaIds.current.registration = saved;
-    } catch {
-      /* storage blocked — a fresh id, the server's copy is not deduplicated */
-    }
-  }, [ret?.token]);
-  /* Meta InitiateCheckout fires as a start button opens Stripe Checkout
-     (onStartTrial, owner 2026-10-06), not on reaching the plan step; the
-     server's copy (/api/checkout/signup) carries the same event_id. */
-  const initiateSent = React.useRef(false);
-  const leadSent = React.useRef(false);
-  const registrationSent = React.useRef(false);
   /** Step 1's outcome for the analyst: passed, or refused and why. */
   const step1Outcome = (outcome: "continue" | "error", reason = "", message = "") => {
     trackTraffic(TRAFFIC_EVENTS.signupStep1, { plan_mode: planMode, outcome, reason, variant: "e", steps: twoStep ? 2 : 3, mode: signupMode });
     if (outcome === "error") signupProblem(reason, { message });
   };
-  /* CompleteRegistration, the browser's copy. On the return from Checkout
-     the page mounts straight on step 4 — before the consent provider has
-     loaded the pixel, so an effect keyed on the step fired into nothing
-     (found 2026-10-06). That return sends it once the account exists
-     (fireRegistration below); this effect covers the skip path. */
-  const fireRegistration = React.useCallback(() => {
-    if (registrationSent.current) return;
-    registrationSent.current = true;
-    metaTrack("CompleteRegistration", { content_name: industry ?? "default", status: "true", signup_mode: modeLabel }, metaIds.current.registration);
-  }, [industry, modeLabel]);
-  React.useEffect(() => {
-    if (step === 4 && !ret?.sessionId) fireRegistration();
-  }, [step, ret?.sessionId, fireRegistration]);
   const trialDays =
     planSlug === CUSTOM_PLAN_SLUG
       ? customTrialDays
@@ -955,12 +914,6 @@ export function RegisterContent({
       : plans.find((p) => p.slug === slug)?.trialDays ?? 0;
     const term = termAsked ?? termFor(slug);
     trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: slug, interval: term, intent: clickedTrialDays > 0 ? "trial" : "purchase", flow: trafficFlow });
-    if (!initiateSent.current) {
-      initiateSent.current = true;
-      const plan = plans.find((p) => p.slug === slug);
-      const cents = slug === CUSTOM_PLAN_SLUG ? customPriceCents(customPages, term) : term === "YEAR" ? (plan?.yearlyPriceCents ?? 0) : (plan?.priceCents ?? 0);
-      metaTrack("InitiateCheckout", { content_category: industry ?? "default", plan: slug, value: cents / 100, currency: "USD" }, metaIds.current.checkout);
-    }
     setPayBusy(true);
     setStartingSlug(slug);
     setPlansErr(null);
@@ -1104,14 +1057,6 @@ export function RegisterContent({
       }
       setResendAt(res.resendAt);
       setNowTick(Date.now());
-      // The link's own page signs the shop in; keep the registration event
-      // id under the token so that page's browser event pairs with the
-      // server's copy (same as the Stripe return).
-      try {
-        sessionStorage.setItem("jf_meta_reg:" + token, metaIds.current.registration);
-      } catch {
-        /* storage blocked — the server's copy stands alone */
-      }
       setResent(confirmSentTo !== null);
       setConfirmSlug(slug);
       setConfirmSentTo(res.email);
@@ -1241,7 +1186,6 @@ export function RegisterContent({
           setStep(3);
           return;
         }
-        fireRegistration();
         if (!res.ticket) {
           setSignedIn(false);
           setDoneNote(`Your workspace is ready for ${res.email}. Sign in to open it.`);
@@ -1266,7 +1210,7 @@ export function RegisterContent({
         setStep(3);
       })
       .finally(() => setPayBusy(false));
-  }, [ret, router, fireRegistration]);
+  }, [ret, router]);
 
   // Tick the countdown down on the success step, then leave — TO SIGN-IN. In
   // the pay-first flow nobody at step 4 holds a session (the account was
@@ -1362,12 +1306,6 @@ export function RegisterContent({
       setChecking(false);
     }
     step1Outcome("continue");
-    /* Meta Lead (2026-10-01): step 1 sent with a free address — browser and
-       server, one event_id, marketing consent only (lib/metaEvents). Once per
-       page: going back to step 1 and on again is the same lead. */
-    if (!leadSent.current) {
-      leadSent.current = metaTrackWithServer("Lead", { content_name: industry ?? "default" }, { email: em });
-    }
     if (twoStep) {
       /* The company's part of the one step: the business name and the
          trades are checked and the pending signup starts right here. */
@@ -1444,29 +1382,12 @@ export function RegisterContent({
         utm: utm ?? undefined,
         signupVariant: "e",
         signupMode: twoStep ? "2-step" : "3-step",
-        meta: {
-          consent: effectiveConsent().marketing,
-          registrationEventId: metaIds.current.registration,
-          // No checkout on the card-less trial: InitiateCheckout belongs to
-          // adding the card later (/api/billing/trial-card), not to this step.
-          checkoutEventId: requiresCard ? metaIds.current.checkout : undefined,
-          ...readMetaCookies(),
-          // Meta's click id, carried here from the ad's landing link; the
-          // server builds an fbc from it when _fbc is missing (with consent).
-          fbclid: searchParams?.get("fbclid") || undefined,
-          sourceUrl: typeof window !== "undefined" ? window.location.origin + window.location.pathname : undefined,
-        },
       });
       if (!res.ok) {
         report(res.error);
         toast.error("Couldn't continue", res.error);
         signupProblem(reasonOfMessage(res.error), { message: res.error });
         return;
-      }
-      try {
-        sessionStorage.setItem("jf_meta_reg:" + res.token, metaIds.current.registration);
-      } catch {
-        /* storage blocked */
       }
       setToken(res.token);
       setStep(3);
@@ -1537,9 +1458,6 @@ export function RegisterContent({
         await planRefused(res.error);
         return;
       }
-      if (res.registrationEventId) metaIds.current.registration = res.registrationEventId;
-      fireRegistration();
-      if (res.subscriptionId) metaTrack("StartTrial", { value: 0, currency: "USD", signup_mode: modeLabel }, `${res.subscriptionId}:trial`);
       const auth = res.ticket ? await signIn("signup-ticket", { ticket: res.ticket, redirect: false }) : null;
       const ok = Boolean(auth && !auth.error);
       setSignedIn(ok);
@@ -1583,11 +1501,6 @@ export function RegisterContent({
      exists: the plan step, with the intent's token in the address so a
      reload opens it again. */
   function onOtpVerified(signupToken: string) {
-    try {
-      sessionStorage.setItem("jf_meta_reg:" + signupToken, metaIds.current.registration);
-    } catch {
-      /* storage blocked */
-    }
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("d");
@@ -1746,20 +1659,10 @@ export function RegisterContent({
                   utm={utm}
                   attribution={attribution}
                   analytics={trafficIdentity}
-                  meta={() => ({
-                    consent: effectiveConsent().marketing,
-                    registrationEventId: metaIds.current.registration,
-                    checkoutEventId: requiresCard ? metaIds.current.checkout : undefined,
-                    ...readMetaCookies(),
-                    fbclid: searchParams?.get("fbclid") || undefined,
-                    sourceUrl: window.location.origin + window.location.pathname,
-                  })}
+                  fbclid={searchParams?.get("fbclid") || undefined}
                   initialError={err1}
                   onGoogle={onGoogle}
                   onVerified={onOtpVerified}
-                  onLead={(em) => {
-                    if (!leadSent.current) leadSent.current = metaTrackWithServer("Lead", { content_name: industry ?? "default" }, { email: em });
-                  }}
                 />
                 {step === 1 && !google && !inApp ? <GoogleOneTap /> : null}
               </>

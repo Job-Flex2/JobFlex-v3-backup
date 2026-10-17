@@ -1,7 +1,7 @@
 // QA LAB TEST ADDRESSES (2026-10-14). Every address under @qa.jobflex.test
 // belongs to the automated checks in qa/ (qa/README.md). `.test` is a reserved
 // top-level domain, so no such mailbox can exist. These accounts are left out
-// of the admin statistics (lib/statsHidden), of PostHog and of Meta — on the
+// of the admin statistics (lib/statsHidden) and of PostHog — on the
 // server (lib/qaTestMode) and in the browser (markQaVisitor below) — and, with
 // QA_TEST_MODE=1 outside production, their codes are kept for the test
 // endpoint instead of being emailed (/api/qa/otp).
@@ -17,7 +17,7 @@ export function isQaEmail(email: string | null | undefined): boolean {
 const VISITOR_KEY = "jf_qa_visitor";
 
 /** In the browser: once a QA address is typed and sent, this browser sends no
- *  analytics or ad events any more (posthog-capture, traffic-client, metaPixel). */
+ *  analytics events any more (posthog-capture, traffic-client). */
 export function markQaVisitor(email: string | null | undefined): void {
   if (!isQaEmail(email) || typeof window === "undefined") return;
   try {

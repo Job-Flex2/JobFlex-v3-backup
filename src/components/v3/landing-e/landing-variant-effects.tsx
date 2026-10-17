@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { effectiveConsent, onConsent } from "@/lib/consent";
-import { metaTrackWithServer } from "@/lib/metaEvents";
+import { useEffect } from "react";
+import { effectiveConsent } from "@/lib/consent";
 import { trackTraffic } from "@/lib/traffic-client";
 import { SPOTLIGHT_COOKIE, SPOTLIGHT_MAX_AGE_S, type SpotlightTool } from "@/lib/planSpotlight";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
@@ -14,7 +13,6 @@ import {
   UTM_COOKIE,
   hasUtm,
   serializeUtm,
-  variantTrade,
   type LandingVariantKey,
   type UtmParams,
 } from "./landing-variants";
@@ -61,14 +59,7 @@ export function rememberFbclidForGoogle(fbclid: string | null | undefined) {
       through trackTraffic, which queues until PostHog is initialised and
       never throws. When the headline was an ad's opening line (`?hook=`,
       2026-10-04) the event names it as `hook`, so one hook can be read
-      against another; a view of the trade's own hero carries no `hook`.
-
-   3. META ViewContent (owner, 2026-10-01 — reverses "no Meta Pixel here" of
-      2026-09-06): once per page load, content_name = the trade ("Roofing";
-      "default" without one),
-      browser + server with one event_id (lib/metaEvents). Needs marketing
-      consent; a visitor who gives it on this page is counted then. Sent a
-      tick after mount, so the layout's pixel has sent its PageView first. */
+      against another; a view of the trade's own hero carries no `hook`. */
 export function LandingVariantEffects({
   industry,
   remember,
@@ -89,26 +80,6 @@ export function LandingVariantEffects({
     writeLandingCookies(industry && remember ? industry : undefined, utm, tool);
     trackTraffic(TRAFFIC_EVENTS.landingView, { industry: industry ?? "default", variant: "e", ...(hook ? { hook } : {}), ...utm });
     // One capture per page load; the props only change on a full navigation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const viewSent = useRef(false);
-  useEffect(() => {
-    const view = () => {
-      if (viewSent.current) return;
-      // False without consent — a later "yes" on this page still counts it.
-      // The trade's name ("Roofing", "HVAC"), as Lead and InitiateCheckout name it.
-      viewSent.current = metaTrackWithServer("ViewContent", { content_name: variantTrade(industry) ?? "default" });
-    };
-    const t = window.setTimeout(view, 0);
-    // A tick later here too: the provider's own consent listener sends the PageView first.
-    const off = onConsent((c) => {
-      if (c.marketing) window.setTimeout(view, 0);
-    });
-    return () => {
-      window.clearTimeout(t);
-      off();
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
