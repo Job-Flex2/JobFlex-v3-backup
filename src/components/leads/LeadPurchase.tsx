@@ -220,7 +220,7 @@ export function LeadPurchaseHost() {
   if (!mine || !confirm) return null;
   const amount = priceLabel(confirm.amountCents);
   return (
-    <div className="jflpay" onClick={(e) => e.target === e.currentTarget && close()}>
+    <div className="jflpay" data-nest="" onClick={(e) => e.target === e.currentTarget && close()}>
       <div className="jflpay-card" role="dialog" aria-modal="true" aria-labelledby="jflpay-title">
         <div className="jflp-head">
           <span className="jflp-kick">Unlock lead</span>
