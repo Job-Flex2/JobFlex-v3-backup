@@ -415,7 +415,6 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
           <Link className={cx("btn", "btn-ghost")} href={"/dashboard/settings?tab=billing" as Route}>Edit billing email</Link>
           {props.canUpdatePaymentCard ? <UpdatePaymentCardButton className={cx("btn", "btn-ghost")} /> : null}
         </div>
-        {props.cancelOffer ? <CancelPlanLink offer={props.cancelOffer} className={cx("cancel-plan")} /> : null}
       </section>
 
       {/* REFER & EARN */}
@@ -462,6 +461,8 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
           </div>
         </div>
       </section>
+
+      {props.cancelOffer ? <CancelPlanLink offer={props.cancelOffer} className={cx("cancel-plan")} /> : null}
 
       {/* Out of flow, so it is not a flex item and adds no gap. Last, so it
           cannot shift the reveal cascade's stagger indices. */}

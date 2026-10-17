@@ -1115,8 +1115,8 @@
 :global(.jf-blueprint) .billing-fields > div { min-width: 0; }
 :global(.jf-blueprint) .billing-fields dt { font: 600 11px/1.5 var(--font-mono); letter-spacing: .08em; color: var(--ink-muted); text-transform: uppercase; }
 :global(.jf-blueprint) .billing-fields dd { margin-top: 6px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-:global(.jf-blueprint) .billing-information .cancel-plan { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ink-line); }
-:global(.jf-blueprint) .billing-information .cancel-plan button { min-height: 44px; }
+:global(.jf-blueprint) .cancel-plan { padding-top: 16px; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint) .cancel-plan button { min-height: 44px; }
 
 /* THE TOOL THE SIGNUP CAME FOR (lib/planSpotlight, owner 2026-10-14): the matrix row, first and marked. */
 :global(.jf-blueprint) .mx-row--spot th, :global(.jf-blueprint) .mx-row--spot td { background: rgba(24, 84, 160, 0.08); }

@@ -439,8 +439,6 @@ export function MobileSubscription({
             ) : null}
           </section>
 
-          {cancelOffer ? <CancelPlanLink offer={cancelOffer} className="jfms-cancel" /> : null}
-
           <section className="jfms-card" aria-labelledby="jfmsBillingInfoT">
             <div className="jfms-cardHead">
               <h2 className="jfms-cardTitle" id="jfmsBillingInfoT">Billing information</h2>
@@ -644,6 +642,7 @@ export function MobileSubscription({
             </div>
           </section>
 
+          {cancelOffer ? <CancelPlanLink offer={cancelOffer} className="jfms-cancel" /> : null}
         </div>
       </main>
 
