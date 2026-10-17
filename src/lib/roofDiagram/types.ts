@@ -111,6 +111,9 @@ export interface MeasurementProvenance {
   instantImageryDate?: string;
   /** Google's own whole-roof figure, as an independent check. */
   googleAreaSqft?: number | null;
+  /** Google's roof-segment count — shown as an ESTIMATED facet count when
+   *  the measured data came back without one. Never a measured fact. */
+  googleSegmentCount?: number | null;
   /** What planarization (spec §5) did to the shipped model. */
   planarize?: PlanarizeReport;
   /** What synthesis (spec §6) built, whether or not its candidate won. */

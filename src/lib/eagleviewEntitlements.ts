@@ -46,15 +46,16 @@ export const DENIED_RECHECK_MS = 24 * 60 * 60 * 1000;
 /**
  * The order packs are probed one by one when a grouped order is refused —
  * the ones the roof page misses most first: imagery (ortho + parcel mask),
- * shape / facet count / chimney, pitch + eave height, the outline, then the
- * condition and age classifiers.
+ * material / condition / SHAPE / FACET COUNT (all four ride in 003 — the
+ * stored raw bodies say so, 2026-10-16), pitch + eave height, the outline,
+ * then chimney / solar / AC (005) and the age classifier.
  */
 export const PROBE_ORDER: readonly PdPack[] = [
   "property_data_id_008",
-  "property_data_id_005",
+  "property_data_id_003",
   "property_data_id_002",
   "property_data_id_007",
-  "property_data_id_003",
+  "property_data_id_005",
   "property_data_id_004",
 ];
 
