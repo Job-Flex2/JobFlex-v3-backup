@@ -791,6 +791,25 @@
   .bp :global(.content .tx-row-a), .bp :global(.content .tx-list-a) { margin-left: 0; width: 100%; }
 }
 .bp :global(.content .tx-row-a--left) { margin-left: 0; margin-top: 0; }
+/* Settings → Texting, quiet Blueprint (2026-10-16): the pane's own buttons in Inter caps with a 1.5px outline; inner
+   frames thin and light; the tags quiet; Lead texts' ON / OFF side by side as one switch (the Monthly | Annual
+   pattern) — the one change of place on the pane. */
+.bp :global(.content [data-pane="texting"] .tx-row-a .btn),
+.bp :global(.content [data-pane="texting"] .tx-list-a .btn) { border-width: 1.5px; border-radius: 2px; font-family: var(--font); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.bp :global(.content [data-pane="texting"] .tx-row-a .btn:hover:not(:disabled)),
+.bp :global(.content [data-pane="texting"] .tx-list-a .btn:hover:not(:disabled)) { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+.bp :global(.content [data-pane="texting"] .tx-list) { border: 1px solid rgba(10,10,10,.18); }
+.bp :global(.content [data-pane="texting"] .tx-list li) { border-top-color: rgba(10,10,10,.12); }
+.bp :global(.content [data-pane="texting"] .tx-row) { border: 1px solid rgba(10,10,10,.18); background: #fff; }
+.bp :global(.content [data-pane="texting"] .tx-tag) { border-width: 1px; font-family: var(--font); font-size: 10px; font-weight: 700; }
+.bp :global(.content [data-pane="texting"] .tx-tag--warn) { background: var(--danger-soft, rgba(168,50,50,.08)); }
+.bp :global(.content #texting-lead-texts .tx-row-a--left) { flex-wrap: wrap; gap: 8px 0; align-items: center; margin-bottom: 12px; }
+.bp :global(.content #texting-lead-texts .tx-row-a--left .btn) { flex: 0 0 100px; width: 100px; border: 1.5px solid var(--ink); border-radius: 0; box-shadow: none; transform: none; }
+.bp :global(.content #texting-lead-texts .tx-row-a--left .btn:first-child) { border-radius: 2px 0 0 2px; }
+.bp :global(.content #texting-lead-texts .tx-row-a--left .btn:nth-child(2)) { margin-left: -1.5px; margin-right: 14px; border-radius: 0 2px 2px 0; }
+.bp :global(.content #texting-lead-texts .tx-row-a--left .btn-primary) { background: var(--ink); color: #fff; opacity: 1; cursor: default; }
+.bp :global(.content #texting-lead-texts .tx-row-a--left .btn-ghost) { background: var(--paper); color: var(--ink); }
+.bp :global(.content #texting-lead-texts .tx-row-a--left .btn-ghost:hover:not(:disabled)) { background: color-mix(in srgb, var(--ink) 7%, var(--paper)); transform: none; box-shadow: none; }
 
 /* ============================================================
    OWNER PASS 2026-09-26 — field names, field frames, the rail, autosave
