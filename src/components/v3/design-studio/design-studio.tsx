@@ -18,7 +18,7 @@ import { SpacesPicker, type SpaceFloor } from "./spaces-picker";
 import { classifySheet, findFloorPlans, floorFromVision, isMultiFloor, matchScore, sameRoom, type FloorPlan, type FoundRoom } from "@/lib/design/planSet";
 import { flaggedItems, flaggedWalls, houseChecks, kitchenChecks } from "@/lib/design/checks";
 import { openUp, readStructure, readWall } from "@/lib/design/structure";
-import { closeRoom } from "@/lib/design/openPlan";
+import { closeOpenRooms, closeRoom } from "@/lib/design/openPlan";
 import type { DesignLocation } from "@/actions/designStudio";
 import type { DesignDoc, OpeningKind, P } from "@/lib/design/model";
 import { emptyDesign, ftIn, newId, DEFAULT_CEILING } from "@/lib/design/model";
@@ -346,7 +346,11 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
     const r: PlanRead = readPlan(vs, texts, { region, fileName: sheet.fileName, page: sheet.page, title: title || "Floor plan", ...(minWidth ? { minWidth } : {}), ...(paper ? { paperInPerFt: paper } : {}) });
     let d = r.doc;
     const k = r.inPerPt;
-    d = { ...d, labels: namedLabels(d.labels, opts.found ?? (sheet.cls ?? classifySheet(texts, sheet.width, sheet.height)).rooms, r.region, k) };
+    const found = opts.found ?? (sheet.cls ?? classifySheet(texts, sheet.width, sheet.height)).rooms;
+    d = { ...d, labels: namedLabels(d.labels, found, r.region, k) };
+    // Every room the plan names closes, so the whole floor stands up in 3D and any room opens to be designed: one
+    // open to the rooms beside it is closed where the picture puts it (lib/design/openPlan).
+    d = closeOpenRooms(d, found, r.region, k);
     step("Drawing the sheet underneath…", 55);
     const pic = await sheet.picture(r.region, 2400);
     const toPx = pic.scale / k; // plan inches → picture pixels

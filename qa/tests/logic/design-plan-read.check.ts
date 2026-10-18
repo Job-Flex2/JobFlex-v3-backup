@@ -7,7 +7,8 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { readVectorSheet, layerRole, type VSeg, type VArc, type VectorSheet } from "../../../src/lib/design/pdfVector";
 import { readPlan, scaleFromText, inchesPerPoint, titleCase } from "../../../src/lib/design/planRead";
-import { roomsOf, wallLen, wallPieces, polyArea } from "../../../src/lib/design/geometry";
+import { roomsOf, wallLen, wallPieces, polyArea, pointInPoly } from "../../../src/lib/design/geometry";
+import { closeOpenRooms } from "../../../src/lib/design/openPlan";
 import { normalizeDesign } from "../../../src/lib/design/normalize";
 import type { DesignDoc } from "../../../src/lib/design/model";
 
@@ -149,6 +150,95 @@ check("T-junctions split walls: three rooms", tr.length === 3, tr.map((x) => `${
 check("the label names its room", tr.some((x) => x.name === "Kitchen" && x.labelId === "k"));
 check("unnamed rooms are numbered", tr.filter((x) => /^Space \d$/.test(x.name)).length === 2);
 check("every room loop runs the same way round", tr.every((x) => polyArea(x.poly) > 0));
+
+console.log("── walls that cross close a room (2026-10-18)");
+{
+  // A bump-out's side carried on down as an inside wall: it crosses the back wall, neither ends at the crossing.
+  const xDoc: DesignDoc = {
+    v: 1,
+    title: "x",
+    walls: [
+      { id: "top", a: { x: -60, y: 0 }, b: { x: 260, y: 0 }, thick: 6, height: 96 },
+      { id: "cross", a: { x: 200, y: -40 }, b: { x: 200, y: 160 }, thick: 4.5, height: 96 },
+      { id: "left", a: { x: 0, y: 0 }, b: { x: 0, y: 120 }, thick: 6, height: 96 },
+      { id: "bottom", a: { x: 0, y: 120 }, b: { x: 200, y: 120 }, thick: 6, height: 96 },
+    ],
+    openings: [],
+    labels: [{ id: "k", name: "Kitchen", at: { x: 100, y: 60 } }],
+    marks: [],
+  };
+  const xr = roomsOf(xDoc);
+  check("a room closes at a crossing that no wall ends at", xr.some((r) => r.name === "Kitchen" && Math.abs(r.sqft - 160) < 12), xr.map((r) => `${r.name}:${r.sqft}`).join(" "));
+}
+
+console.log("── a sheet without layers: windows, a slider and a doorway in a lighter pen than the walls");
+{
+  // 20 × 12 ft, walls 6 in, drawn in the heavy pen (1.44); the window, the slider and a beam above outside drawn
+  // light (0.36); a room-name underline in the heavy pen. ¼" = 1'-0", on the sheet at 1.5 pt an inch.
+  const P2 = 1.5;
+  const lsegs: VSeg[] = [];
+  let pn = 0;
+  const L = (x1: number, y1: number, x2: number, y2: number, w: number) => lsegs.push({ x1: 50 + x1 * P2, y1: 50 + y1 * P2, x2: 50 + x2 * P2, y2: 50 + y2 * P2, w, layer: "", path: pn++ });
+  const H = 1.44, T = 0.36;
+  // top wall (y 0–6) with a 6 ft window from x 60 to 132: three lines across (both faces and the glass)
+  for (const y of [0, 6]) { L(0, y, 60, y, H); L(132, y, 240, y, H); }
+  for (const y of [0, 3, 6]) L(60, y, 132, y, T);
+  // right wall (x 234–240) with an 8 ft slider from y 24 to 120
+  for (const x of [234, 240]) { L(x, 0, x, 24, H); L(x, 120, x, 144, H); }
+  for (const x of [234, 237, 240]) L(x, 24, x, 120, T);
+  // bottom wall (y 138–144) stops 36 in short of the left wall: a doorway at its end, drawn as nothing
+  for (const y of [138, 144]) L(42, y, 240, y, H);
+  // left wall (x 0–6)
+  for (const x of [0, 6]) L(x, 0, x, 144, H);
+  // a room name's underline paired with a letter's stroke, in the wall pen, in the middle of the room
+  L(90, 70, 130, 70, H); L(90, 73, 130, 73, H);
+  // outside: a beam above drawn dashed down from the left wall to a post
+  for (let y = 150; y < 246; y += 12) { L(0, y, 0, y + 6, T); L(6, y, 6, y + 6, T); }
+  L(-1, 246, 7, 246, H); L(-1, 254, 7, 254, H); L(-1, 246, -1, 254, H); L(7, 246, 7, 254, H);
+  const sheet: VectorSheet = { width: 600, height: 600, segs: lsegs, arcs: [], layers: {} } as unknown as VectorSheet;
+  const r = readPlan(sheet, [], { region: { x: 0, y: 0, w: 600, h: 600 }, minWidth: H, paperInPerFt: 0.25 });
+  const d = r.doc;
+  const kinds = d.openings.map((o) => `${o.kind}:${o.width}`).sort();
+  check("the window read in its lighter pen, on its wall", d.openings.some((o) => o.kind === "window" && Math.abs(o.width - 72) <= 2), kinds.join(" "));
+  check("an 8 ft glazed break is a slider", d.openings.some((o) => o.kind === "slider" && Math.abs(o.width - 96) <= 2), kinds.join(" "));
+  check("a wall that stops short of the corner meets it, the doorway in it", d.openings.some((o) => o.kind === "opening" && o.width >= 30 && o.width <= 42), kinds.join(" "));
+  const rooms = roomsOf({ walls: d.walls, labels: [] });
+  check("the room closes", rooms.some((x) => x.sqft > 200 && x.sqft < 240), rooms.map((x) => x.sqft).join(" "));
+  check("the underline is not a wall", !d.walls.some((w) => Math.min(w.a.y, w.b.y) > 60 && Math.max(w.a.y, w.b.y) < 80 && Math.min(w.a.x, w.b.x) > 80), JSON.stringify(d.walls.map((w) => [Math.round(w.a.x), Math.round(w.a.y), Math.round(w.b.x), Math.round(w.b.y)])));
+  // The house's bottom face sits at y ≈ 177 in plan inches (the sheet margin rides along); the post at ≈ 200.
+  check("a dashed beam does not carry a wall out to the post", !d.walls.some((w) => Math.max(w.a.y, w.b.y) > 185 && wallLen(w) > 40), JSON.stringify(d.walls.filter((w) => Math.max(w.a.y, w.b.y) > 185).map((w) => [Math.round(w.a.x), Math.round(w.a.y), Math.round(w.b.x), Math.round(w.b.y)])));
+}
+
+console.log("── an open plan: every named room closed, one space carved into its rooms");
+{
+  // A 30 × 12 ft space, one loop of walls: the kitchen on the left, the nook on the right, no wall between.
+  const oDoc: DesignDoc = {
+    v: 1,
+    title: "o",
+    walls: [
+      { id: "a", a: { x: 0, y: 0 }, b: { x: 360, y: 0 }, thick: 6, height: 96 },
+      { id: "b", a: { x: 360, y: 0 }, b: { x: 360, y: 144 }, thick: 6, height: 96 },
+      { id: "c", a: { x: 360, y: 144 }, b: { x: 0, y: 144 }, thick: 6, height: 96 },
+      { id: "d", a: { x: 0, y: 144 }, b: { x: 0, y: 0 }, thick: 6, height: 96 },
+    ],
+    openings: [],
+    labels: [{ id: "k", name: "Kitchen", at: { x: 100, y: 72 } }, { id: "n", name: "Nook", at: { x: 290, y: 72 } }],
+    marks: [],
+  };
+  // Sheet points = plan inches here (region at 0, k = 1).
+  const found = [
+    { at: { x: 100, y: 72 }, box: { x0: 0, y0: 0, x1: 220, y1: 144 } },
+    { at: { x: 290, y: 72 }, box: { x0: 220, y0: 0, x1: 360, y1: 144 } },
+  ];
+  const before = roomsOf(oDoc);
+  check("read as one space with both names", before.length === 1 && before[0].names.length === 2, before.map((x) => x.names.join("+")).join(" "));
+  const after = closeOpenRooms(oDoc, found, { x: 0, y: 0 }, 1);
+  const rs = roomsOf(after);
+  const kitchen = rs.find((x) => pointInPoly(found[0].at, x.poly));
+  const nook = rs.find((x) => pointInPoly(found[1].at, x.poly));
+  check("carved into two rooms, each with its own name", !!kitchen && !!nook && kitchen !== nook && kitchen.names.length === 1 && nook.names.length === 1, rs.map((x) => `${x.name}:${x.sqft}`).join(" "));
+  check("the line between them is a room boundary, not a wall", after.walls.filter((w) => w.boundary).length >= 1 && after.walls.filter((w) => !w.boundary).length === 4);
+}
 
 console.log("── a saved design is made safe");
 const n = normalizeDesign({ walls: [{ id: "w1", a: { x: 0, y: 0 }, b: { x: 1e9, y: "x" }, thick: 999, height: 5 }], openings: [{ id: "o1", wallId: "nope", kind: "door" }, { id: "o2", wallId: "w1", kind: "portal", width: -4 }], labels: [{ name: "<b>Kitchen</b>\u0000", at: { x: 1, y: 1 } }], title: "" });
