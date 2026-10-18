@@ -641,30 +641,35 @@ export function PasswordlessStep({
         <h1 className="auth-h1">{trialDays}-DAY FREE TRIAL</h1>
         {auto ? (
           <div className={css.priceCard} data-auto-plan-lede>
-            <p className={css.priceKicker}>Plans start at</p>
-            {/* Starter's price, typed in (owner, 2026-10-18) — when Starter's price changes, change it here. */}
-            <p className={css.price}>
-              <b>$45</b>
-              <span>/month</span>
-            </p>
-            <ul className={css.perks}>
-              <li>
-                <span className={css.tick} aria-hidden="true">
-                  <svg className="ic">
-                    <use href="#i-check" />
-                  </svg>
-                </span>
-                One flat monthly price
-              </li>
-              <li>
-                <span className={css.tick} aria-hidden="true">
-                  <svg className="ic">
-                    <use href="#i-check" />
-                  </svg>
-                </span>
-                No pay-per-report fees
-              </li>
-            </ul>
+            <span className={css.priceIcon} aria-hidden="true">
+              <svg className="ic">
+                <use href="#i-tag" />
+              </svg>
+            </span>
+            <div className={css.priceBody}>
+              {/* Starter's price, typed in (owner, 2026-10-18) — when Starter's price changes, change it here. */}
+              <p className={css.priceHead}>
+                Plans start at <b>$45/month</b>
+              </p>
+              <ul className={css.perks}>
+                <li>
+                  <span className={css.tick} aria-hidden="true">
+                    <svg className="ic">
+                      <use href="#i-check" />
+                    </svg>
+                  </span>
+                  One flat monthly price
+                </li>
+                <li>
+                  <span className={css.tick} aria-hidden="true">
+                    <svg className="ic">
+                      <use href="#i-check" />
+                    </svg>
+                  </span>
+                  No pay-per-report fees
+                </li>
+              </ul>
+            </div>
           </div>
         ) : (
           <p className="auth-lede">Create your account in seconds. No password needed.</p>
@@ -729,6 +734,14 @@ export function PasswordlessStep({
               Upgrade / downgrade or cancel anytime
             </p>
           ) : null}
+          <p className={css.compare}>
+            <Link href={"/pricing" as Route} id="comparePlans">
+              Compare all plans
+              <svg className="ic" aria-hidden="true">
+                <use href="#i-arrow-r" />
+              </svg>
+            </Link>
+          </p>
           <div className={err ? "err" : "err is-hidden"} id="err1" role="alert">
             {err}
           </div>
@@ -738,11 +751,6 @@ export function PasswordlessStep({
           Already have an account?{" "}
           <Link className="link-ink" href={"/auth/login" as Route}>
             Sign in
-          </Link>
-        </div>
-        <div className="foot foot-home">
-          <Link className="link-ink" href={"/pricing" as Route} id="comparePlans">
-            Compare all plans
           </Link>
         </div>
       </div>

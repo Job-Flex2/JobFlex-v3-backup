@@ -41,6 +41,11 @@ export function RegisterSprite() {
       <symbol id="i-check" viewBox="0 0 24 24">
         <path d="M4 12.5l5 5L20 6.5" />
       </symbol>
+      {/* Not the donor's: the price strip's tag on step 1 (2026-10-18), the roof estimator sprite's i-tag. */}
+      <symbol id="i-tag" viewBox="0 0 24 24">
+        <path d="M12.6 2.6a2 2 0 0 0-1.4-.6H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l7.2-7.2a2 2 0 0 0 0-2.8Z" />
+        <circle cx="7" cy="7" r="1.2" />
+      </symbol>
       <symbol id="i-gift" viewBox="0 0 24 24">
         <rect x="3" y="9" width="18" height="12" rx="1" />
         <path d="M3 13h18" />
