@@ -21,6 +21,10 @@
 // a cancelled Professional shop no longer opens the roof estimator. The rule
 // is lib/planStatus — the one the limits engine and the feature tier read;
 // PAST_DUE keeps the pages while Stripe retries the card.
+//
+// A PLATFORM ADMIN IN THE ORGANIZATION OPENS EVERY PAGE (owner, 2026-10-17),
+// whatever the plan and its status — lib/fullAccess hasFullAccess, asked as
+// the session's user. With no session (a cron) the organization decides.
 
 import { db } from "@/lib/db";
 import {
@@ -32,6 +36,7 @@ import {
 } from "@/lib/customPlan";
 import { planLapsed } from "@/lib/planStatus";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
+import { hasFullAccess } from "@/lib/fullAccess";
 
 /** The error an add-on's server code throws for an org that did not buy it. */
 export class CustomPageLockedError extends Error {
@@ -60,6 +65,7 @@ export function isCustomPageLockedError(err: unknown): err is CustomPageLockedEr
  *  when the plan cannot be read — callers that must fail closed (requirePage)
  *  let it propagate. */
 async function readPageAccess(organizationId: string): Promise<{ lapsed: boolean; pages: string[] | null }> {
+  if (await hasFullAccess(organizationId)) return { lapsed: false, pages: null };
   const sub = await readAccessSubscription(organizationId);
   if (planLapsed(sub)) return { lapsed: true, pages: [] };
   return { lapsed: false, pages: await readCustomPages(organizationId, sub?.plan ?? null) };

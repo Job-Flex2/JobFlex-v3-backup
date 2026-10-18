@@ -1,13 +1,14 @@
-// A platform admin has no plan caps in an organization they OWN, and the
-// ordinary caps everywhere else — through the REAL engine, no browser.
+// A platform admin has no plan caps in an organization they hold a seat in,
+// and the ordinary caps everywhere else — through the REAL engine, no browser.
 //
 //   npx tsx --tsconfig tsconfig.json qa/tests/billing/platform-admin-limits.check.ts
 //
-// The owner's rule (2026-09-22): isPlatformAdmin AND an OWNER seat in the
-// organization being checked → every key unlimited, enforcePlanLimit passes,
-// the surfaces say "Unlimited · platform admin"; a member's seat (or none)
-// in another organization → the plan's caps as for anyone; the flag off →
-// the caps are back. One rule, in lib/limitsEngine (resolvePlan).
+// The owner's rule (2026-09-22; any seat since 2026-10-17): isPlatformAdmin
+// AND a seat (any role) in the organization being checked → every key
+// unlimited, enforcePlanLimit passes, the surfaces say "Unlimited · platform
+// admin"; no seat → the plan's caps as for anyone; the flag off → the caps are
+// back. One rule, lib/fullAccess hasFullAccess (asked by lib/limitsEngine
+// resolvePlan); every other door is in platform-admin-access.check.ts.
 //
 // Made here and removed at the end, pass or fail: one user with the flag
 // (`qa-platform-admin-<pid>@jobflex.test`), one organisation they own
@@ -16,7 +17,8 @@
 // is only READ — nothing is created or counted in Acme.
 
 import { PrismaClient } from "@prisma/client";
-import { checkPlanLimit, enforcePlanLimit, getOrgLimitUsage, getOrgLimitOverview, isPlanLimitExempt } from "../../../src/lib/limitsEngine";
+import { checkPlanLimit, enforcePlanLimit, getOrgLimitUsage, getOrgLimitOverview } from "../../../src/lib/limitsEngine";
+import { hasFullAccess } from "../../../src/lib/fullAccess";
 import { getNavLimitState } from "../../../src/lib/navLimits";
 import { LIMIT_DEFS, PLAN_LIMIT_MESSAGE } from "../../../src/lib/planLimits";
 
@@ -75,11 +77,11 @@ async function main() {
   try {
     /* ── A. the rule ────────────────────────────────────────────────── */
     head("A · the rule, as a question");
-    ok("A admin + OWNER of the org → exempt", await isPlanLimitExempt(ownOrgId, userId));
-    ok("A admin + member (USER) of QA Co → not exempt", !(await isPlanLimitExempt(qaOrgId, userId)));
-    ok("A nobody → not exempt", !(await isPlanLimitExempt(ownOrgId, null)));
+    ok("A admin + OWNER of the org → exempt", await hasFullAccess(ownOrgId, userId));
+    ok("A admin + member (USER) of QA Co → exempt (any seat)", await hasFullAccess(qaOrgId, userId));
+    ok("A nobody → not exempt", !(await hasFullAccess(ownOrgId, null)));
     const stranger = await db.user.findUnique({ where: { email: "qa@acme.test" }, select: { id: true } });
-    ok("A the QA robot (no flag) in its own org → not exempt", !!stranger && !(await isPlanLimitExempt(qaOrgId, stranger.id)));
+    ok("A the QA robot (no flag) in its own org → not exempt", !!stranger && !(await hasFullAccess(qaOrgId, stranger.id)));
 
     /* ── B. in their own organisation: no caps ──────────────────────── */
     head("B · own organisation: every key unlimited");
@@ -100,36 +102,41 @@ async function main() {
     const nav = await getNavLimitState(ownOrgId);
     ok("B the sidebar state outside a request (nobody): counters, not exempt", nav.exempt === false && Object.keys(nav.counters).length > 0);
 
-    /* ── C. in QA Co as a member: the plan's caps ───────────────────── */
-    head("C · QA Co, as a member: the caps as for anyone");
+    /* ── C. QA Co: a member's seat opens it too; no seat, the caps ──── */
+    head("C · QA Co: a member's seat → no caps; the seat removed → the caps as for anyone");
     const asMember = await getOrgLimitUsage(qaOrgId, me);
+    ok("C as a member (USER): every key exempt", asMember.every((u) => u.exempt === true && u.limit === null));
+    await db.membership.deleteMany({ where: { userId, organizationId: qaOrgId } });
+    const asStranger = await getOrgLimitUsage(qaOrgId, me);
     const asNobody = await getOrgLimitUsage(qaOrgId, nobody);
-    ok("C not exempt", asMember.every((u) => u.exempt === undefined));
-    ok("C the same numbers as for nobody", JSON.stringify(asMember) === JSON.stringify(asNobody));
-    ok("C proposals are capped", asMember.find((u) => u.resource === "proposalsCreated")?.limit !== null);
+    ok("C no seat: not exempt", asStranger.every((u) => u.exempt === undefined));
+    ok("C no seat: the same numbers as for nobody", JSON.stringify(asStranger) === JSON.stringify(asNobody));
+    ok("C no seat: proposals are capped", asStranger.find((u) => u.resource === "proposalsCreated")?.limit !== null);
     const blockedQa = await checkPlanLimit(qaOrgId, "proposalsCreated", 1, me);
     const blockedNobody = await checkPlanLimit(qaOrgId, "proposalsCreated", 1, nobody);
-    ok("C enforcement is the same as for nobody", blockedQa.allowed === blockedNobody.allowed && blockedQa.used === blockedNobody.used);
+    ok("C no seat: enforcement is the same as for nobody", blockedQa.allowed === blockedNobody.allowed && blockedQa.used === blockedNobody.used);
     if (!blockedNobody.allowed) {
       const err = await rejects(() => enforcePlanLimit(qaOrgId, "proposalsCreated", 1, me));
-      ok("C an exhausted QA Co blocks the admin-member too", !!err && err.message === PLAN_LIMIT_MESSAGE);
+      ok("C an exhausted QA Co blocks the admin without a seat too", !!err && err.message === PLAN_LIMIT_MESSAGE);
     }
 
     /* ── D. the flag off: the caps are back ─────────────────────────── */
     head("D · the flag removed");
     await db.user.update({ where: { id: userId }, data: { isPlatformAdmin: false } });
-    ok("D not exempt any more", !(await isPlanLimitExempt(ownOrgId, userId)));
+    ok("D not exempt any more", !(await hasFullAccess(ownOrgId, userId)));
     const back = await checkPlanLimit(ownOrgId, "proposalsCreated", 1, me);
     ok("D own organisation counts and blocks again", back.limit === limit && back.used > limit && !back.allowed && back.exempt === undefined, `${back.used}/${back.limit}`);
     const backErr = await rejects(() => enforcePlanLimit(ownOrgId, "proposalsCreated", 1, me));
     ok("D enforcePlanLimit throws again", !!backErr && backErr.message === PLAN_LIMIT_MESSAGE);
     await db.user.update({ where: { id: userId }, data: { isPlatformAdmin: true } });
-    ok("D the flag back on: exempt again", await isPlanLimitExempt(ownOrgId, userId));
+    ok("D the flag back on: exempt again", await hasFullAccess(ownOrgId, userId));
 
-    /* ── E. an OWNER seat given up ──────────────────────────────────── */
-    head("E · the seat, not just the flag");
-    await db.membership.updateMany({ where: { userId, organizationId: ownOrgId }, data: { role: "ADMIN" } });
-    ok("E an org ADMIN seat (not OWNER) with the flag → not exempt", !(await isPlanLimitExempt(ownOrgId, userId)));
+    /* ── E. any role of the seat ─────────────────────────────────────── */
+    head("E · the seat's role does not matter");
+    for (const role of ["ADMIN", "MANAGER", "SALES", "INSTALLER"]) {
+      await db.membership.updateMany({ where: { userId, organizationId: ownOrgId }, data: { role } });
+      ok(`E an org ${role} seat with the flag → exempt`, await hasFullAccess(ownOrgId, userId));
+    }
     await db.membership.updateMany({ where: { userId, organizationId: ownOrgId }, data: { role: "OWNER" } });
 
     /* ── F. the real one, read only ─────────────────────────────────── */
@@ -137,10 +144,10 @@ async function main() {
     const owner = await db.user.findUnique({ where: { email: "owner@acme.test" }, select: { id: true, isPlatformAdmin: true, memberships: { select: { organizationId: true, role: true, organization: { select: { slug: true } } } } } });
     const acme = owner?.memberships.find((m) => m.role === "OWNER");
     if (owner?.isPlatformAdmin && acme) {
-      ok(`F owner@acme.test is exempt in ${acme.organization.slug}`, await isPlanLimitExempt(acme.organizationId, owner.id));
-      ok("F and not in QA Co", !(await isPlanLimitExempt(qaOrgId, owner.id)));
+      ok(`F owner@acme.test is exempt in ${acme.organization.slug}`, await hasFullAccess(acme.organizationId, owner.id));
+      ok("F and not in QA Co", !(await hasFullAccess(qaOrgId, owner.id)));
       const sales = await db.user.findUnique({ where: { email: "sales@acme.test" }, select: { id: true } });
-      if (sales) ok("F sales@acme.test (no flag) is not exempt in Acme", !(await isPlanLimitExempt(acme.organizationId, sales.id)));
+      if (sales) ok("F sales@acme.test (no flag) is not exempt in Acme", !(await hasFullAccess(acme.organizationId, sales.id)));
     } else {
       console.log("F  skipped — owner@acme.test is not a platform admin owning an organisation in this database");
     }

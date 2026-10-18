@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
 import { getBlockedCustomPages } from "@/lib/customPageAccess";
+import { accessRole, hasFullAccess } from "@/lib/fullAccess";
 import { UpgradeGate } from "@/components/v3/upgrade-gate/upgrade-gate";
 import { CustomGateSwap } from "@/components/v3/upgrade-gate/custom-gate-swap";
 import { isCustomBlockedPath } from "@/lib/customPlan";
@@ -82,8 +83,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Active-org role drives the limited-role experiences (INSTALLER / SALES /
   // ESTIMATOR): a restricted nav and no org-wide manager tools (global search,
   // notifications). Office roles get the full dashboard.
-  const activeRole =
-    membershipItems.find((m) => m.current)?.role ?? membershipItems[0]?.role ?? null;
+  // A platform admin's seat never narrows it (lib/fullAccess): a limited role
+  // reads as a manager.
+  const activeSeat = membershipItems.find((m) => m.current) ?? membershipItems[0] ?? null;
+  const activeRole = accessRole(
+    activeSeat?.role,
+    await hasFullAccess(activeSeat?.organizationId ?? null, session.user.id),
+  );
   const isWorker = activeRole === "INSTALLER";
   const routeGate = activeRole ? ROLE_ROUTE_GATES[activeRole] : undefined;
   const isLimited = Boolean(routeGate);

@@ -3,6 +3,7 @@ import { PLAN_TIERS, type Plan } from "@/lib/entitlements";
 import { CUSTOM_PLAN_TIER } from "@/lib/customPlan";
 import { planLapsed } from "@/lib/planStatus";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
+import { hasFullAccess } from "@/lib/fullAccess";
 
 /**
  * Resolve an org's effective feature tier.
@@ -17,8 +18,12 @@ import { readAccessSubscription } from "@/lib/subscriptionAccess";
  * A LAPSED plan is FREE here whatever its name (owner, 2026-10-07): CANCELED,
  * UNPAID, EXPIRED, TRIAL_ENDED, or a period long over — lib/planStatus. A
  * failed renewal Stripe is still retrying (PAST_DUE) keeps its tier.
+ *
+ * A platform admin in the org (lib/fullAccess, the session's user) has the
+ * top tier whatever the subscription says (owner, 2026-10-17).
  */
 export async function getOrgPlanById(organizationId: string): Promise<Plan> {
+  if (await hasFullAccess(organizationId)) return "ENTERPRISE";
   const sub = await readAccessSubscription(organizationId);
   if (!sub?.plan || planLapsed(sub)) return "FREE";
 

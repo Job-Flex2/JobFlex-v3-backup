@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { accessRole, fullAccessFor } from "@/lib/fullAccessRule";
 import { clientIp, rateLimitShared, MINUTE } from "@/lib/rateLimit";
 
 /** The database did not answer during sign-in. Reaches the browser as
@@ -312,7 +313,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.cv = dbUser.credentialVersion ?? 0;
           const m = dbUser.memberships[0];
           token.activeOrgId = dbUser.activeOrgId ?? m?.organizationId ?? null;
-          token.role = m?.role ?? null;
+          // The middleware's route gate reads this: a platform admin's seat never narrows it (lib/fullAccess).
+          token.role = accessRole(m?.role, fullAccessFor(dbUser, m));
           token.orgName = m?.organization?.name ?? null;
           token.orgCheckedAt = Date.now();
         }
@@ -351,7 +353,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             dbUser.memberships.find((x) => x.organizationId === dbUser.activeOrgId) ??
             dbUser.memberships[0];
           token.activeOrgId = dbUser.activeOrgId ?? m?.organizationId ?? null;
-          token.role = m?.role ?? null;
+          // The middleware's route gate reads this: a platform admin's seat never narrows it (lib/fullAccess).
+          token.role = accessRole(m?.role, fullAccessFor(dbUser, m));
           token.orgName = m?.organization?.name ?? null;
           token.orgCheckedAt = Date.now();
         }

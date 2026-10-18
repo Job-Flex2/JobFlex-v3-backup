@@ -43,6 +43,7 @@ scripts:
   - { file: plan-change.check.ts, suite: billing, kind: check, status: live }
   - { file: plan-spotlight.check.ts, suite: billing, kind: check, status: live }
   - { file: platform-admin-limits.check.ts, suite: billing, kind: check, status: live }
+  - { file: platform-admin-access.check.ts, suite: billing, kind: check, status: live, note: "a platform admin sees everything in their organization, any plan and any seat (lib/fullAccess hasFullAccess); an ordinary owner stays closed (2026-10-17)" }
   - { file: refund-isolation.check.ts, suite: billing, kind: check, status: live }
   - { file: trial-board.check.ts, suite: billing, kind: check, status: live }
   - { file: trial-caps.check.ts, suite: billing, kind: check, status: live }

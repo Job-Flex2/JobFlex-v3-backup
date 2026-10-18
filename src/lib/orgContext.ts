@@ -5,6 +5,7 @@ import { isServerActionRequest, noteTrialLock } from "@/lib/trialLock";
 import { isTrialWriteLocked } from "@/lib/trialState";
 import { noteRequestOrg } from "@/lib/trialMeter";
 import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
+import { accessRole, hasFullAccess } from "@/lib/fullAccess";
 
 export class UnauthorizedError extends Error {
   constructor(message = "Unauthorized") {
@@ -127,30 +128,33 @@ export async function requireOrg() {
 
 async function resolveOrg() {
   const user = await requireUser();
+  const seat = await findSeat(user.id, user.activeOrgId ?? null);
+  if (!seat) throw new NoOrgError();
+  // A platform admin's seat never narrows the dashboard (lib/fullAccess): a
+  // limited role reads as a manager for every role gate and guard below.
+  // `seatRole` is the membership as stored.
+  const full = await hasFullAccess(seat.organizationId, user.id);
+  return { user, organizationId: seat.organizationId, role: accessRole(seat.role, full) ?? seat.role, seatRole: seat.role, fullAccess: full };
+}
+
+async function findSeat(userId: string, activeOrgId: string | null) {
   // A soft-deleted org (Settings → Danger zone) is gone from every membership
   // lookup at once; the member falls through to another org or NoOrgError.
   const alive = { organization: { deletedAt: null } };
-  if (!user.activeOrgId) {
+  if (activeOrgId) {
     const m = await db.membership.findFirst({
-      where: { userId: user.id, ...alive },
-      orderBy: { createdAt: "asc" },
+      where: { userId, organizationId: activeOrgId, ...alive },
     });
-    if (!m) throw new NoOrgError();
-    return { user, organizationId: m.organizationId, role: m.role };
+    if (m) return m;
   }
-  const m = await db.membership.findFirst({
-    where: { userId: user.id, organizationId: user.activeOrgId, ...alive },
-  });
-  if (m) return { user, organizationId: m.organizationId, role: m.role };
-  // JWT has a stale activeOrgId (e.g. membership was removed and re-created, or
-  // DB was partially reset). Fall back to the oldest remaining membership so a
-  // valid user is never locked out by a stale token.
-  const fallback = await db.membership.findFirst({
-    where: { userId: user.id, ...alive },
+  // No active org, or the JWT has a stale activeOrgId (e.g. membership was
+  // removed and re-created, or DB was partially reset). Fall back to the
+  // oldest remaining membership so a valid user is never locked out by a
+  // stale token.
+  return db.membership.findFirst({
+    where: { userId, ...alive },
     orderBy: { createdAt: "asc" },
   });
-  if (!fallback) throw new NoOrgError();
-  return { user, organizationId: fallback.organizationId, role: fallback.role };
 }
 
 // ── Role taxonomy ────────────────────────────────────────────────────────────

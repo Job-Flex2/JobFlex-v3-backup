@@ -41,23 +41,22 @@
 // while it lies inside the current cycle (see usageResetInForce), so it
 // burns by itself when the next cycle begins; nothing is deleted.
 //
-// PLATFORM ADMINS IN THEIR OWN ORGANIZATION (owner, 2026-09-22). When the
-// current user carries isPlatformAdmin AND is an OWNER of the organization
-// being checked, the plan's caps do not apply: every key resolves unlimited,
-// enforcePlanLimit passes, and the sidebar and the plans page say
-// "Unlimited · platform admin" instead of counting. In any other
-// organization — an admin who is merely a member, or no member at all — the
-// caps hold as for anyone. The rule lives HERE, in resolvePlan: the engine
-// reads the session itself (no caller passes a user), so no action needs a
-// check of its own. Where there is no session — a cron, an inbound phone
-// call, a public form — there is no current user and the caps apply. Money
-// is untouched: paid providers (EagleView, ReportAll …) keep their own
+// PLATFORM ADMINS IN THEIR ORGANIZATION (owner, 2026-09-22; any seat since
+// 2026-10-17). When the current user carries isPlatformAdmin and holds a seat
+// in the organization being checked, the plan's caps do not apply: every key
+// resolves unlimited, enforcePlanLimit passes, and the sidebar and the plans
+// page say "Unlimited · platform admin" instead of counting. The rule is
+// lib/fullAccess hasFullAccess — the one every access check asks — and the
+// engine reads the session itself (no caller passes a user), so no action
+// needs a check of its own. Where there is no session — a cron, an inbound
+// phone call, a public form — there is no current user and the caps apply.
+// Money is untouched: paid providers (EagleView, ReportAll …) keep their own
 // budgets and ledgers; this is the plan's caps only.
 // ─────────────────────────────────────────────────────────────────────────
 import { planLapsed } from "@/lib/planStatus";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { db } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { hasFullAccess } from "@/lib/fullAccess";
 import {
   parsePlanLimits,
   isUnlimited,
@@ -207,34 +206,6 @@ export interface LimitActor {
 }
 
 /**
- * The rule itself: the user carries isPlatformAdmin and holds an OWNER seat
- * in this organization. Nothing else exempts anyone.
- */
-export async function isPlanLimitExempt(organizationId: string, userId: string | null | undefined): Promise<boolean> {
-  if (!userId) return false;
-  const user = await db.user
-    .findUnique({
-      where: { id: userId },
-      select: { isPlatformAdmin: true, memberships: { where: { organizationId, role: "OWNER" }, select: { id: true }, take: 1 } },
-    })
-    .catch(() => null);
-  return !!user?.isPlatformAdmin && user.memberships.length > 0;
-}
-
-/** The session's user id, or null outside a request or for a partner session. */
-async function currentUserId(): Promise<string | null> {
-  try {
-    const session = await auth();
-    const u = session?.user;
-    if (!u?.id || u.principal === "INFLUENCER") return null;
-    return u.id;
-  } catch {
-    // No request scope (cron, script, build): nobody is asking.
-    return null;
-  }
-}
-
-/**
  * A lapsed subscription is enforced at FREE limits — this is what closes the
  * "cancel/stop paying, keep the paid quotas" hole. The rule is lib/planStatus,
  * shared with the feature tier and the page gate: PAST_DUE keeps the plan
@@ -257,7 +228,7 @@ async function resolvePlan(
   const [sub, resets, exempt] = await Promise.all([
     readAccessSubscription(organizationId),
     readUsageResetMarks(organizationId),
-    (actor && "actorId" in actor ? Promise.resolve(actor.actorId) : currentUserId()).then((uid) => isPlanLimitExempt(organizationId, uid)),
+    hasFullAccess(organizationId, actor && "actorId" in actor ? (actor.actorId ?? null) : undefined),
   ]);
 
   const now = new Date();
@@ -279,7 +250,7 @@ async function resolvePlan(
   const plan = plans.find((p) => p.slug.toLowerCase() === planKey) ?? null;
 
   // A lapsed org with no "free" catalog row must not fail open to unlimited.
-  // A platform admin in their own organization: no caps, whatever the plan.
+  // A platform admin in their organization: no caps, whatever the plan (lib/fullAccess).
   if (exempt) return { limits: {}, cycleStart, resets, exempt };
   if (lapsed && !plan) return { limits: { ...DEFAULT_FREE_LIMITS }, cycleStart, resets, exempt };
 

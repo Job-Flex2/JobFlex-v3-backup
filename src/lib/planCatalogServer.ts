@@ -8,6 +8,7 @@
 
 import { planLapsed } from "@/lib/planStatus";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
+import { hasFullAccess } from "@/lib/fullAccess";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { PLAN_TIERS, type Plan } from "@/lib/entitlements";
@@ -148,15 +149,19 @@ export async function getOrgPlanContext(organizationId: string): Promise<{
   plan: PlanDTO | null;
   rawPlan: string;
 }> {
-  const sub = await readAccessSubscription(organizationId);
+  const [sub, full] = await Promise.all([readAccessSubscription(organizationId), hasFullAccess(organizationId)]);
   // No subscription row → nothing to display as a plan (the Free tier is no
   // longer presented; the limits engine still enforces the internal cap-floor
   // row on its own). Tier stays FREE — the boolean-feature floor is unchanged.
-  if (!sub?.plan) return { tier: "FREE", plan: null, rawPlan: "NONE" };
+  // A platform admin in the org has the top tier whatever the row says
+  // (lib/fullAccess, owner 2026-10-17).
+  if (!sub?.plan) return { tier: full ? "ENTERPRISE" : "FREE", plan: null, rawPlan: "NONE" };
   const rawPlan = sub.plan;
   const plan = await getPlanBySlug(rawPlan, { includeInactive: true });
   const upper = rawPlan.toUpperCase();
-  const tier: Plan = planLapsed(sub)
+  const tier: Plan = full
+    ? "ENTERPRISE"
+    : planLapsed(sub)
     ? "FREE"
     : (PLAN_TIERS as readonly string[]).includes(upper)
     ? (upper as Plan)

@@ -54,6 +54,7 @@
 
 ## Owner-locked decisions
 - Cancelling a subscription happens only at Settings → Billing → Manage subscription → the window → Cancel → Before you go → confirmation (owner, 2026-10-17). The Subscription page and every other place have no cancel button.
+- Платформенный админ всегда видит всё. Любая новая проверка доступа идёт через `hasFullAccess` ([src/lib/fullAccess.ts](src/lib/fullAccess.ts)) (owner, 2026-10-17).
 
 ## Git
 - Commit only when asked. Never push, branch, or open a PR without explicit instruction.

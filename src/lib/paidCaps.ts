@@ -14,7 +14,7 @@
 import { DAY, HOUR, RateLimitError, enforceRateLimit, retryInWords } from "@/lib/rateLimit";
 import { planLapsed } from "@/lib/planStatus";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
-import { isPlanLimitExempt } from "@/lib/limitsEngine";
+import { hasFullAccess } from "@/lib/fullAccess";
 
 export type PaidRefusal = { ok: false; error: string; capped: true };
 
@@ -99,18 +99,19 @@ export async function takeHvacReportCap(organizationId: string): Promise<{ ok: t
 //   · planOpen    — the company HOLDS a plan that is still open: a
 //                   subscription that is not FREE and not ended. What the
 //                   owner asked for before a text code or a parcel tile.
+// A platform admin in the company (lib/fullAccess hasFullAccess, asked as the
+// session's user when no user is passed) finds the plan open and not ended,
+// whatever the row says. A cron or a webhook has no session: the company decides.
 
 export const PLAN_NEEDED_MESSAGE = "This needs an active plan. Choose a plan on Subscription to turn it on.";
 
-export async function planEnded(organizationId: string): Promise<boolean> {
+export async function planEnded(organizationId: string, userId?: string | null): Promise<boolean> {
+  if (await hasFullAccess(organizationId, userId)) return false;
   return planLapsed(await readAccessSubscription(organizationId));
 }
 
-//                   A platform admin in their own company (an OWNER seat)
-//                   passes whatever the row says — the rule lib/limitsEngine
-//                   keeps for the plan's caps (isPlanLimitExempt).
 export async function planOpen(organizationId: string, userId?: string | null): Promise<boolean> {
-  if (userId && (await isPlanLimitExempt(organizationId, userId))) return true;
+  if (await hasFullAccess(organizationId, userId)) return true;
   const sub = await readAccessSubscription(organizationId);
   return !!sub && sub.status !== "FREE" && !planLapsed(sub);
 }
@@ -123,7 +124,8 @@ export async function planEndedRefusal(organizationId: string, what: string): Pr
 
 /** Whether a text may still leave the company's own number: not after its
  *  plan ended. The dispatcher runs in crons and webhooks too, with no session,
- *  so it asks the company, not the caller. */
+ *  so there it is the company's plan that answers; a text a platform admin
+ *  sends from the dashboard of their company is sent. */
 export async function orgMayText(organizationId: string): Promise<boolean> {
   return !(await planEnded(organizationId));
 }
