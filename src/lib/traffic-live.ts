@@ -1419,16 +1419,13 @@ export function buildLiveTotalsQuery(timezone: string, fullHistory = false): str
  *  (lib/traffic-visitor carriesAdTag): utm_source or fbclid on the link. The
  *  first-ad day comes back as '1970-01-01' when there is none; the reader
  *  treats that as unknown. */
-export function buildInvestorVisitorsQuery(timezone: string, sinceDate: string, skipDays: readonly string[] = []): string {
+export function buildInvestorVisitorsQuery(timezone: string, sinceDate: string): string {
   const tz = tzLiteral(timezone);
   const prop = (name: string) => `ifNull(toString(properties.${name}), '')`;
   const production = visitorRuleSql({ host: "hostname", ua: "ua", browserType: "browser_type", event: "'$pageview'" }, "production");
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sinceDate) ? sinceDate : TRAFFIC_SINCE;
-  // The days the investor figures leave out (2026-10-17: the no-card trials' days) are left out of the count too.
-  const skip = skipDays.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 400);
-  const notSkipped = skip.length ? ` AND toString(day) NOT IN (${skip.map((d) => `'${d}'`).join(", ")})` : "";
   return `SELECT
-    uniqExactIf(person, day >= toDate('${date}')${notSkipped} AND ${production}),
+    uniqExactIf(person, day >= toDate('${date}') AND ${production}),
     toString(minIf(day, from_ad AND ${production}))
   FROM (
     SELECT toString(person_id) AS person,

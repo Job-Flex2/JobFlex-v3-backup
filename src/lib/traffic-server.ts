@@ -102,12 +102,12 @@ export async function fetchLiveTotals(timezone: string, fullHistory = false): Pr
  *  beside the "Counting from" field. Cached like the totals, per day asked. */
 export interface InvestorVisitors { visitors: number; firstAdDay: string | null }
 const investorVisitors = new Map<string, { at: number; promise: Promise<InvestorVisitors> }>();
-export async function fetchInvestorVisitors(sinceDate: string, timezone = TRAFFIC_TZ, skipDays: readonly string[] = []): Promise<InvestorVisitors> {
-  const key = `${sinceDate}|${timezone}|${skipDays.join(",")}`;
+export async function fetchInvestorVisitors(sinceDate: string, timezone = TRAFFIC_TZ): Promise<InvestorVisitors> {
+  const key = `${sinceDate}|${timezone}`;
   const now = Date.now();
   const hit = investorVisitors.get(key);
   if (hit && now - hit.at < LIVE_TOTALS_CACHE_MS) return hit.promise;
-  const promise = runTrafficQuery(buildInvestorVisitorsQuery(timezone, sinceDate, skipDays), "investor visitors").then((rows) => {
+  const promise = runTrafficQuery(buildInvestorVisitorsQuery(timezone, sinceDate), "investor visitors").then((rows) => {
     const row: unknown[] = Array.isArray(rows[0]) ? rows[0] : [];
     const v = Number(row[0]);
     const d = typeof row[1] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row[1]) && row[1] >= "2020-01-01" ? row[1] : null;
