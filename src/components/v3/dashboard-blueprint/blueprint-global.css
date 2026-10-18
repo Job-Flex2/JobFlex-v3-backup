@@ -720,6 +720,7 @@ body:has(.jf-blueprint) {
 .jf-blueprint .sb [data-tone="berry"] { --tone: var(--tool-video); }
 .jf-blueprint .sb [data-tone="teal"] { --tone: var(--tool-hvac); }
 .jf-blueprint .sb [data-tone="cedar"] { --tone: var(--tool-deck); }
+.jf-blueprint .sb [data-tone="olive"] { --tone: var(--tool-design); }
 
 /* The bay. Not positioned on purpose: the plate sums offsets up through
    positioned wrappers and a positioned bay's frame would sit between them. */

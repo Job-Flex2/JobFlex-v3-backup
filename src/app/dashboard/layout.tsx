@@ -35,7 +35,7 @@
 import { redirect } from "next/navigation";
 import type { Route } from "next";
 import { cookies, headers } from "next/headers";
-import { requireOrg } from "@/lib/orgContext";
+import { isLimitedRole, requireOrg } from "@/lib/orgContext";
 import { hiddenPagesFor } from "@/lib/earlyAccess";
 import { db } from "@/lib/db";
 import { SETUP_PATH, needsCompanySetup } from "@/lib/orgSetup";
@@ -44,6 +44,7 @@ import { getBlockedCustomPages } from "@/lib/customPageAccess";
 import { workspaceOf } from "@/lib/editionAccess";
 import { unlockedByEdition } from "@/lib/editions";
 import { canUseDeckEstimator } from "@/lib/deck/access";
+import { canUseDesignStudio } from "@/lib/design/access";
 import type { NavView } from "@/components/v3/blueprint-shell/nav-role";
 import { UpgradeGate } from "@/components/v3/upgrade-gate/upgrade-gate";
 import { isCustomBlockedPath } from "@/lib/customPlan";
@@ -166,12 +167,15 @@ export default async function DashboardBlueprintLayout({
     );
     // Deck Studio is not sold yet; the admins who test it (lib/deck/access) get it in the
     // New estimate dialog as a Preview — read beside the workspace, not after it.
-    const [ws, deckPreview] = await Promise.all([
+    // The Home Design Studio (lib/design/access) the same way: its sidebar row is drawn only for the accounts it opens to.
+    const [ws, deckPreview, designPreview] = await Promise.all([
       workspaceOf(ctx.organizationId).catch(() => null),
       canUseDeckEstimator({ id: ctx.user.id, email: ctx.user.email }, null).catch(() => false),
+      isLimitedRole(ctx.role) ? Promise.resolve(false) : canUseDesignStudio({ id: ctx.user.id, email: ctx.user.email }).catch(() => false),
     ]);
     if (ws) navView = { workspace: ws.workspace, unlocked: ws.deckAccess ? [...unlockedByEdition("deck")] : [], switchable: ws.switchable };
     if (deckPreview && !ws?.deckAccess) navView = { ...navView, preview: [...unlockedByEdition("deck")] };
+    if (designPreview) navView = { ...navView, tools: ["/dashboard/design-studio"] };
     announcements = await db.announcement
       .findMany({
         where: {
