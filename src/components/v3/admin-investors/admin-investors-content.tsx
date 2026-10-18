@@ -1,12 +1,10 @@
 "use client";
 
-// ADMIN — INVESTORS, /admin/investors (2026-10-06; facts only since
-// 2026-10-17). The report (shared with the public link and the PDF) with the
-// owner's controls between its first sentences and the rest: Meta's spend
-// (read now, or by itself every 15 minutes), days booked by hand for another
-// platform, the start day, and the shared link. No assumptions to set: the
-// daily budget, the realistic share, the projected spend and the horizon are
-// gone (owner: "remove assumptions").
+// ADMIN — INVESTORS, /admin/investors (2026-10-06). The report (shared with
+// the public link and the PDF) with the owner's controls between its numbers
+// and its chart: the daily ad budget (all ads together, spent every day),
+// days booked by hand or read from Meta, the start day and the assumptions,
+// and the shared link.
 
 import { useState, type ReactNode } from "react";
 import { Copy, ExternalLink, FileDown, Link as LinkIcon, RefreshCw, Trash2 } from "lucide-react";
@@ -28,16 +26,23 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const f = report.facts;
+  const f = report.figures;
   const a = report.settings;
 
+  // The daily budget.
+  const [budget, setBudget] = useState(a.dailyBudgetCents === null ? "" : String(a.dailyBudgetCents / 100));
+  const [budgetFrom, setBudgetFrom] = useState(a.budgetFrom ?? "");
+  const budgetChanged = (budget.trim() === "" ? null : Math.round(Number(budget) * 100)) !== a.dailyBudgetCents || (budgetFrom.trim() === "" ? null : budgetFrom) !== a.budgetFrom;
   // Days booked by hand.
   const [from, setFrom] = useState(todayLocal());
   const [to, setTo] = useState(todayLocal());
   const [perDay, setPerDay] = useState("");
-  // Meta reports itself once connected; a day by hand is then for another platform.
-  const [platform, setPlatform] = useState<SpendPlatform>(initial.meta.configured ? "google" : "meta");
-  // The start day.
+  const [platform, setPlatform] = useState<SpendPlatform>("meta");
+  // The assumptions.
+  const [pct, setPct] = useState(a.realisticPct);
+  const [projPerDay, setProjPerDay] = useState(a.spendPerDayCents === null ? "" : String(a.spendPerDayCents / 100));
+  const [horizon, setHorizon] = useState(a.horizonDays);
+  const [trialDays, setTrialDays] = useState(a.trialDays);
   const [sinceDate, setSinceDate] = useState(a.sinceDate ?? "");
   const sinceOrNull = sinceDate.trim() === "" ? null : sinceDate;
 
@@ -65,29 +70,46 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
       setError("Copy did not work here — select the link and copy it.");
     }
   };
-  const sinceChanged = sinceOrNull !== a.sinceDate;
-  const booked = report.entries;
-  const handBooked = booked.filter((e) => e.source === "manual");
+  const assumptionsChanged = pct !== a.realisticPct || horizon !== a.horizonDays || trialDays !== a.trialDays || sinceOrNull !== a.sinceDate || (projPerDay.trim() === "" ? a.spendPerDayCents !== null : Math.round(Number(projPerDay) * 100) !== a.spendPerDayCents);
+  const booked = report.spend.entries;
+  const bookedTotal = booked.filter((e) => e.date >= f.since && e.date <= f.today).reduce((x, e) => x + e.cents, 0);
 
   const controls = (
     <div className={s.controls}>
-      {/* The ad spend: Meta's own figures. */}
+      {/* The ad budget. */}
       <section className={s.panel} aria-label="Ad spend">
         <h2 className={s.panelTitle}>Ad spend</h2>
+        <form
+          className={s.form}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(() => saveInvestorSettingsAction({ dailyBudgetDollars: budget.trim() === "" ? null : Number(budget), budgetFrom: budgetFrom.trim() === "" ? null : budgetFrom }));
+          }}
+        >
+          <label className={s.field}><span>Daily budget, all ads together, $</span><input className={s.in} name="budget" type="number" inputMode="decimal" min={0} step="0.01" placeholder="e.g. 100" value={budget} onChange={(e) => setBudget(e.target.value)} /></label>
+          <label className={s.field}><span>Spent every day since</span><input className={s.in} name="budgetFrom" type="date" value={budgetFrom} min="2025-01-01" max={todayLocal()} onChange={(e) => setBudgetFrom(e.target.value)} /></label>
+          <button type="submit" className="btn btn-primary" disabled={pending || !budgetChanged}>Save budget</button>
+        </form>
+        <p className={s.hint}>
+          {f.spend.dailyBudgetCents !== null && f.spend.budgetFrom
+            ? <>Counted as spent every day from {longDate(f.spend.budgetFrom)} to today — {f.spend.budgetDays > 0 ? <><b>{dollars(f.spend.dailyBudgetCents * f.spend.budgetDays)} over {f.spend.budgetDays} {f.spend.budgetDays === 1 ? "day" : "days"}</b> so far</> : <>no day yet, every day since then has a booked figure</>} — and projected forward at {dollars(f.spend.perDayProjectedCents)} a day. A day booked below, or read from Meta, overrides the budget for that day.</>
+            : <>Set what the ads cost per day — the total across all ads, not per ad. It counts as spent every day from that date, and is projected forward. Blank = only the days booked below.</>}
+        </p>
+
+        {/* Meta's own figures. */}
         <div className={s.metaRow} data-meta={report.meta.configured ? "on" : "off"}>
           <div>
             <b>Meta</b>{" "}
             {report.meta.configured
-              ? <>connected{report.meta.lastPulledAt ? ` · last read ${when(report.meta.lastPulledAt)}, ${report.meta.daysPulled} ${report.meta.daysPulled === 1 ? "day" : "days"}` : " · not read yet"}{report.meta.lastError ? ` · ${report.meta.lastError}` : ""} · read again by itself when older than 15 minutes — on the shared link too — and every morning</>
-              : <>not connected — add <code>META_ADS_ACCESS_TOKEN</code> and <code>META_AD_ACCOUNT_ID</code> to the deployment; then the exact spend per day is read by itself.</>}
+              ? <>connected{report.meta.lastPulledAt ? ` · last read ${when(report.meta.lastPulledAt)}, ${report.meta.daysPulled} ${report.meta.daysPulled === 1 ? "day" : "days"}` : " · not read yet"}{report.meta.lastError ? ` · ${report.meta.lastError}` : ""} · read again by itself when older than an hour, and every morning</>
+              : <>not connected — add <code>META_ADS_ACCESS_TOKEN</code> and <code>META_AD_ACCOUNT_ID</code> to the deployment; then the exact spend per day is read every morning.</>}
           </div>
           {report.meta.configured && <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => void run(() => pullMetaSpendAction())}>Read from Meta now</button>}
         </div>
-        <p className={s.hint}>The figures count only what was spent: Meta&apos;s own number for each day, and any day booked by hand below. Nothing is estimated.{f.leftOut.cents > 0 ? ` ${dollars(f.leftOut.cents)} spent while trials needed no card is left out of them.` : ""}</p>
 
         {/* Days booked by hand. */}
         <details className={s.fold}>
-          <summary>Book days by hand · for a platform Meta does not report · {handBooked.length} {handBooked.length === 1 ? "day" : "days"}</summary>
+          <summary>Book days by hand · {booked.length} {booked.length === 1 ? "day" : "days"}</summary>
           <form
             className={s.form}
             onSubmit={(e) => {
@@ -101,7 +123,7 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
             <label className={s.field}><span>Platform</span><select className={s.in} value={platform} onChange={(e) => setPlatform(e.target.value as SpendPlatform)}>{PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABEL[p]}</option>)}</select></label>
             <button type="submit" className="btn btn-primary" disabled={pending}>Book spend</button>
           </form>
-          <p className={s.hint}>{handBooked.length} {handBooked.length === 1 ? "day" : "days"} booked by hand. A day booked here adds to Meta&apos;s for another platform; a Meta day booked by hand is replaced by Meta&apos;s own figure on its next read.</p>
+          <p className={s.hint}>{booked.length} {booked.length === 1 ? "day" : "days"} booked · {dollars(bookedTotal)} since the start day. A booked day replaces the budget for that day; a figure read from Meta replaces a hand-typed Meta day.</p>
           {booked.length > 0 && (
             <div className={s.entryList}>
               {booked.slice(0, 120).map((e) => (
@@ -118,18 +140,18 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
         </details>
       </section>
 
-      {/* The start day. */}
-      <section className={s.panel} aria-label="Counting from">
-        <h2 className={s.panelTitle}>Counting from</h2>
+      {/* The assumptions. */}
+      <section className={s.panel} aria-label="Assumptions">
+        <h2 className={s.panelTitle}>Assumptions</h2>
         <form
           className={s.form}
           onSubmit={(e) => {
             e.preventDefault();
-            void run(() => saveInvestorSettingsAction({ sinceDate: sinceOrNull }));
+            void run(() => saveInvestorSettingsAction({ realisticPct: pct, spendPerDayDollars: projPerDay.trim() === "" ? null : Number(projPerDay), horizonDays: horizon, trialDays, sinceDate: sinceOrNull }));
           }}
         >
           <label className={`${s.field} ${s.wide}`}>
-            <span>The day the first campaign went live</span>
+            <span>Counting from · the day the first campaign went live</span>
             <input className={s.in} type="date" value={sinceDate} min="2025-01-01" max={todayLocal()} onChange={(e) => setSinceDate(e.target.value)} />
             <small>
               {report.firstAdDay ? (
@@ -140,10 +162,18 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
               ) : (
                 <>Blank counts from the live map&apos;s start, Sep 30, 2026. </>
               )}
-              Spend, signups and payments before this day are left out; customers already paying count as paying.
+              Signups, trials, paying accounts and spend before this day are left out.
             </small>
           </label>
-          <button type="submit" className="btn btn-primary" disabled={pending || !sinceChanged}>Save</button>
+          <label className={`${s.field} ${s.wide}`}>
+            <span>Realistic share of trials that pay · <b>{pct}%</b></span>
+            <input className={s.range} type="range" min={0} max={100} step={5} value={pct} onChange={(e) => setPct(Number(e.target.value))} aria-label="Realistic share of trials that pay, percent" />
+            <small>By behaviour the model reads {f.trials.byBehaviourPct === null ? "—" : `${f.trials.byBehaviourPct}%`}{f.observed.pct !== null ? `; observed so far ${f.observed.pct}%` : ""}.</small>
+          </label>
+          <label className={s.field}><span>Ads per day from tomorrow, $</span><input className={s.in} type="number" inputMode="decimal" min={0} step="1" placeholder={`${f.spend.perDayProjectedCents / 100} (${a.dailyBudgetCents !== null && a.spendPerDayCents === null ? "the budget" : "recent pace"})`} value={projPerDay} onChange={(e) => setProjPerDay(e.target.value)} /></label>
+          <label className={s.field}><span>Horizon, days</span><input className={s.in} type="number" min={30} max={730} step={30} value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} /></label>
+          <label className={s.field}><span>Trial length, days</span><input className={s.in} type="number" min={1} max={90} value={trialDays} onChange={(e) => setTrialDays(Number(e.target.value))} /></label>
+          <button type="submit" className="btn btn-primary" disabled={pending || !assumptionsChanged}>Apply</button>
         </form>
       </section>
 

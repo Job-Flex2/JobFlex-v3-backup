@@ -1,175 +1,148 @@
-// THE INVESTOR REPORT (2026-10-06; facts only since 2026-10-17) — the same page for the admin, for the shared link
-// and (in prose) for the PDF. Owner, 2026-10-17: "remove the assumptions; read the current spend; take out the money
-// spent while the trials needed no card, show what the ads for the card trials cost, but count the paying users who
-// came from the no-card trials; make it smart and understandable." So: what the ads cost (live from Meta), what they
-// brought — visitors, trial signups, paying customers — what customers pay and have paid (Stripe), what a customer
-// costs and how soon one pays it back, and in plain words how each figure is made. Nothing projected, no share of
-// trials that "will" pay. Read-only and hook-free; the admin's controls sit around it (admin-investors-content).
+"use client";
+// THE INVESTOR REPORT (2026-10-06) — the same page for the admin, for the
+// shared link and (in prose) for the PDF: what the ads cost, who signed up,
+// what the trials are worth, who pays, and when the ads pay for themselves.
+// Read-only; the admin's controls sit around it (admin-investors-content).
+// No server imports, no state. One statistic (owner, 2026-10-14): the trials that
+// took a card and the ad spend that brought them; the no-card experiment and its
+// days' spend are left out and said so in the method note.
 import type { ReactNode } from "react";
-import { dollars, factsLines, longDate } from "@/lib/investorModel";
+import { dollars, longDate, paybackSentence, type InvestorFigures } from "@/lib/investorModel";
 import type { InvestorReport } from "@/lib/investors";
-import { MoneyChart } from "./money-chart";
+import { PaybackChart } from "./payback-chart";
 import { SpendBars } from "./spend-bars";
 import s from "./investor-report.module.css";
 
 const n = (v: number) => v.toLocaleString("en-US");
+const pct = (v: number | null, suffix = "%") => (v === null ? "—" : `${v}${suffix}`);
 const money = (v: number | null) => (v === null ? "—" : dollars(v));
-const plural = (v: number, one: string, many: string) => `${n(v)} ${v === 1 ? one : many}`;
-const shortDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-const span = (from: string | null, to: string | null) => (!from ? "" : !to || to === from ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}`);
-const when = (iso: string) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+const shortDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-/** Where the spend figure comes from, in one line. */
-export function spendSourceLine(report: InvestorReport): string {
-  const m = report.meta;
-  if (!m.configured) return "Ad spend as booked by day — Meta's own figures come once its account is connected";
-  if (!m.lastPulledAt) return `Meta is connected; its figures arrive with the first read${m.lastError ? ` — the last read failed: ${m.lastError}` : ""}`;
-  return `Meta's own figures · read ${when(m.lastPulledAt)}${m.lastError ? ` · the last read failed: ${m.lastError}` : ""}`;
-}
-
-export function InvestorReportView({ report, between }: { report: InvestorReport; between?: ReactNode }) {
-  const f = report.facts;
-  const lo = f.leftOut;
-  const lines = factsLines(f);
-  const cardAvg = f.paying.card ? Math.round(f.paying.cardMrrCents / f.paying.card) : null;
-  const payingParts = [
-    f.paying.card ? `${f.paying.card} from card trials` : null,
-    f.paying.nocard ? `${f.paying.nocard} from the no-card test` : null,
-    f.paying.before ? `${f.paying.before} from before the ads` : null,
-  ].filter(Boolean);
-  const rows30 = f.spend.days.slice(-30).map((d) => ({ date: d.date, cents: d.cents, leftOutCents: d.leftOutCents, clicks: report.clicksByDay[d.date] ?? null, signups: d.signups }));
-
+export function InvestorReportView({ report, shared = false, between }: { report: InvestorReport; shared?: boolean; between?: ReactNode }) {
+  const f = report.figures;
+  const a = report.settings;
+  const be = f.breakEven;
+  const periods = report.periods;
+  const lo = report.leftOut;
+  const budgetWords = a.dailyBudgetCents !== null && a.dailyBudgetCents !== undefined && a.budgetFrom ? `${dollars(a.dailyBudgetCents)}/day, all ads, since ${shortDate(a.budgetFrom)}${f.spend.bookedDays ? ` · ${f.spend.bookedDays} booked ${f.spend.bookedDays === 1 ? "day" : "days"}` : ""}` : `since ${shortDate(f.since)} · ${dollars(f.spend.perDayRecentCents)}/day lately`;
   return (
     <div className={s.rep} data-investor-report>
-      {/* What happened, in three sentences — every number a fact. */}
-      <section className={s.lead} data-lead>
-        <div className={s.leadLabel}>Where the ads stand · {longDate(f.today)}</div>
-        <div className={s.leadText}>
-          {lines.map((l) => <p key={l}>{l}</p>)}
-        </div>
+      {/* The sentence first. */}
+      <section className={s.lead} data-tone={be.withinHorizon ? "good" : f.spend.totalCents === 0 ? "none" : "late"}>
+        <div className={s.leadLabel}>When the ads pay for themselves</div>
+        <p className={s.leadText}>{paybackSentence(f)}</p>
         <div className={s.leadFacts}>
-          <div data-fact="spend"><b>{dollars(f.spend.cents)}</b><span>spent on ads · {dollars(f.spend.perDayLast7Cents)}/day this past week</span></div>
-          <div data-fact="paying"><b>{n(f.paying.count)}</b><span>paying {f.paying.count === 1 ? "customer" : "customers"}{payingParts.length > 1 ? ` · ${payingParts.join(" · ")}` : ""}</span></div>
-          <div data-fact="mrr"><b>{dollars(f.paying.mrrCents)}</b><span>a month · {dollars(f.paying.arrCents)} a year</span></div>
-          <div data-fact="collected"><b>{f.collected ? dollars(f.collected.cents) : "—"}</b><span>{f.collected ? `paid so far${f.collected.recoveredPct !== null ? ` · ${f.collected.recoveredPct}% of the ad spend` : ""}` : "paid so far · Stripe not read just now"}</span></div>
+          <div><b>{be.daysFromToday !== null && be.daysFromToday > 0 ? `${be.daysFromToday} days` : be.daysFromToday !== null ? "Covered" : "—"}</b><span>{be.date ? `break-even · ${longDate(be.date)}` : "break-even not within the horizon"}</span></div>
+          <div><b>{pct(f.unit.paybackMonths, " mo")}</b><span>spend to date ÷ realistic monthly revenue</span></div>
+          <div><b>{pct(f.unit.returnToDatePct)}</b><span>revenue earned to date against the spend</span></div>
         </div>
+      </section>
+
+      {/* The numbers. */}
+      <section className={s.kpis} aria-label="The figures">
+        <Kpi label="Ad spend" value={dollars(f.spend.totalCents)} note={budgetWords} tone="ink" />
+        <Kpi label="Visitors" value={f.visitors === null ? "—" : n(f.visitors)} note={f.visitors === null ? "analytics not reached" : `${money(f.unit.costPerVisitorCents)} each`} />
+        <Kpi label="Signed up" value={n(f.signups)} note={`${f.unit.signupsPerDay}/day · ${pct(f.unit.visitorToSignupPct)} of visitors · ${money(f.unit.costPerSignupCents)} each`} />
+        <Kpi label="On free trial" value={n(f.trials.count)} note={`${dollars(f.trials.maxMrrCents)}/mo if all pay`} tone="trial" />
+        <Kpi label="Paying" value={n(f.paying.count)} note={`${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.preexisting > 0 ? ` · ${f.paying.preexisting} from before the start day` : ""}${report.payingUnpriced > 0 ? ` · ${report.payingUnpriced} without a list price` : ""}`} tone="good" />
+        <Kpi label="Realistic MRR" value={dollars(f.projected.mrrRealisticCents)} note={`paying + ${a.realisticPct}% of trials`} tone="blue" />
       </section>
 
       {between}
 
-      {/* The spend, live (owner, 2026-10-08 and 2026-10-17). */}
+      {/* The costs (owner, 2026-10-08): by period, by day, and by campaign when Meta answers. */}
       <section className={s.card} data-costs>
         <div className={s.cardHead}>
           <h2 className={s.h2}>The ad spend, live</h2>
-          <span className={s.cardNote} data-spend-source>{spendSourceLine(report)}</span>
+          <span className={s.cardNote}>
+            {report.meta.configured
+              ? report.meta.lastPulledAt
+                ? `Meta's own figures · read ${new Date(report.meta.lastPulledAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}${report.insights ? ` · ${report.insights.days.length} days · ${report.insights.campaigns.length} ${report.insights.campaigns.length === 1 ? "campaign" : "campaigns"}` : ""}${report.meta.lastError ? ` · last read failed: ${report.meta.lastError}` : ""}`
+                : `Meta is connected; its figures arrive with the first read${report.meta.lastError ? ` — last read failed: ${report.meta.lastError}` : ""}`
+              : "Figures from the daily budget and the days booked by hand; Meta's own come once its account is connected"}
+          </span>
         </div>
         <div className={s.periods} aria-label="Ad spend by period">
-          {f.spend.periods.map((p) => (
+          {periods.map((p) => (
             <div key={p.key} className={s.period} data-period={p.key}>
               <span className={s.periodLabel}>{p.label}</span>
               <strong className={s.periodValue}>{dollars(p.cents)}</strong>
-              <small className={s.periodNote}>{p.days === 0 ? "nothing yet" : p.days === 1 ? "one day" : `${dollars(p.perDayCents)}/day · ${p.days} days`}</small>
+              <small className={s.periodNote}>{p.days === 0 ? "nothing yet" : p.days === 1 ? (p.key === "today" || p.key === "yesterday" ? "one day" : "1 day") : `${dollars(p.perDayCents)}/day · ${p.days} days`}</small>
             </div>
           ))}
         </div>
-        <SpendBars rows={rows30} />
-        {lo.cents > 0 && (
-          <p className={s.leftOutLine} data-left-out-line>
-            Left out: <b>{dollars(lo.cents)}</b> spent {span(lo.from, lo.to)} on ads while a new signup could start a free trial with no card — {plural(lo.signups, "trial", "trials")} started that way{lo.paid > 0 ? <>; {n(lo.paid)} went on to pay and {lo.paid === 1 ? "is" : "are"} counted below as {lo.paid === 1 ? "a paying customer" : "paying customers"}.</> : <>; none of them pays.</>}
-          </p>
-        )}
+        <SpendBars rows={report.dailyRows} />
       </section>
 
-      {/* From the ad to a paying customer. */}
-      <section className={s.card} data-funnel>
-        <h2 className={s.h2}>From visitor to paying customer</h2>
-        <ol className={s.funnel}>
-          <li className={s.step} data-step="visitors">
-            <span className={s.stepLabel}>Visitors</span>
-            <strong className={s.stepValue}>{f.visitors === null ? "—" : n(f.visitors)}</strong>
-            <small className={s.stepNote}>{f.visitors === null ? "analytics not reached" : `${money(f.unit.perVisitorCents)} of ads each`}</small>
-          </li>
-          <li className={s.step} data-step="signups">
-            <span className={s.stepLabel}>Started a trial</span>
-            <strong className={s.stepValue}>{n(f.signups)}</strong>
-            <small className={s.stepNote}>{f.unit.visitorToSignupPct !== null ? `${f.unit.visitorToSignupPct}% of visitors · ` : ""}{money(f.unit.perSignupCents)} each · {n(f.signupsLast7)} this past week</small>
-          </li>
-          <li className={s.step} data-step="ended">
-            <span className={s.stepLabel}>Trials ended</span>
-            <strong className={s.stepValue}>{n(f.ended.paid + f.ended.lapsed)}</strong>
-            <small className={s.stepNote}>{n(f.onTrial.count)} still on trial{f.onTrial.priced ? ` · their plans ${dollars(f.onTrial.listMrrCents)}/mo` : ""}</small>
-          </li>
-          <li className={s.step} data-step="paid" data-tone="good">
-            <span className={s.stepLabel}>Paid</span>
-            <strong className={s.stepValue}>{n(f.ended.paid)}</strong>
-            <small className={s.stepNote}>{f.ended.pct !== null ? `${f.ended.pct}% of ended trials · ${n(f.ended.lapsed)} did not` : "no trial has ended yet"} · {money(f.unit.perPayingCents)} of ads each</small>
-          </li>
-        </ol>
-        <p className={s.funnelNote}>The trials that took a card, from the days their ads ran.{f.paying.nocard || f.paying.before ? ` Paying customers counted beside them: ${[f.paying.nocard ? plural(f.paying.nocard, "from the no-card test", "from the no-card test") : null, f.paying.before ? plural(f.paying.before, "from before the ads", "from before the ads") : null].filter(Boolean).join(" and ")}.` : ""}</p>
+      <section className={s.card}>
+        <h2 className={s.h2}>Ad spend against revenue</h2>
+        <PaybackChart curve={f.curve} today={f.today} breakEven={be.date} horizonDays={a.horizonDays} />
       </section>
 
       <div className={s.twoUp}>
-        <section className={s.card} data-revenue>
-          <h2 className={s.h2}>What customers pay</h2>
+        <section className={s.card}>
+          <h2 className={s.h2}>Monthly revenue, three ways</h2>
           <table className={s.tbl}>
             <tbody>
-              <tr className={s.strong}><td>Monthly revenue</td><td className={s.num}>{dollars(f.paying.mrrCents)}</td><td className={s.sub}>{plural(f.paying.count, "paying customer", "paying customers")}{report.payingUnpriced > 0 ? ` · ${report.payingUnpriced} with no list price` : ""}</td></tr>
-              <tr><td>A year</td><td className={s.num}>{dollars(f.paying.arrCents)}</td><td className={s.sub}>monthly revenue × 12</td></tr>
-              {f.paying.card > 0 && <tr><td>From card trials</td><td className={s.num}>{dollars(f.paying.cardMrrCents)}</td><td className={s.sub}>{plural(f.paying.card, "customer", "customers")} · {money(cardAvg)} a month each</td></tr>}
-              {f.paying.nocard > 0 && <tr><td>From the no-card test</td><td className={s.num}>{dollars(f.paying.nocardMrrCents)}</td><td className={s.sub}>{plural(f.paying.nocard, "customer", "customers")} who started with no card, then paid</td></tr>}
-              {f.paying.before > 0 && <tr><td>From before the ads</td><td className={s.num}>{dollars(f.paying.beforeMrrCents)}</td><td className={s.sub}>{plural(f.paying.before, "customer", "customers")} paying before {shortDate(f.since)}</td></tr>}
-              <tr className={s.strong}><td>Paid so far</td><td className={s.num}>{f.collected ? dollars(f.collected.cents) : "—"}</td><td className={s.sub}>{f.collected ? `${plural(f.collected.payments, "payment", "payments")} since ${shortDate(f.since)}, as Stripe took them` : report.stripe.error ?? "Stripe not read"}</td></tr>
+              <tr><td>Paying now</td><td className={s.num}>{dollars(f.paying.mrrCents)}</td><td className={s.sub}>{f.paying.count} {f.paying.count === 1 ? "account" : "accounts"} at list price</td></tr>
+              <tr><td>If every trial pays</td><td className={s.num}>{dollars(f.projected.mrrAllPayCents)}</td><td className={s.sub}>+ {dollars(f.trials.maxMrrCents)} from {f.trials.priced} priced {f.trials.priced === 1 ? "trial" : "trials"}</td></tr>
+              <tr className={s.strong}><td>Realistic · {a.realisticPct}% of trials</td><td className={s.num}>{dollars(f.projected.mrrRealisticCents)}</td><td className={s.sub}>the share used for the break-even</td></tr>
+              <tr><td>By behaviour</td><td className={s.num}>{dollars(f.projected.mrrByBehaviourCents)}</td><td className={s.sub}>{pct(f.trials.byBehaviourPct)} of trials, read from what each account has done</td></tr>
+              {f.observed.pct !== null && <tr><td>Observed so far</td><td className={s.num}>{f.observed.pct}%</td><td className={s.sub}>{f.observed.paid} paid, {f.observed.lapsed} lapsed, of the trials that have finished</td></tr>}
             </tbody>
           </table>
         </section>
-        <section className={s.card} data-unit>
+        <section className={s.card}>
           <h2 className={s.h2}>What a customer costs</h2>
           <table className={s.tbl}>
             <tbody>
-              <tr><td>Per visitor</td><td className={s.num}>{money(f.unit.perVisitorCents)}</td><td className={s.sub}>{f.visitors === null ? "no visitor count" : plural(f.visitors, "visitor", "visitors")}</td></tr>
-              <tr><td>Per trial</td><td className={s.num}>{money(f.unit.perSignupCents)}</td><td className={s.sub}>{plural(f.signups, "trial started", "trials started")}</td></tr>
-              <tr className={s.strong}><td>Per paying customer</td><td className={s.num}>{money(f.unit.perPayingCents)}</td><td className={s.sub}>the ad spend ÷ {plural(f.paying.card, "card trial that paid", "card trials that paid")}</td></tr>
-              <tr><td>Paid back in</td><td className={s.num}>{f.unit.paybackMonths === null ? "—" : `${f.unit.paybackMonths} mo`}</td><td className={s.sub}>{cardAvg !== null && f.unit.perPayingCents !== null ? `${dollars(f.unit.perPayingCents)} ÷ ${dollars(cardAvg)} a month` : "once a card trial pays"}</td></tr>
-              <tr><td>Ad spend covered</td><td className={s.num}>{f.collected?.recoveredPct != null ? `${f.collected.recoveredPct}%` : "—"}</td><td className={s.sub}>paid so far ÷ spent so far</td></tr>
+              <tr><td>Per visitor</td><td className={s.num}>{money(f.unit.costPerVisitorCents)}</td><td className={s.sub}>{f.visitors === null ? "no visitor count" : `${n(f.visitors)} visitors`}</td></tr>
+              <tr><td>Per signup</td><td className={s.num}>{money(f.unit.costPerSignupCents)}</td><td className={s.sub}>{n(f.signups)} signed up</td></tr>
+              <tr className={s.strong}><td>Per paying customer</td><td className={s.num}>{money(f.unit.costPerPayingRealisticCents)}</td><td className={s.sub}>paying now plus {a.realisticPct}% of trials</td></tr>
+              <tr><td>Pays back in</td><td className={s.num}>{pct(f.unit.paybackMonths, " months")}</td><td className={s.sub}>at {dollars(f.projected.mrrRealisticCents)} a month</td></tr>
+              <tr><td>Lapsed</td><td className={s.num}>{n(f.lapsed)}</td><td className={s.sub}>trials over or canceled</td></tr>
             </tbody>
           </table>
         </section>
       </div>
 
-      <section className={s.card} data-chart>
-        <h2 className={s.h2}>Spent against paid, day by day</h2>
-        <MoneyChart points={f.chart} />
-      </section>
-
-      {f.spend.byPlatform.length > 0 && (
-        <section className={s.card} data-platforms>
+      {report.spend.byPlatform.length > 0 && (
+        <section className={s.card}>
           <h2 className={s.h2}>Where the ad money went</h2>
           <table className={s.tbl}>
             <tbody>
-              {f.spend.byPlatform.map((p) => (
-                <tr key={p.platform}><td>{p.label}</td><td className={s.num}>{dollars(p.cents)}</td><td className={s.sub}>{plural(p.days, "day", "days")} · {dollars(Math.round(p.cents / Math.max(1, p.days)))}/day</td></tr>
+              {report.spend.byPlatform.map((p) => (
+                <tr key={p.platform}><td>{p.label}</td><td className={s.num}>{dollars(p.cents)}</td><td className={s.sub}>{p.days} {p.days === 1 ? "day" : "days"} · {dollars(Math.round(p.cents / Math.max(1, p.days)))}/day</td></tr>
               ))}
             </tbody>
           </table>
         </section>
       )}
 
-      <section className={s.method} data-method>
+      <section className={s.method}>
         <h2 className={s.h2}>How these are figured</h2>
         <ul>
-          <li>Everything here has happened: no forecast, no share of trials that &ldquo;will&rdquo; pay, no budget counted as spent. Counting from {longDate(f.since)}, the day the first campaign went live.</li>
-          <li>Ad spend is {report.meta.configured ? "Meta's own figure for each day, read again whenever it is more than 15 minutes old" : "the spend booked for each day"}{f.spend.handDays ? `, with ${plural(f.spend.handDays, "day", "days")} booked by hand` : ""}. Today&apos;s figure is what has been spent so far today.</li>
-          {lo.cents > 0 || lo.signups > 0 ? (
-            <li data-left-out>Left out on purpose: the {dollars(lo.cents)} of ad spend on the {plural(lo.days, "day", "days")} ({span(lo.from, lo.to)}) when a new signup could start a free trial with no card — an experiment since ended — and the {plural(lo.signups, "trial", "trials")} started that way. {lo.paid > 0 ? `${plural(lo.paid, "of them", "of them")} went on to pay (${dollars(lo.paidMrrCents)} a month): ${lo.paid === 1 ? "it counts as a paying customer" : "they count as paying customers"}, but not in the cost of a customer, since ${lo.paid === 1 ? "its" : "their"} ad spend is not in the figures either.` : "None of them is paying."}</li>
-          ) : (
-            <li data-left-out>Every trial here took a card at signup.</li>
-          )}
-          <li>Visitors are unique people on www.jobflex.app on the days the card trials&apos; ads ran, bots and previews out. A trial counts from its signup; a trial &ldquo;ended&rdquo; either paid or did not.</li>
-          <li>Monthly revenue is each paying customer&apos;s plan price (a yearly plan as a twelfth; discounts not taken off). &ldquo;Paid so far&rdquo; is the money Stripe collected for subscriptions since the start day, before any refund.{f.paying.before ? ` ${plural(f.paying.before, "customer", "customers")} paying from before the start day ${f.paying.before === 1 ? "counts" : "count"} as paying, not as a trial of the period.` : ""}</li>
-          <li>The cost of a paying customer is the counted ad spend divided by the card trials that paid; &ldquo;paid back in&rdquo; is that cost divided by what one of those customers pays a month.</li>
-          <li>Read {when(report.at)}. The figures move as the ads run and accounts sign up and pay.</li>
+          <li>Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted as paying — their revenue from that day on — but not as signups of the period.` : ""}</li>
+          <li>Ad spend is {a.dailyBudgetCents !== null && a.dailyBudgetCents !== undefined && a.budgetFrom ? `the daily budget — ${dollars(a.dailyBudgetCents)} for all ads together — counted as spent every day since ${longDate(a.budgetFrom)}${f.spend.bookedDays ? `, with ${f.spend.bookedDays} ${f.spend.bookedDays === 1 ? "day" : "days"} at the figure booked for it` : ""}` : "what was booked per day; a day with nothing booked counts as zero"}{shared ? "" : " (set on this page; Meta's own figures per day once its API token is connected)"}. Tomorrow on it is projected at {dollars(f.spend.perDayProjectedCents)} a day.</li>
+          <li>A trial is worth its plan&apos;s monthly list price: a yearly plan as a twelfth, a custom plan by its pages. Discounts, taxes and churn are not modelled.</li>
+          <li>The realistic share is {a.realisticPct}% of trials paying, set by the owner; &ldquo;by behaviour&rdquo; reads each account&apos;s activity instead and is shown beside it.</li>
+          <li>The curve: each paying account earns a thirtieth of its monthly price a day from the day it started paying; a trial from the day it ends; signups still to come arrive at the recent pace ({f.unit.signupsPerDay}/day), at the average trial price ({dollars(f.trials.avgMonthlyCents)}/mo), and pay after a {a.trialDays}-day trial. Spend continues at {dollars(f.spend.perDayProjectedCents)}/day for {a.horizonDays} days.</li>
+          <li data-left-out>{lo.signups > 0 ? `Left out on purpose: ${lo.signups} ${lo.signups === 1 ? "trial" : "trials"} that started with no card${lo.from ? ` (${lo.from === lo.to || !lo.to ? longDate(lo.from) : `${longDate(lo.from)} – ${longDate(lo.to)}`}, an experiment since ended)` : ""} and the ${dollars(lo.spendCents)} of ad spend over the ${lo.days} ${lo.days === 1 ? "day" : "days"} that brought them. ` : ""}Every trial counted here took a card at signup.</li>
+          <li>Read on {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. The figures move as accounts sign up and pay.</li>
         </ul>
       </section>
     </div>
   );
 }
+
+function Kpi({ label, value, note, tone }: { label: string; value: string; note: string; tone?: "ink" | "trial" | "good" | "blue" }) {
+  return (
+    <div className={s.kpi} data-tone={tone}>
+      <span className={s.kpiLabel}>{label}</span>
+      <strong className={s.kpiValue}>{value}</strong>
+      <small className={s.kpiNote}>{note}</small>
+    </div>
+  );
+}
+
+export type { InvestorFigures };

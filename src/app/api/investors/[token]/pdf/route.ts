@@ -19,10 +19,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
   // The PDF is the page's: the reader introduces themselves first (2026-10-13); an admin passes.
   const known = (await visitorForLink(token)) ?? (await requirePlatformAdmin().then(() => true).catch(() => null));
   if (!known) return NextResponse.redirect(new URL(`/investors/${token}`, req.url));
-  const report = await investorReport({ refreshMeta: "shared" });
+  const report = await investorReport();
   // The renderer wants a <Document> element; the component returns one (as the proposal route does).
   const stream = await renderToStream(createElement(InvestorPdfDocument, { report }) as unknown as Parameters<typeof renderToStream>[0]);
-  const day = report.facts.today;
+  const day = report.figures.today;
   return new NextResponse(stream as unknown as ReadableStream, {
     headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="jobflex-investors-${day}.pdf"`, "Cache-Control": "private, no-store" },
   });
