@@ -69,7 +69,7 @@ if (MODES.remove && (MODES.seed || MODES.prepare)) throw new Error("--remove run
 const DEMO = "demo_";
 const SNAPSHOT_KEY = (orgId: string) => `demoSeed:${orgId}`;
 const COMPANY = { name: "Stevenson Roofing & Exteriors", address: "1420 116th Ave NE, Bellevue, WA 98004", phone: "(425) 555-0100", timezone: "America/Los_Angeles" };
-const TRADES = ["Roofing", "Siding", "Fencing", "Decking", "Windows", "HVAC"];
+const TRADES = ["Roofing", "Siding", "Fencing", "Windows", "HVAC"];
 const TAX = 0.101; // Bellevue, WA combined sales tax
 
 class Rollback extends Error {}
@@ -148,15 +148,15 @@ const TAG_COLORS: Record<string, string> = { VIP: "#1f7a52", "Repeat client": "#
 
 const CREW = [
   { key: "diego", name: "Diego Ramirez", role: "INSTALLER", specialties: ["Roofing", "Siding"], rate: 42 },
-  { key: "tyler", name: "Tyler Brooks", role: "INSTALLER", specialties: ["Roofing", "Decking"], rate: 34 },
-  { key: "andre", name: "Andre Wallace", role: "INSTALLER", specialties: ["Fencing", "Decking"], rate: 32 },
+  { key: "tyler", name: "Tyler Brooks", role: "INSTALLER", specialties: ["Roofing", "Siding"], rate: 34 },
+  { key: "andre", name: "Andre Wallace", role: "INSTALLER", specialties: ["Fencing", "Windows"], rate: 32 },
   { key: "kenji", name: "Kenji Watanabe", role: "ESTIMATOR", specialties: ["Roofing", "HVAC"], rate: 38 },
   { key: "hannah", name: "Hannah Olsen", role: "SALES", specialties: ["Roofing", "Windows"], rate: 30 },
 ] as const;
 type CrewKey = (typeof CREW)[number]["key"];
 
 type Line = { name: string; type: string; qty: number; unit: number; kind: "material" | "labor" };
-type Tool = "roof" | "fence" | "hvac" | "deck" | "smart" | "video" | "blueprint";
+type Tool = "roof" | "fence" | "hvac" | "smart" | "video" | "blueprint";
 type ProposalSpec = {
   tool: Tool; client: number; title: string; status: string; age: number; lines: Line[];
   scope: string; projectType?: string; trade: string | null; roof?: { sq: number; pitch: string; facets: number };
@@ -184,39 +184,29 @@ const fenceLines = (lf: number, gates: number, perLf: number): Line[] => [
   M("Walk gate with hardware", "UNIT", gates, 420),
   L("Build & set, per foot", "LINEAR_FT", lf, 24),
 ];
-const deckLines = (sqft: number, rail: number, board: string, perSqft: number): Line[] => [
-  L("Demo existing deck & disposal", "LUMP_SUM", 1, 1800),
-  M("Framing — PT joists, beams, hangers", "SQFT", sqft, 9.5),
-  M(board, "SQFT", sqft, perSqft),
-  M("Aluminum rail with balusters", "LINEAR_FT", rail, 78),
-  M("Stairs, 4 treads", "UNIT", 1, 1450),
-  L("Build labor", "SQFT", sqft, 22),
-  L("Permit & engineering", "LUMP_SUM", 1, 1200),
-];
 
 const PROPOSALS: ProposalSpec[] = [
   // ROOF
   { tool: "roof", client: 1, trade: "roof", status: "PAID", age: 46, roof: { sq: 26.4, pitch: "7/12", facets: 12 }, title: "Architectural shingle re-roof · 26 sq", scope: "Full tear-off to the deck, new synthetic underlayment, GAF Timberline HDZ in Charcoal, new ridge vent and flashings.", lines: roofLines(26.4, "GAF Timberline HDZ architectural shingles", 152, 205), job: { title: "Re-roof — Halvorsen", start: -38, days: 3, crew: ["diego", "tyler"] } },
   { tool: "roof", client: 6, trade: "roof", status: "ACCEPTED", age: 9, roof: { sq: 31.2, pitch: "8/12", facets: 16 }, title: "Standing-seam metal roof · 31 sq", scope: "Remove composition roof, install 24-ga standing-seam panels in Dark Bronze over high-temp underlayment.", lines: [L("Tear-off & haul-away, 1 layer", "SQUARE", 31.2, 85), M("24-ga standing-seam panels, Dark Bronze", "SQUARE", 34.3, 540), M("High-temp underlayment", "SQUARE", 31.2, 62), M("Trim, ridge & eave closures", "LINEAR_FT", 290, 11), L("Install labor", "SQUARE", 31.2, 430), L("Dumpster, permit & site protection", "LUMP_SUM", 1, 1100)], job: { title: "Metal roof — Marchetti", start: 3, days: 4, crew: ["diego", "tyler"] } },
   { tool: "roof", client: 3, trade: "roof", status: "VIEWED", age: 4, roof: { sq: 22.8, pitch: "6/12", facets: 9 }, title: "Class 4 impact shingle roof · 23 sq", scope: "Insurance-grade Class 4 shingles, full replacement, decking repairs as found at $95/sheet.", lines: roofLines(22.8, "Owens Corning Duration Storm (Class 4)", 178, 210) },
+  { tool: "roof", client: 24, trade: "roof", status: "ACCEPTED", age: 12, roof: { sq: 28.1, pitch: "9/12", facets: 14 }, title: "Cedar shake to architectural shingle · 28 sq", scope: "Strip the old cedar shakes, sheath over the skip sheathing with 1/2\" CDX, then a full architectural shingle system.", lines: [...roofLines(28.1, "GAF Timberline HDZ architectural shingles", 152, 215), M("1/2\" CDX plywood over skip sheathing", "UNIT", 92, 48)], job: { title: "Re-roof — Crane", start: -1, days: 3, crew: ["diego", "tyler"] } },
   { tool: "roof", client: 18, trade: "roof", status: "DRAFT", age: 1, roof: { sq: 19.6, pitch: "5/12", facets: 8 }, title: "Re-roof + new gutters · 20 sq", scope: "Architectural shingle replacement with 5\" seamless aluminum gutters and downspouts.", lines: [...roofLines(19.6, "CertainTeed Landmark architectural shingles", 148, 200), M("5\" seamless aluminum gutter", "LINEAR_FT", 160, 11), M("Downspouts", "UNIT", 5, 85)] },
   // FENCE
   { tool: "fence", client: 8, trade: "fence", status: "PAID", age: 33, title: "6' cedar privacy fence · 148 LF", scope: "Remove the old fence, set new posts in concrete, 6' western red cedar privacy fence with one walk gate.", lines: fenceLines(148, 1, 31), job: { title: "Cedar fence — Brandt", start: -24, days: 2, crew: ["andre"] } },
   { tool: "fence", client: 21, trade: "fence", status: "SENT", age: 2, title: "Cedar fence with two gates · 212 LF", scope: "Back and side lot lines, 6' cedar privacy fence, two walk gates.", lines: fenceLines(212, 2, 31) },
   { tool: "fence", client: 11, trade: "fence", status: "DECLINED", age: 19, title: "Horizontal cedar fence · 96 LF", scope: "Modern horizontal 1×6 cedar boards on steel posts.", lines: [L("Remove & haul old fence", "LINEAR_FT", 96, 4.5), M("Horizontal 1×6 cedar boards", "LINEAR_FT", 96, 44), M("Steel posts, powder-coated", "UNIT", 14, 64), L("Build & set, per foot", "LINEAR_FT", 96, 31)] },
   { tool: "fence", client: 22, trade: "fence", status: "ACCEPTED", age: 6, title: "6' cedar fence + double drive gate · 174 LF", scope: "Full perimeter cedar privacy fence with a 10' double drive gate.", lines: [...fenceLines(174, 1, 31), M("10' double drive gate, steel frame", "UNIT", 1, 1650)], job: { title: "Cedar fence — Gallardo", start: 8, days: 2, crew: ["andre", "tyler"] } },
+  { tool: "fence", client: 15, trade: "fence", status: "SENT", age: 1, title: "Picture-frame cedar fence · 126 LF", scope: "6' cedar privacy fence with a picture-frame cap and trim, one walk gate.", lines: [...fenceLines(126, 1, 31), M("Picture-frame cap & trim", "LINEAR_FT", 126, 7.5)] },
   // HVAC
   { tool: "hvac", client: 12, trade: "hvac", status: "COMPLETED", age: 21, title: "Heat pump replacement · 3 ton", scope: "Replace the failed heat pump with a 3-ton variable-speed system, new line set and pad, startup and commissioning.", lines: [M("Carrier Infinity 3-ton variable-speed heat pump", "UNIT", 1, 7850), M("Matching air handler", "UNIT", 1, 3200), M("Line set, pad & disconnect", "UNIT", 1, 690), L("Install & commissioning", "HOUR", 18, 135), L("Permit & electrical inspection", "LUMP_SUM", 1, 420)], job: { title: "Heat pump — Ferreira", start: -12, days: 1, crew: ["kenji"] } },
   { tool: "hvac", client: 26, trade: "hvac", status: "VIEWED", age: 3, title: "Ductless mini-split · 2 zones", scope: "Two-zone ductless system for the bonus room and primary suite.", lines: [M("Mitsubishi 2-zone outdoor unit, 24k BTU", "UNIT", 1, 4100), M("Wall heads, 9k + 12k", "UNIT", 2, 980), M("Line sets & covers", "UNIT", 2, 340), L("Install labor", "HOUR", 14, 135)] },
   { tool: "hvac", client: 19, trade: "hvac", status: "DRAFT", age: 0, title: "Furnace + AC change-out", scope: "96% two-stage gas furnace with a 2.5-ton AC, new thermostat.", lines: [M("96% two-stage gas furnace", "UNIT", 1, 3650), M("2.5-ton AC condenser & coil", "UNIT", 1, 4300), M("Smart thermostat", "UNIT", 1, 260), L("Install labor", "HOUR", 16, 135)] },
-  // DECK
-  { tool: "deck", client: 24, trade: "deck", status: "ACCEPTED", age: 12, title: "Composite deck 16×20 with rail", scope: "Tear out the old deck; new PT framing, Trex Transcend boards in Spiced Rum, aluminum rail, one stair.", lines: deckLines(320, 52, "Trex Transcend composite boards", 16.5), job: { title: "Composite deck — Crane", start: -1, days: 5, crew: ["tyler", "andre"] } },
-  { tool: "deck", client: 15, trade: "deck", status: "SENT", age: 1, title: "Cedar deck 14×18", scope: "New clear cedar deck on PT framing with picture-frame border.", lines: deckLines(252, 40, "Clear cedar 5/4 decking", 12) },
-  { tool: "deck", client: 27, trade: "deck", status: "EXPIRED", age: 44, title: "Second-story composite deck", scope: "Elevated deck off the kitchen, composite boards and cable rail.", lines: deckLines(280, 60, "TimberTech AZEK composite boards", 18.5) },
   // SMART PROPOSAL
   { tool: "smart", client: 0, trade: null, projectType: "Gutter replacement with leaf guards", status: "PAID", age: 28, title: "Seamless gutters + leaf guards", scope: "Replace all gutters with 6\" seamless aluminum, oversized downspouts and micro-mesh guards.", lines: [L("Remove old gutters", "LINEAR_FT", 190, 2), M("6\" seamless aluminum gutter", "LINEAR_FT", 190, 13), M("Micro-mesh leaf guards", "LINEAR_FT", 190, 9), M("3×4 downspouts", "UNIT", 6, 95), L("Install labor", "HOUR", 10, 85)], job: { title: "Gutters — Delgado", start: -20, days: 1, crew: ["tyler"] } },
   { tool: "smart", client: 13, trade: null, projectType: "Fiber-cement siding repair and paint", status: "VIEWED", age: 5, title: "Hardie siding repair & repaint", scope: "Replace damaged fiber-cement planks on two elevations, caulk and repaint the whole house.", lines: [M("James Hardie lap siding planks", "SQFT", 420, 4.2), M("Trim boards & flashing", "LINEAR_FT", 160, 6.5), L("Siding replacement labor", "SQFT", 420, 6), L("Prep, caulk & paint — whole house", "LUMP_SUM", 1, 9800)] },
   { tool: "smart", client: 29, trade: null, projectType: "Skylight replacement", status: "DRAFT", age: 2, title: "Skylight replacement (2)", scope: "Replace two leaking curb skylights with Velux deck-mount units and flashing kits.", lines: [M("Velux deck-mount skylight 2×4", "UNIT", 2, 980), M("Flashing kits", "UNIT", 2, 210), L("Install labor", "HOUR", 9, 95), L("Interior drywall touch-up", "LUMP_SUM", 1, 450)] },
+  { tool: "smart", client: 27, trade: null, projectType: "Exterior repaint and trim repair", status: "EXPIRED", age: 44, title: "Exterior repaint + trim repair", scope: "Replace rotted fascia and window trim, prime and repaint the whole exterior in two coats.", lines: [M("Fascia & trim boards, primed", "LINEAR_FT", 220, 6.5), L("Trim replacement labor", "HOUR", 24, 85), L("Prep, prime & paint — whole house", "LUMP_SUM", 1, 8600)] },
   // VIDEO ESTIMATOR
   { tool: "video", client: 4, trade: null, projectType: "Storm damage roof repair", status: "PAID", age: 17, title: "Storm damage repair — west slope", scope: "Replace wind-lifted shingles on the west slope, reseal the ridge, replace two damaged vents.", lines: [M("Matching architectural shingles", "SQUARE", 3, 165), M("Roof vents", "UNIT", 2, 65), L("Repair labor", "HOUR", 12, 95), L("Ridge reseal", "LINEAR_FT", 40, 6)], job: { title: "Storm repair — Okafor", start: -9, days: 1, crew: ["diego"] } },
   { tool: "video", client: 16, trade: null, projectType: "Chimney flashing and cricket", status: "SENT", age: 3, title: "Chimney flashing & cricket", scope: "Build a cricket behind the chimney, new step and counter flashing.", lines: [M("Copper step & counter flashing", "UNIT", 1, 640), M("Cricket framing & membrane", "UNIT", 1, 380), L("Labor", "HOUR", 10, 95)] },
@@ -248,7 +238,7 @@ const APPOINTMENTS = [
   { client: 13, title: "Siding estimate", day: -6, hour: 14, who: "hannah" as CrewKey, status: "COMPLETED" },
   { client: 26, title: "Mini-split walkthrough", day: -4, hour: 11, who: "kenji" as CrewKey, status: "COMPLETED" },
   { client: 21, title: "Fence estimate", day: -3, hour: 15, who: "hannah" as CrewKey, status: "COMPLETED" },
-  { client: 15, title: "Deck estimate", day: -2, hour: 9, who: "hannah" as CrewKey, status: "COMPLETED" },
+  { client: 15, title: "Fence estimate", day: -2, hour: 9, who: "hannah" as CrewKey, status: "COMPLETED" },
   { client: 0, title: "Final walkthrough — gutters", day: 0, hour: 15, who: "hannah" as CrewKey, status: "SCHEDULED" },
   { client: 3, title: "Insurance adjuster meeting", day: 1, hour: 10, who: "kenji" as CrewKey, status: "SCHEDULED" },
   { client: 16, title: "Chimney flashing review", day: 2, hour: 13, who: "kenji" as CrewKey, status: "SCHEDULED" },
@@ -378,6 +368,7 @@ async function report(prisma: any, Prisma: any, ORG: string, user: any, lib: any
       currentPeriodEnd: org.subscription.currentPeriodEnd, trialEndsAt: org.subscription.trialEndsAt, canceledAt: org.subscription.canceledAt,
       promo: !!org.subscription.appliedPromotionCodeId, coupon: !!org.subscription.appliedCouponId, updatedAt: org.subscription.updatedAt,
     },
+    grant: (() => { const g = sync.find((r: any) => r.key === `planGrant:${ORG}`); return g ? json(g.cursor) : null; })(),
     hiddenFromStats: hidden.some((h) => h.orgId === ORG),
     plans: plans.map((p: any) => ({ slug: p.slug, name: p.name, limits: json(p.limitsJson) ?? "none set = unlimited" })),
     cycleStart,
@@ -404,7 +395,7 @@ async function prepare(tx: any, ORG: string, userId: string, before: any, lib: a
     record.prepare = {
       at: now.toISOString(),
       subscription: org.subscription,
-      org: { smsClientsOn: org.smsClientsOn, leadOffersEnabled: org.leadOffersEnabled, paymentSettingsJson: org.paymentSettingsJson, bookingSettingsJson: org.bookingSettingsJson },
+      org: { isInternal: org.isInternal, smsClientsOn: org.smsClientsOn, leadOffersEnabled: org.leadOffersEnabled, paymentSettingsJson: org.paymentSettingsJson, bookingSettingsJson: org.bookingSettingsJson },
       hiddenFromStats: before.hiddenFromStats,
       sync: before.sync,
     };
@@ -417,7 +408,13 @@ async function prepare(tx: any, ORG: string, userId: string, before: any, lib: a
     externalSubId: null, stripePriceId: null, currentPeriodEnd: null, trialEndsAt: null, canceledAt: null,
   };
   await tx.subscription.upsert({ where: { organizationId: ORG }, update: sub, create: { organizationId: ORG, ...sub } });
-  const grant = { plan: "ENTERPRISE", grantedAt: now.toISOString(), endsAt: null, fallback: "free", reason: "Ad shoot account — owner, 2026-10-18 (scripts/demo/seed-joe.ts)", actorId: null, actorEmail: null, replaced: null, noticeSentAt: null };
+  // A grant the admin already gave keeps its record (author, reason, what it replaced) — only its end goes.
+  const had = await tx.syncState.findUnique({ where: { key: `planGrant:${ORG}` } });
+  const old = had ? (() => { try { return JSON.parse(had.cursor); } catch { return null; } })() : null;
+  const grant = old && typeof old === "object"
+    ? { ...old, plan: "ENTERPRISE", endsAt: null, noticeSentAt: null }
+    : { plan: "ENTERPRISE", grantedAt: now.toISOString(), endsAt: null, fallback: "free", reason: "Ad shoot account — owner, 2026-10-18 (scripts/demo/seed-joe.ts)", actorId: null, actorEmail: null, replaced: null, noticeSentAt: null };
+  console.log(`grant: ${old ? `admin grant ${old.plan}, ends ${old.endsAt ?? "never"} (by ${old.actorEmail ?? "?"}, ${old.grantedAt})` : "none"} → ENTERPRISE, no end`);
   await tx.syncState.upsert({ where: { key: `planGrant:${ORG}` }, create: { key: `planGrant:${ORG}`, cursor: JSON.stringify(grant) }, update: { cursor: JSON.stringify(grant) } });
   // Nothing created before now may write the mirror (lib/stripeSync mirrorAccepts).
   await tx.syncState.upsert({ where: { key: `mirrorSubAt:${ORG}` }, create: { key: `mirrorSubAt:${ORG}`, cursor: String(now.getTime()) }, update: { cursor: String(now.getTime()) } });
@@ -439,6 +436,7 @@ async function prepare(tx: any, ORG: string, userId: string, before: any, lib: a
   await tx.organization.update({
     where: { id: ORG },
     data: {
+      isInternal: false, // "may receive TEST platform leads" (admin Lead Center) — never for this account
       smsClientsOn: false, // client texts: proposal link, the day-before visit reminder
       leadOffersEnabled: false, // never offered platform leads (routing reads reviews)
       paymentSettingsJson: merge(org.paymentSettingsJson, { reminderMode: "off" }), // payment reminder ladder + Remind button
@@ -451,7 +449,7 @@ async function prepare(tx: any, ORG: string, userId: string, before: any, lib: a
   const lsr = JSON.stringify({ count: 14, lastAt: now.toISOString() }); // lib/leadSetupReminders MAX_SENDS
   await tx.syncState.upsert({ where: { key: `leadSetupReminder:${ORG}` }, create: { key: `leadSetupReminder:${ORG}`, cursor: lsr }, update: { cursor: lsr } });
   const desk = await tx.syncState.findMany({ where: { key: { in: [`aidesk:${ORG}`, `deskpacks:${ORG}`] } }, select: { key: true } });
-  console.log(`switches: client texts off, payment reminders off, booking page off, lead offers off, follow-up rules off ${fr.count}, text rules off ${tr.count}, open follow-ups closed ${fu.count}, setup-reminder mails spent; AI desk ${desk.length ? "HAS " + desk.map((d: any) => d.key).join(", ") + " — left as is, see the report" : "has no number (nothing to switch)"}`);
+  console.log(`switches: isInternal off, client texts off, payment reminders off, booking page off, lead offers off, follow-up rules off ${fr.count}, text rules off ${tr.count}, open follow-ups closed ${fu.count}, setup-reminder mails spent; AI desk ${desk.length ? "HAS " + desk.map((d: any) => d.key).join(", ") + " — left as is, see the report" : "has no number (nothing to switch)"}`);
 
   // 4. Usage reset — the admin's own mechanism (lib/usageReset): a mark per monthly key, counting
   //    starts after it.
@@ -580,7 +578,6 @@ async function seedBook(tx: any, ORG: string, owner: any, defaultPrefs: (role?: 
       p.tool === "roof" ? { kind: "CREATED", summary: `Converted roof estimate to proposal "${p.title}"` }
       : p.tool === "hvac" ? { kind: "CREATED", summary: `Converted HVAC estimate to proposal "${p.title}"` }
       : p.tool === "fence" ? { kind: "ESTIMATE", summary: `Priced a fence estimate — ${p.title.split("·")[1]?.trim() ?? p.title}, ${usd(total)}`, meta: JSON.stringify({ trade: "fence", amount: total, demo: true }) }
-      : p.tool === "deck" ? { kind: "ESTIMATE", summary: `Priced a deck — ${p.title}, ${usd(total)}`, meta: JSON.stringify({ trade: "deck", amount: total, demo: true }) }
       : { kind: "CREATED", summary: `Converted "${p.projectType}" AI estimate to proposal "${p.title}"`, meta: JSON.stringify({ source: p.tool, projectType: p.projectType, demo: true }) };
     await ev({ ...creation, proposalId, clientId: client.id, createdAt });
     if (p.tool === "fence") await ev({ kind: "CREATED", summary: `Converted fence estimate to proposal "${p.title}"`, proposalId, clientId: client.id, createdAt: new Date(createdAt.getTime() + 60_000) });
