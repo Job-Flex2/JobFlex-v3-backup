@@ -28,10 +28,15 @@ export type AutoPlanPick = { slug: string; why: "asked" | "edition" | "tool" | "
  *  to open the card page for. */
 export type AutoPlanOffer = { slug: string; name: string; priceCents: number; why: AutoPlanPick["why"] };
 
+/** "$79" — the plan's monthly amount alone, for "then $79 (with this plan)". */
+export function autoPlanAmount(o: Pick<AutoPlanOffer, "priceCents">): string {
+  const d = o.priceCents / 100;
+  return `$${Number.isInteger(d) ? d : d.toFixed(2)}`;
+}
+
 /** "$79/mo" — the price after the free days, as step 1 says it. */
 export function autoPlanPrice(o: Pick<AutoPlanOffer, "priceCents">): string {
-  const d = o.priceCents / 100;
-  return `$${Number.isInteger(d) ? d : d.toFixed(2)}/mo`;
+  return `${autoPlanAmount(o)}/mo`;
 }
 
 /** Each plan's features, with "Everything in Starter" rolled up the way the plan cards read it. */

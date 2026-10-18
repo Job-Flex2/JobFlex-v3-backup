@@ -2,7 +2,7 @@
 
 // STEP 1 OF THE PASSWORDLESS SIGN-UP (owner, 2026-10-10; lib/signupOtp).
 //
-//   form  — "Start Your Free Trial": Google on top, then name and email; the
+//   form  — "7-DAY FREE TRIAL": Google on top, then name and email; the
 //           trial's terms under Continue, in the words of signupTrialMode and
 //           the trial offer this visitor was assigned.
 //   code  — "We sent a 6-digit code to your email" (owner, 2026-10-12): the
@@ -58,8 +58,7 @@ import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/o
 import css from "./passwordless.module.css";
 import { markQaVisitor } from "@/lib/qaEmail";
 import { trackMetaLeadOnce } from "@/lib/metaLead";
-import { autoPlanPrice, type AutoPlanOffer } from "@/lib/signupAutoPlan";
-import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
+import { autoPlanAmount, type AutoPlanOffer } from "@/lib/signupAutoPlan";
 
 type Screen = "form" | "code" | "google" | "done";
 const STORE_KEY = "jf_otp_signup";
@@ -185,8 +184,6 @@ export function PasswordlessStep({
   useKeepInView(headRef, goRef, screen === "code");
   const verifying = React.useRef(false);
   const handoff = useBrowserHandoff(inApp ?? "instagram");
-  // A homeowner who came in on a trade's contractor ad: the way to a quote instead (lib/home/homeownerDoor, 2026-10-16).
-  const homeDoor = homeownerDoorFor(industry);
   const track = (outcome: string, reason = "", message = "") => {
     trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp", plan_mode: planMode, ...(quick ? { quick: true } : {}) });
     // The watcher's own reasons: a refusal the server answered in words is read from them (start_rejected).
@@ -556,9 +553,15 @@ export function PasswordlessStep({
   }
 
   const gmailTyped = /@(gmail|googlemail)\.com\s*$/i.test(email.trim());
-  const trialText = auto
-    ? `${trialDays}-day free trial · ${requiresCard ? `$0 today, then ${autoPlanPrice(auto)}` : "No card needed"} · Cancel anytime`
-    : `${trialDays}-day free trial · ${requiresCard ? "Card required" : "No card needed"} · Cancel anytime`;
+  // Straight to a plan with a card (owner, 2026-10-18): "$0 today" marked, then that plan's own price.
+  const trialText =
+    auto && requiresCard ? (
+      <>
+        <b className={css.today}>$0 today</b>, then <span className={css.nowrap}>{autoPlanAmount(auto)} (with this plan)</span> after your free trial.
+      </>
+    ) : (
+      `${trialDays}-day free trial · ${requiresCard ? "Card required" : "No card needed"} · Cancel anytime`
+    );
 
   // The keyboard bridge stays put across the screens: the form hands the focus to it, the code field takes it.
   const view = (() => {
@@ -635,12 +638,28 @@ export function PasswordlessStep({
 
     return (
       <div className={css.otp} data-otp-screen="form">
-        <h1 className="auth-h1">Start Your Free Trial</h1>
+        <h1 className="auth-h1">{trialDays}-DAY FREE TRIAL</h1>
         {auto ? (
-          <p className="auth-lede" data-auto-plan-lede>
-            You&apos;ll start on <b>{auto.name}</b> — free for {trialDays} days, then {autoPlanPrice(auto)}. Change your plan any time.
-            {quick ? " Your name and email, then your card on Stripe's secure page." : " No password needed."}
-          </p>
+          <>
+            {/* $45 is Starter's monthly price in the plan catalog (owner's copy, 2026-10-18). */}
+            <p className="auth-lede" data-auto-plan-lede>
+              Plans start at $45/month
+            </p>
+            <ul className={css.perks}>
+              <li>
+                <svg className="ic" aria-hidden="true">
+                  <use href="#i-check" />
+                </svg>
+                One flat monthly price
+              </li>
+              <li>
+                <svg className="ic" aria-hidden="true">
+                  <use href="#i-check" />
+                </svg>
+                No pay-per-report fees
+              </li>
+            </ul>
+          </>
         ) : (
           <p className="auth-lede">Create your account in seconds. No password needed.</p>
         )}
@@ -693,12 +712,17 @@ export function PasswordlessStep({
             </p>
           ) : null}
           <button className="btn" type="submit" id="nextBtn" disabled={busy}>
-            {busy ? (quick ? "One moment…" : "Sending code…") : quick ? "Continue to card · $0 today" : "Continue"}
+            {busy ? (quick ? "One moment…" : "Sending code…") : quick ? `Start Your ${trialDays}-Day Free Trial` : "Continue"}
             <svg className="ic" aria-hidden="true">
               <use href="#i-arrow-r" />
             </svg>
           </button>
           <p className={css.trial} id="otpTrial">{trialText}</p>
+          {auto && requiresCard ? (
+            <p className={css.anytime} id="otpAnytime">
+              Upgrade / downgrade or cancel anytime
+            </p>
+          ) : null}
           <div className={err ? "err" : "err is-hidden"} id="err1" role="alert">
             {err}
           </div>
@@ -710,14 +734,11 @@ export function PasswordlessStep({
             Sign in
           </Link>
         </div>
-        {homeDoor ? (
-          <div className="foot foot-home" data-home-door={homeDoor.key}>
-            Homeowner looking for {homeDoor.thing}?{" "}
-            <a className="link-ink" href={homeDoor.href}>
-              Get quotes from local pros
-            </a>
-          </div>
-        ) : null}
+        <div className="foot foot-home">
+          <Link className="link-ink" href={"/pricing" as Route} id="comparePlans">
+            Compare all plans
+          </Link>
+        </div>
       </div>
     );
   })();
