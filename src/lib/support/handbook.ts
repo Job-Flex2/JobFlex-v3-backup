@@ -20,8 +20,8 @@ const ACCOUNTS = `## Accounts & access
 ### Sign-up
 **Where:** /auth/register ("Create an account" on sign-in). Same page on phone and desktop. New shops get a 7-day free trial. No account exists until the plan step finishes (Stripe takes the card, or the no-card trial starts).
 **JobFlex switches (Admin → Trials) decide the form.** Newest, *Straight to Professional*:
-1. "Start Your Free Trial": "Sign up with Google" (any Google account), or "Your name" + "Email".
-2. Card required: "Continue to card · $0 today" opens Stripe's card page for Professional (unless a pricing-link plan or the ad's tool picks another). No password, no code, no company screen. No card: "Continue" emails a 6-digit code; the code starts the trial.
+1. "7-DAY FREE TRIAL", a "Plans start at $45/month" card ("One flat monthly price", "No pay-per-report fees"), then "Sign up with Google" (any Google account), or "Your name" + "Email". At the foot, "Compare all plans" opens /pricing.
+2. Card required: "Start Your 7-Day Free Trial" opens Stripe's card page for Professional (unless a pricing-link plan or the ad's tool picks another); under it "$0 today, then <the plan's price> (with this plan) after your free trial." and "Upgrade / downgrade or cancel anytime". No password, no code, no company screen. No card: "Continue" emails a 6-digit code; the code starts the trial.
 3. "You're all set, <name>." The owner sees a welcome card ("You're on <plan> — free until <date>", "Compare plans", "Subscription", "Got it") for up to 10 days.
 Other settings: *Passwordless* (code, then "Pick a plan.") or *2/3 steps* (password, 8+ characters).
 **Email code:** subject "<code> is your JobFlex code"; lasts 10 minutes; 5 wrong tries burn it; "Resend code" after 30 s kills the old one; the email's "Continue in browser" button works in any browser. Unnamed shops are asked "What's your company called?" before their first send.

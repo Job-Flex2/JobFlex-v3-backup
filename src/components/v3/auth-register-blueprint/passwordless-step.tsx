@@ -640,26 +640,32 @@ export function PasswordlessStep({
       <div className={css.otp} data-otp-screen="form">
         <h1 className="auth-h1">{trialDays}-DAY FREE TRIAL</h1>
         {auto ? (
-          <>
-            {/* $45 is Starter's monthly price in the plan catalog (owner's copy, 2026-10-18). */}
-            <p className="auth-lede" data-auto-plan-lede>
-              Plans start at $45/month
+          <div className={css.priceCard} data-auto-plan-lede>
+            <p className={css.priceKicker}>Plans start at</p>
+            {/* Starter's price, typed in (owner, 2026-10-18) — when Starter's price changes, change it here. */}
+            <p className={css.price}>
+              <b>$45</b>
+              <span>/month</span>
             </p>
             <ul className={css.perks}>
               <li>
-                <svg className="ic" aria-hidden="true">
-                  <use href="#i-check" />
-                </svg>
+                <span className={css.tick} aria-hidden="true">
+                  <svg className="ic">
+                    <use href="#i-check" />
+                  </svg>
+                </span>
                 One flat monthly price
               </li>
               <li>
-                <svg className="ic" aria-hidden="true">
-                  <use href="#i-check" />
-                </svg>
+                <span className={css.tick} aria-hidden="true">
+                  <svg className="ic">
+                    <use href="#i-check" />
+                  </svg>
+                </span>
                 No pay-per-report fees
               </li>
             </ul>
-          </>
+          </div>
         ) : (
           <p className="auth-lede">Create your account in seconds. No password needed.</p>
         )}
