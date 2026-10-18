@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 import { db } from "@/lib/db";
 import { getResend, isResendEnabled } from "@/lib/sdk/resend";
 import { rateLimitShared } from "@/lib/rateLimit";
 import { supportTicketRef } from "@/lib/notify";
 import { checkReply } from "@/lib/supportReply";
 import { emailAddressOf, htmlToText, isAutoReply, ticketFromAddress, trimQuoted, verifyWebhook, webhookHeaders } from "@/lib/supportInbound";
-import { inboundConfig, postSupportMessage, senderOnTicket } from "@/lib/supportThread";
-import { answerTicketWithAi } from "@/lib/support/aiSupport";
+import { inboundConfig, senderOnTicket } from "@/lib/supportThread";
+import { acceptSupportMessage } from "@/lib/support/acceptMessage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// SUPPORT · A REPLY BY EMAIL (owner, 2026-10-17, stage 2 — prepared, off until
-// the owner turns it on; lib/supportInbound has the whole story).
+// SUPPORT · A REPLY BY EMAIL THROUGH RESEND — PARKED (owner, 2026-10-18: we
+// stay on Gmail; replies are read from the Gmail box by /api/cron/support-mail,
+// lib/supportMail). Kept and OFF: without RESEND_INBOUND_WEBHOOK_SECRET and
+// SUPPORT_REPLY_DOMAIN, which production does not have, it answers 503.
 //
 // Resend Inbound posts `email.received` here (a Standard Webhooks signature,
 // secret RESEND_INBOUND_WEBHOOK_SECRET). Its payload names the letter; the
@@ -119,7 +120,8 @@ export async function POST(req: Request) {
   const check = checkReply(body.slice(0, 4000));
   if (!check.ok) return drop("empty", { ref });
 
-  const r = await postSupportMessage({
+  // The one path every door takes (lib/support/acceptMessage): the alert text and the AI's follow-up included.
+  const r = await acceptSupportMessage({
     ticketId,
     from: who.from,
     body: check.body,
@@ -129,16 +131,6 @@ export async function POST(req: Request) {
     emailMessageId: messageId,
   });
   if (!r) return drop("ticket-gone", { ref });
-
-  // The customer's next message may be answered by the AI, as in the app — while no person leads the ticket.
-  if (who.from === "customer") {
-    after(() =>
-      answerTicketWithAi(ticketId, { trigger: "follow-up" }).then(
-        () => undefined,
-        (err) => console.error(`[support-ai] ${ref}: the follow-up by email was not answered:`, err instanceof Error ? err.message : err),
-      ),
-    );
-  }
   console.info(`[support-inbound] ${ref}: ${who.from} message added by email (${check.body.length} chars).`);
   return NextResponse.json({ ok: true, ref, from: who.from, messageId: r.message.id });
 }

@@ -10,6 +10,8 @@ import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { isBlobEnabled } from "@/lib/sdk/blob";
 import { deskReadiness } from "@/lib/aiDesk/readiness";
 import { WebhookEventStatus } from "@/lib/prismaEnums";
+import { readSupportMailStatus } from "@/lib/supportMail/run";
+import { supportMailConfig } from "@/lib/supportMail/config";
 import {
   AdminHealthContent,
   type HealthData,
@@ -85,6 +87,9 @@ export default async function AdminHealthPage() {
   // says so rather than showing zeros.
   let webhooks: WebhookSnapshot | null = null;
   let reconcileAt: string | null = null;
+  // The support inbox (lib/supportMail): what the cron last managed, and why it stopped if it did.
+  const mailCfg = supportMailConfig();
+  const mailStatus = database.state === "ok" ? await readSupportMailStatus().catch(() => null) : null;
   if (database.state === "ok") {
     try {
       const [snapshot, sync] = await Promise.all([
@@ -122,6 +127,13 @@ export default async function AdminHealthPage() {
     webhooks,
     reconcileAt,
     desk,
+    supportInbox: {
+      on: mailCfg.ok,
+      why: mailCfg.ok ? null : mailCfg.why,
+      checkedAt: mailStatus?.checkedAt ?? null,
+      lastError: mailStatus?.lastError ?? null,
+      lastErrorAt: mailStatus?.lastErrorAt ?? null,
+    },
   };
 
   return <AdminHealthContent data={data} />;

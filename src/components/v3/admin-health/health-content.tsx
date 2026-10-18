@@ -61,6 +61,8 @@ export interface HealthData {
   reconcileAt: string | null;
   /** The AI desk's go-live lights (lib/aiDesk/readiness, 2026-10-13). Null when the probe itself failed. */
   desk: DeskReadiness | null;
+  /** Replies to support letters read from the Gmail box (lib/supportMail, 2026-10-18): the cron's last run. */
+  supportInbox: { on: boolean; why: string | null; checkedAt: string | null; lastError: string | null; lastErrorAt: string | null };
 }
 
 type Tone = "ok" | "warn" | "danger" | "ink" | "mute";
@@ -125,6 +127,25 @@ function emailRow(transport: HealthData["emailTransport"]): { tone: Tone; label:
   if (transport === "resend") return { tone: "ink", label: "Resend" };
   if (transport === "smtp") return { tone: "ink", label: "SMTP" };
   return { tone: "danger", label: "None" };
+}
+
+/** "Checked 3 min ago" — or off and why, or the last error when it came after the last good read. */
+function supportInboxRow(data: HealthData): { tone: Tone; label: string; reason: string | null } {
+  const b = data.supportInbox;
+  if (!b.on) return { tone: "mute", label: "Off", reason: b.why };
+  const failing = Boolean(b.lastErrorAt && (!b.checkedAt || b.lastErrorAt > b.checkedAt));
+  const ago = (iso: string) => {
+    const m = Math.max(0, Math.round((Date.parse(data.generatedAt) - Date.parse(iso)) / 60_000));
+    return m < 1 ? "just now" : m < 120 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
+  };
+  if (failing) return { tone: "danger", label: b.checkedAt ? `Failing · last read ${ago(b.checkedAt)}` : "Failing", reason: `${b.lastError ?? "Unknown error"} (${ago(b.lastErrorAt!)})` };
+  if (!b.checkedAt) return { tone: "warn", label: "Not read yet", reason: null };
+  const stale = Date.parse(data.generatedAt) - Date.parse(b.checkedAt) > 10 * 60_000;
+  return {
+    tone: stale ? "warn" : "ok",
+    label: `Checked ${ago(b.checkedAt)}`,
+    reason: b.lastError && b.lastErrorAt ? `Last error ${ago(b.lastErrorAt)}: ${b.lastError}` : null,
+  };
 }
 
 function stripeKeyRow(data: HealthData): { tone: Tone; label: string } {
@@ -321,6 +342,10 @@ export function AdminHealthContent({ data }: { data: HealthData }) {
           <ProbeRow name="Database" probe={data.database} />
           <ProbeRow name="Stripe API" probe={data.stripeApi} />
           <ProbeRow name="PostHog" probe={data.analytics} />
+          {(() => {
+            const inbox = supportInboxRow(data);
+            return <SignalRow name="Support inbox" tone={inbox.tone} label={inbox.label} reason={inbox.reason} />;
+          })()}
         </div>
 
         <div className="card">

@@ -201,6 +201,7 @@ scripts:
   - { file: specialty-detect.check.ts, suite: logic, kind: check, status: live }
   - { file: step-prices.check.ts, suite: logic, kind: check, status: live }
   - { file: support-reply.check.ts, suite: logic, kind: check, status: live }
+  - { file: support-mail.check.ts, suite: logic, kind: check, status: live, note: "pure: fake IMAP box + fake db; the Gmail reply path and the preview email guard" }
   - { file: traffic-analyst.check.ts, suite: logic, kind: check, status: live }
   - { file: traffic-live.check.ts, suite: logic, kind: check, status: live }
   - { file: traffic-stale.check.ts, suite: logic, kind: check, status: live }

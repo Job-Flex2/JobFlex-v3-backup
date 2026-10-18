@@ -7,9 +7,10 @@ import { db } from "@/lib/db";
 import { notifySupportTicket, supportTicketRef } from "@/lib/notify";
 import { rateLimitShared, retryInWords } from "@/lib/rateLimit";
 import { answerTicketWithAi, readSupportAi } from "@/lib/support/aiSupport";
-import { admin as adminLink, alertSupportTicket, fireAdminAlert, short } from "@/lib/adminAlerts";
+import { alertSupportTicket } from "@/lib/adminAlerts";
+import { acceptSupportMessage } from "@/lib/support/acceptMessage";
 import { checkReply, openingMessage, type ThreadMessage } from "@/lib/supportReply";
-import { customerLabel, postSupportMessage, threadOf, ticketReplyTo } from "@/lib/supportThread";
+import { customerLabel, threadOf, ticketReplyTo } from "@/lib/supportThread";
 import type { SupportAiRecord } from "@/lib/support/aiState";
 
 // Support taxonomy — kept in lockstep with the customer form's chips, the
@@ -235,21 +236,10 @@ export async function postSupportReply(ticketId: unknown, raw: unknown): Promise
   const check = checkReply(raw);
   if (!check.ok) return check;
 
-  const r = await postSupportMessage({ ticketId: own.t.id, from: "customer", body: check.body, channel: "app", authorUserId: own.userId, authorName: customerLabel(own.t) });
+  // The one path every door takes (lib/support/acceptMessage): kept, the inbox
+  // emailed, unread for the admins, the team's alert text, the AI's follow-up.
+  const r = await acceptSupportMessage({ ticketId: own.t.id, from: "customer", body: check.body, channel: "app", authorUserId: own.userId, authorName: customerLabel(own.t) });
   if (!r) return { ok: false, error: "That ticket is gone." };
-  const ref = supportTicketRef(own.t.id);
-  // The team's "Support" alert texts hear of it too (lib/adminAlerts drops repeats within ten minutes).
-  await fireAdminAlert("support", `JobFlex: ${short(own.t.organization.name)} replied on support ${ref} — “${short(check.body, 60)}”. ${await adminLink(`/admin/support?ticket=${own.t.id}`)}`);
-  after(() =>
-    answerTicketWithAi(own.t.id, { trigger: "follow-up" }).then(
-      () => undefined,
-      (err) => console.error(`[support-ai] ${ref}: the follow-up was not answered:`, err instanceof Error ? err.message : err),
-    ),
-  );
-
-  revalidatePath("/dashboard/support");
-  revalidatePath("/admin/support");
-  revalidatePath("/admin");
   const fresh = await db.supportTicket.findUnique({
     where: { id: own.t.id },
     include: { user: { select: { name: true, email: true } }, organization: { select: { name: true } } },

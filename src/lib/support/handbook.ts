@@ -494,7 +494,7 @@ In production a server action's *thrown* error text is hidden; only *returned* e
 
 - **Filing:** a Help button on every signed-in app screen, all roles: one message (≤5,000 characters) plus a chip — Bug, Billing, Account, Question.
 - **Confirmation:** "Ticket filed" with a 6-character reference (the ticket id's last 6 characters, uppercase), then "Our team has been alerted." or "The email alert did not go out. Quote this reference if you follow up."
-- **One conversation per ticket:** our answers show in the ticket's chat at /dashboard/support and are emailed as "Re: <subject> [JobFlex <REF>]" (reply-to support@jobflex.app) to the filer (else owner, else billing email), with the last few messages and an "Open conversation" button. The customer replies in that chat (every role, own tickets only; the Help window's "Open the conversation" and the email's button both go there); a reply to the email reaches the support mailbox.
+- **One conversation per ticket:** our answers show in the ticket's chat at /dashboard/support and are emailed as "Re: <subject> [JobFlex <REF>]" to the filer (else owner, else billing email), with the last few messages and an "Open conversation" button. The customer replies in that chat (every role, own tickets only; the Help window's "Open the conversation" and the email's button both go there); replying to the email works too — the reply is added to the same conversation within a few minutes (attachments are not carried over; they stay in the email).
 - **Stated response time:** "Typical reply within one business day".
 
 ### Internal — for the team (not for customers)

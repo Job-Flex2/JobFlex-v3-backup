@@ -20,7 +20,8 @@ import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isEmailEnabled, sendEmail } from "@/lib/sdk/resend";
 import { supportRecipients, supportTicketRef } from "@/lib/notify";
-import { replyAddress } from "@/lib/supportInbound";
+import { plusReplyAddress, replyAddress } from "@/lib/supportInbound";
+import { supportMailConfig } from "@/lib/supportMail/config";
 import {
   conversationLetter,
   messageFrom,
@@ -54,8 +55,15 @@ export function inboundConfig(): { domain: string; secret: string } | null {
   return domain && secret ? { domain, secret } : null;
 }
 
-/** The ticket's own reply address, or null while replies by email are off. */
+/**
+ * The ticket's own reply address, or null while replies by email are off.
+ * Gmail first (owner, 2026-10-18): the platform mailbox's plus-address, read by
+ * /api/cron/support-mail — production only (lib/supportMail/config). The
+ * Resend inbound address above stays wired but is off without its variables.
+ */
 export function ticketReplyTo(ticketId: string): string | null {
+  const mail = supportMailConfig();
+  if (mail.ok) return plusReplyAddress(ticketId, { mailbox: mail.config.user, secret: mail.config.secret });
   const cfg = inboundConfig();
   return cfg ? replyAddress(ticketId, cfg) : null;
 }

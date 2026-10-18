@@ -42,6 +42,51 @@ export function ticketFromAddress(raw: string, o: { domain: string; secret: stri
   return want.length === got.length && timingSafeEqual(want, got) ? m[1] : null;
 }
 
+// ── …or the mailbox's own plus-address (owner, 2026-10-18: we stay on Gmail) ──
+//
+// Gmail delivers <box>+<anything>@<domain> to <box>@<domain> and keeps the
+// whole address in To / Delivered-To, so the ticket rides in the "+" part:
+// app+t-<ticket id>-<signature>@jobflex.app. lib/supportMail reads the box
+// over IMAP and finds the ticket here. Same HMAC as above.
+
+/** <box>+t-<ticket id>-<signature>@<box's domain>. */
+export function plusReplyAddress(ticketId: string, o: { mailbox: string; secret: string }): string {
+  const box = o.mailbox.trim().toLowerCase();
+  const at = box.lastIndexOf("@");
+  const local = box.slice(0, at).split("+")[0];
+  return `${local}+t-${ticketId}-${ticketSig(ticketId, o.secret)}@${box.slice(at + 1)}`;
+}
+
+/** The ticket a plus-address names, when it is the mailbox's own and its signature holds; else null. */
+export function ticketFromPlusAddress(raw: string, o: { mailbox: string; secret: string }): string | null {
+  const address = emailAddressOf(raw);
+  if (!address) return null;
+  const box = o.mailbox.trim().toLowerCase();
+  const boxAt = box.lastIndexOf("@");
+  const at = address.lastIndexOf("@");
+  if (address.slice(at + 1) !== box.slice(boxAt + 1)) return null;
+  const m = /^([^+]+)\+t-([a-z0-9]{10,40})-([a-f0-9]{20})$/.exec(address.slice(0, at));
+  if (!m || m[1] !== box.slice(0, boxAt).split("+")[0]) return null;
+  const want = Buffer.from(ticketSig(m[2], o.secret));
+  const got = Buffer.from(m[3]);
+  return want.length === got.length && timingSafeEqual(want, got) ? m[2] : null;
+}
+
+/** Looks like one of our plus-addresses (signature not checked) — a forged or broken one still counts as "meant for a ticket". */
+export function isPlusTicketAddress(raw: string, mailbox: string): boolean {
+  const address = emailAddressOf(raw);
+  const box = mailbox.trim().toLowerCase();
+  if (!address) return false;
+  const local = box.slice(0, box.lastIndexOf("@")).split("+")[0];
+  return address.startsWith(`${local}+t-`) && address.endsWith(box.slice(box.lastIndexOf("@")));
+}
+
+/** "[JobFlex J7RCFS]" in a subject → "J7RCFS" (the ticket's ref, lib/notify supportTicketRef). */
+export function refFromSubject(subject: string | null | undefined): string | null {
+  const m = /\[JobFlex ([A-Z0-9]{6})\]/.exec(subject ?? "");
+  return m ? m[1] : null;
+}
+
 /** "Dana Ray <Dana@X.test>" → "dana@x.test"; anything without an address → null. */
 export function emailAddressOf(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -119,6 +164,11 @@ export function trimQuoted(text: string): string {
     const line = lines[i].trim();
     const joined = i + 1 < lines.length ? `${line} ${lines[i + 1].trim()}` : line;
     if (line.includes(REPLY_ABOVE.replace(/#/g, "").trim()) || CUT_AT.some((re) => re.test(line))) {
+      end = i;
+      break;
+    }
+    // The signature: "-- " on a line of its own (RFC 3676), what follows is the sender's footer.
+    if (i > 0 && (lines[i] === "-- " || line === "--")) {
       end = i;
       break;
     }

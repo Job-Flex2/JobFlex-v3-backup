@@ -3,6 +3,7 @@ import { IntegrationDisabledError } from "./base";
 import { isSmtpEnabled, sendViaSmtp } from "./smtp";
 import { withEmailRetry, recipientLabel } from "./emailRetry";
 import { isQaEmail } from "@/lib/qaEmail";
+import { previewRecipients } from "@/lib/emailPreviewGuard";
 
 let client: Resend | null = null;
 
@@ -69,6 +70,19 @@ export async function sendEmail(opts: {
   const recipients = Array.isArray(opts.to) ? opts.to : [opts.to];
   if (process.env.QA_TEST_MODE === "1" && !!process.env.QA_SECRET && process.env.VERCEL_ENV !== "production" && recipients.length > 0 && recipients.every((r) => isQaEmail(r))) {
     return { id: "qa-test-mode:skipped", skipped: true as const };
+  }
+
+  // A PREVIEW DEPLOYMENT (2026-10-18, lib/emailPreviewGuard): the same Gmail
+  // box as production, so only our own addresses (PREVIEW_EMAIL_ALLOW) get a
+  // letter; anyone else is dropped, and a letter left with nobody is logged.
+  const previewTo = previewRecipients(recipients);
+  if (previewTo) {
+    if (!previewTo.length) {
+      console.info(`[email] preview: not sent — "${opts.subject}" to ${recipients.length} address(es) outside PREVIEW_EMAIL_ALLOW`);
+      return { id: "preview:skipped", skipped: true as const };
+    }
+    if (previewTo.length < recipients.length) console.info(`[email] preview: "${opts.subject}" sent to ${previewTo.length} of ${recipients.length} address(es)`);
+    opts = { ...opts, to: previewTo };
   }
 
   // Dev preview: when DEV_EMAIL_OVERRIDE is set, redirect every email to that one
