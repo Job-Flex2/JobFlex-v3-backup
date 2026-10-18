@@ -22,6 +22,9 @@ export type Wall = {
   from?: "plan" | "drawn";
   /** The floor it stands on, in a whole house read from several plans ("Main floor") — 2026-10-18. */
   floor?: string;
+  /** A ROOM BOUNDARY, not a wall (2026-10-18): where an open plan's rooms meet (the kitchen and the great room) — it
+   *  closes a room so it can be designed, and is never built, painted, trimmed or counted as a change to the house. */
+  boundary?: boolean;
 };
 
 export type OpeningKind = "door" | "double" | "slider" | "pocket" | "window" | "opening";

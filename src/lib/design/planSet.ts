@@ -13,7 +13,7 @@
 // plan sits on the sheet (the box to read when the sheet keeps no CAD layers). Pure.
 import type { SheetText } from "./planRead";
 
-export type FoundRoom = { name: string; at: { x: number; y: number }; h: number; size?: string; sqft?: number };
+export type FoundRoom = { name: string; at: { x: number; y: number }; h: number; size?: string; sqft?: number; /** Its extent on the sheet (points), when the picture was read for it. */ box?: { x0: number; y0: number; x1: number; y1: number } };
 export type PlanTitle = { title: string; level: string | null; order: number; at: { x: number; y: number }; h: number };
 export type SheetClass = { score: number; plans: PlanTitle[]; rooms: FoundRoom[]; why: string };
 
@@ -30,7 +30,30 @@ export type FloorPlan = {
   rooms: FoundRoom[];
   /** Where this plan sits on the sheet (points), from its rooms and title — null when the sheet says too little. */
   region: { x: number; y: number; w: number; h: number } | null;
+  /** The scale as printed, when it was read from the picture (a sheet without words). */
+  scale?: string | null;
+  /** Found by looking at the sheet (the vision model), not by its words. */
+  seen?: boolean;
 };
+
+/** A floor plan the vision model found on a sheet without words (2026-10-18): its title's level and name, its rooms
+ *  where their labels sit (fractions of the sheet → points), the drawing's box, the printed scale. Two labels of one
+ *  name ("WIC" twice) are told apart ("Walk-in closet", "Walk-in closet 2"). */
+export function floorFromVision(sheet: { key: string; fileName: string; page: number; width: number; height: number }, tri: { title: string | null; level: string | null }, read: { rooms: Array<{ name: string; x: number; y: number; size: string | null; box?: [number, number, number, number] | null }>; box: [number, number, number, number] | null; scale: string | null } | null): FloorPlan {
+  const lv = levelOf(tri.title ?? (tri.level ? `${tri.level} floor plan` : "floor plan"));
+  const seen = new Map<string, number>();
+  const rooms: FoundRoom[] = (read?.rooms ?? []).map((r) => {
+    const base = roomName(r.name);
+    const n = (seen.get(base.toLowerCase()) ?? 0) + 1;
+    seen.set(base.toLowerCase(), n);
+    const rb = r.box ? { x0: r.box[0] * sheet.width, y0: r.box[1] * sheet.height, x1: r.box[2] * sheet.width, y1: r.box[3] * sheet.height } : null;
+    return { name: n > 1 ? `${base} ${n}` : base, at: { x: r.x * sheet.width, y: r.y * sheet.height }, h: 10, ...(r.size ? { size: r.size } : {}), ...(rb ? { box: rb } : {}) };
+  });
+  const b = read?.box;
+  const pad = 0.015;
+  const region = b ? { x: Math.max(0, (b[0] - pad) * sheet.width), y: Math.max(0, (b[1] - pad) * sheet.height), w: Math.min(1, b[2] - b[0] + 2 * pad) * sheet.width, h: Math.min(1, b[3] - b[1] + 2 * pad) * sheet.height } : null;
+  return { key: `${sheet.key}~v`, sheetKey: sheet.key, fileName: sheet.fileName, page: sheet.page, name: lv.name, level: lv.level, order: lv.order, rooms, region, scale: read?.scale ?? null, seen: true };
+}
 
 /* ── Words ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -201,7 +224,8 @@ export function classifySheet(texts: SheetText[], width: number, height: number)
     score += 6;
     why.push(plansU.map((p) => levelOf(p.title).name).join(" · "));
   }
-  score += Math.min(rooms.length, 14) * 0.6;
+  // Room names alone (a load calculation or a schedule lists them too) say little without a plan's title.
+  score += Math.min(rooms.length, 14) * (plansU.length ? 0.6 : 0.15);
   if (rooms.length) why.push(`${rooms.length} room${rooms.length === 1 ? "" : "s"}`);
   score -= Math.min(prose, 60) * 0.08;
   if (!plansU.length && NOT_FLOOR.test(titleBlock)) score -= 3;

@@ -10,6 +10,7 @@ import { classifySheet, type SheetClass } from "./planSet";
 export const MAX_SHEETS = 60;
 export const MAX_FILE_BYTES = 120 * 1024 * 1024;
 const THUMB_PX = 320;
+const PREVIEW_PX = 800;
 
 type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 let pdfjs: Promise<PdfJs> | null = null;
@@ -35,6 +36,8 @@ export type DesignSheet = {
   page: number;
   kind: "pdf" | "image";
   thumb: string;
+  /** A picture of the whole sheet large enough to read its titles (a PDF page) — drawn once, with the thumbnail. */
+  preview?: string;
   /** Sheet size in points (an image: its pixels). */
   width: number;
   height: number;
@@ -92,13 +95,26 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
       .map((t) => t.str)
       .join(" ");
     const why = [cls.why, layered ? "CAD layers" : ""].filter(Boolean);
-    const tvp = page.getViewport({ scale: THUMB_PX / Math.max(vp.width, vp.height) });
+    // Drawn ONCE, large enough for a vision model to read the sheet's titles (a set that draws its words as lines is
+    // sorted from these pictures); the thumbnail is that picture made small. A sheet of 100,000 lines takes seconds to
+    // draw — twice was a minute more on an 18-sheet set.
+    const pvp = page.getViewport({ scale: PREVIEW_PX / Math.max(vp.width, vp.height) });
+    const big = document.createElement("canvas");
+    big.width = Math.round(pvp.width);
+    big.height = Math.round(pvp.height);
+    const bg = big.getContext("2d")!;
+    bg.fillStyle = "#fff";
+    bg.fillRect(0, 0, big.width, big.height);
+    await page.render({ canvasContext: bg, viewport: pvp }).promise;
+    const preview = big.toDataURL("image/jpeg", 0.72);
     const c = document.createElement("canvas");
-    c.width = Math.round(tvp.width);
-    c.height = Math.round(tvp.height);
-    await page.render({ canvasContext: c.getContext("2d")!, viewport: tvp }).promise;
+    const ts = THUMB_PX / Math.max(big.width, big.height);
+    c.width = Math.round(big.width * ts);
+    c.height = Math.round(big.height * ts);
+    c.getContext("2d")!.drawImage(big, 0, 0, c.width, c.height);
     const thumb = c.toDataURL("image/jpeg", 0.7);
     c.width = c.height = 0;
+    big.width = big.height = 0;
     onPage?.();
     out.push({
       key: `${file.name}#${i}`,
@@ -106,6 +122,7 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
       page: i,
       kind: "pdf",
       thumb,
+      preview,
       width: vp.width,
       height: vp.height,
       title: (cls.plans[0]?.title ?? titleText.slice(0, 60)).trim(),

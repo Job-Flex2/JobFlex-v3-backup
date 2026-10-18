@@ -4,6 +4,14 @@
 //   npx tsx qa/tests/logic/design-planset.check.ts
 import { classifySheet, findFloorPlans, findSpaces, isMultiFloor, levelOf, matchScore, roomName, sameRoom } from "../../../src/lib/design/planSet";
 import type { SheetText } from "../../../src/lib/design/planRead";
+import { wallPen } from "../../../src/lib/design/planRead";
+import { floorFromVision } from "../../../src/lib/design/planSet";
+import { closeRoom } from "../../../src/lib/design/openPlan";
+import { roomsOf, pointInPoly } from "../../../src/lib/design/geometry";
+import { roomSpans } from "../../../src/lib/design/kitchen";
+import { houseChanges } from "../../../src/lib/design/structure";
+import type { DesignDoc, Wall } from "../../../src/lib/design/model";
+import type { VectorSheet } from "../../../src/lib/design/pdfVector";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -95,6 +103,30 @@ check("'kitch' → Kitchen (as it's typed)", top("kitch") === "Kitchen", top("ki
 check("nothing for a room the house hasn't", findSpaces("wine cellar", floors).length === 0);
 check("the same room under two names", sameRoom("Primary Bedroom", "Master bedroom") && sameRoom("Bedroom #2", "Bedroom 2") && !sameRoom("Bedroom 2", "Bedroom 3"));
 check("a better match ranks first", matchScore("bedroom 2", "Bedroom #2") > matchScore("bedroom 2", "Master bedroom"));
+
+console.log("── a set that draws its words as lines (read from its pictures)");
+const seg = (x1: number, y1: number, x2: number, y2: number, w: number) => ({ x1, y1, x2, y2, w, layer: "", path: 0 });
+const lettering = Array.from({ length: 3000 }, (_, i) => seg(100 + (i % 60) * 20, 100 + Math.floor(i / 60) * 20, 125 + (i % 60) * 20, 100 + Math.floor(i / 60) * 20, 0.72));
+const heavy = Array.from({ length: 140 }, (_, i) => seg(200, 100 + i * 8, 600, 100 + i * 8, 1.44));
+const vsheet = { width: 2592, height: 1728, segs: [...lettering, ...heavy], arcs: [], layers: {} } as unknown as VectorSheet;
+check("the walls' pen is the heavy one, the lettering left out", wallPen(vsheet, null) === 1.44);
+check("one pen throughout: read every line, as before", wallPen({ ...vsheet, segs: heavy.map((s) => ({ ...s, w: 1 })) } as unknown as VectorSheet, null) === 0);
+const vf = floorFromVision({ key: "e#7", fileName: "set.pdf", page: 7, width: 2592, height: 1728 }, { title: "MAIN FLOOR PLAN", level: "main" }, { rooms: [{ name: "Kitchen", x: 0.5, y: 0.4, size: null, box: [0.45, 0.3, 0.55, 0.5] }, { name: "WIC", x: 0.6, y: 0.4, size: null }, { name: "WIC", x: 0.7, y: 0.4, size: null }], box: [0.2, 0.1, 0.8, 0.9], scale: `1/4" = 1'-0"` });
+check("a floor seen in its picture: named by its title, its rooms placed on the sheet", vf.name === "Main floor" && vf.level === "main" && vf.seen === true && Math.round(vf.rooms[0].at.x) === 1296 && Math.round(vf.rooms[0].box!.x1) === 1426);
+check("two labels of one name told apart", vf.rooms.map((r) => r.name).join(",") === "Kitchen,Walk-in closet,Walk-in closet 2", vf.rooms.map((r) => r.name).join(","));
+check("the drawing's box and its scale kept for the read", !!vf.region && vf.region.x < 0.2 * 2592 && vf.scale === `1/4" = 1'-0"`);
+
+console.log("── an open plan's room, closed by room boundaries");
+const Wl = (id: string, ax: number, ay: number, bx: number, by: number): Wall => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by }, thick: 6, height: 96, exterior: true });
+// A 40 × 20 ft great room + kitchen with no wall between them; a short wall stub at the kitchen's back corner.
+const open: DesignDoc = { v: 1, title: "open", walls: [Wl("n", 0, 0, 480, 0), Wl("e", 480, 0, 480, 240), Wl("s", 480, 240, 0, 240), Wl("w", 0, 240, 0, 0)], openings: [], labels: [{ id: "k", name: "Kitchen", at: { x: 400, y: 120 } }, { id: "g", name: "Great room", at: { x: 150, y: 120 } }], marks: [] };
+check("one space before: the kitchen isn't a room of its own", roomsOf(open).length === 1);
+const closed = closeRoom(open, { x: 400, y: 120 }, { x0: 318, y0: 14, x1: 470, y1: 226 });
+const kroom = closed ? roomsOf(closed).find((r) => pointInPoly({ x: 400, y: 120 }, r.poly)) : null;
+check("the kitchen closes: its sides snapped to the outside walls, one boundary across the open side", !!closed && closed.walls.filter((w) => w.boundary).length === 1 && !!kroom && Math.abs(kroom.sqft - (160 * 240) / 144) < 25, kroom ? `${Math.round(kroom.sqft)} sq ft` : "no room");
+check("…the boundary is a line on the floor: no face for cabinets or paint", !!kroom && roomSpans(closed!, kroom).every((s) => !closed!.walls.find((w) => w.id === s.wallId)?.boundary));
+check("…and never a change to the house", houseChanges({ ...closed!, existing: { walls: open.walls, openings: [], at: "x" } }).length === 0);
+check("an extent the label isn't in: not closed", closeRoom(open, { x: 100, y: 120 }, { x0: 318, y0: 14, x1: 470, y1: 226 }) === null);
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

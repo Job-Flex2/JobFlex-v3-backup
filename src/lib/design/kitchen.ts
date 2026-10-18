@@ -105,7 +105,8 @@ export function roomSpans(doc: Pick<DesignDoc, "walls" | "openings">, room: Room
   }
   const out: Span[] = [];
   merged.forEach((e, i) => {
-    if (!e.w) return;
+    // A room boundary (an open plan's edge) has no face: no cabinets against it, no paint, no baseboard.
+    if (!e.w || e.w.boundary) return;
     const d = unit(sub(e.q, e.p));
     let n = leftN(d);
     const mid = mulP(add(e.p, e.q), 0.5);

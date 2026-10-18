@@ -121,6 +121,8 @@ export type PlanReadOptions = {
   paperInPerFt?: number | null;
   /** Only read inside this box (sheet points) — required for a sheet without CAD layers. */
   region?: { x: number; y: number; w: number; h: number } | null;
+  /** A sheet without CAD layers: only lines drawn with this pen or heavier are walls (see wallPen). */
+  minWidth?: number;
   title?: string;
   fileName?: string;
   page?: number;
@@ -167,7 +169,8 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
     return x1 >= R.x && x0 <= R.x + R.w && y1 >= R.y && y0 <= R.y + R.h;
   };
   const toIn = (x: number, y: number): P => ({ x: (x - R.x) * k, y: (y - R.y) * k });
-  const lines: L[] = sheet.segs.filter(inR).map((s) => ({ a: toIn(s.x1, s.y1), b: toIn(s.x2, s.y2), w: s.w, role: roleOf(s), curve: !!s.curve, path: s.path }));
+  const minW = opts.minWidth ? opts.minWidth - 0.01 : 0;
+  const lines: L[] = sheet.segs.filter((s) => inR(s) && (!minW || s.w >= minW)).map((s) => ({ a: toIn(s.x1, s.y1), b: toIn(s.x2, s.y2), w: s.w, role: roleOf(s), curve: !!s.curve, path: s.path }));
 
   // ── Walls: pair the parallel lines ──
   const wallLines = lines
@@ -577,4 +580,27 @@ export function titleCase(s: string): string {
     .trim()
     .toLowerCase()
     .replace(/\b([a-z])/g, (m) => m.toUpperCase());
+}
+
+/** The pen a layer-less sheet draws its walls with (2026-10-18). Drafting draws walls heavier than the dimensions,
+ *  notes and lettering — and a CAD export without layers draws even its lettering as lines, tens of thousands of them,
+ *  which buried the walls. The heaviest pen that has enough long lines (a foot or more) to be a house's walls; 0 when
+ *  no pen stands out (read every line, as before). */
+export function wallPen(sheet: VectorSheet, region: { x: number; y: number; w: number; h: number } | null, enough = 100): number {
+  const R = region ?? { x: 0, y: 0, w: sheet.width, h: sheet.height };
+  const count = new Map<number, number>();
+  for (const s of sheet.segs) {
+    if (s.curve || Math.min(s.x1, s.x2) < R.x || Math.max(s.x1, s.x2) > R.x + R.w || Math.min(s.y1, s.y2) < R.y || Math.max(s.y1, s.y2) > R.y + R.h) continue;
+    if (Math.hypot(s.x2 - s.x1, s.y2 - s.y1) < 18) continue;
+    const w = Math.round(s.w * 100) / 100;
+    count.set(w, (count.get(w) ?? 0) + 1);
+  }
+  const pens = [...count.keys()].sort((a, b) => b - a);
+  if (pens.length < 2) return 0;
+  let acc = 0;
+  for (const w of pens) {
+    acc += count.get(w)!;
+    if (acc >= enough) return w === pens[pens.length - 1] ? 0 : w;
+  }
+  return 0;
 }

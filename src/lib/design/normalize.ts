@@ -93,6 +93,7 @@ function normalizeWalls(raw: unknown): Wall[] {
     ...(w?.exterior ? { exterior: true } : {}),
     ...(w?.from === "plan" || w?.from === "drawn" ? { from: w.from } : {}),
     ...(w?.floor ? { floor: str(w.floor, 40) } : {}),
+    ...(w?.boundary ? { boundary: true } : {}),
   }));
 }
 

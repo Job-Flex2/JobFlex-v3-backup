@@ -534,6 +534,13 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
       {doc.walls.map((w) => {
         const on = selWall?.id === w.id;
         const flagged = flags?.has(w.id);
+        if (w.boundary)
+          return (
+            <g key={w.id} data-hit={`wall:${w.id}`} data-design-boundary={w.id} style={{ cursor: tool === "select" ? "move" : undefined }}>
+              <line x1={w.a.x} y1={w.a.y} x2={w.b.x} y2={w.b.y} stroke={on ? "#1d4ed8" : "#64748b"} strokeWidth={1.4 * px} strokeDasharray={`${6 * px} ${4 * px}`} />
+              <line x1={w.a.x} y1={w.a.y} x2={w.b.x} y2={w.b.y} stroke="transparent" strokeWidth={Math.max(8, 14 * px)} />
+            </g>
+          );
         const pieces = wallPieces(w, doc.openings).filter((pc) => pc.z0 === 0 && pc.z1 >= w.height - 0.5);
         return (
           <g key={w.id} data-hit={`wall:${w.id}`} style={{ cursor: tool === "select" ? "move" : undefined }}>

@@ -198,7 +198,7 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
   };
   for (const w of doc.walls) {
     const L = wallLen(w);
-    if (L < 0.5) continue;
+    if (L < 0.5 || w.boundary) continue; // a room boundary is open floor
     // The dollhouse: the room's own walls stand full height except those between the camera and the room.
     const full = (!focusRoom || focusWalls.has(w.id)) && !cut.has(w.id);
     const H = full ? w.height : Math.min(CUT, w.height);

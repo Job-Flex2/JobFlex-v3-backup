@@ -54,7 +54,7 @@ function planAngle(walls: Wall[]): number {
 const rot = (p: P, ang: number): P => ({ x: p.x * Math.cos(-ang) - p.y * Math.sin(-ang), y: p.x * Math.sin(-ang) + p.y * Math.cos(-ang) });
 
 /** The walls as they stood (doc.existing), or as they are when the plan wasn't kept. */
-export const standingWalls = (doc: DesignDoc): Wall[] => doc.existing?.walls ?? doc.walls;
+export const standingWalls = (doc: DesignDoc): Wall[] => (doc.existing?.walls ?? doc.walls).filter((w) => !w.boundary);
 const standingOpenings = (doc: DesignDoc): Opening[] => doc.existing?.openings ?? doc.openings;
 
 /** Every standing wall read — each floor of a whole house on its own footprint. */
@@ -224,8 +224,9 @@ const openingWord = (o: Opening) => (isWindow(o) ? "window" : o.kind === "openin
 /** Every way the design differs from the house as it stood. Empty when the house wasn't kept (doc.existing). */
 export function houseChanges(doc: DesignDoc): HouseChange[] {
   if (!doc.existing) return [];
-  const before = doc.existing.walls;
-  const now = new Map(doc.walls.map((w) => [w.id, w]));
+  // Room boundaries are lines on the floor, not walls: never a change to the house.
+  const before = doc.existing.walls.filter((w) => !w.boundary);
+  const now = new Map(doc.walls.filter((w) => !w.boundary).map((w) => [w.id, w]));
   const was = new Map(before.map((w) => [w.id, w]));
   const readings = readStructure(doc);
   const out: HouseChange[] = [];
@@ -264,7 +265,7 @@ export function houseChanges(doc: DesignDoc): HouseChange[] {
     }
   }
   for (const w of doc.walls) {
-    if (was.has(w.id)) continue;
+    if (was.has(w.id) || w.boundary) continue;
     out.push({ id: `new:${w.id}`, kind: "new-wall", wallId: w.id, inches: wallLen(w), title: `New wall, ${ftIn(wallLen(w))}`, exterior: false, reading: readWall(doc, w.id)!, needs: "none", why: "A new partition: framing, drywall and finishes." });
   }
 

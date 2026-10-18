@@ -66,15 +66,15 @@ export function SpacesPicker({ floors, multi, busy, onRoom, onFloor, onHouse, on
         </div>
       </div>
       <div className={s.body}>
-        <label className={s.field}>
+        <label className={s.field} style={floors.length ? undefined : { display: "none" }}>
           <span className={s.lbl}>Find a room</span>
           <input id="space-search" className={s.in} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type it — kitchen, master bath, bedroom 2…" autoFocus data-design-space-search />
         </label>
         {q.trim() ? (
           hits.length ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }} data-design-space-hits>
-              {hits.map(({ f, r }) => (
-                <RoomChip key={`${f.key}|${r.name}`} floor={floors.length > 1 ? f.name : null} room={r} primary disabled={!!busy} onClick={() => onRoom(f.key, r.name)} />
+              {hits.map(({ f, r }, i) => (
+                <RoomChip key={`${f.key}|${r.name}|${i}`} floor={floors.length > 1 ? f.name : null} room={r} primary disabled={!!busy} onClick={() => onRoom(f.key, r.name)} />
               ))}
             </div>
           ) : (
@@ -87,6 +87,8 @@ export function SpacesPicker({ floors, multi, busy, onRoom, onFloor, onHouse, on
             {busy}
           </p>
         ) : null}
+
+        {!floors.length && !busy ? <p className={`${s.note} ${s.noteWarn}`}>No floor plan was found in this set.</p> : null}
 
         {multi ? (
           <button type="button" className={`${s.btn} ${s.btnPrimary}`} style={{ height: "auto", padding: "14px 16px", textAlign: "left", display: "grid", gap: 2 }} onClick={onHouse} disabled={!!busy} data-design-space-house>
@@ -116,8 +118,8 @@ export function SpacesPicker({ floors, multi, busy, onRoom, onFloor, onHouse, on
             </div>
             {f.rooms.length ? (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {f.rooms.map((r) => (
-                  <RoomChip key={r.name} floor={null} room={r} disabled={!!busy} onClick={() => onRoom(f.key, r.name)} />
+                {f.rooms.map((r, i) => (
+                  <RoomChip key={`${r.name}-${i}`} floor={null} room={r} disabled={!!busy} onClick={() => onRoom(f.key, r.name)} />
                 ))}
               </div>
             ) : f.status !== "reading" ? (
