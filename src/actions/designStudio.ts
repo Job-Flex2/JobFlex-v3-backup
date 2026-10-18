@@ -7,7 +7,17 @@
 //     its own, like the deck drafts), at most DRAFT_MAX a shop.
 //   readRoomNames — the plan with its rooms numbered → the name (and printed area) inside each.
 import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { db } from "@/lib/db";
+import { checkPlanLimit } from "@/lib/limitsEngine";
+import { PLAN_LIMIT_MESSAGE } from "@/lib/planLimits";
+import { ProposalStatus } from "@/lib/prismaEnums";
+import { clearFilingContext, filedClientId, leadProposalText, readFilingContext } from "@/lib/filingContext";
+import { stateFromAddress, stateTaxRate } from "@/lib/pricing/salesTax";
+import { applyMemberDiscount } from "@/lib/servicePlanBook";
+import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
+import { locationIndex } from "@/lib/estimate/location-index";
 import { isLimitedRole, requireOrg } from "@/lib/orgContext";
 import { canUseDesignStudio } from "@/lib/design/access";
 import { normalizeDesign } from "@/lib/design/normalize";
@@ -20,14 +30,14 @@ const PREFIX = "designdraft:";
 const DRAFT_MAX = 40;
 const keyOf = (org: string, id: string) => `${PREFIX}${org}:${id}`;
 
-type Gate = { ok: true; organizationId: string; userId: string } | { ok: false; error: string };
+type Gate = { ok: true; organizationId: string; userId: string; role: string } | { ok: false; error: string };
 
 async function gate(): Promise<Gate> {
   try {
     const ctx = await requireOrg();
     if (isLimitedRole(ctx.role)) return { ok: false, error: "The design studio isn't open to this role." };
     if (!(await canUseDesignStudio(ctx.user))) return { ok: false, error: "The design studio is in preview for admins." };
-    return { ok: true, organizationId: ctx.organizationId, userId: ctx.user.id };
+    return { ok: true, organizationId: ctx.organizationId, userId: ctx.user.id, role: String(ctx.role) };
   } catch {
     return { ok: false, error: "Sign in again to use the design studio." };
   }
@@ -180,5 +190,173 @@ export async function readRoomNames(input: { image: string; count: number }): Pr
   } catch (err) {
     logServerError("design-room-names", err, { kind: "action", organizationId: g.organizationId });
     return { ok: false, error: friendlyAIError(err, "reading the room names") };
+  }
+}
+
+/* ── Milestone 4: the estimate and the proposal ─────────────────────────────────────────────────────────────── */
+
+export type DesignLocation = { factor: number; place: string; level: "city" | "state" | "national" };
+
+/** The job's market, from its address: the price book's city (or state) index. */
+export async function designLocation(address: string): Promise<{ ok: true; loc: DesignLocation } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const idx = locationIndex(String(address ?? "").slice(0, 300));
+  return { ok: true, loc: { factor: idx.factor, place: idx.place, level: idx.level } };
+}
+
+const BOOK_KEY = (org: string) => `designbook:${org}`;
+
+/** The shop's own price per estimate line (line key → unit price). */
+export async function readDesignBook(): Promise<{ ok: true; book: Record<string, number> } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const row = await db.syncState.findUnique({ where: { key: BOOK_KEY(g.organizationId) }, select: { cursor: true } }).catch(() => null);
+  try {
+    const raw = row ? (JSON.parse(row.cursor) as Record<string, unknown>) : {};
+    const book: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) if (/^[\w-]{1,40}$/.test(k) && typeof v === "number" && Number.isFinite(v) && v >= 0) book[k] = v;
+    return { ok: true, book };
+  } catch {
+    return { ok: true, book: {} };
+  }
+}
+
+/** Keep (or forget, with null) the shop's own price for one line. */
+export async function saveDesignPrice(key: string, price: number | null): Promise<{ ok: true; book: Record<string, number> } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  if (!/^[\w-]{1,40}$/.test(key)) return { ok: false, error: "That line can't keep a price." };
+  if (price != null && !(Number.isFinite(price) && price >= 0 && price <= 1_000_000)) return { ok: false, error: "That price isn't a number we can keep." };
+  const cur = await readDesignBook();
+  const book = cur.ok ? { ...cur.book } : {};
+  if (price == null) delete book[key];
+  else book[key] = Math.round(price * 100) / 100;
+  try {
+    await db.syncState.upsert({ where: { key: BOOK_KEY(g.organizationId) }, create: { key: BOOK_KEY(g.organizationId), cursor: JSON.stringify(book) }, update: { cursor: JSON.stringify(book) } });
+    return { ok: true, book };
+  } catch (err) {
+    logServerError("design-book", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The price could not be kept — try again in a moment." };
+  }
+}
+
+export type DesignClient = { id: string; name: string; email: string | null; phone: string | null; address: string | null };
+
+/** The shop's clients by name, email or phone (the first eight). */
+export async function findDesignClients(q: string): Promise<{ ok: true; clients: DesignClient[] } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const t = String(q ?? "").trim().slice(0, 80);
+  const where = t
+    ? { organizationId: g.organizationId, deletedAt: null, OR: [{ name: { contains: t, mode: "insensitive" as const } }, { email: { contains: t, mode: "insensitive" as const } }, { phone: { contains: t } }] }
+    : { organizationId: g.organizationId, deletedAt: null };
+  try {
+    const rows = await db.client.findMany({ where, select: { id: true, name: true, email: true, phone: true, address: true }, orderBy: { updatedAt: "desc" }, take: 8 });
+    return { ok: true, clients: rows };
+  } catch {
+    // SQLite (the stand) has no case-insensitive mode: match by name as typed.
+    const rows = await db.client.findMany({ where: { organizationId: g.organizationId, deletedAt: null, ...(t ? { OR: [{ name: { contains: t } }, { email: { contains: t } }, { phone: { contains: t } }] } : {}) }, select: { id: true, name: true, email: true, phone: true, address: true }, orderBy: { updatedAt: "desc" }, take: 8 }).catch(() => []);
+    return { ok: true, clients: rows };
+  }
+}
+
+const lineSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().max(1500).default(""),
+  quantity: z.number().min(0).max(1_000_000),
+  unit: z.enum(["ea", "sqft", "ln ft", "lot"]),
+  unitPrice: z.number().min(0).max(10_000_000),
+  labor: z.number().min(0).max(1),
+});
+const convertSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  clientId: z.string().max(64).nullable().optional(),
+  address: z.string().max(300).nullable().optional(),
+  scope: z.string().max(6000).default(""),
+  lines: z.array(lineSchema).min(1).max(200),
+  designId: z.string().max(64).nullable().optional(),
+  room: z.string().max(120).optional(),
+  doc: z.unknown().optional(),
+});
+
+const UNIT_TYPE = { ea: "UNIT", sqft: "SQFT", "ln ft": "LINEAR_FT", lot: "LUMP_SUM" } as const;
+const DESIGN_PLAN_EVENT = "DESIGN_PLAN";
+
+/** The priced design → a JobFlex proposal (a draft), with the design riding along so it can be opened again. */
+export async function convertDesignToProposal(raw: unknown): Promise<{ ok: true; id: string } | { ok: false; error: string; code?: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const quota = await checkPlanLimit(g.organizationId, "proposalsCreated");
+  if (!quota.allowed) return { ok: false, code: "PLAN_LIMIT_REACHED", error: PLAN_LIMIT_MESSAGE };
+  const parsed = convertSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: `The estimate didn't validate — ${parsed.error.issues[0]?.path.join(".") ?? ""} ${parsed.error.issues[0]?.message ?? ""}`.trim() };
+  const data = parsed.data;
+  try {
+    const named = data.clientId ? ((await db.client.findFirst({ where: { id: data.clientId, organizationId: g.organizationId, deletedAt: null }, select: { id: true } }))?.id ?? null) : null;
+    const filing = await readFilingContext(g.organizationId);
+    const clientId = named ?? (await filedClientId(g.organizationId, g.role, filing));
+    const projectId = filing?.projectId ?? null;
+    const text = leadProposalText(filing?.lead ?? null, data.scope);
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    // The book's prices are selling prices (overhead and profit in): the proposal is the ticket, no markup on top.
+    const lines = data.lines.map((l, i) => {
+      const unitPrice = round2(l.unitPrice);
+      const laborCost = round2(unitPrice * l.labor);
+      return { name: l.name, description: l.description || null, measurementType: UNIT_TYPE[l.unit], quantity: l.quantity, unitPrice, materialCost: round2(unitPrice - laborCost), laborCost, total: round2(l.quantity * unitPrice), position: i };
+    });
+    const subtotal = round2(lines.reduce((a, l) => a + l.total, 0));
+    const address = data.address?.trim() || null;
+    const org = await db.organization.findUnique({ where: { id: g.organizationId }, select: { defaultTaxRate: true } });
+    const taxRate = stateTaxRate(stateFromAddress(address)) ?? org?.defaultTaxRate ?? 0;
+    const taxTotal = round2(subtotal * taxRate);
+    const proposal = await db.proposal.create({
+      data: {
+        trade: "kitchen",
+        publicId: randomUUID(),
+        organizationId: g.organizationId,
+        ownerId: g.userId,
+        clientId,
+        projectId,
+        title: data.title,
+        scopeOfWork: text.scopeOfWork,
+        description: text.overview,
+        address,
+        status: ProposalStatus.DRAFT,
+        subtotal,
+        taxRate,
+        taxTotal,
+        total: round2(subtotal + taxTotal),
+        materialMarkupPct: 0,
+        laborMarkupPct: 0,
+        validUntil: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
+        lineItems: { create: lines },
+        installments: {
+          create: [
+            { label: "Deposit", amount: 30, isPercent: true, position: 0 },
+            { label: "Completion", amount: 70, isPercent: true, position: 1 },
+          ],
+        },
+      },
+    });
+    await applyMemberDiscount(proposal.id).catch(() => {});
+    // The design rides with the proposal: walls, openings, rooms, what's placed and the finishes (not the plan's
+    // drawn lines) — to open it again, and for the client's page later.
+    try {
+      const doc = normalizeDesign(data.doc ?? {});
+      const plan = { v: 1, designId: data.designId ?? null, room: data.room ?? null, doc: { ...doc, marks: [] } };
+      const meta = JSON.stringify(plan);
+      if (meta.length < 900_000) await db.activityEvent.create({ data: { organizationId: g.organizationId, actorId: g.userId, proposalId: proposal.id, kind: DESIGN_PLAN_EVENT, summary: `Designed in the Home Design Studio — ${data.room ?? data.title}`, meta } });
+    } catch {
+      /* the design never blocks the proposal */
+    }
+    await logActivity({ organizationId: g.organizationId, actorId: g.userId, kind: TRAIL_KINDS.ESTIMATE, proposalId: proposal.id, summary: `Priced a kitchen design — ${data.room ?? data.title}, $${Math.round(subtotal).toLocaleString("en-US")}`, meta: { trade: "kitchen", amount: Math.round(subtotal) } });
+    if (filing) await clearFilingContext();
+    if (projectId) revalidatePath(`/dashboard/projects/${projectId}`);
+    revalidatePath("/dashboard/proposals");
+    return { ok: true, id: proposal.id };
+  } catch (err) {
+    logServerError("design-convert", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The proposal could not be saved. Try again in a moment." };
   }
 }

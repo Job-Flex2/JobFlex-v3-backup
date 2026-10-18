@@ -147,6 +147,18 @@ export function normalizeDesign(raw: unknown): DesignDoc {
     focus: typeof d.focus === "string" && labels.some((l) => l.id === d.focus) ? d.focus : null,
     ...(items.length ? { items } : {}),
     ...(Object.keys(finishes).length ? { finishes } : {}),
+    ...(d.estimate && typeof d.estimate === "object"
+      ? {
+          estimate: {
+            scope: d.estimate.scope === "new" ? ("new" as const) : ("remodel" as const),
+            roughIn: d.estimate.roughIn !== false,
+            permits: d.estimate.permits !== false,
+            appliances: d.estimate.appliances === "allowance" ? ("allowance" as const) : ("owner" as const),
+            ...(d.estimate.address ? { address: str(d.estimate.address, 300) } : {}),
+            ...(d.estimate.title ? { title: str(d.estimate.title, 160) } : {}),
+          },
+        }
+      : {}),
     source: {
       kind,
       ...(src.fileName ? { fileName: str(src.fileName, 160) } : {}),

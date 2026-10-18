@@ -9,8 +9,9 @@ import * as React from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type { DesignDoc, DesignItem, Opening, Wall } from "@/lib/design/model";
-import { finishesFor, floorPreset, lib, UPPER_Z } from "@/lib/design/library";
+import type { DesignDoc, Opening, Wall } from "@/lib/design/model";
+import { finishesFor, floorPreset, lib } from "@/lib/design/library";
+import { splashTopFor } from "@/lib/design/kitchen";
 import { buildItem, disposeOwn, floorTexture, matCache, placeItem, wallBump } from "./items-3d";
 import { centroid, pointInPoly, roomsOf, wallDir, wallLen, wallPieces, type Room } from "@/lib/design/geometry";
 
@@ -107,18 +108,6 @@ function labelSprite(text: string, sub: string): { sprite: THREE.Sprite; dispose
 
 type Built = { group: THREE.Group; dispose: () => void; wallMeshes: THREE.Mesh[]; itemGroups: THREE.Object3D[]; frame: { center: THREE.Vector3; radius: number; floorPoly: Array<{ x: number; z: number }> | null } };
 
-/** How high the backsplash behind an item rises: to the wall cabinet over it, the hood, or the chosen height. */
-function splashTopFor(it: DesignItem, items: DesignItem[], height: "4in" | "18in" | "full", ceiling: number): number {
-  if (height === "4in") return 40;
-  const r = (it.rot * Math.PI) / 180;
-  const u = { x: -Math.sin(r), y: Math.cos(r) };
-  const t = it.x * u.x + it.y * u.y;
-  const over = items.filter((o) => o.id !== it.id && o.wallId === it.wallId && o.z >= 40 && Math.abs(o.x * u.x + o.y * u.y - t) < (o.w + it.w) / 2 - 1);
-  const hood = over.find((o) => o.lib === "HD" || o.lib === "MW");
-  if (it.lib === "RNG") return hood ? hood.z : height === "full" ? Math.min(ceiling, 84) : 54;
-  if (height === "18in") return UPPER_Z;
-  return over.length ? Math.min(...over.map((o) => o.z)) : Math.min(ceiling, 84);
-}
 
 /** The focus room's walls standing between the camera and the room (camera and room center on opposite sides). */
 function nearWalls(doc: DesignDoc, room: Room | null, cam: THREE.Vector3 | null): Set<string> {

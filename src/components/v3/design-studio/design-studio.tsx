@@ -12,6 +12,8 @@ import dynamic from "next/dynamic";
 import s from "./design-studio.module.css";
 import { PlanEditor, setWallLength, type Selection, type Tool, type Underlay } from "./plan-editor";
 import { DesignPanel } from "./design-panel";
+import { EstimateSheet } from "./estimate-sheet";
+import type { DesignLocation } from "@/actions/designStudio";
 import type { DesignDoc, OpeningKind, P } from "@/lib/design/model";
 import { emptyDesign, ftIn, newId, DEFAULT_CEILING } from "@/lib/design/model";
 import { centroid, dist, roomsOf, wallLen, type Room } from "@/lib/design/geometry";
@@ -50,7 +52,7 @@ function parseLength(v: string): number | null {
   return null;
 }
 
-export function DesignStudio({ initial }: { initial: { id: string; doc: DesignDoc } | null }) {
+export function DesignStudio({ initial, market, shopAddress }: { initial: { id: string; doc: DesignDoc } | null; market: DesignLocation; shopAddress: string | null }) {
   const [phase, setPhase] = React.useState<Phase>(initial ? "plan" : "start");
   const [designs, setDesigns] = React.useState<DesignRow[] | null>(null);
   const [sheets, setSheets] = React.useState<DesignSheet[]>([]);
@@ -931,6 +933,7 @@ export function DesignStudio({ initial }: { initial: { id: string; doc: DesignDo
           </section>
         </aside>
       </div>
+      {focus && focusRoom && (doc.items ?? []).some((i) => i.room === focus) ? <EstimateSheet doc={doc} focus={focus} designId={id} market={market} shopAddress={shopAddress} onPatch={patch} /> : null}
     </div>
   );
 }

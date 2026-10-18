@@ -135,6 +135,8 @@ export type DesignDoc = {
   items?: DesignItem[];
   /** Each room's finishes, by its label id (milestone 3). */
   finishes?: Record<string, Finishes>;
+  /** The estimate's choices (milestone 4): remodel or new, rough-in, permits, who supplies the appliances, the job. */
+  estimate?: { scope: "remodel" | "new"; roughIn: boolean; permits: boolean; appliances: "owner" | "allowance"; address?: string; title?: string };
 };
 
 export const DEFAULT_CEILING = 96;

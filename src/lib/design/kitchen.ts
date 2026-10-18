@@ -9,12 +9,27 @@
 //   · kitchenFromPlan — the same, from what the architect DREW: the counter's front edge a cabinet depth off a wall,
 //     the dashed uppers, the island block, the burners (four small circles), the sink bowls, the fridge box.
 // Everything returned is ordinary DesignItems the contractor then moves, resizes or deletes.
-import type { DesignDoc, DesignItem, P } from "./model";
+import type { DesignDoc, DesignItem, Finishes, P } from "./model";
 import { DEFAULT_CEILING, newId } from "./model";
 import { add, centroid, dist, dot, leftN, mulP, pointInPoly, project, sub, unit, type Room } from "./geometry";
 import { BASE_H, UPPER_Z, lib, newItemFrom } from "./library";
 
 const DEG = 180 / Math.PI;
+
+/* ── How high the backsplash rises behind an item (the 3D and the estimate share it) ─────────────────────────── */
+
+export function splashTopFor(it: DesignItem, items: DesignItem[], height: Finishes["backsplash"]["height"], ceiling: number): number {
+  if (height === "4in") return 40;
+  const r = (it.rot * Math.PI) / 180;
+  const u = { x: -Math.sin(r), y: Math.cos(r) };
+  const t = it.x * u.x + it.y * u.y;
+  const over = items.filter((o) => o.id !== it.id && o.wallId === it.wallId && o.z >= 40 && Math.abs(o.x * u.x + o.y * u.y - t) < (o.w + it.w) / 2 - 1);
+  const hood = over.find((o) => o.lib === "HD" || o.lib === "MW");
+  if (it.lib === "RNG") return hood ? hood.z : height === "full" ? Math.min(ceiling, 84) : 54;
+  if (height === "18in") return UPPER_Z;
+  return over.length ? Math.min(...over.map((o) => o.z)) : Math.min(ceiling, 84);
+}
+
 
 /* ── An item's frame ───────────────────────────────────────────────────────────────────────────────────────────── */
 
