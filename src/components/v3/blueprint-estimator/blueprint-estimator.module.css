@@ -554,21 +554,57 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+/* A disclosure reads as a button (owner, 2026-10-17): a framed row, its name
+   left, a chevron right that turns when it is open. */
 .be.be .more summary {
   display: flex;
   align-items: center;
-  min-height: 40px;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--be-ink);
+  border-radius: var(--be-r);
+  background: var(--be-paper);
+  list-style: none;
   cursor: pointer;
   font-size: 14px;
   font-weight: 800;
-  color: var(--be-blue);
+  color: var(--be-ink);
+  transition: background 0.15s var(--ease-out, ease), border-color 0.15s var(--ease-out, ease), color 0.15s var(--ease-out, ease);
+}
+.be.be .more summary::-webkit-details-marker {
+  display: none;
+}
+.be.be .more summary:hover {
+  background: var(--be-blue-soft);
 }
 .be.be .more summary:focus-visible {
   outline: 2px solid var(--be-blue);
   outline-offset: 2px;
 }
+.be.be .moreChev {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s var(--ease-out, ease);
+}
 .be.be .more[open] summary {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  border-color: var(--be-blue);
+  background: var(--be-blue-soft);
+  color: var(--be-blue);
+}
+.be.be .more[open] .moreChev {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .be.be .more summary, .be.be .moreChev { transition: none; }
 }
 .be.be .items,
 .be.be .notes {

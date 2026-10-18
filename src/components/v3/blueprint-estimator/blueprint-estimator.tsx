@@ -1006,7 +1006,10 @@ export function BlueprintEstimator() {
           </div>
           {(m.notes.length > 0 || result.timing.length > 0) && (
             <details className={s.more}>
-              <summary>Notes and checks{m.notes.length ? ` · ${m.notes.length}` : ""}</summary>
+              <summary>
+                <span>Notes and checks{m.notes.length ? ` · ${m.notes.length}` : ""}</span>
+                <svg className={s.moreChev} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </summary>
               <ul className={s.notes}>
                 {m.notes.map((n) => (
                   <li key={n}>{n}</li>
@@ -1084,7 +1087,10 @@ export function BlueprintEstimator() {
           )}
           <details className={s.more}>
             <summary>
-              Every quantity of this job · {result.items.length} line{result.items.length === 1 ? "" : "s"}
+              <span>
+                Every quantity of this job · {result.items.length} line{result.items.length === 1 ? "" : "s"}
+              </span>
+              <svg className={s.moreChev} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
             </summary>
             <ul className={s.items}>
               {result.items.map((i) => (
