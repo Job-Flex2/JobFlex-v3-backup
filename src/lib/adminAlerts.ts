@@ -127,6 +127,13 @@ export async function alertSupportTicket(info: { orgName: string; subject: strin
   await fireAdminAlert("support", `JobFlex: support ${info.ref} from ${short(info.orgName)} — “${short(info.subject, 60)}”. ${await admin("/admin/support")}`);
 }
 
+/** The purge could not give a deleted company's number back to Twilio: it is still
+ *  billed to JobFlex until someone releases it in the Twilio console. */
+export async function alertNumberLeft(info: { orgName: string; number: string | null; numberSid: string | null }): Promise<void> {
+  const which = [info.number, info.numberSid].filter(Boolean).join(" · ") || "a number";
+  await fireAdminAlert("cleanup", `JobFlex: purged ${short(info.orgName)}, but its Twilio number ${which} was not released — release it in the Twilio console.`, `numberLeft:${info.numberSid ?? info.number ?? info.orgName}`);
+}
+
 /* ── the traffic surge ────────────────────────────────────────────────────── */
 
 type SurgeState = { lastAlertAt?: string; armed?: boolean };

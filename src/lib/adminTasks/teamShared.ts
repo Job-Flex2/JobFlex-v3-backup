@@ -23,7 +23,7 @@
  * time"; then "text when payment got charged in Stripe or failed"). Off for everyone
  * until ticked — an alert text costs money and attention.
  * The texts themselves: lib/adminAlerts. */
-export const ALERT_KEYS = ["signup", "converted", "canceled", "paid", "failed", "support", "surge"] as const;
+export const ALERT_KEYS = ["signup", "converted", "canceled", "paid", "failed", "support", "surge", "cleanup"] as const;
 export type AlertKey = (typeof ALERT_KEYS)[number];
 export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
   signup: { label: "Sign-ups", hint: "a company signs up" },
@@ -33,6 +33,7 @@ export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
   failed: { label: "Failed payments", hint: "a plan charge is declined — the first try and the last" },
   support: { label: "Support", hint: "a support ticket arrives" },
   surge: { label: "Traffic surge", hint: "the site is busy right now" },
+  cleanup: { label: "Cleanup failures", hint: "a deleted company's Twilio number could not be released" },
 };
 export const isAlertKey = (v: unknown): v is AlertKey => typeof v === "string" && (ALERT_KEYS as readonly string[]).includes(v);
 

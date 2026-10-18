@@ -18,7 +18,7 @@ import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { getOrgPlanById } from "@/lib/orgPlan";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
-import { twilioClient, twilioSettings } from "@/lib/sdk/twilio";
+import { twilioClient, twilioSettings, type TwilioSettings } from "@/lib/sdk/twilio";
 import { notePaidCall } from "@/lib/trialMeter";
 import { attachVoiceToNumber, forgetVoiceNumber, indexVoiceNumber, numbersAssignedTo } from "@/lib/aiDesk/numbers";
 import { jobflexSender } from "./jobflexSender";
@@ -269,12 +269,7 @@ export async function releaseRegistration(organizationId: string, actorId: strin
   const settings = await twilioSettings();
   if (settings) {
     try {
-      const client = await twilioClient(settings);
-      if (state.verificationSid) await client.messaging.v1.tollfreeVerifications(state.verificationSid).remove().catch(() => null);
-      if (numberSid) {
-        if (settings.messagingServiceSid) await client.messaging.v1.services(settings.messagingServiceSid).phoneNumbers(numberSid).remove().catch(() => null);
-        await client.incomingPhoneNumbers(numberSid).remove();
-      }
+      await removeFromTwilio(settings, state.verificationSid ?? null, numberSid);
     } catch (err) {
       console.warn(`[sms/registration] release of ${number} on Twilio failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -284,4 +279,63 @@ export async function releaseRegistration(organizationId: string, actorId: strin
   await db.syncState.delete({ where: { key: keyOf(organizationId) } }).catch(() => null);
   await logActivity({ organizationId, actorId, kind: TRAIL_KINDS.SETTINGS, summary: `Released the texting number ${pretty(number)}` });
   return { ok: true, state: { stage: "none" } };
+}
+
+/** The verification, the Messaging Service seat, then the number itself. Only the
+ *  number's own removal throws; a number Twilio no longer has counts as released. */
+async function removeFromTwilio(settings: TwilioSettings, verificationSid: string | null, numberSid: string | null): Promise<void> {
+  const client = await twilioClient(settings);
+  if (verificationSid) await client.messaging.v1.tollfreeVerifications(verificationSid).remove().catch(() => null);
+  if (!numberSid) return;
+  if (settings.messagingServiceSid) await client.messaging.v1.services(settings.messagingServiceSid).phoneNumbers(numberSid).remove().catch(() => null);
+  try {
+    await client.incomingPhoneNumbers(numberSid).remove();
+  } catch (err) {
+    if ((err as { status?: number } | null)?.status !== 404) throw err;
+  }
+}
+
+export type PurgedNumbers = {
+  /** The company's own numbers given back to Twilio. */
+  released: string[];
+  /** Its own numbers Twilio would not let go of — still paid for until someone releases them. */
+  failed: Array<{ number: string | null; numberSid: string | null; error: string }>;
+  /** JobFlex's own lines that were routed to it (/admin/health) — unassigned, not released. */
+  unassigned: string[];
+};
+
+/**
+ * The purge's half (api/cron/purge-deleted-orgs, 30 days after a company was
+ * deleted — never at the soft delete, which can still be undone): the
+ * company's own number released on Twilio, and every index row that routed
+ * calls or texts to the company dropped. A JobFlex line assigned to it is
+ * JobFlex's, so it only goes back unassigned. Never throws: a number that
+ * could not be released comes back in `failed` for the caller to report.
+ */
+export async function releaseNumbersForPurge(organizationId: string): Promise<PurgedNumbers> {
+  const out: PurgedNumbers = { released: [], failed: [], unassigned: [] };
+  const state = await readRegistration(organizationId);
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { smsFromNumber: true, smsNumberSid: true } });
+  const numberSid = state.numberSid ?? org?.smsNumberSid ?? null;
+  const number = state.number ?? org?.smsFromNumber ?? null;
+  if (numberSid || state.verificationSid) {
+    const settings = await twilioSettings();
+    if (!settings) {
+      if (numberSid) out.failed.push({ number, numberSid, error: "Twilio is not configured" });
+    } else {
+      try {
+        await removeFromTwilio(settings, state.verificationSid ?? null, numberSid);
+        if (numberSid) out.released.push(number ?? numberSid);
+      } catch (err) {
+        out.failed.push({ number, numberSid, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+  await forgetVoiceNumber(number);
+  for (const assigned of await numbersAssignedTo(organizationId)) {
+    await forgetVoiceNumber(assigned);
+    if (assigned !== number) out.unassigned.push(assigned);
+  }
+  await db.syncState.delete({ where: { key: keyOf(organizationId) } }).catch(() => null);
+  return out;
 }
