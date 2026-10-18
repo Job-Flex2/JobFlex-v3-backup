@@ -435,6 +435,10 @@ function navSectionsBase(
   })).filter((section) => section.items.length > 0);
 }
 
+/** Surfaces deliberately left out of the nav (reached from the Help window, the letters'
+ *  "Open conversation", Settings' Help Center) — no row is lit on them. */
+const UNLISTED_SURFACES = ["/dashboard/support"];
+
 /**
  * The nav item that owns this path, by longest-prefix match, so child routes
  * (e.g. /dashboard/workers/[id]) keep their parent item lit. Returns null when
@@ -442,6 +446,9 @@ function navSectionsBase(
  */
 export function activeHref(pathname: string): string | null {
   const path = SURFACE_ALIASES[pathname] ?? pathname;
+  // Pages with no row of their own light nothing — without this, Overview's
+  // "/dashboard" prefix claims them (owner, 2026-10-17: Support lit Overview).
+  if (UNLISTED_SURFACES.some((p) => path === p || path.startsWith(p + "/"))) return null;
   let best: string | null = null;
   for (const section of NAV_SECTIONS) {
     for (const item of flattenNavItems(section.items)) {

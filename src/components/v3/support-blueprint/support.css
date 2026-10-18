@@ -4,58 +4,100 @@
    ============================================================================
 
    What this file adds is only what the shell's shared classes don't already
-   say: the two-column workspace, the ticket rows, the chat (bubbles, the
-   reply box), the form's fields and segmented choices, the folded extras, and
-   the handheld layer. The page head (.page-head / .kicker / .page-title /
+   say: the two-panel workspace, the ticket rows, the chat (bubbles, the reply
+   box), the form's fields and segmented choices, the folded extras, and the
+   handheld layer. The page head (.page-head / .kicker / .page-title /
    .page-actions), the buttons (.btn / .btn-primary / .btn-ghost), the framed
    cards (.card / .card-head / .card-title / .card-sub), the count (.tag), the
    empty note (.empty) and the status stamps (.pstatus--*) are the shell's own
-   (dashboard-blueprint/blueprint.module.css, proposals-blueprint) and are
-   not re-painted here.
+   and are not re-painted here.
+
+   ONE SCREEN, NO PAGE SCROLL (owner, 2026-10-17). On a desk the page is the
+   window: the head on top, the two panels under it filling what is left. The
+   list scrolls inside its panel; in the chat only the messages scroll — the
+   ticket's head and the reply box stay put. Heights come from the shell's
+   --app-h (the window's height in the zoomed shell's own pixels: FLUID SCALE
+   zooms the root, under which a bare 100dvh drifts) minus its --topbar-h; no
+   fixed pixel heights. On a phone the list is the page and a ticket is a layer
+   pinned by its edges between the app bar and the keyboard (visualViewport).
 
    PLAIN CSS, NOT A MODULE. Every selector starts with the literal root class
    `.jf-support` and has at least two classes: the shell's universal reset
    (`.bp *`) ties a single-class rule, and the production build emits that
    reset later than this file, so a one-class rule would lose there while
-   `next dev` looks right (CLAUDE.md). Values come from the globals.css tokens.
-   Light mode only. No `md:`/`lg:`; the handheld composition is its own root
-   modifier, `.jf-support--hand`, chosen by the page's viewport switch.
+   `next dev` looks right (CLAUDE.md). The two host rules that reach outside
+   the root are `:has()`-gated and undo themselves when the page goes. Values
+   come from the globals.css tokens. Light mode only; no `md:`/`lg:` — the
+   handheld composition is its own root modifier, `.jf-support--hand`.
    ========================================================================= */
 
-/* ── The workspace ───────────────────────────────────────────────────────── */
+/* ── The host: the shell's content column is exactly the window under the bar ── */
+.jf-blueprint .content:has(> .jf-support:not(.jf-support--hand)) {
+  height: calc(var(--app-h, 100dvh) - var(--topbar-h, 62px));
+  min-height: 0;
+  padding-top: clamp(16px, 2.6vh, 28px);
+  padding-bottom: clamp(14px, 2.2vh, 24px);
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* ── The workspace (desk) ────────────────────────────────────────────────── */
 .jf-support.jf-support {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   min-width: 0;
   color: var(--ink);
 }
-.jf-support .sup-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
-  gap: 22px;
-  align-items: start;
+.jf-support.jf-support > .page-head {
+  flex-shrink: 0;
+  align-items: center;
+  margin-bottom: clamp(10px, 1.8vh, 18px);
+  padding-top: 0;
 }
-.jf-support .sup-side {
+.jf-support.jf-support > .page-head .kicker {
+  margin-bottom: 6px;
+}
+/* The masthead, compact: the page is a working surface, not a cover. */
+.jf-support.jf-support > .page-head .page-title {
+  font-size: clamp(26px, 4.4vh, 36px);
+}
+.jf-support.jf-support > .page-head .page-actions {
+  padding-bottom: 0;
+}
+.jf-support .sup-grid.sup-grid {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  gap: 16px;
-  min-width: 0;
+  grid-template-columns: minmax(240px, clamp(260px, 30%, 400px)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: clamp(14px, 1.6vw, 22px);
 }
 
-/* ── The list ────────────────────────────────────────────────────────────── */
+/* ── The list panel ──────────────────────────────────────────────────────── */
 .jf-support .card.sup-list {
-  padding: 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  padding: 16px 0 0;
   overflow: hidden;
 }
 .jf-support .sup-list .card-head {
-  padding: 0 20px;
-  margin-bottom: 12px;
+  flex-shrink: 0;
+  padding: 0 18px;
+  margin-bottom: 10px;
 }
 .jf-support .sup-list .tag {
   margin-left: auto;
 }
 .jf-support .sup-list-empty.sup-list-empty {
-  margin: 0 20px 20px;
+  margin: 0 18px 18px;
 }
 .jf-support .sup-rows.sup-rows {
-  max-height: 560px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -64,7 +106,7 @@
   gap: 4px;
   width: 100%;
   min-height: 44px;
-  padding: 12px 20px 13px;
+  padding: 12px 18px 13px;
   border-top: 1px solid var(--ink-line);
   background: var(--paper-deep);
   text-align: left;
@@ -139,15 +181,16 @@
   letter-spacing: 0.08em;
 }
 
-/* ── Quick answers and the other ways in: folded, quiet ─────────────────── */
-.jf-support .sup-extras {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
+/* The panel's foot: Quick answers folded, the other ways in on one line. Open,
+   the answers scroll inside a capped box, so the list keeps its share. */
+.jf-support .sup-list .sup-list-foot {
+  flex-shrink: 0;
+  border-top: 1.5px solid var(--ink);
+  background: var(--paper-deep);
 }
-.jf-support .card.sup-fold {
-  padding: 0;
-  overflow: hidden;
+.jf-support .sup-list-foot .sup-extras {
+  display: grid;
+  min-width: 0;
 }
 .jf-support .sup-fold .sup-fold-sum,
 .jf-support .sup-faq .sup-faq-q {
@@ -160,7 +203,13 @@
   list-style: none;
 }
 .jf-support .sup-fold .sup-fold-sum {
-  padding: 12px 20px;
+  padding: 8px 18px;
+}
+.jf-support .sup-fold .sup-fold-t {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .jf-support .sup-fold .sup-fold-sum::-webkit-details-marker,
 .jf-support .sup-faq .sup-faq-q::-webkit-details-marker {
@@ -171,7 +220,7 @@
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-.jf-support .sup-fold .sup-fold-ic {
+.jf-support .sup-extras .sup-fold-ic {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -181,27 +230,34 @@
 .jf-support .sup-faq-item[open] > .sup-faq-q .sup-fold-ic {
   transform: rotate(180deg);
 }
+.jf-support .sup-fold .sup-faq {
+  max-height: 34vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .jf-support .sup-faq .sup-faq-item {
   border-top: 1px solid var(--ink-line);
 }
 .jf-support .sup-faq .sup-faq-q {
-  padding: 10px 20px;
+  padding: 8px 18px;
   font-size: 13px;
   font-weight: 600;
 }
 .jf-support .sup-faq .sup-faq-a {
-  padding: 0 20px 14px;
+  padding: 0 18px 12px;
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink-soft);
 }
 .jf-support .sup-extras .sup-reach {
   display: grid;
-  gap: 3px;
-  padding: 0 4px;
+  gap: 2px;
+  padding: 10px 18px 12px;
+  border-top: 1px solid var(--ink-line);
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 .jf-support .sup-reach .sup-reach-lbl {
   font-family: var(--font-mono);
@@ -223,13 +279,13 @@
   cursor: pointer;
 }
 
-/* ── The open ticket ─────────────────────────────────────────────────────── */
+/* ── The open ticket panel ───────────────────────────────────────────────── */
 .jf-support .card.sup-pane {
-  padding: 0;
   display: flex;
   flex-direction: column;
-  min-height: 560px;
+  min-height: 0;
   min-width: 0;
+  padding: 0;
   overflow: hidden;
 }
 .jf-support .sup-pane .sup-empty,
@@ -250,12 +306,17 @@
 }
 .jf-support .sup-chat .sup-chat-head,
 .jf-support .sup-form .sup-chat-head {
-  padding: 20px 24px 16px;
+  flex-shrink: 0;
+  padding: clamp(12px, 2vh, 20px) 24px clamp(10px, 1.6vh, 16px);
   border-bottom: 1.5px solid var(--ink);
 }
 /* The subject is the customer's own words: normal case, never uppercased. */
 .jf-support .sup-chat-head .sup-chat-title {
-  font-size: 20px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: clamp(17px, 2.6vh, 20px);
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -272,7 +333,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 6px;
   font-family: var(--font-mono);
   font-size: 11.5px;
   font-weight: 600;
@@ -288,20 +349,23 @@
 }
 
 /* The conversation, on drafting paper: theirs on the right in an ink frame,
-   ours (and the AI's, signed by the team) on the left on a blueprint rule. */
+   ours (and the AI's, signed by the team) on the left on a blueprint rule.
+   The ONLY scroller in the panel. */
 .jf-support .sup-chat .sup-msgs {
   flex: 1 1 auto;
-  min-height: 260px;
-  max-height: 520px;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: clamp(12px, 2vh, 20px) 24px;
+  background: var(--paper);
+}
+.jf-support .sup-msgs .sup-msgs-in {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 20px 24px;
-  background: var(--paper);
 }
 .jf-support .sup-msgs .sup-msg {
+  flex-shrink: 0;
   max-width: 78%;
   min-width: 0;
   padding: 10px 14px 12px;
@@ -352,9 +416,10 @@
 
 /* ── The reply box, and the form's fields ────────────────────────────────── */
 .jf-support .sup-chat .sup-compose {
+  flex-shrink: 0;
   display: grid;
   gap: 8px;
-  padding: 14px 24px 18px;
+  padding: clamp(10px, 1.6vh, 14px) 24px clamp(12px, 2vh, 18px);
   border-top: 1.5px solid var(--ink);
   background: var(--paper-deep);
 }
@@ -367,12 +432,18 @@
   flex-wrap: wrap;
 }
 .jf-support .sup-form .sup-form-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
-  gap: 18px;
-  padding: 20px 24px;
+  align-content: start;
+  gap: clamp(12px, 2vh, 18px);
+  padding: clamp(14px, 2.2vh, 20px) 24px;
 }
 .jf-support .sup-form .sup-form-foot {
-  padding: 14px 24px 18px;
+  flex-shrink: 0;
+  padding: clamp(10px, 1.6vh, 14px) 24px clamp(12px, 2vh, 18px);
   border-top: 1.5px solid var(--ink);
 }
 .jf-support .sup-form .sup-form-acts {
@@ -405,8 +476,19 @@
   color: var(--ink);
 }
 .jf-support .sup-in.sup-ta {
+  resize: none;
+}
+/* The reply box grows with what is typed, up to a third of the panel; the
+   messages above give up the room, the box never leaves the bottom edge. */
+.jf-support .sup-compose .sup-in.sup-ta {
+  field-sizing: content;
+  min-height: calc(2lh + 22px);
+  max-height: 30vh;
+  overflow-y: auto;
+}
+.jf-support .sup-form .sup-in.sup-ta {
+  min-height: calc(5lh + 22px);
   resize: vertical;
-  min-height: 64px;
 }
 .jf-support .sup-in.sup-in::placeholder {
   color: var(--ink-muted);
@@ -489,16 +571,17 @@
 }
 
 /* ── Handheld ─────────────────────────────────────────────────────────────
-   The list first, full width; a tap opens the ticket (or the form) as a layer
-   under the app's top bar: back + what is open, the messages, and the reply
-   box on the bottom edge. Pinned by its edges, no viewport units (DESIGN.md,
-   mobile frames). Inputs at 16px so iOS doesn't zoom on focus; every target
-   44px or more. */
+   The list is the page (the frame's .layout scrolls it); a tap opens the
+   ticket — or the form — as a layer pinned by its edges: under the app bar
+   on top, on the keyboard (or the screen's edge) at the bottom; the
+   workspace keeps --sup-kb / --sup-vvtop from window.visualViewport. No
+   viewport units (DESIGN.md, mobile frames). Inputs at 16px so iOS doesn't
+   zoom on focus; every target 44px or more. */
 .jf-support.jf-support--hand {
   display: grid;
   gap: 16px;
 }
-.jf-support.jf-support--hand .page-head {
+.jf-support.jf-support--hand > .page-head {
   margin-bottom: 0;
 }
 .jf-support.jf-support--hand .btn.sup-new-wide {
@@ -506,8 +589,10 @@
   height: 48px;
   justify-content: center;
 }
+.jf-support.jf-support--hand .card.sup-list {
+  overflow: visible;
+}
 .jf-support.jf-support--hand .sup-rows.sup-rows {
-  max-height: none;
   overflow: visible;
 }
 .jf-support.jf-support--hand .sup-row.sup-row {
@@ -519,16 +604,21 @@
 }
 .jf-support.jf-support--hand .sup-fold .sup-fold-sum,
 .jf-support.jf-support--hand .sup-faq .sup-faq-q,
-.jf-support.jf-support--hand .sup-faq .sup-faq-a {
+.jf-support.jf-support--hand .sup-faq .sup-faq-a,
+.jf-support.jf-support--hand .sup-extras .sup-reach {
   padding-left: 16px;
   padding-right: 16px;
+}
+.jf-support.jf-support--hand .sup-fold .sup-faq {
+  max-height: none;
+  overflow: visible;
 }
 
 .jf-support.jf-support--hand .sup-layer {
   position: fixed;
-  top: var(--topbar-h, 64px);
+  top: max(var(--topbar-h, 64px), var(--sup-vvtop, 0px));
   right: 0;
-  bottom: 0;
+  bottom: var(--sup-kb, 0px);
   left: 0;
   width: 100%;
   z-index: 25;
@@ -536,12 +626,15 @@
   flex-direction: column;
   background: var(--paper);
 }
+.jf-support--hand .sup-layer:focus {
+  outline: none;
+}
 .jf-support--hand .sup-layer .sup-lhead {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-  padding: 10px var(--pad-x, 16px) 12px 8px;
+  padding: 8px var(--pad-x, 16px) 10px 8px;
   border-bottom: 2px solid var(--ink);
   background: var(--paper-deep);
 }
@@ -586,20 +679,27 @@
   font-size: 11px;
 }
 .jf-support--hand .sup-layer .sup-chat .sup-msgs {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
   padding: 14px var(--pad-x, 16px);
 }
 .jf-support--hand .sup-layer .sup-msgs .sup-msg {
   max-width: 88%;
 }
 .jf-support--hand .sup-layer .sup-chat .sup-compose {
-  flex-shrink: 0;
-  padding: 10px var(--pad-x, 16px) calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 10px var(--pad-x, 16px) calc(10px + env(safe-area-inset-bottom, 0px));
+}
+/* The reply box on a phone: the box, then Send on its right — the note's
+   words are on the desk; here the bottom edge keeps every pixel for the chat. */
+.jf-support--hand .sup-layer .sup-compose .sup-compose-row {
+  justify-content: flex-end;
 }
 .jf-support--hand .sup-layer .sup-compose .sup-note {
-  font-size: 12px;
+  display: none;
+}
+.jf-support--hand .sup-layer .sup-compose .btn.sup-send {
+  min-width: 132px;
+}
+.jf-support--hand .sup-layer .sup-compose .sup-in.sup-ta {
+  max-height: 9lh;
 }
 .jf-support--hand .sup-layer .sup-in.sup-in {
   font-size: 16px;
@@ -608,19 +708,14 @@
   height: 44px;
 }
 .jf-support--hand .sup-layer .sup-form .sup-form-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 16px var(--pad-x, 16px);
 }
 .jf-support--hand .sup-layer .sup-form .sup-form-foot {
-  flex-shrink: 0;
   display: grid;
   /* the desk foot's space-between would shrink the one grid track to its content */
   justify-content: stretch;
   gap: 8px;
-  padding: 10px var(--pad-x, 16px) calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 10px var(--pad-x, 16px) calc(10px + env(safe-area-inset-bottom, 0px));
   background: var(--paper-deep);
 }
 .jf-support--hand .sup-layer .sup-form-acts .btn.sup-send {
@@ -634,38 +729,17 @@
   gap: 6px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .jf-support .sup-row.sup-row,
-  .jf-support .sup-fold .sup-fold-ic,
-  .jf-support .sup-seg .sup-seg-btn {
-    transition: none;
-  }
-}
-
-/* A desk window too narrow for the two columns: the list over the chat. */
-@media (max-width: 1024px) {
-  .jf-support .sup-grid.sup-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 /* The open layer on a phone is already the support conversation: the corner
    Support button would sit on its last message, so it steps aside while the
    layer is open (and comes back with it closed — `:has()` undoes itself). */
 body:has(.jf-support--hand .sup-layer) .jfsup-fab.jfsup-fab.jfsup-fab {
   display: none;
 }
-/* The reply box on a phone: the box, then Send on its right — the note's
-   words are on the desk; here the bottom edge keeps every pixel for the chat. */
-.jf-support--hand .sup-layer .sup-compose .sup-compose-row {
-  justify-content: flex-end;
-}
-.jf-support--hand .sup-layer .sup-compose .sup-note {
-  display: none;
-}
-.jf-support--hand .sup-layer .sup-compose .btn.sup-send {
-  min-width: 132px;
-}
-.jf-support--hand .sup-layer:focus {
-  outline: none;
+
+@media (prefers-reduced-motion: reduce) {
+  .jf-support .sup-row.sup-row,
+  .jf-support .sup-extras .sup-fold-ic,
+  .jf-support .sup-seg .sup-seg-btn {
+    transition: none;
+  }
 }

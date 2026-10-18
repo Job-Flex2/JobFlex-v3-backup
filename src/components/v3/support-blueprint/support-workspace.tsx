@@ -247,11 +247,35 @@ export function SupportWorkspace({ tickets: initial, openId, handheld }: { ticke
   useEffect(() => {
     if (layerOpen) layerRef.current?.focus({ preventScroll: true });
   }, [layerOpen]);
+  // THE KEYBOARD. A fixed layer is placed against the LAYOUT viewport, which a
+  // phone's on-screen keyboard does not shrink (iOS; Chrome on Android since
+  // it resizes only the visual viewport) — the reply box would sit under the
+  // keys. The visual viewport says how much of the screen is left: the layer's
+  // bottom edge rides on top of the keyboard and its top edge follows a
+  // page the browser scrolled to keep the caret in view.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const el = layerRef.current;
+    if (!layerOpen || !vv || !el) return;
+    const fit = () => {
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      el.style.setProperty("--sup-kb", `${Math.round(kb)}px`);
+      el.style.setProperty("--sup-vvtop", `${Math.round(vv.offsetTop)}px`);
+    };
+    fit();
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    return () => {
+      vv.removeEventListener("resize", fit);
+      vv.removeEventListener("scroll", fit);
+    };
+  }, [layerOpen]);
 
+  // Quick answers and the other ways in sit at the foot of the list's own panel,
+  // folded, so they never push the two panels past the window.
   const list = (
-    <TicketList tickets={tickets} openId={pane.kind === "ticket" ? pane.id : null} isUnread={isUnread} onOpen={openTicket} onNew={newTicket} />
+    <TicketList tickets={tickets} openId={pane.kind === "ticket" ? pane.id : null} isUnread={isUnread} onOpen={openTicket} onNew={newTicket} foot={<HelpExtras />} />
   );
-  const extras = <HelpExtras />;
 
   const paneBody =
     pane.kind === "new" ? (
@@ -291,7 +315,6 @@ export function SupportWorkspace({ tickets: initial, openId, handheld }: { ticke
           New ticket
         </button>
         {list}
-        {extras}
         {layer ? (
           <div
             className="sup-layer"
@@ -327,10 +350,7 @@ export function SupportWorkspace({ tickets: initial, openId, handheld }: { ticke
         </div>
       </div>
       <div className="sup-grid">
-        <div className="sup-side">
-          {list}
-          {extras}
-        </div>
+        {list}
         <section className="card sup-pane" aria-label={pane.kind === "new" ? "New ticket" : "Conversation"}>
           {paneBody ?? (
             <div className="sup-empty">
@@ -351,12 +371,14 @@ function TicketList({
   isUnread,
   onOpen,
   onNew,
+  foot,
 }: {
   tickets: SupportTicketView[];
   openId: string | null;
   isUnread: (t: SupportTicketView) => boolean;
   onOpen: (id: string) => void;
   onNew: () => void;
+  foot?: ReactNode;
 }) {
   return (
     <section className="card sup-list" aria-label="Your tickets">
@@ -408,18 +430,19 @@ function TicketList({
           })}
         </ul>
       )}
+      {foot ? <div className="sup-list-foot">{foot}</div> : null}
     </section>
   );
 }
 
-// ── Quick answers and the other ways in — folded, under the list ────────────
+// ── Quick answers and the other ways in — folded, at the foot of the list ───
 
 function HelpExtras() {
   return (
     <div className="sup-extras">
-      <details className="card sup-fold">
-        <summary className="sup-fold-sum">
-          <span className="card-title">Quick answers</span>
+      <details className="sup-fold">
+        <summary className="sup-fold-sum" data-support-faq>
+          <span className="sup-fold-t">Quick answers</span>
           <Icon id="i-chev" className="ic sup-fold-ic" />
         </summary>
         <div className="sup-faq">
@@ -506,12 +529,50 @@ function Conversation({
     };
   }, [ticket.id, onNews]);
 
-  // The newest message in view: on opening, and whenever one arrives.
+  // The newest message in view: on opening, and whenever one arrives. The
+  // chat STICKS to its bottom while the reader is there: whatever grows the
+  // messages afterwards — the web font settling, the reply box growing, the
+  // window resizing, the keyboard — keeps the last one in view. Scrolled up
+  // to read, it stays where the reader left it.
+  //
+  // The bottom is reached by asking for far past it and letting the browser
+  // clamp: under the shell's root `zoom` (FLUID SCALE, above 1 on big
+  // screens) scrollTop and scrollHeight are not in the same units, so
+  // `scrollTop = scrollHeight` stopped short of the last two messages at
+  // 1920×1080. "At the bottom" is likewise measured against where that
+  // clamp landed, never against scrollHeight.
+  const innerRef = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  const bottomAt = useRef(0);
+  const toBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = 1e9;
+    bottomAt.current = el.scrollTop;
+    stick.current = true;
+  }, []);
   const count = ticket.messages.length;
   useEffect(() => {
+    toBottom();
+  }, [count, toBottom]);
+  useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [count]);
+    const inner = innerRef.current;
+    if (!el || !inner || typeof ResizeObserver === "undefined") return;
+    const onScroll = () => {
+      stick.current = el.scrollTop >= bottomAt.current - 24;
+    };
+    const ro = new ResizeObserver(() => {
+      if (stick.current) toBottom();
+    });
+    ro.observe(inner);
+    ro.observe(el);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [toBottom]);
 
   async function send() {
     const body = draft.trim();
@@ -561,9 +622,11 @@ function Conversation({
       )}
 
       <div ref={scrollRef} className="sup-msgs" role="log" aria-label="Conversation" aria-live="polite">
-        {ticket.messages.map((m) => (
-          <Bubble key={m.id} m={m} />
-        ))}
+        <div ref={innerRef} className="sup-msgs-in">
+          {ticket.messages.map((m) => (
+            <Bubble key={m.id} m={m} />
+          ))}
+        </div>
       </div>
 
       <div className="sup-compose">
