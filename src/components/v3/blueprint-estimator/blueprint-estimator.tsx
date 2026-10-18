@@ -21,7 +21,8 @@ import s from "./blueprint-estimator.module.css";
 import { BlueprintLoadingCard } from "./blueprint-loading-card";
 import { clientErrorText } from "@/lib/staleDeploy";
 import { askPlan, getPlanPriceChecks, measurePlanSheet, readPlanSheet, skimPlanSheet, startPlanSession } from "@/actions/planEstimator";
-import { convertEstimateToProposal, pricePlanTrade, saveEstimate } from "@/actions/advancedEstimator";
+import { convertEstimateToProposal, saveEstimate } from "@/actions/advancedEstimator";
+import type { pricePlanTrade } from "@/actions/advancedEstimator";
 import { MAX_PLAN_PAGES, openPlanFiles, type PlanPage } from "@/lib/plans/pdfClient";
 import { formatTextLayer, pageWorthReading } from "@/lib/plans/readPrompt";
 import { SHEET_KINDS, type SheetRead } from "@/lib/plans/sheet";
@@ -64,7 +65,9 @@ type Result = {
 const SKIM_AT_ONCE = 6;
 const READ_AT_ONCE = 3;
 const MEASURE_AT_ONCE = 3;
-const PRICE_AT_ONCE = 3;
+// Trades are priced through /api/estimator/plan-price (2026-10-17): fetch calls run side by side, where the page's
+// server actions had been sent one at a time — so these lanes are real now.
+const PRICE_AT_ONCE = 6;
 /** A trade that has not come back in this long is marked failed (it joins "Try again") instead of holding the
  *  whole estimate at "Pricing" forever (owner, 2026-10-17: stuck at 88% for minutes). */
 const PRICE_TRADE_LIMIT_MS = 240_000;
@@ -119,6 +122,22 @@ const clockText = (ms: number) => {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 };
 const qtyText = (n: number) => (Number.isInteger(n) ? n.toLocaleString("en-US") : (Math.round(n * 10) / 10).toLocaleString("en-US"));
+
+type TradePriceRun = Awaited<ReturnType<typeof pricePlanTrade>>;
+
+/** One trade priced through the route (the same checks and work as the `pricePlanTrade` action). */
+async function postTradePrice(body: Parameters<typeof pricePlanTrade>[0], signal?: AbortSignal): Promise<TradePriceRun> {
+  const res = await fetch("/api/estimator/plan-price", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  // A platform timeout or a crash answers with a page, not our JSON.
+  const data = (await res.json().catch(() => null)) as TradePriceRun | null;
+  if (!data) return { ok: false, error: res.status === 504 ? "This trade took too long to price. Try it again." : "This trade could not be priced. Try it again." };
+  return data;
+}
 
 async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>): Promise<void> {
   let next = 0;
@@ -410,14 +429,26 @@ export function BlueprintEstimator() {
   const readDone = Object.values(reads).filter((r) => r.status === "ok" || r.status === "fail").length;
   // A lost response must not strand the estimate on its first step. Keep the
   // existing read queue and files so returning to the question does not rebill them.
+  // Time with the tab in the back does not count: the clock stops while it is hidden
+  // and starts its three minutes again when the tab is in front.
   useEffect(() => {
     if (stage !== "work" || step !== 0) return;
-    const timer = setTimeout(() => {
-      askRun.current++;
-      setErr("No new sheet has finished reading for three minutes. Your plans are still open. Let the reading finish and try the estimate again, or open the plans again if it stays stalled.");
-      setStage("ask");
-    }, 180_000);
-    return () => clearTimeout(timer);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      if (document.visibilityState === "hidden") return;
+      timer = setTimeout(() => {
+        askRun.current++;
+        setErr("No new sheet has finished reading for three minutes. Your plans are still open. Let the reading finish and try the estimate again, or open the plans again if it stays stalled.");
+        setStage("ask");
+      }, 180_000);
+    };
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", arm);
+    };
   }, [stage, step, readDone]);
   const ready = stage !== "upload" && (baseReady || (readTotal > 0 && readDone >= readTotal));
   const sheetsRead = useMemo(() => Object.values(reads).filter((r) => r.status === "ok" && r.sheet).map((r) => r.sheet!), [reads]);
@@ -547,14 +578,10 @@ export function BlueprintEstimator() {
       setPricing({ done: 0, total: trades.length, now: [] });
       await pool(trades, PRICE_AT_ONCE, async (trade) => {
         if (alive()) setPricing((p) => ({ ...p, now: [...p.now, trade] }));
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const timeUp = new Promise<{ ok: false; error: string }>((resolve) => {
-          timer = setTimeout(() => resolve({ ok: false, error: `${TRADE_LABEL[trade]} took too long to price. Try it again.` }), PRICE_TRADE_LIMIT_MS);
-        });
-        const out = await Promise.race([
-          priceTrade({ tok, trade, house: houseNow, items, trades, scope, req, partial: partial.has(trade), location: loc, specs: found.specs }),
-          timeUp,
-        ]);
+        // A trade still out after the limit is stopped (the request is aborted) and joins "Try again".
+        const stop = new AbortController();
+        const timer = setTimeout(() => stop.abort(), PRICE_TRADE_LIMIT_MS);
+        const out = await priceTrade({ tok, trade, house: houseNow, items, trades, scope, req, partial: partial.has(trade), location: loc, specs: found.specs, signal: stop.signal });
         clearTimeout(timer);
         if (out.ok) results.push({ trade, est: out.est });
         else failed.push({ trade, error: out.error });
@@ -575,9 +602,9 @@ export function BlueprintEstimator() {
     }
   }
 
-  async function priceTrade(a: { tok: string; trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; trades: PlanTrade[]; scope: JobScope; req: string; partial: boolean; location: string; specs: JobSpec[] }) {
+  async function priceTrade(a: { tok: string; trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; trades: PlanTrade[]; scope: JobScope; req: string; partial: boolean; location: string; specs: JobSpec[]; signal?: AbortSignal }) {
     try {
-      const res = await pricePlanTrade({
+      const res = await postTradePrice({
         token: a.tok,
         trade: a.trade,
         location: a.location || null,
@@ -585,10 +612,11 @@ export function BlueprintEstimator() {
         items: a.items.filter((i) => i.trade === a.trade),
         alsoPriced: a.trades,
         ask: a.scope.wholeHouse ? null : { request: a.req, title: a.scope.title, partial: a.partial, specialtyId: a.scope.specialties[a.trade] ?? null, label: a.scope.labels?.[a.trade] ?? null, specs: a.specs.map((x) => `${x.text} (p. ${x.page})`) },
-      });
+      }, a.signal);
       if (res.ok) return { ok: true as const, est: res.data };
       return { ok: false as const, error: res.code === "PLAN_LIMIT_REACHED" ? failText(res as Failure) : res.error };
     } catch (e) {
+      if (a.signal?.aborted) return { ok: false as const, error: `${TRADE_LABEL[a.trade]} took too long to price. Try it again.` };
       return { ok: false as const, error: clientErrorText(e, `${TRADE_LABEL[a.trade]} could not be priced.`) };
     }
   }
@@ -917,32 +945,121 @@ export function BlueprintEstimator() {
   // 4 · result
   if (!result) return null;
   const m = result.merged;
-  const groups = Array.from(new Set(lines.map((l) => l.group ?? ""))).map((g) => ({ g, rows: lines.filter((l) => (l.group ?? "") === g) }));
+  const groups = Array.from(new Set(lines.map((l) => l.group ?? ""))).map((g) => {
+    const rows = lines.filter((l) => (l.group ?? "") === g);
+    return { g, rows, sub: rows.filter(isBilled).reduce((a, l) => a + lineTotal(l), 0) };
+  });
   const showGroups = groups.length > 1;
   const measuredRows = result.rows;
   const site = [planName, planAddress].filter(Boolean).join(" · ");
+  const tookMs = result.timing.reduce((a, [, ms]) => a + ms, 0);
   return (
     <div className={s.be}>
       {viewerEl}
+      {/* THE RESULT (owner, 2026-10-17: the AI desk's clarity pass): the job, then the total and the one next step
+          — Create proposal — at the top, so a 300-line estimate never hides it. */}
       <div className={s.resultHead}>
         {head(result.scope.title, `${site ? `${site} — ` : ""}“${result.request}”`)}
         <div className={s.headTotal}>
           <span>Estimate</span>
           <b>{money(total)}</b>
+          <button type="button" className={s.btnPrimary} disabled={!billed.length || saving != null} onClick={() => void createProposal()}>
+            {saving === "saving" ? "Creating…" : saving === "opening" ? "Opening…" : "Create proposal"}
+          </button>
         </div>
       </div>
-      {result.timing.length > 0 && (
-        <p className={s.timing}>
-          Took {clockText(result.timing.reduce((a, [, ms]) => a + ms, 0))}
-          {result.timing.map(([label, ms]) => (
-            <span key={label}>
-              {" "}
-              · {label.toLowerCase()} {clockText(ms)}
-            </span>
-          ))}
-        </p>
-      )}
       <div className={s.resGrid}>
+        <section className={`${s.card} ${s.est}`}>
+          <h2 className={s.h2}>Estimate</h2>
+          {result.failed.map((f) => (
+            <div key={f.trade} className={s.failRow}>
+              <span>
+                <b>{TRADE_LABEL[f.trade]}</b> could not be priced — {f.error}
+              </span>
+              <button type="button" className={s.btnGhost} disabled={retrying != null} onClick={() => void retryTrade(f.trade)}>
+                {retrying === f.trade ? "Pricing…" : "Try again"}
+              </button>
+            </div>
+          ))}
+          <div className={s.lines}>
+            {groups.map(({ g, rows, sub }) => (
+              <div key={g || "-"} className={s.lineGroup}>
+                {showGroups && (
+                  <div className={s.groupHead}>
+                    <span>{g}</span>
+                    <b>{money(sub)}</b>
+                  </div>
+                )}
+                {rows.map((l) => {
+                  const suggested = !isBilled(l);
+                  return (
+                    <div key={l.id} className={`${s.line} ${suggested ? s.lineSuggested : ""}`}>
+                      <span className={s.lineName}>
+                        {l.name}
+                        {suggested && <span className={s.lineNote}>Suggested — not in the total</span>}
+                      </span>
+                      <input className={s.lineQty} key={`${l.id}:${l.qty}`} defaultValue={qtyText(l.qty)} inputMode="decimal" aria-label={`${l.name} — quantity`} onBlur={(e) => setQty(l.id, e.target.value)} />
+                      <span className={s.lineUnit}>{l.unit}</span>
+                      <span className={s.lineTotal}>{money(lineTotal(l))}</span>
+                      {suggested ? (
+                        <button type="button" className={s.lineAct} onClick={() => acceptLine(l.id)} aria-label={`Add ${l.name}`}>
+                          Add
+                        </button>
+                      ) : (
+                        <button type="button" className={`${s.lineAct} ${s.lineRemove}`} onClick={() => removeLine(l.id)} aria-label={`Remove ${l.name}`}>
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className={s.totalRow}>
+            <span>Total</span>
+            <b>{money(total)}</b>
+          </div>
+          {(m.notes.length > 0 || result.timing.length > 0) && (
+            <details className={s.more}>
+              <summary>
+                <span>Notes and checks{m.notes.length ? ` · ${m.notes.length}` : ""}</span>
+                <svg className={s.moreChev} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </summary>
+              <ul className={s.notes}>
+                {m.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+                {result.timing.length > 0 && (
+                  <li className={s.timing}>
+                    Took {clockText(tookMs)}
+                    {result.timing.map(([label, ms]) => ` · ${label.toLowerCase()} ${clockText(ms)}`).join("")}
+                  </li>
+                )}
+              </ul>
+            </details>
+          )}
+          <div className={s.actions}>
+            <button type="button" className={s.btnPrimary} disabled={!billed.length || saving != null} onClick={() => void createProposal()}>
+              {saving === "saving" ? "Creating…" : saving === "opening" ? "Opening…" : "Create proposal"}
+            </button>
+            <button type="button" className={s.btnGhost} disabled={saving != null} onClick={editInSmartProposal}>
+              Edit in Smart Proposal
+            </button>
+            <button
+              type="button"
+              className={s.btnGhost}
+              disabled={saving != null}
+              onClick={() => {
+                setErr("");
+                setStage("ask");
+              }}
+            >
+              Ask for another job
+            </button>
+          </div>
+        </section>
+
         <section className={`${s.card} ${s.found}`}>
           <h2 className={s.h2}>Found on your plans</h2>
           {result.scope.summary && <p className={s.p}>{result.scope.summary}</p>}
@@ -986,7 +1103,10 @@ export function BlueprintEstimator() {
           )}
           <details className={s.more}>
             <summary>
-              Every quantity of this job · {result.items.length} line{result.items.length === 1 ? "" : "s"}
+              <span>
+                Every quantity of this job · {result.items.length} line{result.items.length === 1 ? "" : "s"}
+              </span>
+              <svg className={s.moreChev} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
             </summary>
             <ul className={s.items}>
               {result.items.map((i) => (
@@ -1012,83 +1132,6 @@ export function BlueprintEstimator() {
               <b>Not in this estimate:</b> {result.scope.notIncluded.join(" ")}
             </p>
           )}
-        </section>
-
-        <section className={`${s.card} ${s.est}`}>
-          <h2 className={s.h2}>Estimate</h2>
-          {result.failed.map((f) => (
-            <div key={f.trade} className={s.failRow}>
-              <span>
-                <b>{TRADE_LABEL[f.trade]}</b> could not be priced — {f.error}
-              </span>
-              <button type="button" className={s.btnGhost} disabled={retrying != null} onClick={() => void retryTrade(f.trade)}>
-                {retrying === f.trade ? "Pricing…" : "Try again"}
-              </button>
-            </div>
-          ))}
-          <div className={s.lines}>
-            {groups.map(({ g, rows }) => (
-              <div key={g || "-"} className={s.lineGroup}>
-                {showGroups && <div className={s.groupHead}>{g}</div>}
-                {rows.map((l) => {
-                  const suggested = !isBilled(l);
-                  return (
-                    <div key={l.id} className={`${s.line} ${suggested ? s.lineSuggested : ""}`}>
-                      <span className={s.lineName}>
-                        {l.name}
-                        {suggested && <span className={s.lineNote}>Suggested — not in the total</span>}
-                      </span>
-                      <input className={s.lineQty} key={`${l.id}:${l.qty}`} defaultValue={qtyText(l.qty)} inputMode="decimal" aria-label={`${l.name} — quantity`} onBlur={(e) => setQty(l.id, e.target.value)} />
-                      <span className={s.lineUnit}>{l.unit}</span>
-                      <span className={s.lineTotal}>{money(lineTotal(l))}</span>
-                      {suggested ? (
-                        <button type="button" className={s.lineAct} onClick={() => acceptLine(l.id)} aria-label={`Add ${l.name}`}>
-                          Add
-                        </button>
-                      ) : (
-                        <button type="button" className={s.lineAct} onClick={() => removeLine(l.id)} aria-label={`Remove ${l.name}`}>
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-          <div className={s.totalRow}>
-            <span>Total</span>
-            <b>{money(total)}</b>
-          </div>
-          {m.notes.length > 0 && (
-            <details className={s.more}>
-              <summary>Notes and checks · {m.notes.length}</summary>
-              <ul className={s.notes}>
-                {m.notes.map((n) => (
-                  <li key={n}>{n}</li>
-                ))}
-              </ul>
-            </details>
-          )}
-          <div className={s.actions}>
-            <button type="button" className={s.btnPrimary} disabled={!billed.length || saving != null} onClick={() => void createProposal()}>
-              {saving === "saving" ? "Creating…" : saving === "opening" ? "Opening…" : "Create proposal"}
-            </button>
-            <button type="button" className={s.btnGhost} disabled={saving != null} onClick={editInSmartProposal}>
-              Edit in Smart Proposal
-            </button>
-            <button
-              type="button"
-              className={s.btnGhost}
-              disabled={saving != null}
-              onClick={() => {
-                setErr("");
-                setStage("ask");
-              }}
-            >
-              Ask for another job
-            </button>
-          </div>
         </section>
       </div>
     </div>

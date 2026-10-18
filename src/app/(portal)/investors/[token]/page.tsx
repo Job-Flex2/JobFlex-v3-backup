@@ -53,8 +53,7 @@ export default async function InvestorsPublicPage({ params }: { params: Promise<
       </main>
     );
   }
-  // The current spend (2026-10-17): Meta is asked again when its last read is over 15 minutes old.
-  const report = await investorReport({ refreshMeta: "shared" });
+  const report = await investorReport();
   const lead = INVESTING_KINDS.has(visitor.kind);
   return (
     <main className={s.page}>
@@ -69,12 +68,12 @@ export default async function InvestorsPublicPage({ params }: { params: Promise<
         <header className={s.head}>
           <div>
             <div className={s.kicker}>JobFlex · Investors</div>
-            <h1 className={s.h1}>Ads, customers and revenue</h1>
-            <p className={s.sub}>What the ads have cost and what they have brought, since {longDate(report.facts.since)}, the day the first campaign went live — every figure a fact, nothing forecast. Read {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}.</p>
+            <h1 className={s.h1}>Ads, trials and payback</h1>
+            <p className={s.sub}>Live figures since {longDate(report.figures.since)}, the day the first campaign went live. Read {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}.</p>
           </div>
           <a className={s.pdf} href={`/api/investors/${token}/pdf`}>Download PDF</a>
         </header>
-        <InvestorReportView report={report} />
+        <InvestorReportView report={report} shared />
       </div>
     </main>
   );
