@@ -17,7 +17,6 @@ import "server-only";
 // the AI's moves Open to In progress and leaves it unread (the admins should
 // see what it said). The words and the letter are the pure lib/supportReply.
 import { db } from "@/lib/db";
-import { isLimitedRole } from "@/lib/orgContext";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isEmailEnabled, sendEmail } from "@/lib/sdk/resend";
 import { supportRecipients, supportTicketRef } from "@/lib/notify";
@@ -112,17 +111,6 @@ export function customerLabel(t: { user?: { name?: string | null; email?: string
 }
 
 // ── Who it goes to ───────────────────────────────────────────────────────────
-
-/** Whether the letter's "Open conversation" can be followed: crew, sales and
- *  estimators file tickets but can't open /dashboard/support (requireManager).
- *  An owner or billing address always can. */
-export async function canOpenSupportPage(ticket: { organizationId: string; userId?: string | null; user?: { email: string | null } | null }, to: string): Promise<boolean> {
-  if (!ticket.userId || !ticket.user?.email || ticket.user.email !== to) return true;
-  const m = await db.membership
-    .findFirst({ where: { organizationId: ticket.organizationId, userId: ticket.userId }, select: { role: true } })
-    .catch(() => null);
-  return !isLimitedRole(m?.role);
-}
 
 /** Where a ticket's answers go: whoever filed it; else the account's owner; else its billing address. */
 export async function recipientForTicket(ticket: { organizationId: string; user?: { email: string | null } | null; organization?: { billingEmail: string | null } | null }): Promise<string | null> {
@@ -283,13 +271,13 @@ async function tellOtherSide(
 
   const to = await recipientForTicket(t);
   if (!to) return { emailed: false, note: "This ticket has no address to email: nobody is on it, and the account has no owner or billing email.", sentTo: null, providerId: null };
-  const canOpen = await canOpenSupportPage({ organizationId: t.organizationId, userId: t.userId, user: t.user }, to);
+  // Every role can open its own tickets at /dashboard/support (2026-10-17), so the button always goes.
   const letter = conversationLetter({
     to: "customer",
     message,
     ticket: { subject: t.subject, ref },
     history,
-    link: canOpen ? `${base}/dashboard/support?ticket=${t.id}` : null,
+    link: `${base}/dashboard/support?ticket=${t.id}`,
     replyByEmail: Boolean(own),
   });
   try {

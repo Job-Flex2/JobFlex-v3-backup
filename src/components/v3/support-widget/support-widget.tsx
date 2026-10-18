@@ -881,6 +881,10 @@ export function SupportWidget({
                 </div>
               </div>
             )}
+            {/* The ticket is a conversation (2026-10-17): every role can open it and write in it. */}
+            <a className="jfsup-done jfsup-open" href={`/dashboard/support?ticket=${filed.id}`} data-support-open-conversation>
+              Open the conversation
+            </a>
             <button className="jfsup-done" type="button" ref={doneRef} onClick={close}>
               Close
             </button>

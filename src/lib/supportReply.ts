@@ -123,9 +123,9 @@ export interface ConversationLetter {
  * messages under it. To the TEAM (a customer message): the same shape, headed
  * with who wrote, the button going to the ticket in /admin/support.
  *
- * `link` null: the recipient can't open the conversation (crew, sales and
- * estimators file tickets but can't open /dashboard/support) — no dead button,
- * just the ticket's number. `replyByEmail`: the letter's Reply-To is the
+ * `link` null: no page to send them to — no dead button, just the ticket's
+ * number. (Every role opens its own tickets at /dashboard/support since
+ * 2026-10-17, so the app always passes one.) `replyByEmail`: the letter's Reply-To is the
  * ticket's own address (lib/supportInbound), so a reply lands in the
  * conversation — the letter says so and carries the line it is cut at.
  */

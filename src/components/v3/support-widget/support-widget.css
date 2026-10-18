@@ -529,6 +529,11 @@
     transform 0.12s var(--ease-out),
     box-shadow 0.12s var(--ease-out);
 }
+/* "Open the conversation" — a link dressed as the quiet button above Close. */
+.jfsup a.jfsup-open {
+  text-decoration: none;
+  margin-bottom: 8px;
+}
 .jfsup .jfsup-done:hover {
   transform: translate(-1px, -1px);
   box-shadow: 3px 3px 0 var(--ink);

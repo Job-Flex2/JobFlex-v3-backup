@@ -83,7 +83,7 @@ Other pages bounce a limited role home; role changes apply within a minute.
 
 ### Help & support
 - Top-bar "Help" (every role): Bug / Billing / Account / Question, "What happened?", "Send" → "Ticket filed" + 6-character reference + "Our team has been alerted." (else "The email alert did not go out. Quote this reference if you follow up."). 5 tickets per 10 minutes.
-- /dashboard/support ("Help Center", office roles): form + "Your conversations" (own tickets only). Each ticket opens as a chat: every message in order (theirs on the right; ours and the AI's, signed JobFlex support, on the left), a Reply box and "Send" at the bottom; new answers appear without reloading. Writing in a Resolved or Closed ticket opens it again. Owners don't see staff tickets.
+- /dashboard/support ("Help Center", every role, Installers, Sales and Estimators included): form + "Your conversations" (own tickets only — nobody sees a colleague's). Each ticket opens as a chat: every message in order (theirs on the right; ours and the AI's, signed JobFlex support, on the left), a Reply box and "Send" at the bottom; new answers appear without reloading. Writing in a Resolved or Closed ticket opens it again. Owners don't see staff tickets.
 
 ### Internal — for the team (not for customers)
 **Code map**
@@ -494,7 +494,7 @@ In production a server action's *thrown* error text is hidden; only *returned* e
 
 - **Filing:** a Help button on every signed-in app screen, all roles: one message (≤5,000 characters) plus a chip — Bug, Billing, Account, Question.
 - **Confirmation:** "Ticket filed" with a 6-character reference (the ticket id's last 6 characters, uppercase), then "Our team has been alerted." or "The email alert did not go out. Quote this reference if you follow up."
-- **One conversation per ticket:** our answers show in the ticket's chat at /dashboard/support and are emailed as "Re: <subject> [JobFlex <REF>]" (reply-to support@jobflex.app) to the filer (else owner, else billing email), with the last few messages and an "Open conversation" button. The customer replies in that chat (office roles only, own tickets only); a reply to the email reaches the support mailbox. Installers, Sales and Estimators can't open the page and get email only.
+- **One conversation per ticket:** our answers show in the ticket's chat at /dashboard/support and are emailed as "Re: <subject> [JobFlex <REF>]" (reply-to support@jobflex.app) to the filer (else owner, else billing email), with the last few messages and an "Open conversation" button. The customer replies in that chat (every role, own tickets only; the Help window's "Open the conversation" and the email's button both go there); a reply to the email reaches the support mailbox.
 - **Stated response time:** "Typical reply within one business day".
 
 ### Internal — for the team (not for customers)

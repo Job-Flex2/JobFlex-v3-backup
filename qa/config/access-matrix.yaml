@@ -1083,7 +1083,7 @@ routes:
     guest: login
     owner: open
     manager: open
-    worker: redirect:/dashboard/jobs
+    worker: open # owner 2026-10-17: every role opens its own support tickets
     admin: open
     homeowner: login
     review:

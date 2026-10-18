@@ -1,4 +1,4 @@
-import { requireManager } from "@/lib/orgContext";
+import { requireOrg } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { SupportForm } from "./support-form";
 import { SupportFaq } from "./support-faq";
@@ -16,8 +16,9 @@ export default async function SupportPage({
   // ?ticket=<id> — the "Open conversation" button in every letter about a ticket.
   const sp = await searchParams;
   const openTicketId = typeof sp.ticket === "string" ? sp.ticket : null;
-  // Manager-only route, and — since the Help widget put a composer on every
-  // screen for every role — the viewer's OWN tickets only.
+  // Every role (owner, 2026-10-17: installers, sales and estimators too — each
+  // files tickets from the Help widget and must be able to answer in them; the
+  // route gate is lib/roleRoutes) — and only the viewer's OWN tickets.
   //
   // This page listed every ticket the organization had ever filed, body
   // included. A ticket is addressed to the JobFlex platform, not to the
@@ -27,7 +28,7 @@ export default async function SupportPage({
   // "Your conversations", "Only you and our team can see this") true. The
   // cross-org view stays where it belongs, on the operator's console at
   // /admin/support.
-  const { organizationId, user } = await requireManager();
+  const { organizationId, user } = await requireOrg();
   const tickets = await db.supportTicket.findMany({
     where: { organizationId, userId: user.id },
     // The conversation with the latest message first.

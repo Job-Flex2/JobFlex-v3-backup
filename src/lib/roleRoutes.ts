@@ -39,10 +39,16 @@ export interface RoleRouteGate {
 // The additions are exactly those four prefixes and nothing else: no role gains
 // a surface it did not hold in the old design, and each new entry replaces a
 // path that role could already reach before the redesign moved it.
+//
+// ONE LATER ADDITION, owner 2026-10-17: "/dashboard/support" for all three. A
+// support ticket is one conversation, and every role files tickets (the Help
+// widget), so every role must be able to open its own and write in it. The
+// page lists only the viewer's own tickets — never a colleague's.
+const SUPPORT = "/dashboard/support";
 export const ROLE_ROUTE_GATES: Record<string, RoleRouteGate> = {
   // Field workers: read-only jobs + own schedule + messages.
   INSTALLER: {
-    allowed: ["/dashboard/jobs", "/dashboard/calendar", "/dashboard/messages"],
+    allowed: ["/dashboard/jobs", "/dashboard/calendar", "/dashboard/messages", SUPPORT],
     home: "/dashboard/jobs",
   },
   // Sales reps: the pipeline slice.
@@ -60,6 +66,7 @@ export const ROLE_ROUTE_GATES: Record<string, RoleRouteGate> = {
       "/dashboard/calendar",
       "/dashboard/phone",
       "/dashboard/messages",
+      SUPPORT,
     ],
     home: "/dashboard/leads",
   },
@@ -85,6 +92,7 @@ export const ROLE_ROUTE_GATES: Record<string, RoleRouteGate> = {
       "/dashboard/hvac-estimator",
       "/dashboard/deck-estimator",
       "/dashboard/messages",
+      SUPPORT,
     ],
     home: "/dashboard/proposals",
   },

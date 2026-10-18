@@ -63,9 +63,9 @@ export interface SubmitTicketResult {
  * and a field worker who cannot open the app is exactly the person who needs to
  * say so. Manager-only was never a security property here — a ticket is the
  * submitter's own words about their own org, scoped to their own membership;
- * it read no data and wrote nothing a limited role can reach. Viewing the
- * ticket HISTORY at /dashboard/support is still manager-only, and scoped to
- * the viewer's own tickets.
+ * it read no data and wrote nothing a limited role can reach. The ticket
+ * HISTORY at /dashboard/support is open to every role too (2026-10-17), and
+ * shows only the viewer's own tickets.
  *
  * RATE LIMIT: widening the guard to every org member also widened who can make
  * this write a row and send mail, and the composer is two taps from every
