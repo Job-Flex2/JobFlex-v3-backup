@@ -21,7 +21,8 @@ import s from "./blueprint-estimator.module.css";
 import { BlueprintLoadingCard } from "./blueprint-loading-card";
 import { clientErrorText } from "@/lib/staleDeploy";
 import { askPlan, getPlanPriceChecks, measurePlanSheet, readPlanSheet, skimPlanSheet, startPlanSession } from "@/actions/planEstimator";
-import { convertEstimateToProposal, pricePlanTrade, saveEstimate } from "@/actions/advancedEstimator";
+import { convertEstimateToProposal, saveEstimate } from "@/actions/advancedEstimator";
+import type { pricePlanTrade } from "@/actions/advancedEstimator";
 import { MAX_PLAN_PAGES, openPlanFiles, type PlanPage } from "@/lib/plans/pdfClient";
 import { formatTextLayer, pageWorthReading } from "@/lib/plans/readPrompt";
 import { SHEET_KINDS, type SheetRead } from "@/lib/plans/sheet";
@@ -64,7 +65,9 @@ type Result = {
 const SKIM_AT_ONCE = 6;
 const READ_AT_ONCE = 3;
 const MEASURE_AT_ONCE = 3;
-const PRICE_AT_ONCE = 3;
+// Trades are priced through /api/estimator/plan-price (2026-10-17): fetch calls run side by side, where the page's
+// server actions had been sent one at a time — so these lanes are real now.
+const PRICE_AT_ONCE = 6;
 /** A trade that has not come back in this long is marked failed (it joins "Try again") instead of holding the
  *  whole estimate at "Pricing" forever (owner, 2026-10-17: stuck at 88% for minutes). */
 const PRICE_TRADE_LIMIT_MS = 240_000;
@@ -119,6 +122,22 @@ const clockText = (ms: number) => {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 };
 const qtyText = (n: number) => (Number.isInteger(n) ? n.toLocaleString("en-US") : (Math.round(n * 10) / 10).toLocaleString("en-US"));
+
+type TradePriceRun = Awaited<ReturnType<typeof pricePlanTrade>>;
+
+/** One trade priced through the route (the same checks and work as the `pricePlanTrade` action). */
+async function postTradePrice(body: Parameters<typeof pricePlanTrade>[0], signal?: AbortSignal): Promise<TradePriceRun> {
+  const res = await fetch("/api/estimator/plan-price", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  // A platform timeout or a crash answers with a page, not our JSON.
+  const data = (await res.json().catch(() => null)) as TradePriceRun | null;
+  if (!data) return { ok: false, error: res.status === 504 ? "This trade took too long to price. Try it again." : "This trade could not be priced. Try it again." };
+  return data;
+}
 
 async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>): Promise<void> {
   let next = 0;
@@ -559,14 +578,10 @@ export function BlueprintEstimator() {
       setPricing({ done: 0, total: trades.length, now: [] });
       await pool(trades, PRICE_AT_ONCE, async (trade) => {
         if (alive()) setPricing((p) => ({ ...p, now: [...p.now, trade] }));
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const timeUp = new Promise<{ ok: false; error: string }>((resolve) => {
-          timer = setTimeout(() => resolve({ ok: false, error: `${TRADE_LABEL[trade]} took too long to price. Try it again.` }), PRICE_TRADE_LIMIT_MS);
-        });
-        const out = await Promise.race([
-          priceTrade({ tok, trade, house: houseNow, items, trades, scope, req, partial: partial.has(trade), location: loc, specs: found.specs }),
-          timeUp,
-        ]);
+        // A trade still out after the limit is stopped (the request is aborted) and joins "Try again".
+        const stop = new AbortController();
+        const timer = setTimeout(() => stop.abort(), PRICE_TRADE_LIMIT_MS);
+        const out = await priceTrade({ tok, trade, house: houseNow, items, trades, scope, req, partial: partial.has(trade), location: loc, specs: found.specs, signal: stop.signal });
         clearTimeout(timer);
         if (out.ok) results.push({ trade, est: out.est });
         else failed.push({ trade, error: out.error });
@@ -587,9 +602,9 @@ export function BlueprintEstimator() {
     }
   }
 
-  async function priceTrade(a: { tok: string; trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; trades: PlanTrade[]; scope: JobScope; req: string; partial: boolean; location: string; specs: JobSpec[] }) {
+  async function priceTrade(a: { tok: string; trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; trades: PlanTrade[]; scope: JobScope; req: string; partial: boolean; location: string; specs: JobSpec[]; signal?: AbortSignal }) {
     try {
-      const res = await pricePlanTrade({
+      const res = await postTradePrice({
         token: a.tok,
         trade: a.trade,
         location: a.location || null,
@@ -597,10 +612,11 @@ export function BlueprintEstimator() {
         items: a.items.filter((i) => i.trade === a.trade),
         alsoPriced: a.trades,
         ask: a.scope.wholeHouse ? null : { request: a.req, title: a.scope.title, partial: a.partial, specialtyId: a.scope.specialties[a.trade] ?? null, label: a.scope.labels?.[a.trade] ?? null, specs: a.specs.map((x) => `${x.text} (p. ${x.page})`) },
-      });
+      }, a.signal);
       if (res.ok) return { ok: true as const, est: res.data };
       return { ok: false as const, error: res.code === "PLAN_LIMIT_REACHED" ? failText(res as Failure) : res.error };
     } catch (e) {
+      if (a.signal?.aborted) return { ok: false as const, error: `${TRADE_LABEL[a.trade]} took too long to price. Try it again.` };
       return { ok: false as const, error: clientErrorText(e, `${TRADE_LABEL[a.trade]} could not be priced.`) };
     }
   }
