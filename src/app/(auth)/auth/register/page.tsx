@@ -39,6 +39,7 @@ import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "@/lib/disposableEma
 import { customPlanOffered } from "@/lib/customPlanFlag";
 import type { AutoPlanOffer } from "@/lib/signupAutoPlan";
 import { autoPlanOffer } from "@/lib/signupAutoPlanServer";
+import { pageClockScript } from "@/lib/pageClock";
 import { RegisterResponsive, type GooglePrefill, type SetupPrefill } from "./register-responsive";
 import {
   INDUSTRY_COOKIE,
@@ -60,10 +61,14 @@ import {
    early Continue, keeps what was typed and notes both moments;
    register-content restores the fields when it is live and reports them to
    the analyst as `signup_step1`. Plain script on purpose: it has to run
-   before any bundle has arrived. */
-const STEP1_PRELUDE = `(function(){var s={typedAt:0,submitAt:0,values:{},ready:false};window.__jfStep1=s;
-document.addEventListener("input",function(e){var el=e.target;if(s.ready||!el||!el.form||el.form.id!=="step1Form"||!el.id)return;if(!s.typedAt)s.typedAt=Math.round(performance.now());s.values[el.id]=el.value;},true);
-document.addEventListener("submit",function(e){var f=e.target;if(s.ready||!f||f.id!=="step1Form")return;e.preventDefault();if(!s.submitAt)s.submitAt=Math.round(performance.now());},true);})();`;
+   before any bundle has arrived.
+   THE PAGE'S CLOCK goes first (lib/pageClock, 2026-10-17): the moments are
+   visible time since the load — a hidden tab's minutes are not the form's —
+   and the form measures itself only on the load this script ran in. */
+const STEP1_PRELUDE = `${pageClockScript("register")}(function(){var s={typedAt:0,submitAt:0,values:{},ready:false};window.__jfStep1=s;
+function v(){var c=window.__jfClock,t=performance.now(),h=0;if(c){for(var i=0;i<c.spans.length;i++)h+=c.spans[i][1]-c.spans[i][0];if(c.since>=0)h+=t-c.since;}return Math.max(1,Math.round(t-h));}
+document.addEventListener("input",function(e){var el=e.target;if(s.ready||!el||!el.form||el.form.id!=="step1Form"||!el.id)return;if(!s.typedAt)s.typedAt=v();s.values[el.id]=el.value;},true);
+document.addEventListener("submit",function(e){var f=e.target;if(s.ready||!f||f.id!=="step1Form")return;e.preventDefault();if(!s.submitAt)s.submitAt=v();},true);})();`;
 
 export const metadata: Metadata = {
   title: "JobFlex · Create account",

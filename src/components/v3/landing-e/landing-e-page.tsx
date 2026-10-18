@@ -45,6 +45,7 @@ import { LandingPricing } from "./landing-pricing";
 import { CtaTracker } from "./cta-tracker";
 import { SectionTracker } from "./section-tracker";
 import { LandingTiming } from "./landing-timing";
+import { pageClockScript } from "@/lib/pageClock";
 import { LazyBg } from "./lazy-bg";
 import { WarmLayout } from "./warm-layout";
 import { Hero } from "./hero";
@@ -211,6 +212,8 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   return (
     <TrialOfferProvider offer={offer}>
     <div className="jf-lp min-h-full bg-white">
+      {/* The page's clock, first in the HTML (lib/pageClock): LandingTiming measures only the load it ran in, in visible time. */}
+      <script dangerouslySetInnerHTML={{ __html: pageClockScript("landing") }} />
       <Nav registerHref={register} pricingHref={pricing} cta={low} />
       <main>
         {order.map((key) => (blocks[key] ? <Fragment key={key}>{blocks[key]}</Fragment> : null))}

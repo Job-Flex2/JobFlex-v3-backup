@@ -36,6 +36,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
 import { trackTraffic, trafficIdentity } from "@/lib/traffic-client";
 import { setSignupPosition, signupLeavingTo, signupProblem, startSignupWatch } from "@/lib/signup-watch";
+import { claimPageLoad, hiddenBefore } from "@/lib/pageClock";
 import { reasonOfMessage } from "@/lib/signup-watch-shared";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import { createPortal } from "react-dom";
@@ -638,6 +639,10 @@ export function RegisterContent({
     step1Live.current = true;
     const w = window as Window & { __jfStep1?: { typedAt: number; submitAt: number; values: Record<string, string>; ready: boolean } };
     const pre = w.__jfStep1;
+    /* Measured once, on the load the prelude ran in (lib/pageClock, 2026-10-17). A form reached without a reload —
+       the logo, Back — finds the prelude spent or absent and sends nothing: its document's clock started earlier, on
+       another page (a 23 ms remount was reported as "ready after 1364.6 s"). */
+    const firstLoad = !!pre && !pre.ready && claimPageLoad("register");
     if (pre) {
       pre.ready = true;
       const v = { ...pre.values };
@@ -650,10 +655,22 @@ export function RegisterContent({
         if (v.password2) setPassword2(v.password2);
       }, 0);
     }
-    // A form that took more than five seconds to come alive is ours to fix, whatever they did next.
-    if (performance.now() > 5000) signupProblem("slow_form", { message: `ready after ${Math.round(performance.now() / 100) / 10} s` });
+    if (!firstLoad) return;
+    // Visible time since the load: the minutes the tab spent hidden are not the form's.
+    const at = performance.now();
+    const hidden = hiddenBefore(at);
+    const readyMs = Math.round(at - hidden);
+    const secs = (ms: number) => Math.round(ms / 100) / 10;
+    // A form that took more than five seconds to come alive is ours to fix, whatever they did next — unless most of
+    // the wait was a background tab, which the browser slows on purpose: said, but not ours.
+    if (readyMs > 5000) {
+      signupProblem("slow_form", {
+        message: `ready after ${secs(readyMs)} s${hidden >= 1000 ? ` (+${secs(hidden)} s in a background tab)` : ""}`,
+        ...(hidden > at / 2 ? { side: "outside" as const } : {}),
+      });
+    }
     trackTraffic(TRAFFIC_EVENTS.signupStep1, { plan_mode: planMode,
-      outcome: "ready", ready_ms: Math.round(performance.now()),
+      outcome: "ready", ready_ms: readyMs,
       typed_before_ready: !!pre?.typedAt, typed_ms: pre?.typedAt || -1,
       early_submit: !!pre?.submitAt, submit_ms: pre?.submitAt || -1,
       variant: "e", mode: signupMode,
