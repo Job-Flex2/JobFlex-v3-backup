@@ -1355,6 +1355,9 @@ export interface BillingData {
    *  cancelled): the plan's price, its date, the card and why there is no
    *  cancel button when there is none. Null for every other role. */
   manage: {
+    /** Stripe was asked for the card (the page opened on Billing). False:
+     *  the window shows what the database has, and the pane asks again. */
+    live: boolean;
     /** "$95 / mo", or null when the price cannot be told. */
     price: string | null;
     /** "Next bill" · "Trial ends" · "Switches to Free" · …, or null. */

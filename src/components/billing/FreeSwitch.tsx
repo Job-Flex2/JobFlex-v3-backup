@@ -34,7 +34,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObjec
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cancelSubscription, resumeSubscription } from "@/actions/billing";
 import { longDate } from "@/lib/format";
 import type { FreeLoss } from "@/lib/freePlan";
@@ -151,6 +151,8 @@ export interface CancelOffer {
 
 /** What the manage window shows besides the plan's name (lib/settings/loadSettingsData). */
 export interface ManageView {
+  /** Stripe was asked for this page load (it opened on Billing). */
+  live: boolean;
   price: string | null;
   date: { label: string; value: string } | null;
   card: { value: string; addHref: string | null } | null;
@@ -189,6 +191,19 @@ export function ManageSubscription({
   const until = untilWords(offer?.keepsUntil ?? null);
   const accessAlreadyFree = offer?.accessAlreadyFree === true;
   const close = useCallback(() => setStep("closed"), []);
+
+  /* Settings reads Stripe (the card) only for a page opened on Billing.
+     Reached from another pane, the window would show the database alone —
+     so the pane asks the server again, as ?tab=billing. */
+  const pathname = usePathname();
+  const params = useSearchParams();
+  useEffect(() => {
+    if (view.live) return;
+    const q = new URLSearchParams(params.toString());
+    q.delete("pane");
+    q.set("tab", "billing");
+    router.replace(`${pathname}?${q.toString()}` as Route, { scroll: false });
+  }, [view.live, pathname, params, router]);
 
   const book = useCallback(async () => {
     if (busy) return;

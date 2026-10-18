@@ -83,7 +83,7 @@ export default async function SettingsPage({
     throw err;
   }
 
-  const data = await loadSettingsData(ctx);
+  const data = await loadSettingsData(ctx, { billingLive: initialPane === "billing" });
   if (!data) redirect("/dashboard?error=forbidden");
 
   // One URL, two designs — the switch picks by media query on the client; see

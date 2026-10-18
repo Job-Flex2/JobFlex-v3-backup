@@ -79,7 +79,7 @@ export default async function MobileSettingsV1Page({
     throw err;
   }
 
-  const data = await loadSettingsData(ctx);
+  const data = await loadSettingsData(ctx, { billingLive: initialPane === "billing" });
   if (!data) redirect("/dashboard?error=forbidden");
 
   return <MobileSettings data={data} initialPane={initialPane} />;

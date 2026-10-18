@@ -91,7 +91,10 @@ export function statusBadge(status: string | null): Badge | null {
 }
 
 /** Everything the five panes render, from the database. `null` = no org row. */
-export async function loadSettingsData(ctx: SettingsOrgContext): Promise<SettingsData | null> {
+/** `billingLive`: the page opened on the Billing pane — only then does the
+ *  owner's manage window read Stripe (price term, card). Every other pane,
+ *  and every other role, costs Stripe nothing. */
+export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingLive?: boolean } = {}): Promise<SettingsData | null> {
   const { organizationId, user, role } = ctx;
 
   const [me, org, sub, planContext, usage, appUrl, connections, lastStripeEvt, lastSquareEvt] =
@@ -157,7 +160,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
     isOwnerHere && !granted && !booked && !!sub && (LIVE_STATUSES as readonly string[]).includes(sub.status) && (!lapsed || stripeSub);
   const [cancel, manage] = await Promise.all([
     cancellable && sub ? cancelOffer(organizationId, sub.plan, lapsed ? null : freeSwitchDate(sub), wasName, lapsed) : null,
-    isOwnerHere ? manageView(organizationId, sub, { planDto: planContext.plan, onFree, granted, booked, lapsed, stripeSub }) : null,
+    isOwnerHere ? manageView(organizationId, sub, { planDto: planContext.plan, onFree, granted, booked, lapsed, stripeSub, live: opts.billingLive === true }) : null,
   ]);
 
   /* ── settings blobs ── */
@@ -494,10 +497,23 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
 
 type SubRow = Awaited<ReturnType<typeof db.subscription.findUnique>>;
 
+/** Stripe gets this long per read in the manage window; past it, or on an
+ *  error, the line is left out and Settings opens as usual. */
+const STRIPE_READ_MS = 3000;
+function withinStripeTime<T>(work: Promise<T>): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), STRIPE_READ_MS);
+  });
+  return Promise.race([work.catch(() => null), late]).finally(() => clearTimeout(timer));
+}
+
 /** The owner's manage window (owner, 2026-10-17): price and term, the plan's
  *  date, the card, and — when nothing can be cancelled — the one line why
- *  (the subscription page's words). A Stripe read that fails costs its line,
- *  never the page. */
+ *  (the subscription page's words). Price, term and date come from the
+ *  database. Stripe (the card) is read only when `live` — the page opened on
+ *  Billing — within STRIPE_READ_MS; a read that is skipped, slow or fails
+ *  costs the card line, never the page. */
 async function manageView(
   organizationId: string,
   sub: SubRow,
@@ -508,18 +524,18 @@ async function manageView(
     booked: boolean;
     lapsed: boolean;
     stripeSub: boolean;
+    live: boolean;
   },
 ): Promise<NonNullable<BillingData["manage"]>> {
   const custom = (sub?.plan ?? "").toLowerCase() === CUSTOM_PLAN_SLUG;
   const priced = !!sub && !s.onFree && !s.lapsed && !s.granted;
   const [term, pages, trialCard, liveCard] = await Promise.all([
+    // The term is read from the database (PlanPrice / minted-price rows), never Stripe.
     priced ? planTermState(organizationId).catch(() => null) : null,
     priced && custom ? readCustomPages(organizationId, sub!.plan).catch(() => null) : null,
-    s.onFree || s.lapsed ? null : trialCardLine(organizationId).catch(() => null),
-    s.stripeSub && !s.onFree && !s.lapsed && sub?.externalSubId
-      ? getStripeClient()
-          .then(({ stripe }) => subscriptionCard(stripe, sub.externalSubId!))
-          .catch(() => null)
+    s.live && !s.onFree && !s.lapsed ? withinStripeTime(trialCardLine(organizationId)) : null,
+    s.live && s.stripeSub && !s.onFree && !s.lapsed && sub?.externalSubId
+      ? withinStripeTime(getStripeClient().then(({ stripe }) => subscriptionCard(stripe, sub.externalSubId!)))
       : null,
   ]);
   const yearly = term?.currentInterval === "YEAR";
@@ -568,7 +584,7 @@ async function manageView(
         ? "Your plan has ended — there is nothing to cancel."
         : "There is no paid subscription on this account to cancel. Plans set up by JobFlex are canceled through support.";
 
-  return { price, date, card, canUpdateCard, noCancel };
+  return { live: s.live, price, date, card, canUpdateCard: canUpdateCard && card !== null, noCancel };
 }
 
 /** The AI desk (2026-10-13, lib/aiDesk): who answers and what the desk knows. A missing piece costs the pane, never the page. */
