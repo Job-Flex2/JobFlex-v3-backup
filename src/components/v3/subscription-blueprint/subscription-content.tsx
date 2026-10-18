@@ -17,7 +17,7 @@ import { SubscriptionSprite } from "./subscription-sprite";
 import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 import type { SubscriptionViewProps } from "@/app/(dashboard)/dashboard/subscription/subscription-load";
 import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
-import { UpdatePaymentCardButton } from "@/components/billing/PlanChangeNotes";
+import { useUpdateCard } from "@/components/v3/payment-ribbon/payment-ribbon";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
 import styles from "./subscription.module.css";
 
@@ -57,6 +57,37 @@ function cx(...names: Array<string | false | null | undefined>): string {
  *  source declares. Porting a second hashed copy would be two definitions of
  *  one thing. */
 const RV = "rv";
+
+/** Billing information's two buttons (owner, 2026-10-17): one row of equal
+ *  ghost buttons, the card note one line under the row — never under one
+ *  button, so the two stay level. The card form is the existing one
+ *  (useUpdateCard → /api/billing/update-card). */
+function BillingActions({ canUpdateCard }: { canUpdateCard: boolean }) {
+  const card = useUpdateCard();
+  return (
+    <div className={cx("billing-actions")}>
+      <div className={cx("billing-btns")}>
+        <Link className={cx("btn", "btn-ghost")} href={"/dashboard/settings?tab=billing" as Route}>Edit billing email</Link>
+        {canUpdateCard ? (
+          <button
+            type="button"
+            className={cx("btn", "btn-ghost")}
+            disabled={card.busy}
+            aria-busy={card.busy}
+            aria-describedby="billingCardHelp"
+            onClick={() => void card.go()}
+          >
+            {card.busy ? "Opening…" : "Update payment card"}
+          </button>
+        ) : null}
+      </div>
+      {canUpdateCard ? (
+        <p className={cx("billing-help")} id="billingCardHelp">A new card will also be used to pay any outstanding invoices.</p>
+      ) : null}
+      {card.error ? <p className={cx("billing-err")} role="alert">{card.error}</p> : null}
+    </div>
+  );
+}
 
 export function SubscriptionContent(props: SubscriptionViewProps) {
   const [copyLabel, setCopyLabel] = useState("Copy");
@@ -432,8 +463,7 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
               <div><dt>Billing email</dt><dd>{props.billingInformation.billingEmail || "Not added"}</dd></div>
             </dl>
           ) : null}
-          <Link className={cx("btn", "btn-ghost")} href={"/dashboard/settings?tab=billing" as Route}>Edit billing email</Link>
-          {props.canUpdatePaymentCard ? <UpdatePaymentCardButton className={cx("btn", "btn-ghost")} /> : null}
+          <BillingActions canUpdateCard={props.canUpdatePaymentCard === true} />
         </div>
       </section>
 

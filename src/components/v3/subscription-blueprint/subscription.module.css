@@ -1117,7 +1117,16 @@
 :global(.jf-blueprint) .ref-code-row .ref-copy { height: auto; min-height: 48px; justify-content: center; }
 :global(.jf-blueprint) .kpi-grid--3 .kpi { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; text-align: center; padding: 20px 16px; }
 :global(.jf-blueprint) .kpi-grid--3 .kpi-lbl { margin-bottom: 0; }
-:global(.jf-blueprint) .billing-information-body { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; }
+/* BILLING INFORMATION (owner, 2026-10-17): the fields on the left; on the right one row of two
+   equal ghost buttons, its top level with the field labels, and the card note one line under the
+   row. Two classes on every selector (the shell's reset, CLAUDE.md). */
+:global(.jf-blueprint) .billing-information-body { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 20px 32px; }
+:global(.jf-blueprint) .billing-actions { display: grid; justify-items: stretch; gap: 8px; flex: 0 0 auto; max-width: 100%; }
+:global(.jf-blueprint) .billing-btns { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; }
+:global(.jf-blueprint) .billing-btns .btn { justify-content: center; min-width: 0; }
+:global(.jf-blueprint) .billing-btns .btn:disabled { opacity: 0.55; cursor: default; transform: none; box-shadow: none; }
+:global(.jf-blueprint) .billing-help { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+:global(.jf-blueprint) .billing-err { margin: 0; color: var(--danger, #a83232); font-size: 13px; font-weight: 600; line-height: 1.5; }
 :global(.jf-blueprint) .billing-fields { display: flex; flex-wrap: wrap; gap: 20px 40px; min-width: 0; }
 :global(.jf-blueprint) .billing-fields > div { min-width: 0; }
 :global(.jf-blueprint) .billing-fields dt { font: 600 11px/1.5 var(--font-mono); letter-spacing: .08em; color: var(--ink-muted); text-transform: uppercase; }
