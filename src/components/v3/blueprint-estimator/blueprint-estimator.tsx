@@ -410,14 +410,26 @@ export function BlueprintEstimator() {
   const readDone = Object.values(reads).filter((r) => r.status === "ok" || r.status === "fail").length;
   // A lost response must not strand the estimate on its first step. Keep the
   // existing read queue and files so returning to the question does not rebill them.
+  // Time with the tab in the back does not count: the clock stops while it is hidden
+  // and starts its three minutes again when the tab is in front.
   useEffect(() => {
     if (stage !== "work" || step !== 0) return;
-    const timer = setTimeout(() => {
-      askRun.current++;
-      setErr("No new sheet has finished reading for three minutes. Your plans are still open. Let the reading finish and try the estimate again, or open the plans again if it stays stalled.");
-      setStage("ask");
-    }, 180_000);
-    return () => clearTimeout(timer);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      if (document.visibilityState === "hidden") return;
+      timer = setTimeout(() => {
+        askRun.current++;
+        setErr("No new sheet has finished reading for three minutes. Your plans are still open. Let the reading finish and try the estimate again, or open the plans again if it stays stalled.");
+        setStage("ask");
+      }, 180_000);
+    };
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", arm);
+    };
   }, [stage, step, readDone]);
   const ready = stage !== "upload" && (baseReady || (readTotal > 0 && readDone >= readTotal));
   const sheetsRead = useMemo(() => Object.values(reads).filter((r) => r.status === "ok" && r.sheet).map((r) => r.sheet!), [reads]);
