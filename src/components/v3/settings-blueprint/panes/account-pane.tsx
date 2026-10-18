@@ -87,7 +87,12 @@ export function AccountPane({ data }: PaneProps) {
     setDeleting(true);
     setDeleteErr("");
     try {
-      await deleteMyAccount({ confirmEmail: confirm.trim() });
+      const r = await deleteMyAccount({ confirmEmail: confirm.trim() });
+      if (!r.ok) {
+        setDeleteErr(r.error);
+        setDeleting(false);
+        return;
+      }
       await signOut({ callbackUrl: "/" });
     } catch (e) {
       setDeleteErr(actionError(e));

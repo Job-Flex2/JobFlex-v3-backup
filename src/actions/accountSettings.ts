@@ -20,12 +20,8 @@ import { requireManager, requireOwner, requireUser } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { signOutEverywhereFor } from "@/lib/sessions";
 import { mergeMatrixSave, parseNotificationPrefs } from "@/lib/notificationPrefsShared";
-import { getStripe, isStripeEnabled } from "@/lib/sdk/stripe";
-import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
-import { markSubscriptionCanceled } from "@/lib/stripeSync";
-import { disconnectSquareFor, disconnectStripeConnectFor } from "@/lib/payments/connections";
-import { ActivityKind } from "@/lib/prismaEnums";
-import { refusal, type ActionResult } from "@/lib/actionResult";
+import { accountDeletionPlan, removeUserRow, retireOrganization, unwindOrganization } from "@/lib/accountDeletion";
+import { refusal, refused, type ActionResult } from "@/lib/actionResult";
 
 const SETTINGS_PATH = "/dashboard/settings";
 
@@ -159,12 +155,10 @@ const deleteOrgSchema = z.object({ confirmName: z.string().max(200) });
 
 /**
  * SOFT delete. Owner-only, and the owner has to type the company name
- * exactly. Order matters: the org is marked deleted FIRST — from that
- * instant requireOrg() and every public surface treat it as gone — then the
- * external side is unwound best-effort (Stripe subscription, Stripe Connect,
- * Square, Gmail). A failure there never resurrects the org; the purge cron
- * (30 days) refuses to hard-delete while a subscription is still live and
- * logs it. Members keep their rows so an admin restore is possible.
+ * exactly. The rules (marked deleted first, then the subscription cancelled
+ * and the processors disconnected best-effort, the purge cron 30 days on)
+ * live in lib/accountDeletion retireOrganization — the admin's Delete account
+ * takes a company down the same way.
  */
 export async function deleteOrganization(raw: unknown) {
   const ctx = await requireOwner();
@@ -177,45 +171,11 @@ export async function deleteOrganization(raw: unknown) {
   if (org.deletedAt) return { ok: true as const, already: true as const, warnings: [] as string[] };
   if (confirmName.trim() !== org.name) throw new Error("That name doesn't match your company name.");
 
-  await db.organization.update({
-    where: { id: org.id },
-    data: { deletedAt: new Date(), deletedById: ctx.user.id },
-  });
-
-  const warnings: string[] = [];
-  if (org.subscription?.externalSubId && isStripeEnabled()) {
-    try {
-      await releaseAttachedSchedule(getStripe(), org.subscription.externalSubId).catch(() => null);
-      const canceled = await getStripe().subscriptions.cancel(org.subscription.externalSubId);
-      await markSubscriptionCanceled(canceled);
-    } catch (err) {
-      console.error("[deleteOrganization] stripe cancel failed", org.id, err);
-      warnings.push("stripe-subscription");
-    }
-  }
-  try {
-    await disconnectStripeConnectFor(org.id);
-  } catch (err) {
-    console.error("[deleteOrganization] stripe connect", org.id, err);
-    warnings.push("stripe-connect");
-  }
-  try {
-    await disconnectSquareFor(org.id);
-  } catch (err) {
-    console.error("[deleteOrganization] square", org.id, err);
-    warnings.push("square");
-  }
-  await db.organization.update({ where: { id: org.id }, data: { gmailTokensJson: null } });
-  // Every member's next request falls through to another org (or NoOrg).
-  await db.user.updateMany({ where: { activeOrgId: org.id }, data: { activeOrgId: null } });
-  await db.activityEvent.create({
-    data: {
-      organizationId: org.id,
-      actorId: ctx.user.id,
-      kind: ActivityKind.UPDATED,
-      summary: `Organization "${org.name}" scheduled for deletion`,
-    },
-  });
+  const warnings = await retireOrganization(
+    { id: org.id, name: org.name, externalSubId: org.subscription?.externalSubId ?? null },
+    ctx.user.id,
+    "deleteOrganization",
+  );
   return { ok: true as const, already: false as const, warnings };
 }
 
@@ -226,85 +186,40 @@ const deleteAccountSchema = z.object({ confirmEmail: z.string().trim().max(200) 
 /**
  * HARD delete of the signed-in user — a launch-time debugging aid (owner's
  * call, 2026-09-03: create an account, delete it, create the same address
- * again). Nothing is kept and there is no grace period, unlike the org's soft
- * delete above.
+ * again).
  *
- * Order: every organization where this user is the ONLY member is hard-
- * deleted (subscription cancelled and processors disconnected best-effort
- * first; `organization.delete` cascades the rest). In an org that has other
- * members only the membership goes — their data stays, and every optional
- * pointer at this user (proposal owner, lead assignee, message author, …) is
- * nulled so the rows survive. Cross-org trade-network rows that REQUIRE the
- * user are deleted. Then the User row goes; Account / Session / Membership /
- * profile rows cascade.
+ * Which companies go with the account is lib/accountDeletion's plan, the same
+ * one the admin's Delete account follows: a company where nobody else would
+ * be an owner goes. One where this user is the ONLY member is hard-deleted at
+ * once, as before (subscription cancelled and processors disconnected first;
+ * `organization.delete` cascades the rest). One that still has other members
+ * is soft-deleted (retireOrganization) — until 2026-10-17 it was left behind
+ * with no owner and its subscription still billing the departed owner's card.
+ * Where another owner remains, only the membership goes. Then the User row
+ * goes (removeUserRow).
+ *
+ * The mismatch comes back as a refusal: a thrown message never reaches a
+ * production page.
  */
-export async function deleteMyAccount(raw: unknown) {
+export async function deleteMyAccount(raw: unknown): Promise<ActionResult> {
   const user = await requireUser();
   const { confirmEmail } = deleteAccountSchema.parse(raw);
   if (confirmEmail.toLowerCase() !== (user.email ?? "").toLowerCase()) {
-    throw new Error("That doesn't match your email address.");
+    return refused("That doesn't match your email address.");
   }
   const uid = user.id;
 
-  const memberships = await db.membership.findMany({
-    where: { userId: uid },
-    select: {
-      organizationId: true,
-      organization: {
-        select: {
-          id: true,
-          name: true,
-          _count: { select: { memberships: true } },
-          subscription: { select: { externalSubId: true } },
-        },
-      },
-    },
-  });
-
-  for (const m of memberships) {
-    const org = m.organization;
-    if (org._count.memberships > 1) continue; // others remain — membership cascades with the user
-    if (org.subscription?.externalSubId && isStripeEnabled()) {
-      try {
-        await releaseAttachedSchedule(getStripe(), org.subscription.externalSubId).catch(() => null);
-        const canceled = await getStripe().subscriptions.cancel(org.subscription.externalSubId);
-        await markSubscriptionCanceled(canceled);
-      } catch (err) {
-        console.error("[deleteMyAccount] stripe cancel failed", org.id, err);
-      }
+  for (const fate of await accountDeletionPlan(uid)) {
+    if (!fate.deletesOrg) continue; // others remain — the membership cascades with the user
+    const externalSubId = fate.subscription?.externalSubId ?? null;
+    if (fate.memberCount > 1) {
+      await retireOrganization({ id: fate.orgId, name: fate.orgName, externalSubId }, uid, "deleteMyAccount");
+      continue;
     }
-    try {
-      await disconnectStripeConnectFor(org.id);
-    } catch (err) {
-      console.error("[deleteMyAccount] stripe connect", org.id, err);
-    }
-    try {
-      await disconnectSquareFor(org.id);
-    } catch (err) {
-      console.error("[deleteMyAccount] square", org.id, err);
-    }
-    await db.organization.delete({ where: { id: org.id } });
+    await unwindOrganization(fate.orgId, externalSubId, "deleteMyAccount");
+    await db.organization.delete({ where: { id: fate.orgId } });
   }
 
-  // Optional pointers at this user in whatever survived: null them.
-  await db.$transaction([
-    db.proposal.updateMany({ where: { ownerId: uid }, data: { ownerId: null } }),
-    db.lead.updateMany({ where: { assignedToId: uid }, data: { assignedToId: null } }),
-    db.lead.updateMany({ where: { claimedById: uid }, data: { claimedById: null } }),
-    db.invite.updateMany({ where: { invitedById: uid }, data: { invitedById: null } }),
-    db.jobEvent.updateMany({ where: { createdById: uid }, data: { createdById: null } }),
-    db.message.updateMany({ where: { authorId: uid }, data: { authorId: null } }),
-    db.activityEvent.updateMany({ where: { actorId: uid }, data: { actorId: null } }),
-    db.appointment.updateMany({ where: { createdById: uid }, data: { createdById: null } }),
-    db.blockedTime.updateMany({ where: { ownerId: uid }, data: { ownerId: null } }),
-    // Required pointers (trade network) — the rows go with the user.
-    db.tradeJobMessage.deleteMany({ where: { authorId: uid } }),
-    db.tradeJobConversation.deleteMany({ where: { OR: [{ authorId: uid }, { recipientId: uid }] } }),
-    db.tradeJobRecipient.deleteMany({ where: { recipientId: uid } }),
-    db.tradeJob.deleteMany({ where: { authorId: uid } }),
-    db.tradeReply.deleteMany({ where: { authorId: uid } }),
-    db.tradePost.deleteMany({ where: { authorId: uid } }),
-    db.user.delete({ where: { id: uid } }),
-  ]);
-  return { ok: true as const };
+  await removeUserRow(uid);
+  return { ok: true };
 }

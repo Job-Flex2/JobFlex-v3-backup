@@ -8,14 +8,15 @@
 // Database control over the local mirror: every account, the org it belongs
 // to, the org's Subscription row, and the platform-admin flag. Writes go
 // through src/actions/adminUsers.ts — updateAdminUser (name/email),
-// setPlatformAdmin and deleteAdminUser (typed confirmation; refuses self and
-// the last owner) — and, for the subscription itself, the two-mode editor in
+// setPlatformAdmin and deleteAdminUser (its own window in the sheet: what goes
+// with the account, then the typed email; refuses yourself and platform
+// admins; lib/accountDeletion decides which companies go) — and, for the subscription itself, the two-mode editor in
 // ./admin-subscription-editor (actions/adminSubscription: change the billed
 // plan on Stripe, or grant a complimentary plan with a term), and the usage
 // meters with the admin's reset in ./admin-usage-reset (actions/adminUsage).
 
 import { freeWasLabel, onFreePlan } from "@/lib/freePlan";
-import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Search, RefreshCw } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
@@ -25,9 +26,10 @@ import {
   updateAdminUser,
   setPlatformAdmin,
   deleteAdminUser,
+  previewAdminUserDeletion,
   syncSubscriptionsFromStripe,
 } from "@/actions/adminUsers";
-import type { AdminUsersData, SubscriptionSummary } from "@/actions/adminUsers";
+import type { AdminDeletionPreview, AdminUsersData, SubscriptionSummary } from "@/actions/adminUsers";
 import type { PlanGrant, SyncingMark } from "@/lib/planGrant";
 import { STRIPE_SCAN_CEILING_LABEL } from "@/components/v3/admin-subscribers/billing-metrics";
 import { SubscriptionEditor } from "./admin-subscription-editor";
@@ -125,6 +127,8 @@ export function AdminUsersContent({
     [users],
   );
   const [selected, setSelected] = useState<AdminUserDTO | null>(null);
+  // The sheet's second view: what goes with the account, then the typed email.
+  const [deleteView, setDeleteView] = useState(false);
   // The sheet reads the LATEST row for the account it opened on: the
   // subscription editor refreshes the server data after a change and the
   // sheet must show the new state, not the row as it was when clicked.
@@ -188,11 +192,19 @@ export function AdminUsersContent({
   const openRow = useCallback(
     (u: AdminUserDTO) => {
       setSelected(u);
+      setDeleteView(false);
       sheet.open();
     },
     [sheet],
   );
-  const closeSheet = useCallback(() => sheet.close(() => setSelected(null)), [sheet]);
+  const closeSheet = useCallback(
+    () =>
+      sheet.close(() => {
+        setSelected(null);
+        setDeleteView(false);
+      }),
+    [sheet],
+  );
 
   const sourceLabel = source.stripeLive
     ? "Stripe · live"
@@ -442,11 +454,13 @@ export function AdminUsersContent({
       <Sheet
         handle={sheet}
         kicker={selected ? selected.email : "Account"}
-        title={selected?.name || selected?.email || "Account"}
+        title={deleteView ? "Delete account" : selected?.name || selected?.email || "Account"}
         onClose={closeSheet}
       >
-        {current ? (
-          <UserForm key={current.id} user={current} plans={plans} meId={meId} onDone={closeSheet} />
+        {current && deleteView ? (
+          <DeleteAccount key={current.id} user={current} plans={plans} onBack={() => setDeleteView(false)} onDone={closeSheet} />
+        ) : current ? (
+          <UserForm key={current.id} user={current} plans={plans} meId={meId} onDone={closeSheet} onDelete={() => setDeleteView(true)} />
         ) : null}
       </Sheet>
     </>
@@ -463,11 +477,14 @@ function UserForm({
   plans,
   meId,
   onDone,
+  onDelete,
 }: {
   user: AdminUserDTO;
   plans: PlanOption[];
   meId: string;
   onDone: () => void;
+  /** Opens the delete window in this sheet. */
+  onDelete: () => void;
 }) {
   const router = useRouter();
   const isMe = user.id === meId;
@@ -476,8 +493,7 @@ function UserForm({
   const [email, setEmail] = useState(user.email);
   const [admin, setAdmin] = useState(user.isPlatformAdmin);
 
-  const [confirm, setConfirm] = useState("");
-  const [busy, setBusy] = useState<"save" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"save" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const profileDirty = name.trim() !== (user.name ?? "") || email.trim().toLowerCase() !== user.email;
@@ -510,23 +526,12 @@ function UserForm({
     }
   }
 
-  const confirmMatches = confirm.trim().toLowerCase() === user.email.toLowerCase();
-
-  async function remove() {
-    if (!confirmMatches || isMe || busy) return;
-    setBusy("delete");
-    setErr(null);
-    try {
-      await deleteAdminUser(user.id);
-      toast.success("Account deleted", user.email);
-      router.refresh();
-      onDone();
-    } catch (e) {
-      setErr(errorMessage(e, "Couldn't delete."));
-    } finally {
-      setBusy(null);
-    }
-  }
+  // Why the delete window stays shut, said beside its button.
+  const deleteBlocked = isMe
+    ? "You can't delete your own account from here."
+    : user.isPlatformAdmin
+      ? "A platform admin can't be deleted. Switch Platform admin off and save first."
+      : null;
 
   return (
     <>
@@ -596,25 +601,17 @@ function UserForm({
           <span className={cx("sec-t")}>Delete account</span>
         </div>
         <div className={cx("au-del-row")}>
-          <Field label="Confirm email" htmlFor="au-confirm">
-            <input
-              id="au-confirm"
-              className={cx("in", "in--mono")}
-              placeholder={user.email}
-              value={confirm}
-              disabled={isMe}
-              autoComplete="off"
-              onChange={(e) => setConfirm(e.target.value)}
-            />
-          </Field>
+          <p className={cx("au-del-copy")}>
+            {deleteBlocked ??
+              "Lists what goes with the account — its company, subscription and payment connections — before anything is deleted."}
+          </p>
           <button
             type="button"
             className={cx("btn", "btn-danger", "btn-field")}
-            title={isMe ? "You can't delete your own account" : undefined}
-            disabled={!confirmMatches || isMe || busy !== null}
-            onClick={remove}
+            disabled={deleteBlocked !== null || busy !== null}
+            onClick={onDelete}
           >
-            {busy === "delete" ? "Deleting…" : "Delete account"}
+            Delete account…
           </button>
         </div>
       </div>
@@ -634,6 +631,210 @@ function UserForm({
         </button>
       </SheetFoot>
     </>
+  );
+}
+
+// ── The delete window ──────────────────────────────────────────────
+// The sheet's second view. Reads what goes with the account from the server
+// (lib/accountDeletion's plan — the same one the delete then follows), lists
+// it per company, and asks for the email. A refusal prints under the field,
+// beside the button, and is scrolled into view.
+
+const LIVE_SUB = new Set(["ACTIVE", "TRIALING", "PAST_DUE", "UNPAID"]);
+const PROCESSOR_NAMES: Record<string, string> = { STRIPE: "Stripe Connect", SQUARE: "Square", STAX: "Stax" };
+
+function DeleteAccount({
+  user,
+  plans,
+  onBack,
+  onDone,
+}: {
+  user: AdminUserDTO;
+  plans: PlanOption[];
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [preview, setPreview] = useState<AdminDeletionPreview | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const errRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    previewAdminUserDeletion(user.id)
+      .then((r) => {
+        if (!live) return;
+        if (r.ok) setPreview(r.preview);
+        else setLoadErr(r.error);
+      })
+      .catch((e) => {
+        if (live) setLoadErr(errorMessage(e, "Couldn't read what the account holds."));
+      });
+    return () => {
+      live = false;
+    };
+  }, [user.id]);
+
+  useEffect(() => {
+    if (err) errRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [err]);
+
+  const matches = confirm.trim().toLowerCase() === user.email.toLowerCase();
+  const ready = preview !== null && preview.blocked === null;
+
+  async function remove() {
+    if (!ready || !matches || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await deleteAdminUser({ userId: user.id, confirmEmail: confirm.trim() });
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      toast.success(
+        "Account deleted",
+        r.deletedOrgs.length ? `${user.email} · ${r.deletedOrgs.join(", ")} scheduled for deletion` : user.email,
+      );
+      if (r.warnings.length) toast.error("Some cleanup didn't finish", r.warnings.join(" · "));
+      router.refresh();
+      onDone();
+    } catch (e) {
+      setErr(errorMessage(e, "Couldn't delete."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <SheetBody>
+        {loadErr ? <Note tone="danger">{loadErr}</Note> : null}
+        {!preview && !loadErr ? <div className={cx("au-us-loading")}>Reading what goes with the account…</div> : null}
+        {preview ? (
+          <>
+            {preview.blocked ? <Note tone="danger">{preview.blocked}</Note> : null}
+            <div className={cx("sec")}>
+              <div className={cx("sec-h")}>
+                <span className={cx("sec-t")}>What will be deleted</span>
+              </div>
+              <div className={cx("au-wipe", "is-gone")}>
+                <div className={cx("au-wipe-h")}>
+                  <span className={cx("au-wipe-name")}>{user.email}</span>
+                  <span className={cx("au-wipe-fate")}>Deleted</span>
+                </div>
+                <dl>
+                  <dt>Account</dt>
+                  <dd>{user.name ?? "—"} · sign-in, sessions, memberships</dd>
+                </dl>
+              </div>
+              {preview.orgs.map((o) => (
+                <OrgFate key={o.orgId} fate={o} plans={plans} />
+              ))}
+              <p className={cx("au-wipe-keep")}>
+                Stays in Stripe: the customer and its payment history — refunds and the books need them.
+              </p>
+            </div>
+            <div className={cx("sec", "sec--danger")}>
+              <Field label="Type the email to confirm" htmlFor="au-confirm">
+                <input
+                  id="au-confirm"
+                  className={cx("in", "in--mono")}
+                  placeholder={user.email}
+                  value={confirm}
+                  disabled={!ready || busy}
+                  autoComplete="off"
+                  onChange={(e) => setConfirm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void remove();
+                  }}
+                />
+              </Field>
+              {err ? (
+                <div ref={errRef}>
+                  <Note tone="danger">{err}</Note>
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+      </SheetBody>
+      <SheetFoot>
+        <button type="button" className={cx("btn", "btn-ghost")} onClick={onBack} disabled={busy}>
+          Back
+        </button>
+        <button
+          type="button"
+          className={cx("btn", "btn-danger")}
+          onClick={() => void remove()}
+          disabled={!ready || !matches || busy}
+        >
+          {busy ? "Deleting…" : "Delete account"}
+        </button>
+      </SheetFoot>
+    </>
+  );
+}
+
+function OrgFate({ fate: o, plans }: { fate: AdminDeletionPreview["orgs"][number]; plans: PlanOption[] }) {
+  const others = o.memberCount - 1;
+  const fateLine = o.alreadyDeleted
+    ? "Already scheduled for deletion"
+    : o.deletesOrg
+      ? "Deleted with the account"
+      : "Stays — only the membership goes";
+  const members = o.deletesOrg
+    ? others > 0
+      ? `${o.memberCount} — ${others === 1 ? "1 other loses" : `${others} others lose`} access`
+      : "Only this account"
+    : `${o.memberCount} · ${o.otherOwners === 1 ? "1 other owner keeps" : `${o.otherOwners} other owners keep`} it`;
+  const sub = o.subscription;
+  const subFate = !sub
+    ? null
+    : !o.deletesOrg
+      ? "Not touched"
+      : !LIVE_SUB.has(sub.status)
+        ? "Already ended"
+        : sub.provider === "MANUAL" && !sub.onStripe
+          ? "Complimentary — ends with the company"
+          : "Cancelled on Stripe at once";
+  const processors = o.processors.map((p) => PROCESSOR_NAMES[p] ?? p);
+  return (
+    <div className={cx("au-wipe", o.deletesOrg && "is-gone")}>
+      <div className={cx("au-wipe-h")}>
+        <span className={cx("au-wipe-name")}>{o.orgName}</span>
+        <span className={cx("au-wipe-fate")}>{fateLine}</span>
+      </div>
+      <dl>
+        <dt>Role</dt>
+        <dd>{o.role}</dd>
+        <dt>Members</dt>
+        <dd>{members}</dd>
+        <dt>Subscription</dt>
+        <dd>
+          {sub ? (
+            <span className={cx("au-wipe-sub")}>
+              {planLabel(sub.plan, plans)}
+              <StatusBadge status={onFreePlan({ status: sub.status }) ? "FREE" : sub.status} />
+              <span className={cx("au-wipe-then")}>{subFate}</span>
+            </span>
+          ) : (
+            "None"
+          )}
+        </dd>
+        {o.deletesOrg ? (
+          <>
+            <dt>Payments</dt>
+            <dd>{processors.length ? `${processors.join(", ")} — disconnected` : "No processor connected"}</dd>
+            <dt>Data</dt>
+            <dd>Hidden at once, purged after 30 days</dd>
+          </>
+        ) : null}
+      </dl>
+    </div>
   );
 }
 

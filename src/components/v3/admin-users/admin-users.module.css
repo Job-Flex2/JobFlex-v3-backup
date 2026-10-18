@@ -109,11 +109,25 @@
 :global(.jf-blueprint .content) .au-plan-src { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-light); }
 :global(.jf-blueprint .content) .au-dash { font-family: var(--font-mono); font-size: 12px; color: var(--muted-faint); }
 
-/* Delete prompt: field + button on one baseline. `end` aligns the button's
-   bottom to the input's bottom — which only holds because the field carries no
-   hint under the input and the button wears .btn-field (38px, the .in axis). */
-:global(.jf-blueprint .content) .au-del-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
+/* Delete row: what the button opens (or why it is shut) beside it. */
+:global(.jf-blueprint .content) .au-del-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
 :global(.jf-blueprint .content) .au-del-row > button { white-space: nowrap; }
+:global(.jf-blueprint .content) .au-del-copy { margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+
+/* The delete window: one dashed panel per thing that goes (the .au-cmp idiom),
+   a danger rule down the left of what is deleted. */
+:global(.jf-blueprint .content) .au-wipe { display: grid; gap: 8px; padding: 12px; border: 1.5px dashed var(--hair); background: var(--paper); }
+:global(.jf-blueprint .content) .au-wipe.is-gone { border-left: 4px solid var(--danger); }
+:global(.jf-blueprint .content) .au-wipe-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; min-width: 0; }
+:global(.jf-blueprint .content) .au-wipe-name { min-width: 0; font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .au-wipe-fate { font-family: var(--font-mono); font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .au-wipe.is-gone .au-wipe-fate { color: var(--danger); }
+:global(.jf-blueprint .content) .au-wipe dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+:global(.jf-blueprint .content) .au-wipe dt { font-size: 11px; color: var(--muted); }
+:global(.jf-blueprint .content) .au-wipe dd { margin: 0; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .au-wipe-sub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+:global(.jf-blueprint .content) .au-wipe-then { font-weight: 600; color: var(--muted); }
+:global(.jf-blueprint .content) .au-wipe-keep { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
 
 /* ============================================================
    BREAKPOINTS — effective width (the shell zooms; the strip collapses

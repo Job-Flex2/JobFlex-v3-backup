@@ -346,6 +346,12 @@ export function StatusBadge({ status }: { status: string }) {
 // ── Small helpers ──────────────────────────────────────────────────
 
 export function errorMessage(err: unknown, fallback = "Something went wrong."): string {
+  // A production build withholds a thrown action's message: the page gets
+  // React's "Minified React error #441" or Next's render notice, which reads
+  // as gibberish in a note. Say that the server gave no reason instead.
+  if (err instanceof Error && /minified react error|server components render|unexpected response/i.test(err.message)) {
+    return `${fallback} The server gave no reason — refresh the page and try again.`;
+  }
   if (err instanceof Error && err.message) return err.message;
   return fallback;
 }

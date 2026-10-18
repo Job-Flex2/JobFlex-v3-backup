@@ -14,6 +14,8 @@ import {
 } from "@/components/v3/admin-subscribers/billing-metrics";
 import { planSnapshot, reportPlanChange } from "@/lib/activation-events";
 import { readGrantsAndMarks, type PlanGrant, type SyncingMark } from "@/lib/planGrant";
+import { accountDeletionPlan, removeUserRow, retireOrganization } from "@/lib/accountDeletion";
+import { refused, type ActionResult } from "@/lib/actionResult";
 
 export interface AdminUserRow {
   id: string;
@@ -415,54 +417,119 @@ export async function setPlatformAdmin(userId: string, on: boolean) {
 
 // ── Delete account ────────────────────────────────────
 
-/**
- * Hard-delete a user. Refused for yourself, and for the last OWNER of any org
- * they own — deleting that account would leave the org with nobody who can
- * manage billing, members, or the org itself. Memberships, sessions and
- * accounts cascade; optional author links (proposals, leads, events) null out.
- */
-export async function deleteAdminUser(userId: string) {
+/** What the confirm window lists before the admin types the email. */
+export interface AdminDeletionPreview {
+  email: string;
+  /** Why the delete is refused (yourself, a platform admin), or null. */
+  blocked: string | null;
+  orgs: Array<{
+    orgId: string;
+    orgName: string;
+    role: string;
+    memberCount: number;
+    otherOwners: number;
+    alreadyDeleted: boolean;
+    /** The company goes with the account (lib/accountDeletion's rule). */
+    deletesOrg: boolean;
+    subscription: { plan: string; status: string; provider: string; onStripe: boolean } | null;
+    processors: string[];
+  }>;
+}
+
+function deletionBlocked(meId: string, user: { id: string; email: string; isPlatformAdmin: boolean }): string | null {
+  if (user.id === meId) return "You can't delete your own account from here.";
+  if (user.isPlatformAdmin) {
+    return `${user.email} is a platform admin. Switch Platform admin off and save, then delete the account.`;
+  }
+  return null;
+}
+
+/** Read for the confirm window: the account, and per company what happens to it. */
+export async function previewAdminUserDeletion(userId: string): Promise<ActionResult<{ preview: AdminDeletionPreview }>> {
   const me = await requirePlatformAdmin();
   const id = z.string().min(1).parse(userId);
-  if (id === me.id) throw new Error("You can't delete your own account from here.");
-
-  const user = await db.user.findUnique({
-    where: { id },
-    select: {
-      email: true,
-      memberships: {
-        select: { role: true, organizationId: true, organization: { select: { name: true } } },
-      },
+  const user = await db.user.findUnique({ where: { id }, select: { id: true, email: true, isPlatformAdmin: true } });
+  if (!user) return refused("This account no longer exists. Refresh the page.");
+  const plan = await accountDeletionPlan(id);
+  return {
+    ok: true,
+    preview: {
+      email: user.email,
+      blocked: deletionBlocked(me.id, user),
+      orgs: plan.map((f) => ({
+        orgId: f.orgId,
+        orgName: f.orgName,
+        role: f.role,
+        memberCount: f.memberCount,
+        otherOwners: f.otherOwners,
+        alreadyDeleted: f.alreadyDeleted,
+        deletesOrg: f.deletesOrg,
+        subscription: f.subscription
+          ? { plan: f.subscription.plan, status: f.subscription.status, provider: f.subscription.provider, onStripe: !!f.subscription.externalSubId }
+          : null,
+        processors: f.processors,
+      })),
     },
-  });
-  if (!user) throw new Error("User not found.");
+  };
+}
 
-  for (const m of user.memberships) {
-    if (m.role !== "OWNER") continue;
-    const otherOwners = await db.membership.count({
-      where: { organizationId: m.organizationId, role: "OWNER", NOT: { userId: id } },
-    });
-    if (otherOwners === 0) {
-      throw new Error(
-        `${user.email} is the last owner of ${m.organization.name}. Promote another member to owner first.`,
-      );
-    }
+const deleteUserInput = z.object({ userId: z.string().min(1), confirmEmail: z.string().trim().max(320) });
+
+/**
+ * Delete an account, fully. Refused for yourself and for a platform admin
+ * (the flag comes off first). Every company nobody else would own goes the
+ * way an owner's own delete takes it (lib/accountDeletion
+ * retireOrganization): marked deleted, its Stripe subscription cancelled at
+ * once, Stripe Connect / Square / Stax disconnected, the purge cron
+ * hard-deleting it 30 days on. A company with another owner is left alone —
+ * only the membership goes. Then the User row (removeUserRow).
+ *
+ * Every refusal comes back as a value: thrown, production showed the admin
+ * nothing but React's error #441, in a note scrolled out of sight.
+ */
+export async function deleteAdminUser(
+  raw: unknown,
+): Promise<ActionResult<{ deletedOrgs: string[]; warnings: string[] }>> {
+  const me = await requirePlatformAdmin();
+  const parsed = deleteUserInput.safeParse(raw);
+  if (!parsed.success) return refused("Type the account's email to confirm.");
+  const { userId: id, confirmEmail } = parsed.data;
+
+  const user = await db.user.findUnique({ where: { id }, select: { id: true, email: true, isPlatformAdmin: true } });
+  if (!user) return refused("This account no longer exists. Refresh the page.");
+  const blocked = deletionBlocked(me.id, user);
+  if (blocked) return refused(blocked);
+  if (confirmEmail.toLowerCase() !== user.email.toLowerCase()) return refused("That doesn't match the account's email.");
+
+  const deletedOrgs: string[] = [];
+  const warnings: string[] = [];
+  for (const fate of await accountDeletionPlan(id)) {
+    if (!fate.deletesOrg) continue;
+    const w = await retireOrganization(
+      { id: fate.orgId, name: fate.orgName, externalSubId: fate.subscription?.externalSubId ?? null },
+      me.id,
+      "deleteAdminUser",
+      `Organization "${fate.orgName}" scheduled for deletion with its owner's account (${user.email}), by a platform admin`,
+    );
+    deletedOrgs.push(fate.orgName);
+    warnings.push(...w.map((x) => `${fate.orgName}: ${x}`));
   }
 
   try {
-    await db.user.delete({ where: { id } });
+    await removeUserRow(id);
   } catch (err) {
-    // A required relation without a cascade (e.g. trade-network posts the user
-    // authored) blocks the delete at the FK — say so instead of a raw P2003.
+    // A required relation removeUserRow does not know about yet blocks the
+    // delete at the FK — say so instead of a digest.
     if (err && typeof err === "object" && (err as { code?: string }).code === "P2003") {
-      throw new Error(
-        "This account still owns records that can't be orphaned (trade posts, messages). Remove those first.",
+      return refused(
+        `${deletedOrgs.length ? `${deletedOrgs.join(", ")} scheduled for deletion, but the` : "The"} account itself still owns records that can't be orphaned — it was not deleted.`,
       );
     }
     throw err;
   }
 
   revalidateAdminBilling();
+  return { ok: true, deletedOrgs, warnings };
 }
 
 // ── Stripe → the platform's subscription record ───────

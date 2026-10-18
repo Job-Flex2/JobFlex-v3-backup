@@ -225,7 +225,7 @@ export const SIGN_OUT_LABEL = 'Log out' as const;
  *  so the same address can be registered again. Slated for removal at launch. */
 export const DELETE_ACCOUNT_CARD: CardHead = {
   title: 'Delete account',
-  sub: 'Removes you and any company you are the only member of. Immediate, no undo.',
+  sub: 'Removes you and any company you are the only owner of. Immediate, no undo.',
   badge: { label: 'Testing', tone: 'bg-warn' },
 };
 export const DELETE_ACCOUNT_ROW = {
@@ -241,7 +241,7 @@ export const DELETE_ACCOUNT_MODAL = {
   mismatch: "That doesn't match your email address.",
 } as const;
 export function deleteAccountDesc(email: string, orgName: string): string {
-  return `Deletes ${email} for good — proposals, leads, jobs and payment history of ${orgName} included if nobody else is a member. You can register the same address again afterwards.`;
+  return `Deletes ${email} for good. If nobody else owns ${orgName}, the company goes too — its subscription is cancelled at once, and its proposals, leads, jobs and payment history are deleted (right away when you are its only member, after 30 days when it has a team). You can register the same address again afterwards.`;
 }
 
 /* ------------------------------------------------------------------ */
