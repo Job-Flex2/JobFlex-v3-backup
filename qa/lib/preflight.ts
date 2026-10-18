@@ -30,7 +30,10 @@ function probe(): { ok: boolean; qaCo: boolean; why: string } {
   const out = `${r.stdout ?? ""}`;
   const m = out.match(/QA_PRISMA_OK (\d+)/);
   if (r.status === 0 && m) return { ok: true, qaCo: Number(m[1]) > 0, why: "" };
-  return { ok: false, qaCo: false, why: (r.stderr || out || r.error?.message || `exit ${r.status}`).trim().split(/\r?\n/).filter(Boolean).slice(-3).join(" ").slice(0, 600) };
+  // the line that says what is wrong, not the stack's tail
+  const lines = `${r.stderr ?? ""}\n${out}`.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const said = lines.find((l) => /did not initialize|Cannot find module|Environment variable not found|Error:|error:|Unknown|does not exist|ENOENT|EPERM/.test(l)) ?? lines[0] ?? r.error?.message ?? `exit ${r.status}`;
+  return { ok: false, qaCo: false, why: said.slice(0, 400) };
 }
 
 function generate(): { ok: boolean; out: string } {
