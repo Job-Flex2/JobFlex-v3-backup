@@ -229,6 +229,10 @@ const PAGE_OWNED_STATIC = new Set([
   // Texting, its own page since 2026-10-16 (it was Settings → Texting): both
   // editions take the page's one sms read (app/dashboard/texting/texting-responsive.tsx).
   "/dashboard/texting",
+  // Support, moved into the blueprint tree 2026-10-17: both editions take the
+  // page's read of the viewer's own tickets (app/dashboard/support/support-responsive.tsx);
+  // the handheld build brings BlueprintHandheldFrame as its chrome.
+  "/dashboard/support",
 ]);
 
 /** Mapped handheld surfaces that do NOT render <MobileNav />.
