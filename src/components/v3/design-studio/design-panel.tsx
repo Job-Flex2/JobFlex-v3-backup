@@ -11,6 +11,8 @@ import type { Room } from "@/lib/design/geometry";
 import { autoKitchen, kitchenFromPlan, frameOf } from "@/lib/design/kitchen";
 import { CABINET_COLORS, COUNTERS, FLOORS, HARDWARE_HEX, LIBRARY, PAINTS, SPLASHES, finishesFor, itemCode, lib, type LibCat } from "@/lib/design/library";
 import type { Selection, Tool } from "./plan-editor";
+import { ChecksPanel } from "./checks-panel";
+import type { Check } from "@/lib/design/checks";
 
 type Props = {
   doc: DesignDoc;
@@ -24,6 +26,8 @@ type Props = {
   onPatch: (fn: (d: DesignDoc) => void) => void;
   /** A kitchen was just laid out: the 3D view turns to it. */
   onLaidOut?: () => void;
+  /** The smart checks for this room and the house (milestone 5). */
+  checks?: Check[];
 };
 
 const CATS: Array<{ cat: LibCat; label: string }> = [
@@ -36,8 +40,9 @@ const CATS: Array<{ cat: LibCat; label: string }> = [
   { cat: "furniture", label: "Furniture" },
 ];
 
-export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool, onPatch, onLaidOut }: Props) {
-  const [tab, setTab] = React.useState<"layout" | "add" | "finishes">("layout");
+export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool, onPatch, onLaidOut, checks = [] }: Props) {
+  const [tab, setTab] = React.useState<"layout" | "add" | "finishes" | "checks">("layout");
+  const openChecks = checks.filter((c) => !c.ok).length;
   const [notes, setNotes] = React.useState<string[]>([]);
   const fin = finishesFor(doc.finishes, focus);
   const roomItems = (doc.items ?? []).filter((i) => i.room === focus);
@@ -67,10 +72,15 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
       {selItem ? <ItemCard it={selItem} onPatch={onPatch} onSelect={onSelect} /> : null}
       <section className={s.card} data-design-panel>
         <div className={s.head}>
-          <div className={s.seg} role="tablist" aria-label="Design">
-            {(["layout", "add", "finishes"] as const).map((t) => (
-              <button key={t} type="button" role="tab" aria-selected={tab === t} className={`${s.segB} ${tab === t ? s.on : ""}`} onClick={() => setTab(t)} data-design-tab={t}>
-                {t === "layout" ? "Kitchen" : t === "add" ? "Add" : "Finishes"}
+          <div className={s.seg} role="tablist" aria-label="Design" style={{ display: "flex", width: "100%" }}>
+            {(["layout", "add", "finishes", "checks"] as const).map((t) => (
+              <button key={t} type="button" role="tab" aria-selected={tab === t} className={`${s.segB} ${tab === t ? s.on : ""}`} onClick={() => setTab(t)} data-design-tab={t} style={{ whiteSpace: "nowrap", flex: "1 1 auto", padding: "0 6px" }}>
+                {t === "layout" ? "Kitchen" : t === "add" ? "Add" : t === "finishes" ? "Finishes" : "Checks"}
+                {t === "checks" && openChecks ? (
+                  <span aria-label={`${openChecks} to look at`} style={{ marginLeft: 4, display: "inline-grid", placeItems: "center", minWidth: 15, height: 15, padding: "0 3px", borderRadius: 8, background: "#9a5b00", color: "#fff", fontSize: 9.5, verticalAlign: 1 }}>
+                    {openChecks}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -130,6 +140,8 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
               <p className={s.note}>Drag anything on the plan; it backs onto the nearest wall and lines up with its neighbours. R turns it, Delete removes it.</p>
             </>
           ) : null}
+
+          {tab === "checks" ? <ChecksPanel checks={checks} onSelect={onSelect} onPatch={onPatch} /> : null}
 
           {tab === "add" ? (
             <>

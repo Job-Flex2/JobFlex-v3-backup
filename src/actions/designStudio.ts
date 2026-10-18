@@ -193,6 +193,116 @@ export async function readRoomNames(input: { image: string; count: number }): Pr
   }
 }
 
+/* ── A plan set whose words are drawn as lines (2026-10-18) ──────────────────────────────────────────────────────
+   Many CAD exports keep no text: every title and room name is strokes, so nothing can be read from the PDF's words.
+   The vision model sorts the sheets (which are the floor plans, and of which floor), then reads each floor plan's
+   rooms with where their labels sit — the studio finds them in the drawing from there. */
+
+export type SheetTriage = { page: number; kind: string; title: string | null; level: string | null };
+
+const TRIAGE_SYSTEM = `You sort the sheets of a residential construction drawing set. Each image is one sheet, preceded by its page number.
+For EACH page say what it is:
+- "floor_plan": the architectural floor plan of a level — rooms labelled, walls, doors, windows (the sheet a designer lays rooms out from). NOT a framing plan, foundation plan, roof (framing) plan, electrical/lighting plan, reflected ceiling plan, plumbing or mechanical plan, shear wall or lateral plan, or site plan — those have their own kinds.
+- otherwise one of: "framing", "foundation", "roof", "electrical", "elevation", "section", "site", "details", "notes", "schedule", "structural", "other".
+Give the drawing's own title as printed (e.g. "MAIN FLOOR PLAN"), and for a floor plan its level: "main", "upper", "third", "basement", "lower", "garage" or "attic" — null when the title names no level (a style or option plan).
+Read only what is printed; never guess a title you can't read (use null).
+Reply with JSON only: {"sheets":[{"page":7,"kind":"floor_plan","title":"MAIN FLOOR PLAN","level":"main"}]}`;
+
+const KINDS = new Set(["floor_plan", "framing", "foundation", "roof", "electrical", "elevation", "section", "site", "details", "notes", "schedule", "structural", "other"]);
+const LEVELS = new Set(["main", "upper", "third", "basement", "lower", "garage", "attic"]);
+const clean = (x: unknown, n: number) => (typeof x === "string" ? x.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, n) : "");
+const dataUrl = (s: unknown, max: number) => typeof s === "string" && /^data:image\/(jpeg|png);base64,/.test(s) && s.length <= max;
+
+async function askVision(system: string, content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" | "low" } }>) {
+  const client = getOpenAI();
+  const model = getVisionModel();
+  const sampling = await samplingOptions(0);
+  const ask = () => client.chat.completions.create({ model, ...sampling, messages: [{ role: "system", content: system }, { role: "user", content }], response_format: { type: "json_object" } }, { maxRetries: 0 });
+  let completion: Awaited<ReturnType<typeof ask>>;
+  try {
+    completion = await ask();
+  } catch (err) {
+    if (!isTransientAIError(err)) throw err;
+    await new Promise((r) => setTimeout(r, 2_500));
+    completion = await ask();
+  }
+  return JSON.parse(completion.choices[0]?.message?.content ?? "{}") as Record<string, unknown>;
+}
+
+/** Which sheets are floor plans, and of which floor — from small pictures of every sheet. */
+export async function triagePlanSheets(input: { pages: Array<{ page: number; image: string }> }): Promise<{ ok: true; sheets: SheetTriage[] } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  if (!isOpenAIEnabled()) return { ok: false, error: "Reading the sheets needs the AI model, which isn't set up here." };
+  const pages = (Array.isArray(input?.pages) ? input.pages : []).slice(0, 40).filter((p) => Number.isFinite(Number(p?.page)) && dataUrl(p?.image, 700_000));
+  if (!pages.length || pages.reduce((n, p) => n + p.image.length, 0) > 7_600_000) return { ok: false, error: "The sheets could not be sent." };
+  try {
+    await enforceRateLimit(`design-triage:${g.organizationId}`, 20, HOUR, "plan set reads");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Too many reads — try again later." };
+  }
+  try {
+    const parsed = await askVision(TRIAGE_SYSTEM, [
+      { type: "text", text: `${pages.length} sheets follow.` },
+      ...pages.flatMap((p) => [{ type: "text" as const, text: `Page ${Math.round(p.page)}:` }, { type: "image_url" as const, image_url: { url: p.image, detail: "high" as const } }]),
+    ]);
+    const asked = new Set(pages.map((p) => Math.round(p.page)));
+    const sheets: SheetTriage[] = (Array.isArray(parsed.sheets) ? (parsed.sheets as Array<Record<string, unknown>>) : [])
+      .map((s) => ({ page: Math.round(Number(s.page)), kind: KINDS.has(String(s.kind)) ? String(s.kind) : "other", title: clean(s.title, 80) || null, level: LEVELS.has(String(s.level)) ? String(s.level) : null }))
+      .filter((s) => asked.has(s.page));
+    return { ok: true, sheets };
+  } catch (err) {
+    logServerError("design-triage", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: friendlyAIError(err, "reading the plan set") };
+  }
+}
+
+export type PlanRoomRead = { name: string; x: number; y: number; size: string | null; box: [number, number, number, number] | null };
+
+const ROOMS_SYSTEM = `You read one floor plan sheet of a residential drawing set.
+List EVERY room or space label printed ON THE FLOOR PLAN DRAWING itself — not in the notes, schedules, legends, area summary, title block or detail callouts:
+- "name": as printed, in sentence case, abbreviations spelled out ("MSTR BEDRM" → "Master bedroom", "MBR2" → "Master bedroom 2", "MBA2" → "Master bath 2", "PDR" → "Powder", "WIC" → "Walk-in closet", "BA 3" → "Bath 3", "BEDRM 4" → "Bedroom 4", "3-CAR GARAGE" → "3-car garage", "REAR COV'D PATIO" → "Rear covered patio"); drop "(N)"/"(E)".
+- "x", "y": the CENTER of that label as fractions of the whole image (0 = left/top, 1 = right/bottom).
+- "box": the room's own extent [x0, y0, x1, y1] as fractions of the image — out to its walls; in an open plan (a kitchen, nook and great room in one space), the part that belongs to that room.
+- "size": the room size if printed right under the name (e.g. "13'-6\" x 12'-0\""), else null. A ceiling height ("10'-1 1/2\" CLG.") is not a size.
+Also give "box": the floor plan drawing's own extent [x0, y0, x1, y1] as fractions of the image — its walls and dimension strings, without the notes, schedules or title block — and "scale" as printed under the drawing (e.g. "1/4\" = 1'-0\""), or null.
+Read only what is printed; never invent a room.
+Reply with JSON only: {"rooms":[{"name":"Kitchen","x":0.49,"y":0.35,"box":[0.43,0.30,0.55,0.42],"size":null}],"box":[0.22,0.08,0.84,0.95],"scale":"1/4\" = 1'-0\""}`;
+
+/** One floor plan's rooms, where each label sits, the drawing's extent and its scale — from a sharp picture of it. */
+export async function readPlanRooms(input: { page: number; image: string }): Promise<{ ok: true; rooms: PlanRoomRead[]; box: [number, number, number, number] | null; scale: string | null } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  if (!isOpenAIEnabled()) return { ok: false, error: "Reading the rooms needs the AI model, which isn't set up here." };
+  if (!dataUrl(input?.image, 6_000_000)) return { ok: false, error: "The plan picture could not be sent." };
+  try {
+    await enforceRateLimit(`design-names:${g.organizationId}`, 40, HOUR, "room reads");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Too many reads — try again later." };
+  }
+  try {
+    const parsed = await askVision(ROOMS_SYSTEM, [
+      { type: "text", text: `Page ${Math.round(Number(input.page) || 0)} of the set.` },
+      { type: "image_url", image_url: { url: input.image, detail: "high" } },
+    ]);
+    const frac = (v: unknown) => Math.max(0, Math.min(1, Number(v)));
+    const rooms: PlanRoomRead[] = (Array.isArray(parsed.rooms) ? (parsed.rooms as Array<Record<string, unknown>>) : [])
+      .filter((r) => clean(r.name, 60) && Number.isFinite(Number(r.x)) && Number.isFinite(Number(r.y)))
+      .slice(0, 80)
+      .map((r) => {
+        const rb = Array.isArray(r.box) ? (r.box as unknown[]).map(Number) : [];
+        const box = rb.length === 4 && rb.every(Number.isFinite) && rb[2] > rb[0] && rb[3] > rb[1] ? ([frac(rb[0]), frac(rb[1]), frac(rb[2]), frac(rb[3])] as [number, number, number, number]) : null;
+        return { name: clean(r.name, 60), x: frac(r.x), y: frac(r.y), size: clean(r.size, 30) || null, box };
+      });
+    const b = Array.isArray(parsed.box) ? (parsed.box as unknown[]).map(Number) : [];
+    const box = b.length === 4 && b.every(Number.isFinite) && b[2] > b[0] && b[3] > b[1] ? ([frac(b[0]), frac(b[1]), frac(b[2]), frac(b[3])] as [number, number, number, number]) : null;
+    return { ok: true, rooms, box, scale: clean(parsed.scale, 40) || null };
+  } catch (err) {
+    logServerError("design-plan-rooms", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: friendlyAIError(err, "reading the rooms") };
+  }
+}
+
 /* ── Milestone 4: the estimate and the proposal ─────────────────────────────────────────────────────────────── */
 
 export type DesignLocation = { factor: number; place: string; level: "city" | "state" | "national" };

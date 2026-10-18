@@ -29,7 +29,7 @@ import type { Workspace } from "@/lib/editions";
 /** `preview` (2026-10-15): pages this account may USE though they are not sold yet — a
  *  platform admin or the early-access account testing Deck Studio (lib/deck/access).
  *  The sidebar still says Soon for them; the New estimate dialog opens the card with a Preview tag. */
-export type NavView = { workspace: Workspace; unlocked: string[]; switchable: boolean; preview?: string[] };
+export type NavView = { workspace: Workspace; unlocked: string[]; switchable: boolean; preview?: string[]; tools?: string[] };
 const PLATFORM_VIEW: NavView = { workspace: "platform", unlocked: [], switchable: false };
 
 export type NavIdentity = {

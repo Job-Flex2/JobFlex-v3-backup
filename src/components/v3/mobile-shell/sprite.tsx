@@ -76,6 +76,7 @@ export function MobileSprite() {
         {/* Added 2026-09-18 with the desktop sprite: the HVAC estimator's outdoor unit. */}
         <symbol id="i-heatpump" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="12" cy="12" r="4.5" /><path d="M12 12V8.5" /><path d="m12 12 3 1.8" /><path d="m12 12-3 1.8" /></symbol>
         <symbol id="i-deck" viewBox="0 0 24 24"><path d="M2 10h20" /><path d="M2 13h20" /><path d="M4 13v8" /><path d="M20 13v8" /><path d="M12 13v8" /><path d="M5 10V5h14v5" /></symbol>
+        <symbol id="i-sofa" viewBox="0 0 24 24"><path d="M5 10V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3" /><path d="M3 11a2 2 0 0 1 2 2v2h14v-2a2 2 0 1 1 4 0v4a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-4a2 2 0 0 1 2-2Z" /><path d="M5 18v2" /><path d="M19 18v2" /></symbol>
         {/* Added 2026-09-20 with the desktop sprite: the views plate. */}
         <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></symbol>
         <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>

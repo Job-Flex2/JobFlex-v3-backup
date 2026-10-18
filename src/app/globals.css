@@ -31,6 +31,7 @@
   --tool-video: #b8406a;
   --tool-hvac: #0d7a8a;
   --tool-deck: #a0582a;
+  --tool-design: #66702a;
 
   /* ─── typography ──────────────────────────────── */
   --font-display: var(--font-inter);

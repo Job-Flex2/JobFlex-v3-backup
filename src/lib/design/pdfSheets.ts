@@ -5,10 +5,12 @@
 // from). Browser-only; the plan never leaves the browser except as that one small picture.
 import { readVectorSheet, layerRole, type VectorSheet } from "./pdfVector";
 import type { SheetText } from "./planRead";
+import { classifySheet, type SheetClass } from "./planSet";
 
 export const MAX_SHEETS = 60;
 export const MAX_FILE_BYTES = 120 * 1024 * 1024;
 const THUMB_PX = 320;
+const PREVIEW_PX = 800;
 
 type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 let pdfjs: Promise<PdfJs> | null = null;
@@ -34,6 +36,8 @@ export type DesignSheet = {
   page: number;
   kind: "pdf" | "image";
   thumb: string;
+  /** A picture of the whole sheet large enough to read its titles (a PDF page) — drawn once, with the thumbnail. */
+  preview?: string;
   /** Sheet size in points (an image: its pixels). */
   width: number;
   height: number;
@@ -45,14 +49,15 @@ export type DesignSheet = {
   hint: string;
   /** The file keeps CAD layers by name (walls, doors, windows). */
   layered: boolean;
+  /** Its text (a PDF page), and what that text says it is: floor plans by title, rooms by label (lib/design/planSet). */
+  texts?: SheetText[];
+  cls?: SheetClass;
   /** Its lines and text (a PDF page only). */
   read?: () => Promise<SheetRead>;
   /** A JPEG of part of the sheet (points), long edge at most maxPx; scale = pixels per point. */
   picture: (region: { x: number; y: number; w: number; h: number } | null, maxPx: number) => Promise<{ url: string; scale: number; w: number; h: number }>;
 };
 
-const PLAN_WORDS = /floor\s*plan|first\s*floor|main\s*floor|second\s*floor|level\s*\d|proposed\s*plan|plan\s*view|dimension(ed)?\s*plan/i;
-const NOT_PLAN = /site\s*plan|roof\s*plan|foundation|framing|elevation|section|detail|electrical|plumbing|mechanical|title\s*24|energy|general\s*notes|schedule/i;
 
 async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]> {
   const lib = await loadPdfJs();
@@ -82,27 +87,34 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
       const [x, y] = lib.Util.applyTransform([it.transform[4], it.transform[5]], vp.transform);
       texts.push({ str: it.str, x, y, h: Math.hypot(it.transform[2], it.transform[3]) });
     }
-    const all = texts.map((t) => t.str).join(" ");
+    // The floor plan by its drawing title and the rooms it labels — not by the words "floor plan" anywhere in its
+    // notes (a spec page said that too, and came first).
+    const cls = classifySheet(texts, vp.width, vp.height);
     const titleText = texts
       .filter((t) => (t.x >= vp.width * 0.6 && t.y >= vp.height * 0.7) || t.x >= vp.width * 0.86)
       .map((t) => t.str)
       .join(" ");
-    let score = 0;
-    const why: string[] = [];
-    if (PLAN_WORDS.test(all)) {
-      score += 3;
-      why.push("Floor plan");
-    }
-    if (NOT_PLAN.test(titleText) && !PLAN_WORDS.test(titleText)) score -= 1;
-    if (/kitchen|bed\s*room|bath|living/i.test(all)) score += 1;
-    if (layered) why.push("CAD layers");
-    const tvp = page.getViewport({ scale: THUMB_PX / Math.max(vp.width, vp.height) });
+    const why = [cls.why, layered ? "CAD layers" : ""].filter(Boolean);
+    // Drawn ONCE, large enough for a vision model to read the sheet's titles (a set that draws its words as lines is
+    // sorted from these pictures); the thumbnail is that picture made small. A sheet of 100,000 lines takes seconds to
+    // draw — twice was a minute more on an 18-sheet set.
+    const pvp = page.getViewport({ scale: PREVIEW_PX / Math.max(vp.width, vp.height) });
+    const big = document.createElement("canvas");
+    big.width = Math.round(pvp.width);
+    big.height = Math.round(pvp.height);
+    const bg = big.getContext("2d")!;
+    bg.fillStyle = "#fff";
+    bg.fillRect(0, 0, big.width, big.height);
+    await page.render({ canvasContext: bg, viewport: pvp }).promise;
+    const preview = big.toDataURL("image/jpeg", 0.72);
     const c = document.createElement("canvas");
-    c.width = Math.round(tvp.width);
-    c.height = Math.round(tvp.height);
-    await page.render({ canvasContext: c.getContext("2d")!, viewport: tvp }).promise;
+    const ts = THUMB_PX / Math.max(big.width, big.height);
+    c.width = Math.round(big.width * ts);
+    c.height = Math.round(big.height * ts);
+    c.getContext("2d")!.drawImage(big, 0, 0, c.width, c.height);
     const thumb = c.toDataURL("image/jpeg", 0.7);
     c.width = c.height = 0;
+    big.width = big.height = 0;
     onPage?.();
     out.push({
       key: `${file.name}#${i}`,
@@ -110,12 +122,15 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
       page: i,
       kind: "pdf",
       thumb,
+      preview,
       width: vp.width,
       height: vp.height,
-      title: (texts.find((t) => PLAN_WORDS.test(t.str))?.str ?? titleText.slice(0, 60)).trim(),
-      score,
+      title: (cls.plans[0]?.title ?? titleText.slice(0, 60)).trim(),
+      score: cls.score,
       hint: why.join(" · "),
       layered,
+      texts,
+      cls,
       read: async () => {
         const ol = await page.getOperatorList();
         const sheet = readVectorSheet({

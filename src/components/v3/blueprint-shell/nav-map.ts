@@ -42,9 +42,12 @@ export type NavItem = {
    *  the input → output line under the name is gone). The drawer draws the
    *  same rows; the palette lists them as ordinary rows. */
   tool?: NavTool;
+  /** AN ADMIN PREVIEW (2026-10-18): drawn only for an account the layout names in `view.tools` — fail-closed, so a
+   *  nav drawn without that list (a handheld twin, a failed read) never shows it. */
+  preview?: boolean;
 };
 /** The tool colours (globals.css `--tool-*`, mapped by `[data-tone]`). One per tool. */
-export type ToolTone = "violet" | "blue" | "spruce" | "berry" | "teal" | "cedar" | "navy";
+export type ToolTone = "violet" | "blue" | "spruce" | "berry" | "teal" | "cedar" | "navy" | "olive";
 /** `short`: the name the desk sidebar's tool row prints when the full one would
  *  not fit beside its "Soon" tag and subpage button (2026-10-16: "Deck"). */
 export type NavTool = { tone: ToolTone; short?: string };
@@ -83,6 +86,9 @@ export const NAV_SECTIONS: NavSection[] = [
       // The plan set as its own tool (owner, 2026-10-13): upload the plans, ask for any
       // job off them — countertops, drywall, the whole house — measured and priced.
       { label: "Blueprint estimator", icon: "i-plans", href: "/dashboard/blueprint-estimator", tool: { tone: "navy" } },
+      // The Home Design Studio (owner, 2026-10-17: "only in admin … not for the users"): the blueprint read into rooms,
+      // a kitchen designed in 3D, priced and made a proposal — for the accounts lib/design/access opens, no one else.
+      { label: "Design Studio", icon: "i-sofa", href: "/dashboard/design-studio", tool: { tone: "olive" }, preview: true },
       // Each estimator folds its own inventory under it (owner, 2026-10-10:
       // "a roofer doesn't have to see the other inventories"). The three
       // shared one page with a trade switch from 2026-09-29; before that they
@@ -360,8 +366,9 @@ export function isLimitedRole(role: string | null | undefined): boolean {
  * production sidebar, intersected with their route gate; office roles get the
  * full map minus anything owner-only.
  */
-/** The edition's view (lib/editions): which workspace, and which rows stop saying "Soon". */
-export type NavView = { workspace?: Workspace; unlocked?: readonly string[] };
+/** The edition's view (lib/editions): which workspace, and which rows stop saying "Soon"; `tools`: the admin-preview
+ *  rows (NavItem.preview) this account may see. */
+export type NavView = { workspace?: Workspace; unlocked?: readonly string[]; tools?: readonly string[] };
 
 export function navSectionsFor(
   role: string | null | undefined,
@@ -371,7 +378,11 @@ export function navSectionsFor(
   /** THE EDITION'S VIEW (2026-10-11): in the Deck Studio workspace only its rows stay; a deck row stops saying Soon once the account holds the edition. */
   view?: NavView,
 ): NavSection[] {
-  const base = navSectionsBase(role, locked, hidden);
+  // Admin previews only where the layout named them (fail-closed).
+  const tools = view?.tools ?? [];
+  const base = navSectionsBase(role, locked, hidden)
+    .map((section) => ({ label: section.label, items: section.items.filter((item) => !item.preview || tools.includes(item.href)) }))
+    .filter((section) => section.items.length > 0);
   if (!view || (view.workspace !== "deck" && !view.unlocked?.length)) return base;
   const unlocked = view.unlocked ?? [];
   const hit = (href: string) => unlocked.includes(href.split("?")[0]);

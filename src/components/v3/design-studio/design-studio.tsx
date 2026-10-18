@@ -13,17 +13,72 @@ import s from "./design-studio.module.css";
 import { PlanEditor, setWallLength, type Selection, type Tool, type Underlay } from "./plan-editor";
 import { DesignPanel } from "./design-panel";
 import { EstimateSheet } from "./estimate-sheet";
+import { HouseChanges, WallStructure } from "./house-changes";
+import { SpacesPicker, type SpaceFloor } from "./spaces-picker";
+import { classifySheet, findFloorPlans, floorFromVision, isMultiFloor, matchScore, sameRoom, type FloorPlan, type FoundRoom } from "@/lib/design/planSet";
+import { flaggedItems, flaggedWalls, houseChecks, kitchenChecks } from "@/lib/design/checks";
+import { openUp, readStructure, readWall } from "@/lib/design/structure";
+import { closeRoom } from "@/lib/design/openPlan";
 import type { DesignLocation } from "@/actions/designStudio";
 import type { DesignDoc, OpeningKind, P } from "@/lib/design/model";
 import { emptyDesign, ftIn, newId, DEFAULT_CEILING } from "@/lib/design/model";
-import { centroid, dist, roomsOf, wallLen, type Room } from "@/lib/design/geometry";
-import { readPlan, type PlanRead } from "@/lib/design/planRead";
+import { centroid, dist, planBounds, roomsOf, wallLen, type Room } from "@/lib/design/geometry";
+import { readPlan, scaleFromText, wallPen, type PlanRead } from "@/lib/design/planRead";
 import { openDesignFiles, type DesignSheet } from "@/lib/design/pdfSheets";
-import { deleteDesign, listDesigns, readRoomNames, saveDesign, type DesignRow } from "@/actions/designStudio";
+import { deleteDesign, listDesigns, readPlanRooms, readRoomNames, saveDesign, triagePlanSheets, type DesignRow } from "@/actions/designStudio";
 
 const Room3D = dynamic(() => import("./room-3d").then((m) => m.Room3D), { ssr: false, loading: () => <div className={s.three} /> });
 
-type Phase = "start" | "opening" | "sheets" | "box" | "reading" | "plan";
+type Phase = "start" | "opening" | "spaces" | "sheets" | "box" | "reading" | "plan";
+
+/** The rooms named as the plan names them (lib/design/planSet: stacked words joined, abbreviations spelled out), the
+ *  plan's printed area kept for the scale check — and a room the reader's own words missed ("LOFT") labelled too. */
+function namedLabels(labels: DesignDoc["labels"], found: FoundRoom[], region: Region, k: number): DesignDoc["labels"] {
+  if (!found.length) return labels;
+  const toIn = (p: { x: number; y: number }): P => ({ x: (p.x - region.x) * k, y: (p.y - region.y) * k });
+  const inside = (p: P) => p.x >= 0 && p.y >= 0 && p.x <= region.w * k && p.y <= region.h * k;
+  const keyOf = (f: FoundRoom) => `${f.name}@${Math.round(f.at.x)},${Math.round(f.at.y)}`;
+  const used = new Set<string>();
+  const out: DesignDoc["labels"] = [];
+  for (const l of labels) {
+    const near = found
+      .map((f) => ({ f, d: dist(toIn(f.at), l.at) }))
+      .filter((x) => x.d <= 48)
+      .sort((a, b) => a.d - b.d)[0];
+    if (!near) {
+      out.push(l);
+      continue;
+    }
+    // Two words of one stacked label ("MASTER" / "BEDROOM") were two labels: one room, one name.
+    if (used.has(keyOf(near.f))) continue;
+    used.add(keyOf(near.f));
+    out.push({ ...l, name: near.f.name, at: toIn(near.f.at), ...(near.f.sqft ? { planSqFt: near.f.sqft } : {}) });
+  }
+  for (const f of found) {
+    const at = toIn(f.at);
+    if (used.has(keyOf(f)) || !inside(at)) continue;
+    out.push({ id: newId("r"), name: f.name, at, ceiling: DEFAULT_CEILING, ...(f.sqft ? { planSqFt: f.sqft } : {}) });
+  }
+  return out;
+}
+
+type Region = { x: number; y: number; w: number; h: number };
+type ScaleNote = { tone: "good" | "warn"; text: string; fix?: number };
+/** One floor plan read: the design, what to say about it, and the sheet to draw underneath. */
+type FloorRead = { doc: DesignDoc; notes: string[]; scaleNote: ScaleNote | null; underlay: Underlay; /** Sheet points → plan inches: (pt − region) × k. */ frame?: { region: Region; k: number } };
+
+/** A read plan moved (a whole house lays its floors side by side) and its ids made its own (two reads number alike). */
+function placeFloor(d: DesignDoc, dx: number, dy: number, prefix: string, floor: string): DesignDoc {
+  const m = (p: P): P => ({ x: p.x + dx, y: p.y + dy });
+  const wid = (id: string) => `${prefix}${id}`;
+  return {
+    ...d,
+    walls: d.walls.map((w) => ({ ...w, id: wid(w.id), a: m(w.a), b: m(w.b), floor })),
+    openings: d.openings.map((o) => ({ ...o, id: wid(o.id), wallId: wid(o.wallId) })),
+    labels: d.labels.map((l) => ({ ...l, id: wid(l.id), at: m(l.at), floor })),
+    marks: d.marks.map((mk) => ({ ...mk, id: wid(mk.id), lines: mk.lines.map(([a, b]) => [m(a), m(b)] as [P, P]), box: { ...mk.box, x: mk.box.x + dx, y: mk.box.y + dy } })),
+  };
+}
 
 const HISTORY_MAX = 80;
 const clone = (d: DesignDoc): DesignDoc => JSON.parse(JSON.stringify(d)) as DesignDoc;
@@ -37,8 +92,13 @@ function scaleDoc(d: DesignDoc, k: number): DesignDoc {
     openings: d.openings.map((o) => ({ ...o, at: o.at * k, width: o.width * k })),
     labels: d.labels.map((l) => ({ ...l, at: m(l.at) })),
     marks: d.marks.map((mk) => ({ ...mk, lines: mk.lines.map(([a, b]) => [m(a), m(b)] as [P, P]), box: { x: mk.box.x * k, y: mk.box.y * k, w: mk.box.w * k, h: mk.box.h * k } })),
+    // The house as it stood scales with it (else every wall would read as moved).
+    ...(d.existing ? { existing: { ...d.existing, walls: d.existing.walls.map((w) => ({ ...w, a: m(w.a), b: m(w.b) })), openings: d.existing.openings.map((o) => ({ ...o, at: o.at * k, width: o.width * k })) } } : {}),
   };
 }
+
+/** The house as it stands, kept once designing starts (milestone 5): what differs from it later is a change. */
+const withExisting = (d: DesignDoc): DesignDoc => (d.existing ? d : { ...d, existing: { walls: clone(d).walls, openings: clone(d).openings, at: new Date().toISOString() } });
 
 /** Parse 12'-6", 12' 6, 150", 12.5 (feet) → inches. */
 function parseLength(v: string): number | null {
@@ -63,7 +123,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   const [dragging, setDragging] = React.useState(false);
 
   // The design and its history.
-  const [doc, setDoc] = React.useState<DesignDoc>(() => initial?.doc ?? emptyDesign());
+  // A design already being designed (a room open) keeps the house as it stood from here on.
+  const [doc, setDoc] = React.useState<DesignDoc>(() => (initial ? (initial.doc.focus ? withExisting(initial.doc) : initial.doc) : emptyDesign()));
   const committed = React.useRef<DesignDoc>(doc);
   const [past, setPast] = React.useState<DesignDoc[]>([]);
   const [future, setFuture] = React.useState<DesignDoc[]>([]);
@@ -85,12 +146,25 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   const [calibLine, setCalibLine] = React.useState<{ a: P; b: P } | null>(null);
   const [calibText, setCalibText] = React.useState("");
   const [notes, setNotes] = React.useState<string[]>([]);
-  const [scaleNote, setScaleNote] = React.useState<{ tone: "good" | "warn"; text: string; fix?: number } | null>(null);
+  const [scaleNote, setScaleNote] = React.useState<ScaleNote | null>(null);
+  // What the plan set holds (2026-10-18): its floor plans and their spaces, each floor read once and kept.
+  const [plans, setPlans] = React.useState<FloorPlan[]>([]);
+  const [spaces, setSpaces] = React.useState<SpaceFloor[]>([]);
+  const [spaceBusy, setSpaceBusy] = React.useState<string | null>(null);
+  const floorReads = React.useRef(new Map<string, Promise<FloorRead | "box" | null>>());
   const [box, setBox] = React.useState<{ sheet: DesignSheet; url: string; scale: number; w: number; h: number; a: P | null; b: P | null } | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   const rooms = React.useMemo(() => roomsOf(doc), [doc]);
   const focusRoom = focus ? rooms.find((r) => r.labelId === focus) ?? null : null;
+  // The smart checks, the structure reading and where walls stood (milestone 5).
+  const checks = React.useMemo(() => (focus ? [...kitchenChecks(doc, focus), ...houseChecks(doc)] : houseChecks(doc)), [doc, focus]);
+  const flags = React.useMemo(() => new Set([...flaggedItems(checks), ...flaggedWalls(checks)]), [checks]);
+  const structure = React.useMemo(() => readStructure(doc), [doc]);
+  const ghosts = React.useMemo(() => {
+    const now = new Set(doc.walls.map((w) => w.id));
+    return (doc.existing?.walls ?? []).filter((w) => !now.has(w.id));
+  }, [doc]);
 
   React.useEffect(() => {
     if (phase !== "start") return;
@@ -159,13 +233,13 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
 
   /* ── Save (and keep saving once saved) ── */
   const save = React.useCallback(
-    async (quiet = false) => {
+    async (quiet = false): Promise<string | null> => {
       setSaving(true);
       const res = await saveDesign({ id, doc: { ...committed.current, focus } });
       setSaving(false);
       if (!res.ok) {
         if (!quiet) setError(res.error);
-        return;
+        return null;
       }
       setDirty(false);
       setSavedAt(res.updatedAt);
@@ -175,6 +249,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
         // over (losing the drawing underneath and the view).
         window.history.replaceState(window.history.state, "", `/dashboard/design-studio?design=${res.id}`);
       }
+      return res.id;
     },
     [id, focus],
   );
@@ -200,8 +275,25 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
       setSheets(sorted);
       setSkipped(res.skipped);
       setPicked(sorted[0]?.key ?? null);
-      setPhase(sorted.length ? "sheets" : "start");
-      if (!sorted.length) setError(res.skipped[0] ?? "No plan sheets were found in those files.");
+      if (!sorted.length) {
+        setPhase("start");
+        setError(res.skipped[0] ?? "No plan sheets were found in those files.");
+        return;
+      }
+      // What the set holds: its floor plans and their rooms — asked first, "what do you want to design?".
+      floorReads.current = new Map();
+      const fps = findFloorPlans(sorted.filter((x) => x.texts).map((x) => ({ key: x.key, fileName: x.fileName, page: x.page, width: x.width, height: x.height, texts: x.texts!, cls: x.cls })));
+      setPlans(fps);
+      setSpaces(
+        fps.map((f) => {
+          const sh = sorted.find((x) => x.key === f.sheetKey);
+          return { key: f.key, name: f.name, page: f.page, fileName: f.fileName, level: f.level, rooms: f.rooms.map((r) => ({ name: r.name, ...(r.size ? { size: r.size } : {}), ...(r.sqft ? { sqft: r.sqft } : {}) })), status: sh?.layered ? "reading" : "text", thumb: sh?.thumb };
+        }),
+      );
+      setPhase("spaces");
+      if (fps.length) void readAhead(fps, sorted);
+      // No sheet's words name a floor plan (a CAD export that draws every word as lines): look at the sheets.
+      else void lookForFloors(sorted);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The files could not be opened.");
       setPhase("start");
@@ -238,7 +330,88 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
     return out;
   };
 
-  const readSheet = async (sheet: DesignSheet, region: { x: number; y: number; w: number; h: number } | null) => {
+  /** Read one floor plan off its sheet — the walls, doors and windows, the rooms named (the sheet's own words, else the
+   *  vision model on a numbered picture of the rooms it couldn't name), the scale checked against the areas printed.
+   *  Changes nothing on screen: the studio opens it (applyRead), keeps it for later, or joins it into a house. */
+  const readFloor = async (sheet: DesignSheet, region: Region | null, step: (text: string, pct: number) => void = () => {}, opts: { found?: FoundRoom[]; scale?: string | null; title?: string } = {}): Promise<FloorRead | "box"> => {
+    const { sheet: vs, texts } = await sheet.read!();
+    if (!sheet.layered && !region) return "box";
+    step("Finding walls, doors and windows…", 40);
+    await new Promise((r) => setTimeout(r, 30));
+    const title = (opts.title || sheet.title || sheet.fileName.replace(/\.pdf$/i, "")).replace(/[\s|·:,-]+$/g, "").replace(/^[\s|·:,-]+/g, "").trim();
+    // A sheet without CAD layers: the walls are the heavy pen (its lettering, drawn as lines, is the light one); the
+    // scale as printed, when the picture was read for it.
+    const minWidth = sheet.layered ? 0 : wallPen(vs, region);
+    const paper = opts.scale ? scaleFromText([{ str: opts.scale, x: 0, y: 0 }])?.paperInPerFt : undefined;
+    const r: PlanRead = readPlan(vs, texts, { region, fileName: sheet.fileName, page: sheet.page, title: title || "Floor plan", ...(minWidth ? { minWidth } : {}), ...(paper ? { paperInPerFt: paper } : {}) });
+    let d = r.doc;
+    const k = r.inPerPt;
+    d = { ...d, labels: namedLabels(d.labels, opts.found ?? (sheet.cls ?? classifySheet(texts, sheet.width, sheet.height)).rooms, r.region, k) };
+    step("Drawing the sheet underneath…", 55);
+    const pic = await sheet.picture(r.region, 2400);
+    const toPx = pic.scale / k; // plan inches → picture pixels
+    const underlay: Underlay = { url: pic.url, x: 0, y: 0, w: pic.w / toPx, h: pic.h / toPx, opacity: 0.35 };
+    const extra: string[] = [...r.notes];
+    // The rooms the sheet's words didn't name (a CAD export draws names as lines): the vision model reads them —
+    // unless it already has, with where each name sits (a plan set read from its pictures).
+    const unnamed = opts.found && !sheet.texts?.length ? [] : roomsOf(d).filter((rm) => !rm.labelId);
+    if (unnamed.length) {
+      step(`Reading the names of ${unnamed.length} room${unnamed.length === 1 ? "" : "s"}…`, 72);
+      const numbered = await numberedPicture(pic.url, unnamed, toPx);
+      const names = await readRoomNames({ image: numbered, count: unnamed.length });
+      if (names.ok) {
+        const labels = [...d.labels];
+        for (const nr of names.rooms) {
+          const room = unnamed[nr.n - 1];
+          if (!room || !nr.names.length) continue;
+          const c = centroid(room.poly);
+          nr.names.forEach((name, i) => labels.push({ id: newId("r"), name, at: { x: c.x, y: c.y + (i - (nr.names.length - 1) / 2) * 30 }, ceiling: DEFAULT_CEILING, planSqFt: i === 0 ? nr.sqft : null }));
+        }
+        d = { ...d, labels };
+      } else extra.push(`Room names weren't read (${names.error}) — name the rooms by clicking them.`);
+    }
+    // The scale, checked against the areas the plan prints. A wrong scale throws EVERY room off by the same factor;
+    // one room off on its own is a wall the read missed (a hall merged into a bedroom) — said as that.
+    let note: ScaleNote | null = null;
+    const checks = roomsOf(d)
+      .map((rm) => {
+        const l = d.labels.find((x) => x.id === rm.labelId);
+        return l?.planSqFt && rm.names.length === 1 && rm.sqft > 12 ? { name: rm.name, have: rm.sqft, want: l.planSqFt, k: rm.sqft / l.planSqFt } : null;
+      })
+      .filter((x): x is { name: string; have: number; want: number; k: number } => x != null);
+    if (checks.length) {
+      const good = checks.filter((c) => c.k >= 0.9 && c.k <= 1.1);
+      const off = checks.filter((c) => c.k < 0.9 || c.k > 1.1);
+      const ks = checks.map((c) => c.k).sort((x, y) => x - y);
+      const consistent = ks[ks.length - 1] / ks[0] <= 1.12;
+      if (good.length) {
+        const worst = Math.max(...good.map((c) => Math.abs(c.k - 1)));
+        note = { tone: "good", text: `Sizes check out: ${good.map((c) => c.name).join(", ")} ${good.length === 1 ? "measures" : "measure"} within ${Math.max(1, Math.round(worst * 100))}% of the area the plan prints.` };
+        for (const c of off) extra.push(`${c.name} measures ${Math.round(c.have)} sq ft where the plan prints ${c.want} — ${c.k > 1 ? "a wall may be missing there (a hall or closet joined to it)" : "a wall may be read in the wrong place"}; check it in the plan.`);
+      } else if (consistent) {
+        const med = ks[Math.floor(ks.length / 2)];
+        note = { tone: "warn", text: `Every room measures ${Math.round(Math.abs(med - 1) * 100)}% ${med > 1 ? "bigger" : "smaller"} than the plan prints — the scale is likely off.`, fix: Math.sqrt(1 / med) };
+      } else for (const c of off) extra.push(`${c.name} measures ${Math.round(c.have)} sq ft where the plan prints ${c.want} — check its walls in the plan.`);
+    }
+    return { doc: d, notes: extra, scaleNote: note, underlay, frame: { region: r.region, k } };
+  };
+
+  /** Open what was read. */
+  const applyRead = (r: FloorRead) => {
+    setError(null);
+    setFocus(null);
+    setSelected(null);
+    setCalibrating(false);
+    setUnderlay(r.underlay);
+    setShowUnderlay(true);
+    setNotes(r.notes);
+    setScaleNote(r.scaleNote);
+    replace(r.doc);
+    setDirty(true);
+    setPhase("plan");
+  };
+
+  const readSheet = async (sheet: DesignSheet, region: Region | null) => {
     setError(null);
     setNotes([]);
     setScaleNote(null);
@@ -260,71 +433,213 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
     setPhase("reading");
     setProgress({ step: "Reading the plan's own lines…", pct: 15 });
     try {
-      const { sheet: vs, texts } = await sheet.read();
-      if (!sheet.layered && !region) {
+      const r = await readFloor(sheet, region, (step, pct) => setProgress({ step, pct }));
+      if (r === "box") {
         // No CAD layers: the contractor boxes the floor plan so only its lines are read.
         const pic = await sheet.picture(null, 1800);
         setBox({ sheet, url: pic.url, scale: pic.scale, w: pic.w, h: pic.h, a: null, b: null });
         setPhase("box");
         return;
       }
-      setProgress({ step: "Finding walls, doors and windows…", pct: 40 });
-      await new Promise((r) => setTimeout(r, 30));
-      const title = (sheet.title || sheet.fileName.replace(/\.pdf$/i, "")).replace(/[\s|·:,-]+$/g, "").replace(/^[\s|·:,-]+/g, "").trim();
-      const r: PlanRead = readPlan(vs, texts, { region, fileName: sheet.fileName, page: sheet.page, title: title || "Floor plan" });
-      let d = r.doc;
-      const k = r.inPerPt;
-      setProgress({ step: "Drawing the sheet underneath…", pct: 55 });
-      const pic = await sheet.picture(r.region, 2400);
-      const toPx = pic.scale / k; // plan inches → picture pixels
-      setUnderlay({ url: pic.url, x: 0, y: 0, w: pic.w / toPx, h: pic.h / toPx, opacity: 0.35 });
-      const rs = roomsOf(d);
-      const extra: string[] = [...r.notes];
-      if (!d.labels.length && rs.length) {
-        setProgress({ step: `Reading the names of ${rs.length} rooms…`, pct: 72 });
-        const numbered = await numberedPicture(pic.url, rs, toPx);
-        const names = await readRoomNames({ image: numbered, count: rs.length });
-        if (names.ok) {
-          const labels = [...d.labels];
-          for (const nr of names.rooms) {
-            const room = rs[nr.n - 1];
-            if (!room || !nr.names.length) continue;
-            const c = centroid(room.poly);
-            nr.names.forEach((name, i) => labels.push({ id: newId("r"), name, at: { x: c.x, y: c.y + (i - (nr.names.length - 1) / 2) * 30 }, ceiling: DEFAULT_CEILING, planSqFt: i === 0 ? nr.sqft : null }));
-          }
-          d = { ...d, labels };
-        } else extra.push(`Room names weren't read (${names.error}) — name the rooms by clicking them.`);
-      }
-      // The scale, checked against the areas the plan prints. A wrong scale throws EVERY room off by the same factor;
-      // one room off on its own is a wall the read missed (a hall merged into a bedroom) — said as that.
-      const checks = roomsOf(d)
-        .map((rm) => {
-          const l = d.labels.find((x) => x.id === rm.labelId);
-          return l?.planSqFt && rm.names.length === 1 && rm.sqft > 12 ? { name: rm.name, have: rm.sqft, want: l.planSqFt, k: rm.sqft / l.planSqFt } : null;
-        })
-        .filter((x): x is { name: string; have: number; want: number; k: number } => x != null);
-      if (checks.length) {
-        const good = checks.filter((c) => c.k >= 0.9 && c.k <= 1.1);
-        const off = checks.filter((c) => c.k < 0.9 || c.k > 1.1);
-        const ks = checks.map((c) => c.k).sort((x, y) => x - y);
-        const consistent = ks[ks.length - 1] / ks[0] <= 1.12;
-        if (good.length) {
-          const worst = Math.max(...good.map((c) => Math.abs(c.k - 1)));
-          setScaleNote({ tone: "good", text: `Sizes check out: ${good.map((c) => c.name).join(", ")} ${good.length === 1 ? "measures" : "measure"} within ${Math.max(1, Math.round(worst * 100))}% of the area the plan prints.` });
-          for (const c of off) extra.push(`${c.name} measures ${Math.round(c.have)} sq ft where the plan prints ${c.want} — ${c.k > 1 ? "a wall may be missing there (a hall or closet joined to it)" : "a wall may be read in the wrong place"}; check it in the plan.`);
-        } else if (consistent) {
-          const med = ks[Math.floor(ks.length / 2)];
-          setScaleNote({ tone: "warn", text: `Every room measures ${Math.round(Math.abs(med - 1) * 100)}% ${med > 1 ? "bigger" : "smaller"} than the plan prints — the scale is likely off.`, fix: Math.sqrt(1 / med) });
-        } else for (const c of off) extra.push(`${c.name} measures ${Math.round(c.have)} sq ft where the plan prints ${c.want} — check its walls in the plan.`);
-      }
-      setNotes(extra);
-      replace(d);
-      setDirty(true);
       setProgress({ step: "Done", pct: 100 });
-      setPhase("plan");
+      applyRead(r);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The sheet could not be read.");
       setPhase("sheets");
+    }
+  };
+
+  /* ── The plan set's spaces (2026-10-18) ── */
+  const sheetOfPlan = (f: FloorPlan) => sheets.find((x) => x.key === f.sheetKey) ?? null;
+  /** A floor read once: the CAD layers find the plan themselves (unless the sheet holds two); else the box its rooms make. */
+  const ensureRead = (f: FloorPlan, list: DesignSheet[] = sheets): Promise<FloorRead | "box" | null> => {
+    const have = floorReads.current.get(f.key);
+    if (have) return have;
+    const sh = list.find((x) => x.key === f.sheetKey);
+    const many = (sh?.cls?.plans.length ?? 0) > 1;
+    const p = sh?.read ? readFloor(sh, sh.layered && !many ? null : f.region, undefined, f.seen ? { found: f.rooms, scale: f.scale, title: f.name } : {}).catch(() => null) : Promise.resolve(null);
+    floorReads.current.set(f.key, p);
+    return p;
+  };
+  /** Read ahead the floors whose sheet can be read without a box, so their rooms are listed whole and measured. */
+  const readAhead = async (fps: FloorPlan[], list: DesignSheet[]) => {
+    for (const f of fps) {
+      const sh = list.find((x) => x.key === f.sheetKey);
+      if (!sh?.layered) continue;
+      const r = await ensureRead(f, list);
+      setSpaces((cur) =>
+        cur.map((sf) => {
+          if (sf.key !== f.key) return sf;
+          if (!r || r === "box") return { ...sf, status: "failed" };
+          const measured = roomsOf(r.doc)
+            .filter((rm) => rm.labelId)
+            .map((rm) => {
+              const printed = sf.rooms.find((x) => rm.names.some((n) => sameRoom(n, x.name)));
+              return { name: rm.names.length > 1 ? rm.names.join(" · ") : rm.name, sqft: rm.sqft, ...(printed?.size ? { size: printed.size } : {}) };
+            });
+          return { ...sf, rooms: measured.length ? measured : sf.rooms, status: "read" };
+        }),
+      );
+    }
+  };
+  /** A plan set without words: the vision model sorts every sheet (small pictures), then reads each floor plan's
+   *  rooms from a sharp one — the list fills in floor by floor. */
+  const lookForFloors = async (list: DesignSheet[]) => {
+    const pdfs = list.filter((x) => x.kind === "pdf" && x.read);
+    if (!pdfs.length) {
+      setPhase("sheets");
+      return;
+    }
+    const files = [...new Set(pdfs.map((x) => x.fileName))];
+    const found: FloorPlan[] = [];
+    try {
+      for (const file of files) {
+        const ofFile = pdfs.filter((x) => x.fileName === file).sort((a, b) => a.page - b.page).slice(0, 30);
+        const pages: Array<{ page: number; image: string }> = [];
+        for (const [i, sh] of ofFile.entries()) {
+          setSpaceBusy(`This set draws its words as lines — looking at each sheet for the floor plans (${i + 1} of ${ofFile.length})…`);
+          pages.push({ page: sh.page, image: sh.preview ?? (await sh.picture(null, 800)).url });
+        }
+        setSpaceBusy("Finding the floor plans among the sheets…");
+        const tri = await triagePlanSheets({ pages });
+        if (!tri.ok) throw new Error(tri.error);
+        const plansHere = tri.sheets.filter((x) => x.kind === "floor_plan");
+        const provisional = plansHere.map((p) => {
+          const sh = ofFile.find((x) => x.page === p.page)!;
+          return floorFromVision(sh, p, null);
+        });
+        found.push(...provisional);
+        const ordered = [...found].sort((a, b) => a.order - b.order || a.page - b.page);
+        setPlans(ordered);
+        setSpaces(ordered.map((f) => ({ key: f.key, name: f.name, page: f.page, fileName: f.fileName, level: f.level, rooms: f.rooms.map((r) => ({ name: r.name, ...(r.size ? { size: r.size } : {}) })), status: "reading" as const, thumb: list.find((x) => x.key === f.sheetKey)?.thumb })));
+        // Each floor plan's rooms, from a sharp picture of it.
+        for (const p of plansHere) {
+          const sh = ofFile.find((x) => x.page === p.page)!;
+          setSpaceBusy(`Reading the rooms of the ${(p.title ?? "floor plan").toLowerCase()}…`);
+          const pic = await sh.picture(null, 2600);
+          const rr = await readPlanRooms({ page: p.page, image: pic.url });
+          const f = floorFromVision(sh, p, rr.ok ? rr : null);
+          const i = found.findIndex((x) => x.key === f.key);
+          if (i >= 0) found[i] = f;
+          const ordered2 = [...found].sort((a, b) => a.order - b.order || a.page - b.page);
+          setPlans(ordered2);
+          setSpaces((cur) => cur.map((sf) => (sf.key === f.key ? { ...sf, name: f.name, rooms: f.rooms.map((r) => ({ name: r.name, ...(r.size ? { size: r.size } : {}) })), status: rr.ok ? "text" : "failed" } : sf)));
+        }
+      }
+      if (!found.length) setError("No floor plan was found among these sheets — pick the sheet yourself.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The sheets couldn't be read.");
+      if (!found.length) setPhase("sheets");
+    } finally {
+      setSpaceBusy(null);
+    }
+  };
+
+  const openSpace = async (floorKey: string, roomName: string | null) => {
+    const f = plans.find((x) => x.key === floorKey);
+    if (!f) return;
+    setSpaceBusy(roomName ? `Opening ${roomName}…` : `Opening the ${f.name.toLowerCase()}…`);
+    try {
+      const r = await ensureRead(f);
+      if (r === "box") {
+        const sh = sheetOfPlan(f);
+        if (sh) {
+          const pic = await sh.picture(null, 1800);
+          setBox({ sheet: sh, url: pic.url, scale: pic.scale, w: pic.w, h: pic.h, a: null, b: null });
+          setPhase("box");
+        }
+        return;
+      }
+      if (!r) {
+        setError(`The ${f.name.toLowerCase()} couldn't be read — pick its sheet and box the plan.`);
+        setPhase("sheets");
+        return;
+      }
+      applyRead(r);
+      if (roomName) {
+        const find = (d: DesignDoc) => {
+          const rs = roomsOf(d);
+          const exact = rs.find((rm) => rm.names.some((n) => sameRoom(n, roomName)));
+          return exact ?? rs.map((rm) => ({ rm, k: Math.max(0, ...rm.names.map((n) => matchScore(roomName, n))) })).filter((x) => x.k >= 0.5).sort((a, b) => b.k - a.k)[0]?.rm;
+        };
+        let best = find(r.doc);
+        if (!best) {
+          // An open plan (the kitchen, nook and great room in one space): close the room where the picture says it is
+          // — its sides on the walls read, room boundaries across the open sides.
+          const fr = f.rooms.find((x) => sameRoom(x.name, roomName));
+          if (fr?.box && r.frame) {
+            const { region, k } = r.frame;
+            const toIn = (p: { x: number; y: number }): P => ({ x: (p.x - region.x) * k, y: (p.y - region.y) * k });
+            const a = toIn({ x: fr.box.x0, y: fr.box.y0 });
+            const b = toIn({ x: fr.box.x1, y: fr.box.y1 });
+            const closed = closeRoom(r.doc, toIn(fr.at), { x0: a.x, y0: a.y, x1: b.x, y1: b.y });
+            if (closed) {
+              replace(closed);
+              floorReads.current.set(f.key, Promise.resolve({ ...r, doc: closed }));
+              best = find(closed);
+              if (best) setNotes([`${roomName} is open to the rooms beside it: its open sides are dashed room boundaries — lines on the floor, not walls (never built, painted or priced). Drag one to move where the room ends.`, ...r.notes]);
+            }
+          }
+        }
+        if (best) designRoom(best);
+        else setNotes([`${roomName} is on the sheet, but its walls didn't close into a room in the read — find it on the plan, close its walls, and design it from the room list.`, ...r.notes]);
+      }
+    } finally {
+      setSpaceBusy(null);
+    }
+  };
+  /** The whole house: every floor read and laid out side by side, each named. */
+  const openHouse = async () => {
+    const levels = plans.filter((f) => f.level);
+    const byFile = new Map<string, FloorPlan[]>();
+    for (const f of levels) byFile.set(f.fileName, [...(byFile.get(f.fileName) ?? []), f]);
+    const floorsOf = [...byFile.values()].sort((a, b) => b.length - a.length)[0] ?? [];
+    if (floorsOf.length < 2) {
+      if (floorsOf[0]) await openSpace(floorsOf[0].key, null);
+      return;
+    }
+    setSpaceBusy(`Reading every floor — ${floorsOf.map((f) => f.name).join(", ")}…`);
+    try {
+      const got: Array<{ f: FloorPlan; r: FloorRead }> = [];
+      const skipped: string[] = [];
+      for (const f of floorsOf) {
+        const r = await ensureRead(f);
+        if (r && r !== "box" && r.doc.walls.length) got.push({ f, r });
+        else skipped.push(f.name);
+      }
+      if (!got.length) {
+        setError("The floors couldn't be read — pick a sheet and box its plan.");
+        setPhase("sheets");
+        return;
+      }
+      let x = 0;
+      const walls: DesignDoc["walls"] = [];
+      const openings: DesignDoc["openings"] = [];
+      const labels: DesignDoc["labels"] = [];
+      const marks: DesignDoc["marks"] = [];
+      const pics: Underlay[] = [];
+      got.forEach(({ f, r }, i) => {
+        const b = planBounds(r.doc);
+        const dx = x - b.x;
+        const dy = -b.y;
+        const placed = placeFloor(r.doc, dx, dy, `f${i + 1}-`, f.name);
+        walls.push(...placed.walls);
+        openings.push(...placed.openings);
+        labels.push(...placed.labels);
+        marks.push(...placed.marks);
+        pics.push({ ...r.underlay, x: r.underlay.x + dx, y: r.underlay.y + dy });
+        x += b.w + 20 * 12; // 20 ft between floors
+      });
+      const first = got[0].r;
+      const doc: DesignDoc = { ...emptyDesign(`${got[0].f.fileName.replace(/\.pdf$/i, "")} — whole house`), walls, openings, labels, marks, source: first.doc.source };
+      applyRead({
+        doc,
+        notes: [`The whole house: ${got.map((g) => g.f.name).join(", ")} side by side. Pick any room to design it.`, ...(skipped.length ? [`${skipped.join(", ")} couldn't be read — open ${skipped.length === 1 ? "it" : "them"} from its sheet.`] : []), ...got.flatMap((g) => g.r.notes.map((n) => `${g.f.name}: ${n}`))],
+        scaleNote: null,
+        underlay: { ...pics[0], more: pics.slice(1).map(({ url, x: ux, y: uy, w, h }) => ({ url, x: ux, y: uy, w, h })) },
+      });
+    } finally {
+      setSpaceBusy(null);
     }
   };
 
@@ -354,6 +669,17 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
       lid = newId("r");
       const id2 = lid;
       patch((d) => d.labels.push({ id: id2, name: room.name, at: centroid(room.poly), ceiling: DEFAULT_CEILING }));
+    }
+    // Designing starts: the house as it stands now is kept (once), every history step with it.
+    const cur = committed.current;
+    if (!cur.existing) {
+      const next = withExisting(cur);
+      committed.current = next;
+      setDoc(next);
+      setDirty(true);
+      const keep = (d: DesignDoc) => (d.existing ? d : { ...d, existing: next.existing });
+      setPast((p) => p.map(keep));
+      setFuture((f) => f.map(keep));
     }
     setFocus(lid);
     setSelected(null);
@@ -506,6 +832,25 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
     );
   }
 
+  if (phase === "spaces") {
+    return (
+      <div className={s.studio}>
+        <Head />
+        {error ? <p className={`${s.note} ${s.noteWarn}`}>{error}</p> : null}
+        <SpacesPicker
+          floors={spaces}
+          multi={isMultiFloor(plans)}
+          busy={spaceBusy}
+          onRoom={(k, r) => void openSpace(k, r)}
+          onFloor={(k) => void openSpace(k, null)}
+          onHouse={() => void openHouse()}
+          onSheets={() => setPhase("sheets")}
+          onBack={() => setPhase("start")}
+        />
+      </div>
+    );
+  }
+
   if (phase === "sheets") {
     const sheet = sheets.find((x) => x.key === picked) ?? null;
     return (
@@ -519,7 +864,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
               <p className={s.cardSub}>The likeliest is first and picked. Read it, and the rooms come out drawn.</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" className={`${s.btn} ${s.btnSm}`} onClick={() => setPhase("start")}>
+              <button type="button" className={`${s.btn} ${s.btnSm}`} onClick={() => setPhase(plans.length ? "spaces" : "start")}>
                 Back
               </button>
               <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={!sheet} onClick={() => sheet && void readSheet(sheet, null)} data-design-read>
@@ -623,6 +968,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
       onCalibratePoints={(a, b) => setCalibLine({ a, b })}
       fitToken={fitToken}
       className={focus ? s.planSmall : s.plan}
+      ghosts={ghosts}
+      flags={flags}
     />
   );
 
@@ -737,7 +1084,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
         </div>
 
         <aside className={s.side}>
-          {focus && focusRoom ? <DesignPanel doc={doc} room={focusRoom} focus={focus} selected={selected} onSelect={setSelected} tool={tool} onTool={setTool} onPatch={patch} onLaidOut={() => setTimeout(() => setFrameToken((t) => t + 1), 50)} /> : null}
+          {focus && focusRoom ? <DesignPanel doc={doc} room={focusRoom} focus={focus} selected={selected} onSelect={setSelected} tool={tool} onTool={setTool} onPatch={patch} onLaidOut={() => setTimeout(() => setFrameToken((t) => t + 1), 50)} checks={checks} /> : null}
           {notes.length || scaleNote ? (
             <section className={s.card}>
               <div className={s.body}>
@@ -775,8 +1122,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
             <section className={s.card} data-design-inspector="wall">
               <div className={s.head}>
                 <div className={s.cardTitle}>Wall</div>
-                <button type="button" className={`${s.btn} ${s.btnSm} ${s.btnDanger}`} onClick={() => { patch((d) => { d.walls = d.walls.filter((w) => w.id !== selWall.id); d.openings = d.openings.filter((o) => o.wallId !== selWall.id); }); setSelected(null); }}>
-                  Delete
+                <button type="button" className={`${s.btn} ${s.btnSm} ${s.btnDanger}`} onClick={() => { patch((d) => { d.walls = d.walls.filter((w) => w.id !== selWall.id); d.openings = d.openings.filter((o) => o.wallId !== selWall.id); }); setSelected(null); }} data-design-wall-out>
+                  {doc.existing?.walls.some((w) => w.id === selWall.id) ? "Take out" : "Delete"}
                 </button>
               </div>
               <div className={s.body}>
@@ -792,7 +1139,31 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
                     </div>
                   </div>
                 </div>
-                <p className={s.note}>Drag its ends to resize, its middle to slide it — joined walls follow. {doc.openings.filter((o) => o.wallId === selWall.id).length} openings on it.</p>
+                <p className={s.note}>Drag its ends to resize, its middle to slide it — joined walls follow. {(() => {
+                    const n = doc.openings.filter((o) => o.wallId === selWall.id).length;
+                    return n === 0 ? "No openings in it." : n === 1 ? "1 opening in it." : `${n} openings in it.`;
+                  })()}</p>
+                {(() => {
+                  const reading = structure.get(selWall.id) ?? readWall(doc, selWall.id);
+                  if (!reading) return null;
+                  const standing = !!doc.existing?.walls.some((w) => w.id === selWall.id) || (!doc.existing && reading.level !== "new");
+                  return (
+                    <WallStructure
+                      reading={reading}
+                      isStanding={standing}
+                      lengthIn={wallLen(selWall)}
+                      onConfirm={(v) =>
+                        patch((d) => {
+                          const st = { ...(d.structure ?? {}) };
+                          if (v) st[selWall.id] = v;
+                          else delete st[selWall.id];
+                          d.structure = st;
+                        })
+                      }
+                      onOpenUp={() => change(openUp(withExisting(committed.current), selWall.id, newId("o")), true)}
+                    />
+                  );
+                })()}
               </div>
             </section>
           ) : null}
@@ -904,6 +1275,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
             </section>
           ) : null}
 
+          {focus ? <HouseChanges doc={doc} onPatch={patch} onSelect={setSelected} ensureSaved={() => (id && !dirty ? Promise.resolve(id) : save())} /> : null}
+
           {/* Every room. */}
           <section className={s.card}>
             <div className={s.head}>
@@ -914,12 +1287,20 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
             </div>
             <div className={s.body}>
               <div className={s.roomList} data-design-rooms>
-                {rooms.map((r) => {
+                {/* An unnamed sliver a few square feet across is a read's leftover (a chase, a wall's thickness), not a room. */}
+                {rooms.filter((r) => r.labelId || r.sqft >= 25).map((r) => {
                   const key = r.labelId ?? r.key;
                   const on = focus ? focus === r.labelId : selected?.kind === "room" && selected.key === key;
                   return (
                     <button type="button" key={r.key} className={`${s.roomBtn} ${on ? s.on : ""}`} onClick={() => (focus ? designRoom(r) : setSelected({ kind: "room", key }))} onDoubleClick={() => designRoom(r)} data-design-room={r.name}>
-                      <span className={s.roomName}>{r.names.length > 1 ? r.names.join(" · ") : r.name}</span>
+                      <span className={s.roomName}>
+                        {r.names.length > 1 ? r.names.join(" · ") : r.name}
+                        {(() => {
+                          // A whole house: which floor it's on.
+                          const fl = r.labelId ? doc.labels.find((l) => l.id === r.labelId)?.floor : undefined;
+                          return fl ? <span className={s.mono} style={{ display: "block" }}>{fl}</span> : null;
+                        })()}
+                      </span>
                       <span className={s.roomArea}>{Math.round(r.sqft)} sf</span>
                     </button>
                   );
