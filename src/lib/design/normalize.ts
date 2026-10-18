@@ -1,8 +1,9 @@
 // A design arriving from the browser, made safe to store (Home Design Studio, 2026-10-17): every number finite and in
 // range, ids short and plain, lists capped — a plan with thousands of drawn fixture lines keeps the first few
 // thousand. Pure.
-import type { DesignDoc, MarkRole, Opening, OpeningKind, P, PlanMark, RoomLabel, Wall } from "./model";
+import type { DesignDoc, DesignItem, Finishes, MarkRole, Opening, OpeningKind, P, PlanMark, RoomLabel, Wall } from "./model";
 import { DEFAULT_CEILING } from "./model";
+import { DEFAULT_FINISHES, lib } from "./library";
 
 const num = (v: unknown, lo: number, hi: number, dflt: number) => {
   const n = typeof v === "number" ? v : Number(v);
@@ -20,6 +21,67 @@ const ROLES: MarkRole[] = ["cabinet", "appliance", "plumbing"];
 export const MAX_WALLS = 400;
 export const MAX_OPENINGS = 400;
 export const MAX_MARK_LINES = 6000;
+export const MAX_ITEMS = 600;
+
+const hex = (v: unknown, dflt: string) => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : dflt);
+const oneOf = <T extends string>(v: unknown, list: readonly T[], dflt: T): T => (list.includes(v as T) ? (v as T) : dflt);
+
+function normalizeItems(raw: unknown, wallIds: Set<string>, labelIds: Set<string>): DesignItem[] {
+  return (Array.isArray(raw) ? raw : [])
+    .slice(0, MAX_ITEMS)
+    .filter((it) => it && typeof it.lib === "string" && !!lib(it.lib))
+    .map((it, i) => {
+      const opts: Record<string, string | number | boolean> = {};
+      if (it.opts && typeof it.opts === "object")
+        for (const [k, v] of Object.entries(it.opts as Record<string, unknown>).slice(0, 12))
+          if (/^[a-z]{1,20}$/i.test(k) && (typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v)) || (typeof v === "string" && v.length <= 30))) opts[k] = v as string | number | boolean;
+      return {
+        id: id(it.id, "i", i),
+        lib: it.lib as string,
+        x: num(it.x, -100000, 100000, 0),
+        y: num(it.y, -100000, 100000, 0),
+        rot: num(it.rot, -360, 360, 0),
+        w: num(it.w, 1, 240, 24),
+        d: num(it.d, 1, 120, 24),
+        h: num(it.h, 0.5, 144, 34.5),
+        z: num(it.z, 0, 144, 0),
+        wallId: typeof it.wallId === "string" && wallIds.has(it.wallId) ? it.wallId : null,
+        room: typeof it.room === "string" && labelIds.has(it.room) ? it.room : null,
+        ...(Object.keys(opts).length ? { opts } : {}),
+      };
+    });
+}
+
+function normalizeFinishes(raw: unknown, labelIds: Set<string>, wallIds: Set<string>): Record<string, Finishes> {
+  const out: Record<string, Finishes> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [room, v] of Object.entries(raw as Record<string, Partial<Finishes>>)) {
+    if (!labelIds.has(room) || !v || typeof v !== "object") continue;
+    const D = DEFAULT_FINISHES;
+    out[room] = {
+      wall: {
+        color: hex(v.wall?.color, D.wall.color),
+        name: str(v.wall?.name, 40) || D.wall.name,
+        ...(v.wall?.code ? { code: str(v.wall.code, 40) } : {}),
+        sheen: oneOf(v.wall?.sheen, ["flat", "eggshell", "satin", "semi"] as const, D.wall.sheen),
+        texture: oneOf(v.wall?.texture, ["smooth", "orange", "knockdown", "skim"] as const, D.wall.texture),
+      },
+      accents: (Array.isArray(v.accents) ? v.accents : []).filter((a) => a && wallIds.has(String(a.wallId))).slice(0, 20).map((a) => ({ wallId: String(a.wallId), color: hex(a.color, D.wall.color), name: str(a.name, 40), ...(a.code ? { code: str(a.code, 40) } : {}) })),
+      floor: { id: str(v.floor?.id, 40) || D.floor.id, pattern: oneOf(v.floor?.pattern, ["straight", "diagonal", "herringbone", "grid", "offset"] as const, D.floor.pattern), angle: num(v.floor?.angle, -180, 180, 0) },
+      cabinets: {
+        style: oneOf(v.cabinets?.style, ["shaker", "slab", "raised"] as const, D.cabinets.style),
+        color: hex(v.cabinets?.color, D.cabinets.color),
+        name: str(v.cabinets?.name, 40) || D.cabinets.name,
+        ...(v.cabinets?.island ? { island: hex(v.cabinets.island, D.cabinets.color), islandName: str(v.cabinets.islandName, 40) } : {}),
+        ...(v.cabinets?.uppers ? { uppers: hex(v.cabinets.uppers, D.cabinets.color), uppersName: str(v.cabinets.uppersName, 40) } : {}),
+      },
+      counter: { id: str(v.counter?.id, 40) || D.counter.id, edge: oneOf(v.counter?.edge, ["eased", "bevel", "ogee", "bullnose"] as const, D.counter.edge) },
+      backsplash: { id: str(v.backsplash?.id, 40) || D.backsplash.id, height: oneOf(v.backsplash?.height, ["4in", "18in", "full"] as const, D.backsplash.height) },
+      hardware: { kind: oneOf(v.hardware?.kind, ["bar", "knob", "cup"] as const, D.hardware.kind), finish: oneOf(v.hardware?.finish, ["black", "brass", "nickel", "chrome"] as const, D.hardware.finish) },
+    };
+  }
+  return out;
+}
 
 export function normalizeDesign(raw: unknown): DesignDoc {
   const d = (raw ?? {}) as Partial<DesignDoc>;
@@ -70,6 +132,9 @@ export function normalizeDesign(raw: unknown): DesignDoc {
       ...(m?.label ? { label: str(m.label, 40) } : {}),
     });
   }
+  const labelIds = new Set(labels.map((l) => l.id));
+  const items = normalizeItems(d.items, wallIds, labelIds);
+  const finishes = normalizeFinishes(d.finishes, labelIds, wallIds);
   const src = (d.source ?? {}) as NonNullable<DesignDoc["source"]>;
   const kind = src.kind === "pdf" || src.kind === "image" || src.kind === "drawn" ? src.kind : "drawn";
   return {
@@ -80,6 +145,8 @@ export function normalizeDesign(raw: unknown): DesignDoc {
     labels,
     marks,
     focus: typeof d.focus === "string" && labels.some((l) => l.id === d.focus) ? d.focus : null,
+    ...(items.length ? { items } : {}),
+    ...(Object.keys(finishes).length ? { finishes } : {}),
     source: {
       kind,
       ...(src.fileName ? { fileName: str(src.fileName, 160) } : {}),

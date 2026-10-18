@@ -65,6 +65,50 @@ export type PlanMark = {
   label?: string;
 };
 
+/* ── Milestone 3: what goes in the room (2026-10-17) ─────────────────────────────────────────────────────────── */
+
+/**
+ * A thing placed in the room: a cabinet, an appliance, a light, a piece of furniture. Its footprint is a rectangle
+ * w (along its front) × d (front to back), centered at (x, y), its FRONT facing `rot` degrees in plan axes (x right,
+ * y down: 90 faces down the sheet). z is its bottom above the floor, h its height. `lib` names the library entry
+ * (lib/design/library) it was made from; everything else is this instance's own.
+ */
+export type DesignItem = {
+  id: string;
+  lib: string;
+  x: number;
+  y: number;
+  rot: number;
+  w: number;
+  d: number;
+  h: number;
+  z: number;
+  /** The wall its back is against, when it is. */
+  wallId?: string | null;
+  /** The room it belongs to (a label id). */
+  room?: string | null;
+  /** This one's own options: seats at an island, a single or double sink, the door's hinge side… */
+  opts?: Record<string, string | number | boolean>;
+};
+
+export type Sheen = "flat" | "eggshell" | "satin" | "semi";
+export type WallTexture = "smooth" | "orange" | "knockdown" | "skim";
+export type DoorStyle = "shaker" | "slab" | "raised";
+export type FloorPattern = "straight" | "diagonal" | "herringbone" | "grid" | "offset";
+
+/** A room's finishes. Colors are hex; `code` is the contractor's own paint/product code ("SW 7008"), shown as written. */
+export type Finishes = {
+  wall: { color: string; name: string; code?: string; sheen: Sheen; texture: WallTexture };
+  /** A wall painted apart from the rest. */
+  accents?: Array<{ wallId: string; color: string; name: string; code?: string }>;
+  floor: { id: string; pattern: FloorPattern; angle: number };
+  cabinets: { style: DoorStyle; color: string; name: string; island?: string; islandName?: string; uppers?: string; uppersName?: string };
+  counter: { id: string; edge: "eased" | "bevel" | "ogee" | "bullnose" };
+  backsplash: { id: string; height: "4in" | "18in" | "full" };
+  hardware: { kind: "bar" | "knob" | "cup"; finish: "black" | "brass" | "nickel" | "chrome" };
+  ceiling?: { color: string };
+};
+
 export type DesignSource = {
   kind: "pdf" | "image" | "drawn";
   fileName?: string;
@@ -87,6 +131,10 @@ export type DesignDoc = {
   /** The room being designed (a label id). */
   focus?: string | null;
   source?: DesignSource;
+  /** What is placed in the rooms (milestone 3). */
+  items?: DesignItem[];
+  /** Each room's finishes, by its label id (milestone 3). */
+  finishes?: Record<string, Finishes>;
 };
 
 export const DEFAULT_CEILING = 96;

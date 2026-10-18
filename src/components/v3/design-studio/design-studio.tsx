@@ -9,10 +9,9 @@
 // A photo or scan is traced: set the scale with two clicks, draw the room over it.
 import * as React from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
-import type { Route } from "next";
 import s from "./design-studio.module.css";
 import { PlanEditor, setWallLength, type Selection, type Tool, type Underlay } from "./plan-editor";
+import { DesignPanel } from "./design-panel";
 import type { DesignDoc, OpeningKind, P } from "@/lib/design/model";
 import { emptyDesign, ftIn, newId, DEFAULT_CEILING } from "@/lib/design/model";
 import { centroid, dist, roomsOf, wallLen, type Room } from "@/lib/design/geometry";
@@ -52,7 +51,6 @@ function parseLength(v: string): number | null {
 }
 
 export function DesignStudio({ initial }: { initial: { id: string; doc: DesignDoc } | null }) {
-  const router = useRouter();
   const [phase, setPhase] = React.useState<Phase>(initial ? "plan" : "start");
   const [designs, setDesigns] = React.useState<DesignRow[] | null>(null);
   const [sheets, setSheets] = React.useState<DesignSheet[]>([]);
@@ -171,10 +169,12 @@ export function DesignStudio({ initial }: { initial: { id: string; doc: DesignDo
       setSavedAt(res.updatedAt);
       if (res.id !== id) {
         setId(res.id);
-        router.replace(`/dashboard/design-studio?design=${res.id}` as Route, { scroll: false });
+        // The address names the design now — in place: a navigation would re-render the page and start the studio
+        // over (losing the drawing underneath and the view).
+        window.history.replaceState(window.history.state, "", `/dashboard/design-studio?design=${res.id}`);
       }
     },
-    [id, focus, router],
+    [id, focus],
   );
   React.useEffect(() => {
     if (!id || !dirty || phase !== "plan") return;
@@ -714,7 +714,18 @@ export function DesignStudio({ initial }: { initial: { id: string; doc: DesignDo
           ) : null}
           {focus ? (
             <div className={s.split}>
-              <Room3D doc={doc} focus={focus} selectedWall={selWall?.id ?? null} onPickWall={(wid) => setSelected(wid ? { kind: "wall", id: wid } : null)} view={threeView} frameToken={frameToken} className={s.three} label={`${focusRoom?.name ?? "The room"} in 3D`} />
+              <Room3D
+                doc={doc}
+                focus={focus}
+                selectedWall={selWall?.id ?? null}
+                onPickWall={(wid) => setSelected(wid ? { kind: "wall", id: wid } : null)}
+                selectedItem={selected?.kind === "item" ? selected.id : null}
+                onPickItem={(iid) => setSelected({ kind: "item", id: iid })}
+                view={threeView}
+                frameToken={frameToken}
+                className={s.three}
+                label={`${focusRoom?.name ?? "The room"} in 3D`}
+              />
               {editor}
             </div>
           ) : (
@@ -724,6 +735,7 @@ export function DesignStudio({ initial }: { initial: { id: string; doc: DesignDo
         </div>
 
         <aside className={s.side}>
+          {focus && focusRoom ? <DesignPanel doc={doc} room={focusRoom} focus={focus} selected={selected} onSelect={setSelected} tool={tool} onTool={setTool} onPatch={patch} onLaidOut={() => setTimeout(() => setFrameToken((t) => t + 1), 50)} /> : null}
           {notes.length || scaleNote ? (
             <section className={s.card}>
               <div className={s.body}>

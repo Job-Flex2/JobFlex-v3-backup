@@ -8,8 +8,13 @@
 import * as React from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { DesignDoc, Opening, Wall } from "@/lib/design/model";
-import { centroid, roomsOf, wallDir, wallLen, wallPieces, type Room } from "@/lib/design/geometry";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import type { DesignDoc, DesignItem, Opening, Wall } from "@/lib/design/model";
+import { finishesFor, floorPreset, lib, UPPER_Z } from "@/lib/design/library";
+import { buildItem, disposeOwn, floorTexture, matCache, placeItem, wallBump } from "./items-3d";
+import { centroid, pointInPoly, roomsOf, wallDir, wallLen, wallPieces, type Room } from "@/lib/design/geometry";
+
+const pointInPolyBox = (b: { x: number; y: number; w: number; h: number }, poly: Array<{ x: number; y: number }>) => pointInPoly({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, poly);
 
 const FT = 1 / 12;
 const CUT = 36; // inches: the rest of the house is cut to this height
@@ -21,6 +26,8 @@ export type Room3DProps = {
   focus: string | null;
   selectedWall?: string | null;
   onPickWall?: (id: string | null) => void;
+  selectedItem?: string | null;
+  onPickItem?: (id: string) => void;
   /** "orbit" — look in from above; "walk" — stand in the room. */
   view?: "orbit" | "walk";
   /** Changes re-frame the camera. */
@@ -98,7 +105,20 @@ function labelSprite(text: string, sub: string): { sprite: THREE.Sprite; dispose
   return { sprite, dispose: () => { tex.dispose(); mat.dispose(); } };
 }
 
-type Built = { group: THREE.Group; dispose: () => void; wallMeshes: THREE.Mesh[]; frame: { center: THREE.Vector3; radius: number; floorPoly: Array<{ x: number; z: number }> | null } };
+type Built = { group: THREE.Group; dispose: () => void; wallMeshes: THREE.Mesh[]; itemGroups: THREE.Object3D[]; frame: { center: THREE.Vector3; radius: number; floorPoly: Array<{ x: number; z: number }> | null } };
+
+/** How high the backsplash behind an item rises: to the wall cabinet over it, the hood, or the chosen height. */
+function splashTopFor(it: DesignItem, items: DesignItem[], height: "4in" | "18in" | "full", ceiling: number): number {
+  if (height === "4in") return 40;
+  const r = (it.rot * Math.PI) / 180;
+  const u = { x: -Math.sin(r), y: Math.cos(r) };
+  const t = it.x * u.x + it.y * u.y;
+  const over = items.filter((o) => o.id !== it.id && o.wallId === it.wallId && o.z >= 40 && Math.abs(o.x * u.x + o.y * u.y - t) < (o.w + it.w) / 2 - 1);
+  const hood = over.find((o) => o.lib === "HD" || o.lib === "MW");
+  if (it.lib === "RNG") return hood ? hood.z : height === "full" ? Math.min(ceiling, 84) : 54;
+  if (height === "18in") return UPPER_Z;
+  return over.length ? Math.min(...over.map((o) => o.z)) : Math.min(ceiling, 84);
+}
 
 /** The focus room's walls standing between the camera and the room (camera and room center on opposite sides). */
 function nearWalls(doc: DesignDoc, room: Room | null, cam: THREE.Vector3 | null): Set<string> {
@@ -114,17 +134,34 @@ function nearWalls(doc: DesignDoc, room: Room | null, cam: THREE.Vector3 | null)
   return out;
 }
 
-function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: string | null, wood: THREE.Texture, cut: Set<string> = new Set()): Built {
+function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: string | null, wood: THREE.Texture, cut: Set<string> = new Set(), selectedItem: string | null = null): Built {
   const group = new THREE.Group();
   const owned: Array<{ dispose: () => void }> = [];
   const wallMeshes: THREE.Mesh[] = [];
+  const itemGroups: THREE.Object3D[] = [];
+  const mats = matCache();
+  owned.push(mats);
   const focusRoom = focus ? rooms.find((r) => r.labelId === focus) ?? null : null;
   const focusWalls = new Set(focusRoom?.wallIds ?? []);
+  const fin = finishesFor(doc.finishes, focus);
 
-  // Floors.
+  // Floors: the room's own floor where it has finishes (the room being designed always), plain elsewhere.
   const floorMatFocus = new THREE.MeshStandardMaterial({ map: wood, roughness: 0.62, metalness: 0 });
   const floorMatOther = new THREE.MeshStandardMaterial({ color: 0xe7e2d8, roughness: 0.95 });
   owned.push(floorMatFocus, floorMatOther);
+  const floorOf = (labelId: string | null): THREE.Material => {
+    const f = labelId === focus ? fin : labelId && doc.finishes?.[labelId] ? finishesFor(doc.finishes, labelId) : null;
+    if (!f) return floorMatOther;
+    const fp = floorPreset(f.floor.id);
+    return mats.get(`floor:${fp.id}:${f.floor.pattern}`, () => {
+      const t = mats.tex(`ftex:${fp.id}:${f.floor.pattern}`, () => floorTexture(fp, f.floor.pattern));
+      if (f.floor.pattern === "diagonal") {
+        t.center.set(0.5, 0.5);
+        t.rotation = Math.PI / 4;
+      }
+      return new THREE.MeshStandardMaterial({ map: t, roughness: fp.kind === "tile" ? 0.35 : 0.6, metalness: 0 });
+    });
+  };
   for (const r of rooms) {
     const shape = new THREE.Shape(r.poly.map((p) => new THREE.Vector2(p.x * FT, -p.y * FT)));
     const geo = new THREE.ShapeGeometry(shape);
@@ -133,7 +170,7 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 5, uv.getY(i) / 5);
     owned.push(geo);
     const isFocus = !focusRoom || r === focusRoom;
-    const m = new THREE.Mesh(geo, isFocus ? floorMatFocus : floorMatOther);
+    const m = new THREE.Mesh(geo, isFocus && !doc.finishes && !focus ? floorMatFocus : floorOf(r.labelId));
     m.rotation.x = -Math.PI / 2;
     m.position.y = 0.001;
     m.receiveShadow = true;
@@ -146,7 +183,11 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
     group.add(tag.sprite);
   }
 
-  // Walls, cut around their openings.
+  // Walls, cut around their openings — the room being designed in its paint (sheen, texture, an accent wall).
+  const SHEEN = { flat: 0.95, eggshell: 0.85, satin: 0.7, semi: 0.5 } as const;
+  const bump = wallBump(fin.wall.texture);
+  if (bump) owned.push(bump);
+  const paint = (hex: string) => mats.get(`paint:${hex}:${fin.wall.sheen}:${fin.wall.texture}`, () => new THREE.MeshStandardMaterial({ color: hex, roughness: SHEEN[fin.wall.sheen], bumpMap: bump ?? undefined, bumpScale: 0.6 }));
   const wallMat = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.9 });
   const wallMatExt = new THREE.MeshStandardMaterial({ color: 0xe9e4da, roughness: 0.9 });
   const wallMatSel = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.7, emissive: 0x1d4ed8, emissiveIntensity: 0.12 });
@@ -172,7 +213,8 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
     // The dollhouse: the room's own walls stand full height except those between the camera and the room.
     const full = (!focusRoom || focusWalls.has(w.id)) && !cut.has(w.id);
     const H = full ? w.height : Math.min(CUT, w.height);
-    const mat = w.id === selected ? wallMatSel : w.exterior ? wallMatExt : wallMat;
+    const accent = fin.accents?.find((a) => a.wallId === w.id);
+    const mat = w.id === selected ? wallMatSel : focusRoom && focusWalls.has(w.id) ? paint(accent?.color ?? fin.wall.color) : w.exterior ? wallMatExt : wallMat;
     // Each piece runs a hair past the wall's ends so corners close (half the thickness each way).
     for (const pc of wallPieces({ ...w, height: H }, doc.openings)) {
       const t0 = pc.t0 === 0 ? -w.thick / 2 : pc.t0;
@@ -240,11 +282,36 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
   };
   for (const o of doc.openings) addOpening(o);
 
-  // What the plan drew inside: traced on the floor until it is designed.
+  // What's placed in the rooms: cabinets, appliances, lights, furniture — each built from its numbers.
+  const items = doc.items ?? [];
+  const lowered = (wallId: string | null | undefined) => !!wallId && (cut.has(wallId) || (!!focusRoom && !focusWalls.has(wallId)));
+  for (const it of items) {
+    // Wall-hung things on a wall that is cut away would float in the way.
+    if (it.z >= 40 && lowered(it.wallId) && lib(it.lib)?.cat !== "light") continue;
+    const f = finishesFor(doc.finishes, it.room ?? focus);
+    const ceiling = (it.room ? doc.labels.find((l) => l.id === it.room)?.ceiling : focusRoom?.ceiling) ?? 96;
+    const g = buildItem(it, { mats, f, ceiling, splashTop: splashTopFor(it, items, f.backsplash.height, ceiling) });
+    placeItem(g, it);
+    g.userData.itemId = it.id;
+    g.traverse((o) => (o.userData.itemId = it.id));
+    if (it.id === selectedItem) {
+      const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(it.w * FT, it.h * FT, it.d * FT));
+      const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1d4ed8 }));
+      line.position.y = (it.h / 2) * FT;
+      owned.push(edges, line.material as THREE.Material);
+      g.add(line);
+    }
+    group.add(g);
+    itemGroups.push(g);
+    owned.push({ dispose: () => disposeOwn(g) });
+  }
+
+  // What the plan drew inside: traced on the floor until it is designed (hidden in a room that has its cabinets).
+  const designedRoom = focusRoom && items.some((i) => i.room === focus) ? focusRoom : null;
   const markColor = { cabinet: 0xb45309, appliance: 0x0d9488, plumbing: 0x15803d } as const;
   for (const role of ["cabinet", "appliance", "plumbing"] as const) {
     const pos: number[] = [];
-    for (const m of doc.marks) if (m.role === role) for (const [a, b] of m.lines) pos.push(a.x * FT, 0.02, a.y * FT, b.x * FT, 0.02, b.y * FT);
+    for (const m of doc.marks) if (m.role === role && !(designedRoom && pointInPolyBox(m.box, designedRoom.poly))) for (const [a, b] of m.lines) pos.push(a.x * FT, 0.02, a.y * FT, b.x * FT, 0.02, b.y * FT);
     if (!pos.length) continue;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
@@ -253,8 +320,16 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
     group.add(new THREE.LineSegments(geo, mat));
   }
 
-  // What to frame.
-  const pts = focusRoom ? focusRoom.poly : doc.walls.flatMap((w) => [w.a, w.b]);
+  // What to frame: what's been placed in the room (and a walkway round it), else the room, else the house.
+  const placed = focusRoom ? items.filter((i) => i.room === focus && lib(i.lib)?.cat !== "light") : [];
+  const pts = placed.length
+    ? placed.flatMap((i) => {
+        const r = Math.hypot(i.w, i.d) / 2 + 36;
+        return [{ x: i.x - r, y: i.y - r }, { x: i.x + r, y: i.y + r }];
+      })
+    : focusRoom
+      ? focusRoom.poly
+      : doc.walls.flatMap((w) => [w.a, w.b]);
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const p of pts) {
     x0 = Math.min(x0, p.x * FT);
@@ -271,6 +346,7 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
   return {
     group,
     wallMeshes,
+    itemGroups,
     frame: { center, radius, floorPoly: focusRoom ? focusRoom.poly.map((p) => ({ x: p.x * FT, z: p.y * FT })) : null },
     dispose: () => {
       for (const o of owned) o.dispose();
@@ -278,10 +354,11 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
   };
 }
 
-export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "orbit", frameToken = 0, className, label }: Room3DProps) {
+export function Room3D({ doc, focus, selectedWall = null, onPickWall, selectedItem = null, onPickItem, view = "orbit", frameToken = 0, className, label }: Room3DProps) {
   const mountRef = React.useRef<HTMLDivElement | null>(null);
-  const api = React.useRef<{ set: (doc: DesignDoc, focus: string | null, selected: string | null) => void; frame: (walk: boolean) => void } | null>(null);
+  const api = React.useRef<{ set: (doc: DesignDoc, focus: string | null, selected: string | null, selItem: string | null) => void; frame: (walk: boolean) => void } | null>(null);
   const pickRef = React.useRef(onPickWall);
+  const pickItemRef = React.useRef(onPickItem);
   const [supported] = React.useState(() => {
     if (typeof window === "undefined") return true;
     try {
@@ -293,7 +370,8 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
   });
   React.useEffect(() => {
     pickRef.current = onPickWall;
-  }, [onPickWall]);
+    pickItemRef.current = onPickItem;
+  }, [onPickWall, onPickItem]);
 
   React.useEffect(() => {
     const mount = mountRef.current;
@@ -326,6 +404,19 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0005;
     world.add(sun, sun.target);
+    // A soft room around everything, so stainless and glass read as what they are.
+    let envTex: THREE.Texture | null = null;
+    try {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const env = new RoomEnvironment();
+      envTex = pmrem.fromScene(env, 0.04).texture;
+      world.environment = envTex;
+      world.environmentIntensity = 0.55;
+      pmrem.dispose();
+      env.dispose?.();
+    } catch {
+      /* optional */
+    }
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xdfe5ec, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
@@ -384,7 +475,7 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
       dirty = true;
     };
 
-    let args: { d: DesignDoc; f: string | null; sel: string | null; rooms: Room[] } | null = null;
+    let args: { d: DesignDoc; f: string | null; sel: string | null; selItem: string | null; rooms: Room[] } | null = null;
     let cutKey = "";
     const rebuild = () => {
       if (!args) return;
@@ -395,7 +486,7 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
         world.remove(content.group);
         content.dispose();
       }
-      content = build(args.d, args.f, args.rooms, args.sel, wood, cut);
+      content = build(args.d, args.f, args.rooms, args.sel, wood, cut, args.selItem);
       world.add(content.group);
       dirty = true;
     };
@@ -407,8 +498,8 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
       if (key !== cutKey) rebuild();
     });
     api.current = {
-      set: (d, f, sel) => {
-        args = { d, f, sel, rooms: roomsOf(d) };
+      set: (d, f, sel, selItem) => {
+        args = { d, f, sel, selItem, rooms: roomsOf(d) };
         rebuild();
       },
       frame: (walkMode) => {
@@ -432,7 +523,12 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
       const r = renderer.domElement.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ndc, camera);
-      const hit = ray.intersectObjects(content.wallMeshes, false)[0];
+      const hit = ray.intersectObjects([...content.itemGroups, ...content.wallMeshes], true)[0];
+      const itemId = hit?.object.userData.itemId as string | undefined;
+      if (itemId && pickItemRef.current) {
+        pickItemRef.current(itemId);
+        return;
+      }
       pickRef.current?.((hit?.object.userData.wallId as string | undefined) ?? null);
     };
     renderer.domElement.addEventListener("pointerdown", onDown);
@@ -514,6 +610,7 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
         content.dispose();
       }
       wood.dispose();
+      envTex?.dispose();
       ground.geometry.dispose();
       (ground.material as THREE.Material).dispose();
       renderer.dispose();
@@ -523,8 +620,8 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, view = "or
 
   // The design, the room and the selection: rebuild; the camera only moves when asked (frameToken, view).
   React.useEffect(() => {
-    api.current?.set(doc, focus, selectedWall);
-  }, [doc, focus, selectedWall]);
+    api.current?.set(doc, focus, selectedWall, selectedItem);
+  }, [doc, focus, selectedWall, selectedItem]);
   React.useEffect(() => {
     api.current?.frame(view === "walk");
   }, [view, frameToken, focus]);
