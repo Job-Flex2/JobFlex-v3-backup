@@ -28,7 +28,11 @@ import { getOrgPlanContext } from "@/lib/planCatalogServer";
 import { getOrgLimitUsage } from "@/lib/limitsEngine";
 import { DEFAULT_FREE_LIMITS, isUnlimited, parsePlanLimits } from "@/lib/planLimits";
 import { readCustomPages } from "@/lib/customPageAccess";
-import { CUSTOM_PLAN_LIMITS_SLUG, CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
+import { CUSTOM_PLAN_LIMITS_SLUG, CUSTOM_PLAN_SLUG, customPriceCents } from "@/lib/customPlan";
+import { planLapsed } from "@/lib/planStatus";
+import { planTermState } from "@/lib/planChange";
+import { getStripeClient, isStripeEnabled } from "@/lib/sdk/stripe";
+import { subscriptionCard, trialCardLine } from "@/lib/trialCardLine";
 import {
   FREE_PLAN_NAME,
   LIVE_STATUSES,
@@ -145,10 +149,16 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
   // Nothing more is billed once the switch to Free is booked, or on Free.
   const nextBillAt = onFree || booked ? null : (sub?.currentPeriodEnd ?? sub?.trialEndsAt ?? null);
   const isOwnerHere = isOwnerRole(role);
-  const cancel =
-    isOwnerHere && !granted && !booked && sub && (LIVE_STATUSES as readonly string[]).includes(sub.status)
-      ? await cancelOffer(organizationId, sub.plan, freeSwitchDate(sub), wasName)
-      : null;
+  // Lapsed access can still leave Stripe renewing: the window then cancels
+  // only the renewal (the subscription page's rule, moved here 2026-10-17).
+  const lapsed = planLapsed(sub);
+  const stripeSub = sub?.provider === "STRIPE" && Boolean(sub.externalSubId) && isStripeEnabled();
+  const cancellable =
+    isOwnerHere && !granted && !booked && !!sub && (LIVE_STATUSES as readonly string[]).includes(sub.status) && (!lapsed || stripeSub);
+  const [cancel, manage] = await Promise.all([
+    cancellable && sub ? cancelOffer(organizationId, sub.plan, lapsed ? null : freeSwitchDate(sub), wasName, lapsed) : null,
+    isOwnerHere ? manageView(organizationId, sub, { planDto: planContext.plan, onFree, granted, booked, lapsed, stripeSub }) : null,
+  ]);
 
   /* ── settings blobs ── */
   const payment = parsePaymentSettings(org.paymentSettingsJson);
@@ -204,6 +214,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext): Promise<Setting
       onFree,
       freeSwitch: booked ? { at: freeSwitchDate(sub)?.toISOString() ?? null, planName: wasName } : null,
       cancel,
+      manage: manage ? { ...manage, noCancel: cancel || booked ? null : manage.noCancel } : null,
     },
     integrations: {
       gmail: {
@@ -457,7 +468,7 @@ async function loadRegistrationView(organizationId: string, myUserId: string | n
 
 /** What the owner's two cancel windows say (lib/freePlan): the plan's lines
  *  Free does not keep, and the company's own numbers. */
-async function cancelOffer(organizationId: string, plan: string, keepsUntil: Date | null, planName: string): Promise<NonNullable<BillingData["cancel"]>> {
+async function cancelOffer(organizationId: string, plan: string, keepsUntil: Date | null, planName: string, accessAlreadyFree: boolean): Promise<NonNullable<BillingData["cancel"]>> {
   const slug = plan.toLowerCase();
   const [pages, catalog, sent, scheduled] = await Promise.all([
     readCustomPages(organizationId, plan).catch(() => null),
@@ -477,7 +488,87 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
     keepsUntil: keepsUntil?.toISOString() ?? null,
     losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated) }),
     made: madeWithLine(sent, scheduled),
+    ...(accessAlreadyFree ? { accessAlreadyFree: true } : {}),
   };
+}
+
+type SubRow = Awaited<ReturnType<typeof db.subscription.findUnique>>;
+
+/** The owner's manage window (owner, 2026-10-17): price and term, the plan's
+ *  date, the card, and — when nothing can be cancelled — the one line why
+ *  (the subscription page's words). A Stripe read that fails costs its line,
+ *  never the page. */
+async function manageView(
+  organizationId: string,
+  sub: SubRow,
+  s: {
+    planDto: Awaited<ReturnType<typeof getOrgPlanContext>>["plan"];
+    onFree: boolean;
+    granted: boolean;
+    booked: boolean;
+    lapsed: boolean;
+    stripeSub: boolean;
+  },
+): Promise<NonNullable<BillingData["manage"]>> {
+  const custom = (sub?.plan ?? "").toLowerCase() === CUSTOM_PLAN_SLUG;
+  const priced = !!sub && !s.onFree && !s.lapsed && !s.granted;
+  const [term, pages, trialCard, liveCard] = await Promise.all([
+    priced ? planTermState(organizationId).catch(() => null) : null,
+    priced && custom ? readCustomPages(organizationId, sub!.plan).catch(() => null) : null,
+    s.onFree || s.lapsed ? null : trialCardLine(organizationId).catch(() => null),
+    s.stripeSub && !s.onFree && !s.lapsed && sub?.externalSubId
+      ? getStripeClient()
+          .then(({ stripe }) => subscriptionCard(stripe, sub.externalSubId!))
+          .catch(() => null)
+      : null,
+  ]);
+  const yearly = term?.currentInterval === "YEAR";
+  const cents = s.granted
+    ? 0
+    : s.onFree
+      ? 0
+      : !priced
+        ? null
+        : s.planDto
+          ? yearly
+            ? (s.planDto.yearlyPriceCents ?? s.planDto.priceCents)
+            : s.planDto.priceCents
+          : custom
+            ? customPriceCents(pages, yearly ? "YEAR" : "MONTH")
+            : null;
+  const price = cents === null ? null : s.granted ? "$0 / mo · free of charge" : `$${Math.round(cents / 100)} / ${yearly ? "yr" : "mo"}`;
+
+  const future = (d: Date | null | undefined) => (d && d.getTime() > Date.now() ? d : null);
+  const trialEnd = sub?.status === "TRIALING" ? future(sub.trialEndsAt) : null;
+  const billAt = future(sub?.currentPeriodEnd ?? sub?.trialEndsAt ?? null);
+  const date = s.onFree || s.lapsed
+    ? null
+    : s.granted
+      ? sub?.currentPeriodEnd
+        ? { label: "Complimentary until", value: longDate(sub.currentPeriodEnd) }
+        : null
+      : s.booked
+        ? { label: "Switches to Free", value: freeSwitchDate(sub) ? longDate(freeSwitchDate(sub)!) : "End of cycle" }
+        : trialEnd
+          ? { label: "Trial ends", value: longDate(trialEnd) }
+          : billAt
+            ? { label: "Next bill", value: longDate(billAt) }
+            : null;
+
+  const card = trialCard ?? (liveCard ? { value: liveCard.kind === "none" ? "No card on file" : liveCard.label, addHref: null } : null);
+  const canUpdateCard =
+    s.stripeSub && !!sub?.externalCustomerId && ["ACTIVE", "TRIALING", "PAST_DUE", "UNPAID"].includes(sub.status) && !trialCard?.addHref;
+
+  // Why there is no cancel button (the subscription page's words, 2026-10-17).
+  const noCancel = s.granted
+    ? "Your plan is a complimentary grant from JobFlex — nothing is billed, so there is nothing to cancel."
+    : s.onFree
+      ? "You're on the Free plan — there is no paid subscription to cancel."
+      : s.lapsed || (sub && sub.status === "EXPIRED")
+        ? "Your plan has ended — there is nothing to cancel."
+        : "There is no paid subscription on this account to cancel. Plans set up by JobFlex are canceled through support.";
+
+  return { price, date, card, canUpdateCard, noCancel };
 }
 
 /** The AI desk (2026-10-13, lib/aiDesk): who answers and what the desk knows. A missing piece costs the pane, never the page. */

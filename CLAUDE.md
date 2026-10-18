@@ -52,6 +52,9 @@
 - Front-load blocking questions. Don't stop mid-batch for something answerable.
 - Propose a skill before codifying a recurring pattern; use `skill-creator` after approval.
 
+## Owner-locked decisions
+- Cancelling a subscription happens only at Settings → Billing → Manage subscription → the window → Cancel → Before you go → confirmation (owner, 2026-10-17). The Subscription page and every other place have no cancel button.
+
 ## Git
 - Commit only when asked. Never push, branch, or open a PR without explicit instruction.
 - Conventional Commits: `feat:` / `fix:` / `chore:` / `refactor:` / `style:`.

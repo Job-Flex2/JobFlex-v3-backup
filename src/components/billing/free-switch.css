@@ -48,12 +48,8 @@
   }
 }
 
-/* ── The link: "Cancel subscription" / "Continue to cancel" ─────────────
+/* ── The link: "Continue to cancel", "Update card", "Change plan" ───────
    An ordinary text link — never a button's frame. 44px tall to the touch. */
-.jffs-cancel {
-  display: flex;
-}
-.jffs-cancel .jffs-link,
 .jf-confirm.jffs-dlg .jffs-link {
   display: inline-flex;
   align-items: center;
@@ -71,11 +67,9 @@
   cursor: pointer;
   transition: color 0.14s var(--ease-out, ease);
 }
-.jffs-cancel .jffs-link:hover,
 .jf-confirm.jffs-dlg .jffs-link:hover {
   color: var(--ink, #0a0a0a);
 }
-.jffs-cancel .jffs-link:focus-visible,
 .jf-confirm.jffs-dlg .jffs-link:focus-visible {
   outline: 2px solid var(--accent, #1854a0);
   outline-offset: 2px;
@@ -206,5 +200,129 @@
   }
   .jf-confirm.jffs-dlg .jffs-go {
     justify-content: center;
+  }
+}
+
+/* ── The manage window (owner, 2026-10-17) ───────────────────────────────
+   Settings → Billing → "Manage subscription". The plan's name and a status
+   badge, three facts on hairline rows (mono keys, the house dialog's tile
+   voice), the way to the subscription page, and the way out at the foot —
+   a danger-outlined ghost, never the box's main button. */
+.jf-confirm.jffs-mng .jffs-mng-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 6px;
+  padding-right: 44px;
+}
+.jf-confirm.jffs-mng .jffs-mng-head .jf-confirm-h {
+  margin-top: 0;
+  padding-right: 0;
+}
+.jf-confirm.jffs-mng .jffs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1.5px solid currentColor;
+  border-radius: var(--r-sm, 2px);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted, #555);
+}
+.jf-confirm.jffs-mng .jffs-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.jf-confirm.jffs-mng .jffs-badge[data-tone="ok"] {
+  color: var(--success, #3a7d44);
+}
+.jf-confirm.jffs-mng .jffs-badge[data-tone="bad"] {
+  color: var(--rose, #a83232);
+}
+.jf-confirm.jffs-mng .jffs-badge[data-tone="warn"] {
+  color: var(--amber, #b88420);
+}
+.jf-confirm.jffs-mng .jffs-facts {
+  margin-top: 18px;
+  border-top: 1.5px solid var(--ink-line, rgba(10, 10, 10, 0.12));
+}
+.jf-confirm.jffs-mng .jffs-facts > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  min-height: 48px;
+  padding: 4px 0;
+  border-bottom: 1.5px solid var(--ink-line, rgba(10, 10, 10, 0.12));
+}
+.jf-confirm.jffs-mng .jffs-facts dt {
+  flex: 0 0 auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted, #555);
+}
+.jf-confirm.jffs-mng .jffs-facts dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 14px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink, #0a0a0a);
+}
+.jf-confirm.jffs-mng .jffs-link:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.jf-confirm.jffs-mng .jffs-change {
+  gap: 8px;
+  margin-top: 6px;
+}
+.jf-confirm.jffs-mng .jffs-change svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.jf-confirm.jffs-mng .jffs-mng-foot {
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1.5px solid var(--ink-line, rgba(10, 10, 10, 0.12));
+}
+.jf-confirm.jffs-mng .jffs-mng-foot .jffs-danger {
+  flex: 0 0 auto;
+  padding: 0 22px;
+  border-color: var(--rose, #a83232);
+  background: #fff;
+  color: var(--rose, #a83232);
+}
+.jf-confirm.jffs-mng .jffs-mng-foot .jffs-danger:hover {
+  box-shadow: 3px 3px 0 var(--rose, #a83232);
+}
+.jf-confirm.jffs-mng .jffs-why {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted, #555);
+}
+@media (max-width: 600px) {
+  .jf-confirm.jffs-mng .jffs-mng-foot .jffs-danger {
+    width: 100%;
   }
 }

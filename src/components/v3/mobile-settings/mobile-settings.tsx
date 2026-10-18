@@ -150,7 +150,7 @@ import {
 import { ProviderKeyForm } from "@/components/v3/settings-blueprint/panes/stripe-key-form";
 import { MobileSettingsSprite } from "./sprite";
 import { PasswordControl } from "@/components/account-password/password-control";
-import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { FreeSwitchNotice, ManageSubscription } from "@/components/billing/FreeSwitch";
 import "./mobile-settings.css";
 import { isRefusal } from "@/lib/actionResult";
 import { CompanyPricingForm } from "@/components/v3/company-pricing/company-pricing-form";
@@ -882,11 +882,19 @@ function BillingPane({ data }: { data: SettingsData }) {
             {b.nextBill ? <span>{`${PLAN_META_PREFIX.nextBill}${b.nextBill}`}</span> : null}
             <span>{`${PLAN_META_PREFIX.seats}${b.seats}`}</span>
           </div>
-          {b.isOwner ? (
-            <a className="mst-btn mst-btn--primary mst-btn--wide" href={b.subscriptionHref}>
+          {b.isOwner && b.manage ? (
+            <ManageSubscription
+              className="mst-btn mst-btn--primary mst-btn--wide"
+              planName={b.planName}
+              status={b.planBadge}
+              view={b.manage}
+              offer={b.cancel}
+              freeSwitch={b.freeSwitch}
+              changeHref={b.subscriptionHref}
+            >
               {PLAN_PRIMARY_ACTION.icon ? <Ic name={PLAN_PRIMARY_ACTION.icon} /> : null}
               {PLAN_PRIMARY_ACTION.label}
-            </a>
+            </ManageSubscription>
           ) : (
             <button
               className="mst-btn mst-btn--ghost mst-btn--wide"
@@ -917,11 +925,10 @@ function BillingPane({ data }: { data: SettingsData }) {
         <SaveBar disabled={!b.canEditBilling} onSave={() => updateBusiness({ billingEmail })} />
       </section>
 
-      {/* The way out, and back (lib/freePlan) — the desktop pane's foot. */}
+      {/* The way back (lib/freePlan) — the desktop pane's foot. The way out
+          is in the manage window only (owner, 2026-10-17). */}
       {b.freeSwitch ? (
         <FreeSwitchNotice planName={b.freeSwitch.planName} at={b.freeSwitch.at} canKeep={b.isOwner} className="mst-freeSwitch" />
-      ) : b.cancel ? (
-        <CancelPlanLink offer={b.cancel} className="mst-cancelLink" />
       ) : null}
     </>
   );

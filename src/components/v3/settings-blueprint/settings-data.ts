@@ -1348,6 +1348,24 @@ export interface BillingData {
     losses: FreeLoss[];
     /** "You've sent N proposals and scheduled N jobs with JobFlex", or null. */
     made: string | null;
+    /** Access already lapsed to Free while the Stripe subscription still renews. */
+    accessAlreadyFree?: boolean;
+  } | null;
+  /** The owner's manage window (owner, 2026-10-17 — the one place a plan is
+   *  cancelled): the plan's price, its date, the card and why there is no
+   *  cancel button when there is none. Null for every other role. */
+  manage: {
+    /** "$95 / mo", or null when the price cannot be told. */
+    price: string | null;
+    /** "Next bill" · "Trial ends" · "Switches to Free" · …, or null. */
+    date: { label: string; value: string } | null;
+    /** "Visa ···· 4242" / "None yet" (a card-less trial, with where to add one). */
+    card: { value: string; addHref: string | null } | null;
+    /** The existing Stripe card form (/api/billing/update-card) applies. */
+    canUpdateCard: boolean;
+    /** One line on why there is nothing to cancel; null when `cancel` or
+     *  `freeSwitch` is there. */
+    noCancel: string | null;
   } | null;
 }
 

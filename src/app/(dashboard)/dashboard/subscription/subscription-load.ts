@@ -19,23 +19,22 @@ import { getStripeMode } from "@/lib/stripeMode";
 // re-assert it themselves through requireOwner().
 
 import { db } from "@/lib/db";
-import { customPriceCents, normalizeCustomPages, CUSTOM_PLAN_LIMITS_SLUG } from "@/lib/customPlan";
+import { customPriceCents, normalizeCustomPages } from "@/lib/customPlan";
 import { isPageLocked } from "@/lib/customPageAccess";
 import { USAGE_ACCESS_PAGES, TRIAL_USAGE_ACCESS_PAGES } from "@/components/v3/subscription-blueprint/subscription-data";
-import type { CancelOffer } from "@/components/billing/FreeSwitch";
 import { customPlanOffered } from "@/lib/customPlanFlag";
 import { REFERRAL_REWARD_PCT, settleReferralsForCode } from "@/lib/referralRewards";
 import { getOrCreateMyReferralCode } from "@/actions/referrals";
 import { listSubscriptionInvoices, type UpcomingInvoice } from "@/actions/billing";
 import { getPlanCatalog, getOrgPlanContext } from "@/lib/planCatalogServer";
 import { getOrgLimitOverview } from "@/lib/limitsEngine";
-import { LIMIT_DEFS, DEFAULT_FREE_LIMITS, isUnlimited, type LimitScope } from "@/lib/planLimits";
+import { LIMIT_DEFS, type LimitScope } from "@/lib/planLimits";
 import { titleCaseSlug, type PlanDTO } from "@/lib/planCatalog";
 import type { SubscriptionInvoice } from "@/actions/billing";
 import { readPlanGrant } from "@/lib/planGrant";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { planLapsed } from "@/lib/planStatus";
-import { FREE_PLAN_NAME, LIVE_STATUSES, freePlanLosses, freeSince, freeSwitchBooked, freeSwitchDate, onFreePlan } from "@/lib/freePlan";
+import { FREE_PLAN_NAME, freeSince, freeSwitchBooked, freeSwitchDate, onFreePlan } from "@/lib/freePlan";
 import { trialCardLine, type TrialCardLine } from "@/lib/trialCardLine";
 import { planTermState } from "@/lib/planChange";
 import { includedDeskMinutes } from "@/lib/aiDesk/minutes";
@@ -102,8 +101,6 @@ export interface SubscriptionViewProps {
   usageUnlimited?: { resource: string; label: string; used: number; scope?: LimitScope; hint?: string }[];
   /** Failed reads remain unknown instead of appearing as zero usage. */
   usageUnavailable?: { resource: string; label: string; limit: number | null; scope: LimitScope; hint: string }[];
-  /** The existing two-step cancellation flow's factual offer. */
-  cancelOffer?: CancelOffer | null;
   /** Existing Stripe card setup flow; the endpoint rechecks live eligibility. */
   canUpdatePaymentCard?: boolean;
   /** Organization billing contact, edited by the existing Settings Billing pane. */
@@ -406,31 +403,6 @@ export async function loadSubscriptionData(
   const cancellation = !complimentary && endedStatus
     ? { accessUntil: (sub?.currentPeriodEnd ?? sub?.trialEndsAt)?.toISOString() ?? null, ended: true }
     : null;
-  let cancelOffer: CancelOffer | null = null;
-  // Local access expiry cannot prove that Stripe stopped billing. Keep the
-  // existing cancellation path for a still-live provider mirror that can be
-  // contacted, while never promising access until a past date.
-  const canCancelUnverifiedProvider = sub?.provider === "STRIPE" && Boolean(sub.externalSubId) && isStripeEnabled();
-  if ((!accessBlocked || canCancelUnverifiedProvider) && sub && sub.provider !== "MANUAL" && !sub.canceledAt && (LIVE_STATUSES as readonly string[]).includes(storedStatus) && !freeSwitch) {
-    // Same rules and copy as Settings Billing; no Stripe request or mutation.
-    const { parsePlanLimits } = await import("@/lib/planLimits");
-    const catalog = await db.pricingPlan.findMany({ select: { slug: true, limitsJson: true } });
-    const limitsOf = (slug: string) => {
-      const row = catalog.find((p) => p.slug.toLowerCase() === slug);
-      return row ? parsePlanLimits(row.limitsJson) : null;
-    };
-    const slug = sub.plan.toLowerCase();
-    const own = limitsOf(slug === "custom" ? CUSTOM_PLAN_LIMITS_SLUG : slug);
-    const free = limitsOf("free") ?? DEFAULT_FREE_LIMITS;
-    const cap = (value: number | undefined) => isUnlimited(value) ? null : value as number;
-    cancelOffer = {
-      planName: wasName,
-      keepsUntil: futureBillDate?.toISOString() ?? null,
-      ...(accessBlocked ? { accessAlreadyFree: true as const } : {}),
-      losses: freePlanLosses({ pages: slug === "custom" ? customPages : null, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated) }),
-      made: null,
-    };
-  }
   let nextCharge: NextCharge | null = null;
   if (accessBlocked || complimentary || cancellation || freeSwitch || freePlan) {
     nextCharge = null;
@@ -496,7 +468,6 @@ export async function loadSubscriptionData(
     usageUnlimited,
     usageUnavailable,
     usageExempt: limitOverview.exempt,
-    cancelOffer,
     canUpdatePaymentCard: isStripeEnabled()
       && sub?.provider === "STRIPE"
       && Boolean(sub.externalCustomerId && sub.externalSubId)

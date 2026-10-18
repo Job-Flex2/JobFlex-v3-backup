@@ -10,8 +10,9 @@
 // REAL DATA: Your plan — Subscription + PricingPlan catalog; seats from the
 // plan's teamSeats limit. Billing contact — Organization.billingEmail.
 // The button is owner-only (billing is fail-closed to OWNER); managers see
-// "Ask your owner". At the foot, the owner's "Cancel subscription" link
-// (components/billing/FreeSwitch, owner 2026-10-13): two windows, then the
+// "Ask your owner". "Manage subscription" opens the manage window over the
+// pane (components/billing/FreeSwitch, owner 2026-10-17) — the one place a
+// plan is cancelled: Cancel → "Before you go" → the confirmation, then the
 // plan switches to Free at the end of the cycle.
 
 import { updateBusiness } from "@/actions/accountSettings";
@@ -29,7 +30,7 @@ import {
 import type { Badge, CardHead, IconName, PaneProps } from "../settings-data";
 import { Field, SaveBar } from "../ui";
 import { useState } from "react";
-import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { FreeSwitchNotice, ManageSubscription } from "@/components/billing/FreeSwitch";
 
 function Icon({ name }: { name: IconName }) {
   return (
@@ -91,11 +92,19 @@ export function BillingPane({ data }: PaneProps) {
               </div>
             </div>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-              {b.isOwner ? (
-                <a className="btn btn-primary" href={b.subscriptionHref}>
+              {b.isOwner && b.manage ? (
+                <ManageSubscription
+                  className="btn btn-primary"
+                  planName={b.planName}
+                  status={b.planBadge}
+                  view={b.manage}
+                  offer={b.cancel}
+                  freeSwitch={b.freeSwitch}
+                  changeHref={b.subscriptionHref}
+                >
                   {PLAN_PRIMARY_ACTION.icon ? <Icon name={PLAN_PRIMARY_ACTION.icon} /> : null}
                   {PLAN_PRIMARY_ACTION.label}
-                </a>
+                </ManageSubscription>
               ) : (
                 <button className="btn btn-ghost" type="button" disabled title={PLAN_ASK_OWNER.desc}>
                   {PLAN_ASK_OWNER.label}
@@ -125,13 +134,11 @@ export function BillingPane({ data }: PaneProps) {
         <SaveBar disabled={!b.canEditBilling} watch={billingEmail} onSave={() => updateBusiness({ billingEmail })} />
       </section>
 
-      {/* ── The way out, and back (lib/freePlan) ──────────────────────
-          The owner's plain "Cancel subscription" link at the pane's foot;
-          once booked, the date it switches to Free and "Keep <plan>". */}
+      {/* ── The way back (lib/freePlan) ───────────────────────────────
+          Once booked, the date it switches to Free and "Keep <plan>". The
+          way out is in the manage window only (owner, 2026-10-17). */}
       {b.freeSwitch ? (
         <FreeSwitchNotice planName={b.freeSwitch.planName} at={b.freeSwitch.at} canKeep={b.isOwner} />
-      ) : b.cancel ? (
-        <CancelPlanLink offer={b.cancel} />
       ) : null}
     </>
   );

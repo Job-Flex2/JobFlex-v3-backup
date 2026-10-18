@@ -87,7 +87,7 @@ import type { SubscriptionInvoice } from "@/actions/billing";
 import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 import type { SubscriptionViewProps } from "@/app/(dashboard)/dashboard/subscription/subscription-load";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
-import { CancelPlanLink, FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import { UpdatePaymentCardButton } from "@/components/billing/PlanChangeNotes";
 import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgrade";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
@@ -180,7 +180,6 @@ export function MobileSubscription({
   usageUnavailable = [],
   usageExempt,
   billingInformation,
-  cancelOffer,
   canUpdatePaymentCard,
   invoices,
   nextCharge,
@@ -641,8 +640,6 @@ export function MobileSubscription({
               </div>
             </div>
           </section>
-
-          {cancelOffer ? <CancelPlanLink offer={cancelOffer} className="jfms-cancel" /> : null}
         </div>
       </main>
 
