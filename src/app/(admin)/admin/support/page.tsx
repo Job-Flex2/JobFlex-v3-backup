@@ -17,10 +17,9 @@ import {
   type SupportTicketDTO,
 } from "@/components/v3/admin-support/admin-support-content";
 import { tasksForTicketsSafe } from "@/lib/adminTasks/service";
-import { recipientsForTickets, repliesForTickets } from "@/lib/supportReplies";
+import { recipientsForTickets, threadsFor } from "@/lib/supportThread";
 import { readSupportAiMode, supportAiForTickets } from "@/lib/support/aiSupport";
 import { supportRecipients } from "@/lib/notify";
-import { MarkSupportSeen } from "./mark-seen";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +42,12 @@ export default async function AdminSupportPage({
 
   const [rows, open, inProgress, resolved, closed, unread] = await Promise.all([
     db.supportTicket.findMany({
-      orderBy: { createdAt: "desc" },
+      // The conversation's latest message first: a customer's reply lifts its ticket to the top.
+      orderBy: { lastMessageAt: "desc" },
       take: 100,
       include: {
         organization: { select: { name: true, billingEmail: true } },
-        user: { select: { email: true } },
+        user: { select: { email: true, name: true } },
       },
     }),
     db.supportTicket.count({ where: { status: "OPEN" } }),
@@ -60,8 +60,8 @@ export default async function AdminSupportPage({
   // The task made from each ticket, if any (/admin/tasks, "Create task").
   // Without the task tables the tickets show as before and "Create task" hides.
   const { available: tasksAvailable, tasks } = await tasksForTicketsSafe(rows.map((t) => t.id));
-  // The answers already given, and where a new one goes (2026-10-14, lib/supportReplies).
-  const [replies, recipients] = await Promise.all([repliesForTickets(rows.map((t) => t.id)), recipientsForTickets(rows)]);
+  // Each ticket's conversation, and where the team's messages are emailed (lib/supportThread).
+  const [threads, recipients] = await Promise.all([threadsFor(rows.map((t) => t.id)), recipientsForTickets(rows)]);
   // The support AI (2026-10-15): what it did on each ticket, its switch, and the inbox it copies.
   const [aiRecords, aiMode, aiCopyTo] = await Promise.all([
     supportAiForTickets(rows.map((t) => t.id)),
@@ -79,22 +79,24 @@ export default async function AdminSupportPage({
     status: t.status,
     orgName: t.organization.name,
     submitterEmail: t.user?.email ?? null,
+    submitterName: t.user?.name?.trim() || null,
     createdAt: t.createdAt.toISOString(),
+    lastMessageAt: t.lastMessageAt.toISOString(),
     unread: t.adminReadAt === null,
     task: tasks[t.id] ?? null,
-    replies: replies[t.id] ?? [],
+    messages: threads[t.id] ?? [],
     to: recipients[t.id] ?? null,
     ai: aiRecords[t.id] ?? null,
   }));
 
   return (
     <>
-      {/* Opening the inbox is "seeing" the queue — clears the unread badge. */}
-      <MarkSupportSeen hasUnread={unread > 0} />
-
+      {/* Unread is per ticket since the conversation (2026-10-17): opening a
+          ticket reads it, and a customer's next message makes it unread again. */}
       <AdminSupportContent
         tickets={tickets}
         counts={{ open, inProgress, resolved, closed }}
+        unread={unread}
         initialTicketId={openTicketId}
         tasksAvailable={tasksAvailable}
         signer={signer}

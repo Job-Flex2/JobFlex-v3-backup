@@ -6,8 +6,11 @@ import { requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { notifySupportTicket, supportTicketRef } from "@/lib/notify";
 import { rateLimitShared, retryInWords } from "@/lib/rateLimit";
-import { answerTicketWithAi } from "@/lib/support/aiSupport";
-import { alertSupportTicket } from "@/lib/adminAlerts";
+import { answerTicketWithAi, readSupportAi } from "@/lib/support/aiSupport";
+import { admin as adminLink, alertSupportTicket, fireAdminAlert, short } from "@/lib/adminAlerts";
+import { checkReply, openingMessage, type ThreadMessage } from "@/lib/supportReply";
+import { customerLabel, postSupportMessage, threadOf, ticketReplyTo } from "@/lib/supportThread";
+import type { SupportAiRecord } from "@/lib/support/aiState";
 
 // Support taxonomy — kept in lockstep with the customer form's chips, the
 // corner Help widget's categories and the admin triage tags. Not exported: a
@@ -109,6 +112,8 @@ export async function submitSupportTicket(raw: unknown): Promise<SubmitTicketRes
   const ref = supportTicketRef(ticket.id);
   const alert = await notifySupportTicket({
     ticketId: ticket.id,
+    // Stage 2: a reply to the alert lands in the conversation as the team's message.
+    replyTo: ticketReplyTo(ticket.id),
     ref,
     subject,
     body: data.body,
@@ -161,4 +166,134 @@ export async function markSupportTicketsRead(): Promise<void> {
   });
   revalidatePath("/admin/support");
   revalidatePath("/admin");
+}
+
+// ── The conversation (owner, 2026-10-17: one dialog per ticket) ──────────────
+//
+// The customer's side: /dashboard/support opens a ticket as a chat — every
+// message in order (theirs, ours, the AI's), the box at the bottom — and asks
+// for news every few seconds while it is open. Only the person who filed a
+// ticket reads or writes it (the page's own rule: "Only you and our team can
+// see this"). The rows and the letters are lib/supportThread.
+
+const isId = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64;
+
+/** Twenty in ten minutes per person — a conversation, not a flood. */
+const MESSAGES_PER_WINDOW = 20;
+
+export interface ConversationView {
+  ticketId: string;
+  status: string;
+  /** ISO — the poll's "anything new?" stamp. */
+  lastMessageAt: string;
+  /** The ticket's own words first, then every message, oldest first. */
+  messages: ThreadMessage[];
+}
+
+async function ownTicket(ticketId: string) {
+  const { organizationId, user } = await requireOrg();
+  const t = await db.supportTicket.findUnique({
+    where: { id: ticketId },
+    include: { user: { select: { name: true, email: true } }, organization: { select: { name: true } } },
+  });
+  return t && t.organizationId === organizationId && t.userId === user.id ? { t, userId: user.id } : null;
+}
+
+async function conversationOf(t: { id: string; body: string; status: string; createdAt: Date; lastMessageAt: Date; user: { name: string | null; email: string | null } | null; organization: { name: string } }): Promise<ConversationView> {
+  const opening = openingMessage({ id: t.id, body: t.body, createdAt: t.createdAt.toISOString(), by: customerLabel(t) });
+  return { ticketId: t.id, status: t.status, lastMessageAt: t.lastMessageAt.toISOString(), messages: [opening, ...(await threadOf(t.id))] };
+}
+
+/**
+ * The open ticket's conversation, for the chat's poll. `since` is the
+ * lastMessageAt the page already has: unchanged (and the status too) →
+ * `{ changed: false }`, one indexed read and nothing more. Null: not theirs.
+ */
+export async function supportConversation(ticketId: unknown, since?: unknown, status?: unknown): Promise<ConversationView | { changed: false } | null> {
+  if (!isId(ticketId)) return null;
+  const own = await ownTicket(ticketId);
+  if (!own) return null;
+  if (typeof since === "string" && since === own.t.lastMessageAt.toISOString() && status === own.t.status) return { changed: false };
+  return conversationOf(own.t);
+}
+
+export type PostReplyResult = { ok: true; conversation: ConversationView } | { ok: false; error: string };
+
+/**
+ * The customer writes in their ticket. Kept, then the support inbox is emailed
+ * (lib/supportThread); a resolved or closed ticket opens again; the ticket is
+ * unread for the admins and on top of their queue; the team's alert texts
+ * hear of it; and the support AI may answer — after the response, and only
+ * while no person on the team leads the ticket (lib/support aiMayAnswer).
+ */
+export async function postSupportReply(ticketId: unknown, raw: unknown): Promise<PostReplyResult> {
+  if (!isId(ticketId)) return { ok: false, error: "That ticket is gone." };
+  const own = await ownTicket(ticketId);
+  if (!own) return { ok: false, error: "That ticket isn't one of yours." };
+  const gate = await rateLimitShared(`support-msg:${own.userId}`, MESSAGES_PER_WINDOW, TICKET_WINDOW_MS);
+  if (!gate.ok) return { ok: false, error: `That is a lot of messages in a row. Try again in ${retryInWords(gate.retryAfterMs)}.` };
+  const check = checkReply(raw);
+  if (!check.ok) return check;
+
+  const r = await postSupportMessage({ ticketId: own.t.id, from: "customer", body: check.body, channel: "app", authorUserId: own.userId, authorName: customerLabel(own.t) });
+  if (!r) return { ok: false, error: "That ticket is gone." };
+  const ref = supportTicketRef(own.t.id);
+  // The team's "Support" alert texts hear of it too (lib/adminAlerts drops repeats within ten minutes).
+  await fireAdminAlert("support", `JobFlex: ${short(own.t.organization.name)} replied on support ${ref} — “${short(check.body, 60)}”. ${await adminLink(`/admin/support?ticket=${own.t.id}`)}`);
+  after(() =>
+    answerTicketWithAi(own.t.id, { trigger: "follow-up" }).then(
+      () => undefined,
+      (err) => console.error(`[support-ai] ${ref}: the follow-up was not answered:`, err instanceof Error ? err.message : err),
+    ),
+  );
+
+  revalidatePath("/dashboard/support");
+  revalidatePath("/admin/support");
+  revalidatePath("/admin");
+  const fresh = await db.supportTicket.findUnique({
+    where: { id: own.t.id },
+    include: { user: { select: { name: true, email: true } }, organization: { select: { name: true } } },
+  });
+  return { ok: true, conversation: await conversationOf(fresh ?? own.t) };
+}
+
+// ── The admins' side of the conversation (platform admins only) ─────────────
+
+export interface AdminConversationView extends ConversationView {
+  /** Still unread (no adminReadAt). */
+  unread: boolean;
+  /** The support AI's record — it may have written meanwhile. */
+  ai: SupportAiRecord | null;
+}
+
+/** The open ticket in /admin/support, for the sheet's poll — same `since` rule as the customer's. */
+export async function adminSupportConversation(ticketId: unknown, since?: unknown, status?: unknown): Promise<AdminConversationView | { changed: false } | null> {
+  await requirePlatformAdmin();
+  if (!isId(ticketId)) return null;
+  const t = await db.supportTicket.findUnique({
+    where: { id: ticketId },
+    include: { user: { select: { name: true, email: true } }, organization: { select: { name: true } } },
+  });
+  if (!t) return null;
+  if (typeof since === "string" && since === t.lastMessageAt.toISOString() && status === t.status) return { changed: false };
+  const [view, ai] = await Promise.all([conversationOf(t), readSupportAi(t.id)]);
+  return { ...view, unread: t.adminReadAt === null, ai };
+}
+
+/** Opening a ticket in the console reads it. */
+export async function markSupportTicketRead(ticketId: unknown): Promise<void> {
+  await requirePlatformAdmin();
+  if (!isId(ticketId)) return;
+  await db.supportTicket.updateMany({ where: { id: ticketId, adminReadAt: null }, data: { adminReadAt: new Date() } });
+  revalidatePath("/admin");
+}
+
+/** The queue's "anything new?" stamp: its latest message and how many are unread. */
+export async function supportQueueStamp(): Promise<{ latest: string | null; unread: number }> {
+  await requirePlatformAdmin();
+  const [top, unread] = await Promise.all([
+    db.supportTicket.findFirst({ orderBy: { lastMessageAt: "desc" }, select: { lastMessageAt: true } }),
+    db.supportTicket.count({ where: { adminReadAt: null } }),
+  ]);
+  return { latest: top?.lastMessageAt.toISOString() ?? null, unread };
 }

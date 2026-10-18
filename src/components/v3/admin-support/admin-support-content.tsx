@@ -11,11 +11,14 @@
 // existing `updateTicketStatus` (src/actions/admin.ts), which whitelists the
 // four statuses — the column is a free String, so that guard is the only one.
 //
-// THE ANSWER (owner, 2026-10-14: "respond to the client from admin right
-// away"): under the message, the answers already given and a box to write the
-// next one — sent by email to whoever filed the ticket as a plain letter with
-// the ticket quoted under it (replyToSupportTicket), kept in the thread here
-// and on the contractor's own support page; an Open ticket turns In progress.
+// THE CONVERSATION (owner, 2026-10-14 "respond to the client from admin right
+// away"; 2026-10-17 "one dialog per ticket"): the sheet is a chat — the
+// ticket's words, then every message in order (the customer's, ours, the
+// AI's), the box at the bottom. A message is kept in the conversation (here
+// and on the customer's support page) and emailed to them
+// (replyToSupportTicket → lib/supportThread). The open sheet asks for news
+// every 5 s; the queue every 10 s, so a customer's reply lifts its ticket to
+// the top, unread. Opening a ticket reads it.
 //
 // THE AI (owner, 2026-10-15: "add smart AI that answers them automatically …
 // copy to our email … a bug: tell the user we're on it, but don't fix
@@ -32,12 +35,13 @@
 // decisions.md — "never create parallel style sets for identical blocks".
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { adminSupportConversation, markSupportTicketRead, markSupportTicketsRead, supportQueueStamp } from "@/actions/support";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { replyToSupportTicket, updateTicketStatus } from "@/actions/admin";
-import type { SupportReply } from "@/lib/supportReply";
+import type { ThreadMessage } from "@/lib/supportReply";
 import { approveSupportFix, askSupportAi, declineSupportFix, markSupportFixed, setSupportAiMode } from "@/actions/supportAi";
 import {
   SUPPORT_AI_CATEGORY_LABEL,
@@ -81,13 +85,17 @@ export interface SupportTicketDTO {
   status: string;
   orgName: string;
   submitterEmail: string | null;
+  /** The filer's name, as their messages are signed in the conversation. */
+  submitterName?: string | null;
   createdAt: string;
-  /** No adminReadAt yet — the ticket arrived since the last inbox visit. */
+  /** The conversation's latest message — the queue's order. */
+  lastMessageAt: string;
+  /** No adminReadAt yet: a new ticket, or the customer wrote since an admin last opened it. */
   unread: boolean;
   /** The task made from this ticket on /admin/tasks, if any. */
   task: { id: string; title: string; status: string } | null;
-  /** The answers already given, oldest first (lib/supportReplies). */
-  replies: SupportReply[];
+  /** The conversation after the ticket's own words, oldest first (lib/supportThread). */
+  messages: ThreadMessage[];
   /** Where an answer goes — whoever filed it, else the account's owner, else its billing email; null = nowhere. */
   to: string | null;
   /** What the support AI did on this ticket (lib/support), or null when it hasn't read it. */
@@ -143,10 +151,15 @@ function statusTone(status: string): string | false {
 
 /** A person answered after the AI read the ticket — or after the customer said
  *  it still isn't solved: what was waiting is handled. */
-function answeredByPerson(t: { replies: SupportReply[] }, ai: SupportAiRecord | null): boolean {
+function answeredByPerson(t: { messages: ThreadMessage[] }, ai: SupportAiRecord | null): boolean {
   if (!ai) return false;
   const since = needsPersonSince(ai);
-  return t.replies.some((r) => !r.ai && r.at > since);
+  return t.messages.some((m) => m.from === "team" && m.at > since);
+}
+
+/** The customer has the last word in the conversation (after at least one answer). */
+function customerWaiting(messages: ThreadMessage[]): boolean {
+  return messages.length > 0 && messages[messages.length - 1].from === "customer";
 }
 
 function badgeTone(b: SupportAiBadge): string | false {
@@ -190,6 +203,7 @@ function filedAt(iso: string): string {
 export function AdminSupportContent({
   tickets,
   counts,
+  unread = 0,
   now,
   initialTicketId = null,
   tasksAvailable = true,
@@ -199,6 +213,8 @@ export function AdminSupportContent({
 }: {
   tickets: SupportTicketDTO[];
   counts: SupportCounts;
+  /** Tickets no admin has opened since their latest customer message. */
+  unread?: number;
   /** ?ticket=<id> — open this ticket on arrival (a task's related link). */
   initialTicketId?: string | null;
   /** False when the task tables can't be read: no "Create task" then. */
@@ -212,6 +228,56 @@ export function AdminSupportContent({
   aiCopyTo?: string[];
 }) {
   useAdminMotion(KIT_BTN_CLASS);
+  const router = useRouter();
+
+  // Read on this visit, as of which message (the rows themselves are re-read by
+  // the queue's poll): a customer message after that makes the ticket unread again.
+  const [readUpTo, setReadUpTo] = useState<Record<string, string>>({});
+  const isUnread = useCallback((t: SupportTicketDTO) => t.unread && !(readUpTo[t.id] && readUpTo[t.id] >= t.lastMessageAt), [readUpTo]);
+  const unreadLeft = tickets.filter(isUnread).length;
+  const [markingAll, setMarkingAll] = useState(false);
+  async function markAllRead() {
+    setMarkingAll(true);
+    try {
+      await markSupportTicketsRead();
+      setReadUpTo(Object.fromEntries(tickets.map((t) => [t.id, t.lastMessageAt])));
+      router.refresh();
+    } catch {
+      /* the next poll shows the truth */
+    } finally {
+      setMarkingAll(false);
+    }
+  }
+
+  // THE QUEUE'S POLL: every 10 s while the tab is visible, "anything new?" —
+  // one cheap read; a change re-reads the page, so a customer's reply lifts its
+  // ticket to the top, unread, without a reload.
+  const stamp = useRef<string | null>(tickets.reduce<string | null>((m, t) => (!m || t.lastMessageAt > m ? t.lastMessageAt : m), null));
+  const unreadSeen = useRef(unread);
+  useEffect(() => {
+    unreadSeen.current = unread;
+  }, [unread]);
+  useEffect(() => {
+    let busy = false;
+    const tick = async () => {
+      if (busy || document.visibilityState !== "visible") return;
+      busy = true;
+      try {
+        const q = await supportQueueStamp();
+        if (q.latest !== stamp.current || q.unread !== unreadSeen.current) {
+          stamp.current = q.latest;
+          unreadSeen.current = q.unread;
+          router.refresh();
+        }
+      } catch {
+        /* offline: the next tick retries */
+      } finally {
+        busy = false;
+      }
+    };
+    const id = window.setInterval(() => void tick(), 10_000);
+    return () => window.clearInterval(id);
+  }, [router]);
 
   // The AI: its switch, what it did on tickets touched this visit, and the queue filter.
   const [mode, setMode] = useState<SupportAiMode>(aiMode);
@@ -312,6 +378,11 @@ export function AdminSupportContent({
           <div className={cx("kicker")}>Platform</div>
           <h1 className={cx("page-title")}>Support tickets</h1>
         </div>
+        {unreadLeft ? (
+          <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} onClick={markAllRead} disabled={markingAll} data-support-mark-all>
+            {markingAll ? "Marking…" : `Mark ${unreadLeft} read`}
+          </button>
+        ) : null}
       </div>
 
       <div className={cx("kpi-grid")}>
@@ -436,7 +507,7 @@ export function AdminSupportContent({
                   <th>Ticket</th>
                   <th>Category</th>
                   <th>Status</th>
-                  <th>Age</th>
+                  <th>Updated</th>
                 </tr>
               </thead>
               <tbody>
@@ -452,15 +523,20 @@ export function AdminSupportContent({
                   >
                     <td>
                       <div className={cx("subj")}>
-                        {t.unread ? (
+                        {isUnread(t) ? (
                           <span className={cx("mark")} role="img" aria-label="New" />
                         ) : null}
                         <div
-                          className={cx("t-title", t.unread && "unread")}
+                          className={cx("t-title", isUnread(t) && "unread")}
                           title={t.subject}
                         >
                           {t.subject}
                         </div>
+                        {customerWaiting(t.messages) ? (
+                          <span className={cx("st", "st--bp", "aiBadge")} data-support-customer-replied>
+                            Customer replied
+                          </span>
+                        ) : null}
                         {t.priority === "high" ? (
                           <span className={cx("st", "st--danger")}>Urgent</span>
                         ) : null}
@@ -485,8 +561,8 @@ export function AdminSupportContent({
                     <td data-l="Status">
                       <span className={cx("st", statusTone(t.status))}>{statusLabel(t.status)}</span>
                     </td>
-                    <td data-l="Age" className={cx("t-mono")}>
-                      {age(t.createdAt, now)}
+                    <td data-l="Updated" className={cx("t-mono")}>
+                      {age(t.lastMessageAt, now)}
                     </td>
                   </tr>
                 ))}
@@ -512,6 +588,7 @@ export function AdminSupportContent({
             signer={signer}
             ai={liveAi[selected.id] ?? selected.ai}
             onAi={(rec) => setLiveAi((m) => ({ ...m, [selected.id]: rec }))}
+            onRead={(upTo) => setReadUpTo((m) => ({ ...m, [selected.id]: upTo }))}
           />
         ) : null}
       </Sheet>
@@ -524,6 +601,14 @@ export function AdminSupportContent({
 // and no effect syncs state — the sheet stays mounted through its 190ms exit
 // with the last ticket's values still in place (admin-kit's contract).
 
+/** The AI's tag on its message: what kind of send it was. */
+function aiTagLabel(m: ThreadMessage): string {
+  return `AI${m.kind === "ack" ? " · holding note" : m.kind === "fixed" ? " · fixed note" : ""}`;
+}
+
+/** How often the open conversation asks for news. */
+const LIVE_MS = 5_000;
+
 function TicketDetail({
   ticket,
   task,
@@ -532,6 +617,7 @@ function TicketDetail({
   signer,
   ai,
   onAi,
+  onRead,
 }: {
   ticket: SupportTicketDTO;
   task: SupportTicketDTO["task"];
@@ -540,28 +626,87 @@ function TicketDetail({
   signer: string;
   ai: SupportAiRecord | null;
   onAi: (rec: SupportAiRecord) => void;
+  /** Read up to this message (its ISO time). */
+  onRead: (upTo: string) => void;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(ticket.status);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
-  // The answer: the thread so far, the one being written, and the last send.
-  const [replies, setReplies] = useState<SupportReply[]>(ticket.replies);
+  // The conversation: the messages after the ticket's words, the one being written, and the last send.
+  const [messages, setMessages] = useState<ThreadMessage[]>(ticket.messages);
+  const [lastAt, setLastAt] = useState(ticket.lastMessageAt);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [sentAt, setSentAt] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ at: string; note?: string } | null>(null);
   const [replyError, setReplyError] = useState<string | null>(null);
   // The AI on this ticket: its record, the call in flight, and the fix's note.
   const [aiRec, setAiRec] = useState<SupportAiRecord | null>(ai);
   const [aiBusy, setAiBusy] = useState<"ask" | "approve" | "decline" | "done" | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [fixNote, setFixNote] = useState("");
+  const endRef = useRef<HTMLDivElement>(null);
 
   function keepAi(rec: SupportAiRecord) {
     setAiRec(rec);
     onAi(rec);
   }
+
+  // Opening it reads it — and so does a customer's message arriving while it is open.
+  const read = useCallback(
+    (upTo: string) => {
+      onRead(upTo);
+      markSupportTicketRead(ticket.id).catch(() => {});
+    },
+    [onRead, ticket.id],
+  );
+  const readOnce = useRef(false);
+  useEffect(() => {
+    if (readOnce.current || !ticket.unread) return;
+    readOnce.current = true;
+    read(ticket.lastMessageAt);
+  }, [read, ticket.unread, ticket.lastMessageAt]);
+
+  // THE LIVE CONVERSATION: every 5 s while the tab is visible, one cheap read
+  // ("changed since?"); news replaces the messages, the status and the AI's record.
+  const live = useRef({ lastAt, status });
+  useEffect(() => {
+    live.current = { lastAt, status };
+  }, [lastAt, status]);
+  useEffect(() => {
+    let busy = false;
+    const tick = async () => {
+      if (busy || document.visibilityState !== "visible") return;
+      busy = true;
+      try {
+        const r = await adminSupportConversation(ticket.id, live.current.lastAt, live.current.status);
+        if (r && "messages" in r) {
+          setMessages(r.messages.slice(1));
+          setLastAt(r.lastMessageAt);
+          setStatus(r.status);
+          if (r.ai) keepAi(r.ai);
+          if (r.unread) read(r.lastMessageAt);
+        }
+      } catch {
+        /* offline: the next tick retries */
+      } finally {
+        busy = false;
+      }
+    };
+    const id = window.setInterval(() => void tick(), LIVE_MS);
+    return () => window.clearInterval(id);
+    // keepAi and read are stable enough for a poll; the id never changes for this mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket.id]);
+
+  // A new message brings the bottom of the conversation into view.
+  const count = messages.length;
+  const seenCount = useRef(count);
+  useEffect(() => {
+    if (count > seenCount.current) endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    seenCount.current = count;
+  }, [count]);
 
   async function askAi() {
     setAiBusy("ask");
@@ -603,7 +748,8 @@ function TicketDetail({
       const r = await markSupportFixed(ticket.id);
       if (r.ok) {
         keepAi(r.record);
-        setReplies((list) => [...list, r.reply]);
+        setMessages((list) => [...list, r.reply]);
+        setLastAt(r.reply.at);
         setStatus("RESOLVED");
         router.refresh();
       } else setAiError(r.error);
@@ -615,20 +761,21 @@ function TicketDetail({
   }
 
   async function sendReply() {
-    if (sending || !ticket.to) return;
+    if (sending || draft.trim().length < 2) return;
     setSending(true);
     setReplyError(null);
     try {
       const r = await replyToSupportTicket(ticket.id, draft);
       if (r.ok) {
-        setReplies((list) => [...list, r.reply]);
+        setMessages((list) => [...list, r.reply]);
+        setLastAt(r.reply.at);
         setDraft("");
-        setSentAt(r.reply.at);
+        setSent({ at: r.reply.at, ...(r.emailed ? {} : { note: r.emailNote ?? "Not emailed." }) });
         setStatus(r.status);
         router.refresh();
       } else setReplyError(r.error);
     } catch {
-      setReplyError("The reply did not go out. Check the connection and try again.");
+      setReplyError("The message wasn't sent. Check the connection and try again.");
     } finally {
       setSending(false);
     }
@@ -667,6 +814,16 @@ function TicketDetail({
     }
   }
 
+  const opening: ThreadMessage = {
+    id: `ticket:${ticket.id}`,
+    at: ticket.createdAt,
+    from: "customer",
+    by: ticket.submitterName || ticket.submitterEmail || ticket.orgName,
+    to: null,
+    body: ticket.body,
+    channel: "app",
+  };
+
   return (
     <>
       <SheetBody>
@@ -687,7 +844,65 @@ function TicketDetail({
           ) : null}
         </div>
 
-        <div className={cx("msg")}>{ticket.body}</div>
+        {/* The conversation, oldest first: the customer's on the left, ours on the right. */}
+        <div className={cx("chat")} data-support-thread role="log" aria-label="Conversation" aria-live="polite">
+          {[opening, ...messages].map((m) => (
+            <div
+              key={m.id}
+              className={cx("bubble", m.from === "customer" ? "bubble--them" : "bubble--us", m.from === "ai" && "bubble--ai")}
+              data-support-message={m.from}
+            >
+              <div className={cx("replyMeta")}>
+                {m.from === "ai" ? <span className={cx("aiTag")}>{aiTagLabel(m)}</span> : null}
+                {m.by || (m.from === "customer" ? "Customer" : "JobFlex support")} · {filedAt(m.at)}
+                {m.channel === "email" ? " · by email" : ""}
+                {m.from !== "customer" && m.to ? ` · emailed to ${m.to}` : ""}
+              </div>
+              <div className={cx("replyBody")}>{m.body}</div>
+            </div>
+          ))}
+          <div ref={endRef} />
+        </div>
+
+        <div className={cx("replyBox")} data-support-reply>
+          <Field
+            label="Reply"
+            htmlFor="ticket-reply"
+            hint={
+              ticket.to
+                ? `Shows in their conversation at once and goes by email to ${ticket.to}, signed ${signer} · JobFlex support — no need to sign it. Ctrl+Enter sends.`
+                : "Shows in their conversation. Nobody can be emailed: no one is on this ticket and the account has no owner or billing email."
+            }
+          >
+            <textarea
+              id="ticket-reply"
+              className={cx("in", "ta")}
+              rows={4}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  void sendReply();
+                }
+              }}
+              placeholder="Write the answer as you'd say it."
+              disabled={sending}
+              data-support-reply-text
+            />
+          </Field>
+          <div className={cx("replyActs")}>
+            <button type="button" className={cx("btn", "btn-primary", "btn-sm")} onClick={sendReply} disabled={sending || draft.trim().length < 2} data-support-send>
+              {sending ? "Sending…" : "Send"}
+            </button>
+            {sent && !draft ? (
+              <span className={cx(sent.note ? "aiWhy" : "replySent")} data-support-sent>
+                {sent.note ? `In the conversation · ${sent.note}` : `Sent · ${filedAt(sent.at)}`}
+              </span>
+            ) : null}
+          </div>
+          {replyError ? <Note tone="danger">{replyError}</Note> : null}
+        </div>
 
         {/* What the support AI did here — and, for a bug, the fix waiting for a decision. */}
         <div className={cx("aiCard")} data-support-ai>
@@ -695,7 +910,7 @@ function TicketDetail({
             <>
               <div className={cx("aiHead")}>
                 {(() => {
-                  const b = badgeFor(aiRec, answeredByPerson({ replies }, aiRec));
+                  const b = badgeFor(aiRec, answeredByPerson({ messages }, aiRec));
                   return b ? <span className={cx("st", badgeTone(b))}>{b.label}</span> : null;
                 })()}
                 {aiRec.outcome !== "failed" ? (
@@ -712,12 +927,12 @@ function TicketDetail({
                   {aiRec.customer.note ? <div className={cx("aiVerdictNote")}>{aiRec.customer.note}</div> : null}
                 </div>
               ) : null}
-              {aiRec.reason ? <div className={cx("aiWhy")}>{aiRec.outcome === "failed" ? "What happened: " : "Why it waited: "}{aiRec.reason}</div> : null}
+              {aiRec.reason ? <div className={cx("aiWhy")}>{aiRec.outcome === "failed" ? "What happened: " : aiRec.outcome === "sent" ? "Note: " : "Why it waited: "}{aiRec.reason}</div> : null}
               {aiRec.outcome !== "sent" && aiRec.reply ? (
                 <details className={cx("aiMore")} open={aiRec.outcome === "held" || aiRec.outcome === "drafted"}>
                   <summary>The AI&apos;s answer{aiRec.outcome === "held" || aiRec.outcome === "drafted" ? ", waiting for you" : ""}</summary>
                   <div className={cx("replyBody")} data-support-ai-draft>{aiRec.reply}</div>
-                  <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} onClick={() => setDraft(aiRec.reply)} disabled={!ticket.to} data-support-ai-use>
+                  <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} onClick={() => setDraft(aiRec.reply)} data-support-ai-use>
                     Put it in the reply box
                   </button>
                 </details>
@@ -822,49 +1037,9 @@ function TicketDetail({
             <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} onClick={askAi} disabled={!!aiBusy} data-support-ask-ai>
               {aiBusy === "ask" ? "The AI is reading…" : aiRec ? "Ask AI again" : "Ask AI for an answer"}
             </button>
-            <span className={cx("aiWhy")}>A draft lands in the reply box — nothing is sent.</span>
+            <span className={cx("aiWhy")}>A draft lands in the reply box — nothing is sent. Once anyone on the team writes here, the AI stops answering this ticket on its own.</span>
           </div>
           {aiError ? <Note tone="danger">{aiError}</Note> : null}
-        </div>
-
-        {/* The answers so far, and the next one. */}
-        {replies.length ? (
-          <div className={cx("thread")} data-support-thread>
-            {replies.map((r) => (
-              <div key={r.id} className={cx("reply")}>
-                <div className={cx("replyMeta")}>
-                  {r.ai ? <span className={cx("aiTag")}>AI{r.kind === "ack" ? " · holding note" : r.kind === "fixed" ? " · fixed note" : ""}</span> : null}
-                  {r.by} · {filedAt(r.at)} · to {r.to}
-                </div>
-                <div className={cx("replyBody")}>{r.body}</div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <div className={cx("replyBox")} data-support-reply>
-          <Field
-            label={ticket.to ? "Reply" : "Reply — no address to send to"}
-            htmlFor="ticket-reply"
-            hint={ticket.to ? `Goes by email to ${ticket.to} as a plain letter signed ${signer} · JobFlex support — no need to sign it — with the ticket quoted under it. Their reply comes back to support@jobflex.app.` : "Nobody is on this ticket and the account has no owner or billing email."}
-          >
-            <textarea
-              id="ticket-reply"
-              className={cx("in", "ta")}
-              rows={4}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Write the answer as you'd say it."
-              disabled={!ticket.to || sending}
-              data-support-reply-text
-            />
-          </Field>
-          <div className={cx("replyActs")}>
-            <button type="button" className={cx("btn", "btn-primary", "btn-sm")} onClick={sendReply} disabled={!ticket.to || sending || draft.trim().length < 2} data-support-send>
-              {sending ? "Sending…" : "Send the reply"}
-            </button>
-            {sentAt && !draft ? <span className={cx("replySent")} data-support-sent>Sent · {filedAt(sentAt)}</span> : null}
-          </div>
-          {replyError ? <Note tone="danger">{replyError}</Note> : null}
         </div>
 
         {/* Without the task tables (not set up yet) there is nothing to link or make. */}

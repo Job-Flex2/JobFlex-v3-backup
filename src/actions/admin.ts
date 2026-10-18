@@ -10,12 +10,8 @@ import { getStripe, isStripeEnabled } from "@/lib/sdk/stripe";
 import { isStripeWriteAllowed } from "@/lib/stripeSafety";
 import { setStripeMode, getStripeMode, stripeKeyFor, type StripeMode } from "@/lib/stripeMode";
 import { setCustomPlanTrialDays, MAX_TRIAL_DAYS } from "@/lib/customPlanConfig";
-import { randomUUID } from "node:crypto";
-import { appBaseUrl } from "@/lib/appUrl";
-import { supportTicketRef } from "@/lib/notify";
-import { isEmailEnabled, sendEmail } from "@/lib/sdk/resend";
-import { checkReply, replyLetter, statusAfterReply, type SupportReply } from "@/lib/supportReply";
-import { addSupportReply, canOpenSupportPage, recipientForTicket } from "@/lib/supportReplies";
+import { checkReply, type ThreadMessage } from "@/lib/supportReply";
+import { postSupportMessage } from "@/lib/supportThread";
 
 // ── Pricing plans ─────────────────────────────────────
 
@@ -201,47 +197,38 @@ export async function updateTicketStatus(id: string, status: string) {
   revalidatePath("/admin");
 }
 
-export type ReplyToTicketResult = { ok: true; reply: SupportReply; status: string } | { ok: false; error: string };
+export type ReplyToTicketResult =
+  | { ok: true; reply: ThreadMessage; status: string; emailed: boolean; emailNote?: string }
+  | { ok: false; error: string };
 
 /**
- * THE ANSWER, FROM THE TICKET ITSELF (owner, 2026-10-14: "respond to the
- * client from admin right away"): the admin's words go to whoever filed the
- * ticket (else the account's owner, else its billing address) as a plain
- * letter with the ticket quoted under it (lib/supportReply), are kept in the
- * ticket's thread (lib/supportReplies) — on this console and on the
- * contractor's own support page — and an Open ticket becomes In progress.
- * The reply is kept only once the email has gone: the thread never says
- * "sent" for a letter that was not.
+ * THE TEAM'S MESSAGE IN THE CONVERSATION (owner, 2026-10-14 "respond to the
+ * client from admin right away"; 2026-10-17 one dialog per ticket): kept in
+ * the ticket's conversation — on this console and on the customer's support
+ * page at once — then emailed to whoever filed the ticket (else the account's
+ * owner, else its billing address) with the last few messages and an "Open
+ * conversation" button (lib/supportThread). An Open ticket becomes In progress.
+ * The message is kept even when the email fails; `emailed: false` and the
+ * note say so, so the console never claims a letter that did not go.
  */
 export async function replyToSupportTicket(id: string, raw: unknown): Promise<ReplyToTicketResult> {
   const admin = await requirePlatformAdmin();
   const check = checkReply(raw);
   if (!check.ok) return check;
-  const ticket = await db.supportTicket.findUnique({
-    where: { id },
-    include: { user: { select: { email: true } }, organization: { select: { billingEmail: true } } },
+  const who = admin as { id?: string; name?: string | null };
+  const r = await postSupportMessage({
+    ticketId: id,
+    from: "team",
+    body: check.body,
+    channel: "app",
+    authorUserId: who.id ?? null,
+    authorName: who.name?.trim() || "JobFlex support",
   });
-  if (!ticket) return { ok: false, error: "That ticket is gone." };
-  const to = await recipientForTicket(ticket);
-  if (!to) return { ok: false, error: "This ticket has no address to answer: nobody is on it, and the account has no owner or billing email." };
-  if (!isEmailEnabled()) return { ok: false, error: "Email is not set up on this server, so the reply cannot be sent." };
-  const who = admin as { name?: string | null; email?: string | null };
-  const sender = who.name?.trim() || "JobFlex support";
-  const letter = replyLetter({ body: check.body, sender, ticket: { subject: ticket.subject, body: ticket.body, ref: supportTicketRef(ticket.id), filedAt: ticket.createdAt.toISOString() }, base: await appBaseUrl(), supportPage: await canOpenSupportPage(ticket, to) });
-  try {
-    await sendEmail({ to, subject: letter.subject, html: letter.html, text: letter.text, replyTo: "support@jobflex.app" });
-  } catch (err) {
-    console.error("[support] reply email failed:", err instanceof Error ? err.message : err);
-    return { ok: false, error: "The email did not go out. Check the connection and try again." };
-  }
-  const reply: SupportReply = { id: randomUUID(), at: new Date().toISOString(), by: sender, to, body: check.body };
-  await addSupportReply(ticket.id, reply);
-  const status = statusAfterReply(ticket.status);
-  await db.supportTicket.update({ where: { id }, data: { status, adminReadAt: ticket.adminReadAt ?? new Date() } });
+  if (!r) return { ok: false, error: "That ticket is gone." };
   revalidatePath("/admin/support");
   revalidatePath("/admin");
   revalidatePath("/dashboard/support");
-  return { ok: true, reply, status };
+  return { ok: true, reply: r.message, status: r.status, emailed: r.emailed, ...(r.emailNote ? { emailNote: r.emailNote } : {}) };
 }
 
 // ── Platform-wide campaigns ───────────────────────────

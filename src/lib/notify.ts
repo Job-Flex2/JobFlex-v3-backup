@@ -950,6 +950,8 @@ export interface SupportTicketNotice {
   priority: string;
   orgName: string;
   submitterEmail: string | null;
+  /** The ticket's own reply address (lib/supportThread ticketReplyTo) while replies by email are on. */
+  replyTo?: string | null;
 }
 
 export type SupportNotifyResult =
@@ -1024,7 +1026,7 @@ export async function notifySupportTicket(t: SupportTicketNotice): Promise<Suppo
         orgName: t.orgName,
         submitterEmail: t.submitterEmail,
         ref: t.ref,
-        href: `${appUrl}/admin/support`,
+        href: `${appUrl}/admin/support?ticket=${t.ticketId}`,
       }),
     );
     // ONE SEND PER RECIPIENT, not one batch. A batch is a single provider call
@@ -1042,7 +1044,9 @@ export async function notifySupportTicket(t: SupportTicketNotice): Promise<Suppo
           // The alert is FROM the platform but ABOUT a contractor's problem, so
           // a plain Reply goes to the person who raised it instead of to the
           // platform's own send-only address.
-          replyTo: t.submitterEmail ?? undefined,
+          // With replies by email on, the ticket's own address instead: the
+          // answer then lands in the conversation and reaches the customer from there.
+          replyTo: t.replyTo ?? t.submitterEmail ?? undefined,
         });
         delivered += 1;
       } catch (err) {

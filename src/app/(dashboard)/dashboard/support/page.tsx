@@ -3,11 +3,19 @@ import { db } from "@/lib/db";
 import { SupportForm } from "./support-form";
 import { SupportFaq } from "./support-faq";
 import { SupportTickets, type SupportTicketView } from "./support-tickets";
-import { repliesForTickets } from "@/lib/supportReplies";
+import { customerLabel, threadsFor } from "@/lib/supportThread";
+import { openingMessage } from "@/lib/supportReply";
 
 export const dynamic = "force-dynamic";
 
-export default async function SupportPage() {
+export default async function SupportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ticket?: string | string[] }>;
+}) {
+  // ?ticket=<id> — the "Open conversation" button in every letter about a ticket.
+  const sp = await searchParams;
+  const openTicketId = typeof sp.ticket === "string" ? sp.ticket : null;
   // Manager-only route, and — since the Help widget put a composer on every
   // screen for every role — the viewer's OWN tickets only.
   //
@@ -22,7 +30,8 @@ export default async function SupportPage() {
   const { organizationId, user } = await requireManager();
   const tickets = await db.supportTicket.findMany({
     where: { organizationId, userId: user.id },
-    orderBy: { createdAt: "desc" },
+    // The conversation with the latest message first.
+    orderBy: { lastMessageAt: "desc" },
     take: 50,
     select: {
       id: true,
@@ -32,11 +41,16 @@ export default async function SupportPage() {
       priority: true,
       status: true,
       createdAt: true,
+      lastMessageAt: true,
     },
   });
 
-  // Our answers (2026-10-14, lib/supportReplies): the same words that went by email, under the ticket here too.
-  const replies = await repliesForTickets(tickets.map((t) => t.id));
+  // Each ticket's conversation (2026-10-17, lib/supportThread): their words, ours, the AI's — the same that went by email.
+  const [threads, me] = await Promise.all([
+    threadsFor(tickets.map((t) => t.id)),
+    db.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } }),
+  ]);
+  const by = customerLabel({ user: me });
 
   const open = tickets.filter((t) => t.status === "OPEN").length;
   const inProgress = tickets.filter((t) => t.status === "IN_PROGRESS").length;
@@ -56,7 +70,8 @@ export default async function SupportPage() {
     priority: t.priority,
     status: t.status,
     createdAt: t.createdAt,
-    replies: (replies[t.id] ?? []).map((r) => ({ id: r.id, at: r.at, body: r.body })),
+    lastMessageAt: t.lastMessageAt.toISOString(),
+    messages: [openingMessage({ id: t.id, body: t.body, createdAt: t.createdAt.toISOString(), by }), ...(threads[t.id] ?? [])],
   }));
 
   return (
@@ -110,10 +125,10 @@ export default async function SupportPage() {
             Your conversations
           </h2>
           <span className="text-[12px] text-[color:var(--ink-muted)] tabular">
-            {tickets.length} message{tickets.length === 1 ? "" : "s"}
+            {tickets.length} conversation{tickets.length === 1 ? "" : "s"}
           </span>
         </div>
-        <SupportTickets tickets={view} />
+        <SupportTickets tickets={view} openId={openTicketId} />
       </section>
     </div>
   );

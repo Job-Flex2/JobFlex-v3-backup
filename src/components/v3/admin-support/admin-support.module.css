@@ -116,6 +116,18 @@
 }
 :global(.jf-blueprint .content) .replyMeta { margin-bottom: 4px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted, #555); overflow-wrap: anywhere; }
 :global(.jf-blueprint .content) .replyBody { font-size: 13.5px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* ── The conversation (2026-10-17): one dialog per ticket ──────
+   The customer's messages on the left on paper, ours on the
+   right edged in blueprint, the AI's dashed. Near-square frames,
+   no shadow; each bubble wraps whatever the customer pasted. */
+:global(.jf-blueprint .content) .chat { display: grid; gap: 10px; min-width: 0; }
+:global(.jf-blueprint .content) .bubble {
+  max-width: 88%; min-width: 0; padding: 10px 12px;
+  border: 1.5px solid var(--hair); border-radius: var(--radius);
+}
+:global(.jf-blueprint .content) .bubble--them { justify-self: start; background: var(--paper); }
+:global(.jf-blueprint .content) .bubble--us { justify-self: end; background: #fff; border-right: 3px solid var(--blueprint, #1854a0); }
+:global(.jf-blueprint .content) .bubble--ai { border-style: dashed; border-right-style: solid; }
 :global(.jf-blueprint .content) .replyBox { display: grid; gap: 8px; margin-top: 12px; }
 :global(.jf-blueprint .content) .replyActs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 :global(.jf-blueprint .content) .replySent { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--success-dark, #2c6335); }
@@ -181,5 +193,5 @@
   :global(.jf-blueprint .content) .count { margin-left: 0; }
   :global(.jf-blueprint .content) .aiPanelRow { flex-direction: column; }
   :global(.jf-blueprint .content) .aiMode { flex: 1 1 auto; width: 100%; }
-
+  :global(.jf-blueprint .content) .bubble { max-width: 94%; }
 }

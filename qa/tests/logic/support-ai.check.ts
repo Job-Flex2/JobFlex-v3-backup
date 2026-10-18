@@ -24,9 +24,9 @@ import {
   teamCopyEmail,
   waitingForPerson,
 } from "../../../src/lib/support/aiReply";
-import { answerParts, liveStateOf, needsPersonSince } from "../../../src/lib/support/aiState";
+import { AI_MESSAGES_MAX, aiMayAnswer, answerParts, liveStateOf, needsPersonSince } from "../../../src/lib/support/aiState";
 import { stillStuckEmail } from "../../../src/lib/support/aiReply";
-import type { SupportReply } from "../../../src/lib/supportReply";
+import type { ThreadMessage } from "../../../src/lib/supportReply";
 import { SUPPORT_HANDBOOK } from "../../../src/lib/support/handbook";
 
 let bad = 0;
@@ -112,8 +112,8 @@ check("the ticket as the model reads it: ref, words, facts, the thread, errors, 
 check("the system message is the rules then the handbook", supportSystemPrompt().startsWith(SUPPORT_AI_RULES) && supportSystemPrompt().includes("HANDBOOK"));
 
 // ── The answer in the Help window ───────────────────────────────────────────
-const thread: SupportReply[] = [
-  { id: "1", at: "2026-10-15T10:00:01.000Z", by: "JobFlex support", to: "dana@x.test", body: "Hi Dana,\n\nHere's how.", ai: true, kind: "answer" },
+const thread: ThreadMessage[] = [
+  { id: "1", at: "2026-10-15T10:00:01.000Z", from: "ai", by: "JobFlex support", to: "dana@x.test", body: "Hi Dana,\n\nHere's how.", channel: "app", kind: "answer" },
 ];
 check("no record yet: the window waits while the AI answers on its own; not when it's off or has no key", liveStateOf(null, [], { mode: "auto", aiOn: true }).state === "pending" && liveStateOf(null, [], { mode: "off", aiOn: true }).state === "none" && liveStateOf(null, [], { mode: "auto", aiOn: false }).state === "none" && liveStateOf(null, [], { mode: "draft", aiOn: true }).state === "none");
 const liveAnswer = liveStateOf(sent, thread, { mode: "auto", aiOn: true });
@@ -121,6 +121,13 @@ check("an answer that went out: the window shows exactly what was emailed", live
 const rated = liveStateOf({ ...sent, customer: { verdict: "solved", at: "t" } }, thread, { mode: "auto", aiOn: true });
 check("…with the customer's word on it, once given", rated.state === "answer" && rated.verdict === "solved");
 check("held with the note sent: 'we're on it'; held without it, drafted or failed: nothing coming", liveStateOf({ ...sent, outcome: "held", ackSent: true }, [], { mode: "auto", aiOn: true }).state === "held" && liveStateOf({ ...sent, outcome: "held" }, [], { mode: "auto", aiOn: true }).state === "none" && liveStateOf({ ...sent, outcome: "drafted" }, [], { mode: "auto", aiOn: true }).state === "none" && liveStateOf(failedRecord("t", "-", "x"), [], { mode: "auto", aiOn: true }).state === "none");
+// ── The conversation (2026-10-17): the AI answers the customer's next message while no person leads ──
+const convo = supportUserPrompt({ ticket: { ref: "J7RCFS", subject: "S", body: "B", category: "technical", priority: "high", filedAt: "2026-10-15" }, facts: [], thread: [{ by: "JobFlex support", at: "t1", body: "Try this.", from: "ai" }, { by: "Dana", at: "t2", body: "Didn't work.", from: "customer" }], errors: [], appUrl: "https://jobflex.app" });
+check("the model reads the whole conversation by role, and is told to answer the customer's last message", convo.includes("[t2 · THE CUSTOMER]\nDidn't work.") && convo.includes("JobFlex support (you, earlier)") && convo.includes("The customer's last message is the one to answer now"));
+check("the AI may answer while only the customer and the AI wrote", aiMayAnswer([{ from: "ai" }, { from: "customer" }], sent).ok);
+check("…not once a person on the team wrote", !aiMayAnswer([{ from: "customer" }, { from: "team" }, { from: "customer" }], sent).ok);
+check("…not once it handed the ticket over, or the customer asked for a person", !aiMayAnswer([], { ...sent, outcome: "held" }).ok && !aiMayAnswer([], { ...sent, customer: { verdict: "needs-person", at: "t" } }).ok);
+check(`…and not past ${AI_MESSAGES_MAX} messages of its own`, !aiMayAnswer(Array.from({ length: AI_MESSAGES_MAX }, () => ({ from: "ai" })), sent).ok);
 const parts = answerParts("Hi Dana,\n\n1. Open https://jobflex.app/dashboard/company.\n2. Press Upload — or see https://www.jobflex.app/pricing, not https://evil.example/login\n\nIf anything is unclear, just reply to this email.");
 check("the answer's paragraphs; the closing 'reply to this email' line is dropped in the window", parts.length === 2);
 check("JobFlex's own links become paths, the sentence's full stop stays outside the link", JSON.stringify(parts[1].filter((x) => "path" in x)) === JSON.stringify([{ path: "/dashboard/company", label: "https://jobflex.app/dashboard/company" }, { path: "/pricing", label: "https://www.jobflex.app/pricing" }]) && parts[1].some((x) => "text" in x && x.text === "."));

@@ -5,7 +5,7 @@
 // 'That solved it' and 'I still need help'"). lib/support/aiReply holds the
 // prompts and letters and re-exports all of this for the server.
 
-import type { SupportReply } from "@/lib/supportReply";
+import type { ThreadMessage } from "@/lib/supportReply";
 
 // ── The switch ───────────────────────────────────────────────────────────────
 
@@ -138,6 +138,25 @@ export function waitingForPerson(r: SupportAiRecord | null, answeredByPerson: bo
   return r.outcome === "held" || r.outcome === "drafted" || r.customer?.verdict === "needs-person";
 }
 
+// ── May the AI write in the conversation? ───────────────────────────────────
+
+/** The AI's own messages a ticket may carry before it is left to the team. */
+export const AI_MESSAGES_MAX = 6;
+
+/**
+ * The AI answers in the conversation (owner, 2026-10-17) only while no person
+ * leads it: no one on the team has written, it didn't already hand the ticket
+ * to a person (a held answer), the customer didn't ask for one ("I still need
+ * help"), and it hasn't said its share already. Why not, when not.
+ */
+export function aiMayAnswer(thread: Array<{ from: string }>, r: SupportAiRecord | null): { ok: true } | { ok: false; why: string } {
+  if (thread.some((m) => m.from === "team")) return { ok: false, why: "a person on the team leads this ticket" };
+  if (r?.outcome === "held") return { ok: false, why: "it was handed to a person" };
+  if (r?.customer?.verdict === "needs-person") return { ok: false, why: "the customer asked for a person" };
+  if (thread.filter((m) => m.from === "ai").length >= AI_MESSAGES_MAX) return { ok: false, why: `the AI already wrote ${AI_MESSAGES_MAX} messages here` };
+  return { ok: true };
+}
+
 // ── The Help window, while and after the AI answers ─────────────────────────
 
 export type LiveState =
@@ -151,10 +170,10 @@ export type LiveState =
   | { state: "none" };
 
 /** What the Help window shows for a ticket, from its AI record and thread. */
-export function liveStateOf(r: SupportAiRecord | null, thread: SupportReply[], o: { mode: SupportAiMode; aiOn: boolean }): LiveState {
+export function liveStateOf(r: SupportAiRecord | null, thread: ThreadMessage[], o: { mode: SupportAiMode; aiOn: boolean }): LiveState {
   if (!r) return o.mode === "auto" && o.aiOn ? { state: "pending" } : { state: "none" };
   if (r.outcome === "sent") {
-    const sent = [...thread].reverse().find((x) => x.ai && x.kind === "answer");
+    const sent = [...thread].reverse().find((x) => x.from === "ai" && x.kind === "answer");
     if (!sent) return { state: "none" };
     return r.customer ? { state: "answer", body: sent.body, verdict: r.customer.verdict } : { state: "answer", body: sent.body };
   }

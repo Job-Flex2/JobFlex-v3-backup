@@ -6,9 +6,17 @@ import "server-only";
 // WHEN IT RUNS
 //   · a new ticket — actions/support submitSupportTicket hands it over with
 //     after(), so the customer's "Send" returns at once;
+//   · the customer's next message in the conversation (2026-10-17) — the same
+//     after(), from actions/support postSupportReply and the inbound email
+//     route — while no person leads the ticket (aiState aiMayAnswer: nobody
+//     on the team has written, it wasn't handed over, it hasn't said its share);
 //   · the safety net — /api/cron/support-ai every 10 minutes answers a new
-//     ticket the AI never read (the request that filed it ended first);
+//     ticket, or a customer's last message, the AI never read (the request
+//     that filed it ended first);
 //   · an admin's "Ask AI" on any ticket — always a draft, never a send.
+//
+// WHAT IT SENDS IS A MESSAGE in the ticket's conversation (from "ai", signed
+// "JobFlex support", lib/supportThread), emailed to the customer like any of ours.
 //
 // ITS OWN OPENAI CLIENT. The shared one (lib/sdk/openai) bills each call to
 // the request's organization through lib/trialMeter, and a new ticket's
@@ -22,14 +30,13 @@ import "server-only";
 // waits for an admin's Approve; "Mark fixed" only tells the customer.
 
 import OpenAI from "openai";
-import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isOpenAIEnabled, resolveOpenAIModel, samplingOptions } from "@/lib/sdk/openai";
 import { isEmailEnabled, sendEmail } from "@/lib/sdk/resend";
 import { supportRecipients, supportTicketRef } from "@/lib/notify";
-import { addSupportReply, canOpenSupportPage, readSupportReplies, recipientForTicket, repliesForTickets } from "@/lib/supportReplies";
-import { replyLetter, statusAfterReply, type SupportReply } from "@/lib/supportReply";
+import { postSupportMessage, recipientForTicket, threadOf, threadsFor } from "@/lib/supportThread";
+import type { AiKind, ThreadMessage } from "@/lib/supportReply";
 import { getOrgLimitUsage } from "@/lib/limitsEngine";
 import { recentServerErrors } from "@/lib/posthog";
 import {
@@ -51,6 +58,7 @@ import {
   supportSystemPrompt,
   supportUserPrompt,
   teamCopyEmail,
+  aiMayAnswer,
   type LiveState,
   type SupportAiMode,
   type SupportAiOutcome,
@@ -60,7 +68,6 @@ import {
 const SETTINGS_KEY = "supportAi:settings";
 const RECORD_KEY = (ticketId: string) => `supportAi:${ticketId}`;
 const TEAM_SIGNATURE = "JobFlex support";
-const REPLY_TO = "support@jobflex.app";
 
 // ── The switch and the records ───────────────────────────────────────────────
 
@@ -211,18 +218,13 @@ async function askModel(system: string, user: string): Promise<{ model: string; 
 
 // ── Sends ────────────────────────────────────────────────────────────────────
 
-async function sendToCustomer(t: TicketRow, to: string, body: string, kind: NonNullable<SupportReply["kind"]>, base: string): Promise<SupportReply> {
-  const letter = replyLetter({
-    body,
-    sender: TEAM_SIGNATURE,
-    ticket: { subject: t.subject, body: t.body, ref: supportTicketRef(t.id), filedAt: t.createdAt.toISOString() },
-    base,
-    supportPage: await canOpenSupportPage(t, to),
-  });
-  await sendEmail({ to, subject: letter.subject, html: letter.html, text: letter.text, replyTo: REPLY_TO });
-  const reply: SupportReply = { id: randomUUID(), at: new Date().toISOString(), by: TEAM_SIGNATURE, to, body, ai: true, kind };
-  await addSupportReply(t.id, reply);
-  return reply;
+/** The AI writes in the conversation (from "ai", signed by the team) and the
+ *  customer is emailed (lib/supportThread). Kept even when the email fails —
+ *  the customer reads it in the app; `emailNote` says why it didn't go. */
+async function sendToCustomer(t: TicketRow, body: string, kind: AiKind): Promise<{ message: ThreadMessage; emailed: boolean; emailNote?: string }> {
+  const r = await postSupportMessage({ ticketId: t.id, from: "ai", body, channel: "app", authorName: TEAM_SIGNATURE, kind });
+  if (!r) throw new Error("That ticket is gone.");
+  return r;
 }
 
 /** One send per address, as notifySupportTicket does — one bad address never silences the rest. */
@@ -244,13 +246,15 @@ async function sendToTeam(mail: { subject: string; html: string; text: string },
 // ── Answering a ticket ───────────────────────────────────────────────────────
 
 export interface AnswerOptions {
-  /** "new": a ticket just filed — answers per the switch. "admin": Ask AI from admin — a draft, never sent. */
-  trigger: "new" | "admin";
+  /** "new": a ticket just filed — answers per the switch. "follow-up": the
+   *  customer wrote again in the conversation — the same, while no person leads
+   *  it (aiMayAnswer). "admin": Ask AI from admin — a draft, never sent. */
+  trigger: "new" | "follow-up" | "admin";
 }
 
 export async function answerTicketWithAi(ticketId: string, opts: AnswerOptions): Promise<SupportAiRecord | null> {
   const mode = await readSupportAiMode();
-  if (opts.trigger === "new" && mode === "off") return null;
+  if (opts.trigger !== "admin" && mode === "off") return null;
   const t = await loadTicket(ticketId);
   if (!t) return null;
   const at = new Date().toISOString();
@@ -259,23 +263,29 @@ export async function answerTicketWithAi(ticketId: string, opts: AnswerOptions):
   const link = `${base.replace(/\/$/, "")}/admin/support?ticket=${t.id}`;
   const customerEmail = t.user?.email ?? null;
   const ticketForMail = { ref, subject: t.subject, body: t.body, orgName: t.organization.name, customerEmail };
-  const previous = await readSupportAi(t.id);
+  const [previous, thread] = await Promise.all([readSupportAi(t.id), threadOf(t.id)]);
+  const automatic = opts.trigger !== "admin";
+
+  // In the conversation the AI keeps out once a person leads it (owner, 2026-10-17).
+  if (automatic) {
+    const may = aiMayAnswer(thread, previous);
+    if (!may.ok) {
+      console.info(`[support-ai] ${ref}: not answering — ${may.why}.`);
+      return null;
+    }
+  }
 
   const fail = async (model: string, reason: string) => {
     const rec = failedRecord(at, model, reason);
     if (previous?.fix) rec.fix = previous.fix;
-    if (opts.trigger === "new") rec.copied = await sendToTeam(teamCopyEmail({ ticket: ticketForMail, record: rec, sentBody: null, facts: [], link }), customerEmail);
+    if (automatic) rec.copied = await sendToTeam(teamCopyEmail({ ticket: ticketForMail, record: rec, sentBody: null, facts: [], link }), customerEmail);
     await writeSupportAi(t.id, rec);
     return rec;
   };
 
   if (!isOpenAIEnabled()) return fail("-", "No OpenAI key on this server (OPENAI_API_KEY), so the AI cannot read tickets.");
 
-  const [facts, thread, errors] = await Promise.all([
-    accountFacts(t),
-    readSupportReplies(t.id),
-    recentServerErrors(t.organizationId).catch(() => [] as string[]),
-  ]);
+  const [facts, errors] = await Promise.all([accountFacts(t), recentServerErrors(t.organizationId).catch(() => [] as string[])]);
   let model = "-";
   let answer;
   try {
@@ -284,7 +294,7 @@ export async function answerTicketWithAi(ticketId: string, opts: AnswerOptions):
       supportUserPrompt({
         ticket: { ref, subject: t.subject, body: t.body, category: t.category, priority: t.priority, filedAt: t.createdAt.toISOString() },
         facts,
-        thread: thread.map((r) => ({ by: r.by, at: r.at, body: r.body })),
+        thread: thread.map((r) => ({ by: r.by, at: r.at, body: r.body, from: r.from })),
         errors,
         appUrl: base,
       }),
@@ -296,53 +306,49 @@ export async function answerTicketWithAi(ticketId: string, opts: AnswerOptions):
     return fail(model, `The model call failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const effective: SupportAiMode = opts.trigger === "admin" ? "draft" : mode;
+  // A person may have written while the model was reading: their word stands, the AI's is a draft.
+  const overtaken = automatic && (await threadOf(t.id)).some((m) => m.from === "team");
+  const effective: SupportAiMode = !automatic || overtaken ? "draft" : mode;
   const delivery = deliveryFor(answer, effective);
-  const to = await recipientForTicket(t);
-  const canMail = Boolean(to) && isEmailEnabled();
   let outcome: SupportAiOutcome = effective === "auto" ? "held" : "drafted";
-  let reason: string | undefined;
+  let reason: string | undefined = overtaken ? "A person on the team answered while the AI was reading." : undefined;
   let sentBody: string | null = null;
   let ackSent = false;
-  let statusTouched = false;
 
-  if (delivery.send && canMail) {
+  // What it sends is a message in the conversation (in progress, still UNREAD
+  // for the admins — an AI answer is one they should see) and an email to the customer.
+  if (delivery.send) {
     try {
-      await sendToCustomer(t, to!, answer.reply, "answer", base);
+      const r = await sendToCustomer(t, answer.reply, "answer");
       outcome = "sent";
       sentBody = answer.reply;
-      statusTouched = true;
+      if (!r.emailed) reason = `It's in the conversation, but not emailed: ${r.emailNote ?? "the email didn't go out."}`;
     } catch (err) {
-      reason = `The answer didn't go out by email: ${err instanceof Error ? err.message : String(err)}`;
+      reason = `The answer wasn't kept: ${err instanceof Error ? err.message : String(err)}`;
     }
-  } else {
-    reason = delivery.send ? (to ? "Email isn't set up on this server." : "This ticket has no address to answer.") : delivery.reason;
+  } else if (!overtaken) {
+    reason = delivery.reason;
   }
   // Held in "answers on its own": the customer still hears from us at once.
-  if (outcome === "held" && opts.trigger === "new" && canMail) {
+  if (outcome === "held" && automatic) {
     try {
       const note = holdingReply(firstNameOf(t.user?.name, customerEmail), t.subject);
-      await sendToCustomer(t, to!, note, "ack", base);
+      await sendToCustomer(t, note, "ack");
       ackSent = true;
       sentBody = note;
-      statusTouched = true;
     } catch (err) {
       console.error(`[support-ai] ${ref}: holding note failed:`, err instanceof Error ? err.message : err);
     }
-  }
-  if (statusTouched) {
-    // In progress, and still UNREAD for the admins — an AI answer is one they should see.
-    await db.supportTicket.update({ where: { id: t.id }, data: { status: statusAfterReply(t.status) } }).catch(() => {});
   }
 
   const rec = recordFor(answer, { at, model, outcome, reason, ackSent });
   // A fix already decided keeps its decision when the AI reads the ticket again.
   if (previous?.fix && previous.fix.status !== "awaiting") rec.fix = previous.fix;
-  if (opts.trigger === "new") {
+  if (automatic) {
     rec.copied = await sendToTeam(teamCopyEmail({ ticket: ticketForMail, record: rec, sentBody, facts, link }), customerEmail);
   }
   await writeSupportAi(t.id, rec);
-  console.info(`[support-ai] ${ref}: ${rec.outcome} · ${rec.category} · ${rec.confidence}%${rec.fix ? ` · fix ${rec.fix.status}` : ""}${reason ? ` · ${reason}` : ""}`);
+  console.info(`[support-ai] ${ref}: ${opts.trigger} · ${rec.outcome} · ${rec.category} · ${rec.confidence}%${rec.fix ? ` · fix ${rec.fix.status}` : ""}${reason ? ` · ${reason}` : ""}`);
   return rec;
 }
 
@@ -360,7 +366,7 @@ async function ownTicket(ticketId: string, who: Who) {
 export async function liveAnswerFor(ticketId: string, who: Who): Promise<LiveState | null> {
   const t = await ownTicket(ticketId, who);
   if (!t) return null;
-  const [rec, thread, mode] = await Promise.all([readSupportAi(t.id), readSupportReplies(t.id), readSupportAiMode()]);
+  const [rec, thread, mode] = await Promise.all([readSupportAi(t.id), threadOf(t.id), readSupportAiMode()]);
   return liveStateOf(rec, thread, { mode, aiOn: isOpenAIEnabled() });
 }
 
@@ -386,7 +392,10 @@ export async function recordCustomerVerdict(
     await db.supportTicket.update({ where: { id: t.id }, data: { status: "RESOLVED" } }).catch(() => {});
     return { ok: true };
   }
-  await db.supportTicket.update({ where: { id: t.id }, data: { status: "OPEN", adminReadAt: null } }).catch(() => {});
+  // Their note is their next message in the conversation — kept without the
+  // usual letter to the team: the "still stuck" one below says it all.
+  if (clean) await postSupportMessage({ ticketId: t.id, from: "customer", body: clean, channel: "app", authorUserId: who.userId, notify: false }).catch(() => null);
+  await db.supportTicket.update({ where: { id: t.id }, data: { status: "OPEN", adminReadAt: null, lastMessageAt: new Date() } }).catch(() => {});
   const base = await appBaseUrl();
   await sendToTeam(
     stillStuckEmail({
@@ -408,26 +417,35 @@ const MISSED_AFTER_MS = 5 * 60_000;
 const MISSED_BEFORE_MS = 48 * 3600_000;
 
 /**
- * New tickets the AI never read: Open, between 5 minutes and 2 days old, no
- * record, nobody has answered. A few per run, oldest first, each the same
- * answer a new ticket gets (the switch decides). Off, or without a key: none.
+ * What the AI never got to, between 5 minutes and 2 days old (by the
+ * conversation's latest message): a NEW ticket it never read (no record, no
+ * messages), and a FOLLOW-UP — the customer's message is the last one and the
+ * AI hasn't read the ticket since — while no person leads the conversation
+ * (answerTicketWithAi checks aiMayAnswer). A few per run, oldest first; the
+ * switch decides as always. Off, or without a key: none.
  */
 export async function answerMissedTickets(limit = 4): Promise<{ checked: number; answered: number }> {
   if ((await readSupportAiMode()) === "off" || !isOpenAIEnabled()) return { checked: 0, answered: 0 };
   const now = Date.now();
   const rows = await db.supportTicket.findMany({
-    where: { status: "OPEN", createdAt: { lte: new Date(now - MISSED_AFTER_MS), gte: new Date(now - MISSED_BEFORE_MS) } },
-    orderBy: { createdAt: "asc" },
+    where: { status: { in: ["OPEN", "IN_PROGRESS"] }, lastMessageAt: { lte: new Date(now - MISSED_AFTER_MS), gte: new Date(now - MISSED_BEFORE_MS) } },
+    orderBy: { lastMessageAt: "asc" },
     take: 40,
     select: { id: true },
   });
   if (!rows.length) return { checked: 0, answered: 0 };
   const ids = rows.map((r) => r.id);
-  const [records, threads] = await Promise.all([supportAiForTickets(ids), repliesForTickets(ids)]);
-  const missed = ids.filter((id) => !records[id] && !threads[id]?.length).slice(0, limit);
+  const [records, threads] = await Promise.all([supportAiForTickets(ids), threadsFor(ids)]);
+  const missed: Array<{ id: string; trigger: "new" | "follow-up" }> = [];
+  for (const id of ids) {
+    const thread = threads[id] ?? [];
+    const last = thread[thread.length - 1];
+    if (!thread.length && !records[id]) missed.push({ id, trigger: "new" });
+    else if (last?.from === "customer" && (!records[id] || records[id].at < last.at) && aiMayAnswer(thread, records[id] ?? null).ok) missed.push({ id, trigger: "follow-up" });
+  }
   let answered = 0;
-  for (const id of missed) {
-    const rec = await answerTicketWithAi(id, { trigger: "new" }).catch((err) => {
+  for (const { id, trigger } of missed.slice(0, limit)) {
+    const rec = await answerTicketWithAi(id, { trigger }).catch((err) => {
       console.error(`[support-ai] safety net: ${supportTicketRef(id)} failed:`, err instanceof Error ? err.message : err);
       return null;
     });
@@ -438,7 +456,7 @@ export async function answerMissedTickets(limit = 4): Promise<{ checked: number;
 
 // ── The fix: approve, decline, done ──────────────────────────────────────────
 
-export type FixResult = { ok: true; record: SupportAiRecord; reply?: SupportReply } | { ok: false; error: string };
+export type FixResult = { ok: true; record: SupportAiRecord; reply?: ThreadMessage } | { ok: false; error: string };
 
 export async function decideFix(
   ticketId: string,
@@ -499,12 +517,13 @@ export async function markFixDone(ticketId: string, by: { email: string; name: s
       console.warn("[support-ai] fixed note fell back to the template:", err instanceof Error ? err.message : err);
     }
   }
-  const base = await appBaseUrl();
-  let reply: SupportReply;
+  let reply: ThreadMessage;
   try {
-    reply = await sendToCustomer(t, to, body, "fixed", base);
+    const r = await sendToCustomer(t, body, "fixed");
+    if (!r.emailed) console.warn(`[support-ai] ${supportTicketRef(t.id)}: the fixed note is in the conversation but not emailed — ${r.emailNote ?? ""}`);
+    reply = r.message;
   } catch (err) {
-    return { ok: false, error: `The email didn't go out: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, error: `The customer wasn't told: ${err instanceof Error ? err.message : String(err)}` };
   }
   rec.fix = { ...rec.fix, status: "done", doneBy: by.name?.trim() || by.email, doneAt: new Date().toISOString() };
   await writeSupportAi(ticketId, rec);

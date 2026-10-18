@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { answerTicketWithAi, decideFix, markFixDone, writeSupportAiMode } from "@/lib/support/aiSupport";
 import { SUPPORT_AI_MODES, type SupportAiMode, type SupportAiRecord } from "@/lib/support/aiReply";
-import type { SupportReply } from "@/lib/supportReply";
+import type { ThreadMessage } from "@/lib/supportReply";
 
 type Admin = { id: string; email: string; name: string | null };
 type Fail = { ok: false; error: string };
@@ -72,7 +72,7 @@ export async function declineSupportFix(ticketId: unknown, note?: unknown): Prom
 }
 
 /** The fix is live: the customer gets the "it's fixed" email and the ticket is resolved. */
-export async function markSupportFixed(ticketId: unknown): Promise<{ ok: true; record: SupportAiRecord; reply: SupportReply } | Fail> {
+export async function markSupportFixed(ticketId: unknown): Promise<{ ok: true; record: SupportAiRecord; reply: ThreadMessage } | Fail> {
   const admin = await asAdmin();
   if (!admin) return { ok: false, error: DENIED };
   if (!isId(ticketId)) return { ok: false, error: "That ticket is gone." };

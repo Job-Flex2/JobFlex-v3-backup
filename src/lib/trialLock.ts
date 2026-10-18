@@ -86,6 +86,7 @@ const WRITABLE_WHEN_LOCKED = new Set([
   "SolarCache",
   "Subscription",
   "SupportTicket",
+  "SupportMessage",
 ]);
 
 const WRITE_OPERATIONS = new Set([

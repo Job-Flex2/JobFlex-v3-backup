@@ -239,7 +239,8 @@ export interface TicketForPrompt {
 export function supportUserPrompt(input: {
   ticket: TicketForPrompt;
   facts: string[];
-  thread: Array<{ by: string; at: string; body: string }>;
+  /** The conversation after the ticket's own words, oldest first. `from` absent: one of our answers. */
+  thread: Array<{ by: string; at: string; body: string; from?: "customer" | "team" | "ai" }>;
   errors: string[];
   appUrl: string;
 }): string {
@@ -251,9 +252,11 @@ export function supportUserPrompt(input: {
     `ACCOUNT FACTS (from our database, accurate now):\n${input.facts.length ? input.facts.map((f) => `- ${f}`).join("\n") : "- (none found)"}`,
   ];
   if (input.thread.length) {
+    const who = (r: (typeof input.thread)[number]) => (r.from === "customer" ? "THE CUSTOMER" : r.from === "ai" ? "JobFlex support (you, earlier)" : `JobFlex support — ${r.by}`);
+    const last = input.thread[input.thread.length - 1];
     parts.push(
-      `ALREADY ANSWERED IN THIS TICKET (don't repeat it; build on it):\n${input.thread
-        .map((r) => `[${r.at} · ${r.by}]\n${r.body}`)
+      `THE CONVERSATION SINCE (oldest first; ALREADY ANSWERED parts — don't repeat them; build on them)${last.from === "customer" ? ". The customer's last message is the one to answer now" : ""}:\n${input.thread
+        .map((r) => `[${r.at} · ${who(r)}]\n${r.body}`)
         .join("\n\n")}`,
     );
   }

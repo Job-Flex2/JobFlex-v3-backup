@@ -322,6 +322,7 @@ model User {
   accounts                 Account[]
   influencer               Influencer?
   supportTickets           SupportTicket[]
+  supportMessages          SupportMessage[]
   sessions                 Session[]
   memberships              Membership[]
   workerProfile            WorkerProfile?
@@ -1596,12 +1597,44 @@ model SupportTicket {
   category       String    @default("general") // billing | technical | account | feature | general — for admin triage
   priority       String    @default("normal") // low | normal | high — submitter-declared urgency
   status         String    @default("OPEN")
-  adminReadAt    DateTime? // platform-admin "seen" marker; null = new/unread in the admin notification feed
+  adminReadAt    DateTime? // platform-admin "seen" marker; null = new/unread in the admin notification feed — cleared again by every customer message
+  lastMessageAt  DateTime  @default(now()) // the conversation's latest message (the ticket itself, then SupportMessage) — the queue's order
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages     SupportMessage[]
+
+  @@index([lastMessageAt])
+}
+
+// ── The conversation under a support ticket (owner, 2026-10-17) ─────────────
+// One dialog per ticket that either side can write to from anywhere: the
+// customer in the app (/dashboard/support) or by email, the team in
+// /admin/support or by email, the support AI (lib/support). The ticket's own
+// `body` is the opening message and is not copied here. Replaced the SyncState
+// `supportReplies:<ticketId>` JSON lists (capped at 50, team side only);
+// prisma/sql/prod-2026-10-17-support-messages.sql moves those over.
+// Vocabularies are free Strings checked in lib/supportReply.
+model SupportMessage {
+  id             String   @id @default(cuid())
+  ticketId       String
+  from           String // customer | team | ai
+  authorUserId   String? // who wrote it, when a signed-in person did
+  authorName     String? // as signed: the admin's name, "JobFlex support"; null for the customer
+  body           String
+  channel        String   @default("app") // app | email — where it was written
+  kind           String? // the AI's sends: answer | ack | fixed
+  sentTo         String? // where the email to the other side went (team/ai → the customer's address)
+  emailMessageId String? // inbound: the letter's Message-ID (dedupe); outbound: the provider's id
+  createdAt      DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?         @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@index([emailMessageId])
 }
 
 // ── Admin task tracker (/admin/tasks, 2026-10-11) ───────────────────────────
