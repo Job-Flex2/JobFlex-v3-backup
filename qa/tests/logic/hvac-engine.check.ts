@@ -99,7 +99,7 @@ function house(over: Partial<BuildingModel> = {}): BuildingModel {
   const levers = loadLevers(house(), dallas);
   ok("the levers line: more glass, the attic ducts, one tightness class", levers.length === 1 && /quarter more glass/.test(levers[0]) && /ducts in the attic/.test(levers[0]) && /one tightness class better/.test(levers[0]), levers[0]);
   ok("…and a house with ducts inside and no tighter class to go has fewer levers", /glass/.test(loadLevers(house({ ducts: { location: "conditioned", condition: "good" }, tightness: "very-tight" }), dallas)[0] ?? "") && !/ducts in the/.test(loadLevers(house({ ducts: { location: "conditioned", condition: "good" }, tightness: "very-tight" }), dallas)[0] ?? ""));
-  ok("the engine version moved", /0\.2/.test(ENGINE_VERSION));
+  ok("the engine version moved (0.2 seasonal infiltration, 0.3 the envelope in detail)", /0\.[2-9]/.test(ENGINE_VERSION));
 }
 
 // ── where the county's air and its station are not the metro's ──

@@ -17,22 +17,26 @@ import {
   ACH50,
   CEILING_U,
   CFM_PER_TON,
+  DOOR_BY_TYPE,
+  DOOR_SQFT_EACH,
   DUCT,
+  DUCT_LEAK_TYPICAL,
   FLOOR,
   ROOF_COLOR_ADD,
   SHADING_FACTOR,
+  SIDING_COLOR_ADD,
+  SKYLIGHT,
   SOLAR_BY_BEARING,
+  WALL_BUILD,
   WALL_U,
   WINDOW,
 } from "./data/defaults";
 
-export const ENGINE_VERSION = "jobflex-hvac-engine 0.2 · block load, estimating grade (2026-10-14: seasonal infiltration, measured glass area)";
+export const ENGINE_VERSION = "jobflex-hvac-engine 0.3 · block load, estimating grade (2026-10-18: glass by side, blower-door and duct-leakage tests, wall construction, siding colour, skylights, doors)";
 export const INDOOR_COOLING_F = 75;
 export const INDOOR_HEATING_F = 70;
 /** Supply-to-room temperature difference the airflow is sized on, °F. */
 const SUPPLY_DT_F = 20;
-const DOOR_U = 0.4;
-const DOOR_SQFT_PER_STOREY = 40;
 const OCCUPANT_SENSIBLE = 230;
 const OCCUPANT_LATENT = 200;
 const APPLIANCE_SENSIBLE = 1200;
@@ -53,9 +57,24 @@ export function solarGainForBearing(bearingDeg: number): { gain: number; label: 
   return { gain: 70, label: "?" };
 }
 
-/** Window area split by the walls it sits in: by footprint edge length when
- *  the footprint is known, otherwise a quarter each way. */
+/** The glass typed by the way it faces (2026-10-18), or null when none was. */
+export function glassBySide(m: BuildingModel): { N: number; E: number; S: number; W: number; total: number } | null {
+  const v = (x: number | undefined) => (typeof x === "number" && x > 0 ? x : 0);
+  const g = { N: v(m.glassNorthSqft), E: v(m.glassEastSqft), S: v(m.glassSouthSqft), W: v(m.glassWestSqft) };
+  const total = g.N + g.E + g.S + g.W;
+  return total > 0 ? { ...g, total } : null;
+}
+
+/** Window area split by the walls it sits in: as typed by side when it was,
+ *  else by footprint edge length when the footprint is known, otherwise a
+ *  quarter each way. */
 function windowShares(m: BuildingModel): Array<{ label: string; share: number; gain: number }> {
+  const side = glassBySide(m);
+  if (side) {
+    return (["N", "E", "S", "W"] as const)
+      .filter((k) => side[k] > 0)
+      .map((k) => ({ label: k, share: side[k] / side.total, gain: solarGainForBearing({ N: 0, E: 90, S: 180, W: 270 }[k]).gain }));
+  }
   const edges = (m.footprintEdges ?? []).filter((e) => e.lengthFt > 0);
   if (!edges.length) {
     return [
@@ -98,12 +117,25 @@ export function computeBlockLoad(m: BuildingModel, c: DesignConditions, opts: { 
   // The glass area counted on the walk or typed beats the era ratio — window
   // area is the biggest single lever on a cooling load, and the ratio is a
   // guess at it.
-  const glassMeasured = typeof m.windowSqft === "number" && m.windowSqft > 0;
-  const windowSqft = glassMeasured ? (m.windowSqft as number) : area * m.windowToFloor;
-  const doorSqft = DOOR_SQFT_PER_STOREY * Math.min(2, storeys);
+  // Glass typed by the way it faces is the most specific answer of all: its
+  // sum is the window area and the sun is split by it (2026-10-18).
+  const side = glassBySide(m);
+  const typedTotal = typeof m.windowSqft === "number" && m.windowSqft > 0 ? m.windowSqft : 0;
+  const glassMeasured = !!side || typedTotal > 0;
+  const windowSqft = side ? side.total : typedTotal > 0 ? typedTotal : area * m.windowToFloor;
+  if (side) assumptions.push(`Glass by side as typed: north ${Math.round(side.N)}, east ${Math.round(side.E)}, south ${Math.round(side.S)}, west ${Math.round(side.W)} sq ft — ${Math.round(side.total)} sq ft in all${typedTotal > 0 && Math.abs(typedTotal - side.total) > 1 ? ` (the ${Math.round(typedTotal)} sq ft typed as the window area stands aside)` : ""}.`);
+  // Doors (2026-10-18): counted and typed, else two a storey up to two storeys — the 40 sq ft a storey the load always used.
+  const doorCount = typeof m.doorCount === "number" && m.doorCount >= 0 ? Math.round(m.doorCount) : 2 * Math.min(2, storeys);
+  const door = DOOR_BY_TYPE[m.doorType ?? "solid-wood"];
+  const doorSqft = doorCount * DOOR_SQFT_EACH;
   const grossWall = perimeter * ceiling * storeys;
   const netWall = Math.max(0, grossWall - windowSqft - doorSqft);
-  const wallU = WALL_U[m.wallInsulation];
+  // The walls by what they are built of and the colour the sun meets (2026-10-18).
+  const build = WALL_BUILD[m.wallConstruction ?? "wood-frame"];
+  const wallU = build.uByInsulation ? build.uByInsulation[m.wallInsulation] : build.uCap ? Math.min(WALL_U[m.wallInsulation], build.uCap) : WALL_U[m.wallInsulation] * (build.uMul ?? 1);
+  const siding = m.sidingColor ?? "medium";
+  const wallCoolAdd = build.coolAddF + SIDING_COLOR_ADD[siding];
+  const skylightSqft = typeof m.skylightSqft === "number" && m.skylightSqft > 0 ? m.skylightSqft : 0;
   const ceilU = CEILING_U[m.ceilingInsulation];
   const floor = FLOOR[m.foundation];
   const floorUA = floor.perPerimeter ? floor.heatingUA * perimeter : floor.heatingUA * footprint;
@@ -117,13 +149,22 @@ export function computeBlockLoad(m: BuildingModel, c: DesignConditions, opts: { 
   // and ~0.2 in summer; a 3,200 sq ft one ~0.3 / 0.16. One rate for both
   // seasons (the 0.1 engine) doubled the summer infiltration load.
   const nFactor = storeys >= 2 ? 17 : 20;
-  const sizeFactor = Math.min(1.6, Math.max(0.7, Math.sqrt(2000 / area)));
-  const achHeat = (ACH50[m.tightness] / nFactor) * sizeFactor;
-  const achCool = achHeat * SUMMER_ACH_SHARE;
   const volume = area * ceiling;
+  // A blower-door test outranks the class (2026-10-18): CFM50 off the gauge
+  // over the house's volume, or the report's ACH50. A measured figure already
+  // carries the house's size, so the class's size factor stands aside.
+  const testedAch50 = typeof m.blowerDoorCfm50 === "number" && m.blowerDoorCfm50 > 0 ? (m.blowerDoorCfm50 * 60) / volume : typeof m.blowerDoorAch50 === "number" && m.blowerDoorAch50 > 0 ? m.blowerDoorAch50 : 0;
+  const sizeFactor = testedAch50 > 0 ? 1 : Math.min(1.6, Math.max(0.7, Math.sqrt(2000 / area)));
+  const achHeat = ((testedAch50 > 0 ? testedAch50 : ACH50[m.tightness]) / nFactor) * sizeFactor;
+  const achCool = achHeat * SUMMER_ACH_SHARE;
   const infilCfmHeat = (achHeat * volume) / 60;
   const infilCfmCool = (achCool * volume) / 60;
-  assumptions.push(`Infiltration from a "${m.tightness}" blower-door class (${ACH50[m.tightness]} ACH50 ÷ ${nFactor}${sizeFactor !== 1 ? `, × ${sizeFactor.toFixed(2)} for the house's size` : ""}): ${achHeat.toFixed(2)} air changes an hour in winter, ${achCool.toFixed(2)} in summer — the Manual J Table 5A shape, where summer runs about half of winter.`);
+  if (testedAch50 > 0) {
+    const how = typeof m.blowerDoorCfm50 === "number" && m.blowerDoorCfm50 > 0 ? `${Math.round(m.blowerDoorCfm50).toLocaleString("en-US")} CFM50 over ${Math.round(volume).toLocaleString("en-US")} cu ft = ${testedAch50.toFixed(1)} ACH50` : `${testedAch50.toFixed(1)} ACH50 from the report`;
+    assumptions.push(`Infiltration from the blower-door test (${how} ÷ ${nFactor}): ${achHeat.toFixed(2)} air changes an hour in winter, ${achCool.toFixed(2)} in summer — the Manual J Table 5A shape, where summer runs about half of winter.`);
+  } else {
+    assumptions.push(`Infiltration from a "${m.tightness}" blower-door class (${ACH50[m.tightness]} ACH50 ÷ ${nFactor}${sizeFactor !== 1 ? `, × ${sizeFactor.toFixed(2)} for the house's size` : ""}): ${achHeat.toFixed(2)} air changes an hour in winter, ${achCool.toFixed(2)} in summer — the Manual J Table 5A shape, where summer runs about half of winter.`);
+  }
   // A tight house (2012 IECC and later, and every CA / WA / OR house) runs a
   // whole-house fan the code requires, and Manual J (Section 11) adds that
   // air to the load: ASHRAE 62.2, 0.03 CFM per sq ft plus 7.5 CFM per person.
@@ -162,9 +203,15 @@ export function computeBlockLoad(m: BuildingModel, c: DesignConditions, opts: { 
     assumptions.push(`Window area assumed at ${Math.round(m.windowToFloor * 100)}% of the floor (${Math.round(windowSqft)} sq ft, the era default) — count the windows or type the glass area: every 50 sq ft of glass is about ${per50.toLocaleString("en-US")} BTU/h of cooling here.`);
   }
   push(`Window solar · ${shares.map((s) => `${s.label} ${Math.round(s.share * 100)}%`).join(", ")}`, 0, solar);
-  push(`Doors · ${doorSqft} sq ft`, DOOR_U * doorSqft * dtHeat, DOOR_U * doorSqft * (dtCool + 8));
-  push(`Walls · ${Math.round(netWall)} sq ft net, ${m.wallInsulation === "none" ? "uninsulated" : m.wallInsulation.toUpperCase()}`, wallU * netWall * dtHeat, wallU * netWall * (dtCool + 8));
-  push(`Ceiling · ${Math.round(footprint)} sq ft under ${m.ceilingInsulation === "none" ? "an uninsulated attic" : m.ceilingInsulation.toUpperCase() + " attic"}, ${m.roofColor} roof`, ceilU * footprint * dtHeat, ceilU * footprint * (dtCool + roofAdd));
+  if (skylightSqft > 0) {
+    // Flat glass in the roof: the highest sun of the day on it, no eave to shade it.
+    const skyU = win.u * SKYLIGHT.uMul;
+    push(`Skylights · ${Math.round(skylightSqft)} sq ft ${win.label}`, skyU * skylightSqft * dtHeat, skyU * skylightSqft * dtCool + skylightSqft * SKYLIGHT.solarGain * (win.shgc / REFERENCE_SHGC));
+  }
+  push(`Doors · ${doorSqft} sq ft, ${doorCount} ${door.label}`, door.u * doorSqft * dtHeat, door.u * doorSqft * (dtCool + 8));
+  push(`Walls · ${Math.round(netWall)} sq ft net, ${m.wallInsulation === "none" ? "uninsulated" : m.wallInsulation.toUpperCase()}, ${build.label}, ${siding} siding`, wallU * netWall * dtHeat, wallU * netWall * (dtCool + wallCoolAdd));
+  const ceilingSqft = Math.max(0, footprint - skylightSqft);
+  push(`Ceiling · ${Math.round(ceilingSqft)} sq ft under ${m.ceilingInsulation === "none" ? "an uninsulated attic" : m.ceilingInsulation.toUpperCase() + " attic"}, ${m.roofColor} roof`, ceilU * ceilingSqft * dtHeat, ceilU * ceilingSqft * (dtCool + roofAdd));
   push(`Floor · ${floor.label}`, floorUA * dtHeat, floor.coolingShare * floorUA * dtCool);
   const grains = Math.max(0, c.grainsDiff);
   push(`Infiltration · ${Math.round(infilCfmHeat)} CFM winter / ${Math.round(infilCfmCool)} CFM summer`, SENS * infilCfmHeat * dtHeat, SENS * infilCfmCool * dtCool, LAT * infilCfmCool * grains);
@@ -187,10 +234,22 @@ export function computeBlockLoad(m: BuildingModel, c: DesignConditions, opts: { 
   const duct = DUCT[m.ducts.location] ?? DUCT.none;
   let ductHeat = duct.heating;
   let ductCool = duct.cooling;
+  // A duct-leakage test (2026-10-18): leakage to outside as a share of the
+  // system's airflow (the load's own tons at the climate's CFM a ton), against
+  // the typical share the table stands for. Half the duct figure is
+  // conduction, which no leak test moves; the condition guess stands aside.
+  const leak = typeof m.ducts.leakageCfm25 === "number" && m.ducts.leakageCfm25 >= 0 && m.ducts.location !== "conditioned" && m.ducts.location !== "none" ? m.ducts.leakageCfm25 : null;
   if (m.ducts.location !== "conditioned" && m.ducts.location !== "none") {
-    if (m.ducts.condition === "poor") { ductHeat *= 1.5; ductCool *= 1.5; }
+    if (leak !== null) {
+      const systemCfm = Math.max(200, ((sens + lat) / 12000) * CFM_PER_TON[c.humidity]);
+      const share = leak / systemCfm;
+      const scale = Math.min(2.5, Math.max(0.5, 0.5 + (0.5 * share) / DUCT_LEAK_TYPICAL));
+      ductHeat *= scale;
+      ductCool *= scale;
+      assumptions.push(`Duct leakage tested at ${Math.round(leak)} CFM25 to outside — ${Math.round(share * 100)}% of the system's ~${Math.round(systemCfm / 10) * 10} CFM against the ${Math.round(DUCT_LEAK_TYPICAL * 100)}% the duct figures assume, so the duct loss and gain are × ${scale.toFixed(2)}.`);
+    } else if (m.ducts.condition === "poor") { ductHeat *= 1.5; ductCool *= 1.5; }
     if (m.ducts.insulated === false) { ductHeat *= 1.5; ductCool *= 1.5; }
-    push(`Ducts in the ${m.ducts.location}${m.ducts.condition === "poor" ? ", poor condition" : ""}${m.ducts.insulated === false ? ", uninsulated" : ""}`, heat * ductHeat, sens * ductCool, lat * ductCool);
+    push(`Ducts in the ${m.ducts.location}${leak !== null ? `, ${Math.round(leak)} CFM25 leakage tested` : m.ducts.condition === "poor" ? ", poor condition" : ""}${m.ducts.insulated === false ? ", uninsulated" : ""}`, heat * ductHeat, sens * ductCool, lat * ductCool);
     heat *= 1 + ductHeat;
     sens *= 1 + ductCool;
     lat *= 1 + ductCool;
@@ -246,15 +305,17 @@ export function loadLevers(m: BuildingModel, c: DesignConditions): string[] {
   const base = computeBlockLoad(m, c);
   const out: string[] = [];
   const k = (n: number) => `${Math.abs(n) >= 1000 ? (Math.abs(n) / 1000).toFixed(1) + "k" : String(Math.abs(n))} BTU/h`;
-  const glass = typeof m.windowSqft === "number" && m.windowSqft > 0 ? m.windowSqft : m.conditionedSqft * m.windowToFloor;
-  const moreGlass = computeBlockLoad({ ...m, windowSqft: glass * 1.25 }, c);
+  const side = glassBySide(m);
+  const glass = side ? side.total : typeof m.windowSqft === "number" && m.windowSqft > 0 ? m.windowSqft : m.conditionedSqft * m.windowToFloor;
+  const moreGlass = computeBlockLoad(side ? { ...m, glassNorthSqft: side.N * 1.25, glassEastSqft: side.E * 1.25, glassSouthSqft: side.S * 1.25, glassWestSqft: side.W * 1.25 } : { ...m, windowSqft: glass * 1.25 }, c);
   if (moreGlass.coolingTotalBtuh !== base.coolingTotalBtuh) out.push(`a quarter more glass than assumed adds ${k(moreGlass.coolingTotalBtuh - base.coolingTotalBtuh)} of cooling`);
   if (m.ducts.location !== "conditioned" && m.ducts.location !== "none") {
     const inside = computeBlockLoad({ ...m, ducts: { ...m.ducts, location: "conditioned" } }, c);
     out.push(`ducts in the ${m.ducts.location} carry ${k(base.coolingTotalBtuh - inside.coolingTotalBtuh)} of cooling and ${k(base.heatingBtuh - inside.heatingBtuh)} of heating that ducts inside the envelope would not`);
   }
   const tighter: Record<string, BuildingModel["tightness"] | undefined> = { leaky: "average", average: "tight", tight: "very-tight", "very-tight": undefined };
-  const next = tighter[m.tightness];
+  const tested = (typeof m.blowerDoorCfm50 === "number" && m.blowerDoorCfm50 > 0) || (typeof m.blowerDoorAch50 === "number" && m.blowerDoorAch50 > 0);
+  const next = tested ? undefined : tighter[m.tightness];
   if (next) {
     const t = computeBlockLoad({ ...m, tightness: next }, c);
     out.push(`one tightness class better ("${next}") takes off ${k(base.heatingBtuh - t.heatingBtuh)} of heating and ${k(base.coolingTotalBtuh - t.coolingTotalBtuh)} of cooling`);

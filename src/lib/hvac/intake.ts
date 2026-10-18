@@ -72,6 +72,16 @@ export function setNested(m: BuildingModel, path: string, value: unknown, p: Pro
 
 const defaultP = (note: string): Provenance => ({ source: "default", confidence: "low", note });
 
+/** The envelope fields added 2026-10-18 (wall construction, siding colour, door type), at their defaults and marked
+ *  so — for a new site and for an estimate saved before they existed. The load treats an empty field the same way;
+ *  this only lets the form show what is assumed. Never overwrites an answer. */
+export function fillEnvelopeDefaults(m: BuildingModel): BuildingModel {
+  if (!m.wallConstruction) { m.wallConstruction = "wood-frame"; m.provenance.wallConstruction ??= defaultP("wood-frame walls assumed"); }
+  if (!m.sidingColor) { m.sidingColor = "medium"; m.provenance.sidingColor ??= defaultP("medium siding colour assumed"); }
+  if (!m.doorType) { m.doorType = "solid-wood"; m.provenance.doorType ??= defaultP("solid wood doors assumed"); }
+  return m;
+}
+
 /** A model for a site with nothing but the era defaults filled — the starting
  *  point every reading and answer writes over. */
 export function modelFromSite(site: SiteFacts): BuildingModel {
@@ -110,6 +120,7 @@ export function modelFromSite(site: SiteFacts): BuildingModel {
   m.provenance.foundation = defaultP("slab assumed — confirm crawlspace or basement");
   m.provenance.roofColor = defaultP("medium roof colour assumed");
   m.provenance.shading = defaultP("some shading assumed");
+  fillEnvelopeDefaults(m);
   m.provenance.occupants = defaultP("3 occupants assumed");
   m.provenance.ceilingHeightFt = defaultP("8 ft ceilings assumed");
   m.provenance["ducts.location"] = defaultP("attic ducts assumed for a slab house");
@@ -160,7 +171,33 @@ const conf = (c: "high" | "medium" | "low"): Confidence => c;
 const srcOf = (s: "spoken" | "visual" | "inferred"): Source => (s === "spoken" ? "stated" : s === "visual" ? "read" : "default");
 
 /** The measurement labels the walkthrough reader uses, matched loosely. */
+/** "white", "beige" → light; "grey", "tan" → medium; "dark", "black", "navy" → dark (2026-10-18). */
+function colourBucket(v: string): "light" | "medium" | "dark" | null {
+  if (/dark|black|charcoal|navy|brown|forest|deep|red brick/i.test(v)) return "dark";
+  if (/white|cream|beige|light|ivory|pale|yellow/i.test(v)) return "light";
+  if (/grey|gray|tan|medium|sage|blue|green|brick/i.test(v)) return "medium";
+  return null;
+}
+
+/** "brick veneer", "block", "ICF" → the wall construction (2026-10-18). */
+function wallBuildBucket(v: string): "wood-frame" | "brick-veneer" | "masonry" | "sip-icf" | null {
+  if (/\b(sip|icf|insulated concrete|structural insulated)\b/i.test(v)) return "sip-icf";
+  if (/veneer/i.test(v)) return "brick-veneer";
+  if (/\b(block|cmu|cinder|concrete|solid brick|masonry|adobe|stone)\b/i.test(v)) return "masonry";
+  if (/brick/i.test(v)) return "brick-veneer";
+  if (/wood|frame|stud|stick/i.test(v)) return "wood-frame";
+  return null;
+}
+
 const LABELS: Array<{ re: RegExp; apply: (m: BuildingModel, v: string, p: Provenance) => void }> = [
+  // The envelope in detail (2026-10-18) — ahead of the square-footage rule, which any "… sq ft" label would hit.
+  { re: /(north|east|south|west)[- ]?(facing)? (glass|windows?)|(glass|windows?) (facing|on the) (north|east|south|west)/i, apply: (m, v, p) => { const side = (p.note ?? "").match(/north|east|south|west/i)?.[0]?.toLowerCase(); const n = num(v); const key = side === "north" ? "glassNorthSqft" : side === "east" ? "glassEastSqft" : side === "south" ? "glassSouthSqft" : side === "west" ? "glassWestSqft" : null; if (key && n !== undefined && n >= 0 && n <= 2000) setFact(m, key, Math.round(n), p); } },
+  { re: /skylights?/i, apply: (m, v, p) => { const n = num(v); if (n === undefined) return; if (/sq|ft/i.test(`${v} ${p.note ?? ""}`)) { if (n >= 0 && n <= 400) setFact(m, "skylightSqft", Math.round(n), p); } else if (n >= 0 && n <= 30) setFact(m, "skylightSqft", Math.round(n) * 8, p); } },
+  { re: /blower[- ]?door|cfm ?50|ach ?50|air leakage test/i, apply: (m, v, p) => { const n = num(v); if (!n || n <= 0) return; if (/ach/i.test(`${v} ${p.note ?? ""}`) || n <= 40) setFact(m, "blowerDoorAch50", n, p); else if (n <= 20000) setFact(m, "blowerDoorCfm50", Math.round(n), p); } },
+  { re: /duct leak|cfm ?25|leakage to outside/i, apply: (m, v, p) => { const n = num(v); if (n !== undefined && n >= 0 && n <= 3000) setNested(m, "ducts.leakageCfm25", Math.round(n), p); } },
+  { re: /exterior doors?|doors? count|number of doors/i, apply: (m, v, p) => { const n = num(v); if (n !== undefined && n >= 0 && n <= 20) setFact(m, "doorCount", Math.round(n), p); } },
+  { re: /siding colou?r|exterior colou?r|wall colou?r|paint colou?r/i, apply: (m, v, p) => { const c = colourBucket(v); if (c) setFact(m, "sidingColor", c, p); } },
+  { re: /wall (construction|type)|walls? (are|built)|construction type/i, apply: (m, v, p) => { const w = wallBuildBucket(v); if (w) setFact(m, "wallConstruction", w, p); } },
   { re: /square\s*f|sq\.?\s*ft|conditioned|floor area/i, apply: (m, v, p) => { const n = num(v); if (n && n > 200) setFact(m, "conditionedSqft", Math.round(n), p); } },
   { re: /stor(e)?y|stories|floors|levels/i, apply: (m, v, p) => { const n = num(v); if (n && n >= 1 && n <= 4) setFact(m, "storeys", Math.round(n), p); } },
   { re: /ceiling/i, apply: (m, v, p) => { const n = num(v); if (n && n >= 7 && n <= 20) setFact(m, "ceilingHeightFt", n, p); } },
@@ -287,6 +324,13 @@ const OBSERVATIONS: Array<{ re: RegExp; apply: (m: BuildingModel, text: string, 
   { re: /double[- ]pane|dual[- ]pane/i, apply: (m, t, p) => setFact(m, "windowType", /low-?e/i.test(t) ? "double-lowe" : "double", p) },
   { re: /triple[- ]pane/i, apply: (m, _t, p) => setFact(m, "windowType", "triple", p) },
   { re: /(dark|black) (shingle|roof)/i, apply: (m, _t, p) => setFact(m, "roofColor", "dark", p) },
+  // The walls as seen on the lap (2026-10-18): siding colour, what they are built of, skylights.
+  { re: /(white|cream|beige|ivory|light[- ]colou?red) (siding|stucco|exterior|paint)/i, apply: (m, _t, p) => setFact(m, "sidingColor", "light", p) },
+  { re: /(dark|black|charcoal|navy|brown|dark[- ]colou?red) (siding|stucco|exterior|paint)/i, apply: (m, _t, p) => setFact(m, "sidingColor", "dark", p) },
+  { re: /brick veneer|brick (house|exterior|front|walls?)/i, apply: (m, t, p) => { if (!negated(t, /brick/)) setFact(m, "wallConstruction", "brick-veneer", p); } },
+  { re: /(concrete|cinder) block|\bcmu\b|block (house|walls?)/i, apply: (m, t, p) => { if (!negated(t, /block/)) setFact(m, "wallConstruction", "masonry", p); } },
+  { re: /\b(icf|sips?)\b|insulated concrete forms?|structural insulated panels?/i, apply: (m, _t, p) => setFact(m, "wallConstruction", "sip-icf", p) },
+  { re: /\b(\d{1,2}|an?|one|two|three|four|five|six|seven|eight|nine|ten) skylights?\b/i, apply: (m, t, p) => { const w = t.match(/\b(\d{1,2}|an?|one|two|three|four|five|six|seven|eight|nine|ten) skylights?\b/i)?.[1]?.toLowerCase() ?? ""; const words: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }; const n = /^\d+$/.test(w) ? Number(w) : words[w]; if (n !== undefined && n >= 0 && n <= 30 && !negated(t, /skylight/)) setFact(m, "skylightSqft", n * 8, p); } },
   { re: /(light|white|metal) (shingle|roof)/i, apply: (m, _t, p) => setFact(m, "roofColor", "light", p) },
   { re: /(heavy|mature) (trees|shade)|well shaded/i, apply: (m, _t, p) => setFact(m, "shading", "heavy", p) },
   { re: /no shade|full sun|unshaded/i, apply: (m, _t, p) => setFact(m, "shading", "none", p) },
