@@ -20,7 +20,7 @@ export const SHOTS: Shot[] = [
   { n: 3, title: "Electrical panel", detail: "Door open, the main breaker in the middle of the frame, then the row of breakers so the free slots are visible.", say: "“Two-hundred-amp main, three open slots, electric dryer and range.”" },
   { n: 4, title: "Ducts", detail: "Attic hatch or crawl access: pan slowly along the trunk and a couple of runs. Show the return grille and the filter.", say: "“Attic ducts, insulated flex, one joint taped. Return grille twenty by twenty-five.”" },
   { n: 5, title: "Gas meter and water heater", detail: "The meter with the pipe size at the riser, and the water heater's fuel. Skip if the house is all-electric — say so.", say: "“Three-quarter-inch gas riser, gas water heater, no EV charger.”" },
-  { n: 6, title: "One lap of the house", detail: "Walk the outside once. Point the camera at the windows, the roof colour and any shade trees. Say the size, storeys and age.", say: "“Two thousand four hundred square feet, one storey, built ninety-eight, double-pane, dark shingles, no shade.”" },
+  { n: 6, title: "One lap of the house", detail: "Walk the outside once. Point the camera at the windows on each side, the roof colour, the siding and any shade trees. Say the size, storeys, age, what the walls are (wood, brick, block) and any skylights.", say: "“Two thousand four hundred square feet, one storey, built ninety-eight, double-pane, dark shingles, no shade.”" },
   { n: 7, title: "Thermostat and the complaint", detail: "One frame of the thermostat, then say what the owner wants and what bothers them.", say: "“Owner wants to keep gas heat. Back bedroom never cools.”" },
 ];
 

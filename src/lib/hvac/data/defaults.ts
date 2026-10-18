@@ -10,9 +10,12 @@
 
 import type {
   CeilingInsulation,
+  DoorType,
   Foundation,
   HumidityClass,
+  SidingColor,
   Tightness,
+  WallConstruction,
   WallInsulation,
   WindowType,
 } from "../types";
@@ -49,6 +52,38 @@ export const WINDOW: Record<WindowType, { u: number; shgc: number; label: string
 
 /** Wood-frame wall U-factor by cavity insulation (framing included). */
 export const WALL_U: Record<WallInsulation, number> = { none: 0.27, r11: 0.09, r13: 0.08, r19: 0.06, r21: 0.055 };
+
+/** What the walls are built of (2026-10-18). Wood frame is the table above; brick veneer adds the brick and its air
+ *  gap; block or solid brick has its own U by the insulation furred onto it (none = a bare 8-in. block wall);
+ *  SIP and ICF walls sit near R-22 whatever the cavity field says. `coolAddF` is the wall's extra cooling
+ *  temperature difference for a medium-coloured wall in the sun: mass soaks up the afternoon peak, so the heavier
+ *  the wall, the smaller it is. */
+export const WALL_BUILD: Record<WallConstruction, { label: string; uMul?: number; uByInsulation?: Record<WallInsulation, number>; uCap?: number; coolAddF: number }> = {
+  "wood-frame": { label: "wood frame", uMul: 1, coolAddF: 8 },
+  "brick-veneer": { label: "brick veneer over frame", uMul: 0.92, coolAddF: 6 },
+  masonry: { label: "concrete block or solid brick", uByInsulation: { none: 0.4, r11: 0.085, r13: 0.08, r19: 0.062, r21: 0.057 }, coolAddF: 4 },
+  "sip-icf": { label: "SIP or ICF", uCap: 0.045, coolAddF: 5 },
+};
+
+/** The siding's colour against the medium the wall figures assume, °F of cooling temperature difference: a light
+ *  wall reflects the sun, a dark one soaks it up. */
+export const SIDING_COLOR_ADD: Record<SidingColor, number> = { light: -3, medium: 0, dark: 4 };
+
+/** Exterior doors, about 20 sq ft each: U by what they are. Solid wood is the 0.4 the load always used. */
+export const DOOR_SQFT_EACH = 20;
+export const DOOR_BY_TYPE: Record<DoorType, { u: number; label: string }> = {
+  insulated: { u: 0.2, label: "insulated steel or fibreglass" },
+  "solid-wood": { u: 0.4, label: "solid wood" },
+  "old-hollow": { u: 0.6, label: "old or hollow-core" },
+};
+
+/** Skylights: sun on flat glass at the design hour, Btu/h per sq ft for a reference SHGC of 0.87, and a skylight's
+ *  U against the same window's (a sloped unit with its curb loses more). */
+export const SKYLIGHT = { solarGain: 200, uMul: 1.2 } as const;
+
+/** The leakage to outside the duct table's figures stand for, as a share of the system's airflow — a measured
+ *  CFM25 scales the duct loss and gain against it (half of them are conduction, which a leak test does not move). */
+export const DUCT_LEAK_TYPICAL = 0.1;
 
 /** Ceiling U-factor under a vented attic by insulation. */
 export const CEILING_U: Record<CeilingInsulation, number> = { none: 0.28, r11: 0.083, r19: 0.05, r30: 0.033, r38: 0.026, r49: 0.02 };

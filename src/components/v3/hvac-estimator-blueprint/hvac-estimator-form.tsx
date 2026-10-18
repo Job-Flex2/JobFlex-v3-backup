@@ -36,6 +36,7 @@ import { VIDEO_ACCEPT, fmtClock, stripFrames } from "@/components/v3/video-estim
 import type { WalkthroughAnalysis } from "@/lib/estimate/video-schema";
 import type { BuildingModel, CatalogItem, EngineResult, Provenance } from "@/lib/hvac/types";
 import { runEngine } from "@/lib/hvac/engine";
+import { glassBySide } from "@/lib/hvac/load";
 import { nextSteps, planFor, type FixAction } from "@/lib/hvac/fixes";
 import { countiesFor } from "@/lib/hvac/designConditions";
 import { CATALOG_CSV_COLUMNS, DEFAULT_RATE_CARD, buildLedger, normalizeRateCard, tiersFor, waterHeaterOptions, type HvacRateCard, type LedgerLine } from "@/lib/hvac/ledger";
@@ -43,7 +44,7 @@ import { offForState, stateName } from "@/lib/hvac/catalogView";
 import { fixFieldSpec } from "@/lib/hvac/fieldSpecs";
 import { addMissingUsRows } from "@/actions/hvacCatalog";
 import { DEFAULT_JOB, JOBS, jobDef, type JobInput, type JobKind , type OutdoorKind } from "@/lib/hvac/jobs";
-import { applyNameplate, applyStated, applyStatedNested, applyTypedModelNumber, applyWalkthrough, modelFromSite, type NameplateRead, type SiteFacts } from "@/lib/hvac/intake";
+import { applyNameplate, applyStated, applyStatedNested, applyTypedModelNumber, applyWalkthrough, fillEnvelopeDefaults, modelFromSite, type NameplateRead, type SiteFacts } from "@/lib/hvac/intake";
 import { designConditionsFor } from "@/lib/hvac/designConditions";
 import {
   attachHvacPermitReport,
@@ -385,6 +386,23 @@ function LinesBlock({ title, rows, editing, onEdit, onChange, phone, onAddPhone 
   );
 }
 
+/** A field the envelope round added (2026-10-18), drawn from its spec in lib/hvac/fieldSpecs — one place for its
+ *  label, kind and options. */
+function EnvField({ path, model, onChange, placeholder }: { path: string; model: BuildingModel; onChange: (path: string, v: unknown) => void; placeholder?: string }) {
+  const spec = fixFieldSpec(path);
+  if (!spec) return null;
+  return <Field label={spec.label} path={path} model={model} kind={spec.kind === "bool" ? "bool" : spec.kind === "select" ? "select" : spec.kind === "text" ? "text" : "num"} options={spec.options} onChange={onChange} placeholder={placeholder ?? spec.placeholder} step={spec.step} />;
+}
+
+/** The fold's one line: the glass by side when typed, the skylights, the doors. */
+function envelopeSummary(m: BuildingModel): string {
+  const side = glassBySide(m);
+  const parts = [side ? `N ${Math.round(side.N)} · E ${Math.round(side.E)} · S ${Math.round(side.S)} · W ${Math.round(side.W)} sq ft` : "glass by side not typed"];
+  if (m.skylightSqft && m.skylightSqft > 0) parts.push(`${Math.round(m.skylightSqft)} sq ft of skylight`);
+  if (typeof m.doorCount === "number") parts.push(`${m.doorCount} door${m.doorCount === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
 function NumCell({ value, onCommit, ariaLabel, className }: { value: number; onCommit: (n: number) => void; ariaLabel: string; className?: string }) {
   const [txt, setTxt] = React.useState(String(value));
   const [seen, setSeen] = React.useState(value);
@@ -597,7 +615,8 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
   // ── derived model, engine, ledger ─────────────────────────────────────────
   const model = React.useMemo<BuildingModel | null>(() => {
     if (!site) return null;
-    const m = restored ? (structuredClone(restored) as BuildingModel) : modelFromSite(site);
+    // An estimate saved before the envelope round (2026-10-18) gets its new fields at their defaults, marked so.
+    const m = restored ? fillEnvelopeDefaults(structuredClone(restored) as BuildingModel) : modelFromSite(site);
     // The state and county selects correct what the lookup guessed, and the
     // state decides which code rules the job answers to — not just the design day.
     if (stateCode && stateCode !== m.state) { m.state = stateCode; m.county = county || ""; }
@@ -1603,7 +1622,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
                 <Field label="Storeys" path="storeys" model={model} kind="num" onChange={onTyped} />
                 <Field label="Year built" path="yearBuilt" model={model} kind="num" onChange={onTyped} placeholder="1998" />
                 <Field label="Windows" path="windowType" model={model} kind="select" onChange={onTyped} options={[["single", "Single pane"], ["double", "Double pane"], ["double-lowe", "Double, low-E"], ["triple", "Triple pane"]]} />
-                <Field label="Window area sq ft" path="windowSqft" model={model} kind="num" onChange={onTyped} placeholder={`${Math.round((model.conditionedSqft || 0) * model.windowToFloor) || 280} assumed`} />
+                <Field label="Window area sq ft" path="windowSqft" model={model} kind="num" onChange={onTyped} placeholder={glassBySide(model) ? `${Math.round(glassBySide(model)?.total ?? 0)} by side` : `${Math.round((model.conditionedSqft || 0) * model.windowToFloor) || 280} assumed`} />
                 <Field label="Foundation" path="foundation" model={model} kind="select" onChange={onTyped} options={[["slab", "Slab"], ["crawl-vented", "Crawlspace, vented"], ["crawl-sealed", "Crawlspace, sealed"], ["basement-unconditioned", "Basement, unconditioned"], ["basement-conditioned", "Basement, conditioned"]]} />
               </div>
             </div>}
@@ -1622,7 +1641,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
 
             <div className={cx("folds")}>
               {def.needs.load && !def.needs.zone && <details className={cx("fold2")}>
-                <summary><span className={cx("fold2-t")}>More about the house</span><span className={cx("fold2-s")}>ceiling · insulation · tightness · ventilation fan · roof · shade · occupants</span><svg className={cx("ic", "fold2-c")}><use href="#i-chev" /></svg></summary>
+                <summary><span className={cx("fold2-t")}>More about the house</span><span className={cx("fold2-s")}>ceiling · insulation · walls · siding · tightness · blower door · ventilation fan · roof · shade · occupants</span><svg className={cx("ic", "fold2-c")}><use href="#i-chev" /></svg></summary>
                 <div className={cx("fold2-b")}>
                   <div className={cx("grid-f")}>
                     <Field label="Ceiling ft" path="ceilingHeightFt" model={model} kind="num" onChange={onTyped} />
@@ -1631,9 +1650,31 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
                     <Field label="Attic insulation" path="ceilingInsulation" model={model} kind="select" onChange={onTyped} options={[["none", "None"], ["r11", "R-11"], ["r19", "R-19"], ["r30", "R-30"], ["r38", "R-38"], ["r49", "R-49"]]} />
                     <Field label="Whole-house ventilation fan" path="ventilationFan" model={model} kind="bool" onChange={onTyped} />
                     <Field label="Air tightness" path="tightness" model={model} kind="select" onChange={onTyped} options={[["leaky", "Leaky"], ["average", "Average"], ["tight", "Tight"], ["very-tight", "Very tight"]]} />
+                    {/* A blower-door test outranks the class (2026-10-18): CFM50 off the gauge, or ACH50 from the report. */}
+                    <EnvField path="blowerDoorCfm50" model={model} onChange={onTyped} />
+                    <EnvField path="blowerDoorAch50" model={model} onChange={onTyped} />
+                    <EnvField path="wallConstruction" model={model} onChange={onTyped} />
+                    <EnvField path="sidingColor" model={model} onChange={onTyped} />
                     <Field label="Roof colour" path="roofColor" model={model} kind="select" onChange={onTyped} options={[["light", "Light"], ["medium", "Medium"], ["dark", "Dark"]]} />
                     <Field label="Shading" path="shading" model={model} kind="select" onChange={onTyped} options={[["none", "None — full sun"], ["some", "Some"], ["heavy", "Heavy trees"]]} />
                   </div>
+                </div>
+              </details>}
+              {/* THE GLASS BY SIDE, SKYLIGHTS AND DOORS (2026-10-18): the glass by the way it faces is the biggest lever on
+                  a cooling load — typed here it replaces the total window area and the even split along the walls. */}
+              {def.needs.load && !def.needs.zone && <details className={cx("fold2")} data-hv-envelope>
+                <summary><span className={cx("fold2-t")}>Windows by side · skylights · doors</span><span className={cx("fold2-s")}>{envelopeSummary(model)}</span><svg className={cx("ic", "fold2-c")}><use href="#i-chev" /></svg></summary>
+                <div className={cx("fold2-b")}>
+                  <div className={cx("grid-f")}>
+                    <EnvField path="glassNorthSqft" model={model} onChange={onTyped} />
+                    <EnvField path="glassEastSqft" model={model} onChange={onTyped} />
+                    <EnvField path="glassSouthSqft" model={model} onChange={onTyped} />
+                    <EnvField path="glassWestSqft" model={model} onChange={onTyped} />
+                    <EnvField path="skylightSqft" model={model} onChange={onTyped} />
+                    <EnvField path="doorCount" model={model} onChange={onTyped} placeholder={`${2 * Math.min(2, Math.max(1, Math.round(model.storeys || 1)))} assumed`} />
+                    <EnvField path="doorType" model={model} onChange={onTyped} />
+                  </div>
+                  <p className={cx("mono")} style={{ margin: "8px 0 0", fontSize: 11 }}>Glass by side replaces the window area above. A skylight is about 8 sq ft; a sliding glass door counts as glass.</p>
                 </div>
               </details>}
               {def.needs.existing && <details className={cx("fold2")}>
@@ -1673,6 +1714,8 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
                     <Field label="Supply registers" path="ducts.supplyRegisters" model={model} kind="num" onChange={onTyped} placeholder="8" />
                     <Field label="Return grille (sq in, W×H)" path="ducts.returnGrilleSqIn" model={model} kind="num" onChange={onTyped} placeholder="20×25 = 500" area />
                     <Field label="Static pressure (in. w.c.)" path="ducts.measuredTespInWc" model={model} kind="num" onChange={onTyped} step="0.05" />
+                    {/* A duct-leakage test (2026-10-18): leakage to outside replaces the location's typical figure. */}
+                    <EnvField path="ducts.leakageCfm25" model={model} onChange={onTyped} />
                     {/* The duct calculator's inputs (lib/hvac/ductCalc, 2026-10-08): the sizes a tech reads at the plenum. */}
                     <Field label="Supply trunk (Ø or W×H, in)" path="ducts.supplyTrunk" model={model} kind="text" onChange={onTyped} placeholder="16 or 20×8" />
                     <Field label="Return duct (Ø or W×H, in)" path="ducts.returnDuct" model={model} kind="text" onChange={onTyped} placeholder="16 or 20×10" />
