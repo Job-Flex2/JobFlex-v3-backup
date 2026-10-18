@@ -929,32 +929,118 @@ export function BlueprintEstimator() {
   // 4 · result
   if (!result) return null;
   const m = result.merged;
-  const groups = Array.from(new Set(lines.map((l) => l.group ?? ""))).map((g) => ({ g, rows: lines.filter((l) => (l.group ?? "") === g) }));
+  const groups = Array.from(new Set(lines.map((l) => l.group ?? ""))).map((g) => {
+    const rows = lines.filter((l) => (l.group ?? "") === g);
+    return { g, rows, sub: rows.filter(isBilled).reduce((a, l) => a + lineTotal(l), 0) };
+  });
   const showGroups = groups.length > 1;
   const measuredRows = result.rows;
   const site = [planName, planAddress].filter(Boolean).join(" · ");
+  const tookMs = result.timing.reduce((a, [, ms]) => a + ms, 0);
   return (
     <div className={s.be}>
       {viewerEl}
+      {/* THE RESULT (owner, 2026-10-17: the AI desk's clarity pass): the job, then the total and the one next step
+          — Create proposal — at the top, so a 300-line estimate never hides it. */}
       <div className={s.resultHead}>
         {head(result.scope.title, `${site ? `${site} — ` : ""}“${result.request}”`)}
         <div className={s.headTotal}>
           <span>Estimate</span>
           <b>{money(total)}</b>
+          <button type="button" className={s.btnPrimary} disabled={!billed.length || saving != null} onClick={() => void createProposal()}>
+            {saving === "saving" ? "Creating…" : saving === "opening" ? "Opening…" : "Create proposal"}
+          </button>
         </div>
       </div>
-      {result.timing.length > 0 && (
-        <p className={s.timing}>
-          Took {clockText(result.timing.reduce((a, [, ms]) => a + ms, 0))}
-          {result.timing.map(([label, ms]) => (
-            <span key={label}>
-              {" "}
-              · {label.toLowerCase()} {clockText(ms)}
-            </span>
-          ))}
-        </p>
-      )}
       <div className={s.resGrid}>
+        <section className={`${s.card} ${s.est}`}>
+          <h2 className={s.h2}>Estimate</h2>
+          {result.failed.map((f) => (
+            <div key={f.trade} className={s.failRow}>
+              <span>
+                <b>{TRADE_LABEL[f.trade]}</b> could not be priced — {f.error}
+              </span>
+              <button type="button" className={s.btnGhost} disabled={retrying != null} onClick={() => void retryTrade(f.trade)}>
+                {retrying === f.trade ? "Pricing…" : "Try again"}
+              </button>
+            </div>
+          ))}
+          <div className={s.lines}>
+            {groups.map(({ g, rows, sub }) => (
+              <div key={g || "-"} className={s.lineGroup}>
+                {showGroups && (
+                  <div className={s.groupHead}>
+                    <span>{g}</span>
+                    <b>{money(sub)}</b>
+                  </div>
+                )}
+                {rows.map((l) => {
+                  const suggested = !isBilled(l);
+                  return (
+                    <div key={l.id} className={`${s.line} ${suggested ? s.lineSuggested : ""}`}>
+                      <span className={s.lineName}>
+                        {l.name}
+                        {suggested && <span className={s.lineNote}>Suggested — not in the total</span>}
+                      </span>
+                      <input className={s.lineQty} key={`${l.id}:${l.qty}`} defaultValue={qtyText(l.qty)} inputMode="decimal" aria-label={`${l.name} — quantity`} onBlur={(e) => setQty(l.id, e.target.value)} />
+                      <span className={s.lineUnit}>{l.unit}</span>
+                      <span className={s.lineTotal}>{money(lineTotal(l))}</span>
+                      {suggested ? (
+                        <button type="button" className={s.lineAct} onClick={() => acceptLine(l.id)} aria-label={`Add ${l.name}`}>
+                          Add
+                        </button>
+                      ) : (
+                        <button type="button" className={`${s.lineAct} ${s.lineRemove}`} onClick={() => removeLine(l.id)} aria-label={`Remove ${l.name}`}>
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className={s.totalRow}>
+            <span>Total</span>
+            <b>{money(total)}</b>
+          </div>
+          {(m.notes.length > 0 || result.timing.length > 0) && (
+            <details className={s.more}>
+              <summary>Notes and checks{m.notes.length ? ` · ${m.notes.length}` : ""}</summary>
+              <ul className={s.notes}>
+                {m.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+                {result.timing.length > 0 && (
+                  <li className={s.timing}>
+                    Took {clockText(tookMs)}
+                    {result.timing.map(([label, ms]) => ` · ${label.toLowerCase()} ${clockText(ms)}`).join("")}
+                  </li>
+                )}
+              </ul>
+            </details>
+          )}
+          <div className={s.actions}>
+            <button type="button" className={s.btnPrimary} disabled={!billed.length || saving != null} onClick={() => void createProposal()}>
+              {saving === "saving" ? "Creating…" : saving === "opening" ? "Opening…" : "Create proposal"}
+            </button>
+            <button type="button" className={s.btnGhost} disabled={saving != null} onClick={editInSmartProposal}>
+              Edit in Smart Proposal
+            </button>
+            <button
+              type="button"
+              className={s.btnGhost}
+              disabled={saving != null}
+              onClick={() => {
+                setErr("");
+                setStage("ask");
+              }}
+            >
+              Ask for another job
+            </button>
+          </div>
+        </section>
+
         <section className={`${s.card} ${s.found}`}>
           <h2 className={s.h2}>Found on your plans</h2>
           {result.scope.summary && <p className={s.p}>{result.scope.summary}</p>}
@@ -1024,83 +1110,6 @@ export function BlueprintEstimator() {
               <b>Not in this estimate:</b> {result.scope.notIncluded.join(" ")}
             </p>
           )}
-        </section>
-
-        <section className={`${s.card} ${s.est}`}>
-          <h2 className={s.h2}>Estimate</h2>
-          {result.failed.map((f) => (
-            <div key={f.trade} className={s.failRow}>
-              <span>
-                <b>{TRADE_LABEL[f.trade]}</b> could not be priced — {f.error}
-              </span>
-              <button type="button" className={s.btnGhost} disabled={retrying != null} onClick={() => void retryTrade(f.trade)}>
-                {retrying === f.trade ? "Pricing…" : "Try again"}
-              </button>
-            </div>
-          ))}
-          <div className={s.lines}>
-            {groups.map(({ g, rows }) => (
-              <div key={g || "-"} className={s.lineGroup}>
-                {showGroups && <div className={s.groupHead}>{g}</div>}
-                {rows.map((l) => {
-                  const suggested = !isBilled(l);
-                  return (
-                    <div key={l.id} className={`${s.line} ${suggested ? s.lineSuggested : ""}`}>
-                      <span className={s.lineName}>
-                        {l.name}
-                        {suggested && <span className={s.lineNote}>Suggested — not in the total</span>}
-                      </span>
-                      <input className={s.lineQty} key={`${l.id}:${l.qty}`} defaultValue={qtyText(l.qty)} inputMode="decimal" aria-label={`${l.name} — quantity`} onBlur={(e) => setQty(l.id, e.target.value)} />
-                      <span className={s.lineUnit}>{l.unit}</span>
-                      <span className={s.lineTotal}>{money(lineTotal(l))}</span>
-                      {suggested ? (
-                        <button type="button" className={s.lineAct} onClick={() => acceptLine(l.id)} aria-label={`Add ${l.name}`}>
-                          Add
-                        </button>
-                      ) : (
-                        <button type="button" className={s.lineAct} onClick={() => removeLine(l.id)} aria-label={`Remove ${l.name}`}>
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-          <div className={s.totalRow}>
-            <span>Total</span>
-            <b>{money(total)}</b>
-          </div>
-          {m.notes.length > 0 && (
-            <details className={s.more}>
-              <summary>Notes and checks · {m.notes.length}</summary>
-              <ul className={s.notes}>
-                {m.notes.map((n) => (
-                  <li key={n}>{n}</li>
-                ))}
-              </ul>
-            </details>
-          )}
-          <div className={s.actions}>
-            <button type="button" className={s.btnPrimary} disabled={!billed.length || saving != null} onClick={() => void createProposal()}>
-              {saving === "saving" ? "Creating…" : saving === "opening" ? "Opening…" : "Create proposal"}
-            </button>
-            <button type="button" className={s.btnGhost} disabled={saving != null} onClick={editInSmartProposal}>
-              Edit in Smart Proposal
-            </button>
-            <button
-              type="button"
-              className={s.btnGhost}
-              disabled={saving != null}
-              onClick={() => {
-                setErr("");
-                setStage("ask");
-              }}
-            >
-              Ask for another job
-            </button>
-          </div>
         </section>
       </div>
     </div>

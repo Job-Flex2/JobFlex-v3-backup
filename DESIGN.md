@@ -89,6 +89,10 @@ one status line in its tone, then "Set up texting" with Number, Team, Clients
 and Your own texts as rows; the extras stay as two cards at the foot. The
 estimators' working cards (Blueprint, Roof) mark their steps with the Smart
 estimator's squares (estimators-blueprint/work-square).
+The Blueprint estimator's result (owner, 2026-10-17): the estimate is the
+wide main column with a subtotal on every trade group; "Found on your plans"
+stands beside it and stays in view; the total and Create proposal sit at the
+top; the run's timing lives under "Notes and checks".
 
 Light mode only. Keep the existing drafting grid behind content, never over
 type. Resting cards have no shadow (`--shadow-sm` and `--shadow-md` are `none`).
