@@ -17,7 +17,7 @@ export type Selection = { kind: "wall"; id: string } | { kind: "opening"; id: st
 /** `place:<library id>` puts that thing where the plan is clicked. */
 export type Tool = "select" | "wall" | "room" | "door" | "window" | "opening" | "label" | `place:${string}`;
 
-export type Underlay = { url: string; x: number; y: number; w: number; h: number; opacity?: number };
+export type Underlay = { url: string; x: number; y: number; w: number; h: number; opacity?: number; /** More sheets beside it: a whole house's other floors. */ more?: Array<{ url: string; x: number; y: number; w: number; h: number }> };
 
 type Props = {
   doc: DesignDoc;
@@ -495,6 +495,7 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
       data-plan-editor
     >
       {underlay ? <image href={underlay.url} x={underlay.x} y={underlay.y} width={underlay.w} height={underlay.h} opacity={underlay.opacity ?? 0.45} preserveAspectRatio="none" /> : null}
+      {underlay?.more?.map((u, i) => <image key={`u${i}`} href={u.url} x={u.x} y={u.y} width={u.w} height={u.h} opacity={underlay.opacity ?? 0.45} preserveAspectRatio="none" />)}
 
       {/* Rooms: tinted, named, with their floor area. */}
       {rooms.map((r, i) => {
@@ -630,6 +631,24 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
             </g>
           );
         })}
+
+      {/* A whole house: each floor's name over its plan. */}
+      {(() => {
+        const names = [...new Set(doc.walls.map((w) => w.floor).filter((f): f is string => !!f))];
+        if (names.length < 2) return null;
+        return names.map((f) => {
+          const ws = doc.walls.filter((w) => w.floor === f);
+          const x0 = Math.min(...ws.flatMap((w) => [w.a.x, w.b.x]));
+          const x1 = Math.max(...ws.flatMap((w) => [w.a.x, w.b.x]));
+          const y0 = Math.min(...ws.flatMap((w) => [w.a.y, w.b.y]));
+          const fs = Math.max(12, 20 * px);
+          return (
+            <text key={`floor-${f}`} x={(x0 + x1) / 2} y={y0 - fs * 1.2} textAnchor="middle" fontSize={fs} fontWeight={900} fill="#0f172a" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }} pointerEvents="none" data-design-floor-caption={f}>
+              {f}
+            </text>
+          );
+        });
+      })()}
 
       {/* Room names and areas. */}
       {rooms.map((r) => {

@@ -92,6 +92,7 @@ function normalizeWalls(raw: unknown): Wall[] {
     height: num(w?.height, 36, 360, DEFAULT_CEILING),
     ...(w?.exterior ? { exterior: true } : {}),
     ...(w?.from === "plan" || w?.from === "drawn" ? { from: w.from } : {}),
+    ...(w?.floor ? { floor: str(w.floor, 40) } : {}),
   }));
 }
 
@@ -157,6 +158,7 @@ export function normalizeDesign(raw: unknown): DesignDoc {
     at: pt(l?.at),
     ...(l?.ceiling != null ? { ceiling: num(l.ceiling, 60, 360, DEFAULT_CEILING) } : {}),
     ...(l?.planSqFt != null ? { planSqFt: num(l.planSqFt, 0, 100000, 0) } : {}),
+    ...(l?.floor ? { floor: str(l.floor, 40) } : {}),
   }));
   let lineBudget = MAX_MARK_LINES;
   const marks: PlanMark[] = [];

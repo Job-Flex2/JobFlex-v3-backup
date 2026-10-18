@@ -20,6 +20,8 @@ export type Wall = {
   exterior?: boolean;
   /** Read from the plan, or drawn here. */
   from?: "plan" | "drawn";
+  /** The floor it stands on, in a whole house read from several plans ("Main floor") — 2026-10-18. */
+  floor?: string;
 };
 
 export type OpeningKind = "door" | "double" | "slider" | "pocket" | "window" | "opening";
@@ -51,6 +53,8 @@ export type RoomLabel = {
   ceiling?: number;
   /** The area the plan printed under the name, to check the scale against. */
   planSqFt?: number | null;
+  /** The floor it's on, in a whole house ("Upper floor"). */
+  floor?: string;
 };
 
 export type MarkRole = "cabinet" | "appliance" | "plumbing";

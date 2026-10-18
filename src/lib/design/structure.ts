@@ -57,9 +57,17 @@ const rot = (p: P, ang: number): P => ({ x: p.x * Math.cos(-ang) - p.y * Math.si
 export const standingWalls = (doc: DesignDoc): Wall[] => doc.existing?.walls ?? doc.walls;
 const standingOpenings = (doc: DesignDoc): Opening[] => doc.existing?.openings ?? doc.openings;
 
-/** Every standing wall read at once (one footprint, one frame). */
+/** Every standing wall read — each floor of a whole house on its own footprint. */
 export function readStructure(doc: DesignDoc): Map<string, WallReading> {
-  const walls = standingWalls(doc);
+  const all = standingWalls(doc);
+  const floors = [...new Set(all.map((w) => w.floor ?? ""))];
+  if (floors.length <= 1) return readFloorStructure(doc, all);
+  const out = new Map<string, WallReading>();
+  for (const f of floors) for (const [k, v] of readFloorStructure(doc, all.filter((w) => (w.floor ?? "") === f))) out.set(k, v);
+  return out;
+}
+
+function readFloorStructure(doc: DesignDoc, walls: Wall[]): Map<string, WallReading> {
   const out = new Map<string, WallReading>();
   if (!walls.length) return out;
   const outer = outsideWallIds({ walls, labels: doc.labels });

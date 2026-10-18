@@ -5,6 +5,7 @@
 // from). Browser-only; the plan never leaves the browser except as that one small picture.
 import { readVectorSheet, layerRole, type VectorSheet } from "./pdfVector";
 import type { SheetText } from "./planRead";
+import { classifySheet, type SheetClass } from "./planSet";
 
 export const MAX_SHEETS = 60;
 export const MAX_FILE_BYTES = 120 * 1024 * 1024;
@@ -45,14 +46,15 @@ export type DesignSheet = {
   hint: string;
   /** The file keeps CAD layers by name (walls, doors, windows). */
   layered: boolean;
+  /** Its text (a PDF page), and what that text says it is: floor plans by title, rooms by label (lib/design/planSet). */
+  texts?: SheetText[];
+  cls?: SheetClass;
   /** Its lines and text (a PDF page only). */
   read?: () => Promise<SheetRead>;
   /** A JPEG of part of the sheet (points), long edge at most maxPx; scale = pixels per point. */
   picture: (region: { x: number; y: number; w: number; h: number } | null, maxPx: number) => Promise<{ url: string; scale: number; w: number; h: number }>;
 };
 
-const PLAN_WORDS = /floor\s*plan|first\s*floor|main\s*floor|second\s*floor|level\s*\d|proposed\s*plan|plan\s*view|dimension(ed)?\s*plan/i;
-const NOT_PLAN = /site\s*plan|roof\s*plan|foundation|framing|elevation|section|detail|electrical|plumbing|mechanical|title\s*24|energy|general\s*notes|schedule/i;
 
 async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]> {
   const lib = await loadPdfJs();
@@ -82,20 +84,14 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
       const [x, y] = lib.Util.applyTransform([it.transform[4], it.transform[5]], vp.transform);
       texts.push({ str: it.str, x, y, h: Math.hypot(it.transform[2], it.transform[3]) });
     }
-    const all = texts.map((t) => t.str).join(" ");
+    // The floor plan by its drawing title and the rooms it labels — not by the words "floor plan" anywhere in its
+    // notes (a spec page said that too, and came first).
+    const cls = classifySheet(texts, vp.width, vp.height);
     const titleText = texts
       .filter((t) => (t.x >= vp.width * 0.6 && t.y >= vp.height * 0.7) || t.x >= vp.width * 0.86)
       .map((t) => t.str)
       .join(" ");
-    let score = 0;
-    const why: string[] = [];
-    if (PLAN_WORDS.test(all)) {
-      score += 3;
-      why.push("Floor plan");
-    }
-    if (NOT_PLAN.test(titleText) && !PLAN_WORDS.test(titleText)) score -= 1;
-    if (/kitchen|bed\s*room|bath|living/i.test(all)) score += 1;
-    if (layered) why.push("CAD layers");
+    const why = [cls.why, layered ? "CAD layers" : ""].filter(Boolean);
     const tvp = page.getViewport({ scale: THUMB_PX / Math.max(vp.width, vp.height) });
     const c = document.createElement("canvas");
     c.width = Math.round(tvp.width);
@@ -112,10 +108,12 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
       thumb,
       width: vp.width,
       height: vp.height,
-      title: (texts.find((t) => PLAN_WORDS.test(t.str))?.str ?? titleText.slice(0, 60)).trim(),
-      score,
+      title: (cls.plans[0]?.title ?? titleText.slice(0, 60)).trim(),
+      score: cls.score,
       hint: why.join(" · "),
       layered,
+      texts,
+      cls,
       read: async () => {
         const ol = await page.getOperatorList();
         const sheet = readVectorSheet({
