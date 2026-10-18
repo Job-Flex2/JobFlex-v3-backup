@@ -13,6 +13,9 @@ import { roomsOf, type Room } from "./geometry";
 import { roomSpans, cornersOf, splashTopFor } from "./kitchen";
 import { COUNTER_T, counterPreset, finishesFor, floorPreset, itemCode, lib, splashPreset } from "./library";
 import { PRICES } from "@/lib/estimate/step-prices/interior-finishes";
+import { PRICES as CORE } from "@/lib/estimate/step-prices/core-building-trades";
+import { PRICES as GENERAL } from "@/lib/estimate/step-prices/general-professional";
+import { houseChanges, type HouseChange } from "./structure";
 import type { PriceRange, StepPrice } from "@/lib/estimate/step-prices/types";
 
 /* ── The counts ────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -47,6 +50,8 @@ export type Takeoff = {
   accentSqft: number;
   floorWastePct: number;
   baseboardLf: number;
+  /** The changes to the house (milestone 5): walls out or moved, new and wider openings — house-wide. */
+  changes: HouseChange[];
 };
 
 const BASE_TOP = 36;
@@ -178,6 +183,7 @@ export function takeoff(doc: DesignDoc, labelId: string): Takeoff | null {
     accentSqft: Math.round(accentSqft),
     floorWastePct,
     baseboardLf: r05(baseboardLf),
+    changes: houseChanges(doc),
   };
 }
 
@@ -211,7 +217,7 @@ export type EstLine = {
   fee?: boolean;
 };
 
-export const GROUPS = ["Prep & demolition", "Rough-in", "Cabinets", "Countertops & backsplash", "Appliances & fixtures", "Electrical & lighting", "Floor, walls & trim"] as const;
+export const GROUPS = ["Prep & demolition", "Walls & structure", "Rough-in", "Cabinets", "Countertops & backsplash", "Appliances & fixtures", "Electrical & lighting", "Floor, walls & trim"] as const;
 
 const K = PRICES["kitchen-remodel"].steps;
 const CT = PRICES["countertop-installer"].steps;
@@ -220,6 +226,8 @@ const FL = PRICES["flooring-installation"].steps;
 const TS = PRICES["tile-stone"].steps;
 const PT = PRICES.painting.steps;
 const DW_ = PRICES.drywall.steps;
+const GC = GENERAL["general-contracting"].steps;
+const FOUNDATION = CORE["residential-foundation-repair"].steps;
 
 /** A price-book step by the start of its text (the book keys steps by their full sentence). */
 function step(book: Record<string, StepPrice>, starts: string): StepPrice | null {
@@ -267,6 +275,8 @@ export function priceDesign(t: Takeoff, f: Finishes, opts: EstimateOptions, fact
     add("demo-floor", "Prep & demolition", "Remove the existing floor", "Flooring and underlayment taken up to the subfloor", t.floorSqft, "sqft", step(K, "Removal of existing flooring"));
     add("dumpster", "Prep & demolition", "Dumpster and disposal", "Debris container and dump fees", 1, "lot", step(K, "Dumpster and disposal"));
   }
+  // Walls and structure: the changes to the house, each kind on one line (so the shop's own price for it carries).
+  priceChanges(t, add);
   // Rough-in.
   if (opts.roughIn) {
     add("rough-plumb", "Rough-in", "Rough plumbing", `Supply and drain to the sink${t.plumbingPoints > t.sinks ? ", dishwasher and fridge water line" : ""}`, t.plumbingPoints, "ea", step(K, "Rough plumbing"));
@@ -323,6 +333,61 @@ export function priceDesign(t: Takeoff, f: Finishes, opts: EstimateOptions, fact
   return out;
 }
 
+type AddLine = (key: string, group: (typeof GROUPS)[number], name: string, desc: string, qty: number, unit: EstUnit, sp: StepPrice | null, mult?: number) => void;
+
+/** The walls and openings changed, priced from the book: the kitchen-remodel "Wall removal" step at its own note's
+ *  ranges (a partition $350–750 a foot; a bearing wall on an LVL beam with posts and footings $850–2,100), a new
+ *  opening in an outside wall per opening (header, studs, a standard unit set and flashed), partitions framed and
+ *  drywalled, the patching, and the engineer's stamped letter when a beam or header is the engineer's to size. A wall
+ *  that can't be told from the plan is priced as bearing until it's checked. */
+function priceChanges(t: Takeoff, add: AddLine) {
+  const cs = t.changes;
+  if (!cs.length) return;
+  const G = "Walls & structure" as const;
+  const out = step(K, "Wall removal");
+  const bearingRate = out ? { ...out, price: [850, 2100] as PriceRange } : null;
+  const partitionRate = out ? { ...out, price: [350, 750] as PriceRange } : null;
+  const frame = step(K, "Framing changes");
+  const patch = step(K, "Drywall and patching");
+  const opening = step(GC, "New or relocated window and exterior door openings");
+  const envelope = step(GC, "Exterior envelope");
+  const engineer = step(FOUNDATION, "Structural engineer's stamped");
+  const ft = (inches: number) => r05(inches / 12);
+  const list = (xs: HouseChange[]) => xs.map((c) => c.title.replace(/^./, (s) => s.toLowerCase())).join("; ");
+  const bearingish = (c: HouseChange) => c.reading.bearing !== false;
+  const unsure = (xs: HouseChange[]) => (xs.some((c) => c.reading.bearing === null) ? " — priced as bearing until it's checked on site" : "");
+
+  const wallsOut = cs.filter((c) => c.kind === "remove-wall" || c.kind === "move-wall");
+  const bOut = wallsOut.filter(bearingish);
+  const pOut = wallsOut.filter((c) => !bearingish(c));
+  add("wall-out-bearing", G, "Take out a bearing wall · beam", `Shored, ${list(bOut)}; an engineered LVL beam with posts and footings to the engineer's size; outlets in it moved${unsure(bOut)}`, ft(bOut.reduce((s, c) => s + c.inches, 0)), "ln ft", bearingRate);
+  add("wall-out-partition", G, "Take out a partition", `${list(pOut)} — to the framing, outlets and switches in it moved`, ft(pOut.reduce((s, c) => s + c.inches, 0)), "ln ft", partitionRate);
+
+  const ops = cs.filter((c) => c.kind === "new-opening" || c.kind === "wider-opening" || c.kind === "moved-opening");
+  const ext = ops.filter((c) => c.exterior);
+  const intB = ops.filter((c) => !c.exterior && bearingish(c));
+  const intP = ops.filter((c) => !c.exterior && !bearingish(c));
+  add("opening-outside", G, "New or changed opening in an outside wall", `${list(ext)} — header, king and jack studs, a standard unit set, flashed and trimmed`, ext.length, "ea", opening);
+  add("opening-bearing", G, "Opening in a bearing wall · header", `${list(intB)} — shored, a header to the engineer's size, jack and king studs${unsure(intB)}`, ft(intB.reduce((s, c) => s + c.inches, 0)), "ln ft", bearingRate);
+  add("opening-partition", G, "Opening in a partition", `${list(intP)} — cut and framed, cased`, ft(intP.reduce((s, c) => s + c.inches, 0)), "ln ft", partitionRate);
+
+  // New partitions: new walls, walls extended, and where a moved wall goes.
+  const fresh = cs.filter((c) => c.kind === "new-wall" || c.kind === "move-wall");
+  const freshLf = ft(fresh.reduce((s, c) => s + c.inches, 0));
+  add("partition-new", G, "Frame new walls", `${list(fresh)} — 2×4 studs, plates, blocking for what hangs on them`, freshLf, "ln ft", frame);
+  const closed = cs.filter((c) => c.kind === "closed-opening");
+  add("infill", G, "Frame in closed openings", `${list(closed)} — framed in to match the wall`, ft(closed.reduce((s, c) => s + c.inches, 0)), "ln ft", frame);
+  const extClosed = closed.filter((c) => c.exterior);
+  add("envelope-patch", G, "Patch the outside where an opening closed", "Sheathing, wrap and siding patched to match", Math.round(extClosed.reduce((s, c) => s + (c.inches * 80) / 144, 0)), "sqft", envelope);
+
+  // Drywall: both faces of new walls, a strip at the ceiling and floor and the ends where a wall came out, closed openings.
+  const h = t.ceiling / 12;
+  const patchSqft = Math.round(wallsOut.reduce((s, c) => s + 2 * (c.inches / 12) + 16, 0) + freshLf * h * 2 + closed.reduce((s, c) => s + (c.inches * 80 * (c.exterior ? 1 : 2)) / 144, 0));
+  add("wall-patch", G, "Drywall where walls changed", "New board on new walls, patches where walls came out and openings closed — taped and finished to Level 4", patchSqft, "sqft", patch);
+
+  if (cs.some((c) => c.needs === "engineer")) add("engineer", G, "Structural engineer", "Beam and header design for the changes above, a stamped letter for the permit (fee, at cost)", 1, "lot", engineer);
+}
+
 export const lineTotal = (l: EstLine) => Math.round(l.qty * l.unitPrice * 100) / 100;
 export const estimateTotal = (lines: EstLine[]) => lines.reduce((s, l) => s + lineTotal(l), 0);
 
@@ -342,6 +407,10 @@ export function scopeText(t: Takeoff, f: Finishes, opts: EstimateOptions): strin
   parts.push(`${fp.name} floor${f.floor.pattern === "herringbone" ? " in herringbone" : f.floor.pattern === "diagonal" ? " on the diagonal" : ""}.`);
   parts.push(`Walls in ${f.wall.name}${f.wall.code ? ` (${f.wall.code})` : ""}, ${f.wall.sheen === "semi" ? "semi-gloss" : f.wall.sheen}${f.wall.texture !== "smooth" ? `, ${f.wall.texture === "orange" ? "orange-peel" : f.wall.texture} texture` : ""}; ceiling painted; new baseboard.`);
   if (t.cans || t.pendants) parts.push(`${t.cans ? `${t.cans} recessed lights` : ""}${t.cans && t.pendants ? " and " : ""}${t.pendants ? `${t.pendants} pendants` : ""}, ${t.receptacles} countertop GFCI outlets.`);
+  if (t.changes.length) {
+    const eng = t.changes.some((c) => c.needs === "engineer");
+    parts.push(`Changes to the house: ${t.changes.map((c) => c.title.replace(/^./, (s) => s.toLowerCase())).join("; ")}${eng ? " — beams and headers to a structural engineer's stamped design" : ""}.`);
+  }
   if (opts.permits) parts.push("Permits and inspections.");
   return parts.join(" ");
 }

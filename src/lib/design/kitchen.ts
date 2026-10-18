@@ -315,7 +315,72 @@ function cans(zone: { x0: number; y0: number; x1: number; y1: number }, roomPoly
 
 export type KitchenResult = { items: DesignItem[]; notes: string[] };
 
+/** The kitchen for an empty room — laid out once for each open end the fridge could take, keeping the layout whose
+ *  work triangle (sink, cooking surface, fridge) best keeps NKBA's 4–9 ft legs and 26 ft around; the first choice
+ *  wins a tie. */
 export function autoKitchen(doc: DesignDoc, room: Room, labelId: string | null): KitchenResult {
+  let best: { r: KitchenResult; score: number } | null = null;
+  for (const rangeFirst of [false, true])
+    for (let pick = 0; pick < 4; pick++) {
+      const r = layoutKitchen(doc, room, labelId, pick, rangeFirst);
+      const score = layoutScore(r);
+      if (!best || score < best.score - 0.5) best = { r: { items: r.items, notes: r.notes }, score };
+      if (pick + 1 >= (r.picks ?? 0)) break;
+    }
+  return best!.r;
+}
+
+/** Counter beside an item along its run, each side (touching counters with the same back line). */
+function sideCounter(it: DesignItem, items: DesignItem[]): [number, number] {
+  const { f, u } = frameOf(it);
+  const back = (o: DesignItem) => dot({ x: o.x, y: o.y }, f) - o.d / 2;
+  const span = (o: DesignItem): [number, number] => {
+    const c = dot({ x: o.x, y: o.y }, u);
+    return [c - o.w / 2, c + o.w / 2];
+  };
+  const run = items.filter((o) => o.id !== it.id && lib(o.lib)?.counter && Math.abs((((o.rot - it.rot) % 360) + 540) % 360 - 180) < 2 && Math.abs(back(o) - back(it)) < 4).map(span);
+  const [t0, t1] = span(it);
+  let lo = t0;
+  let hi = t1;
+  for (let moved = true; moved; ) {
+    moved = false;
+    for (const [a, b] of run) {
+      if (b >= lo - 1.5 && a < lo - 0.01) {
+        lo = a;
+        moved = true;
+      }
+      if (a <= hi + 1.5 && b > hi + 0.01) {
+        hi = b;
+        moved = true;
+      }
+    }
+  }
+  return [t0 - lo, hi - t1];
+}
+
+/** How far a layout misses the guidelines it can: the triangle's legs and loop, and the counter beside the range
+ *  (12 + 15 in) and the fridge (15 in), inches short or over; a missing sink, range or fridge counts heavily. */
+function layoutScore(r: KitchenResult): number {
+  const one = (id: string) => r.items.find((i) => i.lib === id);
+  const s = one("SB");
+  const c = one("RNG") ?? one("CT");
+  const f = one("REF");
+  // Missing pieces outrank everything; a kitchen without a range is worse than one without a built-in fridge spot.
+  if (!s || !c || !f) return 5000 + (s ? 0 : 3000) + (c ? 0 : 2000) + (f ? 0 : 1500);
+  const fm = (it: DesignItem) => {
+    const { f: dir } = frameOf(it);
+    return { x: it.x + (dir.x * it.d) / 2, y: it.y + (dir.y * it.d) / 2 };
+  };
+  const [ps, pc, pf] = [fm(s), fm(c), fm(f)];
+  const legs = [Math.hypot(ps.x - pc.x, ps.y - pc.y), Math.hypot(pc.x - pf.x, pc.y - pf.y), Math.hypot(pf.x - ps.x, pf.y - ps.y)];
+  const off = legs.reduce((sum, l) => sum + Math.max(0, 48 - l) + Math.max(0, l - 108), 0);
+  const [ca, cb] = c.lib === "RNG" ? sideCounter(c, r.items) : [15, 15];
+  const [fa, fb] = sideCounter(f, r.items);
+  const landing = Math.max(0, 12 - Math.min(ca, cb)) + Math.max(0, 15 - Math.max(ca, cb)) + Math.max(0, 15 - Math.max(fa, fb));
+  return off + Math.max(0, legs.reduce((a, b) => a + b, 0) - 312) + landing;
+}
+
+function layoutKitchen(doc: DesignDoc, room: Room, labelId: string | null, pick: number, rangeFirst: boolean): KitchenResult & { picks?: number } {
   const notes: string[] = [];
   const ceiling = room.ceiling || DEFAULT_CEILING;
   const label = doc.labels.find((l) => l.id === labelId);
@@ -396,36 +461,23 @@ export function autoKitchen(doc: DesignDoc, room: Room, labelId: string | null):
   const dwAt = sides.find((t) => !blocked(m, t, t + 24));
   if (dwAt != null) m.fixed.push({ t0: dwAt, t1: dwAt + 24, lib: "DW", w: 24 });
   else notes.push("No 24 in beside the sink for a dishwasher — place it by hand.");
-  // Range: centered on the L's other run (counter both sides), else on the sink wall away from the sink.
-  const rw = 30;
-  const rangeRun = used[1] ?? m;
-  let r0 = on3((rangeRun.t0 + rangeRun.t1) / 2 - rw / 2, rangeRun.t0);
-  if (rangeRun === m) {
-    // The far side of the sink wall from the sink, at least 15 in of counter each side.
-    const leftSpace = s0 - m.t0;
-    r0 = on3(leftSpace > m.t1 - (s0 + sinkW) ? m.t0 + Math.max(15, leftSpace / 2 - rw / 2) : s0 + sinkW + 24 + Math.max(15, (m.t1 - s0 - sinkW - 24) / 2 - rw / 2), m.t0);
-  }
-  if (!blocked(rangeRun, r0, r0 + rw) && r0 - rangeRun.t0 >= 12 && rangeRun.t1 - (r0 + rw) >= 12) {
-    rangeRun.fixed.push({ t0: r0, t1: r0 + rw, lib: "RNG", w: rw });
-    rangeRun.range = r0;
-  } else notes.push("No 30 in stretch with counter both sides for the range — place it by hand.");
-  // Fridge: at an open end (not a corner), on the run that has room after the range; 36 in.
+  const items: DesignItem[] = [];
+  // The fridge at an open end (not a corner), 36 in. Placed before the range (so the range is centered in what's
+  // left and keeps its counter) or after it (a small room: the range first); autoKitchen tries both.
   const fw = 36;
-  let fridge: { run: (typeof used)[number]; t0: number } | null = null;
+  let picks = 0;
+  const placeFridge = () => {
+  // Every open end it could take, the L's leg first; `pick` chooses among them (autoKitchen tries each).
+  const ends: Array<{ run: (typeof used)[number]; t0: number }> = [];
   for (const u of [...used].reverse()) {
     const corner = used.some((o) => o !== u && cornerBetween(o.s, u.s));
     const c = corner ? cornerBetween(used[0].s, used[1]?.s ?? used[0].s) : null;
     const endFree = (end: "a" | "b") => !(c && ((u === used[0] && c.end1 === end) || (u === used[1] && c.end2 === end)));
-    if (endFree("b") && !blocked(u, u.t1 - fw, u.t1)) {
-      fridge = { run: u, t0: u.t1 - fw };
-      break;
-    }
-    if (endFree("a") && !blocked(u, u.t0, u.t0 + fw)) {
-      fridge = { run: u, t0: u.t0 };
-      break;
-    }
+    if (endFree("b") && !blocked(u, u.t1 - fw, u.t1)) ends.push({ run: u, t0: u.t1 - fw });
+    if (endFree("a") && !blocked(u, u.t0, u.t0 + fw)) ends.push({ run: u, t0: u.t0 });
   }
-  const items: DesignItem[] = [];
+  picks = ends.length;
+  const fridge = ends[pick] ?? ends[0] ?? null;
   if (fridge) {
     const f = place(fridge.run.s, fridge.t0, fw, "REF", labelId);
     if (f) items.push(f);
@@ -435,6 +487,62 @@ export function autoKitchen(doc: DesignDoc, room: Room, labelId: string | null):
     const over = place(fridge.run.s, fridge.t0, fw, "WR", labelId, 24, 72, Math.max(12, Math.min(24, ceiling - 72 - 6)));
     if (over) items.push(over);
   } else notes.push("No open end for a 36 in fridge — place it by hand.");
+  };
+  // Range: centered on the L's other run (counter both sides), else on the sink wall away from the sink.
+  const rw = 30;
+  const rangeRun = used[1] ?? m;
+  const placeRange = () => {
+  // NKBA landing at a cooking surface: 12 in on one side, 15 in on the other (the corner cabinet's counter counts).
+  const fits = (u: (typeof used)[number], t: number, need = { lo: 12, hi: 15 }) => {
+    const a = t - u.t0;
+    const b = u.t1 - (t + rw);
+    return !blocked(u, t, t + rw) && Math.min(a, b) >= need.lo && Math.max(a, b) >= need.hi;
+  };
+  // Every spot on the run's 3 in grid that fits, the best by `score` (lower is better).
+  const bestOn = (u: (typeof used)[number], score: (t: number) => number, need?: { lo: number; hi: number }) => {
+    let best: number | null = null;
+    for (let t = u.t0; t <= u.t1 - rw + 0.01; t += 3) {
+      const tt = on3(t, u.t0);
+      if (fits(u, tt, need) && (best == null || score(tt) < score(best))) best = tt;
+    }
+    return best;
+  };
+  const middle = (u: (typeof used)[number]) => (t: number) => Math.abs(t + rw / 2 - (u.t0 + u.t1) / 2);
+  // On the sink wall: as far from the sink as it fits.
+  const awayFromSink = (t: number) => -Math.abs(t + rw / 2 - (s0 + sinkW / 2));
+  const spot =
+    rangeRun !== m
+      ? (() => {
+          const leg = bestOn(rangeRun, middle(rangeRun));
+          return leg != null ? { u: rangeRun, t: leg } : null;
+        })() ?? (() => {
+          const wall = bestOn(m, awayFromSink);
+          return wall != null ? { u: m, t: wall } : null;
+        })()
+      : (() => {
+          const wall = bestOn(m, awayFromSink);
+          return wall != null ? { u: m, t: wall } : null;
+        })();
+  if (spot) {
+    spot.u.fixed.push({ t0: spot.t, t1: spot.t + rw, lib: "RNG", w: rw });
+    spot.u.range = spot.t;
+  } else {
+    // A range with short counter beats no range: the Checks tab says so.
+    const tight = bestOn(rangeRun, middle(rangeRun), { lo: 6, hi: 6 });
+    if (tight != null) {
+      rangeRun.fixed.push({ t0: tight, t1: tight + rw, lib: "RNG", w: rw });
+      rangeRun.range = tight;
+      notes.push("The range has less counter beside it than the guideline (12 in one side, 15 in the other) — see Checks.");
+    } else notes.push("No 30 in stretch with counter both sides for the range — place it by hand.");
+  }
+  };
+  if (rangeFirst) {
+    placeRange();
+    placeFridge();
+  } else {
+    placeFridge();
+    placeRange();
+  }
   // Base runs, then uppers.
   for (const u of used) {
     items.push(...baseRun(u.s, u.t0, u.t1, u.fixed, labelId, { range: u.range }));
@@ -455,7 +563,7 @@ export function autoKitchen(doc: DesignDoc, room: Room, labelId: string | null):
   const pts = items.flatMap((it) => cornersOf(it));
   const zone = { x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) };
   items.push(...cans(zone, room.poly, ceiling, labelId));
-  return { items, notes };
+  return { items, notes, picks };
 }
 
 /** The biggest island (48–96 in) that keeps 42 in walkways, square to the sink wall, near the kitchen. */

@@ -1,0 +1,47 @@
+/* THE ENGINEERING REQUEST SHEET (2026-10-17) — the page an engineer opens from the contractor's email, and prints. */
+.page { --ink: #15171a; --muted: #5d636b; --hair: #d9d6cf; --paper: #f3f1ec; --red: #b4232a; --amber: #9a5b00; --blue: #1b5f9e; --good: #1f7a46; min-height: 100vh; background: var(--paper); color: var(--ink); padding: 32px 16px 64px; font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif; }
+.sheet { max-width: 880px; margin: 0 auto; background: #fff; border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
+.top { padding: 24px 28px 18px; border-bottom: 1px solid var(--hair); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.caps { font-family: var(--font-mono), ui-monospace, monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.h1 { font-size: 26px; line-height: 1.15; font-weight: 800; margin: 6px 0 4px; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 14px; margin: 0; }
+.from { text-align: right; font-size: 13.5px; line-height: 1.5; }
+.from b { font-size: 14.5px; }
+.section { padding: 20px 28px; border-bottom: 1px solid var(--hair); }
+.section:last-child { border-bottom: 0; }
+.h2 { font-size: 15px; font-weight: 800; margin: 0 0 10px; }
+.note { background: var(--paper); border-radius: 4px; padding: 10px 12px; font-size: 14.5px; line-height: 1.5; margin: 0; white-space: pre-wrap; }
+.plan { border: 1px solid var(--hair); border-radius: 4px; padding: 8px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.sw { display: inline-block; width: 18px; height: 8px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
+.facts { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.6; }
+.change { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 16px 0; border-top: 1px solid var(--hair); }
+.change:first-of-type { border-top: 0; padding-top: 4px; }
+.num { width: 28px; height: 28px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+.title { font-size: 16px; font-weight: 800; margin: 2px 0 4px; }
+.chip { display: inline-block; font-family: var(--font-mono), ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; border: 1.5px solid currentColor; border-radius: 3px; padding: 1px 6px; margin-left: 8px; vertical-align: 2px; }
+.why { font-size: 14px; margin: 0 0 8px; line-height: 1.5; }
+.read { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0 0 8px; }
+.qs { margin: 0 0 10px; padding-left: 18px; font-size: 14px; line-height: 1.55; }
+.label { display: block; font-size: 12px; font-weight: 700; margin: 0 0 4px; }
+.area { width: 100%; min-height: 76px; border: 1.5px solid var(--ink); border-radius: 4px; padding: 8px 10px; font: inherit; font-size: 14px; resize: vertical; background: #fff; color: var(--ink); }
+.input { width: 100%; height: 38px; border: 1.5px solid var(--ink); border-radius: 4px; padding: 0 10px; font: inherit; font-size: 14px; background: #fff; color: var(--ink); }
+.area:focus-visible, .input:focus-visible, .btn:focus-visible { outline: 3px solid #8fb4dc; outline-offset: 1px; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.btn { height: 42px; padding: 0 18px; border-radius: 4px; border: 1.5px solid var(--ink); background: var(--ink); color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; }
+.btn[disabled] { opacity: 0.5; cursor: default; }
+.ghost { background: #fff; color: var(--ink); }
+.answered { border-left: 3px solid var(--good); padding: 6px 0 6px 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; margin: 0 0 6px; }
+.ok { color: var(--good); font-weight: 700; }
+.err { color: var(--red); font-weight: 700; }
+.foot { font-size: 12px; color: var(--muted); line-height: 1.5; }
+@media (max-width: 560px) {
+  .top, .section { padding-left: 16px; padding-right: 16px; }
+  .from { text-align: left; }
+  .h1 { font-size: 22px; }
+}
+@media print {
+  .page { background: #fff; padding: 0; }
+  .sheet { border: 0; }
+  .noPrint { display: none !important; }
+}

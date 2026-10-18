@@ -137,6 +137,26 @@ export type DesignDoc = {
   finishes?: Record<string, Finishes>;
   /** The estimate's choices (milestone 4): remodel or new, rough-in, permits, who supplies the appliances, the job. */
   estimate?: { scope: "remodel" | "new"; roughIn: boolean; permits: boolean; appliances: "owner" | "allowance"; address?: string; title?: string };
+  /** The house as it stands (milestone 5): its walls and openings when the plan was read, before anything was changed.
+   *  What differs from it now is a change to the house — a wall out, a wider window — and is read for structure. */
+  existing?: { walls: Wall[]; openings: Opening[]; at: string };
+  /** What the contractor found on site, by wall id: it IS bearing, or it is NOT. Outranks the plan's reading. */
+  structure?: Record<string, "bearing" | "not">;
+  /** What the engineer needs that the plan doesn't say, and the request once it's sent. */
+  engineering?: EngineeringState;
+};
+
+export type SiteFacts = {
+  /** What sits on the walls: the roof only, or a floor above. */
+  above?: "roof" | "floor" | "unknown";
+  roof?: "trusses" | "rafters" | "unknown";
+  below?: "slab" | "crawl" | "basement" | "unknown";
+};
+
+export type EngineeringState = {
+  site?: SiteFacts;
+  /** The last request sent: its link token, to whom, when. The answers live with the request (server side). */
+  request?: { token: string; to: string; sentAt: string };
 };
 
 export const DEFAULT_CEILING = 96;

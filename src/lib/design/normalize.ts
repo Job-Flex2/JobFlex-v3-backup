@@ -1,7 +1,7 @@
 // A design arriving from the browser, made safe to store (Home Design Studio, 2026-10-17): every number finite and in
 // range, ids short and plain, lists capped — a plan with thousands of drawn fixture lines keeps the first few
 // thousand. Pure.
-import type { DesignDoc, DesignItem, Finishes, MarkRole, Opening, OpeningKind, P, PlanMark, RoomLabel, Wall } from "./model";
+import type { DesignDoc, DesignItem, EngineeringState, Finishes, MarkRole, Opening, OpeningKind, P, PlanMark, RoomLabel, Wall } from "./model";
 import { DEFAULT_CEILING } from "./model";
 import { DEFAULT_FINISHES, lib } from "./library";
 
@@ -83,9 +83,8 @@ function normalizeFinishes(raw: unknown, labelIds: Set<string>, wallIds: Set<str
   return out;
 }
 
-export function normalizeDesign(raw: unknown): DesignDoc {
-  const d = (raw ?? {}) as Partial<DesignDoc>;
-  const walls: Wall[] = (Array.isArray(d.walls) ? d.walls : []).slice(0, MAX_WALLS).map((w, i) => ({
+function normalizeWalls(raw: unknown): Wall[] {
+  return (Array.isArray(raw) ? (raw as Partial<Wall>[]) : []).slice(0, MAX_WALLS).map((w, i) => ({
     id: id(w?.id, "w", i),
     a: pt(w?.a),
     b: pt(w?.b),
@@ -94,14 +93,16 @@ export function normalizeDesign(raw: unknown): DesignDoc {
     ...(w?.exterior ? { exterior: true } : {}),
     ...(w?.from === "plan" || w?.from === "drawn" ? { from: w.from } : {}),
   }));
-  const wallIds = new Set(walls.map((w) => w.id));
-  const openings: Opening[] = (Array.isArray(d.openings) ? d.openings : [])
+}
+
+function normalizeOpenings(raw: unknown, wallIds: Set<string>): Opening[] {
+  return (Array.isArray(raw) ? (raw as Partial<Opening>[]) : [])
     .slice(0, MAX_OPENINGS)
     .filter((o) => wallIds.has(String(o?.wallId)))
     .map((o, i) => ({
       id: id(o.id, "o", i),
       wallId: String(o.wallId),
-      kind: KINDS.includes(o.kind) ? o.kind : "door",
+      kind: KINDS.includes(o.kind as OpeningKind) ? (o.kind as OpeningKind) : "door",
       at: num(o.at, 0, 100000, 0),
       width: num(o.width, 6, 360, 32),
       height: num(o.height, 6, 200, 80),
@@ -110,6 +111,46 @@ export function normalizeDesign(raw: unknown): DesignDoc {
       ...(o.swing === "left" || o.swing === "right" ? { swing: o.swing } : {}),
       ...(o.tag ? { tag: str(o.tag, 12) } : {}),
     }));
+}
+
+const SITE_ABOVE = ["roof", "floor", "unknown"] as const;
+const SITE_ROOF = ["trusses", "rafters", "unknown"] as const;
+const SITE_BELOW = ["slab", "crawl", "basement", "unknown"] as const;
+
+/** The house as it stood, what the contractor found on site, the engineering request's state (milestone 5). */
+function normalizeStructure(d: Partial<DesignDoc>): Pick<DesignDoc, "existing" | "structure" | "engineering"> {
+  const out: Pick<DesignDoc, "existing" | "structure" | "engineering"> = {};
+  const ex = d.existing as { walls?: unknown; openings?: unknown; at?: unknown } | undefined;
+  if (ex && typeof ex === "object" && Array.isArray(ex.walls)) {
+    const walls = normalizeWalls(ex.walls);
+    out.existing = { walls, openings: normalizeOpenings(ex.openings, new Set(walls.map((w) => w.id))), at: str(ex.at, 40) || new Date(0).toISOString() };
+  }
+  if (d.structure && typeof d.structure === "object") {
+    const s: Record<string, "bearing" | "not"> = {};
+    for (const [k, v] of Object.entries(d.structure).slice(0, MAX_WALLS)) if (v === "bearing" || v === "not") s[str(k, 40)] = v;
+    if (Object.keys(s).length) out.structure = s;
+  }
+  const e = d.engineering as EngineeringState | undefined;
+  if (e && typeof e === "object") {
+    const site = e.site && typeof e.site === "object" ? e.site : {};
+    const eng: EngineeringState = {
+      site: {
+        ...(site.above ? { above: oneOf(site.above, SITE_ABOVE, "unknown") } : {}),
+        ...(site.roof ? { roof: oneOf(site.roof, SITE_ROOF, "unknown") } : {}),
+        ...(site.below ? { below: oneOf(site.below, SITE_BELOW, "unknown") } : {}),
+      },
+      ...(e.request && typeof e.request.token === "string" ? { request: { token: str(e.request.token, 64), to: str(e.request.to, 200), sentAt: str(e.request.sentAt, 40) } } : {}),
+    };
+    out.engineering = eng;
+  }
+  return out;
+}
+
+export function normalizeDesign(raw: unknown): DesignDoc {
+  const d = (raw ?? {}) as Partial<DesignDoc>;
+  const walls = normalizeWalls(d.walls);
+  const wallIds = new Set(walls.map((w) => w.id));
+  const openings = normalizeOpenings(d.openings, wallIds);
   const labels: RoomLabel[] = (Array.isArray(d.labels) ? d.labels : []).slice(0, 120).map((l, i) => ({
     id: id(l?.id, "r", i),
     name: str(l?.name, 60) || "Room",
@@ -159,6 +200,7 @@ export function normalizeDesign(raw: unknown): DesignDoc {
           },
         }
       : {}),
+    ...normalizeStructure(d),
     source: {
       kind,
       ...(src.fileName ? { fileName: str(src.fileName, 160) } : {}),

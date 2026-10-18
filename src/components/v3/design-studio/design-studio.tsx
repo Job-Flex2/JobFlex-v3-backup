@@ -13,6 +13,9 @@ import s from "./design-studio.module.css";
 import { PlanEditor, setWallLength, type Selection, type Tool, type Underlay } from "./plan-editor";
 import { DesignPanel } from "./design-panel";
 import { EstimateSheet } from "./estimate-sheet";
+import { HouseChanges, WallStructure } from "./house-changes";
+import { flaggedItems, flaggedWalls, houseChecks, kitchenChecks } from "@/lib/design/checks";
+import { openUp, readStructure, readWall } from "@/lib/design/structure";
 import type { DesignLocation } from "@/actions/designStudio";
 import type { DesignDoc, OpeningKind, P } from "@/lib/design/model";
 import { emptyDesign, ftIn, newId, DEFAULT_CEILING } from "@/lib/design/model";
@@ -37,8 +40,13 @@ function scaleDoc(d: DesignDoc, k: number): DesignDoc {
     openings: d.openings.map((o) => ({ ...o, at: o.at * k, width: o.width * k })),
     labels: d.labels.map((l) => ({ ...l, at: m(l.at) })),
     marks: d.marks.map((mk) => ({ ...mk, lines: mk.lines.map(([a, b]) => [m(a), m(b)] as [P, P]), box: { x: mk.box.x * k, y: mk.box.y * k, w: mk.box.w * k, h: mk.box.h * k } })),
+    // The house as it stood scales with it (else every wall would read as moved).
+    ...(d.existing ? { existing: { ...d.existing, walls: d.existing.walls.map((w) => ({ ...w, a: m(w.a), b: m(w.b) })), openings: d.existing.openings.map((o) => ({ ...o, at: o.at * k, width: o.width * k })) } } : {}),
   };
 }
+
+/** The house as it stands, kept once designing starts (milestone 5): what differs from it later is a change. */
+const withExisting = (d: DesignDoc): DesignDoc => (d.existing ? d : { ...d, existing: { walls: clone(d).walls, openings: clone(d).openings, at: new Date().toISOString() } });
 
 /** Parse 12'-6", 12' 6, 150", 12.5 (feet) → inches. */
 function parseLength(v: string): number | null {
@@ -63,7 +71,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   const [dragging, setDragging] = React.useState(false);
 
   // The design and its history.
-  const [doc, setDoc] = React.useState<DesignDoc>(() => initial?.doc ?? emptyDesign());
+  // A design already being designed (a room open) keeps the house as it stood from here on.
+  const [doc, setDoc] = React.useState<DesignDoc>(() => (initial ? (initial.doc.focus ? withExisting(initial.doc) : initial.doc) : emptyDesign()));
   const committed = React.useRef<DesignDoc>(doc);
   const [past, setPast] = React.useState<DesignDoc[]>([]);
   const [future, setFuture] = React.useState<DesignDoc[]>([]);
@@ -91,6 +100,14 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
 
   const rooms = React.useMemo(() => roomsOf(doc), [doc]);
   const focusRoom = focus ? rooms.find((r) => r.labelId === focus) ?? null : null;
+  // The smart checks, the structure reading and where walls stood (milestone 5).
+  const checks = React.useMemo(() => (focus ? [...kitchenChecks(doc, focus), ...houseChecks(doc)] : houseChecks(doc)), [doc, focus]);
+  const flags = React.useMemo(() => new Set([...flaggedItems(checks), ...flaggedWalls(checks)]), [checks]);
+  const structure = React.useMemo(() => readStructure(doc), [doc]);
+  const ghosts = React.useMemo(() => {
+    const now = new Set(doc.walls.map((w) => w.id));
+    return (doc.existing?.walls ?? []).filter((w) => !now.has(w.id));
+  }, [doc]);
 
   React.useEffect(() => {
     if (phase !== "start") return;
@@ -159,13 +176,13 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
 
   /* ── Save (and keep saving once saved) ── */
   const save = React.useCallback(
-    async (quiet = false) => {
+    async (quiet = false): Promise<string | null> => {
       setSaving(true);
       const res = await saveDesign({ id, doc: { ...committed.current, focus } });
       setSaving(false);
       if (!res.ok) {
         if (!quiet) setError(res.error);
-        return;
+        return null;
       }
       setDirty(false);
       setSavedAt(res.updatedAt);
@@ -175,6 +192,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
         // over (losing the drawing underneath and the view).
         window.history.replaceState(window.history.state, "", `/dashboard/design-studio?design=${res.id}`);
       }
+      return res.id;
     },
     [id, focus],
   );
@@ -354,6 +372,17 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
       lid = newId("r");
       const id2 = lid;
       patch((d) => d.labels.push({ id: id2, name: room.name, at: centroid(room.poly), ceiling: DEFAULT_CEILING }));
+    }
+    // Designing starts: the house as it stands now is kept (once), every history step with it.
+    const cur = committed.current;
+    if (!cur.existing) {
+      const next = withExisting(cur);
+      committed.current = next;
+      setDoc(next);
+      setDirty(true);
+      const keep = (d: DesignDoc) => (d.existing ? d : { ...d, existing: next.existing });
+      setPast((p) => p.map(keep));
+      setFuture((f) => f.map(keep));
     }
     setFocus(lid);
     setSelected(null);
@@ -623,6 +652,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
       onCalibratePoints={(a, b) => setCalibLine({ a, b })}
       fitToken={fitToken}
       className={focus ? s.planSmall : s.plan}
+      ghosts={ghosts}
+      flags={flags}
     />
   );
 
@@ -737,7 +768,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
         </div>
 
         <aside className={s.side}>
-          {focus && focusRoom ? <DesignPanel doc={doc} room={focusRoom} focus={focus} selected={selected} onSelect={setSelected} tool={tool} onTool={setTool} onPatch={patch} onLaidOut={() => setTimeout(() => setFrameToken((t) => t + 1), 50)} /> : null}
+          {focus && focusRoom ? <DesignPanel doc={doc} room={focusRoom} focus={focus} selected={selected} onSelect={setSelected} tool={tool} onTool={setTool} onPatch={patch} onLaidOut={() => setTimeout(() => setFrameToken((t) => t + 1), 50)} checks={checks} /> : null}
           {notes.length || scaleNote ? (
             <section className={s.card}>
               <div className={s.body}>
@@ -775,8 +806,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
             <section className={s.card} data-design-inspector="wall">
               <div className={s.head}>
                 <div className={s.cardTitle}>Wall</div>
-                <button type="button" className={`${s.btn} ${s.btnSm} ${s.btnDanger}`} onClick={() => { patch((d) => { d.walls = d.walls.filter((w) => w.id !== selWall.id); d.openings = d.openings.filter((o) => o.wallId !== selWall.id); }); setSelected(null); }}>
-                  Delete
+                <button type="button" className={`${s.btn} ${s.btnSm} ${s.btnDanger}`} onClick={() => { patch((d) => { d.walls = d.walls.filter((w) => w.id !== selWall.id); d.openings = d.openings.filter((o) => o.wallId !== selWall.id); }); setSelected(null); }} data-design-wall-out>
+                  {doc.existing?.walls.some((w) => w.id === selWall.id) ? "Take out" : "Delete"}
                 </button>
               </div>
               <div className={s.body}>
@@ -792,7 +823,31 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
                     </div>
                   </div>
                 </div>
-                <p className={s.note}>Drag its ends to resize, its middle to slide it — joined walls follow. {doc.openings.filter((o) => o.wallId === selWall.id).length} openings on it.</p>
+                <p className={s.note}>Drag its ends to resize, its middle to slide it — joined walls follow. {(() => {
+                    const n = doc.openings.filter((o) => o.wallId === selWall.id).length;
+                    return n === 0 ? "No openings in it." : n === 1 ? "1 opening in it." : `${n} openings in it.`;
+                  })()}</p>
+                {(() => {
+                  const reading = structure.get(selWall.id) ?? readWall(doc, selWall.id);
+                  if (!reading) return null;
+                  const standing = !!doc.existing?.walls.some((w) => w.id === selWall.id) || (!doc.existing && reading.level !== "new");
+                  return (
+                    <WallStructure
+                      reading={reading}
+                      isStanding={standing}
+                      lengthIn={wallLen(selWall)}
+                      onConfirm={(v) =>
+                        patch((d) => {
+                          const st = { ...(d.structure ?? {}) };
+                          if (v) st[selWall.id] = v;
+                          else delete st[selWall.id];
+                          d.structure = st;
+                        })
+                      }
+                      onOpenUp={() => change(openUp(withExisting(committed.current), selWall.id, newId("o")), true)}
+                    />
+                  );
+                })()}
               </div>
             </section>
           ) : null}
@@ -903,6 +958,8 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
               </div>
             </section>
           ) : null}
+
+          {focus ? <HouseChanges doc={doc} onPatch={patch} onSelect={setSelected} ensureSaved={() => (id && !dirty ? Promise.resolve(id) : save())} /> : null}
 
           {/* Every room. */}
           <section className={s.card}>

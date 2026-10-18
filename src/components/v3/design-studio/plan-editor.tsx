@@ -36,6 +36,10 @@ type Props = {
   /** A change refits the view (after the scale is set, the plan's size changes under it). */
   fitToken?: number;
   className?: string;
+  /** Walls the house had that the design took out — drawn dashed where they stood (milestone 5). */
+  ghosts?: Wall[];
+  /** Items and walls a check is about — outlined in red. */
+  flags?: Set<string>;
 };
 
 const ROOM_TINT = ["#fef3c7", "#dbeafe", "#dcfce7", "#fce7f3", "#ede9fe", "#ffedd5", "#cffafe", "#f1f5f9"];
@@ -66,7 +70,7 @@ function moveCorner(doc: DesignDoc, from: P, to: P, onlyWall?: string) {
   }
 }
 
-export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, focus = null, underlay = null, calibrating = false, onCalibratePoints, fitToken = 0, className }: Props) {
+export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, focus = null, underlay = null, calibrating = false, onCalibratePoints, fitToken = 0, className, ghosts = [], flags }: Props) {
   const svgRef = React.useRef<SVGSVGElement | null>(null);
   const rooms = React.useMemo(() => roomsOf(doc), [doc]);
   const [view, setView] = React.useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -520,14 +524,20 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
         </g>
       ))}
 
+      {/* Where walls stood before the design took them out. */}
+      {ghosts.map((w) => (
+        <polygon key={`ghost${w.id}`} points={wallQuad(w).map((p) => `${p.x},${p.y}`).join(" ")} fill="#fde2e2" stroke="#c0262d" strokeWidth={1.2 * px} strokeDasharray={`${5 * px} ${3 * px}`} pointerEvents="none" data-design-ghost={w.id} />
+      ))}
+
       {/* Walls, cut where their openings are. */}
       {doc.walls.map((w) => {
         const on = selWall?.id === w.id;
+        const flagged = flags?.has(w.id);
         const pieces = wallPieces(w, doc.openings).filter((pc) => pc.z0 === 0 && pc.z1 >= w.height - 0.5);
         return (
           <g key={w.id} data-hit={`wall:${w.id}`} style={{ cursor: tool === "select" ? "move" : undefined }}>
             {pieces.map((pc, i) => (
-              <polygon key={i} points={wallQuad(w, pc.t0, pc.t1).map((p) => `${p.x},${p.y}`).join(" ")} fill={on ? "#1d4ed8" : w.exterior ? "#0f172a" : "#334155"} />
+              <polygon key={i} points={wallQuad(w, pc.t0, pc.t1).map((p) => `${p.x},${p.y}`).join(" ")} fill={on ? "#1d4ed8" : flagged ? "#c0262d" : w.exterior ? "#0f172a" : "#334155"} />
             ))}
             {/* A wider invisible band makes a thin wall easy to grab. */}
             <line x1={w.a.x} y1={w.a.y} x2={w.b.x} y2={w.b.y} stroke="transparent" strokeWidth={Math.max(w.thick, 14 * px)} />
@@ -607,7 +617,8 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
           const code = itemCode(it);
           const fs = Math.max(4, Math.min(it.w / Math.max(3, code.length) * 1.5, it.d * 0.5, 10));
           return (
-            <g key={it.id} data-hit={`item:${it.id}`} data-item-code={code} opacity={quiet ? 0.45 : 1} style={{ cursor: tool === "select" ? "move" : undefined }}>
+            <g key={it.id} data-hit={`item:${it.id}`} data-item-code={code} data-flagged={flags?.has(it.id) ? "" : undefined} opacity={quiet ? 0.45 : 1} style={{ cursor: tool === "select" ? "move" : undefined }}>
+              {flags?.has(it.id) ? <polygon points={pts} fill="none" stroke="#c0262d" strokeWidth={4 * px} strokeOpacity={0.55} pointerEvents="none" /> : null}
               <polygon points={pts} fill={fill} stroke={ink} strokeWidth={(on ? 2 : 1) * px} strokeDasharray={wallHung ? `${4 * px} ${3 * px}` : undefined} />
               {!wallHung ? <line x1={front[0].x} y1={front[0].y} x2={front[1].x} y2={front[1].y} stroke={ink} strokeWidth={(on ? 2.4 : 1.6) * px} /> : null}
               {it.opts?.sink ? <ellipse cx={(c[0].x + c[2].x) / 2} cy={(c[0].y + c[2].y) / 2} rx={Math.min(it.w, it.d) * 0.3} ry={Math.min(it.w, it.d) * 0.22} fill="#fff" stroke={ink} strokeWidth={0.8 * px} /> : null}
