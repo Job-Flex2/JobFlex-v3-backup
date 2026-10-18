@@ -134,6 +134,10 @@ const WALL_MIN = 2.5; // inches: thinner pairs are trim, glazing or a countertop
 const WALL_MAX = 16; // inches: thicker pairs are two walls with a chase, or furniture
 const GAP_MERGE = 12; // inches: a break this short is a crossing wall, not an opening
 const OPENING_MAX = 192; // 16 ft: a longer break is two walls
+const COVERED_MAX = 228; // 19 ft: a break the sheet draws something across (a double garage door) is still one wall
+const SLIDER_MIN = 84; // a glazed break wider than 7 ft is a slider (a window that wide is rare on a house)
+const GARAGE_MIN = 156; // wider than 13 ft: a garage door
+const WIDE_OPENING = 144; // an undrawn break up to 12 ft between two real stretches of one wall is a cased opening
 
 export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadOptions = {}): PlanRead {
   const notes: string[] = [];
@@ -171,6 +175,32 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
   const toIn = (x: number, y: number): P => ({ x: (x - R.x) * k, y: (y - R.y) * k });
   const minW = opts.minWidth ? opts.minWidth - 0.01 : 0;
   const lines: L[] = sheet.segs.filter((s) => inR(s) && (!minW || s.w >= minW)).map((s) => ({ a: toIn(s.x1, s.y1), b: toIn(s.x2, s.y2), w: s.w, role: roleOf(s), curve: !!s.curve, path: s.path }));
+  // A sheet without CAD layers draws its windows, sliders and garage doors in a lighter pen than its walls: the pen
+  // the walls were picked by left them out, and every one became a break that ended its wall — the rooms around it
+  // never closed (2026-10-18, a real set: 20 rooms on the sheet, 5 closed). They are looked for in every lighter pen,
+  // inside a wall's own thickness across a break; a grid keeps the hundred thousand strokes of such a sheet quick.
+  const CELL = 36;
+  const thinGrid = new Map<string, L[]>();
+  if (!layered && minW) {
+    for (const s of sheet.segs) {
+      if (s.curve || s.w >= minW || !inR(s)) continue;
+      const l: L = { a: toIn(s.x1, s.y1), b: toIn(s.x2, s.y2), w: s.w, role: "window", curve: false, path: s.path };
+      if (dist(l.a, l.b) < 2) continue;
+      const key = `${Math.floor((l.a.x + l.b.x) / 2 / CELL)}:${Math.floor((l.a.y + l.b.y) / 2 / CELL)}`;
+      const cell = thinGrid.get(key);
+      if (cell) cell.push(l);
+      else thinGrid.set(key, [l]);
+    }
+  }
+  const thinNear = (box: { x0: number; y0: number; x1: number; y1: number }): L[] => {
+    const out: L[] = [];
+    for (let gx = Math.floor(box.x0 / CELL) - 1; gx <= Math.floor(box.x1 / CELL) + 1; gx++)
+      for (let gy = Math.floor(box.y0 / CELL) - 1; gy <= Math.floor(box.y1 / CELL) + 1; gy++) {
+        const cell = thinGrid.get(`${gx}:${gy}`);
+        if (cell) out.push(...cell);
+      }
+    return out;
+  };
 
   // ── Walls: pair the parallel lines ──
   const wallLines = lines
@@ -230,7 +260,8 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
   }
 
   // ── Join pieces on one line into runs ──
-  type Run = { t0: number; t1: number };
+  /** `face`: no stretch of wall, the face of the crossing wall a line was carried to (a zero-length run). */
+  type Run = { t0: number; t1: number; face?: boolean };
   type Track = { ang: number; u: P; n: P; c: number; thick: number; runs: Run[] };
   const tracks: Track[] = [];
   for (const p of pieces.sort((a, b) => a.ang - b.ang || a.c - b.c)) {
@@ -323,6 +354,40 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
     return covered;
   };
   const windowIn = (tr: Track, g0: number, g1: number) => coverage(tr, g0, g1, winLines.filter((l) => inBand(tr, g0, g1, l.a) && inBand(tr, g0, g1, l.b)));
+  /** What a sheet without layers draws across a break in a wall, in its lighter pens:
+   *  "glass" — lines two or more deep with one inside the wall (the glass): a window, a slider, a garage door;
+   *  "wall"  — just the wall's two faces, unbroken: the same wall drawn in a lighter pen, no opening at all;
+   *  null    — nothing, or dashes (a beam or soffit above, the line of a floor below), or a single threshold line. */
+  const thinIn = (tr: Track, g0: number, g1: number): "glass" | "wall" | null => {
+    if (layered || !thinGrid.size || g1 - g0 < 6) return null;
+    const A = world(tr, g0, -tr.thick / 2 - 2);
+    const B = world(tr, g1, tr.thick / 2 + 2);
+    const C = world(tr, g0, tr.thick / 2 + 2);
+    const D = world(tr, g1, -tr.thick / 2 - 2);
+    const xs = [A.x, B.x, C.x, D.x];
+    const ys = [A.y, B.y, C.y, D.y];
+    // Lines running ALONG the wall inside its thickness — a jamb tick across it says nothing about glass.
+    const ls = thinNear({ x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }).filter((l) => {
+      if (!inBand(tr, g0, g1, l.a) || !inBand(tr, g0, g1, l.b)) return false;
+      const qa = local(tr, l.a);
+      const qb = local(tr, l.b);
+      return Math.abs(qb.t - qa.t) >= 3 * Math.abs(qb.o - qa.o);
+    });
+    const gap = g1 - g0;
+    const byDepth = new Map<number, L[]>();
+    for (const l of ls) {
+      const d = Math.round(((local(tr, l.a).o + local(tr, l.b).o) / 2) * 2) / 2;
+      byDepth.set(d, [...(byDepth.get(d) ?? []), l]);
+    }
+    // A depth counts when it is drawn across most of the break in a few long strokes — dashes are a beam above.
+    const solid = [...byDepth.entries()].filter(([, g]) => {
+      const cov = coverage(tr, g0, g1, g);
+      return cov >= gap * 0.6 && !(g.length >= 4 && cov / g.length < 18);
+    });
+    if (solid.length < 2) return null;
+    const inner = solid.some(([d]) => Math.abs(d) <= tr.thick * 0.3);
+    return inner || solid.length >= 3 ? "glass" : "wall";
+  };
   /** Door-layer lines along the wall (a slider's panels, a bifold's leaves) that cover at least half the gap. */
   const leafIn = (tr: Track, g0: number, g1: number) => {
     const ls = doorLines.filter((l) => inBand(tr, g0, g1, l.a, 14) && inBand(tr, g0, g1, l.b, 14));
@@ -337,19 +402,21 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
       const edge = side === "start" ? tr.runs[0].t0 : tr.runs[tr.runs.length - 1].t1;
       // Every crossing wall present at this line beyond the end, nearest first. A wall that only reaches the line
       // (a T) lets the search go on past it; one that crosses the line stops it.
-      const stops: Array<{ face: number; through: boolean }> = [];
+      const stops: Array<{ face: number; through: boolean; real: boolean }> = [];
       for (const cr of tracks) {
         if (cr === tr || near(cr.ang, tr.ang)) continue;
         const X = lineX(world(tr, 0), world(tr, 100), world(cr, 0), world(cr, 100));
         if (!X) continue;
         const tc = local(tr, X).t;
         const beyond = side === "start" ? edge - tc : tc - edge;
-        if (beyond < -1 || beyond > OPENING_MAX) continue;
+        if (beyond < -1 || beyond > COVERED_MAX) continue;
         const tcr = local(cr, X).t;
         const reach = tr.thick / 2 + 3;
         if (!cr.runs.some((r) => tcr >= r.t0 - reach && tcr <= r.t1 + reach)) continue;
         const through = cr.runs.some((r) => r.t0 < tcr - reach && r.t1 > tcr + reach);
-        stops.push({ face: side === "start" ? tc + cr.thick / 2 : tc - cr.thick / 2, through });
+        // A post or a jamb return is not a wall to run to — a beam drawn out to the porch posts is not a wall.
+        const real = cr.runs.reduce((s2, r) => s2 + (r.t1 - r.t0), 0) >= 24;
+        stops.push({ face: side === "start" ? tc + cr.thick / 2 : tc - cr.thick / 2, through, real });
       }
       stops.sort((x, y) => (side === "start" ? y.face - x.face : x.face - y.face));
       let bestB: number | null = null;
@@ -358,7 +425,17 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
         const g1 = side === "start" ? edge : st.face;
         const gap = g1 - g0;
         const win = gap > 0.5 ? windowIn(tr, g0, g1) : 0;
-        const fits = gap <= GAP_MERGE || win >= gap * 0.5 || (gap <= 96 && (swingsIn(tr, g0, g1).length || leafIn(tr, g0, g1).length));
+        // A wall of its own (not a post, a jamb return or a pair of lettering strokes) may reach across.
+        const real = tr.runs.reduce((s2, r) => s2 + (r.t1 - r.t0), 0) >= 24;
+        const thin = real && gap > GAP_MERGE ? thinIn(tr, g0, g1) : null;
+        // A break up to 4 ft at a wall's end that the sheet draws nothing across is a doorway, cased or doorless —
+        // the wall still meets the one it runs into, with the opening in it (the room beyond it closes).
+        const fits =
+          gap <= GAP_MERGE ||
+          win >= gap * 0.5 ||
+          (!!thin && gap <= COVERED_MAX && st.real) ||
+          (gap <= 96 && (swingsIn(tr, g0, g1).length || leafIn(tr, g0, g1).length)) ||
+          (real && st.real && gap <= 48);
         if (gap > 0.5 && fits && !heldByTwin(tr, g0, g1)) {
           bestB = st.face;
           break;
@@ -366,8 +443,8 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
         if (st.through) break;
       }
       if (bestB == null) continue;
-      if (side === "start") tr.runs.unshift({ t0: bestB, t1: bestB });
-      else tr.runs.push({ t0: bestB, t1: bestB });
+      if (side === "start") tr.runs.unshift({ t0: bestB, t1: bestB, face: true });
+      else tr.runs.push({ t0: bestB, t1: bestB, face: true });
     }
   }
 
@@ -398,8 +475,14 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
       const sw = swingsIn(tr, g0, g1);
       const win = windowIn(tr, g0, g1);
       const leafs = leafIn(tr, g0, g1);
+      const thin = sw.length ? null : thinIn(tr, g0, g1);
+      // The same wall, drawn on in a lighter pen: no break at all.
+      if (thin === "wall") continue;
       const made: Array<Omit<Opening, "wallId" | "at"> & { t: number }> = [];
-      if (win >= gap * 0.6) made.push({ id: newId("o"), kind: "window", t: (g0 + g1) / 2, width: Math.round(gap), height: WINDOW_HEIGHT, sill: WINDOW_SILL });
+      const glazed = !sw.length && (win >= gap * 0.6 || thin === "glass");
+      if (glazed && gap > GARAGE_MIN) made.push({ id: newId("o"), kind: "opening", t: (g0 + g1) / 2, width: Math.round(gap), height: 96, sill: 0 });
+      else if (glazed && gap > SLIDER_MIN) made.push({ id: newId("o"), kind: "slider", t: (g0 + g1) / 2, width: Math.round(gap), height: DOOR_HEIGHT, sill: 0 });
+      else if (glazed) made.push({ id: newId("o"), kind: "window", t: (g0 + g1) / 2, width: Math.round(gap), height: WINDOW_HEIGHT, sill: WINDOW_SILL });
       else if (sw.length) {
         // Each swing: the hinge on one jamb, the door as wide as the swing. Two hinges facing → a pair of doors.
         const doors = sw
@@ -422,8 +505,14 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
             made.push({ id: newId("o"), kind: "door", t: Math.max(g0 + w / 2, Math.min(g1 - w / 2, t0 + w / 2)), width: w, height: DOOR_HEIGHT, sill: 0, hinge: d.toward > 0 ? "a" : "b", swing: d.side });
           }
       } else if (leafs.length) made.push({ id: newId("o"), kind: gap >= 30 && leafs.some((l) => Math.abs(local(tr, l.b).o - local(tr, l.a).o) > 4) ? "door" : "slider", t: (g0 + g1) / 2, width: Math.round(gap), height: DOOR_HEIGHT, sill: 0 });
-      else if (gap <= 72) made.push({ id: newId("o"), kind: "opening", t: (g0 + g1) / 2, width: Math.round(gap), height: DOOR_HEIGHT, sill: 0 });
-      if (!made.length || gap > OPENING_MAX) {
+      else {
+        // An undrawn break is a doorway only between two stretches of wall (or a wall's face it was carried to) — a
+        // post standing on the wall's line (a porch column) is not the other jamb.
+        const side = (r: Run, min: number) => !!r.face || r.t1 - r.t0 >= min;
+        if ((gap <= 72 && side(rs[i], 16) && side(rs[i + 1], 16)) || (gap <= WIDE_OPENING && side(rs[i], 24) && side(rs[i + 1], 24)))
+          made.push({ id: newId("o"), kind: "opening", t: (g0 + g1) / 2, width: Math.round(gap), height: DOOR_HEIGHT, sill: 0 });
+      }
+      if (!made.length || gap > (glazed ? COVERED_MAX : OPENING_MAX)) {
         flush(g0);
         start = g1;
         continue;
@@ -457,7 +546,8 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
           if (sin < 0.17) continue; // nearly parallel: not a corner
           const X = lineX(w.a, w.b, w2.a, w2.b);
           if (!X) continue;
-          const reach = w.thick / 2 + w2.thick + 3;
+          // A sheet without layers draws its corners less exactly (a jog for the siding, a pen's width): reach further.
+          const reach = w.thick / 2 + w2.thick + (layered ? 3 : 9);
           const dE = dist(E, X);
           if (dE > reach) continue;
           // X must be on (or just past the end of) the other wall.
@@ -513,6 +603,23 @@ export function readPlan(sheet: VectorSheet, texts: SheetText[], opts: PlanReadO
         } else E.w.b = m;
       }
     }
+
+  // ── A wall that touches nothing (a sheet without layers): the underline of a room name, or strokes of lettering
+  //    drawn in the wall pen and paired up — never a wall of the house, which meets another at one end at least ──
+  if (!layered) {
+    const meets = (w: Wall, p: P) =>
+      walls.some((o) => {
+        if (o === w) return false;
+        if (dist(o.a, p) <= 8 || dist(o.b, p) <= 8) return true;
+        const pr = project(o.a, o.b, p);
+        return pr.off <= o.thick / 2 + 8 && pr.tRaw > -8 && pr.tRaw < dist(o.a, o.b) + 8;
+      });
+    for (let i = walls.length - 1; i >= 0; i--) {
+      const w = walls[i];
+      if (dist(w.a, w.b) > 96 || openings.some((o) => o.wallId === w.id)) continue;
+      if (!meets(w, w.a) && !meets(w, w.b)) walls.splice(i, 1);
+    }
+  }
 
   // ── What the plan drew inside: cabinets, appliances, fixtures ──
   const marks: PlanMark[] = [];

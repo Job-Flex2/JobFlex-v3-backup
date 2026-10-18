@@ -123,6 +123,23 @@ export function facesOf(doc: Pick<DesignDoc, "walls" | "labels">): { rooms: Room
   };
   type E = { a: number; b: number; wall: string };
   const ends = walls.map((w) => [nodeOf(w.a), nodeOf(w.b)] as const);
+  // Two walls that CROSS — neither ending where they meet (a bump-out's side carried on down as an inside wall) —
+  // meet there too: a node at the crossing splits both (2026-10-18: a kitchen's corner was such a crossing, and the
+  // room leaked out of it).
+  for (let i = 0; i < walls.length; i++) {
+    const wi = walls[i];
+    const li = wallLen(wi);
+    for (let j = i + 1; j < walls.length; j++) {
+      const wj = walls[j];
+      const X = lineX(wi.a, wi.b, wj.a, wj.b);
+      if (!X) continue;
+      const pi = project(wi.a, wi.b, X);
+      if (pi.tRaw <= SNAP || pi.tRaw >= li - SNAP) continue;
+      const pj = project(wj.a, wj.b, X);
+      if (pj.tRaw <= SNAP || pj.tRaw >= wallLen(wj) - SNAP) continue;
+      nodeOf(X);
+    }
+  }
   // Split each wall at every node that lies on it (a T-junction, or a crossing wall's end).
   const edges: E[] = [];
   walls.forEach((w, i) => {
