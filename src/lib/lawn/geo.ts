@@ -104,6 +104,46 @@ export function fillRings(w: number, h: number, rings: Pt[][], into?: Uint8Array
   return m;
 }
 
+/** Distance from every pixel to the nearest `on` pixel, in pixels (chamfer 3-4, within 8% of true distance). Infinity
+ *  everywhere when nothing is on. */
+export function distanceTo(on: Uint8Array, w: number, h: number): Float32Array {
+  const N = w * h;
+  const BIG = 1e9;
+  const d = new Float32Array(N);
+  let any = false;
+  for (let i = 0; i < N; i++) {
+    d[i] = on[i] ? 0 : BIG;
+    if (on[i]) any = true;
+  }
+  if (!any) return d.fill(Infinity);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      let v = d[i];
+      if (x > 0) v = Math.min(v, d[i - 1] + 3);
+      if (y > 0) {
+        v = Math.min(v, d[i - w] + 3);
+        if (x > 0) v = Math.min(v, d[i - w - 1] + 4);
+        if (x < w - 1) v = Math.min(v, d[i - w + 1] + 4);
+      }
+      d[i] = v;
+    }
+  for (let y = h - 1; y >= 0; y--)
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x;
+      let v = d[i];
+      if (x < w - 1) v = Math.min(v, d[i + 1] + 3);
+      if (y < h - 1) {
+        v = Math.min(v, d[i + w] + 3);
+        if (x < w - 1) v = Math.min(v, d[i + w + 1] + 4);
+        if (x > 0) v = Math.min(v, d[i + w - 1] + 4);
+      }
+      d[i] = v;
+    }
+  for (let i = 0; i < N; i++) d[i] /= 3;
+  return d;
+}
+
 /** Douglas–Peucker on an open or closed path. */
 export function simplify(path: Pt[], tol: number): Pt[] {
   if (path.length < 4) return path;

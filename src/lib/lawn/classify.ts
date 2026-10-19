@@ -6,9 +6,13 @@
 // the class of what it falls on. Thresholds adapt to each photo (Otsu), since every state's flight is exposed
 // differently. The contractor corrects the result with a brush — this is the first draft, never the last word. Pure.
 
-export const CLS = { OUT: 0, LAWN: 1, TREE: 2, BED: 3, HARD: 4, BUILDING: 5, WATER: 6, SHADOW: 7 } as const;
+import { distanceTo } from "./geo";
+
+/** NATURAL is never read from the photo: it's ground the yard pass (yard.ts) or the contractor left out — woods floor,
+ *  field, meadow — shown on the map, never priced. */
+export const CLS = { OUT: 0, LAWN: 1, TREE: 2, BED: 3, HARD: 4, BUILDING: 5, WATER: 6, SHADOW: 7, NATURAL: 8 } as const;
 export type ClassId = (typeof CLS)[keyof typeof CLS];
-export const CLASS_NAME: Record<number, string> = { 0: "Outside the lot", 1: "Lawn", 2: "Trees", 3: "Beds", 4: "Hard surfaces", 5: "House", 6: "Pool & water", 7: "Shadow" };
+export const CLASS_NAME: Record<number, string> = { 0: "Outside the lot", 1: "Lawn", 2: "Trees", 3: "Beds", 4: "Hard surfaces", 5: "House", 6: "Pool & water", 7: "Shadow", 8: "Natural — not serviced" };
 
 export type Raster = {
   w: number;
@@ -111,7 +115,7 @@ function localStd(v: Uint8Array, w: number, h: number, r: number, mask: Uint8Arr
 /** Each pixel to the commonest class among its 8 neighbours and itself (ties keep the pixel's own). */
 export function majority(labels: Uint8Array, w: number, h: number, keep?: (c: number) => boolean): Uint8Array {
   const out = new Uint8Array(labels);
-  const cnt = new Uint8Array(8);
+  const cnt = new Uint8Array(16);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const own = labels[y * w + x];
@@ -124,7 +128,7 @@ export function majority(labels: Uint8Array, w: number, h: number, keep?: (c: nu
           if (xx >= 0 && yy >= 0 && xx < w && yy < h) cnt[labels[yy * w + xx]]++;
         }
       let best = own;
-      for (let k = 1; k < 8; k++) if (cnt[k] > cnt[best] && !keep?.(k)) best = k;
+      for (let k = 1; k < 16; k++) if (cnt[k] > cnt[best] && !keep?.(k)) best = k;
       out[y * w + x] = best;
     }
   return out;
@@ -235,6 +239,134 @@ export function dropThin(labels: Uint8Array, w: number, h: number, cls: number, 
   }
 }
 
+/** Pixels the height map calls tree that the photo shows as lawn: green (NDVI well over the photo's line), lit (not a
+ *  crown's shade), and smooth at two metres across — a mown lawn is, a crown's sunlit top never is (its own shade and
+ *  its neighbours' break it up) — in pieces of `minPx` or more, then their lawn-smooth rim at a metre. */
+function staleCanopy(chm: Float32Array, ndvi: Float32Array, br: Float32Array, nir: Uint8Array, w: number, h: number, rad: number, vegT: number, texT: number, minPx: number): Uint8Array | null {
+  const N = w * h;
+  const green = new Uint8Array(N);
+  for (let i = 0; i < N; i++) green[i] = ndvi[i] > vegT ? 1 : 0;
+  const near = localStd(nir, w, h, rad, green);
+  const wide = localStd(nir, w, h, rad * 2, new Uint8Array(N).fill(1));
+  // Mown lawn measured 0.7–1.2 at two metres on the test lots, sunlit crowns 3.2 and up.
+  const flatT = Math.max(2.2, texT * 0.15);
+  const lawnish = (i: number) => chm[i] >= 2.5 && ndvi[i] > vegT + 0.1 && br[i] >= 70;
+  const cand = new Uint8Array(N);
+  let any = false;
+  for (let i = 0; i < N; i++)
+    if (lawnish(i) && wide[i] < flatT) {
+      cand[i] = 1;
+      any = true;
+    }
+  if (!any) return null;
+  const out = new Uint8Array(N);
+  const seen = new Uint8Array(N);
+  let kept = false;
+  for (let i = 0; i < N; i++) {
+    if (seen[i] || !cand[i]) continue;
+    const comp: number[] = [];
+    const q = [i];
+    seen[i] = 1;
+    while (q.length) {
+      const p = q.pop()!;
+      comp.push(p);
+      const x = p % w;
+      const y = (p - x) / w;
+      for (const [xx, yy] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const k = yy * w + xx;
+        if (!seen[k] && cand[k]) {
+          seen[k] = 1;
+          q.push(k);
+        }
+      }
+    }
+    if (comp.length < minPx) continue;
+    for (const p of comp) out[p] = 1;
+    kept = true;
+  }
+  if (!kept) return null;
+  // The rim the wide window couldn't vouch for (it reaches over the lawn's edge): lawn-smooth at a metre, grown in.
+  const d = distanceTo(out, w, h);
+  for (let i = 0; i < N; i++) if (!out[i] && d[i] <= rad * 2 && lawnish(i) && near[i] < texT * 0.8) out[i] = 1;
+  return out;
+}
+
+/** Pool-blue: a bright, strongly blue-cyan pixel, or a moderately blue one that's dark in the near-infrared. Not the
+ *  vegetation index — a pool with a bright plaster floor reads as "green" in it on some flights — and not plain
+ *  blueness either: a blue-grey slate or metal roof is blue but dull and bright in the near-infrared, and a shadow on
+ *  concrete is blue (lit by the sky) but dark. */
+export function blueWater(r: number, g: number, b: number, nir: number): boolean {
+  if (b <= r + 25 || g <= r) return false;
+  const hi = Math.max(r, g, b);
+  const chroma = (hi - Math.min(r, g, b)) / hi;
+  return (chroma >= 0.45 && b - r >= 60 && g >= 135) || (chroma >= 0.25 && nir < b * 0.6 && (r + g + b) / 3 >= 85);
+}
+
+/** Pool-blue pieces near each other (within `gapPx` — a court's boxes across its painted lines) aren't a pool when
+ *  they add up past `bigPx`, or when three or more of them are `boxPx` or bigger (a court's boxes): paving — or a
+ *  pond, when a big one is dark in the near-infrared. */
+function bigBlueIsHard(L: Uint8Array, w: number, h: number, nir: Uint8Array, rgb: Uint8Array, bigPx: number, boxPx: number, gapPx: number): void {
+  const N = w * h;
+  const water = new Uint8Array(N);
+  for (let i = 0; i < N; i++) water[i] = L[i] === CLS.WATER ? 1 : 0;
+  const near = distanceTo(water, w, h);
+  const seen = new Uint8Array(N);
+  // Each 4-connected blue piece, marked once with its size.
+  const piece = new Uint8Array(N);
+  const pieces: number[] = [];
+  const markPiece = (start: number): number => {
+    const st = [start];
+    piece[start] = 1;
+    let k = 0;
+    while (st.length) {
+      const p = st.pop()!;
+      k++;
+      const x = p % w;
+      const y = (p - x) / w;
+      for (const [xx, yy] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const j = yy * w + xx;
+        if (!piece[j] && water[j]) {
+          piece[j] = 1;
+          st.push(j);
+        }
+      }
+    }
+    return k;
+  };
+  for (let i = 0; i < N; i++) {
+    if (seen[i] || !water[i]) continue;
+    const comp: number[] = [];
+    const q = [i];
+    seen[i] = 1;
+    let n = 0;
+    let b = 0;
+    while (q.length) {
+      const p = q.pop()!;
+      if (water[p]) {
+        comp.push(p);
+        n += nir[p];
+        b += rgb[p * 3 + 2];
+        if (!piece[p]) pieces.push(markPiece(p));
+      }
+      const x = p % w;
+      const y = (p - x) / w;
+      for (const [xx, yy] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const k = yy * w + xx;
+        if (!seen[k] && near[k] <= gapPx) {
+          seen[k] = 1;
+          q.push(k);
+        }
+      }
+    }
+    const boxes = pieces.filter((k) => k >= boxPx).length;
+    pieces.length = 0;
+    if ((comp.length > bigPx && n / (b || 1) > 0.5) || boxes >= 3) for (const p of comp) L[p] = CLS.HARD;
+  }
+}
+
 export function classify({ raster, lot, buildings }: ClassifyInput): ClassifyResult {
   const { w, h, gsdM, rgb, nir, chm } = raster;
   const N = w * h;
@@ -255,15 +387,28 @@ export function classify({ raster, lot, buildings }: ClassifyInput): ClassifyRes
     sample.push(ndvi[i]);
     brSample.push(br[i]);
   }
-  const vegT = Math.max(0.06, Math.min(0.3, otsu(sample.length > 200 ? sample : Array.from(ndvi), -0.4, 0.8)));
+  // Otsu splits plants from pavement where the lot has both; on a lot that's nearly all green (woods, a field) there's no
+  // pavement to split from and it splits the green itself — crowns from grass — so it's held to 0.2, the line living
+  // plants stand over in NAIP whatever the flight.
+  const vegT = Math.max(0.06, Math.min(0.2, otsu(sample.length > 200 ? sample : Array.from(ndvi), -0.4, 0.8)));
   const shadowT = Math.max(32, Math.min(62, percentile(brSample.length ? brSample : Array.from(br), 0.06) + 6));
   // Roughness among low plants only: a tree is told by its height, and a lawn's edge against a crown isn't rough.
+  const rad = Math.max(1, Math.round(1 / gsdM));
+  const sqftPx = (gsdM * 3.280839895) ** 2;
   const veg = new Uint8Array(N);
   for (let i = 0; i < N; i++) veg[i] = ndvi[i] > vegT && !(chm && chm[i] >= 2.5) ? 1 : 0;
-  const std = localStd(nir, w, h, Math.max(1, Math.round(1 / gsdM)), veg);
+  let std = localStd(nir, w, h, rad, veg);
   const vegStd: number[] = [];
   for (let i = 0; i < N; i += 2) if (ndvi[i] > vegT && lot[i]) vegStd.push(std[i]);
   const texT = vegStd.length > 100 ? Math.max(9, Math.min(30, otsu(vegStd, 0, 60))) : 16;
+  // The height map is older than the photo: where it still stands trees that have since come down, the photo shows
+  // bright, smooth, mown green — over 600 sq ft and up. The photo wins.
+  const felled = chm ? staleCanopy(chm, ndvi, br, nir, w, h, rad, vegT, texT, Math.ceil(600 / sqftPx)) : null;
+  if (felled) {
+    for (let i = 0; i < N; i++) if (felled[i]) veg[i] = 1;
+    std = localStd(nir, w, h, rad, veg);
+  }
+  const isTall = (i: number) => !!chm && chm[i] >= 2.5 && !felled?.[i];
   const canopy = !!chm && chm.some((v) => v >= 2.5);
 
   const L = new Uint8Array(N);
@@ -271,9 +416,9 @@ export function classify({ raster, lot, buildings }: ClassifyInput): ClassifyRes
     const r = rgb[i * 3];
     const g = rgb[i * 3 + 1];
     const b = rgb[i * 3 + 2];
-    const tall = !!chm && chm[i] >= 2.5;
+    const tall = isTall(i);
     if (buildings?.[i]) L[i] = CLS.BUILDING;
-    else if (b > r + 25 && g > r && br[i] > 70 && ndvi[i] < 0.05) L[i] = CLS.WATER;
+    else if (blueWater(r, g, b, nir[i])) L[i] = CLS.WATER;
     else if (br[i] < shadowT && ndvi[i] < vegT + 0.2) L[i] = tall ? CLS.TREE : CLS.SHADOW;
     else if (ndvi[i] > vegT) {
       if (tall) L[i] = CLS.TREE;
@@ -284,6 +429,42 @@ export function classify({ raster, lot, buildings }: ClassifyInput): ClassifyRes
       const sat = Math.max(r, g, b) - Math.min(r, g, b);
       // Mulch, soil, decomposed granite and rock: warm and earth-coloured (red ≥ green ≥ blue), not grey.
       L[i] = sat > 22 && r >= g - 4 && g >= b - 6 && ndvi[i] > -0.08 ? CLS.BED : CLS.HARD;
+    }
+  }
+  // A pool is a few hundred square feet, an estate's with its spa up to a couple of thousand. A court painted
+  // pool-blue is paving — told by its boxes, split by the white lines, so counted before the glare is grown in — and
+  // so is anything blue past 3,000 sq ft that isn't dark in the near-infrared the way open water is (a pond).
+  bigBlueIsHard(L, w, h, nir, rgb, Math.ceil(3000 / sqftPx), Math.ceil(100 / sqftPx), Math.max(1, Math.round(0.9 / gsdM)));
+  // A pool's glints and its bright rim (pale cyan, less saturated than the water), and the duller water of a greener
+  // pool, are the pool's: grown in from it —
+  // a metre and a half at most, so a seed of blue in a shadow doesn't spread over the sky-lit concrete around it.
+  {
+    const q: number[] = [];
+    const depth = new Uint8Array(N);
+    const maxDepth = Math.max(2, Math.round(1.5 / gsdM));
+    for (let i = 0; i < N; i++) if (L[i] === CLS.WATER) q.push(i);
+    for (let head = 0; head < q.length; head++) {
+      const p = q[head];
+      if (depth[p] >= maxDepth) continue;
+      const x = p % w;
+      const y = (p - x) / w;
+      for (const [xx, yy] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const k = yy * w + xx;
+        if (L[k] === CLS.WATER || L[k] === CLS.BUILDING) continue;
+        const r = rgb[k * 3];
+        const g = rgb[k * 3 + 1];
+        const b = rgb[k * 3 + 2];
+        const hi = Math.max(r, g, b);
+        const paleCyan = b > r + 25 && g > r + 20 && g >= 135 && (hi - Math.min(r, g, b)) / hi >= 0.2;
+        // …and a dull, greener pool's water: teal, dark in the near-infrared the way water is.
+        const darkTeal = b >= r + 10 && g >= r + 25 && nir[k] < b * 0.6;
+        if (paleCyan || darkTeal) {
+          L[k] = CLS.WATER;
+          depth[k] = depth[p] + 1;
+          q.push(k);
+        }
+      }
     }
   }
   // A shadow is what it falls on: grown in from its non-shadow neighbours.
@@ -308,16 +489,18 @@ export function classify({ raster, lot, buildings }: ClassifyInput): ClassifyRes
   }
   for (let i = 0; i < N; i++) if (L[i] === CLS.SHADOW) L[i] = CLS.HARD;
   // A crown's shaded rim: no green to speak of, but standing over a metre of mapped tree height — the tree's edge.
-  if (chm) for (let i = 0; i < N; i++) if (L[i] === CLS.BED && chm[i] >= 1.2) L[i] = CLS.TREE;
-  // Calm the speckle; the house keeps its outline.
-  let out = majority(L, w, h, (c) => c === CLS.BUILDING);
-  out = majority(out, w, h, (c) => c === CLS.BUILDING);
-  const sqftPx = (gsdM * 3.280839895) ** 2;
+  if (chm) for (let i = 0; i < N; i++) if (L[i] === CLS.BED && chm[i] >= 1.2 && !felled?.[i]) L[i] = CLS.TREE;
+  // Calm the speckle; the house keeps its outline, and a pool its water (the colour rules made it; crumbs go below).
+  const fixed = (c: number) => c === CLS.BUILDING || c === CLS.WATER;
+  let out = majority(L, w, h, fixed);
+  out = majority(out, w, h, fixed);
   dropThin(out, w, h, CLS.BED, Math.max(1, Math.round(0.45 / gsdM)));
   despeckle(out, w, h, CLS.LAWN, Math.ceil(12 / sqftPx));
   despeckle(out, w, h, CLS.BED, Math.ceil(6 / sqftPx));
   despeckle(out, w, h, CLS.HARD, Math.ceil(6 / sqftPx));
   despeckle(out, w, h, CLS.TREE, Math.ceil(10 / sqftPx));
+  // Blue glints off cars and skylights, blue in a shadow, aren't pools.
+  despeckle(out, w, h, CLS.WATER, Math.ceil(80 / sqftPx));
   let nd = 0;
   let nl = 0;
   for (let i = 0; i < N; i++)

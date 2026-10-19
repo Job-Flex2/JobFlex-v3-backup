@@ -6,7 +6,9 @@
 // 80k / 70k; string trimming 1,500 ft an hour and 60 obstacles; edging 9,000 ft hard / 4,000 soft; blowing 25,000 sq ft;
 // a push spreader 43,000 sq ft; mulch by hand 2.5 cu yd; bed detail 6,000 sq ft; shrubs 15 small / 10 medium / 6 large.
 // The market check is LawnStarter's (2M+ mows a year; per visit by lot size: ≤¼ acre $41–61, ¼–½ $49–69, ½–1 $59–114,
-// 1–2 $99–264) scaled by the JobFlex city index. Every number a company can set is in LawnSettings; the defaults are the research's middle. Pure.
+// 1–2 $99–264) scaled by the JobFlex city index — matched by the LAWN's size, not the lot's (2026-10-19: a 6-acre wooded
+// lot with 4,000 sq ft of lawn is a quarter-acre mow), and the cleanups by the yard's own size and its own trees. Every
+// number a company can set is in LawnSettings; the defaults are the research's middle. Pure.
 import type { YardMeasures } from "./measure";
 import { climateFor, mowVisits, type StateClimate } from "./season";
 
@@ -198,6 +200,25 @@ export type LawnQuote = {
 /** The company's hour, scaled to the market when it hasn't set its own. */
 export const effectiveRate = (c: Pick<PricingContext, "settings" | "locationFactor" | "ownRate">) => (c.ownRate ? c.settings.ratePerPersonHour : Math.round(c.settings.ratePerPersonHour * c.locationFactor));
 
+/** LawnStarter prices a mow by the lot; a lot's lawn runs about half of it, so the bands are read by the lawn: up to
+ *  5,000 sq ft a ¼-acre lot's, 10,000 a ½-acre's, 20,000 an acre's, 43,560 a 1–2 acre lot's — and a bigger lawn than
+ *  that, the 1–2 acre band scaled by its acres. */
+export function mowBand(lawnSqft: number): { band: [number, number]; lotWord: string } {
+  if (lawnSqft <= 5000) return { band: [41, 61], lotWord: "lot up to ¼ acre" };
+  if (lawnSqft <= 10000) return { band: [49, 69], lotWord: "¼–½ acre lot" };
+  if (lawnSqft <= 20000) return { band: [59, 114], lotWord: "½–1 acre lot" };
+  const k = Math.max(1, lawnSqft / 43560);
+  return { band: [Math.round(99 * k), Math.round(264 * k)], lotWord: k > 1 ? `lot with ${(lawnSqft / 43560).toFixed(1)} acres of lawn` : "1–2 acre lot" };
+}
+
+/** The share of the yard (lawn, beds and the crowns over and beside them) under trees — what slows a leaf cleanup.
+ *  Estimates measured before 2026-10-19 have only the whole lot's canopy. */
+export function yardCanopyShare(m: Pick<YardMeasures, "lawnSqft" | "bedSqft" | "treeCanopySqft" | "lotSqft" | "yardCanopySqft">): number {
+  if (m.yardCanopySqft == null) return m.lotSqft ? m.treeCanopySqft / m.lotSqft : 0;
+  const ground = m.lawnSqft + m.bedSqft + m.yardCanopySqft;
+  return ground ? Math.min(0.85, m.yardCanopySqft / ground) : 0;
+}
+
 export function priceYard(ctx: PricingContext): LawnQuote {
   const { measures: m, settings: s, options: o } = ctx;
   const rate = effectiveRate(ctx);
@@ -224,9 +245,7 @@ export function priceYard(ctx: PricingContext): LawnQuote {
     const blowH = Math.min(m.hardSqft, 4000) / RATE.blowSqftPerHr;
     const hours = mowH + trimH + edgeH + blowH + stopHrs;
     const price = Math.max(s.minimumStop, round5(hours * rate));
-    // LawnStarter's per-visit prices by LOT size (2026): ≤¼ acre $41–61, ¼–½ $49–69, ½–1 $59–114, 1–2 $99–264.
-    const acres = m.lotSqft / 43560;
-    const band = acres <= 0.25 ? [41, 61] : acres <= 0.5 ? [49, 69] : acres <= 1 ? [59, 114] : [99, 264];
+    const { band, lotWord } = mowBand(m.lawnSqft);
     push({
       id: "mow",
       name: o.frequency === "weekly" ? "Weekly mowing" : "Every-other-week mowing",
@@ -236,7 +255,7 @@ export function priceYard(ctx: PricingContext): LawnQuote {
       qty: visits,
       labor: 0.92,
       hours: Math.round(hours * 100) / 100,
-      market: { low: money(band[0] * lf), high: money(band[1] * lf), basis: `LawnStarter, a ${acres <= 0.25 ? "lot up to ¼ acre" : acres <= 0.5 ? "¼–½ acre lot" : acres <= 1 ? "½–1 acre lot" : "1–2 acre lot"}, at this city's index` },
+      market: { low: money(band[0] * lf), high: money(band[1] * lf), basis: `LawnStarter, a ${lotWord} (that much lawn), at this city's index` },
       taxClass: "service",
     });
   }
@@ -304,15 +323,16 @@ export function priceYard(ctx: PricingContext): LawnQuote {
       taxClass: "service",
     });
   }
-  // Cleanups: the whole yard (lawn and beds), slower the more trees drop leaves on it.
+  // Cleanups: the whole yard (lawn and beds), slower the more trees drop leaves on it — the trees over and beside the
+  // yard, not the woods beyond it.
   const yard = m.lawnSqft + m.bedSqft;
   if (yard > 0) {
-    const canopy = m.lotSqft ? m.treeCanopySqft / m.lotSqft : 0;
+    const canopy = yardCanopyShare(m);
     const springH = (yard / RATE.cleanupSqftPerHr) * (1 + canopy * 1.5) + stopHrs;
     const fallH = (yard / RATE.cleanupSqftPerHr) * (1 + canopy * 3) + stopHrs;
-    const acres = m.lotSqft / 43560;
-    push({ id: "springCleanup", name: "Spring cleanup", desc: "Winter debris raked out of the lawn and beds, beds tidied, the first cut's height set", unitPrice: Math.max(s.minimumStop * 2, round5(springH * rate + s.haulFee)), unit: "lot", qty: 1, labor: 0.85, hours: Math.round(springH * 100) / 100, market: { low: money(Math.max(150, acres * 900) * lf), high: money(Math.max(250, acres * 1600) * lf), basis: "Jobber, ¼ acre $225–400" }, taxClass: "service" });
-    push({ id: "fallCleanup", name: "Fall leaf cleanup", desc: `Leaves blown and mulched or hauled from the lawn and beds — ${Math.round(canopy * 100)}% of the lot is under trees`, unitPrice: Math.max(s.minimumStop * 2, round5(fallH * rate + s.haulFee)), unit: "lot", qty: 1, labor: 0.85, hours: Math.round(fallH * 100) / 100, market: { low: money(Math.max(70, acres * 400) * lf), high: money(Math.max(200, acres * 1000) * lf), basis: "HomeAdvisor, $400–1,000 an acre" }, taxClass: "service" });
+    const acres = yard / 43560;
+    push({ id: "springCleanup", name: "Spring cleanup", desc: "Winter debris raked out of the lawn and beds, beds tidied, the first cut's height set", unitPrice: Math.max(s.minimumStop * 2, round5(springH * rate + s.haulFee)), unit: "lot", qty: 1, labor: 0.85, hours: Math.round(springH * 100) / 100, market: { low: money(Math.max(150, acres * 900) * lf), high: money(Math.max(250, acres * 1600) * lf * (1 + canopy * 0.5)), basis: `Jobber, a ¼-acre yard $225–400${canopy >= 0.2 ? ", more under trees" : ""}` }, taxClass: "service" });
+    push({ id: "fallCleanup", name: "Fall leaf cleanup", desc: `Leaves blown and mulched or hauled from the lawn and beds — ${Math.round(canopy * 100)}% of the yard is under or beside trees`, unitPrice: Math.max(s.minimumStop * 2, round5(fallH * rate + s.haulFee)), unit: "lot", qty: 1, labor: 0.85, hours: Math.round(fallH * 100) / 100, market: { low: money(Math.max(70, acres * 400) * lf), high: money(Math.max(200, acres * 1000) * lf * (1 + canopy * 1.5)), basis: `HomeAdvisor, $400–1,000 an acre of yard${canopy >= 0.2 ? ", the top end raised for the trees over it" : ""}` }, taxClass: "service" });
   }
   // Mulch: cubic yards = bed area × depth ÷ 324, plus 10% for settling and edges; the beds re-edged.
   if (m.bedSqft > 0) {

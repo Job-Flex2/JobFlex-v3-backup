@@ -115,3 +115,13 @@
   :global(.jf-blueprint .content) .pageTitle { font-size: 30px; }
   :global(.jf-blueprint .content) .btnSm { height: 32px; padding: 0 9px; font-size: 10px; letter-spacing: 0.08em; }
 }
+/* The map's key (2026-10-19): the same lines and fills the map draws. */
+:global(.jf-blueprint .content) .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2, #475569); }
+:global(.jf-blueprint .content) .legend span { display: inline-flex; align-items: center; gap: 6px; }
+:global(.jf-blueprint .content) .legend i { display: inline-block; width: 16px; height: 11px; border-radius: 3px; }
+:global(.jf-blueprint .content) .keyYard { border: 2px solid #ffffff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.55); background: #6b7f5a; }
+:global(.jf-blueprint .content) .keyLawn { border: 2px solid #84cc16; background: rgba(163, 230, 53, 0.45); }
+:global(.jf-blueprint .content) .keyBed { border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.4); }
+:global(.jf-blueprint .content) .keyPool { border: 2px solid #38bdf8; background: rgba(56, 189, 248, 0.45); }
+:global(.jf-blueprint .content) .keyOut { background: #3f4a3c; opacity: 0.75; }
+
