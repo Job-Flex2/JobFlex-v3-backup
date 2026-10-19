@@ -482,21 +482,21 @@
 .sbScroll [data-tone="cedar"] { --tone: var(--tool-deck); }
 .sbScroll [data-tone="olive"] { --tone: var(--tool-design); }
 .sbScroll .sbLink.sbTool {
-  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center;
-  column-gap: 11px; padding: 7px 8px; border-radius: var(--radius);
+  display: grid; grid-template-columns: var(--nav-tool-size) minmax(0, 1fr) auto; align-items: center;
+  column-gap: var(--nav-tool-gap); padding: 7px var(--nav-tool-inset); border-radius: var(--radius);
 }
 .sbScroll .sbTile {
-  width: 34px; height: 34px;
+  width: var(--nav-tool-size); height: var(--nav-tool-size);
   display: inline-flex; align-items: center; justify-content: center;
   border: 1.5px solid var(--ink); border-radius: var(--radius);
   background: #fff; box-shadow: 3px 3px 0 var(--tone);
   transition: transform 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out), background 0.14s;
 }
-.sbScroll .sbLink.sbTool .sbTile .ic { width: 18px; height: 18px; opacity: 1; color: var(--ink); }
+.sbScroll .sbLink.sbTool .sbTile .ic { width: var(--nav-tool-icon); height: var(--nav-tool-icon); opacity: 1; color: var(--ink); }
 .sbScroll .sbTxt { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .sbScroll .sbTxt .sbName {
   flex: 0 1 auto; min-width: 0;
-  font-family: var(--font-sans); font-size: 14px; font-weight: 800; line-height: 18px; color: var(--ink);
+  font-family: var(--font-sans); font-size: var(--nav-tool-label); font-weight: 800; line-height: 18px; color: var(--ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sbScroll .sbTxt .sbSoonTag {
@@ -547,8 +547,8 @@
 .sbScroll .sbFoldBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: -4px; }
 .sbScroll .sbSub { position: relative; padding: 0 0 4px; }
 .sbScroll .sbSub[hidden] { display: none; }
-.sbScroll .sbSub::before { content: ""; position: absolute; left: 32px; top: 0; bottom: 10px; border-left: 1.5px solid var(--ink-line, var(--muted-faint)); }
-.sbScroll .sbLink.sbSubLink { margin-left: 44px; color: var(--ink); border-color: transparent; }
+.sbScroll .sbSub::before { content: ""; position: absolute; left: var(--nav-tool-guide-inset); top: 0; bottom: 10px; border-left: 1.5px solid var(--ink-line, var(--muted-faint)); }
+.sbScroll .sbLink.sbSubLink { margin-left: var(--nav-tool-sub-inset); font-size: var(--nav-tool-label); color: var(--ink); border-color: transparent; }
 .sbScroll .sbLink.sbSubLink .ic { opacity: 0.72; }
 @media (prefers-reduced-motion: reduce) {
   .sbScroll .sbFoldBtn svg { transition: none; }

@@ -22,7 +22,8 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import "@/components/v3/who/who.css";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { bindSmoothWheel } from "@/lib/smooth-wheel";
 import { BlueprintShell } from "@/components/v3/blueprint-shell/blueprint-shell";
 import { BlueprintHandheldFrame } from "./blueprint-handheld-frame";
 import { type NavLimit, NavRoleProvider, type NavIdentity } from "@/components/v3/blueprint-shell/nav-role";
@@ -367,6 +368,10 @@ export function ResponsiveDashboardShell({
 }) {
   const isHandheld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const pathname = usePathname();
+  useEffect(() => {
+    if (pathname !== "/dashboard/phone" && pathname !== "/dashboard/texting") return;
+    return bindSmoothWheel(document);
+  }, [pathname]);
 
   const Handheld = HANDHELD_SURFACES[pathname ?? ""];
   // Wrapped because every entry in the map above is a `dynamic(…, { ssr:false })`

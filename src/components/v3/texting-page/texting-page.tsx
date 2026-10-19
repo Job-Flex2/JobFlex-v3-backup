@@ -5,8 +5,8 @@
 // texted, from which number, saying what.
 //
 // Everything the Settings pane did is here (the inventory: scratchpad
-// texting-inventory.md) — the same components in texting-people/ (their 712ecad9
-// "quiet blueprint" look untouched) and the pane's own cards, rebuilt for a
+// texting-inventory.md) — the same components in texting-people/ (their inside
+// redrawn for clarity 2026-10-18, texting-kit.css) and the pane's own cards, rebuilt for a
 // page: a page head with the month's count, the status and steps first, then
 // the setup in its order — 1 number, 2 team, 3 clients, 4 your own texts — and
 // the two extras side by side at the foot. Long instructions moved behind a
@@ -365,8 +365,10 @@ function ExtrasCard({ sms }: { sms: SmsSettingsData }) {
             <li key={x.id} className={x.active ? "" : "is-paused"} data-extra={x.id}>
               <span className="txp-listT">
                 <b>{x.name}</b>
-                <span className="txp-phone">{x.phone}</span>
-                {x.stopped ? <span className="txp-tag txp-tag--warn">{TEXTS_COPY.stopped}</span> : !x.active ? <span className="txp-tag">paused</span> : null}
+                <span className="txp-listS">
+                  <span className="txp-phone">{x.phone}</span>
+                  {x.stopped ? <span className="txp-tag txp-tag--warn">{TEXTS_COPY.stopped}</span> : !x.active ? <span className="txp-tag">paused</span> : null}
+                </span>
               </span>
               <span className="txp-listA">
                 <button type="button" className="txp-btn txp-btn--sm" disabled={busy !== null} onClick={() => run("toggle", () => setNotificationPhoneActive(x.id, !x.active))}>
@@ -387,12 +389,11 @@ function ExtrasCard({ sms }: { sms: SmsSettingsData }) {
           if (canAdd) void run("add", () => addNotificationPhone({ name: extraName, phone: extraPhone }), () => { setExtraName(""); setExtraPhone(""); });
         }}
       >
-        <div className="txp-fields">
+        {/* The add row (2026-10-18): name, mobile and the one blue button on one line, their bottoms aligned. */}
+        <div className="txp-fields txp-fields--add">
           <TxField label={TEXTS_COPY.extraName} value={extraName} placeholder="Dispatch" onChange={setExtraName} />
           <TxField label={TEXTS_COPY.extraPhone} value={extraPhone} placeholder={TEXTS_COPY.mobilePlaceholder} onChange={setExtraPhone} />
-        </div>
-        <div className="txp-acts">
-          <button type="submit" className="txp-btn txp-btn--primary" disabled={!canAdd}>
+          <button type="submit" className="txp-btn txp-btn--primary txp-btn--field" disabled={!canAdd}>
             {busy === "add" ? "Adding…" : TEXTS_COPY.addExtra}
           </button>
         </div>
@@ -409,7 +410,7 @@ function LeadTextsCard({ sms }: { sms: SmsSettingsData }) {
   const on = sms.leadTexts.on;
   return (
     <Card id="texting-lead-texts" title={TEXTS_COPY.leadTitle} sub={TEXTS_COPY.leadSub} data={{ "data-lead-texts": on ? "on" : "off" }}>
-      <div className="txp-lead">
+      <div className="txp-leadRow">
         <div className="txp-onoff" role="group" aria-label={TEXTS_COPY.leadTitle}>
           <button type="button" aria-pressed={on} className={on ? "is-on" : ""} disabled={busy !== null || on || !sms.leadTexts.phone} onClick={() => run("lead", () => setLeadTexts(true))}>
             {TEXTS_COPY.clientsOn}

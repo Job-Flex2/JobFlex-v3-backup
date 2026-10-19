@@ -1,4 +1,8 @@
 "use client";
+// RETIRED 2026-10-18: Variant 1 ("One decision at a time", components/v3/deck-variant-1/deck-v1-studio.tsx) replaced
+// this studio on /dashboard/deck-estimator. Kept, unmounted, on purpose — other modules import its sub-components
+// (deck-plan, house-wall-plan, deck-kind-picker, deck-photo, deck-coming-soon) and the owner may want it back.
+//
 // THE DECK ESTIMATOR (2026-10-04; M2 roofs, gazebos, pergolas and the photo
 // of the house 2026-10-10; M3 the site, stairs, rails, levels, shaped fronts,
 // the electrical, drafts and the part-by-part 3D 2026-10-10) — page CONTENT

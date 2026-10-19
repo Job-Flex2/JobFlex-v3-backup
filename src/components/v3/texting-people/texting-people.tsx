@@ -1,17 +1,24 @@
 "use client";
 
-// WHO GETS TEXTED — person by person (2026-09-29). One component for the
-// desk's Settings → Texting and the handheld settings page.
+// WHO GETS TEXTED — person by person (2026-09-29). The inside of the Texting
+// page's "Your team" step, on the desk and the phone.
 //
 // Owner: "if I have managers I just add their name and phone number and the
 // list of what they will receive — proposal accepted, job started,
 // scheduled, something cancelled… for sales most of it is appointments or
 // their proposal sold, for installers when they get the job or we
 // reschedule it". Three rosters by role (office, sales, crew); each person is
-// a line with their mobile and their own switches; under each roster, the
-// texts as they will read. The actions are actions/sms (setMemberMobile,
-// clearMemberMobile, setMemberTextEvents); the events and their example
-// texts are lib/notificationPrefsShared.
+// a row with their mobile and their own switches. The actions are actions/sms
+// (setMemberMobile, setMemberTextEvents, setMemberTextsOn, the verify pair);
+// the events and their example texts are lib/notificationPrefsShared.
+//
+// THE INSIDE, FOR CLARITY (owner, 2026-10-18): a row says first whether texts
+// can reach the person — switch, name, number and its state — and the picks
+// under it sit in a few labelled clusters in aligned columns, not a ragged
+// run; when nothing can be sent (no mobile, texts off, STOP) the picks are
+// kept and read as kept: grey, with the reason beside them. A group with
+// nobody in it is one quiet line, and "What the texts say" is said once for
+// the whole team. Styles: ./texting-kit.css (plain, under `.jf-tx`).
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -22,9 +29,35 @@ import { smsFailureMessage } from "@/lib/sms/actionGuard";
 import { roleLabel } from "@/lib/team/who";
 import type { SmsRosterRow } from "@/components/v3/settings-blueprint/settings-data";
 import { TEXTING_COPY, TEXTS_COPY } from "@/components/v3/settings-blueprint/settings-data";
-import s from "./texting-people.module.css";
+import "./texting-kit.css";
 
 const AUDIENCES: readonly TextAudience[] = ["office", "sales", "crew"];
+
+type ClusterKey = keyof typeof TEXTING_COPY.clusters;
+/** Which labelled cluster an event sits in — the same families the "When" list of your own texts uses. */
+const CLUSTER_OF: Record<string, ClusterKey> = {
+  "lead-assigned": "leads",
+  "proposal-accepted": "leads",
+  "proposal-declined": "leads",
+  "payment-received": "money",
+  "change-order": "money",
+  "appointment-booked": "visits",
+  "appointment-moved": "visits",
+  "job-scheduled": "visits",
+  "job-started": "job",
+  "job-completed": "job",
+  "job-photos": "job",
+  "worker-responded": "job",
+  "crew-assigned": "crewJobs",
+  "crew-moved": "crewJobs",
+  "crew-tomorrow": "crewDaily",
+  "crew-today": "crewDaily",
+};
+const CLUSTER_ORDER: readonly ClusterKey[] = ["leads", "money", "visits", "job", "crewJobs", "crewDaily", "other"];
+
+function clustersOf(events: readonly PrefEventMeta[]) {
+  return CLUSTER_ORDER.map((k) => ({ key: k, label: TEXTING_COPY.clusters[k], events: events.filter((e) => (CLUSTER_OF[e.key] ?? "other") === k) })).filter((c) => c.events.length);
+}
 
 type Run = (label: string, fn: () => Promise<SmsActionResult>, after?: () => void) => Promise<void>;
 type RowMessage = { forRow: string; kind: "ok" | "err"; text: string };
@@ -71,41 +104,55 @@ export function TextingPeople({ roster }: { roster: SmsRosterRow[] }) {
     setRows((rs) => rs.map((r) => (r.userId === row.userId ? { ...r, cells: { ...r.cells, ...patch } } : r)));
     void run(`${row.userId}:ev`, () => setMemberTextEvents(row.userId, patch));
   };
+  // Every text any group can get, once, in its cluster (the three disclosures repeated each other).
+  const allEvents = [...new Map(AUDIENCES.flatMap((a) => textEventsFor(a)).map((e) => [e.key, e])).values()];
   return (
-    <div className={s.root} data-texting-people data-nest="">
+    <div className="jf-tx tk-team" data-texting-people data-nest="">
       {AUDIENCES.map((aud) => {
         const events = textEventsFor(aud);
         const people = rows.filter((r) => r.audience === aud);
         const copy = TEXTING_COPY.sections[aud];
+        if (!people.length) {
+          return (
+            <section key={aud} className="tk-group is-empty" data-audience={aud} aria-label={copy.title}>
+              <h3>{copy.title}</h3>
+              <p>{TEXTING_COPY.emptySection}</p>
+            </section>
+          );
+        }
         return (
-          <div key={aud} className={s.sec} data-audience={aud}>
-            <div className={s.secH}>
-              <b>{copy.title}</b>
-              <span>{copy.sub}</span>
+          <section key={aud} className="tk-group" data-audience={aud} aria-labelledby={`tk-aud-${aud}`}>
+            <div className="tk-groupH">
+              <h3 id={`tk-aud-${aud}`}>{copy.title}</h3>
+              <p>{copy.sub}</p>
+              <span className="tk-count">{TEXTING_COPY.peopleCount(people.length)}</span>
             </div>
-            {people.length ? (
-              <div className={s.people}>
-                {people.map((r) => (
-                  <PersonRow key={r.userId} row={r} events={events} busy={busy} run={run} onFlip={flip} msg={msg?.forRow === r.userId ? msg : null} />
-                ))}
-              </div>
-            ) : (
-              <p className={s.note}>{TEXTING_COPY.emptySection}</p>
-            )}
-            <details className={s.ex}>
-              <summary>{TEXTING_COPY.examplesTitle}</summary>
+            <ul className="tk-people">
+              {people.map((r) => (
+                <PersonRow key={r.userId} row={r} events={events} busy={busy} run={run} onFlip={flip} msg={msg?.forRow === r.userId ? msg : null} />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+      <details className="tk-more" data-texting-examples>
+        <summary>{TEXTING_COPY.examplesTitle}</summary>
+        <div className="tk-examples">
+          {clustersOf(allEvents).map((c) => (
+            <section key={c.key}>
+              <h4>{c.label}</h4>
               <ul>
-                {events.map((e) => (
+                {c.events.map((e) => (
                   <li key={e.key}>
                     <b>{e.name}</b>
-                    <q>{e.example}</q>
+                    <q className="tk-bubble">{e.example}</q>
                   </li>
                 ))}
               </ul>
-            </details>
-          </div>
-        );
-      })}
+            </section>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }
@@ -139,16 +186,20 @@ function PersonRow({
   const mobile = row.phone ?? row.phoneOnFile;
   const canSwitch = Boolean(mobile) && !row.stopped && busy === null;
   const switchWhy = row.stopped ? TEXTING_COPY.stoppedHelp : !mobile ? TEXTING_COPY.switchNoMobile : texting ? TEXTING_COPY.switchOnHelp : TEXTING_COPY.switchOffHelp;
+  const idle = texting ? null : row.stopped ? TEXTING_COPY.picksIdleStop : !mobile ? TEXTING_COPY.picksIdleNone : TEXTING_COPY.picksIdleOff;
+  const sendCode = () => run(`${row.userId}:code`, () => startPhoneVerification(phone), () => setStage("code"));
+  const verify = () => run(`${row.userId}:verify`, () => confirmPhoneVerification(code), () => setEditing(false));
+  const saveTheirs = () => run(`${row.userId}:mobile`, () => setMemberMobile(row.userId, phone), () => setEditing(false));
   return (
-    <div className={`${s.person}${texting ? "" : ` ${s.quiet}`}`} data-member={row.userId} data-me={row.isMe || undefined} data-texting={texting ? "on" : row.paused ? "off" : "none"}>
-      <div className={s.head}>
+    <li className="tk-person" data-member={row.userId} data-me={row.isMe || undefined} data-texting={texting ? "on" : row.paused ? "off" : "none"}>
+      <div className="tk-personH">
         <button
           type="button"
           role="switch"
           aria-checked={texting}
           aria-label={`Texts to ${row.name}`}
           title={switchWhy}
-          className={`${s.switch}${texting ? ` ${s.switchOn}` : ""}`}
+          className={`tk-switch${texting ? " is-on" : ""}`}
           disabled={!canSwitch}
           onClick={() => run(`${row.userId}:switch`, () => setMemberTextsOn(row.userId, !texting))}
           data-texting-switch
@@ -156,38 +207,46 @@ function PersonRow({
           <i aria-hidden="true" />
           <span>{texting ? TEXTING_COPY.switchOn : TEXTING_COPY.switchOff}</span>
         </button>
-        <span className={s.who}>
-          <b>{row.name}</b>
-          <em>
-            {roleLabel(row.role)}
-            {row.isMe ? ` · ${TEXTING_COPY.whoMe}` : ""}
-          </em>
-        </span>
-        <span className={s.phone}>
-          {row.phone ? (
-            <>
-              <b>{row.phone}</b>
-              <span className={`${s.tag}${row.stopped ? ` ${s.tagWarn}` : ""}`}>{row.stopped ? TEXTS_COPY.stopped : row.phoneBy === "office" ? TEXTING_COPY.byOffice : TEXTING_COPY.bySelf}</span>
-            </>
-          ) : row.phoneOnFile ? (
-            <>
-              <b>{row.phoneOnFile}</b>
-              <span className={`${s.tag} ${s.tagWarn}`}>{row.stopped ? TEXTS_COPY.stopped : TEXTING_COPY.onFileOff}</span>
-            </>
-          ) : (
-            <span className={`${s.tag} ${s.tagWarn}`}>{TEXTING_COPY.noMobileLong}</span>
-          )}
-        </span>
+        <div className="tk-who">
+          <span className="tk-whoName">
+            <b>{row.name}</b>
+            <span>
+              {roleLabel(row.role)}
+              {row.isMe ? ` · ${TEXTING_COPY.whoMe}` : ""}
+            </span>
+          </span>
+          <span className="tk-whoLine">
+            {row.phone ? (
+              <>
+                <span className="tk-num">{row.phone}</span>
+                <span className="tk-tag" data-tone={row.stopped ? "bad" : "ok"}>
+                  {row.stopped ? TEXTS_COPY.stopped : row.phoneBy === "office" ? TEXTING_COPY.byOffice : TEXTING_COPY.bySelf}
+                </span>
+              </>
+            ) : row.phoneOnFile ? (
+              <>
+                <span className="tk-num">{row.phoneOnFile}</span>
+                <span className="tk-tag" data-tone={row.stopped ? "bad" : undefined}>
+                  {row.stopped ? TEXTS_COPY.stopped : TEXTING_COPY.onFileOff}
+                </span>
+              </>
+            ) : (
+              <span className="tk-tag" data-tone="bad">
+                {TEXTING_COPY.noMobileLong}
+              </span>
+            )}
+          </span>
+        </div>
         {!editing ? (
-          <span className={s.acts}>
+          <div className="tk-personA">
             {mobile && !texting && !row.stopped ? (
-              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null} onClick={() => run(`${row.userId}:switch`, () => setMemberTextsOn(row.userId, true))} data-texting-turn-on>
+              <button type="button" className="tk-btn" disabled={busy !== null} onClick={() => run(`${row.userId}:switch`, () => setMemberTextsOn(row.userId, true))} data-texting-turn-on>
                 {TEXTING_COPY.turnOn}
               </button>
             ) : null}
             <button
               type="button"
-              className={`${s.btn}${row.phone || row.phoneOnFile ? "" : ` ${s.btnPrimary}`}`}
+              className="tk-btn"
               disabled={busy !== null}
               onClick={() => {
                 setEditing(true);
@@ -195,122 +254,152 @@ function PersonRow({
                 setCode("");
                 setStage("phone");
               }}
+              data-texting-edit-mobile
             >
-              {row.phone || row.phoneOnFile ? TEXTING_COPY.changeMobile : TEXTING_COPY.addMobile}
+              {mobile ? TEXTING_COPY.changeMobile : TEXTING_COPY.addMobile}
             </button>
-          </span>
+          </div>
         ) : null}
       </div>
+
       {msg ? (
-        <p className={`${s.note} ${s.rowNote}${msg.kind === "err" ? ` ${s.noteErr}` : ""}`} role={msg.kind === "err" ? "alert" : "status"} data-row-message>
+        <p className={`tk-msg${msg.kind === "err" ? " is-err" : ""}`} role={msg.kind === "err" ? "alert" : "status"} data-row-message>
           {msg.text}
         </p>
       ) : null}
+
       {editing && row.isMe ? (
-        <div className={s.edit} data-texting-own-editor>
-          <label htmlFor={inputId} hidden={stage === "code"}>{TEXTS_COPY.mobileLabel}</label>
-          <input
-            id={inputId}
-            type="tel"
-            inputMode="tel"
-            autoComplete="off"
-            value={phone}
-            placeholder={TEXTS_COPY.mobilePlaceholder}
-            hidden={stage === "code"}
-            onChange={(e) => setPhone(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && stage === "phone" && phone.replace(/\D/g, "").length >= 10) void run(`${row.userId}:code`, () => startPhoneVerification(phone), () => setStage("code"));
-              if (e.key === "Escape") setEditing(false);
-            }}
-          />
+        <div className="tk-panel" data-texting-own-editor>
           {stage === "code" ? (
             <>
-              <p className={s.sentTo} data-texting-sent-to>
+              <p className="tk-sent" data-texting-sent-to>
                 {TEXTS_COPY.sentTo(prettyTyped(phone))}{" "}
-                <button type="button" className={s.linkBtn} disabled={busy !== null} onClick={() => { setStage("phone"); setCode(""); }}>
+                <button type="button" className="tk-link tk-link--inline" disabled={busy !== null} onClick={() => { setStage("phone"); setCode(""); }}>
                   {TEXTS_COPY.notYours}
                 </button>
               </p>
-              <label htmlFor={`${inputId}-code`}>{TEXTS_COPY.codeLabel}</label>
-              <input
-                id={`${inputId}-code`}
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
-                placeholder="482913"
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && code.length === 6) void run(`${row.userId}:verify`, () => confirmPhoneVerification(code), () => setEditing(false));
-                  if (e.key === "Escape") setEditing(false);
-                }}
-              />
-              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || code.length !== 6} onClick={() => run(`${row.userId}:verify`, () => confirmPhoneVerification(code), () => setEditing(false))} data-texting-verify>
-                {busy === `${row.userId}:verify` ? "Checking…" : TEXTS_COPY.verify}
-              </button>
-              <button type="button" className={s.btn} disabled={busy !== null} onClick={() => run(`${row.userId}:code`, () => startPhoneVerification(phone))} data-texting-send-again>
-                {busy === `${row.userId}:code` ? "Sending…" : TEXTS_COPY.sendAgain}
-              </button>
-              <p className={s.consent} data-texting-code-hint>{TEXTS_COPY.codeHint}</p>
+              <div className="tk-panelRow">
+                <label className="tk-field tk-field--code" htmlFor={`${inputId}-code`}>
+                  <span className="tk-label">{TEXTS_COPY.codeLabel}</span>
+                  <input
+                    id={`${inputId}-code`}
+                    className="tk-input tk-input--code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={code}
+                    placeholder="482913"
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && code.length === 6) void verify();
+                      if (e.key === "Escape") setEditing(false);
+                    }}
+                  />
+                </label>
+                <button type="button" className="tk-btn tk-btn--primary" disabled={busy !== null || code.length !== 6} onClick={() => void verify()} data-texting-verify>
+                  {busy === `${row.userId}:verify` ? "Checking…" : TEXTS_COPY.verify}
+                </button>
+                <button type="button" className="tk-btn" disabled={busy !== null} onClick={() => void sendCode()} data-texting-send-again>
+                  {busy === `${row.userId}:code` ? "Sending…" : TEXTS_COPY.sendAgain}
+                </button>
+              </div>
+              <p className="tk-note" data-texting-code-hint>{TEXTS_COPY.codeHint}</p>
             </>
           ) : (
-            <>
-              <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => run(`${row.userId}:code`, () => startPhoneVerification(phone), () => setStage("code"))} data-texting-send-code>
+            <div className="tk-panelRow">
+              <label className="tk-field" htmlFor={inputId}>
+                <span className="tk-label">{TEXTS_COPY.mobileLabel}</span>
+                <input
+                  id={inputId}
+                  className="tk-input tk-input--num"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
+                  value={phone}
+                  placeholder={TEXTS_COPY.mobilePlaceholder}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && phone.replace(/\D/g, "").length >= 10) void sendCode();
+                    if (e.key === "Escape") setEditing(false);
+                  }}
+                />
+              </label>
+              <button type="button" className="tk-btn tk-btn--primary" disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => void sendCode()} data-texting-send-code>
                 {busy === `${row.userId}:code` ? "Sending…" : TEXTS_COPY.sendCode}
               </button>
-              <button type="button" className={s.btn} disabled={busy !== null} onClick={() => setEditing(false)}>
+              <button type="button" className="tk-btn" disabled={busy !== null} onClick={() => setEditing(false)}>
                 {TEXTING_COPY.cancel}
               </button>
-            </>
+            </div>
           )}
-          <p className={s.consent} data-sms-consent>
+          <p className="tk-note" data-sms-consent>
             {TEXTS_COPY.consent} <a href="/terms">{TEXTS_COPY.terms}</a> · <a href="/privacy">{TEXTS_COPY.privacy}</a>
           </p>
         </div>
       ) : editing ? (
-        <div className={s.edit}>
-          <label htmlFor={inputId}>{TEXTING_COPY.theirMobile(row.name)}</label>
-          <input
-            id={inputId}
-            type="tel"
-            inputMode="tel"
-            autoComplete="off"
-            value={phone}
-            placeholder={TEXTS_COPY.mobilePlaceholder}
-            onChange={(e) => setPhone(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && phone.replace(/\D/g, "").length >= 10) void run(`${row.userId}:mobile`, () => setMemberMobile(row.userId, phone), () => setEditing(false));
-              if (e.key === "Escape") setEditing(false);
-            }}
-          />
-          <button type="button" className={`${s.btn} ${s.btnPrimary}`} disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => run(`${row.userId}:mobile`, () => setMemberMobile(row.userId, phone), () => setEditing(false))}>
-            {busy === `${row.userId}:mobile` ? "Saving…" : TEXTING_COPY.saveMobile}
-          </button>
-          <button type="button" className={s.btn} disabled={busy !== null} onClick={() => setEditing(false)}>
-            {TEXTING_COPY.cancel}
-          </button>
-          <p className={s.consent}>{TEXTING_COPY.typedInNote}</p>
+        <div className="tk-panel" data-texting-their-editor>
+          <div className="tk-panelRow">
+            <label className="tk-field" htmlFor={inputId}>
+              <span className="tk-label">{TEXTING_COPY.theirMobile(row.name)}</span>
+              <input
+                id={inputId}
+                className="tk-input tk-input--num"
+                type="tel"
+                inputMode="tel"
+                autoComplete="off"
+                value={phone}
+                placeholder={TEXTS_COPY.mobilePlaceholder}
+                onChange={(e) => setPhone(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && phone.replace(/\D/g, "").length >= 10) void saveTheirs();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+              />
+            </label>
+            <button type="button" className="tk-btn tk-btn--primary" disabled={busy !== null || phone.replace(/\D/g, "").length < 10} onClick={() => void saveTheirs()}>
+              {busy === `${row.userId}:mobile` ? "Saving…" : TEXTING_COPY.saveMobile}
+            </button>
+            <button type="button" className="tk-btn" disabled={busy !== null} onClick={() => setEditing(false)}>
+              {TEXTING_COPY.cancel}
+            </button>
+          </div>
+          <p className="tk-note">{TEXTING_COPY.typedInNote}</p>
         </div>
       ) : null}
-      <div className={s.evs} role="group" aria-label={`Texts to ${row.name}`}>
-        {events.map((e) => {
-          const on = Boolean(row.cells[e.key]);
-          return (
-            <button key={e.key} type="button" className={`${s.ev}${on ? ` ${s.evOn}` : ""}`} aria-pressed={on} title={e.sub} data-event={e.key} onClick={() => onFlip(row, [e.key], !on)}>
-              <i aria-hidden="true" />
-              {e.name}
+
+      <div className="tk-picks" data-live={texting ? "1" : "0"} role="group" aria-label={`Texts to ${row.name}`}>
+        <div className="tk-picksH">
+          <b>{TEXTING_COPY.picksTitle}</b>
+          <span className="tk-num">
+            {onCount}/{events.length}
+          </span>
+          {idle ? <span className="tk-idle">{idle}</span> : null}
+          <span className="tk-allNone">
+            <button type="button" className="tk-link" disabled={onCount === events.length} onClick={() => onFlip(row, events.map((e) => e.key), true)}>
+              {TEXTING_COPY.all}
             </button>
-          );
-        })}
-        <span className={s.allNone}>
-          <button type="button" className={s.link} disabled={onCount === events.length} onClick={() => onFlip(row, events.map((e) => e.key), true)}>
-            {TEXTING_COPY.all}
-          </button>
-          <button type="button" className={s.link} disabled={onCount === 0} onClick={() => onFlip(row, events.map((e) => e.key), false)}>
-            {TEXTING_COPY.none}
-          </button>
-        </span>
+            <button type="button" className="tk-link" disabled={onCount === 0} onClick={() => onFlip(row, events.map((e) => e.key), false)}>
+              {TEXTING_COPY.none}
+            </button>
+          </span>
+        </div>
+        <div className="tk-clusters">
+          {clustersOf(events).map((c) => (
+            <div key={c.key} className="tk-cluster" role="group" aria-label={c.label}>
+              <h4>{c.label}</h4>
+              {c.events.map((e) => {
+                const on = Boolean(row.cells[e.key]);
+                return (
+                  <button key={e.key} type="button" className={`tk-tick${on ? " is-on" : ""}`} aria-pressed={on} title={e.sub} data-event={e.key} onClick={() => onFlip(row, [e.key], !on)}>
+                    <i aria-hidden="true" />
+                    {e.name}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </li>
   );
 }

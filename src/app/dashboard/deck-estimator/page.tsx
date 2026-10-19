@@ -10,6 +10,11 @@
 // Coming soon mark and, here, a page that says what is coming; admins (the
 // platform-admin flag, the admin console's sign-in, the owner's own account —
 // lib/deck/access) get the working estimator to test.
+//
+// 2026-10-18: the owner chose Variant 1 of the Deck Lab ("One decision at a
+// time", components/v3/deck-variant-1) and it is this page's studio now. The
+// gates and the loaders below are unchanged; only the component was swapped.
+// The old studio (deck-estimator-blueprint/deck-studio.tsx) is kept, unmounted.
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -20,7 +25,7 @@ import { hasEdition } from "@/lib/editions";
 import { isLimitedRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { readDeckRateBook } from "@/lib/deck/rateBookStore";
 import { parseStateZip } from "@/lib/fence/market";
-import { DeckStudio } from "@/components/v3/deck-estimator-blueprint/deck-studio";
+import { DeckV1Studio } from "@/components/v3/deck-variant-1/deck-v1-studio";
 import { DeckComingSoon } from "@/components/v3/deck-estimator-blueprint/deck-coming-soon";
 import { loadDeckDraft, loadDeckFromProposal, type ReturnedClientDesign } from "@/actions/deckEstimator";
 import type { DeckDesign } from "@/lib/deck/design";
@@ -77,5 +82,7 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
     const res = await loadDeckFromProposal(proposalId);
     if (res.ok) opened = { design: res.design, address: res.address, title: res.title, draftId: null, from: "proposal", proposal: res.proposal, client: null };
   }
-  return <DeckStudio initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={!viaEdition} opened={opened} />;
+  // Keyed by what was opened: a client-side push to another draft or proposal (the studio's own Open links) mounts a
+  // fresh studio on it, as the old studio's full page loads did.
+  return <DeckV1Studio key={opened ? `${opened.from}:${opened.draftId ?? proposalId}` : `new:${clientId ?? ""}`} initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={!viaEdition} opened={opened} />;
 }

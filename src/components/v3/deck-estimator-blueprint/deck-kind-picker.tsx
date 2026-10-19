@@ -23,6 +23,8 @@
 // per page for its resting angle and on the fly while it turns.
 
 import * as React from "react";
+import Image from "next/image";
+import { ChevronDown } from "lucide-react";
 import { KINDS, KIND_WORDS, kindSample, sampleDesign, samplesFor, type DeckSample } from "@/lib/deck/samples";
 import { isoDrawing, isoMarkup, type IsoMaterials } from "@/lib/deck/iso";
 import { buildStructure } from "@/lib/deck/structure";
@@ -84,8 +86,9 @@ export type Turn = { turn: () => void };
  * slow turn of its own while `spin` (the mouse resting on its card) — then
  * it eases back to its angle.
  */
-export function IsoFigure({ sample, detail, play = 0, spin = false, label, className, turnRef }: { sample: DeckSample; detail: "card" | "thumb"; play?: number; spin?: boolean; label: string; className?: string; turnRef?: React.MutableRefObject<Turn | null> }) {
+export function IsoFigure({ sample, detail, play = 0, spin = false, label, className, turnRef, staticPreview = false }: { sample: DeckSample; detail: "card" | "thumb"; play?: number; spin?: boolean; label: string; className?: string; turnRef?: React.MutableRefObject<Turn | null>; staticPreview?: boolean }) {
   const rest = restingFor(sample, detail);
+  const image = React.useMemo(() => staticPreview ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rest.viewBox}">${rest.still}</svg>`)}` : null, [staticPreview, rest]);
   const svgRef = React.useRef<SVGSVGElement>(null);
   const yaw = React.useRef(REST_YAW);
   const anim = React.useRef<number>(0);
@@ -210,6 +213,7 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
       setTimeout(() => el.removeEventListener("click", swallow, { capture: true }), 0);
     }
   };
+  if (image) return <Image src={image} alt={label} width={480} height={320} unoptimized loading="lazy" className={cx(p.svg, className)} />;
   return (
     <svg
       key={play}
@@ -237,65 +241,63 @@ function TurnButton({ turnRef, small, what }: { turnRef: React.MutableRefObject<
   );
 }
 
-function KindCard({ structure: st, label, on, onPick }: { structure: Structure; label: string; on: boolean; onPick: () => void }) {
+function KindCard({ structure: st, label, on, onPick, staticPreview }: { structure: Structure; label: string; on: boolean; onPick: () => void; staticPreview: boolean }) {
   const hero = kindSample(st);
   const turn = React.useRef<Turn | null>(null);
   const [play, setPlay] = React.useState(0);
   const [spin, setSpin] = React.useState(false);
   return (
-    <div className={p.kindWrap} onPointerEnter={(e) => { if (e.pointerType === "mouse") { setPlay((n) => n + 1); setSpin(true); } }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
-      <button type="button" role="radio" aria-checked={on} className={cx(p.kind, on && p.kindOn)} onClick={() => { onPick(); setPlay((n) => n + 1); }} data-structure={st}>
+    <div className={p.kindWrap} onPointerEnter={(e) => { if (!staticPreview && e.pointerType === "mouse") { setPlay((n) => n + 1); setSpin(true); } }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
+      <button type="button" role="radio" aria-checked={on} className={cx(p.kind, on && p.kindOn)} onClick={() => { onPick(); if (!staticPreview) setPlay((n) => n + 1); }} data-structure={st}>
         <span className={p.fig}>
-          <IsoFigure sample={hero} detail="card" play={play} spin={spin} label={`${label}: ${hero.name}`} turnRef={turn} />
+          <IsoFigure sample={hero} detail="card" play={play} spin={spin} label={`${label}: ${hero.name}`} turnRef={turn} staticPreview={staticPreview} />
           {on ? <span className={p.tick} aria-hidden="true">✓</span> : null}
         </span>
         <span className={p.kindName}>{label}</span>
         <span className={p.kindBlurb}>{KIND_WORDS[st].blurb}</span>
         <span className={p.kindInc}>{KIND_WORDS[st].includes}</span>
       </button>
-      <TurnButton turnRef={turn} what={label} />
+      {!staticPreview ? <TurnButton turnRef={turn} what={label} /> : null}
     </div>
   );
 }
 
-function SampleCard({ sample, inUse, onPick }: { sample: DeckSample; inUse: boolean; onPick: () => void }) {
+function SampleCard({ sample, inUse, onPick, staticPreview }: { sample: DeckSample; inUse: boolean; onPick: () => void; staticPreview: boolean }) {
   const turn = React.useRef<Turn | null>(null);
   const [spin, setSpin] = React.useState(false);
   return (
-    <div className={p.sampleWrap} onPointerEnter={(e) => { if (e.pointerType === "mouse") setSpin(true); }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
+    <div className={p.sampleWrap} onPointerEnter={(e) => { if (!staticPreview && e.pointerType === "mouse") setSpin(true); }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
       <button type="button" className={cx(p.sample, inUse && p.sampleOn)} aria-pressed={inUse} onClick={onPick} data-deck-sample={sample.id}>
         <span className={cx(p.fig, p.figSmall)}>
-          <IsoFigure sample={sample} detail="thumb" spin={spin} label={sample.name} turnRef={turn} />
+          <IsoFigure sample={sample} detail="thumb" spin={spin} label={sample.name} turnRef={turn} staticPreview={staticPreview} />
         </span>
         <span className={p.sampleName}>{sample.name}</span>
         <span className={p.sampleFacts}>{sample.facts}</span>
         <span className={p.sampleTag}>{inUse ? "In use ✓" : "Start from this →"}</span>
       </button>
-      <TurnButton turnRef={turn} small what={sample.name} />
+      {!staticPreview ? <TurnButton turnRef={turn} small what={sample.name} /> : null}
     </div>
   );
 }
 
-export function DeckKindPicker({ structure, onPickKind, onPickSample, appliedSampleId, hint }: { structure: Structure; onPickKind: (s: Structure) => void; onPickSample: (s: DeckSample) => void; appliedSampleId: string | null; /** The line beside "Start from a sample" (the client's page says it its own way). */ hint?: string }) {
+export function DeckKindPicker({ structure, onPickKind, onPickSample, appliedSampleId, hint, staticPreview = false, foldSamples = false }: { structure: Structure; onPickKind: (s: Structure) => void; onPickSample: (s: DeckSample) => void; appliedSampleId: string | null; /** The line beside "Start from a sample" (the client's page says it its own way). */ hint?: string; staticPreview?: boolean; foldSamples?: boolean }) {
   const samples = samplesFor(structure);
+  const [samplesOpen, setSamplesOpen] = React.useState(false);
+  const choices = <div className={p.sampleRow}>{samples.map((sm) => <SampleCard key={sm.id} sample={sm} inUse={sm.id === appliedSampleId} onPick={() => onPickSample(sm)} staticPreview={staticPreview} />)}</div>;
   return (
     <div className={p.picker} data-deck-kinds>
       <div className={p.kinds} role="radiogroup" aria-label="What to build">
         {KINDS.map(({ structure: st, label }) => (
-          <KindCard key={st} structure={st} label={label} on={st === structure} onPick={() => onPickKind(st)} />
+          <KindCard key={st} structure={st} label={label} on={st === structure} onPick={() => onPickKind(st)} staticPreview={staticPreview} />
         ))}
       </div>
-      <div className={p.samples} data-deck-samples={structure}>
+      {foldSamples ? <details className={p.samples} data-deck-samples={structure} onToggle={(event) => setSamplesOpen(event.currentTarget.open)}><summary className={p.samplesLbl}>Starting layouts<ChevronDown size={16} aria-hidden="true" /></summary>{samplesOpen ? choices : null}</details> : <div className={p.samples} data-deck-samples={structure}>
         <div className={p.samplesHead}>
           <span className={p.samplesLbl}>Start from a sample</span>
           <span className={p.samplesHint}>{hint ?? "Your address, state, house and lumber stay as set — the sample brings the shape, height, rails, stairs and roof."}</span>
         </div>
-        <div className={p.sampleRow}>
-          {samples.map((sm) => (
-            <SampleCard key={sm.id} sample={sm} inUse={sm.id === appliedSampleId} onPick={() => onPickSample(sm)} />
-          ))}
-        </div>
-      </div>
+        {choices}
+      </div>}
     </div>
   );
 }

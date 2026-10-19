@@ -91,6 +91,9 @@ cancel" a 14px bold ink link under it, never small or grey. Owner rule
 (2026-10-18): no shadow or offset behind a coloured square or dot, and none
 on number tiles — flat colour only.
 The handheld drawer folds each estimator's inventory the same way (2026-10-17).
+Owner refinement (2026-10-18): Automation precedes Money. Estimator links use
+32px icon squares and 13px names, shifted slightly left; section labels retain
+their existing position and size. Drawer targets remain at least 44px.
 The AI desk (owner, 2026-10-16): its two tabs, Calls | AI desk setup, are one
 framed switch, the open tab filled with ink. The setup is a checklist card —
 a full-width row per step (numbered square, name, status stamp, an
@@ -253,6 +256,58 @@ Long names must wrap or have an accessible way to view the full value. Use
 Keep key mobile data available; do not hide functionality to make a layout fit.
 
 ## Implementation and review
+
+Deck estimator (owner refinements, 2026-10-18): use one continuous scrolling
+form in the left column, with all sections available together. No clickable
+step strip, Back/Next wizard, or returning-user summary screen. Give each
+section its own numbered white card. First choose the structure; second set
+its size and house placement, with House & ground inside that same card.
+Retain disclosures for optional detail. The compact form
+scale lives under `.jf-deck-v1 .v1-q` in `globals.css`: 20px questions, 16px
+section headings, 14px working text, 12px annotations, 36px desktop controls,
+and 40px dimension steppers. On handheld, preserve 44px targets and 16px input
+text. The page title remains 36px (30px handheld).
+The form column is 500px on a wide desktop, 440px at middle widths. Use a
+12px column gap and 4px above the price footer. Numbered cards and footer
+share their outer edges; keep the form scrollbar in the column gap.
+
+Use one Job address field, with its label above and a 520px maximum width.
+Keep the compact icon-and-label Drafts menu beside
+the title; omit idle save-status text. Remove the region/frost/snow/lumber shorthand
+from the header; retain editable footing and code assumptions under House &
+ground. Keep price provenance with the estimate. The working estimator has no
+Coming soon or admin-preview marketing copy.
+
+Both desktop frames fit the available dashboard viewport, measured through
+the existing shell zoom. Keep only the deck price beside Package & price at
+the left foot; do not add a summary card above the numbered sections. Detailed
+pricing and price sources remain in the package section.
+Align the draft name and finish actions with the package content, without a
+nested card. Save draft and Send to client share an equal-width row; the primary
+proposal action spans the full width below them, including on handheld.
+On desktop, ordinary wheel scrolling anywhere in the main workspace, including
+over the scene, first scrolls search, title and address away while expanding
+both workspaces. Only then do the left cards scroll. Upward scrolling reverses
+that order. Dragging still orbits the scene; modified wheel/pinch stays available
+for zoom. Escape returns to the top. AI desk, Texting and the estimator use
+gentler wheel movement with brief easing; touch and keyboard stay native,
+and reduced-motion preferences disable the easing.
+The landing and public marketing pages use the same gentle desktop wheel
+movement. Handheld website scrolling stays native, as do editable fields,
+nested demonstrations and modal scroll locks.
+Give the space freed by the step strip to the scene. Title the preview "The deck" (or the selected structure), with
+dimensions above compact 3D / Framing plan / House & deck controls. Keep editing
+and adding stairs prominent, playback distinct, and secondary controls under
+View options. Handheld keeps normal page scrolling, a 360px preview, and
+44px view controls. Retain the Blueprint palette and ink frames. Use cached
+still images for structure thumbnails in this estimator and defer starting
+layouts until opened. Keep the main 3D scene interactive, rendering on demand
+and pausing when offscreen or the browser document is hidden.
+During header scrolling, cache layout measurements and keep the 3D surface at
+its fully expanded height, anchored to the bottom of the preview. The growing
+panel reveals more of that stationary scene; scrolling must not resize the
+canvas, change its camera projection, or trigger a WebGL redraw. Real viewport
+resizes update the camera and drawing buffer together before rendering.
 
 Read [implementation notes](docs/design/implementation.md) when editing an
 existing interactive surface, and [mobile notes](docs/design/mobile.md) for
