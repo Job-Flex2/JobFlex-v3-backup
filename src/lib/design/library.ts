@@ -3,9 +3,9 @@
 // widths, lights, furniture — and the finishes, brand-neutral (the contractor types a brand's code beside a color when
 // they want it on the proposal). Every cabinet and appliance is drawn to its size from its numbers; nothing here is a
 // 3D file. Pure.
-import type { DesignItem, Finishes } from "./model";
+import type { DesignItem, Finishes, RoomKind } from "./model";
 
-export type LibCat = "base" | "wall" | "tall" | "island" | "appliance" | "light" | "furniture";
+export type LibCat = "base" | "wall" | "tall" | "island" | "appliance" | "light" | "furniture" | "fixture" | "decor";
 
 export type LibEntry = {
   id: string;
@@ -68,6 +68,45 @@ export const LIBRARY: LibEntry[] = [
   { id: "STL", name: "Counter stool", cat: "furniture", code: "STL", widths: [17, 18, 20], w: 17, d: 17, h: 26, z: 0, wall: false },
   { id: "TBL", name: "Dining table", cat: "furniture", code: "TBL", widths: [48, 60, 72, 84], w: 60, d: 36, h: 30, z: 0, depths: [30, 36, 40, 42], wall: false },
   { id: "CHR", name: "Dining chair", cat: "furniture", code: "CHR", widths: [18, 20], w: 18, d: 20, h: 34, z: 0, wall: false },
+
+  /* ── EVERY ROOM, NOT ONLY THE KITCHEN (2026-10-18, owner: "build in 3D any room and start design … a designer
+     program, not only estimate"). The pieces each room is furnished with, at the sizes they are sold in — a queen
+     bed is 60 × 80, a toilet roughs in at 12 in, a washer is 27 wide — drawn from their numbers like the cabinets. */
+  // Bath and laundry fixtures (a plumber sets them).
+  { id: "VAN", name: "Vanity", cat: "fixture", code: "VAN", widths: [18, 24, 30, 36, 48, 60, 72], w: 36, d: 21, h: 34.5, z: 0, wall: true, depths: [12, 18, 21, 22], note: "Two sinks from 60 in" },
+  { id: "WC", name: "Toilet", cat: "fixture", code: "WC", widths: [19, 20], w: 19, d: 28, h: 30, z: 0, wall: true, note: "Needs 15 in from its center to a side wall, 21 in clear in front" },
+  { id: "TUB", name: "Bathtub · alcove", cat: "fixture", code: "TUB", widths: [60, 66, 72], w: 60, d: 30, h: 20, z: 0, wall: true, depths: [30, 32, 36] },
+  { id: "FTUB", name: "Freestanding tub", cat: "fixture", code: "FTUB", widths: [59, 66, 72], w: 66, d: 32, h: 24, z: 0, wall: false },
+  { id: "SHW", name: "Shower", cat: "fixture", code: "SHW", widths: [36, 42, 48, 60], w: 48, d: 36, h: 80, z: 0, wall: true, depths: [32, 36, 42, 48], note: "Pan, tile walls and a glass door" },
+  { id: "MIR", name: "Mirror", cat: "decor", code: "MIR", widths: [24, 30, 36, 48, 60, 72], w: 30, d: 1, h: 36, z: 40, wall: true, heights: [30, 36, 42] },
+  { id: "WSH", name: "Washer", cat: "fixture", code: "WSH", widths: [27], w: 27, d: 30, h: 38, z: 0, wall: true },
+  { id: "DRY", name: "Dryer", cat: "fixture", code: "DRY", widths: [27], w: 27, d: 30, h: 38, z: 0, wall: true, note: "Vented to the outside" },
+  { id: "USK", name: "Utility sink", cat: "fixture", code: "USK", widths: [20, 24], w: 24, d: 22, h: 34, z: 0, wall: true },
+  // Bedroom.
+  { id: "BED", name: "Bed", cat: "furniture", code: "BED", widths: [39, 54, 60, 76, 72], w: 60, d: 80, h: 24, z: 0, wall: true, depths: [75, 80, 84], note: "Twin 39 · full 54 · queen 60 · king 76 · California king 72 × 84" },
+  { id: "NS", name: "Nightstand", cat: "furniture", code: "NS", widths: [18, 22, 26], w: 22, d: 16, h: 25, z: 0, wall: true },
+  { id: "DRS", name: "Dresser", cat: "furniture", code: "DRS", widths: [36, 48, 60, 72], w: 60, d: 20, h: 32, z: 0, wall: true },
+  // Living.
+  { id: "SOFA", name: "Sofa", cat: "furniture", code: "SOFA", widths: [60, 72, 84, 96], w: 84, d: 38, h: 34, z: 0, wall: true },
+  { id: "ARM", name: "Armchair", cat: "furniture", code: "ARM", widths: [30, 32, 34], w: 32, d: 34, h: 34, z: 0, wall: false },
+  { id: "CTB", name: "Coffee table", cat: "furniture", code: "CTB", widths: [36, 42, 48, 54], w: 48, d: 24, h: 17, z: 0, wall: false },
+  { id: "STB", name: "Side table", cat: "furniture", code: "STB", widths: [18, 20, 22], w: 20, d: 20, h: 22, z: 0, wall: false },
+  { id: "TVC", name: "TV and console", cat: "furniture", code: "TVC", widths: [48, 60, 72], w: 60, d: 18, h: 24, z: 0, wall: true },
+  { id: "SBD", name: "Sideboard", cat: "furniture", code: "SBD", widths: [48, 60, 72], w: 60, d: 18, h: 34, z: 0, wall: true },
+  { id: "SHF", name: "Bookshelf", cat: "furniture", code: "SHF", widths: [24, 30, 36], w: 36, d: 12, h: 72, z: 0, wall: true },
+  // Office, entry, closet, garage, outside.
+  { id: "DSK", name: "Desk", cat: "furniture", code: "DSK", widths: [42, 48, 60], w: 48, d: 24, h: 30, z: 0, wall: true },
+  { id: "OCH", name: "Desk chair", cat: "furniture", code: "OCH", widths: [24], w: 24, d: 24, h: 38, z: 0, wall: false },
+  { id: "BNC", name: "Bench", cat: "furniture", code: "BNC", widths: [36, 48, 60], w: 48, d: 16, h: 18, z: 0, wall: true },
+  { id: "CON", name: "Console table", cat: "furniture", code: "CON", widths: [36, 48, 60], w: 48, d: 14, h: 30, z: 0, wall: true },
+  { id: "CLS", name: "Closet rod and shelf", cat: "furniture", code: "CLS", widths: range(24, 120, 12), w: 72, d: 14, h: 2, z: 66, wall: true, note: "Shelf at 66 in, rod under it" },
+  { id: "WBN", name: "Workbench", cat: "furniture", code: "WBN", widths: [48, 72, 96], w: 72, d: 24, h: 36, z: 0, wall: true },
+  { id: "SHU", name: "Shelving unit", cat: "furniture", code: "SHU", widths: [36, 48], w: 48, d: 18, h: 72, z: 0, wall: true },
+  { id: "LNG", name: "Lounge chair · outdoor", cat: "furniture", code: "LNG", widths: [26, 30], w: 26, d: 72, h: 14, z: 0, wall: false },
+  { id: "GRL", name: "Grill", cat: "furniture", code: "GRL", widths: [48, 58], w: 58, d: 24, h: 46, z: 0, wall: false },
+  // Decor.
+  { id: "RUG", name: "Rug", cat: "decor", code: "RUG", widths: [60, 72, 96, 108, 120], w: 96, d: 72, h: 0.4, z: 0, wall: false, depths: [48, 60, 72, 96, 108] },
+  { id: "PLT", name: "Plant", cat: "decor", code: "PLT", widths: [14, 16, 20], w: 16, d: 16, h: 42, z: 0, wall: false },
 ];
 
 export const lib = (id: string): LibEntry | undefined => LIBRARY.find((e) => e.id === id);
@@ -79,7 +118,7 @@ export function itemCode(it: Pick<DesignItem, "lib" | "w" | "h">): string {
   const w = Number.isInteger(it.w) ? String(it.w) : it.w.toFixed(1);
   if (e.cat === "wall" && e.id !== "WF") return `${e.code}${w}${Math.round(it.h)}`;
   if (e.cat === "tall") return `${e.code}${w}${Math.round(it.h)}`;
-  if (e.cat === "light" || e.cat === "furniture") return e.code;
+  if (e.cat === "light" || e.cat === "furniture" || e.cat === "decor" || (e.cat === "fixture" && e.id !== "VAN")) return e.code;
   return `${e.code}${w}`;
 }
 
@@ -119,7 +158,7 @@ export const CABINET_COLORS: Array<Swatch & { wood?: boolean }> = [
   { name: "Walnut", hex: "#6a4632", wood: true },
 ];
 
-export type FloorPreset = { id: string; name: string; kind: "wood" | "lvp" | "tile"; hex: string; hex2?: string; tile?: { w: number; h: number }; grout?: string; plank?: number };
+export type FloorPreset = { id: string; name: string; kind: "wood" | "lvp" | "tile" | "carpet"; hex: string; hex2?: string; tile?: { w: number; h: number }; grout?: string; plank?: number };
 export const FLOORS: FloorPreset[] = [
   { id: "oak-natural", name: "White oak · natural", kind: "wood", hex: "#c8a273", plank: 5 },
   { id: "oak-light", name: "White oak · light", kind: "wood", hex: "#dcc3a0", plank: 7 },
@@ -130,6 +169,8 @@ export const FLOORS: FloorPreset[] = [
   { id: "tile-marble", name: "Marble-look porcelain · 24×24", kind: "tile", hex: "#ebe8e3", tile: { w: 24, h: 24 }, grout: "#d3d0ca" },
   { id: "tile-terracotta", name: "Terracotta · 8×8", kind: "tile", hex: "#b8683f", tile: { w: 8, h: 8 }, grout: "#d8c4ad" },
   { id: "tile-checker", name: "Checkerboard · 12×12", kind: "tile", hex: "#f1efe9", hex2: "#26272a", tile: { w: 12, h: 12 }, grout: "#bdbab3" },
+  { id: "carpet-greige", name: "Carpet · greige plush", kind: "carpet", hex: "#b7ab9c" },
+  { id: "carpet-charcoal", name: "Carpet · charcoal berber", kind: "carpet", hex: "#5d5c5a" },
 ];
 
 export type CounterPreset = { id: string; name: string; hex: string; look: "solid" | "veined" | "speckled" | "wood" };
@@ -165,8 +206,18 @@ export const DEFAULT_FINISHES: Finishes = {
   hardware: { kind: "bar", finish: "black" },
 };
 
-export const finishesFor = (all: Record<string, Finishes> | undefined, room: string | null | undefined): Finishes => ({
+/** Where a room's kind starts from something else (2026-10-18): a bath and a laundry on tile, in a satin paint that
+ *  takes a wipe; a garage on gray vinyl; a patio on terracotta. */
+const KIND_DEFAULTS: Partial<Record<RoomKind, Partial<Finishes>>> = {
+  bath: { floor: { id: "tile-marble", pattern: "grid", angle: 0 }, wall: { ...DEFAULT_FINISHES.wall, sheen: "satin" } },
+  laundry: { floor: { id: "tile-gray", pattern: "offset", angle: 0 }, wall: { ...DEFAULT_FINISHES.wall, sheen: "satin" } },
+  garage: { floor: { id: "lvp-gray", pattern: "straight", angle: 0 } },
+  outdoor: { floor: { id: "tile-terracotta", pattern: "grid", angle: 0 } },
+};
+
+export const finishesFor = (all: Record<string, Finishes> | undefined, room: string | null | undefined, kind?: RoomKind): Finishes => ({
   ...DEFAULT_FINISHES,
+  ...(kind ? KIND_DEFAULTS[kind] ?? {} : {}),
   ...(room && all?.[room] ? all[room] : {}),
 });
 export const floorPreset = (id: string) => FLOORS.find((f) => f.id === id) ?? FLOORS[0];

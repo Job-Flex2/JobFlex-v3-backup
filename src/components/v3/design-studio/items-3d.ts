@@ -38,6 +38,16 @@ export function floorTexture(p: FloorPreset, pattern: Finishes["floor"]["pattern
   const S = 1024;
   const px = S / 60; // pixels per inch
   return canvas(S, S, (g) => {
+    if (p.kind === "carpet") {
+      // Pile: the colour, flecked lighter and darker so it reads as fibre, not paint.
+      g.fillStyle = p.hex;
+      g.fillRect(0, 0, S, S);
+      for (let i = 0; i < 26000; i++) {
+        g.fillStyle = shade(p.hex, 0.82 + rnd() * 0.34);
+        g.fillRect(rnd() * S, rnd() * S, 1.6, 1.6);
+      }
+      return;
+    }
     if (p.kind === "tile") {
       const tw = (p.tile?.w ?? 12) * px;
       const th = (p.tile?.h ?? 12) * px;
@@ -248,6 +258,29 @@ function cyl(g: THREE.Group, mat: THREE.Material, x: number, y: number, z: numbe
   g.add(m);
   return m;
 }
+
+const unitSph = new THREE.SphereGeometry(0.5, 18, 12);
+/** An ellipsoid by inches: center (x, y, z), size (w, h, d). */
+function sph(g: THREE.Group, mat: THREE.Material, x: number, y: number, z: number, w: number, h: number, d: number) {
+  const m = new THREE.Mesh(unitSph, mat);
+  m.scale.set(w * FT, h * FT, d * FT);
+  m.position.set(x * FT, y * FT, z * FT);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  g.add(m);
+  return m;
+}
+const porcelain = (mats: Mats) => mats.get("porcelain", () => new THREE.MeshStandardMaterial({ color: 0xf6f6f3, roughness: 0.16, metalness: 0 }));
+const chromeMat = (mats: Mats) => mats.get("chrome", () => new THREE.MeshStandardMaterial({ color: 0xdfe2e4, roughness: 0.15, metalness: 1 }));
+const glassMat = (mats: Mats) =>
+  mats.get("glass", () => new THREE.MeshStandardMaterial({ color: 0xd8e6ea, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false }));
+const fabric = (mats: Mats, hex: string) => std(mats, hex, 0.95);
+const woodMat = (mats: Mats, hex = "#8a6a4c") => std(mats, hex, 0.62);
+/** A piece's own colour when the designer set one (opts.color), else its default. */
+const tint = (it: DesignItem, hex: string) => (typeof it.opts?.color === "string" && /^#[0-9a-f]{6}$/i.test(it.opts.color) ? it.opts.color : hex);
+const legs = (g: THREE.Group, mat: THREE.Material, w: number, d: number, h: number, inset = 2, t = 1.5) => {
+  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, mat, lx * (w / 2 - inset), h / 2, lz * (d / 2 - inset), t, h, t);
+};
 
 /** A door or drawer front on the face plane (z = front), with its style and hardware. */
 function front(g: THREE.Group, mats: Mats, f: Finishes, color: string, x0: number, x1: number, y0: number, y1: number, zFront: number, kind: "door" | "drawer" | "panel", hingeLeft = true) {
@@ -495,6 +528,272 @@ export function buildItem(it: DesignItem, ctx: ItemCtx): THREE.Group {
       box(g, wood, 0, 18, 0, w, 1.2, d);
       box(g, wood, 0, 26, d / 2 - 0.6, w, 16, 1.2);
       for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, wood, lx * (w / 2 - 1), 9, lz * (d / 2 - 1), 1.2, 18, 1.2);
+      break;
+    }
+    /* ── Every room (2026-10-18): the bath, the bedroom, the living room and the rest, each from its numbers ── */
+    case "VAN": {
+      // The cabinet in the cabinets' colour, its top in the counter, a basin (two from 60 in) and faucets.
+      box(g, kick, 0, 2, 1.5, w - 0.2, 4, d - 3);
+      box(g, carcass, 0, 4 + (h - 4) / 2, 0.375, w, h - 4, d - 0.75);
+      const pull = std(mats, HARDWARE_HEX[f.hardware.finish], 0.35, 0.8);
+      const doors = Math.max(2, Math.round(w / 18));
+      for (let i = 0; i < doors; i++) {
+        const x0 = -w / 2 + (w / doors) * i;
+        box(g, carcass, x0 + w / doors / 2, 4 + (h - 4) / 2, zF - 0.25, w / doors - 0.4, h - 5, 0.75);
+        box(g, pull, x0 + w / doors / 2 + (i % 2 ? -1 : 1) * (w / doors / 2 - 2), h - 6, zF - 0.9, 0.5, 5, 0.6);
+      }
+      box(g, counterMat, 0, h + COUNTER_T / 2, -0.5, w + 1, COUNTER_T, d + 1);
+      const sinks = w >= 60 ? [-w / 4, w / 4] : [0];
+      for (const sx of sinks) {
+        const basin = sph(g, porcelain(mats), sx, h + COUNTER_T - 1.5, -1, 16, 4, 12);
+        basin.castShadow = false;
+        cyl(g, chromeMat(mats), sx, h + COUNTER_T + 4, d / 2 - 4, 0.6, 8);
+        box(g, chromeMat(mats), sx, h + COUNTER_T + 7.6, d / 2 - 6, 0.9, 0.8, 5);
+      }
+      break;
+    }
+    case "WC": {
+      const pc = porcelain(mats);
+      box(g, pc, 0, 22, d / 2 - 4.5, 17, 15, 8);
+      box(g, pc, 0, 30.2, d / 2 - 4.5, 18, 1.2, 9);
+      sph(g, pc, 0, 9, -d / 2 + 11, 14, 18, 18);
+      box(g, pc, 0, 6, -d / 2 + 13, 9, 12, 12);
+      sph(g, pc, 0, 15.6, -d / 2 + 11, 14.5, 1.6, 18);
+      cyl(g, chromeMat(mats), -7, 27, d / 2 - 9, 0.4, 1.2, "x");
+      break;
+    }
+    case "TUB": {
+      const pc = porcelain(mats);
+      const t = 2.5;
+      box(g, pc, 0, 1, 0, w, 2, d);
+      box(g, pc, 0, h / 2, -d / 2 + t / 2, w, h, t);
+      box(g, pc, 0, h / 2, d / 2 - t / 2, w, h, t);
+      box(g, pc, -w / 2 + t / 2, h / 2, 0, t, h, d);
+      box(g, pc, w / 2 - t / 2, h / 2, 0, t, h, d);
+      const water = mats.get("tubwater", () => new THREE.MeshStandardMaterial({ color: 0xcfe0e6, roughness: 0.05, metalness: 0.1 }));
+      box(g, water, 0, 2.2, 0, w - 2 * t, 0.4, d - 2 * t, false);
+      cyl(g, chromeMat(mats), w / 2 - 6, h + 3, d / 2 - 2, 0.7, 6);
+      box(g, chromeMat(mats), w / 2 - 6, h + 6, d / 2 - 4.5, 1, 1, 5);
+      break;
+    }
+    case "FTUB": {
+      const pc = porcelain(mats);
+      const shell = cyl(g, pc, 0, h / 2, 0, 0.5, h);
+      shell.scale.set(w * FT, h * FT, d * FT);
+      const inner = mats.get("tubin", () => new THREE.MeshStandardMaterial({ color: 0xe9eef0, roughness: 0.1 }));
+      const top = cyl(g, inner, 0, h - 0.4, 0, 0.5, 0.6);
+      top.scale.set((w - 5) * FT, 0.6 * FT, (d - 5) * FT);
+      cyl(g, chromeMat(mats), w / 2 + 6, 18, 0, 0.8, 36);
+      break;
+    }
+    case "SHW": {
+      const pc = porcelain(mats);
+      box(g, pc, 0, 1.5, 0, w, 3, d);
+      const glass = glassMat(mats);
+      const front = box(g, glass, 0, 3 + (h - 3) / 2, -d / 2 + 0.25, w, h - 3, 0.5, false);
+      front.castShadow = false;
+      const trim = chromeMat(mats);
+      box(g, trim, 0, h, -d / 2 + 0.25, w, 0.6, 0.8, false);
+      box(g, trim, -w / 2 + 0.3, 3 + (h - 3) / 2, -d / 2 + 0.25, 0.6, h - 3, 0.8, false);
+      box(g, trim, w / 6, 3 + (h - 3) / 2, -d / 2 + 0.25, 0.4, h - 3, 0.9, false);
+      cyl(g, trim, 0, 74, d / 2 - 3, 0.5, 6, "z");
+      cyl(g, trim, 0, 72, d / 2 - 7, 3, 0.6);
+      break;
+    }
+    case "MIR": {
+      const frame = std(mats, HARDWARE_HEX[f.hardware.finish], 0.4, 0.6);
+      box(g, frame, 0, h / 2, 0.2, w, h, 0.6);
+      const mirror = mats.get("mirror", () => new THREE.MeshStandardMaterial({ color: 0xe4ecef, roughness: 0.02, metalness: 1 }));
+      box(g, mirror, 0, h / 2, -0.15, w - 2, h - 2, 0.2, false);
+      break;
+    }
+    case "WSH":
+    case "DRY": {
+      const white = std(mats, "#f2f3f3", 0.35);
+      box(g, white, 0, h / 2, 0, w, h, d);
+      box(g, std(mats, "#d9dcdf", 0.4), 0, h - 2.5, d / 2 - 3, w - 1, 5, 6);
+      const door = cyl(g, it.lib === "WSH" ? darkGlass(mats) : std(mats, "#e7e9ea", 0.3), 0, h / 2 - 2, -d / 2 - 0.2, 8, 1.2, "z");
+      door.castShadow = false;
+      cyl(g, steel(mats), 0, h / 2 - 2, -d / 2 - 0.5, 9, 0.5, "z");
+      cyl(g, steel(mats), w / 2 - 5, h - 2.5, d / 2 - 6.2, 1.2, 0.8, "z");
+      break;
+    }
+    case "USK": {
+      const white = std(mats, "#eeefef", 0.3);
+      box(g, white, 0, h / 2, 0, w, h, d);
+      box(g, std(mats, "#cfd3d4", 0.3), 0, h - 4, -1, w - 4, 0.4, d - 6, false);
+      cyl(g, chromeMat(mats), 0, h + 5, d / 2 - 3, 0.6, 10);
+      break;
+    }
+    case "BED": {
+      const frame = woodMat(mats, tint(it, "#7b5a40"));
+      box(g, frame, 0, 6, 0, w, 8, d);
+      legs(g, frame, w, d, 2, 2, 2);
+      box(g, std(mats, "#f4f2ee", 0.9), 0, 15, 0.5, w - 2, 10, d - 3);
+      const duvet = fabric(mats, typeof it.opts?.fabric === "string" && /^#[0-9a-f]{6}$/i.test(it.opts.fabric) ? it.opts.fabric : "#c7cfd3");
+      box(g, duvet, 0, 20.6, -d / 2 + (d * 0.72) / 2 - 0.5, w + 0.6, 1.6, d * 0.72);
+      box(g, duvet, 0, 12, -d / 2 + 0.2, w + 0.6, 17, 0.6);
+      const pillows = w >= 54 ? [-w / 4, w / 4] : [0];
+      for (const px of pillows) sph(g, std(mats, "#fbfaf7", 0.95), px, 22.5, d / 2 - 11, Math.min(26, w / pillows.length - 6), 6, 15);
+      box(g, fabric(mats, "#b9b1a4"), 0, 24 + 12, d / 2 - 1.5, w + 2, 40, 3);
+      break;
+    }
+    case "NS":
+    case "DRS":
+    case "SBD": {
+      const wood = woodMat(mats, tint(it, it.lib === "SBD" ? "#6f5240" : "#8a6a4c"));
+      box(g, wood, 0, (h - 4) / 2 + 4, 0, w, h - 4, d);
+      legs(g, wood, w, d, 4, 1.5, 1.6);
+      const line = std(mats, "#4a3a2c", 0.7);
+      const rows = it.lib === "DRS" ? 3 : 1;
+      for (let r = 1; r < rows + 1; r++) {
+        const y = 4 + ((h - 4) / (rows + 1)) * r;
+        if (it.lib === "SBD") box(g, line, 0, (h - 4) / 2 + 4, -d / 2 - 0.05, 0.3, h - 6, 0.2, false);
+        else box(g, line, 0, y, -d / 2 - 0.05, w - 2, 0.3, 0.2, false);
+      }
+      const knob = std(mats, HARDWARE_HEX[f.hardware.finish], 0.35, 0.8);
+      if (it.lib === "DRS") for (const r of [1, 2, 3]) for (const kx of [-w / 4, w / 4]) cyl(g, knob, kx, 4 + ((h - 4) / 4) * r + (h - 4) / 8, -d / 2 - 0.6, 0.6, 0.8, "z");
+      if (it.lib === "NS") {
+        cyl(g, knob, 0, h * 0.62, -d / 2 - 0.6, 0.5, 0.8, "z");
+        cyl(g, std(mats, "#d8d2c6", 0.6), 0, h + 1, 2, 2.5, 2);
+        cyl(g, std(mats, "#4f4a44", 0.5), 0, h + 7, 2, 0.4, 10);
+        const shade = new THREE.Mesh(new THREE.CylinderGeometry(3.2 * FT, 5 * FT, 7 * FT, 18, 1, true), std(mats, "#f1ece2", 0.9));
+        (shade.geometry as THREE.BufferGeometry).userData.own = true;
+        shade.position.set(0, (h + 14) * FT, 2 * FT);
+        g.add(shade);
+      }
+      break;
+    }
+    case "SOFA":
+    case "ARM": {
+      const cloth = fabric(mats, tint(it, it.lib === "ARM" ? "#a39686" : "#8e8b85"));
+      const arm = Math.min(6, w / 6);
+      box(g, cloth, 0, 9, 0, w, 10, d);
+      box(g, cloth, 0, 20, d / 2 - 4.5, w, 26, 9);
+      box(g, cloth, -w / 2 + arm / 2, 15, 0, arm, 22, d);
+      box(g, cloth, w / 2 - arm / 2, 15, 0, arm, 22, d);
+      const seats = it.lib === "ARM" ? 1 : w >= 84 ? 3 : 2;
+      const sw = (w - 2 * arm) / seats;
+      const cushion = fabric(mats, tint(it, it.lib === "ARM" ? "#ada190" : "#99958e"));
+      for (let i = 0; i < seats; i++) box(g, cushion, -w / 2 + arm + sw * (i + 0.5), 16, -1.5, sw - 0.6, 5, d - 11);
+      legs(g, woodMat(mats, "#3b2b20"), w, d, 4, 3, 1.4);
+      break;
+    }
+    case "CTB":
+    case "STB":
+    case "CON":
+    case "DSK": {
+      const wood = woodMat(mats, tint(it, it.lib === "DSK" ? "#a17c56" : "#7d5d43"));
+      box(g, wood, 0, h - 0.75, 0, w, 1.5, d);
+      legs(g, it.lib === "CTB" ? wood : std(mats, "#2b2c2e", 0.5, 0.4), w, d, h - 1.5, 2, it.lib === "CTB" ? 2.2 : 1.2);
+      if (it.lib === "CTB") box(g, wood, 0, 5, 0, w - 6, 0.8, d - 6);
+      if (it.lib === "DSK") {
+        box(g, darkGlass(mats), 0, h + 9, d / 2 - 5, Math.min(24, w - 12), 13, 0.8);
+        box(g, std(mats, "#2b2c2e", 0.5), 0, h + 1.5, d / 2 - 5, 6, 3, 4);
+      }
+      break;
+    }
+    case "TVC": {
+      const wood = woodMat(mats, tint(it, "#5d4635"));
+      box(g, wood, 0, (h - 4) / 2 + 4, 0, w, h - 4, d);
+      legs(g, wood, w, d, 4, 2, 1.6);
+      box(g, std(mats, "#3a2c22", 0.7), 0, (h - 4) / 2 + 4, -d / 2 - 0.05, 0.3, h - 6, 0.2, false);
+      const tvW = Math.min(65, w - 4) * 0.87;
+      box(g, darkGlass(mats), 0, h + 3 + (tvW * 0.56) / 2, d / 2 - 4, tvW, tvW * 0.56, 1.2);
+      box(g, std(mats, "#1c1d1f", 0.5), 0, h + 1.5, d / 2 - 4, 10, 1, 6);
+      break;
+    }
+    case "SHF":
+    case "SHU": {
+      const metal = it.lib === "SHU";
+      const mat = metal ? std(mats, "#9da2a6", 0.45, 0.6) : woodMat(mats, tint(it, "#8f6c4d"));
+      const t = metal ? 1 : 0.75;
+      if (metal) for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, mat, lx * (w / 2 - 0.5), h / 2, lz * (d / 2 - 0.5), 1, h, 1);
+      else {
+        box(g, mat, -w / 2 + t / 2, h / 2, 0, t, h, d);
+        box(g, mat, w / 2 - t / 2, h / 2, 0, t, h, d);
+        box(g, mat, 0, h / 2, d / 2 - 0.25, w, h, 0.5);
+      }
+      const shelves = Math.max(3, Math.round(h / 15));
+      const colors = ["#7a4b3a", "#3f5a6b", "#c2a35e", "#5d6b52", "#8c8c86", "#a5583e"];
+      for (let i = 0; i <= shelves; i++) {
+        const y = 2 + ((h - 3) / shelves) * i;
+        box(g, mat, 0, y, 0, w - 2 * t, t, d - 0.5);
+        if (!metal && i < shelves) {
+          let x = -w / 2 + t + 1;
+          let k = i * 3;
+          while (x < w / 2 - t - 6) {
+            const bw = 1 + ((k * 7) % 3);
+            const bh = 8 + ((k * 5) % 4);
+            box(g, std(mats, colors[k % colors.length], 0.8), x + bw / 2, y + t / 2 + bh / 2, 0, bw, bh, d - 3);
+            x += bw + 0.15;
+            k++;
+          }
+        }
+      }
+      break;
+    }
+    case "OCH": {
+      const dark = std(mats, "#2b2c2e", 0.5);
+      cyl(g, dark, 0, 1, 0, 11, 1.2);
+      cyl(g, steel(mats), 0, 9, 0, 1, 16);
+      box(g, fabric(mats, tint(it, "#3d4146")), 0, 18, 0, 19, 3, 19);
+      box(g, fabric(mats, tint(it, "#3d4146")), 0, 29, d / 2 - 2.5, 18, 18, 2.5);
+      break;
+    }
+    case "BNC": {
+      const wood = woodMat(mats, tint(it, "#8a6a4c"));
+      box(g, fabric(mats, "#b6ab9b"), 0, h - 1.5, 0, w, 3, d);
+      box(g, wood, 0, h - 3.5, 0, w, 1, d);
+      legs(g, wood, w, d, h - 4, 2, 1.6);
+      break;
+    }
+    case "CLS": {
+      const wood = woodMat(mats, "#e9e2d4");
+      box(g, wood, 0, 0.4, 0, w, 0.8, d - 2);
+      cyl(g, chromeMat(mats), 0, -2.5, -d / 2 + 6, 0.6, w, "x");
+      const cloth = ["#3b4a5a", "#c9b79c", "#7a2f2f", "#e9e6df", "#556b5a", "#2d2d30"];
+      for (let x = -w / 2 + 4, k = 0; x < w / 2 - 3; x += 2.2, k++) box(g, fabric(mats, cloth[k % cloth.length]), x, -2.5 - 18, -d / 2 + 6, 1.8, 34 - ((k * 7) % 10), 18);
+      break;
+    }
+    case "WBN": {
+      const wood = woodMat(mats, "#b38b5c");
+      box(g, wood, 0, h - 0.75, 0, w, 1.5, d);
+      legs(g, wood, w, d, h - 1.5, 2, 3);
+      box(g, wood, 0, 8, 0, w - 4, 1, d - 4);
+      box(g, std(mats, "#c9b38a", 0.8), 0, h + 18, d / 2 - 0.4, w, 36, 0.8);
+      break;
+    }
+    case "LNG": {
+      const frame = woodMat(mats, "#9c7a54");
+      box(g, frame, 0, 8, -6, w, 3, d - 12);
+      legs(g, frame, w, d - 12, 7, 2, 1.5);
+      const back = box(g, fabric(mats, tint(it, "#e7e1d4")), 0, 16, d / 2 - 9, w, 3, 22);
+      back.rotation.x = -0.75;
+      box(g, fabric(mats, tint(it, "#e7e1d4")), 0, 10.5, -6, w - 1, 2, d - 14);
+      break;
+    }
+    case "GRL": {
+      const black = std(mats, "#26272a", 0.5, 0.5);
+      box(g, black, 0, 30, 0, w - 18, 14, d);
+      cyl(g, black, 0, 36, 0, d / 2 - 1, w - 18, "x");
+      box(g, steel(mats), -w / 2 + 6, 32, 0, 12, 1, d - 2);
+      box(g, steel(mats), w / 2 - 6, 32, 0, 12, 1, d - 2);
+      legs(g, black, w - 18, d, 23, 2, 1.5);
+      break;
+    }
+    case "RUG": {
+      const border = fabric(mats, tint(it, "#6d5d4d"));
+      box(g, border, 0, 0.2, 0, w, 0.4, d, false);
+      box(g, fabric(mats, "#b8a68b"), 0, 0.42, 0, w - 8, 0.05, d - 8, false);
+      break;
+    }
+    case "PLT": {
+      cyl(g, std(mats, "#b56a43", 0.8), 0, 7, 0, w / 2 - 1, 14);
+      const leaf = std(mats, "#4f7a4a", 0.8);
+      sph(g, leaf, 0, 24, 0, w + 4, 22, w + 4);
+      sph(g, leaf, -3, 33, 2, w - 2, 14, w - 2);
+      sph(g, leaf, 3, 30, -2, w - 4, 12, w - 4);
       break;
     }
     default:

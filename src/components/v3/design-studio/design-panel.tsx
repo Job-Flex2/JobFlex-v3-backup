@@ -3,13 +3,18 @@
 // out (from what the architect drew, or automatically), add any cabinet, appliance, light or piece of furniture from
 // the library, choose the finishes — paint (with the contractor's own brand code), wall texture, floor, cabinet style
 // and colour, counter, backsplash, hardware — and the selected item's own numbers. Brand-neutral by design.
+// Every room (2026-10-18): the first tab is the room's kind — a bath, a bedroom, a living room… (changeable) — with
+// "Furnish it" laying a designer's first sketch in (lib/design/rooms), the room's own pieces first in Add, and a colour
+// for each piece of furniture.
 import * as React from "react";
 import s from "./design-studio.module.css";
-import type { DesignDoc, DesignItem, Finishes } from "@/lib/design/model";
-import { newId } from "@/lib/design/model";
+import type { DesignDoc, DesignItem, Finishes, RoomKind } from "@/lib/design/model";
+import { newId, ROOM_KINDS } from "@/lib/design/model";
 import type { Room } from "@/lib/design/geometry";
 import { autoKitchen, kitchenFromPlan, frameOf } from "@/lib/design/kitchen";
-import { CABINET_COLORS, COUNTERS, FLOORS, HARDWARE_HEX, LIBRARY, PAINTS, SPLASHES, finishesFor, itemCode, lib, type LibCat } from "@/lib/design/library";
+import { autoFurnish, furnishedSummary, kindOfRoom, KIND_LABEL, KIT } from "@/lib/design/rooms";
+import { roomFinishes } from "@/lib/design/roomKinds";
+import { CABINET_COLORS, COUNTERS, FLOORS, HARDWARE_HEX, LIBRARY, PAINTS, SPLASHES, itemCode, lib, type LibCat } from "@/lib/design/library";
 import type { Selection, Tool } from "./plan-editor";
 import { ChecksPanel } from "./checks-panel";
 import type { Check } from "@/lib/design/checks";
@@ -36,15 +41,44 @@ const CATS: Array<{ cat: LibCat; label: string }> = [
   { cat: "tall", label: "Tall" },
   { cat: "island", label: "Island" },
   { cat: "appliance", label: "Appliances" },
+  { cat: "fixture", label: "Bath & laundry" },
   { cat: "light", label: "Lights" },
   { cat: "furniture", label: "Furniture" },
+  { cat: "decor", label: "Decor" },
 ];
+
+/** Rooms with cabinets, a counter and hardware to choose. */
+const CABINET_ROOMS: RoomKind[] = ["kitchen", "bath", "laundry", "pantry"];
+
+/** A piece's colour (opts.color): upholstery for what you sit or lie on, wood tones for the rest. */
+const FABRICS = [
+  { name: "Linen", hex: "#d9d0c1" },
+  { name: "Oatmeal", hex: "#b9ab97" },
+  { name: "Stone gray", hex: "#8e8b85" },
+  { name: "Charcoal", hex: "#45464a" },
+  { name: "Navy", hex: "#2f3e55" },
+  { name: "Sage", hex: "#8d9b82" },
+  { name: "Terracotta", hex: "#b3684a" },
+  { name: "Cognac leather", hex: "#8a5233" },
+];
+const WOODS = [
+  { name: "White oak", hex: "#b9946a" },
+  { name: "Natural oak", hex: "#a17c56" },
+  { name: "Walnut", hex: "#5d4635" },
+  { name: "Espresso", hex: "#3b2b22" },
+  { name: "Ash white", hex: "#e6dfd3" },
+  { name: "Black", hex: "#26272a" },
+];
+const FABRIC_PIECES = new Set(["SOFA", "ARM", "OCH", "LNG", "RUG"]);
+const WOOD_PIECES = new Set(["BED", "NS", "DRS", "SBD", "CTB", "STB", "CON", "DSK", "TVC", "SHF", "BNC"]);
 
 export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool, onPatch, onLaidOut, checks = [] }: Props) {
   const [tab, setTab] = React.useState<"layout" | "add" | "finishes" | "checks">("layout");
   const openChecks = checks.filter((c) => !c.ok).length;
   const [notes, setNotes] = React.useState<string[]>([]);
-  const fin = finishesFor(doc.finishes, focus);
+  const [find, setFind] = React.useState("");
+  const kind = kindOfRoom(doc, room);
+  const fin = roomFinishes(doc, focus);
   const roomItems = (doc.items ?? []).filter((i) => i.room === focus);
   const hasMarks = doc.marks.some((m) => {
     const c = { x: m.box.x + m.box.w / 2, y: m.box.y + m.box.h / 2 };
@@ -55,7 +89,7 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
 
   const setFin = (fn: (f: Finishes) => Finishes) =>
     onPatch((d) => {
-      d.finishes = { ...(d.finishes ?? {}), [focus]: fn(finishesFor(d.finishes, focus)) };
+      d.finishes = { ...(d.finishes ?? {}), [focus]: fn(roomFinishes(d, focus)) };
     });
   const replaceRoomItems = (items: DesignItem[], why: string[]) => {
     if (roomItems.length && !window.confirm("Replace what's already in this room?")) return;
@@ -75,7 +109,7 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
           <div className={s.seg} role="tablist" aria-label="Design" style={{ display: "flex", width: "100%" }}>
             {(["layout", "add", "finishes", "checks"] as const).map((t) => (
               <button key={t} type="button" role="tab" aria-selected={tab === t} className={`${s.segB} ${tab === t ? s.on : ""}`} onClick={() => setTab(t)} data-design-tab={t} style={{ whiteSpace: "nowrap", flex: "1 1 auto", padding: "0 6px" }}>
-                {t === "layout" ? "Kitchen" : t === "add" ? "Add" : t === "finishes" ? "Finishes" : "Checks"}
+                {t === "layout" ? KIND_LABEL[kind] : t === "add" ? "Add" : t === "finishes" ? "Finishes" : "Checks"}
                 {t === "checks" && openChecks ? (
                   <span aria-label={`${openChecks} to look at`} style={{ marginLeft: 4, display: "inline-grid", placeItems: "center", minWidth: 15, height: 15, padding: "0 3px", borderRadius: 8, background: "#9a5b00", color: "#fff", fontSize: 9.5, verticalAlign: 1 }}>
                     {openChecks}
@@ -87,6 +121,72 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
         </div>
         <div className={s.body}>
           {tab === "layout" ? (
+            <label className={s.field}>
+              <span className={s.lbl}>This room is a</span>
+              <select
+                className={s.in}
+                value={kind}
+                onChange={(e) => {
+                  const use = e.target.value as RoomKind;
+                  onPatch((d) => {
+                    const l = d.labels.find((x) => x.id === focus);
+                    if (l) l.use = use;
+                  });
+                  setNotes([]);
+                }}
+                data-design-room-kind
+              >
+                {ROOM_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {k === "other" ? "Other room" : KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {tab === "layout" && kind !== "kitchen" ? (
+            <>
+              <p className={s.note}>{roomItems.length ? `${roomItems.length} ${roomItems.length === 1 ? "piece" : "pieces"} in this room.` : "Nothing placed yet — furnish it, or add pieces one by one."}</p>
+              <div style={{ display: "grid", gap: 8 }}>
+                <button
+                  type="button"
+                  className={`${s.btn} ${s.btnPrimary}`}
+                  onClick={() => {
+                    const r = autoFurnish(doc, room, focus, kind);
+                    replaceRoomItems(r.items, [furnishedSummary(r.items), ...r.notes].filter(Boolean));
+                  }}
+                  data-design-furnish
+                >
+                  Furnish it
+                </button>
+                <button type="button" className={s.btn} onClick={() => setTab("add")}>
+                  Add a piece
+                </button>
+                {roomItems.length ? (
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.btnSm} ${s.btnDanger}`}
+                    onClick={() => {
+                      if (!window.confirm("Take everything out of this room?")) return;
+                      onPatch((d) => {
+                        d.items = (d.items ?? []).filter((i) => i.room !== focus);
+                      });
+                      setNotes([]);
+                    }}
+                  >
+                    Clear the room
+                  </button>
+                ) : null}
+              </div>
+              {notes.map((n) => (
+                <p key={n} className={s.note} data-design-kitchen-note>
+                  {n}
+                </p>
+              ))}
+              <p className={s.note}>Drag anything on the plan or in 3D; it backs onto the nearest wall. R turns it, Delete removes it. Click a piece to size it and choose its colour.</p>
+            </>
+          ) : null}
+          {tab === "layout" && kind === "kitchen" ? (
             <>
               <p className={s.note}>
                 {roomItems.length ? `${roomItems.filter((i) => ["base", "wall", "tall", "island"].includes(lib(i.lib)?.cat ?? "")).length} cabinets · ${roomItems.filter((i) => lib(i.lib)?.cat === "appliance").length} appliances in this room.` : "Nothing placed yet."}
@@ -153,18 +253,24 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
                   </button>
                 </p>
               ) : null}
-              {CATS.map((c) => (
-                <div key={c.cat} style={{ display: "grid", gap: 6 }}>
-                  <span className={s.lbl}>{c.label}</span>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {LIBRARY.filter((e) => e.cat === c.cat).map((e) => (
-                      <button key={e.id} type="button" className={`${s.btn} ${s.btnSm} ${tool === `place:${e.id}` ? s.btnOn : ""}`} onClick={() => onTool(`place:${e.id}`)} title={e.note ?? e.name} data-design-add={e.id}>
-                        {e.name}
-                      </button>
-                    ))}
+              <input className={s.in} value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a piece — vanity, sofa, bed…" aria-label="Find a piece" data-design-find />
+              {[
+                ...(find.trim() ? [] : [{ key: "kit", label: `For this ${kind === "other" ? "room" : KIND_LABEL[kind].toLowerCase()}`, list: KIT[kind].map((id) => lib(id)).filter((e): e is NonNullable<typeof e> => !!e) }]),
+                ...CATS.map((c) => ({ key: c.cat, label: c.label, list: LIBRARY.filter((e) => e.cat === c.cat && (!find.trim() || e.name.toLowerCase().includes(find.trim().toLowerCase()))) })),
+              ]
+                .filter((g) => g.list.length)
+                .map((g) => (
+                  <div key={g.key} style={{ display: "grid", gap: 6 }} data-design-add-group={g.key}>
+                    <span className={s.lbl}>{g.label}</span>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {g.list.map((e) => (
+                        <button key={e.id} type="button" className={`${s.btn} ${s.btnSm} ${tool === `place:${e.id}` ? s.btnOn : ""}`} onClick={() => onTool(`place:${e.id}`)} title={e.note ?? e.name} data-design-add={g.key === "kit" ? `kit:${e.id}` : e.id}>
+                          {e.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </>
           ) : null}
 
@@ -207,9 +313,11 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
                     </option>
                   ))}
                 </select>
-                <Seg value={fin.floor.pattern} options={FLOORS.find((x) => x.id === fin.floor.id)?.kind === "tile" ? [["grid", "Grid"], ["offset", "Offset"], ["diagonal", "Diagonal"]] : [["straight", "Straight"], ["diagonal", "Diagonal"], ["herringbone", "Herringbone"]]} onPick={(v) => setFin((f) => ({ ...f, floor: { ...f.floor, pattern: v } }))} />
+                {FLOORS.find((x) => x.id === fin.floor.id)?.kind === "carpet" ? null : <Seg value={fin.floor.pattern} options={FLOORS.find((x) => x.id === fin.floor.id)?.kind === "tile" ? [["grid", "Grid"], ["offset", "Offset"], ["diagonal", "Diagonal"]] : [["straight", "Straight"], ["diagonal", "Diagonal"], ["herringbone", "Herringbone"]]} onPick={(v) => setFin((f) => ({ ...f, floor: { ...f.floor, pattern: v } }))} />}
               </Group>
-              <Group label="Cabinets">
+              {CABINET_ROOMS.includes(kind) || roomItems.some((i) => ["base", "wall", "tall", "island"].includes(lib(i.lib)?.cat ?? "")) ? (
+              <>
+              <Group label={kind === "bath" ? "Vanity and cabinets" : "Cabinets"}>
                 <Seg value={fin.cabinets.style} options={[["shaker", "Shaker"], ["slab", "Slab"], ["raised", "Raised panel"]]} onPick={(v) => setFin((f) => ({ ...f, cabinets: { ...f.cabinets, style: v } }))} />
                 <Swatches list={CABINET_COLORS} value={fin.cabinets.color} onPick={(sw) => setFin((f) => ({ ...f, cabinets: { ...f.cabinets, color: sw.hex, name: sw.name } }))} />
                 <span className={s.lbl}>Island in another colour</span>
@@ -232,6 +340,7 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
                 </select>
                 <Seg value={fin.counter.edge} options={[["eased", "Eased"], ["bevel", "Bevel"], ["bullnose", "Bullnose"], ["ogee", "Ogee"]]} onPick={(v) => setFin((f) => ({ ...f, counter: { ...f.counter, edge: v } }))} />
               </Group>
+              {kind === "kitchen" || kind === "laundry" ? (
               <Group label="Backsplash">
                 <select className={s.in} value={fin.backsplash.id} onChange={(e) => setFin((f) => ({ ...f, backsplash: { ...f.backsplash, id: e.target.value } }))} data-design-splash>
                   {SPLASHES.map((c) => (
@@ -242,6 +351,7 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
                 </select>
                 <Seg value={fin.backsplash.height} options={[["4in", "4 in"], ["18in", "To the uppers"], ["full", "Full height"]]} onPick={(v) => setFin((f) => ({ ...f, backsplash: { ...f.backsplash, height: v } }))} />
               </Group>
+              ) : null}
               <Group label="Hardware">
                 <Seg value={fin.hardware.kind} options={[["bar", "Bar pulls"], ["knob", "Knobs"], ["cup", "Cup pulls"]]} onPick={(v) => setFin((f) => ({ ...f, hardware: { ...f.hardware, kind: v } }))} />
                 <Swatches
@@ -250,6 +360,8 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
                   onPick={(sw) => setFin((f) => ({ ...f, hardware: { ...f.hardware, finish: sw.name.toLowerCase() as Finishes["hardware"]["finish"] } }))}
                 />
               </Group>
+              </>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -341,13 +453,25 @@ function ItemCard({ it, onPatch, onSelect }: { it: DesignItem; onPatch: Props["o
               </select>
             </label>
           ) : null}
-          {e.cat === "wall" || e.cat === "light" ? (
+          {e.cat === "wall" || e.cat === "light" || it.lib === "MIR" || it.lib === "CLS" ? (
             <label className={s.field}>
               <span className={s.lbl}>Height off the floor</span>
               <input className={s.in} inputMode="decimal" defaultValue={String(it.z)} key={`z${it.id}${it.z}`} onBlur={(ev) => { const v = Number(ev.target.value); if (Number.isFinite(v) && v >= 0 && v <= 140) set((x) => (x.z = v)); }} />
             </label>
           ) : null}
         </div>
+        {FABRIC_PIECES.has(it.lib) || WOOD_PIECES.has(it.lib) ? (
+          <div style={{ display: "grid", gap: 6 }} data-design-item-color>
+            <span className={s.lbl}>{FABRIC_PIECES.has(it.lib) ? "Fabric" : it.lib === "BED" ? "Frame" : "Finish"}</span>
+            <Swatches list={FABRIC_PIECES.has(it.lib) ? FABRICS : WOODS} value={typeof it.opts?.color === "string" ? it.opts.color : ""} onPick={(sw) => set((x) => (x.opts = { ...(x.opts ?? {}), color: sw.hex }))} />
+          </div>
+        ) : null}
+        {it.lib === "BED" ? (
+          <div style={{ display: "grid", gap: 6 }}>
+            <span className={s.lbl}>Bedding</span>
+            <Swatches list={FABRICS} value={typeof it.opts?.fabric === "string" ? it.opts.fabric : ""} onPick={(sw) => set((x) => (x.opts = { ...(x.opts ?? {}), fabric: sw.hex }))} />
+          </div>
+        ) : null}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {it.lib === "ISL" ? (
             <button type="button" className={`${s.btn} ${s.btnSm} ${it.opts?.seats ? s.btnOn : ""}`} onClick={() => set((x) => (x.opts = { ...(x.opts ?? {}), seats: !x.opts?.seats }))}>
