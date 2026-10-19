@@ -1,52 +1,134 @@
 JobFlex HVAC estimator — demo videos
 
-═══ 1 · The hvac2 landing's demo (40 s, delivered edit) ════════════════════════
+═══ 1 · The hvac2 landing's demo (recorded from the real app, 2026-10-19) ══════
 
-Sources (as delivered, not re-cut — source/; the 4:5 one also goes to Meta Ads):
-  source/jobflex-hvac-demo-40-16x9.mp4   1920x1080, 40 s, 30 fps, H.264 High, no audio, 6,053,035 B
-  source/jobflex-hvac-demo-40-4x5.mp4    1080x1350, 40 s, 30 fps, H.264 High, no audio, 5,151,642 B
-  The 16:9 carries the step captions on black plates at the lower left; the 4:5 carries the same
-  captions as a header on the paper at the top. Same cut, same timing.
+What it is: the real /dashboard/hvac-estimator on a local production build (next build +
+next start, no dev overlay), signed in as qa@acme.test, walked at a person's pace and filmed
+frame by frame. Same scenario and caption texts as the delivered 40 s edit (source/, kept as the
+reference); every screen here is the app itself, nothing is cropped, the page scrolls instead.
 
-Web files (encode.sh; two-pass so each lands under its cap; -an, +faststart, yuv420p, 30 fps):
-  public/landing-e/hvac-demo-16x9.mp4          1920x1080 H.264 High, 1000 kbit/s    cap 5 MB
-  public/landing-e/hvac-demo-16x9.webm         1920x1080 VP9,         650 kbit/s    cap 3.5 MB
-  public/landing-e/hvac-demo-4x5.mp4           1080x1350 H.264 High,  760 kbit/s    cap 4 MB
-  public/landing-e/hvac-demo-4x5.webm          1080x1350 VP9,         560 kbit/s    cap 3 MB
-  public/landing-e/hvac-demo-poster-16x9.webp  the 22 s frame, 1920x1080, WebP q55  cap 60 KB
-  public/landing-e/hvac-demo-poster-4x5.webp   the 22 s frame, 1080x1350, WebP q75  cap 50 KB
-  Both formats keep their full size: at 1440x810 / 864x1080 the captions came out softer than
-  1080p at the same size (compared on the 20.5 s plate), so no downscale.
+Files (render-demo.js; two-pass so each lands under its cap; -an, +faststart, yuv420p, 30 fps):
+  public/landing-e/hvac-demo-16x9.mp4          1920x1080 H.264 High   41.27 s   4,599,816 B   cap 5 MB
+  public/landing-e/hvac-demo-16x9.webm         1920x1080 VP9          41.27 s   2,848,940 B   cap 3.5 MB
+  public/landing-e/hvac-demo-4x5.mp4           1080x1350 H.264 High   39.87 s   3,565,096 B   cap 4 MB
+  public/landing-e/hvac-demo-4x5.webm          1080x1350 VP9          39.87 s   2,429,454 B   cap 3 MB
+  public/landing-e/hvac-demo-poster-16x9.webp  the 17.7 s frame (05, the unit picked), q60, 58,448 B   cap 60 KB
+  public/landing-e/hvac-demo-poster-4x5.webp   the 15.7 s frame (05, the unit picked), q75, 45,732 B   cap 50 KB
+  No audio stream in any of the four; in both MP4s moov comes right after ftyp (before mdat).
+  Full size kept in both formats (the 1080p text reads; no 1440x810 / 864x1080 needed).
+  out/hvac-demo-<fmt>-master.mkv — the lossless renders (FFV1, RGB), gitignored.
 
-The captions, by second (plate changes found with ffmpeg's scene filter on the caption area,
-checked frame by frame; the same in both formats):
-   0.2– 2.3   intro   JOBFLEX · HVAC ESTIMATOR — A full system, start to finish
-   2.3– 4.4   01      The job — Pick the job
-   4.4– 9.6   02      The house — Type the address. The house comes back.
-   9.6–14.9   03      The details — Type what you see on site
-  14.9–18.4   04      The load — Manual J-based, on the county's design day
-  18.4–23.4   05      The equipment — Sized by Manual S — real model numbers
-  23.4–27.6   06      The price — Every line priced
-  27.6–32.2   07      Your inventory — Your units, your costs
-  32.2–37.3   08      The client — One click: a proposal they can sign (on the phone)
-  37.6–40.0   final   JobFlex · HVAC estimator — Size it. Price it. Send it. + Start your free trial
-                      (no plate; the end card, fully in by ~38 s)
-  The first frame (0.0) has no plate; the intro plate fades in over 0.1–0.4 s. Plate 08 fades
-  out over 37.3–37.6 s while the end card cross-fades in.
+The two shapes:
+  16:9 — viewport 1920x1080 at deviceScaleFactor 1, the desktop layout; the sidebar is hidden by
+         CSS in the Playwright context (aside.sb + the layout's grid), not in the project, so the
+         estimator takes the full width. A pointer (drawn by the film) moves and clicks.
+  4:5  — the real handheld layout: viewport 390x488 (4:5 of 1080x1350), isMobile + touch, an iPhone
+         UA, deviceScaleFactor 1080/390 = 2.769 → 1080x1351 frames, the film shows the top 1350.
+         The mobile shell (header with menu/+/bell), the sticky step rail and the estimate's
+         sticky summary bar, the inline row + sheet of the inventory, the phone builder, the
+         client's phone page. A finger mark (drawn by the film) shows each tap and each swipe.
+         Chosen over 390x844-in-a-frame: at 844 the phone would be shown at 1.6x and its 13 px text
+         lands at ~8 px on a 390-px-wide feed; at 488 tall it is 2.77x, the page's own size on a phone.
+  The landing's hvac2 demo-media.ts already points at these six names (READY); its label says
+  "in 40 seconds".
 
-Frames: frames/16x9/tNN.jpg and frames/4x5/tNN.jpg — one frame at every whole second 0–39
-(-ss N), scaled to 640 / 432 px wide.
+The captions (film-demo.html; texts from the delivered edit, figures this house's as the page
+printed them), by second — each plate fades in over 0.35 s from its start and out over the last
+0.18 s; the end card cross-fades in over 0.5 s:
+  16:9 (centred lower third, x 420–1500, y 916–1048; the page's working area is kept above it)
+   0.00– 2.17  01 · The job        Pick the job
+   2.17– 8.85  02 · The house      Type the address. The house comes back.
+   8.85–12.72  03 · The details    The house, from the record
+  12.72–16.11  04 · The load       Manual J-based, on the county's design day
+  16.11–19.04  05 · The equipment  Sized by Manual S — real model numbers
+  19.04–24.60  06 · The price      Every line priced
+  24.60–32.02  07 · Your inventory Your units, your costs
+  32.02–38.27  08 · The client     One click: a proposal they can sign
+  38.27–41.27  end card            JobFlex · HVAC estimator — Size it. Price it. Send it. — Start your free trial
+  4:5 (full width; over the estimate's summary bar at the bottom, moved to the top while the bottom
+  holds what is being used: the suggestion list 1.84–7.77, the inventory row/sheet 24.87–29.56,
+  Save & send and its answer 33.53–35.23)
+   0.00– 1.84  01   ·   1.84– 7.77  02   ·   7.77–12.03  03   ·  12.03–14.77  04
+  14.77–18.31  05   ·  18.31–22.97  06   ·  22.97–30.55  07   ·  30.55–36.86  08
+  36.86–39.87  end card
+  The sub-lines:
+   01  Full system, outdoor unit, furnace, heat pump, ductless or a service call — each asks only what it needs.
+   02  One lookup: the county record, the footprint, the elevation and the design day. No record? Enter it by hand.
+   03  2,380 sq ft, 2 storeys, built 1997, King County's 84° / 26° design day — type over anything you see on site.
+   04  27,000 BTU/h cooling · 39,000 heating at 84° / 26° — not a guess by the square foot.
+   05  The unit covers 111% of the cooling load (Manual S 90–115%). Good or better — pick one.
+   06  Equipment, materials, labor, permit, disposal — every line yours to edit.
+   07  626 units in the price book. Type what you pay — every estimate prices from your book.
+   08  Every line and the total — sent to the homeowner, on her phone, with a PDF to keep.
+  (The delivered edit's 03 "Type what you see on site" is about typing windows in; this cut shows
+  the looked-up details instead, so its line is the house's record. Its 05 said "good, better,
+  best": this house gets two tiers. Its 08 said "the deposit": this proposal has one full payment.)
 
-Re-encoding (from the repo root; FFMPEG=<path> when ffmpeg is not on PATH):
-    bash advertisement/hvac/encode.sh
-  The frames:
-    for s in $(seq 0 39); do t=$(printf %02d $s)
-      ffmpeg -v error -y -ss $s -i advertisement/hvac/source/jobflex-hvac-demo-40-16x9.mp4 -frames:v 1 -vf scale=640:-2 -q:v 4 advertisement/hvac/frames/16x9/t$t.jpg
-      ffmpeg -v error -y -ss $s -i advertisement/hvac/source/jobflex-hvac-demo-40-4x5.mp4  -frames:v 1 -vf scale=432:-2 -q:v 4 advertisement/hvac/frames/4x5/t$t.jpg
-    done
-  The caption changes:
-    ffmpeg -i advertisement/hvac/source/jobflex-hvac-demo-40-16x9.mp4 -vf "crop=960:220:40:830,select='gt(scene,0.08)',showinfo" -an -f null - 2>&1 | grep -o "pts_time:[0-9.]*"
-    ffmpeg -i advertisement/hvac/source/jobflex-hvac-demo-40-4x5.mp4  -vf "crop=1080:300:0:0,select='gt(scene,0.08)',showinfo" -an -f null - 2>&1 | grep -o "pts_time:[0-9.]*"
+The walk (record.js, the same in both shapes; real pace — T runs with the wall clock while the
+page is live; a scroll is stepped frame by frame; a page load is cut with a 0.3–0.45 s dissolve):
+  01  the empty estimator, Full system preselected → Continue
+  02  the address typed ("12629 NE 100th Pl, Kirk", 14 keys/s) → Google's suggestions → the house
+      → Look up the house (≈0.6 s live on the stand; past 2.5 s the wait would be cut) → the page
+      moves on by itself
+  03  back to The house on the rail: the four sources found (King County Assessor parcel, footprint
+      2,066 sq ft at the pin, USGS 3DEP 279 ft, King County 84° / 26°) and the figures
+  04  The design on the rail: cooling 27,000 BTU/h, heating 39,000, 2.5 ton, 1,010 CFM
+  05  System (Air conditioner $12,106 · Heat pump $12,478), Good Carrier 26SCA530W003 $10,507 ·
+      Better Trane 5TTR6030A1000A $12,106 (picked), the unit card, cooling fit 111% (Manual S 90–115%)
+  06  The estimate: every line, down to the subtotal $12,105.83
+  07  HVAC inventory (626 units): the line set row of the rate card's materials → its cost $9 → 8.40
+      → Save to company (filmed first, so the estimate's line set already prices from it:
+      25 ft × $10.50 = $262.50)
+  08  Convert to proposal → the builder (02 The client: Jenna Brooks) → Save & send → "PRO-xxxx was
+      sent to jenna.brooks@example.com" → the client's own link (no contractor session): prepared
+      for Jenna Brooks, $12,892.71 with tax, valid until Nov 2, 2026, Accept proposal
+  Not in the film: no step was missing from the app. Two things are kept out on purpose:
+  • the unit's own shop cost — saving a US-catalog unit from the inventory drawer drops its tier
+    and family (itemJson keeps only the form's fields), and the estimate's Good · Better · Best and
+    pick change (seen on the stand: the pick became York YC6-030); so the scene edits a material;
+  • the "Files for <client>" chip — hidden by context CSS: on the desktop it sits under the caption,
+    on a 488-px phone it floats mid-screen (84 px over the bottom). The floating Help button too.
+
+Where the data comes from:
+  • the stand: stand/rec-shoot.sh — a production build in its own dist dir (.next-hvacrec-prod,
+    stand/build.sh), next start on :3492 over its own copy of dev.db (.cache/hvac-rec/rec.db,
+    stand/make-db.py + stand/rec-dress.py), qa@acme.test signed in (stand/login.cjs); every take
+    starts from a fresh copy (the inventory scene writes a cost);
+  • the dressing: QA Co named Ridgeline Heating & Air, owner Alex Morgan, Enterprise (manual), its
+    test leads marked lost, its placeholder "Starter" catalog rows removed; one client, Jenna Brooks
+    at the filmed house ((425) 555-0193, jenna.brooks@example.com — the fictional exchange and the
+    reserved domain); the estimate is filed to her the way the estimator picker does (jf_file_to);
+  • the house is real (12629 NE 100th Pl, Kirkland, WA 98033); the lookup ran live on the stand
+    with the local keys (Google geocoder/Places, King County Assessor, OSM/Regrid footprints,
+    USGS 3DEP, the design-day table). The landing fixtures (landing-e/hvac-estimator-demo) were not
+    needed and are not recordings: their 4418 NE 97th St does not exist. ReportAll is blanked (the
+    local key is expired); Stripe, mail, SMS, Meta, PostHog are blanked — so "was sent" is the app's
+    own answer, and no mail left the machine;
+  • the load, the units, the prices, the lines and the totals are the engine's and the ledger's.
+
+Frames: frames/16x9/tNN.jpg (960 px wide) and frames/4x5/tNN.jpg (540 px wide) — one frame of the
+delivered MP4 at every whole second (16:9 0–41, 4:5 0–39).
+The 4:5 frames are captured at device pixels (a CDP clip at scale 2.769 from the visual viewport:
+a plain capture comes back in CSS px and would be upscaled).
+
+Re-recording and re-rendering (from the repo root; NODE_PATH must reach playwright-core, system
+Chrome; FFMPEG=<path> if ffmpeg is not on PATH — this was ffmpeg-static 5.2.0, ffmpeg 6.0):
+    DIST=.next-hvacrec-prod STAND=.cache/hvac-rec bash advertisement/hvac/stand/build.sh   # when the app changed
+    bash advertisement/hvac/stand/rec-shoot.sh 16x9      # → advertisement/hvac/rec/16x9/ (frames + tape.json)
+    bash advertisement/hvac/stand/rec-shoot.sh 4x5
+    node advertisement/hvac/render-demo.js 16x9          # → out/ master, public/landing-e files, frames/16x9/
+    node advertisement/hvac/render-demo.js 4x5
+    node advertisement/hvac/preview-demo.js 16x9 "3,9,17"   # stills → frames/pv-16x9-*.png (gitignored)
+  A take is about 2 minutes; a render (frames + two-pass H.264 + two-pass VP9) about 2.5 minutes.
+  Each take spends one Google Places session + geocode and the free county/OSM/USGS lookups
+  (QA Co's 30 lookups an hour).
+  The film is film-demo.html: every frame is a function of t (open it with ?fmt=16x9&t=17 —
+  preview-demo.js and render-demo.js open it in Chrome with --allow-file-access-from-files).
+
+The delivered 40 s edit this replaces on the landing (reference only now):
+  source/jobflex-hvac-demo-40-16x9.mp4, source/jobflex-hvac-demo-40-4x5.mp4 — its scenario and
+  plate texts were the brief; its windows are cropped. (encode.sh, which re-encoded it to the
+  public names, is gone: it would overwrite these files.)
 
 ═══ 2 · The ?industry=hvac hero film (45 s, rendered here from the real app) ═══
 

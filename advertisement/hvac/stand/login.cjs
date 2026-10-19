@@ -1,7 +1,8 @@
 // Signs qa@acme.test in on the film stand (:3488) and keeps the session in .cache/hvac-ad/state.json.
 const { chromium } = require("playwright-core");
 const fs = require("fs");
-const BASE = "http://localhost:3488";
+const BASE = process.env.BASE || "http://localhost:3488";
+const STAND = process.env.STAND || ".cache/hvac-ad";
 const pass = fs.readFileSync("C:/Projects/JobFlex-v3-copy/.env.local", "utf8").match(/^QA_PASS_OWNER=(.*)$/m)[1].replace(/^"|"$/g, "").trim();
 (async () => {
   const b = await chromium.launch({ channel: "chrome", headless: true });
@@ -16,6 +17,6 @@ const pass = fs.readFileSync("C:/Projects/JobFlex-v3-copy/.env.local", "utf8").m
   await page.fill("#loginPassword", pass);
   await Promise.all([page.waitForURL((u) => !u.pathname.startsWith("/auth/login"), { timeout: 60000 }).catch(() => {}), page.click("#signInBtn")]);
   console.log("at", page.url());
-  await ctx.storageState({ path: "C:/Projects/JobFlex-v3-copy/.cache/hvac-ad/state.json" });
+  await ctx.storageState({ path: `C:/Projects/JobFlex-v3-copy/${STAND}/state.json` });
   await b.close();
 })().catch((e) => { console.error("LOGIN ERROR", e.message.split("\n")[0]); process.exit(1); });

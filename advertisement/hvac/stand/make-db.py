@@ -1,7 +1,7 @@
 # The film's own database: a copy of prisma/dev.db with QA Co (qa@acme.test's org) dressed as an HVAC shop.
 #   python advertisement/hvac/stand/make-db.py   -> .cache/hvac-ad/hvac-ad.db (overwritten)
 import sqlite3, time, os
-SRC = 'prisma/dev.db'; DST = '.cache/hvac-ad/hvac-ad.db'
+SRC = 'prisma/dev.db'; DST = os.environ.get('DST', '.cache/hvac-ad/hvac-ad.db')
 os.makedirs(os.path.dirname(DST), exist_ok=True)
 if os.path.exists(DST): os.remove(DST)
 s = sqlite3.connect(SRC); d = sqlite3.connect(DST); s.backup(d); s.close()
