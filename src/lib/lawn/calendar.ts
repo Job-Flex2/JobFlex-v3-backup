@@ -158,9 +158,9 @@ export function planTotals(visits: PlanVisit[], quote: LawnQuote, picked: Iterab
 
 /** A lawn plan's visits as kept with the plan: month-day, so each new term books the same season again. */
 export type StoredVisit = { md: string; service: ServiceId; label: string; minutes: number; checklist: string[] };
-export type StoredSchedule = { v: 1; visits: StoredVisit[] };
+export type StoredSchedule = { v: 1; visits: StoredVisit[]; /** The property, for the route days. */ place?: { lat: number; lng: number; address: string | null } | null };
 
-export const toSchedule = (visits: PlanVisit[]): StoredSchedule => ({ v: 1, visits: visits.map((x) => ({ md: x.date.slice(5), service: x.service, label: x.label, minutes: x.minutes, checklist: x.checklist })) });
+export const toSchedule = (visits: PlanVisit[], place?: StoredSchedule["place"]): StoredSchedule => ({ v: 1, visits: visits.map((x) => ({ md: x.date.slice(5), service: x.service, label: x.label, minutes: x.minutes, checklist: x.checklist })), ...(place ? { place } : {}) });
 
 /** The schedule's visits dated inside a term [startsAt + 1 day, startsAt + termMonths): each month-day at its next
  *  occurrence, in the order they fall. */

@@ -12,6 +12,7 @@ import { climateFor, mowVisits, monthsOf, weeklyMonths, STATE_CLIMATE } from "..
 import { lawnTaxed, taxWords } from "../../../src/lib/lawn/tax";
 import { rulesAt, inWindow, FERTILIZER, FLORIDA_SUMMER } from "../../../src/lib/lawn/rules";
 import { seasonCalendar, planTotals, lawnSlots, toSchedule, mowHeightIn } from "../../../src/lib/lawn/calendar";
+import { orderStops, balanceDays, onWeekday, nextWorkday, milesBetween, driveMinutes } from "../../../src/lib/lawn/routes";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -214,6 +215,27 @@ console.log("── the season, date by date");
   check("a renewal books the same season the next year", slots.length === il.v.length && slots[0].dueAt.getUTCFullYear() === 2028 && slots.every((x, i) => i === 0 || x.dueAt >= slots[i - 1].dueAt), `${slots.length} vs ${il.v.length}`);
   const mid = lawnSlots(toSchedule(il.v), new Date("2027-07-01"), 12);
   check("a plan started mid-season books what's left this year and the start of next", mid.length === il.v.length && mid[0].dueAt.getUTCMonth() === 6 && mid[mid.length - 1].dueAt.getUTCFullYear() === 2028);
+}
+
+console.log("── route days");
+{
+  // Eight yards on two streets a mile apart, west to east; the shop at the west end.
+  const shop = { lat: 33.35, lng: -111.8 };
+  const yards = Array.from({ length: 8 }, (_, i) => ({ id: `y${i}`, at: { lat: i % 2 ? 33.364 : 33.35, lng: -111.8 + 0.006 * i }, minutes: 40 + (i % 3) * 10 }));
+  const shuffled = [yards[5], yards[0], yards[7], yards[2], yards[4], yards[1], yards[6], yards[3]];
+  const { order, driveMinutes: dm } = orderStops(shop, shuffled);
+  const naive = shuffled.reduce((a, y, i) => a + driveMinutes(i ? shuffled[i - 1].at : shop, y.at), 0);
+  check("a day's stops ordered: shorter than the order they came in", dm < naive && order.length === 8, `${dm} vs ${naive} min`);
+  check("the first stop is the nearest to the shop", order[0].id === "y0");
+  check("a mile is a mile", near(milesBetween({ lat: 33.35, lng: -111.8 }, { lat: 33.3645, lng: -111.8 }), 1, 0.02));
+  const days = balanceDays(yards, 2);
+  const west = yards.filter((y) => days.get(y.id) === 0);
+  const east = yards.filter((y) => days.get(y.id) === 1);
+  check("two route days: the west half and the east half", west.length && east.length && Math.max(...west.map((y) => y.at.lng)) < Math.min(...east.map((y) => y.at.lng)), JSON.stringify([...days]));
+  const loads = [0, 1].map((d) => yards.filter((y) => days.get(y.id) === d).reduce((a, y) => a + y.minutes, 0));
+  check("the days are within a fifth of each other", Math.max(...loads) <= Math.min(...loads) * 1.2 + 30, JSON.stringify(loads));
+  check("Wednesday of the week of Friday Oct 23, 2026 is Oct 21", onWeekday(new Date("2026-10-23T00:00:00Z"), 3).toISOString().startsWith("2026-10-21"));
+  check("rained out on Saturday: Monday", nextWorkday(new Date("2026-10-24T00:00:00Z")).toISOString().startsWith("2026-10-26"));
 }
 
 console.log(bad ? `\n${bad} FAILED` : "\nall ok");
