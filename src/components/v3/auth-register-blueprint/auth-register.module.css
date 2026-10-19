@@ -1895,3 +1895,13 @@
 }
 .bp :global(.pw-autonote b) { color: var(--ink); }
 @media (max-width: 560px) { .bp :global(.pw-auto) { padding: 20px; margin-top: 16px; } }
+/* A phone (2026-10-18): the screen now waits for its button after a back-out, so it sits with the rest of the sheet —
+   the 18px gutters every other block of the plan step keeps, and right under the logo row (the sheet's grid shared
+   the screen's spare height between the logo row and this short step, leaving a band of nothing between them). */
+@media (max-width: 768px) {
+  .bp :global(.pw-auto) { width: min(560px, calc(100% - 36px)); }
+  /* a 44px tap band around the small link, its underline left where it is */
+  .bp :global(.pw-auto-all) { position: relative; }
+  .bp :global(.pw-auto-all::before) { content: ""; position: absolute; left: -8px; right: -8px; top: 50%; height: 44px; transform: translateY(-50%); }
+}
+@media (max-width: 640px) { .bp :global(.plan-sheet-in[data-auto-going]) { align-content: start; } }

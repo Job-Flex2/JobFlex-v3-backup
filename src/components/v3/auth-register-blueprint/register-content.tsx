@@ -461,14 +461,18 @@ export function RegisterContent({
      stays up until checkout's page replaces this one — resetting it straight
      away put every button back to idle (and clickable) for the second the
      browser spends loading Stripe. A page brought back by the Back button
-     from the back/forward cache returns idle. */
+     from the back/forward cache returns idle — and straight to Professional's
+     screen then waits for its button (`autoHeld`) instead of sitting on
+     "Opening Stripe's secure card page…" (2026-10-18). */
   const leavingRef = React.useRef(false);
+  const [autoHeld, setAutoHeld] = React.useState(false);
   React.useEffect(() => {
     const onShow = (e: PageTransitionEvent) => {
       if (!e.persisted || !leavingRef.current) return;
       leavingRef.current = false;
       setPayBusy(false);
       setStartingSlug(null);
+      setAutoHeld(true);
     };
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
@@ -926,6 +930,9 @@ export function RegisterContent({
      re-implemented here. */
   async function onStartTrial(slug: string | null = planSlug, termAsked?: BillingTerm) {
     if (payBusy || !slug) return;
+    /* Started from straight-to-Professional's screen (the cards are not up): "See all plans instead" can still call
+       it back. A start from the cards cannot be — it was called back once and Start did nothing (2026-10-18). */
+    const fromAutoScreen = !autoOff;
     // The clicked card can differ from the selection until React commits it.
     const clickedTrialDays = slug === CUSTOM_PLAN_SLUG
       ? customTrialDays
@@ -963,7 +970,7 @@ export function RegisterContent({
       });
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       // "See all plans instead" pressed while the card page was being opened: stay on the cards.
-      if (res.ok && body.url && autoAbort.current) return;
+      if (res.ok && body.url && fromAutoScreen && autoAbort.current) return;
       if (res.ok && body.url) {
         trackTraffic(TRAFFIC_EVENTS.opened, { plan_mode: planMode, plan: slug, interval: term, flow: trafficFlow });
         signupLeavingTo("checkout");
@@ -977,6 +984,7 @@ export function RegisterContent({
           leavingRef.current = false;
           setPayBusy(false);
           setStartingSlug(null);
+          setAutoHeld(true);
         }, 15000);
         return;
       }
@@ -1131,9 +1139,11 @@ export function RegisterContent({
 
   /* STRAIGHT TO THE CARD PAGE (owner, 2026-10-15, lib/signupAutoPlan). Once the
      plans are in, the plan the server picked opens Stripe's card page (or, with
-     no card, the trial starts) — no cards to compare. The cards come back when
-     the visitor backs out of the card page (?checkout=cancelled), asks for them
-     ("See all plans instead"), or anything on the way is refused. */
+     no card, the trial starts) — no cards to compare. The cards come ONLY when
+     the visitor asks for them ("See all plans"): a back-out of the card page, the
+     browser's Back, a reload, a refusal on the way all come back to the plan's
+     own screen with a button that opens the card page again (owner, 2026-10-18:
+     "with the switch on, a person never lands on the plan cards by themselves"). */
   const [autoOff, setAutoOff] = React.useState(false);
   const autoAbort = React.useRef(false);
   const autoSlug = React.useMemo(() => {
@@ -1142,10 +1152,11 @@ export function RegisterContent({
     const editionSlug = edition ? (plans.find((p) => isEditionPlan(p.slug, edition))?.slug ?? null) : null;
     return autoPlanFor({ plans, tool: spotlight, editionSlug, asked: searchParams?.get("plan") ?? null })?.slug ?? null;
   }, [auto, plans, spotlight, edition, searchParams]);
-  /* Back from the card page in the tab that opened it: the cards with the calm note. Read after mount (sessionStorage);
-     until then a cancelled return is taken for a back-out, as before. The browser's own Back lands on the plan step's
-     address (`?signup=` alone): in the tab that handed this intent over it is the same back-out, not a new hand-off —
-     straight-to-Professional opened a second card page there, so Back never left Stripe (2026-10-17). */
+  /* Back from the card page: Stripe's own back link (`?checkout=cancelled`, in whatever tab it is opened) or, in the tab
+     that handed this intent over, the browser's Back or a reload (the plan step's address, `?signup=` alone — read
+     after mount, sessionStorage). Either is a back-out: the plan's screen with its button, not a second card page
+     (Back never left Stripe, 2026-10-17) and not the cards (2026-10-18). Any other `?signup=` address — the emailed
+     code's button, a tab restored later — goes straight on, as a first arrival does. */
   const returned = !!ret && !ret.sessionId;
   const [handedOffHere, setHandedOffHere] = React.useState<boolean | null>(null);
   React.useEffect(() => {
@@ -1153,11 +1164,16 @@ export function RegisterContent({
     if (returned) setHandedOffHere(recalledHandoff() === ret.token);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
   }, []);
-  const backedOut = ret?.cancelled ? handedOffHere !== false : returned && handedOffHere === true;
-  /* …and until it is read, straight-to-Professional draws neither the cards nor the card-page note, nor hands off:
-     a returning visitor must not see the cards flash (the server's HTML and the hydrating page both wait on it). */
-  const handoffUnread = !!auto && returned && handedOffHere === null;
-  const autoView = !!auto && step === 3 && !backedOut && !handoffUnread && !autoOff && !plansErr && !gate && !confirmSentTo;
+  const backedOut = returned && (ret.cancelled || handedOffHere === true);
+  /* …and until it is read, straight-to-Professional neither draws its screen nor hands off (the server's HTML and the
+     hydrating page both wait on it), so a returning visitor sees no flash of anything. */
+  const handoffUnread = !!auto && returned && !ret.cancelled && handedOffHere === null;
+  /* The plan's screen: whenever the switch picked a plan, the cards were not asked for and nothing else holds the step
+     (the address's gate, the card-less link sent). It hands off by itself once; after a back-out, a refusal or a
+     return from the card page it waits for its button. */
+  const autoScreen = !!auto && step === 3 && !handoffUnread && !autoOff && !gate && !confirmSentTo;
+  const autoWaits = autoScreen && (backedOut || autoHeld || !!plansErr);
+  const autoView = autoScreen && !autoWaits;
   const autoRan = React.useRef(false);
   React.useEffect(() => {
     if (!autoView || autoRan.current || !autoSlug || !token) return;
@@ -2090,7 +2106,7 @@ export function RegisterContent({
             share one left and one right edge. */}
         <div
           className="plan-sheet-in"
-          data-auto-going={autoView || undefined}
+          data-auto-going={autoScreen || undefined}
           style={{ "--pw-cols": Math.max(1, orderedPlans.length + (offerCustom && plans.length > 0 ? 1 : 0)) } as React.CSSProperties}
         >
           {brand}
@@ -2129,12 +2145,22 @@ export function RegisterContent({
             {/* ONE ROW ON A DESK (owner, 2026-10-12): the question on the left; the trial's
                 stamp and the Monthly | Annual switch side by side on the right, so the head
                 takes one row (two when the window is narrow) and the cards fit the screen. */}
-            {autoView ? (
-              <div className="pw-auto" role="status" data-auto-plan={autoSlug ?? auto?.slug}>
+            {/* STRAIGHT TO PROFESSIONAL'S SCREEN: handing off by itself (the bar), or — back from the card page, after a
+                reload or a refusal — waiting for its button (owner, 2026-10-18: the cards only when asked for). */}
+            {autoScreen ? (
+              <div className="pw-auto" role="status" data-auto-plan={autoSlug ?? auto?.slug} data-auto-wait={autoWaits || undefined}>
                 <span className="pw-confirm-k">{trialDays}-day free trial</span>
                 <h1 className="auth-h1">{autoName}</h1>
                 <p className="pw-auto-p">
-                  {requiresCard ? (
+                  {autoWaits ? (
+                    requiresCard ? (
+                      <>
+                        No card yet, nothing charged. <b>$0 today</b>, then {autoPlanPrice({ priceCents: autoPriceCents })} — cancel any time.
+                      </>
+                    ) : (
+                      <>Nothing started yet — no card needed.</>
+                    )
+                  ) : requiresCard ? (
                     <>
                       Opening Stripe&apos;s secure card page… <b>$0 today</b>, then {autoPlanPrice({ priceCents: autoPriceCents })} — cancel any time.
                     </>
@@ -2143,9 +2169,34 @@ export function RegisterContent({
                   )}{" "}
                   You can change your plan any time in JobFlex.
                 </p>
-                <div className="pw-auto-bar" aria-hidden="true">
-                  <span />
-                </div>
+                {autoWaits && plansErr ? (
+                  <div className="err" role="alert">
+                    {plansErr}
+                  </div>
+                ) : null}
+                {autoWaits ? (
+                  <button
+                    type="button"
+                    className="btn pw-go"
+                    id="autoGo"
+                    data-auto-plan-go
+                    disabled={payBusy}
+                    aria-busy={payBusy || undefined}
+                    onClick={() => {
+                      const slug = autoSlug ?? auto?.slug;
+                      if (slug) void onStartPlan(slug, AUTO_TERM);
+                    }}
+                  >
+                    {payBusy ? busyLabel : requiresCard ? "Add your card" : `Start my ${trialDays}-day free trial`}
+                    <svg className="ic" aria-hidden="true">
+                      <use href="#i-arrow-r" />
+                    </svg>
+                  </button>
+                ) : (
+                  <div className="pw-auto-bar" aria-hidden="true">
+                    <span />
+                  </div>
+                )}
                 <button
                   type="button"
                   className="link-ink pw-auto-all"
@@ -2156,7 +2207,7 @@ export function RegisterContent({
                   }}
                   data-auto-plan-all
                 >
-                  See all plans instead
+                  {autoWaits ? "See all plans" : "See all plans instead"}
                 </button>
               </div>
             ) : null}

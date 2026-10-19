@@ -4,13 +4,17 @@
 // to the card page for Professional — the plan cards are never drawn. On a production build, at 390 (iPhone):
 //   · the landing's "Start my 7-day FREE TRIAL" with a live draft cookie (the intent written before the switch, no
 //     autoPlan mark; Starter remembered by the phone) → Professional, no cards;
-//   · the plan step's own address (?signup=<token>) and a `?checkout=cancelled` address opened anywhere but the tab
-//     that handed off → Professional, no cards;
+//   · the plan step's own address (?signup=<token>) opened in another tab → Professional, no cards;
 //   · a tab drawn while the switch was OFF, the code typed after it went ON → Professional, no cards (the step asks
 //     the server as it opens, not the page's copy);
 //   · the tab remembering Annual (and ?billing=annual) → the screen prints the MONTHLY price and Checkout is opened on
 //     it — read back from Stripe's sandbox when dev.db is in test mode;
-//   · backing out of the card page in the same tab → the cards with the calm note, Professional chosen (as built);
+//   · BACK FROM THE CARD PAGE NEVER DRAWS THE CARDS (owner, 2026-10-18): Stripe's back link in the same tab, the
+//     browser's Back, a reload after it, and a `?checkout=cancelled` address opened in a new tab → Professional's
+//     screen waiting with its button (no second card page by itself, no cards); its button → the card page for
+//     Professional, monthly;
+//   · "See all plans" on that screen → the cards, Professional chosen — the only way to them; Start on a card then
+//     goes through;
 //   · the switch OFF → the plan cards, as before;
 //   · on every step: no console error, no page error, no 4xx/5xx from this server.
 // The card page is not opened: /api/checkout/signup is answered here with a fake Checkout address, so the check reads
@@ -152,7 +156,7 @@ async function plantCode(url: string) {
   throw new Error("no draft for " + url);
 }
 
-type Seen = { asked: string | null; checkout: boolean; cardsSeen: number; autoShown: boolean; chosen: string | null; note: boolean; gate: string | null };
+type Seen = { asked: string | null; checkout: boolean; cardsSeen: number; autoShown: boolean; waiting: boolean; chosen: string | null; note: boolean; gate: string | null };
 /** Until the card page is asked for (or `ms` pass): what the page asked for and whether cards were drawn. */
 async function outcome(v: V, ms = 15000): Promise<Seen> {
   let autoShown = false;
@@ -161,11 +165,19 @@ async function outcome(v: V, ms = 15000): Promise<Seen> {
     await v.page.waitForTimeout(100);
   }
   const here = v.out.checkout ? null : await v.page.evaluate(() => ({
+    waiting: !!(document.querySelector(".pw-auto[data-auto-wait] #autoGo") as HTMLElement | null)?.offsetParent,
     chosen: document.querySelector("section.plan-sheet.is-in .pw-plan.on")?.getAttribute("data-plan-card") ?? null,
     note: !!document.querySelector("[data-auto-plan-back]"),
     gate: document.getElementById("planGate")?.getAttribute("data-gate") ?? null,
   }));
-  return { asked: v.out.asked, checkout: v.out.checkout, autoShown, cardsSeen: v.out.cardsSeen, chosen: here?.chosen ?? null, note: here?.note ?? false, gate: here?.gate ?? null };
+  return { asked: v.out.asked, checkout: v.out.checkout, autoShown, cardsSeen: v.out.cardsSeen, waiting: here?.waiting ?? false, chosen: here?.chosen ?? null, note: here?.note ?? false, gate: here?.gate ?? null };
+}
+/** A new leg in the same tab: what the page asks for from here on. */
+function fresh(v: V) {
+  v.out.asked = null;
+  v.out.interval = null;
+  v.out.checkout = false;
+  v.out.cardsSeen = 0;
 }
 
 async function scenario(browser: Browser, name: string, run: (v: V) => Promise<void>, expect: (s: Seen) => boolean) {
@@ -184,6 +196,30 @@ async function scenario(browser: Browser, name: string, run: (v: V) => Promise<v
   }
 }
 const straightToPro = (s: Seen) => s.asked === "professional" && s.checkout && s.cardsSeen === 0;
+/** A scenario that makes its own checks (several legs in one tab). */
+async function journey(browser: Browser, name: string, run: (v: V, name: string) => Promise<void>) {
+  const v = await visitor(browser);
+  try {
+    v.step(name);
+    await run(v, name);
+    const e = v.take();
+    check(`${name} — no console / page / HTTP errors`, !e, e);
+  } catch (e) {
+    check(`${name} ran through`, false, failed(e, v));
+  } finally {
+    await v.ctx.close();
+  }
+}
+/* Professional's screen waits (no card page by itself, no cards); its button then opens the card page for Professional,
+   monthly. */
+async function waitsThenGoes(v: V, name: string) {
+  const s = await outcome(v, 6000);
+  check(`${name}: Professional's screen waits with its button — no card page by itself, no cards`, !s.checkout && !s.asked && s.cardsSeen === 0 && s.waiting, JSON.stringify(s));
+  fresh(v);
+  await v.page.locator("#autoGo").click();
+  const t = await outcome(v);
+  check(`${name}: its button → the card page for Professional, monthly`, straightToPro(t) && v.out.interval === "MONTH", JSON.stringify({ ...t, interval: v.out.interval }));
+}
 
 /* The sandbox key, for reading back the Checkout session the route made (never the live key). */
 function sandboxKey(): string | null {
@@ -270,18 +306,53 @@ async function main() {
         await holdDraft(v, draft);
         await v.page.goto(`${BASE}/auth/register?signup=${signup}`, { waitUntil: "load", timeout: 180000 });
       }, straightToPro);
-      await scenario(browser, "switch ON: a ?checkout=cancelled address opened outside the tab that handed off → Professional, no plan cards", async (v) => {
+      await journey(browser, "switch ON: a ?checkout=cancelled address opened in a new tab", async (v, name) => {
         const { draft, signup } = await plantReturning(`back.cancelled.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
         await holdDraft(v, draft);
         await v.page.goto(`${BASE}/auth/register?signup=${signup}&checkout=cancelled`, { waitUntil: "load", timeout: 180000 });
-      }, straightToPro);
-      await scenario(browser, "switch ON: backing out of the card page in the same tab → the cards with the calm note, Professional chosen (Starter remembered is ignored)", async (v) => {
+        await waitsThenGoes(v, name);
+      });
+      await journey(browser, "switch ON: cancelled in Stripe (its back link, in the tab that handed off; Starter remembered)", async (v, name) => {
         const { draft, signup } = await plantReturning(`back.out.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
         await holdDraft(v, draft);
         await tabMemory(v, { jf_signup_plan: "starter", jf_signup_handoff: signup });
         await v.page.goto(`${BASE}/auth/register?signup=${signup}&checkout=cancelled`, { waitUntil: "load", timeout: 180000 });
+        await waitsThenGoes(v, name);
+      });
+      await journey(browser, "switch ON: the browser's Back from the card page", async (v, name) => {
+        const { draft, signup } = await plantReturning(`back.history.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
+        await holdDraft(v, draft);
+        await v.page.goto(`${BASE}/auth/register?signup=${signup}`, { waitUntil: "load", timeout: 180000 });
+        const first = await outcome(v);
+        check(`${name}: the first arrival → the card page for Professional by itself`, straightToPro(first), JSON.stringify(first));
+        await v.page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 });
+        fresh(v);
+        await v.page.goBack({ waitUntil: "load", timeout: 120000 });
+        await waitsThenGoes(v, `${name} (Back)`);
+        // …and again: Back from that card page, then a reload of the plan step.
+        await v.page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 });
+        await v.page.goBack({ waitUntil: "load", timeout: 120000 });
+        fresh(v);
+        await v.page.reload({ waitUntil: "load", timeout: 120000 });
+        await waitsThenGoes(v, `${name} (Back, then a reload)`);
+      });
+      await journey(browser, "switch ON: \"See all plans\" on Professional's screen", async (v, name) => {
+        const { draft, signup } = await plantReturning(`back.all.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
+        await holdDraft(v, draft);
+        await tabMemory(v, { jf_signup_plan: "starter", jf_signup_handoff: signup });
+        await v.page.goto(`${BASE}/auth/register?signup=${signup}&checkout=cancelled`, { waitUntil: "load", timeout: 180000 });
+        const s = await outcome(v, 6000);
+        check(`${name}: before the tap — the screen waits, no cards`, s.cardsSeen === 0 && s.waiting && !s.checkout, JSON.stringify(s));
+        await v.page.locator("[data-auto-plan-all]").click();
         await v.page.locator("section.plan-sheet.is-in .pw-plan").first().waitFor({ timeout: 60000 });
-      }, (s) => !s.checkout && !s.asked && s.cardsSeen > 0 && s.note && s.chosen === "professional");
+        const t = await outcome(v, 3000);
+        check(`${name} → the cards, Professional chosen (Starter remembered is ignored)`, !t.checkout && !t.asked && t.cardsSeen > 0 && t.chosen === "professional" && !t.waiting, JSON.stringify(t));
+        // Start on a card goes through: "See all plans" called back only the screen's own hand-off.
+        fresh(v);
+        await v.page.locator('section.plan-sheet.is-in .pw-plan[data-plan-card="professional"] .pw-acts button.pw-go').first().click();
+        const u = await outcome(v);
+        check(`${name}: Start on the Professional card → the card page`, u.asked === "professional" && u.checkout, JSON.stringify(u));
+      });
 
       // A tab drawn while the switch was OFF: the code screen waits, the owner turns it ON, the code is typed.
       await setSwitch("pick");

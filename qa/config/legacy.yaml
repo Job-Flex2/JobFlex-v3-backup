@@ -22,7 +22,7 @@ scripts:
   - { file: signup-watch.check.ts, suite: signup, kind: check, status: live }
   - { file: signup-flow.check.ts, suite: signup, kind: prod, status: live, minutes: 25, note: "landing → register → plan → Checkout hand-off, every industry; own build on :3312" }
   - { file: signup-otp.check.ts, suite: signup, kind: prod, status: live, minutes: 25, note: "passwordless sign-up, code squares, the return gate; own build on :3313" }
-  - { file: signup-auto-return.check.ts, suite: signup, kind: prod, status: live, minutes: 15, note: "straight to Professional: a returning visitor with a live draft gets Professional's card page, never the plan cards; own build on :3314 (2026-10-17)" }
+  - { file: signup-auto-return.check.ts, suite: signup, kind: prod, status: live, minutes: 15, note: "straight to Professional: a returning visitor gets Professional's card page; back from Stripe (its link, Back, reload) Professional's screen with its button; the cards only on See all plans; own build on :3314 (2026-10-17, 2026-10-18)" }
 
   # ── billing ─────────────────────────────────────────────────────────────
   - { file: admin-subscription.check.ts, suite: billing, kind: check, status: live, note: "fails while dev.db stripe:mode=test (its Stripe mock has no products.create) — known, 2026-10-06" }
