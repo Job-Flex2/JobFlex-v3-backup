@@ -307,9 +307,11 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
           </div>
         </div>
 
-          {/* SETTINGS — under the lot's sides, a grid of cards (3 across at 1440, 2 at
+          {/* SETTINGS — under the lot's sides, columns of cards (3 across at 1440, 2 at
               1280, 1 on a phone). They used to hang under the type list in the
-              rail, which ran several screens down beside an empty centre. */}
+              rail, which ran several screens down beside an empty centre. Posts, the
+              tallest card, comes last: in this order the columns come out even at 2
+              and at 3 across (every order measured at 1280/1440/1920, 2026-10-18). */}
           <div className="fs-settings" id="fsSettings">
             <div className="card fs-card fs-set fs-set--height">
               <div className="ledger-head">Height</div>
@@ -350,6 +352,33 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
                 <button className="tgl" type="button" id="haulTgl" aria-label="Haul away excavated soil"></button>
               </div>
             </div>
+            <div className="card fs-card fs-set is-hidden" id="woodCard">
+              <div className="ledger-head">Boards &amp; fasteners</div>
+              <div className="site-row site-row--stack" id="gradeRow">
+                <div>
+                  <div className="tg-t">Cedar grade</div>
+                  <div className="tg-h">#2 &amp; better is the standard tight-knot board; #1 has tighter, smaller knots; clear has none.</div>
+                </div>
+                <div className="site-seg" role="group" aria-label="Cedar grade"></div>
+              </div>
+              <div className="site-row site-row--stack" id="fastenRow">
+                <div>
+                  <div className="tg-t">Fasteners</div>
+                  <div className="tg-h">Hot-dip galvanized ring-shank is standard; stainless leaves no rust streaks down the cedar.</div>
+                </div>
+                <div className="site-seg" role="group" aria-label="Fasteners"></div>
+              </div>
+            </div>
+            <div className="card fs-card fs-set">
+              <div className="ledger-head">Ground</div>
+              <div className="site-row site-row--stack" id="groundRow">
+                <div>
+                  <div className="tg-t">Ground</div>
+                  <div className="tg-h"></div>
+                </div>
+                <div className="site-seg" role="group" aria-label="Ground difficulty"></div>
+              </div>
+            </div>
             <div className="card fs-card fs-set">
               <div className="ledger-head">Posts</div>
               <div className="site-row site-row--stack is-hidden" id="upgradeRow">
@@ -379,33 +408,6 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
                   <div className="tg-h"></div>
                 </div>
                 <div className="site-seg" role="group" aria-label="Post spacing"></div>
-              </div>
-            </div>
-            <div className="card fs-card fs-set is-hidden" id="woodCard">
-              <div className="ledger-head">Boards &amp; fasteners</div>
-              <div className="site-row site-row--stack" id="gradeRow">
-                <div>
-                  <div className="tg-t">Cedar grade</div>
-                  <div className="tg-h">#2 &amp; better is the standard tight-knot board; #1 has tighter, smaller knots; clear has none.</div>
-                </div>
-                <div className="site-seg" role="group" aria-label="Cedar grade"></div>
-              </div>
-              <div className="site-row site-row--stack" id="fastenRow">
-                <div>
-                  <div className="tg-t">Fasteners</div>
-                  <div className="tg-h">Hot-dip galvanized ring-shank is standard; stainless leaves no rust streaks down the cedar.</div>
-                </div>
-                <div className="site-seg" role="group" aria-label="Fasteners"></div>
-              </div>
-            </div>
-            <div className="card fs-card fs-set">
-              <div className="ledger-head">Ground</div>
-              <div className="site-row site-row--stack" id="groundRow">
-                <div>
-                  <div className="tg-t">Ground</div>
-                  <div className="tg-h"></div>
-                </div>
-                <div className="site-seg" role="group" aria-label="Ground difficulty"></div>
               </div>
             </div>
           </div>

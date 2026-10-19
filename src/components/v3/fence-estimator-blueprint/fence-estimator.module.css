@@ -2146,20 +2146,20 @@
    ============================================================ */
 .bp :global(.content .fs-main) { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-/* Settings: cards under the sides — 3 across, 2 on a narrower desk. */
-/* Height is a short card and Ground a short one: they share the first column,
-   Site and Posts stand two rows tall beside them — no hole under a short card. */
-.bp :global(.content .fs-settings) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto 1fr; gap: 16px; align-items: start; }
-.bp :global(.content .fs-settings > .fs-set:nth-child(2)), .bp :global(.content .fs-settings > .fs-set:nth-child(3)) { grid-row: span 2; }
+/* Settings: cards under the sides — 3 across, 2 on a narrower desk — laid as
+   columns: each card falls straight under the one above it, one gap apart,
+   whichever cards and rows the fence type shows (Boards & fasteners, stain,
+   steel gate posts come and go). Never place them by nth-child: the grid of
+   2026-09-21 spanned the 2nd and 3rd card over two rows, and the fifth card
+   (20c53b07) turned that into holes and a ragged grid. A card's top margin
+   is dropped at a column break, so every column starts at the block's top.
+   The columns' evenness comes from the card order in the markup (Posts last).
+   Guard: qa/tests/visual/fence-settings-grid.check.ts. */
+.bp :global(.content .fs-settings) { --fs-set-gap: 16px; display: block; column-count: 3; column-gap: var(--fs-set-gap); }
+.bp :global(.content .fs-settings > .fs-set) { break-inside: avoid; margin-top: var(--fs-set-gap); }
+.bp :global(.content .fs-settings > .fs-set:first-child) { margin-top: 0; }
 @media (min-width: 1101px) and (max-width: 1399px) {
-  /* two across: Height over Ground | Site, and Posts across the row under them with its two groups side by side */
-  .bp :global(.content .fs-settings) { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto 1fr auto; }
-  .bp :global(.content .fs-settings > .fs-set:nth-child(1)) { order: 1; }
-  .bp :global(.content .fs-settings > .fs-set:nth-child(2)) { order: 2; }
-  .bp :global(.content .fs-settings > .fs-set:nth-child(4)) { order: 3; }
-  .bp :global(.content .fs-settings > .fs-set:nth-child(3)) { order: 4; grid-row: auto; grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .bp :global(.content .fs-settings > .fs-set:nth-child(3) > .ledger-head) { grid-column: 1 / -1; }
-  .bp :global(.content .fs-settings > .fs-set:nth-child(3) > .site-row + .site-row) { border-top: none; border-left: 1.5px solid var(--hair-soft); }
+  .bp :global(.content .fs-settings) { column-count: 2; }
 }
 .bp :global(.content .fs-set .seg) { border-bottom: none; flex-wrap: wrap; }
 /* one segment height on the page */
@@ -2200,7 +2200,8 @@
   /* flex: 0 0 auto — in the one-column flex the desk's `flex: 1 1 0` would collapse the card and spill its list over its neighbours */
   .bp :global(.content .fs-types) { order: 5; flex: 0 0 auto; min-height: 0; display: block; }
   .bp :global(.content .fs-types .mats) { overflow: visible; }
-  .bp :global(.content .fs-settings > .fs-set:nth-child(n)) { order: 6; grid-row: auto; grid-column: auto; display: block; }
+  /* the cards are the column's own items here: its gap spaces them */
+  .bp :global(.content .fs-settings > .fs-set:nth-child(n)) { order: 6; margin-top: 0; display: block; }
   .bp :global(.content .fs-rail) { height: auto; }
   .bp :global(.content .ledger-head--acts) { flex-wrap: wrap; }
 }

@@ -84,6 +84,7 @@ scripts:
   - { file: mobile-sweep.check.ts, suite: visual, kind: prod, status: live, minutes: 35, devSkip: true, note: "WebKit phone sweep; compares against QA_DEV_URL (the runner passes the dev server)" }
   - { file: plan-terms.check.ts, suite: visual, kind: prod, status: live, minutes: 25 }
   - { file: sidebar-motion.check.ts, suite: visual, kind: prod, status: live, minutes: 25 }
+  - { file: fence-settings-grid.check.ts, suite: visual, kind: prod, status: live, minutes: 25, note: "fence estimator option cards packed in even columns, ≤24px apart, at 1920/1440/1280/390, empty and filled (2026-10-18, the 20c53b07 regression)" }
   - { file: fixpass-smoke.js, suite: visual, kind: page, status: live }
   - { file: deck-zfight.check.ts, suite: visual, kind: check, status: live, note: "geometry-level: no coplanar faces (3D flicker)" }
 
