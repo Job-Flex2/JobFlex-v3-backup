@@ -75,10 +75,9 @@ export type LandingVariant = {
   /** A sign-up button stands under the product shot. */
   shotCta?: boolean;
 
-  /** "trial-terms" (hvac2, 2026-10-19): the trial's two lines of terms under
-   *  the hero's pair of buttons in place of the line there, and the trial
-   *  button says "Start My 7-Day Free Trial →" (hero.tsx, hvac2/hvac2-terms.ts). */
-  heroLine?: "trial-terms";
+  /** The hero's trial button says "Start My 7-Day Free Trial →" (hvac2,
+   *  2026-10-19; landing-e-page.tsx) in place of "Start my 7-day FREE TRIAL". */
+  trialCtaTitle?: boolean;
 };
 
 /** The hero as it shipped on 2026-08-25 — the page with no `?industry=`. */
@@ -309,8 +308,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
   },
   // HVAC, VERSION 2 (2026-10-19). The HVAC page itself — every word, field
   // and section — with two changes in the first screen: the demo film in the
-  // shot's place, and the trial's terms under the pair of buttons (the trial
-  // button saying "Start My 7-Day Free Trial →").
+  // shot's place, and the trial button saying "Start My 7-Day Free Trial →".
   // Filled in from hvac below (HVAC2), so an edit to hvac is an edit to both.
   hvac2: null,
   drywall: {
@@ -375,8 +373,8 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
   },
 };
 
-// HVAC2: hvac's own entry, the film in the shot's place and the trial's terms under the buttons.
-LANDING_VARIANTS.hvac2 = { ...LANDING_VARIANTS.hvac!, visual: "hvac-video", heroLine: "trial-terms" };
+// HVAC2: hvac's own entry, the film in the shot's place and the trial button's own words.
+LANDING_VARIANTS.hvac2 = { ...LANDING_VARIANTS.hvac!, visual: "hvac-video", trialCtaTitle: true };
 
 /** The hero content for a key: its variant, or the default while unwritten. */
 export function variantContent(key: LandingVariantKey | undefined): LandingVariant {

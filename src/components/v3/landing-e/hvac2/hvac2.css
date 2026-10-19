@@ -1,7 +1,6 @@
-/* HVAC v2 (?industry=hvac2, 2026-10-19) — the HVAC first screen's two
-   changes: the demo film in the shot's frame (hvac2-film.tsx) and the
-   trial's terms under the buttons (hero.tsx, heroLine). Every rule hangs on an
-   `lp-h2-` class only that page renders, so no other landing is touched. */
+/* HVAC v2 (?industry=hvac2, 2026-10-19) — the demo film in the HVAC hero
+   shot's frame (hvac2-film.tsx). Every rule hangs on an `lp-h2-` class only
+   that page renders, so no other landing is touched. */
 
 /* ── the film ─────────────────────────────────────────────────
    The shot's app frame, its box shaped before anything has loaded: 4:5
@@ -30,20 +29,4 @@
 }
 @media (min-width: 1024px) {
   .jf-lp .lp-h2-cap { font-size: 12px; }
-}
-
-/* ── the trial's terms ───────────────────────────────────────
-   Under the pair of buttons, where the hero's price line stands on HVAC
-   (.lp-hero-price, the same 10px under the buttons): what today costs and
-   what follows, then how not to be charged, in the hero's secondary white. */
-.jf-lp .lp-h2-terms {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 10px 0 0;
-  font-size: 14px;
-  line-height: 1.45;
-  text-align: center;
-  text-wrap: balance;
-  color: rgba(255, 255, 255, 0.72);
 }
