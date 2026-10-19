@@ -187,8 +187,10 @@ export function deckSurface(frame: DeckFrame): DeckSurface {
   const borderBoards = design.shape.kind === "rect" ? design.decking.border : 0;
   const borderIn = borderBoards * pitch;
   // A quarter inch off the wall, so water and the siding have room; a free-standing deck's border runs along its back
-  // too, and the field starts behind it.
-  const first = againstHouse ? 0.25 : borderIn;
+  // too, and the field starts behind it. A deck that follows the wall (2026-10-19) starts at its back-most part — in a
+  // set-back, behind the house line.
+  const back0 = Math.min(0, ...zones.map((z) => z.y0));
+  const first = back0 + (againstHouse ? 0.25 : borderIn);
   const rows = Math.max(1, Math.ceil((farthest - first + product.gapIn) / pitch - 1e-9));
   const wastePct = design.decking.wastePct + (diagonal ? 5 : 0) + (pattern === "herringbone" ? 5 : 0) + (borderBoards ? 3 : 0);
   const joistXs = frame.joists.filter((j) => !j.sister).map((j) => j.x);
@@ -244,10 +246,26 @@ export function deckSurface(frame: DeckFrame): DeckSurface {
         // The row is cut to the line when its far edge is past the front anywhere along it.
         cut = fieldFront(x0 + 0.01) < y0 + w + 0.5 || fieldFront(x1 - 0.01) < y0 + w + 0.5;
       } else {
-        const under = zones.filter((z) => yc >= z.y0 && yc <= z.y1);
+        // The zones under the row, side by side; a gap between them (a bump-out in the middle of a deck that follows
+        // the wall) breaks the row in two — no board runs through the house.
+        const under = zones.filter((z) => yc >= z.y0 && yc <= z.y1).sort((a, b) => a.x0 - b.x0);
         if (under.length === 0) continue;
-        x0 = Math.max(fieldX0, Math.min(...under.map((z) => z.x0)));
-        x1 = Math.min(fieldX1, Math.max(...under.map((z) => z.x1)));
+        const runs: Array<[number, number]> = [];
+        for (const z of under) {
+          const last = runs[runs.length - 1];
+          if (last && z.x0 <= last[1] + 0.5) last[1] = Math.max(last[1], z.x1);
+          else runs.push([z.x0, z.x1]);
+        }
+        for (const [a, b] of runs) {
+          const rx0 = Math.max(fieldX0, a);
+          const rx1 = Math.min(fieldX1, b);
+          if (!(rx1 - rx0 > 2)) continue;
+          const key = `${Math.round(rx0)}:${Math.round(rx1)}`;
+          const g = groups.get(key) ?? { x0: rx0, x1: rx1, ys: [] };
+          g.ys.push({ y: yc, w, cut });
+          groups.set(key, g);
+        }
+        continue;
       }
       if (!(x1 - x0 > 2)) continue;
       const key = `${Math.round(x0)}:${Math.round(x1)}`;

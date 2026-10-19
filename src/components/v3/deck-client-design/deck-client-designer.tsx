@@ -128,6 +128,8 @@ const SHAPES: ReadonlyArray<{ key: Exclude<ShapeKey, "L-back">; name: string; pa
 ];
 function shapeKey(sh: DeckShape): ShapeKey {
   if (sh.kind === "L") return sh.notch.corner === "front-left" ? "L-left" : sh.notch.corner === "front-right" ? "L-right" : "L-back";
+  // A deck that follows the house wall is a rectangle the wall's steps shape — the wall, not this picker, sets them.
+  if (sh.kind === "wall") return "rect";
   if (sh.front?.kind === "curve") return "curve";
   if (sh.front?.kind === "clipped") return "clipped";
   return "rect";

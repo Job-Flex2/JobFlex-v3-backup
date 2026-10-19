@@ -94,7 +94,7 @@ import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type
 import { convertDeckEstimateToProposal, updateDeckProposal, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckSite, saveDeckDraft, saveDeckRateBook, type DeckDraftRow, type ReturnedClientDesign } from "@/actions/deckEstimator";
 import { deckClientInbox } from "@/actions/deckClientDesign";
 import { jobLine, type ClientLinkRow } from "@/lib/deck/clientDesign";
-import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
@@ -1364,10 +1364,16 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         <Answers
           label="Shape"
           value={design.shape.kind}
-          onChange={(k) => patch({ shape: k === "rect" ? { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt } : { kind: "L", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, notch: { corner: "front-right", widthFt: Math.max(2, Math.round(design.shape.widthFt / 2)), depthFt: Math.max(2, Math.round(design.shape.depthFt / 2)) } } })}
+          onChange={(k) => {
+            if (k === design.shape.kind || k === "wall") return;
+            // A rectangle asked for while the deck follows the wall: the wall under it goes straight, and the deck with it.
+            if (k === "rect" && design.shape.kind === "wall") return patch({ house: levelUnderDeck(design.house, design.shape) });
+            patch({ shape: k === "rect" ? { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt } : { kind: "L", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, notch: { corner: "front-right", widthFt: Math.max(2, Math.round(design.shape.widthFt / 2)), depthFt: Math.max(2, Math.round(design.shape.depthFt / 2)) } } });
+          }}
           options={[
             { value: "rect", label: "Rectangle", sub: "Four straight sides" },
             { value: "L", label: "L-shaped", sub: "One corner cut away" },
+            ...(design.shape.kind === "wall" ? [{ value: "wall" as const, label: "Follows the wall", sub: "Its back steps with the house" }] : []),
           ]}
         />
         <div className="v1-grid2">
@@ -1392,6 +1398,15 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
             </div>
             <p className="v1-hint">A back corner is where the house steps out into the deck — a bump-out or a bay.</p>
           </div>
+        ) : design.shape.kind === "wall" ? (
+          <div className="v1-sub" data-deck-follows-wall>
+            <p className="v1-hint">
+              <b>The back follows the house wall</b> — {wallDeckWords(design.shape)}. It reaches into a set-back, its ledger on that wall, and steps around a bump-out. Move the wall in the drawing and the deck follows.
+            </p>
+            <button type="button" className="v1-btn v1-btn-sm" onClick={() => patch({ house: levelUnderDeck(design.house, design.shape) })} data-deck-straighten-wall>
+              Straighten the wall under the deck
+            </button>
+          </div>
         ) : null}
       </div>
       <div className="v1-size-group v1-size-height" role="group" aria-labelledby="v1-height-title">
@@ -1399,11 +1414,13 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         <Answers label="Deck height" cols={2} value={HEIGHT_PRESETS.some((h) => h.inches === design.heightIn) ? design.heightIn : -1} onChange={(v) => patch({ heightIn: v })} options={HEIGHT_PRESETS.map((h) => ({ value: h.inches, label: h.label, sub: ftIn(h.inches) }))} />
         <Stepper label="Deck height" unit="in." aside={ftIn(design.heightIn)} value={design.heightIn} step={1} parse={parseInches} format={(n2) => String(Math.round(n2 * 4) / 4)} min={DECK_LIMITS.heightIn.min} max={DECK_LIMITS.heightIn.max} onCommit={(n2) => patch({ heightIn: n2 })} />
       </div>
-      {design.shape.kind === "rect" ? (
-        <More title="Front edge, lower level, hot tub" now={[front ? FRONT_LABEL[front.kind] : "", design.lower.on ? "lower level" : "", design.spa.on ? "hot tub" : ""].filter(Boolean).join(" · ") || "Straight front, one level"} open={!!front || design.lower.on || design.spa.on} id="size-more">
+      {design.shape.kind === "rect" || design.shape.kind === "wall" ? (
+        <More title={design.shape.kind === "wall" ? "Lower level, hot tub" : "Front edge, lower level, hot tub"} now={[front ? FRONT_LABEL[front.kind] : "", design.lower.on ? "lower level" : "", design.spa.on ? "hot tub" : ""].filter(Boolean).join(" · ") || "Straight front, one level"} open={!!front || design.lower.on || design.spa.on} id="size-more">
+          {design.shape.kind === "rect" ? (
           <Field label="The front edge" wide>
             <Seg label="The front edge" value={front?.kind ?? "straight"} onChange={(k: FrontKind) => patch({ shape: { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, front: k === "straight" ? undefined : { kind: k, bulgeFt: front?.bulgeFt ?? 2, clipFt: front?.clipFt ?? 2 } } })} options={(["straight", "curve", "clipped"] as const).map((k) => ({ value: k, label: FRONT_LABEL[k] }))} />
           </Field>
+          ) : null}
           {front?.kind === "curve" ? (
             <Field label="The bow at the middle" aside="ft · laminated rim" wide>
               <NumberInput label="How far the front bows out at the middle, feet" value={front.bulgeFt} parse={parseFeet} format={feetText} min={DECK_LIMITS.bulgeFt.min} max={Math.min(DECK_LIMITS.bulgeFt.max, design.shape.widthFt / 3)} onCommit={(n2) => patch({ shape: { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, front: { ...front, bulgeFt: n2 } } })} />

@@ -15,6 +15,7 @@ import { FRAMING_SPECIES, DECKING, WALL_TYPES, RAIL_TYPES } from "../../../src/l
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const nA = Number(process.argv[2] ?? 3000), nB = Number(process.argv[3] ?? 3000);
+const nW = Number(process.argv[4] ?? 1500);
 function rngOf(seed: number) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 type Rng = () => number;
 const pick = <T,>(r: Rng, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)];
@@ -25,6 +26,25 @@ const bool = (r: Rng) => r() < 0.5;
 const rateKeys = new Set(DECK_RATES.map((x: any) => x.key));
 const MOUNTS = ["post", "header", "rail", "deck", "ceiling", "wall", "stair", "peak"];
 const ids = (xs: readonly any[]) => xs.map((x) => x.id as string);
+
+/** A deck that follows a stepped house wall (2026-10-19): 2–5 parts across it, set back as far as 16 ft or out to its
+ *  front less 3 ft — and now and then past those limits, which the reader must hold. */
+function randomWall(r: Rng, depthHint: number): unknown {
+  const widthFt = odd(r, 8, 60);
+  const depthFt = Math.max(4, depthHint);
+  const n = int(r, 2, 5);
+  const cuts = Array.from({ length: n - 1 }, () => odd(r, 1, widthFt - 1)).sort((a, b) => a - b);
+  const xs = [0, ...cuts, widthFt];
+  const back = xs.slice(0, -1).map((x0, i) => ({ x0Ft: x0, x1Ft: xs[i + 1], yFt: r() < 0.3 ? 0 : r() < 0.5 ? -odd(r, 0, r() < 0.1 ? 30 : 16) : odd(r, 0, r() < 0.1 ? depthFt + 4 : Math.max(0, depthFt - 3)) }));
+  return { kind: "wall", widthFt, depthFt, back };
+}
+
+/** A whole random design whose deck follows a stepped house wall. */
+function wallDesign(i: number): unknown {
+  const r = rngOf(90000 + i);
+  const d = randomDesign(r) as { shape: { depthFt: number } };
+  return { ...d, shape: randomWall(r, Math.round(d.shape.depthFt)) };
+}
 
 function randomDesign(r: Rng): unknown {
   const d: any = JSON.parse(JSON.stringify(defaultDeckDesign({ state: pick(r, ["NY", "TX", "CA", "MN", "FL", "WA", null]) })));
@@ -150,7 +170,7 @@ function exercise(d: DeckDesign, tag: string, out: string[]) {
 if (process.argv[2] === "--repro") {
   for (const tag of process.argv.slice(3)) {
     const i = Number(tag.slice(1));
-    const raw = tag[0] === "A" ? randomDesign(rngOf(1000 + i)) : (() => { const r = rngOf(50000 + i); return mutate(r, normalizeDeckDesign(randomDesign(r))); })();
+    const raw = tag[0] === "A" ? randomDesign(rngOf(1000 + i)) : tag[0] === "W" ? wallDesign(i) : (() => { const r = rngOf(50000 + i); return mutate(r, normalizeDeckDesign(randomDesign(r))); })();
     const d = normalizeDeckDesign(raw);
     console.log(`\n=== ${tag}: ${structureWords(d)} · ${sizeWords(d)} · h ${d.heightIn} in · placement ${d.placement} · floor ${d.floor} · roof ${d.roof.kind}/${d.roof.plan.shape} · stairs ${d.stairs.length} · rail ${d.rail.type} · lower ${d.lower.on} · fixtures ${d.electrical.fixtures.length} · front ${d.shape.kind === "rect" ? d.shape.front?.kind : "L"}`);
     const pkg = priceDeck(d);
@@ -177,11 +197,20 @@ for (let i = 0; i < nA; i++) run(`A${i}`, randomDesign(rngOf(1000 + i)));
 const tA = Date.now() - started;
 for (const [i, junk] of [null, 1, "x", [], {}, { v: 99 }, { shape: "x" }, { shape: { kind: "L" } }, { stairs: "x" }, { electrical: { fixtures: [null, 1, {}] } }, { roof: 5 }, { lower: { on: true } }, { photo: {} }, { site: { slope: "x" } }].entries()) run(`root${i}`, junk);
 for (let i = 0; i < nB; i++) { const r = rngOf(50000 + i); run(`B${i}`, mutate(r, normalizeDeckDesign(randomDesign(r)))); }
+// Decks that follow the house wall, every option around them as random as the rest.
+let walls = 0;
+for (let i = 0; i < nW; i++) {
+  const raw = wallDesign(i);
+  if (normalizeDeckDesign(raw).shape.kind === "wall") walls++;
+  run(`W${i}`, raw);
+}
+if (walls < nW * 0.8) trouble.push(`only ${walls} of ${nW} wall designs read back as decks that follow the wall  [W]`);
+for (const [i, junk] of [{ kind: "wall" }, { kind: "wall", back: "x" }, { kind: "wall", widthFt: 10, back: [null, 1, { x0Ft: "a" }, { x0Ft: 4, x1Ft: 2, yFt: 3 }] }, { kind: "wall", widthFt: 10, depthFt: 6, back: [{ x0Ft: 0, x1Ft: 5, yFt: -999 }, { x0Ft: 5, x1Ft: 99, yFt: 999 }] }].entries()) run(`WJ${i}`, { shape: junk });
 const tB = Date.now() - started - tA;
 
 const groups = new Map<string, string[]>();
 for (const t of trouble) { const k = t.replace(/\s+\[.*$/, "").replace(/[-\d.]+/g, "#").slice(0, 90); (groups.get(k) ?? groups.set(k, []).get(k)!).push(t); }
-console.log(`fuzz: ${nA} designs in the rails (${(tA / 1000).toFixed(1)} s) + ${nB} junk mutations (${(tB / 1000).toFixed(1)} s) → ${trouble.length} findings in ${groups.size} groups`);
+console.log(`fuzz: ${nA} designs in the rails (${(tA / 1000).toFixed(1)} s) + ${nB} junk mutations (${(tB / 1000).toFixed(1)} s) + ${nW} following the house wall (${walls} kept that shape) → ${trouble.length} findings in ${groups.size} groups`);
 console.log(`stats: max ${stats.maxBoxes} boxes (${stats.maxBoxesTag}), ${(stats.maxBytes / 1024).toFixed(0)} KB scene, ${stats.maxLines} lines, scope ${stats.maxScope} chars, ${stats.maxNotes} notes, slowest ${stats.maxMs} ms, biggest $${Math.round(stats.maxSubtotal).toLocaleString()}`);
 for (const [k, v] of [...groups.entries()].sort((a, b) => b[1].length - a[1].length)) { console.log(`\n${String(v.length).padStart(5)}×  ${k}`); for (const ex of v.slice(0, 3)) console.log(`        ${ex.slice(0, 400)}`); }
 process.exit(trouble.length ? 1 : 0);
