@@ -17,10 +17,11 @@
 // not set (this machine's :3000 may be another project's).
 
 import "../_lib/_server-only";
+import { readFileSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import {
   bookNumbers, canEditBook, fenceBookRows, fenceDocWith, fenceDocWithout, groupRows, hvacBookRows, hvacCardWith, hvacRateRows, nextCustomFenceId,
-  roofBookRows, roofDocWith, roofDocWithout, roofLists, rowKey, shownGroups, slugId, FENCE_TYPE_IDS,
+  roofBookRows, roofDocWith, roofDocWithout, roofLists, rowKey, rowStanding, shownGroups, slugId, FENCE_TYPE_IDS,
 } from "../../../src/lib/priceBook";
 import { fenceCatalogSchema } from "../../../src/lib/fence/catalogSchema";
 import { roofCatalogSchema } from "../../../src/lib/roofPackage/catalogSchema";
@@ -97,6 +98,11 @@ async function main() {
     let rdoc = roofDocWith(null, { system: { id: "architectural", label: "Architectural shingle · 30-yr", family: "asphalt", matPerSq: 140, laborPerSq: 200, wastePct: 12, capPerFt: 2.1 } });
     ok("B an edited system keeps the whole list and passes the builder's schema", rdoc.systems.length === ROOF_SYSTEMS.length && rdoc.underlayments.length === UNDERLAYMENTS.length && roofCatalogSchema.safeParse(rdoc).success);
     ok("B the row is a company default at $140", roofBookRows(rdoc).find((r) => r.id === "architectural")?.companyDefault === true && roofBookRows(rdoc).find((r) => r.id === "architectural")?.price === 140);
+    // One word for the saved row on the desk and on the phone (2026-10-19: the phone list said "Default" for "Company").
+    const saved = roofBookRows(rdoc).find((r) => r.id === "architectural")!;
+    ok("B a saved row stands as Company; a built-in one as catalog; an HVAC rate as typical", rowStanding(saved).label === "Company" && rowStanding(saved).own && rowStanding(roofBookRows(null)[0]).label === "catalog" && rowStanding({ companyDefault: false, kind: "hvac-rate" }).label === "typical");
+    const invSrc = readFileSync("src/components/v3/inventory-blueprint/inventory-content.tsx", "utf8");
+    ok("B the desk table and the phone list draw the same standing chip", (invSrc.match(/<Standing row=\{r\} \/>/g) ?? []).length === 2 && !/>Default</.test(invSrc) && !/pstatus--accepted">Company</.test(invSrc));
     const sid = slugId("QA solar tile", roofLists(rdoc).systems.map((s) => s.id));
     rdoc = roofDocWith(rdoc, { system: { id: sid, label: "QA solar tile", family: "tile", matPerSq: 900, laborPerSq: 600, wastePct: 10, capPerFt: 9 } });
     ok("B a system of our own is appended with a fresh id", sid === "qa_solar_tile" && rdoc.systems.some((s) => s.id === sid) && roofBookRows(rdoc).find((r) => r.id === sid)?.custom === true);

@@ -35,7 +35,7 @@ import { DECK_RATE_GROUP_LABEL } from "@/lib/deck/rates";
 import {
   FENCE_RATE_LIMITS, FENCE_TYPE_IDS, HVAC_KINDS, ROOF_FAMILY_OPTIONS,
   bookNumbers, fenceBookRows, fenceDocWith, fenceDocWithout, filterRows, groupRows, hvacBookRows, hvacCardWith, hvacRateRows,
-  deckBookRows, deckBookWith, nextCustomFenceId, roofBookRows, roofDocWith, roofDocWithout, roofLists, rowKey, shownGroups, slugId, usd2,
+  deckBookRows, deckBookWith, nextCustomFenceId, roofBookRows, roofDocWith, roofDocWithout, roofLists, rowKey, rowStanding, shownGroups, slugId, usd2,
   type BookRow,
 } from "@/lib/priceBook";
 import { InventoryStock } from "./inventory-stock";
@@ -193,7 +193,7 @@ function PriceBook({ data, rows, canEdit, sheet, setSheet }: { data: InventoryPa
                   return (
                     <div key={key} role="listitem"><div className={cx("rowi")} role="button" tabIndex={0} aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : key)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(isOpen ? null : key); } }}>
                       <div className={cx("l1")}>{r.color && <span style={{ display: "inline-block", width: 12, height: 12, background: r.color, border: "1px solid var(--ink)" }} aria-hidden="true" />}<span className={cx("t")}>{r.name}</span><span className={cx("p")}>{r.price === null ? "—" : usd2(r.price)}</span></div>
-                      <div className={cx("l2")}><span>{r.specs}</span><span>/ {r.unit}</span>{r.companyDefault && <span className={cx("pstatus", "pstatus--accepted")}>Default</span>}</div>
+                      <div className={cx("l2")}><span>{r.specs}</span><span>/ {r.unit}</span><Standing row={r} /></div>
                       {isOpen && (
                         <div className={cx("more")}>
                           {r.labor !== null && <div className={cx("kv")}><span>Labor</span><b>{usd2(r.labor)} / {r.unit}</b></div>}
@@ -232,7 +232,7 @@ function PriceBook({ data, rows, canEdit, sheet, setSheet }: { data: InventoryPa
                           <td className="pt-mono">{r.unit}</td>
                           <td className="num"><span className="pt-money">{r.price === null ? "—" : usd2(r.price)}</span></td>
                           {trade !== "hvac" && <td className="num"><span className="pt-money">{r.labor === null ? "—" : usd2(r.labor)}</span></td>}
-                          <td className="c">{r.companyDefault ? <span className="pstatus pstatus--accepted">Company</span> : <span className="pstatus">{r.kind === "hvac-rate" ? "typical" : "catalog"}</span>}</td>
+                          <td className="c"><Standing row={r} /></td>
                           {canEdit && <td className="num"><button type="button" className="pt-open" onClick={(e) => { e.stopPropagation(); openRow(r); }} aria-label={`Edit ${r.name}`} title="Edit"><Pencil className="ic" aria-hidden="true" /></button></td>}
                         </tr>
                       );
@@ -249,6 +249,12 @@ function PriceBook({ data, rows, canEdit, sheet, setSheet }: { data: InventoryPa
       {sheet && <EditSheet state={sheet} book={book} rows={rows} onClose={() => setSheet(null)} />}
     </section>
   );
+}
+
+/** The row's standing chip — the same word in the desk table and the phone list (lib/priceBook rowStanding). */
+function Standing({ row }: { row: BookRow }) {
+  const s = rowStanding(row);
+  return <span className={s.own ? "pstatus pstatus--accepted" : "pstatus"}>{s.label}</span>;
 }
 
 function GroupRows({ label, count, cols, children }: { label: string; count: number; cols: number; children: ReactNode }) {

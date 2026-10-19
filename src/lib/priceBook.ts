@@ -51,6 +51,14 @@ export type BookRow = {
 
 export type BookGroup = { label: string; rows: BookRow[] };
 
+/**
+ * The row's standing, one word for every build of the page (2026-10-19 — the phone list said "Default" for the row
+ * the desk table called "Company"): the company's own figure, else where the figure comes from.
+ */
+export function rowStanding(r: Pick<BookRow, "companyDefault" | "kind">): { label: string; own: boolean } {
+  return r.companyDefault ? { label: "Company", own: true } : { label: r.kind === "hvac-rate" ? "typical" : "catalog", own: false };
+}
+
 /* ── FENCE ─────────────────────────────────────────────────────────── */
 
 export const FENCE_TYPE_IDS = FENCE_TYPES.map((t) => t.id) as FenceTypeId[];
