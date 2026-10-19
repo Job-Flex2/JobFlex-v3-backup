@@ -48,11 +48,14 @@ export default function TermsPage() {
         records before closing your account.
       </p>
       <p>
-        You can request a full refund within 14 days of your first subscription charge. Otherwise,
-        charges are non-refundable except as required by law or expressly offered by us. Mandatory
-        cancellation, refund, and renewal-notice rights remain in effect. We will give at least 30
-        days&apos; notice of a subscription price increase before it applies to your next renewal and
-        obtain additional agreement where required by law.
+        JobFlex is a subscription, and charges are non-refundable. You can cancel at any time, and
+        cancellation stops the next charge. Your trial, and then each billing period, is your time to
+        cancel before the next charge: a charge made because the subscription was not canceled
+        beforehand is not refunded, in whole or in part, and unused time is not credited. The only
+        exceptions are where the law requires a refund or where we expressly offer one in writing.
+        Mandatory cancellation, refund, and renewal-notice rights remain in effect. We will give at
+        least 30 days&apos; notice of a subscription price increase before it applies to your next
+        renewal and obtain additional agreement where required by law.
       </p>
       <h2>3. Contractor payments and providers</h2>
       <p>
