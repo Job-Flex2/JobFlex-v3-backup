@@ -2421,7 +2421,10 @@
   flex-shrink: 0;
   width: var(--pdf-w, 816px);
   max-width: 100%;
-  padding: 56px 60px;
+  /* The sheet's margin, 0.6in — the same edge the file has (MARGIN_IN in
+     bp-pdf-plan.ts). On paper the sides stay here and the top and bottom
+     move into the table bands' cells (print layer). */
+  padding: 0.6in;
   background: #ffffff;
   border: var(--border);
   box-shadow: var(--mb-lift-sheet);
@@ -2477,6 +2480,7 @@
 
 :global(.jf-blueprint) .pdfHeadRef {
   text-align: right;
+  text-transform: uppercase;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
@@ -2702,17 +2706,87 @@
   white-space: pre-wrap;
 }
 
-/* Name · basis · amount. The middle column exists because "25%"
-   and "$4,000.00" answer different questions, and a schedule that
-   prints only the money hides the rule the money came from. */
+/* THE PRICE TABLE — item | quantity × unit price | amount. Fixed
+   number columns so every amount on the sheet shares one right
+   edge (the totals and the payment schedule use the same last
+   column), and a long item name wraps inside its own column
+   instead of pushing the price. The file draws the same table in
+   points (bp-pdf-file.tsx); here the columns are shares of the
+   sheet, so a phone-width preview keeps a column for the name. */
+:global(.jf-blueprint) .pdfLine,
 :global(.jf-blueprint) .pdfPayRow {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 16px;
-  align-items: baseline;
-  padding: 9px 0;
+  grid-template-columns: minmax(0, 1fr) 26% 16%;
+  align-items: start;
+  padding: 11px 0;
   border-top: 1.5px solid var(--mb-rule);
   break-inside: avoid;
+}
+
+:global(.jf-blueprint) .pdfPayRow {
+  grid-template-columns: minmax(0, 1fr) 22% 16%;
+}
+
+:global(.jf-blueprint) .pdfLine > :first-child,
+:global(.jf-blueprint) .pdfPayRow > :first-child {
+  min-width: 0;
+  padding-right: 18px;
+  overflow-wrap: anywhere;
+}
+
+:global(.jf-blueprint) .pdfLine > :nth-child(2),
+:global(.jf-blueprint) .pdfPayRow > :nth-child(2) {
+  padding-right: 16px;
+  text-align: right;
+}
+
+:global(.jf-blueprint) .pdfLine > :last-child,
+:global(.jf-blueprint) .pdfPayRow > :last-child {
+  text-align: right;
+}
+
+/* The column heads: the mono caption register, one hairline under. */
+:global(.jf-blueprint) .pdfLineHead {
+  padding: 0 0 8px;
+  border-top: none;
+  border-bottom: 1.5px solid var(--mb-line);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+:global(.jf-blueprint) .pdfLineHead + .pdfLine,
+:global(.jf-blueprint) .pdfLineHead + .pdfPayRow {
+  border-top: none;
+}
+
+:global(.jf-blueprint) .pdfLineQty {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+:global(.jf-blueprint) .pdfLineAmt {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The totals sit under the amount column, not across the sheet. */
+:global(.jf-blueprint) .pdfSums {
+  width: min(340px, 100%);
+  margin-left: auto;
+}
+
+:global(.jf-blueprint) .pdfSums .sumValue {
+  font-family: inherit;
+  font-size: 12.5px;
 }
 
 :global(.jf-blueprint) .pdfPayShare {
@@ -3208,7 +3282,9 @@
   }
 
   /* The card stops being a card: no frame, no shadow, no padding.
-     The @page margin is the sheet's margin now. */
+     The sheet's margin is the sheet's own (below) — the @page margin
+     is 0, so the browser has no margin to print its header and footer
+     in (bp-pdf.tsx). */
   :global(.jf-blueprint) .card:has(.pdfBlock) {
     border: none !important;
     box-shadow: none !important;
@@ -3284,9 +3360,21 @@
   :global(.jf-blueprint) .pdfSheet {
     width: auto !important;
     max-width: none !important;
-    padding: 0 !important;
+    padding: 0 0.6in !important;
     border: none !important;
     box-shadow: none !important;
+  }
+
+  /* THE TOP AND BOTTOM MARGIN OF EVERY PAGE. With `@page { margin: 0 }`
+     the paper has no margin of its own, and padding on the sheet would
+     reach page one's top and the last page's foot only. The <thead> and
+     <tfoot> repeat on every page, so their cells carry it — which is why
+     both groups are rendered even with their band switched off. */
+  :global(.jf-blueprint) .pdfPaged > thead > tr > td {
+    padding-top: 0.6in !important;
+  }
+  :global(.jf-blueprint) .pdfPaged > tfoot > tr > td {
+    padding-bottom: 0.6in !important;
   }
 
   /* THE TRAP THIS AVOIDS: a `transform` on any ancestor makes that
@@ -3339,6 +3427,22 @@
     break-after: avoid;
   }
 
+  /* The clearance under the letterhead belongs to the BAND, which repeats:
+     a section opening page two otherwise sits on the rule, because the
+     fragmenter drops the margin above whatever starts a page. */
+  :global(.jf-blueprint) .pdfRunHead {
+    margin-bottom: 22px;
+  }
+
+  /* The support button is fixed to the viewport, so paper would carry it
+     at the foot of every page. */
+  :global(.jfsup-fab),
+  :global(.jfsup-dock),
+  :global(.jfsup-pop),
+  :global(.jfsup-scrim) {
+    display: none !important;
+  }
+
   /* ── THE PAGINATION RULE, IN FULL ────────────────────────────
      A SECTION IS THE ATOMIC UNIT. If the next section does not fit
      in what is left of the page, the WHOLE section moves to the
@@ -3360,11 +3464,20 @@
     break-inside: avoid !important;
   }
 
+  /* …EXCEPT the sections that are tables or prose (FLOWING in bp-pdf.tsx).
+     Moved whole, a twelve-line price table left two thirds of page one
+     blank above it — measured. They break between rows and lines; the rules
+     below keep every row whole and every heading with what follows it. */
+  :global(.jf-blueprint) .pdfSection.pdfSectionFlow {
+    break-inside: auto !important;
+  }
+
   /* Rows are the fallback break point INSIDE a section too long to
      hold together — the only breaks that happen inside a section,
      and never mid-row, which would put a line item's name on one
      page and its price on the next. */
   :global(.jf-blueprint) .printRow,
+  :global(.jf-blueprint) .pdfLine,
   :global(.jf-blueprint) .sumRow,
   :global(.jf-blueprint) .pdfPayRow,
   :global(.jf-blueprint) .pdfFileRow,
@@ -3375,8 +3488,10 @@
   }
 
   /* An orphaned heading at the foot of a page is the one break the
-     section rule cannot catch on its own. */
-  :global(.jf-blueprint) .pdfSecHead {
+     section rule cannot catch on its own — nor are a table's column
+     heads left without a row under them. */
+  :global(.jf-blueprint) .pdfSecHead,
+  :global(.jf-blueprint) .pdfLineHead {
     break-after: avoid;
   }
 

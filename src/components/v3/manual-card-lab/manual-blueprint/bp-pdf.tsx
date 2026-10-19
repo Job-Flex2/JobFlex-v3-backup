@@ -8,15 +8,13 @@
 // repeats, a footer that identifies the sheet if a page is separated from the
 // rest, and an acceptance block at the end.
 //
-// ── WHY PRINT CSS AND NOT A PDF LIBRARY ──────────────────────
-// The file the client receives is produced by the browser's own print engine
-// (Save as PDF). Three things follow from that, and all three are the reason:
-// the text stays VECTOR and selectable (a canvas rasteriser produces a picture
-// of a proposal, which cannot be searched, copied or read by a screen reader);
-// the document is styled in the same token system as every other blueprint
-// page, so a theme change reaches the paper for free; and there is no second
-// layout language to keep in sync with this one. The whole document below is
-// the same HTML in both media — only the page furniture changes behaviour.
+// ── THE PREVIEW IS HTML, THE FILE IS A FILE ──────────────────
+// The sheet below is the on-screen preview (and what Ctrl+P prints). Download
+// PDF does not print it: it builds a real .pdf from the same props with
+// react-pdf (bp-pdf-file.tsx), because printing lets the browser add its own
+// date, tab title, URL and "2/7" to the paper — on an iPhone with no way to
+// turn them off. What the two share — which sections, in which order, under
+// which numbers, the one date they carry — comes from bp-pdf-plan.ts.
 //
 // ── THE STRUCTURE, AND WHY IT IS IN THIS ORDER ───────────────
 // A proposal is read in a fixed sequence by someone deciding whether to sign:
@@ -50,83 +48,40 @@
 //   keeps the ≈ because the measurement is taken from the PREVIEW, which the
 //   shell's fluid-scale zoom lays out at a fraction of 1 while the paper is
 //   always at zoom 1 — a line that wraps on screen can hold on the sheet.
-// · "Page 1 of 3" is not achievable in print CSS — `counter(page)` only works
-//   inside @page margin boxes, which Chrome does not implement. The footer
-//   therefore carries the identifiers that DO survive a separated page (the
-//   reference number, the client and the expiry) and the card says plainly that
-//   page numbers come from the browser's own header/footer option.
+// · "Page 1 of 3" exists only in the file. The preview's footer carries the
+//   identifiers that survive a separated page (the reference, the client and
+//   the expiry); the file adds the page number in its own footer.
+// · The sheet carries ONE date, the expiry. The day it was drawn up is the
+//   contractor's record, not a term of the offer.
 
 import { useEffect, useRef, useState } from "react";
-import type {
-  Installment,
-  ProposalOptions,
-  StagedFile,
-  Totals,
-} from "../manual-focus/manual-focus-types";
+import { toast } from "@/components/ui/Toast";
+import { fileSize, installmentValue, money, pct } from "../manual-focus/manual-focus-math";
+// Who is sending this, under what reference and until when are facts about a
+// REAL org and a REAL row, so they arrive as `doc.identity`, read on the
+// server. See manual-blueprint-bridge.ts.
 import {
-  UNIT_LABEL,
-  fileSize,
-  installmentValue,
-  money,
-  pct,
-  qty,
-} from "../manual-focus/manual-focus-math";
-// The five fixtures that used to sit here — ORG_NAME, ORG_LINE, PROPOSAL_NO,
-// PROPOSAL_DATE, VALID_DAYS — are gone. Who is sending this, under what
-// reference and until when are facts about a REAL org and a REAL row, so they
-// arrive as `doc.identity`, read on the server. See manual-blueprint-bridge.ts.
-import type { SheetIdentity } from "./manual-blueprint-bridge";
+  FLOWING_SECTIONS,
+  MARGIN_IN,
+  PAPER,
+  fileStem,
+  sectionPlan,
+  sheetDate,
+  unitText,
+  type DocProps,
+  type SectionKey,
+  type PaperSize,
+  type PdfSetup,
+} from "./bp-pdf-plan";
+import type { PdfPalette } from "./bp-pdf-file";
 import styles from "./manual-blueprint.module.css";
 import { Btn, Segmented, Toggle, ToggleCell, cx } from "./bp-ui";
 import { useHandheld } from "./use-handheld";
 
-/* ============================================================
-   SETUP — the four decisions that belong to the DOCUMENT
-   ============================================================ */
+export { DEFAULT_PDF_SETUP, type PaperSize, type PdfSetup } from "./bp-pdf-plan";
 
-export type PaperSize = "letter" | "a4";
-
-/**
- * Deliberately NOT merged into `ProposalOptions`.
- *
- * That type is shared with four other card-lab variants and describes what the
- * client's copy SAYS. These four describe how the paper is built, which is a
- * different question with a different owner — and this variant does not get to
- * widen a shared type on the way to answering it.
- */
-export type PdfSetup = {
-  paper: PaperSize;
-  /** A first page carrying the title, the client and the total, and nothing
-   *  else. Off by default: it is a page of paper that says what page two
-   *  already says, and it earns its place only on large jobs. */
-  cover: boolean;
-  /** The org band at the head of every page. */
-  letterhead: boolean;
-  /** The identifying strip at the foot of every page. */
-  footer: boolean;
-};
-
-export const DEFAULT_PDF_SETUP: PdfSetup = {
-  paper: "letter",
-  cover: false,
-  letterhead: true,
-  footer: true,
-};
-
-/** Trim sizes in CSS px (96/in), and the page box that prints inside them. */
-const PAPER: Record<PaperSize, { label: string; css: string; w: number; h: number }> = {
-  letter: { label: "US Letter", css: "Letter", w: 816, h: 1056 },
-  a4: { label: "A4", css: "A4", w: 794, h: 1123 },
-};
-
-/** CSS px per millimetre at 96/in — the document is measured in px and the
- *  page box is specified in mm, and one of the two has to convert. */
-const MM = 96 / 25.4;
-
-/** THE PAGE BOX, IN ONE PLACE — the paper's own white edge, written into the
- *  @page rule below and used by the length estimate, so the estimate cannot
- *  drift from the paper it is estimating. */
-const TRIM_MM = { top: 20, side: 16, bottom: 18 };
+/** CSS px per inch — the preview is laid out in px, the margin is set in inches. */
+const PX_IN = 96;
 
 /** The two running bands cost their height on EVERY sheet, not once: they are
  *  a repeating <thead>/<tfoot> (see the note on the document), so the usable
@@ -134,26 +89,6 @@ const TRIM_MM = { top: 20, side: 16, bottom: 18 };
  *  Measured from the rendered bands at true trim width. */
 const RUNHEAD_H = 48;
 const RUNFOOT_H = 53;
-
-type DocProps = {
-  /** Sender, reference, date and expiry — see SheetIdentity. */
-  identity: SheetIdentity;
-  title: string;
-  clientName: string;
-  email: string;
-  phone: string;
-  address: string;
-  projectName: string;
-  description: string;
-  scopeOfWork: string;
-  terms: string;
-  taxPct: number;
-  options: ProposalOptions;
-  totals: Totals;
-  installments: Installment[];
-  files: StagedFile[];
-  setup: PdfSetup;
-};
 
 /* ============================================================
    11 — THE CARD FACE
@@ -217,12 +152,12 @@ export function PdfBlock({
       // one place the rhythm is set.
       const next = Array.from(el.children).map((node) => {
         const n = node as HTMLElement;
-        return { h: n.offsetHeight, mt: parseFloat(getComputedStyle(n).marginTop) || 0 };
+        return { h: n.offsetHeight, mt: parseFloat(getComputedStyle(n).marginTop) || 0, flow: n.dataset.flow === "" };
       });
       // Read OUTSIDE the updater: a DOM read inside one runs twice under
       // StrictMode.
       setBlocks((prev) =>
-        prev.length === next.length && prev.every((v, i) => v.h === next[i].h && v.mt === next[i].mt)
+        prev.length === next.length && prev.every((v, i) => v.h === next[i].h && v.mt === next[i].mt && v.flow === next[i].flow)
           ? prev
           : next,
       );
@@ -273,7 +208,7 @@ export function PdfBlock({
   const paper = PAPER[setup.paper];
   const usable =
     paper.h -
-    (TRIM_MM.top + TRIM_MM.bottom) * MM -
+    2 * MARGIN_IN * PX_IN -
     (setup.letterhead ? RUNHEAD_H : 0) -
     (setup.footer ? RUNFOOT_H : 0);
   const bodyPages = fitPages(blocks, usable);
@@ -284,30 +219,34 @@ export function PdfBlock({
   const stepZoom = (dir: 1 | -1) =>
     setZoomAt((at) => Math.min(ZOOM_STOPS.length - 1, Math.max(0, at + dir)));
 
-  /** Chrome names the saved file from `document.title`. Setting it for the
-   *  duration of the print is the difference between the client receiving
-   *  "MC-2041 Roof replacement.pdf" and "JobFlex · Manual proposal.pdf". */
-  const download = () => {
-    const prev = document.title;
-    const stem = [doc.identity.ref, doc.title.trim() || "Proposal"].join(" ");
-    document.title = stem.replace(/[\\/:*?"<>|]+/g, "-");
-    const restore = () => {
-      document.title = prev;
-      window.removeEventListener("afterprint", restore);
-    };
-    window.addEventListener("afterprint", restore);
-    window.print();
+  /** DOWNLOAD PDF SAVES A FILE. It used to be window.print(), and the browser
+   *  printed its own date, tab title, URL and page count on the client's copy
+   *  (see the note at the head of bp-pdf-file.tsx). The builder and its fonts
+   *  load on the first press only. */
+  const [making, setMaking] = useState(false);
+  const download = async () => {
+    if (making) return;
+    setMaking(true);
+    try {
+      const { buildProposalFile } = await import("./bp-pdf-file");
+      const blob = await buildProposalFile({ ...doc, setup }, readPalette(flowRef.current), window.location.origin);
+      saveBlob(blob, `${fileStem(doc)}.pdf`);
+    } catch (err) {
+      toast.error("Couldn't make the PDF", err instanceof Error ? err.message : "Try again in a moment.");
+    } finally {
+      setMaking(false);
+    }
   };
 
   return (
     <div className={styles.pdfBlock}>
-      {/* @page cannot be scoped to a class, so the one rule that has to follow
-          the paper control is written as a real stylesheet. Keyed on the whole
-          page box — paper AND the two bands, since each band widens a margin —
-          so React replaces the rule rather than appending a second. */}
-      <style key={setup.paper}>
-        {`@page { size: ${paper.css} portrait; margin: ${TRIM_MM.top}mm ${TRIM_MM.side}mm ${TRIM_MM.bottom}mm; }`}
-      </style>
+      {/* For Ctrl+P, which still prints the preview. @page cannot be scoped to
+          a class, so the rule that follows the paper control is a real
+          stylesheet, keyed so React replaces it rather than appending a second.
+          The margin is 0: the browser prints its header and footer INSIDE the
+          page margin, so with none it has nowhere to put them (Chrome, Edge).
+          The sheet's own padding and the table bands' cells are the margin. */}
+      <style key={setup.paper}>{`@page { size: ${paper.css} portrait; margin: 0; }`}</style>
 
       {/* ── THE CARD'S CHROME, IN TWO BUILDS ──────────────────────────
           On the desk it is a four-cell spec strip, a labelled segmented
@@ -418,8 +357,8 @@ export function PdfBlock({
         <Btn icon="file" onClick={() => setOpen(true)}>
           Preview the sheet
         </Btn>
-        <Btn tone="primary" icon="download" onClick={download}>
-          Download PDF
+        <Btn tone="primary" icon="download" onClick={download} disabled={making}>
+          {making ? "Making the PDF…" : "Download PDF"}
         </Btn>
       </div>
 
@@ -511,7 +450,7 @@ export function PdfBlock({
 
 /** One block of the flow — the document head, then one per section — with the
  *  space above it kept apart from its own height. */
-type Block = { h: number; mt: number };
+type Block = { h: number; mt: number; flow: boolean };
 
 /**
  * The page count, under the rule the printed sheet actually follows.
@@ -523,6 +462,9 @@ type Block = { h: number; mt: number };
  *
  *   · a block that does not fit in what is left of the page moves whole;
  *   · a block taller than a whole page is the exception, and flows;
+ *   · a FLOWING section (`data-flow`: the price table, the payment schedule,
+ *     the prose sections) starts where the last one ended and breaks at a row
+ *     or a line;
  *   · a block that opens a page loses the margin above it, as the fragmenter
  *     truncates it — so it is charged for its height and nothing else.
  */
@@ -531,6 +473,13 @@ function fitPages(blocks: Block[], usable: number): number {
   let pages = 1;
   let used = 0;
   for (const b of blocks) {
+    if (b.flow) {
+      const total = used + (used > 0 ? b.mt + b.h : b.h);
+      const more = Math.max(0, Math.ceil(total / usable) - 1);
+      pages += more;
+      used = total - more * usable;
+      continue;
+    }
     if (used > 0 && used + b.mt + b.h > usable) {
       pages += 1;
       used = 0;
@@ -548,6 +497,50 @@ function fitPages(blocks: Block[], usable: number): number {
     used = rest - (extra - 1) * usable;
   }
   return pages;
+}
+
+/** The sheet's tokens as plain opaque colours for the file: react-pdf takes no
+ *  CSS variables, and a token may be `rgba()` or `color-mix()`. A 1×1 canvas
+ *  resolves any of them, flattened onto white paper. */
+function readPalette(el: HTMLElement | null): PdfPalette {
+  const fallback: PdfPalette = { ink: "#0a0a0a", soft: "#2a2a2a", muted: "#6b6b6b", rule: "#ebebeb", line: "#e0e0e0" };
+  if (!el) return fallback;
+  const css = getComputedStyle(el);
+  const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  if (!ctx) return fallback;
+  const solid = (token: string, dflt: string) => {
+    const v = css.getPropertyValue(token).trim();
+    if (!v) return dflt;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 1, 1);
+    ctx.fillStyle = dflt;
+    ctx.fillStyle = v; // an unparseable value leaves the fallback in place
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+  };
+  return {
+    ink: solid("--ink", fallback.ink),
+    soft: solid("--ink-soft", fallback.soft),
+    muted: solid("--muted", fallback.muted),
+    rule: solid("--mb-rule", fallback.rule),
+    line: solid("--mb-line", fallback.line),
+  };
+}
+
+/** Hands the file to the browser as a download. iOS Safari opens it in its
+ *  viewer with Share / Save to Files, which is that platform's download. */
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoked late: Safari reads the URL after the click returns.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function SpecCell({ label, value }: { label: string; value: string }) {
@@ -585,6 +578,7 @@ export function PdfDocument({
   const paper = PAPER[setup.paper];
   const jobTitle = title.trim() || "Untitled proposal";
   const client = clientName.trim() || "No client yet";
+  const valid = sheetDate(identity.validUntil);
   const sections = buildSections({
     identity,
     title,
@@ -627,12 +621,16 @@ export function PdfDocument({
           own space, and the section-level `break-inside: avoid` below keeps
           working inside the cell. That is the whole justification; the table
           carries no data and is marked `presentation` so it carries no
-          meaning either. */}
+          meaning either.
+
+          Both groups are there even with their band switched off: on paper
+          their cells carry the sheet's top and bottom margin on every page
+          (the @page margin is 0 — see the print layer). */}
       <table className={styles.pdfPaged} role="presentation">
-        {setup.letterhead ? (
-          <thead>
-            <tr>
-              <td>
+        <thead>
+          <tr>
+            <td>
+              {setup.letterhead ? (
                 <header className={styles.pdfRunHead}>
                   <div>
                     <div className={styles.pdfHeadOrg}>{identity.orgName}</div>
@@ -641,15 +639,15 @@ export function PdfDocument({
                     ) : null}
                   </div>
                   <div className={styles.pdfHeadRef}>
-                    {identity.ref}
+                    Proposal {identity.ref}
                     <br />
-                    {identity.date}
+                    Valid until {valid}
                   </div>
                 </header>
-              </td>
-            </tr>
-          </thead>
-        ) : null}
+              ) : null}
+            </td>
+          </tr>
+        </thead>
 
         <tbody>
           <tr>
@@ -673,7 +671,7 @@ export function PdfDocument({
               <span className={styles.pdfCoverTotalValue}>{money(totals.total)}</span>
             </div>
             <div className={styles.pdfCoverMeta}>
-              {identity.orgName} · {identity.date} · valid until {identity.validUntil}
+              {identity.orgName} · Valid until {valid}
             </div>
           </section>
         ) : null}
@@ -685,12 +683,16 @@ export function PdfDocument({
           <div className={styles.pdfDocHead}>
             <h2 className={styles.pdfDocTitle}>{jobTitle}</h2>
             <div className={styles.pdfDocSub}>
-              Proposal {identity.ref} · {identity.date} · valid until {identity.validUntil}
+              Proposal {identity.ref} · Valid until {valid}
             </div>
           </div>
 
           {sections.map((s, i) => (
-            <section key={s.key} className={styles.pdfSection}>
+            <section
+              key={s.key}
+              className={cx(styles.pdfSection, FLOWING_SECTIONS.has(s.key) && styles.pdfSectionFlow)}
+              data-flow={FLOWING_SECTIONS.has(s.key) ? "" : undefined}
+            >
               <div className={styles.pdfSecHead}>
                 <span className={styles.pdfSecNum}>{String(i + 1).padStart(2, "0")}</span>
                 <h3 className={styles.pdfSecTitle}>{s.title}</h3>
@@ -704,20 +706,22 @@ export function PdfDocument({
           </tr>
         </tbody>
 
-        {setup.footer ? (
-          <tfoot>
-            <tr>
-              <td>
+        <tfoot>
+          <tr>
+            <td>
+              {setup.footer ? (
                 <footer className={styles.pdfRunFoot}>
                   <span>
                     {identity.ref} · {client}
                   </span>
-                  <span>Valid until {identity.validUntil} · {identity.orgName}</span>
+                  <span>
+                    Valid until {valid} · {identity.orgName}
+                  </span>
                 </footer>
-              </td>
-            </tr>
-          </tfoot>
-        ) : null}
+              ) : null}
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </article>
   );
@@ -725,123 +729,110 @@ export function PdfDocument({
 
 /* ============================================================
    THE SECTIONS
-   Built as a list so the numbering is a consequence of what is
-   actually present. `sectionCount` is the same list, counted —
-   never a second hand-kept number.
+   Which ones, in which order, is `sectionPlan` (bp-pdf-plan.ts) —
+   the list the file is built from too, so the numbering cannot
+   differ between the preview and the PDF. This only draws them.
    ============================================================ */
 
-type Section = { key: string; title: string; body: React.ReactNode };
+type Section = { key: SectionKey; title: string; body: React.ReactNode };
 
 function sectionCount(doc: Omit<DocProps, "setup">): number {
-  return buildSections({ ...doc, setup: DEFAULT_PDF_SETUP }).length;
+  return sectionPlan(doc).length;
 }
 
 function buildSections(d: DocProps): Section[] {
-  const out: Section[] = [];
+  return sectionPlan(d).map(({ key, title }) => ({ key, title, body: sectionBody(key, d) }));
+}
 
-  out.push({
-    key: "parties",
-    title: "Prepared for",
-    body: (
-      <div className={styles.pdfMeta}>
-        <MetaPair label="Client" value={d.clientName.trim() || "—"} />
-        <MetaPair label="Job address" value={d.address.trim() || "—"} />
-        <MetaPair label="Email" value={d.email.trim() || "—"} />
-        <MetaPair label="Phone" value={d.phone.trim() || "—"} />
-        <MetaPair label="Project" value={d.projectName || "—"} />
-        <MetaPair label="Prepared by" value={d.identity.orgName} />
-      </div>
-    ),
-  });
-
-  if (d.description.trim()) {
-    out.push({
-      key: "overview",
-      title: "Project overview",
-      body: <p className={styles.pdfProse}>{d.description}</p>,
-    });
-  }
-
-  if (d.options.showScope && d.scopeOfWork.trim()) {
-    out.push({
-      key: "scope",
-      title: "Scope of work",
-      body: <p className={styles.pdfProse}>{d.scopeOfWork}</p>,
-    });
-  }
-
-  out.push({
-    key: "pricing",
-    title: "Schedule of work & pricing",
-    // The card-10 classes, deliberately. Two sets of row styles for one priced
-    // column is how the screen and the paper start disagreeing.
-    body: d.totals.printed.length === 0 ? (
-      <div className={styles.empty}>No named lines yet — nothing prints.</div>
-    ) : (
-      d.totals.printed.map((row, i) => (
-        <div key={row.id} className={cx(styles.printRow, i === 0 && styles.printFirst)}>
-          <span>
-            <span className={styles.printName}>{row.name}</span>
-            {row.description ? <span className={styles.printSub}>{row.description}</span> : null}
-            <span className={styles.printSub}>
-              {qty(row.quantity)} {UNIT_LABEL[row.unit]} · {money(row.unitPrice)} each
-            </span>
-            {!d.options.hideBreakdown ? (
-              <span className={styles.printSub}>
-                {[row.materialAmount > 0 ? `Materials ${money(row.materialAmount)}` : "", row.laborAmount > 0 ? `Labor ${money(row.laborAmount)}` : ""].filter(Boolean).join(" · ")}
-              </span>
-            ) : null}
-          </span>
-          <span className={styles.printAmt}>{money(row.amount)}</span>
+function sectionBody(key: SectionKey, d: DocProps): React.ReactNode {
+  switch (key) {
+    case "parties":
+      return (
+        <div className={styles.pdfMeta}>
+          <MetaPair label="Client" value={d.clientName.trim() || "—"} />
+          <MetaPair label="Job address" value={d.address.trim() || "—"} />
+          <MetaPair label="Email" value={d.email.trim() || "—"} />
+          <MetaPair label="Phone" value={d.phone.trim() || "—"} />
+          <MetaPair label="Project" value={d.projectName || "—"} />
+          <MetaPair label="Prepared by" value={d.identity.orgName} />
         </div>
-      ))
-    ),
-  });
-
-  out.push({
-    key: "totals",
-    title: "Totals",
-    body: (
-      <>
-        <div className={styles.sumRow}>
-          <span className={styles.sumLabel}>Subtotal</span>
-          <span className={styles.sumValue}>{money(d.totals.preTax)}</span>
-        </div>
-        {/* Printed only when it is worth something. A "Discount $0.00" row on a
-            client's copy invites the question it answers. */}
-        {d.totals.discountAmount > 0 ? (
-          <div className={styles.sumRow}>
-            <span className={styles.sumLabel}>Discount</span>
-            <span className={styles.sumValue}>−{money(d.totals.discountAmount)}</span>
-          </div>
-        ) : null}
-        <div className={styles.sumRow}>
-          <span className={styles.sumLabel}>Tax · {pct(d.taxPct)}</span>
-          <span className={styles.sumValue}>{money(d.totals.tax)}</span>
-        </div>
-        <div className={cx(styles.sumRow, styles.sumTotal)}>
-          <span className={styles.sumTotalLabel}>Total</span>
-          <span className={styles.sumTotalValue}>{money(d.totals.total)}</span>
-        </div>
-      </>
-    ),
-  });
-
-  if (d.installments.length > 0) {
-    out.push({
-      key: "pay",
-      title: "Payment schedule",
-      body: (
+      );
+    case "overview":
+      return <p className={styles.pdfProse}>{d.description}</p>;
+    case "scope":
+      return <p className={styles.pdfProse}>{d.scopeOfWork}</p>;
+    case "terms":
+      return <p className={styles.pdfProse}>{d.terms}</p>;
+    case "pricing":
+      // THREE COLUMNS — item, quantity × unit price, amount — under heads, so
+      // a figure is read by its column rather than found inside a sentence.
+      // The file draws the same table (bp-pdf-file.tsx).
+      return d.totals.printed.length === 0 ? (
+        <div className={styles.empty}>No named lines yet — nothing prints.</div>
+      ) : (
         <>
-          {d.installments.map((inst, i) => (
-            <div key={inst.id} className={cx(styles.pdfPayRow, i === 0 && styles.printFirst)}>
+          <div className={cx(styles.pdfLine, styles.pdfLineHead)}>
+            <span>Item</span>
+            <span>Qty × unit price</span>
+            <span>Amount</span>
+          </div>
+          {d.totals.printed.map((row) => (
+            <div key={row.id} className={styles.pdfLine}>
+              <span>
+                <span className={styles.printName}>{row.name}</span>
+                {row.description ? <span className={styles.printSub}>{row.description}</span> : null}
+                {!d.options.hideBreakdown ? (
+                  <span className={styles.printSub}>
+                    {[row.materialAmount > 0 ? `Materials ${money(row.materialAmount)}` : "", row.laborAmount > 0 ? `Labor ${money(row.laborAmount)}` : ""].filter(Boolean).join(" · ")}
+                  </span>
+                ) : null}
+              </span>
+              <span className={styles.pdfLineQty}>{unitText(row)}</span>
+              <span className={styles.pdfLineAmt}>{money(row.amount)}</span>
+            </div>
+          ))}
+        </>
+      );
+    case "totals":
+      return (
+        <div className={styles.pdfSums}>
+          <div className={styles.sumRow}>
+            <span className={styles.sumLabel}>Subtotal</span>
+            <span className={styles.sumValue}>{money(d.totals.preTax)}</span>
+          </div>
+          {/* Printed only when it is worth something. A "Discount $0.00" row on a
+              client's copy invites the question it answers. */}
+          {d.totals.discountAmount > 0 ? (
+            <div className={styles.sumRow}>
+              <span className={styles.sumLabel}>Discount</span>
+              <span className={styles.sumValue}>−{money(d.totals.discountAmount)}</span>
+            </div>
+          ) : null}
+          <div className={styles.sumRow}>
+            <span className={styles.sumLabel}>Tax · {pct(d.taxPct)}</span>
+            <span className={styles.sumValue}>{money(d.totals.tax)}</span>
+          </div>
+          <div className={cx(styles.sumRow, styles.sumTotal)}>
+            <span className={styles.sumTotalLabel}>Total</span>
+            <span className={styles.sumTotalValue}>{money(d.totals.total)}</span>
+          </div>
+        </div>
+      );
+    case "pay":
+      return (
+        <>
+          <div className={cx(styles.pdfPayRow, styles.pdfLineHead)}>
+            <span>Payment</span>
+            <span>Basis</span>
+            <span>Amount</span>
+          </div>
+          {d.installments.map((inst) => (
+            <div key={inst.id} className={styles.pdfPayRow}>
               <span className={styles.printName}>{inst.label.trim() || "Unnamed payment"}</span>
               <span className={styles.pdfPayShare}>
                 {inst.isPercent ? `${inst.amount}% of total` : "Fixed amount"}
               </span>
-              <span className={styles.printAmt}>
-                {money(installmentValue(inst, d.totals.total))}
-              </span>
+              <span className={styles.pdfLineAmt}>{money(installmentValue(inst, d.totals.total))}</span>
             </div>
           ))}
           <p className={styles.pdfFine}>
@@ -849,28 +840,14 @@ function buildSections(d: DocProps): Section[] {
             schedule is due on completion.
           </p>
         </>
-      ),
-    });
-  }
-
-  if (d.terms.trim()) {
-    out.push({
-      key: "terms",
-      title: "Terms & conditions",
-      body: <p className={styles.pdfProse}>{d.terms}</p>,
-    });
-  }
-
-  if (d.options.showSignature) {
-    out.push({
-      key: "accept",
-      title: "Acceptance",
-      body: (
+      );
+    case "accept":
+      return (
         <>
           <p className={styles.pdfProse}>
             Signing below accepts this proposal, its scope, its price of{" "}
             {money(d.totals.total)} and the terms above. This offer stands until{" "}
-            {d.identity.validUntil}.
+            {sheetDate(d.identity.validUntil)}.
           </p>
           <div className={styles.signRow}>
             <div className={styles.signLine}>Client signature</div>
@@ -881,20 +858,14 @@ function buildSections(d: DocProps): Section[] {
             <div className={styles.signLine}>Date</div>
           </div>
         </>
-      ),
-    });
-  }
-
-  if (d.files.length > 0) {
-    out.push({
-      key: "files",
-      title: "Attachments",
-      body: (
+      );
+    case "files":
+      return (
         <>
           {d.files.map((f, i) => (
             <div key={f.id} className={cx(styles.pdfFileRow, i === 0 && styles.printFirst)}>
               <span className={styles.printName}>{f.name}</span>
-              <span className={styles.printAmt}>{fileSize(f.size)}</span>
+              <span className={styles.pdfLineAmt}>{fileSize(f.size)}</span>
             </div>
           ))}
           {/* The list is a manifest, not the files. Saying so on the paper is
@@ -904,11 +875,8 @@ function buildSections(d: DocProps): Section[] {
             Listed for reference — the files themselves are sent alongside this document.
           </p>
         </>
-      ),
-    });
+      );
   }
-
-  return out;
 }
 
 function MetaPair({ label, value }: { label: string; value: string }) {
