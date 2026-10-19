@@ -1,0 +1,8 @@
+# preview stills and render scratch (preview-demo.js / render-demo.js); the per-second frames of the
+# demo videos (16x9/, 4x5/) are kept
+frames/*
+!frames/16x9/
+!frames/4x5/
+# the recording's raw frames + tapes (record.js) and the lossless masters (render-demo.js): large, local only
+rec/
+out/
