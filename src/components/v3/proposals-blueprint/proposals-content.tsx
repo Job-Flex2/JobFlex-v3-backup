@@ -90,10 +90,11 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
       {/* KPI STRIP */}
       <div className="pmast" id="pMast"></div>
 
-      {/* TYPE (2026-10-17): the families of work the book holds — painted by proposals-behavior renderKinds */}
-      <div className="pkinds" id="pKinds" role="group" aria-label="Type of work" hidden></div>
-
-      {/* TABS */}
+      {/* TABS — and, at the row's right end, TYPE (2026-10-17; a dropdown since
+          2026-10-18): the families of work the book holds, each in its
+          estimating tool's colour, with counts. It narrows every tab, chip and
+          figure, so it sits on the tabs' row. Painted by proposals-behavior
+          renderKinds; hidden while the book holds one family. */}
       <div className="ptabs" id="pTabs">
         <button className="ptab active" type="button" data-tab="all">
           All<span className="ptab-count" data-count="all">0</span>
@@ -104,6 +105,22 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
         <button className="ptab" type="button" data-tab="completed">
           Completed<span className="ptab-count" data-count="completed">0</span>
         </button>
+        <div className="dd pkdd" id="pKinds" hidden>
+          <button
+            className="dd-btn"
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-controls="pKindsMenu"
+          >
+            <span className="pkdd-key">Type</span>
+            <span className="pkdd-face"></span>
+            <svg className="ic">
+              <use href="#i-chev" />
+            </svg>
+          </button>
+          <div className="dd-menu" id="pKindsMenu" role="listbox" aria-label="Type of work"></div>
+        </div>
       </div>
 
       {/* TAB: ALL */}

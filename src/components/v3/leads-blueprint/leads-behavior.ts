@@ -264,11 +264,11 @@ export function initLeadsContent(
   function srcLabel(v: string | null) {
     return leadSourceOf(v).label;
   }
-  /** The source as a badge: JobFlex's own monogram plate, or the source's dot and name. */
+  /** The source as a stamp: JobFlex's in the blueprint tone, or the source's square and name. */
   function srcBadge(v: string | null) {
     const s = leadSourceOf(v);
     return s.side === "jobflex"
-      ? '<span class="lsrc-b lsrc-b--jobflex" title="Sent to you by JobFlex"><b>J</b>JobFlex</span>'
+      ? '<span class="lsrc-b lsrc-b--jobflex" title="Sent to you by JobFlex">JobFlex</span>'
       : '<span class="lsrc-b" title="' + esc(s.label) + '"><i style="--t:' + s.tone + '"></i>' + esc(s.short) + "</span>";
   }
   function initials(n: string) {
@@ -432,7 +432,7 @@ export function initLeadsContent(
     });
     root.querySelectorAll<HTMLButtonElement>("#lOrigin [data-side]").forEach(function (b) {
       const on = (b.dataset.side ?? "") === lstate.side;
-      b.classList.toggle("on", on);
+      b.classList.toggle("active", on);
       b.setAttribute("aria-pressed", String(on));
     });
     const row = $("#lSrcs");
@@ -454,12 +454,12 @@ export function initLeadsContent(
     }
     const counts = ownSourceCounts(pool);
     row.innerHTML = counts.length
-      ? '<span class="lsrcs-lbl">Your own leads by source</span>' +
+      ? '<span class="lsrcs-lbl">By source</span>' +
         counts
           .map(function (c) {
             return (
-              '<button class="lsrc-chip' +
-              (lstate.source === c.key ? " on" : "") +
+              '<button class="pchip lsrc-chip' +
+              (lstate.source === c.key ? " active" : "") +
               '" type="button" data-osrc="' +
               c.key +
               '" aria-pressed="' +
@@ -468,7 +468,7 @@ export function initLeadsContent(
               c.tone +
               '"></i>' +
               esc(c.label) +
-              "<b>" +
+              " <b>" +
               c.count +
               "</b></button>"
             );

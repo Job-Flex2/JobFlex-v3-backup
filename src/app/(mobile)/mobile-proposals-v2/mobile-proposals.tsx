@@ -355,6 +355,11 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   const filterRef = useRef<HTMLDivElement>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   useMenuPlacement(filterOpen, filterRef, filterMenuRef);
+  /* The Type menu (2026-10-18): the same .dd, on the filter row beside Status. */
+  const [typeOpen, setTypeOpen] = useState(false);
+  const typeRef = useRef<HTMLDivElement>(null);
+  const typeMenuRef = useRef<HTMLDivElement>(null);
+  useMenuPlacement(typeOpen, typeRef, typeMenuRef);
 
   /* ---------- the book, when nobody handed one down -------------------
      Only the shell-mounted copy gets here (rows === undefined). The rows
@@ -400,6 +405,21 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [filterOpen]);
+  useEffect(() => {
+    if (!typeOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!typeRef.current?.contains(e.target as Node)) setTypeOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTypeOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [typeOpen]);
 
   /* ---------- viewport height + effective-width classes --------------
      Mandatory rule: viewport heights only via var(--app-h). A phone's URL
@@ -964,20 +984,6 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             </div>
           </div>
 
-          {/* TYPE (2026-10-17): deck · roof · fence · HVAC · remodel · other — drawn when there is a choice */}
-          {kindChips.length > 1 ? (
-            <div className={styles.pkinds} role="group" aria-label="Type of work">
-              <button type="button" className={`${styles.pkchip} ${kindNow === "ALL" ? styles.active : ""}`} aria-pressed={kindNow === "ALL"} onClick={() => pickKind("ALL")}>
-                All types <b>{data.length}</b>
-              </button>
-              {kindChips.map((f) => (
-                <button key={f.key} type="button" data-fam={f.key} className={`${styles.pkchip} ${kindNow === f.key ? styles.active : ""}`} aria-pressed={kindNow === f.key} onClick={() => pickKind(f.key)}>
-                  <i className={styles.pkSq} aria-hidden="true" />{f.label} <b>{f.count}</b>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
           {/* TABS */}
           <div className={styles.ptabs}>
             <span className={styles.ptabInd} style={{ transform: `translateX(${tabIndex * 100}%)` }} />
@@ -990,31 +996,71 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             ))}
           </div>
 
-          {/* ============ TAB: ALL ============ */}
-          {tab === "all" && (
-            <div className={`${styles.dd} ${filterOpen ? styles.open : ""}`} ref={filterRef}>
-              <button className={styles.ddBtn} type="button" aria-haspopup="listbox"
-                aria-expanded={filterOpen} onClick={() => setFilterOpen((v) => !v)}>
-                <Icon id="i-filter" />
-                Filter
-                <span className={styles.ddValue} data-f={filter}>
-                  {activeFilterLabel} · {chipCounts[filter] ?? 0}
-                </span>
-                <Icon id="i-chev" className={`${styles.ic} ${styles.ddCaret}`} />
-              </button>
-              <div className={styles.ddMenu} role="listbox" ref={filterMenuRef}>
-                {FILTERS.map((f) => (
-                  <button key={f.key} className={`${styles.ddItem} ${filter === f.key ? styles.active : ""}`}
-                    type="button" role="option" aria-selected={filter === f.key}
-                    onClick={() => { setFilter(f.key); setPageAll(1); setFilterOpen(false); }}>
-                    {f.label}
-                    <span className={styles.ddCount}>{chipCounts[f.key] ?? 0}</span>
-                    {filter === f.key ? <Icon id="i-check" /> : null}
+          {/* FILTERS (2026-10-18) — one row under the tabs: Status (the All tab's
+              stages) and Type (deck · roof · fence · HVAC · remodel · other, each
+              in its estimating tool's colour), two .dd faces side by side whose
+              menus open across the whole row. Type narrows every tab, so on
+              Accepted and Completed it holds the row alone. */}
+          {tab === "all" || kindChips.length > 1 ? (
+            <div className={`${styles.fbar} ${tab === "all" && kindChips.length > 1 ? styles.fbarDuo : ""}`}>
+              {tab === "all" ? (
+                <div className={`${styles.dd} ${filterOpen ? styles.open : ""}`} ref={filterRef}>
+                  <button className={`${styles.ddBtn} ${styles.ddDuo}`} type="button" aria-haspopup="listbox"
+                    aria-expanded={filterOpen} onClick={() => { setTypeOpen(false); setFilterOpen((v) => !v); }}>
+                    <span className={styles.ddTxt}>
+                      <span className={styles.ddKey}>Status</span>
+                      <span className={styles.ddValue} data-f={filter}>
+                        {activeFilterLabel} · {chipCounts[filter] ?? 0}
+                      </span>
+                    </span>
+                    <Icon id="i-chev" className={`${styles.ic} ${styles.ddCaret}`} />
                   </button>
-                ))}
-              </div>
+                  <div className={styles.ddMenu} role="listbox" aria-label="Status" ref={filterMenuRef}>
+                    {FILTERS.map((f) => (
+                      <button key={f.key} className={`${styles.ddItem} ${filter === f.key ? styles.active : ""}`}
+                        type="button" role="option" aria-selected={filter === f.key}
+                        onClick={() => { setFilter(f.key); setPageAll(1); setFilterOpen(false); }}>
+                        {f.label}
+                        <span className={styles.ddCount}>{chipCounts[f.key] ?? 0}</span>
+                        {filter === f.key ? <Icon id="i-check" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {kindChips.length > 1 ? (
+                <div className={`${styles.dd} ${typeOpen ? styles.open : ""}`} ref={typeRef}>
+                  <button className={`${styles.ddBtn} ${styles.ddDuo}`} type="button" aria-haspopup="listbox"
+                    aria-expanded={typeOpen} onClick={() => { setFilterOpen(false); setTypeOpen((v) => !v); }}>
+                    <span className={styles.ddTxt}>
+                      <span className={styles.ddKey}>Type</span>
+                      <span className={`${styles.ddValue} ${styles.ddFam}`} data-set={kindNow !== "ALL" ? "" : undefined}>
+                        {kindNow !== "ALL" ? <i className={styles.pkSq} data-fam={kindNow} aria-hidden="true" /> : null}
+                        {kindNow === "ALL" ? "All types" : kindChips.find((f) => f.key === kindNow)?.label} · {kindNow === "ALL" ? data.length : kindChips.find((f) => f.key === kindNow)?.count ?? 0}
+                      </span>
+                    </span>
+                    <Icon id="i-chev" className={`${styles.ic} ${styles.ddCaret}`} />
+                  </button>
+                  <div className={styles.ddMenu} role="listbox" aria-label="Type of work" ref={typeMenuRef}>
+                    {[{ key: "ALL" as const, label: "All types", count: data.length }, ...kindChips].map((f) => (
+                      <button key={f.key} className={`${styles.ddItem} ${kindNow === f.key ? styles.active : ""}`}
+                        type="button" role="option" aria-selected={kindNow === f.key}
+                        onClick={() => { pickKind(f.key); setTypeOpen(false); }}>
+                        <span className={styles.ddFam}>
+                          {f.key !== "ALL" ? <i className={styles.pkSq} data-fam={f.key} aria-hidden="true" /> : null}
+                          {f.label}
+                        </span>
+                        <span className={styles.ddCount}>{f.count}</span>
+                        {kindNow === f.key ? <Icon id="i-check" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          )}
+          ) : null}
+
+          {/* ============ TAB: ALL ============ */}
           {tab === "all" && (
             listAll.length === 0 ? (
               <div className={styles.pempty}>

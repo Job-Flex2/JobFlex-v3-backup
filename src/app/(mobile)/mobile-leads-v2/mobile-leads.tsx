@@ -206,6 +206,8 @@ export function MobileLeads() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [filterOpen, setFilterOpen] = useState(false);
+  /** The source menu under "Your own" (2026-10-18: the page's .dd, not a native select). */
+  const [srcOpen, setSrcOpen] = useState(false);
 
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [moveId, setMoveId] = useState<string | null>(null);
@@ -432,6 +434,7 @@ export function MobileLeads() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (filterOpen) setFilterOpen(false);
+      else if (srcOpen) setSrcOpen(false);
       else if (delId !== null) setDelId(null);
       else if (moveId !== null) setMoveId(null);
       else if (addOpen) setAddOpen(false);
@@ -439,7 +442,7 @@ export function MobileLeads() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [filterOpen, delId, moveId, addOpen, sheetId]);
+  }, [filterOpen, srcOpen, delId, moveId, addOpen, sheetId]);
 
   /* ---------- Filter dropdown: placement + outside pointerdown -----------
      The menu is absolutely positioned, so it does not lengthen the scroller it
@@ -458,6 +461,17 @@ export function MobileLeads() {
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
   }, [filterOpen, filterHit]);
+  // The source menu: the same placement hook and outside-tap closer.
+  const srcMenu = useAnchoredMenu(srcOpen);
+  const srcHit = srcMenu.contains;
+  useEffect(() => {
+    if (!srcOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!srcHit(e.target as Node)) setSrcOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [srcOpen, srcHit]);
 
   /* ---------- Paging returns you to the top of the ledger ---------------
      In an effect, not the click handler: the ref must not be read during
@@ -501,6 +515,7 @@ export function MobileLeads() {
   const searched = useMemo(() => own.filter((l) => matchesQuery(l, query)), [own, query]);
   const sides = useMemo(() => sideCounts(searched), [searched]);
   const srcCounts = useMemo(() => ownSourceCounts(searched), [searched]);
+  const srcNow = srcKey ? srcCounts.find((c) => c.key === srcKey) ?? null : null;
   const pool = useMemo(
     () =>
       searched.filter(
@@ -1037,9 +1052,9 @@ export function MobileLeads() {
           )}
 
           {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): All / JobFlex / Your
-              own as one three-part switch that fits 320px, and under "Your own"
-              one native menu of sources with counts — not a chip rail, which
-              does not survive a phone's width (see the note at the top). */}
+              own as three equal chips that fit 320px — the house filter chip,
+              blue when picked (2026-10-18) — and under "Your own" the sources
+              in the page's own dropdown (.dd, as Filter above), with counts. */}
           {tab === "all" && own.length > 0 && (
             <div className={styles.origin}>
               <div className={styles.oseg} role="group" aria-label="Where the leads came from">
@@ -1051,7 +1066,7 @@ export function MobileLeads() {
                   <button
                     key={k || "all"}
                     type="button"
-                    className={`${styles.osegBtn} ${side === k ? styles.on : ""} ${k === "jobflex" ? styles.osegJf : ""}`}
+                    className={`${styles.osegBtn} ${side === k ? styles.on : ""}`}
                     aria-pressed={side === k}
                     data-side={k}
                     onClick={() => {
@@ -1060,32 +1075,42 @@ export function MobileLeads() {
                       setPage(1);
                     }}
                   >
-                    {k === "jobflex" ? <span className={styles.ljf} aria-hidden="true">J</span> : null}
                     {label}
-                    <span className={styles.osegN}>{n}</span>
+                    <b className={styles.osegN}>{n}</b>
                   </button>
                 ))}
               </div>
               {side === "own" && srcCounts.length > 1 ? (
-                <label className={styles.osrc}>
-                  <span className={styles.osrcLbl}>Source</span>
-                  <select
-                    className={styles.osrcSel}
-                    value={srcKey}
-                    aria-label="Your own leads by source"
-                    onChange={(e) => {
-                      setSrcKey(e.target.value);
-                      setPage(1);
-                    }}
-                  >
-                    <option value="">Every source · {sides.own}</option>
-                    {srcCounts.map((c) => (
-                      <option key={c.key} value={c.key}>
-                        {c.label} · {c.count}
-                      </option>
+                <div className={`${styles.dd} ${srcOpen ? styles.open : ""}`} {...srcMenu.anchorProps}>
+                  <button className={styles.ddBtn} type="button" aria-haspopup="listbox"
+                    aria-expanded={srcOpen} aria-label="Your own leads by source"
+                    onClick={() => setSrcOpen((v) => !v)}>
+                    Source
+                    <span className={styles.ddValue}>
+                      {srcNow ? (
+                        <i className={styles.osrcSq} style={{ "--t": srcNow.tone } as React.CSSProperties} aria-hidden="true" />
+                      ) : null}
+                      {srcNow ? srcNow.short : "Every source"} · {srcNow ? srcNow.count : sides.own}
+                    </span>
+                    <Icon id="i-chev" className={`${styles.ic} ${styles.ddCaret}`} />
+                  </button>
+                  <div className={styles.ddMenu} role="listbox" {...srcMenu.menuProps}>
+                    {[{ key: "", label: "Every source", short: "Every source", tone: "", count: sides.own }, ...srcCounts].map((c) => (
+                      <button key={c.key || "every"} className={`${styles.ddItem} ${srcKey === c.key ? styles.active : ""}`}
+                        type="button" role="option" aria-selected={srcKey === c.key} title={c.label}
+                        onClick={() => { setSrcKey(c.key); setPage(1); setSrcOpen(false); }}>
+                        <span className={styles.osrcItem}>
+                          {c.tone ? (
+                            <i className={styles.osrcSq} style={{ "--t": c.tone } as React.CSSProperties} aria-hidden="true" />
+                          ) : null}
+                          {c.short}
+                        </span>
+                        <span className={styles.ddCount}>{c.count}</span>
+                        {srcKey === c.key ? <Icon id="i-check" /> : null}
+                      </button>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </div>
               ) : null}
             </div>
           )}
@@ -1146,7 +1171,7 @@ export function MobileLeads() {
                         {l.email || l.phone || "No contact on file"}
                       </span>
                       {leadSide(l.source) === "jobflex" ? (
-                        <span className={`${styles.lsrc} ${styles.lsrcJf}`}><b aria-hidden="true">J</b>JobFlex</span>
+                        <span className={`${styles.lsrc} ${styles.lsrcJf}`}>JobFlex</span>
                       ) : (
                         <span className={styles.lsrc}>
                           <i style={{ "--t": leadSourceOf(l.source).tone } as React.CSSProperties} aria-hidden="true" />

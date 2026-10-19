@@ -109,17 +109,18 @@ export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Le
       <section className="ppanel" data-panel="all">
         {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): the ones JobFlex sent
             apart from the shop's own, and the shop's own by source. Counts and
-            chips are painted by the behavior module (renderOrigin). */}
+            chips are painted by the behavior module (renderOrigin). The house
+            filter chips (.pchip, as Proposals' status row), 2026-10-18. */}
         <div className="lorigin" id="lOrigin">
-          <div className="lseg" role="group" aria-label="Where the leads came from">
-            <button className="lseg-btn on" type="button" data-side="" aria-pressed="true">
-              All<span className="lseg-n" data-side-n="all">0</span>
+          <div className="pchips lseg" role="group" aria-label="Where the leads came from">
+            <button className="pchip active" type="button" data-side="" aria-pressed="true">
+              All <b data-side-n="all">0</b>
             </button>
-            <button className="lseg-btn lseg-btn--jf" type="button" data-side="jobflex" aria-pressed="false">
-              <span className="ljf" aria-hidden="true">J</span>From JobFlex<span className="lseg-n" data-side-n="jobflex">0</span>
+            <button className="pchip" type="button" data-side="jobflex" aria-pressed="false">
+              From JobFlex <b data-side-n="jobflex">0</b>
             </button>
-            <button className="lseg-btn" type="button" data-side="own" aria-pressed="false">
-              Your own leads<span className="lseg-n" data-side-n="own">0</span>
+            <button className="pchip" type="button" data-side="own" aria-pressed="false">
+              Your own leads <b data-side-n="own">0</b>
             </button>
           </div>
           <div className="lsrcs" id="lSrcs"></div>

@@ -377,23 +377,44 @@ export function initProposalsContent(
       '<span class="pkind-tool" data-tool="' + esc(k.tool) + '">' + esc(tool) + "</span></div>"
     );
   }
-  /** The type bar: All types + each family the book holds, with counts — drawn only when there is a choice. */
+  /** The Type dropdown on the tabs' row (2026-10-18; a chip bar before): All types + each family the
+   *  book holds, each with its tool-colour square and count — drawn only when there is a choice. */
   function renderKinds() {
-    const bar = $("#pKinds");
-    if (!bar) return;
+    const dd = $("#pKinds");
+    if (!dd) return;
     const fams = familyCounts(proposalsData.map((p) => ({ family: p.kind?.family ?? "other" })));
     if (pstate.kind !== "ALL" && !fams.some((f) => f.key === pstate.kind)) pstate.kind = "ALL";
+    const menu = $("#pKindsMenu");
     if (fams.length < 2) {
-      bar.hidden = true;
-      bar.innerHTML = "";
+      setKindsOpen(false);
+      dd.hidden = true;
+      if (menu) menu.innerHTML = "";
       return;
     }
-    bar.hidden = false;
-    const chip = (key: string, label: string, n: number) =>
-      '<button class="pkchip' + (pstate.kind === key ? " active" : "") + '" type="button" data-k="' + key + '" aria-pressed="' + (pstate.kind === key) + '"' +
-      (key === "ALL" ? "" : ' data-fam="' + key + '"') + ">" +
-      (key === "ALL" ? "" : '<i class="pkind-sq" aria-hidden="true"></i>') + esc(label) + " <b>" + n + "</b></button>";
-    bar.innerHTML = '<span class="pk-lbl">Type</span>' + chip("ALL", "All types", proposalsData.length) + fams.map((f) => chip(f.key, f.label, f.count)).join("");
+    dd.hidden = false;
+    const all = { key: "ALL", label: "All types", count: proposalsData.length };
+    const now = pstate.kind === "ALL" ? all : fams.find((f) => f.key === pstate.kind) ?? all;
+    const sq = (key: string) => (key === "ALL" ? "" : '<i class="pkind-sq" data-fam="' + key + '" aria-hidden="true"></i>');
+    const face = dd.querySelector<HTMLElement>(".pkdd-face");
+    if (face) face.innerHTML = sq(now.key) + '<span class="dd-label">' + esc(now.label) + '</span><span class="dd-n">' + now.count + "</span>";
+    dd.classList.toggle("is-set", pstate.kind !== "ALL");
+    if (menu) {
+      menu.innerHTML = [all, ...fams]
+        .map((f) => {
+          const sel = pstate.kind === f.key;
+          return (
+            '<button class="dd-item' + (sel ? " active" : "") + '" type="button" role="option" aria-selected="' + sel + '" data-k="' + f.key + '">' +
+            sq(f.key) + '<span class="dd-item-lbl">' + esc(f.label) + '</span><span class="dd-item-n">' + f.count + "</span></button>"
+          );
+        })
+        .join("");
+    }
+  }
+  function setKindsOpen(open: boolean) {
+    const dd = $("#pKinds");
+    if (!dd) return;
+    dd.classList.toggle("open", open);
+    dd.querySelector(".dd-btn")?.setAttribute("aria-expanded", String(open));
   }
   function filteredAll() {
     const base = book();
@@ -1502,9 +1523,16 @@ export function initProposalsContent(
     }
   });
   $("#pKinds")?.addEventListener("click", (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLElement>(".pkchip");
-    if (!chip) return;
-    const k = (chip.dataset.k || "ALL") as "ALL" | WorkFamily;
+    const target = e.target as HTMLElement;
+    if (target.closest(".dd-btn")) {
+      setKindsOpen(!$("#pKinds")?.classList.contains("open"));
+      return;
+    }
+    const item = target.closest<HTMLElement>("[data-k]");
+    if (!item) return;
+    setKindsOpen(false);
+    $<HTMLButtonElement>("#pKinds .dd-btn")?.focus();
+    const k = (item.dataset.k || "ALL") as "ALL" | WorkFamily;
     if (k === pstate.kind) return;
     pstate.kind = k;
     pstate.pageAll = 1;
@@ -1512,6 +1540,17 @@ export function initProposalsContent(
     pstate.pageDone = 1;
     // Narrowing by type is a repaint, not a list arriving — silently, every panel and figure at once.
     renderProposals();
+  });
+  // The Type menu closes on a click anywhere else and on Escape (focus back on its button).
+  on(document, "pointerdown", (e) => {
+    const dd = $("#pKinds");
+    if (dd?.classList.contains("open") && !dd.contains(e.target as Node)) setKindsOpen(false);
+  });
+  on(document, "keydown", (e) => {
+    const dd = $("#pKinds");
+    if ((e as KeyboardEvent).key !== "Escape" || !dd?.classList.contains("open")) return;
+    setKindsOpen(false);
+    dd.querySelector<HTMLButtonElement>(".dd-btn")?.focus();
   });
   $("#pChips")?.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>(".pchip");

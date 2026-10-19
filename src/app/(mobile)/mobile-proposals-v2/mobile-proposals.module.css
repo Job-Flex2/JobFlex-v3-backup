@@ -1115,14 +1115,14 @@
 
 /* ── WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind) ─────────────────
    The desk list's mark and type bar, on the phone: the work's square in the
-   estimating tools' colours, its word, the tool (Smart Proposal in violet); a
-   strip of type chips that narrows every tab, list and figure. */
-.pkind, .pkchip { --fam: var(--muted, #6b6b6b); }
-.pkind[data-fam="deck"], .pkchip[data-fam="deck"] { --fam: var(--tool-deck); }
-.pkind[data-fam="roof"], .pkchip[data-fam="roof"] { --fam: var(--tool-roof); }
-.pkind[data-fam="fence"], .pkchip[data-fam="fence"] { --fam: var(--tool-fence); }
-.pkind[data-fam="hvac"], .pkchip[data-fam="hvac"] { --fam: var(--tool-hvac); }
-.pkind[data-fam="remodel"], .pkchip[data-fam="remodel"] { --fam: var(--tool-plan); }
+   estimating tools' colours, its word, the tool (Smart Proposal in violet). The
+   Type menu that narrows every tab, list and figure is on the filter row. */
+.pkind, .pkSq[data-fam] { --fam: var(--muted, #6b6b6b); }
+.pkind[data-fam="deck"], .pkSq[data-fam="deck"] { --fam: var(--tool-deck); }
+.pkind[data-fam="roof"], .pkSq[data-fam="roof"] { --fam: var(--tool-roof); }
+.pkind[data-fam="fence"], .pkSq[data-fam="fence"] { --fam: var(--tool-fence); }
+.pkind[data-fam="hvac"], .pkSq[data-fam="hvac"] { --fam: var(--tool-hvac); }
+.pkind[data-fam="remodel"], .pkSq[data-fam="remodel"] { --fam: var(--tool-plan); }
 .pkSq { display: inline-block; width: 9px; height: 9px; flex: none; background: var(--fam); box-shadow: 1.5px 1.5px 0 var(--ink, #0a0a0a); }
 .pkind {
   display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
@@ -1139,22 +1139,26 @@
 .pkTool[data-tool="video"] { color: var(--tool-video); }
 .pkTool[data-tool="blueprint"] { color: var(--tool-plan); }
 
-.pkinds {
-  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-  margin: 0 calc(-1 * var(--pad-x)) 16px; padding: 2px var(--pad-x) 6px;
-  -webkit-overflow-scrolling: touch;
+/* ── FILTERS (2026-10-18): Status + Type on one row under the tabs ─────────
+   Two .dd faces side by side, each the label over its pick (a 160px half has
+   no room for "STATUS  Declined · 2" on one line); the row, not the face, is
+   the menus' box, so either menu opens the full width with its 3-up cells.
+   Type alone (Accepted / Completed) holds the row by itself. */
+.fbar { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.fbarDuo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fbar .dd { position: static; min-width: 0; }
+.ddDuo { gap: 8px; padding: 0 12px; }
+.ddTxt { display: grid; gap: 3px; min-width: 0; text-align: left; }
+.ddKey {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  line-height: 1;
 }
-.pkinds::-webkit-scrollbar { display: none; }
-.pkchip {
-  flex: none; display: inline-flex; align-items: center; gap: 7px;
-  min-height: 40px; padding: 0 14px;
-  border: 1.5px solid var(--ink, #0a0a0a); border-radius: 0;
-  background: #fff;
-  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
-  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
-  color: var(--ink, #0a0a0a);
+.ddDuo .ddValue {
+  margin-left: 0; overflow: hidden; text-overflow: ellipsis;
+  font-size: 12px; letter-spacing: 0.04em; line-height: 1.2;
 }
-.pkchip b { font-weight: 700; color: var(--muted, #6b6b6b); }
-.pkchip.active { background: var(--ink, #0a0a0a); color: #fff; box-shadow: 3px 3px 0 var(--fam, var(--blueprint, #1854a0)); }
-.pkchip.active b { color: rgba(255, 255, 255, 0.72); }
-.pkchip.active .pkSq { box-shadow: 1.5px 1.5px 0 #fff; }
+.ddDuo .ddCaret { margin-left: auto; flex: none; }
+.ddFam { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.ddValue.ddFam { display: flex; }
+.ddValue.ddFam[data-set] { color: var(--ink); font-weight: 700; }

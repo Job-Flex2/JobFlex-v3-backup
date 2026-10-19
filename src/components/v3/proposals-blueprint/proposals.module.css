@@ -1890,24 +1890,64 @@
 .bp :global(.pkind-tool[data-tool="blueprint"]) { color: var(--tool-plan); }
 .bp :global(.pjob-head .pkind), .bp :global(.psheet-head .pkind) { margin-bottom: 7px; }
 
-.bp :global(.pkinds) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -6px 0 18px; }
-.bp :global(.pkinds[hidden]) { display: none; }
-.bp :global(.pk-lbl) { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
-.bp :global(.pkchip) {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 6px 12px;
-  border: 1.5px solid var(--ink);
+/* TYPE (2026-10-18; a chip bar before) — one compact dropdown at the right end
+   of the tabs' row, since it narrows every tab: a quiet white control like an
+   unpicked tab, "TYPE" as its annotation, the pick with its tool-colour square
+   and count; ink-framed while a type is set. The menu lists every family the
+   book holds, square · name · count, the pick in blue. Built on the shell's
+   .dd / .dd-btn / .dd-menu / .dd-item, weighted with .content so the shell's
+   reset and its own .dd rules cannot tie it in the production CSS order. */
+.bp :global(.content .pkdd) { display: flex; margin-left: auto; flex-shrink: 0; }
+.bp :global(.content .pkdd[hidden]) { display: none; }
+.bp :global(.content .pkdd .dd-btn) {
+  display: flex; align-items: center; gap: 9px;
+  min-height: 38px; padding: 0 12px;
+  border: 1.5px solid var(--hair);
   border-radius: var(--radius);
   background: #fff;
-  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none;
   color: var(--ink);
-  transition: background 0.12s, box-shadow 0.12s, transform 0.12s;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s var(--ease), transform 0.12s var(--ease);
 }
-.bp :global(.pkchip b) { font-weight: 700; color: var(--muted); }
-.bp :global(.pkchip:hover) { background: var(--paper-deep); }
-.bp :global(.pkchip.active) { background: var(--ink); color: #fff; box-shadow: 3px 3px 0 var(--fam, var(--blueprint)); transform: translate(-1px, -1px); }
-.bp :global(.pkchip.active b) { color: rgba(255, 255, 255, 0.72); }
-.bp :global(.pkchip.active .pkind-sq) { box-shadow: 1.5px 1.5px 0 #fff; }
-.bp :global(.pkchip:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .bp :global(.pkchip) { transition: none; } .bp :global(.pkchip.active) { transform: none; } }
+.bp :global(.content .pkdd .dd-btn:hover) { background: var(--paper-deep); }
+.bp :global(.content .pkdd.is-set .dd-btn) { border-color: var(--ink); }
+.bp :global(.content .pkdd.open .dd-btn) { border-color: var(--ink); background: #fff; box-shadow: 2px 2px 0 var(--ink); transform: translate(-1px, -1px); }
+.bp :global(.content .pkdd .dd-btn:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.bp :global(.content .pkdd-key) {
+  padding-right: 9px; border-right: 1px solid var(--hair);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+.bp :global(.content .pkdd-face) { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.bp :global(.content .pkdd .dd-n),
+.bp :global(.content .pkdd .dd-item-n) { font-family: var(--font-mono); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted-light); }
+.bp :global(.content .pkdd.is-set .dd-n) { color: var(--blueprint); }
+.bp :global(.content .pkdd .dd-btn .ic) { width: 13px; height: 13px; color: var(--muted); transition: transform 0.2s var(--ease); }
+.bp :global(.content .pkdd.open .dd-btn .ic) { transform: rotate(180deg); }
+.bp :global(.content .pkdd .dd-menu) {
+  display: block; top: calc(100% + 6px); right: 0; left: auto;
+  min-width: max(100%, 220px); padding: 4px;
+  border: var(--border); border-radius: var(--radius);
+  background: #fff; box-shadow: 3px 3px 0 var(--ink);
+  visibility: hidden; opacity: 0; transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s var(--ease), visibility 0.16s;
+}
+.bp :global(.content .pkdd.open .dd-menu) { visibility: visible; opacity: 1; transform: none; }
+.bp :global(.content .pkdd .dd-item) {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 36px; padding: 0 10px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none;
+  color: var(--ink-soft);
+}
+.bp :global(.content .pkdd .dd-item-lbl) { flex: 1; min-width: 0; text-align: left; }
+.bp :global(.content .pkdd .dd-item:hover) { background: var(--accent-soft); color: var(--ink); }
+.bp :global(.content .pkdd .dd-item.active) { color: var(--blueprint); font-weight: 800; }
+.bp :global(.content .pkdd .dd-item.active .dd-item-n) { color: var(--blueprint); }
+/* "All types" has no square; its label lines up with the coloured ones. */
+.bp :global(.content .pkdd .dd-item[data-k="ALL"]) { padding-left: 29px; }
+@media (max-width: 860px) {
+  .bp :global(.content .pkdd) { flex: 1 1 100%; margin-left: 0; }
+  .bp :global(.content .pkdd .dd-btn) { flex: 1; min-height: 44px; }
+  .bp :global(.content .pkdd .dd-btn .ic) { margin-left: auto; }
+  .bp :global(.content .pkdd .dd-menu) { left: 0; right: 0; }
+}

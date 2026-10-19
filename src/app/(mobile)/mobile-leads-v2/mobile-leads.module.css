@@ -661,51 +661,34 @@
   letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--muted-light);
 }
-/* The source's dot (lib/leads/sources tone) and JobFlex's J plate (2026-10-16). */
-.lsrc i { width: 7px; height: 7px; border-radius: 50%; background: var(--t, var(--muted-light)); flex: 0 0 auto; }
+/* The source's square (lib/leads/sources tone); JobFlex's in the blueprint tone. */
+.lsrc i { width: 7px; height: 7px; border-radius: 1px; background: var(--t, var(--muted-light)); flex: 0 0 auto; }
 .lsrcJf { color: var(--blueprint); font-weight: 800; }
-.lsrcJf b {
-  display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 3px;
-  background: var(--blueprint); color: #fff; font-size: 9px; font-weight: 900; letter-spacing: 0;
-}
 
-/* ── WHERE THE LEADS CAME FROM (2026-10-16) ─────────────────────────────
-   All / JobFlex / Your own: three equal parts that hold at 320px, a count
-   on each; under "Your own", one native menu of sources with counts. */
-.origin { display: grid; gap: 8px; margin: 10px 0 2px; }
-.oseg {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  border: var(--border); border-radius: var(--radius); overflow: hidden; background: var(--paper);
-}
+/* ── WHERE THE LEADS CAME FROM (2026-10-16; Blueprint chips 2026-10-18) ──
+   All / JobFlex / Your own: the house filter chip (desk .pchip) as three
+   equal 44px parts that hold at 320px — white, a quiet hair frame, mono
+   caps, blue frame and text when picked. Under "Your own", the sources in
+   the page's own .dd (the Filter above), label over count in each cell. */
+.origin { display: grid; gap: 10px; margin: 2px 0 0; }
+.oseg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .osegBtn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 44px; padding: 0 6px;
-  border: 0; border-right: var(--border); background: transparent; color: var(--ink);
-  font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  min-width: 0; min-height: 44px; padding: 0 4px;
+  border: 1.5px solid var(--hair); border-radius: var(--radius); background: var(--paper);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+  color: var(--muted);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.osegBtn:last-child { border-right: 0; }
-.osegBtn.on { background: var(--ink); color: #fff; }
-.osegBtn.osegJf.on { background: var(--blueprint); }
-.osegN {
-  min-width: 20px; padding: 1px 5px; border-radius: 999px; background: rgba(10, 10, 10, 0.08);
-  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0; text-align: center;
-}
-.osegBtn.on .osegN { background: rgba(255, 255, 255, 0.22); }
-.ljf {
-  display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 3px;
-  background: var(--blueprint); color: #fff; font-size: 10px; font-weight: 900; letter-spacing: 0;
-}
-.osegBtn.osegJf.on .ljf { background: #fff; color: var(--blueprint); }
-.osrc { display: flex; align-items: center; gap: 10px; }
-.osrcLbl {
-  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
-  letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
-}
-.osrcSel {
-  flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 0 12px;
-  border: var(--border); border-radius: var(--radius); background: var(--paper);
-  font-size: 16px; font-weight: 600; color: var(--ink);
-}
+.osegBtn:active { background: var(--paper-deep); }
+.osegBtn.on { border-color: var(--blueprint); color: var(--blueprint); background: var(--accent-soft); }
+.osegN { font-weight: 700; font-variant-numeric: tabular-nums; }
+.osrcSq { display: inline-block; width: 8px; height: 8px; border-radius: 1px; background: var(--t, var(--muted)); flex: 0 0 auto; margin-right: 6px; }
+/* In a cell the square sits in the top-left corner (the tick takes the right),
+   so a ~95px cell at 320px gives "Thumbtack" its whole width, unbroken. */
+.osrcItem { min-width: 0; letter-spacing: 0.02em; overflow-wrap: normal; }
+.osrcItem .osrcSq { position: absolute; top: 7px; left: 7px; margin-right: 0; }
 .lrowFoot {
   grid-column: 1 / -1;
   grid-row: 4;
