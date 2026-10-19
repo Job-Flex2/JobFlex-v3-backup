@@ -11,6 +11,7 @@ import { DEFAULT_CEILING, DEFAULT_INTERIOR, DOOR_HEIGHT, WINDOW_HEIGHT, WINDOW_S
 import { add, along, centroid, dist, mulP, planBounds, pointInPoly, project, roomsOf, sub, unit, wallDir, wallLen, wallPieces, wallQuad, leftN, type Room } from "@/lib/design/geometry";
 import type { DesignItem } from "@/lib/design/model";
 import { cornersOf, frameOf, snapToNeighbours, snapToWall } from "@/lib/design/kitchen";
+import { applyProduct, type DesignProduct } from "@/lib/design/inventory";
 import { itemCode, lib, newItemFrom } from "@/lib/design/library";
 
 export type Selection = { kind: "wall"; id: string } | { kind: "opening"; id: string } | { kind: "label"; id: string } | { kind: "room"; key: string } | { kind: "item"; id: string } | null;
@@ -40,6 +41,8 @@ type Props = {
   ghosts?: Wall[];
   /** Items and walls a check is about — outlined in red. */
   flags?: Set<string>;
+  /** The shop's products (lib/design/inventory): `place:<lib>#<product id>` places that product. */
+  products?: readonly DesignProduct[];
 };
 
 const ROOM_TINT = ["#fef3c7", "#dbeafe", "#dcfce7", "#fce7f3", "#ede9fe", "#ffedd5", "#cffafe", "#f1f5f9"];
@@ -70,7 +73,7 @@ function moveCorner(doc: DesignDoc, from: P, to: P, onlyWall?: string) {
   }
 }
 
-export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, focus = null, underlay = null, calibrating = false, onCalibratePoints, fitToken = 0, className, ghosts = [], flags }: Props) {
+export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, focus = null, underlay = null, calibrating = false, onCalibratePoints, fitToken = 0, className, ghosts = [], flags, products = [] }: Props) {
   const svgRef = React.useRef<SVGSVGElement | null>(null);
   const rooms = React.useMemo(() => roomsOf(doc), [doc]);
   const [view, setView] = React.useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -247,11 +250,13 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
       return;
     }
     if (tool.startsWith("place:")) {
-      const libId = tool.slice(6);
+      const [libId, productId] = tool.slice(6).split("#");
       const e = lib(libId);
       const room = rooms.find((r) => pointInPoly(p, r.poly)) ?? (focus ? rooms.find((r) => r.labelId === focus) ?? null : null);
-      const it = e ? newItemFrom(libId, { x: p.x, y: p.y, rot: 90, room: focus ?? room?.labelId ?? null }, newId("i")) : null;
-      if (!it) return;
+      const made = e ? newItemFrom(libId, { x: p.x, y: p.y, rot: 90, room: focus ?? room?.labelId ?? null }, newId("i")) : null;
+      if (!made) return;
+      const product = productId ? products.find((x) => x.id === productId) ?? null : null;
+      const it = product ? applyProduct(made, product) : made;
       const snapped = { ...it, ...snapToWall(doc, room, it, p) };
       const next = clone(doc);
       next.items = [...(next.items ?? []), snapToNeighbours(next.items ?? [], snapped)];

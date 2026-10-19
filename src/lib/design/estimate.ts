@@ -21,6 +21,7 @@ import { PRICES as CORE } from "@/lib/estimate/step-prices/core-building-trades"
 import { PRICES as GENERAL } from "@/lib/estimate/step-prices/general-professional";
 import { houseChanges, type HouseChange } from "./structure";
 import { kindOfRoom } from "./rooms";
+import { productName, stockWords, type DesignProduct } from "./inventory";
 import { roomFinishes } from "./roomKinds";
 import type { PriceRange, StepPrice } from "@/lib/estimate/step-prices/types";
 
@@ -44,7 +45,7 @@ export type Takeoff = {
   sinks: number;
   cooktops: number;
   splashSqft: number;
-  appliances: Array<{ lib: string; name: string; code: string }>;
+  appliances: Array<{ lib: string; name: string; code: string; /** The shop's product it is, when it's one. */ product?: string }>;
   pendants: number;
   cans: number;
   receptacles: number;
@@ -72,6 +73,8 @@ export type Takeoff = {
   furnishings: number;
   /** The doorways' width, ln ft — a threshold or transition at each. */
   doorLf: number;
+  /** The shop's products the room uses (opts.product), and how many of each. */
+  products: Array<{ id: string; lib: string; count: number }>;
 };
 
 const BASE_TOP = 36;
@@ -137,7 +140,16 @@ export function takeoff(doc: DesignDoc, labelId: string): Takeoff | null {
       : items
           .filter((i) => i.wallId && (lib(i.lib)?.counter || i.lib === "RNG") && i.lib !== "ISL")
           .reduce((s, i) => s + (i.w * Math.max(0, splashTopFor(i, items, f.backsplash.height, ceiling) - (BASE_TOP)))  / 144, 0);
-  const appliances = items.filter((i) => cat(i) === "appliance" || i.lib === "OV").map((i) => ({ lib: i.lib, name: lib(i.lib)?.name ?? i.lib, code: itemCode(i) }));
+  const productIdOf = (i: DesignItem) => (typeof i.opts?.product === "string" ? i.opts.product : undefined);
+  const appliances = items.filter((i) => cat(i) === "appliance" || i.lib === "OV").map((i) => ({ lib: i.lib, name: lib(i.lib)?.name ?? i.lib, code: itemCode(i), ...(productIdOf(i) ? { product: productIdOf(i) } : {}) }));
+  const productCount = new Map<string, { id: string; lib: string; count: number }>();
+  for (const i of items) {
+    const id = productIdOf(i);
+    if (!id) continue;
+    const cur = productCount.get(id) ?? { id, lib: i.lib, count: 0 };
+    cur.count++;
+    productCount.set(id, cur);
+  }
   const pendants = items.filter((i) => i.lib === "PEN").length;
   const cans = items.filter((i) => i.lib === "CAN").length;
   // Countertop receptacles: about one every 4 ft of counter along the walls, one at an island.
@@ -166,7 +178,7 @@ export function takeoff(doc: DesignDoc, labelId: string): Takeoff | null {
   const wetTileSqft = showerWalls + tubWalls;
   const waterproofSqft = showerWalls + fixtures.showers.reduce((s, x) => s + (x.w * x.d) / 144, 0);
   const shelvingLf = items.filter((i) => i.lib === "CLS" || i.lib === "SHU").reduce((s, i) => s + i.w, 0) / 12;
-  const furnishings = items.filter((i) => cat(i) === "furniture" || cat(i) === "decor").filter((i) => i.lib !== "CLS" && i.lib !== "SHU" && i.lib !== "MIR").length;
+  const furnishings = items.filter((i) => cat(i) === "furniture" || cat(i) === "decor").filter((i) => i.lib !== "CLS" && i.lib !== "SHU" && i.lib !== "MIR" && !productIdOf(i)).length;
 
   // Walls to paint: the room's walls to the ceiling, less doors and windows, the cabinets against them and the tile.
   const openingsSqft = doc.openings.filter((o) => room.wallIds.includes(o.wallId)).reduce((s, o) => s + (o.width * o.height) / 144, 0);
@@ -230,6 +242,7 @@ export function takeoff(doc: DesignDoc, labelId: string): Takeoff | null {
     shelvingLf: r05(shelvingLf),
     furnishings,
     doorLf: r05(doorLf),
+    products: [...productCount.values()],
   };
 }
 
@@ -263,7 +276,7 @@ export type EstLine = {
   fee?: boolean;
 };
 
-export const GROUPS = ["Prep & demolition", "Walls & structure", "Rough-in", "Cabinets", "Countertops & backsplash", "Tile & shower", "Appliances & fixtures", "Closets & shelving", "Electrical & lighting", "Floor, walls & trim"] as const;
+export const GROUPS = ["Prep & demolition", "Walls & structure", "Rough-in", "Cabinets", "Countertops & backsplash", "Tile & shower", "Appliances & fixtures", "Furnishings", "Closets & shelving", "Electrical & lighting", "Floor, walls & trim"] as const;
 
 const K = PRICES["kitchen-remodel"].steps;
 const CT = PRICES["countertop-installer"].steps;
@@ -331,12 +344,41 @@ function makers(out: EstLine[], factor: number, yours: Record<string, number>): 
   return { add, allowance };
 }
 
-export function priceDesign(t: Takeoff, f: Finishes, opts: EstimateOptions, factor: number, yours: Record<string, number> = {}): EstLine[] {
+export function priceDesign(t: Takeoff, f: Finishes, opts: EstimateOptions, factor: number, yours: Record<string, number> = {}, products: readonly DesignProduct[] = []): EstLine[] {
   const out: EstLine[] = [];
   const { add, allowance } = makers(out, factor, yours);
-  if (t.kind === "bath") return priceBath(t, f, opts, add, allowance, out);
-  if (t.kind === "laundry") return priceLaundry(t, f, opts, add, out);
-  if (t.kind !== "kitchen") return priceFinishRoom(t, f, opts, add, out);
+  // What the shop supplies from its own inventory is priced as its product, so no allowance stands in for it.
+  const supplied = new Set(t.products.filter((u) => products.some((p) => p.id === u.id)).map((u) => u.id));
+  const covered = (lib: string) => t.products.filter((u) => u.lib === lib && supplied.has(u.id)).reduce((n, u) => n + u.count, 0);
+  const lines = t.kind === "bath" ? priceBath(t, f, opts, add, allowance, out, covered) : t.kind === "laundry" ? priceLaundry(t, f, opts, add, out) : t.kind !== "kitchen" ? priceFinishRoom(t, f, opts, add, out) : priceKitchen(t, f, opts, add, allowance, out, supplied);
+  return productLines(t, products, yours, lines);
+}
+
+/** The shop's own products the design uses: each at its price, with what the shelf holds. */
+function productLines(t: Takeoff, products: readonly DesignProduct[], yours: Record<string, number>, out: EstLine[]): EstLine[] {
+  for (const u of t.products) {
+    const p = products.find((x) => x.id === u.id);
+    if (!p) continue;
+    const e = lib(p.lib);
+    const key = `prod-${p.id}`;
+    const own = yours[key];
+    const furnishing = e?.cat === "furniture" || e?.cat === "decor";
+    out.push({
+      key,
+      group: furnishing ? "Furnishings" : "Appliances & fixtures",
+      name: productName(p),
+      desc: `${e?.name ?? p.lib} · ${p.w} × ${p.d} × ${p.h} in — ${stockWords(p, u.count)}`,
+      qty: u.count,
+      unit: "ea",
+      unitPrice: own ?? p.price ?? 0,
+      labor: 0,
+      basis: own != null || p.price != null ? "yours" : "allowance",
+    });
+  }
+  return out;
+}
+
+function priceKitchen(t: Takeoff, f: Finishes, opts: EstimateOptions, add: AddLine, allowance: Allowance, out: EstLine[], supplied: ReadonlySet<string>): EstLine[] {
   const cabRun = t.baseLf + t.wallLf + t.tallLf + t.islandLf;
 
   // Prep & demolition.
@@ -384,7 +426,7 @@ export function priceDesign(t: Takeoff, f: Finishes, opts: EstimateOptions, fact
   // Appliances and fixtures.
   const setCount = t.sinks * 2 + t.appliances.length;
   add("set", "Appliances & fixtures", "Set and connect appliances and fixtures", `Sink and faucet (standard allowance), ${t.appliances.map((a) => a.name.toLowerCase()).join(", ") || "appliances"}`, setCount, "ea", step(K, "Fixtures and appliances set"));
-  if (opts.appliances === "allowance") for (const a of t.appliances) allowance(`appl-${a.lib}`, "Appliances & fixtures", `${a.name} · allowance`, `${a.code} — set the allowance, or the client's model`, 1);
+  if (opts.appliances === "allowance") for (const a of t.appliances) if (!a.product || !supplied.has(a.product)) allowance(`appl-${a.lib}`, "Appliances & fixtures", `${a.name} · allowance`, `${a.code} — set the allowance, or the client's model`, 1);
   // Electrical and lighting.
   add("finish-elec", "Electrical & lighting", "Finish electrical", `${t.cans} recessed light${t.cans === 1 ? "" : "s"}, ${t.pendants} pendant${t.pendants === 1 ? "" : "s"}, ${t.receptacles} countertop GFCI outlets — devices, plates and trims`, t.cans + t.pendants + t.receptacles, "ea", step(K, "Finish electrical"));
   allowance("pendant-fixtures", "Electrical & lighting", "Pendant fixtures · allowance", "The fixtures themselves — set the allowance", t.pendants);
@@ -421,7 +463,7 @@ function accentAndTexture(t: Takeoff, f: Finishes, add: AddLine) {
 }
 
 /** A bathroom, by the book's bathroom-remodel steps. */
-function priceBath(t: Takeoff, f: Finishes, opts: EstimateOptions, add: AddLine, allowance: Allowance, out: EstLine[]): EstLine[] {
+function priceBath(t: Takeoff, f: Finishes, opts: EstimateOptions, add: AddLine, allowance: Allowance, out: EstLine[], covered: (lib: string) => number): EstLine[] {
   const fx = t.fixtures;
   const fixtureCount = fx.toilets + fx.vanities.length + fx.tubs + fx.freeTubs + fx.showers.length;
   if (opts.permits) add("bath-permits", "Prep & demolition", "Permits and inspections", "Building, plumbing and electrical permits; rough and final inspections (fees at cost)", 1, "lot", step(BATH, "Permits and inspections"));
@@ -448,8 +490,8 @@ function priceBath(t: Takeoff, f: Finishes, opts: EstimateOptions, add: AddLine,
   for (const [i, v] of fx.vanities.entries()) add(`bath-vanity${i ? `-${i + 1}` : ""}`, "Appliances & fixtures", `Vanity ${v.code} · ${cp.name} top`, `${v.w} in vanity, ${v.basins === 2 ? "two undermount basins" : "an undermount basin"}, faucet${v.basins === 2 ? "s" : ""} and drain${v.basins === 2 ? "s" : ""} connected; doors in ${f.cabinets.name.toLowerCase()}`, 1, "ea", step(BATH, "Vanity and top set"));
   add("bath-fixtures", "Appliances & fixtures", "Set the fixtures", listWords([fx.toilets && plural(fx.toilets, "toilet") + " on new wax rings", fx.tubs && plural(fx.tubs, "alcove tub"), fx.freeTubs && plural(fx.freeTubs, "freestanding tub") + " with a floor filler", fx.showers.length && "shower trim and head"].filter(Boolean) as string[]) + "; towel bars, paper holder", fx.toilets + fx.tubs + fx.freeTubs + fx.showers.length, "ea", step(BATH, "Fixtures set"));
   if (opts.appliances === "allowance") {
-    allowance("allow-toilet", "Appliances & fixtures", "Toilet · allowance", "The toilet itself — set the allowance, or the client's model", fx.toilets);
-    allowance("allow-tub", "Appliances & fixtures", "Tub · allowance", "The tub itself — set the allowance, or the client's model", fx.tubs + fx.freeTubs);
+    allowance("allow-toilet", "Appliances & fixtures", "Toilet · allowance", "The toilet itself — set the allowance, or the client's model", fx.toilets - covered("WC"));
+    allowance("allow-tub", "Appliances & fixtures", "Tub · allowance", "The tub itself — set the allowance, or the client's model", fx.tubs - covered("TUB") + fx.freeTubs - covered("FTUB"));
   }
   // Floor, walls, trim.
   const fp = floorPreset(f.floor.id);
@@ -567,8 +609,13 @@ export const lineTotal = (l: EstLine) => Math.round(l.qty * l.unitPrice * 100) /
 export const estimateTotal = (lines: EstLine[]) => lines.reduce((s, l) => s + lineTotal(l), 0);
 
 /** The proposal's scope of work, from the design. */
-export function scopeText(t: Takeoff, f: Finishes, opts: EstimateOptions): string {
-  if (t.kind !== "kitchen") return roomScopeText(t, f, opts);
+export function scopeText(t: Takeoff, f: Finishes, opts: EstimateOptions, products: readonly DesignProduct[] = []): string {
+  const used = t.products.map((u) => products.find((p) => p.id === u.id)).filter((p): p is DesignProduct => !!p);
+  const supply = used.length ? ` Supplied from our inventory: ${used.map((p) => productName(p)).join("; ")}.` : "";
+  return (t.kind !== "kitchen" ? roomScopeText(t, f, opts) : kitchenScopeText(t, f, opts)) + supply;
+}
+
+function kitchenScopeText(t: Takeoff, f: Finishes, opts: EstimateOptions): string {
   const cp = counterPreset(f.counter.id);
   const sp = splashPreset(f.backsplash.id);
   const fp = floorPreset(f.floor.id);

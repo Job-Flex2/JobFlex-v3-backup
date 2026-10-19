@@ -10,6 +10,7 @@ import type { DesignDoc } from "@/lib/design/model";
 import { DEFAULT_OPTIONS, GROUPS, benchmarkFor, benchmarkTone, estimateTotal, lineTotal, priceDesign, scopeText, takeoff, type EstLine, type EstimateOptions } from "@/lib/design/estimate";
 import { KIND_LABEL } from "@/lib/design/rooms";
 import { roomFinishes } from "@/lib/design/roomKinds";
+import type { DesignProduct } from "@/lib/design/inventory";
 import { convertDesignToProposal, designLocation, findDesignClients, readDesignBook, saveDesignPrice, type DesignClient, type DesignLocation } from "@/actions/designStudio";
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n >= 1000 ? 0 : 2 });
@@ -22,9 +23,11 @@ type Props = {
   market: DesignLocation;
   shopAddress: string | null;
   onPatch: (fn: (d: DesignDoc) => void) => void;
+  /** The shop's products: a piece that is one is supplied at its price. */
+  products?: readonly DesignProduct[];
 };
 
-export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPatch }: Props) {
+export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPatch, products = [] }: Props) {
   const [book, setBook] = React.useState<Record<string, number>>({});
   const [found, setFound] = React.useState<{ address: string; loc: DesignLocation } | null>(null);
   const [made, setMade] = React.useState<{ id: string } | null>(null);
@@ -37,7 +40,7 @@ export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPat
   const loc = address.trim() && found?.address === address.trim() ? found.loc : market;
   const fin = roomFinishes(doc, focus);
   const t = React.useMemo(() => takeoff(doc, focus), [doc, focus]);
-  const lines = React.useMemo(() => (t ? priceDesign(t, fin, opts, loc.factor, book) : []), [t, fin, opts, loc.factor, book]);
+  const lines = React.useMemo(() => (t ? priceDesign(t, fin, opts, loc.factor, book, products) : []), [t, fin, opts, loc.factor, book, products]);
   const total = estimateTotal(lines);
   const unset = lines.filter((l) => l.basis === "allowance" && l.unitPrice === 0);
 
@@ -81,7 +84,7 @@ export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPat
       title: roomTitle,
       clientId: client?.id ?? null,
       address: address.trim() || client?.address || null,
-      scope: scopeText(t, fin, opts),
+      scope: scopeText(t, fin, opts, products),
       lines: lines.filter((l) => l.qty > 0).map((l: EstLine) => ({ name: l.name, description: l.desc, quantity: l.qty, unit: l.unit, unitPrice: l.unitPrice, labor: l.labor })),
       designId,
       room: t.room,
@@ -163,7 +166,7 @@ export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPat
             {t.kind === "outdoor" ? "A patio or deck is priced in the Deck Studio — this design shows how it's furnished." : "Nothing to price yet — design the room, and the work it needs is counted here."}
           </p>
         ) : null}
-        {t.furnishings ? <p className={s.note}>The furniture in the design shows the room; it isn&apos;t priced.</p> : null}
+        {t.furnishings ? <p className={s.note}>The furniture in the design shows the room; it isn&apos;t priced — unless it&apos;s one of your products.</p> : null}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontVariantNumeric: "tabular-nums", minWidth: 640 }} data-design-estimate-lines>
             <thead>
@@ -198,7 +201,16 @@ export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPat
                         <td style={{ padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
                           <PriceIn value={l.unitPrice} onCommit={(v) => keepPrice(l.key, v)} line={l.key} />
                           <div className={s.mono} style={{ fontSize: 9.5 }}>
-                            {l.basis === "yours" ? (
+                            {l.key.startsWith("prod-") && book[l.key] == null ? (
+                              "Your inventory"
+                            ) : l.key.startsWith("prod-") ? (
+                              <>
+                                Your price ·{" "}
+                                <button type="button" className={s.link} onClick={() => keepPrice(l.key, null)}>
+                                  inventory price
+                                </button>
+                              </>
+                            ) : l.basis === "yours" ? (
                               <>
                                 Your price ·{" "}
                                 <button type="button" className={s.link} onClick={() => keepPrice(l.key, null)}>
