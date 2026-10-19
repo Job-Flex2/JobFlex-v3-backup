@@ -32,6 +32,10 @@
 
 /* ── Root ────────────────────────────────────────────────────────────────── */
 .jf-deck-v1 {
+  /* The wheel on this page moves a little closer to the hand (owner, 2026-10-19: "the scroll feels slow"): 0.85 of
+     a native tick against the shell's 0.65, and a shorter settle. The engine reads these off the studio. */
+  --scroll-wheel-scale: 0.85;
+  --scroll-wheel-settle: 90;
   --step-c: var(--accent); /* the shared kind picker's tint: the blueprint blue */
   --v1-amber-ink: color-mix(in srgb, var(--amber) 62%, var(--ink));
   display: flex;
@@ -121,6 +125,14 @@
 .jf-deck-v1 .v1-q-body { display: flex; flex-direction: column; gap: var(--deck-space-lg); min-width: 0; }
 .jf-deck-v1 .v1-q-scroll { display: flex; flex-direction: column; gap: var(--deck-space-lg); min-width: 0; }
 .jf-deck-v1 .v1-form-section { display: grid; gap: var(--deck-space-lg); min-width: 0; padding: var(--deck-panel-padding); background: var(--paper-deep); border: 2px solid var(--ink); border-radius: var(--r-sm); }
+/* A section off the screen is not laid out or painted (2026-10-18, perf): the header's scroll resizes the whole
+   workspace every frame, and with the form's ~2,100 nodes one layout cost 46ms; skipping the sections out of view
+   brought it to 4ms. `auto` keeps a section's real height once it has been seen, so the scrollbar does not jump.
+   (2026-10-19: a skipped section is never shrunk by the flex column — it was squeezed to its padding, 35px, and grew
+   to its real height as it scrolled in, so the form jumped by whole sections. And the skipping waits for
+   `data-sized`, set once every section has been laid out once, so each is skipped at its own remembered height.) */
+.jf-deck-v1 .v1-form-section { flex: none; contain-intrinsic-size: auto 640px; }
+.jf-deck-v1 .v1-q-scroll[data-sized] > .v1-form-section { content-visibility: auto; }
 .jf-deck-v1 .v1-form-heading { display: flex; align-items: center; gap: var(--deck-space-sm); }
 .jf-deck-v1 .v1-section-number { display: inline-grid; place-items: center; width: var(--deck-card-number); height: var(--deck-card-number); flex: none; border: 2px solid var(--ink); background: var(--ink); color: var(--paper-deep); font-size: var(--deck-body); font-weight: 800; }
 .jf-deck-v1 .v1-btn.v1-drafts-btn { min-height: var(--deck-tool-control); gap: var(--deck-space-xs); padding: 0 var(--deck-space-sm); font-size: var(--deck-meta); }
@@ -138,11 +150,10 @@
   background: var(--paper-deep);
   border: 2px solid var(--ink);
 }
-.jf-deck-v1 .v1-q-foot .v1-btn-primary { margin-left: auto; }
+.jf-deck-v1 .v1-q-foot .v1-foot-save { margin-left: auto; }
 .jf-deck-v1 .v1-foot-price { display: block; font-size: var(--deck-number); font-weight: 900; font-variant-numeric: tabular-nums; }
 .jf-deck-v1 .v1-foot-sum { display: grid; gap: 2px; min-width: 0; }
 .jf-deck-v1 .v1-foot-note { font-size: var(--deck-meta); color: var(--ink-soft); line-height: 1.2; }
-.jf-deck-v1 .v1-dock-btn { display: none; }
 
 .jf-deck-v1 .v1-sub { display: grid; gap: var(--deck-space-md); }
 .jf-deck-v1 .v1-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--deck-space-md); }
@@ -408,10 +419,15 @@
 /* ── The structure, pinned ──────────────────────────────────────────────── */
 .jf-deck-v1 .v1-stage { position: sticky; top: 12px; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .jf-deck-v1 .v1-viewer { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; background: var(--paper-deep); border: 2px solid var(--ink); border-radius: var(--r-sm); }
-.jf-deck-v1 .v1-view-head { display: grid; align-items: center; grid-template-columns: auto minmax(0, 1fr); gap: var(--deck-space-xs) var(--deck-space-md); padding: var(--deck-space-sm); border-bottom: 1px solid var(--ink); }
-.jf-deck-v1 .v1-view-title { white-space: nowrap; }
+/* The head (owner, 2026-10-19): the title and a small Full view on one line, the deck's facts under them, the
+   view tabs last. The button's size is set here, after .v1-btn, which would otherwise take it. */
+.jf-deck-v1 .v1-view-head { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) auto; gap: var(--deck-space-xs) var(--deck-space-md); padding: var(--deck-space-sm); border-bottom: 1px solid var(--ink); }
+.jf-deck-v1 .v1-view-title { grid-column: 1; grid-row: 1; align-self: center; white-space: nowrap; }
+.jf-deck-v1 .v1-view-head .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; align-self: center; gap: 5px; min-height: 32px; padding: 0 10px; font-size: 12px; }
+.jf-deck-v1 .v1-view-head .v1-dock-btn svg { width: 14px; height: 14px; }
+.jf-deck-v1 .v1-view-head .v1-view-facts { grid-column: 1 / -1; grid-row: 2; }
 .jf-deck-v1 .v1-view-head .v1-seg { flex: none; flex-wrap: nowrap; }
-.jf-deck-v1 .v1-view-head .v1-seg { grid-column: 1 / -1; }
+.jf-deck-v1 .v1-view-head .v1-seg { grid-column: 1 / -1; grid-row: 3; }
 .jf-deck-v1 .v1-view-head .v1-seg-btn { min-height: var(--deck-view-control); padding: 0 var(--deck-space-sm); font-size: var(--deck-meta); flex: none; }
 .jf-deck-v1 .v1-view-facts { min-width: 0; font-family: var(--font-sans); font-size: var(--deck-meta); letter-spacing: 0.02em; text-align: left; white-space: normal; overflow: visible; text-overflow: clip; }
 /* The picture takes what the window leaves once the head, price and tools are counted, so the whole pinned
@@ -593,7 +609,6 @@
   .jf-deck-v1 .v1-view-box { height: var(--deck-preview-height); }
   .jf-deck-v1 .v1-view-box.is-wall { height: 460px; }
   .jf-deck-v1 .v1-view-head { flex-wrap: nowrap; }
-  .jf-deck-v1 .v1-view-title, .jf-deck-v1 .v1-view-facts { grid-column: 1 / -1; }
   /* The view tabs share the width (at 320 the three labels overran the viewer). */
   .jf-deck-v1 .v1-view-head .v1-seg { flex: none; min-width: 0; width: 100%; }
   .jf-deck-v1 .v1-view-head .v1-seg-btn { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 6px; line-height: 1.15; }
@@ -649,16 +664,10 @@
    tables read as lists: the name, its quantity under it, the cost at the
    right; the per-unit columns stay on the desk. */
 @media (max-width: 768px) {
-  .jf-deck-v1 .v1-view-head { grid-template-columns: minmax(0, 1fr) auto; }
-  .jf-deck-v1 .v1-view-title { grid-column: 1; grid-row: 1; align-self: center; }
-  .jf-deck-v1 .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; gap: 6px; min-height: 40px; padding: 0 12px; }
-  .jf-deck-v1 .v1-view-facts { grid-row: 2; }
-  .jf-deck-v1 .v1-view-head .v1-seg { grid-row: 3; }
-
-  .jf-deck-v1 .v1-stage.is-docked { position: sticky; top: 0; z-index: 8; }
+  /* Compact, in the flow (owner, 2026-10-19: not pinned) — the steps scroll past it; Full view opens the whole viewer. */
+  .jf-deck-v1 .v1-stage.is-docked { position: static; }
   .jf-deck-v1 .v1-stage.is-docked .v1-viewer { border-width: 2px; }
   .jf-deck-v1 .v1-stage.is-docked .v1-view-head { gap: 6px var(--deck-space-sm); padding: 8px; }
-  .jf-deck-v1 .v1-stage.is-docked .v1-view-facts,
   .jf-deck-v1 .v1-stage.is-docked .v1-tools,
   .jf-deck-v1 .v1-stage.is-docked .v1-auto,
   .jf-deck-v1 .v1-stage.is-docked .v1-pick,
@@ -666,8 +675,7 @@
   .jf-deck-v1 .v1-stage.is-docked .v1-view-head .v1-seg-btn { min-height: 40px; }
   .jf-deck-v1 .v1-stage.is-docked .v1-view-box { height: clamp(180px, 30vh, 250px); }
   .jf-deck-v1 .v1-stage.is-docked .v1-view-box.is-wall { height: clamp(220px, 36vh, 300px); }
-  /* the steps' headings land under the docked scene, not behind it */
-  .jf-deck-v1 .v1-question { scroll-margin-top: calc(76px + clamp(180px, 30vh, 250px)); }
+  .jf-deck-v1 .v1-question { scroll-margin-top: 76px; }
 
   /* the footer: the price and its note left, the next step filling the rest */
   .jf-deck-v1 .v1-foot-price { font-size: 20px; }

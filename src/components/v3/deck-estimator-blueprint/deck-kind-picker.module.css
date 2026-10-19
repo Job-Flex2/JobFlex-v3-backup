@@ -32,15 +32,17 @@
 /* The picture: a sky above, the ground's own fade below (2026-10-13 — the drawing is lit and drawn in its materials). */
 :global(.jf-blueprint .content) .fig {
   position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden;
+  /* Its own box and layer (2026-10-19, perf): a picture is thousands of SVG nodes, and the page's every scroll
+     frame re-laid-out and repainted all four of them. Contained, the page's layout stops at this box and its
+     raster is kept between frames; only a turn or a build-up redraws it. */
+  contain: strict;
   background: linear-gradient(180deg, #e9f0f6 0%, #f4f4f0 55%, #f1efe9 100%);
 }
 :global(.jf-blueprint .content) .figSmall { aspect-ratio: 5 / 3.4; }
-:global(.jf-blueprint .content) .svg { display: block; width: 100%; height: 100%; touch-action: pan-y; }
+:global(.jf-blueprint .content) .svg { position: relative; display: block; width: 100%; height: 100%; object-fit: contain; touch-action: pan-y; }
 /* The picture's parts never take the pointer (a press on one part and a release on another was never a click); the
    picture itself does, for the mouse that turns it. */
 :global(.jf-blueprint .content) .svg * { pointer-events: none; }
-:global(.jf-blueprint .content) .svg path { stroke-width: 0.45; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-:global(.jf-blueprint .content) .layer, :global(.jf-blueprint .content) .still { transform-box: view-box; }
 /* The card and its ↻: the button is outside the card, in its corner. */
 :global(.jf-blueprint .content) .kindWrap, :global(.jf-blueprint .content) .sampleWrap { position: relative; min-width: 0; display: grid; }
 :global(.jf-blueprint .content) .kindWrap > .kind, :global(.jf-blueprint .content) .sampleWrap > .sample { height: 100%; }
@@ -62,12 +64,6 @@
   :global(.jf-blueprint .content) .turn { width: 36px; height: 36px; font-size: 17px; }
   :global(.jf-blueprint .content) .turnSmall { width: 32px; height: 32px; font-size: 15px; }
   :global(.jf-blueprint .content) .kindOn ~ .turn { top: 54px; }
-}
-/* The build-up: each step of the build fades in and settles down, one after the other. */
-:global(.jf-blueprint .content) .play .layer { animation: deckRise 0.42s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
-@keyframes deckRise {
-  from { opacity: 0; transform: translateY(-2.5%); }
-  to { opacity: 1; transform: none; }
 }
 
 /* The samples */
@@ -106,7 +102,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :global(.jf-blueprint .content) .play .layer { animation: none; }
   :global(.jf-blueprint .content) .kind, :global(.jf-blueprint .content) .sample { transition: none; }
   :global(.jf-blueprint .content) .kind:hover, :global(.jf-blueprint .content) .sample:hover { transform: none; }
 }
+
+
+/* The moving picture — its build-up and its turns — drawn on a canvas over the resting image (deck-kind-picker.tsx,
+   2026-10-19): the same box as the image, under the pointer's events (the image's span keeps the drag). */
+:global(.jf-blueprint .content) .fig, .fig { position: relative; }
+:global(.jf-blueprint .content) .turnCanvas, .turnCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: none; margin: 0; padding: 0; pointer-events: none; }

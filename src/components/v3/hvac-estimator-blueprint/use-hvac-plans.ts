@@ -45,6 +45,10 @@ export type HvacPlans = {
 
 const EMPTY: HvacPlans = { status: "idle", fileName: null, pages: 0, total: 0, done: 0, error: "", skipped: [], sheets: [], house: null, envelope: null };
 
+/** How a read ended — what the caller acts on once `pick` resolves (step 1 fills the address from it). null = a newer
+ *  pick or a remove took over. */
+export type PlanReadOutcome = { status: "done" | "failed"; house: House | null; envelope: PlanEnvelope | null } | null;
+
 export function useHvacPlans() {
   const [state, setState] = useState<HvacPlans>(EMPTY);
   const run = useRef(0);
@@ -54,27 +58,27 @@ export function useHvacPlans() {
     setState(EMPTY);
   }, []);
 
-  const pick = useCallback(async (files: File[]) => {
-    if (!files.length) return;
+  const pick = useCallback(async (files: File[]): Promise<PlanReadOutcome> => {
+    if (!files.length) return null;
     const mine = ++run.current;
     const alive = () => mine === run.current;
     setState({ ...EMPTY, status: "opening", fileName: files.length === 1 ? files[0].name : `${files.length} files` });
     try {
       const { pages: opened, skipped } = await openPlanFiles(files);
-      if (!alive()) return;
+      if (!alive()) return null;
       const pages: PlanPage[] = opened.slice(0, MAX_PLAN_PAGES).map((p, i) => ({ ...p, page: i + 1 }));
       const left = [...skipped, ...(opened.length > MAX_PLAN_PAGES ? [`Only the first ${MAX_PLAN_PAGES} pages are kept.`] : [])];
       if (!pages.length) {
         setState((s) => ({ ...s, status: "failed", error: skipped[0] ?? "No pages could be opened from these files.", skipped: left }));
-        return;
+        return { status: "failed", house: null, envelope: null };
       }
       setState((s) => ({ ...s, status: "reading", pages: pages.length, skipped: left }));
       const session = await startPlanSession();
-      if (!alive()) return;
+      if (!alive()) return null;
       if (!session.ok) {
         const msg = reportPlanLimitResult(session) ? "You have used this month's estimator runs." : session.error;
         setState((s) => ({ ...s, status: "failed", error: msg }));
-        return;
+        return { status: "failed", house: null, envelope: null };
       }
       const tok = session.token;
 
@@ -95,7 +99,7 @@ export function useHvacPlans() {
           kinds.set(p.page, null); // read in full: better a sheet too many than the energy table missed
         }
       });
-      if (!alive()) return;
+      if (!alive()) return null;
 
       // The sheets the load rests on, the most useful first; elevations, sections, foundation and roof read light.
       const queue = pages.filter((p) => {
@@ -138,17 +142,20 @@ export function useHvacPlans() {
         }
         if (alive()) setState((s) => ({ ...s, done: s.done + 1 }));
       });
-      if (!alive()) return;
+      if (!alive()) return null;
       sheets.sort((a, b) => a.page - b.page);
       const takeoff = computeTakeoff(sheets);
       if (!takeoff.house.levels.length) {
         setState((s) => ({ ...s, status: "failed", sheets, error: "No floor plan could be read from these sheets — add the floor plans and try again." }));
-        return;
+        return { status: "failed", house: takeoff.house, envelope: null };
       }
       const envelope = planEnvelopeOf(takeoff.house, sheets);
       setState((s) => ({ ...s, status: "done", sheets, house: takeoff.house, envelope, skipped: failed ? [...s.skipped, `${failed} sheet${failed === 1 ? "" : "s"} could not be read.`] : s.skipped }));
+      return { status: "done", house: takeoff.house, envelope };
     } catch (e) {
-      if (alive()) setState((s) => ({ ...s, status: "failed", error: clientErrorText(e, "The plans could not be read.") }));
+      if (!alive()) return null;
+      setState((s) => ({ ...s, status: "failed", error: clientErrorText(e, "The plans could not be read.") }));
+      return { status: "failed", house: null, envelope: null };
     }
   }, []);
 

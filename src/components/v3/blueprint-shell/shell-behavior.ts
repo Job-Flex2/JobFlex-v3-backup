@@ -130,13 +130,17 @@ export function initBlueprintShell(root: HTMLElement, opts: {
     const mainEl = $(".main");
     if (mainEl) {
       let ticking = false;
+      let scrolled = 0;
       mainEl.addEventListener(
         "scroll",
         () => {
+          // Read here, where layout is already clean; the frame only writes (2026-10-18, perf: read in the
+          // frame, after a page had set styles in the same frame, it forced a full layout every frame).
+          scrolled = mainEl.scrollTop;
           if (ticking) return;
           ticking = true;
           requestAnimationFrame(() => {
-            mainEl.style.setProperty("--gy", (-(mainEl.scrollTop * 0.06)).toFixed(1) + "px");
+            mainEl.style.setProperty("--gy", (-(scrolled * 0.06)).toFixed(1) + "px");
             ticking = false;
           });
         },

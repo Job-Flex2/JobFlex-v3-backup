@@ -97,6 +97,9 @@ export const NAV_SECTIONS: NavSection[] = [
         preview: true,
         children: [{ label: "Design inventory", icon: "i-folder", href: "/dashboard/design-studio/inventory" }],
       },
+      // The lawn & landscape estimator (2026-10-18): the address → the yard measured from the USDA aerial photo, every
+      // service priced by the crew's time — admin preview, drawn only for the accounts lib/lawn/access opens.
+      { label: "Lawn estimator", icon: "i-leaf", href: "/dashboard/lawn-estimator", tool: { tone: "spruce" }, preview: true },
       // Each estimator folds its own inventory under it (owner, 2026-10-10:
       // "a roofer doesn't have to see the other inventories"). The three
       // shared one page with a trade switch from 2026-09-29; before that they

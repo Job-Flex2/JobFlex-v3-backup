@@ -136,6 +136,9 @@ export interface SceneHandle {
   value: number;
   /** Feet of drag per unit of value (12 for an inches value). */
   perUnit: number;
+  /** The handle's own travel per unit of value where a change grows both ways about a centre (0.5 for a stair's
+   *  width); the drag is divided by it so the knob stays under the pointer. 1 when absent. */
+  follow?: number;
   label: string;
 }
 
@@ -876,7 +879,7 @@ export function deckScene(s: DeckStructure): DeckScene {
     // The width: a knob on the flight's far side, half-way down — drag it along the edge and the stairs widen that way
     // (the stringers, treads, risers, rail and the pad all re-count from the width).
     const c = st.footprint[2];
-    if (st.kind === "flight" && c) handles.push({ kind: "stair-width", id: st.design.id, x: r3((b.x + c.x) / 2), y: r3((b.y + c.y) / 2), z: r3(top - st.riseIn / 2), axis: st.design.side === "front" ? "x" : "y", value: st.design.widthFt, perUnit: 1, label: "Stair width" });
+    if (st.kind === "flight" && c) handles.push({ kind: "stair-width", id: st.design.id, x: r3((b.x + c.x) / 2), y: r3((b.y + c.y) / 2), z: r3(top - st.riseIn / 2), axis: st.design.side === "front" ? "x" : "y", value: st.design.widthFt, perUnit: 1, follow: 0.5, label: "Stair width" });
   }
   if (house && frame) for (const h of houseHandles(design.shape, design.house, (frame.surfaceIn + 2) / 12)) handles.push(h);
   return {
@@ -1053,7 +1056,7 @@ export function parseDeckScene(raw: unknown): DeckScene | null {
       for (const h of r.handles) {
         const o = (h && typeof h === "object" ? h : null) as Record<string, unknown> | null;
         if (!o || typeof o.kind !== "string" || typeof o.id !== "string" || !fin(o.x) || !fin(o.y) || !fin(o.z) || !fin(o.value) || !fin(o.perUnit) || (o.axis !== "x" && o.axis !== "y" && o.axis !== "z")) continue;
-        handles.push({ kind: o.kind as SceneHandle["kind"], id: o.id.slice(0, 20), x: o.x, y: o.y, z: o.z, axis: o.axis, value: o.value, perUnit: o.perUnit, label: typeof o.label === "string" ? o.label.slice(0, 60) : "" });
+        handles.push({ kind: o.kind as SceneHandle["kind"], id: o.id.slice(0, 20), x: o.x, y: o.y, z: o.z, axis: o.axis, value: o.value, perUnit: o.perUnit, ...(fin(o.follow) && o.follow > 0 && o.follow <= 1 ? { follow: o.follow } : {}), label: typeof o.label === "string" ? o.label.slice(0, 60) : "" });
       }
     }
   }

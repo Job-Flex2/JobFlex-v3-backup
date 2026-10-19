@@ -175,7 +175,8 @@ export default async function DashboardBlueprintLayout({
     ]);
     if (ws) navView = { workspace: ws.workspace, unlocked: ws.deckAccess ? [...unlockedByEdition("deck")] : [], switchable: ws.switchable };
     if (deckPreview && !ws?.deckAccess) navView = { ...navView, preview: [...unlockedByEdition("deck")] };
-    if (designPreview) navView = { ...navView, tools: ["/dashboard/design-studio"] };
+    // The lawn estimator (lib/lawn/access) opens to the same accounts as the studio.
+    if (designPreview) navView = { ...navView, tools: ["/dashboard/design-studio", "/dashboard/lawn-estimator"] };
     announcements = await db.announcement
       .findMany({
         where: {

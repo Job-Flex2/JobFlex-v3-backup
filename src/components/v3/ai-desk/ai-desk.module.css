@@ -2070,11 +2070,13 @@
   }
 }
 
-/* ── the setup as separate cards (owner, 2026-10-18) ─────────────────────────
-   "Make the title a bit bigger, not card in card but separated cards inside, and the steps separated by a gap."
+/* ── the setup: steps as separate cards, each step ONE card (owner, 2026-10-18/19) ──────────────
+   "Make the title a bit bigger … the steps separated by a gap" (10-18), then "the dropdown connected to its card,
+   the text outside the card inside it … a good line with the title showing this is a different section" (10-19).
    The setup's outer frame is gone: its head sits on the paper, each step is its own framed card with a gap between,
-   and an open step's parts sit under its card as separate cards — the step's frame no longer wraps them. Every rule
-   here is ≥ 2 classes (CLAUDE.md: the shell's reset ties single-class module rules on a production build). */
+   and an open step's parts sit INSIDE that card, each section opened by a full ink rule under which its title sits —
+   no frame inside the frame. Every rule here is ≥ 2 classes (CLAUDE.md: the shell's reset ties single-class module
+   rules on a production build). */
 .desk .setup.setup {
   border: 0;
   background: none;
@@ -2091,15 +2093,19 @@
   display: grid;
   gap: 14px;
 }
+.desk .step.step {
+  min-width: 0;
+  border: var(--k-frame);
+  border-radius: var(--k-r);
+  overflow: hidden;
+  background: var(--k-sheet);
+}
 .desk .step.step + .step {
-  border-top: 0;
+  border-top: var(--k-frame);
 }
 .desk .stepBtn.stepBtn {
   min-height: 76px;
   padding: 16px 22px;
-  border: var(--k-frame);
-  border-radius: var(--k-r);
-  overflow: hidden;
 }
 .desk .step[data-open="1"] .stepBtn.stepBtn {
   border-bottom: var(--k-frame);
@@ -2110,26 +2116,33 @@
 .desk .stepSub.stepSub {
   font-size: 15px;
 }
-.desk .stepBody.stepBody {
-  padding: 18px 0 10px;
-}
 .desk .stepBody .panelBody.panelBody {
-  padding: 0;
+  padding: 22px 22px 26px;
 }
 .desk .stepBody .panelBody > * {
-  gap: 14px;
+  gap: 18px;
 }
-/* each part of the open step: its own card */
+/* each part of the open step: a section of the card, not a card of its own */
 .desk .stepBody .panelBody > * > div {
   margin: 0;
-  padding: 18px 20px;
-  border: var(--k-frame-thin);
-  border-radius: var(--k-r);
-  background: var(--k-sheet);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
-/* a box inside one of those cards is a tinted area, not another frame */
+.desk .stepBody .panelBody > * > * + div {
+  padding-top: 18px;
+  border-top: 1.5px solid var(--k-ink);
+}
+/* a box inside a section is a tinted area, not another frame */
 .desk .stepBody .panelBody > * > div .empty.empty,
 .desk .stepBody .panelBody > * > div .card.card {
   border-color: transparent;
   background: var(--k-paper);
+}
+@media (max-width: 600px) {
+  .desk .stepBody .panelBody.panelBody {
+    padding: 18px 14px 20px;
+  }
 }

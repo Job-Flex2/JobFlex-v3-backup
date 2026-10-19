@@ -11,9 +11,22 @@ export function createWheelMotion(read: () => number, write: (value: number) => 
   let target = 0;
   let position = 0;
   let previous = 0;
+  // A glide to a place (a "go to" button): eased over its own time, its target read again every frame so a section
+  // that lays out on the way does not leave it short.
+  let glide: { from: number; to: () => number; start: number; ms: number } | null = null;
   const clamp = (value: number) => Math.max(0, Math.min(maximum(), value));
-  const stop = () => { const active = !!raf; cancelAnimationFrame(raf); raf = 0; if (active) onActivity?.(false); };
+  const stop = () => { const active = !!raf; cancelAnimationFrame(raf); raf = 0; glide = null; if (active) onActivity?.(false); };
   const frame = (now: number) => {
+    if (glide) {
+      const t = Math.min(1, (now - glide.start) / glide.ms);
+      // Ease in-out sine: its top speed is half the cubic's, so a long glide reads as a glide, not a jump.
+      const k = (1 - Math.cos(Math.PI * t)) / 2;
+      position = glide.from + (clamp(glide.to()) - glide.from) * k;
+      write(position);
+      if (t >= 1) { target = position; glide = null; raf = 0; onActivity?.(false); return; }
+      raf = requestAnimationFrame(frame);
+      return;
+    }
     const value = position;
     target = clamp(target);
     const next = value + (target - value) * (1 - Math.exp(-Math.min(64, now - previous) / settle));
@@ -25,7 +38,21 @@ export function createWheelMotion(read: () => number, write: (value: number) => 
   };
   return {
     stop,
+    glideTo(to: () => number) {
+      const from = raf ? position : read();
+      const active = !!raf;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      glide = null;
+      if (reduced.matches || Math.abs(clamp(to()) - from) < epsilon) { position = target = clamp(to()); write(position); if (active) onActivity?.(false); return; }
+      glide = { from, to, start: performance.now(), ms: Math.min(1100, 420 + Math.abs(clamp(to()) - from) * 0.14) };
+      position = from;
+      if (!active) onActivity?.(true);
+      raf = requestAnimationFrame(frame);
+    },
     move(delta: number) {
+      // A wheel during a glide takes over from where the glide is.
+      if (glide) { glide = null; target = position; }
       if (!raf) target = position = read();
       target = clamp(target + delta * scale);
       if (reduced.matches) { stop(); write(target); return; }
