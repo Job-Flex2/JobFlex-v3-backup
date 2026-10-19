@@ -46,9 +46,9 @@ export const LANDING_SECTION_KEYS = LANDING_SECTIONS.map((s) => s.key);
    sections is numbered by — stays exactly as it was. Only an own order
    (below) may name them. */
 const OWN_SECTIONS: readonly LandingSection[] = [
-  { key: "how", label: "Estimate from an address", selector: [".lp-cv--how", "#how"], shown: "some" },
-  { key: "steps", label: "Four steps", selector: [".lp-cv--steps", "#steps"], shown: "some" },
+  { key: "skeptic", label: "Where the numbers come from", selector: [".lp-cv--skeptic", "#skeptic"], shown: "some" },
   { key: "sample", label: "Finished estimate", selector: [".lp-cv--sample", "#sample"], shown: "some" },
+  { key: "try", label: "Try the estimator", selector: [".lp-cv--try", "#try"], shown: "some" },
 ];
 const OWN_SECTION_KEYS = OWN_SECTIONS.map((s) => s.key);
 
@@ -65,7 +65,7 @@ const OWN_SECTION_KEYS = OWN_SECTIONS.map((s) => s.key);
    sections out as they are now; the analyst reads a week of visits, and a
    visit from before `since` saw the usual order — it is read in that one,
    so the first days after the change are not a blend of two pages. */
-const OWN_ORDER: Readonly<Record<string, { since: number; order: readonly string[] }>> = {
+const OWN_ORDER: Readonly<Record<string, { since: number; order: readonly string[]; /** Sections of the list this landing leaves out, named so none goes missing by accident. */ drops?: readonly string[] }>> = {
   roofing: {
     // Pushed 2026-10-04 ~7:45 PM Los Angeles; live a few minutes later.
     since: Date.parse("2026-10-05T03:00:00Z"),
@@ -84,12 +84,14 @@ const OWN_ORDER: Readonly<Record<string, { since: number; order: readonly string
     since: Date.parse("2026-10-05T06:55:00Z"),
     order: ["hero", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
   },
-  // The HVAC page's second version (2026-10-19, the October audit): where
-  // the figures come from, the four steps and a finished estimate between
-  // the hero and HVAC's own order. A new page — every visit is in this order.
+  // The HVAC page's second version (2026-10-19, the conversion audit): where
+  // the numbers come from, a finished estimate and the estimator to try
+  // under the hero, then a shorter run of HVAC's own sections. A new page —
+  // every visit is in this order.
   hvac2: {
     since: Date.parse("2026-10-19T00:00:00Z"),
-    order: ["hero", "how", "steps", "sample", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
+    order: ["hero", "skeptic", "sample", "try", "hvac", "proposals", "portal", "stats", "pricing", "faq", "final"],
+    drops: ["compare", "showcase", "montage", "crew", "integrations", "built"],
   },
 };
 
@@ -116,11 +118,11 @@ export function landingSectionsFor(industry: string | null | undefined): readonl
 }
 
 // An own order is the same sections, each once (plus, at most, sections of
-// its own) — checked at module load so a section added to the list above
-// cannot go missing from a landing unnoticed.
+// its own, less the ones it names as dropped) — checked at module load so a
+// section added to the list above cannot go missing from a landing unnoticed.
 if (process.env.NODE_ENV !== "production") {
-  for (const [landing, { order }] of Object.entries(OWN_ORDER)) {
-    const missing = LANDING_SECTION_KEYS.filter((k) => !order.includes(k));
+  for (const [landing, { order, drops = [] }] of Object.entries(OWN_ORDER)) {
+    const missing = LANDING_SECTION_KEYS.filter((k) => !order.includes(k) && !drops.includes(k));
     const extra = order.filter((k, i) => !(LANDING_SECTION_KEYS.includes(k) || OWN_SECTION_KEYS.includes(k)) || order.indexOf(k) !== i);
     if (missing.length || extra.length) throw new Error(`landing-sections: the ${landing} order is not the list (missing ${missing.join(", ") || "none"}; unknown or repeated ${extra.join(", ") || "none"})`);
     if (order[0] !== "hero" || order[order.length - 1] !== "final") throw new Error(`landing-sections: the ${landing} order must start at the hero and end at the final call to action`);

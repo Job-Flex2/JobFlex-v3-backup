@@ -1,25 +1,29 @@
-/* THE FIRST SCREEN'S DEMO VIDEO (hvac2, 2026-10-19). The audit's "real
-   product demo" above the button: a 45-second screen recording of the
-   address-to-proposal workflow, one cut per shape — 9:16 for a phone, 16:9
-   for a desk — and one poster frame.
+/* THE FIRST SCREEN'S DEMO FILM (hvac2, 2026-10-19). "Real product demo ·
+   address to proposal in 40 seconds", one cut per shape, silent:
+   16:9 for a desk (≥ 640 px, inside the app frame) and 4:5 for a phone (the
+   column's full width), each as WebM first and MP4 second, and one poster
+   per shape — the poster is the first screen's largest paint, the film plays
+   over it once it has frames.
 
-   The files are not recorded yet. Until they are, the demo is the real
-   estimator playing itself (hvac-estimator-shot, quick start). To switch:
-   put the three files in public/landing-e/ under these names and set READY
-   to true — the video then plays first and "Try it yourself ↓" leads to the
-   interactive estimator in the showcase. A flag rather than a file check:
-   the server never sees public/ on Vercel, and a probe from the browser
-   would cost the first screen a round trip and a jump. */
+   A FLAG, NOT A FILE CHECK. The page is rendered per request
+   (src/app/page.tsx, force-dynamic) and on Vercel the server function does
+   not carry public/ — a check there would say "no film" in production while
+   the files sit on the CDN; a check from the browser would cost the first
+   screen a request and a swap. So the six files land in public/landing-e/
+   under the names below and READY turns true in the same commit. Until
+   then the demo is the real estimator playing itself
+   (hvac-estimator-shot, opening on the address), in the same box.
+   The six files are in (4cce4867): on. */
 
 export const HVAC2_DEMO_VIDEO = {
-  READY: false,
-  phone: "/landing-e/hvac-demo-916.mp4",
-  desk: "/landing-e/hvac-demo-169.mp4",
-  poster: "/landing-e/hvac-demo-poster.webp",
-  /** Below this width the 9:16 cut plays (the hero's phone build). */
-  phoneMax: 640,
-  seconds: 45,
+  READY: true,
+  /** ≥ 640 px. */
+  desk: { webm: "/landing-e/hvac-demo-16x9.webm", mp4: "/landing-e/hvac-demo-16x9.mp4", poster: "/landing-e/hvac-demo-poster-16x9.webp" },
+  /** < 640 px. */
+  phone: { webm: "/landing-e/hvac-demo-4x5.webm", mp4: "/landing-e/hvac-demo-4x5.mp4", poster: "/landing-e/hvac-demo-poster-4x5.webp" },
+  /** The cut's length, as the label says it. */
+  seconds: 40,
 } as const;
 
-/** What every hvac2 event carries: the version, as industry and as landing. */
-export const HVAC2_EVENT = { industry: "hvac2", landing: "hvac2", variant: "e" } as const;
+/** The one media query both the poster and the film switch on. */
+export const HVAC2_DESK_MEDIA = "(min-width: 640px)";

@@ -11,7 +11,7 @@ import { DEMO_READS, DEMO_SITE } from "../hvac-estimator-demo/demo-actions";
 import { applyNameplate, applyStated, applyStatedNested, modelFromSite } from "@/lib/hvac/intake";
 import { designConditionsFor } from "@/lib/hvac/designConditions";
 import { runEngine } from "@/lib/hvac/engine";
-import { DEFAULT_RATE_CARD, STARTER_CATALOG, normalizeRateCard, tiersFor } from "@/lib/hvac/ledger";
+import { DEFAULT_RATE_CARD, STARTER_CATALOG, buildLedger, normalizeRateCard, tiersFor, type LedgerLine } from "@/lib/hvac/ledger";
 import type { BuildingModel } from "@/lib/hvac/types";
 
 /** What the demo types on the walk (hvac-estimator-shot TYPED_FACTS). */
@@ -50,6 +50,45 @@ export interface Hvac2Example {
   checks: { pass: number; fix: number; verify: number };
   checkNames: string[];
   tiers: Array<{ tier: string; subtotal: number; tons: number }>;
+  /** The Better tier's estimate as the client receives it (#sample). */
+  sample: {
+    title: string;
+    unit: string;
+    lines: Array<{ name: string; amount: number }>;
+    total: number;
+  };
+}
+
+/* THE CLIENT'S LINES. The ledger writes every part and labour step on its own
+   row (24 on this house); a proposal groups them the way a homeowner reads a
+   bid. Each ledger row lands in exactly one group by its id — a row no group
+   names joins "Other materials and labour", so the groups always add up to
+   the ledger's own total. */
+const GROUPS: Array<{ name: string; ids: string[] }> = [
+  { name: "", ids: ["eq-main"] },
+  { name: "", ids: ["eq-ah"] },
+  { name: "", ids: ["eq-strips"] },
+  { name: "Line set, pad, disconnect, surge protection and condensate drain", ids: ["m-lineset", "m-pad", "m-disc", "m-surge", "m-drain"] },
+  { name: "Electrical: air-handler circuit, breaker, disconnect and wiring", ids: ["m-breaker-ah", "m-brk-ah", "l-elec-ah", "l-elec"] },
+  { name: "Larger return: grille, duct and cut-in", ids: ["m-return", "l-return"] },
+  { name: "Programmable thermostat, installed and set up", ids: ["m-tstat", "l-tstat"] },
+  { name: "Installation: remove the old system, set, braze, evacuate, cap the gas, start-up", ids: ["l-remove", "l-outdoor", "l-indoor", "l-lineset", "l-gascap", "l-startup"] },
+  { name: "Mechanical permit, inspection and disposal", ids: ["l-permit", "l-disposal"] },
+];
+
+function clientLines(rows: LedgerLine[]): Array<{ name: string; amount: number }> {
+  const cents = (r: LedgerLine) => Math.round(r.quantity * r.unitPrice * 100);
+  const used = new Set<string>();
+  const out: Array<{ name: string; amount: number }> = [];
+  for (const g of GROUPS) {
+    const hit = rows.filter((r) => g.ids.includes(r.id));
+    if (!hit.length) continue;
+    hit.forEach((r) => used.add(r.id));
+    out.push({ name: g.name || hit[0].name, amount: hit.reduce((a, r) => a + cents(r), 0) / 100 });
+  }
+  const rest = rows.filter((r) => !used.has(r.id));
+  if (rest.length) out.push({ name: "Other materials and labour", amount: rest.reduce((a, r) => a + cents(r), 0) / 100 });
+  return out;
 }
 
 const R = (v: string) => v.replace(/^r(\d+)$/i, "R-$1");
@@ -73,6 +112,12 @@ export function hvac2Example(): Hvac2Example {
   const r = run();
   const card = normalizeRateCard(DEFAULT_RATE_CARD);
   const tiers = tiersFor(r, m, card, STARTER_CATALOG, {}, (id) => run(id));
+  // The Better tier, as the estimator picks it for the proposal by default.
+  const mid = tiers.find((t) => t.tier === "mid") ?? tiers[0];
+  const midRun = mid ? run(mid.candidate.item.id) : r;
+  const ledger = buildLedger(midRun, m, card, STARTER_CATALOG, mid ? { pick: mid.candidate.item.id } : {});
+  const lines = clientLines([...ledger.materials, ...ledger.labor]);
+  const midItem = midRun.selection.chosen?.item;
   const o = DEMO_READS.outdoor;
   const i = DEMO_READS.indoor;
   const chosen = r.selection.chosen?.item;
@@ -104,11 +149,15 @@ export function hvac2Example(): Hvac2Example {
     },
     checkNames: r.checks.slice(0, 4).map((c) => c.title),
     tiers: tiers.map((t) => ({ tier: t.tier, subtotal: Math.round(t.subtotal), tons: t.candidate.item.tons ?? 0 })),
+    sample: {
+      title: ledger.title,
+      unit: midItem ? `${midItem.tons}-ton ${midItem.kind === "heat-pump" ? "heat pump" : midItem.kind.replace(/-/g, " ")}${midItem.seer2 ? ` · ${midItem.seer2} SEER2` : ""}${midItem.refrigerant ? ` · ${midItem.refrigerant}` : ""}` : "",
+      lines,
+      total: lines.reduce((a, l) => a + Math.round(l.amount * 100), 0) / 100,
+    },
   };
   cached = ex;
   return ex;
 }
 
-export const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 export const btu = (n: number) => `${Math.round(n).toLocaleString("en-US")} BTU/h`;
-export const TIER_NAME: Record<string, string> = { value: "Good", mid: "Better", premium: "Best" };

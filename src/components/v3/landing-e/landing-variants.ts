@@ -307,23 +307,24 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     playOnPhone: true,
     shotCta: true,
   },
-  // HVAC, VERSION 2 (2026-10-19; the October audit). The HVAC page with a
-  // first screen that says what the tool does without "AI" or "in seconds",
-  // a demo above the one button, the trial's terms under it, and three
-  // sections of its own under the hero (hvac2/): where the figures come
-  // from, the four steps, a finished estimate to open. Every claim stays
-  // inside hvac's claims review above: the load is "Manual J-based", on the
-  // county's design day; the property facts are the parcel record, the
-  // building outline the pin sits in and the ground elevation (USGS 3DEP),
-  // each with its source; code checks exist for six states plus the federal
-  // floors; no duct design, no texting. The ad hooks are hvac's.
+  // HVAC, VERSION 2 (2026-10-19; the conversion audit). The HVAC page with
+  // a first screen that says what the tool does without "AI" or "in
+  // seconds", a demo above one trial button, the trial's terms under it,
+  // and sections of its own (hvac2/): where the numbers come from, a
+  // finished estimate, the estimator to try. Every claim stays inside hvac's
+  // claims review above: the load is "Manual J-based" on the county's design
+  // day, the unit is matched from the shop's own equipment catalog (Manual S
+  // window), the property facts are the parcel record, the building
+  // footprint at the pin and the ground elevation, each with its source;
+  // code rules exist for six states plus the federal floors; no duct design,
+  // no permits filed, no texting. The ad hooks are hvac's.
   hvac2: {
     kicker: "For HVAC contractors",
     h1: ["Stop Spending Hours", "on HVAC Estimates."],
     h1Long: true,
-    sub: "Start with an address. Build the load estimate, size the equipment, review pricing and send a customer-ready proposal.",
+    sub: "Start with an address. JobFlex pulls the property data, runs the load, sizes the equipment and prices every line — you review, adjust and send the proposal from your phone.",
     subEven: true,
-    checks: ["Load estimate & equipment sizing", "Equipment options & pricing", "Professional proposal"],
+    checks: ["Manual J-based load from real property data", "Manual S equipment match from your inventory", "Every line priced, proposal ready to send"],
     primaryCta: "Start free — price an HVAC job",
     showcaseSlide: "hvac",
     visual: "hvac",

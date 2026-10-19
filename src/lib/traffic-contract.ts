@@ -166,10 +166,13 @@ export const TRAFFIC_EVENTS = {
   // The HVAC page's second version (?industry=hvac2, 2026-10-19), its first
   // screen's demo above the button: `demo_play` once it starts, then
   // `demo_25` / `demo_50` / `demo_100` as a quarter, half and all of it has
-  // played (the video's own time; the interactive walk-through's clock until
-  // the video is in) — `kind` "video" | "interactive". `sample_open` when the
-  // finished estimate is opened (`from`: the hero's link or the section's
-  // button). Fired by landing-e/hvac2; always industry and landing "hvac2".
+  // played (the film's own time; the interactive walk-through's clock while
+  // the film is not in) — `kind` "video" | "interactive". `sample_open` when
+  // the finished estimate comes into view or a link to it is tapped (`from`
+  // "view" | "link"). Each once per browser session. Fired by
+  // landing-e/hvac2, always with industry and landing "hvac2" and the `hook`
+  // when the headline was an ad's. That page's cta_click also carries
+  // `position` (hero | sample | final | mobile) and `hook`.
   demoPlay: "demo_play",
   demo25: "demo_25",
   demo50: "demo_50",
