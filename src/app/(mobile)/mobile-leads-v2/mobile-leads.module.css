@@ -667,53 +667,65 @@
 .lsrcJf { color: var(--blueprint); font-weight: 600; }
 .lsrcJf i { background: var(--blueprint); }
 
-/* ── WHERE THE LEADS CAME FROM (2026-10-16) — FILTERS (owner, 2026-10-18;
-   two designs on trial by ?v=) ──────────────────────────────────────────
-   One row: All / JobFlex / Your own, sliding sideways when it does not fit
-   (whole words, never clipped), then under "Your own" the Source button,
-   whose menu opens across the whole row (the row is its box; the button's
-   .fdrop is static). The page's plain type, a grey count beside each label,
-   colour only as a flat 8px dot — no shadow, no offset, no heavy frame.
-     v1  one light plate, the picked segment white with a thin frame; Source
-         a button in the same plate.
-     v2  underlined tabs on one hairline, the picked one ink over a 2px
-         blueprint rule; Source a plain text dropdown at the right end. */
+/* ── WHERE THE LEADS CAME FROM (2026-10-16) — FILTERS (owner, 2026-10-18) ──
+   One row: All / JobFlex / Your own as the Blueprint segmented control —
+   one white square plate in a 1.5px hair frame, segments split by 1px hair
+   rules, the picked one a light blueprint fill, blueprint text and a 2px
+   blueprint bar along its foot — sliding sideways when it does not fit
+   (whole words, never clipped; use-scroll-fade fades the side that holds
+   more). Under "Your own" the Source button, same frame, whose menu (white,
+   square, 1.5px ink) opens across the whole row (the row is its box; the
+   button's .fdrop is static). The page's plain type, a grey count beside
+   each label, colour only as a flat 8px dot — no shadow, no offset. */
 .fbar {
-  --fplate: color-mix(in srgb, var(--ink) 6%, transparent);
   position: relative;
   display: flex; align-items: stretch; gap: 8px;
   min-width: 0;
 }
 .fseg {
   display: flex; flex: 1 1 auto; min-width: 0;
+  border: 1.5px solid var(--hair); border-radius: 0;
+  background: #fff;
+}
+/* The scroller inside the frame: it alone fades, so the frame stays whole. */
+.fsegScroll {
+  display: flex; flex: 1 1 auto; min-width: 0;
   overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
-.fseg::-webkit-scrollbar { display: none; }
-.fseg[data-fade="end"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
-.fseg[data-fade="start"] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
-.fseg[data-fade="start end"] { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+.fsegScroll::-webkit-scrollbar { display: none; }
+.fsegScroll[data-fade="end"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.fsegScroll[data-fade="start"] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+.fsegScroll[data-fade="start end"] { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
 .fsegBtn {
+  position: relative;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 1 0 auto;
-  min-height: 44px; padding: 0 12px;
+  min-height: 44px; padding: 0 14px;
+  border-radius: 0;
   font-family: var(--font); font-size: 14px; font-weight: 500; line-height: 1;
   letter-spacing: 0; text-transform: none; white-space: nowrap;
-  color: var(--muted);
-  transition: background 0.14s, color 0.14s, border-color 0.14s;
+  color: var(--ink);
+  transition: background 0.14s, color 0.14s;
 }
-.fsegBtn.on { color: var(--ink); font-weight: 600; }
+.fsegBtn + .fsegBtn { border-left: 1px solid var(--hair); }
+.fsegBtn.on { background: var(--accent-soft); color: var(--blueprint); font-weight: 600; }
+.fsegBtn.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--blueprint); }
 .fsegN { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted-light); }
+.fsegBtn.on .fsegN { color: var(--blueprint); }
 .fdrop { position: static; display: flex; flex: none; margin-left: auto; }
 .fdropBtn {
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 44px; padding: 0 12px;
+  border: 1.5px solid var(--hair); border-radius: 0;
+  background: #fff;
   font-family: var(--font); font-size: 14px; font-weight: 600; line-height: 1;
   letter-spacing: 0; text-transform: none; white-space: nowrap;
   color: var(--ink);
-  transition: background 0.14s, border-color 0.14s;
+  transition: border-color 0.14s;
 }
+.fdrop.open .fdropBtn { border-color: var(--ink); }
 .fdropKey { font-weight: 500; color: var(--muted); }
-.fdropCaret { width: 15px; height: 15px; color: var(--muted-light); transition: transform 0.18s var(--ease-out); }
+.fdropCaret { width: 15px; height: 15px; color: var(--muted); transition: transform 0.18s var(--ease-out); }
 .fdrop.open .fdropCaret { transform: rotate(180deg); }
 .fdot { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dot, transparent); }
 .fmenu {
@@ -722,8 +734,7 @@
   overflow-y: auto; overscroll-behavior: contain;
   padding: 4px;
   background: #fff;
-  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
-  border-radius: var(--radius);
+  border: 1.5px solid var(--ink); border-radius: 0;
   visibility: hidden; opacity: 0; transform: translateY(-4px);
   transition: opacity 0.16s ease, transform 0.16s var(--ease-out), visibility 0.16s;
 }
@@ -732,32 +743,16 @@
 .fitem {
   display: flex; align-items: center; gap: 10px; width: 100%;
   min-height: 46px; padding: 0 12px;
-  border-radius: var(--radius);
+  border-radius: 0;
   font-family: var(--font); font-size: 15px; font-weight: 500;
   letter-spacing: 0; text-transform: none; text-align: left;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
-.fitem:active { background: var(--fplate); }
+.fitem:active { background: var(--accent-soft); }
 .fitem.on { color: var(--blueprint); font-weight: 600; }
 .fitem .fsegN { margin-left: auto; }
 .fitem.on .fsegN { color: var(--blueprint); }
 .fitem .ic { width: 15px; height: 15px; color: var(--blueprint); margin-left: 4px; }
-
-/* v1 — segmented control */
-.fbar[data-fv="1"] .fseg { gap: 2px; padding: 3px; background: var(--fplate); border-radius: var(--radius); }
-.fbar[data-fv="1"] .fsegBtn { border: 1px solid transparent; border-radius: var(--radius); }
-.fbar[data-fv="1"] .fsegBtn.on { background: #fff; border-color: var(--hair); }
-.fbar[data-fv="1"] .fdropBtn { border: 1px solid transparent; border-radius: var(--radius); background: var(--fplate); min-height: 50px; }
-.fbar[data-fv="1"] .fdrop.isSet .fdropBtn,
-.fbar[data-fv="1"] .fdrop.open .fdropBtn { background: #fff; border-color: var(--hair); }
-
-/* v2 — underlined tabs */
-.fbar[data-fv="2"] { gap: 12px; border-bottom: 1px solid var(--hair); }
-.fbar[data-fv="2"] .fseg { gap: 18px; }
-.fbar[data-fv="2"] .fsegBtn { flex: none; padding: 0 1px; border-bottom: 2px solid transparent; }
-.fbar[data-fv="2"] .fsegBtn.on { border-bottom-color: var(--blueprint); }
-.fbar[data-fv="2"] .fdropBtn { padding: 0 4px 0 8px; }
-.fbar[data-fv="2"] .fdrop.isSet .fdropBtn { color: var(--blueprint); }
 @media (prefers-reduced-motion: reduce) { .fsegBtn, .fdropBtn, .fmenu, .fdropCaret { transition: none; } }
 .lrowFoot {
   grid-column: 1 / -1;

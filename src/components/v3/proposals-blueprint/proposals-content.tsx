@@ -25,7 +25,6 @@
 
 import Link from "next/link";
 import { useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
 import "@/components/v3/blueprint-shell/filter-bar.css";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { initProposalsContent } from "./proposals-behavior";
@@ -37,8 +36,6 @@ import type { ProposalRow } from "./proposals-data";
  *   keeps itself in step with the database through the proposal server actions.
  */
 export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
-  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
-  const fv = useSearchParams().get("v") === "2" ? "2" : "1";
   // The seed reaches `init` through a ref, NOT through the callback's deps.
   // `useBlueprintContent` re-runs whenever `init` changes identity, and a
   // re-run tears the page down and replays the whole reveal cascade — so the
@@ -107,14 +104,14 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
         </button>
       </div>
 
-      {/* FILTERS (owner, 2026-10-18; two designs on trial by ?v=, see
-          blueprint-shell/filter-bar.css): the status of the All tab's list,
+      {/* FILTERS (owner, 2026-10-18, blueprint-shell/filter-bar.css): the
+          status of the All tab's list as a segmented control,
           then TYPE — the families of work the book holds, each with its
           estimating tool's dot and a count. Type narrows every tab, chip and
           figure, so the bar stays on every tab; the statuses only on All.
           Type is painted by proposals-behavior renderKinds and hidden while
           the book holds one family. */}
-      <div className="flt-bar" id="pFilters" data-fv={fv}>
+      <div className="flt-bar" id="pFilters">
         <div className="flt-seg" id="pChips" role="group" aria-label="Status">
           {(
             [

@@ -203,9 +203,22 @@ monthly" is one 12px line (weight 600) under the price.
 - Фильтры, метки, бейджи — без теней и offset-сдвигов за цветными
   квадратами/точками; без моно-капса в чипах (owner, 2026-10-18).
   Filters, tags and badges: no shadow or offset behind a coloured square or
-  dot, and no monospace caps in chips. The Leads and Proposals filter bars
-  ([filter-bar.css](src/components/v3/blueprint-shell/filter-bar.css)) are on
-  trial in two designs by `?v=1` / `?v=2` until the owner picks one.
+  dot, and no monospace caps in chips.
+- Filter bar (owner, 2026-10-18 — the segmented control was chosen over
+  underlined tabs): Leads (All / From JobFlex / Your own leads + Source) and
+  Proposals (status + Type) filter with one white plate, square corners, a
+  1.5px `--hair` frame, segments split by 1px `--hair` rules, 36px tall on a
+  desk (44px on a phone). The picked segment has a light blueprint fill
+  (`--accent-soft`), blueprint text and a 2px blueprint bar along its foot;
+  the others are ink with the count a grey number. Inter 13.5–14px, 500–600,
+  never caps. Type / Source is a separate button with the same frame and
+  height — "Type:" grey, the value ink, a ▾ — opening a white, square menu
+  framed in 1.5px ink, each colour a flat 8px dot. No shadow or offset on the
+  plate, the segments or the dots. On a phone the segments slide sideways
+  with a fade on the side that holds more. Row tags keep the same language:
+  a flat dot and plain text (● JobFlex, ● Facebook, ● HVAC · HVAC estimator).
+  Desk: [filter-bar.css](src/components/v3/blueprint-shell/filter-bar.css);
+  phone: the `.fbar` rules in the mobile Leads and Proposals modules.
 - Use existing Lucide icons at consistent sizes; decorative icons are hidden
   from assistive technology, icon-only controls have accessible names.
 - Preserve all existing actions, validation, units, permissions and data

@@ -51,7 +51,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Fragment } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useScrollFade } from "@/components/v3/mobile-shell/use-scroll-fade";
 import styles from "./mobile-proposals.module.css";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
@@ -346,8 +346,6 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   const [writing, setWriting] = useState(false);
   /** One-line report for a write that succeeded or refused. */
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "live"; text: string } | null>(null);
-  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
-  const fv = useSearchParams().get("v") === "2" ? "2" : "1";
   /* The Type menu on the filter bar (owner, 2026-10-18). Its placement AND the
      outside-tap closer share one node: useMenuPlacement caps the panel at the
      room actually left under the trigger and flips it above when there is more
@@ -355,7 +353,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
      overflows, so a menu hanging off the bottom edge would be unreachable. */
   const [typeOpen, setTypeOpen] = useState(false);
   /** The filter row slides sideways when it does not fit; this fades the side that holds more. */
-  const segFade = useScrollFade<HTMLDivElement>();
+  const segFade = useScrollFade<HTMLDivElement>(filter);
   const typeRef = useRef<HTMLDivElement>(null);
   const typeMenuRef = useRef<HTMLDivElement>(null);
   useMenuPlacement(typeOpen, typeRef, typeMenuRef);
@@ -979,23 +977,25 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             ))}
           </div>
 
-          {/* FILTERS (owner, 2026-10-18; two designs on trial by ?v=): one row
-              under the tabs — the All list's statuses (a segmented control, or
-              underlined tabs on ?v=2), sliding sideways when they do not fit,
+          {/* FILTERS (owner, 2026-10-18): one row under the tabs — the All
+              list's statuses as the Blueprint segmented control, sliding
+              sideways when they do not fit,
               never clipped; then TYPE (deck · roof · fence · HVAC · remodel ·
               other, each with its tool's flat dot), whose menu opens across the
               whole row. Type narrows every tab, so it stays on all three. */}
           {tab === "all" || kindChips.length > 1 ? (
-            <div className={styles.fbar} data-fv={fv}>
+            <div className={styles.fbar}>
               {tab === "all" ? (
-                <div className={styles.fseg} ref={segFade} role="group" aria-label="Status">
-                  {FILTERS.map((f) => (
-                    <button key={f.key} type="button" className={`${styles.fsegBtn} ${filter === f.key ? styles.on : ""}`}
-                      aria-pressed={filter === f.key} onClick={() => { setFilter(f.key); setPageAll(1); }}>
-                      {f.label}
-                      <span className={styles.fsegN}>{chipCounts[f.key] ?? 0}</span>
-                    </button>
-                  ))}
+                <div className={styles.fseg}>
+                  <div className={styles.fsegScroll} ref={segFade} role="group" aria-label="Status">
+                    {FILTERS.map((f) => (
+                      <button key={f.key} type="button" className={`${styles.fsegBtn} ${filter === f.key ? styles.on : ""}`}
+                        aria-pressed={filter === f.key} onClick={() => { setFilter(f.key); setPageAll(1); }}>
+                        {f.label}
+                        <span className={styles.fsegN}>{chipCounts[f.key] ?? 0}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : null}
               {kindChips.length > 1 ? (

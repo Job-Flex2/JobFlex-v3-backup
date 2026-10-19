@@ -35,10 +35,7 @@ import "@/components/v3/blueprint-shell/filter-bar.css";
  * step with the database through the lead server actions.
  */
 export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Lead[]; offers: Offer[] }) {
-  const params = useSearchParams();
-  const metaOnly = params.get("imported") === "meta";
-  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
-  const fv = params.get("v") === "2" ? "2" : "1";
+  const metaOnly = useSearchParams().get("imported") === "meta";
   const leads = useMemo(() => metaOnly ? allLeads.filter(isMetaImportedLead) : allLeads, [allLeads, metaOnly]);
   const offers = useMemo(() => metaOnly ? [] : allOffers, [allOffers, metaOnly]);
   // The seed reaches `init` through refs, NOT through the callback's deps.
@@ -113,11 +110,11 @@ export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Le
       <section className="ppanel" data-panel="all">
         {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): the ones JobFlex sent
             apart from the shop's own, and the shop's own by source. One filter
-            bar (blueprint-shell/filter-bar.css, owner 2026-10-18, two designs on
-            trial by ?v=): the three sides, then Source as a dropdown. Counts,
+            bar (blueprint-shell/filter-bar.css, owner 2026-10-18): the three
+            sides as a segmented control, then Source as a dropdown. Counts,
             the source menu and the JobFlex note are painted by the behavior
             module (renderOrigin). */}
-        <div className="flt-bar lorigin" id="lOrigin" data-fv={fv}>
+        <div className="flt-bar lorigin" id="lOrigin">
           <div className="flt-seg" role="group" aria-label="Where the leads came from">
             <button className="flt-seg-btn active" type="button" data-side="" aria-pressed="true">
               All <span className="flt-n" data-side-n="all">0</span>

@@ -182,10 +182,7 @@ type MenuRow = {
 
 export function MobileLeads() {
   const router = useRouter();
-  const params = useSearchParams();
-  const metaOnly = params.get("imported") === "meta";
-  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
-  const fv = params.get("v") === "2" ? "2" : "1";
+  const metaOnly = useSearchParams().get("imported") === "meta";
   const scrollRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -213,7 +210,7 @@ export function MobileLeads() {
   /** The source menu under "Your own" (2026-10-18: the page's .dd, not a native select). */
   const [srcOpen, setSrcOpen] = useState(false);
   /** The filter row slides sideways when it does not fit; this fades the side that holds more. */
-  const segFade = useScrollFade<HTMLDivElement>();
+  const segFade = useScrollFade<HTMLDivElement>(side);
 
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [moveId, setMoveId] = useState<string | null>(null);
@@ -1059,34 +1056,36 @@ export function MobileLeads() {
 
           {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): All / JobFlex / Your
               own, and under "Your own" the source as a dropdown at the row's
-              end. Two designs on trial by ?v= (owner, 2026-10-18): a segmented
-              control, or underlined tabs on ?v=2 — the page's plain type, grey
-              counts, a flat dot per source, the row sliding sideways rather
-              than clipping a word when it does not fit. */}
+              end. The Blueprint segmented control (owner, 2026-10-18): one
+              square hair-framed plate, the page's plain type, grey counts, a
+              flat dot per source, the row sliding sideways rather than
+              clipping a word when it does not fit. */}
           {tab === "all" && own.length > 0 && (
-            <div className={styles.fbar} data-fv={fv}>
-              <div className={styles.fseg} ref={segFade} role="group" aria-label="Where the leads came from">
-                {([
-                  ["", "All", sides.all],
-                  ["jobflex", "JobFlex", sides.jobflex],
-                  ["own", "Your own", sides.own],
-                ] as const).map(([k, label, n]) => (
-                  <button
-                    key={k || "all"}
-                    type="button"
-                    className={`${styles.fsegBtn} ${side === k ? styles.on : ""}`}
-                    aria-pressed={side === k}
-                    data-side={k}
-                    onClick={() => {
-                      setSide(k);
-                      if (k === "jobflex") setSrcKey("");
-                      setPage(1);
-                    }}
-                  >
-                    {label}
-                    <span className={styles.fsegN}>{n}</span>
-                  </button>
-                ))}
+            <div className={styles.fbar}>
+              <div className={styles.fseg}>
+                <div className={styles.fsegScroll} ref={segFade} role="group" aria-label="Where the leads came from">
+                  {([
+                    ["", "All", sides.all],
+                    ["jobflex", "JobFlex", sides.jobflex],
+                    ["own", "Your own", sides.own],
+                  ] as const).map(([k, label, n]) => (
+                    <button
+                      key={k || "all"}
+                      type="button"
+                      className={`${styles.fsegBtn} ${side === k ? styles.on : ""}`}
+                      aria-pressed={side === k}
+                      data-side={k}
+                      onClick={() => {
+                        setSide(k);
+                        if (k === "jobflex") setSrcKey("");
+                        setPage(1);
+                      }}
+                    >
+                      {label}
+                      <span className={styles.fsegN}>{n}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               {side === "own" && srcCounts.length > 1 ? (
                 <div className={`${styles.fdrop} ${srcOpen ? styles.open : ""} ${srcNow ? styles.isSet : ""}`} {...srcMenu.anchorProps}>
