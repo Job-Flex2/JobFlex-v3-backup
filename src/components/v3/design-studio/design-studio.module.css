@@ -91,6 +91,26 @@
 /* Workspace */
 :global(.jf-blueprint .content) .work { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 @media (max-width: 1100px) { :global(.jf-blueprint .content) .work { grid-template-columns: minmax(0, 1fr); } }
+/* Full screen: the workspace over the whole screen — the 3D large, the plan beside it, the panel scrolling on its own. */
+:global(.jf-blueprint .content) .work.full {
+  position: fixed; inset: 0; z-index: 2000; margin: 0; padding: 12px; background: #f3f5f7;
+  grid-template-columns: minmax(0, 1fr) 360px; align-items: stretch; overflow: hidden;
+}
+:global(.jf-blueprint .content) .work.full .stage { display: flex; flex-direction: column; gap: 10px; height: calc(100vh - 24px); height: calc(100dvh - 24px); }
+:global(.jf-blueprint .content) .work.full .stage > .split,
+:global(.jf-blueprint .content) .work.full .stage > .plan { flex: 1 1 auto; min-height: 0; height: auto; }
+:global(.jf-blueprint .content) .work.full .split { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+:global(.jf-blueprint .content) .work.full .split > .three,
+:global(.jf-blueprint .content) .work.full .split > .planSmall { height: 100%; min-height: 0; }
+:global(.jf-blueprint .content) .work.full .side { position: static; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow: auto; align-content: start; padding-right: 2px; }
+@media (max-width: 1100px) {
+  :global(.jf-blueprint .content) .work.full { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+  :global(.jf-blueprint .content) .work.full .stage { height: auto; }
+  :global(.jf-blueprint .content) .work.full .split > .three,
+  :global(.jf-blueprint .content) .work.full .split > .planSmall,
+  :global(.jf-blueprint .content) .work.full .stage > .plan { height: 62vh; }
+  :global(.jf-blueprint .content) .work.full .side { max-height: none; overflow: visible; }
+}
 :global(.jf-blueprint .content) .stage { display: grid; gap: 10px; min-width: 0; }
 :global(.jf-blueprint .content) .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 :global(.jf-blueprint .content) .toolSep { width: 1px; height: 26px; background: var(--hair-soft); margin: 0 4px; }

@@ -47,6 +47,10 @@ export type Opening = {
   tag?: string;
 };
 
+/** What a room is used for — it decides what the studio furnishes it with and checks it against. */
+export const ROOM_KINDS = ["kitchen", "bath", "bedroom", "living", "dining", "laundry", "office", "closet", "pantry", "entry", "garage", "outdoor", "other"] as const;
+export type RoomKind = (typeof ROOM_KINDS)[number];
+
 /** A room's name, placed inside it. The room is whichever loop of walls holds the label. */
 export type RoomLabel = {
   id: string;
@@ -58,6 +62,8 @@ export type RoomLabel = {
   planSqFt?: number | null;
   /** The floor it's on, in a whole house ("Upper floor"). */
   floor?: string;
+  /** What the designer said the room is for, when its name doesn't say ("Bonus" → office). */
+  use?: RoomKind;
 };
 
 export type MarkRole = "cabinet" | "appliance" | "plumbing";

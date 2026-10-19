@@ -16,7 +16,7 @@ import { EstimateSheet } from "./estimate-sheet";
 import { HouseChanges, WallStructure } from "./house-changes";
 import { SpacesPicker, type SpaceFloor } from "./spaces-picker";
 import { classifySheet, findFloorPlans, floorFromVision, isMultiFloor, matchScore, sameRoom, type FloorPlan, type FoundRoom } from "@/lib/design/planSet";
-import { flaggedItems, flaggedWalls, houseChecks, kitchenChecks } from "@/lib/design/checks";
+import { designChecks, flaggedItems, flaggedWalls, houseChecks } from "@/lib/design/checks";
 import { openUp, readStructure, readWall } from "@/lib/design/structure";
 import { closeOpenRooms, closeRoom } from "@/lib/design/openPlan";
 import type { DesignLocation } from "@/actions/designStudio";
@@ -139,6 +139,10 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   const [focus, setFocus] = React.useState<string | null>(initial?.doc.focus ?? null);
   const [threeView, setThreeView] = React.useState<"orbit" | "walk">("orbit");
   const [frameToken, setFrameToken] = React.useState(0);
+  // Full screen (2026-10-18): the plan, the 3D and the panel over the whole screen — the browser's own full screen
+  // where it has one for an element, a fixed overlay where it doesn't (iPhone Safari).
+  const workRef = React.useRef<HTMLDivElement>(null);
+  const [full, setFull] = React.useState<"native" | "overlay" | null>(null);
   const [fitToken, setFitToken] = React.useState(0);
   const [underlay, setUnderlay] = React.useState<Underlay | null>(null);
   const [showUnderlay, setShowUnderlay] = React.useState(true);
@@ -158,13 +162,32 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   const rooms = React.useMemo(() => roomsOf(doc), [doc]);
   const focusRoom = focus ? rooms.find((r) => r.labelId === focus) ?? null : null;
   // The smart checks, the structure reading and where walls stood (milestone 5).
-  const checks = React.useMemo(() => (focus ? [...kitchenChecks(doc, focus), ...houseChecks(doc)] : houseChecks(doc)), [doc, focus]);
+  const checks = React.useMemo(() => (focus ? [...designChecks(doc, focus), ...houseChecks(doc)] : houseChecks(doc)), [doc, focus]);
   const flags = React.useMemo(() => new Set([...flaggedItems(checks), ...flaggedWalls(checks)]), [checks]);
   const structure = React.useMemo(() => readStructure(doc), [doc]);
   const ghosts = React.useMemo(() => {
     const now = new Set(doc.walls.map((w) => w.id));
     return (doc.existing?.walls ?? []).filter((w) => !now.has(w.id));
   }, [doc]);
+
+  React.useEffect(() => {
+    if (!full) return;
+    const onChange = () => {
+      if (full === "native" && document.fullscreenElement !== workRef.current) setFull(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (full === "overlay" && e.key === "Escape") setFull(null);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    window.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    if (full === "overlay") document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [full]);
 
   React.useEffect(() => {
     if (phase !== "start") return;
@@ -953,6 +976,24 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   }
 
   /* ── The plan / the room ── */
+  const toggleFull = async () => {
+    if (full) {
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
+      setFull(null);
+      return;
+    }
+    const el = workRef.current;
+    if (el && typeof el.requestFullscreen === "function") {
+      try {
+        await el.requestFullscreen();
+        setFull("native");
+        return;
+      } catch {
+        /* refused (an iframe, a policy) — the overlay instead */
+      }
+    }
+    setFull("overlay");
+  };
   const toolBtn = (t: Tool, label: string) => (
     <button type="button" className={`${s.btn} ${s.btnSm} ${tool === t ? s.btnOn : ""}`} onClick={() => setTool(t)} aria-pressed={tool === t} data-design-tool={t}>
       {label}
@@ -1004,9 +1045,14 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
       />
       {error ? <p className={`${s.note} ${s.noteWarn}`}>{error}</p> : null}
 
-      <div className={s.work}>
+      <div className={`${s.work} ${full ? s.full : ""}`} ref={workRef} data-design-work={full ?? undefined}>
         <div className={s.stage}>
           <div className={s.toolbar}>
+            {full ? (
+              <span className={s.cardTitle} style={{ marginRight: 6 }} data-design-full-title>
+                {focusRoom ? (focusRoom.names.length > 1 ? focusRoom.names.join(" · ") : focusRoom.name) : doc.title}
+              </span>
+            ) : null}
             {focus ? (
               <button type="button" className={`${s.btn} ${s.btnSm}`} onClick={() => setFocus(null)} data-design-back>
                 ← Whole plan
@@ -1051,6 +1097,15 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
                   Reset view
                 </button>
               </>
+            ) : null}
+            <span className={s.toolSep} />
+            <button type="button" className={`${s.btn} ${s.btnSm} ${full ? s.btnOn : ""}`} onClick={() => void toggleFull()} aria-pressed={!!full} title={full ? "Back to the page (Esc)" : "Design on the whole screen"} data-design-fullscreen>
+              {full ? "Exit full screen" : "Full screen"}
+            </button>
+            {full ? (
+              <button type="button" className={`${s.btn} ${s.btnSm} ${s.btnPrimary}`} onClick={() => void save()} disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </button>
             ) : null}
           </div>
           {calibLine ? (

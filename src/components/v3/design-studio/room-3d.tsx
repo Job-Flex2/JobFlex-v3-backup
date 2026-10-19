@@ -10,7 +10,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { DesignDoc, Opening, Wall } from "@/lib/design/model";
-import { finishesFor, floorPreset, lib } from "@/lib/design/library";
+import { floorPreset, lib } from "@/lib/design/library";
+import { roomFinishes } from "@/lib/design/roomKinds";
 import { splashTopFor } from "@/lib/design/kitchen";
 import { buildItem, disposeOwn, floorTexture, matCache, placeItem, wallBump } from "./items-3d";
 import { centroid, pointInPoly, roomsOf, wallDir, wallLen, wallPieces, type Room } from "@/lib/design/geometry";
@@ -132,14 +133,14 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
   owned.push(mats);
   const focusRoom = focus ? rooms.find((r) => r.labelId === focus) ?? null : null;
   const focusWalls = new Set(focusRoom?.wallIds ?? []);
-  const fin = finishesFor(doc.finishes, focus);
+  const fin = roomFinishes(doc, focus);
 
   // Floors: the room's own floor where it has finishes (the room being designed always), plain elsewhere.
   const floorMatFocus = new THREE.MeshStandardMaterial({ map: wood, roughness: 0.62, metalness: 0 });
   const floorMatOther = new THREE.MeshStandardMaterial({ color: 0xe7e2d8, roughness: 0.95 });
   owned.push(floorMatFocus, floorMatOther);
   const floorOf = (labelId: string | null): THREE.Material => {
-    const f = labelId === focus ? fin : labelId && doc.finishes?.[labelId] ? finishesFor(doc.finishes, labelId) : null;
+    const f = labelId === focus ? fin : labelId && doc.finishes?.[labelId] ? roomFinishes(doc, labelId) : null;
     if (!f) return floorMatOther;
     const fp = floorPreset(f.floor.id);
     return mats.get(`floor:${fp.id}:${f.floor.pattern}`, () => {
@@ -148,7 +149,7 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
         t.center.set(0.5, 0.5);
         t.rotation = Math.PI / 4;
       }
-      return new THREE.MeshStandardMaterial({ map: t, roughness: fp.kind === "tile" ? 0.35 : 0.6, metalness: 0 });
+      return new THREE.MeshStandardMaterial({ map: t, roughness: fp.kind === "tile" ? 0.35 : fp.kind === "carpet" ? 0.98 : 0.6, metalness: 0 });
     });
   };
   for (const r of rooms) {
@@ -277,7 +278,7 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
   for (const it of items) {
     // Wall-hung things on a wall that is cut away would float in the way.
     if (it.z >= 40 && lowered(it.wallId) && lib(it.lib)?.cat !== "light") continue;
-    const f = finishesFor(doc.finishes, it.room ?? focus);
+    const f = roomFinishes(doc, it.room ?? focus);
     const ceiling = (it.room ? doc.labels.find((l) => l.id === it.room)?.ceiling : focusRoom?.ceiling) ?? 96;
     const g = buildItem(it, { mats, f, ceiling, splashTop: splashTopFor(it, items, f.backsplash.height, ceiling) });
     placeItem(g, it);
@@ -309,8 +310,9 @@ function build(doc: DesignDoc, focus: string | null, rooms: Room[], selected: st
     group.add(new THREE.LineSegments(geo, mat));
   }
 
-  // What to frame: what's been placed in the room (and a walkway round it), else the room, else the house.
-  const placed = focusRoom ? items.filter((i) => i.room === focus && lib(i.lib)?.cat !== "light") : [];
+  // What to frame: a room up to 300 sq ft, whole (a bath, a bedroom); a bigger one, what's been placed in it and a
+  // walkway round it (an open plan's kitchen), else the room; with no room, the house.
+  const placed = focusRoom && focusRoom.sqft > 300 ? items.filter((i) => i.room === focus && lib(i.lib)?.cat !== "light") : [];
   const pts = placed.length
     ? placed.flatMap((i) => {
         const r = Math.hypot(i.w, i.d) / 2 + 36;
@@ -440,10 +442,13 @@ export function Room3D({ doc, focus, selectedWall = null, onPickWall, selectedIt
         orbit.rotateSpeed = -0.35;
       } else {
         camera.fov = 48;
-        // Frame the room with its walls: aim at mid-wall height, far enough back to see the far walls' tops.
+        // Frame the room with its walls: aim at mid-wall height, back along a fixed slant just far enough for the room
+        // to fill the narrower of the view's two angles (a tall, narrow view stands farther back).
         const r = Math.max(radius, 5.5);
-        const dist = r * 2.6 + 4;
-        camera.position.set(center.x + dist * 0.5, dist * 0.92 + 2, center.z + dist * 0.72);
+        const half = Math.min(24, (Math.atan(Math.tan((24 * Math.PI) / 180) * (camera.aspect || 1)) * 180) / Math.PI) * (Math.PI / 180);
+        const dist = (r / Math.tan(half)) * 1.08 + 2;
+        const slant = new THREE.Vector3(0.5, 0.92, 0.72).normalize();
+        camera.position.set(center.x + slant.x * dist, slant.y * dist + 2, center.z + slant.z * dist);
         orbit.target.set(center.x, 2.5, center.z);
         orbit.minDistance = 0.5;
         orbit.maxDistance = radius * 8;
