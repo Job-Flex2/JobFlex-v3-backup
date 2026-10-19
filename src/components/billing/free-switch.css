@@ -163,7 +163,7 @@
 }
 
 /* The company's numbers: one row of tiles, each a white box in an ink
-   frame topped with its colour, the number big in that colour. */
+   frame topped with its colour, the number big in that colour. No shadow. */
 .jf-confirm.jffs-go-dlg .jffs-tally {
   margin-top: 16px;
 }
@@ -210,8 +210,8 @@
   color: var(--ink-soft, #333);
 }
 
-/* What the plan gives: a square per line, filled with its tool's colour, a
-   white icon, an ink frame and a 2px ink offset — the sidebar's open tool. */
+/* What the plan gives: a square per line, flat in its tool's colour with a
+   white icon — no frame, no shadow, no offset (owner, 2026-10-18). */
 .jf-confirm.jffs-go-dlg .jffs-list {
   list-style: none;
   margin-top: 12px;
@@ -238,10 +238,8 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  border: 1.5px solid var(--ink, #0a0a0a);
   border-radius: var(--r-sm, 2px);
   background: var(--tone, var(--accent, #1854a0));
-  box-shadow: 2px 2px 0 var(--ink, #0a0a0a);
   color: #fff;
 }
 .jf-confirm.jffs-go-dlg .jffs-ic svg {

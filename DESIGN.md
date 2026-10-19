@@ -84,10 +84,12 @@ tool-colour segments across the top of the box; the company's own numbers
 (proposals sent, what they quoted, clients — a zero is left out, none at all
 hides the row) as white tiles in an ink frame topped and numbered in a tool
 colour, one row on a desk, the amount across over the two counts on a phone;
-each "what the plan gives" line on a square filled with its own tool colour
-(white icon, ink frame, 2px ink offset); the keep date in bold; "Keep <plan>"
+each "what the plan gives" line on a flat square filled with its own tool
+colour and a white icon; the keep date in bold; "Keep <plan>"
 one full-width blue button with a resting 3px ink offset; "Continue to
-cancel" a 14px bold ink link under it, never small or grey.
+cancel" a 14px bold ink link under it, never small or grey. Owner rule
+(2026-10-18): no shadow or offset behind a coloured square or dot, and none
+on number tiles — flat colour only.
 The handheld drawer folds each estimator's inventory the same way (2026-10-17).
 The AI desk (owner, 2026-10-16): its two tabs, Calls | AI desk setup, are one
 framed switch, the open tab filled with ink. The setup is a checklist card —
