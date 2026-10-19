@@ -140,6 +140,9 @@
 }
 .jf-deck-v1 .v1-q-foot .v1-btn-primary { margin-left: auto; }
 .jf-deck-v1 .v1-foot-price { display: block; font-size: var(--deck-number); font-weight: 900; font-variant-numeric: tabular-nums; }
+.jf-deck-v1 .v1-foot-sum { display: grid; gap: 2px; min-width: 0; }
+.jf-deck-v1 .v1-foot-note { font-size: var(--deck-meta); color: var(--ink-soft); line-height: 1.2; }
+.jf-deck-v1 .v1-dock-btn { display: none; }
 
 .jf-deck-v1 .v1-sub { display: grid; gap: var(--deck-space-md); }
 .jf-deck-v1 .v1-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--deck-space-md); }
@@ -636,6 +639,55 @@
   .jf-deck-v1 .v1-rate-row .v1-meta { grid-column: 1; grid-row: 2; }
   .jf-deck-v1 .v1-rate-row .v1-rate-in { grid-column: 2; grid-row: 1 / span 2; }
   .jf-deck-v1 .v1-banner { flex-direction: column; align-items: stretch; }
+}
+
+/* ── THE PHONE (owner, 2026-10-18): the deck's own handheld design ─────────
+   The structure DOCKS at the top of the screen — compact, its view tabs and
+   the picture — while the numbered steps scroll under it, so every change is
+   seen as it is made. "Full view" opens the whole viewer with its tools (Edit
+   in 3D, Build it, view options); "Keep in view" docks it again. The two
+   tables read as lists: the name, its quantity under it, the cost at the
+   right; the per-unit columns stay on the desk. */
+@media (max-width: 768px) {
+  .jf-deck-v1 .v1-view-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .jf-deck-v1 .v1-view-title { grid-column: 1; grid-row: 1; align-self: center; }
+  .jf-deck-v1 .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; gap: 6px; min-height: 40px; padding: 0 12px; }
+  .jf-deck-v1 .v1-view-facts { grid-row: 2; }
+  .jf-deck-v1 .v1-view-head .v1-seg { grid-row: 3; }
+
+  .jf-deck-v1 .v1-stage.is-docked { position: sticky; top: 0; z-index: 8; }
+  .jf-deck-v1 .v1-stage.is-docked .v1-viewer { border-width: 2px; }
+  .jf-deck-v1 .v1-stage.is-docked .v1-view-head { gap: 6px var(--deck-space-sm); padding: 8px; }
+  .jf-deck-v1 .v1-stage.is-docked .v1-view-facts,
+  .jf-deck-v1 .v1-stage.is-docked .v1-tools,
+  .jf-deck-v1 .v1-stage.is-docked .v1-auto,
+  .jf-deck-v1 .v1-stage.is-docked .v1-pick,
+  .jf-deck-v1 .v1-stage.is-docked .v1-price-sources { display: none; }
+  .jf-deck-v1 .v1-stage.is-docked .v1-view-head .v1-seg-btn { min-height: 40px; }
+  .jf-deck-v1 .v1-stage.is-docked .v1-view-box { height: clamp(180px, 30vh, 250px); }
+  .jf-deck-v1 .v1-stage.is-docked .v1-view-box.is-wall { height: clamp(220px, 36vh, 300px); }
+  /* the steps' headings land under the docked scene, not behind it */
+  .jf-deck-v1 .v1-question { scroll-margin-top: calc(76px + clamp(180px, 30vh, 250px)); }
+
+  /* the footer: the price and its note left, the next step filling the rest */
+  .jf-deck-v1 .v1-foot-price { font-size: 20px; }
+  .jf-deck-v1 .v1-foot-note { font-size: 12px; }
+
+  /* the tables as lists */
+  .jf-deck-v1 .v1-table thead { display: none; }
+  .jf-deck-v1 .v1-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 12px; padding: 12px; border-bottom: 1px solid var(--ink-line); }
+  .jf-deck-v1 .v1-table td { display: block; padding: 0; border: 0; }
+  .jf-deck-v1 .v1-table td:empty,
+  .jf-deck-v1 .v1-table td.v1-hide-s { display: none; }
+  .jf-deck-v1 .v1-table td:not(.v1-r) { grid-column: 1; grid-row: 1; min-width: 0; }
+  .jf-deck-v1 .v1-table td:last-child { grid-column: 2; grid-row: 1; font-size: 15px; font-weight: 800; text-align: right; }
+  .jf-deck-v1 .v1-table td.v1-r:not(:last-child) { grid-column: 1; grid-row: 2; font-size: 13.5px; text-align: left; color: var(--ink-soft); }
+  .jf-deck-v1 .v1-table .v1-line-name { font-size: 15px; }
+  .jf-deck-v1 .v1-table .v1-line-desc { font-size: 13px; }
+  .jf-deck-v1 .v1-table .v1-group-row { padding: 4px 12px; background: var(--paper); border-bottom: 1px solid var(--ink); }
+  .jf-deck-v1 .v1-table .v1-group-row td { background: transparent; border: 0; align-self: center; }
+  .jf-deck-v1 .v1-table tfoot tr { border-top: 2px solid var(--ink); border-bottom: 0; }
+  .jf-deck-v1 .v1-table tfoot td:first-child { font-weight: 800; }
 }
 
 @media (prefers-reduced-motion: reduce) {

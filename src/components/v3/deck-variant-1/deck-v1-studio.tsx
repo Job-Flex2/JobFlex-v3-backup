@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { createWheelMotion, wheelPixels } from "@/lib/smooth-wheel";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Plus, RotateCcw, Send, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Maximize2, Minimize2, Plus, RotateCcw, Send, X } from "lucide-react";
 import { resolveMarket, parseStateZip, type MarketSnapshot } from "@/lib/fence/market";
 import { DECKING, DECKING_BRAND_LABEL, DECKING_BRAND_ORDER, DECKING_FAMILY_LABEL, DECKING_FAMILY_ORDER, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, treatedDecking, wallType, type DeckingFamily, type DeckingProduct } from "@/lib/deck/catalog";
 import { regionalPicks, regionalWords } from "@/lib/deck/regional";
@@ -515,6 +515,10 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [focus, setFocus] = React.useState<[number, number, number] | null>(null);
   const [placing, setPlacing] = React.useState<Placing>(null);
   const [editing, setEditing] = React.useState(false);
+  // THE PHONE (owner, 2026-10-18: the deck estimator's own handheld design). The structure rides at the top of the
+  // screen, compact, while the steps scroll under it, so every change is seen as it is made; "Full view" opens the
+  // whole viewer with its tools. Only the ≤768px stylesheet reads it — on a desk the scene is always pinned beside.
+  const [phoneFull, setPhoneFull] = React.useState(false);
   const r = design.roof;
   const polygon = r.plan.shape === "hexagon" || r.plan.shape === "octagon" || r.plan.shape === "round";
   /** A handle dragged in the 3D: the design number it stands for takes the dragged value, inside its rails. */
@@ -2784,7 +2788,10 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
               ))}
             </div>
             <footer className="v1-q-foot">
-              <span className="v1-foot-price" aria-label="Deck price before tax" aria-live="polite" data-v1-price>{money(pkg.subtotal)}</span>
+              <span className="v1-foot-sum">
+                <span className="v1-foot-price" aria-label="Deck price before tax" aria-live="polite" data-v1-price>{money(pkg.subtotal)}</span>
+                <span className="v1-foot-note" aria-hidden="true">before tax</span>
+              </span>
               <button type="button" className="v1-btn v1-btn-primary" onClick={() => go("package")}>
                 Package &amp; price <ChevronRight size={16} aria-hidden="true" />
               </button>
@@ -2793,10 +2800,14 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </FieldScope.Provider>
 
         {/* ── the structure, pinned ── */}
-        <aside className="v1-stage" ref={viewerRef} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
+        <aside className={cx("v1-stage", !phoneFull && "is-docked")} ref={viewerRef} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
           <div className="v1-viewer">
             <div className="v1-view-head">
               <h2 className="v1-h3 v1-view-title">The {what.toLowerCase()}</h2>
+              <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" aria-pressed={phoneFull} onClick={() => setPhoneFull((f) => !f)} data-deck-dock>
+                {phoneFull ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+                {phoneFull ? "Keep in view" : "Full view"}
+              </button>
               <span className="v1-meta v1-view-facts" title={scene.facts}>{scene.facts}</span>
               <Seg label="View" value={view} onChange={setView} options={viewTabs} />
             </div>
