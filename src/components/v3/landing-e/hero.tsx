@@ -24,7 +24,7 @@ import { HomeownerDoor } from "./homeowner-door";
    it as its motion starts; if that has not happened 1.8 s on, the timer
    here lifts it and the copy simply appears. No JavaScript, a phone, a
    touch screen: never armed, never hidden. */
-const ENTRANCE_PRELUDE = `(function(){try{var d=document.documentElement,w=window;if(!w.matchMedia||!w.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)").matches||w.matchMedia("(prefers-reduced-motion: reduce)").matches)return;d.setAttribute("data-lp-entrance","pending");w.__jfEntranceTimer=setTimeout(function(){if(d.getAttribute("data-lp-entrance")==="pending"){d.removeAttribute("data-lp-entrance");if(w.__jfHeroShownAt===undefined)w.__jfHeroShownAt=Math.round(performance.now());}},1800);}catch(e){}})();`;
+export const ENTRANCE_PRELUDE = `(function(){try{var d=document.documentElement,w=window;if(!w.matchMedia||!w.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)").matches||w.matchMedia("(prefers-reduced-motion: reduce)").matches)return;d.setAttribute("data-lp-entrance","pending");w.__jfEntranceTimer=setTimeout(function(){if(d.getAttribute("data-lp-entrance")==="pending"){d.removeAttribute("data-lp-entrance");if(w.__jfHeroShownAt===undefined)w.__jfHeroShownAt=Math.round(performance.now());}},1800);}catch(e){}})();`;
 
 /* The first screen, and the one screen a trade variant may replace. The
    headline, the line under it, the solid button's words and the product shot

@@ -17,8 +17,9 @@ import type { LandingVariantKey } from "./landing-variants";
    `button` when it names which button it is (data-cta-button: the plan a
    card's button starts, the nav's trial or login — 2026-10-15).
    `only` limits the tracker to some placements — /pricing tracks the plan
-   buttons and the nav's (pricing-visit.tsx). */
-export function CtaTracker({ industry, only }: { industry: LandingVariantKey | undefined; only?: string[] }) {
+   buttons and the nav's (pricing-visit.tsx). `landing` names a version of a
+   trade's page (landing-variants VARIANT_BASE: "hvac2"); absent elsewhere. */
+export function CtaTracker({ industry, only, landing }: { industry: LandingVariantKey | undefined; only?: string[]; landing?: string }) {
   useEffect(() => {
     const onClick = (ev: MouseEvent) => {
       const target = ev.target instanceof Element ? ev.target.closest<HTMLElement>("[data-cta]") : null;
@@ -33,6 +34,7 @@ export function CtaTracker({ industry, only }: { industry: LandingVariantKey | u
         industry: industry ?? "default",
         href: href.split("?")[0],
         variant: "e",
+        ...(landing ? { landing } : {}),
         ...(target.dataset.ctaSpot ? { spot: target.dataset.ctaSpot } : {}),
         ...(target.dataset.ctaButton ? { button: target.dataset.ctaButton } : {}),
       });
@@ -40,6 +42,6 @@ export function CtaTracker({ industry, only }: { industry: LandingVariantKey | u
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `only` is a literal per page
-  }, [industry]);
+  }, [industry, landing]);
   return null;
 }

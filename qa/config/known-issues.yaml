@@ -20,10 +20,6 @@ issues:
     signature: "^legacy qa/tests/billing/admin-subscription\\.check\\.ts$"
     why: "conflicts with dev.db stripe:mode=test — its Stripe mock / price ids do not match the sandbox account (No such price…)"
     confirmed: "owner, 2026-10-15"
-  - id: landing-ad-screen-outdated
-    signature: "^legacy qa/tests/logic/landing-ad-screen\\.check\\.ts$"
-    why: "the check is out of date: the ad's first screen now goes to the decking landing too (fencing, roofing, decking, hvac)"
-    confirmed: "owner, 2026-10-15"
   - id: google-client-id-empty-locally
     test: "Google is offered on sign-up and sign-in"
     message: "client id"

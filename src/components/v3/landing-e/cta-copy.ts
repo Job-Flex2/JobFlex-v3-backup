@@ -26,6 +26,7 @@ const TOP: Record<LandingVariantKey, string> = {
   plumbing: "Start my free plumbing quote",
   electrical: "Start my free electrical quote",
   hvac: "Start my free HVAC quote",
+  hvac2: "Start my free HVAC quote",
   carpentry: "Start my free carpentry bid",
   demolition: "Start my free tear-out quote",
   "general-contractor": "Start my free whole-job estimate",

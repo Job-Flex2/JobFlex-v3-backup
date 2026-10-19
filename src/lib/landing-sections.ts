@@ -41,6 +41,17 @@ export const LANDING_SECTIONS: readonly LandingSection[] = [
 
 export const LANDING_SECTION_KEYS = LANDING_SECTIONS.map((s) => s.key);
 
+/* SECTIONS ONE LANDING ALONE HAS (2026-10-19, ?industry=hvac2). Kept out of
+   the list above, so every other landing's list — and the index each of its
+   sections is numbered by — stays exactly as it was. Only an own order
+   (below) may name them. */
+const OWN_SECTIONS: readonly LandingSection[] = [
+  { key: "how", label: "Estimate from an address", selector: [".lp-cv--how", "#how"], shown: "some" },
+  { key: "steps", label: "Four steps", selector: [".lp-cv--steps", "#steps"], shown: "some" },
+  { key: "sample", label: "Finished estimate", selector: [".lp-cv--sample", "#sample"], shown: "some" },
+];
+const OWN_SECTION_KEYS = OWN_SECTIONS.map((s) => s.key);
+
 /* THE AD LANDINGS' ORDER (owner, 2026-10-04: "take only the roofing
    landing page and do the analyst's fixes"; then the same fixes for the
    HVAC and the fence landings). The analyst's reading of the ad
@@ -73,6 +84,13 @@ const OWN_ORDER: Readonly<Record<string, { since: number; order: readonly string
     since: Date.parse("2026-10-05T06:55:00Z"),
     order: ["hero", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
   },
+  // The HVAC page's second version (2026-10-19, the October audit): where
+  // the figures come from, the four steps and a finished estimate between
+  // the hero and HVAC's own order. A new page — every visit is in this order.
+  hvac2: {
+    since: Date.parse("2026-10-19T00:00:00Z"),
+    order: ["hero", "how", "steps", "sample", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
+  },
 };
 
 /** The landings laid out in an order of their own. */
@@ -94,15 +112,16 @@ export function landingSectionOrder(industry: string | null | undefined): readon
 /** The sections themselves, in this landing's order. */
 export function landingSectionsFor(industry: string | null | undefined): readonly LandingSection[] {
   if (!hasOwnSectionOrder(industry)) return LANDING_SECTIONS;
-  return landingSectionOrder(industry).map((key) => LANDING_SECTIONS.find((s) => s.key === key)).filter((s): s is LandingSection => !!s);
+  return landingSectionOrder(industry).map((key) => LANDING_SECTIONS.find((s) => s.key === key) ?? OWN_SECTIONS.find((s) => s.key === key)).filter((s): s is LandingSection => !!s);
 }
 
-// An own order is the same sections, each once — checked at module load so a
-// section added to the list above cannot go missing from a landing unnoticed.
+// An own order is the same sections, each once (plus, at most, sections of
+// its own) — checked at module load so a section added to the list above
+// cannot go missing from a landing unnoticed.
 if (process.env.NODE_ENV !== "production") {
   for (const [landing, { order }] of Object.entries(OWN_ORDER)) {
     const missing = LANDING_SECTION_KEYS.filter((k) => !order.includes(k));
-    const extra = order.filter((k, i) => !LANDING_SECTION_KEYS.includes(k) || order.indexOf(k) !== i);
+    const extra = order.filter((k, i) => !(LANDING_SECTION_KEYS.includes(k) || OWN_SECTION_KEYS.includes(k)) || order.indexOf(k) !== i);
     if (missing.length || extra.length) throw new Error(`landing-sections: the ${landing} order is not the list (missing ${missing.join(", ") || "none"}; unknown or repeated ${extra.join(", ") || "none"})`);
     if (order[0] !== "hero" || order[order.length - 1] !== "final") throw new Error(`landing-sections: the ${landing} order must start at the hero and end at the final call to action`);
   }

@@ -77,6 +77,15 @@ export const HVAC_TIMELINE = {
   slide: DONE + READ_HOLD,
 };
 
+/* THE QUICK START (hvac2's first screen, 2026-10-19 — "no 1.5 s of an empty
+   form"): the frame opens on the house with the address already in the field
+   (the form's own initialAddress, so the server's HTML is that step too),
+   and the lookup runs at once; everything after it is the sequence above,
+   moved up by what was skipped. */
+const QUICK_LOOKUP = 400;
+const QUICK_SHIFT = T.lookup - QUICK_LOOKUP;
+export const HVAC_QUICK_DONE = DONE - QUICK_SHIFT;
+
 /** The typed answers the walk would have caught: the ducts in the crawl,
  *  fair, the return and the registers counted, gas at the house. */
 const TYPED_FACTS: Record<string, unknown> = {
@@ -91,7 +100,23 @@ const TYPED_FACTS: Record<string, unknown> = {
 
 const cx = (...names: Array<string | false | null | undefined>) => names.filter(Boolean).map((n) => (s as Record<string, string>)[n as string] ?? (n as string)).join(" ");
 
-export function HvacEstimatorShot({ active, hero = false }: { active: boolean; instant?: boolean; hero?: boolean }) {
+export function HvacEstimatorShot({
+  active,
+  hero = false,
+  quick = false,
+  landing,
+  onProgress,
+}: {
+  active: boolean;
+  instant?: boolean;
+  hero?: boolean;
+  /** Open on the house, the address in, and run from the lookup (QUICK_SHIFT). */
+  quick?: boolean;
+  /** A version of a trade's page ("hvac2"): the step and tier events name it as their industry and landing. */
+  landing?: string;
+  /** The sequence's clock, by the quarter: 0 as it starts, then 25, 50, 100 — never after a takeover. */
+  onProgress?: (pct: 0 | 25 | 50 | 100) => void;
+}) {
   const frameRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HvacDemoHandle | null>(null);
   // Where the sequence is, and whether the visitor took over.
@@ -133,38 +158,50 @@ export function HvacEstimatorShot({ active, hero = false }: { active: boolean; i
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const at = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(() => { if (!manualRef.current) fn(); }, reduced ? Math.min(ms, 50) : ms));
     const h = () => handleRef.current;
-    at(T.house, () => h()?.go("house"));
-    // The address, a character at a time, into the real field.
-    for (let i = 1; i <= DEMO_ADDRESS.length; i++) at(T.typeFrom + i * TYPE_MS, () => h()?.typeAddress(DEMO_ADDRESS.slice(0, i)));
-    at(T.lookup, () => void h()?.lookup());
-    at(T2.plates, () => h()?.setMode("plates"));
+    const shift = quick ? QUICK_SHIFT : 0;
+    const done = DONE - shift;
+    if (onProgress) {
+      at(0, () => onProgress(0));
+      at(done * 0.25, () => onProgress(25));
+      at(done * 0.5, () => onProgress(50));
+      at(done, () => onProgress(100));
+    }
+    if (!quick) {
+      at(T.house, () => h()?.go("house"));
+      // The address, a character at a time, into the real field.
+      for (let i = 1; i <= DEMO_ADDRESS.length; i++) at(T.typeFrom + i * TYPE_MS, () => h()?.typeAddress(DEMO_ADDRESS.slice(0, i)));
+    }
+    at(T.lookup - shift, () => void h()?.lookup());
+    at(T2.plates - shift, () => h()?.setMode("plates"));
     const plate = (key: "outdoor" | "indoor" | "panel", thumb: string, t: number) => {
       at(t, () => h()?.setPlates({ [key]: { thumb, busy: true } }));
       at(t + 900, () => h()?.setPlates({ [key]: { thumb, read: DEMO_READS[key] } }));
     };
-    plate("outdoor", PLATE_OUTDOOR, T3.outdoor);
-    plate("indoor", PLATE_INDOOR, T3.indoor);
-    plate("panel", PLATE_PANEL, T3.panel);
-    at(T3.typed, () => h()?.setTyped(TYPED_FACTS));
-    at(T4.design, () => h()?.go("design"));
-    at(T4.heatPump, () => h()?.setOutdoorKind("heat-pump"));
-    at(T4.estimate, () => h()?.go("estimate"));
+    plate("outdoor", PLATE_OUTDOOR, T3.outdoor - shift);
+    plate("indoor", PLATE_INDOOR, T3.indoor - shift);
+    plate("panel", PLATE_PANEL, T3.panel - shift);
+    at(T3.typed - shift, () => h()?.setTyped(TYPED_FACTS));
+    at(T4.design - shift, () => h()?.go("design"));
+    at(T4.heatPump - shift, () => h()?.setOutdoorKind("heat-pump"));
+    at(T4.estimate - shift, () => h()?.go("estimate"));
     return stop;
-  }, [active, stop]);
+    // onProgress is the page's own callback, read once with the sequence.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, stop, quick]);
 
   const hooks = useMemo<HvacDemoHooks>(() => ({
     bind: (h) => { handleRef.current = h; },
     onStep: (k) => {
       setStep(k);
-      trackTraffic(TRAFFIC_EVENTS.hvacDemoStep, { step: k, how: manualRef.current ? "tap" : "auto", hero, industry: "hvac", variant: "e" });
+      trackTraffic(TRAFFIC_EVENTS.hvacDemoStep, { step: k, how: manualRef.current ? "tap" : "auto", hero, industry: landing ?? "hvac", variant: "e", ...(landing ? { landing } : {}) });
     },
     onPick: (p) => {
-      trackTraffic(TRAFFIC_EVENTS.hvacDemoTier, { tier: p.tier, unit: p.id, subtotal: Math.round(p.subtotal), hero, industry: "hvac", variant: "e" });
+      trackTraffic(TRAFFIC_EVENTS.hvacDemoTier, { tier: p.tier, unit: p.id, subtotal: Math.round(p.subtotal), hero, industry: landing ?? "hvac", variant: "e", ...(landing ? { landing } : {}) });
     },
     // The landing's "Convert to proposal": the page's own proposal section,
     // which carries this same job (landing-groups HVAC_PROPOSAL).
     onConvert: () => document.getElementById("proposals")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-  }), [hero]);
+  }), [hero, landing]);
 
   return (
     <AppFrame path="www.jobflex.app/dashboard/hvac-estimator" body="#f2f0eb">
@@ -174,7 +211,7 @@ export function HvacEstimatorShot({ active, hero = false }: { active: boolean; i
           what the steps scroll (data-hvac-scroll). */}
       <div
         ref={frameRef}
-        className={`lp-hvac-frame${hero ? " lp-hvac-frame--hero" : ""}`}
+        className={`lp-hvac-frame${hero ? " lp-hvac-frame--hero" : ""}${quick ? " lp-hvac-frame--quick" : ""}`}
         data-hvac-window
         data-step={step}
         data-manual={manual ? "1" : undefined}
@@ -196,7 +233,7 @@ export function HvacEstimatorShot({ active, hero = false }: { active: boolean; i
             </div>
             {/* aiEnabled: the plates and a walk are read here too — from the
                 example's fixtures, after the pause a model run takes. */}
-            <HvacEstimatorForm aiEnabled demo={hooks} />
+            <HvacEstimatorForm aiEnabled demo={hooks} initialAddress={quick ? DEMO_ADDRESS : undefined} />
           </div>
         </div>
         </div>

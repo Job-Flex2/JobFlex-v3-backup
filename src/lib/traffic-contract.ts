@@ -163,6 +163,18 @@ export const TRAFFIC_EVENTS = {
   // picked. Fired by landing-e/hvac-estimator-shot.tsx; always industry "hvac".
   hvacDemoStep: "hvac_demo_step",
   hvacDemoTier: "hvac_demo_tier",
+  // The HVAC page's second version (?industry=hvac2, 2026-10-19), its first
+  // screen's demo above the button: `demo_play` once it starts, then
+  // `demo_25` / `demo_50` / `demo_100` as a quarter, half and all of it has
+  // played (the video's own time; the interactive walk-through's clock until
+  // the video is in) — `kind` "video" | "interactive". `sample_open` when the
+  // finished estimate is opened (`from`: the hero's link or the section's
+  // button). Fired by landing-e/hvac2; always industry and landing "hvac2".
+  demoPlay: "demo_play",
+  demo25: "demo_25",
+  demo50: "demo_50",
+  demo100: "demo_100",
+  sampleOpen: "sample_open",
   // One per landing section the visitor actually reaches (the analyst,
   // 2026-10-02): section key (lib/landing-sections), its index, seconds since
   // the page opened, the trade hero shown. Fired by landing-e/section-tracker.

@@ -2,7 +2,7 @@
 
 import { useTrialOffer } from "@/components/providers/trial-offer";
 import { useState } from "react";
-import type { LandingVariantKey } from "./landing-variants";
+import { baseVariant, type LandingVariantKey } from "./landing-variants";
 import { Reveal } from "./reveal";
 import "./pricing-faq.css";
 
@@ -40,6 +40,15 @@ const DATA_Q: Record<"roofing" | "fencing" | "hvac" | "other", Faq> = {
   },
 };
 
+/* HVAC v2 (2026-10-19, the October audit): the page that promises an
+   estimate from an address answers where the house's data comes from, in
+   the place of "My trade isn't in the list" — the visitor came from an HVAC
+   ad — and the trial's answer opens with the terms the hero printed. */
+const PROPERTY_Q: Faq = {
+  q: "Where does the property data come from?",
+  a: "From the public record for the address: the county parcel record (living area, year built, storeys), the building outline the pin sits in, the ground elevation from USGS 3DEP and the county's design temperatures. Every figure is labelled with its source, and what a record cannot know starts at the house era's default until you type over it.",
+};
+
 /* The card question, by signupTrialMode (lib/trialPolicyServer). */
 const cardQuestions = (days: number): Record<"card" | "cardless", Faq> => ({
   card: {
@@ -52,23 +61,28 @@ const cardQuestions = (days: number): Record<"card" | "cardless", Faq> => ({
   },
 });
 
-function questions(variant: LandingVariantKey | undefined, requiresCard: boolean, days: number): Faq[] {
+function questions(variant: LandingVariantKey | undefined, requiresCard: boolean, days: number, terms?: string): Faq[] {
   const CARD_Q = cardQuestions(days);
-  const data = variant === "roofing" || variant === "fencing" || variant === "hvac" ? DATA_Q[variant] : DATA_Q.other;
+  const trade = baseVariant(variant);
+  const data = trade === "roofing" || trade === "fencing" || trade === "hvac" ? DATA_Q[trade] : DATA_Q.other;
+  const own = variant === "hvac2";
+  const after = requiresCard ? "Your selected plan renews automatically at the price and billing interval shown in checkout unless you cancel before the trial ends. Cancel anytime from Settings → Billing: you keep the plan to the end of the period you've paid for, then your account moves to the free plan — no more charges, and your work stays." : "With a card added, your selected plan starts billing at the disclosed price when the trial ends. Without a card, nothing is charged: your account moves to the free plan and your work stays.";
   return [
     requiresCard ? CARD_Q.card : CARD_Q.cardless,
     {
       q: "How long does it take to learn?",
       a: "Most shops send their first proposal the same day. Type the job, the estimate writes itself, and the calendar and invoices follow from it.",
     },
-    {
-      q: "My trade isn't in the list.",
-      a: "Pick the closest one and name yours under Other. Templates, units and lead matching follow the trade you type.",
-    },
+    own
+      ? PROPERTY_Q
+      : {
+          q: "My trade isn't in the list.",
+          a: "Pick the closest one and name yours under Other. Templates, units and lead matching follow the trade you type.",
+        },
     data,
     {
       q: `What happens after ${days} days?`,
-      a: requiresCard ? "Your selected plan renews automatically at the price and billing interval shown in checkout unless you cancel before the trial ends. Cancel anytime from Settings → Billing: you keep the plan to the end of the period you've paid for, then your account moves to the free plan — no more charges, and your work stays." : "With a card added, your selected plan starts billing at the disclosed price when the trial ends. Without a card, nothing is charged: your account moves to the free plan and your work stays.",
+      a: own && terms ? `${terms} ${after}` : after,
     },
     {
       q: "Does it work from my phone?",
@@ -77,9 +91,9 @@ function questions(variant: LandingVariantKey | undefined, requiresCard: boolean
   ];
 }
 
-export function LandingFaq({ variant, registerHref = "/auth/register", cta = "Start my free trial", requiresCard = true }: { variant?: LandingVariantKey; registerHref?: string; cta?: string; requiresCard?: boolean }) {
+export function LandingFaq({ variant, registerHref = "/auth/register", cta = "Start my free trial", requiresCard = true, trialTerms }: { variant?: LandingVariantKey; registerHref?: string; cta?: string; requiresCard?: boolean; /** hvac2: the hero's terms line, opening the trial's answer. */ trialTerms?: string }) {
   const { days } = useTrialOffer();
-  const items = questions(variant, requiresCard, days);
+  const items = questions(variant, requiresCard, days, trialTerms);
   /* Opened by a click, a tap, Enter or Space; each card on its own. Hover and
      keyboard focus only SHOW the answer (CSS); this set is what aria-expanded
      reports and what keeps an answer up on a touch screen. */

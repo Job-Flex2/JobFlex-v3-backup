@@ -72,6 +72,13 @@ export type LandingVariant = {
   playOnPhone?: boolean;
   /** A sign-up button stands under the product shot. */
   shotCta?: boolean;
+
+  /* A LANDING'S OWN FIRST SCREEN (hvac2, 2026-10-19). Only a page with its
+     own hero component reads these (hvac2/hvac2-hero.tsx). */
+  /** Mono caps over the headline ("FOR HVAC CONTRACTORS"). */
+  kicker?: string;
+  /** What the product does, ticked under the line. */
+  checks?: string[];
 };
 
 /** The hero as it shipped on 2026-08-25 — the page with no `?industry=`. */
@@ -100,6 +107,9 @@ export const VARIANT_TRADE = {
   siding: "Siding",
   "kitchen-bath": "Kitchen & Bath",
   hvac: "HVAC",
+  // The HVAC page's second version (2026-10-19, VARIANT_BASE below): the same
+  // trade, its own first screen and sections.
+  hvac2: "HVAC",
   landscaping: "Landscaping",
   concrete: "Concrete",
   demolition: "Demolition",
@@ -112,6 +122,29 @@ export const VARIANT_TRADE = {
 export type LandingVariantKey = keyof typeof VARIANT_TRADE;
 
 export const VARIANT_KEYS = Object.keys(VARIANT_TRADE) as LandingVariantKey[];
+
+/* ── versions of a landing ─────────────────────────────────
+   A second page for a trade under its own key (2026-10-19: ?industry=hvac2,
+   the HVAC page rebuilt after the October audit). It is the trade in
+   everything the visitor carries on — the register link says
+   `industry=hvac`, the cookie remembers hvac, the ad hooks and the plan
+   spotlight are hvac's — and itself in what is measured: the events name
+   the version (`industry` and `landing` = "hvac2") and the register link
+   adds `landing=hvac2`, so the two pages are read side by side. The base
+   page is not touched by any of it. */
+export const VARIANT_BASE: Partial<Record<LandingVariantKey, LandingVariantKey>> = {
+  hvac2: "hvac",
+};
+
+/** The trade page a key is a version of; a key that is no version is its own. */
+export function baseVariant<K extends LandingVariantKey | undefined>(key: K): K {
+  return (key && Object.prototype.hasOwnProperty.call(VARIANT_BASE, key) ? VARIANT_BASE[key] : key) as K;
+}
+
+/** The version's key when the page is one ("hvac2"); undefined on every other page. */
+export function landingVersion(key: LandingVariantKey | undefined): LandingVariantKey | undefined {
+  return key && baseVariant(key) !== key ? key : undefined;
+}
 
 /* ── the variants ──────────────────────────────────────────
    null = not written yet: the key works (links, cookie, register pre-select)
@@ -273,6 +306,28 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     priceNote: "HVAC estimator included",
     playOnPhone: true,
     shotCta: true,
+  },
+  // HVAC, VERSION 2 (2026-10-19; the October audit). The HVAC page with a
+  // first screen that says what the tool does without "AI" or "in seconds",
+  // a demo above the one button, the trial's terms under it, and three
+  // sections of its own under the hero (hvac2/): where the figures come
+  // from, the four steps, a finished estimate to open. Every claim stays
+  // inside hvac's claims review above: the load is "Manual J-based", on the
+  // county's design day; the property facts are the parcel record, the
+  // building outline the pin sits in and the ground elevation (USGS 3DEP),
+  // each with its source; code checks exist for six states plus the federal
+  // floors; no duct design, no texting. The ad hooks are hvac's.
+  hvac2: {
+    kicker: "For HVAC contractors",
+    h1: ["Stop Spending Hours", "on HVAC Estimates."],
+    h1Long: true,
+    sub: "Start with an address. Build the load estimate, size the equipment, review pricing and send a customer-ready proposal.",
+    subEven: true,
+    checks: ["Load estimate & equipment sizing", "Equipment options & pricing", "Professional proposal"],
+    primaryCta: "Start free — price an HVAC job",
+    showcaseSlide: "hvac",
+    visual: "hvac",
+    scenario: "hvac",
   },
   drywall: {
     h1: ["The complete drywall bid.", "From the sheet count."],
@@ -505,8 +560,13 @@ export const LANDING_HOOKS: Partial<Record<LandingVariantKey, Readonly<Record<st
 /** `?hook=No_Report` → "no-report" when the trade has that hook; anything
  *  else → undefined (the trade's own hero). Case, spaces and underscores do
  *  not matter. */
+/** A trade's hook table; a version of a landing reads its base's (hvac2 → hvac). */
+function hookTable(variant: LandingVariantKey | undefined) {
+  return variant ? LANDING_HOOKS[baseVariant(variant)] : undefined;
+}
+
 export function resolveLandingHook(variant: LandingVariantKey | undefined, raw: string | string[] | null | undefined): string | undefined {
-  const table = variant ? LANDING_HOOKS[variant] : undefined;
+  const table = hookTable(variant);
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!table || typeof value !== "string") return undefined;
   const key = value.trim().toLowerCase().replace(/[\s_]+/g, "-").slice(0, 40);
@@ -515,13 +575,13 @@ export function resolveLandingHook(variant: LandingVariantKey | undefined, raw: 
 
 /** The hook's lines for a resolved key. */
 export function hookContent(variant: LandingVariantKey | undefined, key: string | undefined): LandingHook | undefined {
-  const table = variant ? LANDING_HOOKS[variant] : undefined;
+  const table = hookTable(variant);
   return table && key && Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
 }
 
 /** A trade's hooks, in the table's order — the admin's link builder lists them. */
 export function hooksOf(variant: LandingVariantKey | undefined): Array<{ key: string } & LandingHook> {
-  const table = variant ? LANDING_HOOKS[variant] : undefined;
+  const table = hookTable(variant);
   return table ? Object.entries(table).map(([key, hook]) => ({ key, ...hook })) : [];
 }
 
@@ -560,6 +620,7 @@ const VARIANT_ALIASES: Record<string, LandingVariantKey> = {
   tiler: "tile",
   tilers: "tile",
   "hvac-contractor": "hvac",
+  "hvac-v2": "hvac2",
   "gc-contractor": "general-contractor",
   kitchen: "kitchen-bath",
   kitchens: "kitchen-bath",
@@ -608,6 +669,8 @@ const LOOKUP: Record<string, LandingVariantKey> = (() => {
   const t: Record<string, LandingVariantKey> = {};
   for (const key of VARIANT_KEYS) {
     t[key] = key;
+    // A version answers to its key only: the trade's name is its base's.
+    if (baseVariant(key) !== key) continue;
     const name = VARIANT_TRADE[key].toLowerCase();
     t[name] = key; // "kitchen & bath", "general contractor"
     t[name.replace(/\s*&\s*/g, "-").replace(/\s+/g, "-")] = key; // "kitchen-bath"
@@ -723,7 +786,10 @@ export const FBCLID_MAX_AGE_S = 60 * 60; // 1 hour
  *  page's markup is exactly what it was. */
 export function signupHref(base: string, opts: { industry?: LandingVariantKey; utm?: UtmParams; fbclid?: string; /** The tool the ad sold (lib/planSpotlight) — the plan cards mark it. */ tool?: string }): string {
   const q = new URLSearchParams();
-  if (opts.industry) q.set("industry", opts.industry);
+  // A version of a landing signs up as its trade, and names itself beside it (VARIANT_BASE).
+  if (opts.industry) q.set("industry", baseVariant(opts.industry));
+  const version = landingVersion(opts.industry);
+  if (version) q.set("landing", version);
   if (opts.tool) q.set("tool", opts.tool);
   for (const key of UTM_KEYS) {
     const v = opts.utm?.[key];

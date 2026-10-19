@@ -9,7 +9,7 @@
    Kenmore, Everett, Woodinville, Bellevue; $1,600–$24,600. The photographs
    are the ones the sections already ship — only names and tags change. */
 
-import type { LandingVariantKey } from "./landing-variants";
+import { baseVariant, type LandingVariantKey } from "./landing-variants";
 
 export type TradeGroup = "tools" | "exterior" | "interior" | "mep" | "general";
 
@@ -31,6 +31,7 @@ export const TRADE_GROUP: Record<LandingVariantKey, TradeGroup> = {
   plumbing: "mep",
   electrical: "mep",
   hvac: "mep",
+  hvac2: "mep",
   carpentry: "general",
   demolition: "general",
   "general-contractor": "general",
@@ -406,7 +407,8 @@ const MEP_PORTAL: PortalContent = {
    Better tier (AC + 96% furnace, $12,417.03; the heat pump at Better is
    $13,484.58 — the option) — so the page tells one story. The figures are
    the ledger's own, grouped into the four lines a proposal shows. */
-const HVAC_PROPOSAL: ProposalContent = {
+/** Exported for hvac2's finished-estimate section (hvac2/hvac2-sample.tsx). */
+export const HVAC_PROPOSAL: ProposalContent = {
   number: "P-1217",
   title: "Whitfield AC + furnace — 2.5 ton, 16 SEER2, 96% AFUE",
   blurb:
@@ -714,8 +716,8 @@ export function groupContentFor(key: LandingVariantKey | undefined): GroupConten
         stats: MEP_STATS,
         jobs: MEP_JOBS,
         phoneJobs: MEP_PHONE, crew: MEP_CREW, phoneLanes: MEP_PHONE_LANES,
-        proposal: key === "hvac" ? HVAC_PROPOSAL : MEP_PROPOSAL,
-        portal: key === "hvac" ? HVAC_PORTAL : MEP_PORTAL,
+        proposal: baseVariant(key) === "hvac" ? HVAC_PROPOSAL : MEP_PROPOSAL,
+        portal: baseVariant(key) === "hvac" ? HVAC_PORTAL : MEP_PORTAL,
         montage: false,
       };
     case "general":

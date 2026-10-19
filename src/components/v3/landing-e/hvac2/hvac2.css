@@ -1,0 +1,366 @@
+/* HVAC v2 (?industry=hvac2, 2026-10-19) — the hero's arrangement and the
+   three sections of its own (hvac2-hero, hvac2-how, hvac2-sample). Every
+   rule hangs on an `lp-h2-` class only that page renders, so no other
+   landing is touched. The ink hero, the paper sections, the 2px ink frames,
+   the blue button and the mono annotations are the landing's own
+   (landing-e.css); the type floors are the landing's (text ≥14px, mono caps
+   ≥11px with tracking, 4.5:1 on the effective ground). */
+
+/* ── the first screen ──────────────────────────────────────── */
+/* The ridge plate as a picture (hvac2-hero.tsx): the stylesheet's background is off, the picture
+   fills the plate as `cover` did, at the same focal point; the plate keeps its mask and opacity. */
+.jf-lp .lp-bg--ridge.lp-h2-ridge { background-image: none; }
+.jf-lp .lp-h2-ridge img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 62%; }
+.jf-lp .lp-h2-col {
+  position: relative;
+  z-index: 1;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 62rem;
+  padding: 14px 20px 40px;
+  text-align: center;
+}
+.jf-lp .lp-h2-kicker {
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+.jf-lp .lp-h2-h1 {
+  font-size: clamp(30px, 4.4vw, 56px);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.jf-lp .lp-h2-br { display: none; }
+.jf-lp .lp-h2-sub { margin-top: 12px; max-width: 40rem; }
+.jf-lp .lp-h2-lede {
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.76);
+  text-wrap: pretty;
+}
+.jf-lp .lp-h2-checks {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+}
+.jf-lp .lp-h2-checks li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #fff;
+}
+.jf-lp .lp-h2-checks svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: square;
+}
+
+/* The demo: its line, then the frame — short on a phone, so the button under
+   it is in the first screen (also in Facebook's and Instagram's in-app
+   browsers, whose window is the shortest a visitor here has). */
+.jf-lp .lp-h2-demo { width: 100%; max-width: 50rem; margin: 14px 0 0; text-align: left; }
+.jf-lp .lp-h2-demo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px 8px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.jf-lp .lp-h2-demo-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.jf-lp .lp-h2-demo-line { font-size: 14px; line-height: 1.4; color: rgba(255, 255, 255, 0.76); }
+/* On a phone the frame takes what the window leaves above the button: about
+   260px in a 700px in-app browser, 340px at most. The app frame's address
+   bar is left off there (the frame's own edge is the window), and the page
+   inside is drawn at 86% — its step row and its result bar stay, with room
+   between them for the step that is playing. */
+.jf-lp .lp-h2-hero .lp-hvac-frame--quick,
+.jf-lp .lp-h2-video { height: clamp(200px, calc(100svh - 448px), 340px); }
+.jf-lp .lp-h2-video { background: #0d0f12; }
+@media (max-width: 639px) {
+  .jf-lp .lp-h2-hero .lp-mock-frame > div:first-child { display: none; }
+  .jf-lp .lp-h2-hero .lp-hvac-frame--quick .lp-hvac-page { zoom: 0.86 !important; }
+  .jf-lp .lp-h2-demo-line--desk { display: none; }
+}
+@media (min-width: 640px) {
+  .jf-lp .lp-h2-demo-line--phone { display: none; }
+}
+.jf-lp .lp-h2-video-el { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* The demo opens on the house with the address in (the form's initialAddress):
+   its "from the client" chip is the real page's, for a lead's address — not this. */
+.jf-lp .lp-hvac-frame--quick label[for="hv-addr"] > span:first-child > span { display: none; }
+.jf-lp .lp-h2-try {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.jf-lp .lp-h2-act {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  max-width: 24rem;
+  margin-top: 14px;
+}
+.jf-lp .lp-h2-cta { width: 100%; min-height: 52px; font-size: 17px; line-height: 1.2; padding: 10px 20px; }
+.jf-lp .lp-h2-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.76);
+  text-wrap: balance;
+}
+.jf-lp .lp-h2-terms > span:first-child { color: #fff; font-weight: 600; }
+.jf-lp .lp-h2-sample-link {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.jf-lp .lp-h2-hero a:focus-visible,
+.jf-lp .lp-h2-hero [data-hvac-window]:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+@media (min-width: 640px) {
+  .jf-lp .lp-h2-col { padding: 4vmin 24px 9vmin; }
+  .jf-lp .lp-h2-br { display: inline; }
+  .jf-lp .lp-h2-lede { font-size: 17px; }
+  .jf-lp .lp-h2-checks { margin-top: 14px; gap: 6px 22px; }
+  .jf-lp .lp-h2-checks li { font-size: 15px; }
+  .jf-lp .lp-h2-demo { margin-top: 18px; }
+  .jf-lp .lp-h2-hero .lp-hvac-frame--quick,
+  .jf-lp .lp-h2-video { height: 300px; }
+  .jf-lp .lp-h2-act { align-items: center; max-width: none; margin-top: 20px; }
+  .jf-lp .lp-h2-cta { width: auto; min-width: 22rem; }
+}
+@media (min-width: 1024px) and (min-height: 960px) {
+  .jf-lp .lp-h2-hero .lp-hvac-frame--quick,
+  .jf-lp .lp-h2-video { height: 380px; }
+}
+
+/* ── the sections under it ─────────────────────────────────── */
+.jf-lp .lp-h2-sec { position: relative; background: var(--paper, #f2f0eb); padding: 8vmin 20px; }
+.jf-lp .lp-h2-sec--steps { background: #fff; border-top: 1px solid var(--ink, #0a0a0a); border-bottom: 1px solid var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-muted, #555);
+}
+
+/* Three cards: where the figures come from. */
+.jf-lp .lp-h2-cards { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 32px; }
+.jf-lp .lp-h2-card { display: flex; flex-direction: column; min-width: 0; background: #fff; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; }
+.jf-lp .lp-h2-card-top { padding: 20px 20px 16px; }
+.jf-lp .lp-h2-card-title { margin-top: 8px; font-size: 20px; font-weight: 800; line-height: 1.12; letter-spacing: -0.01em; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-card-body { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-card-mock { margin-top: auto; padding: 12px 16px 16px; border-top: 1px solid var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-mock-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+  padding-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #0a0a0a);
+}
+.jf-lp .lp-h2-mock-head > span:last-child { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted, #555); align-self: center; }
+.jf-lp .lp-h2-rows { margin: 0; padding: 0; list-style: none; }
+.jf-lp .lp-h2-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(10, 10, 10, 0.1);
+}
+.jf-lp .lp-h2-row:last-child { border-bottom: 0; }
+.jf-lp .lp-h2-row-k { font-size: 14px; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-row-v { font-size: 14px; font-weight: 700; color: var(--ink, #0a0a0a); text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jf-lp .lp-h2-row-src {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted, #555);
+}
+.jf-lp .lp-h2-mock-note { margin-top: 10px; font-size: 14px; line-height: 1.45; color: var(--ink-soft, #2a2a2a); }
+
+/* Source stamps: flat, no offset (owner, 2026-10-18), a semantic frame and fill. */
+.jf-lp .lp-h2-stamp {
+  display: inline-block;
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--ink, #0a0a0a);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink, #0a0a0a);
+  background: #fff;
+}
+.jf-lp .lp-h2-stamp--record { border-color: rgba(10, 10, 10, 0.45); }
+.jf-lp .lp-h2-stamp--read { border-color: var(--accent, #1854a0); color: var(--accent, #1854a0); background: var(--accent-soft, rgba(24, 84, 160, 0.08)); }
+.jf-lp .lp-h2-stamp--default { border-color: var(--amber, #b88420); background: rgba(184, 132, 32, 0.12); }
+.jf-lp .lp-h2-stamp--stated { border-color: var(--emerald, #3a7d44); color: var(--emerald, #3a7d44); background: rgba(58, 125, 68, 0.08); }
+.jf-lp .lp-h2-stamp--result { border-color: var(--ink, #0a0a0a); background: var(--ink, #0a0a0a); color: #fff; }
+.jf-lp .lp-h2-checks-tally { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.jf-lp .lp-h2-checks-tally > span { padding: 6px 10px; border: 1.5px solid var(--ink, #0a0a0a); border-radius: 2px; font-size: 14px; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-checks-tally b { font-weight: 800; color: var(--ink, #0a0a0a); font-variant-numeric: tabular-nums; }
+
+/* The four steps. */
+.jf-lp .lp-h2-sec-title { font-size: clamp(26px, 3.2vw, 44px); font-weight: 800; line-height: 1.02; letter-spacing: -0.03em; color: var(--ink, #0a0a0a); text-wrap: balance; }
+.jf-lp .lp-h2-steps { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 24px 0 0; padding: 0; list-style: none; }
+.jf-lp .lp-h2-step { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 14px; background: #fff; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; }
+.jf-lp .lp-h2-step-head { display: flex; align-items: center; gap: 10px; }
+.jf-lp .lp-h2-step-n { display: grid; place-items: center; width: 28px; height: 28px; flex: none; background: var(--ink, #0a0a0a); color: #fff; font-family: var(--font-mono); font-size: 13px; font-weight: 800; }
+.jf-lp .lp-h2-step-name { font-family: var(--font-mono); font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-mini { flex: 1; min-height: 112px; padding: 10px; background: var(--paper, #f2f0eb); border: 1px solid rgba(10, 10, 10, 0.18); border-radius: 2px; }
+.jf-lp .lp-h2-mini-field { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; background: #fff; border: 1.5px solid var(--ink, #0a0a0a); border-radius: 2px; }
+.jf-lp .lp-h2-mini-field svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--ink, #0a0a0a); stroke-width: 1.6; }
+.jf-lp .lp-h2-mini-field span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-mini-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.jf-lp .lp-h2-mini-chips span,
+.jf-lp .lp-h2-mini-tally span { padding: 3px 6px; background: #fff; border: 1px solid rgba(10, 10, 10, 0.2); border-radius: 2px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-mini-rows { margin: 0; padding: 0; list-style: none; }
+.jf-lp .lp-h2-mini-rows li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(10, 10, 10, 0.1); font-size: 14px; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-mini-rows li:last-child { border-bottom: 0; }
+.jf-lp .lp-h2-mini-load { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.jf-lp .lp-h2-mini-load > div,
+.jf-lp .lp-h2-mini-tiers > div { min-width: 0; padding: 8px 6px; background: #fff; border: 1px solid rgba(10, 10, 10, 0.2); border-radius: 2px; }
+.jf-lp .lp-h2-mini-load b { display: block; font-size: 18px; font-weight: 900; line-height: 1.1; color: var(--ink, #0a0a0a); font-variant-numeric: tabular-nums; }
+.jf-lp .lp-h2-mini-load span,
+.jf-lp .lp-h2-mini-tiers span { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted, #555); }
+.jf-lp .lp-h2-mini-tally { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.jf-lp .lp-h2-mini-tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.jf-lp .lp-h2-mini-tiers > div.is-picked { border: 2px solid var(--accent, #1854a0); }
+.jf-lp .lp-h2-mini-tiers b { display: block; margin-top: 2px; font-size: 14px; font-weight: 800; color: var(--ink, #0a0a0a); font-variant-numeric: tabular-nums; }
+.jf-lp .lp-h2-mini-btn { margin-top: 8px; padding: 7px 10px; background: var(--accent, #1854a0); border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; font-size: 14px; font-weight: 700; color: #fff; text-align: center; }
+
+.jf-lp .lp-h2-after { display: flex; flex-direction: column; align-items: stretch; gap: 6px; max-width: 24rem; margin: 28px auto 0; text-align: center; }
+.jf-lp .lp-h2-after-link { display: inline-flex; align-self: center; align-items: center; min-height: 44px; font-size: 15px; font-weight: 700; color: var(--ink, #0a0a0a); text-decoration: underline; text-underline-offset: 3px; }
+
+/* The finished estimate. */
+.jf-lp .lp-h2-doc { max-width: 52rem; margin-top: 28px; background: #fff; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; }
+.jf-lp .lp-h2-doc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-doc-title { margin-top: 6px; font-size: 19px; font-weight: 800; line-height: 1.18; letter-spacing: -0.01em; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-doc-client { margin-top: 4px; font-size: 14px; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-doc-total { flex: none; text-align: right; }
+.jf-lp .lp-h2-doc-total span { display: block; font-family: var(--font-mono); font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-muted, #555); }
+.jf-lp .lp-h2-doc-total b { display: block; font-size: 26px; font-weight: 900; line-height: 1.1; color: var(--ink, #0a0a0a); font-variant-numeric: tabular-nums; }
+.jf-lp .lp-h2-doc-lines { margin: 0; padding: 0; list-style: none; }
+.jf-lp .lp-h2-doc-lines li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 10px 20px; border-bottom: 1px solid rgba(10, 10, 10, 0.1); }
+.jf-lp .lp-h2-doc-lines li span { min-width: 0; font-size: 14px; line-height: 1.45; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-doc-lines li b { flex: none; font-size: 15px; font-weight: 800; color: var(--ink, #0a0a0a); font-variant-numeric: tabular-nums; }
+.jf-lp .lp-h2-doc-lines li.lp-h2-doc-sum { border-top: 1px solid var(--ink, #0a0a0a); border-bottom: 0; }
+.jf-lp .lp-h2-doc-lines li.lp-h2-doc-sum span { font-weight: 800; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-doc-lines li.lp-h2-doc-sum b { font-size: 18px; font-weight: 900; }
+.jf-lp .lp-h2-doc[data-open] .lp-h2-doc-lines--short { display: none; }
+.jf-lp .lp-h2-doc-scope { padding: 16px 20px 8px; font-size: 14px; line-height: 1.55; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-doc-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 4px 20px 20px; padding: 12px 14px; background: var(--accent-soft, rgba(24, 84, 160, 0.08)); border: 1.5px solid var(--accent, #1854a0); border-radius: 2px; }
+.jf-lp .lp-h2-doc-option div { min-width: 0; }
+.jf-lp .lp-h2-doc-option div b { display: block; font-size: 15px; font-weight: 800; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-h2-doc-option div span { display: block; margin-top: 2px; font-size: 14px; color: var(--ink-soft, #2a2a2a); }
+.jf-lp .lp-h2-doc-option > b { flex: none; font-size: 16px; font-weight: 800; color: var(--accent, #1854a0); font-variant-numeric: tabular-nums; }
+.jf-lp .lp-h2-doc-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-top: 1px solid var(--ink, #0a0a0a);
+  background: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink, #0a0a0a);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.jf-lp .lp-h2-doc-toggle:hover { background: var(--paper, #f2f0eb); }
+.jf-lp .lp-h2-doc-toggle:focus-visible,
+.jf-lp .lp-h2-sec a:focus-visible { outline: 2px solid var(--accent, #1854a0); outline-offset: 2px; }
+
+/* Their content-visibility boxes (landing-e.css .lp-cv), measured. */
+.jf-lp .lp-cv--how { --lp-cv: 2050px; }
+.jf-lp .lp-cv--steps { --lp-cv: 1500px; }
+.jf-lp .lp-cv--sample { --lp-cv: 820px; }
+
+@media (max-width: 639px) {
+  .jf-lp .lp-h2-doc-head { flex-direction: column; gap: 10px; }
+  .jf-lp .lp-h2-doc-total { display: flex; align-items: baseline; gap: 10px; text-align: left; }
+}
+@media (min-width: 640px) {
+  .jf-lp .lp-h2-sec { padding-inline: 24px; }
+  .jf-lp .lp-h2-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jf-lp .lp-h2-after { align-items: center; max-width: none; }
+  .jf-lp .lp-h2-doc-title { font-size: 22px; }
+}
+@media (min-width: 960px) {
+  .jf-lp .lp-h2-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 44px; }
+  .jf-lp .lp-cv--how { --lp-cv: 1000px; }
+  .jf-lp .lp-cv--sample { --lp-cv: 760px; }
+}
+@media (min-width: 1100px) {
+  .jf-lp .lp-h2-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Four across, a tier tile is ~65px wide: the amounts a size down so "$13,485" clears its frame. */
+  .jf-lp .lp-h2-mini-tiers { gap: 4px; }
+  .jf-lp .lp-h2-mini-tiers > div { padding: 6px 4px; }
+  .jf-lp .lp-h2-mini-tiers b { font-size: 13px; }
+  .jf-lp .lp-cv--steps { --lp-cv: 620px; }
+}

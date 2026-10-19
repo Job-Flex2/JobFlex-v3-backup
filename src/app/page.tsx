@@ -51,7 +51,8 @@ const HVAC_METADATA: Metadata = {
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }): Promise<Metadata> {
   const { variant } = readLandingVariant(await searchParams);
-  return variant === "hvac" ? HVAC_METADATA : DEFAULT_METADATA;
+  // HVAC v2 (?industry=hvac2) unfurls as the HVAC page, and names it canonical.
+  return variant === "hvac" || variant === "hvac2" ? HVAC_METADATA : DEFAULT_METADATA;
 }
 
 // Read at true device width — the page carries its own handheld build.
