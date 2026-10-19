@@ -97,6 +97,45 @@ export function streetEdge(lotRing: Pt[], labels: Uint8Array, lot: Uint8Array, g
   return best && best.score > 0 ? best.i : null;
 }
 
+/** Front, back or side of the house for any point of the grid: the street side is the lot edge with the most pavement
+ *  just outside it; "front" is between that edge and the house's near face, "back" past its far face, "side" beside it.
+ *  With no street side or no house, everything is front. */
+export function zoneFrame(lotRing: Pt[] | null, labels: Uint8Array, lot: Uint8Array, g: Grid): { frontEdge: number | null; zoneAt: (x: number, y: number) => Zone } {
+  const { w, h } = g;
+  const frontEdge = lotRing ? streetEdge(lotRing, labels, lot, g) : null;
+  if (frontEdge == null || !lotRing) return { frontEdge, zoneAt: () => "front" };
+  const [a, b] = edge(lotRing, frontEdge);
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  let nx = -(b.y - a.y) / len;
+  let ny = (b.x - a.x) / len;
+  const ox = (a.x + b.x) / 2;
+  const oy = (a.y + b.y) / 2;
+  // Point the normal into the lot.
+  const tx = Math.floor(ox + nx * 3);
+  const ty = Math.floor(oy + ny * 3);
+  if (!(tx >= 0 && ty >= 0 && tx < w && ty < h && lot[ty * w + tx])) {
+    nx = -nx;
+    ny = -ny;
+  }
+  let tMin = Infinity;
+  let tMax = -Infinity;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      if (lot[y * w + x] && labels[y * w + x] === CLS.BUILDING) {
+        const t = (x + 0.5 - ox) * nx + (y + 0.5 - oy) * ny;
+        tMin = Math.min(tMin, t);
+        tMax = Math.max(tMax, t);
+      }
+  if (!Number.isFinite(tMin)) return { frontEdge, zoneAt: () => "front" };
+  return {
+    frontEdge,
+    zoneAt: (x, y) => {
+      const t = (x - ox) * nx + (y - oy) * ny;
+      return t < tMin ? "front" : t > tMax ? "back" : "side";
+    },
+  };
+}
+
 /** Without assessor footprints: the house is a solid hard or roof-coloured piece inside the lot, away from the lot line
  *  (a driveway reaches the street; a roof doesn't), bigger than a shed. Marked BUILDING in place. */
 export function findHouse(labels: Uint8Array, lot: Uint8Array, g: Grid): number {
@@ -205,46 +244,11 @@ export function measureYard(inp: MeasureInput): YardMeasures {
   for (let i = 0; i < w * h; i++) if (lot[i]) lotPx++;
 
   // Front, back and sides: along the street edge's inward normal, before the house, past it, beside it.
-  const frontEdge = inp.lotRing ? streetEdge(inp.lotRing, labels, lot, g) : null;
+  const zones = zoneFrame(inp.lotRing, labels, lot, g);
+  const frontEdge = zones.frontEdge;
   const byZone: Record<Zone, number> = { front: 0, back: 0, side: 0 };
-  let nx = 0;
-  let ny = 1;
-  let ox = 0;
-  let oy = 0;
-  if (frontEdge != null && inp.lotRing) {
-    const [a, b] = edge(inp.lotRing, frontEdge);
-    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    nx = -(b.y - a.y) / len;
-    ny = (b.x - a.x) / len;
-    ox = (a.x + b.x) / 2;
-    oy = (a.y + b.y) / 2;
-    // Point the normal into the lot.
-    const tx = Math.floor(ox + nx * 3);
-    const ty = Math.floor(oy + ny * 3);
-    if (!(tx >= 0 && ty >= 0 && tx < w && ty < h && lot[ty * w + tx])) {
-      nx = -nx;
-      ny = -ny;
-    }
-  }
-  let tMin = Infinity;
-  let tMax = -Infinity;
   for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++)
-      if (L[y * w + x] === CLS.BUILDING) {
-        const t = (x + 0.5 - ox) * nx + (y + 0.5 - oy) * ny;
-        tMin = Math.min(tMin, t);
-        tMax = Math.max(tMax, t);
-      }
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      if (L[y * w + x] !== CLS.LAWN) continue;
-      if (frontEdge == null || !Number.isFinite(tMin)) {
-        byZone.front += sqftPx;
-        continue;
-      }
-      const t = (x + 0.5 - ox) * nx + (y + 0.5 - oy) * ny;
-      byZone[t < tMin ? "front" : t > tMax ? "back" : "side"] += sqftPx;
-    }
+    for (let x = 0; x < w; x++) if (L[y * w + x] === CLS.LAWN) byZone[zones.zoneAt(x + 0.5, y + 0.5)] += sqftPx;
 
   // Trees in the lawn: crowns mostly ringed by lawn.
   const treeOut = outlinesOf(L, w, h, CLS.TREE, Math.ceil(10 / sqftPx));

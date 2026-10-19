@@ -11,6 +11,7 @@
 //     kept beside it for the plan engine to book; sent to the client to accept when asked.
 //   loadRouteWeek / balanceMowingDays / rainDelay — the route days: a week's lawn visits in driving order, the yards
 //     given a mowing weekday by where they are, a rained-out day pushed to the next.
+import { cleanShapes } from "@/lib/lawn/shapes";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -103,7 +104,7 @@ function cleanDraft(raw: unknown): LawnDraft | null {
   if (!site || site.v !== 1 || typeof site.labels !== "string" || !site.grid || !Array.isArray(site.lot?.ring)) return null;
   if (site.labels.length > 2_000_000) return null;
   return {
-    site,
+    site: { ...site, shapes: cleanShapes(site.shapes) },
     options: cleanOptions(o?.options),
     picked: Array.isArray(o?.picked) ? (o!.picked as unknown[]).filter((x): x is string => typeof x === "string" && x.length < 40).slice(0, 30) : [],
     clientId: typeof o?.clientId === "string" && o.clientId.length < 64 ? o.clientId : null,

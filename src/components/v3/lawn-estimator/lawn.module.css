@@ -124,4 +124,20 @@
 :global(.jf-blueprint .content) .keyBed { border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.4); }
 :global(.jf-blueprint .content) .keyPool { border: 2px solid #38bdf8; background: rgba(56, 189, 248, 0.45); }
 :global(.jf-blueprint .content) .keyOut { background: #3f4a3c; opacity: 0.75; }
+/* The drawing map (2026-10-19): Google's satellite, the contractor's shapes, a chip by the pointer, a bar while drawing. */
+:global(.jf-blueprint .content) .drawWrap { position: relative; width: 100%; border: var(--border); border-radius: var(--radius); overflow: hidden; background: #1f2a1d; }
+:global(.jf-blueprint .content) .drawMap { width: 100%; height: min(68vh, 640px); min-height: 360px; }
+:global(.jf-blueprint .content) .drawChip { position: absolute; z-index: 3; pointer-events: none; padding: 3px 8px; border-radius: 999px; background: rgba(15, 23, 42, 0.88); color: #fff; font: 700 12px/1.3 var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
+:global(.jf-blueprint .content) .drawBar { position: absolute; z-index: 4; left: 50%; top: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: rgba(255, 255, 255, 0.96); border: var(--border); border-radius: 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); max-width: calc(100% - 80px); flex-wrap: wrap; justify-content: center; }
+:global(.jf-blueprint .content) .mapLabel { position: absolute; left: 0; top: 0; white-space: nowrap; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.94); color: #1a2e05; font: 700 12px/1.25 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); border: 2px solid #84cc16; }
+:global(.jf-blueprint .content) .mapLabelBed { border-color: #f59e0b; color: #451a03; }
+:global(.jf-blueprint .content) .mapLabelCut { border-color: #64748b; color: #0f172a; }
+:global(.jf-blueprint .content) .mapLabelOn { background: #0f172a; color: #fff; }
+:global(.jf-blueprint .content) .shapeList { display: grid; gap: 4px; }
+:global(.jf-blueprint .content) .shapeRow { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 9px; border: var(--border); border-radius: var(--radius); background: var(--paper, #fff); text-align: left; font-size: 13px; cursor: pointer; }
+:global(.jf-blueprint .content) .shapeRowOn { outline: 2px solid var(--ink, #0f172a); }
+:global(.jf-blueprint .content) .shapeKey { width: 12px; height: 12px; border-radius: 3px; }
+@media (max-width: 640px) {
+  :global(.jf-blueprint .content) .drawMap { height: 62vh; min-height: 320px; }
+}
 

@@ -7,6 +7,7 @@ import { fillRings, toPx } from "./geo";
 import type { SlopeBands, YardMeasures } from "./measure";
 import { measureYard } from "./measure";
 import { DEFAULT_REACH_FT, keepYard } from "./yard";
+import type { LawnShape } from "./shapes";
 
 export type LawnSite = {
   v: 1;
@@ -29,6 +30,9 @@ export type LawnSite = {
   /** How the yard was picked out: grass within `reachFt` of the lot's buildings is lawn, past it natural (null: no
    *  building on the lot, nothing cut). Absent on estimates read before 2026-10-19 — their labels have no yard pass. */
   yard?: { reachFt: number | null };
+  /** The contractor's own outlines — lawns, beds, cut-outs (2026-10-19). When present they are the measure; the
+   *  labels then only name what the shapes' edges meet. Absent on estimates read before. */
+  shapes?: LawnShape[];
   slope: SlopeBands;
   sources: { parcel: boolean; footprints: boolean; footprintSource?: "county" | "usa-structures" | null; canopyMap: boolean; lidar: boolean };
   readAt: string;

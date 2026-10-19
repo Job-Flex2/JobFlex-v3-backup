@@ -2,13 +2,15 @@
 // repo) — lawn, a tree, a bed, the driveway, the house — the outlines and edges traced from it, the lawn split front /
 // back / side from the street, the labels' storage, the pricing against the market, the season by state, the tax —
 // and (2026-10-19) a wooded acreage: the maintained yard picked out of the woods, the field and the undergrowth, the
-// pool told from a court and a pale roof, a lawn the tree-height map still calls woods.
+// pool told from a court and a pale roof, a lawn the tree-height map still calls woods — and the contractor's own
+// shapes: their areas, a bed in a lawn coming off it, the names, the edges they meet, the photo's suggestions.
 //   npx tsx qa/tests/logic/lawn-estimator.check.ts
 import { classify, blueWater, CLS } from "../../../src/lib/lawn/classify";
 import { traceLoops, signedArea, outlinesOf, edgeNeighbours } from "../../../src/lib/lawn/vectorize";
 import { measureYard, slopeBands, confidenceOf, findHouse } from "../../../src/lib/lawn/measure";
 import { encodeLabels, decodeLabels, withYard, type LawnSite } from "../../../src/lib/lawn/site";
-import { fillRings, fromMerc, ftPerPx, type Grid } from "../../../src/lib/lawn/geo";
+import { fillRings, fromMerc, fromPx, ftPerPx, type Grid } from "../../../src/lib/lawn/geo";
+import { ringSqft, pathFt, shapeAreas, measureShapes, suggestShapes, outlineAt, cleanShapes, labelPoint, nameFor, drawnShape, type LawnShape } from "../../../src/lib/lawn/shapes";
 import { priceYard, pickMower, difficultyOf, cleanLawnSettings, cleanOptions, DEFAULT_LAWN_SETTINGS, DEFAULT_OPTIONS, mowBand, yardCanopyShare } from "../../../src/lib/lawn/pricing";
 import { keepYard, shadedUndergrowth, yardArea, reReach, countPiece, fillPiece } from "../../../src/lib/lawn/yard";
 import { climateFor, mowVisits, monthsOf, weeklyMonths, STATE_CLIMATE } from "../../../src/lib/lawn/season";
@@ -335,6 +337,61 @@ console.log("── the maintained yard on a wooded acreage");
   const qWoods = priceYard({ measures: m2, settings: DEFAULT_LAWN_SETTINGS, options: DEFAULT_OPTIONS, locationFactor: 1, state: "WA", ownRate: false });
   const fall = qWoods.services.find((x) => x.id === "fallCleanup")!;
   check("the fall cleanup's market is the yard's acres, not the lot's", fall.market!.high < 2000, `$${fall.market!.low}–${fall.market!.high}`);
+}
+
+console.log("── the contractor's shapes");
+{
+  // The first synthetic yard as a site: 0.3 m pixels, the lot inset 5 px, the house at x 70–130, y 60–110.
+  const ringOf = (pts: Array<[number, number]>) => pts.map(([x, y]) => fromPx(grid, { x, y }));
+  const site = { v: 1, address: "", lat: 0, lng: 0, state: "IL", place: "", locationFactor: 1, photo: null, grid, lot: { ring: ringOf(lotRing.map((q) => [q.x, q.y] as [number, number])), source: "parcel", parcelId: null, acreage: null, stories: null }, labels: encodeLabels(L), readLabels: encodeLabels(L), slope: slopeBands(null, 0, 0, 1), sources: { parcel: true, footprints: true, canopyMap: true, lidar: false }, readAt: "" } as unknown as LawnSite;
+  const px = (n: number) => n * fpp; // pixels → feet
+  const back = ringOf([[10, 10], [190, 10], [190, 60], [10, 60]]);
+  check("a drawn rectangle's area: 180 × 50 px", near(ringSqft(back), px(180) * px(50), 1), `${Math.round(ringSqft(back))} vs ${Math.round(px(180) * px(50))}`);
+  check("and its length round", near(pathFt(back), 2 * (px(180) + px(50)), 0.5), `${Math.round(pathFt(back))} ft`);
+  const lawnA: LawnShape = { id: "a", kind: "lawn", name: "Back lawn", ring: back };
+  const bedIn: LawnShape = { id: "b", kind: "bed", name: "Back bed", ring: ringOf([[40, 20], [60, 20], [60, 40], [40, 40]]) };
+  const cutIn: LawnShape = { id: "c", kind: "cut", name: "Not mowed", ring: ringOf([[120, 20], [140, 20], [140, 30], [120, 30]]) };
+  const a1 = shapeAreas(site, [lawnA, bedIn, cutIn]);
+  const exact = ringSqft(back) - ringSqft(bedIn.ring) - ringSqft(cutIn.ring);
+  check("a bed and a cut-out inside a lawn come off it — exactly", near(a1.lawnSqft, exact, 1) && near(a1.each.a.net, exact, 0.01), `${a1.lawnSqft} vs ${Math.round(exact)}`);
+  check("the bed counts as bed", near(a1.bedSqft, ringSqft(bedIn.ring), 1), String(a1.bedSqft));
+  // Two lawns drawn over each other count the overlap once.
+  const lawnB: LawnShape = { id: "d", kind: "lawn", name: "Back lawn 2", ring: ringOf([[100, 10], [190, 10], [190, 60], [100, 60]]) };
+  const a2 = shapeAreas(site, [lawnA, lawnB]);
+  check("a lawn drawn inside another (sharing its edge) isn't counted twice", near(a2.lawnSqft, ringSqft(back), 1), `${a2.lawnSqft} vs ${Math.round(ringSqft(back))}`);
+  const bedBeside: LawnShape = { id: "f", kind: "bed", name: "Side bed", ring: ringOf([[190, 10], [195, 10], [195, 60], [190, 60]]) };
+  check("a bed snapped against the lawn's edge, outside it, takes nothing off", near(shapeAreas(site, [lawnA, bedBeside]).lawnSqft, ringSqft(back), 1));
+  const crossing: LawnShape = { id: "e", kind: "lawn", name: "x", ring: ringOf([[150, 30], [195, 30], [195, 100], [150, 100]]) };
+  const a3 = shapeAreas(site, [lawnA, crossing]);
+  const union = ringSqft(back) + ringSqft(crossing.ring) - px(40) * px(30);
+  check("lawns that cross count their overlap once (to the pixel)", near(a3.lawnSqft, union, union * 0.02), `${a3.lawnSqft} vs ${Math.round(union)}`);
+  // The measures: the shapes' areas; the edges from what they meet.
+  const ms = measureShapes(site, L, [lawnA, bedIn]).measures;
+  check("measured lawn is the shapes' lawn", near(ms.lawnSqft, ringSqft(back) - ringSqft(bedIn.ring), 1), String(ms.lawnSqft));
+  check("the drawn lawn is behind the house", ms.lawnByZone.back === ms.lawnSqft, JSON.stringify(ms.lawnByZone));
+  check("its edge along the house is foundation trim", ms.edges.houseFt > px(50), `${ms.edges.houseFt} ft`);
+  check("its edge round the bed is a bed edge", ms.edges.bedFt > px(60), `${ms.edges.bedFt} ft`);
+  check("the bed's edge is its own outline", near(ms.bedPerimeterFt, pathFt(bedIn.ring), 1), `${ms.bedPerimeterFt} ft`);
+  check("nothing drawn: nothing to mow", measureShapes(site, L, []).measures.lawnSqft === 0);
+  // Names for where they lie.
+  check("a shape drawn in the front yard is the front lawn", drawnShape(site, "lawn", ringOf([[10, 120], [60, 120], [60, 160], [10, 160]]), L, []).name === "Front lawn");
+  check("a second one is numbered", nameFor("lawn", "back", ["Back lawn"]) === "Back lawn 2" && nameFor("cut", "front", []) === "Not mowed");
+  // The photo's suggestions and the one-tap outline.
+  const sug = suggestShapes(site, L);
+  const sugLawn = sug.filter((x) => x.kind === "lawn").reduce((t, x) => t + ringSqft(x.ring), 0);
+  check("suggestions outline the lawn the photo reads", sug.some((x) => x.kind === "lawn") && near(sugLawn, m.lawnSqft + m.treeCanopySqft * 0, m.lawnSqft * 0.2), `${Math.round(sugLawn)} vs ${m.lawnSqft}`);
+  check("and the bed", sug.some((x) => x.kind === "bed"), sug.map((x) => x.name).join(", "));
+  const one = outlineAt(site, L, fromPx(grid, { x: 30, y: 30 }), []);
+  check("a tap on the lawn outlines that piece", !!one && one.kind === "lawn" && ringSqft(one.ring) > 1000, one ? `${one.name} ${Math.round(ringSqft(one.ring))}` : "none");
+  check("a tap on the house outlines nothing", outlineAt(site, L, fromPx(grid, { x: 100, y: 80 }), []) === null);
+  // The label sits inside the lawn, clear of the bed in it.
+  const lp = labelPoint(back, [bedIn.ring]);
+  const lpx = (() => { const q = fromPx(grid, { x: 0, y: 0 }); return q; })();
+  void lpx;
+  check("the label sits in the lawn, off the bed", lp.lat <= back[0].lat && lp.lat >= back[2].lat && !(lp.lng > bedIn.ring[0].lng && lp.lng < bedIn.ring[1].lng && lp.lat < bedIn.ring[0].lat && lp.lat > bedIn.ring[2].lat));
+  // Off the wire: junk out.
+  const cleaned = cleanShapes([{ kind: "lawn", ring: back, name: "  Back  " }, { kind: "pool", ring: back }, { kind: "bed", ring: [{ lat: 1, lng: 1 }] }, { kind: "cut", ring: [{ lat: "x" }, ...back] }]);
+  check("saved shapes are held to sense", !!cleaned && cleaned.length === 2 && cleaned[0].name === "Back" && cleaned[1].ring.length === 4, JSON.stringify(cleaned?.map((x) => [x.kind, x.name, x.ring.length])));
 }
 
 console.log(bad ? `\n${bad} FAILED` : "\nall ok");
