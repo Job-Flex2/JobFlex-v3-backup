@@ -343,9 +343,11 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     const motion = createWheelMotion(
       () => main.scrollTop + scroller.scrollTop,
       (value) => {
+        // Both scroll positions first, the variables last (2026-10-18, perf): a scroll write needs a clean layout,
+        // so a variable set between the two forced a full layout of the page every frame.
         main.scrollTop = Math.min(headerRange, value);
-        fit();
         scroller.scrollTop = Math.max(0, value - headerRange);
+        fit();
       },
       () => Math.max(headerRange, main.scrollTop + scroller.scrollHeight - scroller.clientHeight),
       studio,
@@ -456,12 +458,33 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [wallHover, setWallHover] = React.useState<WallFocus | null>(null);
   const [fieldFocus, setFieldFocus] = React.useState<FieldFocus | null>(null);
   const [fieldHover, setFieldHover] = React.useState<FieldFocus | null>(null);
+  // NOT WHILE SCROLLING (2026-10-18, perf): a still pointer over a scrolling form gets a mouseenter for every field
+  // that slides under it, and each one re-rendered the whole studio and redrew the 3D — the lag as the header scrolls
+  // away. A hover light is dropped until the page has been still for a moment; a focus light always applies.
+  const scrollingUntil = React.useRef(0);
+  React.useEffect(() => {
+    const onScroll = () => { scrollingUntil.current = performance.now() + 160; };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, true);
+  }, []);
+  // The hover light as last set, readable without a render: a mouseleave for a field that is not lit (the one left
+  // behind when the page scrolls) sets nothing, where a setter call re-rendered the studio for no change.
+  const fieldHoverRef = React.useRef<FieldFocus | null>(null);
+  React.useLayoutEffect(() => {
+    fieldHoverRef.current = fieldHover;
+  }, [fieldHover]);
   const rootScope = React.useMemo<FieldScopeValue>(() => {
     const same = (a: FieldFocus | null, b: FieldFocus) => !!a && JSON.stringify(a) === JSON.stringify(b);
     return {
       where: {},
-      light: (f, how) => (how === "focus" ? setFieldFocus(f) : setFieldHover(f)),
-      unlight: (f, how) => (how === "focus" ? setFieldFocus((x) => (same(x, f) ? null : x)) : setFieldHover((x) => (same(x, f) ? null : x))),
+      light: (f, how) => {
+        if (how === "focus") setFieldFocus(f);
+        else if (performance.now() >= scrollingUntil.current && !same(fieldHoverRef.current, f)) setFieldHover(f);
+      },
+      unlight: (f, how) => {
+        if (how === "focus") setFieldFocus((x) => (same(x, f) ? null : x));
+        else if (same(fieldHoverRef.current, f)) setFieldHover(null);
+      },
     };
   }, []);
   const lightsFor = (f: WallFocus) => ({
@@ -1110,19 +1133,51 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   React.useEffect(() => {
     const scroller = qScrollRef.current;
     if (!scroller) return;
-    const observer = new IntersectionObserver((entries) => {
-      setVisibleSections((previous) => {
-        const next = new Set(previous);
-        for (const entry of entries) {
-          const id = (entry.target as HTMLElement).dataset.deckSection as StepId;
-          if (entry.isIntersecting) next.add(id);
-          else next.delete(id);
-        }
-        return next.size === previous.size && [...next].every((id) => previous.has(id)) ? previous : next;
+    // The sections in view only switch what is computed for them (the tier prices, the package links), so they are
+    // read once the scroll has settled and committed at low priority (2026-10-18, perf): each change re-rendered the
+    // whole studio (~110ms) while the header was still scrolling away.
+    const pending = new Map<StepId, boolean>();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    // …and never while the page is still scrolling: the header's easing runs on for a second after the wheel
+    // stops, and a flush in that tail re-rendered the studio several times over one gesture.
+    let scrolledAt = 0;
+    const onScrolled = () => { scrolledAt = performance.now(); };
+    const main = scroller.closest<HTMLElement>(".main");
+    scroller.addEventListener("scroll", onScrolled, { passive: true });
+    main?.addEventListener("scroll", onScrolled, { passive: true });
+    const QUIET = 200;
+    const flush = () => {
+      timer = null;
+      const since = performance.now() - scrolledAt;
+      if (since < QUIET) {
+        timer = setTimeout(flush, QUIET - since);
+        return;
+      }
+      const changes = new Map(pending);
+      pending.clear();
+      React.startTransition(() => {
+        setVisibleSections((previous) => {
+          const next = new Set(previous);
+          for (const [id, on] of changes) {
+            if (on) next.add(id);
+            else next.delete(id);
+          }
+          return next.size === previous.size && [...next].every((id) => previous.has(id)) ? previous : next;
+        });
       });
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) pending.set((entry.target as HTMLElement).dataset.deckSection as StepId, entry.isIntersecting);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, QUIET);
     }, { root: window.matchMedia("(min-width: 769px)").matches ? scroller : null });
     scroller.querySelectorAll("[data-deck-section]").forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener("scroll", onScrolled);
+      main?.removeEventListener("scroll", onScrolled);
+      if (timer) clearTimeout(timer);
+    };
   }, [design.structure]);
 
   // Group the relevant checks with each form section.
