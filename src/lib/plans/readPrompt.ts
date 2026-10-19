@@ -69,6 +69,9 @@ export function planReadPrompt(input: { page: number; pages: number; textLayer: 
   "electrical": { "receptacle": n, "gfci": n, "switch": n, "light": n, "recessed": n, "fan": n, "exhaustFan": n, "smoke": n, "co": n, "exteriorLight": n, "dataTv": n, "evCharger": n, "panelAmps": n },
   "mechanical": { "system": "e.g. gas furnace + AC, heat pump", "tons": n, "furnaceBtu": n, "waterHeater": "e.g. 50 gal gas", "heatLoadBtu": "the energy sheet's BUILDING DESIGN HEAT LOAD in Btu/h, if written", "systems": "how many outdoor units / separate systems are drawn (a pad with (2) compressors = 2)" },
   "notes": [ "short notes that change the price: insulation R-values, structural calls (LVL, steel beam), special finishes, sprinklers…" ],
+  "energy": { "wallR": "exterior wall insulation as written, e.g. R-21 or R-13+5ci", "ceilingR": "attic / ceiling, e.g. R-49", "floorR": "floor over a crawl or garage", "slabR": "slab edge / under slab", "basementWallR": "...", "windowU": "window U-factor, e.g. 0.28", "windowShgc": "window SHGC, e.g. 0.25", "ach50": "the air-leakage (blower-door) target in ACH50", "ductLocation": "where the ducts run: conditioned space, attic, crawlspace or basement", "ductLeakage": "duct leakage target, CFM25 per 100 sq ft" },
+  "facades": [ { "facing": "the elevation's name as titled: FRONT|REAR|LEFT|RIGHT|NORTH|SOUTH|EAST|WEST", "glass": "sq ft of glass on that face — windows and glass doors together", "windows": n } ],
+  "frontFaces": "a site plan only: the compass direction the FRONT of the house (the street side) faces, read from the north arrow: N|NE|E|SE|S|SW|W|NW",
   "confidence": "high|medium|low"
 }`,
     "",
@@ -82,6 +85,9 @@ export function planReadPrompt(input: { page: number; pages: number; textLayer: 
     "6. Roof pitch: as written on the elevations or roof plan (\"6:12\", \"6/12\"). Overhang as written on a section or note.",
     "7. kind: a floor plan that also shows electrical symbols is still \"floor\" unless its title says electrical. A cover sheet with an area summary is \"cover\".",
     "8. confidence: high when the text layer carries the numbers, medium when read from a clear image, low when the image is blurry or partly cut off.",
+    "9. energy: the energy-code table, the insulation schedule, the wall and roof sections and the general notes say what the house is built to (R-values, window U-factor and SHGC, the ACH50 air-leakage target, duct location and leakage). Copy them as written; null for anything the sheet does not say. Any sheet may carry them.",
+    "10. facades: on an ELEVATION sheet, one row for each elevation drawn, named as its title names it (FRONT ELEVATION → FRONT, NORTH ELEVATION → NORTH). glass = the windows and glass doors on that face added up from their sizes (3'-0\" x 5'-0\" is 15 sq ft) or from the schedule by their tags; windows = how many. Other sheets: an empty list.",
+    "11. frontFaces: on a SITE plan, the way the front of the house faces — the street side — read off the north arrow (a front wall toward the bottom of the sheet with north pointing up faces S). Other sheets: null.",
     "Return only the JSON object.",
   ].join("\n");
 }
@@ -120,6 +126,9 @@ function classifySheet(text: string): { read: boolean; guess: string } | null {
   if (/\b(SITE PLAN|PLOT PLAN)S?\b/.test(t)) return { read: true, guess: "site" };
   if (/\b(AREA SUMMARY|SQUARE FOOTAGE|PROJECT DATA)\b/.test(t)) return { read: true, guess: "cover" };
   if (/\b(BUILDING SECTION|WALL SECTION|CROSS SECTION|SECTIONS?)\b/.test(t)) return { read: true, guess: "section" };
-  if (/\b(DETAILS?|GENERAL NOTES|SPECIFICATIONS|STRUCTURAL NOTES|CALCULATIONS|SHEAR WALL|ENERGY CODE)\b/.test(t)) return { read: false, guess: "detail" };
+  // An energy-code sheet carries what the heating & cooling load rests on — R-values, window U-factors, the
+  // air-leakage target (2026-10-18): read like a schedule, never skipped as a detail.
+  if (/\b(ENERGY CODE|ENERGY COMPLIANCE|ENERGY CALCS?|REScheck|INSULATION SCHEDULE|GLAZING SCHEDULE)\b/i.test(t)) return { read: true, guess: "schedule" };
+  if (/\b(DETAILS?|GENERAL NOTES|SPECIFICATIONS|STRUCTURAL NOTES|CALCULATIONS|SHEAR WALL)\b/.test(t)) return { read: false, guess: "detail" };
   return { read: true, guess: "other" };
 }

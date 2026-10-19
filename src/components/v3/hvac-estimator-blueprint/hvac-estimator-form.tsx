@@ -75,6 +75,9 @@ import type { WaitingLead } from "@/lib/leadRules";
 import Link from "next/link";
 import type { Route } from "next";
 import { useHvacWalk } from "./use-hvac-walk";
+import { planFacts, useHvacPlans } from "./use-hvac-plans";
+import { applyPlansToModel } from "@/lib/plans/hvacLoad";
+import { MAX_PLAN_PAGES } from "@/lib/plans/pdfClient";
 import { SHOTS, TIPS, coverageFor } from "./filming-guide";
 import { indexedLabor, repairAdvice, serviceLaborIndex, serviceMenuFor } from "@/lib/hvac/serviceMenu";
 import { setHvacServiceOverride } from "@/actions/hvacServices";
@@ -206,7 +209,8 @@ function LineSheet({ line, isNew, onDone, onRemove, onClose }: { line: LedgerLin
 // ── the stepper ─────────────────────────────────────────────────────────────
 
 type StepKey = "job" | "house" | "intake" | "design" | "estimate";
-type IntakeMode = "walk" | "plates" | "type";
+type IntakeMode = "walk" | "plates" | "plans" | "type";
+const PLAN_ACCEPT = "application/pdf,.pdf,image/*";
 /** The quickest way in for a job: the walk where the whole house has to be
  *  read, the plates where only the equipment does, typing where the job asks
  *  for two or three facts. */
@@ -527,6 +531,8 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
 
   // 2 · intake
   const walk = useHvacWalk(aiEnabled);
+  // The plan set, read in this browser sheet by sheet (lib/plans) — the house as drawn, for a load on a new build.
+  const plans = useHvacPlans();
   const [analysis, setAnalysis] = React.useState<WalkthroughAnalysis | null>(null);
   const [plates, setPlates] = React.useState<Partial<Record<SlotKey, Slot>>>({});
   const [typed, setTyped] = React.useState<Record<string, unknown>>({});
@@ -622,6 +628,9 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
     if (stateCode && stateCode !== m.state) { m.state = stateCode; m.county = county || ""; }
     if (county && county !== m.county) m.county = county;
     if (analysis) applyWalkthrough(m, analysis);
+    // The plans (the "Blueprint" way in): what they draw and the energy table states is laid over the record and the
+    // walk; what they leave out is assumed to the energy code only where nothing better was there. Typed still wins.
+    if (plans.envelope) applyPlansToModel(m, plans.envelope, designConditionsFor(m.state, m.county, m.elevationFt ?? 0).conditions);
     for (const k of ["outdoor", "indoor", "panel"] as SlotKey[]) {
       const r = plates[k]?.read;
       if (!r) continue;
@@ -641,7 +650,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       else applyStated(m, path as keyof BuildingModel, v as never);
     }
     return m;
-  }, [site, restored, stateCode, county, analysis, plates, typed]);
+  }, [site, restored, stateCode, county, analysis, plans.envelope, plates, typed]);
 
   const conditions = React.useMemo(() => (model ? designConditionsFor(model.state, model.county, model.elevationFt ?? 0) : null), [model]);
   const ready = !!model && (!def.needs.load || (def.needs.zone ? (jobInput.zoneSqft ?? 0) > 0 : model.conditionedSqft > 0));
@@ -926,7 +935,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       if (hadIntake && !isSameHouse && !window.confirm("Start over? The answers, plates and service picks for this house will be cleared.")) return;
       setSiteError("");
       setRestored(null); setPickId(null); setOutdoorKind(null); setCustom(null); setSwapMsg(""); setSavedId(null); setPermit(null); setReportUrl(null); setPermitMsg(""); setTitle(null);
-      if (!isSameHouse) { setTyped({}); setAnalysis(null); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
+      if (!isSameHouse) { setTyped({}); setAnalysis(null); plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
       setSite({ address: full, state: st, county: sameState && countyPicked && county ? county : undefined, sources: {} });
       setSiteLocal(true);
       setStateCode(st);
@@ -978,7 +987,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       setReportUrl(null);
       setPermitMsg("");
       setTitle(null);
-      if (!sameHouse) { setTyped({}); setAnalysis(null); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
+      if (!sameHouse) { setTyped({}); setAnalysis(null); plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
       setSite(res.facts);
       setSiteLocal(false);
       setStateCode(res.facts.state);
@@ -1013,7 +1022,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
     const hasCounty = sameState && countyPicked && !!county;
     setSiteError("");
     setRestored(null); setPickId(null); setOutdoorKind(null); setCustom(null); setSwapMsg(""); setSavedId(null); setPermit(null); setReportUrl(null); setPermitMsg(""); setTitle(null);
-    if (!sameHouse) { setTyped({}); setAnalysis(null); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
+    if (!sameHouse) { setTyped({}); setAnalysis(null); plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
     setSite({ address: text, state: st, county: hasCounty ? county : undefined, sources: {} });
     setSiteLocal(true);
     setStateCode(st);
@@ -1042,6 +1051,11 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       const kept = read.conflicts.length ? ` Kept the record on ${read.conflicts.map((c) => `${c.path.replace(/^existing\./, "")} (the walk said ${c.walk})`).join(", ")} — confirm on the card.` : "";
       toast.success("Walk read", (applied.length ? `Filled: ${applied.slice(0, 6).join(", ")}${applied.length > 6 ? ` +${applied.length - 6}` : ""}.` : `${a.measurements.length} figures, ${a.observations.length} observations — nothing new for the model.`) + kept);
     }
+  };
+  const onPlanFiles = async (files: File[]) => {
+    if (!files.length) return;
+    if (!(await ensureWithinLimit("hvacEstimates")) || !(await ensureWithinLimit("estimatorUses"))) return;
+    await plans.pick(files);
   };
   const onPlateFile = async (key: SlotKey, hint: "outdoor" | "indoor" | "panel", f: File | undefined) => {
     if (!f) return;
@@ -1175,6 +1189,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
     const m = res.row.model as BuildingModel;
     if (!facts?.address || !m?.provenance) { toast.error("Couldn't open", "That estimate is missing its site facts."); return; }
     setAnalysis(null);
+    plans.remove();
     setPlates({});
     setTyped({});
     setSite(facts);
@@ -1278,7 +1293,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
   const S: Record<StepKey, StepMeta> = {
     job: { n: 1, title: "The job", lead: "Pick the job. It sets what we ask for and what goes on the estimate.", summary: def.title, done: true, locked: false, reason: "" },
     house: { n: 2, title: "The house", lead: "Tell us the address — we'll pull the house size and the local climate.", summary: site ? [addrShort, sqftText].filter(Boolean).join(" · ") : "", done: !!site, locked: false, reason: "" },
-    intake: { n: 3, title: "What is there", lead: "Walk it on video, photograph the plates, or type what you know — every figure shows where it came from.", summary: site && model ? [analysis ? "walk read" : "no walk", `${Object.keys(plates).length} plate${Object.keys(plates).length === 1 ? "" : "s"}`, `${Object.keys(typed).length} typed`, sqftText].filter(Boolean).join(" · ") : "", done: !!(site && model && ready), locked: !site, reason: "Look up the house first" },
+    intake: { n: 3, title: "What is there", lead: def.needs.load ? "Walk it on video, photograph the plates, upload the plans, or type what you know — every figure shows where it came from." : "Walk it on video, photograph the plates, or type what you know — every figure shows where it came from.", summary: site && model ? [analysis ? "walk read" : "no walk", plans.envelope ? "plans read" : "", `${Object.keys(plates).length} plate${Object.keys(plates).length === 1 ? "" : "s"}`, `${Object.keys(typed).length} typed`, sqftText].filter(Boolean).join(" · ") : "", done: !!(site && model && ready), locked: !site, reason: "Look up the house first" },
     design: { n: 4, title: def.needs.load ? "The design" : "The checks", lead: def.needs.load ? "The load on the design day, the unit that fits it, and the checks an inspector would ask about." : engine?.waterHeater ? "The tank sized from the household, and the checks an inspector would ask about." : "What the visit needs, and the rule that applies.", summary: engine ? [def.selection !== "none" ? (chosen ? `${chosen.item.brand} ${chosen.item.model}` : "no catalog fit") : "", sizeText, defaultedCount ? `${defaultedCount} assumption${defaultedCount === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") : "", done: !!engine, locked: !site || needSqft, reason: !site ? "Look up the house first" : def.needs.zone ? "Type the zone's square footage" : "Type the conditioned square footage" },
     estimate: { n: 5, title: "The estimate", lead: "Every line is editable. Convert when it reads right.", summary: lines ? money(subtotal) : "", done: !!(engine && ledger && lines), locked: !engine, reason: !site ? "Look up the house first" : needSqft ? (def.needs.zone ? "Type the zone's square footage" : "Type the conditioned square footage") : "Finish the design first" },
   };
@@ -1480,7 +1495,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
           {!aiEnabled && <div className={cx("body")} style={{ paddingBottom: 0 }}><div className={cx("call", "warn")}><span className={cx("stamp")}>off</span><span>Plate and video reading need OPENAI_API_KEY on the server — type the facts in Confirm below; a typed model number still decodes.</span></div></div>}
           <div className={cx("body")}>
             <div className={cx("seg")} role="tablist" aria-label="How to tell us about the house">
-              {([["walk", "Walk", "video", "i-video"], ["plates", "Plate", "photos", "i-imgadd"], ["type", "Type", "it in", "i-pen"]] as Array<[IntakeMode, string, string, string]>).map(([m, l1, l2, ic]) => (
+              {([["walk", "Walk", "video", "i-video"], ["plates", "Plate", "photos", "i-imgadd"], ["plans", "Blueprint", "PDF", "i-plans"], ["type", "Type", "it in", "i-pen"]] as Array<[IntakeMode, string, string, string]>).filter(([m]) => m !== "plans" || def.needs.load).map(([m, l1, l2, ic]) => (
                 <button key={m} type="button" role="tab" aria-selected={mode === m} className={cx("seg-btn", mode === m && "on")} onClick={() => setMode(m)}>
                   <span className={cx("seg-stamp")} aria-hidden="true"><svg className={cx("ic")}><use href="#i-check" /></svg></span>
                   <svg className={cx("ic", "seg-ic")}><use href={`#${ic}`} /></svg><span className={cx("seg-l")}><span>{l1}</span> <span>{l2}</span></span>
@@ -1578,6 +1593,45 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {mode === "plans" && def.needs.load && (
+              <div className={cx("mode")} data-hvac-plans>
+                {plans.status === "idle" ? (
+                  <label className={cx("zone")} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void onPlanFiles(Array.from(e.dataTransfer.files ?? [])); }}>
+                    <input type="file" accept={PLAN_ACCEPT} multiple onChange={(e) => { const list = Array.from(e.target.files ?? []); e.target.value = ""; void onPlanFiles(list); }} />
+                    <svg className={cx("ic")}><use href="#i-plans" /></svg>
+                    <span className={cx("zone-t")}>Upload the plan set</span>
+                    <span className={cx("zone-h")}>PDF · or photos of the sheets · up to {MAX_PLAN_PAGES} pages · floor plans, window schedule, elevations, energy table</span>
+                  </label>
+                ) : (
+                  <div className={cx("clip")}>
+                    <svg className={cx("ic")} style={{ width: 22, height: 22, flex: "none", color: "var(--blueprint)" }}><use href="#i-plans" /></svg>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className={cx("clip-t")}>{plans.fileName}</div>
+                      <div className={cx("mono", "clip-m")}>{plans.status === "opening" ? "opening…" : `${plans.pages} page${plans.pages === 1 ? "" : "s"}${plans.total ? ` · ${plans.status === "done" ? `${plans.sheets.length} sheets read` : `${plans.done} of ${plans.total} sheets`}` : ""}`}</div>
+                    </div>
+                    <button type="button" className={cx("link")} onClick={plans.remove}>{plans.status === "failed" ? "Try another" : "Remove"}</button>
+                  </div>
+                )}
+                {(plans.status === "opening" || plans.status === "reading") && (
+                  <div className={cx("stage")}><div className={cx("stage-bar")}><div className={cx("stage-fill")} style={{ width: `${plans.total ? Math.max(6, Math.round((plans.done / plans.total) * 100)) : 4}%` }} /></div><span className={cx("stage-t")}>{plans.total ? "Reading the floor plans, the schedules, the elevations and the energy table…" : "Looking at each sheet…"}</span></div>
+                )}
+                {plans.status === "failed" && <div className={cx("call", "bad")} style={{ marginTop: 10 }}>{plans.error}</div>}
+                {plans.envelope && (
+                  <div className={cx("call", "info")} style={{ marginTop: 12 }} data-hvac-plans-read>
+                    <span className={cx("stamp")}>plan</span>
+                    <span><b>{planFacts(plans.envelope).join(" · ")}</b> — the house below now runs on the plans: every figure they gave says <i>plan</i>; where they say nothing, a new house built to the energy code is assumed and marked <i>default</i>. What you type still wins.</span>
+                  </div>
+                )}
+                {plans.envelope && (plans.envelope.stated.systems ?? 0) > 1 && (
+                  <div className={cx("call", "warn")} style={{ marginTop: 8 }} data-hvac-plans-systems>
+                    <span className={cx("stamp")}>note</span>
+                    <span>The plans draw {plans.envelope.stated.systems} systems. This estimate sizes one system on the whole house&apos;s load — for {plans.envelope.stated.systems}, size each on its floor&apos;s share (the Blueprint estimator splits it).</span>
+                  </div>
+                )}
+                {plans.skipped.length > 0 && <div className={cx("note")} style={{ marginTop: 8 }}>{plans.skipped.join(" ")}</div>}
               </div>
             )}
 

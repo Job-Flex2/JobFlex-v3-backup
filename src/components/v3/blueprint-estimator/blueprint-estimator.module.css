@@ -554,6 +554,110 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+/* The heating & cooling load from the plans (2026-10-18). It sits in the narrow "Found on your plans" column on a
+   desk and full width on a phone, so it lays itself out by its OWN width (a container query), not the screen's. */
+.be.be .hvac {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--be-line);
+  border-left: 3px solid var(--be-blue);
+  border-radius: var(--be-r);
+  background: var(--be-blue-soft);
+}
+.be.be .hvacNums {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.be.be .hvacNums div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.be.be .hvacNums b {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--be-blue-ink);
+}
+.be.be .hvacNums span,
+.be.be .hvacFine {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--be-muted);
+}
+.be.be .hvacNote {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--be-soft);
+}
+.be.be .hvacFine {
+  margin: 0;
+}
+.be.be .hvacInputs,
+.be.be .hvacParts,
+.be.be .hvacAssume {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.be.be .hvacInputs li {
+  display: grid;
+  grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--be-line);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.be.be .hvacLabel {
+  font-weight: 800;
+}
+.be.be .hvacValue {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--be-soft);
+}
+.be.be .hvacFrom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.be.be .hvacParts li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--be-line);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.be.be .hvacAssume li {
+  padding: 4px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--be-muted);
+}
+@container (max-width: 560px) {
+  .be.be .hvacNums { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .be.be .hvacNums div { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+  .be.be .hvacInputs li { grid-template-columns: minmax(0, 1fr) auto; }
+  .be.be .hvacValue { grid-column: 1 / -1; grid-row: 2; }
+  .be.be .hvacParts li { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 12px; }
+  .be.be .hvacParts li span:first-child { grid-column: 1 / -1; font-weight: 700; }
+}
 /* A disclosure reads as a button (owner, 2026-10-17): a framed row, its name
    left, a chevron right that turns when it is open. */
 .be.be .more summary {

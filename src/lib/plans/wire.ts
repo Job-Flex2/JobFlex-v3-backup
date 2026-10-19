@@ -128,3 +128,47 @@ export const priceChecksInput = z.object({
   house: houseBriefSchema,
   items: z.array(takeoffItemSchema).max(800),
 });
+
+// The heating & cooling load from the plans (2026-10-18, lib/plans/hvacLoad): the envelope the browser took out of
+// the merged house (lib/plans/hvacEnvelope) and the job's place.
+const rOrNull = z.number().finite().min(0).max(100).nullable();
+const opening = z.object({ widthIn: z.number().finite().min(1).max(400).nullable(), heightIn: z.number().finite().min(1).max(400).nullable(), count: z.number().finite().min(0).max(200), type: z.string().max(160).nullable() });
+const compass = z.enum(["N", "NE", "E", "SE", "S", "SW", "W", "NW"]);
+const pageList = z.array(z.number().int().min(1).max(500)).max(80);
+export const planEnvelopeSchema = z.object({
+  address: z.string().max(200).nullable(),
+  livingSqFt: area,
+  levels: z.array(z.object({ name: z.string().max(40), areaSqFt: area, perimeterLf: z.number().finite().min(0).max(5000), plateFt: z.number().finite().min(0).max(40), pages: pageList })).max(8),
+  foundation: z.enum(["slab", "crawlspace", "basement", "piers"]),
+  windows: z.array(opening).max(120),
+  doors: z.array(opening).max(80),
+  facades: z.array(z.object({ facing: z.enum(["N", "NE", "E", "SE", "S", "SW", "W", "NW", "front", "rear", "left", "right"]), glassSqFt: z.number().finite().min(0).max(3000).nullable(), windows: z.number().finite().min(0).max(80).nullable() })).max(16),
+  frontFaces: compass.nullable(),
+  energy: z
+    .object({
+      wallR: rOrNull,
+      ceilingR: rOrNull,
+      floorR: rOrNull,
+      slabR: rOrNull,
+      basementWallR: rOrNull,
+      windowU: z.number().finite().min(0.05).max(1.5).nullable(),
+      windowShgc: z.number().finite().min(0.05).max(1).nullable(),
+      ach50: z.number().finite().min(0.3).max(30).nullable(),
+      ductLocation: z.enum(["conditioned", "attic", "crawl", "basement"]).nullable(),
+      ductLeakage: z.number().finite().min(0).max(30).nullable(),
+    })
+    .nullable(),
+  roof: z.object({ material: z.string().max(160).nullable(), overhangIn: z.number().finite().min(0).max(96) }),
+  siding: z.string().max(160).nullable(),
+  exteriorFraming: z.string().max(160).nullable(),
+  bedrooms: z.number().int().min(0).max(30),
+  notes: z.array(z.string().max(240)).max(20),
+  heatPump: z.boolean(),
+  stated: z.object({ tons: z.number().finite().min(0).max(40).nullable(), heatLoadBtu: z.number().finite().min(0).max(1_000_000).nullable(), system: z.string().max(160).nullable(), systems: z.number().finite().min(0).max(10).nullable() }),
+  pages: z.object({ windows: pageList, energy: pageList, facades: pageList, site: pageList }),
+});
+export const planHvacInput = z.object({
+  token: z.string().min(1).max(1024),
+  location: z.string().max(300).nullish(),
+  envelope: planEnvelopeSchema,
+});
