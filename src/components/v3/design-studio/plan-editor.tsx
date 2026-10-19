@@ -10,7 +10,8 @@ import type { DesignDoc, Opening, OpeningKind, P, Wall } from "@/lib/design/mode
 import { DEFAULT_CEILING, DEFAULT_INTERIOR, DOOR_HEIGHT, WINDOW_HEIGHT, WINDOW_SILL, ftIn, newId } from "@/lib/design/model";
 import { add, along, centroid, dist, mulP, planBounds, pointInPoly, project, roomsOf, sub, unit, wallDir, wallLen, wallPieces, wallQuad, leftN, type Room } from "@/lib/design/geometry";
 import type { DesignItem } from "@/lib/design/model";
-import { cornersOf, snapToNeighbours, snapToWall } from "@/lib/design/kitchen";
+import { cornersOf, frameOf, snapToNeighbours, snapToWall } from "@/lib/design/kitchen";
+import { applyProduct, type DesignProduct } from "@/lib/design/inventory";
 import { itemCode, lib, newItemFrom } from "@/lib/design/library";
 
 export type Selection = { kind: "wall"; id: string } | { kind: "opening"; id: string } | { kind: "label"; id: string } | { kind: "room"; key: string } | { kind: "item"; id: string } | null;
@@ -40,6 +41,8 @@ type Props = {
   ghosts?: Wall[];
   /** Items and walls a check is about — outlined in red. */
   flags?: Set<string>;
+  /** The shop's products (lib/design/inventory): `place:<lib>#<product id>` places that product. */
+  products?: readonly DesignProduct[];
 };
 
 const ROOM_TINT = ["#fef3c7", "#dbeafe", "#dcfce7", "#fce7f3", "#ede9fe", "#ffedd5", "#cffafe", "#f1f5f9"];
@@ -70,7 +73,7 @@ function moveCorner(doc: DesignDoc, from: P, to: P, onlyWall?: string) {
   }
 }
 
-export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, focus = null, underlay = null, calibrating = false, onCalibratePoints, fitToken = 0, className, ghosts = [], flags }: Props) {
+export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, focus = null, underlay = null, calibrating = false, onCalibratePoints, fitToken = 0, className, ghosts = [], flags, products = [] }: Props) {
   const svgRef = React.useRef<SVGSVGElement | null>(null);
   const rooms = React.useMemo(() => roomsOf(doc), [doc]);
   const [view, setView] = React.useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -247,11 +250,13 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
       return;
     }
     if (tool.startsWith("place:")) {
-      const libId = tool.slice(6);
+      const [libId, productId] = tool.slice(6).split("#");
       const e = lib(libId);
       const room = rooms.find((r) => pointInPoly(p, r.poly)) ?? (focus ? rooms.find((r) => r.labelId === focus) ?? null : null);
-      const it = e ? newItemFrom(libId, { x: p.x, y: p.y, rot: 90, room: focus ?? room?.labelId ?? null }, newId("i")) : null;
-      if (!it) return;
+      const made = e ? newItemFrom(libId, { x: p.x, y: p.y, rot: 90, room: focus ?? room?.labelId ?? null }, newId("i")) : null;
+      if (!made) return;
+      const product = productId ? products.find((x) => x.id === productId) ?? null : null;
+      const it = product ? applyProduct(made, product) : made;
       const snapped = { ...it, ...snapToWall(doc, room, it, p) };
       const next = clone(doc);
       next.items = [...(next.items ?? []), snapToNeighbours(next.items ?? [], snapped)];
@@ -601,7 +606,7 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
 
       {/* What's placed: floor things solid, wall cabinets dashed (the plan convention), lights as symbols. */}
       {[...(doc.items ?? [])]
-        .sort((a, b) => (a.z >= 40 ? 1 : 0) - (b.z >= 40 ? 1 : 0))
+        .sort((a, b) => (a.lib === "RUG" ? -1 : a.z >= 40 ? 1 : 0) - (b.lib === "RUG" ? -1 : b.z >= 40 ? 1 : 0))
         .map((it) => {
           const e = lib(it.lib);
           const on = selected?.kind === "item" && selected.id === it.id;
@@ -620,17 +625,35 @@ export function PlanEditor({ doc, onChange, selected, onSelect, tool, onTool, fo
             );
           }
           const wallHung = it.z >= 40;
-          const fill = wallHung ? "none" : e?.cat === "appliance" ? "#e2e8f0" : e?.cat === "furniture" ? "#f8fafc" : e?.cat === "island" ? "#ead9bf" : "#f1e6d2";
+          const own = typeof it.opts?.color === "string" ? it.opts.color : null;
+          const fill = wallHung ? "none" : e?.cat === "appliance" ? "#e2e8f0" : e?.cat === "fixture" && it.lib !== "VAN" ? "#ffffff" : it.lib === "RUG" ? own ?? "#d8cbb6" : e?.cat === "furniture" || e?.cat === "decor" ? own ?? "#f8fafc" : e?.cat === "island" ? "#ead9bf" : "#f1e6d2";
+          const fillOpacity = it.lib === "RUG" ? 0.4 : own && (e?.cat === "furniture" || e?.cat === "decor") ? 0.45 : 1;
+          const mid = { x: (c[0].x + c[2].x) / 2, y: (c[0].y + c[2].y) / 2 };
+          const fr = frameOf(it);
+          /** A point in the piece's own frame: `a` along its width from the middle, `b` toward its front. */
+          const at = (a: number, b: number) => ({ x: it.x + fr.u.x * a + fr.f.x * b, y: it.y + fr.u.y * a + fr.f.y * b });
           const front = [c[2], c[3]];
           const code = itemCode(it);
           const fs = Math.max(4, Math.min(it.w / Math.max(3, code.length) * 1.5, it.d * 0.5, 10));
           return (
             <g key={it.id} data-hit={`item:${it.id}`} data-item-code={code} data-flagged={flags?.has(it.id) ? "" : undefined} opacity={quiet ? 0.45 : 1} style={{ cursor: tool === "select" ? "move" : undefined }}>
               {flags?.has(it.id) ? <polygon points={pts} fill="none" stroke="#c0262d" strokeWidth={4 * px} strokeOpacity={0.55} pointerEvents="none" /> : null}
-              <polygon points={pts} fill={fill} stroke={ink} strokeWidth={(on ? 2 : 1) * px} strokeDasharray={wallHung ? `${4 * px} ${3 * px}` : undefined} />
-              {!wallHung ? <line x1={front[0].x} y1={front[0].y} x2={front[1].x} y2={front[1].y} stroke={ink} strokeWidth={(on ? 2.4 : 1.6) * px} /> : null}
+              <polygon points={pts} fill={fill} fillOpacity={fillOpacity} stroke={ink} strokeWidth={(on ? 2 : 1) * px} strokeDasharray={wallHung || it.lib === "RUG" ? `${4 * px} ${3 * px}` : undefined} />
+              {/* The plan's symbols for the bath: the toilet's bowl, the tub's basin, the shower's cross, the vanity's basins. */}
+              {it.lib === "WC" ? <ellipse cx={at(0, it.d / 2 - 10).x} cy={at(0, it.d / 2 - 10).y} rx={7} ry={7} fill="#fff" stroke={ink} strokeWidth={0.8 * px} transform={`rotate(${it.rot} ${at(0, it.d / 2 - 10).x} ${at(0, it.d / 2 - 10).y})`} /> : null}
+              {it.lib === "TUB" || it.lib === "FTUB" ? <ellipse cx={mid.x} cy={mid.y} rx={(it.w - 8) / 2} ry={(it.d - 8) / 2} fill="none" stroke={ink} strokeWidth={0.8 * px} transform={`rotate(${it.rot - 90} ${mid.x} ${mid.y})`} /> : null}
+              {it.lib === "SHW" ? (
+                <>
+                  <line x1={c[0].x} y1={c[0].y} x2={c[2].x} y2={c[2].y} stroke={ink} strokeWidth={0.6 * px} />
+                  <line x1={c[1].x} y1={c[1].y} x2={c[3].x} y2={c[3].y} stroke={ink} strokeWidth={0.6 * px} />
+                </>
+              ) : null}
+              {it.lib === "VAN"
+                ? (it.w >= 60 ? [-it.w / 4, it.w / 4] : [0]).map((a) => <ellipse key={a} cx={at(a, 1).x} cy={at(a, 1).y} rx={7} ry={5} fill="#fff" stroke={ink} strokeWidth={0.8 * px} transform={`rotate(${it.rot - 90} ${at(a, 1).x} ${at(a, 1).y})`} />)
+                : null}
+              {!wallHung && it.lib !== "RUG" ? <line x1={front[0].x} y1={front[0].y} x2={front[1].x} y2={front[1].y} stroke={ink} strokeWidth={(on ? 2.4 : 1.6) * px} /> : null}
               {it.opts?.sink ? <ellipse cx={(c[0].x + c[2].x) / 2} cy={(c[0].y + c[2].y) / 2} rx={Math.min(it.w, it.d) * 0.3} ry={Math.min(it.w, it.d) * 0.22} fill="#fff" stroke={ink} strokeWidth={0.8 * px} /> : null}
-              {(on || (!wallHung && e?.cat !== "furniture" && it.lib !== "CT")) && it.w >= 6 ? (
+              {(on || (!wallHung && e?.cat !== "furniture" && e?.cat !== "decor" && it.lib !== "CT")) && it.w >= 6 ? (
                 <text x={it.x} y={it.y + fs * 0.35} textAnchor="middle" fontSize={fs} fontWeight={800} fill={ink} pointerEvents="none">
                   {code}
                 </text>

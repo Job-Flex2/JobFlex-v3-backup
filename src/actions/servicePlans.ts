@@ -12,11 +12,16 @@ import { db } from "@/lib/db";
 import { requireEstimatorOrManager, requireRouteAccess } from "@/lib/orgContext";
 import { activatePlan, cancelPlan, markPlanInvoicePaid, markVisitDone, renewPlan, sendPlan } from "@/lib/servicePlanBook";
 import { STARTER_PLANS, type Billing } from "@/lib/servicePlans";
+import { SERVICE_DESK_PATH } from "@/lib/serviceDesk";
+import { smartLinkFor, type PlanLink } from "@/lib/serviceDeskBook";
+import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { enforceRateLimit, clientIp, MINUTE } from "@/lib/rateLimit";
 
 const PAGE = "/dashboard/service-plans";
 function refresh(clientId?: string | null) {
   revalidatePath(PAGE);
+  // The HVAC services desk (2026-10-18) shows every plan, visit and bill too.
+  revalidatePath(SERVICE_DESK_PATH);
   revalidatePath("/dashboard/calendar");
   if (clientId) revalidatePath("/dashboard/client-detail");
 }
@@ -94,22 +99,46 @@ export async function seedStarterPlans(): Promise<void> {
 /**
  * A client is enrolled: the plan is a snapshot of the template's terms,
  * DRAFT until it is sent or activated. From the plans page (a form with
- * clientId + templateId) or the client page (bound).
+ * clientId + templateId), the client page (bound) and the HVAC services desk.
+ *
+ * The desk (2026-10-18) also says what the plan belongs to: `link` names the
+ * proposal or project; left out, the plan is tied to the system the shop put
+ * in — the client's latest accepted HVAC proposal, else their newest project
+ * (lib/serviceDeskBook smartLinkFor). The tie is a SERVICE_LINK trail row.
  */
-export async function enrollClientInPlan(input: { clientId: string; templateId: string; send?: boolean; activate?: boolean } | FormData): Promise<void> {
+export async function enrollClient(input: { clientId: string; templateId: string; send?: boolean; activate?: boolean; link?: { proposalId?: string | null; projectId?: string | null } | null }): Promise<{ ok: true; planId: string } | { ok: false; error: string }> {
   const { organizationId, user } = await requireEstimatorOrManager();
-  await requireRouteAccess("/dashboard/client-detail", "/dashboard/service-plans");
-  const raw = input instanceof FormData ? { clientId: String(input.get("clientId") ?? ""), templateId: String(input.get("templateId") ?? ""), send: input.get("then") === "send", activate: input.get("then") === "activate" } : input;
-  const data = z.object({ clientId: z.string().min(1), templateId: z.string().min(1), send: z.boolean().optional(), activate: z.boolean().optional() }).parse(raw);
+  await requireRouteAccess("/dashboard/client-detail", "/dashboard/service-plans", SERVICE_DESK_PATH);
+  const data = z
+    .object({
+      clientId: z.string().min(1),
+      templateId: z.string().min(1),
+      send: z.boolean().optional(),
+      activate: z.boolean().optional(),
+      link: z.object({ proposalId: z.string().nullable().optional(), projectId: z.string().nullable().optional() }).nullable().optional(),
+    })
+    .parse(input);
   const [client, t] = await Promise.all([
-    db.client.findFirst({ where: { id: data.clientId, organizationId, deletedAt: null }, select: { id: true, address: true, city: true, state: true, zip: true } }),
+    db.client.findFirst({ where: { id: data.clientId, organizationId, deletedAt: null }, select: { id: true, name: true, address: true, city: true, state: true, zip: true } }),
     db.servicePlanTemplate.findFirst({ where: { id: data.templateId, organizationId } }),
   ]);
-  if (!client || !t) return;
-  const open = await db.servicePlan.findFirst({ where: { organizationId, clientId: client.id, status: { in: ["DRAFT", "SENT", "ACTIVE"] } }, select: { id: true } });
+  if (!client) return { ok: false, error: "That client is not in this company." };
+  if (!t) return { ok: false, error: "Pick one of the plans you sell." };
+  const open = await db.servicePlan.findFirst({ where: { organizationId, clientId: client.id, status: { in: ["DRAFT", "SENT", "ACTIVE"] } }, select: { id: true, status: true, name: true } });
   if (open) {
     refresh(client.id);
-    return;
+    return { ok: false, error: `${client.name} already has the ${open.name} (${open.status.toLowerCase()}). Renew or cancel that one first.` };
+  }
+  // What it belongs to: the contractor's pick, checked against this client, else the smart guess.
+  let link: PlanLink = { proposalId: null, projectId: null };
+  if (data.link && (data.link.proposalId || data.link.projectId)) {
+    const [proposal, project] = await Promise.all([
+      data.link.proposalId ? db.proposal.findFirst({ where: { id: data.link.proposalId, organizationId, clientId: client.id }, select: { id: true, projectId: true } }) : null,
+      data.link.projectId ? db.project.findFirst({ where: { id: data.link.projectId, organizationId }, select: { id: true } }) : null,
+    ]);
+    link = { proposalId: proposal?.id ?? null, projectId: project?.id ?? proposal?.projectId ?? null };
+  } else if (data.link === undefined || data.link === null) {
+    link = await smartLinkFor(organizationId, client.id).catch(() => ({ proposalId: null, projectId: null }));
   }
   const plan = await db.servicePlan.create({
     data: {
@@ -131,9 +160,18 @@ export async function enrollClientInPlan(input: { clientId: string; templateId: 
     },
     select: { id: true },
   });
+  if (link.proposalId || link.projectId) {
+    await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SERVICE_LINK, summary: `Tied ${client.name}'s ${t.name} to ${link.proposalId ? "the proposal" : "the project"} it belongs to`, clientId: client.id, proposalId: link.proposalId, meta: { planId: plan.id, projectId: link.projectId } });
+  }
   if (data.activate) await activatePlan(plan.id, { actorId: user.id });
   else if (data.send) await sendPlan(plan.id, user.id);
   refresh(client.id);
+  return { ok: true, planId: plan.id };
+}
+
+export async function enrollClientInPlan(input: { clientId: string; templateId: string; send?: boolean; activate?: boolean } | FormData): Promise<void> {
+  const raw = input instanceof FormData ? { clientId: String(input.get("clientId") ?? ""), templateId: String(input.get("templateId") ?? ""), send: input.get("then") === "send", activate: input.get("then") === "activate" } : input;
+  await enrollClient(raw);
 }
 
 export async function sendServicePlan(planId: string): Promise<void> {

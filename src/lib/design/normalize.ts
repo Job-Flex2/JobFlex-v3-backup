@@ -2,7 +2,7 @@
 // range, ids short and plain, lists capped — a plan with thousands of drawn fixture lines keeps the first few
 // thousand. Pure.
 import type { DesignDoc, DesignItem, EngineeringState, Finishes, MarkRole, Opening, OpeningKind, P, PlanMark, RoomLabel, Wall } from "./model";
-import { DEFAULT_CEILING } from "./model";
+import { DEFAULT_CEILING, ROOM_KINDS } from "./model";
 import { DEFAULT_FINISHES, lib } from "./library";
 
 const num = (v: unknown, lo: number, hi: number, dflt: number) => {
@@ -160,6 +160,7 @@ export function normalizeDesign(raw: unknown): DesignDoc {
     ...(l?.ceiling != null ? { ceiling: num(l.ceiling, 60, 360, DEFAULT_CEILING) } : {}),
     ...(l?.planSqFt != null ? { planSqFt: num(l.planSqFt, 0, 100000, 0) } : {}),
     ...(l?.floor ? { floor: str(l.floor, 40) } : {}),
+    ...(l?.use && ROOM_KINDS.includes(l.use) ? { use: l.use } : {}),
   }));
   let lineBudget = MAX_MARK_LINES;
   const marks: PlanMark[] = [];

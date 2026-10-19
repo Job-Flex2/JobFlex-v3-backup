@@ -363,7 +363,7 @@ export function initFenceEstimatorContent(
     const t = usableTerrain();
     if (!t || !t.segs.length) return null;
     return summarizeSlope(
-      t.segs.map(function (sg) { return { planFt: sg.planFt, gradeFt: sg.gradeFt, riseFt: sg.riseFt, thetaDeg: sg.thetaDeg, cls: sg.cls, steps: sg.steps, stepDropFt: sg.stepDropFt }; }),
+      t.segs.map(function (sg) { return { planFt: sg.planFt, gradeFt: sg.gradeFt, riseFt: sg.riseFt, thetaDeg: sg.thetaDeg, cls: sg.cls, steps: sg.steps, stepDropFt: sg.stepDropFt, planned: sg.planned }; }),
       fs.height,
       effectiveSpacingFt(currentType().type, fs.spacing),
       market()?.frostIn ?? 0,
@@ -371,7 +371,7 @@ export function initFenceEstimatorContent(
   }
   /** The steps one stepped segment is priced with — the ticket's count, which
    *  the map's badge, the run's grade tag and the 3D all show. */
-  function pricedSteps(sg: { planFt: number; riseFt: number; cls: 'level' | 'racked' | 'stepped'; steps?: number }): number {
+  function pricedSteps(sg: { planFt: number; riseFt: number; cls: 'level' | 'racked' | 'stepped'; steps?: number; stepDropFt?: number; planned?: boolean }): number {
     return segmentSteps(sg, effectiveSpacingFt(currentType().type, fs.spacing)).steps;
   }
   /** The ground difficulty the labor is priced at. */
@@ -2423,12 +2423,12 @@ export function initFenceEstimatorContent(
   // A phone has no double-click, Enter or right-click to be told about.
   const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
   const hintIdle = coarse
-    ? 'Tap to place a dot · hold and drag to aim — it snaps to corners, lot lines and house walls · double-tap or Finish to end · two fingers move the map'
+    ? 'Tap to place a dot · drag to move the map, pinch to zoom · hold a moment, then drag to aim — it snaps to corners, lot lines and house walls · double-tap or Finish to end'
     : hintMouse;
   // The aiming tip, once: shown in place of the idle line on a touch screen
   // until the first dot is placed with the reticle; never again after a visit
   // that showed it.
-  const AIM_TIP = 'Hold and drag to aim — the dot snaps to corners and lines';
+  const AIM_TIP = 'Drag to move the map · hold a moment, then drag to aim — the dot snaps to corners and lines';
   const AIM_TIP_KEY = 'jf.fence.aimTip';
   let aimTip = false;
   if (coarse) {
@@ -3307,7 +3307,7 @@ export function initFenceEstimatorContent(
           ? 'Drag the whole outline to line it up with the lot — shape and size stay locked'
           : houseMode
             ? (coarse
-                ? 'Trace the house: tap each corner — tap the first corner or Finish to close · hold and drag to aim · Cancel drops it'
+                ? 'Trace the house: tap each corner — tap the first corner or Finish to close · drag to move the map · hold, then drag to aim · Cancel drops it'
                 : 'Trace the house: click each corner — click the first corner, double-click or press Enter to close · drag a corner to adjust · Esc cancels')
             : houseSel
               ? (coarse

@@ -94,6 +94,33 @@ export type SheetRead = {
   /** Notes worth carrying to the estimate (insulation values, structural calls, specs). */
   notes: string[];
   confidence: "high" | "medium" | "low";
+  /** THE ENVELOPE FOR THE HEATING & COOLING LOAD (2026-10-18, owner: "the blueprint estimator should estimate HVAC
+   *  Manual J based — blueprints have the windows' sizes and the rest"): what the energy-code table, the insulation
+   *  notes and the wall sections specify. Optional — older reads have none. */
+  energy?: PlanEnergy;
+  /** An elevation sheet: the glass on each face it draws, for the sun on each side of the house. */
+  facades?: PlanFacade[];
+  /** A site plan: the way the front of the house faces, by the north arrow. */
+  frontFaces?: Compass | null;
+};
+
+export const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
+export type Compass = (typeof COMPASS)[number];
+export type FacadeName = Compass | "front" | "rear" | "left" | "right";
+export type PlanFacade = { facing: FacadeName; glassSqFt: number | null; windows: number | null };
+export type PlanEnergy = {
+  wallR: number | null;
+  ceilingR: number | null;
+  floorR: number | null;
+  slabR: number | null;
+  basementWallR: number | null;
+  windowU: number | null;
+  windowShgc: number | null;
+  /** The air-leakage target the plans hold the house to, ACH50. */
+  ach50: number | null;
+  ductLocation: "conditioned" | "attic" | "crawl" | "basement" | null;
+  /** Duct leakage target, CFM25 per 100 sq ft of floor. */
+  ductLeakage: number | null;
 };
 
 export const FIXTURE_KEYS = ["toilet", "lavatory", "kitchenSink", "barSink", "laundrySink", "tub", "shower", "tubShower", "dishwasher", "washer", "waterHeater", "hoseBib", "iceMaker", "gasRange", "gasFireplace"] as const;
@@ -125,6 +152,77 @@ const sqft = (v: unknown, lo = 4, hi = 40000): number | null => {
   const a = typeof v === "number" ? v : areaOf(typeof v === "string" ? v : null) ?? num(v, lo, hi);
   return a != null && a >= lo && a <= hi ? round(a, 1) : null;
 };
+
+/** "R-21", "R21", 21, "R-13+5ci" (cavity plus continuous, added) → 21 / 18; null when it does not read. */
+export function rValueOf(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) && v > 0 && v <= 100 ? round(v, 1) : null;
+  if (typeof v !== "string") return null;
+  const t = v.toUpperCase().replace(/\s+/g, "");
+  const parts = t.match(/R-?(\d+(?:\.\d+)?)(?:\+R?-?(\d+(?:\.\d+)?))?/) ?? t.match(/^(\d+(?:\.\d+)?)$/);
+  if (!parts) return null;
+  const total = Number(parts[1]) + (parts[2] ? Number(parts[2]) : 0);
+  return Number.isFinite(total) && total > 0 && total <= 100 ? round(total, 1) : null;
+}
+/** "U-0.30", ".30", 0.3 → 0.3 (a window's U-factor); null outside 0.1–1.3. */
+export function uValueOf(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number((v.match(/\d*\.\d+|\d+/) ?? [""])[0]) : NaN;
+  return Number.isFinite(n) && n >= 0.1 && n <= 1.3 ? round(n, 2) : null;
+}
+const COMPASS_WORDS: Record<string, Compass> = { NORTH: "N", NORTHEAST: "NE", EAST: "E", SOUTHEAST: "SE", SOUTH: "S", SOUTHWEST: "SW", WEST: "W", NORTHWEST: "NW" };
+/** "north", "N", "south-east", "SE", 135 (degrees) → a compass point; null when it does not read. */
+export function compassOf(v: unknown): Compass | null {
+  if (typeof v === "number" && Number.isFinite(v)) return COMPASS[Math.round((((v % 360) + 360) % 360) / 45) % 8];
+  if (typeof v !== "string") return null;
+  const t = v.toUpperCase().replace(/[^A-Z]/g, "");
+  if (!t) return null;
+  if ((COMPASS as readonly string[]).includes(t)) return t as Compass;
+  return COMPASS_WORDS[t] ?? null;
+}
+function facadeName(v: unknown): FacadeName | null {
+  const c = compassOf(v);
+  if (c) return c;
+  const t = typeof v === "string" ? v.toLowerCase() : "";
+  if (/\bfront\b|\bstreet\b|\bentry\b/.test(t)) return "front";
+  if (/\brear\b|\bback\b/.test(t)) return "rear";
+  if (/\bleft\b/.test(t)) return "left";
+  if (/\bright\b/.test(t)) return "right";
+  const word = t.match(/\b(north|south|east|west)(?:\s*-?\s*(east|west))?\b/);
+  return word ? compassOf(`${word[1]}${word[2] ?? ""}`) : null;
+}
+const firstNumber = (v: unknown): unknown => (typeof v === "string" ? (v.match(/\d*\.\d+|\d+/) ?? [""])[0] : v);
+function energyOf(raw: unknown): PlanEnergy | undefined {
+  const e = (raw && typeof raw === "object" ? raw : null) as Record<string, unknown> | null;
+  if (!e) return undefined;
+  const duct = str(e.ductLocation ?? e.ducts, 40)?.toLowerCase() ?? "";
+  const out: PlanEnergy = {
+    wallR: rValueOf(e.wallR ?? e.walls),
+    ceilingR: rValueOf(e.ceilingR ?? e.ceiling ?? e.atticR),
+    floorR: rValueOf(e.floorR ?? e.floor),
+    slabR: rValueOf(e.slabR ?? e.slab),
+    basementWallR: rValueOf(e.basementWallR ?? e.basementWall),
+    windowU: uValueOf(e.windowU ?? e.uFactor),
+    windowShgc: num(firstNumber(e.windowShgc ?? e.shgc), 0.1, 0.9),
+    ach50: num(firstNumber(e.ach50), 0.5, 20),
+    ductLocation: /condition|inside|interior|heated/.test(duct) ? "conditioned" : /attic/.test(duct) ? "attic" : /crawl/.test(duct) ? "crawl" : /basement/.test(duct) ? "basement" : null,
+    ductLeakage: num(firstNumber(e.ductLeakage), 0.5, 20),
+  };
+  return Object.values(out).some((v) => v != null) ? out : undefined;
+}
+function facadesOf(raw: unknown): PlanFacade[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw
+    .slice(0, 8)
+    .map((x) => {
+      const o = (x ?? {}) as Record<string, unknown>;
+      const facing = facadeName(o.facing ?? o.name ?? o.side);
+      if (!facing) return null;
+      const g = o.glass ?? o.glassSqFt;
+      const glassSqFt = typeof g === "number" ? (g >= 0 && g <= 3000 ? round(g, 1) : null) : sqft(g, 0, 3000);
+      return { facing, glassSqFt, windows: num(o.windows ?? o.windowCount, 0, 80) };
+    })
+    .filter((x): x is PlanFacade => !!x);
+  return out.length ? out : undefined;
+}
 
 function room(raw: Record<string, unknown>, sheetLevel: string | null): PlanRoom | null {
   const name = str(raw.name, 60);
@@ -286,5 +384,8 @@ export function cleanSheetRead(page: number, raw: unknown): SheetRead {
     },
     notes: (Array.isArray(r.notes) ? r.notes : []).map((n) => str(n, 200)).filter((n): n is string => !!n).slice(0, 20),
     confidence: conf === "high" || conf === "low" ? conf : "medium",
+    ...(energyOf(r.energy) ? { energy: energyOf(r.energy) } : {}),
+    ...(facadesOf(r.facades) ? { facades: facadesOf(r.facades) } : {}),
+    ...(compassOf(r.frontFaces) ? { frontFaces: compassOf(r.frontFaces) } : {}),
   };
 }

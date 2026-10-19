@@ -27,7 +27,9 @@ import { issuePlanPass, readPlanPass } from "@/lib/plans/planToken";
 import { PLAN_READ_SYSTEM, planReadPrompt } from "@/lib/plans/readPrompt";
 import { cleanSheetRead, type SheetRead } from "@/lib/plans/sheet";
 import { planPriceChecks, type PriceChecks } from "@/lib/plans/priceChecks";
-import { askPlanInput, MAX_SHEET_IMAGE_CHARS, measureSheetInput, priceChecksInput, sheetReadInput, skimSheetInput } from "@/lib/plans/wire";
+import { askPlanInput, MAX_SHEET_IMAGE_CHARS, measureSheetInput, planHvacInput, priceChecksInput, sheetReadInput, skimSheetInput } from "@/lib/plans/wire";
+import { planHvacLoad, type PlanPlace } from "@/lib/plans/hvacLoad";
+import type { PlanHvacLoad } from "@/lib/plans/hvacEnvelope";
 import { cleanSkim, SKIM_SYSTEM, skimPrompt, type SheetSkim } from "@/lib/plans/readOrder";
 import { ASK_SYSTEM, askPlanPrompt, cleanFocus, cleanScope, FOCUS_SYSTEM, focusPrompt, scopeByRules, scopeExtras, unitWord, type FocusRead, type JobScope, type MeasureAsk } from "@/lib/plans/ask";
 import { houseFacts } from "@/lib/plans/tradeBrief";
@@ -46,7 +48,8 @@ export async function startPlanSession(): Promise<{ ok: true; token: string } | 
   let organizationId: string;
   try {
     ({ organizationId } = await requireEstimatorOrManager());
-    await requirePage(organizationId, ["smart-proposal"]);
+    // The blueprint estimator, and the HVAC estimator's "from the plans" (2026-10-18): either page opens a session.
+    await requirePage(organizationId, ["smart-proposal", "hvac-estimator"]);
     await enforceRateLimit(`ai-plans:${organizationId}`, 12, HOUR, "blueprint runs");
     const { requireFeatureOrThrow } = await import("@/lib/entitlements");
     const { getOrgPlanById } = await import("@/lib/orgPlan");
@@ -165,6 +168,76 @@ export async function getPlanPriceChecks(raw: unknown): Promise<{ ok: true; data
   }
   const { house, items, location } = parsed.data;
   return { ok: true, data: planPriceChecks(house, items, location) };
+}
+
+/** Where the job is, as the HVAC engine's design tables want it: the county (Census geocoder, then OpenStreetMap +
+ *  the FCC block lookup), else the state named in the address, else nothing. Kept an hour per address. */
+const placeCache = new Map<string, { at: number; place: PlanPlace | null }>();
+async function placeOf(location: string): Promise<PlanPlace | null> {
+  const key = location.trim().toLowerCase();
+  if (!key) return null;
+  const hit = placeCache.get(key);
+  if (hit && Date.now() - hit.at < HOUR) return hit.place;
+  const { censusGeocode, countyAtPoint, nominatimGeocode } = await import("@/lib/hvac/publicGeo");
+  const { stateFromAddress } = await import("@/lib/pricing/salesTax");
+  let place: PlanPlace | null = null;
+  // A new house's lot is often not on any map yet ("Lot 12, …", a street still being built): the address, then the
+  // town and ZIP after its first comma, then the ZIP alone — the county is what the design tables need.
+  const tail = location.includes(",") ? location.slice(location.indexOf(",") + 1).trim() : "";
+  const zip = location.match(/\b\d{5}\b/)?.[0] ?? "";
+  const tries = Array.from(new Set([location, tail, zip ? `${zip}, USA` : ""].filter((x) => x.length >= 3)));
+  for (const q of tries) {
+    const census = await censusGeocode(q).catch(() => null);
+    if (census?.state && census.county) {
+      place = { state: census.state, county: census.county, lat: census.lat, lng: census.lng, label: `${census.county}, ${census.state}` };
+      break;
+    }
+    const osm = await nominatimGeocode(q).catch(() => null);
+    const at = osm ? await countyAtPoint(osm.lat, osm.lng).catch(() => null) : null;
+    if (at) {
+      place = { state: at.state, county: at.county, lat: osm?.lat, lng: osm?.lng, label: `${at.county}, ${at.state}` };
+      break;
+    }
+  }
+  if (!place) {
+    const st = stateFromAddress(location);
+    if (st) place = { state: st, county: null, label: st };
+  }
+  placeCache.set(key, { at: Date.now(), place });
+  return place;
+}
+
+/** THE HEATING & COOLING LOAD FROM THE PLANS (owner, 2026-10-18: "make sure the blueprint estimator can estimate
+ *  HVAC Manual J based"): the envelope the browser took out of the takeoff, the job's place → the HVAC engine's
+ *  Manual J-style block load and the Manual S size (lib/plans/hvacLoad). No model call; the plan pass gates it. */
+export async function planHvacLoadAction(raw: unknown): Promise<{ ok: true; load: PlanHvacLoad } | Fail> {
+  const parsed = planHvacInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "The plans' house could not be read for the load." };
+  const input = parsed.data;
+  let organizationId: string;
+  try {
+    ({ organizationId } = await requireEstimatorOrManager());
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Sign in again." };
+  }
+  const pass = readPlanPass(input.token, organizationId);
+  if (!pass) return { ok: false, error: EXPIRED };
+  try {
+    await enforceRateLimit(`plan-hvac:${pass.nonce}`, 30, 6 * HOUR, "load calculations");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Too many load calculations." };
+  }
+  const where = (input.location ?? input.envelope.address ?? "").trim();
+  const place = where ? await placeOf(where) : null;
+  const { designConditionsFor } = await import("@/lib/hvac/designConditions");
+  const lookup = designConditionsFor(place?.state ?? "", place?.county ?? null, place?.elevationFt ?? 0);
+  const label = place?.label ?? (where || "location not given");
+  try {
+    return { ok: true, load: planHvacLoad(input.envelope, place ?? { state: "", county: null, label }, lookup.conditions, { match: place ? lookup.match : "none" }) };
+  } catch (err) {
+    console.warn("[plans] hvac load failed:", err instanceof Error ? err.message : err);
+    return { ok: false, error: "The heating & cooling load could not be worked out from these plans." };
+  }
 }
 
 /** One JSON answer from the vision model, with one patient retry on a rate limit or a 5xx. */

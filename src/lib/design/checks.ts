@@ -7,12 +7,17 @@
 // or range's listing), IRC R310 (a bedroom's emergency escape opening: 5.7 sq ft clear, 24 in high, 20 in wide, sill
 // no higher than 44 in), IRC M1503.6 (makeup air past 400 cfm of kitchen exhaust), NEC 210.52(C) (countertop
 // receptacles: no point along a wall counter more than 24 in from one), NEC 210.8(A) (GFCI). The NKBA guidelines are
-// recommendations, not code, and are labelled so. Pure.
+// recommendations, not code, and are labelled so.
+// Every room (2026-10-18): a bath against IRC R307.1 (a toilet 15 in from its center to a side wall or fixture, 21 in
+// clear in front of it and of a lavatory, 24 in in front of a shower's opening), IRC P2708.1 (a shower 30 × 30 in and
+// 900 sq in inside at least), IRC R303.3 (a bath's window of 3 sq ft or an exhaust fan) and NEC 210.8(A)(1) /
+// 210.11(C)(3) / 210.52(D); the other rooms against the walkways a designer keeps (labelled guidelines, not code). Pure.
 import type { DesignDoc, DesignItem, Opening, P } from "./model";
 import { DEFAULT_CEILING, ftIn, newId } from "./model";
 import { dot, pointInPoly, roomsOf, wallDir, type Room } from "./geometry";
 import { cornersOf, frameOf, overlaps } from "./kitchen";
 import { itemCode, lib, newItemFrom, UPPER_Z } from "./library";
+import { kindOfRoom } from "./roomKinds";
 
 export type CheckLevel = "code" | "guide" | "fit";
 export type CheckFix = { label: string } & ({ kind: "add-hood"; cookId: string } | { kind: "set"; itemId: string; z?: number; h?: number });
@@ -326,6 +331,192 @@ export function kitchenChecks(doc: DesignDoc, labelId: string): Check[] {
     out.push({ id: "receptacles", level: "code", ok: true, source: "NEC 210.52(C) · 210.8(A)", title: `${n} countertop outlets, GFCI`, detail: `About ${r0(wallCounterLf)} ft of wall counter: an outlet so no point is more than 24 in from one (about one every 4 ft), plus the island's — all GFCI protected, on two 20 A circuits.` });
   }
   if (items.some((i) => i.lib === "HD")) out.push({ id: "makeup-air", level: "code", ok: true, source: "IRC M1503.6", title: "Makeup air past 400 cfm", detail: "If the hood moves more than 400 cfm, the code calls for makeup air brought in to match — choose the hood with that in mind." });
+  return out;
+}
+
+const DESIGNER = "Designer guideline";
+/** Pieces that tuck under a table or desk: their footprints may overlap it. */
+const TUCKS = new Set(["CHR", "STL", "OCH"]);
+const UNDER = new Set(["TBL", "DSK", "ISL", "CTB"]);
+
+/** The checks for whichever room is being designed: the kitchen's own, or the room's. */
+export function designChecks(doc: DesignDoc, labelId: string): Check[] {
+  const room = roomsOf(doc).find((r) => r.labelId === labelId);
+  if (!room) return [];
+  return kindOfRoom(doc, room) === "kitchen" ? kitchenChecks(doc, labelId) : roomChecks(doc, labelId);
+}
+
+/** Any room but a kitchen: what plainly doesn't fit, then the code (a bath) and the walkways for the room's kind. */
+export function roomChecks(doc: DesignDoc, labelId: string): Check[] {
+  const room = roomsOf(doc).find((r) => r.labelId === labelId);
+  if (!room) return [];
+  const items = (doc.items ?? []).filter((i) => i.room === labelId);
+  if (!items.length) return [];
+  const kind = kindOfRoom(doc, room);
+  const out: Check[] = [];
+  const cat = (i: DesignItem) => lib(i.lib)?.cat;
+  // On the floor: everything standing there but a rug and the lights; on the wall: what hangs (a mirror, a closet shelf).
+  const onFloor = (i: DesignItem) => i.z < 30 && cat(i) !== "light" && i.lib !== "RUG";
+  const floor = items.filter(onFloor);
+  const layer = (i: DesignItem) => (onFloor(i) ? "floor" : i.z >= 40 && cat(i) !== "light" ? "wall" : null);
+
+  /* ── Fit ── */
+  const clashes: string[] = [];
+  const clashIds = new Set<string>();
+  for (let i = 0; i < items.length; i++)
+    for (let j = i + 1; j < items.length; j++) {
+      const a = items[i];
+      const b = items[j];
+      if (!layer(a) || layer(a) !== layer(b)) continue;
+      if ((TUCKS.has(a.lib) && UNDER.has(b.lib)) || (TUCKS.has(b.lib) && UNDER.has(a.lib))) continue;
+      if (overlaps(a, b, 1)) {
+        clashes.push(`${itemCode(a)} and ${itemCode(b)}`);
+        clashIds.add(a.id).add(b.id);
+      }
+    }
+  out.push({ id: "fit-overlap", level: "fit", ok: !clashes.length, source: "Fit", title: clashes.length ? `${clashes.length === 1 ? "Two things" : `${clashes.length} pairs`} in the same spot` : "Nothing overlaps", detail: clashes.length ? `${clashes.slice(0, 4).join("; ")}${clashes.length > 4 ? "…" : ""} — move one or change its size.` : "Every piece has its own space.", items: [...clashIds] });
+  const outside = items.filter((i) => cat(i) !== "light" && !pointInPoly(center(i), room.poly));
+  if (outside.length) out.push({ id: "fit-outside", level: "fit", ok: false, source: "Fit", title: `${outside.length === 1 ? "Something sits" : `${outside.length} things sit`} outside the room's walls`, detail: outside.map(name).join(", "), items: outside.map((i) => i.id) });
+  const roomOpenings = doc.openings.filter((o) => room.wallIds.includes(o.wallId));
+  const wallOf = (id: string) => doc.walls.find((w) => w.id === id) ?? null;
+  const blocked: Array<{ o: Opening; it: DesignItem }> = [];
+  for (const o of roomOpenings) {
+    if (o.kind === "window") continue;
+    const w = wallOf(o.wallId);
+    if (!w) continue;
+    const d = wallDir(w);
+    const mid = { x: w.a.x + d.x * o.at, y: w.a.y + d.y * o.at };
+    const zone = { x: mid.x, y: mid.y, rot: (Math.atan2(d.x, -d.y) * 180) / Math.PI, w: o.width, d: w.thick + 60 };
+    for (const it of floor) if (overlaps(zone, it, 1)) blocked.push({ o, it });
+  }
+  out.push({ id: "fit-doors", level: "fit", ok: !blocked.length, source: "Fit", title: blocked.length ? "Something stands in a doorway" : "Doorways are clear", detail: blocked.length ? blocked.map(({ o, it }) => `${name(it)} in front of a ${ftIn(o.width)} ${o.kind === "opening" ? "opening" : "door"}`).join("; ") : "30 in clear on both sides of every door and opening.", items: blocked.map((b) => b.it.id) });
+  // Tall pieces across the glass (a bed's headboard under a window is a choice, not a fault).
+  const covered: Array<{ o: Opening; it: DesignItem }> = [];
+  for (const o of roomOpenings.filter((x) => x.kind === "window")) {
+    const w = wallOf(o.wallId);
+    if (!w) continue;
+    const d = wallDir(w);
+    for (const it of items) {
+      if (it.wallId !== w.id || cat(it) === "light" || it.lib === "BED" || it.h < 48) continue;
+      const t = dot({ x: it.x - w.a.x, y: it.y - w.a.y }, d);
+      const along = Math.min(t + it.w / 2, o.at + o.width / 2) - Math.max(t - it.w / 2, o.at - o.width / 2);
+      if (along > 2 && it.z + it.h > o.sill + 1 && it.z < o.sill + o.height) covered.push({ o, it });
+    }
+  }
+  if (covered.length) out.push({ id: "fit-windows", level: "fit", ok: false, source: "Fit", title: "Something tall covers a window", detail: covered.map(({ it }) => `${name(it)} across a window`).join("; "), items: covered.map((c) => c.it.id) });
+
+  /** Clear floor in front of a piece: from the middle of its front edge, straight out, to a wall or the next piece. */
+  const clearAhead = (it: DesignItem, ignore: (o: DesignItem) => boolean = () => false, max = 96) => {
+    const { f } = frameOf(it);
+    const hit = rayHit({ x: it.x + f.x * (it.d / 2 + 0.5), y: it.y + f.y * (it.d / 2 + 0.5) }, f, room, floor.filter((o) => o.id !== it.id && !ignore(o)), max);
+    return hit ? hit.d : max;
+  };
+  /** Clear floor beside a piece (along ±u from its center line, at `k` of its depth from the back). */
+  const clearSide = (it: DesignItem, side: -1 | 1, k = 0.5, ignore: (o: DesignItem) => boolean = () => false, max = 96) => {
+    const { f, u } = frameOf(it);
+    const back = -it.d / 2 + it.d * k;
+    const from = { x: it.x + f.x * back + u.x * side * (it.w / 2 + 0.5), y: it.y + f.y * back + u.y * side * (it.w / 2 + 0.5) };
+    const hit = rayHit(from, { x: u.x * side, y: u.y * side }, room, floor.filter((o) => o.id !== it.id && !ignore(o)), max);
+    return hit ? hit.d : max;
+  };
+  const IRC_FIX = "IRC R307.1";
+
+  if (kind === "bath") {
+    for (const wc of items.filter((i) => i.lib === "WC")) {
+      const sides = ([-1, 1] as const).map((sd) => clearSide(wc, sd, 0.55, () => false, 40) + wc.w / 2);
+      const near = Math.min(...sides);
+      const ahead = clearAhead(wc);
+      out.push({ id: `wc-side:${wc.id}`, level: "code", ok: near >= 15, source: IRC_FIX, title: near >= 15 ? "Toilet has room each side" : `Toilet ${r0(near)} in from its center to the side`, detail: `15 in at least from the toilet's center to a side wall or the next fixture (${r0(sides[0])} in and ${r0(sides[1])} in here); 18 in is more comfortable.`, items: [wc.id] });
+      out.push({ id: `wc-front:${wc.id}`, level: "code", ok: ahead >= 21, source: IRC_FIX, title: ahead >= 21 ? "Clear floor in front of the toilet" : `Only ${r0(ahead)} in in front of the toilet`, detail: "21 in clear in front of the toilet at least (30 in is the NKBA's recommendation).", items: [wc.id] });
+    }
+    for (const v of items.filter((i) => i.lib === "VAN")) {
+      const ahead = clearAhead(v);
+      out.push({ id: `lav-front:${v.id}`, level: "code", ok: ahead >= 21, source: IRC_FIX, title: ahead >= 21 ? "Room to stand at the vanity" : `Only ${r0(ahead)} in in front of the vanity`, detail: "21 in clear in front of a lavatory at least; 30 in is comfortable.", items: [v.id] });
+    }
+    for (const sh of items.filter((i) => i.lib === "SHW")) {
+      const ahead = clearAhead(sh);
+      const inside = (sh.w - 2) * (sh.d - 2);
+      const big = sh.w - 2 >= 30 && sh.d - 2 >= 30 && inside >= 900;
+      out.push({ id: `shw-size:${sh.id}`, level: "code", ok: big, source: "IRC P2708.1", title: big ? "Shower is big enough inside" : "Shower is too small inside", detail: `About ${r0(sh.w - 2)} × ${r0(sh.d - 2)} in inside (${r0(inside)} sq in) — 30 × 30 in and 900 sq in at least.`, items: [sh.id] });
+      out.push({ id: `shw-front:${sh.id}`, level: "code", ok: ahead >= 24, source: IRC_FIX, title: ahead >= 24 ? "Room to step out of the shower" : `Only ${r0(ahead)} in in front of the shower`, detail: "24 in clear in front of the shower's opening.", items: [sh.id] });
+    }
+    const vent = roomOpenings.find((o) => o.kind === "window" && (o.width * o.height) / 144 >= 3);
+    out.push({ id: "bath-vent", level: "code", ok: true, source: "IRC R303.3 · M1505.4", title: vent ? "A window to air the bath — a fan is still wise" : "An exhaust fan, ducted outside", detail: vent ? `A ${ftIn(vent.width)} × ${ftIn(vent.height)} window (half of 3 sq ft must open) — a 50 cfm fan ducted outside is the usual choice even so.` : "No window of 3 sq ft here: the code calls for a fan of 50 cfm (on demand) or 20 cfm (running), ducted outside." });
+    out.push({ id: "bath-gfci", level: "code", ok: true, source: "NEC 210.8(A)(1) · 210.11(C)(3) · 210.52(D)", title: "GFCI outlets on a 20 A bath circuit", detail: "Every bathroom receptacle GFCI protected; a 20 A circuit for the bath's outlets; an outlet within 3 ft of each basin's edge." });
+  }
+
+  if (kind === "bedroom") {
+    for (const bed of items.filter((i) => i.lib === "BED")) {
+      const notNs = (o: DesignItem) => o.lib === "RUG";
+      const sides = ([-1, 1] as const).map((sd) => clearSide(bed, sd, 0.35, notNs));
+      const foot = clearAhead(bed, notNs);
+      const twin = bed.w < 54;
+      const sideOk = twin ? Math.max(...sides) >= 24 : Math.min(...sides) >= 24;
+      out.push({ id: `bed-sides:${bed.id}`, level: "guide", ok: sideOk, source: DESIGNER, title: sideOk ? "Room to get in each side of the bed" : "Tight beside the bed", detail: `${r0(sides[0])} in and ${r0(sides[1])} in beside it — 24 in at least ${twin ? "on the open side" : "on both sides"} to make the bed and get in; 30–36 in is comfortable.`, items: [bed.id] });
+      out.push({ id: `bed-foot:${bed.id}`, level: "guide", ok: foot >= 24, source: DESIGNER, title: foot >= 24 ? "A walkway at the foot of the bed" : `Only ${r0(foot)} in at the foot of the bed`, detail: "24 in at least past the foot of the bed; 36 in where it's the way through.", items: [bed.id] });
+    }
+    for (const dr of items.filter((i) => i.lib === "DRS")) {
+      const ahead = clearAhead(dr);
+      out.push({ id: `drs:${dr.id}`, level: "guide", ok: ahead >= 36, source: DESIGNER, title: ahead >= 36 ? "Room to open the dresser" : `${r0(ahead)} in in front of the dresser`, detail: "36 in in front of a dresser to pull a drawer out and stand at it.", items: [dr.id] });
+    }
+  }
+
+  if (kind === "living" || kind === "other") {
+    const sofa = items.find((i) => i.lib === "SOFA");
+    const ctb = items.find((i) => i.lib === "CTB");
+    if (sofa && ctb) {
+      const g = gap(sofa, ctb);
+      const ok = g >= 14 && g <= 20;
+      out.push({ id: "ctb", level: "guide", ok, source: DESIGNER, title: ok ? "Coffee table within reach" : g < 14 ? `Coffee table ${r0(g)} in from the sofa` : `Coffee table ${r0(g)} in away`, detail: "14–18 in between the sofa and the coffee table: legroom, and a cup within reach.", items: [sofa.id, ctb.id] });
+    }
+    const tv = items.find((i) => i.lib === "TVC");
+    if (sofa && tv) {
+      // The screen the studio stands on the console: its diagonal, inches (as items-3d draws it).
+      const diag = Math.min(65, tv.w - 4);
+      // From the sofa to the screen, which stands at the console's back.
+      const dist = Math.hypot(sofa.x - tv.x, sofa.y - tv.y) - tv.d / 2;
+      const ok = dist >= diag * 1.2 && dist <= diag * 3;
+      out.push({ id: "tv", level: "guide", ok, source: DESIGNER, title: ok ? "The TV at a good distance" : dist < diag * 1.2 ? "Sitting close to the TV" : "The TV is far from the sofa", detail: `${ftIn(dist)} from the sofa to a screen about ${r0(diag)} in across — 1½ to 2½ times the screen's diagonal is ideal; nearer than 1.2 or farther than 3 times strains.`, items: [sofa.id, tv.id] });
+    }
+  }
+
+  if (kind === "dining" || kind === "outdoor") {
+    for (const tbl of items.filter((i) => i.lib === "TBL")) {
+      const isChair = (o: DesignItem) => o.lib === "CHR";
+      const around = [clearAhead(tbl, isChair), clearAhead({ ...tbl, rot: tbl.rot + 180 }, isChair), clearSide(tbl, -1, 0.5, isChair), clearSide(tbl, 1, 0.5, isChair)];
+      const least = Math.min(...around);
+      out.push({ id: `tbl:${tbl.id}`, level: "guide", ok: least >= 36, source: DESIGNER, title: least >= 36 ? "Room to pull the chairs out" : `${r0(least)} in from the table to the wall`, detail: "36 in from the table's edge to a wall or furniture to pull a chair out and sit; 44 in to walk behind someone seated.", items: [tbl.id] });
+      const chairs = items.filter((c) => c.lib === "CHR" && Math.hypot(c.x - tbl.x, c.y - tbl.y) < Math.max(tbl.w, tbl.d) / 2 + 30).length;
+      const seats = Math.floor((2 * tbl.w + 2 * tbl.d) / 24);
+      if (chairs) out.push({ id: `tbl-seats:${tbl.id}`, level: "guide", ok: chairs <= seats, source: DESIGNER, title: chairs <= seats ? `${chairs} seats at the table` : `${chairs} chairs crowd the table`, detail: `24 in of table edge a person — this ${ftIn(tbl.w)} × ${ftIn(tbl.d)} table seats about ${seats}.`, items: [tbl.id] });
+    }
+  }
+
+  if (kind === "laundry") {
+    for (const m of items.filter((i) => i.lib === "WSH" || i.lib === "DRY")) {
+      const ahead = clearAhead(m);
+      out.push({ id: `lau:${m.id}`, level: "guide", ok: ahead >= 36, source: DESIGNER, title: ahead >= 36 ? `Room to load the ${m.lib === "WSH" ? "washer" : "dryer"}` : `${r0(ahead)} in in front of the ${m.lib === "WSH" ? "washer" : "dryer"}`, detail: "36 in clear in front of a front-loader to open the door and load it; 42 in to stand with a basket.", items: [m.id] });
+    }
+    if (items.some((i) => i.lib === "DRY")) out.push({ id: "dryer-vent", level: "code", ok: true, source: "IRC M1502", title: "The dryer vents outside", detail: "4 in rigid metal duct to the outside with a backdraft damper, no screen, within 35 ft less 5 ft for each 90° bend (or the dryer's listing)." });
+  }
+
+  if (kind === "office") {
+    for (const desk of items.filter((i) => i.lib === "DSK")) {
+      const ahead = clearAhead(desk, (o) => o.lib === "OCH" || o.lib === "RUG");
+      out.push({ id: `desk:${desk.id}`, level: "guide", ok: ahead >= 36, source: DESIGNER, title: ahead >= 36 ? "Room to push back from the desk" : `${r0(ahead)} in behind the desk chair`, detail: "36 in from the desk's edge to the wall or furniture behind to roll the chair back and stand up.", items: [desk.id] });
+    }
+  }
+
+  if (kind === "closet") {
+    const rods = items.filter((i) => i.lib === "CLS");
+    for (const r of rods) {
+      // The clothes hang 24 in out from the wall; the floor to stand on starts there.
+      const { f } = frameOf(r);
+      const k = (24 - r.d) / 2;
+      const ahead = clearAhead({ ...r, x: r.x + f.x * k, y: r.y + f.y * k, z: 0, d: 24 });
+      out.push({ id: `cls:${r.id}`, level: "guide", ok: ahead >= 24, source: DESIGNER, title: ahead >= 24 ? "Room to reach the rod" : `${r0(ahead)} in past the clothes`, detail: "Hanging clothes take 24 in from the wall; then 24 in of floor to stand in (36 in in a walk-in with rods both sides).", items: [r.id] });
+    }
+  }
   return out;
 }
 

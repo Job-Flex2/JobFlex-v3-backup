@@ -1,0 +1,303 @@
+/* ============================================================
+   HVAC SERVICES — the service desk on the blueprint sheet (2026-10-18)
+   Head, the four-step "how it runs" strip, tabs, then hairline cards:
+   what needs you, the season and its visits, the clients on a plan, the
+   plans you sell, the reminders. Head, button, KPI, card, plate and form
+   rules are the Service plans module's (same design, same words); the
+   HVAC tool's teal (--tool-hvac) marks the steps and the season bars.
+   ── NO @keyframes (Lightning CSS rejects them in a module) ──
+   ── Light mode only. ──
+   ============================================================ */
+
+:global(.jf-blueprint .content) .desk { --desk-tone: var(--tool-hvac, #0d7a8a); display: grid; gap: 18px; padding-bottom: 56px; }
+
+/* ── head ── */
+:global(.jf-blueprint .content) .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding-top: 6px; }
+:global(.jf-blueprint .content) .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+:global(.jf-blueprint .content) .kicker::before { content: ''; width: 7px; height: 7px; background: var(--desk-tone); border-radius: 50%; }
+:global(.jf-blueprint .content) .page-title { font-size: 46px; font-weight: 900; letter-spacing: -0.03em; text-transform: uppercase; line-height: 0.95; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .page-lede { margin-top: 10px; font-size: 13.5px; line-height: 1.5; color: var(--muted); max-width: 62ch; }
+:global(.jf-blueprint .content) .page-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+:global(.jf-blueprint .content) svg.ic { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+/* ── buttons ── */
+:global(.jf-blueprint .content) .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 0 16px; height: 40px;
+  border: var(--border); border-radius: var(--radius);
+  font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  white-space: nowrap; text-decoration: none; cursor: pointer; color: var(--ink);
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease), background 0.12s;
+}
+:global(.jf-blueprint .content) .btn .ic { width: 15px; height: 15px; }
+:global(.jf-blueprint .content) .btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+:global(.jf-blueprint .content) .btn:active { transform: translate(0, 0); box-shadow: none; }
+:global(.jf-blueprint .content) .btn-primary { background: var(--blueprint); color: #fff; }
+:global(.jf-blueprint .content) .btn-primary:hover { background: var(--blueprint-dark); }
+:global(.jf-blueprint .content) .btn-ghost { background: #fff; }
+:global(.jf-blueprint .content) .btn-ghost:hover { background: var(--paper-deep); }
+:global(.jf-blueprint .content) .btn--sm { height: 34px; padding: 0 12px; font-size: 11px; }
+:global(.jf-blueprint .content) .btn--xs { height: 28px; padding: 0 10px; font-size: 10.5px; letter-spacing: 0.1em; gap: 6px; }
+:global(.jf-blueprint .content) .btn--xs .ic { width: 13px; height: 13px; }
+:global(.jf-blueprint .content) .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+:global(.jf-blueprint .content) .btn:disabled:hover { transform: none; box-shadow: none; }
+:global(.jf-blueprint .content) .btn--danger { color: var(--danger, #a83232); border-color: var(--danger, #a83232); }
+:global(.jf-blueprint .content) .linkish { background: none; border: none; padding: 0; font: inherit; color: var(--blueprint); font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── how it runs: four steps ── */
+:global(.jf-blueprint .content) .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: var(--border); border-radius: var(--radius); background: #fff; box-shadow: 3px 3px 0 var(--shadow); overflow: hidden; }
+:global(.jf-blueprint .content) .step {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 4px 12px; align-items: start;
+  padding: 14px 16px 15px; border: none; border-right: 1.5px solid var(--ink); background: #fff;
+  font: inherit; text-align: left; color: var(--ink); cursor: pointer; transition: background 0.12s;
+}
+:global(.jf-blueprint .content) .step:last-child { border-right: none; }
+:global(.jf-blueprint .content) .step:hover { background: var(--paper); }
+:global(.jf-blueprint .content) .step--on { background: var(--accent-soft, rgba(24, 84, 160, 0.08)); box-shadow: inset 0 -3px 0 var(--desk-tone); }
+:global(.jf-blueprint .content) .step-n {
+  grid-row: 1 / span 2; width: 30px; height: 30px; display: grid; place-items: center;
+  border: 1.5px solid var(--ink); border-radius: 50%; font-family: var(--font-mono); font-size: 13px; font-weight: 800; background: #fff;
+}
+:global(.jf-blueprint .content) .step--done .step-n { background: var(--desk-tone); border-color: var(--desk-tone); color: #fff; }
+:global(.jf-blueprint .content) .step-n .ic { width: 15px; height: 15px; stroke-width: 2.6; }
+:global(.jf-blueprint .content) .step-t { font-size: 13.5px; font-weight: 800; letter-spacing: -0.005em; }
+:global(.jf-blueprint .content) .step-s { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+
+/* ── tabs ── */
+:global(.jf-blueprint .content) .tabs-wrap { overflow-x: auto; scrollbar-width: none; margin: 0 -2px; padding: 2px; }
+:global(.jf-blueprint .content) .tabs-wrap::-webkit-scrollbar { display: none; }
+:global(.jf-blueprint .content) .tabs { display: inline-flex; border: var(--border); border-radius: var(--radius); background: #fff; overflow: hidden; }
+:global(.jf-blueprint .content) .tab {
+  display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 18px;
+  border: none; border-right: 1.5px solid var(--ink); background: #fff; color: var(--ink);
+  font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; cursor: pointer;
+}
+:global(.jf-blueprint .content) .tab:last-child { border-right: none; }
+:global(.jf-blueprint .content) .tab:hover { background: var(--paper); }
+:global(.jf-blueprint .content) .tab--on { background: var(--ink); color: #fff; }
+:global(.jf-blueprint .content) .tab--on:hover { background: var(--ink); }
+:global(.jf-blueprint .content) .tab-n { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 10px; background: var(--paper-deep); color: var(--ink); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; }
+:global(.jf-blueprint .content) .tab-n--hot { background: var(--blueprint); color: #fff; }
+:global(.jf-blueprint .content) .tab--on .tab-n { background: #fff; color: var(--ink); }
+
+/* ── kpis ── */
+:global(.jf-blueprint .content) .kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: var(--border); border-radius: var(--radius); background: #fff; overflow: hidden; box-shadow: 3px 3px 0 var(--shadow); }
+:global(.jf-blueprint .content) .kpi { padding: 16px 20px 18px; border-right: 1.5px solid var(--ink); min-width: 0; }
+:global(.jf-blueprint .content) .kpi:last-child { border-right: none; }
+:global(.jf-blueprint .content) .kpi-lbl { font-size: 11px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+:global(.jf-blueprint .content) .kpi-val { font-size: 32px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .kpi-sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+
+/* ── cards ── */
+:global(.jf-blueprint .content) .stack { display: grid; gap: 18px; align-content: start; min-width: 0; }
+:global(.jf-blueprint .content) .grid2 { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+:global(.jf-blueprint .content) .grid2--even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+:global(.jf-blueprint .content) .card { background: #fff; border: var(--border); border-radius: var(--radius); padding: 18px 22px 20px; box-shadow: 3px 3px 0 var(--shadow); min-width: 0; }
+:global(.jf-blueprint .content) .card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 12px; }
+:global(.jf-blueprint .content) .card-t { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+:global(.jf-blueprint .content) .card-s { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+:global(.jf-blueprint .content) .sec-h { font-size: 10.5px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; }
+:global(.jf-blueprint .content) .sec-h:first-child { margin-top: 0; }
+:global(.jf-blueprint .content) .hint { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+:global(.jf-blueprint .content) .empty { padding: 10px 0 4px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+:global(.jf-blueprint .content) .mono { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .who { font-weight: 800; color: var(--ink); text-decoration: none; }
+:global(.jf-blueprint .content) a.who:hover { text-decoration: underline; }
+:global(.jf-blueprint .content) .sub { display: block; font-family: var(--font-mono); font-size: 11px; line-height: 1.45; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* ── plates ── */
+:global(.jf-blueprint .content) .plate {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px;
+  border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
+}
+:global(.jf-blueprint .content) .plate--active, :global(.jf-blueprint .content) .plate--done { color: var(--success, #3a7d44); border-color: var(--success, #3a7d44); }
+:global(.jf-blueprint .content) .plate--expiring, :global(.jf-blueprint .content) .plate--lapsed, :global(.jf-blueprint .content) .plate--overdue, :global(.jf-blueprint .content) .plate--late { color: var(--warning, #b88420); border-color: var(--warning, #b88420); background: var(--warning-soft, rgba(184, 132, 32, 0.08)); }
+:global(.jf-blueprint .content) .plate--sent, :global(.jf-blueprint .content) .plate--today, :global(.jf-blueprint .content) .plate--due { color: #fff; border-color: var(--blueprint); background: var(--blueprint); }
+:global(.jf-blueprint .content) .plate--soon { color: var(--blueprint); border-color: var(--blueprint); }
+:global(.jf-blueprint .content) .plate--draft, :global(.jf-blueprint .content) .plate--later, :global(.jf-blueprint .content) .plate--ahead { color: var(--ink); }
+:global(.jf-blueprint .content) .plate--expired, :global(.jf-blueprint .content) .plate--canceled, :global(.jf-blueprint .content) .plate--skipped { color: var(--muted); border-color: var(--muted); }
+:global(.jf-blueprint .content) .tag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 3px; background: var(--paper-deep); font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; color: var(--ink); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+:global(.jf-blueprint .content) .tag--warn { background: var(--warning-soft, rgba(184, 132, 32, 0.1)); color: var(--warning-dark, #8a6212); }
+:global(.jf-blueprint .content) .tag--hvac { background: rgba(13, 122, 138, 0.1); color: var(--desk-tone); }
+:global(.jf-blueprint .content) a.tag { text-decoration: none; }
+:global(.jf-blueprint .content) a.tag:hover { text-decoration: underline; }
+
+/* ── needs you ── */
+:global(.jf-blueprint .content) .tone-h { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .tone-h:first-child { margin-top: 0; }
+:global(.jf-blueprint .content) .tone-h::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--tone-c, var(--ink)); }
+:global(.jf-blueprint .content) .tone-h[data-tone="now"] { --tone-c: var(--blueprint); }
+:global(.jf-blueprint .content) .tone-h[data-tone="soon"] { --tone-c: var(--desk-tone); }
+:global(.jf-blueprint .content) .tone-h[data-tone="idea"] { --tone-c: var(--warning, #b88420); }
+:global(.jf-blueprint .content) .need { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 11px 0 11px 12px; border-bottom: 1px solid var(--hair-soft); border-left: 3px solid var(--tone-c, var(--ink)); }
+:global(.jf-blueprint .content) .need:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .need[data-tone="now"] { --tone-c: var(--blueprint); }
+:global(.jf-blueprint .content) .need[data-tone="soon"] { --tone-c: var(--desk-tone); }
+:global(.jf-blueprint .content) .need[data-tone="idea"] { --tone-c: var(--warning, #b88420); }
+:global(.jf-blueprint .content) .need-t { font-size: 13.5px; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .need-who { font-size: 12.5px; font-weight: 700; margin-top: 2px; }
+:global(.jf-blueprint .content) .need .acts { justify-content: flex-end; }
+
+/* ── short visit lists ── */
+:global(.jf-blueprint .content) .vlist { display: grid; }
+:global(.jf-blueprint .content) .vline { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .vline:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .vline-when { font-family: var(--font-mono); font-size: 11px; line-height: 1.3; color: var(--muted); }
+:global(.jf-blueprint .content) .vline-when b { display: block; color: var(--ink); font-size: 12px; }
+
+/* ── the season ── */
+:global(.jf-blueprint .content) .load { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; }
+:global(.jf-blueprint .content) .bar { display: grid; gap: 5px; justify-items: center; padding: 0; border: none; background: none; font: inherit; color: var(--ink); cursor: pointer; min-width: 0; }
+:global(.jf-blueprint .content) .bar-track { position: relative; width: 100%; height: 86px; border: 1.5px solid var(--ink); border-radius: 3px; background: repeating-linear-gradient(0deg, transparent 0 20px, var(--hair-soft) 20px 21px); overflow: hidden; }
+:global(.jf-blueprint .content) .bar-fill { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(13, 122, 138, 0.28); }
+:global(.jf-blueprint .content) .bar-done { position: absolute; left: 0; right: 0; bottom: 0; background: var(--desk-tone); }
+:global(.jf-blueprint .content) .bar-n { font-family: var(--font-mono); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .bar-l { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .bar--on .bar-track { box-shadow: 2px 2px 0 var(--ink); border-color: var(--blueprint); }
+:global(.jf-blueprint .content) .bar--on .bar-l { color: var(--blueprint); }
+:global(.jf-blueprint .content) .bar:hover .bar-track { border-color: var(--blueprint); }
+:global(.jf-blueprint .content) .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+:global(.jf-blueprint .content) .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+
+/* ── filters ── */
+:global(.jf-blueprint .content) .toolbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-bottom: 12px; }
+:global(.jf-blueprint .content) .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+:global(.jf-blueprint .content) .chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1.5px solid var(--ink); border-radius: 16px; background: #fff; font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); cursor: pointer; white-space: nowrap; }
+:global(.jf-blueprint .content) .chip b { font-family: var(--font-mono); font-size: 11px; }
+:global(.jf-blueprint .content) .chip:hover { background: var(--paper); }
+:global(.jf-blueprint .content) .chip--on { background: var(--ink); color: #fff; }
+:global(.jf-blueprint .content) .chip--on:hover { background: var(--ink); }
+:global(.jf-blueprint .content) .search { flex: 1 1 220px; min-width: 0; height: 36px; padding: 0 12px; border: 1.5px solid var(--ink); border-radius: var(--radius); font: inherit; font-size: 13px; background: #fff; }
+
+/* ── the schedule ── */
+:global(.jf-blueprint .content) .month-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 18px 0 2px; padding-bottom: 6px; border-bottom: 1.5px solid var(--ink); }
+:global(.jf-blueprint .content) .month-h:first-child { margin-top: 0; }
+:global(.jf-blueprint .content) .month-h b { font-size: 13px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+:global(.jf-blueprint .content) .vrow { display: grid; grid-template-columns: 54px minmax(0, 1fr) minmax(150px, 210px) 104px 214px; gap: 10px 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .vrow:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .vrow--focus { background: var(--accent-soft, rgba(24, 84, 160, 0.08)); box-shadow: -10px 0 0 var(--accent-soft, rgba(24, 84, 160, 0.08)), 10px 0 0 var(--accent-soft, rgba(24, 84, 160, 0.08)); }
+:global(.jf-blueprint .content) .vdate { display: grid; justify-items: center; padding: 6px 0; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; line-height: 1; }
+:global(.jf-blueprint .content) .vdate b { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .vdate span { margin-top: 3px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .vt { font-size: 13.5px; font-weight: 800; }
+:global(.jf-blueprint .content) .vt .mono { font-weight: 700; margin-right: 6px; }
+:global(.jf-blueprint .content) .vrow > .acts { justify-content: flex-end; }
+:global(.jf-blueprint .content) .vmove { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 10px 12px; border: 1.5px dashed var(--ink); border-radius: var(--radius); background: var(--paper); }
+
+/* ── clients ── */
+:global(.jf-blueprint .content) .clist { display: grid; }
+:global(.jf-blueprint .content) .crow { border-bottom: 1px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .crow:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .crow--open { border-bottom: 1.5px solid var(--ink); }
+:global(.jf-blueprint .content) .crow-h {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.1fr) 22px; gap: 12px; align-items: center;
+  width: 100%; padding: 12px 0; border: none; background: none; font: inherit; text-align: left; color: var(--ink); cursor: pointer;
+}
+:global(.jf-blueprint .content) .crow-h:hover .who { text-decoration: underline; }
+:global(.jf-blueprint .content) .crow-h > * { min-width: 0; }
+:global(.jf-blueprint .content) .crow-chev { width: 18px; height: 18px; transition: transform 0.15s var(--ease); }
+:global(.jf-blueprint .content) .crow--open .crow-chev { transform: rotate(90deg); }
+:global(.jf-blueprint .content) .chead { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.1fr) 22px; gap: 12px; padding-bottom: 8px; border-bottom: 1.5px solid var(--ink); font-size: 10.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .cdetail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 4px 0 18px; }
+:global(.jf-blueprint .content) .cdetail > div { min-width: 0; }
+:global(.jf-blueprint .content) .cfoot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px dashed var(--hair); }
+:global(.jf-blueprint .content) .mini { display: grid; gap: 0; }
+:global(.jf-blueprint .content) .mini > div { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--hair-soft); font-size: 12.5px; }
+:global(.jf-blueprint .content) .mini > div:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .mini a { color: var(--ink); }
+:global(.jf-blueprint .content) .facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; font-size: 12.5px; }
+:global(.jf-blueprint .content) .facts dt { font-size: 10.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+:global(.jf-blueprint .content) .facts dd { margin: 0; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .advice { margin-top: 4px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+
+/* ── forms ── */
+:global(.jf-blueprint .content) .frm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+:global(.jf-blueprint .content) .frm .wide { grid-column: 1 / -1; }
+:global(.jf-blueprint .content) .fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+:global(.jf-blueprint .content) .lbl { font-size: 10.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .in, :global(.jf-blueprint .content) .sel, :global(.jf-blueprint .content) .ta {
+  font: inherit; font-size: 13px; padding: 8px 10px; min-height: 38px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; color: var(--ink); width: 100%; min-width: 0;
+}
+:global(.jf-blueprint .content) .sel--sm { min-height: 32px; padding: 4px 8px; font-size: 12.5px; }
+:global(.jf-blueprint .content) .ta { min-height: 76px; resize: vertical; }
+:global(.jf-blueprint .content) .chk { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+:global(.jf-blueprint .content) .switch { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper); cursor: pointer; }
+:global(.jf-blueprint .content) .switch input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--blueprint); flex-shrink: 0; }
+:global(.jf-blueprint .content) .switch b { display: block; font-size: 13px; }
+:global(.jf-blueprint .content) .steps-list { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }
+:global(.jf-blueprint .content) .steps-list b { font-weight: 800; }
+:global(.jf-blueprint .content) .preview { margin-top: 8px; padding: 12px 14px; border: 1.5px solid var(--ink); border-radius: 12px 12px 12px 3px; background: var(--paper); font-size: 13px; line-height: 1.5; max-width: 52ch; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .tpl { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+:global(.jf-blueprint .content) .tpl-card { border: 1.5px solid var(--ink); border-radius: var(--radius); padding: 14px 16px 16px; background: #fff; min-width: 0; }
+:global(.jf-blueprint .content) .tpl-terms { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin: 3px 0 8px; }
+:global(.jf-blueprint .content) .benefits { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; }
+
+/* ── reminders ── */
+:global(.jf-blueprint .content) .rem { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .rem:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .rem-t { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .rem--done .rem-t { text-decoration: line-through; color: var(--muted); font-weight: 500; }
+
+/* ── the answer line ── */
+:global(.jf-blueprint .content) .toast {
+  position: sticky; bottom: 14px; z-index: 5; justify-self: center;
+  display: flex; align-items: center; gap: 12px; max-width: min(560px, 100%);
+  padding: 10px 14px; border: var(--border); border-radius: var(--radius); background: var(--ink); color: #fff;
+  font-size: 13px; line-height: 1.4; box-shadow: 3px 3px 0 var(--shadow);
+}
+:global(.jf-blueprint .content) .toast--err { background: #fff; color: var(--danger, #a83232); border-color: var(--danger, #a83232); }
+:global(.jf-blueprint .content) .toast button { margin-left: auto; background: none; border: none; color: inherit; font: inherit; font-weight: 800; cursor: pointer; padding: 4px; }
+
+@media (max-width: 1100px) {
+  :global(.jf-blueprint .content) .grid2, :global(.jf-blueprint .content) .grid2--even { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .cdetail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  :global(.jf-blueprint .content) .page-title { font-size: 34px; }
+  :global(.jf-blueprint .content) .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .step:nth-child(2) { border-right: none; }
+  :global(.jf-blueprint .content) .step:nth-child(-n+2) { border-bottom: 1.5px solid var(--ink); }
+  :global(.jf-blueprint .content) .kpis { grid-template-columns: 1fr 1fr; }
+  :global(.jf-blueprint .content) .kpi:nth-child(2) { border-right: none; }
+  :global(.jf-blueprint .content) .kpi:nth-child(-n+2) { border-bottom: 1.5px solid var(--ink); }
+  :global(.jf-blueprint .content) .card { padding: 14px 14px 16px; }
+  :global(.jf-blueprint .content) .frm { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .chead { display: none; }
+  :global(.jf-blueprint .content) .crow-h { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 22px; }
+  /* client + chevron, then plan | next visit, then visits·bills | belongs to — every piece placed, none auto-flowed into the chevron's 22px. */
+  :global(.jf-blueprint .content) .crow-h { row-gap: 8px; }
+  :global(.jf-blueprint .content) .crow-h > :nth-child(1) { grid-column: 1 / 3; grid-row: 1; }
+  :global(.jf-blueprint .content) .crow-h > :nth-child(2) { grid-column: 1; grid-row: 2; }
+  :global(.jf-blueprint .content) .crow-h > :nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
+  :global(.jf-blueprint .content) .crow-h > :nth-child(4) { grid-column: 1; grid-row: 3; }
+  :global(.jf-blueprint .content) .crow-h > :nth-child(5) { grid-column: 2 / 4; grid-row: 3; }
+  :global(.jf-blueprint .content) .crow-h > :nth-child(6) { grid-column: 3; grid-row: 1; }
+  :global(.jf-blueprint .content) .cdetail { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .vrow { grid-template-columns: 50px minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .vrow .acts { justify-content: flex-start; }
+  :global(.jf-blueprint .content) .vrow > :nth-child(n+3) { grid-column: 2; }
+  :global(.jf-blueprint .content) .load { gap: 3px; }
+  :global(.jf-blueprint .content) .bar-track { height: 64px; }
+  :global(.jf-blueprint .content) .bar-l { font-size: 9px; letter-spacing: 0.04em; }
+  :global(.jf-blueprint .content) .need { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .need .acts { justify-content: flex-start; }
+  :global(.jf-blueprint .content) .rem { grid-template-columns: auto minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .rem > .acts { grid-column: 1 / -1; }
+}
+
+@media (max-width: 520px) {
+  :global(.jf-blueprint .content) .step { grid-template-columns: 26px minmax(0, 1fr); padding: 12px; gap: 3px 9px; }
+  :global(.jf-blueprint .content) .step-n { width: 26px; height: 26px; font-size: 12px; }
+  :global(.jf-blueprint .content) .step-t { font-size: 12.5px; }
+  :global(.jf-blueprint .content) .step-s { font-size: 10.5px; }
+  :global(.jf-blueprint .content) .kpi { padding: 12px 12px 14px; }
+  :global(.jf-blueprint .content) .kpi-val { font-size: 26px; }
+  :global(.jf-blueprint .content) .kpi-lbl { letter-spacing: 0.1em; font-size: 10px; }
+  :global(.jf-blueprint .content) .tab { padding: 0 13px; height: 40px; font-size: 11px; letter-spacing: 0.08em; }
+  :global(.jf-blueprint .content) .page-actions { width: 100%; }
+  :global(.jf-blueprint .content) .page-actions > * { flex: 1 1 auto; }
+}

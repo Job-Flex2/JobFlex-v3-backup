@@ -57,8 +57,9 @@ checkEq("6° is racked", run(200, 6).segs[0].cls, "racked");
 checkEq("25° is racked (boundary)", run(200, 25).segs[0].cls, "racked");
 const t30 = run(200, 30);
 checkEq("30° is stepped", t30.segs[0].cls, "stepped");
-checkEq("30° steps (200 ft, 8 ft bays)", t30.segs[0].steps, 25);
-check("30° drop per step", t30.segs[0].stepDropFt ?? 0, (200 * Math.tan((30 * Math.PI) / 180)) / 25, 0.05);
+// 115 ft of fall over 200 ft wants a step every 1.7 ft; the shortest bay (2 ft) holds: 100 steps (a wall past that).
+checkEq("30° steps (200 ft): a step every 2 ft, the shortest bay", t30.segs[0].steps, 100);
+check("30° drop per step", t30.segs[0].stepDropFt ?? 0, (200 * Math.tan((30 * Math.PI) / 180)) / 100, 0.05);
 
 // ── a dip inside a segment still buys its footage even with zero net rise ──
 {
@@ -72,7 +73,8 @@ check("30° drop per step", t30.segs[0].stepDropFt ?? 0, (200 * Math.tan((30 * M
   const elev = Array.from({ length: seg.count }, (_, k) => 100 - Math.abs(k - mid) * ds * rise + mid * ds * rise);
   const t = terrainFromProfile(s.segs, elev);
   check("valley: grade > plan despite zero net rise", t.gradeFt, 200 / Math.cos((15 * Math.PI) / 180), 0.5);
-  checkEq("valley: net class is level (rise ≈ 0)", t.segs[0].cls, "level");
+  // Down and back up is rolling ground (2026-09-28: "up and down — step it"), whatever the net rise.
+  checkEq("valley: rolling ground steps (rise ≈ 0)", t.segs[0].cls, "stepped");
 }
 
 // ── assumption strings ──

@@ -328,12 +328,12 @@ function ClientRecordPage({ view }: { view: ClientDetailRecord }) {
                     <form action={renewServicePlan.bind(null, PLAN.id)}><button type="submit" className="btn btn-primary btn--sm">Renew now</button></form>
                   )}
                   <form action={cancelServicePlan.bind(null, PLAN.id)}><button type="submit" className="btn btn-ghost btn--sm">Cancel plan</button></form>
-                  <a href="/dashboard/service-plans" className="btn btn-ghost btn--sm">All plans</a>
+                  <a href="/dashboard/hvac-estimator/service-desk?tab=clients" className="btn btn-ghost btn--sm">All plans</a>
                 </div>
               </>
             ) : view.planTemplates.length === 0 ? (
               <EmptyNote kicker="No plans yet">
-                Set up the plans you sell on the <a href="/dashboard/service-plans" style={{ textDecoration: "underline" }}>Service plans</a> page — three starter plans are one click away.
+                Set up the plans you sell on the <a href="/dashboard/hvac-estimator/service-desk?tab=plans" style={{ textDecoration: "underline" }}>HVAC services</a> page — three starter plans are one click away.
               </EmptyNote>
             ) : (
               <form action={enrollClientInPlan} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }} data-client-plan-enroll>

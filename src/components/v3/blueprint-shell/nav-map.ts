@@ -88,7 +88,15 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Blueprint estimator", icon: "i-plans", href: "/dashboard/blueprint-estimator", tool: { tone: "navy" } },
       // The Home Design Studio (owner, 2026-10-17: "only in admin … not for the users"): the blueprint read into rooms,
       // a kitchen designed in 3D, priced and made a proposal — for the accounts lib/design/access opens, no one else.
-      { label: "Design Studio", icon: "i-sofa", href: "/dashboard/design-studio", tool: { tone: "olive" }, preview: true },
+      // Its inventory folds under it like every estimator's (2026-10-18): the shop's own products a design can use.
+      {
+        label: "Design Studio",
+        icon: "i-sofa",
+        href: "/dashboard/design-studio",
+        tool: { tone: "olive" },
+        preview: true,
+        children: [{ label: "Design inventory", icon: "i-folder", href: "/dashboard/design-studio/inventory" }],
+      },
       // Each estimator folds its own inventory under it (owner, 2026-10-10:
       // "a roofer doesn't have to see the other inventories"). The three
       // shared one page with a trade switch from 2026-09-29; before that they
@@ -123,7 +131,13 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/dashboard/hvac-estimator",
         tool: { tone: "teal" },
         // The HVAC service menu is a tab of it.
-        children: [{ label: "HVAC inventory", icon: "i-folder", href: "/dashboard/hvac-estimator/inventory" }],
+        // HVAC services (owner, 2026-10-18: "make the service a sub-row under the inventory"): the service
+        // desk — maintenance plans, their visits, the clients on them, the contractor's reminders. It took
+        // over the Money section's "Service plans" row, whose address forwards here.
+        children: [
+          { label: "HVAC inventory", icon: "i-folder", href: "/dashboard/hvac-estimator/inventory" },
+          { label: "HVAC services", icon: "i-check", href: "/dashboard/hvac-estimator/service-desk" },
+        ],
       },
       // The deck estimator (2026-10-04): marked Coming soon for everyone,
       // open to admins for testing (lib/deck/access).
@@ -154,9 +168,8 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Money",
     items: [
       { label: "Financials", icon: "i-bank", href: "/dashboard/financials" },
-      // Memberships (2026-09-22): the plans a shop sells, its members, the
-      // visits and the bills they bring.
-      { label: "Service plans", icon: "i-check", href: "/dashboard/service-plans" },
+      // Memberships (2026-09-22) moved under the HVAC estimator as "HVAC services" (2026-10-18) — one
+      // service desk instead of a Money page; /dashboard/service-plans forwards there.
       // /dashboard/subscription IS the blueprint page now (owner promoted the
       // port 2026-08-12; the classic "Well-Kept Ledger" donor was deleted with
       // it and this URL taken over). The responsive staging build — desktop

@@ -6,6 +6,7 @@
 import { readVectorSheet, layerRole, type VectorSheet } from "./pdfVector";
 import type { SheetText } from "./planRead";
 import { classifySheet, type SheetClass } from "./planSet";
+import { drawPage } from "../plans/pdfDraw";
 
 export const MAX_SHEETS = 60;
 export const MAX_FILE_BYTES = 120 * 1024 * 1024;
@@ -105,7 +106,8 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
     const bg = big.getContext("2d")!;
     bg.fillStyle = "#fff";
     bg.fillRect(0, 0, big.width, big.height);
-    await page.render({ canvasContext: bg, viewport: pvp }).promise;
+    // Drawn without animation frames: a tab in the back still opens its plans (lib/plans/pdfDraw).
+    await drawPage(page, bg, pvp).catch(() => undefined);
     const preview = big.toDataURL("image/jpeg", 0.72);
     const c = document.createElement("canvas");
     const ts = THUMB_PX / Math.max(big.width, big.height);
@@ -159,7 +161,7 @@ async function pdfSheets(file: File, onPage?: () => void): Promise<DesignSheet[]
         const g = cc.getContext("2d")!;
         g.fillStyle = "#fff";
         g.fillRect(0, 0, cc.width, cc.height);
-        await page.render({ canvasContext: g, viewport: rvp }).promise;
+        await drawPage(page, g, rvp);
         const url = cc.toDataURL("image/jpeg", 0.82);
         const res = { url, scale, w: cc.width, h: cc.height };
         cc.width = cc.height = 0;

@@ -19,6 +19,7 @@ export type PrefKey =
   | "change-order"
   | "appointment-booked"
   | "appointment-moved"
+  | "service-reminder"
   | "job-scheduled"
   | "job-started"
   | "job-completed"
@@ -68,6 +69,10 @@ export const PREF_EVENTS: readonly PrefEventMeta[] = [
   { key: "change-order", name: "Change order answered", sub: "The client approved or declined it", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: false }, example: "Sarah Mitchell approved change order #2 \"Skylight flashing\" ($640) on \"Standing-seam metal · 18412 92nd Ave NE\"." },
   { key: "appointment-booked", name: "Appointment booked", sub: "A visit goes on the calendar — by the team or online", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Booked: Roof inspection · Sarah Mitchell · Tue Oct 7, 9 AM–10 AM · 18412 92nd Ave NE · online." },
   { key: "appointment-moved", name: "Appointment moved or cancelled", sub: "A visit changes day or time, or comes off the calendar", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Moved: Roof inspection · Sarah Mitchell — was Tue Oct 7, 9 AM, now Thu Oct 9, 1 PM." },
+  // HVAC services (2026-10-18): the service desk's own reminders — one digest a day, a heads-up before plan
+  // visits, the contractor's own reminders on their day (lib/serviceDeskBook). In the bell for everyone;
+  // texted to the office members who switch it on.
+  { key: "service-reminder", name: "Service reminders", sub: "HVAC service: the day's plan visits, visits coming up, late plan bills, your own reminders", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true }, example: "Northpeak Heating & Air: HVAC service — Today: 2 visits — 9:00 AM Mark Ellis; 11:00 AM Jenna Brooks. Thu, Oct 23: 1 visit — confirm the times. Reminder: call about the filter (Mark Ellis). jobflex.app/…" },
   { key: "job-scheduled", name: "Job scheduled", sub: "A job gets its install date", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Scheduled: \"Standing-seam metal · 18412 92nd Ave NE\" — Mon Oct 13, 8 AM at 18412 92nd Ave NE." },
   // The crew on site (2026-09-27): the office hears when work starts, when a
   // crew is back for another day, when it is done, and when photos or a
@@ -302,6 +307,15 @@ export function prefKeyForEvent(e: EventLike): PrefKey | null {
     case "PAYMENT_RECEIVED":
     case "PAYMENT_MARKED":
       return "payment-received";
+    // The service side's own notices (2026-09-22 plans, 2026-10-18 desk): the day's digest, the heads-up,
+    // the contractor's reminders, a plan visit two weeks out, a plan ending or ended.
+    case "PLAN_DIGEST":
+    case "PLAN_HEADS_UP":
+    case "PLAN_REMINDER":
+    case "PLAN_VISIT_DUE":
+    case "PLAN_EXPIRING":
+    case "PLAN_EXPIRED":
+      return "service-reminder";
     default:
       return null;
   }

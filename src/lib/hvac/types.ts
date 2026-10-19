@@ -46,6 +46,11 @@ export type DuctLocation = "conditioned" | "attic" | "crawl" | "basement" | "non
 export type DuctCondition = "good" | "fair" | "poor" | "unknown";
 export type RoofColor = "dark" | "medium" | "light";
 export type Shading = "none" | "some" | "heavy";
+/** What the exterior walls are built of (2026-10-18): it moves the wall's heat flow and, with mass, softens the peak. */
+export type WallConstruction = "wood-frame" | "brick-veneer" | "masonry" | "sip-icf";
+/** The siding's (or the brick's) colour — light, medium or dark — for the sun on the walls. */
+export type SidingColor = "light" | "medium" | "dark";
+export type DoorType = "insulated" | "solid-wood" | "old-hollow";
 export type Fuel = "gas" | "electric" | "propane" | "oil" | "none";
 export type ExistingKind =
   | "split-ac-furnace"
@@ -110,6 +115,9 @@ export interface Ducts {
   returnDuct?: string;
   /** The branch runs' diameter, inches (6 in most houses). */
   branchIn?: number;
+  /** A duct-leakage test (2026-10-18): leakage to OUTSIDE at 25 Pa, CFM25. It replaces the location's typical
+   *  leakage in the duct loss and gain — the condition guess stands aside. */
+  leakageCfm25?: number;
 }
 
 export interface Gas {
@@ -177,6 +185,29 @@ export interface BuildingModel {
   roofColor: RoofColor;
   shading: Shading;
   occupants: number;
+
+  /* THE ENVELOPE IN DETAIL (2026-10-18, an HVAC pro on the ad: "you need insulation amount and type, window type
+     and size, roof colour, siding colour and more"). All optional: a field left empty is the default the load has
+     always used, so every older estimate prices the same. */
+  /** Glass facing each way, sq ft. Any of them set: their sum is the window area and the sun is split by them,
+   *  instead of the total spread along the walls by their length. */
+  glassNorthSqft?: number;
+  glassEastSqft?: number;
+  glassSouthSqft?: number;
+  glassWestSqft?: number;
+  /** Skylights, sq ft of glass (an average skylight is about 8). Default none. */
+  skylightSqft?: number;
+  /** Exterior doors, counted (default two a storey, up to two storeys), and what they are. */
+  doorCount?: number;
+  doorType?: DoorType;
+  /** Default wood frame. */
+  wallConstruction?: WallConstruction;
+  /** Default medium. */
+  sidingColor?: SidingColor;
+  /** A blower-door test: CFM50 as read off the gauge (the house's volume turns it into ACH50), or ACH50 from the
+   *  report. Either replaces the tightness class. */
+  blowerDoorCfm50?: number;
+  blowerDoorAch50?: number;
 
   /** A whole-house ventilation fan (exhaust, supply, HRV / ERV). Unset = the
    *  era rule (tight, or built 2012 or later, runs one); false = none, so no

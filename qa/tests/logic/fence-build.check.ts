@@ -66,7 +66,7 @@ check("without a build the old privacy run comes out as it always did (8 ft, one
 // ── the ground: stepped bays split at a code step, with extra posts
 const hill = (x: number) => -x * 0.3; // 30 % grade down the x axis
 const layHill = computeFenceLayout([{ x: 0, y: 0 }, { x: 16, y: 0 }], [], { build: cedar6, groundAt: hill, segClass: () => "stepped" });
-check("a stepped 16 ft run dropping 4.8 ft is not two 2.4 ft cliffs: each bay splits in three ≤ 1 ft steps (7 posts, 6 bays — the takeoff's 2 × 3)", layHill.postCount === 7 && layHill.bayCount === 6 && layHill.steppedBays === 6, `${layHill.postCount} posts · ${layHill.bayCount} bays`);
+check("a stepped 16 ft run dropping 4.8 ft is not two 2.4 ft cliffs: five even ≤ 1 ft steps (6 posts, 5 bays)", layHill.postCount === 6 && layHill.bayCount === 5 && layHill.steppedBays === 5, `${layHill.postCount} posts · ${layHill.bayCount} bays`);
 // The ticket's count wins over the ground under each bay (vinyl: 29 drawn, 31 priced).
 const layPriced = computeFenceLayout([{ x: 0, y: 0 }, { x: 16, y: 0 }], [], { build: cedar6, groundAt: hill, segClass: () => "stepped", segSteps: () => 5 });
 check("given the ticket's step count, the 3D draws exactly that many equal steps", layPriced.steppedBays === 5 && layPriced.bayCount === 5 && layPriced.postCount === 6, `${layPriced.steppedBays} steps · ${layPriced.postCount} posts`);
@@ -91,7 +91,7 @@ check("the same net fall over rolling ground steps", rolling.segs[0].cls === "st
 const hump = terrainFromProfile([seg(40, 5)], [0, 0.4, 1.6, 0.3, 0.1], { sectionFt: 8, rackMaxDeg: 20 });
 check("a hump on level ground steps too — a racked panel would bury or hang", hump.segs[0].cls === "stepped" && hump.segs[0].rolling === true);
 const steep = terrainFromProfile([seg(40, 5)], [0, -4, -8, -12, -16], { sectionFt: 8, rackMaxDeg: 20 });
-check("steeper than the build can rack (22° > 20°) steps, with one step per 8 ft bay (5)", steep.segs[0].cls === "stepped" && steep.segs[0].steps === 5 && !steep.segs[0].rolling);
+check("steeper than the build can rack (22° > 20°) steps — a step per foot of its 16 ft fall", steep.segs[0].cls === "stepped" && steep.segs[0].steps === 16 && !steep.segs[0].rolling, String(steep.segs[0].steps));
 const steepPanel = terrainFromProfile([seg(40, 5)], [0, -1.5, -3, -4.5, -6], { sectionFt: 8, rackMaxDeg: 4 });
 const steepStick = terrainFromProfile([seg(40, 5)], [0, -1.5, -3, -4.5, -6], { sectionFt: 8, rackMaxDeg: 20 });
 check("the same 15 % grade (8.5°) racks stick-built and steps a prefab panel", steepStick.segs[0].cls === "racked" && steepPanel.segs[0].cls === "stepped", `${steepStick.segs[0].cls} / ${steepPanel.segs[0].cls}`);
@@ -100,7 +100,7 @@ check("a 5 % grade (under 5°) is level even for a panel", gentle.segs[0].cls ==
 const chainRacks = terrainFromProfile([seg(40, 5)], [0, -4, -8, -12, -16], { sectionFt: 10, rackMaxDeg: 25 });
 check("chain link follows a 22° hill (under its 25°)", chainRacks.segs[0].cls === "racked");
 const chainSteps = terrainFromProfile([seg(40, 5)], [0, -6, -12, -18, -24], { sectionFt: 10, rackMaxDeg: 25 });
-check("past that it steps, counted at the type's spacing: 4 bays at 10 ft", chainSteps.segs[0].cls === "stepped" && chainSteps.segs[0].steps === 4, String(chainSteps.segs[0].steps));
+check("past that it steps — 24 ft of fall over 40 ft: a step every 2 ft, the shortest bay (20)", chainSteps.segs[0].cls === "stepped" && chainSteps.segs[0].steps === 20, String(chainSteps.segs[0].steps));
 const flat = terrainFromProfile([seg(40, 5)], [10, 10.1, 10, 9.9, 10], {});
 check("flat ground is level, no rules needed", flat.segs[0].cls === "level" && !flat.segs[0].rolling);
 const shape = profileShape([0, 1, 2, 1, 0]);

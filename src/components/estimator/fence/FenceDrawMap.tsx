@@ -303,7 +303,7 @@ export type FenceDrawMapProps = {
   /** What is being traced, whenever it changes. */
   onDraftChange?: (state: DraftState) => void;
   /** A dot was placed with the touch reticle (hold, drag, release) — the host
-   *  retires its one-time "hold and drag to aim" hint. */
+   *  retires its one-time "hold, then drag to aim" hint. */
   onTouchAim?: () => void;
 };
 
@@ -1858,20 +1858,23 @@ export function FenceDrawMap({
 
         // ── Touch aim ──────────────────────────────────────────────────────
         // A phone has no cursor and the finger covers the corner it is going
-        // for. So while tracing, ONE finger aims instead of panning: a reticle
-        // rides AIM_LIFT_PX above the finger, runs the same snapping the mouse
-        // does (onMove), and the dot goes where the reticle is when the finger
+        // for. So a finger HELD still for AIM_HOLD_MS aims: a reticle rides
+        // AIM_LIFT_PX above the finger, runs the same snapping the mouse does
+        // (onMove), and the dot goes where the reticle is when the finger
         // lifts (onMapClick) — nothing about what snaps to what is decided
         // here. A quick tap is still Google's click, placed under the finger.
-        // Two fingers pan and zoom as ever: a second finger calls the aim off.
-        // Only single-finger MOVES are kept from Google (so it never pans on
-        // them); it still sees every touch start and end, which is what lets
-        // a pinch that begins one finger at a time work. Google follows a
-        // gesture from listeners it puts on the document when the finger lands,
-        // so the moves are stopped at the WINDOW, in the capture phase — the
-        // one place that is ahead of them.
+        // A finger that MOVES before the hold is up is moving the map (owner,
+        // 2026-10-18: "hard to zoom in or move the map because it starts
+        // drawing lines"): the aim stands down and Google pans, as any map
+        // does; two fingers pinch and pan as ever, and a second finger calls
+        // an aim off. Only an aiming finger's moves are kept from Google (so
+        // it does not pan while aiming); it still sees every touch start and
+        // end, which is what lets a pinch that begins one finger at a time
+        // work. Google follows a gesture from listeners it puts on the
+        // document when the finger lands, so the moves are stopped at the
+        // WINDOW, in the capture phase — the one place that is ahead of them.
         const AIM_LIFT_PX = 56;
-        const AIM_HOLD_MS = 220;
+        const AIM_HOLD_MS = 320;
         const AIM_SLOP_PX = 10;
         const HANDLE_PX = 16;
         const mountEl = mountRef.current as HTMLDivElement;
@@ -2162,6 +2165,7 @@ export function FenceDrawMap({
               if (aim === a && !a.live) {
                 a.live = true;
                 suppressClickUntil = Number.POSITIVE_INFINITY;
+                buzz(); // felt as well as seen: from here the finger aims, it no longer moves the map
                 renderAim();
               }
             }, AIM_HOLD_MS);
@@ -2176,21 +2180,21 @@ export function FenceDrawMap({
           }
           const t = touchOf(ev.touches, aim.id);
           if (!t) return;
-          // One finger while tracing never pans: Google does not get the move,
-          // and the page under the map does not scroll.
+          if (!aim.live) {
+            // Moving before the hold is up: the finger is moving the map. The
+            // aim stands down (no dot on release) and Google pans with it.
+            movedPress(t.clientX, t.clientY);
+            if (Math.hypot(t.clientX - aim.x0, t.clientY - aim.y0) > AIM_SLOP_PX * hostZoom) cancelAim(true);
+            return;
+          }
+          // An aiming finger never pans: Google does not get the move, and the
+          // page under the map does not scroll.
           ev.stopImmediatePropagation();
           if (ev.cancelable) ev.preventDefault();
           aim.x = t.clientX;
           aim.y = t.clientY;
           movedPress(aim.x, aim.y);
-          if (!aim.live && Math.hypot(aim.x - aim.x0, aim.y - aim.y0) > AIM_SLOP_PX * hostZoom) {
-            aim.live = true;
-            // Closed NOW, not at touchend: Google reports its tap on pointerup,
-            // which the browser dispatches before the touchend heard here.
-            suppressClickUntil = Number.POSITIVE_INFINITY;
-            window.clearTimeout(aim.timer);
-          }
-          if (aim.live) renderAim();
+          renderAim();
         };
         const onTouchEnd = (ev: TouchEvent) => {
           lastTouchAt = performance.now();
@@ -2220,7 +2224,7 @@ export function FenceDrawMap({
         };
         // Google listens with pointer events where it can: the same rule there.
         const onPointerMoveCapture = (ev: PointerEvent) => {
-          if (aim && ev.pointerType === "touch") ev.stopImmediatePropagation();
+          if (aim?.live && ev.pointerType === "touch") ev.stopImmediatePropagation();
         };
         // A long press is a context menu on Android, which Google reports as a
         // right-click — and a right-click ends the run being aimed.

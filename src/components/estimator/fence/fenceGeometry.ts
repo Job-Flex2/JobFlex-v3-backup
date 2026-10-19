@@ -29,7 +29,7 @@
 // flat fence.
 import type { PathPoint, GateSpec, OpeningKind, OpeningVariant } from "./fenceTypes";
 import { DEFAULT_FENCE_BUILD, type FenceBuild } from "@/lib/fence/build";
-import { MAX_STEP_DROP_FT } from "@/lib/fence/slope";
+import { panelBase, stepStations } from "@/lib/fence/slope";
 
 export const POST_SPACING_FT = 8; // max bay width; runs subdivide evenly to stay ≤ this
 export const PICKET_WIDTH_FT = 0.46; // ~5.5"
@@ -386,21 +386,16 @@ export function computeFenceLayout(
     let stations: number[] = [];
     for (let k = 0; k <= bayN; k++) stations.push(k === bayN ? len : step * k);
     const priced = stepped ? opts.segSteps?.(i) : null;
-    if (stepped && groundAt && priced && priced >= 1) {
-      // The ticket's count, in equal steps: what the client is charged for is what stands.
-      const n = Math.min(bayN * 12, Math.round(priced));
-      stations = [];
-      for (let k = 0; k <= n; k++) stations.push(k === n ? len : (len * k) / n);
-    } else if (stepped && groundAt) {
-      const refined: number[] = [stations[0]];
-      for (let k = 1; k < stations.length; k++) {
-        const s0 = stations[k - 1];
-        const s1 = stations[k];
-        const drop = Math.abs(g(a.x + ux * s1, a.y + uy * s1) - g(a.x + ux * s0, a.y + uy * s0));
-        const splits = Math.min(12, Math.max(1, Math.ceil(drop / MAX_STEP_DROP_FT - 1e-6)));
-        for (let m = 1; m <= splits; m++) refined.push(s0 + ((s1 - s0) * m) / splits);
-      }
-      stations = refined;
+    // A stepped segment on real ground: the posts where the ground spends a step (lib/fence/slope stepStations) —
+    // close down the steep part, a bay apart on the flat — exactly the ticket's count when there is one.
+    let profile: number[] | null = null;
+    let profileDs = 1;
+    if (stepped && groundAt) {
+      const nS = Math.max(2, Math.ceil(len));
+      profileDs = len / nS;
+      profile = [];
+      for (let k = 0; k <= nS; k++) profile.push(g(a.x + ux * profileDs * k, a.y + uy * profileDs * k));
+      stations = stepStations(profile, profileDs, spacing, { count: priced });
     }
     const first = posts.length / 3;
     for (let k = 0; k < stations.length - 1; k++) {
@@ -418,8 +413,11 @@ export function computeFenceLayout(
       const s1 = stations[k + 1];
       const ga = postBase[first + k];
       const gb = k + 1 < bayCountHere ? postBase[first + k + 1] : endGround;
-      const za = stepped ? Math.max(ga, gb) : ga;
-      const zb = stepped ? Math.max(ga, gb) : gb;
+      // A stepped bay is level on the HIGH ground under it (not only at its ends): it never buries, and hangs at most
+      // one step over the dips.
+      const level = stepped ? (profile ? panelBase(profile, profileDs, s0, s1) : Math.max(ga, gb)) : 0;
+      const za = stepped ? level : ga;
+      const zb = stepped ? level : gb;
       segBays.push([s0, s1, za, zb]);
       bays.push(a.x + ux * s0, a.y + uy * s0, za, a.x + ux * s1, a.y + uy * s1, zb, stepped ? 1 : 0);
       if (stepped) steppedBays++;
