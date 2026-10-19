@@ -14,6 +14,7 @@ import type { Room } from "@/lib/design/geometry";
 import { autoKitchen, kitchenFromPlan, frameOf } from "@/lib/design/kitchen";
 import { autoFurnish, furnishedSummary, kindOfRoom, KIND_LABEL, KIT } from "@/lib/design/rooms";
 import { roomFinishes } from "@/lib/design/roomKinds";
+import { applyProduct, productName, productOf, productsFor, stockWords, type DesignProduct } from "@/lib/design/inventory";
 import { CABINET_COLORS, COUNTERS, FLOORS, HARDWARE_HEX, LIBRARY, PAINTS, SPLASHES, itemCode, lib, type LibCat } from "@/lib/design/library";
 import type { Selection, Tool } from "./plan-editor";
 import { ChecksPanel } from "./checks-panel";
@@ -33,6 +34,8 @@ type Props = {
   onLaidOut?: () => void;
   /** The smart checks for this room and the house (milestone 5). */
   checks?: Check[];
+  /** The shop's own products (its inventory): placed as they are, sized as they are. */
+  products?: readonly DesignProduct[];
 };
 
 const CATS: Array<{ cat: LibCat; label: string }> = [
@@ -72,7 +75,7 @@ const WOODS = [
 const FABRIC_PIECES = new Set(["SOFA", "ARM", "OCH", "LNG", "RUG"]);
 const WOOD_PIECES = new Set(["BED", "NS", "DRS", "SBD", "CTB", "STB", "CON", "DSK", "TVC", "SHF", "BNC"]);
 
-export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool, onPatch, onLaidOut, checks = [] }: Props) {
+export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool, onPatch, onLaidOut, checks = [], products = [] }: Props) {
   const [tab, setTab] = React.useState<"layout" | "add" | "finishes" | "checks">("layout");
   const openChecks = checks.filter((c) => !c.ok).length;
   const [notes, setNotes] = React.useState<string[]>([]);
@@ -103,7 +106,7 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
 
   return (
     <>
-      {selItem ? <ItemCard it={selItem} onPatch={onPatch} onSelect={onSelect} /> : null}
+      {selItem ? <ItemCard it={selItem} onPatch={onPatch} onSelect={onSelect} products={products} uses={(doc.items ?? []).filter((i) => i.opts?.product && i.opts.product === selItem.opts?.product).length} /> : null}
       <section className={s.card} data-design-panel>
         <div className={s.head}>
           <div className={s.seg} role="tablist" aria-label="Design" style={{ display: "flex", width: "100%" }}>
@@ -254,6 +257,35 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
                 </p>
               ) : null}
               <input className={s.in} value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a piece — vanity, sofa, bed…" aria-label="Find a piece" data-design-find />
+              {(() => {
+                const q = find.trim().toLowerCase();
+                const mine = products.filter((p) => (q ? `${productName(p)} ${lib(p.lib)?.name ?? ""}`.toLowerCase().includes(q) : KIT[kind].includes(p.lib)));
+                return (
+                  <div style={{ display: "grid", gap: 6 }} data-design-add-group="products">
+                    <span className={s.lbl}>Your products{q ? "" : ` for this ${kind === "other" ? "room" : KIND_LABEL[kind].toLowerCase()}`}</span>
+                    {mine.length ? (
+                      <div style={{ display: "grid", gap: 6 }}>
+                        {mine.map((p) => (
+                          <button key={p.id} type="button" className={`${s.btn} ${s.btnSm} ${tool === `place:${p.lib}#${p.id}` ? s.btnOn : ""}`} style={{ justifyContent: "space-between", height: "auto", minHeight: 34, padding: "6px 10px", textAlign: "left", gap: 8 }} onClick={() => onTool(`place:${p.lib}#${p.id}`)} title={`${lib(p.lib)?.name} · ${p.w} × ${p.d} × ${p.h} in`} data-design-add={`product:${p.id}`}>
+                            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{productName(p)}</span>
+                            <span style={{ whiteSpace: "nowrap", opacity: 0.8 }}>
+                              {p.price != null ? `$${Math.round(p.price).toLocaleString("en-US")} · ` : ""}
+                              {p.onHand} in stock
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={s.note}>
+                        {products.length ? "None of your products are for this room — the pieces below are generic." : "Add the products you sell — brand, model, size, price — and place them here as they are."}{" "}
+                        <a className={s.link} href="/dashboard/design-studio/inventory">
+                          Your inventory
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
               {[
                 ...(find.trim() ? [] : [{ key: "kit", label: `For this ${kind === "other" ? "room" : KIND_LABEL[kind].toLowerCase()}`, list: KIT[kind].map((id) => lib(id)).filter((e): e is NonNullable<typeof e> => !!e) }]),
                 ...CATS.map((c) => ({ key: c.cat, label: c.label, list: LIBRARY.filter((e) => e.cat === c.cat && (!find.trim() || e.name.toLowerCase().includes(find.trim().toLowerCase()))) })),
@@ -370,17 +402,24 @@ export function DesignPanel({ doc, room, focus, selected, onSelect, tool, onTool
   );
 }
 
-function ItemCard({ it, onPatch, onSelect }: { it: DesignItem; onPatch: Props["onPatch"]; onSelect: Props["onSelect"] }) {
+function ItemCard({ it, onPatch, onSelect, products, uses }: { it: DesignItem; onPatch: Props["onPatch"]; onSelect: Props["onSelect"]; products: readonly DesignProduct[]; uses: number }) {
   const e = lib(it.lib);
   if (!e) return null;
+  const mine = productsFor(products, it.lib);
+  const product = productOf(it, products);
   const set = (fn: (x: DesignItem) => void) =>
     onPatch((d) => {
       const x = (d.items ?? []).find((y) => y.id === it.id);
       if (x) fn(x);
     });
+  // A product has its one size: resized, the piece is a generic one again.
+  const unproduct = (x: DesignItem) => {
+    if (x.opts?.product) delete x.opts.product;
+  };
   // Resizing keeps the item's back edge and its left end where they are.
   const resizeW = (w: number) =>
     set((x) => {
+      unproduct(x);
       const { u } = frameOf(x);
       const dw = w - x.w;
       x.x += (u.x * dw) / 2;
@@ -389,6 +428,7 @@ function ItemCard({ it, onPatch, onSelect }: { it: DesignItem; onPatch: Props["o
     });
   const resizeD = (dd: number) =>
     set((x) => {
+      unproduct(x);
       const { f } = frameOf(x);
       const delta = dd - x.d;
       x.x += (f.x * delta) / 2;
@@ -401,7 +441,7 @@ function ItemCard({ it, onPatch, onSelect }: { it: DesignItem; onPatch: Props["o
         <div>
           <div className={s.cardTitle}>{e.name}</div>
           <p className={s.cardSub}>
-            {itemCode(it)} · {Math.round(it.w)} × {Math.round(it.d)} × {Math.round(it.h)} in{it.z > 0 ? ` · ${Math.round(it.z)} in up` : ""}
+            {itemCode(it)} · {inch(it.w)} × {inch(it.d)} × {inch(it.h)} in{it.z > 0 ? ` · ${Math.round(it.z)} in up` : ""}
           </p>
         </div>
         <button
@@ -418,6 +458,44 @@ function ItemCard({ it, onPatch, onSelect }: { it: DesignItem; onPatch: Props["o
         </button>
       </div>
       <div className={s.body}>
+        {mine.length || product ? (
+          <div style={{ display: "grid", gap: 6 }} data-design-item-product>
+            <label className={s.field}>
+              <span className={s.lbl}>Product</span>
+              <select
+                className={s.in}
+                value={product?.id ?? ""}
+                onChange={(ev) => {
+                  const p = products.find((x) => x.id === ev.target.value) ?? null;
+                  set((x) => Object.assign(x, applyProduct(x, p)));
+                }}
+                data-design-item-product-pick
+              >
+                <option value="">Generic {e.name.toLowerCase()}</option>
+                {mine.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {productName(p)} · {p.w} in
+                  </option>
+                ))}
+              </select>
+            </label>
+            {product ? (
+              <p className={`${s.note} ${product.onHand >= uses ? s.noteGood : ""}`}>
+                {product.price != null ? `$${product.price.toLocaleString("en-US")} each · ` : "No price yet · "}
+                {stockWords(product, Math.max(1, uses))}
+                {uses > 1 ? ` for the ${uses} in this design` : ""}
+                {product.url ? (
+                  <>
+                    {" · "}
+                    <a className={s.link} href={product.url} target="_blank" rel="noreferrer noopener">
+                      supplier
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className={s.fields}>
           <label className={s.field}>
             <span className={s.lbl}>Width</span>
@@ -432,7 +510,7 @@ function ItemCard({ it, onPatch, onSelect }: { it: DesignItem; onPatch: Props["o
           {e.heights ? (
             <label className={s.field}>
               <span className={s.lbl}>Height</span>
-              <select className={s.in} value={String(it.h)} onChange={(ev) => set((x) => (x.h = Number(ev.target.value)))}>
+              <select className={s.in} value={String(it.h)} onChange={(ev) => set((x) => { unproduct(x); x.h = Number(ev.target.value); })}>
                 {[...new Set([...e.heights, it.h])].sort((a, b) => a - b).map((h) => (
                   <option key={h} value={String(h)}>
                     {h} in
@@ -510,6 +588,9 @@ function ItemCard({ it, onPatch, onSelect }: { it: DesignItem; onPatch: Props["o
     </section>
   );
 }
+
+/** Inches as a size is written: whole, or to the half or quarter a spec sheet gives. */
+const inch = (n: number) => String(Math.round(n * 4) / 4);
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (

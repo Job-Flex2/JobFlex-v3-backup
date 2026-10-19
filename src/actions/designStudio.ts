@@ -6,6 +6,8 @@
 //   saveDesign / listDesigns / loadDesign / deleteDesign — SyncState rows `designdraft:<orgId>:<id>` (no table of
 //     its own, like the deck drafts), at most DRAFT_MAX a shop.
 //   readRoomNames — the plan with its rooms numbered → the name (and printed area) inside each.
+//   readDesignInventory / saveDesignProduct / deleteDesignProduct — the shop's own products (SyncState
+//     `designinv:<orgId>`), which a piece in a design can be.
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -22,6 +24,7 @@ import { isLimitedRole, requireOrg } from "@/lib/orgContext";
 import { canUseDesignStudio } from "@/lib/design/access";
 import { normalizeDesign } from "@/lib/design/normalize";
 import type { DesignDoc } from "@/lib/design/model";
+import { PRODUCTS_MAX, sanitizeProduct, sanitizeProducts, type DesignProduct } from "@/lib/design/inventory";
 import { logServerError } from "@/lib/server-events";
 import { enforceRateLimit, HOUR } from "@/lib/rateLimit";
 import { friendlyAIError, getOpenAI, getVisionModel, isOpenAIEnabled, isTransientAIError, samplingOptions } from "@/lib/sdk/openai";
@@ -354,6 +357,64 @@ export async function saveDesignPrice(key: string, price: number | null): Promis
 export type DesignClient = { id: string; name: string; email: string | null; phone: string | null; address: string | null };
 
 /** The shop's clients by name, email or phone (the first eight). */
+/* ── The studio's inventory (2026-10-18): the shop's own products, one SyncState row a shop ─────────────────── */
+
+const INV_KEY = (org: string) => `designinv:${org}`;
+
+async function readProducts(org: string): Promise<DesignProduct[]> {
+  const row = await db.syncState.findUnique({ where: { key: INV_KEY(org) }, select: { cursor: true } }).catch(() => null);
+  try {
+    return row ? sanitizeProducts((JSON.parse(row.cursor) as { products?: unknown }).products) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeProducts(org: string, products: DesignProduct[]) {
+  const cursor = JSON.stringify({ v: 1, products });
+  await db.syncState.upsert({ where: { key: INV_KEY(org) }, create: { key: INV_KEY(org), cursor }, update: { cursor } });
+}
+
+/** The shop's products, for the studio's catalog and its inventory page. */
+export async function readDesignInventory(): Promise<{ ok: true; products: DesignProduct[] } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  return { ok: true, products: await readProducts(g.organizationId) };
+}
+
+/** Add a product, or change one (by its id). */
+export async function saveDesignProduct(raw: unknown): Promise<{ ok: true; product: DesignProduct; products: DesignProduct[] } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const fresh = `p${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  const product = sanitizeProduct(raw, fresh);
+  if (!product) return { ok: false, error: "A product needs what it is and a brand or a model." };
+  try {
+    const list = await readProducts(g.organizationId);
+    const at = list.findIndex((p) => p.id === product.id);
+    if (at < 0 && list.length >= PRODUCTS_MAX) return { ok: false, error: `The inventory holds ${PRODUCTS_MAX} products — remove one first.` };
+    const next = at < 0 ? [...list, product] : list.map((p, i) => (i === at ? product : p));
+    await writeProducts(g.organizationId, next);
+    return { ok: true, product, products: next };
+  } catch (err) {
+    logServerError("design-inventory", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The product could not be kept — try again in a moment." };
+  }
+}
+
+export async function deleteDesignProduct(id: string): Promise<{ ok: true; products: DesignProduct[] } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  try {
+    const next = (await readProducts(g.organizationId)).filter((p) => p.id !== id);
+    await writeProducts(g.organizationId, next);
+    return { ok: true, products: next };
+  } catch (err) {
+    logServerError("design-inventory", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The product could not be removed — try again in a moment." };
+  }
+}
+
 export async function findDesignClients(q: string): Promise<{ ok: true; clients: DesignClient[] } | { ok: false; error: string }> {
   const g = await gate();
   if (!g.ok) return g;

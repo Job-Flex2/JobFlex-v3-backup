@@ -25,7 +25,8 @@ import { emptyDesign, ftIn, newId, DEFAULT_CEILING } from "@/lib/design/model";
 import { centroid, dist, planBounds, roomsOf, wallLen, type Room } from "@/lib/design/geometry";
 import { readPlan, scaleFromText, wallPen, type PlanRead } from "@/lib/design/planRead";
 import { openDesignFiles, type DesignSheet } from "@/lib/design/pdfSheets";
-import { deleteDesign, listDesigns, readPlanRooms, readRoomNames, saveDesign, triagePlanSheets, type DesignRow } from "@/actions/designStudio";
+import { deleteDesign, listDesigns, readDesignInventory, readPlanRooms, readRoomNames, saveDesign, triagePlanSheets, type DesignRow } from "@/actions/designStudio";
+import type { DesignProduct } from "@/lib/design/inventory";
 
 const Room3D = dynamic(() => import("./room-3d").then((m) => m.Room3D), { ssr: false, loading: () => <div className={s.three} /> });
 
@@ -143,6 +144,15 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   // where it has one for an element, a fixed overlay where it doesn't (iPhone Safari).
   const workRef = React.useRef<HTMLDivElement>(null);
   const [full, setFull] = React.useState<"native" | "overlay" | null>(null);
+  // The shop's own products (its inventory page), offered in Add and on a piece's card, priced in the estimate.
+  const [products, setProducts] = React.useState<DesignProduct[]>([]);
+  React.useEffect(() => {
+    let live = true;
+    readDesignInventory().then((r) => live && r.ok && setProducts(r.products));
+    return () => {
+      live = false;
+    };
+  }, []);
   const [fitToken, setFitToken] = React.useState(0);
   const [underlay, setUnderlay] = React.useState<Underlay | null>(null);
   const [showUnderlay, setShowUnderlay] = React.useState(true);
@@ -738,7 +748,13 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
   if (phase === "start") {
     return (
       <div className={s.studio}>
-        <Head />
+        <Head
+          right={
+            <a className={`${s.btn} ${s.btnSm}`} href="/dashboard/design-studio/inventory" title="The products you sell, for your designs and their estimates" data-design-inventory-link>
+              Your inventory{products.length ? ` · ${products.length}` : ""}
+            </a>
+          }
+        />
         {error ? <p className={`${s.note} ${s.noteWarn}`}>{error}</p> : null}
         <div className={s.startGrid}>
           <section className={s.card}>
@@ -1015,6 +1031,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
       className={focus ? s.planSmall : s.plan}
       ghosts={ghosts}
       flags={flags}
+      products={products}
     />
   );
 
@@ -1040,6 +1057,9 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
             <button type="button" className={`${s.btn} ${s.btnSm}`} onClick={() => (window.location.href = "/dashboard/design-studio")}>
               New
             </button>
+            <a className={`${s.btn} ${s.btnSm}`} href="/dashboard/design-studio/inventory" title="The products you sell, for your designs and their estimates" data-design-inventory-link>
+              Inventory{products.length ? ` · ${products.length}` : ""}
+            </a>
           </div>
         }
       />
@@ -1143,7 +1163,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
         </div>
 
         <aside className={s.side}>
-          {focus && focusRoom ? <DesignPanel doc={doc} room={focusRoom} focus={focus} selected={selected} onSelect={setSelected} tool={tool} onTool={setTool} onPatch={patch} onLaidOut={() => setTimeout(() => setFrameToken((t) => t + 1), 50)} checks={checks} /> : null}
+          {focus && focusRoom ? <DesignPanel doc={doc} room={focusRoom} focus={focus} selected={selected} onSelect={setSelected} tool={tool} onTool={setTool} onPatch={patch} onLaidOut={() => setTimeout(() => setFrameToken((t) => t + 1), 50)} checks={checks} products={products} /> : null}
           {notes.length || scaleNote ? (
             <section className={s.card}>
               <div className={s.body}>
@@ -1373,7 +1393,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
           </section>
         </aside>
       </div>
-      {focus && focusRoom && (doc.items ?? []).some((i) => i.room === focus) ? <EstimateSheet doc={doc} focus={focus} designId={id} market={market} shopAddress={shopAddress} onPatch={patch} /> : null}
+      {focus && focusRoom && (doc.items ?? []).some((i) => i.room === focus) ? <EstimateSheet doc={doc} focus={focus} designId={id} market={market} shopAddress={shopAddress} onPatch={patch} products={products} /> : null}
     </div>
   );
 }

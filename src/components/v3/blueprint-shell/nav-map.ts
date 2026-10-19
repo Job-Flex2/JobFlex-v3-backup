@@ -88,7 +88,15 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Blueprint estimator", icon: "i-plans", href: "/dashboard/blueprint-estimator", tool: { tone: "navy" } },
       // The Home Design Studio (owner, 2026-10-17: "only in admin … not for the users"): the blueprint read into rooms,
       // a kitchen designed in 3D, priced and made a proposal — for the accounts lib/design/access opens, no one else.
-      { label: "Design Studio", icon: "i-sofa", href: "/dashboard/design-studio", tool: { tone: "olive" }, preview: true },
+      // Its inventory folds under it like every estimator's (2026-10-18): the shop's own products a design can use.
+      {
+        label: "Design Studio",
+        icon: "i-sofa",
+        href: "/dashboard/design-studio",
+        tool: { tone: "olive" },
+        preview: true,
+        children: [{ label: "Design inventory", icon: "i-folder", href: "/dashboard/design-studio/inventory" }],
+      },
       // Each estimator folds its own inventory under it (owner, 2026-10-10:
       // "a roofer doesn't have to see the other inventories"). The three
       // shared one page with a trade switch from 2026-09-29; before that they
