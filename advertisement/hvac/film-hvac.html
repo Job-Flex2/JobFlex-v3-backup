@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>JobFlex HVAC estimator — the film</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --paper:#f2f0eb; --paper-deep:#ebe8e1; --ink:#0a0a0a; --blue:#1854a0; --sky:#4a9eff; --muted:#555; --yellow:#f5c400; --green:#1f7a3f; --font:'Inter',Helvetica,Arial,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace; }
+  html,body { margin:0; background:var(--paper); overflow:hidden; }
+  #stage { position:relative; overflow:hidden; background:var(--paper);
+    background-image: linear-gradient(rgba(10,10,10,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(10,10,10,.045) 1px, transparent 1px);
+    background-size: 48px 48px; font-family:var(--font); color:var(--ink); }
+  .clip { position:absolute; overflow:hidden; background:#fff; }
+  .clip img { position:absolute; left:0; top:0; display:block; will-change:transform; }
+  .frame { border:3px solid var(--ink); box-shadow: 14px 14px 0 var(--ink); }
+  .head { position:absolute; z-index:5; }
+  .kicker { font-family:var(--mono); font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:var(--blue); }
+  .kicker::before { content:''; display:inline-block; width:.6em; height:.6em; background:var(--blue); margin-right:.6em; vertical-align:middle; }
+  .cap { margin-top:.35em; font-weight:900; letter-spacing:-.025em; line-height:1.02; text-transform:uppercase; text-wrap:balance; }
+  .sub { margin-top:.55em; font-weight:600; letter-spacing:-.005em; line-height:1.28; color:#222; text-wrap:pretty; }
+  .cards { position:absolute; z-index:5; display:flex; flex-direction:column; }
+  .card { background:#fff; border:3px solid var(--ink); box-shadow:8px 8px 0 var(--ink); }
+  .card b { display:block; font-weight:900; letter-spacing:-.02em; line-height:1.05; color:var(--blue); font-variant-numeric:tabular-nums; }
+  .card i { display:block; font-style:normal; font-family:var(--mono); font-weight:600; letter-spacing:.04em; color:#333; line-height:1.3; }
+  .card i em { font-style:normal; color:var(--blue); }
+  .card s { text-decoration:none; color:#9a2a1c; }
+  .hl { position:absolute; z-index:4; border:4px solid var(--blue); box-shadow:0 0 0 6px rgba(74,158,255,.28); pointer-events:none; }
+  .hl.y { border-color:var(--yellow); box-shadow:0 0 0 6px rgba(245,196,0,.3); }
+  .cursor { position:absolute; z-index:6; width:38px; height:38px; pointer-events:none; transform-origin:4px 2px; }
+  .typed { position:absolute; z-index:3; background:#fff; color:var(--ink); white-space:nowrap; overflow:hidden; display:flex; align-items:center; font-family:var(--font); font-weight:500; }
+  .phone { position:absolute; z-index:4; background:var(--ink); border-radius:54px; padding:16px; box-shadow: 18px 18px 0 rgba(10,10,10,.2); }
+  .phone .clip { position:relative; border-radius:38px; }
+  .end { position:absolute; inset:0; z-index:7; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:var(--paper); }
+  .wordmark { font-weight:900; letter-spacing:-.04em; line-height:.9; text-transform:uppercase; }
+  .wordmark em { font-style:normal; color:var(--blue); }
+  .steps { position:absolute; z-index:5; display:flex; gap:10px; }
+  .steps span { font-family:var(--mono); font-weight:700; letter-spacing:.08em; padding:6px 10px; border:2px solid var(--ink); background:#fff; color:var(--ink); }
+  .steps span.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="assets/film-data.js"></script>
+<script>
+(async () => {
+  const P = new URLSearchParams(location.search);
+  const W = +P.get("w") || 1080, H = +P.get("h") || 1920;
+  const VERT = H > W;
+  const F = window.FACTS, B = window.BOXES;
+  const stage = document.getElementById("stage");
+  stage.style.width = W + "px"; stage.style.height = H + "px";
+  const $ = (tag, cls, parent = stage) => { const e = document.createElement(tag); if (cls) e.className = cls; parent.appendChild(e); return e; };
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
+  const io = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const win = (t, a, b, f = .35) => Math.min(seg(t, a, a + f), 1 - seg(t, b - f, b));
+  const place = (el, r) => Object.assign(el.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+  const show = (e, on = true) => { e.style.display = on ? "" : "none"; };
+  const lv = (a, b, k) => ({ x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), w: lerp(a.w, b.w, k) });
+
+  // ── the captures: CSS px of the capture viewport; k = image px per CSS px
+  const APP = (n) => ({ src: `assets/${n}.png`, k: 2, w: 1440, h: 1300 });
+  const A = {
+    hEmpty: APP("h-empty"), hSug: APP("h-sug"), hTyped: APP("h-typed"), hFound: APP("h-found"),
+    iEmpty: APP("i-empty"), iReading: APP("i-reading"), iRead: APP("i-read"), iConfirm: APP("i-confirm"), iEdited: APP("i-edited"),
+    dAc: APP("d-ac"), dHp: APP("d-hp"), dRule: APP("d-rule"),
+    eLines: APP("e-lines"), eTotal: APP("e-total"), pBuilder: APP("p-builder"),
+    desk: { src: "assets/c-desk.png", k: 2, w: 1280, h: 900 },
+    phone: { src: "assets/c-phone.png", k: 3, w: 390, h: 844 },
+  };
+
+  // A window onto one capture. view({x,y,w}) shows that source rect (height from the box's aspect).
+  class Shot {
+    constructor(asset, box, parent = stage) {
+      this.a = asset; this.box = { ...box };
+      this.el = $("div", "clip", parent); place(this.el, this.box);
+      this.img = document.createElement("img"); this.img.src = asset.src; this.el.appendChild(this.img);
+    }
+    view(v) {
+      const k = this.box.w / v.w; this.k = k; this.src = { x: v.x, y: v.y };
+      this.img.style.width = this.a.w * k + "px"; this.img.style.height = this.a.h * k + "px";
+      this.img.style.transform = `translate(${-v.x * k}px, ${-v.y * k}px)`;
+      return this;
+    }
+    at(x, y) { return { x: this.box.x + (x - this.src.x) * this.k, y: this.box.y + (y - this.src.y) * this.k }; }
+    rect(r, pad = 0) { const p = this.at(r.x, r.y); return { x: p.x - pad, y: p.y - pad, w: r.w * this.k + pad * 2, h: r.h * this.k + pad * 2 }; }
+  }
+
+  // ── layout per format
+  const L = VERT
+    ? { frame: { x: 40, y: 440, w: 1000, h: 880 }, head: { x: 56, y: 64, w: 968 }, kick: 28, cap: 74, sub: 35, cards: { x: 40, y: 1362, w: 1000 }, cardV: 44, cardL: 30, gap: 12 }
+    : { frame: { x: 50, y: 90, w: 1180, h: 900 }, head: { x: 1290, y: 96, w: 580 }, kick: 20, cap: 58, sub: 28, cards: { x: 1290, y: 520, w: 580 }, cardV: 38, cardL: 20, gap: 14 };
+  const ASP = L.frame.h / L.frame.w;
+
+  const frames = {};
+  for (const [k, a] of Object.entries(A)) if (k !== "phone") { frames[k] = new Shot(a, L.frame); frames[k].el.classList.add("frame"); }
+  const head = $("div", "head"); Object.assign(head.style, { left: L.head.x + "px", top: L.head.y + "px", width: L.head.w + "px" });
+  const kick = $("div", "kicker", head); kick.style.fontSize = L.kick + "px";
+  const cap = $("div", "cap", head); cap.style.fontSize = L.cap + "px";
+  const sub = $("div", "sub", head); sub.style.fontSize = L.sub + "px";
+  const cardsBox = $("div", "cards"); Object.assign(cardsBox.style, { left: L.cards.x + "px", top: L.cards.y + "px", width: L.cards.w + "px", gap: L.gap + "px" });
+  const cards = Array.from({ length: 4 }, () => { const c = $("div", "card", cardsBox); c.innerHTML = "<b></b><i></i>"; Object.assign(c.style, { padding: VERT ? "12px 22px 12px" : "12px 18px 12px" }); c.querySelector("b").style.fontSize = L.cardV + "px"; c.querySelector("i").style.fontSize = L.cardL + "px"; c.querySelector("i").style.marginTop = (VERT ? 8 : 6) + "px"; return c; });
+  const hl = $("div", "hl"), hl2 = $("div", "hl y");
+  const cursor = $("div", "cursor"); cursor.innerHTML = '<svg viewBox="0 0 24 24" width="38" height="38"><path d="M4 2l16 9-7 2-3 8z" fill="#fff" stroke="#0a0a0a" stroke-width="2" stroke-linejoin="round"/></svg>';
+  const typed = $("div", "typed");
+  const phoneW = VERT ? 400 : 380, phoneH = Math.round(phoneW * 844 / 390);
+  const phoneBox = VERT ? { x: (W - phoneW) / 2 - 16, y: 452 } : { x: 790, y: 70 };
+  const phoneShell = $("div", "phone"); Object.assign(phoneShell.style, { left: phoneBox.x + "px", top: phoneBox.y + "px", width: phoneW + "px", height: phoneH + "px" });
+  const sPhone = new Shot(A.phone, { x: 0, y: 0, w: phoneW, h: phoneH }, phoneShell); sPhone.el.style.position = "relative";
+  const endCard = $("div", "end");
+  endCard.innerHTML = `<div class="wordmark" style="font-size:${VERT ? 150 : 140}px">Job<em>Flex</em></div><div style="margin-top:38px;font-size:${VERT ? 64 : 54}px;font-weight:900;letter-spacing:-.02em;line-height:1.08">Size it from the load.<br>Quote it today.</div><div style="margin-top:46px;font-family:var(--mono);font-weight:700;letter-spacing:.22em;font-size:${VERT ? 40 : 30}px;color:var(--blue)">JOBFLEX.APP</div>`;
+
+  const everything = [head, cardsBox, hl, hl2, cursor, typed, phoneShell, endCard, ...Object.values(frames).map((s) => s.el)];
+  const hideAll = () => everything.forEach((e) => show(e, false));
+
+  // ── words
+  const setHead = (k, c, s, a = 1) => { kick.textContent = k; cap.innerHTML = c; sub.innerHTML = s; head.style.opacity = String(a); show(head); };
+  const setCards = (list, t) => {
+    show(cardsBox);
+    cards.forEach((c, i) => {
+      const it = list[i];
+      if (!it || t < it.at) { c.style.display = "none"; return; }
+      c.style.display = "";
+      const a = seg(t, it.at, it.at + .35);
+      c.style.opacity = String(a); c.style.transform = `translateY(${(1 - ease(a)) * 22}px)`;
+      c.querySelector("b").innerHTML = it.v; c.querySelector("i").innerHTML = it.l;
+      c.style.borderColor = it.on ? "var(--blue)" : "var(--ink)"; c.style.boxShadow = it.on ? "8px 8px 0 var(--blue)" : "";
+    });
+  };
+  const box = (r, el = hl, pad = 6) => { place(el, r.w ? { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 } : r); show(el); };
+  const pointer = (p, pressed) => { place(cursor, { x: p.x, y: p.y, w: 38, h: 38 }); cursor.style.transform = pressed ? "scale(.82)" : ""; show(cursor); };
+  const mid = (shot, r, fx = .5, fy = .55) => shot.at(r.x + r.w * fx, r.y + r.h * fy);
+  const glide = (a, b, k) => ({ x: lerp(a.x, b.x, io(k)), y: lerp(a.y, b.y, io(k)) });
+
+  // ── the figures, as the page printed them (assets/facts.json)
+  const src = (k) => (F.sources.find((s) => s.k === k) || {}).v || "";
+  const after = (s) => s.split(" — ").slice(1).join(" — ");
+  const before = (s) => s.split(" — ")[0];
+  const cell = (list, label) => list.find((c) => c.label === label) || {};
+  const area = cell(F.house, "Conditioned area").value.replace("sq ft", " sq ft");
+  const [storeys, built] = cell(F.house, "Storeys · built").value.split("·");
+  const assessor = after(src("Parcel")).replace(/\s*\(.*\)$/, "");
+  const factCards = [
+    { at: 4.75, v: `${area} · ${storeys} storeys · built ${built}`, l: `Parcel record — <em>${assessor}</em>` },
+    { at: 5.45, v: `${before(src("Footprint"))} footprint`, l: `<em>${after(src("Footprint"))}</em>` },
+    { at: 6.15, v: `${before(src("Elevation"))} elevation`, l: `<em>${after(src("Elevation"))}</em>` },
+    { at: 6.85, v: `${after(src("County design day"))} design day`, l: `<em>${before(src("County design day"))}</em> · 1% cooling / 99% heating` },
+  ];
+  const plateCards = F.plates.map((p, i) => ({ at: 12.0 + i * .55, v: p.read, l: `${p.title} — read · <em>${p.conf}</em>` }));
+  const loadCards = [
+    { at: 18.7, v: `${cell(F.design, "Cooling load").value} BTU/h cooling`, l: `${cell(F.design, "Cooling load").hint.replace(/^BTU\/h · /, "")}` },
+    { at: 19.3, v: `${cell(F.design, "Heating load").value} BTU/h heating`, l: `${cell(F.design, "Heating load").hint.replace(/^BTU\/h /, "")} — <em>the design day</em>` },
+  ];
+  const tierCards = [{ at: 21.5, v: `${cell(F.design, "Size").value.replace("ton", " ton")} heat pump`, l: `${cell(F.design, "Size").hint} · picked by Manual S` }, ...F.tiers.map((x, i) => ({ at: 21.9 + i * .45, v: `${x.tier} · ${x.price}`, l: `${x.unit} · ${x.spec.split(" · ")[0]}`, on: x.on }))];
+  const balance = (F.chart.find((s) => /^balance/.test(s)) || "").replace("balance ", "");
+  const ruleState = (F.rule.source.match(/WSEC|WAC/) ? "Washington" : "");
+
+  // ── the timeline (seconds)
+  function render(t) {
+    hideAll(); cursor.style.transform = ""; hl.style.transform = ""; hl2.style.transform = "";
+    // ─ 1 · ENTER THE ADDRESS (0–8)
+    if (t < 8) {
+      const K = "01 · Enter the address";
+      setHead(K, "Type the address.<br>Get the house.", "The parcel record, the footprint, the elevation and the county's design day — every fact with its source.", win(t, 0, 8.05, .3));
+      if (t < 2.3) {
+        const s = frames.hEmpty; show(s.el);
+        s.view(lv(VERT ? { x: 300, y: 230, w: 800 } : { x: 300, y: 170, w: 960 }, VERT ? { x: 330, y: 250, w: 740 } : { x: 310, y: 190, w: 900 }, ease(seg(t, 0, 2.3))));
+        const f = s.rect(B["h-empty"].addr);
+        place(typed, { x: f.x + 1 * s.k, y: f.y + 3 * s.k, w: f.w - 8 * s.k, h: f.h - 6 * s.k }); typed.style.fontSize = 15 * s.k + "px";
+        const text = F.address.replace(/, USA$/, ""); const n = Math.round(lerp(0, text.length, seg(t, .35, 2.1)));
+        typed.textContent = text.slice(0, n) + (Math.floor(t * 3) % 2 === 0 ? "|" : ""); show(typed);
+        return;
+      }
+      if (t < 3.35) {
+        const s = frames.hSug; show(s.el);
+        s.view(VERT ? { x: 330, y: 250, w: 740 } : { x: 310, y: 190, w: 900 });
+        const opt = s.rect(B["h-sug"].option);
+        pointer(glide({ x: opt.x + opt.w * .75, y: opt.y - 70 }, { x: opt.x + opt.w * .3, y: opt.y + opt.h * .5 }, seg(t, 2.45, 3.0)), t > 3.05 && t < 3.3);
+        if (t > 2.9) box(opt);
+        return;
+      }
+      if (t < 4.3) {
+        const s = frames.hTyped; show(s.el);
+        s.view(VERT ? { x: 330, y: 250, w: 740 } : { x: 310, y: 190, w: 900 });
+        const btn = s.rect(B["h-typed"].lookup), opt = s.rect(B["h-sug"].option);
+        pointer(glide({ x: opt.x + opt.w * .3, y: opt.y + opt.h * .5 }, mid(s, B["h-typed"].lookup), seg(t, 3.4, 3.95)), t > 4.0 && t < 4.25);
+        if (t > 3.9) box(btn);
+        return;
+      }
+      const s = frames.hFound; show(s.el);
+      const v0 = VERT ? { x: 330, y: 250, w: 740 } : { x: 310, y: 190, w: 900 };
+      const v1 = VERT ? { x: 330, y: 560, w: 740 } : { x: 320, y: 300, w: 900 };
+      s.view(lv(v0, v1, io(seg(t, 4.35, 5.0))));
+      const i = Math.min(3, Math.floor(seg(t, 4.75, 7.55) * 4));
+      if (t > 4.75) box(s.rect(B["h-found"]["r" + i]), hl, 4);
+      setCards(factCards, t);
+      return;
+    }
+    // ─ 2 · REVIEW THE INPUTS (8–18)
+    if (t < 18) {
+      const K = "02 · Review the inputs";
+      if (t < 13.8) {
+        setHead(K, "Three plates.<br>Read.", "Outdoor unit, furnace, panel: model, size, refrigerant, the main breaker — each read off a photo.", win(t, 8, 13.85, .3));
+        const plates = VERT ? { x: 330, y: 270, w: 740 } : { x: 320, y: 150, w: 900 };
+        const shot = t < 8.6 ? frames.iEmpty : t < 11.8 ? frames.iReading : frames.iRead; show(shot.el); shot.view(plates);
+        const name = t < 8.6 ? "i-empty" : t < 11.8 ? "i-reading" : "i-read";
+        if (t >= 12.0) { const j = Math.min(2, Math.floor(seg(t, 12.0, 13.7) * 3)); box(shot.rect(B[name]["z" + j]), hl, 4); }
+        else if (t < 11.8) { box(shot.rect({ x: B[name].z0.x, y: B[name].z0.y, w: B[name].z2.x + B[name].z2.w - B[name].z0.x, h: B[name].z0.h }), hl2, 6); }
+        setCards(plateCards, t);
+        return;
+      }
+      setHead(K, "Every input.<br>Editable.", "Insulation, windows, tightness — each marked read, default or stated. Change one and the price follows.", win(t, 13.8, 18.05, .3));
+      const fields = B["i-confirm"];
+      if (t < 15.4) {
+        const s = frames.iConfirm; show(s.el);
+        const va = VERT ? { x: 330, y: 160, w: 740 } : { x: 320, y: 110, w: 900 };
+        const vb = VERT ? { x: 330, y: 300, w: 740 } : { x: 320, y: 230, w: 900 };
+        s.view(lv(va, vb, io(seg(t, 13.9, 15.3))));
+        const order = ["sqft", "attic", "tight"]; const j = Math.min(order.length - 1, Math.floor(seg(t, 13.9, 15.4) * order.length));
+        box(s.rect(fields[order[j]]), hl, 4);
+        return;
+      }
+      const edited = t >= 16.05;
+      const s = edited ? frames.iEdited : frames.iConfirm; show(s.el);
+      s.view(VERT ? { x: 640, y: 120, w: 740 } : { x: 500, y: 60, w: 880 });
+      const wf = s.rect(fields.win);
+      pointer(glide({ x: wf.x - 200, y: wf.y + 260 }, mid(s, fields.win, .6, .75), seg(t, 15.4, 15.85)), t > 15.85 && t < 16.05);
+      box(wf, edited ? hl : hl2, 4);
+      if (edited) { const pr = s.rect(B["i-edited"].price); box(pr, hl2, 6); hl2.style.transform = `scale(${1 + .03 * Math.sin((t - 16) * 9)})`; }
+      setCards([
+        { at: 16.1, v: `${F.edit.field}: ${F.edit.to}`, l: `was <s>${F.edit.from}</s> (the era's default) — now <em>stated</em>` },
+        { at: 16.6, v: `${F.edit.before} → ${F.edit.after}`, l: "the load, the size and every line re-figured" },
+      ], t);
+      return;
+    }
+    // ─ 3 · CHECK THE RESULTS (18–30)
+    if (t < 30) {
+      const K = "03 · Check the results";
+      const dv = VERT ? { x: 330, y: 190, w: 740 } : { x: 320, y: 180, w: 900 };
+      if (t < 21.3) {
+        setHead(K, "Sized from<br>the load.", "A Manual J-based block load on the county's design day — not a rule of thumb per square foot.", win(t, 18, 21.35, .3));
+        const s = frames.dAc; show(s.el); s.view(lv({ ...dv, y: dv.y - 20, w: dv.w * .92, x: dv.x + 10 }, dv, ease(seg(t, 18, 19))));
+        box(s.rect(B["d-ac"].hero), hl, 2);
+        const k1 = B["d-ac"].k1;
+        if (t > 20.3) pointer(glide({ x: s.at(k1.x, 0).x - 160, y: s.at(0, k1.y).y + 220 }, mid(s, k1, .35), seg(t, 20.3, 20.95)), t > 21.0 && t < 21.25);
+        if (t > 20.9) box(s.rect(k1), hl2, 4);
+        setCards(loadCards, t);
+        return;
+      }
+      if (t < 26.3) {
+        setHead(K, "Three units.<br>Three prices.", `Three heat pumps that fit the load, and each one's capacity against the heating load — balance point ${balance}.`, win(t, 21.3, 26.35, .3));
+        const s = frames.dHp; show(s.el);
+        const wide = VERT ? { x: 330, y: 190, w: 740 } : { x: 320, y: 180, w: 900 };
+        const chartV = VERT ? { x: 330, y: 560, w: 740 } : { x: 320, y: 470, w: 900 };
+        s.view(lv(wide, chartV, io(seg(t, 24.6, 25.4))));
+        if (t < 24.6) { const j = Math.min(2, Math.floor(seg(t, 21.9, 24.4) * 3)); box(s.rect(B["d-hp"]["t" + j]), hl, 4); setCards(tierCards, t); }
+        else { box(s.rect(B["d-chart"].chart), hl, 4); setCards([{ at: 25.0, v: `Balance point ${balance}`, l: `${F.unit} — capacity vs. the heating load, design ${cell(F.design, "Heating load").hint.match(/\d+°/)?.[0] ?? ""}` }], t); }
+        return;
+      }
+      setHead(K, "Code-checked.<br>Rule by rule.", "Each check carries the rule behind it: state rules for CA, WA, OR, FL, TX and NY, federal floors everywhere.", win(t, 26.3, 30.05, .3));
+      const s = frames.dRule; show(s.el);
+      const r = B["d-rule"].row;
+      s.view(lv(VERT ? { x: 640, y: 580, w: 470 } : { x: 330, y: 560, w: 800 }, VERT ? { x: 690, y: 700, w: 390 } : { x: 400, y: 600, w: 700 }, ease(seg(t, 26.3, 28))));
+      box(s.rect(r), hl, 6);
+      setCards([{ at: 26.9, v: `${F.rule.status} · ${F.rule.title}`, l: `${ruleState ? ruleState + " — " : ""}<em>${F.rule.source.replace(/ \(verified [^)]*\)/, "")}</em>` }], t);
+      return;
+    }
+    // ─ 4 · CREATE THE PROPOSAL (30–42)
+    if (t < 42) {
+      const K = "04 · Create the proposal";
+      if (t < 37.4) {
+        setHead(K, "Every line.<br>Priced.", "Equipment, materials, labor, permit and disposal — from your rate card, every line editable.", win(t, 30, 37.45, .3));
+        if (t < 33.0) {
+          const s = frames.eLines; show(s.el);
+          const a = VERT ? { x: 330, y: 70, w: 740 } : { x: 320, y: 60, w: 900 };
+          s.view(lv(a, { ...a, y: a.y + (VERT ? 520 : 400) }, io(seg(t, 30.4, 32.9))));
+          return;
+        }
+        if (t < 35.2) {
+          const s = frames.eTotal; show(s.el);
+          s.view(VERT ? { x: 330, y: 640, w: 740 } : { x: 320, y: 470, w: 900 });
+          const tot = B["e-total"].total, cv = B["e-total"].convert;
+          box(s.rect(tot), hl, 4);
+          pointer(glide({ x: s.at(cv.x, 0).x - 220, y: s.at(0, cv.y).y - 180 }, mid(s, cv), seg(t, 33.6, 34.4)), t > 34.5 && t < 34.8);
+          if (t > 34.4) box(s.rect(cv), hl2, 4);
+          setCards([{ at: 33.3, v: `${F.subtotal} subtotal`, l: "Save it, or convert it — one click" }], t);
+          return;
+        }
+        const s = frames.pBuilder; show(s.el);
+        const pb = B["p-builder"] || {};
+        s.view(lv(VERT ? { x: 320, y: 90, w: 860 } : { x: 310, y: 90, w: 1040 }, VERT ? { x: 320, y: 520, w: 860 } : { x: 310, y: 500, w: 1040 }, io(seg(t, 35.6, 37.2))));
+        if (pb.total) box(s.rect(pb.total), hl, 6);
+        setCards([{ at: 35.5, v: "HVAC proposal, drafted", l: "every line and the total carried over — Save &amp; send" }], t);
+        return;
+      }
+      setHead(K, "The client's copy.<br>On their phone.", `${F.portal.find((x) => /—/.test(x)) ? "" : ""}One total, every line, and Accept or Decline — right on the phone.`, win(t, 37.4, 42.05, .3));
+      const d = frames.desk; show(d.el); d.view({ x: 150, y: 0, w: 980 });
+      d.el.style.opacity = String(VERT ? 1 - .6 * seg(t, 38.0, 38.8) : 1);
+      const k = ease(seg(t, 38.0, 38.9));
+      phoneShell.style.transform = `translateY(${(1 - k) * 900}px)`; show(phoneShell);
+      sPhone.view({ x: 0, y: 0, w: 390 });
+      if (t > 39.6) {
+        const a = BOXES.phoneAccept || { x: 36, y: 417, width: 209, height: 48 };
+        const r = sPhone.rect({ x: a.x, y: a.y, w: a.width, h: a.height });
+        box({ x: phoneBox.x + 16 + r.x, y: phoneBox.y + 16 + r.y, w: r.w, h: r.h }, hl2, 6); hl2.style.transform = `scale(${1 + .04 * Math.sin((t - 39.6) * 8)})`;
+      }
+      const totIdx = F.portal.indexOf("TOTAL");
+      setCards([{ at: 39.2, v: `${F.portal[totIdx + 1]} total`, l: "the client accepts with their name" }], t);
+      return;
+    }
+    // ─ end card (42–45)
+    show(endCard); endCard.style.opacity = String(seg(t, 42, 42.6)); endCard.style.transform = `scale(${lerp(.97, 1, ease(seg(t, 42, 43)))})`;
+  }
+
+  const imgs = Array.from(document.images);
+  await Promise.all(imgs.map((im) => (im.complete ? Promise.resolve() : new Promise((r) => { im.onload = r; im.onerror = r; }))));
+  await (document.fonts ? document.fonts.ready : Promise.resolve());
+  window.__seek = (t) => render(t);
+  render(+P.get("t") || 0);
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
