@@ -27,6 +27,7 @@ import {
   type Billing,
   type PlanPhase,
 } from "@/lib/servicePlans";
+import { SERVICE_DESK_PATH } from "@/lib/serviceDesk";
 
 type Tx = Prisma.TransactionClient;
 const ORG_SELECT = { id: true, name: true, timezone: true, logoUrl: true, gmailSettingsJson: true, gmailTokensJson: true, billingEmail: true } as const;
@@ -52,7 +53,8 @@ async function emailClient(org: OrgRow, to: string | null | undefined, doc: Plan
 
 /** `actorId`: the member whose action this is; null for the daily run and the client's own accept. */
 async function notice(tx: Tx | typeof db, organizationId: string, kind: string, summary: string, meta: Record<string, unknown>, clientId?: string | null, actorId?: string | null) {
-  await tx.activityEvent.create({ data: { organizationId, actorId: actorId ?? null, kind, summary, meta: JSON.stringify({ href: "/dashboard/service-plans", ...meta }), clientId: clientId ?? null } });
+  // The bell opens the HVAC services desk (2026-10-18), where plans, visits and bills now live together.
+  await tx.activityEvent.create({ data: { organizationId, actorId: actorId ?? null, kind, summary, meta: JSON.stringify({ href: SERVICE_DESK_PATH, ...meta }), clientId: clientId ?? null } });
 }
 
 // ── invoices ────────────────────────────────────────────────────────────────

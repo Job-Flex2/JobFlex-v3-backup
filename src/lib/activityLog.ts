@@ -29,6 +29,12 @@ export const TRAIL_KINDS = {
   TEAM: "TEAM",
   SETTINGS: "SETTINGS",
   FOLLOW_UP: "FOLLOW_UP",
+  // HVAC services (2026-10-18, lib/serviceDeskBook): a reminder the contractor set (open, then done), a plan
+  // tied to the proposal or project it belongs to, the desk's reminder settings. Rung later — never at once.
+  SERVICE_REMINDER: "SERVICE_REMINDER",
+  SERVICE_REMINDER_DONE: "SERVICE_REMINDER_DONE",
+  SERVICE_LINK: "SERVICE_LINK",
+  SERVICE_PREFS: "SERVICE_PREFS",
 } as const;
 export type TrailKind = (typeof TRAIL_KINDS)[keyof typeof TRAIL_KINDS];
 

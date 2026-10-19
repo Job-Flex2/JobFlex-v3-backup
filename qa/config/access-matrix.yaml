@@ -677,6 +677,14 @@ routes:
     worker: redirect:/dashboard/jobs
     admin: redirect:/dashboard
     homeowner: login
+  # HVAC services (2026-10-18): the service desk, open to every company's office; /dashboard/service-plans forwards here.
+  /dashboard/hvac-estimator/service-desk:
+    guest: login
+    owner: open
+    manager: open
+    worker: redirect:/dashboard/jobs
+    admin: redirect:/dashboard
+    homeowner: login
   /dashboard/inventory:
     guest: login
     owner: redirect:/dashboard/roof-estimator/inventory
@@ -930,8 +938,8 @@ routes:
     homeowner: login
   /dashboard/service-plans:
     guest: login
-    owner: redirect:/dashboard
-    manager: redirect:/dashboard
+    owner: redirect:/dashboard/hvac-estimator/service-desk
+    manager: redirect:/dashboard/hvac-estimator/service-desk
     worker: redirect:/dashboard/jobs
     admin: redirect:/dashboard
     homeowner: login

@@ -1,34 +1,22 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
-import { canSeeEarlyAccess } from "@/lib/earlyAccess";
+import type { Route } from "next";
 import { isLimitedRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
-import { appBaseUrl } from "@/lib/appUrl";
-import { loadPlansDashboard } from "@/lib/servicePlanBook";
-import { ServicePlansContent } from "@/components/v3/service-plans-blueprint/service-plans-content";
 
-// SERVICE PLANS (2026-09-22) — memberships: the plans the shop sells, its
-// members, the visits and the bills. Session-scoped, never static.
+// SERVICE PLANS (2026-09-22) → HVAC SERVICES (2026-10-18). The memberships
+// page moved under the HVAC estimator as one service desk (owner: "make the
+// service a sub-row under the inventory … make it more understandable").
+// This address stays alive for the bell notices, bookmarks and links that
+// still carry it. The office only; everyone else lands where they always did.
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "JobFlex · Service plans", description: "Maintenance plans: members, visits, billing, the plans you sell." };
 
 export default async function ServicePlansPage() {
-  let organizationId: string;
   try {
     const ctx = await requireOrg();
-    organizationId = ctx.organizationId;
     if (isLimitedRole(ctx.role)) redirect("/dashboard?error=forbidden");
-    // Early access (lib/earlyAccess): hidden from every other account for now.
-    if (!canSeeEarlyAccess(ctx.user.email)) redirect("/dashboard");
   } catch (err) {
-    if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fservice-plans");
+    if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fhvac-estimator%2Fservice-desk");
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");
     throw err;
   }
-  const [data, org, appUrl] = await Promise.all([
-    loadPlansDashboard(organizationId),
-    db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } }),
-    appBaseUrl(),
-  ]);
-  return <ServicePlansContent data={data} timeZone={org?.timezone || "America/New_York"} appUrl={appUrl} />;
+  redirect("/dashboard/hvac-estimator/service-desk" as Route);
 }

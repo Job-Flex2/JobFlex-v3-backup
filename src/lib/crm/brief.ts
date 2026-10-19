@@ -425,7 +425,7 @@ export const HREF = {
   jobs: "/dashboard/jobs",
   financials: "/dashboard/financials",
   reviews: "/dashboard/reviews",
-  servicePlans: "/dashboard/service-plans",
+  servicePlans: "/dashboard/hvac-estimator/service-desk",
   messages: "/dashboard/messages",
   phone: "/dashboard/phone",
   workers: "/dashboard/workers",

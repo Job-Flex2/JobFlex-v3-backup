@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/cronAuth";
 import { runServicePlans } from "@/lib/servicePlanBook";
 import { runBookingReminders } from "@/lib/bookingBook";
+import { runServiceDeskReminders } from "@/lib/serviceDeskBook";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -19,5 +20,11 @@ export async function GET(req: Request) {
     console.error(`[booking] reminders: ${err instanceof Error ? err.message : String(err)}`);
     return { reminded: 0 };
   });
-  return NextResponse.json({ ok: true, ...report, bookingsReminded: bookings.reminded });
+  // The HVAC services desk (2026-10-18): the contractor's own reminders on their day, the heads-up before
+  // plan visits, and one digest a day by bell and text (lib/serviceDeskBook).
+  const desk = await runServiceDeskReminders(new Date()).catch((err) => {
+    console.error(`[serviceDesk] run: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  });
+  return NextResponse.json({ ok: true, ...report, bookingsReminded: bookings.reminded, desk });
 }
