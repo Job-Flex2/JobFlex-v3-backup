@@ -39,7 +39,6 @@ import {
   freePlanLosses,
   freeSwitchBooked,
   freeSwitchDate,
-  madeWithLine,
   onFreePlan,
 } from "@/lib/freePlan";
 import { GMAIL_SCOPES, isGmailOAuthConfigured } from "@/lib/sdk/gmail";
@@ -470,14 +469,15 @@ async function loadRegistrationView(organizationId: string, myUserId: string | n
 }
 
 /** What the owner's two cancel windows say (lib/freePlan): the plan's lines
- *  Free does not keep, and the company's own numbers. */
+ *  Free does not keep, and the company's own numbers (proposals sent, what
+ *  they quoted, clients). */
 async function cancelOffer(organizationId: string, plan: string, keepsUntil: Date | null, planName: string, accessAlreadyFree: boolean): Promise<NonNullable<BillingData["cancel"]>> {
   const slug = plan.toLowerCase();
-  const [pages, catalog, sent, scheduled] = await Promise.all([
+  const [pages, catalog, sent, clients] = await Promise.all([
     readCustomPages(organizationId, plan).catch(() => null),
     db.pricingPlan.findMany({ select: { slug: true, limitsJson: true } }),
-    db.proposal.count({ where: { organizationId, sentAt: { not: null } } }),
-    db.job.count({ where: { organizationId, startsAt: { not: null }, status: { not: "CANCELED" } } }),
+    db.proposal.groupBy({ by: ["currency"], where: { organizationId, sentAt: { not: null } }, _count: { _all: true }, _sum: { total: true } }),
+    db.client.count({ where: { organizationId, deletedAt: null } }),
   ]);
   const limitsOf = (s: string) => {
     const row = catalog.find((p) => p.slug.toLowerCase() === s);
@@ -490,7 +490,11 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
     planName,
     keepsUntil: keepsUntil?.toISOString() ?? null,
     losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated) }),
-    made: madeWithLine(sent, scheduled),
+    tally: {
+      proposalsSent: sent.reduce((n, g) => n + g._count._all, 0),
+      quoted: sent.length === 1 ? { amount: sent[0]._sum.total ?? 0, currency: sent[0].currency.toUpperCase() } : null,
+      clients,
+    },
     ...(accessAlreadyFree ? { accessAlreadyFree: true } : {}),
   };
 }

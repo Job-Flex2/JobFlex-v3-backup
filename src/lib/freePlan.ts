@@ -127,11 +127,32 @@ export function freePlanLosses(opts: { pages: readonly string[] | null; planProp
   return out.slice(0, 5);
 }
 
-/** "You've sent 12 proposals and scheduled 4 jobs with JobFlex" — or null
- *  when there is nothing of its own to say. */
-export function madeWithLine(proposalsSent: number, jobsScheduled: number): string | null {
-  const p = proposalsSent > 0 ? `sent ${proposalsSent} proposal${proposalsSent === 1 ? "" : "s"}` : "";
-  const j = jobsScheduled > 0 ? `scheduled ${jobsScheduled} job${jobsScheduled === 1 ? "" : "s"}` : "";
-  if (!p && !j) return null;
-  return `You've ${[p, j].filter(Boolean).join(" and ")} with JobFlex.`;
+/** The company's own numbers in "Before you go" — read from its rows, never
+ *  estimated. `quoted` is the total of the proposals it sent, or null when
+ *  they are in more than one currency (no sum across currencies). */
+export interface FreeTally {
+  proposalsSent: number;
+  quoted: { amount: number; currency: string } | null;
+  clients: number;
+}
+
+/** The tally as tiles, largest-meaning first; a zero is left out, and an
+ *  empty list means the window shows no numbers at all. */
+export function freeTallyTiles(t: FreeTally | null | undefined): Array<{ key: "sent" | "quoted" | "clients"; value: string; label: string }> {
+  if (!t) return [];
+  const out: Array<{ key: "sent" | "quoted" | "clients"; value: string; label: string }> = [];
+  const n = (x: number) => new Intl.NumberFormat("en-US").format(x);
+  if (t.proposalsSent > 0) out.push({ key: "sent", value: n(t.proposalsSent), label: t.proposalsSent === 1 ? "proposal sent" : "proposals sent" });
+  if (t.quoted && t.quoted.amount >= 1) {
+    const big = t.quoted.amount >= 100_000;
+    const value = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: t.quoted.currency,
+      maximumFractionDigits: big ? 1 : 0,
+      ...(big ? { notation: "compact" as const } : {}),
+    }).format(t.quoted.amount);
+    out.push({ key: "quoted", value, label: "quoted to clients" });
+  }
+  if (t.clients > 0) out.push({ key: "clients", value: n(t.clients), label: t.clients === 1 ? "client" : "clients" });
+  return out;
 }

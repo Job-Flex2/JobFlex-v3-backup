@@ -124,82 +124,224 @@
   line-height: 1.5;
   color: var(--ink-soft, #333);
 }
-.jf-confirm.jffs-dlg .jffs-list {
+
+/* ── Window 1, "Before you go" (owner, 2026-10-18) ────────────────────────
+   Made to be glad about what the plan does: the estimators' colours carry it
+   (globals.css --tool-*, the sidebar's tool squares) — a band of them across
+   the top, one per line on the list's squares, one per number on the tiles.
+   No gradient, no emoji. "Keep <plan>" is the one big button; "Continue to
+   cancel" a full-size ink link under it, never small or grey. */
+.jf-confirm.jffs-go-dlg [data-tone="smart"] { --tone: var(--tool-smart); }
+.jf-confirm.jffs-go-dlg [data-tone="roof"] { --tone: var(--tool-roof); }
+.jf-confirm.jffs-go-dlg [data-tone="video"] { --tone: var(--tool-video); }
+.jf-confirm.jffs-go-dlg [data-tone="deck"] { --tone: var(--tool-deck); }
+.jf-confirm.jffs-go-dlg [data-tone="hvac"] { --tone: var(--tool-hvac); }
+.jf-confirm.jffs-go-dlg .jffs-tile[data-key="sent"] { --tone: var(--tool-roof); }
+.jf-confirm.jffs-go-dlg .jffs-tile[data-key="quoted"] { --tone: var(--tool-fence); }
+.jf-confirm.jffs-go-dlg .jffs-tile[data-key="clients"] { --tone: var(--tool-video); }
+
+.jf-confirm.jffs-dlg.jffs-go-dlg .jf-confirm-box {
+  padding-top: 34px;
+}
+.jf-confirm.jffs-dlg.jffs-go-dlg .jffs-x {
+  top: 16px;
+}
+/* The band: hard-edged segments under the box's top frame, one ink line
+   under them. */
+.jf-confirm.jffs-go-dlg .jffs-band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: 8px;
+  border-bottom: 1.5px solid var(--ink, #0a0a0a);
+}
+.jf-confirm.jffs-go-dlg .jffs-band i {
+  flex: 1 1 0;
+  background: var(--tone);
+}
+
+/* The company's numbers: one row of tiles, each a white box in an ink
+   frame topped with its colour, the number big in that colour. */
+.jf-confirm.jffs-go-dlg .jffs-tally {
+  margin-top: 16px;
+}
+.jf-confirm.jffs-go-dlg .jffs-tally-k {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted, #555);
+}
+.jf-confirm.jffs-go-dlg .jffs-tiles {
+  margin-top: 8px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.jf-confirm.jffs-go-dlg .jffs-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 14px 12px;
+  border: 1.5px solid var(--ink, #0a0a0a);
+  border-top: 5px solid var(--tone);
+  border-radius: var(--r-sm, 2px);
+  background: #fff;
+}
+.jf-confirm.jffs-go-dlg .jffs-tile dd {
+  order: -1;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: var(--tone);
+  overflow-wrap: anywhere;
+}
+.jf-confirm.jffs-go-dlg .jffs-tile dt {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink-soft, #333);
+}
+
+/* What the plan gives: a square per line, filled with its tool's colour, a
+   white icon, an ink frame and a 2px ink offset — the sidebar's open tool. */
+.jf-confirm.jffs-go-dlg .jffs-list {
   list-style: none;
   margin-top: 12px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
-.jf-confirm.jffs-dlg .jffs-list li {
+.jf-confirm.jffs-go-dlg .jffs-list li {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 700;
   line-height: 1.35;
   color: var(--ink, #0a0a0a);
 }
-.jf-confirm.jffs-dlg .jffs-li-t {
+.jf-confirm.jffs-go-dlg .jffs-li-t {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.jf-confirm.jffs-dlg .jffs-ic {
+.jf-confirm.jffs-go-dlg .jffs-ic {
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 1.5px solid var(--accent, #1854a0);
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--ink, #0a0a0a);
   border-radius: var(--r-sm, 2px);
-  color: var(--accent, #1854a0);
+  background: var(--tone, var(--accent, #1854a0));
+  box-shadow: 2px 2px 0 var(--ink, #0a0a0a);
+  color: #fff;
 }
-.jf-confirm.jffs-dlg .jffs-ic svg {
-  width: 16px;
-  height: 16px;
+.jf-confirm.jffs-go-dlg .jffs-ic svg {
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.jf-confirm.jffs-dlg .jffs-made {
+.jf-confirm.jffs-go-dlg .jffs-keeps {
   margin-top: 16px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--accent, #1854a0);
-  background: var(--accent-soft, rgba(24, 84, 160, 0.08));
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.45;
-  color: var(--ink, #0a0a0a);
-}
-.jf-confirm.jffs-dlg .jffs-keeps {
-  margin-top: 14px;
   font-size: 14px;
   line-height: 1.55;
   color: var(--ink-soft, #333);
 }
-.jf-confirm.jffs-dlg .jffs-acts {
+.jf-confirm.jffs-go-dlg .jffs-keeps b {
+  font-weight: 800;
+  color: var(--ink, #0a0a0a);
+}
+
+/* The two ways: the big blue button across the box, the link under it. */
+.jf-confirm.jffs-go-dlg .jffs-acts {
   margin-top: 20px;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
 }
-.jf-confirm.jffs-dlg .jffs-acts .jf-confirm-btn {
-  flex: 0 1 auto;
+.jf-confirm.jffs-go-dlg .jffs-acts .jf-confirm-btn.jffs-keepbig {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 56px;
   padding: 0 22px;
+  border-color: var(--ink, #0a0a0a);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  box-shadow: 3px 3px 0 var(--ink, #0a0a0a);
 }
+@media (hover: hover) {
+  .jf-confirm.jffs-go-dlg .jffs-acts .jf-confirm-btn.jffs-keepbig:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--ink, #0a0a0a);
+  }
+  .jf-confirm.jffs-go-dlg .jffs-acts .jffs-go:hover {
+    color: var(--accent-ink, #0e3d7a);
+  }
+}
+.jf-confirm.jffs-go-dlg .jffs-acts .jf-confirm-btn.jffs-keepbig:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--ink, #0a0a0a);
+}
+.jf-confirm.jffs-go-dlg .jffs-acts .jf-confirm-btn.jffs-keepbig:focus-visible {
+  outline: 2px solid var(--ink, #0a0a0a);
+  outline-offset: 3px;
+}
+.jf-confirm.jffs-go-dlg .jffs-acts .jffs-go {
+  align-self: center;
+  justify-content: center;
+  padding: 0 12px;
+  color: var(--ink, #0a0a0a);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Handheld: the house sheet at the foot; three tiles go two over one —
+   the amount across, the two counts under it. */
 @media (max-width: 600px) {
-  .jf-confirm.jffs-dlg .jffs-acts {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
+  .jf-confirm.jffs-dlg.jffs-go-dlg {
+    padding-bottom: calc(12px + var(--msheet-safe-b, 0px));
   }
-  .jf-confirm.jffs-dlg .jffs-acts .jf-confirm-btn {
-    width: 100%;
+  .jf-confirm.jffs-dlg.jffs-go-dlg .jf-confirm-box {
+    padding-top: 30px;
   }
-  .jf-confirm.jffs-dlg .jffs-go {
-    justify-content: center;
+  .jf-confirm.jffs-dlg.jffs-go-dlg .jffs-x {
+    top: 12px;
+  }
+  .jf-confirm.jffs-go-dlg .jffs-tally[data-n="3"] .jffs-tiles {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .jf-confirm.jffs-go-dlg .jffs-tally[data-n="3"] .jffs-tile[data-key="quoted"] {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+  .jf-confirm.jffs-go-dlg .jffs-tile dd {
+    font-size: 24px;
+  }
+  .jf-confirm.jffs-go-dlg .jffs-tally {
+    margin-top: 12px;
+  }
+  .jf-confirm.jffs-go-dlg .jffs-tiles {
+    gap: 8px;
+  }
+  .jf-confirm.jffs-go-dlg .jffs-list {
+    gap: 8px;
+  }
+  .jf-confirm.jffs-go-dlg .jffs-list li {
+    font-size: 14px;
   }
 }
 

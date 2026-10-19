@@ -13,10 +13,14 @@
  *     "Update card", the way to /dashboard/subscription for plans and
  *     invoices, and at its foot "Cancel subscription", which REPLACES the
  *     window with two more in turn:
- *       1 "Before you go": what the plan gives that Free does not (read from
- *         the company's own plan — lib/freePlan freePlanLosses), the
- *         company's own numbers, and the date it keeps the plan until.
- *         "Keep <plan>" closes it; "Continue to cancel" goes on.
+ *       1 "Before you go": a band of the estimators' colours over the box,
+ *         the company's own numbers as tiles (lib/freePlan freeTallyTiles —
+ *         none when it has none), what the plan gives that Free does not
+ *         (read from the company's own plan — freePlanLosses), each line on
+ *         a square in its own tool colour, and the date it keeps the plan
+ *         until, in bold. "Keep <plan>" is the box's one big button and
+ *         closes it; "Continue to cancel" is a plain, full-size link under
+ *         it and goes on at the first press (owner, 2026-10-18).
  *       2 the confirmation: "Cancel <plan>?", two buttons of one size. The
  *         second books the switch (actions/billing cancelSubscription); an
  *         error stays in the window.
@@ -37,7 +41,7 @@ import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cancelSubscription, resumeSubscription } from "@/actions/billing";
 import { longDate } from "@/lib/format";
-import type { FreeLoss } from "@/lib/freePlan";
+import { freeTallyTiles, type FreeLoss, type FreeTally } from "@/lib/freePlan";
 import { toast } from "@/components/ui/Toast";
 import { ConfirmPlanChange } from "./ConfirmPlanChange";
 import { useUpdateCard } from "@/components/v3/payment-ribbon/payment-ribbon";
@@ -144,7 +148,7 @@ export interface CancelOffer {
   planName: string;
   keepsUntil: string | null;
   losses: FreeLoss[];
-  made: string | null;
+  tally: FreeTally;
   /** Access already lapsed to Free while an external billing subscription remains. */
   accessAlreadyFree?: boolean;
 }
@@ -256,7 +260,7 @@ export function ManageSubscription({
       />
 
       {offer && !accessAlreadyFree ? (
-        <BeforeYouGo open={step === "go"} offer={offer} until={until} onKeep={close} onContinue={() => setStep("confirm")} />
+        <BeforeYouGo open={step === "go"} offer={offer} onKeep={close} onContinue={() => setStep("confirm")} />
       ) : null}
 
       <ConfirmPlanChange
@@ -470,35 +474,63 @@ function ManageWindow({
   );
 }
 
-/** Window 1. The house dialog's frame with a cross, a list and a link. */
+/** Each line's square wears one estimator colour (globals.css --tool-*,
+ *  the sidebar's tool squares): free-switch.css maps the tone to the token. */
+const LOSS_TONE: Record<FreeLoss["icon"], string> = {
+  "i-roof": "smart",
+  "i-file": "roof",
+  "i-target": "video",
+  "i-cal": "deck",
+  "i-msg": "hvac",
+};
+
+/** Window 1. The house dialog's frame with a cross: the band, the company's
+ *  numbers, the list, the date, the big button and the link. */
 function BeforeYouGo({
   open,
   offer,
-  until,
   onKeep,
   onContinue,
 }: {
   open: boolean;
   offer: CancelOffer;
-  until: string;
   onKeep: () => void;
   onContinue: () => void;
 }) {
   // The way back first: the focus lands on "Keep <plan>" once the box is in.
   const keepRef = useRef<HTMLButtonElement>(null);
   const plan = offer.planName;
+  const tiles = freeTallyTiles(offer.tally);
 
   return (
-    <FrameWindow open={open} onClose={onKeep} labelledBy="jffs-go-title" focusRef={keepRef}>
+    <FrameWindow open={open} onClose={onKeep} labelledBy="jffs-go-title" focusRef={keepRef} extraClass="jffs-go-dlg">
+      <div className="jffs-band" aria-hidden="true">
+        {Object.values(LOSS_TONE).map((t) => (
+          <i key={t} data-tone={t} />
+        ))}
+      </div>
       <div className="jf-confirm-kick">Cancel subscription</div>
       <h2 className="jf-confirm-h" id="jffs-go-title">
         Before you go
       </h2>
+      {tiles.length ? (
+        <div className="jffs-tally" data-n={tiles.length}>
+          <p className="jffs-tally-k">Your work on JobFlex</p>
+          <dl className="jffs-tiles">
+            {tiles.map((t) => (
+              <div key={t.key} className="jffs-tile" data-key={t.key}>
+                <dt>{t.label}</dt>
+                <dd>{t.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
       <p className="jffs-lead">{`What ${plan} gives you that the Free plan doesn't:`}</p>
       <ul className="jffs-list">
         {offer.losses.map((l) => (
           <li key={l.text}>
-            <span className="jffs-ic" aria-hidden="true">
+            <span className="jffs-ic" data-tone={LOSS_TONE[l.icon]} aria-hidden="true">
               <svg>
                 <use href={`#${l.icon}`} />
               </svg>
@@ -507,12 +539,13 @@ function BeforeYouGo({
           </li>
         ))}
       </ul>
-      {offer.made ? <p className="jffs-made">{offer.made}</p> : null}
       <p className="jffs-keeps">
-        {`You keep ${plan} until ${until}. After that your account moves to the Free plan — your data stays.`}
+        {`You keep ${plan} until `}
+        {offer.keepsUntil ? <b>{longDate(offer.keepsUntil)}</b> : untilWords(null)}
+        {". After that your account moves to the Free plan — your data stays."}
       </p>
       <div className="jffs-acts">
-        <button ref={keepRef} type="button" className="jf-confirm-btn primary" onClick={onKeep}>
+        <button ref={keepRef} type="button" className="jf-confirm-btn primary jffs-keepbig" onClick={onKeep}>
           {`Keep ${plan}`}
         </button>
         <button type="button" className="jffs-link jffs-go" onClick={onContinue}>

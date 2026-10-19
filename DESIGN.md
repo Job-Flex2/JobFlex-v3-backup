@@ -77,7 +77,17 @@ tool is open; then the name (no caption under it), "Soon" beside it when it
 is coming. The tools sit in one bay with no frame and no grid. A subpage
 toggle is a small white square in a 1.5px ink frame with a down arrow (up
 when open); a subpage row (an inventory) has the same ink, size and weight
-as the rows above it, indented on a guide line. Nothing else reads `--tool-*`.
+as the rows above it, indented on a guide line. The one other reader of
+`--tool-*` (owner, 2026-10-18) is the cancel window "Before you go"
+([FreeSwitch](src/components/billing/FreeSwitch.tsx)): a band of hard-edged
+tool-colour segments across the top of the box; the company's own numbers
+(proposals sent, what they quoted, clients — a zero is left out, none at all
+hides the row) as white tiles in an ink frame topped and numbered in a tool
+colour, one row on a desk, the amount across over the two counts on a phone;
+each "what the plan gives" line on a square filled with its own tool colour
+(white icon, ink frame, 2px ink offset); the keep date in bold; "Keep <plan>"
+one full-width blue button with a resting 3px ink offset; "Continue to
+cancel" a 14px bold ink link under it, never small or grey.
 The handheld drawer folds each estimator's inventory the same way (2026-10-17).
 The AI desk (owner, 2026-10-16): its two tabs, Calls | AI desk setup, are one
 framed switch, the open tab filled with ink. The setup is a checklist card —

@@ -23,7 +23,8 @@
      One colour per tool for the sidebar's Estimating tools rows, desk and
      drawer: the offset shadow under each icon square and its fill when the
      tool is open. Values are the tile colours the bay has worn since
-     2026-10-12; nothing else reads these. */
+     2026-10-12. The one other reader (owner, 2026-10-18): the cancel
+     window "Before you go" (billing/free-switch.css). */
   --tool-smart: #6a4bd1;
   --tool-plan: #2f4a7a;
   --tool-roof: #1854a0;

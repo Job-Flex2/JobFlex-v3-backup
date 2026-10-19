@@ -16,7 +16,7 @@
  * five "use client" panes, so it must stay free of Prisma and "use server".
  */
 
-import type { FreeLoss } from "@/lib/freePlan";
+import type { FreeLoss, FreeTally } from "@/lib/freePlan";
 
 /* ------------------------------------------------------------------ */
 /* Shared primitive types                                              */
@@ -1346,8 +1346,8 @@ export interface BillingData {
     /** ISO end of the paid cycle (or trial): what the plan is kept until. */
     keepsUntil: string | null;
     losses: FreeLoss[];
-    /** "You've sent N proposals and scheduled N jobs with JobFlex", or null. */
-    made: string | null;
+    /** The company's own numbers (lib/freePlan freeTallyTiles draws them). */
+    tally: FreeTally;
     /** Access already lapsed to Free while the Stripe subscription still renews. */
     accessAlreadyFree?: boolean;
   } | null;
