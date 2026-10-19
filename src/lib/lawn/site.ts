@@ -13,6 +13,8 @@ export type LawnSite = {
   lat: number;
   lng: number;
   state: string | null;
+  /** For the county's own rules (Florida's summer fertilizer bans, Montgomery County's pesticide law). */
+  county?: string | null;
   place: string;
   locationFactor: number;
   photo: { itemId: string; date: string; gsdM: number } | null;

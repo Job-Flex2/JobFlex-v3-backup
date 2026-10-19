@@ -10,6 +10,8 @@ import { fillRings, ftPerPx, type Grid } from "../../../src/lib/lawn/geo";
 import { priceYard, pickMower, difficultyOf, cleanLawnSettings, cleanOptions, DEFAULT_LAWN_SETTINGS, DEFAULT_OPTIONS } from "../../../src/lib/lawn/pricing";
 import { climateFor, mowVisits, monthsOf, weeklyMonths, STATE_CLIMATE } from "../../../src/lib/lawn/season";
 import { lawnTaxed, taxWords } from "../../../src/lib/lawn/tax";
+import { rulesAt, inWindow, FERTILIZER, FLORIDA_SUMMER } from "../../../src/lib/lawn/rules";
+import { seasonCalendar, planTotals, lawnSlots, toSchedule, mowHeightIn } from "../../../src/lib/lawn/calendar";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -166,6 +168,53 @@ console.log("── sales tax on lawn work");
 check("Texas taxes mowing; Florida doesn't", lawnTaxed("TX", "service") && !lawnTaxed("FL", "service"));
 check("New York taxes mowing but not installing (a capital improvement)", lawnTaxed("NY", "service") && !lawnTaxed("NY", "install") && /ST-124/.test(taxWords("NY")));
 check("Arizona taxes installing, not mowing", !lawnTaxed("AZ", "service") && lawnTaxed("AZ", "install"));
+
+console.log("── the rules at an address");
+{
+  const nj = rulesAt("NJ");
+  check("New Jersey: phosphorus-limited, no fertilizer Dec 1 – Mar 1, 72-hour lawn signs, no neonicotinoids", nj.phosphorusLimited && nj.blackouts.some((w) => w.from === "12-01" && w.to === "03-01") && nj.rules.some((r) => /72 hours/.test(r.title)) && nj.rules.some((r) => /neonicotinoid/i.test(r.title)));
+  check("a blackout over New Year: Jan 15 is in Dec 1 – Mar 1, Apr 15 isn't", inWindow(new Date("2027-01-15"), { from: "12-01", to: "03-01", what: "all" }) && !inWindow(new Date("2027-04-15"), { from: "12-01", to: "03-01", what: "all" }));
+  const pin = rulesAt("FL", "Pinellas County");
+  check("Pinellas County: the summer nitrogen ban and the state's applicator certificate", pin.blackouts.some((w) => w.what === "nitrogen-phosphorus" && w.from === "06-01") && pin.rules.some((r) => /LCFAC/.test(r.title)));
+  check("Montgomery County bans cosmetic pesticides and gas blowers", rulesAt("MD", "Montgomery County").herbicideBan && rulesAt("MD", "Montgomery County").rules.some((r) => r.kind === "equipment"));
+  check("Florida's summer-ban counties are 17", Object.keys(FLORIDA_SUMMER).length === 17);
+  check("every rule says where it comes from", Object.values(FERTILIZER).every((f) => !!f.source) && rulesAt("CA").rules.every((r) => r.source.length > 10));
+  check("a state with no fertilizer law still hears about the applicator's licence", rulesAt("GA").rules.some((r) => r.kind === "pesticide") && !rulesAt("GA").phosphorusLimited);
+}
+
+console.log("── the season, date by date");
+{
+  const yard = { ...base, bedSqft: 600, bedPerimeterFt: 160 };
+  const opts = { ...DEFAULT_OPTIONS, irrigationZones: 5 };
+  const picked = ["mow", "fert", "aerate", "overseed", "springCleanup", "fallCleanup", "mulch", "irrigationStart", "irrigationBlowout"] as const;
+  const cal = (st: string, county: string | null = null) => {
+    const q = priceYard({ measures: yard, settings: DEFAULT_LAWN_SETTINGS, options: opts, locationFactor: 1, state: st, ownRate: false });
+    return { q, v: seasonCalendar({ start: new Date("2027-01-15"), quote: q, picked, fertRounds: 5, frequency: "weekly", rules: rulesAt(st, county), crewSize: 2 }) };
+  };
+  const il = cal("IL");
+  const mows = il.v.filter((x) => x.service === "mow");
+  check("Illinois mows as many times as the quote counts, April to October", mows.length === il.q.visits && mows[0].date.startsWith("2027-04") && mows[mows.length - 1].date.startsWith("2027-10"), `${mows.length} vs ${il.q.visits}, ${mows[0]?.date}–${mows[mows.length - 1]?.date}`);
+  check("cool-season: aeration and overseeding in September, the blowout before the freeze", il.v.some((x) => x.service === "aerate" && x.date.slice(5, 7) === "09") && il.v.some((x) => x.service === "irrigationBlowout" && x.date.slice(5, 7) === "10"));
+  const ferts = il.v.filter((x) => x.service === "fert");
+  check("five fertilizer rounds, the first the crabgrass pre-emergent", ferts.length === 5 && /pre-emergent/.test(ferts[0].checklist[0]), JSON.stringify(ferts.map((f) => f.date)));
+  const nj = cal("NJ").v.filter((x) => x.service === "fert");
+  check("New Jersey: no round from Dec 1 to Mar 1", nj.every((f) => !inWindow(new Date(f.date), { from: "12-01", to: "03-01", what: "all" })), JSON.stringify(nj.map((f) => f.date)));
+  const vt = cal("VT").v.filter((x) => x.service === "fert");
+  check("Vermont: every round between Apr 1 and Oct 15", vt.every((f) => f.date.slice(5) >= "04-01" && f.date.slice(5) <= "10-15"), JSON.stringify(vt.map((f) => f.date)));
+  const pin = cal("FL", "Pinellas County").v;
+  const summer = pin.filter((x) => x.service === "fert" && x.date.slice(5) >= "06-01" && x.date.slice(5) <= "09-30");
+  check("Pinellas: a summer round is iron and micronutrients, not nitrogen", summer.length > 0 && summer.every((x) => /Iron and micronutrients/.test(x.checklist[0])));
+  check("Florida: no sprinkler start-up (never winterized), spring work in March", !pin.some((x) => x.service === "irrigationStart") && pin.find((x) => x.service === "springCleanup")?.date.slice(5, 7) === "03");
+  check("bermuda (Arizona) gets winter rye in October", cal("AZ").v.some((x) => x.service === "overseed" && x.label === "Winter rye overseed" && x.date.slice(5, 7) === "10"));
+  check("mowing height: bermuda 1.5 in, tall fescue 3.5 in, bluegrass 3 in raised to 3.5 in in July", mowHeightIn(climateFor("AZ"), 6) === 1.5 && mowHeightIn(climateFor("VA"), 5) === 3.5 && mowHeightIn(climateFor("IL"), 7) === 3.5);
+  const t = planTotals(il.v, il.q, picked);
+  check("the plan's season is every visit's price; a month is a twelfth", near(t.monthly, t.season / 12, 0.01) && t.visits === il.v.length);
+  // Kept with the plan by month-day: the next term books the same season again.
+  const slots = lawnSlots(toSchedule(il.v), new Date("2028-01-15"), 12);
+  check("a renewal books the same season the next year", slots.length === il.v.length && slots[0].dueAt.getUTCFullYear() === 2028 && slots.every((x, i) => i === 0 || x.dueAt >= slots[i - 1].dueAt), `${slots.length} vs ${il.v.length}`);
+  const mid = lawnSlots(toSchedule(il.v), new Date("2027-07-01"), 12);
+  check("a plan started mid-season books what's left this year and the start of next", mid.length === il.v.length && mid[0].dueAt.getUTCMonth() === 6 && mid[mid.length - 1].dueAt.getUTCFullYear() === 2028);
+}
 
 console.log(bad ? `\n${bad} FAILED` : "\nall ok");
 process.exit(bad ? 1 : 0);

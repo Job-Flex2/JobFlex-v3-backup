@@ -277,7 +277,12 @@ export function priceYard(ctx: PricingContext): LawnQuote {
     push({
       id: "overseed",
       name: "Overseeding",
-      desc: `Seed spread behind the aerator over ${m.lawnSqft.toLocaleString("en-US")} sq ft, the grass the lawn has (${climate.grasses})`,
+      desc:
+        climate.zone !== "warm"
+          ? `Seed spread behind the aerator over ${m.lawnSqft.toLocaleString("en-US")} sq ft, the grass the lawn has (${climate.grasses})`
+          : climate.grasses.toLowerCase().startsWith("bermuda")
+            ? `Winter rye overseeded into ${m.lawnSqft.toLocaleString("en-US")} sq ft of bermuda in October, for a green winter`
+            : `Bare spots patched in spring — St. Augustine and centipede with plugs or sod, seed only where the grass takes it`,
       unitPrice: round5(seedH * rate + (m.lawnSqft / 1000) * s.seedCostPer1000 * mk),
       unit: "lot",
       qty: 1,

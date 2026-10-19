@@ -112,6 +112,7 @@ export async function readProperty(inp: ReadInput): Promise<LawnSite> {
   let lng = Number.isFinite(inp.lng) ? Number(inp.lng) : NaN;
   let address = inp.address?.trim() ?? "";
   let state: string | null = null;
+  let county: string | null = null;
   let place = "";
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     if (!address) throw new ReadError("Type the client's address.");
@@ -120,6 +121,7 @@ export async function readProperty(inp: ReadInput): Promise<LawnSite> {
     lat = g.lat;
     lng = g.lng;
     state = resolveStateCode(g.state ?? null) ?? stateFromAddress(address);
+    county = g.county ?? null;
     place = [g.city, state].filter(Boolean).join(", ");
     if ("formatted" in g && typeof g.formatted === "string" && g.formatted) address = g.formatted;
   }
@@ -150,6 +152,7 @@ export async function readProperty(inp: ReadInput): Promise<LawnSite> {
     acreage = p.acreage;
     stories = p.storeys;
     state = state ?? resolveStateCode(p.stateAbbr ?? null);
+    county = county ?? p.countyName ?? null;
     if (!address && p.address) address = [p.address, p.city, p.stateAbbr].filter(Boolean).join(", ");
     if (!place) place = [p.city, p.stateAbbr].filter(Boolean).join(", ");
   }
@@ -158,8 +161,10 @@ export async function readProperty(inp: ReadInput): Promise<LawnSite> {
   if (!state) {
     const c = await countyAtPoint(lat, lng).catch(() => null);
     state = resolveStateCode(c?.state ?? null);
+    county = county ?? c?.county ?? null;
     if (!place && c) place = `${c.county}, ${state ?? c.state}`;
   }
+  if (!county && (state === "FL" || state === "MD")) county = (await countyAtPoint(lat, lng).catch(() => null))?.county ?? null;
   const loc = locationIndex(address || place);
 
   // The photo, the trees' height, on one grid around the lot.
@@ -188,6 +193,7 @@ export async function readProperty(inp: ReadInput): Promise<LawnSite> {
     lat,
     lng,
     state,
+    county,
     place: place || loc.place,
     locationFactor: loc.factor,
     photo: { itemId: photo.id, date: photo.date, gsdM: photo.gsdM },
