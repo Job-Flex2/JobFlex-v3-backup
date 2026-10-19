@@ -1,3 +1,6 @@
-# preview stills and render frames — rebuilt by preview.js / render.js
-frames/
+# preview stills and render scratch (preview.js / render.js); the per-second frames of the
+# delivered hvac2 videos (16x9/, 4x5/) are kept
+frames/*
+!frames/16x9/
+!frames/4x5/
 assets/*.txt

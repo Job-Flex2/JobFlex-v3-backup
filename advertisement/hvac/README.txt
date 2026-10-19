@@ -1,4 +1,54 @@
-JobFlex HVAC estimator — the landing's demo film (?industry=hvac hero)
+JobFlex HVAC estimator — demo videos
+
+═══ 1 · The hvac2 landing's demo (40 s, delivered edit) ════════════════════════
+
+Sources (as delivered, not re-cut — source/; the 4:5 one also goes to Meta Ads):
+  source/jobflex-hvac-demo-40-16x9.mp4   1920x1080, 40 s, 30 fps, H.264 High, no audio, 6,053,035 B
+  source/jobflex-hvac-demo-40-4x5.mp4    1080x1350, 40 s, 30 fps, H.264 High, no audio, 5,151,642 B
+  The 16:9 carries the step captions on black plates at the lower left; the 4:5 carries the same
+  captions as a header on the paper at the top. Same cut, same timing.
+
+Web files (encode.sh; two-pass so each lands under its cap; -an, +faststart, yuv420p, 30 fps):
+  public/landing-e/hvac-demo-16x9.mp4          1920x1080 H.264 High, 1000 kbit/s    cap 5 MB
+  public/landing-e/hvac-demo-16x9.webm         1920x1080 VP9,         650 kbit/s    cap 3.5 MB
+  public/landing-e/hvac-demo-4x5.mp4           1080x1350 H.264 High,  760 kbit/s    cap 4 MB
+  public/landing-e/hvac-demo-4x5.webm          1080x1350 VP9,         560 kbit/s    cap 3 MB
+  public/landing-e/hvac-demo-poster-16x9.webp  the 22 s frame, 1920x1080, WebP q55  cap 60 KB
+  public/landing-e/hvac-demo-poster-4x5.webp   the 22 s frame, 1080x1350, WebP q75  cap 50 KB
+  Both formats keep their full size: at 1440x810 / 864x1080 the captions came out softer than
+  1080p at the same size (compared on the 20.5 s plate), so no downscale.
+
+The captions, by second (plate changes found with ffmpeg's scene filter on the caption area,
+checked frame by frame; the same in both formats):
+   0.2– 2.3   intro   JOBFLEX · HVAC ESTIMATOR — A full system, start to finish
+   2.3– 4.4   01      The job — Pick the job
+   4.4– 9.6   02      The house — Type the address. The house comes back.
+   9.6–14.9   03      The details — Type what you see on site
+  14.9–18.4   04      The load — Manual J-based, on the county's design day
+  18.4–23.4   05      The equipment — Sized by Manual S — real model numbers
+  23.4–27.6   06      The price — Every line priced
+  27.6–32.2   07      Your inventory — Your units, your costs
+  32.2–37.3   08      The client — One click: a proposal they can sign (on the phone)
+  37.6–40.0   final   JobFlex · HVAC estimator — Size it. Price it. Send it. + Start your free trial
+                      (no plate; the end card, fully in by ~38 s)
+  The first frame (0.0) has no plate; the intro plate fades in over 0.1–0.4 s. Plate 08 fades
+  out over 37.3–37.6 s while the end card cross-fades in.
+
+Frames: frames/16x9/tNN.jpg and frames/4x5/tNN.jpg — one frame at every whole second 0–39
+(-ss N), scaled to 640 / 432 px wide.
+
+Re-encoding (from the repo root; FFMPEG=<path> when ffmpeg is not on PATH):
+    bash advertisement/hvac/encode.sh
+  The frames:
+    for s in $(seq 0 39); do t=$(printf %02d $s)
+      ffmpeg -v error -y -ss $s -i advertisement/hvac/source/jobflex-hvac-demo-40-16x9.mp4 -frames:v 1 -vf scale=640:-2 -q:v 4 advertisement/hvac/frames/16x9/t$t.jpg
+      ffmpeg -v error -y -ss $s -i advertisement/hvac/source/jobflex-hvac-demo-40-4x5.mp4  -frames:v 1 -vf scale=432:-2 -q:v 4 advertisement/hvac/frames/4x5/t$t.jpg
+    done
+  The caption changes:
+    ffmpeg -i advertisement/hvac/source/jobflex-hvac-demo-40-16x9.mp4 -vf "crop=960:220:40:830,select='gt(scene,0.08)',showinfo" -an -f null - 2>&1 | grep -o "pts_time:[0-9.]*"
+    ffmpeg -i advertisement/hvac/source/jobflex-hvac-demo-40-4x5.mp4  -vf "crop=1080:300:0:0,select='gt(scene,0.08)',showinfo" -an -f null - 2>&1 | grep -o "pts_time:[0-9.]*"
+
+═══ 2 · The ?industry=hvac hero film (45 s, rendered here from the real app) ═══
 
 Files (all 45 s, 30 fps, no audio track — the landing plays them muted):
   public/landing-e/hvac-demo-169.mp4    1920x1080 H.264, two-pass, under 6 MB
