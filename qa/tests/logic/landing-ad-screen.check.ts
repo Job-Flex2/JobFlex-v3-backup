@@ -72,18 +72,18 @@ check("the HVAC and roofing tables never share a key, and a roofing key is no HV
 const hvHooked = withHook(variantContent("hvac"), hookContent("hvac", "tonnage"));
 check("an HVAC hook replaces the two lines and the bold third line, keeps the button and the window", hvHooked.h1.join(" | ") === "Still Sizing by the Square Foot? | Stop Guessing Tonnage." && hvHooked.subStrong === undefined && hvHooked.heroCta === "Build My First Estimate →" && hvHooked.visual === "hvac" && hvHooked.shotCta === true);
 
-// ── HVAC v2 (?industry=hvac2, 2026-10-19): HVAC's page, the film in the shot's place and one button
+// ── HVAC v2 (?industry=hvac2, 2026-10-19): HVAC's page, the film in the shot's place and the trial's terms under the buttons
 check("hvac2 is reached by its key and by hvac-v2; every HVAC spelling is still the HVAC page", resolveLandingVariant("hvac2") === "hvac2" && resolveLandingVariant("HVAC-V2") === "hvac2" && resolveLandingVariant("hvac") === "hvac" && resolveLandingVariant("HVAC") === "hvac" && resolveLandingVariant("heating") === "hvac" && resolveLandingVariant("hvac-contractor") === "hvac");
 check("hvac2 is a version of hvac; no other page is a version", baseVariant("hvac2") === "hvac" && landingVersion("hvac2") === "hvac2" && baseVariant("hvac") === "hvac" && landingVersion("hvac") === undefined && landingVersion(undefined) === undefined && baseVariant(undefined) === undefined);
 check("hvac2 signs up as HVAC and names itself; HVAC's link is as it was", signupHref("/auth/register", { industry: "hvac2", utm: { utm_source: "fb" }, fbclid: "Ab_1" }) === "/auth/register?industry=hvac&landing=hvac2&utm_source=fb&fbclid=Ab_1" && signupHref("/auth/register", { industry: "hvac", utm: { utm_source: "fb" }, fbclid: "Ab_1" }) === "/auth/register?industry=hvac&utm_source=fb&fbclid=Ab_1" && signupHref("/auth/register", {}) === "/auth/register");
 check("hvac2 opens on hvac's ad hooks", resolveLandingHook("hvac2", "tonnage") === "tonnage" && hookContent("hvac2", "tonnage") === hookContent("hvac", "tonnage") && hooksOf("hvac2").length === hooksOf("hvac").length && resolveLandingHook("hvac2", "no-report") === undefined);
 check("hvac2 is HVAC's page in HVAC's order", landingSectionOrder("hvac2").join() === landingSectionOrder("hvac").join() && landingSectionsFor("hvac2").map((x) => x.key).join() === landingSectionOrder("hvac").join() && landingSectionOrder("hvac").join() === "hero,showcase,hvac,montage,proposals,portal,crew,integrations,stats,built,compare,pricing,faq,final");
 const h2v = variantContent("hvac2"), hvc = variantContent("hvac");
-const { visual: h2Visual, singleCta: h2Single, ...h2Rest } = h2v;
+const { visual: h2Visual, heroLine: h2Line, ...h2Rest } = h2v;
 const { visual: hvVisual, ...hvRest } = hvc;
-check("hvac2 is hvac's hero with two changes: the film in the shot's place and one button", JSON.stringify(h2Rest) === JSON.stringify(hvRest) && h2Visual === "hvac-video" && h2Single === true && hvVisual === "hvac" && hvc.singleCta === undefined);
+check("hvac2 is hvac's hero with two changes: the film in the shot's place and the trial's terms under the buttons", JSON.stringify(h2Rest) === JSON.stringify(hvRest) && h2Visual === "hvac-video" && h2Line === "trial-terms" && hvVisual === "hvac" && hvc.heroLine === undefined);
 const h2Hooked = withHook(h2v, hookContent("hvac2", "tonnage"));
-check("an ad hook on hvac2 changes the headline as on hvac and keeps the film and the one button", h2Hooked.h1.join(" | ") === hvHooked.h1.join(" | ") && h2Hooked.sub === hvHooked.sub && h2Hooked.visual === "hvac-video" && h2Hooked.singleCta === true);
+check("an ad hook on hvac2 changes the headline as on hvac and keeps the film and the terms", h2Hooked.h1.join(" | ") === hvHooked.h1.join(" | ") && h2Hooked.sub === hvHooked.sub && h2Hooked.visual === "hvac-video" && h2Hooked.heroLine === "trial-terms");
 
 // ── the price
 const plan = (slug: string, priceCents: number, features: string[]): PricedPlan => ({ slug, priceCents, isFree: priceCents === 0, features });

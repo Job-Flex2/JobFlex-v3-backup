@@ -189,15 +189,13 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // rendered as it always was; a landing that moves it down the page gives
   // it a content-visibility box like every other section under the fold.
   const order = landingSectionOrder(variant);
-  // HVAC v2 (singleCta): one trial button in the hero with the trial's terms
-  // under it in place of the line under the pair, and the same words on the
-  // final block's and the sticky bar's buttons. Everything else is HVAC's.
-  const single = !!v.singleCta;
-  const singleCta = `Start My ${offer.days}-Day Free Trial`;
-  const terms = single ? await hvac2TrialTerms(plans, requiresCard) : null;
+  // HVAC v2 (heroLine "trial-terms"): the hero's trial button says the trial's
+  // length in its own words and the trial's two lines of terms stand under the
+  // pair in place of the line there. Everything else is HVAC's.
+  const terms = v.heroLine === "trial-terms" ? await hvac2TrialTerms(plans, requiresCard) : null;
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
-    hero: single ? <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={singleCta} fbclid={fbclid} inAppBrowser={inAppBrowser} terms={terms} hook={hook} /> : <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} />,
+    hero: terms ? <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={`Start My ${offer.days}-Day Free Trial →`} fbclid={fbclid} inAppBrowser={inAppBrowser} terms={terms} hook={hook} /> : <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
@@ -220,7 +218,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     built: <div className="lp-cv lp-cv--built"><BuiltSection jobs={g?.jobs} phoneJobs={g?.phoneJobs} /></div>,
     pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
     faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={faqCta} requiresCard={requiresCard} /></div>,
-    final: <CtaFooter registerHref={register} cta={single ? singleCta : low} />,
+    final: <CtaFooter registerHref={register} cta={low} />,
   };
   return (
     <TrialOfferProvider offer={offer}>
@@ -231,7 +229,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
       <main>
         {order.map((key) => (blocks[key] ? <Fragment key={key}>{blocks[key]}</Fragment> : null))}
       </main>
-      <MobileCta registerHref={register} cta={single ? `${singleCta} →` : low} />
+      <MobileCta registerHref={register} cta={low} />
       <ScrollFx />
       <SmoothWheel />
       <LazyBg />

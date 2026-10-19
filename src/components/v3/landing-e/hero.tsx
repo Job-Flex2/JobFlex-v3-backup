@@ -44,8 +44,8 @@ export function Hero({
   terms = null,
   hook,
 }: {
-  /** A variant with `singleCta` (hvac2): the trial's two lines under its one
-   *  button (hvac2/hvac2-terms.ts), in place of the price line. */
+  /** A variant with heroLine "trial-terms" (hvac2): the trial's two lines
+   *  under the buttons (hvac2/hvac2-terms.ts), in place of the price line. */
   terms?: [string, string] | null;
   /** The ad hook the headline shows (`?hook=`), for the demo film's events. */
   hook?: string;
@@ -131,23 +131,6 @@ export function Hero({
         )}
         </HeroExperiment>
         <div className="lp-enter w-full sm:w-auto" data-entrance="cta">
-          {variant.singleCta ? (
-            /* ONE BUTTON (hvac2, 2026-10-19): the trial alone — Google stays on
-               the sign-up page — and the trial's terms under it. */
-            <div className="lp-h2-act">
-              <a href={registerHref} className="lp-btn-dark lp-cta lp-cta--solid lp-trial-cta" data-cta="hero">
-                {trialCta ?? cta ?? variant.primaryCta}
-                <span aria-hidden>→</span>
-              </a>
-              {terms ? (
-                <p className="lp-h2-terms">
-                  <span>{terms[0]}</span>
-                  <span>{terms[1]}</span>
-                </p>
-              ) : null}
-            </div>
-          ) : (
-          <>
           {/* The pair, and nothing under it (owner, 2026-10-15): the framed
               "Start your 7-day free trial" badge that sat beneath it is gone
               from every landing — it read as a third button. The product shot
@@ -187,9 +170,13 @@ export function Hero({
           {/* The price, in the first screen (2026-10-04): under the buttons,
               in the landing's mono caps. The trial it follows is the button
               above it (owner, 2026-10-16), so the line says only the price. */}
-          {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
-          </>
-          )}
+          {/* hvac2 (heroLine "trial-terms"): the trial's two lines of terms in the price line's place. */}
+          {terms ? (
+            <p className="lp-h2-terms">
+              <span>{terms[0]}</span>
+              <span>{terms[1]}</span>
+            </p>
+          ) : priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
         </div>
         </HeroEntrance>
       </div>
