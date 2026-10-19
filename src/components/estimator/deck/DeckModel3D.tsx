@@ -679,6 +679,12 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     let content: Built | null = null;
     // A handle drag: the pointer's movement along the handle's axis, read on a plane through the handle; `last` is the value last sent.
     let drag: { handle: SceneHandle; plane: THREE.Plane; start: THREE.Vector3; last: number } | null = null;
+    // THE GRABBED EDGE STAYS UNDER THE POINTER (owner, 2026-10-18). The scene stands on the deck's centre, so a wider
+    // deck used to slide the house one way and the knob the other: the knob fell behind the pointer and the size ran
+    // ahead of the hand. While a knob is held the origin is pinned where the drag began, so only the grabbed edge
+    // moves — by exactly the drag; the rebuild after letting go re-centres (and re-frames) as before.
+    let pinned: { ox: number; oz: number } | null = null;
+    const origin = (s: { widthFt: number; depthFt: number }) => pinned ?? { ox: s.widthFt / 2, oz: s.depthFt / 2 };
     // The knob that had the keyboard, so a rebuild hands it back.
     let focusedKnob: string | null = null;
     let span = 20;
@@ -775,8 +781,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const tiltGround = () => {
       const s = sceneRef.current;
       const g = s.ground;
-      const ox = s.widthFt / 2;
-      const oz = s.depthFt / 2;
+      const { ox, oz } = origin(s);
       const outPerFt = g ? g.outDropFt / Math.max(1, s.depthFt) : 0;
       const acrossPerFt = g ? g.acrossDropFt / Math.max(1, s.widthFt) : 0;
       // The plane z = −out·y − across·x in scene feet, zero at the house line's left corner.
@@ -788,8 +793,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const build = (): Built => {
       const s = sceneRef.current;
       const group = new THREE.Group();
-      const ox = s.widthFt / 2;
-      const oz = s.depthFt / 2;
+      const { ox, oz } = origin(s);
       const owned: Array<{ dispose: () => void }> = [];
       const fade: THREE.Material[] = [];
       const centres: Array<[THREE.Vector3, number]> = [];
@@ -1601,8 +1605,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         return;
       }
       const s = sceneRef.current;
-      const ox = s.widthFt / 2;
-      const oz = s.depthFt / 2;
+      const { ox, oz } = origin(s);
       const group = new THREE.Group();
       const fill = new THREE.MeshBasicMaterial({ color: 0x2a6fd6, transparent: true, opacity: 0.32, depthTest: false, depthWrite: false, side: THREE.DoubleSide });
       const line = new THREE.LineBasicMaterial({ color: 0x1854a0, transparent: true, opacity: 0.95, depthTest: false });
@@ -1737,8 +1740,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       pointer.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
       ray.setFromCamera(pointer, camera);
       const s = content.scene;
-      const ox = s.widthFt / 2;
-      const oz = s.depthFt / 2;
+      const { ox, oz } = origin(s);
       // Callout tags first.
       if (connRef.current) {
         const tagHits = ray.intersectObjects(content.callouts.filter((c) => c.visible), false);
@@ -1807,6 +1809,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const start = planePoint(clientX, clientY, plane);
       if (!start) return;
       drag = { handle: h, plane, start, last: h.value };
+      pinned = origin(sceneRef.current);
       orbit.enabled = false;
       renderer.domElement.style.cursor = h.axis === "z" ? "ns-resize" : "move";
     };
@@ -1816,13 +1819,16 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       if (!p) return;
       const h = drag.handle;
       const d = h.axis === "x" ? p.x - drag.start.x : h.axis === "y" ? p.z - drag.start.z : p.y - drag.start.y;
-      const value = h.value + d / h.perUnit;
+      // `follow`: a handle on something that grows both ways about its centre (a stair's width) travels half the
+      // change, so the change is twice the drag to keep it under the pointer.
+      const value = h.value + d / h.perUnit / (h.follow ?? 1);
       // Half a foot or an inch at a time: the deck re-frames on every value sent.
       if (!done && Math.abs(value - drag.last) < (h.perUnit === 1 ? 0.5 : 1)) return;
       drag.last = value;
       editCbRef.current?.({ kind: h.kind, id: h.id, value, done });
       if (done) {
         drag = null;
+        pinned = null;
         orbit.enabled = true;
         renderer.domElement.style.cursor = "";
       }
@@ -1930,6 +1936,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const onCancel = () => {
       if (drag) {
         drag = null;
+        pinned = null;
         orbit.enabled = true;
         renderer.domElement.style.cursor = "";
       }

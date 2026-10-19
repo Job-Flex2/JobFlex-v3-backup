@@ -1407,7 +1407,10 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
 
   const kindStep = () => (
     <>
-      <DeckKindPickerView staticPreview foldSamples structure={design.structure} onPickKind={setStructure} onPickSample={applySample} appliedSampleId={applied && applied.design === design ? applied.id : null} />
+      {/* The pictures are live again (owner, 2026-10-18): they stand up when picked, turn under the mouse and by
+          their ↻ on a touch screen, as the old studio's did. Sections off the screen are not rendered at all now
+          (content-visibility), so the still images they were swapped for are no longer needed. */}
+      <DeckKindPickerView foldSamples structure={design.structure} onPickKind={setStructure} onPickSample={applySample} appliedSampleId={applied && applied.design === design ? applied.id : null} />
       <PhotoWhere ph={ph} design={design} what={what} setView={setView} />
       {design.structure === "gazebo" || design.structure === "pergola" ? (
         <>
