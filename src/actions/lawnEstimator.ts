@@ -7,6 +7,8 @@
 //   readLawnSettings / saveLawnSettings — the company's lawn rates, SyncState `lawnsettings:<org>`.
 //   findLawnClients — the client picker.
 //   convertLawnToProposal — the priced yard → a draft proposal (trade "lawn"), the yard riding along as an activity.
+//   createLawnPlan — the season's calendar → a service plan for the client (trade "lawn", billed monthly), its visits
+//     kept beside it for the plan engine to book; sent to the client to accept when asked.
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -26,6 +28,9 @@ import { readProperty, ReadError } from "@/lib/lawn/read";
 import type { LawnSite } from "@/lib/lawn/site";
 import { cleanLawnSettings, cleanOptions, DEFAULT_LAWN_SETTINGS, type LawnSettings, type ServiceOptions } from "@/lib/lawn/pricing";
 import { lawnTaxed } from "@/lib/lawn/tax";
+import { toSchedule, type PlanVisit } from "@/lib/lawn/calendar";
+import { writeLawnSchedule } from "@/lib/lawn/planStore";
+import { sendPlan } from "@/lib/servicePlanBook";
 
 type Gate = { ok: true; organizationId: string; userId: string; role: string } | { ok: false; error: string };
 
@@ -314,5 +319,74 @@ export async function convertLawnToProposal(raw: unknown): Promise<{ ok: true; i
   } catch (err) {
     logServerError("lawn-convert", err, { kind: "action", organizationId: g.organizationId });
     return { ok: false, error: "The proposal could not be saved. Try again in a moment." };
+  }
+}
+
+/* ── The service plan ────────────────────────────────────────────────────────────────────────────────────────── */
+
+const visitSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  service: z.string().max(40),
+  label: z.string().trim().min(1).max(120),
+  minutes: z.number().int().min(5).max(1440),
+  price: z.number().min(0).max(1_000_000),
+  checklist: z.array(z.string().max(300)).max(12),
+});
+const planSchema = z.object({
+  clientId: z.string().min(1).max(64),
+  name: z.string().trim().min(2).max(80),
+  description: z.string().max(600).default(""),
+  address: z.string().max(300).nullable().optional(),
+  monthly: z.number().min(0).max(100_000),
+  visits: z.array(visitSchema).min(1).max(120),
+  benefits: z.array(z.string().max(200)).max(20).default([]),
+  send: z.boolean().default(false),
+});
+
+/** The season → a service plan: monthly billing at a twelfth of the season, every visit booked when it starts. */
+export async function createLawnPlan(raw: unknown): Promise<{ ok: true; planId: string; sent: boolean; emailed: boolean; acceptHref: string | null } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const parsed = planSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: `The plan didn't validate — ${parsed.error.issues[0]?.path.join(".") ?? ""} ${parsed.error.issues[0]?.message ?? ""}`.trim() };
+  const d = parsed.data;
+  try {
+    const client = await db.client.findFirst({ where: { id: d.clientId, organizationId: g.organizationId, deletedAt: null }, select: { id: true, name: true } });
+    if (!client) return { ok: false, error: "Pick the client first." };
+    const plan = await db.servicePlan.create({
+      data: {
+        organizationId: g.organizationId,
+        clientId: client.id,
+        status: "DRAFT",
+        name: d.name,
+        description: d.description || null,
+        trade: "lawn",
+        visitsPerYear: d.visits.length,
+        termMonths: 12,
+        priceCents: Math.round(d.monthly * 100),
+        billing: "MONTHLY",
+        discountPct: 0,
+        benefitsJson: JSON.stringify(d.benefits),
+        priorityScheduling: true,
+        waivedDiagnostic: false,
+        propertyAddress: d.address?.trim() || null,
+      },
+    });
+    await writeLawnSchedule(plan.id, toSchedule(d.visits as PlanVisit[]));
+    await logActivity({ organizationId: g.organizationId, actorId: g.userId, kind: TRAIL_KINDS.ESTIMATE, summary: `Put ${client.name} on a lawn plan — ${d.visits.length} visits, $${Math.round(d.monthly).toLocaleString("en-US")} a month`, meta: { trade: "lawn", planId: plan.id } }).catch(() => {});
+    let sent = false;
+    let emailed = false;
+    let acceptHref: string | null = null;
+    if (d.send) {
+      const r = await sendPlan(plan.id, g.userId);
+      sent = r.ok;
+      emailed = r.emailed;
+      acceptHref = r.href || null;
+    }
+    revalidatePath("/dashboard/service-plans");
+    return { ok: true, planId: plan.id, sent, emailed, acceptHref };
+  } catch (err) {
+    logServerError("lawn-plan", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The plan could not be saved. Try again in a moment." };
   }
 }

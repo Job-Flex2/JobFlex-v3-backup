@@ -13,8 +13,10 @@ import { decodeLabels, encodeLabels, lotMaskOf, measureSite, type LawnSite } fro
 import { fromPx, ftPerPx, type Pt } from "@/lib/lawn/geo";
 import { DEFAULT_LAWN_SETTINGS, DEFAULT_OPTIONS, MOWERS, priceYard, type LawnSettings, type Mower, type PricedService, type ServiceId, type ServiceOptions } from "@/lib/lawn/pricing";
 import { monthsOf } from "@/lib/lawn/season";
+import { rulesAt, type RuleKind } from "@/lib/lawn/rules";
+import { planTotals, seasonCalendar, type PlanVisit } from "@/lib/lawn/calendar";
 import { lawnTaxed, taxWords } from "@/lib/lawn/tax";
-import { convertLawnToProposal, deleteLawnDraft, findLawnClients, listLawnDrafts, loadLawnDraft, readLawnProperty, readLawnSettings, saveLawnDraft, saveLawnSettings, type LawnClient, type LawnDraftRow } from "@/actions/lawnEstimator";
+import { convertLawnToProposal, createLawnPlan, deleteLawnDraft, findLawnClients, listLawnDrafts, loadLawnDraft, readLawnProperty, readLawnSettings, saveLawnDraft, saveLawnSettings, type LawnClient, type LawnDraftRow } from "@/actions/lawnEstimator";
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n >= 1000 ? 0 : 2 });
 const sqft = (n: number) => `${Math.round(n).toLocaleString("en-US")} sq ft`;
@@ -56,6 +58,8 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
   const [made, setMade] = React.useState<string | null>(null);
   const [showRates, setShowRates] = React.useState(false);
   const [readStep, setReadStep] = React.useState(0);
+  const [plan, setPlan] = React.useState<{ id: string; sent: boolean; emailed: boolean; href: string | null } | null>(null);
+  const [sendPlanToo, setSendPlanToo] = React.useState(true);
 
   React.useEffect(() => {
     let live = true;
@@ -118,9 +122,18 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
   const measures = React.useMemo(() => (site && labels ? measureSite(site, labels) : null), [site, labels]);
   const quote = React.useMemo(() => (site && measures ? priceYard({ measures, settings, options, locationFactor: site.locationFactor, state: site.state, ownRate }) : null), [site, measures, settings, options, ownRate]);
   const chosen = React.useMemo(() => picked ?? (quote ? defaultPicked(quote.services) : new Set<ServiceId>()), [picked, quote]);
-  const lines = React.useMemo(() => (quote ? quote.services.filter((x) => chosen.has(x.id)) : []), [quote, chosen]);
+  const rules = React.useMemo(() => (site ? rulesAt(site.state, site.county ?? null, site.place) : null), [site]);
+  // The season, date by date, from today: what the plan books and what the proposal counts.
+  const calendar = React.useMemo<PlanVisit[]>(() => (quote && rules ? seasonCalendar({ start: new Date(), quote, picked: chosen, fertRounds: options.fertRounds, frequency: options.frequency, rules, crewSize: settings.crewSize }) : []), [quote, rules, chosen, options.fertRounds, options.frequency, settings.crewSize]);
+  const lines = React.useMemo(() => {
+    if (!quote) return [];
+    const count = (id: ServiceId) => calendar.filter((v) => v.service === id).length;
+    // Visits the calendar books are counted from it (mowing, bed weeding, fertilizer rounds the rules left in).
+    return quote.services.filter((x) => chosen.has(x.id)).map((x) => (x.id === "mow" || x.id === "bedWeeding" || x.id === "fert" ? { ...x, qty: count(x.id) || x.qty } : x));
+  }, [quote, chosen, calendar]);
   const season = lines.reduce((t, l) => t + l.unitPrice * l.qty, 0);
   const tax = site ? lines.reduce((t, l) => t + (lawnTaxed(site.state, l.taxClass) ? l.unitPrice * l.qty : 0), 0) : 0;
+  const totals = quote ? planTotals(calendar, quote, chosen) : null;
 
   const stroke = (next: Uint8Array) => {
     if (labels) setPast((p) => [...p.slice(-30), labels]);
@@ -174,6 +187,27 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
     setBusy(null);
     if (!r.ok) return setError(r.error);
     setMade(r.id);
+  };
+
+  const putOnPlan = async () => {
+    if (!site || !quote || !client || !calendar.length) return;
+    setBusy("plan");
+    setError(null);
+    const months = monthsOf(quote.climate);
+    const benefits = lines.map((l) => `${l.name}${l.qty > 1 ? ` (${l.qty}${l.unit === "cu yd" ? " cu yd" : ""})` : ""}`);
+    const r = await createLawnPlan({
+      clientId: client.id,
+      name: "Lawn care plan",
+      description: `The season's lawn care for ${site.address || "your home"}, ${MONTH[months[0] - 1]}–${MONTH[months[months.length - 1] - 1]}: every visit on our calendar, billed in twelve equal months.`,
+      address: site.address || null,
+      monthly: Math.round((season / 12) * 100) / 100,
+      visits: calendar,
+      benefits,
+      send: sendPlanToo,
+    });
+    setBusy(null);
+    if (!r.ok) return setError(r.error);
+    setPlan({ id: r.planId, sent: r.sent, emailed: r.emailed, href: r.acceptHref });
   };
 
   /* ── Start ── */
@@ -410,6 +444,34 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
               </dl>
             </div>
           </section>
+          <SeasonStrip visits={calendar} />
+          {rules?.rules.length ? (
+            <section className={s.card} data-lawn-rules>
+              <div className={s.head}>
+                <div>
+                  <div className={s.cardTitle}>Rules at this address</div>
+                  <p className={s.cardSub}>
+                    {site.state}
+                    {site.county ? `, ${site.county}` : ""} — the season&apos;s calendar already keeps out of the fertilizer blackouts. Summaries to plan by; the state and county have the last word.
+                  </p>
+                </div>
+              </div>
+              <div className={s.body}>
+                {rules.rules.map((r) => (
+                  <div key={r.title + r.detail} style={{ display: "grid", gap: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800 }}>
+                      <span className={s.mono} style={{ marginRight: 8 }}>
+                        {KIND_WORD[r.kind]}
+                      </span>
+                      {r.title}
+                    </div>
+                    <div className={s.note}>{r.detail}</div>
+                    <div className={s.market}>{r.source}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
 
         <aside className={s.side}>
@@ -493,6 +555,8 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
                 </dd>
                 <dt>On a plan, a month (×12)</dt>
                 <dd data-lawn-monthly>{usd(season / 12)}</dd>
+                <dt>Visits on the calendar</dt>
+                <dd>{totals?.visits ?? 0}</dd>
               </dl>
               <p className={s.note}>{taxWords(site.state)}</p>
               <ClientPicker client={client} onPick={setClient} />
@@ -508,6 +572,31 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
                   {busy === "proposal" ? "Creating…" : "Create the proposal"}
                 </button>
               )}
+              <div className={s.card} style={{ padding: 12, display: "grid", gap: 8 }} data-lawn-plan>
+                <div className={s.cardTitle} style={{ fontSize: 12 }}>
+                  Keep them on a plan
+                </div>
+                <p className={s.note}>
+                  {calendar.length} visits a year booked on your calendar as the season comes, {usd(season / 12)} a month — the plan bills, reminds before the big visits (not every mow) and renews by itself.
+                </p>
+                {plan ? (
+                  <p className={`${s.note} ${s.noteGood}`} data-lawn-plan-made>
+                    Plan created{plan.sent ? (plan.emailed ? " and emailed to the client to accept" : " — no email on file, share the accept link") : ""}.{" "}
+                    <a className={s.link} href="/dashboard/service-plans">
+                      Service plans
+                    </a>
+                  </p>
+                ) : (
+                  <>
+                    <label className={s.tool} style={{ fontSize: 12.5, fontWeight: 700 }}>
+                      <input type="checkbox" checked={sendPlanToo} onChange={(e) => setSendPlanToo(e.target.checked)} /> Email it to the client to accept
+                    </label>
+                    <button type="button" className={`${s.btn} ${s.btnSm}`} disabled={!client || !calendar.length || !!busy} onClick={() => void putOnPlan()} title={client ? "" : "Pick the client first"} data-lawn-plan-go>
+                      {busy === "plan" ? "Creating the plan…" : client ? "Put them on the plan" : "Pick the client to start a plan"}
+                    </button>
+                  </>
+                )}
+              </div>
               <button type="button" className={s.link} onClick={() => setShowRates((v) => !v)}>
                 {showRates ? "Hide your rates" : "Your rates"}
               </button>
@@ -517,6 +606,55 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
         </aside>
       </div>
     </div>
+  );
+}
+
+const KIND_WORD: Record<RuleKind, string> = { fertilizer: "Fertilizer", pesticide: "Weed control", license: "Licence", water: "Water", equipment: "Equipment" };
+const SHORT: Partial<Record<ServiceId, string>> = { mow: "Mow", fert: "Feed", aerate: "Aerate", overseed: "Seed", dethatch: "Dethatch", springCleanup: "Spring clean", fallCleanup: "Leaves", mulch: "Mulch", bedWeeding: "Beds", shrubs: "Shrubs", hedges: "Hedges", irrigationStart: "Sprinklers on", irrigationBlowout: "Blowout", gutters: "Gutters" };
+
+/** The year at a glance: each month, what happens in it. */
+function SeasonStrip({ visits }: { visits: PlanVisit[] }) {
+  if (!visits.length) return null;
+  const byMonth = new Map<string, PlanVisit[]>();
+  for (const v of visits) {
+    const k = v.date.slice(0, 7);
+    byMonth.set(k, [...(byMonth.get(k) ?? []), v]);
+  }
+  const first = new Date(`${visits[0].date}T00:00:00Z`);
+  const keys = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + i, 1));
+    return d.toISOString().slice(0, 7);
+  });
+  return (
+    <section className={s.card} data-lawn-season-strip>
+      <div className={s.head}>
+        <div>
+          <div className={s.cardTitle}>The season</div>
+          <p className={s.cardSub}>Every visit dated from today, for the grass and the climate here. The plan books these.</p>
+        </div>
+      </div>
+      <div className={s.body} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: 6 }}>
+        {keys.map((k) => {
+          const list = byMonth.get(k) ?? [];
+          const mows = list.filter((v) => v.service === "mow").length;
+          const rest = list.filter((v) => v.service !== "mow");
+          const [y, m] = k.split("-").map(Number);
+          return (
+            <div key={k} className={s.num} style={{ padding: "8px 9px", opacity: list.length ? 1 : 0.55 }}>
+              <div className={s.numL}>
+                {MONTH[m - 1]} {String(y).slice(2)}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 800, marginTop: 4 }}>{mows ? `Mow ×${mows}` : list.length ? "" : "—"}</div>
+              {rest.map((v) => (
+                <div key={v.date + v.service} style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>
+                  {SHORT[v.service] ?? v.label} {Number(v.date.slice(8))}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

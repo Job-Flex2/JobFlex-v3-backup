@@ -28,6 +28,8 @@ import {
   type PlanPhase,
 } from "@/lib/servicePlans";
 import { SERVICE_DESK_PATH } from "@/lib/serviceDesk";
+import { lawnSlots } from "@/lib/lawn/calendar";
+import { readLawnSchedule } from "@/lib/lawn/planStore";
 
 type Tx = Prisma.TransactionClient;
 const ORG_SELECT = { id: true, name: true, timezone: true, logoUrl: true, gmailSettingsJson: true, gmailTokensJson: true, billingEmail: true } as const;
@@ -60,6 +62,16 @@ async function notice(tx: Tx | typeof db, organizationId: string, kind: string, 
 // ── invoices ────────────────────────────────────────────────────────────────
 
 /** The bill for one period, once: a second call for the same due date is a no-op. */
+/** The term's visits: a lawn plan books its own season (lib/lawn — dated visits, their length and checklist); every
+ *  other plan the engine's spread of tune-ups, two hours each. */
+async function termSlots(plan: { id: string; trade: string; termMonths: number; visitsPerYear: number }, startsAt: Date): Promise<Array<{ seq: number; label: string; dueAt: Date; minutes: number; notes: string }>> {
+  if (plan.trade === "lawn") {
+    const sched = await readLawnSchedule(plan.id);
+    if (sched) return lawnSlots(sched, startsAt, plan.termMonths).map((x) => ({ seq: x.seq, label: x.label, dueAt: x.dueAt, minutes: x.minutes, notes: [`${x.label} — lawn plan visit.`, ...x.checklist.map((c) => `• ${c}`)].join("\n") }));
+  }
+  return visitSchedule(startsAt, plan.termMonths, plan.visitsPerYear, plan.trade).map((x) => ({ ...x, minutes: 120, notes: tuneUpChecklist(x.label, plan.trade) }));
+}
+
 export async function createPlanInvoice(tx: Tx, plan: { id: string; organizationId: string; clientId: string; priceCents: number; billing: string; name: string }, periodStart: Date): Promise<{ id: string; number: string; amount: number; created: boolean }> {
   const dueDate = new Date(periodStart.getTime() + 7 * DAY);
   const had = await tx.invoice.findFirst({ where: { servicePlanId: plan.id, dueDate }, select: { id: true, number: true, amount: true } });
@@ -100,7 +112,7 @@ export async function activatePlan(planId: string, opts: { acceptedName?: string
   if (!plan || plan.status === "ACTIVE" || plan.status === "CANCELED") return { ok: false, visits: 0 };
   const startsAt = opts.startsAt ?? new Date();
   const endsAt = planEndsAt(startsAt, plan.termMonths);
-  const slots = visitSchedule(startsAt, plan.termMonths, plan.visitsPerYear, plan.trade);
+  const slots = await termSlots(plan, startsAt);
   const tz = plan.organization.timezone || "America/New_York";
   const seq0 = plan.visits.reduce((a, v) => Math.max(a, v.seq), 0);
   const appUrl = await appBaseUrl();
@@ -113,10 +125,10 @@ export async function activatePlan(planId: string, opts: { acceptedName?: string
     for (const s of slots) {
       const start = atLocalHour(s.dueAt, 9, tz);
       const appt = await tx.appointment.create({
-        data: { organizationId: plan.organizationId, clientId: plan.clientId, title: `${s.label} · ${plan.name}`, startsAt: start, endsAt: new Date(start.getTime() + 2 * 3600000), notes: tuneUpChecklist(s.label, plan.trade), status: "SCHEDULED" },
+        data: { organizationId: plan.organizationId, clientId: plan.clientId, title: `${s.label} · ${plan.name}`, startsAt: start, endsAt: new Date(start.getTime() + s.minutes * 60000), notes: s.notes, status: "SCHEDULED" },
       });
       // The crew's report form for this visit (2026-09-23), first line of the notes.
-      await tx.appointment.update({ where: { id: appt.id }, data: { notes: `Report form: ${appUrl}/dashboard/visits/${appt.id}\n\n${tuneUpChecklist(s.label, plan.trade)}` } });
+      await tx.appointment.update({ where: { id: appt.id }, data: { notes: `Report form: ${appUrl}/dashboard/visits/${appt.id}\n\n${s.notes}` } });
       await tx.servicePlanVisit.create({ data: { organizationId: plan.organizationId, planId: plan.id, seq: seq0 + s.seq, label: s.label, dueAt: s.dueAt, status: "SCHEDULED", appointmentId: appt.id } });
     }
     const inv = await createPlanInvoice(tx, plan, startsAt);
@@ -133,7 +145,7 @@ export async function activatePlan(planId: string, opts: { acceptedName?: string
       first ? `Your first visit, the ${first.label.toLowerCase()}, is set for ${fmtDay(first.dueAt)} — we will confirm the time a couple of weeks before.` : "We will be in touch to set your first visit.",
     ],
     box: [{ type: "field", label: "Plan", value: planTermsLine(plan) }, ...parseBenefits(plan.benefitsJson).map((b) => ({ type: "field" as const, label: "Includes", value: b })), { type: "item", name: `Invoice ${invoiceNumber}`, amount: money(plan.priceCents) }],
-    after: ["Repairs and services are billed at your member discount for as long as the plan runs."],
+    after: [plan.trade === "lawn" ? "Every visit of the season is on our calendar; anything extra is quoted before we do it." : "Repairs and services are billed at your member discount for as long as the plan runs."],
   });
   return { ok: true, visits: slots.length };
 }
@@ -164,7 +176,7 @@ export async function renewPlan(planId: string, actorId?: string | null): Promis
   const now = new Date();
   const startsAt = plan.endsAt && plan.endsAt.getTime() > now.getTime() - 60 * DAY ? plan.endsAt : now;
   const endsAt = planEndsAt(startsAt, plan.termMonths);
-  const slots = visitSchedule(startsAt, plan.termMonths, plan.visitsPerYear, plan.trade);
+  const slots = await termSlots(plan, startsAt);
   const tz = plan.organization.timezone || "America/New_York";
   const seq0 = plan.visits.reduce((a, v) => Math.max(a, v.seq), 0);
   const appUrl = await appBaseUrl();
@@ -172,8 +184,8 @@ export async function renewPlan(planId: string, actorId?: string | null): Promis
     await tx.servicePlan.update({ where: { id: plan.id }, data: { status: "ACTIVE", startsAt, endsAt, nextBillingAt: advanceBilling(startsAt, plan.billing as Billing), expiringNoticedAt: null } });
     for (const s of slots) {
       const start = atLocalHour(s.dueAt, 9, tz);
-      const appt = await tx.appointment.create({ data: { organizationId: plan.organizationId, clientId: plan.clientId, title: `${s.label} · ${plan.name}`, startsAt: start, endsAt: new Date(start.getTime() + 2 * 3600000), notes: tuneUpChecklist(s.label, plan.trade), status: "SCHEDULED" } });
-      await tx.appointment.update({ where: { id: appt.id }, data: { notes: `Report form: ${appUrl}/dashboard/visits/${appt.id}\n\n${tuneUpChecklist(s.label, plan.trade)}` } });
+      const appt = await tx.appointment.create({ data: { organizationId: plan.organizationId, clientId: plan.clientId, title: `${s.label} · ${plan.name}`, startsAt: start, endsAt: new Date(start.getTime() + s.minutes * 60000), notes: s.notes, status: "SCHEDULED" } });
+      await tx.appointment.update({ where: { id: appt.id }, data: { notes: `Report form: ${appUrl}/dashboard/visits/${appt.id}\n\n${s.notes}` } });
       await tx.servicePlanVisit.create({ data: { organizationId: plan.organizationId, planId: plan.id, seq: seq0 + s.seq, label: s.label, dueAt: s.dueAt, status: "SCHEDULED", appointmentId: appt.id } });
     }
     const inv = await createPlanInvoice(tx, plan, startsAt);
@@ -271,6 +283,11 @@ export async function runServicePlans(now = new Date()): Promise<PlanRunReport> 
   const visits = await db.servicePlanVisit.findMany({ where: { status: "SCHEDULED", remindedAt: null, dueAt: { lte: soon, gte: new Date(now.getTime() - 2 * DAY) }, plan: { status: "ACTIVE" } }, include: { plan: { include: { client: true, organization: { select: ORG_SELECT } } }, appointment: { select: { startsAt: true } } } });
   for (const v of visits) {
     try {
+      // A lawn plan's routine mowing isn't announced each week: marked, not mailed.
+      if (v.plan.trade === "lawn" && /^mow/i.test(v.label)) {
+        await db.servicePlanVisit.update({ where: { id: v.id }, data: { remindedAt: now } });
+        continue;
+      }
       const when = v.appointment?.startsAt ?? v.dueAt;
       const whenText = v.appointment ? when.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: v.plan.organization.timezone || "America/New_York" }) : fmtDay(v.dueAt);
       await db.servicePlanVisit.update({ where: { id: v.id }, data: { remindedAt: now } });
@@ -280,7 +297,7 @@ export async function runServicePlans(now = new Date()): Promise<PlanRunReport> 
         kicker: { text: "Service plan" },
         headline: `${v.label}: ${whenText}`,
         prose: [`Part of your ${v.plan.name}. We have it on our calendar for ${whenText}; if another day suits you better, reply to this email and we will move it.`],
-        after: ["Please leave clear access to the indoor and outdoor units."],
+        after: [v.plan.trade === "lawn" ? "Please leave the gates unlocked and keep pets inside while we're there." : "Please leave clear access to the indoor and outdoor units."],
       });
       report.reminded++;
     } catch (err) {
