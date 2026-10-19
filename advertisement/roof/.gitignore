@@ -1,0 +1,7 @@
+# the demo recording's raw frames + tapes (record.js) and the lossless masters / render scratch
+# (render-demo.js): large, local only. The per-second frames of the delivered MP4s (frames/16x9, 4x5) are kept.
+rec/
+out/
+frames/*
+!frames/16x9/
+!frames/4x5/

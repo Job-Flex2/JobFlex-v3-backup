@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Roof demo film</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* The roof estimator's landing demo, as a pure function of t: the recorded frames of the real app
+     (record.js → rec/<fmt>/), with the pointer or the finger, the caption plates and the end card on top.
+     Open with ?fmt=16x9|4x5&t=<seconds> to look at one frame. */
+  :root { --paper:#f2f0eb; --ink:#0a0a0a; --blue:#1854a0; --sky:#4a9eff; --font:'Inter',Helvetica,Arial,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace; }
+  html,body { margin:0; background:var(--ink); overflow:hidden; }
+  #stage { position:relative; overflow:hidden; background:var(--paper); font-family:var(--font); }
+  #stage img.fr { position:absolute; left:0; top:0; display:block; }
+  .ptr { position:absolute; left:0; top:0; z-index:6; pointer-events:none; transform-origin:0 0; }
+  .ring { position:absolute; z-index:5; border-radius:50%; border:3px solid var(--blue); pointer-events:none; }
+  .touch { position:absolute; z-index:6; border-radius:50%; pointer-events:none; background:rgba(10,10,10,.28); border:4px solid rgba(255,255,255,.95); box-shadow:0 0 0 3px rgba(10,10,10,.35), 0 6px 18px rgba(10,10,10,.25); }
+  .plate { position:absolute; z-index:7; display:flex; flex-direction:column; justify-content:center; background:var(--ink); color:#fff; box-shadow: var(--sh) var(--sh) 0 var(--blue); }
+  .plate .k { display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:#9ec5ff; }
+  .plate .dots { display:flex; gap:5px; }
+  .plate .dots i { display:block; height:3px; background:rgba(255,255,255,.28); }
+  .plate .dots i.on { background:#fff; }
+  .plate .h { font-weight:900; letter-spacing:-.025em; line-height:1.02; text-transform:uppercase; text-wrap:balance; }
+  .plate .s { font-weight:500; line-height:1.32; color:rgba(255,255,255,.86); text-wrap:pretty; }
+  .plate .s b { color:#fff; font-weight:700; }
+  .end { position:absolute; inset:0; z-index:8; background:var(--ink); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); }
+  .end .logo { display:flex; align-items:center; gap:.5em; font-weight:900; letter-spacing:-.03em; text-transform:uppercase; }
+  .end .logo span.j { display:inline-flex; align-items:center; justify-content:center; background:#fff; color:var(--ink); }
+  .end .kick { font-family:var(--mono); font-weight:600; letter-spacing:.24em; text-transform:uppercase; color:#9ec5ff; }
+  .end .big { font-weight:900; letter-spacing:-.035em; line-height:.98; text-transform:uppercase; }
+  .end .big em { font-style:normal; background:#fff; color:var(--ink); padding:0 .12em; }
+  .end .cta { display:inline-flex; align-items:center; gap:.6em; background:var(--blue); color:#fff; font-weight:800; letter-spacing:.06em; text-transform:uppercase; border:3px solid #fff; }
+  .end .fine { color:rgba(255,255,255,.5); font-weight:500; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+(async () => {
+  const P = new URLSearchParams(location.search);
+  const FMT = P.get("fmt") === "4x5" ? "4x5" : "16x9";
+  const PHONE = FMT === "4x5";
+  const W = PHONE ? 1080 : 1920, H = PHONE ? 1350 : 1080;
+  await new Promise((ok, no) => { const s = document.createElement("script"); s.src = `rec/${FMT}/tape.js`; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+  const TAPE = window.TAPE, K = TAPE.dsf; // film px per CSS px of the recording
+  const stage = document.getElementById("stage");
+  Object.assign(stage.style, { width: W + "px", height: H + "px" });
+  const $ = (tag, cls, parent = stage) => { const e = document.createElement(tag); if (cls) e.className = cls; parent.appendChild(e); return e; };
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const io = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+  const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+  const lerp = (a, b, k) => a + (b - a) * k;
+
+  // ── the captions (the figures are this house's, as the page printed them: rec/<fmt>/tape.json facts)
+  const PLATES = {
+    "01": { k: "01 · The house", h: "Type the address. The pin lands on the roof.", s: "Google's suggestions fill in the city, state and ZIP — and the satellite shows the house before anything is measured." },
+    "02": { k: "02 · The measurement", h: "One click: the roof, measured", s: "<b>2,840 sq ft</b> · 28.4 squares · 5/12 pitch · 6 facets — from aerial roof data, not a tape on a ladder." },
+    "03": { k: "03 · The roof", h: "What's up there", s: "Eaves 10 ft up, shingle, 13 years old, condition <b>poor</b>, one chimney — read with the measurement." },
+    "04": { k: "04 · The system", h: "Pick the roof. Brands ranked for your state.", s: "Asphalt, metal, tile, shake, slate, synthetic or flat — GAF, Owens Corning, CertainTeed, IKO: top picks for Washington." },
+    "05": { k: "05 · The takeoff", h: "Every part of the roof counted", s: "Underlayment, ice & water, edges, flashing, vents balanced for the attic, tear-off — each row opens to change." },
+    "06": { k: "06 · The price", h: "Every line priced", s: "<b>{lines} lines</b> — materials and labor — <b>{total}</b>. Every quantity and rate yours to edit." },
+    "07": { k: "07 · Your price book", h: "Your prices, your book", s: "{book} roof types and materials. Type your price a square — every estimate prices from your book." },
+    "08": { k: "08 · The client", h: "One click: a proposal they can sign", s: "Every line and the total, <b>{grand}</b> with tax — sent to the homeowner to accept online, with a PDF to keep." },
+  };
+  // the figures that move with the shop's prices come off the page as the take printed them (record.js facts)
+  const F = TAPE.facts, money = (s) => (String(s || "").match(/\$[\d,]+(\.\d\d)?/) || ["?"])[0];
+  const FIG = { lines: (String(F.reviewLabel || "").match(/\d+/) || ["?"])[0], total: money(F.total), grand: money(F.grandTotal), book: (String(F.bookCount || "").match(/\d+/) || ["?"])[0] };
+  for (const p of Object.values(PLATES)) p.s = p.s.replace(/\{(\w+)\}/g, (_, k) => FIG[k]);
+  const IDS = Object.keys(PLATES);
+
+  // ── the timeline: segments in play order, each cross-fading in from the last
+  const JOIN = 0.45, END = 3.0, END_FADE = 0.5;
+  const segs = []; let off = 0;
+  for (const name of TAPE.order) { const s = TAPE.segs[name]; segs.push({ ...s, off }); off += s.dur; }
+  const BODY = off, TOTAL = BODY + END;
+  const plates = []; const platePos = [];
+  for (const s of segs) { for (const m of s.marks) plates.push({ id: m.id, t: s.off + m.t }); for (const p of s.plate) platePos.push({ pos: p.pos, t: s.off + p.t }); }
+  plates.sort((a, b) => a.t - b.t);
+  window.__duration = TOTAL;
+
+  // ── the frames: decoded once into bitmaps and drawn on a canvas (an <img> of this size can be
+  // painted before it is decoded — Chrome's checker-imaging — and a frame would come out half old)
+  const cache = new Map();
+  const bmp = (seg, f) => {
+    const src = `rec/${FMT}/${seg}/${f}`;
+    let p = cache.get(src);
+    if (!p) {
+      const im = new Image(); im.src = src;
+      p = im.decode().then(() => createImageBitmap(im));
+      cache.set(src, p);
+      if (cache.size > 48) { const k = cache.keys().next().value; const old = cache.get(k); cache.delete(k); old.then((b) => b.close()).catch(() => {}); }
+    }
+    return p;
+  };
+  const lastShot = (shots, lt) => { let lo = 0, hi = shots.length - 1, r = 0; while (lo <= hi) { const m = (lo + hi) >> 1; if (shots[m].t <= lt + 1e-6) { r = m; lo = m + 1; } else hi = m - 1; } return r; };
+  const cv = $("canvas"); cv.width = W; cv.height = H; cv.style.cssText = `position:absolute;left:0;top:0;width:${W}px;height:${H}px`;
+  const g = cv.getContext("2d");
+  const draw = (b, alpha) => { g.globalAlpha = alpha; g.drawImage(b, 0, 0, W, Math.round((b.height * W) / b.width)); };
+
+  // ── the pointer and the finger
+  const ptr = $("div", "ptr");
+  ptr.innerHTML = '<svg width="34" height="44" viewBox="0 0 17 22"><path d="M1 1 L1 17.5 L5.1 13.6 L7.9 20.2 L10.6 19 L7.9 12.6 L13.4 12.6 Z" fill="#0a0a0a" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+  const ring = $("div", "ring");
+  const touch = $("div", "touch");
+
+  // ── the plate
+  const pl = $("div", "plate");
+  // 16:9: a wide, low lower third, centred (the page's working area stays above y 900); up top while the
+  // foot of the page is in use, and to the left while the price book's drawer is open at the right edge;
+  // 4:5: over the estimate's sticky summary bar, tall enough to cover it whole, up top while the bottom is in use
+  const SZ = PHONE ? { x: 20, w: W - 40, bottom: 16, top: 20, pad: "18px 24px 20px", kick: 20, h: 42, s: 24, gap: 9, dot: 24, sh: "7px", minH: 232 }
+                   : { x: 420, left: 60, w: 1080, bottom: 32, top: 24, pad: "16px 24px 18px", kick: 14, h: 38, s: 20, gap: 8, dot: 22, sh: "6px", minH: 0 };
+  Object.assign(pl.style, { left: SZ.x + "px", width: SZ.w + "px", padding: SZ.pad, boxSizing: "border-box", minHeight: SZ.minH + "px" });
+  pl.style.setProperty("--sh", SZ.sh);
+  pl.innerHTML = `<div class="k" style="font-size:${SZ.kick}px"><span></span><span class="dots">${IDS.map(() => `<i style="width:${SZ.dot}px"></i>`).join("")}</span></div><div class="h" style="font-size:${SZ.h}px;margin-top:${SZ.gap}px"></div><div class="s" style="font-size:${SZ.s}px;margin-top:${SZ.gap}px"></div>`;
+  const plK = pl.querySelector(".k span"), plH = pl.querySelector(".h"), plS = pl.querySelector(".s"), plDots = [...pl.querySelectorAll(".dots i")];
+  let plFor = null;
+  const setPlate = (id) => { if (plFor === id) return; plFor = id; const p = PLATES[id]; plK.textContent = p.k; plH.textContent = p.h; plS.innerHTML = p.s; plDots.forEach((d, i) => d.classList.toggle("on", IDS[i] === id)); };
+
+  // ── the end card
+  const end = $("div", "end");
+  const E = PHONE ? { logo: 44, j: 62, kick: 24, big: 104, cta: 32, fine: 20, gap: 44 } : { logo: 40, j: 56, kick: 20, big: 112, cta: 30, fine: 17, gap: 40 };
+  end.innerHTML = `
+    <div class="logo" style="font-size:${E.logo}px"><span class="j" style="width:${E.j}px;height:${E.j}px">J</span>JobFlex</div>
+    <div class="kick" style="font-size:${E.kick}px;margin-top:${E.gap * 0.55}px">Roof estimator</div>
+    <div class="big" style="font-size:${E.big}px;margin-top:${E.gap}px">Measure it.${PHONE ? "<br>" : " "}Price it.${PHONE ? "<br>" : " "}<em>Send it.</em></div>
+    <div class="cta" style="font-size:${E.cta}px;margin-top:${E.gap * 1.25}px;padding:${E.cta * 0.62}px ${E.cta * 1.1}px;box-shadow:8px 8px 0 #fff">Start your free trial <span>→</span></div>
+    <div class="fine" style="font-size:${E.fine}px;margin-top:${E.gap * 1.2}px;max-width:${PHONE ? 860 : 1100}px">Demo company and client. Roof figures from aerial roof data; edge lengths estimated from the outline. Brand names belong to their owners.</div>`;
+
+  async function seek(t) {
+    t = clamp(t, 0, TOTAL - 1e-4);
+    // the end card
+    const ek = clamp((t - BODY) / END_FADE);
+    end.style.display = ek > 0 ? "" : "none"; end.style.opacity = String(ek);
+    const tb = Math.min(t, BODY - 1e-4);
+    let si = segs.length - 1; while (si > 0 && segs[si].off > tb) si--;
+    const S = segs[si], lt = tb - S.off;
+    const i = lastShot(S.shots, lt), shot = S.shots[i];
+    // a cross-fade: from the shot before (a cut inside the segment) or from the last segment's last frame (a join)
+    let prev = null, fade = 0, since = lt - shot.t;
+    if (i === 0 && si > 0) { const P0 = segs[si - 1]; prev = [P0.dir, P0.shots[P0.shots.length - 1].f]; fade = JOIN; }
+    else if (shot.fade && i > 0) { prev = [S.dir, S.shots[i - 1].f]; fade = shot.fade; }
+    const k = prev && since < fade ? io(since / fade) : 1;
+    const a = await bmp(S.dir, shot.f);
+    if (k < 1) { const b = await bmp(prev[0], prev[1]); draw(b, 1); draw(a, k); }
+    else draw(a, 1);
+    g.globalAlpha = 1;
+    // the pointer: the segment's moves, eased; it fades in with the segment
+    ptr.style.display = "none"; ring.style.display = "none"; touch.style.display = "none";
+    if (!PHONE && S.moves.length && lt >= S.moves[0].t0) {
+      let m = S.moves[0]; for (const x of S.moves) if (x.t0 <= lt) m = x;
+      const q = m.t1 > m.t0 ? io((lt - m.t0) / (m.t1 - m.t0)) : 1;
+      const x = lerp(m.x0, m.x1, q) * K, y = lerp(m.y0, m.y1, q) * K;
+      let press = 1; for (const c of S.clicks) { const d = lt - c.t; if (d >= -0.05 && d < 0.5) { press = d < 0.12 ? 0.86 : 1; const r = lerp(8, 30, out(d / 0.5)); Object.assign(ring.style, { display: "", left: c.x * K - r + "px", top: c.y * K - r + "px", width: 2 * r + "px", height: 2 * r + "px", opacity: String(0.7 * (1 - d / 0.5)) }); } }
+      const vis = clamp((lt - S.moves[0].t0) / 0.25) * (i === 0 && si > 0 ? clamp(since / JOIN) : 1);
+      Object.assign(ptr.style, { display: "", opacity: String(vis), transform: `translate(${x - 2}px, ${y - 1}px) scale(${press})` });
+    }
+    if (PHONE) {
+      const R = 26 * K; let on = null;
+      for (const tp of S.taps) { const d = lt - tp.t; if (d >= -0.3 && d < 0.4) on = { x: tp.x * K, y: tp.y * K, o: d < 0 ? out((d + 0.3) / 0.3) : 1 - clamp(d / 0.4), s: d < 0 ? lerp(1.35, 1, out((d + 0.3) / 0.3)) : d < 0.12 ? 0.82 : lerp(0.82, 1.1, clamp((d - 0.12) / 0.28)) }; }
+      for (const sw of S.swipes) { if (lt >= sw.t0 - 0.18 && lt <= sw.t1 + 0.22) { const q = io((lt - sw.t0) / (sw.t1 - sw.t0)); const o = Math.min(clamp((lt - sw.t0 + 0.18) / 0.18), clamp((sw.t1 + 0.22 - lt) / 0.22)); on = { x: sw.x * K, y: lerp(sw.y0, sw.y1, q) * K, o, s: 0.92 }; } }
+      if (on) Object.assign(touch.style, { display: "", left: on.x - R + "px", top: on.y - R + "px", width: 2 * R + "px", height: 2 * R + "px", opacity: String(on.o), transform: `scale(${on.s})` });
+    }
+    // the caption plate: one after another, in from below, out before the next
+    let pi = -1; for (let j = 0; j < plates.length; j++) if (plates[j].t <= t) pi = j;
+    if (pi >= 0 && t < BODY) {
+      const p = plates[pi], next = plates[pi + 1] ? plates[pi + 1].t : BODY;
+      setPlate(p.id);
+      const kin = out((t - p.t - 0.05) / 0.35), kout = clamp((next - t) / 0.18);
+      let o = Math.min(kin, kout), dy = (1 - kin) * 26;
+      let pos = "bottom"; for (const e of platePos) if (e.t <= t) pos = e.pos;
+      // the plate changes places through a quick dip
+      for (const e of platePos) { const d = t - e.t; if (d >= -0.15 && d < 0.15) o *= Math.abs(d) / 0.15; }
+      pl.style.display = o > 0.001 ? "" : "none"; pl.style.opacity = String(o);
+      pl.style.left = (pos === "left" ? SZ.left : SZ.x) + "px";
+      if (pos === "top") { pl.style.top = SZ.top + "px"; pl.style.bottom = ""; pl.style.transform = `translateY(${-dy}px)`; }
+      else { pl.style.top = ""; pl.style.bottom = SZ.bottom + "px"; pl.style.transform = `translateY(${dy}px)`; }
+    } else pl.style.display = "none";
+    return true;
+  }
+
+  await document.fonts.ready;
+  window.__seek = seek;
+  await seek(+P.get("t") || 0);
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
