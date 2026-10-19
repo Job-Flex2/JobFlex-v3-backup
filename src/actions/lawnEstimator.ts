@@ -9,6 +9,8 @@
 //   convertLawnToProposal — the priced yard → a draft proposal (trade "lawn"), the yard riding along as an activity.
 //   createLawnPlan — the season's calendar → a service plan for the client (trade "lawn", billed monthly), its visits
 //     kept beside it for the plan engine to book; sent to the client to accept when asked.
+//   loadRouteWeek / balanceMowingDays / rainDelay — the route days: a week's lawn visits in driving order, the yards
+//     given a mowing weekday by where they are, a rained-out day pushed to the next.
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -29,7 +31,11 @@ import type { LawnSite } from "@/lib/lawn/site";
 import { cleanLawnSettings, cleanOptions, DEFAULT_LAWN_SETTINGS, type LawnSettings, type ServiceOptions } from "@/lib/lawn/pricing";
 import { lawnTaxed } from "@/lib/lawn/tax";
 import { toSchedule, type PlanVisit } from "@/lib/lawn/calendar";
-import { writeLawnSchedule } from "@/lib/lawn/planStore";
+import { readLawnSchedule, writeLawnSchedule } from "@/lib/lawn/planStore";
+import { balanceDays, driveMinutes, nextWorkday, onWeekday, orderStops } from "@/lib/lawn/routes";
+import { atLocalHour } from "@/lib/servicePlans";
+import { geocodePlace } from "@/lib/maps";
+import { censusGeocode } from "@/lib/hvac/publicGeo";
 import { sendPlan } from "@/lib/servicePlanBook";
 
 type Gate = { ok: true; organizationId: string; userId: string; role: string } | { ok: false; error: string };
@@ -341,6 +347,7 @@ const planSchema = z.object({
   visits: z.array(visitSchema).min(1).max(120),
   benefits: z.array(z.string().max(200)).max(20).default([]),
   send: z.boolean().default(false),
+  place: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).nullable().optional(),
 });
 
 /** The season → a service plan: monthly billing at a twelfth of the season, every visit booked when it starts. */
@@ -372,7 +379,7 @@ export async function createLawnPlan(raw: unknown): Promise<{ ok: true; planId: 
         propertyAddress: d.address?.trim() || null,
       },
     });
-    await writeLawnSchedule(plan.id, toSchedule(d.visits as PlanVisit[]));
+    await writeLawnSchedule(plan.id, toSchedule(d.visits as PlanVisit[], d.place ? { lat: d.place.lat, lng: d.place.lng, address: d.address?.trim() || null } : null));
     await logActivity({ organizationId: g.organizationId, actorId: g.userId, kind: TRAIL_KINDS.ESTIMATE, summary: `Put ${client.name} on a lawn plan — ${d.visits.length} visits, $${Math.round(d.monthly).toLocaleString("en-US")} a month`, meta: { trade: "lawn", planId: plan.id } }).catch(() => {});
     let sent = false;
     let emailed = false;
@@ -388,5 +395,192 @@ export async function createLawnPlan(raw: unknown): Promise<{ ok: true; planId: 
   } catch (err) {
     logServerError("lawn-plan", err, { kind: "action", organizationId: g.organizationId });
     return { ok: false, error: "The plan could not be saved. Try again in a moment." };
+  }
+}
+
+/* ── Route days ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const DAY_MS = 86400000;
+const localDay = (d: Date, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+
+/** Where the crew starts: the shop's address, geocoded once and kept. */
+async function shopAt(organizationId: string): Promise<{ lat: number; lng: number } | null> {
+  const key = `lawnshop:${organizationId}`;
+  const row = await db.syncState.findUnique({ where: { key }, select: { cursor: true } }).catch(() => null);
+  if (row) {
+    try {
+      const p = JSON.parse(row.cursor) as { lat?: number; lng?: number; address?: string };
+      if (Number.isFinite(p.lat) && Number.isFinite(p.lng)) return { lat: p.lat!, lng: p.lng! };
+    } catch {
+      /* look it up again */
+    }
+  }
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { address: true } });
+  const a = org?.address?.trim();
+  if (!a) return null;
+  const g = (await geocodePlace(a).catch(() => null)) ?? (await censusGeocode(a).catch(() => null));
+  if (!g) return null;
+  await db.syncState.upsert({ where: { key }, create: { key, cursor: JSON.stringify({ lat: g.lat, lng: g.lng, address: a }) }, update: { cursor: JSON.stringify({ lat: g.lat, lng: g.lng, address: a }) } }).catch(() => {});
+  return { lat: g.lat, lng: g.lng };
+}
+
+export type RouteStop = { visitId: string; appointmentId: string; client: string; phone: string | null; address: string | null; label: string; minutes: number; startsAt: string; driveFromPrev: number; located: boolean };
+export type RouteDay = { date: string; stops: RouteStop[]; driveMinutes: number; crewMinutes: number };
+
+async function lawnPlans(organizationId: string) {
+  const plans = await db.servicePlan.findMany({ where: { organizationId, trade: "lawn", status: "ACTIVE" }, select: { id: true, name: true, propertyAddress: true, client: { select: { name: true, phone: true } } } });
+  const places = new Map<string, { lat: number; lng: number } | null>();
+  for (const p of plans) places.set(p.id, (await readLawnSchedule(p.id))?.place ?? null);
+  return { plans, places };
+}
+
+/** The week's lawn visits, day by day, each day in driving order from the shop. */
+export async function loadRouteWeek(input: { weekStart: string }): Promise<{ ok: true; days: RouteDay[]; plans: number; unlocated: number; shop: boolean; timeZone: string } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.weekStart)) return { ok: false, error: "That week couldn't be read." };
+  try {
+    const org = await db.organization.findUnique({ where: { id: g.organizationId }, select: { timezone: true } });
+    const tz = org?.timezone || "America/New_York";
+    const from = atLocalHour(new Date(`${input.weekStart}T00:00:00Z`), 0, tz);
+    const to = new Date(from.getTime() + 7 * DAY_MS);
+    const { plans, places } = await lawnPlans(g.organizationId);
+    const byPlan = new Map(plans.map((p) => [p.id, p]));
+    const visits = plans.length
+      ? await db.servicePlanVisit.findMany({ where: { planId: { in: plans.map((p) => p.id) }, status: "SCHEDULED", appointment: { startsAt: { gte: from, lt: to }, status: { not: "CANCELED" } } }, select: { id: true, planId: true, label: true, appointment: { select: { id: true, startsAt: true, endsAt: true } } } })
+      : [];
+    const shop = await shopAt(g.organizationId);
+    const groups = new Map<string, typeof visits>();
+    for (const v of visits) {
+      if (!v.appointment) continue;
+      const k = localDay(v.appointment.startsAt, tz);
+      groups.set(k, [...(groups.get(k) ?? []), v]);
+    }
+    const days: RouteDay[] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = localDay(new Date(from.getTime() + i * DAY_MS + 12 * 3600000), tz);
+      const list = groups.get(date) ?? [];
+      const stops = list.map((v) => {
+        const p = byPlan.get(v.planId)!;
+        const at = places.get(v.planId) ?? null;
+        return { id: v.id, at: at ?? { lat: 0, lng: 0 }, located: !!at, minutes: Math.round((v.appointment!.endsAt.getTime() - v.appointment!.startsAt.getTime()) / 60000), v, p };
+      });
+      const located = stops.filter((s) => s.located);
+      const { order, driveMinutes: drive } = orderStops(shop, located);
+      const all = [...order, ...stops.filter((s) => !s.located)];
+      let prev = shop;
+      days.push({
+        date,
+        driveMinutes: drive,
+        crewMinutes: all.reduce((a, s) => a + s.minutes, 0),
+        stops: all.map((s) => {
+          const d = s.located && prev ? driveMinutes(prev, s.at) : 0;
+          if (s.located) prev = s.at;
+          return { visitId: s.v.id, appointmentId: s.v.appointment!.id, client: s.p.client.name, phone: s.p.client.phone, address: s.p.propertyAddress, label: s.v.label, minutes: s.minutes, startsAt: s.v.appointment!.startsAt.toISOString(), driveFromPrev: d, located: s.located };
+        }),
+      });
+    }
+    return { ok: true, days, plans: plans.length, unlocated: [...places.values()].filter((x) => !x).length, shop: !!shop, timeZone: tz };
+  } catch (err) {
+    logServerError("lawn-routes", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The route days couldn't be read right now." };
+  }
+}
+
+/** Re-time one local day's lawn visits along their route: the first at `startHour`, each after the last plus the drive. */
+async function retimeDay(organizationId: string, date: string, tz: string, shop: { lat: number; lng: number } | null, places: Map<string, { lat: number; lng: number } | null>, startHour: number) {
+  const from = atLocalHour(new Date(`${date}T00:00:00Z`), 0, tz);
+  const to = new Date(from.getTime() + DAY_MS);
+  const visits = await db.servicePlanVisit.findMany({ where: { organizationId, status: "SCHEDULED", plan: { trade: "lawn", status: "ACTIVE" }, appointment: { startsAt: { gte: from, lt: to }, status: { not: "CANCELED" } } }, select: { id: true, planId: true, appointment: { select: { id: true, startsAt: true, endsAt: true } } } });
+  const stops = visits.filter((v) => v.appointment && places.get(v.planId)).map((v) => ({ id: v.id, at: places.get(v.planId)!, minutes: Math.round((v.appointment!.endsAt.getTime() - v.appointment!.startsAt.getTime()) / 60000), v }));
+  const { order } = orderStops(shop, stops);
+  let t = atLocalHour(new Date(`${date}T00:00:00Z`), startHour, tz).getTime();
+  let prev = shop;
+  for (const s of order) {
+    if (prev) t += driveMinutes(prev, s.at) * 60000;
+    prev = s.at;
+    const start = new Date(t);
+    const end = new Date(t + s.minutes * 60000);
+    await db.appointment.update({ where: { id: s.v.appointment!.id }, data: { startsAt: start, endsAt: end } });
+    await db.servicePlanVisit.update({ where: { id: s.v.id }, data: { dueAt: start } });
+    t = end.getTime();
+  }
+}
+
+/** Every yard on the plans gets a mowing weekday by where it is — nearby yards on the same day, the days about even —
+ *  and its coming mowings move to that weekday of their own week, re-timed along the route. */
+export async function balanceMowingDays(input: { days?: number; startHour?: number }): Promise<{ ok: true; moved: number; perDay: Array<{ weekday: number; yards: number; minutes: number }> } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  const days = Math.max(1, Math.min(6, Math.round(input.days ?? 5)));
+  const startHour = Math.max(5, Math.min(11, Math.round(input.startHour ?? 8)));
+  try {
+    const org = await db.organization.findUnique({ where: { id: g.organizationId }, select: { timezone: true } });
+    const tz = org?.timezone || "America/New_York";
+    const { plans, places } = await lawnPlans(g.organizationId);
+    const located = plans.filter((p) => places.get(p.id));
+    if (!located.length) return { ok: false, error: "No lawn plan has its property's location yet — plans made from the lawn estimator carry it." };
+    const now = new Date();
+    const mows = await db.servicePlanVisit.findMany({ where: { planId: { in: located.map((p) => p.id) }, status: "SCHEDULED", dueAt: { gt: now }, label: { startsWith: "Mow" } }, select: { id: true, planId: true, dueAt: true, appointment: { select: { id: true, startsAt: true, endsAt: true } } } });
+    const minutesOf = new Map<string, number>();
+    for (const v of mows) if (v.appointment && !minutesOf.has(v.planId)) minutesOf.set(v.planId, Math.round((v.appointment.endsAt.getTime() - v.appointment.startsAt.getTime()) / 60000));
+    const stops = located.map((p) => ({ id: p.id, at: places.get(p.id)!, minutes: minutesOf.get(p.id) ?? 45 }));
+    // As few days as the work fills (seven hours on site and driving a day, driving about a quarter on top), never more
+    // than the crew mows — six small yards are one day's route, not one a day.
+    const total = stops.reduce((a, x) => a + x.minutes, 0);
+    const routeDays = Math.max(1, Math.min(days, Math.ceil((total * 1.25) / 420)));
+    const dayOf = balanceDays(stops, routeDays);
+    const touched = new Set<string>();
+    let moved = 0;
+    for (const v of mows) {
+      if (!v.appointment) continue;
+      const weekday = (dayOf.get(v.planId) ?? 0) + 1;
+      let target = onWeekday(new Date(`${localDay(v.appointment.startsAt, tz)}T00:00:00Z`), weekday);
+      if (target.getTime() < now.getTime() - DAY_MS) target = new Date(target.getTime() + 7 * DAY_MS);
+      const date = target.toISOString().slice(0, 10);
+      const start = atLocalHour(target, startHour, tz);
+      const len = v.appointment.endsAt.getTime() - v.appointment.startsAt.getTime();
+      if (localDay(v.appointment.startsAt, tz) !== date) moved++;
+      await db.appointment.update({ where: { id: v.appointment.id }, data: { startsAt: start, endsAt: new Date(start.getTime() + len) } });
+      await db.servicePlanVisit.update({ where: { id: v.id }, data: { dueAt: start } });
+      touched.add(date);
+    }
+    const shop = await shopAt(g.organizationId);
+    for (const date of touched) await retimeDay(g.organizationId, date, tz, shop, places, startHour);
+    const perDay = Array.from({ length: routeDays }, (_, i) => ({ weekday: i + 1, yards: stops.filter((s) => dayOf.get(s.id) === i).length, minutes: stops.filter((s) => dayOf.get(s.id) === i).reduce((a, s) => a + s.minutes, 0) }));
+    await logActivity({ organizationId: g.organizationId, actorId: g.userId, kind: TRAIL_KINDS.ESTIMATE, summary: `Balanced the mowing days — ${located.length} yards over ${days} days, ${moved} mowings moved`, meta: { trade: "lawn" } }).catch(() => {});
+    revalidatePath("/dashboard/calendar");
+    return { ok: true, moved, perDay };
+  } catch (err) {
+    logServerError("lawn-balance", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The mowing days couldn't be balanced right now." };
+  }
+}
+
+/** Rained out: the day's lawn visits move to the next working day, after that day's own route. */
+export async function rainDelay(input: { date: string }): Promise<{ ok: true; moved: number; to: string } | { ok: false; error: string }> {
+  const g = await gate();
+  if (!g.ok) return g;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { ok: false, error: "That day couldn't be read." };
+  try {
+    const org = await db.organization.findUnique({ where: { id: g.organizationId }, select: { timezone: true } });
+    const tz = org?.timezone || "America/New_York";
+    const from = atLocalHour(new Date(`${input.date}T00:00:00Z`), 0, tz);
+    const visits = await db.servicePlanVisit.findMany({ where: { organizationId: g.organizationId, status: "SCHEDULED", plan: { trade: "lawn", status: "ACTIVE" }, appointment: { startsAt: { gte: from, lt: new Date(from.getTime() + DAY_MS) }, status: { not: "CANCELED" } } }, select: { id: true, appointment: { select: { id: true, startsAt: true, endsAt: true } } } });
+    const toDay = nextWorkday(new Date(`${input.date}T00:00:00Z`));
+    const to = toDay.toISOString().slice(0, 10);
+    for (const v of visits) {
+      if (!v.appointment) continue;
+      const shift = toDay.getTime() - new Date(`${input.date}T00:00:00Z`).getTime();
+      await db.appointment.update({ where: { id: v.appointment.id }, data: { startsAt: new Date(v.appointment.startsAt.getTime() + shift), endsAt: new Date(v.appointment.endsAt.getTime() + shift) } });
+      await db.servicePlanVisit.update({ where: { id: v.id }, data: { dueAt: new Date(v.appointment.startsAt.getTime() + shift) } });
+    }
+    const { places } = await lawnPlans(g.organizationId);
+    await retimeDay(g.organizationId, to, tz, await shopAt(g.organizationId), places, 8);
+    revalidatePath("/dashboard/calendar");
+    return { ok: true, moved: visits.length, to };
+  } catch (err) {
+    logServerError("lawn-rain", err, { kind: "action", organizationId: g.organizationId });
+    return { ok: false, error: "The day couldn't be moved right now." };
   }
 }

@@ -204,6 +204,7 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
       visits: calendar,
       benefits,
       send: sendPlanToo,
+      place: { lat: site.lat, lng: site.lng },
     });
     setBusy(null);
     if (!r.ok) return setError(r.error);
@@ -242,6 +243,9 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
                 <button type="button" className={`${s.btn} ${s.btnSm}`} onClick={() => setShowRates((v) => !v)}>
                   Your rates
                 </button>
+                <a className={`${s.btn} ${s.btnSm}`} href="/dashboard/lawn-estimator/routes" data-lawn-routes-link>
+                  Route days
+                </a>
               </div>
               {showRates ? <RatesCard settings={settings} own={ownRate} onSaved={(x) => { setSettings(x); setOwnRate(true); }} /> : null}
             </form>
