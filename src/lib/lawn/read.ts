@@ -14,6 +14,7 @@ import { boxAround, boxOfRings, fillRings, fromPx, ftPerPx, gridFor, M_TO_FT, me
 import { classify, CLS } from "./classify";
 import { findHouse, slopeBands, type SlopeBands } from "./measure";
 import { findPhoto, readCanopy, readPhoto, readStructures } from "./aerial";
+import { keepYard, shadedUndergrowth } from "./yard";
 import { encodeLabels, type LawnSite } from "./site";
 
 export type ReadInput = { address?: string | null; lat?: number | null; lng?: number | null; /** The contractor's own lot line. */ ring?: LatLng[] | null };
@@ -185,8 +186,10 @@ export async function readProperty(inp: ReadInput): Promise<LawnSite> {
   const bmask = buildings.length ? fillRings(grid.w, grid.h, buildings.map((b) => b.map((p) => toPx(grid, p)))) : null;
   const { labels } = classify({ raster: { w: grid.w, h: grid.h, gsdM: grid.gsdM, rgb: pix.rgb, nir: pix.nir, chm }, lot, buildings: bmask });
   if (!bmask) findHouse(labels, lot, grid);
-  const { slope, ok: lidar } = await readSlope(grid, labels, lot);
-  const encoded = encodeLabels(labels);
+  // What the photo read (the woods' undergrowth told from lawn), then the yard a crew keeps picked out of it.
+  shadedUndergrowth(labels, lot, grid, pix);
+  const yard = keepYard(labels, lot, grid);
+  const { slope, ok: lidar } = await readSlope(grid, yard.labels, lot);
   return {
     v: 1,
     address,
@@ -199,8 +202,9 @@ export async function readProperty(inp: ReadInput): Promise<LawnSite> {
     photo: { itemId: photo.id, date: photo.date, gsdM: photo.gsdM },
     grid: { box: grid.box, w: grid.w, h: grid.h, gsdM: grid.gsdM, lat },
     lot: { ring, source, parcelId, acreage, stories },
-    labels: encoded,
-    readLabels: encoded,
+    labels: encodeLabels(yard.labels),
+    readLabels: encodeLabels(labels),
+    yard: { reachFt: yard.reachFt },
     slope,
     sources: { parcel: source === "parcel", footprints: !!bmask, footprintSource, canopyMap: !!chm, lidar },
     readAt: new Date().toISOString(),

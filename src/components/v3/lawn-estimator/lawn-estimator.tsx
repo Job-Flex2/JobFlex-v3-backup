@@ -9,7 +9,8 @@ import * as React from "react";
 import s from "./lawn.module.css";
 import { YardMap, CLASS_COLOR } from "./yard-map";
 import { CLS } from "@/lib/lawn/classify";
-import { decodeLabels, encodeLabels, lotMaskOf, measureSite, type LawnSite } from "@/lib/lawn/site";
+import { decodeLabels, encodeLabels, lotMaskOf, measureSite, withYard, type LawnSite } from "@/lib/lawn/site";
+import { countPiece, DEFAULT_REACH_FT, fillPiece, keepYard, REACHES_FT, reReach } from "@/lib/lawn/yard";
 import { fromPx, ftPerPx, type Pt } from "@/lib/lawn/geo";
 import { DEFAULT_LAWN_SETTINGS, DEFAULT_OPTIONS, MOWERS, priceYard, type LawnSettings, type Mower, type PricedService, type ServiceId, type ServiceOptions } from "@/lib/lawn/pricing";
 import { monthsOf } from "@/lib/lawn/season";
@@ -20,6 +21,8 @@ import { convertLawnToProposal, createLawnPlan, deleteLawnDraft, findLawnClients
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n >= 1000 ? 0 : 2 });
 const sqft = (n: number) => `${Math.round(n).toLocaleString("en-US")} sq ft`;
+/** An area the way a landscaper says it: square feet, or acres once it's past half of one. */
+const area = (n: number) => (n >= 21780 ? `${(n / 43560).toFixed(2)} acres` : sqft(n));
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const PAINTS: Array<{ cls: number; label: string }> = [
@@ -27,6 +30,7 @@ const PAINTS: Array<{ cls: number; label: string }> = [
   { cls: CLS.BED, label: "Bed" },
   { cls: CLS.TREE, label: "Tree" },
   { cls: CLS.HARD, label: "Paving" },
+  { cls: CLS.NATURAL, label: "Not serviced" },
 ];
 
 /** Ticked by default: the season's core, and what the yard plainly needs. */
@@ -41,12 +45,16 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
   const [error, setError] = React.useState<string | null>(null);
   const [site, setSite] = React.useState<LawnSite | null>(null);
   const [labels, setLabels] = React.useState<Uint8Array | null>(null);
-  const [past, setPast] = React.useState<Uint8Array[]>([]);
+  // Undo goes back to the labels and the reach they were picked out at.
+  const [past, setPast] = React.useState<Array<{ labels: Uint8Array; reachFt: number | null | undefined }>>([]);
   const [settings, setSettings] = React.useState<LawnSettings>(DEFAULT_LAWN_SETTINGS);
   const [ownRate, setOwnRate] = React.useState(false);
   const [options, setOptions] = React.useState<ServiceOptions>(DEFAULT_OPTIONS);
   const [picked, setPicked] = React.useState<Set<ServiceId> | null>(null);
   const [paint, setPaint] = React.useState<number | null>(null);
+  const [tapping, setTapping] = React.useState(false);
+  const [tapNote, setTapNote] = React.useState<string | null>(null);
+  const [zoom, setZoom] = React.useState<"yard" | "lot">("yard");
   const [brushFt, setBrushFt] = React.useState(4);
   const [view, setView] = React.useState<"both" | "photo" | "classes">("both");
   const [drawingLot, setDrawingLot] = React.useState<Pt[] | null>(null);
@@ -79,8 +87,9 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
           return;
         }
         const d = r.draft;
-        setSite(d.site);
-        setLabels(decodeLabels(d.site.labels, d.site.grid.w * d.site.grid.h));
+        const opened = withYard(d.site, decodeLabels(d.site.labels, d.site.grid.w * d.site.grid.h));
+        setSite(opened.site);
+        setLabels(opened.labels);
         setOptions(d.options);
         setPicked(new Set(d.picked as ServiceId[]));
         setSavedAt(r.updatedAt);
@@ -119,6 +128,8 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
   };
 
   const lotInfo = React.useMemo(() => (site ? lotMaskOf(site) : null), [site]);
+  // The photo's own reading, before the yard was picked out of it: "As read", a reach change and "count it in" go back to it.
+  const asRead = React.useMemo(() => (site ? decodeLabels(site.readLabels, site.grid.w * site.grid.h) : null), [site]);
   const measures = React.useMemo(() => (site && labels ? measureSite(site, labels) : null), [site, labels]);
   const quote = React.useMemo(() => (site && measures ? priceYard({ measures, settings, options, locationFactor: site.locationFactor, state: site.state, ownRate }) : null), [site, measures, settings, options, ownRate]);
   const chosen = React.useMemo(() => picked ?? (quote ? defaultPicked(quote.services) : new Set<ServiceId>()), [picked, quote]);
@@ -136,12 +147,35 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
   const totals = quote ? planTotals(calendar, quote, chosen) : null;
 
   const stroke = (next: Uint8Array) => {
-    if (labels) setPast((p) => [...p.slice(-30), labels]);
+    if (labels) setPast((p) => [...p.slice(-30), { labels, reachFt: site?.yard?.reachFt }]);
     setLabels(next);
+  };
+  /** The yard picked out again at another reach, the contractor's own edits kept. */
+  const setReach = (to: number) => {
+    if (!site || !labels || !asRead || !lotInfo) return;
+    const from = site.yard?.reachFt ?? DEFAULT_REACH_FT;
+    if (from === to) return;
+    const next = reReach(asRead, labels, lotInfo.mask, site.grid, from, to);
+    stroke(next.labels);
+    setSite({ ...site, yard: { reachFt: to } });
+  };
+  /** A tap: a dimmed (natural) piece counted in, anything else in the yard left out. Trees and the house stay. */
+  const tapPiece = (at: number) => {
+    if (!site || !labels || !asRead || !lotInfo || !lotInfo.mask[at]) return;
+    const c = labels[at];
+    if (c === CLS.BUILDING || c === CLS.TREE || c === CLS.OUT) {
+      setTapNote(c === CLS.TREE ? "That's under trees — if there's lawn there, paint it in with the Lawn brush." : c === CLS.BUILDING ? "That's the house." : null);
+      return;
+    }
+    setTapNote(null);
+    const { w, h } = site.grid;
+    stroke(c === CLS.NATURAL ? countPiece(labels, asRead, lotInfo.mask, w, h, at) : fillPiece(labels, lotInfo.mask, w, h, at, CLS.NATURAL));
   };
   const undo = () => {
     if (!past.length) return;
-    setLabels(past[past.length - 1]);
+    const last = past[past.length - 1];
+    setLabels(last.labels);
+    if (site && last.reachFt !== site.yard?.reachFt) setSite({ ...site, yard: last.reachFt === undefined ? undefined : { reachFt: last.reachFt } });
     setPast(past.slice(0, -1));
   };
   const toggle = (id: ServiceId) => {
@@ -169,7 +203,7 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
     const months = monthsOf(quote.climate);
     const scope = [
       `Lawn and landscape care for ${site.address || "the property"}, ${MONTH[months[0] - 1]} through ${MONTH[months[months.length - 1] - 1]}.`,
-      `Measured from the USDA aerial photo${site.photo ? ` of ${new Date(site.photo.date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}` : ""}: ${sqft(measures.lawnSqft)} of lawn (front ${sqft(measures.lawnByZone.front)}, back ${sqft(measures.lawnByZone.back)}, sides ${sqft(measures.lawnByZone.side)}), ${sqft(measures.bedSqft)} of beds on a ${sqft(measures.lotSqft)} lot.`,
+      `Measured from the USDA aerial photo${site.photo ? ` of ${new Date(site.photo.date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}` : ""}: ${sqft(measures.lawnSqft)} of lawn (front ${sqft(measures.lawnByZone.front)}, back ${sqft(measures.lawnByZone.back)}, sides ${sqft(measures.lawnByZone.side)}), ${sqft(measures.bedSqft)} of beds${measures.yardSqft ? ` — a maintained yard of ${area(measures.yardSqft)}` : ""} on a ${area(measures.lotSqft)} lot.`,
       ...lines.map((l) => `${l.name}: ${l.desc}.`),
       `The season comes to ${usd(season)}${tax ? " plus sales tax on the lines the state taxes" : ""} — ${usd(season / 12)} a month over 12 months on a service plan.`,
     ].join("\n");
@@ -343,7 +377,17 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
               Paint
             </span>
             {PAINTS.map((p) => (
-              <button key={p.cls} type="button" className={`${s.btn} ${s.btnSm} ${paint === p.cls ? s.btnOn : ""}`} onClick={() => setPaint((x) => (x === p.cls ? null : p.cls))} aria-pressed={paint === p.cls} data-lawn-paint={p.label.toLowerCase()}>
+              <button
+                key={p.cls}
+                type="button"
+                className={`${s.btn} ${s.btnSm} ${paint === p.cls && !tapping ? s.btnOn : ""}`}
+                onClick={() => {
+                  setTapping(false);
+                  setPaint((x) => (x === p.cls && !tapping ? null : p.cls));
+                }}
+                aria-pressed={paint === p.cls && !tapping}
+                data-lawn-paint={p.label.toLowerCase()}
+              >
                 <span className={s.swatch} style={{ background: `rgb(${CLASS_COLOR[p.cls].join(",")})` }} />
                 {p.label}
               </button>
@@ -355,6 +399,19 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              className={`${s.btn} ${s.btnSm} ${tapping ? s.btnOn : ""}`}
+              onClick={() => {
+                setTapping((t) => !t);
+                setTapNote(null);
+              }}
+              aria-pressed={tapping}
+              title="Tap a dimmed piece to count it in, or a lawn, bed or paving piece to leave it out"
+              data-lawn-tap
+            >
+              Count in / leave out
+            </button>
             <span className={s.toolSep} />
             <button type="button" className={`${s.btn} ${s.btnSm}`} onClick={undo} disabled={!past.length} data-lawn-undo>
               Undo
@@ -364,8 +421,11 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
               className={`${s.btn} ${s.btnSm}`}
               onClick={() => {
                 if (!window.confirm("Put the yard back the way the photo read it?")) return;
-                setPast((p) => [...p, labels]);
-                setLabels(decodeLabels(site.readLabels, g.w * g.h));
+                if (!asRead || !lotInfo) return;
+                const y = keepYard(asRead, lotInfo.mask, g, { reachFt: site.yard?.reachFt ?? DEFAULT_REACH_FT });
+                setPast((p) => [...p, { labels, reachFt: site.yard?.reachFt }]);
+                setLabels(y.labels);
+                setSite({ ...site, yard: { reachFt: y.reachFt } });
               }}
             >
               As read
@@ -378,10 +438,25 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
                 </button>
               ))}
             </div>
+            {measures.yardSqft && measures.yardSqft < measures.lotSqft * 0.45 ? (
+              <div className={s.seg} role="group" aria-label="Zoom">
+                <button type="button" className={`${s.segB} ${zoom === "yard" ? s.on : ""}`} onClick={() => setZoom("yard")} data-lawn-zoom="yard">
+                  The yard
+                </button>
+                <button type="button" className={`${s.segB} ${zoom === "lot" ? s.on : ""}`} onClick={() => setZoom("lot")} data-lawn-zoom="lot">
+                  Whole lot
+                </button>
+              </div>
+            ) : null}
             <button type="button" className={`${s.btn} ${s.btnSm} ${drawingLot ? s.btnOn : ""}`} onClick={() => setDrawingLot((d) => (d ? null : []))} data-lawn-lot-draw>
               {drawingLot ? "Cancel lot line" : "Redraw lot line"}
             </button>
           </div>
+          {tapping ? (
+            <p className={`${s.note} ${s.noteGood}`} data-lawn-tap-note>
+              {tapNote ?? "Tap a dimmed piece (field, brush) to count it in, or a lawn, bed or paving piece to leave it out."}
+            </p>
+          ) : null}
           {drawingLot ? (
             <p className={`${s.note} ${s.noteGood}`}>
               Click the lot&apos;s corners in order ({drawingLot.length} so far).{" "}
@@ -392,19 +467,63 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
               ) : null}
             </p>
           ) : null}
+          {site.yard?.reachFt != null ? (
+            <div className={s.row} data-lawn-reach>
+              <span className={s.lbl}>Lawn counted within</span>
+              <div className={s.seg} role="group" aria-label="Yard reach">
+                {REACHES_FT.map((r) => (
+                  <button key={r} type="button" className={`${s.segB} ${site.yard?.reachFt === r ? s.on : ""}`} onClick={() => setReach(r)} data-lawn-reach-ft={r}>
+                    {r} ft
+                  </button>
+                ))}
+              </div>
+              <span className={s.note}>of the buildings — grass past it is left as field</span>
+            </div>
+          ) : null}
           <YardMap
             w={g.w}
             h={g.h}
+            gsdM={g.gsdM}
             photoUrl={photoUrl}
             labels={labels}
             lot={lotInfo.mask}
             lotRing={lotInfo.ring}
-            paint={drawingLot ? null : paint}
+            paint={drawingLot || tapping ? null : paint}
             brushPx={brushFt / fpp}
             view={view}
+            zoom={drawingLot ? "lot" : zoom}
+            frameKey={`${site.readAt}|${site.yard?.reachFt ?? ""}`}
             onStroke={stroke}
+            onTap={tapping && !drawingLot ? tapPiece : null}
             drawing={drawingLot ? { points: drawingLot, onAdd: (p) => setDrawingLot((d) => [...(d ?? []), p]) } : null}
           />
+          <div className={s.legend} data-lawn-legend>
+            <span>
+              <i className={s.keyYard} />
+              Maintained yard{measures.yardSqft ? ` · ${area(measures.yardSqft)}` : ""}
+            </span>
+            <span>
+              <i className={s.keyLawn} />
+              Lawn
+            </span>
+            <span>
+              <i className={s.keyBed} />
+              Beds
+            </span>
+            <span>
+              <i className={s.keyPool} />
+              Pool
+            </span>
+            <span>
+              <i className={s.keyOut} />
+              Not serviced{measures.naturalSqft ? ` · ${area(measures.naturalSqft)} left natural` : ""}
+            </span>
+          </div>
+          {(measures.naturalSqft ?? 0) >= 5000 ? (
+            <p className={s.note} data-lawn-natural-note>
+              Woods, field and brush past the yard aren&apos;t counted. If the crew keeps some of it, choose <b>Count in / leave out</b> and tap the dimmed ground.
+            </p>
+          ) : null}
           <div className={s.row}>
             <span className={`${s.chip} ${conf.level === "green" ? s.chipGreen : conf.level === "amber" ? s.chipAmber : s.chipRed}`} data-lawn-confidence={conf.level}>
               {conf.level === "green" ? "Measured well" : conf.level === "amber" ? "Check the edges" : "Check it on site"}
@@ -431,7 +550,10 @@ export function LawnEstimator({ initialDraftId }: { initialDraftId?: string | nu
                 <dt>Slope</dt>
                 <dd>{measures.slope.source === "lidar" ? `${Math.round(measures.slope.flat * 100)}% flat, ${Math.round(measures.slope.moderate * 100)}% rolling (10–20%), ${Math.round(measures.slope.steep * 100)}% steep${measures.slope.tooSteep > 0.02 ? " — some too steep to ride a mower on" : ""}` : "No lidar here — taken as flat"}</dd>
                 <dt>Under trees</dt>
-                <dd>{sqft(measures.treeCanopySqft)} of crowns{measures.canopyOverLawnSqft ? `, ${sqft(measures.canopyOverLawnSqft)} of them over the lawn (mowed too, not seen from the air)` : ""}</dd>
+                <dd>
+                  {measures.yardCanopySqft != null ? `${sqft(measures.yardCanopySqft)} of crowns over and beside the yard (${area(measures.treeCanopySqft)} on the lot)` : `${sqft(measures.treeCanopySqft)} of crowns`}
+                  {measures.canopyOverLawnSqft ? `, ${sqft(measures.canopyOverLawnSqft)} of them over the lawn (mowed too, not seen from the air)` : ""}
+                </dd>
                 <dt>Also</dt>
                 <dd>
                   {sqft(measures.hardSqft)} paved · house {sqft(measures.houseSqft)}

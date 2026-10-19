@@ -3,7 +3,7 @@
 // of a lawn's outline is named by what lies just outside it (a driveway is hard edging, a bed is a soft edge, the house
 // is the foundation line). Areas are counted from the pixels themselves, never from the smoothed outline. Pure.
 import type { Pt } from "./geo";
-import { simplify } from "./geo";
+import { distanceTo, simplify } from "./geo";
 
 /** Closed loops around every region of `mask` (1 = in), in pixel-corner coordinates; outer loops counter-clockwise on
  *  screen (y down) — the region on the left — and holes the other way. */
@@ -135,6 +135,57 @@ export function edgeNeighbours(outlines: Outline[], labels: Uint8Array, w: numbe
         out.set(c, (out.get(c) ?? 0) + len / steps);
       }
     }
+  }
+  return out;
+}
+
+/** Corner-cutting (Chaikin): a closed ring's stair-steps and sharp turns eased into curves — for drawing only; areas
+ *  and edges are measured from the pixels and the unsmoothed outline. */
+export function chaikin(r: Pt[], passes = 2): Pt[] {
+  let p = r;
+  for (let k = 0; k < passes && p.length >= 3; k++) {
+    const q: Pt[] = [];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i];
+      const b = p[(i + 1) % p.length];
+      q.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 }, { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    p = q;
+  }
+  return p;
+}
+
+/** Where to write each piece's size: every 4-connected piece of `cls` of `minPx` pixels or more, its pixel count and
+ *  the point deepest inside it (so the label sits on the piece, not on a hole or a neighbour). */
+export function pieceSpots(labels: Uint8Array, w: number, h: number, cls: number, minPx: number): Array<{ x: number; y: number; px: number }> {
+  const N = w * h;
+  const off = new Uint8Array(N);
+  for (let i = 0; i < N; i++) off[i] = labels[i] === cls ? 0 : 1;
+  const depth = distanceTo(off, w, h);
+  const seen = new Uint8Array(N);
+  const out: Array<{ x: number; y: number; px: number }> = [];
+  for (let i = 0; i < N; i++) {
+    if (seen[i] || labels[i] !== cls) continue;
+    const q = [i];
+    seen[i] = 1;
+    let n = 0;
+    let best = i;
+    while (q.length) {
+      const p = q.pop()!;
+      n++;
+      if (depth[p] > depth[best]) best = p;
+      const x = p % w;
+      const y = (p - x) / w;
+      for (const [xx, yy] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const k = yy * w + xx;
+        if (!seen[k] && labels[k] === cls) {
+          seen[k] = 1;
+          q.push(k);
+        }
+      }
+    }
+    if (n >= minPx) out.push({ x: (best % w) + 0.5, y: Math.floor(best / w) + 0.5, px: n });
   }
   return out;
 }

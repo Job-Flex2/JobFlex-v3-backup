@@ -4,9 +4,10 @@
 // edged soft, the house trimmed along its foundation, the lot line trimmed along a fence), slope from lidar, and how
 // far the numbers can be trusted. Areas come from pixel counts; lengths from the smoothed outlines. Pure.
 import type { Grid, Pt } from "./geo";
-import { ftPerPx } from "./geo";
+import { distanceTo, ftPerPx } from "./geo";
 import { CLS } from "./classify";
 import { edgeNeighbours, outlinesOf } from "./vectorize";
+import { yardArea } from "./yard";
 
 export type Zone = "front" | "back" | "side";
 
@@ -20,6 +21,13 @@ export type YardMeasures = {
   lawnByZone: Record<Zone, number>;
   bedSqft: number;
   treeCanopySqft: number;
+  /** Crowns over or within 30 ft of the lawn and beds — the trees whose leaves land in the yard (2026-10-19). */
+  yardCanopySqft?: number;
+  /** Ground left natural — woods floor, field, meadow: on the lot, never serviced (2026-10-19). */
+  naturalSqft?: number;
+  /** The maintained yard as one area (lawn, beds, pool, house and the paving beside them, gaps under 12 ft closed) —
+   *  the outline on the map (2026-10-19). */
+  yardSqft?: number;
   /** Tree crowns over the lawn: the grass under them is mowed too, but can't be seen from the air. */
   canopyOverLawnSqft: number;
   hardSqft: number;
@@ -36,7 +44,7 @@ export type YardMeasures = {
     houseFt: number;
     /** Lawn around trees. */
     treeFt: number;
-    /** Lawn along the lot line (a fence or the neighbour's line): trimmed. */
+    /** Lawn along the lot line (a fence or the neighbour's line) or the edge of the natural ground: trimmed. */
     lotLineFt: number;
   };
   bedPerimeterFt: number;
@@ -273,28 +281,40 @@ export function measureYard(inp: MeasureInput): YardMeasures {
 
   const lawnSqft = count(CLS.LAWN);
   const treeSqft = count(CLS.TREE);
+  // The trees that drop leaves in the yard: crowns within 30 ft of the lawn or a bed.
+  const yardMask = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) yardMask[i] = L[i] === CLS.LAWN || L[i] === CLS.BED ? 1 : 0;
+  const nearYard = distanceTo(yardMask, w, h);
+  let yardCanopyPx = 0;
+  for (let i = 0; i < w * h; i++) if (L[i] === CLS.TREE && nearYard[i] * fpp <= 30) yardCanopyPx++;
+  const bedSqft = count(CLS.BED);
   const slope = inp.slope ?? slopeBands(null, 0, 0, 1);
   return {
     lotSqft: round(lotPx * sqftPx),
     lawnSqft: round(lawnSqft),
     lawnByZone: { front: round(byZone.front), back: round(byZone.back), side: round(byZone.side) },
-    bedSqft: round(count(CLS.BED)),
+    bedSqft: round(bedSqft),
     treeCanopySqft: round(treeSqft),
+    yardCanopySqft: round(yardCanopyPx * sqftPx),
+    naturalSqft: round(count(CLS.NATURAL)),
+    yardSqft: yardArea(L, lot, g).sqft,
     canopyOverLawnSqft: round(canopyOverLawnPx * sqftPx),
     hardSqft: round(count(CLS.HARD)),
     houseSqft: round(count(CLS.BUILDING)),
     poolSqft: round(count(CLS.WATER)),
     treesInLawn,
-    edges: { hardFt: round(ft(CLS.HARD)), bedFt: round(ft(CLS.BED)), houseFt: round(ft(CLS.BUILDING)), treeFt: round(ft(CLS.TREE)), lotLineFt: round(ft(CLS.OUT)) },
+    edges: { hardFt: round(ft(CLS.HARD)), bedFt: round(ft(CLS.BED)), houseFt: round(ft(CLS.BUILDING)), treeFt: round(ft(CLS.TREE)), lotLineFt: round(ft(CLS.OUT) + ft(CLS.NATURAL)) },
     bedPerimeterFt: round(bedPerimeterFt),
     slope,
     frontEdge,
-    confidence: confidenceOf({ ...inp, lawnSqft, treeSqft, lotSqft: lotPx * sqftPx }),
+    confidence: confidenceOf({ ...inp, lawnSqft, canopySqft: yardCanopyPx * sqftPx, groundSqft: lawnSqft + bedSqft + yardCanopyPx * sqftPx }),
   };
 }
 
 /** How far the numbers can be trusted — green, amber or red, and why. */
-export function confidenceOf(inp: Pick<MeasureInput, "photo" | "parcel" | "footprints" | "canopyMap"> & { lawnSqft: number; treeSqft: number; lotSqft: number; now?: Date }): Confidence {
+/** `canopySqft` over `groundSqft` is the share of the yard under trees (its crowns, over the yard and the yard with
+ *  them — the woods beyond it aren't measured, so they don't count against it). */
+export function confidenceOf(inp: Pick<MeasureInput, "photo" | "parcel" | "footprints" | "canopyMap"> & { lawnSqft: number; canopySqft: number; groundSqft: number; now?: Date }): Confidence {
   const reasons: string[] = [];
   let score = 100;
   const now = inp.now ?? new Date();
@@ -324,13 +344,13 @@ export function confidenceOf(inp: Pick<MeasureInput, "photo" | "parcel" | "footp
     score -= 10;
     reasons.push(`A ${Math.round(inp.photo.gsdM * 100)} cm photo — small beds and edges are approximate`);
   }
-  const canopyShare = inp.lotSqft ? inp.treeSqft / inp.lotSqft : 0;
+  const canopyShare = inp.groundSqft ? inp.canopySqft / inp.groundSqft : 0;
   if (canopyShare > 0.35) {
     score -= 25;
-    reasons.push(`Trees cover ${Math.round(canopyShare * 100)}% of the lot — lawn under them is a guess`);
+    reasons.push(`Trees stand over ${Math.round(canopyShare * 100)}% of the yard — lawn under them is a guess`);
   } else if (canopyShare > 0.2) {
     score -= 10;
-    reasons.push(`Trees cover ${Math.round(canopyShare * 100)}% of the lot`);
+    reasons.push(`Trees stand over ${Math.round(canopyShare * 100)}% of the yard`);
   }
   if (!inp.footprints) {
     score -= 8;

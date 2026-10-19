@@ -6,6 +6,7 @@ import type { Grid, LatLng, MercBox } from "./geo";
 import { fillRings, toPx } from "./geo";
 import type { SlopeBands, YardMeasures } from "./measure";
 import { measureYard } from "./measure";
+import { DEFAULT_REACH_FT, keepYard } from "./yard";
 
 export type LawnSite = {
   v: 1;
@@ -22,8 +23,12 @@ export type LawnSite = {
   lot: { ring: LatLng[]; source: "parcel" | "assumed"; parcelId: string | null; acreage: number | null; stories: number | null };
   /** Class of every pixel, run-length encoded (see encodeLabels). */
   labels: string;
-  /** The classification as read from the photo, before any edit — "reset" goes back to it. */
+  /** The classification as read from the photo, before the yard was picked out of it and before any edit — "As read"
+   *  and a change of reach redo the yard from it. */
   readLabels: string;
+  /** How the yard was picked out: grass within `reachFt` of the lot's buildings is lawn, past it natural (null: no
+   *  building on the lot, nothing cut). Absent on estimates read before 2026-10-19 — their labels have no yard pass. */
+  yard?: { reachFt: number | null };
   slope: SlopeBands;
   sources: { parcel: boolean; footprints: boolean; footprintSource?: "county" | "usa-structures" | null; canopyMap: boolean; lidar: boolean };
   readAt: string;
@@ -66,6 +71,25 @@ export function lotMaskOf(site: Pick<LawnSite, "grid" | "lot">) {
   const g = gridOf(site);
   const ring = site.lot.ring.map((p) => toPx(g, p));
   return { ring, mask: fillRings(g.w, g.h, [ring]) };
+}
+
+/** The yard picked out of the photo's reading at a reach — "As read", or the start of a reach change. */
+export function yardOf(site: LawnSite, reachFt?: number | null): Uint8Array {
+  const g = gridOf(site);
+  const { mask } = lotMaskOf(site);
+  return keepYard(decodeLabels(site.readLabels, g.w * g.h), mask, g, { reachFt: reachFt ?? site.yard?.reachFt ?? DEFAULT_REACH_FT }).labels;
+}
+
+/** An estimate saved before the yard pass (2026-10-19) opens with the yard picked out of its reading, the
+ *  contractor's own edits (wherever its labels differ from the reading) laid back on top. Newer ones as they are. */
+export function withYard(site: LawnSite, labels: Uint8Array): { site: LawnSite; labels: Uint8Array } {
+  if (site.yard) return { site, labels };
+  const g = gridOf(site);
+  const { mask } = lotMaskOf(site);
+  const read = decodeLabels(site.readLabels, g.w * g.h);
+  const y = keepYard(read, mask, g);
+  for (let i = 0; i < labels.length; i++) if (labels[i] !== read[i]) y.labels[i] = labels[i];
+  return { site: { ...site, yard: { reachFt: y.reachFt } }, labels: y.labels };
 }
 
 /** The yard's numbers from the site as it stands (labels as edited). */

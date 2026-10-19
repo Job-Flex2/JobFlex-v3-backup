@@ -1,13 +1,16 @@
 // Lawn & landscape estimator (2026-10-18): the yard read from a synthetic aerial photo (no real address in a public
 // repo) — lawn, a tree, a bed, the driveway, the house — the outlines and edges traced from it, the lawn split front /
-// back / side from the street, the labels' storage, the pricing against the market, the season by state, the tax.
+// back / side from the street, the labels' storage, the pricing against the market, the season by state, the tax —
+// and (2026-10-19) a wooded acreage: the maintained yard picked out of the woods, the field and the undergrowth, the
+// pool told from a court and a pale roof, a lawn the tree-height map still calls woods.
 //   npx tsx qa/tests/logic/lawn-estimator.check.ts
-import { classify, CLS } from "../../../src/lib/lawn/classify";
+import { classify, blueWater, CLS } from "../../../src/lib/lawn/classify";
 import { traceLoops, signedArea, outlinesOf, edgeNeighbours } from "../../../src/lib/lawn/vectorize";
 import { measureYard, slopeBands, confidenceOf, findHouse } from "../../../src/lib/lawn/measure";
-import { encodeLabels, decodeLabels } from "../../../src/lib/lawn/site";
-import { fillRings, ftPerPx, type Grid } from "../../../src/lib/lawn/geo";
-import { priceYard, pickMower, difficultyOf, cleanLawnSettings, cleanOptions, DEFAULT_LAWN_SETTINGS, DEFAULT_OPTIONS } from "../../../src/lib/lawn/pricing";
+import { encodeLabels, decodeLabels, withYard, type LawnSite } from "../../../src/lib/lawn/site";
+import { fillRings, fromMerc, ftPerPx, type Grid } from "../../../src/lib/lawn/geo";
+import { priceYard, pickMower, difficultyOf, cleanLawnSettings, cleanOptions, DEFAULT_LAWN_SETTINGS, DEFAULT_OPTIONS, mowBand, yardCanopyShare } from "../../../src/lib/lawn/pricing";
+import { keepYard, shadedUndergrowth, yardArea, reReach, countPiece, fillPiece } from "../../../src/lib/lawn/yard";
 import { climateFor, mowVisits, monthsOf, weeklyMonths, STATE_CLIMATE } from "../../../src/lib/lawn/season";
 import { lawnTaxed, taxWords } from "../../../src/lib/lawn/tax";
 import { rulesAt, inWindow, FERTILIZER, FLORIDA_SUMMER } from "../../../src/lib/lawn/rules";
@@ -119,7 +122,7 @@ console.log("── without footprints, the house is found");
 }
 
 console.log("── confidence");
-const c1 = confidenceOf({ photo: { date: "2019-01-10", gsdM: 0.6 }, parcel: false, footprints: false, canopyMap: false, lawnSqft: 3000, treeSqft: 6000, lotSqft: 10000, now: new Date("2026-10-18") });
+const c1 = confidenceOf({ photo: { date: "2019-01-10", gsdM: 0.6 }, parcel: false, footprints: false, canopyMap: false, lawnSqft: 3000, canopySqft: 6000, groundSqft: 10000, now: new Date("2026-10-18") });
 check("old winter 60 cm photo, no parcel, many trees: red with reasons", c1.level === "red" && c1.reasons.length >= 5, JSON.stringify(c1));
 
 console.log("── slope");
@@ -236,6 +239,102 @@ console.log("── route days");
   check("the days are within a fifth of each other", Math.max(...loads) <= Math.min(...loads) * 1.2 + 30, JSON.stringify(loads));
   check("Wednesday of the week of Friday Oct 23, 2026 is Oct 21", onWeekday(new Date("2026-10-23T00:00:00Z"), 3).toISOString().startsWith("2026-10-21"));
   check("rained out on Saturday: Monday", nextWorkday(new Date("2026-10-24T00:00:00Z")).toISOString().startsWith("2026-10-26"));
+}
+
+console.log("── the maintained yard on a wooded acreage");
+{
+  // 600 × 600 px at 0.3 m (≈ 590 ft square, 8 acres), all woods but: the house in the middle with ~100 ft of lawn round
+  // it, a pool and (50 px south) a stretch of that lawn the height map still calls 14 m trees; out in the woods a canopy
+  // gap, a clearing, a shaded patch of undergrowth by the woods' edge; a field to the south; a pool-blue court; a pale
+  // blue shed roof.
+  const W2 = 600;
+  const H2 = 600;
+  const N2 = W2 * H2;
+  const g2: Grid = { box: [0, 0, 180, 180], w: W2, h: H2, gsdM: 0.3, lat: 0 };
+  const rgb2 = new Uint8Array(N2 * 3);
+  const nir2 = new Uint8Array(N2);
+  const chm2 = new Float32Array(N2);
+  const put = (i: number, r: number, gr: number, b: number, n: number, ht = 0) => {
+    rgb2.set([r, gr, b], i * 3);
+    nir2[i] = n;
+    chm2[i] = ht;
+  };
+  const inBox = (x: number, y: number, x0: number, y0: number, x1: number, y1: number) => x >= x0 && x < x1 && y >= y0 && y < y1;
+  for (let y = 0; y < H2; y++)
+    for (let x = 0; x < W2; x++) {
+      const i = y * W2 + x;
+      const yard = (x - 300) ** 2 + (y - 300) ** 2 < 100 ** 2;
+      const lawn = (r = 1) => put(i, 70 + noise(3) * r, 110 + noise(3) * r, 55 + noise(3) * r, 175 + noise(3) * r);
+      if (inBox(x, y, 280, 280, 320, 320)) put(i, 150, 120, 100, 120); // the house
+      else if (inBox(x, y, 330, 250, 345, 275)) put(i, 79, 163, 200, 170); // the pool: bright cyan, bright in NIR on this flight
+      else if (inBox(x, y, 260, 340, 330, 380)) put(i, 70 + noise(3), 110 + noise(3), 55 + noise(3), 175 + noise(3), 14); // felled since the height map
+      else if (yard) lawn();
+      else if (inBox(x, y, 40, 40, 48, 48)) lawn(); // a sunlit gap in the canopy
+      else if (inBox(x, y, 500, 60, 525, 85)) lawn(); // a clearing deep in the woods
+      else if (inBox(x, y, 430, 280, 480, 320)) put(i, 45 + noise(3), 75 + noise(3), 40 + noise(3), 85 + noise(3)); // undergrowth in the shade
+      else if (y >= 470 && y < 590 && x >= 100 && x < 500) lawn(); // the field
+      else if (inBox(x, y, 120, 150, 180, 180)) put(i, ...((x - 120) % 30 < 2 || (y - 150) % 15 < 2 ? ([235, 235, 232, 220] as const) : ([90, 178, 204, 172] as const))); // a pool-blue court, white lines
+      else if (inBox(x, y, 450, 420, 470, 440)) put(i, 200, 225, 250, 240); // a pale blue shed roof
+      else put(i, 40 + noise(20), 70 + noise(25), 35 + noise(15), 150 + noise(45), 15); // woods
+    }
+  const lot2 = fillRings(W2, H2, [[{ x: 5, y: 5 }, { x: 595, y: 5 }, { x: 595, y: 595 }, { x: 5, y: 595 }]]);
+  const b2 = fillRings(W2, H2, [[{ x: 280, y: 280 }, { x: 320, y: 280 }, { x: 320, y: 320 }, { x: 280, y: 320 }]]);
+  const read2 = classify({ raster: { w: W2, h: H2, gsdM: 0.3, rgb: rgb2, nir: nir2, chm: chm2 }, lot: lot2, buildings: b2 }).labels;
+  const at = (L: Uint8Array, x: number, y: number) => L[y * W2 + x];
+  check("the pool is water — pool-blue, though bright in the near-infrared", at(read2, 337, 262) === CLS.WATER, String(at(read2, 337, 262)));
+  check("a pool-blue court split by its lines is paving, not a pool", at(read2, 135, 157) === CLS.HARD && at(read2, 165, 172) === CLS.HARD, `${at(read2, 135, 157)} ${at(read2, 165, 172)}`);
+  check("a pale blue roof isn't water", at(read2, 460, 430) !== CLS.WATER, String(at(read2, 460, 430)));
+  check("lawn the height map still calls trees reads as lawn", at(read2, 295, 360) === CLS.LAWN, String(at(read2, 295, 360)));
+  check("the woods are trees", at(read2, 100, 300) === CLS.TREE && at(read2, 550, 300) === CLS.TREE);
+  check("pool-blue: a pool yes; a slate roof, a white glint, sky-blue shade no", blueWater(79, 163, 200, 170) && blueWater(70, 107, 118, 37) && !blueWater(94, 123, 134, 97) && !blueWater(176, 197, 203, 189) && !blueWater(66, 113, 142, 95));
+  const under = shadedUndergrowth(read2, lot2, g2, { rgb: rgb2, nir: nir2 });
+  check("the shaded green the woods rim is undergrowth, set natural", at(read2, 455, 300) === CLS.NATURAL && under > 1000, `${at(read2, 455, 300)}, ${under} sq ft`);
+  check("the lawn in the sun stays lawn", at(read2, 300, 230) === CLS.LAWN);
+  const y200 = keepYard(read2, lot2, g2, { reachFt: 200 });
+  const L2 = y200.labels;
+  check("the yard round the house is kept", at(L2, 300, 230) === CLS.LAWN && at(L2, 380, 300) === CLS.LAWN, `${at(L2, 300, 230)} ${at(L2, 380, 300)}`);
+  check("a gap in the canopy is the woods'", at(L2, 44, 44) === CLS.TREE, String(at(L2, 44, 44)));
+  check("a clearing deep in the woods is left natural", at(L2, 512, 72) === CLS.NATURAL, String(at(L2, 512, 72)));
+  check("the field: counted within 200 ft of the house, natural past it", at(L2, 300, 490) === CLS.LAWN && at(L2, 300, 570) === CLS.NATURAL, `${at(L2, 300, 490)} ${at(L2, 300, 570)}`);
+  check("the reach is reported", y200.reachFt === 200 && y200.naturalSqft > 20000, JSON.stringify({ reach: y200.reachFt, natural: y200.naturalSqft }));
+  const m2 = measureYard({ grid: g2, labels: L2, lot: lot2, lotRing: null, photo: { date: "2025-07-01", gsdM: 0.3 }, parcel: true, footprints: true, canopyMap: true });
+  const sq2 = (0.3 * 3.280839895) ** 2;
+  check("the lawn is the yard's and the field's near part, not the 8 acres", m2.lawnSqft > Math.PI * 95 ** 2 * sq2 * 0.8 && m2.lawnSqft < 70000, `${m2.lawnSqft} sq ft`);
+  check("the trees that matter are the yard's: under a third of the woods", (m2.yardCanopySqft ?? 0) > 0 && (m2.yardCanopySqft ?? 0) < m2.treeCanopySqft / 3, `${m2.yardCanopySqft} of ${m2.treeCanopySqft}`);
+  check("the maintained yard: one area round the house, far under the lot", (m2.yardSqft ?? 0) > m2.lawnSqft * 0.9 && (m2.yardSqft ?? 0) < m2.lotSqft / 2, `${m2.yardSqft} of ${m2.lotSqft}`);
+  check("natural ground counted apart", (m2.naturalSqft ?? 0) === y200.naturalSqft, `${m2.naturalSqft} vs ${y200.naturalSqft}`);
+  const ya = yardArea(L2, lot2, g2);
+  check("the yard area takes in the house and pool, not the woods", ya.mask[300 * W2 + 300] === 1 && ya.mask[262 * W2 + 337] === 1 && ya.mask[300 * W2 + 100] === 0);
+  // A wider reach takes in more of the field; an edit made before stays.
+  const edited = new Uint8Array(L2);
+  for (let y = 225; y < 235; y++) for (let x = 295; x < 305; x++) edited[y * W2 + x] = CLS.BED;
+  const y300 = reReach(read2, edited, lot2, g2, 200, 300);
+  check("300 ft takes in the field's far end", at(y300.labels, 300, 570) === CLS.LAWN, String(at(y300.labels, 300, 570)));
+  check("the contractor's bed survives the reach change", at(y300.labels, 300, 230) === CLS.BED);
+  check("a tap counts the field back in as grass to mow", at(countPiece(L2, read2, lot2, W2, H2, 570 * W2 + 300), 300, 570) === CLS.LAWN);
+  check("a tap leaves a lawn piece out", at(fillPiece(L2, lot2, W2, H2, 230 * W2 + 300, CLS.NATURAL), 380, 300) === CLS.NATURAL);
+  // No building on the lot: nothing to measure reach from, nothing cut.
+  const noHouse = new Uint8Array(read2);
+  for (let i = 0; i < N2; i++) if (noHouse[i] === CLS.BUILDING) noHouse[i] = CLS.HARD;
+  check("no building: the field is all counted", at(keepYard(noHouse, lot2, g2).labels, 300, 570) === CLS.LAWN && keepYard(noHouse, lot2, g2).reachFt === null);
+  // An estimate saved before the yard pass opens with it, its edit kept.
+  {
+    const oldEdit = new Uint8Array(read2);
+    for (let y = 225; y < 235; y++) for (let x = 295; x < 305; x++) oldEdit[y * W2 + x] = CLS.BED;
+    // The lot ring in lat/lng on g2's Mercator box (0.3 m a pixel, y down from the box's top).
+    const ring = [{ x: 5, y: 5 }, { x: 595, y: 5 }, { x: 595, y: 595 }, { x: 5, y: 595 }].map((q) => fromMerc({ x: q.x * 0.3, y: 180 - q.y * 0.3 }));
+    const fake = { v: 1, grid: { box: g2.box, w: W2, h: H2, gsdM: 0.3, lat: 0 }, lot: { ring, source: "parcel", parcelId: null, acreage: null, stories: null }, labels: encodeLabels(oldEdit), readLabels: encodeLabels(read2) } as unknown as LawnSite;
+    const fresh = { ...fake, yard: { reachFt: 200 } } as LawnSite;
+    check("a new estimate opens as saved", withYard(fresh, oldEdit).labels === oldEdit);
+    const up = withYard(fake, oldEdit);
+    check("an old estimate opens with the yard picked out, its edit kept", up.site.yard?.reachFt === 200 && up.labels[230 * W2 + 300] === CLS.BED && up.labels[570 * W2 + 300] === CLS.NATURAL, `${up.site.yard?.reachFt} ${up.labels[230 * W2 + 300]} ${up.labels[570 * W2 + 300]}`);
+  }
+  // The market by the lawn, the leaves by the yard's own trees.
+  check("a 4,000 sq ft lawn on a 6-acre lot is a quarter-acre mow", mowBand(4000).band[0] === 41 && mowBand(30000).band[0] === 99 && mowBand(87120).band[1] === 528, JSON.stringify([mowBand(4000), mowBand(87120)]));
+  check("the leaf factor is the yard's trees, not the woods'", near(yardCanopyShare({ lawnSqft: 4000, bedSqft: 1000, treeCanopySqft: 200000, lotSqft: 250000, yardCanopySqft: 5000 }), 0.5, 0.001) && near(yardCanopyShare({ lawnSqft: 4000, bedSqft: 1000, treeCanopySqft: 2000, lotSqft: 10000 }), 0.2, 0.001));
+  const qWoods = priceYard({ measures: m2, settings: DEFAULT_LAWN_SETTINGS, options: DEFAULT_OPTIONS, locationFactor: 1, state: "WA", ownRate: false });
+  const fall = qWoods.services.find((x) => x.id === "fallCleanup")!;
+  check("the fall cleanup's market is the yard's acres, not the lot's", fall.market!.high < 2000, `$${fall.market!.low}–${fall.market!.high}`);
 }
 
 console.log(bad ? `\n${bad} FAILED` : "\nall ok");
