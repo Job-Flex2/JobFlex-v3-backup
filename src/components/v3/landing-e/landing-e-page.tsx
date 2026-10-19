@@ -75,10 +75,8 @@ const StatsSection = dynamic(() => import("./stats-section").then((m) => m.Stats
 const BuiltSection = dynamic(() => import("./built-section").then((m) => m.BuiltSection));
 const ScrollFx = dynamic(() => import("./scroll-fx").then((m) => m.ScrollFx));
 import {
-  baseVariant,
   hookContent,
   isVariantReady,
-  landingVersion,
   signupHref,
   variantContent,
   withHook,
@@ -118,10 +116,7 @@ export interface LandingEProps {
 
 export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, inAppBrowser = null, hook, tool }: LandingEProps) {
   // What the plan cards mark for this visitor: the ad's tool, else the trade's own estimator (lib/planSpotlight).
-  // A version of a trade's page (hvac2) is its trade here, as in the register link.
-  const spotlight = spotlightFor({ tool, industry: baseVariant(variant) });
-  // The version's own name for the events ("hvac2"); undefined on every other page.
-  const version = landingVersion(variant);
+  const spotlight = spotlightFor({ tool, industry: variant });
   // The trade's hero — with the ad's two lines in place of its own when the
   // link carried a `?hook=` the trade knows.
   const base = withHook(variantContent(variant), hookContent(variant, hook));
@@ -150,7 +145,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // The trade group's data for the sections under the hero (CRO stage 3):
   // undefined for the default page and the interior trades, which keep the
   // sections' own built-in kitchen.
-  const g = groupContentFor(baseVariant(variant));
+  const g = groupContentFor(variant);
   // CTA copy (pass B): first person with the trade's outcome at the top of
   // the page, "Start my free trial" from Proposals down. The hero's solid
   // button, the nav's and the sticky phone bar's say the trial on every
@@ -189,12 +184,12 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const order = landingSectionOrder(variant);
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
-    // HVAC v2 (trialCtaTitle): the trial button in the trade's own words; the hook goes to the demo film's events.
-    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={v.trialCtaTitle ? `Start My ${offer.days}-Day Free Trial →` : low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} hook={v.visual === "hvac-video" ? hook : undefined} />,
+    // The hook goes to the demo film's events (demo-film.tsx).
+    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} hook={v.film ? hook : undefined} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
-    hvac: baseVariant(variant) === "hvac" ? <div className="lp-cv lp-cv--hvac"><HvacServiceSection registerHref={register} cta={top} /></div> : null,
+    hvac: variant === "hvac" ? <div className="lp-cv lp-cv--hvac"><HvacServiceSection registerHref={register} cta={top} /></div> : null,
     montage: (g?.montage ?? true) ? <div className="lp-cv lp-cv--montage"><Montage /></div> : null,
     proposals: <div className="lp-cv lp-cv--proposals"><ProposalsSection proposal={g?.proposal} registerHref={register} cta={low} /></div>,
     portal: <div className="lp-cv lp-cv--portal"><PortalSection portal={g?.portal} client={g?.proposal?.client} /></div>,
@@ -229,12 +224,12 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
       <SmoothWheel />
       <LazyBg />
       <WarmLayout />
-      <CtaTracker industry={variant} landing={version} hook={version ? hook : undefined} />
+      <CtaTracker industry={variant} />
       {/* Which sections the visitor reaches, for the admin's analyst (2026-10-02). */}
       <SectionTracker industry={variant} />
       {/* When the first screen really showed on this visitor's phone (2026-10-04). */}
       <LandingTiming industry={variant} />
-      <LandingVariantEffects industry={variant} remember={explicitVariant} utm={utm} hook={hook} tool={tool ?? null} landing={version} />
+      <LandingVariantEffects industry={variant} remember={explicitVariant} utm={utm} hook={hook} tool={tool ?? null} />
       {/* Google One Tap (pass A): only when NEXT_PUBLIC_GOOGLE_CLIENT_ID is set;
           loads after the page is idle, so it never competes with the hero. */}
       <GoogleOneTap />

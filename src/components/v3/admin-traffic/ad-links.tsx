@@ -10,7 +10,7 @@
 // landing-variants LANDING_HOOKS) can also open on the ad's own opening line
 // as the headline (`&hook=`), so the page continues the ad's sentence.
 import { useState } from "react";
-import { VARIANT_KEYS, VARIANT_TRADE, baseVariant, hooksOf, resolveLandingVariant, type LandingVariantKey } from "@/components/v3/landing-e/landing-variants";
+import { VARIANT_KEYS, VARIANT_TRADE, hooksOf, resolveLandingVariant, type LandingVariantKey } from "@/components/v3/landing-e/landing-variants";
 import { SPOTLIGHT, SPOTLIGHT_TOOLS, spotlightFromTrade } from "@/lib/planSpotlight";
 import s from "./traffic.module.css";
 
@@ -50,7 +50,7 @@ const PRESETS: Record<Kind, { label: string; params: (campaign: string, platform
 const slug = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 const PAGES: Array<[string, string]> = [["/", "Landing page"], ["/auth/register", "Straight to sign-up"], ["/pricing", "Pricing"], ["/homeowner", "Homeowner page"]];
 /** The trade's own name ("HVAC", "Kitchen & Bath"), not its slug title-cased ("Hvac"). */
-const heroName = (key: string) => (key === "hvac2" ? "HVAC — version 2" : VARIANT_TRADE[key as LandingVariantKey] ?? key.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));
+const heroName = (key: string) => VARIANT_TRADE[key as LandingVariantKey] ?? key.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 export function AdLinks({ origin = "https://www.jobflex.app" }: { origin?: string }) {
   const [kind, setKind] = useState<Kind>("meta");
@@ -87,7 +87,7 @@ export function AdLinks({ origin = "https://www.jobflex.app" }: { origin?: strin
         <div className={s.linksForm}>
           <label className={s.filterLabel}><span>Page it opens</span><div className={`bp-sel ${s.selectWrap}`}><select className="bp-sel-in" value={page} onChange={(e) => setPage(e.target.value)}>{PAGES.map(([p, name]) => <option key={p} value={p}>{name}</option>)}</select></div></label>
           {page === "/" && <label className={s.filterLabel}><span>Trade hero on the landing</span><div className={`bp-sel ${s.selectWrap}`}><select className="bp-sel-in" value={industry} onChange={(e) => setIndustry(e.target.value)}><option value="">Default (every trade)</option>{VARIANT_KEYS.map((k) => <option key={k} value={k}>{heroName(k)}</option>)}</select></div></label>}
-          <label className={s.filterLabel}><span>The tool the ad sells</span><div className={`bp-sel ${s.selectWrap}`}><select className="bp-sel-in" data-testid="ad-tool" value={tool} onChange={(e) => setTool(e.target.value)}><option value="">{industry && spotlightFromTrade(baseVariant(resolveLandingVariant(industry))) ? `— the ${SPOTLIGHT[spotlightFromTrade(baseVariant(resolveLandingVariant(industry)))!].label} (the trade hero's own) —` : "— none —"}</option>{SPOTLIGHT_TOOLS.map((k) => <option key={k} value={k}>{SPOTLIGHT[k].label}</option>)}</select></div></label>
+          <label className={s.filterLabel}><span>The tool the ad sells</span><div className={`bp-sel ${s.selectWrap}`}><select className="bp-sel-in" data-testid="ad-tool" value={tool} onChange={(e) => setTool(e.target.value)}><option value="">{industry && spotlightFromTrade(industry) ? `— the ${SPOTLIGHT[spotlightFromTrade(industry)!].label} (the trade hero's own) —` : "— none —"}</option>{SPOTLIGHT_TOOLS.map((k) => <option key={k} value={k}>{SPOTLIGHT[k].label}</option>)}</select></div></label>
           {hooks.length > 0 && <label className={s.filterLabel}><span>Headline: the ad&apos;s opening line</span><div className={`bp-sel ${s.selectWrap}`}><select className="bp-sel-in" data-testid="ad-link-hook" value={hookOn?.key ?? ""} onChange={(e) => setHook(e.target.value)}><option value="">The trade&apos;s own headline</option>{hooks.map((x) => <option key={x.key} value={x.key}>{x.h1.join(" ")} — {x.ad}</option>)}</select></div></label>}
           {(kind === "x" || kind === "google" || kind === "organic") && <label className={s.filterLabel}><span>Campaign name</span><input className={s.linksInput} value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder="october-roofers"/></label>}
           {kind === "organic" && <label className={s.filterLabel}><span>Platform</span><div className={`bp-sel ${s.selectWrap}`}><select className="bp-sel-in" value={platform} onChange={(e) => setPlatform(e.target.value)}><option value="instagram">Instagram</option><option value="facebook">Facebook</option><option value="tiktok">TikTok</option><option value="x">X (Twitter)</option><option value="youtube">YouTube</option><option value="linkedin">LinkedIn</option><option value="nextdoor">Nextdoor</option></select></div></label>}

@@ -9,7 +9,7 @@
    Kenmore, Everett, Woodinville, Bellevue; $1,600–$24,600. The photographs
    are the ones the sections already ship — only names and tags change. */
 
-import { baseVariant, type LandingVariantKey } from "./landing-variants";
+import type { LandingVariantKey } from "./landing-variants";
 
 export type TradeGroup = "tools" | "exterior" | "interior" | "mep" | "general";
 
@@ -31,7 +31,6 @@ export const TRADE_GROUP: Record<LandingVariantKey, TradeGroup> = {
   plumbing: "mep",
   electrical: "mep",
   hvac: "mep",
-  hvac2: "mep",
   carpentry: "general",
   demolition: "general",
   "general-contractor": "general",
@@ -715,8 +714,8 @@ export function groupContentFor(key: LandingVariantKey | undefined): GroupConten
         stats: MEP_STATS,
         jobs: MEP_JOBS,
         phoneJobs: MEP_PHONE, crew: MEP_CREW, phoneLanes: MEP_PHONE_LANES,
-        proposal: baseVariant(key) === "hvac" ? HVAC_PROPOSAL : MEP_PROPOSAL,
-        portal: baseVariant(key) === "hvac" ? HVAC_PORTAL : MEP_PORTAL,
+        proposal: key === "hvac" ? HVAC_PROPOSAL : MEP_PROPOSAL,
+        portal: key === "hvac" ? HVAC_PORTAL : MEP_PORTAL,
         montage: false,
       };
     case "general":

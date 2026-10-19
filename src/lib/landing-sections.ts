@@ -73,12 +73,6 @@ const OWN_ORDER: Readonly<Record<string, { since: number; order: readonly string
     since: Date.parse("2026-10-05T06:55:00Z"),
     order: ["hero", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
   },
-  // The HVAC page's second version (?industry=hvac2, 2026-10-19): HVAC's page
-  // to the section, so HVAC's order. A new page — every visit is in it.
-  hvac2: {
-    since: Date.parse("2026-10-19T00:00:00Z"),
-    order: ["hero", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
-  },
 };
 
 /** The landings laid out in an order of their own. */

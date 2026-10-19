@@ -338,7 +338,7 @@ export function adNameOf(s: { utmCampaign: string; utmContent: string }, adNames
 }
 
 const STEP_NAMES: Record<number, string> = { 1: "step 1 (account)", 2: "step 2 (company)", 3: "step 3 (plan)" };
-const TRADE_NAME = (key: string) => (key === "default" ? "the general landing" : `the ${key === "hvac" ? "HVAC" : key === "hvac2" ? "HVAC v2" : key.replace(/-/g, " ")} landing`);
+const TRADE_NAME = (key: string) => (key === "default" ? "the general landing" : `the ${key === "hvac" ? "HVAC" : key.replace(/-/g, " ")} landing`);
 
 // ── The analysis ───────────────────────────────────────────────────────────
 

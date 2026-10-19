@@ -5,7 +5,8 @@
 // Pure functions only. Static imports (tsx has no top-level await).
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/landing-ad-screen.check.ts
 import { LANDING_SECTIONS, LANDING_SECTION_KEYS, OWN_ORDER_LANDINGS, hasOwnSectionOrder, landingSectionOrder, landingSectionsFor } from "../../../src/lib/landing-sections";
-import { DEFAULT_LANDING, LANDING_HOOKS, LANDING_VARIANTS, baseVariant, hookContent, hooksOf, landingVersion, resolveLandingHook, resolveLandingVariant, signupHref, variantContent, withHook, type LandingVariantKey } from "../../../src/components/v3/landing-e/landing-variants";
+import { DEFAULT_LANDING, LANDING_HOOKS, LANDING_VARIANTS, hookContent, hooksOf, resolveLandingHook, resolveLandingVariant, signupHref, variantContent, withHook, type LandingVariantKey } from "../../../src/components/v3/landing-e/landing-variants";
+import { DEMO_FILMS } from "../../../src/components/v3/landing-e/demo-media";
 import { cheapestPlanWith, heroPriceLine, type PricedPlan } from "../../../src/components/v3/landing-e/hero-price";
 
 let bad = 0;
@@ -28,9 +29,8 @@ check("an inherited name is not a landing", !hasOwnSectionOrder("constructor") &
 // ── the scope: roofing only
 const adScreens = (Object.keys(LANDING_VARIANTS) as LandingVariantKey[]).filter((k) => { const v = LANDING_VARIANTS[k]; return !!v && (v.shotCta || v.playOnPhone || v.priceFeature || v.priceNote); });
 const AD_LANDINGS = "fencing,hvac,roofing";
-// The Deck Studio's page took the price line and the button under its shot on 2026-10-11 (lib/editions, owner);
-// HVAC v2 (2026-10-19) is HVAC's page — its first screen, its order — and reads hvac's hooks.
-check("the roofing, HVAC (and HVAC v2) and fence landings (and the Deck Studio's) take the ad's first screen; roofing, HVAC and fencing have the hooks; they and HVAC v2 an order of their own", [...adScreens].sort().join() === "decking,fencing,hvac,hvac2,roofing" && Object.keys(LANDING_HOOKS).sort().join() === AD_LANDINGS && [...OWN_ORDER_LANDINGS].sort().join() === "fencing,hvac,hvac2,roofing", adScreens.join());
+// The Deck Studio's page took the price line and the button under its shot on 2026-10-11 (lib/editions, owner).
+check("the roofing, HVAC and fence landings (and the Deck Studio's) take the ad's first screen; roofing, HVAC and fencing have the hooks and an order of their own", [...adScreens].sort().join() === "decking,fencing,hvac,roofing" && Object.keys(LANDING_HOOKS).sort().join() === AD_LANDINGS && [...OWN_ORDER_LANDINGS].sort().join() === AD_LANDINGS, adScreens.join());
 check("the default hero and every other trade's are as they were", DEFAULT_LANDING.h1.join(" ") === "Turn your trade into a business." && !("shotCta" in DEFAULT_LANDING) && !variantContent("siding").shotCta && !variantContent("painting").priceFeature && !variantContent("kitchen-bath").playOnPhone);
 check("fencing keeps the owner's own headline, line and button when the link carries no hook", variantContent("fencing").h1.join(" ") === "Still Driving to the Job Site Just to Measure a Fence?" && variantContent("fencing").heroCta === "Create My Free Estimate →" && variantContent("fencing").shotCta === true && variantContent("fencing").playOnPhone === true);
 check("HVAC keeps the owner's own headline, line and button when the link carries no hook", variantContent("hvac").h1.join(" ") === "Turn an Address Into a Complete HVAC Estimate — in Seconds." && variantContent("hvac").subStrong === "No unnecessary drive. No hours of calculations." && variantContent("hvac").heroCta === "Build My First Estimate →" && variantContent("hvac").shotCta === true);
@@ -72,18 +72,14 @@ check("the HVAC and roofing tables never share a key, and a roofing key is no HV
 const hvHooked = withHook(variantContent("hvac"), hookContent("hvac", "tonnage"));
 check("an HVAC hook replaces the two lines and the bold third line, keeps the button and the window", hvHooked.h1.join(" | ") === "Still Sizing by the Square Foot? | Stop Guessing Tonnage." && hvHooked.subStrong === undefined && hvHooked.heroCta === "Build My First Estimate →" && hvHooked.visual === "hvac" && hvHooked.shotCta === true);
 
-// ── HVAC v2 (?industry=hvac2, 2026-10-19): HVAC's page, the film in the shot's place and the trial button's own words
-check("hvac2 is reached by its key and by hvac-v2; every HVAC spelling is still the HVAC page", resolveLandingVariant("hvac2") === "hvac2" && resolveLandingVariant("HVAC-V2") === "hvac2" && resolveLandingVariant("hvac") === "hvac" && resolveLandingVariant("HVAC") === "hvac" && resolveLandingVariant("heating") === "hvac" && resolveLandingVariant("hvac-contractor") === "hvac");
-check("hvac2 is a version of hvac; no other page is a version", baseVariant("hvac2") === "hvac" && landingVersion("hvac2") === "hvac2" && baseVariant("hvac") === "hvac" && landingVersion("hvac") === undefined && landingVersion(undefined) === undefined && baseVariant(undefined) === undefined);
-check("hvac2 signs up as HVAC and names itself; HVAC's link is as it was", signupHref("/auth/register", { industry: "hvac2", utm: { utm_source: "fb" }, fbclid: "Ab_1" }) === "/auth/register?industry=hvac&landing=hvac2&utm_source=fb&fbclid=Ab_1" && signupHref("/auth/register", { industry: "hvac", utm: { utm_source: "fb" }, fbclid: "Ab_1" }) === "/auth/register?industry=hvac&utm_source=fb&fbclid=Ab_1" && signupHref("/auth/register", {}) === "/auth/register");
-check("hvac2 opens on hvac's ad hooks", resolveLandingHook("hvac2", "tonnage") === "tonnage" && hookContent("hvac2", "tonnage") === hookContent("hvac", "tonnage") && hooksOf("hvac2").length === hooksOf("hvac").length && resolveLandingHook("hvac2", "no-report") === undefined);
-check("hvac2 is HVAC's page in HVAC's order", landingSectionOrder("hvac2").join() === landingSectionOrder("hvac").join() && landingSectionsFor("hvac2").map((x) => x.key).join() === landingSectionOrder("hvac").join() && landingSectionOrder("hvac").join() === "hero,showcase,hvac,montage,proposals,portal,crew,integrations,stats,built,compare,pricing,faq,final");
-const h2v = variantContent("hvac2"), hvc = variantContent("hvac");
-const { visual: h2Visual, trialCtaTitle: h2Title, ...h2Rest } = h2v;
-const { visual: hvVisual, ...hvRest } = hvc;
-check("hvac2 is hvac's hero with two changes: the film in the shot's place and the trial button's words", JSON.stringify(h2Rest) === JSON.stringify(hvRest) && h2Visual === "hvac-video" && h2Title === true && hvVisual === "hvac" && hvc.trialCtaTitle === undefined);
-const h2Hooked = withHook(h2v, hookContent("hvac2", "tonnage"));
-check("an ad hook on hvac2 changes the headline as on hvac and keeps the film and the button's words", h2Hooked.h1.join(" | ") === hvHooked.h1.join(" | ") && h2Hooked.sub === hvHooked.sub && h2Hooked.visual === "hvac-video" && h2Hooked.trialCtaTitle === true);
+// ── the demo films (2026-10-19): HVAC, roofing and fencing show their estimator's film in the shot's place; no other page does
+const films = (Object.keys(LANDING_VARIANTS) as LandingVariantKey[]).filter((k) => !!LANDING_VARIANTS[k]?.film);
+check("HVAC, roofing and fencing play their own estimator's film; every other landing and the default keep their shot", films.sort().join() === "fencing,hvac,roofing" && variantContent("hvac").film === "hvac" && variantContent("roofing").film === "roof" && variantContent("fencing").film === "fence" && DEMO_FILMS.hvac.desk.mp4 === "/landing-e/hvac-demo-16x9.mp4" && DEMO_FILMS.roof.phone.poster === "/landing-e/roof-demo-poster-4x5.webp" && DEMO_FILMS.fence.desk.webm === "/landing-e/fence-demo-16x9.webm" && !("film" in DEFAULT_LANDING) && !variantContent("landscaping").film && !variantContent("decking").film, films.join());
+check("the films keep each landing's shot for the showcase", variantContent("hvac").visual === "hvac" && variantContent("roofing").visual === "roof" && variantContent("fencing").visual === "fence");
+check("an ad hook changes the headline and keeps the film", withHook(variantContent("roofing"), hookContent("roofing", "no-report")).film === "roof" && withHook(variantContent("hvac"), hookContent("hvac", "tonnage")).film === "hvac" && withHook(variantContent("fencing"), hookContent("fencing", "slope")).film === "fence");
+// The HVAC page's second version (?industry=hvac2) is the HVAC page again: the old links land on it.
+check("hvac2 and hvac-v2 open the HVAC page; every HVAC spelling is still the HVAC page", resolveLandingVariant("hvac2") === "hvac" && resolveLandingVariant("HVAC-V2") === "hvac" && resolveLandingVariant("hvac") === "hvac" && resolveLandingVariant("HVAC") === "hvac" && resolveLandingVariant("heating") === "hvac" && resolveLandingVariant("hvac-contractor") === "hvac" && !(Object.keys(LANDING_VARIANTS) as string[]).includes("hvac2"));
+check("HVAC's sign-up link names the trade only", signupHref("/auth/register", { industry: "hvac", utm: { utm_source: "fb" }, fbclid: "Ab_1" }) === "/auth/register?industry=hvac&utm_source=fb&fbclid=Ab_1" && signupHref("/auth/register", {}) === "/auth/register");
 
 // ── the price
 const plan = (slug: string, priceCents: number, features: string[]): PricedPlan => ({ slug, priceCents, isFree: priceCents === 0, features });

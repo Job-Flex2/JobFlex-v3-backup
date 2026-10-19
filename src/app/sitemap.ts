@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/siteUrl";
-import { VARIANT_KEYS, baseVariant } from "@/components/v3/landing-e/landing-variants";
+import { VARIANT_KEYS } from "@/components/v3/landing-e/landing-variants";
 
 // sitemap.xml (2026-10-01): the public pages and the 20 trade landings. A trade
 // landing is the root with ?industry=<key> (the variant is read from the query
@@ -21,7 +21,6 @@ const UPDATED: Array<[string, Date, number]> = [
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...UPDATED.map(([path, lastModified, priority]) => ({ url: `${SITE_URL}${path}`, lastModified, changeFrequency: "monthly" as const, priority })),
-    // A version of a trade's page (hvac2) is the trade's page to a crawler: not listed.
-    ...VARIANT_KEYS.filter((key) => baseVariant(key) === key).map((key) => ({ url: `${SITE_URL}/?industry=${key}`, lastModified: LANDING, changeFrequency: "monthly" as const, priority: 0.8 })),
+    ...VARIANT_KEYS.map((key) => ({ url: `${SITE_URL}/?industry=${key}`, lastModified: LANDING, changeFrequency: "monthly" as const, priority: 0.8 })),
   ];
 }

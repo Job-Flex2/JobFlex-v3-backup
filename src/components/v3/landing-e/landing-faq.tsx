@@ -2,7 +2,7 @@
 
 import { useTrialOffer } from "@/components/providers/trial-offer";
 import { useState } from "react";
-import { baseVariant, type LandingVariantKey } from "./landing-variants";
+import type { LandingVariantKey } from "./landing-variants";
 import { Reveal } from "./reveal";
 import "./pricing-faq.css";
 
@@ -54,9 +54,7 @@ const cardQuestions = (days: number): Record<"card" | "cardless", Faq> => ({
 
 function questions(variant: LandingVariantKey | undefined, requiresCard: boolean, days: number): Faq[] {
   const CARD_Q = cardQuestions(days);
-  // A version of a trade's page (hvac2) asks its trade's questions.
-  const trade = baseVariant(variant);
-  const data = trade === "roofing" || trade === "fencing" || trade === "hvac" ? DATA_Q[trade] : DATA_Q.other;
+  const data = variant === "roofing" || variant === "fencing" || variant === "hvac" ? DATA_Q[variant] : DATA_Q.other;
   return [
     requiresCard ? CARD_Q.card : CARD_Q.cardless,
     {

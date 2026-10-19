@@ -8,13 +8,16 @@
    needs a stage of its own: AppFrame + STAGE are inside them, and the takeoff
    rail stacks under the stage below 640px on its own media query — which is
    what makes the same build the phone hero too (it replaces PhoneOverview
-   there, not just DashboardMock). */
+   there, not just DashboardMock).
+
+   A variant with a `film` (HVAC, roofing, fencing — 2026-10-19) shows its
+   estimator's demo film in the shot's place (demo-film.tsx); the shot itself
+   stays the showcase's. */
 
 import { DeckShot } from "./deck-shots";
+import { DemoFilm } from "./demo-film";
 import { FenceShot } from "./fence-shot";
 import { HvacEstimatorShot } from "./hvac-estimator-shot";
-import { HVAC2_DEMO_VIDEO } from "./hvac2/demo-media";
-import { Hvac2Film } from "./hvac2/hvac2-film";
 import type { LandingVariant } from "./landing-variants";
 import { RoofShot } from "./roof-shot";
 import { SmartProposalShot } from "./smart-proposal-shot";
@@ -33,7 +36,7 @@ export function HeroVisual({
   slot?: "phone" | "desk";
   /** The ad hook the headline shows, for the film's events. */
   hook?: string;
-  /** A version of a trade's page ("hvac2"), for the HVAC shot's events. */
+  /** The landing's key ("hvac", "roofing", "fencing"), for the film's events. */
   landing?: string;
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.2);
@@ -54,14 +57,12 @@ export function HeroVisual({
   }, []);
   const active = instant === null ? false : inView;
   const now = instant === true && !variant.playOnPhone;
+  if (variant.film) return <DemoFilm film={variant.film} slot={slot} landing={landing ?? variant.film} hook={hook} />;
   return (
     <div ref={ref}>
       {variant.visual === "fence" && <FenceShot active={active} instant={now} />}
       {variant.visual === "roof" && <RoofShot active={active} instant={now} hero />}
       {variant.visual === "hvac" && <HvacEstimatorShot active={active} instant={now} hero />}
-      {/* hvac2: the demo film in the shot's frame; until its files are in, HVAC's shot (hvac2/demo-media). */}
-      {variant.visual === "hvac-video" &&
-        (HVAC2_DEMO_VIDEO.READY ? <Hvac2Film slot={slot} hook={hook} /> : <HvacEstimatorShot active={active} instant={now} hero landing={landing} />)}
       {variant.visual === "deck" && <DeckShot />}
       {variant.visual === "smart" && (
         <SmartProposalShot active={active} instant={now} scenario={SMART_SCENARIOS[variant.scenario ?? "kitchen"]} />

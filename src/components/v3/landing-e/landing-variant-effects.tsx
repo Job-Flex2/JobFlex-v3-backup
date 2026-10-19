@@ -11,7 +11,6 @@ import {
   INDUSTRY_COOKIE,
   INDUSTRY_MAX_AGE_S,
   UTM_COOKIE,
-  baseVariant,
   hasUtm,
   serializeUtm,
   type LandingVariantKey,
@@ -25,8 +24,7 @@ import {
  *  effect. */
 export function writeLandingCookies(industry: LandingVariantKey | undefined, utm: UtmParams | undefined, tool?: SpotlightTool | null) {
   try {
-    // A version of a landing (hvac2) is remembered as its trade, which is what the register reads.
-    if (industry) document.cookie = `${INDUSTRY_COOKIE}=${baseVariant(industry)}; path=/; max-age=${INDUSTRY_MAX_AGE_S}; samesite=lax`;
+    if (industry) document.cookie = `${INDUSTRY_COOKIE}=${industry}; path=/; max-age=${INDUSTRY_MAX_AGE_S}; samesite=lax`;
     // The tool the ad sold (lib/planSpotlight), for the register and /pricing to keep marking.
     if (tool) document.cookie = `${SPOTLIGHT_COOKIE}=${tool}; path=/; max-age=${SPOTLIGHT_MAX_AGE_S}; samesite=lax`;
     if (hasUtm(utm)) document.cookie = `${UTM_COOKIE}=${encodeURIComponent(serializeUtm(utm!))}; path=/; max-age=${INDUSTRY_MAX_AGE_S}; samesite=lax`;
@@ -68,7 +66,6 @@ export function LandingVariantEffects({
   utm,
   hook,
   tool,
-  landing,
 }: {
   industry: LandingVariantKey | undefined;
   /** True only when the variant came from the URL, not the cookie. */
@@ -78,12 +75,10 @@ export function LandingVariantEffects({
   hook?: string;
   /** The tool the link said it sold (`?tool=`, lib/planSpotlight) — remembered like the trade. */
   tool?: SpotlightTool | null;
-  /** A version of a trade's page ("hvac2", landing-variants VARIANT_BASE), named on the view. */
-  landing?: string;
 }) {
   useEffect(() => {
     writeLandingCookies(industry && remember ? industry : undefined, utm, tool);
-    trackTraffic(TRAFFIC_EVENTS.landingView, { industry: industry ?? "default", variant: "e", ...(landing ? { landing } : {}), ...(hook ? { hook } : {}), ...utm });
+    trackTraffic(TRAFFIC_EVENTS.landingView, { industry: industry ?? "default", variant: "e", ...(hook ? { hook } : {}), ...utm });
     // One capture per page load; the props only change on a full navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

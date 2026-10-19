@@ -163,13 +163,13 @@ export const TRAFFIC_EVENTS = {
   // picked. Fired by landing-e/hvac-estimator-shot.tsx; always industry "hvac".
   hvacDemoStep: "hvac_demo_step",
   hvacDemoTier: "hvac_demo_tier",
-  // The HVAC page's second version (?industry=hvac2, 2026-10-19), its first
-  // screen's demo film: `demo_play` once it starts, then `demo_25` /
-  // `demo_50` / `demo_100` as a quarter, half and all of it has played (the
-  // film's own time) — `kind` "video". Each once per browser session. Fired
-  // by landing-e/hvac2, always with industry and landing "hvac2" and the
-  // `hook` when the headline was an ad's. That page's cta_click also carries
-  // `position` (hero | final | mobile, …) and `hook`.
+  // The first screen's demo film on the HVAC, roofing and fencing landings
+  // (2026-10-19): `demo_play` once it starts, then `demo_25` / `demo_50` /
+  // `demo_100` as a quarter, half and all of it has played (the film's own
+  // time) — `kind` "video". Each once per landing per browser session. Fired
+  // by landing-e/demo-film.tsx (demo-track), with industry and landing the
+  // landing's key ("hvac", "roofing", "fencing") and the `hook` when the
+  // headline was an ad's.
   demoPlay: "demo_play",
   demo25: "demo_25",
   demo50: "demo_50",

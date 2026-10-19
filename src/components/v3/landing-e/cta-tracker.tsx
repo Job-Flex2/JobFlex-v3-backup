@@ -17,15 +17,8 @@ import type { LandingVariantKey } from "./landing-variants";
    `button` when it names which button it is (data-cta-button: the plan a
    card's button starts, the nav's trial or login — 2026-10-15).
    `only` limits the tracker to some placements — /pricing tracks the plan
-   buttons and the nav's (pricing-visit.tsx). `landing` names a version of a
-   trade's page (landing-variants VARIANT_BASE: "hvac2"); absent elsewhere.
-   On such a page the click also says its `position` in the page's own words
-   (hero | final | mobile for the trial button's three places; hero-shot,
-   nav and the rest by their placement) and the ad `hook` the headline
-   showed. */
-const POSITION: Record<string, string> = { footer: "final", sticky: "mobile" };
-
-export function CtaTracker({ industry, only, landing, hook }: { industry: LandingVariantKey | undefined; only?: string[]; landing?: string; hook?: string }) {
+   buttons and the nav's (pricing-visit.tsx). */
+export function CtaTracker({ industry, only }: { industry: LandingVariantKey | undefined; only?: string[] }) {
   useEffect(() => {
     const onClick = (ev: MouseEvent) => {
       const target = ev.target instanceof Element ? ev.target.closest<HTMLElement>("[data-cta]") : null;
@@ -40,7 +33,6 @@ export function CtaTracker({ industry, only, landing, hook }: { industry: Landin
         industry: industry ?? "default",
         href: href.split("?")[0],
         variant: "e",
-        ...(landing ? { landing, position: POSITION[placement] ?? placement, ...(hook ? { hook } : {}) } : {}),
         ...(target.dataset.ctaSpot ? { spot: target.dataset.ctaSpot } : {}),
         ...(target.dataset.ctaButton ? { button: target.dataset.ctaButton } : {}),
       });
@@ -48,6 +40,6 @@ export function CtaTracker({ industry, only, landing, hook }: { industry: Landin
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `only` is a literal per page
-  }, [industry, landing, hook]);
+  }, [industry]);
   return null;
 }

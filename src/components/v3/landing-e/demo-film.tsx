@@ -1,9 +1,11 @@
 "use client";
 
-/* THE DEMO FILM IN THE HERO SHOT'S PLACE (?industry=hvac2, 2026-10-19).
-   HVAC's first screen with the film where the estimator shot plays: the same
-   app frame (showcase-kit AppFrame), under the line "Real product demo ·
-   address to proposal in 40 seconds".
+/* THE DEMO FILM IN THE HERO SHOT'S PLACE (2026-10-19) — the HVAC,
+   roofing and fencing landings. The landing's first screen with
+   its estimator's film where the product shot plays: the same app frame
+   (showcase-kit AppFrame), under the line "Real product demo · address to
+   proposal in 40 seconds". Which film is the landing's `film`
+   (landing-variants); its files are in demo-media.ts.
 
    The hero renders its visual twice — a phone build under 640 px and a desk
    build from 640 px (hero.tsx), one of them display:none. Each copy gets a
@@ -15,23 +17,36 @@
    the poster.
 
    demo_play once it plays, then demo_25 / demo_50 / demo_100 by the film's
-   own time — each once per browser session (hvac2-track). */
+   own time — each once per browser session (demo-track). */
 
-import { useEffect, useRef, useState } from "react";
-import { AppFrame } from "../showcase-kit";
-import { HVAC2_DEMO_VIDEO, HVAC2_DESK_MEDIA } from "./demo-media";
-import { trackHvac2Once } from "./hvac2-track";
-import "./hvac2.css";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { AppFrame } from "./showcase-kit";
+import { DEMO_CAPTION, DEMO_DESK_MEDIA, DEMO_FILMS, type DemoFilmKey } from "./demo-media";
+import { trackDemoOnce, type DemoEvent } from "./demo-track";
+import "./demo-film.css";
 
 type Pct = 0 | 25 | 50 | 100;
-const EVENT = { 0: "demoPlay", 25: "demo25", 50: "demo50", 100: "demo100" } as const;
+const EVENT: Record<Pct, DemoEvent> = { 0: "demoPlay", 25: "demo25", 50: "demo50", 100: "demo100" };
 
-export function Hvac2Film({ slot, hook }: { slot: "phone" | "desk"; hook?: string }) {
+export function DemoFilm({
+  film,
+  slot,
+  landing,
+  hook,
+}: {
+  film: DemoFilmKey;
+  /** Which of the hero's two builds this is: the video mounts in the one on screen. */
+  slot: "phone" | "desk";
+  /** The landing's key ("hvac", "roofing", "fencing"), named on the events. */
+  landing: string;
+  /** The ad hook the headline shows, for the events. */
+  hook?: string;
+}) {
   const [play, setPlay] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const last = useRef(0);
   useEffect(() => {
-    const desk = window.matchMedia(HVAC2_DESK_MEDIA);
+    const desk = window.matchMedia(DEMO_DESK_MEDIA);
     const still = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => setPlay(desk.matches === (slot === "desk") && !still.matches);
     sync();
@@ -51,7 +66,7 @@ export function Hvac2Film({ slot, hook }: { slot: "phone" | "desk"; hook?: strin
     v.play().catch(() => {});
   }, [play]);
 
-  const mark = (pct: Pct) => trackHvac2Once(EVENT[pct], { kind: "video" }, hook);
+  const mark = (pct: Pct) => trackDemoOnce(EVENT[pct], landing, hook);
   const onTime = (v: HTMLVideoElement) => {
     if (!v.duration || !Number.isFinite(v.duration)) return;
     const t = v.currentTime;
@@ -63,27 +78,27 @@ export function Hvac2Film({ slot, hook }: { slot: "phone" | "desk"; hook?: strin
     if (p >= 0.5) mark(50);
     if (p >= 0.98) mark(100);
   };
-  const { desk, phone } = HVAC2_DEMO_VIDEO;
-  const cut = HVAC2_DEMO_VIDEO[slot];
+  const f = DEMO_FILMS[film];
+  const cut = f[slot];
   return (
-    <figure className="lp-h2-fig">
-      <figcaption className="lp-h2-cap">Real product demo · address to proposal in {HVAC2_DEMO_VIDEO.seconds} seconds</figcaption>
-      <AppFrame path="www.jobflex.app/dashboard/hvac-estimator" body="#f2f0eb">
-        <div className="lp-h2-film">
+    <figure className="lp-film-fig" style={{ "--film-h": `${f.deskHeight}px` } as CSSProperties}>
+      <figcaption className="lp-film-cap">{DEMO_CAPTION}</figcaption>
+      <AppFrame path={f.path} body={f.body}>
+        <div className="lp-film">
           <picture>
-            <source media={HVAC2_DESK_MEDIA} srcSet={desk.poster} />
-            <img className="lp-h2-film-media" src={phone.poster} alt="" fetchPriority="high" decoding="async" />
+            <source media={DEMO_DESK_MEDIA} srcSet={f.desk.poster} />
+            <img className="lp-film-media" src={f.phone.poster} alt="" fetchPriority="high" decoding="async" />
           </picture>
           {play ? (
             <video
               ref={videoRef}
-              className="lp-h2-film-media"
+              className="lp-film-media"
               autoPlay
               muted
               playsInline
               loop
               preload="metadata"
-              aria-label="JobFlex HVAC estimator: an address becomes a load, a sized system, priced lines and a proposal"
+              aria-label={f.label}
               onPlaying={() => mark(0)}
               onTimeUpdate={(e) => onTime(e.currentTarget)}
             >

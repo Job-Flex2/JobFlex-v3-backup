@@ -3,7 +3,7 @@ import { PhoneOverview } from "./blueprint-phone";
 import { REGISTER } from "./routes";
 import { DashboardMock } from "./dashboard-mock";
 import { HeroVisual } from "./hero-visual";
-import { DEFAULT_LANDING, baseVariant, landingVersion, type LandingVariant, type LandingVariantKey, type UtmParams } from "./landing-variants";
+import { DEFAULT_LANDING, type LandingVariant, type LandingVariantKey, type UtmParams } from "./landing-variants";
 import { Reveal } from "./reveal";
 import { GoogleSignupButton } from "./google-signup-button";
 import { HeroEntrance } from "./hero-entrance";
@@ -179,11 +179,11 @@ export function Hero({
             An estimator shot is one build for both: its takeoff rail stacks
             under the stage below 640px by its own media query. */}
         <Reveal shown className="sm:hidden">
-          {shot ? <HeroVisual variant={variant} slot="phone" hook={hook} landing={landingVersion(variantKey)} /> : <PhoneOverview />}
+          {shot ? <HeroVisual variant={variant} slot="phone" hook={hook} landing={variantKey} /> : <PhoneOverview />}
         </Reveal>
         <div className="mx-auto hidden lp-wrap sm:block">
           <Reveal shown>
-            <div data-parallax="18">{shot ? <HeroVisual variant={variant} slot="desk" hook={hook} landing={landingVersion(variantKey)} /> : <DashboardMock />}</div>
+            <div data-parallax="18">{shot ? <HeroVisual variant={variant} slot="desk" hook={hook} landing={variantKey} /> : <DashboardMock />}</div>
           </Reveal>
         </div>
         {/* THE BUTTON UNDER THE SHOT (2026-10-04; the analyst: "they leave at
@@ -199,7 +199,7 @@ export function Hero({
               <span aria-hidden>→</span>
             </a>
             {/* The homeowner who clicked a contractor ad, sent where they belong (2026-10-16). */}
-            <HomeownerDoor trade={baseVariant(variantKey)} />
+            <HomeownerDoor trade={variantKey} />
           </div>
         ) : null}
       </div>

@@ -91,17 +91,7 @@ const TYPED_FACTS: Record<string, unknown> = {
 
 const cx = (...names: Array<string | false | null | undefined>) => names.filter(Boolean).map((n) => (s as Record<string, string>)[n as string] ?? (n as string)).join(" ");
 
-export function HvacEstimatorShot({
-  active,
-  hero = false,
-  landing,
-}: {
-  active: boolean;
-  instant?: boolean;
-  hero?: boolean;
-  /** A version of a trade's page ("hvac2"): the step and tier events name it as their industry and landing. */
-  landing?: string;
-}) {
+export function HvacEstimatorShot({ active, hero = false }: { active: boolean; instant?: boolean; hero?: boolean }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HvacDemoHandle | null>(null);
   // Where the sequence is, and whether the visitor took over.
@@ -166,15 +156,15 @@ export function HvacEstimatorShot({
     bind: (h) => { handleRef.current = h; },
     onStep: (k) => {
       setStep(k);
-      trackTraffic(TRAFFIC_EVENTS.hvacDemoStep, { step: k, how: manualRef.current ? "tap" : "auto", hero, industry: landing ?? "hvac", variant: "e", ...(landing ? { landing } : {}) });
+      trackTraffic(TRAFFIC_EVENTS.hvacDemoStep, { step: k, how: manualRef.current ? "tap" : "auto", hero, industry: "hvac", variant: "e" });
     },
     onPick: (p) => {
-      trackTraffic(TRAFFIC_EVENTS.hvacDemoTier, { tier: p.tier, unit: p.id, subtotal: Math.round(p.subtotal), hero, industry: landing ?? "hvac", variant: "e", ...(landing ? { landing } : {}) });
+      trackTraffic(TRAFFIC_EVENTS.hvacDemoTier, { tier: p.tier, unit: p.id, subtotal: Math.round(p.subtotal), hero, industry: "hvac", variant: "e" });
     },
     // The landing's "Convert to proposal": the page's own proposal section,
     // which carries this same job (landing-groups HVAC_PROPOSAL).
     onConvert: () => document.getElementById("proposals")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-  }), [hero, landing]);
+  }), [hero]);
 
   return (
     <AppFrame path="www.jobflex.app/dashboard/hvac-estimator" body="#f2f0eb">
