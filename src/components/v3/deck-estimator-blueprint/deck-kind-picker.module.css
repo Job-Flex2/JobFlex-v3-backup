@@ -32,6 +32,10 @@
 /* The picture: a sky above, the ground's own fade below (2026-10-13 — the drawing is lit and drawn in its materials). */
 :global(.jf-blueprint .content) .fig {
   position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden;
+  /* Its own box and layer (2026-10-19, perf): a picture is thousands of SVG nodes, and the page's every scroll
+     frame re-laid-out and repainted all four of them. Contained, the page's layout stops at this box and its
+     raster is kept between frames; only a turn or a build-up redraws it. */
+  contain: strict;
   background: linear-gradient(180deg, #e9f0f6 0%, #f4f4f0 55%, #f1efe9 100%);
 }
 :global(.jf-blueprint .content) .figSmall { aspect-ratio: 5 / 3.4; }
@@ -110,3 +114,11 @@
   :global(.jf-blueprint .content) .kind, :global(.jf-blueprint .content) .sample { transition: none; }
   :global(.jf-blueprint .content) .kind:hover, :global(.jf-blueprint .content) .sample:hover { transform: none; }
 }
+
+
+/* The turning frames of a picture, painted over it (deck-kind-picker.tsx paintFrame, 2026-10-19): the same box
+   as the SVG, under the pointer's events (the SVG keeps the drag). */
+:global(.jf-blueprint .content) .fig, .fig { position: relative; }
+:global(.jf-blueprint .content) .turnCanvas, .turnCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: none; margin: 0; padding: 0; pointer-events: none; }
+/* The live build-up SVG sits over the resting image for the moment it plays. */
+:global(.jf-blueprint .content) .liveSvg, .liveSvg { position: absolute; inset: 0; }

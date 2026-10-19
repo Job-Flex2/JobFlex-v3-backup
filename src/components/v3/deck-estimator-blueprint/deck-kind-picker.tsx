@@ -26,7 +26,7 @@ import * as React from "react";
 import Image from "next/image";
 import { ChevronDown } from "lucide-react";
 import { KINDS, KIND_WORDS, kindSample, sampleDesign, samplesFor, type DeckSample } from "@/lib/deck/samples";
-import { isoDrawing, isoMarkup, type IsoMaterials } from "@/lib/deck/iso";
+import { isoDrawing, isoMarkup, type IsoDrawing, type IsoMaterials } from "@/lib/deck/iso";
 import { buildStructure } from "@/lib/deck/structure";
 import { deckScene, type DeckScene } from "@/lib/deck/scene";
 import { deckingProduct } from "@/lib/deck/catalog";
@@ -38,6 +38,61 @@ const cx = (...names: Array<string | false | null | undefined>) => names.filter(
 /** The angle every picture rests at. */
 const REST_YAW = 34;
 const DETAIL = { card: { full: 2400, quick: 1100 }, thumb: { full: 900, quick: 500 } } as const;
+
+/* A TURNING PICTURE IS PAINTED, NOT REBUILT (2026-10-19, perf). A frame of the turn used to replace the SVG's
+   thousands of paths, and the browser's styling and painting of them cost 120–170ms a frame — 2.7s of every 3s of a
+   hovered card, whatever the frame rate or the number of parts. The faces are now painted onto a canvas laid over
+   the picture (a few milliseconds for the same frame); the resting SVG underneath is never touched, and shows again,
+   crisp and with its build-up, as soon as the picture is back at its angle. */
+function paintFrame(canvas: HTMLCanvasElement, d: IsoDrawing) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const box = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = Math.max(1, Math.round(box.width * dpr));
+  const ch = Math.max(1, Math.round(box.height * dpr));
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw;
+    canvas.height = ch;
+  }
+  const [vx, vy, vw, vh] = d.viewBox.split(/\s+/).map(Number);
+  const k = Math.min(cw / vw, ch / vh);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.setTransform(k, 0, 0, k, (cw - vw * k) / 2 - vx * k, (ch - vh * k) / 2 - vy * k);
+  // A gradient or pattern fill is painted as its first colour; a filter is dropped. A gradient that only fades one
+  // colour out (the ground's edge, black to nothing) is a mask, not a surface: painted flat it was a dark wedge, so
+  // a face filled with one is left out.
+  const flat = new Map<string, [string, number] | null>();
+  for (const def of d.defs) {
+    if (def.kind === "linear" || def.kind === "radial") {
+      const fade = def.stops.length > 1 && def.stops.every((s) => s[1] === def.stops[0][1]) && def.stops[def.stops.length - 1][2] === 0;
+      flat.set(def.id, fade ? null : [def.stops[0]?.[1] ?? "#888", def.stops[0]?.[2] ?? 1]);
+    } else if (def.kind === "grain") flat.set(def.id, [def.lines[0]?.[2] ?? "#888", 0.5]);
+  }
+  const colour = (fill: string): [string, number] | null => {
+    const m = /^url\(#([^)]+)\)/.exec(fill);
+    if (!m) return [fill, 1];
+    return flat.has(m[1]) ? flat.get(m[1])! : ["#888", 1];
+  };
+  ctx.lineJoin = "round";
+  for (const f of d.faces) {
+    const ca = colour(f.fill.split("|")[0]);
+    if (!ca) continue;
+    const [c, a] = ca;
+    const path = new Path2D(f.d);
+    ctx.globalAlpha = (f.opacity ?? 1) * a * (f.layer === "shadow" ? 0.34 : 1);
+    ctx.fillStyle = c;
+    ctx.fill(path);
+    if (f.stroke) {
+      ctx.globalAlpha = f.strokeOpacity ?? 1;
+      ctx.strokeStyle = f.stroke;
+      ctx.lineWidth = 0.45 / k;
+      ctx.stroke(path);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
 
 /** The scene a sample makes, built once per page. */
 const scenes = new Map<string, { scene: DeckScene; materials: IsoMaterials }>();
@@ -78,6 +133,21 @@ const reducedMotion = (): boolean => {
 };
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
+/* A turning picture is redrawn at most this often (2026-10-19, perf): a frame is a few thousand paths computed and
+   parsed, and at 60 a second four turning cards took the page under 20fps. 25 a second reads as smooth for a slow
+   turn. And not while the page scrolls under the mouse: the picture holds its angle until the scroll settles. */
+const DRAW_EVERY_MS = 40;
+const SCROLL_QUIET_MS = 200;
+let pageScrolledAt = 0;
+let scrollWatched = false;
+function watchPageScroll() {
+  if (scrollWatched || typeof document === "undefined") return;
+  scrollWatched = true;
+  document.addEventListener("scroll", () => { pageScrolledAt = performance.now(); }, { capture: true, passive: true });
+}
+if (typeof document !== "undefined") watchPageScroll();
+const pageStill = (now: number) => now - pageScrolledAt > SCROLL_QUIET_MS;
+
 export type Turn = { turn: () => void };
 
 /**
@@ -85,36 +155,56 @@ export type Turn = { turn: () => void };
  * again. It turns: a mouse drag on it, `turnRef` (the ↻ beside it), and a
  * slow turn of its own while `spin` (the mouse resting on its card) — then
  * it eases back to its angle.
+ *
+ * WHAT IS IN THE DOM (2026-10-19, perf). A live picture is thousands of SVG nodes, and four of them on the page
+ * made every scroll frame re-style and re-layerize them all (2.9s of style, 4s of layerizing over one scroll). So:
+ * at rest the picture is an IMAGE of its resting markup (crisp, one node); a turn is PAINTED on the canvas over it
+ * (paintFrame); the live SVG is mounted only for the build-up — the second and a half after a card is picked —
+ * and gives way to the image again as soon as it has stood up.
  */
 export function IsoFigure({ sample, detail, play = 0, spin = false, label, className, turnRef, staticPreview = false }: { sample: DeckSample; detail: "card" | "thumb"; play?: number; spin?: boolean; label: string; className?: string; turnRef?: React.MutableRefObject<Turn | null>; staticPreview?: boolean }) {
   const rest = restingFor(sample, detail);
-  const image = React.useMemo(() => staticPreview ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rest.viewBox}">${rest.still}</svg>`)}` : null, [staticPreview, rest]);
+  const image = React.useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rest.viewBox}">${rest.still}</svg>`)}`, [rest]);
   const svgRef = React.useRef<SVGSVGElement>(null);
+  const stillRef = React.useRef<HTMLSpanElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const yaw = React.useRef(REST_YAW);
   const anim = React.useRef<number>(0);
   const settle = React.useRef<number>(0);
   const drag = React.useRef<{ x: number; yaw: number; moved: boolean } | null>(null);
+  // The build-up's live SVG is in the DOM only while it plays. A new `play` turns it on during render (the sanctioned
+  // way to derive state from a prop); the timer below turns it off once the picture has stood up.
+  const [live, setLive] = React.useState(false);
+  const [seenPlay, setSeenPlay] = React.useState(play);
+  if (play !== seenPlay) {
+    setSeenPlay(play);
+    if (play && !staticPreview) setLive(true);
+  }
+  const buildEnds = React.useRef(0);
+  const turning = React.useRef(false);
 
-  /**
-   * The picture at `yawDeg`, drawn straight into the SVG (no React in the loop — a frame is thousands of paths). Its
-   * groups are STILL ones: the build-up's groups animate in from nothing, and a frame that replaced them every tick
-   * would never be seen.
-   */
+  /** The picture at `yawDeg`: at its angle the resting image (or the live SVG) shows; turned, a painted frame. */
   const draw = React.useCallback(
     (yawDeg: number, quality: "full" | "quick") => {
-      const svg = svgRef.current;
-      if (!svg) return;
-      if (Math.abs(yawDeg - REST_YAW) < 0.01 && quality === "full") {
-        svg.setAttribute("viewBox", rest.viewBox);
-        svg.innerHTML = rest.still;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const atRest = Math.abs(yawDeg - REST_YAW) < 0.01 && quality === "full";
+      if (atRest) {
+        turning.current = false;
+        canvas.style.display = "none";
+        if (stillRef.current) stillRef.current.style.visibility = "";
+        if (svgRef.current) svgRef.current.style.visibility = "";
         return;
       }
       const { scene, materials } = sceneFor(sample);
       const d = isoDrawing(scene, { maxSolids: DETAIL[detail][quality], materials, yawDeg, detail: quality });
-      svg.setAttribute("viewBox", d.viewBox);
-      svg.innerHTML = isoMarkup(d, { prefix: `iso-${sample.id}-${detail}`, layerClass: p.still });
+      turning.current = true;
+      canvas.style.display = "block";
+      paintFrame(canvas, d);
+      if (stillRef.current) stillRef.current.style.visibility = "hidden";
+      if (svgRef.current) svgRef.current.style.visibility = "hidden";
     },
-    [sample, detail, rest],
+    [sample, detail],
   );
   const stopAll = React.useCallback(() => {
     cancelAnimationFrame(anim.current);
@@ -131,11 +221,15 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
         return;
       }
       const t0 = performance.now();
+      let drawn = 0;
       const step = (now: number) => {
         const t = Math.min(1, (now - t0) / ms);
         yaw.current = from + (to - from) * easeInOut(t);
         if (t < 1) {
-          draw(yaw.current, "quick");
+          if (now - drawn >= DRAW_EVERY_MS) {
+            drawn = now;
+            draw(yaw.current, "quick");
+          }
           settle.current = requestAnimationFrame(step);
         } else {
           yaw.current = to;
@@ -146,15 +240,22 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
     },
     [draw, stopAll],
   );
-  // The resting picture — again whenever it is replayed (the play key remounts the svg).
+  // The build-up: the live SVG for as long as it plays, then the image again.
+  React.useEffect(() => {
+    if (!live) return;
+    stopAll();
+    yaw.current = REST_YAW;
+    draw(REST_YAW, "full");
+    buildEnds.current = performance.now() + rest.steps * 70 + 700;
+    const t = window.setTimeout(() => setLive(false), rest.steps * 70 + 700);
+    return () => window.clearTimeout(t);
+  }, [live, play, rest.steps, draw, stopAll]);
   React.useLayoutEffect(() => {
     const svg = svgRef.current;
-    if (!svg) return;
+    if (!svg || !live) return;
     svg.setAttribute("viewBox", rest.viewBox);
     svg.innerHTML = rest.markup;
-    yaw.current = REST_YAW;
-    return stopAll;
-  }, [rest, play, stopAll]);
+  }, [rest, live, play]);
   // The ↻: a third of a turn.
   React.useEffect(() => {
     if (!turnRef) return;
@@ -167,15 +268,21 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
   React.useEffect(() => {
     if (!spin || reducedMotion()) return;
     stopAll();
+    watchPageScroll();
     // Only once the build-up has stood every step up (70 ms a step, and the last step's rise).
-    const start = performance.now() + (play > 0 ? rest.steps * 70 + 600 : 350);
+    const start = Math.max(performance.now() + 350, buildEnds.current);
     let last = start;
     const step = (now: number) => {
       if (now >= start && !drag.current) {
-        yaw.current += ((now - Math.max(last, start)) / 1000) * 9;
-        draw(yaw.current, "quick");
-      }
-      last = now;
+        if (!pageStill(now)) {
+          // Paused for the scroll: the time does not pile up into a jump when it resumes.
+          last = now;
+        } else if (now - last >= DRAW_EVERY_MS) {
+          yaw.current += ((now - Math.max(last, start)) / 1000) * 9;
+          last = now;
+          draw(yaw.current, "quick");
+        }
+      } else last = now;
       anim.current = requestAnimationFrame(step);
     };
     anim.current = requestAnimationFrame(step);
@@ -183,27 +290,33 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
       cancelAnimationFrame(anim.current);
       if (Math.abs(yaw.current - REST_YAW) > 0.01) turnTo(REST_YAW, 600);
     };
-  }, [spin, play, rest.steps, draw, turnTo, stopAll]);
+  }, [spin, play, draw, turnTo, stopAll]);
+  React.useEffect(() => stopAll, [stopAll]);
 
   /* ── a mouse drag turns it by hand (a touch scrolls the page, as it should) ── */
-  const onDown = (e: React.PointerEvent<SVGSVGElement>) => {
+  const dragDrawn = React.useRef(0);
+  const onDown = (e: React.PointerEvent<Element>) => {
     if (e.pointerType !== "mouse" || e.button !== 0) return;
     stopAll();
     drag.current = { x: e.clientX, yaw: yaw.current, moved: false };
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+    (e.currentTarget as Element & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(e.pointerId);
   };
-  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
+  const onMove = (e: React.PointerEvent<Element>) => {
     if (!drag.current) return;
     const dx = e.clientX - drag.current.x;
     if (Math.abs(dx) > 4) drag.current.moved = true;
     yaw.current = drag.current.yaw + dx * 0.6;
+    // A mouse reports faster than the picture can be drawn: one frame per DRAW_EVERY_MS, the last angle wins on release.
+    const now = performance.now();
+    if (now - dragDrawn.current < DRAW_EVERY_MS) return;
+    dragDrawn.current = now;
     draw(yaw.current, "quick");
   };
-  const onUp = (e: React.PointerEvent<SVGSVGElement>) => {
+  const onUp = (e: React.PointerEvent<Element>) => {
     const d = drag.current;
     if (!d) return;
     drag.current = null;
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    (e.currentTarget as Element & { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(e.pointerId);
     draw(yaw.current, "full");
     // A drag is not a click on the card.
     if (d.moved) {
@@ -213,22 +326,29 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
       setTimeout(() => el.removeEventListener("click", swallow, { capture: true }), 0);
     }
   };
-  if (image) return <Image src={image} alt={label} width={480} height={320} unoptimized loading="lazy" className={cx(p.svg, className)} />;
+  const handlers = staticPreview ? {} : { onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp };
   return (
-    <svg
-      key={play}
-      ref={svgRef}
-      className={cx(p.svg, play > 0 && p.play, className)}
-      viewBox={rest.viewBox}
-      preserveAspectRatio="xMidYMid meet"
-      role="img"
-      aria-label={label}
-      data-iso-faces={rest.faces}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-    />
+    <>
+      {/* The resting picture: one image. Hidden under a painted turn or the build-up's live SVG. */}
+      <span ref={stillRef} className={cx(p.svg, className)} style={live ? { visibility: "hidden" } : undefined} {...handlers}>
+        <Image src={image} alt={label} width={480} height={320} unoptimized loading="lazy" className={p.svg} draggable={false} />
+      </span>
+      {live ? (
+        <svg
+          key={play}
+          ref={svgRef}
+          className={cx(p.svg, p.play, p.liveSvg, className)}
+          viewBox={rest.viewBox}
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label={label}
+          data-iso-faces={rest.faces}
+          {...handlers}
+        />
+      ) : null}
+      {/* The turning frames, painted; shown only while the picture is off its angle. */}
+      <canvas ref={canvasRef} className={p.turnCanvas} aria-hidden="true" />
+    </>
   );
 }
 
@@ -247,7 +367,7 @@ function KindCard({ structure: st, label, on, onPick, staticPreview }: { structu
   const [play, setPlay] = React.useState(0);
   const [spin, setSpin] = React.useState(false);
   return (
-    <div className={p.kindWrap} onPointerEnter={(e) => { if (!staticPreview && e.pointerType === "mouse") { setPlay((n) => n + 1); setSpin(true); } }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
+    <div className={p.kindWrap} onPointerEnter={(e) => { if (!staticPreview && e.pointerType === "mouse" && pageStill(performance.now())) { setPlay((n) => n || 1); setSpin(true); } }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
       <button type="button" role="radio" aria-checked={on} className={cx(p.kind, on && p.kindOn)} onClick={() => { onPick(); if (!staticPreview) setPlay((n) => n + 1); }} data-structure={st}>
         <span className={p.fig}>
           <IsoFigure sample={hero} detail="card" play={play} spin={spin} label={`${label}: ${hero.name}`} turnRef={turn} staticPreview={staticPreview} />
@@ -266,7 +386,7 @@ function SampleCard({ sample, inUse, onPick, staticPreview }: { sample: DeckSamp
   const turn = React.useRef<Turn | null>(null);
   const [spin, setSpin] = React.useState(false);
   return (
-    <div className={p.sampleWrap} onPointerEnter={(e) => { if (!staticPreview && e.pointerType === "mouse") setSpin(true); }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
+    <div className={p.sampleWrap} onPointerEnter={(e) => { if (!staticPreview && e.pointerType === "mouse" && pageStill(performance.now())) setSpin(true); }} onPointerLeave={(e) => { if (e.pointerType === "mouse") setSpin(false); }}>
       <button type="button" className={cx(p.sample, inUse && p.sampleOn)} aria-pressed={inUse} onClick={onPick} data-deck-sample={sample.id}>
         <span className={cx(p.fig, p.figSmall)}>
           <IsoFigure sample={sample} detail="thumb" spin={spin} label={sample.name} turnRef={turn} staticPreview={staticPreview} />

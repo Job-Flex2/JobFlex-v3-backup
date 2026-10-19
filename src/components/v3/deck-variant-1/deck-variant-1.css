@@ -32,6 +32,10 @@
 
 /* ── Root ────────────────────────────────────────────────────────────────── */
 .jf-deck-v1 {
+  /* The wheel on this page moves a little closer to the hand (owner, 2026-10-19: "the scroll feels slow"): 0.85 of
+     a native tick against the shell's 0.65, and a shorter settle. The engine reads these off the studio. */
+  --scroll-wheel-scale: 0.85;
+  --scroll-wheel-settle: 90;
   --step-c: var(--accent); /* the shared kind picker's tint: the blueprint blue */
   --v1-amber-ink: color-mix(in srgb, var(--amber) 62%, var(--ink));
   display: flex;
@@ -653,16 +657,18 @@
    tables read as lists: the name, its quantity under it, the cost at the
    right; the per-unit columns stay on the desk. */
 @media (max-width: 768px) {
+  /* The head: the title and a small Full view on one line, the deck's facts under them (owner, 2026-10-19). */
   .jf-deck-v1 .v1-view-head { grid-template-columns: minmax(0, 1fr) auto; }
   .jf-deck-v1 .v1-view-title { grid-column: 1; grid-row: 1; align-self: center; }
-  .jf-deck-v1 .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; gap: 6px; min-height: 40px; padding: 0 12px; }
-  .jf-deck-v1 .v1-view-facts { grid-row: 2; }
+  .jf-deck-v1 .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; align-self: center; gap: 5px; min-height: 32px; padding: 0 10px; font-size: 12px; }
+  .jf-deck-v1 .v1-dock-btn svg { width: 14px; height: 14px; }
+  .jf-deck-v1 .v1-view-facts { grid-column: 1 / -1; grid-row: 2; }
   .jf-deck-v1 .v1-view-head .v1-seg { grid-row: 3; }
 
-  .jf-deck-v1 .v1-stage.is-docked { position: sticky; top: 0; z-index: 8; }
+  /* Compact, in the flow (owner, 2026-10-19: not pinned) — the steps scroll past it; Full view opens the whole viewer. */
+  .jf-deck-v1 .v1-stage.is-docked { position: static; }
   .jf-deck-v1 .v1-stage.is-docked .v1-viewer { border-width: 2px; }
   .jf-deck-v1 .v1-stage.is-docked .v1-view-head { gap: 6px var(--deck-space-sm); padding: 8px; }
-  .jf-deck-v1 .v1-stage.is-docked .v1-view-facts,
   .jf-deck-v1 .v1-stage.is-docked .v1-tools,
   .jf-deck-v1 .v1-stage.is-docked .v1-auto,
   .jf-deck-v1 .v1-stage.is-docked .v1-pick,
@@ -670,8 +676,7 @@
   .jf-deck-v1 .v1-stage.is-docked .v1-view-head .v1-seg-btn { min-height: 40px; }
   .jf-deck-v1 .v1-stage.is-docked .v1-view-box { height: clamp(180px, 30vh, 250px); }
   .jf-deck-v1 .v1-stage.is-docked .v1-view-box.is-wall { height: clamp(220px, 36vh, 300px); }
-  /* the steps' headings land under the docked scene, not behind it */
-  .jf-deck-v1 .v1-question { scroll-margin-top: calc(76px + clamp(180px, 30vh, 250px)); }
+  .jf-deck-v1 .v1-question { scroll-margin-top: 76px; }
 
   /* the footer: the price and its note left, the next step filling the rest */
   .jf-deck-v1 .v1-foot-price { font-size: 20px; }
