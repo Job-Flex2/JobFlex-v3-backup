@@ -1114,51 +1114,119 @@
 @media (prefers-reduced-motion: reduce) { .prowClientNew { animation: none; } }
 
 /* ── WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind) ─────────────────
-   The desk list's mark and type bar, on the phone: the work's square in the
-   estimating tools' colours, its word, the tool (Smart Proposal in violet). The
-   Type menu that narrows every tab, list and figure is on the filter row. */
-.pkind, .pkSq[data-fam] { --fam: var(--muted, #6b6b6b); }
-.pkind[data-fam="deck"], .pkSq[data-fam="deck"] { --fam: var(--tool-deck); }
-.pkind[data-fam="roof"], .pkSq[data-fam="roof"] { --fam: var(--tool-roof); }
-.pkind[data-fam="fence"], .pkSq[data-fam="fence"] { --fam: var(--tool-fence); }
-.pkind[data-fam="hvac"], .pkSq[data-fam="hvac"] { --fam: var(--tool-hvac); }
-.pkind[data-fam="remodel"], .pkSq[data-fam="remodel"] { --fam: var(--tool-plan); }
-.pkSq { display: inline-block; width: 9px; height: 9px; flex: none; background: var(--fam); box-shadow: 1.5px 1.5px 0 var(--ink, #0a0a0a); }
+   The row's mark, as the desk list: a flat 8px dot in the estimating tool's
+   colour, the work's word and the tool in the page's plain type (owner,
+   2026-10-18: nothing behind the dot, no mono caps); Smart Proposal in violet. */
+.pkind, .fdot { --fam: var(--muted-light); }
+.pkind[data-fam="deck"], .fdot[data-fam="deck"] { --fam: var(--tool-deck); }
+.pkind[data-fam="roof"], .fdot[data-fam="roof"] { --fam: var(--tool-roof); }
+.pkind[data-fam="fence"], .fdot[data-fam="fence"] { --fam: var(--tool-fence); }
+.pkind[data-fam="hvac"], .fdot[data-fam="hvac"] { --fam: var(--tool-hvac); }
+.pkind[data-fam="remodel"], .fdot[data-fam="remodel"] { --fam: var(--tool-plan); }
+.pkSq { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--fam); }
 .pkind {
-  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   margin: 6px 0 4px;
-  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; line-height: 1.2;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--ink, #0a0a0a);
+  font-family: var(--font); font-size: 13px; font-weight: 500; line-height: 1.25;
+  letter-spacing: 0; text-transform: none;
+  color: var(--muted);
 }
-.pkind b { font-weight: 700; color: var(--fam); }
-.pkind[data-fam="other"] b { color: var(--ink, #0a0a0a); }
-.pkTool { font-weight: 600; color: var(--muted, #6b6b6b); }
-.pkTool::before { content: "·"; margin-right: 7px; }
-.pkTool[data-tool="smart"] { color: var(--tool-smart); font-weight: 700; }
+.pkind b { font-weight: 600; color: var(--ink); }
+.pkTool { font-weight: 500; color: var(--muted); }
+.pkTool::before { content: "·"; margin-right: 6px; color: var(--muted-light); }
+.pkTool[data-tool="smart"] { color: var(--tool-smart); font-weight: 600; }
 .pkTool[data-tool="video"] { color: var(--tool-video); }
 .pkTool[data-tool="blueprint"] { color: var(--tool-plan); }
 
-/* ── FILTERS (2026-10-18): Status + Type on one row under the tabs ─────────
-   Two .dd faces side by side, each the label over its pick (a 160px half has
-   no room for "STATUS  Declined · 2" on one line); the row, not the face, is
-   the menus' box, so either menu opens the full width with its 3-up cells.
-   Type alone (Accepted / Completed) holds the row by itself. */
-.fbar { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.fbarDuo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.fbar .dd { position: static; min-width: 0; }
-.ddDuo { gap: 8px; padding: 0 12px; }
-.ddTxt { display: grid; gap: 3px; min-width: 0; text-align: left; }
-.ddKey {
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-  letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
-  line-height: 1;
+/* ── FILTERS (owner, 2026-10-18; two designs on trial by ?v=) ──────────────
+   One row under the tabs: the statuses, sliding sideways when they do not
+   fit (whole words, never clipped), then the Type button, whose menu opens
+   across the whole row (the row is its box; the button's .fdrop is static).
+   The page's plain type, a grey count beside each label, colour only as a
+   flat 8px dot — no shadow, no offset, no heavy frame.
+     v1  one light plate, the picked segment white with a thin frame; Type a
+         button in the same plate.
+     v2  underlined tabs on one hairline, the picked one ink over a 2px
+         blueprint rule; Type a plain text dropdown at the right end. */
+.fbar {
+  --fplate: color-mix(in srgb, var(--ink) 6%, transparent);
+  position: relative;
+  display: flex; align-items: stretch; gap: 8px;
+  min-width: 0;
 }
-.ddDuo .ddValue {
-  margin-left: 0; overflow: hidden; text-overflow: ellipsis;
-  font-size: 12px; letter-spacing: 0.04em; line-height: 1.2;
+.fseg {
+  display: flex; flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
-.ddDuo .ddCaret { margin-left: auto; flex: none; }
-.ddFam { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
-.ddValue.ddFam { display: flex; }
-.ddValue.ddFam[data-set] { color: var(--ink); font-weight: 700; }
+.fseg::-webkit-scrollbar { display: none; }
+.fseg[data-fade="end"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.fseg[data-fade="start"] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+.fseg[data-fade="start end"] { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+.fsegBtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none;
+  min-height: 44px; padding: 0 12px;
+  font-family: var(--font); font-size: 14px; font-weight: 500; line-height: 1;
+  letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: var(--muted);
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.fsegBtn.on { color: var(--ink); font-weight: 600; }
+.fsegN { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted-light); }
+.fdrop { position: static; display: flex; flex: none; margin-left: auto; }
+.fdropBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 12px;
+  font-family: var(--font); font-size: 14px; font-weight: 600; line-height: 1;
+  letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: var(--ink);
+  transition: background 0.14s, border-color 0.14s;
+}
+.fdropKey { font-weight: 500; color: var(--muted); }
+.fdropCaret { width: 15px; height: 15px; color: var(--muted-light); transition: transform 0.18s var(--ease-out); }
+.fdrop.open .fdropCaret { transform: rotate(180deg); }
+.fdot { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--fam); }
+.fdot:not([data-fam]) { background: transparent; }
+.fmenu {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+  max-height: var(--menu-max-h, calc(var(--app-h, 100dvh) * 0.6));
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: var(--radius);
+  visibility: hidden; opacity: 0; transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s var(--ease-out), visibility 0.16s;
+}
+.fdrop[data-place="up"] .fmenu { top: auto; bottom: calc(100% + 6px); transform: translateY(4px); }
+.fdrop.open .fmenu { visibility: visible; opacity: 1; transform: none; }
+.fitem {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 46px; padding: 0 12px;
+  border-radius: var(--radius);
+  font-family: var(--font); font-size: 15px; font-weight: 500;
+  letter-spacing: 0; text-transform: none; text-align: left;
+  color: var(--ink-soft);
+}
+.fitem:active { background: var(--fplate); }
+.fitem.on { color: var(--blueprint); font-weight: 600; }
+.fitem .fsegN { margin-left: auto; }
+.fitem.on .fsegN { color: var(--blueprint); }
+.fitem .ic { width: 15px; height: 15px; color: var(--blueprint); margin-left: 4px; }
+
+/* v1 — segmented control */
+.fbar[data-fv="1"] .fseg { gap: 2px; padding: 3px; background: var(--fplate); border-radius: var(--radius); }
+.fbar[data-fv="1"] .fsegBtn { border: 1px solid transparent; border-radius: var(--radius); }
+.fbar[data-fv="1"] .fsegBtn.on { background: #fff; border-color: var(--hair); }
+.fbar[data-fv="1"] .fdropBtn { border: 1px solid transparent; border-radius: var(--radius); background: var(--fplate); min-height: 50px; }
+.fbar[data-fv="1"] .fdrop.isSet .fdropBtn,
+.fbar[data-fv="1"] .fdrop.open .fdropBtn { background: #fff; border-color: var(--hair); }
+
+/* v2 — underlined tabs */
+.fbar[data-fv="2"] { gap: 12px; border-bottom: 1px solid var(--hair); }
+.fbar[data-fv="2"] .fseg { gap: 18px; }
+.fbar[data-fv="2"] .fsegBtn { padding: 0 1px; border-bottom: 2px solid transparent; }
+.fbar[data-fv="2"] .fsegBtn.on { border-bottom-color: var(--blueprint); }
+.fbar[data-fv="2"] .fdropBtn { padding: 0 4px 0 8px; }
+.fbar[data-fv="2"] .fdrop.isSet .fdropBtn { color: var(--blueprint); }
+@media (prefers-reduced-motion: reduce) { .fsegBtn, .fdropBtn, .fmenu, .fdropCaret { transition: none; } }

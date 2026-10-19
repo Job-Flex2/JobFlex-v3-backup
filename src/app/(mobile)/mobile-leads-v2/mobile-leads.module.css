@@ -654,41 +654,111 @@
 .lcontactV.isNone { color: var(--muted-faint); letter-spacing: 0.08em; text-transform: uppercase; }
 .lsrc {
   justify-self: end;
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
   white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--muted-light);
-}
-/* The source's square (lib/leads/sources tone); JobFlex's in the blueprint tone. */
-.lsrc i { width: 7px; height: 7px; border-radius: 1px; background: var(--t, var(--muted-light)); flex: 0 0 auto; }
-.lsrcJf { color: var(--blueprint); font-weight: 800; }
-
-/* ── WHERE THE LEADS CAME FROM (2026-10-16; Blueprint chips 2026-10-18) ──
-   All / JobFlex / Your own: the house filter chip (desk .pchip) as three
-   equal 44px parts that hold at 320px — white, a quiet hair frame, mono
-   caps, blue frame and text when picked. Under "Your own", the sources in
-   the page's own .dd (the Filter above), label over count in each cell. */
-.origin { display: grid; gap: 10px; margin: 2px 0 0; }
-.oseg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.osegBtn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-width: 0; min-height: 44px; padding: 0 4px;
-  border: 1.5px solid var(--hair); border-radius: var(--radius); background: var(--paper);
-  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+  font-family: var(--font);
+  font-size: 13px; font-weight: 500;
+  letter-spacing: 0; text-transform: none;
   color: var(--muted);
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.osegBtn:active { background: var(--paper-deep); }
-.osegBtn.on { border-color: var(--blueprint); color: var(--blueprint); background: var(--accent-soft); }
-.osegN { font-weight: 700; font-variant-numeric: tabular-nums; }
-.osrcSq { display: inline-block; width: 8px; height: 8px; border-radius: 1px; background: var(--t, var(--muted)); flex: 0 0 auto; margin-right: 6px; }
-/* In a cell the square sits in the top-left corner (the tick takes the right),
-   so a ~95px cell at 320px gives "Thumbtack" its whole width, unbroken. */
-.osrcItem { min-width: 0; letter-spacing: 0.02em; overflow-wrap: normal; }
-.osrcItem .osrcSq { position: absolute; top: 7px; left: 7px; margin-right: 0; }
+/* The source as a flat 8px dot and its name (owner, 2026-10-18: nothing
+   behind the dot, no mono caps) — JobFlex's dot and name in the blueprint tone. */
+.lsrc i { width: 8px; height: 8px; border-radius: 50%; background: var(--t, var(--muted-light)); flex: 0 0 auto; }
+.lsrcJf { color: var(--blueprint); font-weight: 600; }
+.lsrcJf i { background: var(--blueprint); }
+
+/* ── WHERE THE LEADS CAME FROM (2026-10-16) — FILTERS (owner, 2026-10-18;
+   two designs on trial by ?v=) ──────────────────────────────────────────
+   One row: All / JobFlex / Your own, sliding sideways when it does not fit
+   (whole words, never clipped), then under "Your own" the Source button,
+   whose menu opens across the whole row (the row is its box; the button's
+   .fdrop is static). The page's plain type, a grey count beside each label,
+   colour only as a flat 8px dot — no shadow, no offset, no heavy frame.
+     v1  one light plate, the picked segment white with a thin frame; Source
+         a button in the same plate.
+     v2  underlined tabs on one hairline, the picked one ink over a 2px
+         blueprint rule; Source a plain text dropdown at the right end. */
+.fbar {
+  --fplate: color-mix(in srgb, var(--ink) 6%, transparent);
+  position: relative;
+  display: flex; align-items: stretch; gap: 8px;
+  min-width: 0;
+}
+.fseg {
+  display: flex; flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.fseg::-webkit-scrollbar { display: none; }
+.fseg[data-fade="end"] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.fseg[data-fade="start"] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+.fseg[data-fade="start end"] { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+.fsegBtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 1 0 auto;
+  min-height: 44px; padding: 0 12px;
+  font-family: var(--font); font-size: 14px; font-weight: 500; line-height: 1;
+  letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: var(--muted);
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.fsegBtn.on { color: var(--ink); font-weight: 600; }
+.fsegN { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted-light); }
+.fdrop { position: static; display: flex; flex: none; margin-left: auto; }
+.fdropBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 12px;
+  font-family: var(--font); font-size: 14px; font-weight: 600; line-height: 1;
+  letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: var(--ink);
+  transition: background 0.14s, border-color 0.14s;
+}
+.fdropKey { font-weight: 500; color: var(--muted); }
+.fdropCaret { width: 15px; height: 15px; color: var(--muted-light); transition: transform 0.18s var(--ease-out); }
+.fdrop.open .fdropCaret { transform: rotate(180deg); }
+.fdot { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dot, transparent); }
+.fmenu {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+  max-height: var(--menu-max-h, none);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: var(--radius);
+  visibility: hidden; opacity: 0; transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s var(--ease-out), visibility 0.16s;
+}
+.fdrop[data-place="up"] .fmenu { top: auto; bottom: calc(100% + 6px); transform: translateY(4px); }
+.fdrop.open .fmenu { visibility: visible; opacity: 1; transform: none; }
+.fitem {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 46px; padding: 0 12px;
+  border-radius: var(--radius);
+  font-family: var(--font); font-size: 15px; font-weight: 500;
+  letter-spacing: 0; text-transform: none; text-align: left;
+  color: var(--ink-soft);
+}
+.fitem:active { background: var(--fplate); }
+.fitem.on { color: var(--blueprint); font-weight: 600; }
+.fitem .fsegN { margin-left: auto; }
+.fitem.on .fsegN { color: var(--blueprint); }
+.fitem .ic { width: 15px; height: 15px; color: var(--blueprint); margin-left: 4px; }
+
+/* v1 — segmented control */
+.fbar[data-fv="1"] .fseg { gap: 2px; padding: 3px; background: var(--fplate); border-radius: var(--radius); }
+.fbar[data-fv="1"] .fsegBtn { border: 1px solid transparent; border-radius: var(--radius); }
+.fbar[data-fv="1"] .fsegBtn.on { background: #fff; border-color: var(--hair); }
+.fbar[data-fv="1"] .fdropBtn { border: 1px solid transparent; border-radius: var(--radius); background: var(--fplate); min-height: 50px; }
+.fbar[data-fv="1"] .fdrop.isSet .fdropBtn,
+.fbar[data-fv="1"] .fdrop.open .fdropBtn { background: #fff; border-color: var(--hair); }
+
+/* v2 — underlined tabs */
+.fbar[data-fv="2"] { gap: 12px; border-bottom: 1px solid var(--hair); }
+.fbar[data-fv="2"] .fseg { gap: 18px; }
+.fbar[data-fv="2"] .fsegBtn { flex: none; padding: 0 1px; border-bottom: 2px solid transparent; }
+.fbar[data-fv="2"] .fsegBtn.on { border-bottom-color: var(--blueprint); }
+.fbar[data-fv="2"] .fdropBtn { padding: 0 4px 0 8px; }
+.fbar[data-fv="2"] .fdrop.isSet .fdropBtn { color: var(--blueprint); }
+@media (prefers-reduced-motion: reduce) { .fsegBtn, .fdropBtn, .fmenu, .fdropCaret { transition: none; } }
 .lrowFoot {
   grid-column: 1 / -1;
   grid-row: 4;

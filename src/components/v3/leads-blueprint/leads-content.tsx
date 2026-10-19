@@ -25,6 +25,7 @@ import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-bluepri
 import { initLeadsContent, type LeadsHandle } from "./leads-behavior";
 import { STAGES, isMetaImportedLead, type Lead, type Offer } from "./leads-data";
 import { PICKABLE_SOURCES } from "@/lib/leads/sources";
+import "@/components/v3/blueprint-shell/filter-bar.css";
 
 /**
  * @param leads the org's real pipeline, read in the page's server component.
@@ -34,7 +35,10 @@ import { PICKABLE_SOURCES } from "@/lib/leads/sources";
  * step with the database through the lead server actions.
  */
 export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Lead[]; offers: Offer[] }) {
-  const metaOnly = useSearchParams().get("imported") === "meta";
+  const params = useSearchParams();
+  const metaOnly = params.get("imported") === "meta";
+  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
+  const fv = params.get("v") === "2" ? "2" : "1";
   const leads = useMemo(() => metaOnly ? allLeads.filter(isMetaImportedLead) : allLeads, [allLeads, metaOnly]);
   const offers = useMemo(() => metaOnly ? [] : allOffers, [allOffers, metaOnly]);
   // The seed reaches `init` through refs, NOT through the callback's deps.
@@ -108,23 +112,35 @@ export function LeadsContent({ leads: allLeads, offers: allOffers }: { leads: Le
       {/* TAB: ALL */}
       <section className="ppanel" data-panel="all">
         {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): the ones JobFlex sent
-            apart from the shop's own, and the shop's own by source. Counts and
-            chips are painted by the behavior module (renderOrigin). The house
-            filter chips (.pchip, as Proposals' status row), 2026-10-18. */}
-        <div className="lorigin" id="lOrigin">
-          <div className="pchips lseg" role="group" aria-label="Where the leads came from">
-            <button className="pchip active" type="button" data-side="" aria-pressed="true">
-              All <b data-side-n="all">0</b>
+            apart from the shop's own, and the shop's own by source. One filter
+            bar (blueprint-shell/filter-bar.css, owner 2026-10-18, two designs on
+            trial by ?v=): the three sides, then Source as a dropdown. Counts,
+            the source menu and the JobFlex note are painted by the behavior
+            module (renderOrigin). */}
+        <div className="flt-bar lorigin" id="lOrigin" data-fv={fv}>
+          <div className="flt-seg" role="group" aria-label="Where the leads came from">
+            <button className="flt-seg-btn active" type="button" data-side="" aria-pressed="true">
+              All <span className="flt-n" data-side-n="all">0</span>
             </button>
-            <button className="pchip" type="button" data-side="jobflex" aria-pressed="false">
-              From JobFlex <b data-side-n="jobflex">0</b>
+            <button className="flt-seg-btn" type="button" data-side="jobflex" aria-pressed="false">
+              From JobFlex <span className="flt-n" data-side-n="jobflex">0</span>
             </button>
-            <button className="pchip" type="button" data-side="own" aria-pressed="false">
-              Your own leads <b data-side-n="own">0</b>
+            <button className="flt-seg-btn" type="button" data-side="own" aria-pressed="false">
+              Your own leads <span className="flt-n" data-side-n="own">0</span>
             </button>
           </div>
-          <div className="lsrcs" id="lSrcs"></div>
+          <div className="flt-drop" id="lSrcDd" hidden>
+            <button className="flt-drop-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="lSrcMenu">
+              <span className="flt-key">Source:</span>
+              <span className="flt-face"></span>
+              <svg className="ic">
+                <use href="#i-chev" />
+              </svg>
+            </button>
+            <div className="flt-menu" id="lSrcMenu" role="listbox" aria-label="Your own leads by source"></div>
+          </div>
         </div>
+        <p className="flt-note" id="lSrcs"></p>
         <div className="lbar">
           <label className="lsearch">
             <svg className="ic">

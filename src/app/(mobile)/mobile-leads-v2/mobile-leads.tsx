@@ -79,6 +79,7 @@ import styles from "./mobile-leads.module.css";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
 import { useSheetDrag } from "@/components/v3/mobile-shell/use-sheet-drag";
 import { useAnchoredMenu } from "@/components/v3/mobile-shell/use-anchored-menu";
+import { useScrollFade } from "@/components/v3/mobile-shell/use-scroll-fade";
 import { lockScroll } from "@/lib/scrollLock";
 import { claimLead, deleteLead, importLeads, updateLeadStatus } from "@/actions/leads";
 import { LeadProfileNudge } from "@/components/dashboard/LeadProfileNudge";
@@ -181,7 +182,10 @@ type MenuRow = {
 
 export function MobileLeads() {
   const router = useRouter();
-  const metaOnly = useSearchParams().get("imported") === "meta";
+  const params = useSearchParams();
+  const metaOnly = params.get("imported") === "meta";
+  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
+  const fv = params.get("v") === "2" ? "2" : "1";
   const scrollRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -208,6 +212,8 @@ export function MobileLeads() {
   const [filterOpen, setFilterOpen] = useState(false);
   /** The source menu under "Your own" (2026-10-18: the page's .dd, not a native select). */
   const [srcOpen, setSrcOpen] = useState(false);
+  /** The filter row slides sideways when it does not fit; this fades the side that holds more. */
+  const segFade = useScrollFade<HTMLDivElement>();
 
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [moveId, setMoveId] = useState<string | null>(null);
@@ -1052,12 +1058,14 @@ export function MobileLeads() {
           )}
 
           {/* WHERE THE LEADS CAME FROM (owner, 2026-10-16): All / JobFlex / Your
-              own as three equal chips that fit 320px — the house filter chip,
-              blue when picked (2026-10-18) — and under "Your own" the sources
-              in the page's own dropdown (.dd, as Filter above), with counts. */}
+              own, and under "Your own" the source as a dropdown at the row's
+              end. Two designs on trial by ?v= (owner, 2026-10-18): a segmented
+              control, or underlined tabs on ?v=2 — the page's plain type, grey
+              counts, a flat dot per source, the row sliding sideways rather
+              than clipping a word when it does not fit. */}
           {tab === "all" && own.length > 0 && (
-            <div className={styles.origin}>
-              <div className={styles.oseg} role="group" aria-label="Where the leads came from">
+            <div className={styles.fbar} data-fv={fv}>
+              <div className={styles.fseg} ref={segFade} role="group" aria-label="Where the leads came from">
                 {([
                   ["", "All", sides.all],
                   ["jobflex", "JobFlex", sides.jobflex],
@@ -1066,7 +1074,7 @@ export function MobileLeads() {
                   <button
                     key={k || "all"}
                     type="button"
-                    className={`${styles.osegBtn} ${side === k ? styles.on : ""}`}
+                    className={`${styles.fsegBtn} ${side === k ? styles.on : ""}`}
                     aria-pressed={side === k}
                     data-side={k}
                     onClick={() => {
@@ -1076,36 +1084,30 @@ export function MobileLeads() {
                     }}
                   >
                     {label}
-                    <b className={styles.osegN}>{n}</b>
+                    <span className={styles.fsegN}>{n}</span>
                   </button>
                 ))}
               </div>
               {side === "own" && srcCounts.length > 1 ? (
-                <div className={`${styles.dd} ${srcOpen ? styles.open : ""}`} {...srcMenu.anchorProps}>
-                  <button className={styles.ddBtn} type="button" aria-haspopup="listbox"
-                    aria-expanded={srcOpen} aria-label="Your own leads by source"
+                <div className={`${styles.fdrop} ${srcOpen ? styles.open : ""} ${srcNow ? styles.isSet : ""}`} {...srcMenu.anchorProps}>
+                  <button className={styles.fdropBtn} type="button" aria-haspopup="listbox"
+                    aria-expanded={srcOpen} aria-label={`Source: ${srcNow ? srcNow.label : "all sources"}`}
                     onClick={() => setSrcOpen((v) => !v)}>
-                    Source
-                    <span className={styles.ddValue}>
-                      {srcNow ? (
-                        <i className={styles.osrcSq} style={{ "--t": srcNow.tone } as React.CSSProperties} aria-hidden="true" />
-                      ) : null}
-                      {srcNow ? srcNow.short : "Every source"} · {srcNow ? srcNow.count : sides.own}
-                    </span>
-                    <Icon id="i-chev" className={`${styles.ic} ${styles.ddCaret}`} />
+                    {srcNow ? (
+                      <><i className={styles.fdot} style={{ "--dot": srcNow.tone } as React.CSSProperties} aria-hidden="true" />{srcNow.short}</>
+                    ) : (
+                      <span className={styles.fdropKey}>Source</span>
+                    )}
+                    <Icon id="i-chev" className={`${styles.ic} ${styles.fdropCaret}`} />
                   </button>
-                  <div className={styles.ddMenu} role="listbox" {...srcMenu.menuProps}>
-                    {[{ key: "", label: "Every source", short: "Every source", tone: "", count: sides.own }, ...srcCounts].map((c) => (
-                      <button key={c.key || "every"} className={`${styles.ddItem} ${srcKey === c.key ? styles.active : ""}`}
-                        type="button" role="option" aria-selected={srcKey === c.key} title={c.label}
+                  <div className={styles.fmenu} role="listbox" aria-label="Your own leads by source" {...srcMenu.menuProps}>
+                    {[{ key: "", label: "All sources", tone: "", count: sides.own }, ...srcCounts].map((c) => (
+                      <button key={c.key || "every"} className={`${styles.fitem} ${srcKey === c.key ? styles.on : ""}`}
+                        type="button" role="option" aria-selected={srcKey === c.key}
                         onClick={() => { setSrcKey(c.key); setPage(1); setSrcOpen(false); }}>
-                        <span className={styles.osrcItem}>
-                          {c.tone ? (
-                            <i className={styles.osrcSq} style={{ "--t": c.tone } as React.CSSProperties} aria-hidden="true" />
-                          ) : null}
-                          {c.short}
-                        </span>
-                        <span className={styles.ddCount}>{c.count}</span>
+                        <i className={styles.fdot} style={c.tone ? ({ "--dot": c.tone } as React.CSSProperties) : undefined} aria-hidden="true" />
+                        {c.label}
+                        <span className={styles.fsegN}>{c.count}</span>
                         {srcKey === c.key ? <Icon id="i-check" /> : null}
                       </button>
                     ))}
@@ -1171,7 +1173,7 @@ export function MobileLeads() {
                         {l.email || l.phone || "No contact on file"}
                       </span>
                       {leadSide(l.source) === "jobflex" ? (
-                        <span className={`${styles.lsrc} ${styles.lsrcJf}`}>JobFlex</span>
+                        <span className={`${styles.lsrc} ${styles.lsrcJf}`}><i aria-hidden="true" />JobFlex</span>
                       ) : (
                         <span className={styles.lsrc}>
                           <i style={{ "--t": leadSourceOf(l.source).tone } as React.CSSProperties} aria-hidden="true" />

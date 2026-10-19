@@ -200,6 +200,12 @@ monthly" is one 12px line (weight 600) under the price.
 - Controls must have visible focus, hover, disabled and busy states. Disabled
   styling must not be mistaken for an available action. Minimum mobile hit
   area is 44×44px; labelled full-width actions are useful on narrow cards.
+- Фильтры, метки, бейджи — без теней и offset-сдвигов за цветными
+  квадратами/точками; без моно-капса в чипах (owner, 2026-10-18).
+  Filters, tags and badges: no shadow or offset behind a coloured square or
+  dot, and no monospace caps in chips. The Leads and Proposals filter bars
+  ([filter-bar.css](src/components/v3/blueprint-shell/filter-bar.css)) are on
+  trial in two designs by `?v=1` / `?v=2` until the owner picks one.
 - Use existing Lucide icons at consistent sizes; decorative icons are hidden
   from assistive technology, icon-only controls have accessible names.
 - Preserve all existing actions, validation, units, permissions and data

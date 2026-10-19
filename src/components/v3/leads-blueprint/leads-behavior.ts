@@ -264,11 +264,11 @@ export function initLeadsContent(
   function srcLabel(v: string | null) {
     return leadSourceOf(v).label;
   }
-  /** The source as a stamp: JobFlex's in the blueprint tone, or the source's square and name. */
+  /** The source as a flat dot and its name (owner, 2026-10-18) — JobFlex's in the blueprint tone. */
   function srcBadge(v: string | null) {
     const s = leadSourceOf(v);
     return s.side === "jobflex"
-      ? '<span class="lsrc-b lsrc-b--jobflex" title="Sent to you by JobFlex">JobFlex</span>'
+      ? '<span class="lsrc-b lsrc-b--jobflex" title="Sent to you by JobFlex"><i></i>JobFlex</span>'
       : '<span class="lsrc-b" title="' + esc(s.label) + '"><i style="--t:' + s.tone + '"></i>' + esc(s.short) + "</span>";
   }
   function initials(n: string) {
@@ -435,8 +435,42 @@ export function initLeadsContent(
       b.classList.toggle("active", on);
       b.setAttribute("aria-pressed", String(on));
     });
-    const row = $("#lSrcs");
-    if (!row) return;
+    // Under the switch (owner, 2026-10-18): the shop's own sources as one
+    // dropdown on the bar, each with its flat dot and count; on JobFlex's side
+    // a one-line note says how JobFlex's leads are doing instead.
+    const note = $("#lSrcs");
+    const dd = $("#lSrcDd");
+    const menu = $("#lSrcMenu");
+    const counts = lstate.side === "jobflex" ? [] : ownSourceCounts(pool);
+    if (dd) {
+      dd.hidden = counts.length === 0;
+      if (dd.hidden) setSrcOpen(false);
+      dd.classList.toggle("is-set", !!lstate.source);
+      const own = counts.reduce(function (t, c) {
+        return t + c.count;
+      }, 0);
+      const now = counts.find(function (c) {
+        return c.key === lstate.source;
+      });
+      const face = dd.querySelector<HTMLElement>(".flt-face");
+      if (face)
+        face.innerHTML = now
+          ? '<i class="flt-dot" style="--dot:' + now.tone + '" aria-hidden="true"></i>' + esc(now.label) + ' <span class="flt-n">' + now.count + "</span>"
+          : 'All <span class="flt-n">' + own + "</span>";
+      if (menu)
+        menu.innerHTML = [{ key: "", label: "All sources", tone: "", count: own }]
+          .concat(counts)
+          .map(function (c) {
+            const sel = (lstate.source ?? "") === c.key;
+            return (
+              '<button class="flt-item' + (sel ? " active" : "") + '" type="button" role="option" aria-selected="' + sel + '" data-osrc="' + c.key + '">' +
+              '<i class="flt-dot' + (c.tone ? "" : " flt-dot--none") + '"' + (c.tone ? ' style="--dot:' + c.tone + '"' : "") + ' aria-hidden="true"></i>' +
+              esc(c.label) + '<span class="flt-n">' + c.count + "</span></button>"
+            );
+          })
+          .join("");
+    }
+    if (!note) return;
     if (lstate.side === "jobflex") {
       const jf = pool.filter(function (l) {
         return leadSide(l.source) === "jobflex";
@@ -447,34 +481,20 @@ export function initLeadsContent(
       const quoted = jf.filter(function (l) {
         return l.status === "QUOTED";
       }).length;
-      row.innerHTML = jf.length
-        ? '<span class="lsrcs-note"><b>' + jf.length + "</b> lead" + (jf.length === 1 ? "" : "s") + " JobFlex sent you · " + quoted + " quoted · " + won + " won. New ones wait under Incoming.</span>"
-        : '<span class="lsrcs-note">No JobFlex leads in your book yet — new ones arrive under Incoming.</span>';
+      note.innerHTML = jf.length
+        ? "<b>" + jf.length + "</b> lead" + (jf.length === 1 ? "" : "s") + " JobFlex sent you · " + quoted + " quoted · " + won + " won. New ones wait under Incoming."
+        : "No JobFlex leads in your book yet — new ones arrive under Incoming.";
       return;
     }
-    const counts = ownSourceCounts(pool);
-    row.innerHTML = counts.length
-      ? '<span class="lsrcs-lbl">By source</span>' +
-        counts
-          .map(function (c) {
-            return (
-              '<button class="pchip lsrc-chip' +
-              (lstate.source === c.key ? " active" : "") +
-              '" type="button" data-osrc="' +
-              c.key +
-              '" aria-pressed="' +
-              (lstate.source === c.key) +
-              '"><i style="--t:' +
-              c.tone +
-              '"></i>' +
-              esc(c.label) +
-              " <b>" +
-              c.count +
-              "</b></button>"
-            );
-          })
-          .join("")
-      : '<span class="lsrcs-note">Leads you add — by hand, from an email, a list, Facebook or the AI desk — show here by where they came from.</span>';
+    note.innerHTML = counts.length
+      ? ""
+      : "Leads you add — by hand, from an email, a list, Facebook or the AI desk — show here by where they came from.";
+  }
+  function setSrcOpen(open: boolean) {
+    const dd = $("#lSrcDd");
+    if (!dd) return;
+    dd.classList.toggle("open", open);
+    dd.querySelector(".flt-drop-btn")?.setAttribute("aria-expanded", String(open));
   }
   /**
    * Everything except the status filter. The status list in the popover counts
@@ -1105,15 +1125,30 @@ export function initLeadsContent(
     if ((e.target as HTMLElement).closest(".fwrap")) return;
     setFilterPop(false);
   });
+  // The source menu closes on a click anywhere else and on Escape.
+  on(document, "click", function (e) {
+    const dd = $("#lSrcDd");
+    if (dd?.classList.contains("open") && !dd.contains(e.target as Node)) setSrcOpen(false);
+  });
+  on(document, "keydown", function (e) {
+    const dd = $("#lSrcDd");
+    if ((e as KeyboardEvent).key !== "Escape" || !dd?.classList.contains("open")) return;
+    setSrcOpen(false);
+    dd.querySelector<HTMLButtonElement>(".flt-drop-btn")?.focus();
+  });
   on(document, "keydown", function (e) {
     if ((e as KeyboardEvent).key !== "Escape") return;
     if (!$("#fPop")?.classList.contains("open")) return;
     setFilterPop(false);
     $("#filterBtn")?.focus();
   });
-  // The origin switch and the source chips under it (renderOrigin).
+  // The origin switch and the source dropdown beside it (renderOrigin).
   onEl($("#lOrigin"), "click", function (e) {
     const target = e.target as HTMLElement;
+    if (target.closest(".flt-drop-btn")) {
+      setSrcOpen(!$("#lSrcDd")?.classList.contains("open"));
+      return;
+    }
     const side = target.closest<HTMLElement>("[data-side]");
     if (side) {
       const v = (side.dataset.side ?? "") as "" | "jobflex" | "own";
@@ -1123,9 +1158,11 @@ export function initLeadsContent(
     }
     const chip = target.closest<HTMLElement>("[data-osrc]");
     if (chip) {
-      const k = chip.dataset.osrc ?? "";
-      lstate.source = !k || lstate.source === k ? null : k;
+      // A menu pick sets the source; "All sources" (an empty key) clears it.
+      lstate.source = chip.dataset.osrc || null;
       if (lstate.source && lstate.side === "jobflex") lstate.side = "own";
+      setSrcOpen(false);
+      $("#lSrcDd .flt-drop-btn")?.focus();
     }
     if (!side && !chip) return;
     lstate.page = 1;

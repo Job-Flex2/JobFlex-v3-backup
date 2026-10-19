@@ -25,6 +25,8 @@
 
 import Link from "next/link";
 import { useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
+import "@/components/v3/blueprint-shell/filter-bar.css";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { initProposalsContent } from "./proposals-behavior";
 import type { ProposalRow } from "./proposals-data";
@@ -35,6 +37,8 @@ import type { ProposalRow } from "./proposals-data";
  *   keeps itself in step with the database through the proposal server actions.
  */
 export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
+  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
+  const fv = useSearchParams().get("v") === "2" ? "2" : "1";
   // The seed reaches `init` through a ref, NOT through the callback's deps.
   // `useBlueprintContent` re-runs whenever `init` changes identity, and a
   // re-run tears the page down and replays the whole reveal cascade — so the
@@ -90,11 +94,7 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
       {/* KPI STRIP */}
       <div className="pmast" id="pMast"></div>
 
-      {/* TABS — and, at the row's right end, TYPE (2026-10-17; a dropdown since
-          2026-10-18): the families of work the book holds, each in its
-          estimating tool's colour, with counts. It narrows every tab, chip and
-          figure, so it sits on the tabs' row. Painted by proposals-behavior
-          renderKinds; hidden while the book holds one family. */}
+      {/* TABS */}
       <div className="ptabs" id="pTabs">
         <button className="ptab active" type="button" data-tab="all">
           All<span className="ptab-count" data-count="all">0</span>
@@ -105,46 +105,46 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
         <button className="ptab" type="button" data-tab="completed">
           Completed<span className="ptab-count" data-count="completed">0</span>
         </button>
-        <div className="dd pkdd" id="pKinds" hidden>
-          <button
-            className="dd-btn"
-            type="button"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-            aria-controls="pKindsMenu"
-          >
-            <span className="pkdd-key">Type</span>
-            <span className="pkdd-face"></span>
+      </div>
+
+      {/* FILTERS (owner, 2026-10-18; two designs on trial by ?v=, see
+          blueprint-shell/filter-bar.css): the status of the All tab's list,
+          then TYPE — the families of work the book holds, each with its
+          estimating tool's dot and a count. Type narrows every tab, chip and
+          figure, so the bar stays on every tab; the statuses only on All.
+          Type is painted by proposals-behavior renderKinds and hidden while
+          the book holds one family. */}
+      <div className="flt-bar" id="pFilters" data-fv={fv}>
+        <div className="flt-seg" id="pChips" role="group" aria-label="Status">
+          {(
+            [
+              ["ALL", "All"],
+              ["DRAFT", "Draft"],
+              ["SENT", "Sent"],
+              ["VIEWED", "Viewed"],
+              ["DECLINED", "Declined"],
+              ["EXPIRED", "Expired"],
+            ] as const
+          ).map(([f, label]) => (
+            <button key={f} className={`flt-seg-btn${f === "ALL" ? " active" : ""}`} type="button" data-f={f}>
+              {label} <span className="flt-n" data-cf={f}>0</span>
+            </button>
+          ))}
+        </div>
+        <div className="flt-drop" id="pKinds" hidden>
+          <button className="flt-drop-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="pKindsMenu">
+            <span className="flt-key">Type:</span>
+            <span className="flt-face"></span>
             <svg className="ic">
               <use href="#i-chev" />
             </svg>
           </button>
-          <div className="dd-menu" id="pKindsMenu" role="listbox" aria-label="Type of work"></div>
+          <div className="flt-menu" id="pKindsMenu" role="listbox" aria-label="Type of work"></div>
         </div>
       </div>
 
       {/* TAB: ALL */}
       <section className="ppanel" data-panel="all">
-        <div className="pchips" id="pChips">
-          <button className="pchip active" type="button" data-f="ALL">
-            All <b data-cf="ALL">0</b>
-          </button>
-          <button className="pchip" type="button" data-f="DRAFT">
-            Draft <b data-cf="DRAFT">0</b>
-          </button>
-          <button className="pchip" type="button" data-f="SENT">
-            Sent <b data-cf="SENT">0</b>
-          </button>
-          <button className="pchip" type="button" data-f="VIEWED">
-            Viewed <b data-cf="VIEWED">0</b>
-          </button>
-          <button className="pchip" type="button" data-f="DECLINED">
-            Declined <b data-cf="DECLINED">0</b>
-          </button>
-          <button className="pchip" type="button" data-f="EXPIRED">
-            Expired <b data-cf="EXPIRED">0</b>
-          </button>
-        </div>
         <div className="card card--table" id="allCard">
           <table className="ptable">
             <thead>

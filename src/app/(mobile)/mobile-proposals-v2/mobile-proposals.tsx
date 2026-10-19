@@ -51,7 +51,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Fragment } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useScrollFade } from "@/components/v3/mobile-shell/use-scroll-fade";
 import styles from "./mobile-proposals.module.css";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
 import { Who } from "@/components/v3/who/who";
@@ -345,18 +346,16 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   const [writing, setWriting] = useState(false);
   /** One-line report for a write that succeeded or refused. */
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "live"; text: string } | null>(null);
-  const [filterOpen, setFilterOpen] = useState(false);
-  /* The filter menu's placement AND the outside-tap closer share one node.
-     `useAnchoredMenu` caps the panel at the room actually left under the trigger
-     and flips it above when there is more room there — without it the menu hung
-     off the bottom edge of the phone whenever the ledger was short, and an
-     absolutely positioned box does not lengthen the scroller it overflows, so
-     the lower half was unreachable rather than merely below the fold. */
-  const filterRef = useRef<HTMLDivElement>(null);
-  const filterMenuRef = useRef<HTMLDivElement>(null);
-  useMenuPlacement(filterOpen, filterRef, filterMenuRef);
-  /* The Type menu (2026-10-18): the same .dd, on the filter row beside Status. */
+  /** Which filter design is on trial (owner, 2026-10-18): ?v=2 underlined tabs, else the segmented control. */
+  const fv = useSearchParams().get("v") === "2" ? "2" : "1";
+  /* The Type menu on the filter bar (owner, 2026-10-18). Its placement AND the
+     outside-tap closer share one node: useMenuPlacement caps the panel at the
+     room actually left under the trigger and flips it above when there is more
+     room there — an absolutely positioned box does not lengthen the scroller it
+     overflows, so a menu hanging off the bottom edge would be unreachable. */
   const [typeOpen, setTypeOpen] = useState(false);
+  /** The filter row slides sideways when it does not fit; this fades the side that holds more. */
+  const segFade = useScrollFade<HTMLDivElement>();
   const typeRef = useRef<HTMLDivElement>(null);
   const typeMenuRef = useRef<HTMLDivElement>(null);
   useMenuPlacement(typeOpen, typeRef, typeMenuRef);
@@ -389,22 +388,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
     return () => window.clearTimeout(id);
   }, [note]);
 
-  /* ---------- filter dropdown: close on outside tap / Esc ------------- */
-  useEffect(() => {
-    if (!filterOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (!filterRef.current?.contains(e.target as Node)) setFilterOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFilterOpen(false);
-    };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [filterOpen]);
+  /* ---------- Type menu: close on outside tap / Esc ------------------ */
   useEffect(() => {
     if (!typeOpen) return;
     const onDown = (e: PointerEvent) => {
@@ -586,7 +570,6 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
     });
     return out;
   }, [book]);
-  const activeFilterLabel = FILTERS.find((f) => f.key === filter)?.label ?? "All";
 
   /* ---------- masthead: one numeral, mono kicker, TWO annotations ----- */
   const mast = useMemo(() => {
@@ -996,61 +979,44 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             ))}
           </div>
 
-          {/* FILTERS (2026-10-18) — one row under the tabs: Status (the All tab's
-              stages) and Type (deck · roof · fence · HVAC · remodel · other, each
-              in its estimating tool's colour), two .dd faces side by side whose
-              menus open across the whole row. Type narrows every tab, so on
-              Accepted and Completed it holds the row alone. */}
+          {/* FILTERS (owner, 2026-10-18; two designs on trial by ?v=): one row
+              under the tabs — the All list's statuses (a segmented control, or
+              underlined tabs on ?v=2), sliding sideways when they do not fit,
+              never clipped; then TYPE (deck · roof · fence · HVAC · remodel ·
+              other, each with its tool's flat dot), whose menu opens across the
+              whole row. Type narrows every tab, so it stays on all three. */}
           {tab === "all" || kindChips.length > 1 ? (
-            <div className={`${styles.fbar} ${tab === "all" && kindChips.length > 1 ? styles.fbarDuo : ""}`}>
+            <div className={styles.fbar} data-fv={fv}>
               {tab === "all" ? (
-                <div className={`${styles.dd} ${filterOpen ? styles.open : ""}`} ref={filterRef}>
-                  <button className={`${styles.ddBtn} ${styles.ddDuo}`} type="button" aria-haspopup="listbox"
-                    aria-expanded={filterOpen} onClick={() => { setTypeOpen(false); setFilterOpen((v) => !v); }}>
-                    <span className={styles.ddTxt}>
-                      <span className={styles.ddKey}>Status</span>
-                      <span className={styles.ddValue} data-f={filter}>
-                        {activeFilterLabel} · {chipCounts[filter] ?? 0}
-                      </span>
-                    </span>
-                    <Icon id="i-chev" className={`${styles.ic} ${styles.ddCaret}`} />
-                  </button>
-                  <div className={styles.ddMenu} role="listbox" aria-label="Status" ref={filterMenuRef}>
-                    {FILTERS.map((f) => (
-                      <button key={f.key} className={`${styles.ddItem} ${filter === f.key ? styles.active : ""}`}
-                        type="button" role="option" aria-selected={filter === f.key}
-                        onClick={() => { setFilter(f.key); setPageAll(1); setFilterOpen(false); }}>
-                        {f.label}
-                        <span className={styles.ddCount}>{chipCounts[f.key] ?? 0}</span>
-                        {filter === f.key ? <Icon id="i-check" /> : null}
-                      </button>
-                    ))}
-                  </div>
+                <div className={styles.fseg} ref={segFade} role="group" aria-label="Status">
+                  {FILTERS.map((f) => (
+                    <button key={f.key} type="button" className={`${styles.fsegBtn} ${filter === f.key ? styles.on : ""}`}
+                      aria-pressed={filter === f.key} onClick={() => { setFilter(f.key); setPageAll(1); }}>
+                      {f.label}
+                      <span className={styles.fsegN}>{chipCounts[f.key] ?? 0}</span>
+                    </button>
+                  ))}
                 </div>
               ) : null}
               {kindChips.length > 1 ? (
-                <div className={`${styles.dd} ${typeOpen ? styles.open : ""}`} ref={typeRef}>
-                  <button className={`${styles.ddBtn} ${styles.ddDuo}`} type="button" aria-haspopup="listbox"
-                    aria-expanded={typeOpen} onClick={() => { setFilterOpen(false); setTypeOpen((v) => !v); }}>
-                    <span className={styles.ddTxt}>
-                      <span className={styles.ddKey}>Type</span>
-                      <span className={`${styles.ddValue} ${styles.ddFam}`} data-set={kindNow !== "ALL" ? "" : undefined}>
-                        {kindNow !== "ALL" ? <i className={styles.pkSq} data-fam={kindNow} aria-hidden="true" /> : null}
-                        {kindNow === "ALL" ? "All types" : kindChips.find((f) => f.key === kindNow)?.label} · {kindNow === "ALL" ? data.length : kindChips.find((f) => f.key === kindNow)?.count ?? 0}
-                      </span>
-                    </span>
-                    <Icon id="i-chev" className={`${styles.ic} ${styles.ddCaret}`} />
+                <div className={`${styles.fdrop} ${typeOpen ? styles.open : ""} ${kindNow !== "ALL" ? styles.isSet : ""}`} ref={typeRef}>
+                  <button className={styles.fdropBtn} type="button" aria-haspopup="listbox"
+                    aria-expanded={typeOpen} onClick={() => setTypeOpen((v) => !v)}>
+                    {kindNow === "ALL" ? (
+                      <><span className={styles.fdropKey}>Type:</span> All</>
+                    ) : (
+                      <><i className={styles.fdot} data-fam={kindNow} aria-hidden="true" />{kindChips.find((f) => f.key === kindNow)?.label}</>
+                    )}
+                    <Icon id="i-chev" className={`${styles.ic} ${styles.fdropCaret}`} />
                   </button>
-                  <div className={styles.ddMenu} role="listbox" aria-label="Type of work" ref={typeMenuRef}>
+                  <div className={styles.fmenu} role="listbox" aria-label="Type of work" ref={typeMenuRef}>
                     {[{ key: "ALL" as const, label: "All types", count: data.length }, ...kindChips].map((f) => (
-                      <button key={f.key} className={`${styles.ddItem} ${kindNow === f.key ? styles.active : ""}`}
+                      <button key={f.key} className={`${styles.fitem} ${kindNow === f.key ? styles.on : ""}`}
                         type="button" role="option" aria-selected={kindNow === f.key}
                         onClick={() => { pickKind(f.key); setTypeOpen(false); }}>
-                        <span className={styles.ddFam}>
-                          {f.key !== "ALL" ? <i className={styles.pkSq} data-fam={f.key} aria-hidden="true" /> : null}
-                          {f.label}
-                        </span>
-                        <span className={styles.ddCount}>{f.count}</span>
+                        <i className={styles.fdot} data-fam={f.key === "ALL" ? undefined : f.key} aria-hidden="true" />
+                        {f.label}
+                        <span className={styles.fsegN}>{f.count}</span>
                         {kindNow === f.key ? <Icon id="i-check" /> : null}
                       </button>
                     ))}

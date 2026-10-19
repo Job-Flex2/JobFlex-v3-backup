@@ -1,0 +1,137 @@
+/* FILTER BAR (owner, 2026-10-18) — the desk's filters for Leads (where the
+   leads came from + source) and Proposals (status + type), in two variants the
+   owner is choosing between, read from ?v= by the page (data-fv on the bar):
+
+     1  segmented control — one light plate, the segments inside, the picked
+        one white with a thin frame; Type / Source a separate button in the
+        same plate style, next to it.
+     2  underlined tabs — plain text tabs on one hairline, the picked one ink
+        with a 2px blueprint rule under it; Type / Source text dropdowns at the
+        row's right end.
+
+   Both: the page's own type (Inter, 13.5–14px, 500–600, never mono caps), the
+   count a grey number beside its label, colour only as a flat 8px dot — no
+   shadow, no offset, no heavy ink frame anywhere (DESIGN.md, owner 2026-10-18).
+
+   Plain stylesheet scoped `.jf-blueprint .content` (3 classes), imported by
+   both pages: it outweighs the shell's (0,1,0) reset and its button reset in
+   any production CSS order, and proposals.module (on every page's root) has
+   no rule of these names. */
+
+.jf-blueprint .content .flt-bar {
+  --flt-plate: color-mix(in srgb, var(--ink) 6%, transparent);
+  --flt-plate-hover: color-mix(in srgb, var(--ink) 10%, transparent);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+  margin: 0 0 16px;
+}
+.jf-blueprint .content .flt-bar[hidden],
+.jf-blueprint .content .flt-drop[hidden],
+.jf-blueprint .content .flt-seg[hidden],
+.jf-blueprint .content .flt-seg.is-hidden { display: none; }
+.jf-blueprint .content .flt-note { margin: -6px 0 14px; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+.jf-blueprint .content .flt-note:empty { display: none; }
+.jf-blueprint .content .flt-note b { color: var(--ink); font-weight: 600; }
+
+/* ── the segments / tabs ── */
+.jf-blueprint .content .flt-seg {
+  display: inline-flex; align-items: center; min-width: 0; max-width: 100%;
+  overflow-x: auto; scrollbar-width: none;
+}
+.jf-blueprint .content .flt-seg::-webkit-scrollbar { display: none; }
+.jf-blueprint .content .flt-seg-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  font-family: var(--font-sans); font-size: 13.5px; font-weight: 500; line-height: 1;
+  letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: var(--ink-muted);
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.jf-blueprint .content .flt-seg-btn:hover { color: var(--ink); }
+.jf-blueprint .content .flt-seg-btn.active { color: var(--ink); font-weight: 600; }
+.jf-blueprint .content .flt-n { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-faint); }
+.jf-blueprint .content .flt-seg-btn:focus-visible,
+.jf-blueprint .content .flt-drop-btn:focus-visible,
+.jf-blueprint .content .flt-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── the dropdown (Type / Source) ── */
+.jf-blueprint .content .flt-drop { position: relative; display: flex; flex: none; }
+.jf-blueprint .content .flt-drop-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-sans); font-size: 13.5px; font-weight: 500; line-height: 1;
+  letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: var(--ink);
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.jf-blueprint .content .flt-key { color: var(--ink-muted); }
+.jf-blueprint .content .flt-face { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.jf-blueprint .content .flt-drop-btn .ic { width: 14px; height: 14px; color: var(--ink-faint); transition: transform 0.18s var(--ease-out); }
+.jf-blueprint .content .flt-drop.open .flt-drop-btn .ic { transform: rotate(180deg); }
+.jf-blueprint .content .flt-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  min-width: max(100%, 220px); max-height: 340px; overflow-y: auto;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: var(--radius);
+  visibility: hidden; opacity: 0; transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s var(--ease-out), visibility 0.16s;
+}
+.jf-blueprint .content .flt-drop.open .flt-menu { visibility: visible; opacity: 1; transform: none; }
+.jf-blueprint .content .flt-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 34px; padding: 0 10px;
+  border-radius: var(--radius);
+  font-family: var(--font-sans); font-size: 13.5px; font-weight: 500;
+  letter-spacing: 0; text-transform: none; text-align: left; white-space: nowrap;
+  color: var(--ink-soft);
+  transition: background 0.12s, color 0.12s;
+}
+.jf-blueprint .content .flt-item:hover { background: var(--flt-plate); color: var(--ink); }
+.jf-blueprint .content .flt-item.active { color: var(--accent); font-weight: 600; }
+.jf-blueprint .content .flt-item .flt-n { margin-left: auto; padding-left: 16px; }
+.jf-blueprint .content .flt-item.active .flt-n { color: var(--accent); }
+/* The colour of a source or a type: a flat dot, nothing behind it. */
+.jf-blueprint .content .flt-dot { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dot, var(--fam, var(--ink-faint))); }
+.jf-blueprint .content .flt-dot--none { background: transparent; }
+
+/* ── v1: segmented control ── */
+.jf-blueprint .content .flt-bar[data-fv="1"] .flt-seg {
+  gap: 2px; padding: 3px;
+  background: var(--flt-plate);
+  border-radius: var(--radius);
+}
+.jf-blueprint .content .flt-bar[data-fv="1"] .flt-seg-btn {
+  height: 30px; padding: 0 12px;
+  border: 1px solid transparent; border-radius: var(--radius);
+}
+.jf-blueprint .content .flt-bar[data-fv="1"] .flt-seg-btn.active { background: #fff; border-color: var(--ink-line); }
+.jf-blueprint .content .flt-bar[data-fv="1"] .flt-drop-btn {
+  height: 36px; padding: 0 12px;
+  border: 1px solid transparent; border-radius: var(--radius);
+  background: var(--flt-plate);
+}
+.jf-blueprint .content .flt-bar[data-fv="1"] .flt-drop-btn:hover { background: var(--flt-plate-hover); }
+.jf-blueprint .content .flt-bar[data-fv="1"] .flt-drop.is-set .flt-drop-btn,
+.jf-blueprint .content .flt-bar[data-fv="1"] .flt-drop.open .flt-drop-btn { background: #fff; border-color: var(--ink-line); }
+
+/* ── v2: underlined tabs ── */
+.jf-blueprint .content .flt-bar[data-fv="2"] { gap: 8px 24px; border-bottom: 1px solid var(--ink-line); }
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-seg { gap: 22px; align-self: stretch; }
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-seg-btn {
+  height: 40px; padding: 0 1px;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+}
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-seg-btn.active { border-bottom-color: var(--accent); }
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-seg + .flt-drop { margin-left: auto; }
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-drop-btn { height: 32px; padding: 0 8px; border-radius: var(--radius); }
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-drop-btn:hover,
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-drop.open .flt-drop-btn { background: var(--flt-plate); }
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-drop.is-set .flt-face { color: var(--accent); }
+.jf-blueprint .content .flt-bar[data-fv="2"] .flt-menu { left: auto; right: 0; }
+.jf-blueprint .content .flt-bar[data-fv="2"] + .flt-note { margin-top: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jf-blueprint .content .flt-seg-btn, .jf-blueprint .content .flt-drop-btn,
+  .jf-blueprint .content .flt-menu, .jf-blueprint .content .flt-item,
+  .jf-blueprint .content .flt-drop-btn .ic { transition: none; }
+}

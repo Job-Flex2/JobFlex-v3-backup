@@ -377,8 +377,8 @@ export function initProposalsContent(
       '<span class="pkind-tool" data-tool="' + esc(k.tool) + '">' + esc(tool) + "</span></div>"
     );
   }
-  /** The Type dropdown on the tabs' row (2026-10-18; a chip bar before): All types + each family the
-   *  book holds, each with its tool-colour square and count — drawn only when there is a choice. */
+  /** The Type dropdown on the filter bar (owner, 2026-10-18): All types + each family the book holds,
+   *  each with its tool-colour dot and count — drawn only when there is a choice. */
   function renderKinds() {
     const dd = $("#pKinds");
     if (!dd) return;
@@ -394,17 +394,20 @@ export function initProposalsContent(
     dd.hidden = false;
     const all = { key: "ALL", label: "All types", count: proposalsData.length };
     const now = pstate.kind === "ALL" ? all : fams.find((f) => f.key === pstate.kind) ?? all;
-    const sq = (key: string) => (key === "ALL" ? "" : '<i class="pkind-sq" data-fam="' + key + '" aria-hidden="true"></i>');
-    const face = dd.querySelector<HTMLElement>(".pkdd-face");
-    if (face) face.innerHTML = sq(now.key) + '<span class="dd-label">' + esc(now.label) + '</span><span class="dd-n">' + now.count + "</span>";
+    const dot = (key: string) =>
+      key === "ALL" ? '<i class="flt-dot flt-dot--none" aria-hidden="true"></i>' : '<i class="flt-dot" data-fam="' + key + '" aria-hidden="true"></i>';
+    const face = dd.querySelector<HTMLElement>(".flt-face");
+    if (face)
+      face.innerHTML =
+        (now.key === "ALL" ? "All" : dot(now.key) + esc(now.label)) + ' <span class="flt-n">' + now.count + "</span>";
     dd.classList.toggle("is-set", pstate.kind !== "ALL");
     if (menu) {
       menu.innerHTML = [all, ...fams]
         .map((f) => {
           const sel = pstate.kind === f.key;
           return (
-            '<button class="dd-item' + (sel ? " active" : "") + '" type="button" role="option" aria-selected="' + sel + '" data-k="' + f.key + '">' +
-            sq(f.key) + '<span class="dd-item-lbl">' + esc(f.label) + '</span><span class="dd-item-n">' + f.count + "</span></button>"
+            '<button class="flt-item' + (sel ? " active" : "") + '" type="button" role="option" aria-selected="' + sel + '" data-k="' + f.key + '">' +
+            dot(f.key) + esc(f.label) + '<span class="flt-n">' + f.count + "</span></button>"
           );
         })
         .join("");
@@ -414,7 +417,7 @@ export function initProposalsContent(
     const dd = $("#pKinds");
     if (!dd) return;
     dd.classList.toggle("open", open);
-    dd.querySelector(".dd-btn")?.setAttribute("aria-expanded", String(open));
+    dd.querySelector(".flt-drop-btn")?.setAttribute("aria-expanded", String(open));
   }
   function filteredAll() {
     const base = book();
@@ -1511,6 +1514,8 @@ export function initProposalsContent(
     pstate.tab = btn.dataset.tab || "all";
     root.querySelectorAll<HTMLElement>("#pTabs .ptab").forEach((t) => t.classList.toggle("active", t === btn));
     $$(".ppanel").forEach((pn) => pn.classList.toggle("is-hidden", pn.dataset.panel !== pstate.tab));
+    // The statuses belong to the All list; Type stays on the bar for every tab.
+    $("#pChips")?.classList.toggle("is-hidden", pstate.tab !== "all");
     renderKpis();
     // A panel's rows arrive the first time it is actually on screen. Playing
     // the cascade earlier — while the panel is display:none — would leave every
@@ -1524,14 +1529,14 @@ export function initProposalsContent(
   });
   $("#pKinds")?.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
-    if (target.closest(".dd-btn")) {
+    if (target.closest(".flt-drop-btn")) {
       setKindsOpen(!$("#pKinds")?.classList.contains("open"));
       return;
     }
     const item = target.closest<HTMLElement>("[data-k]");
     if (!item) return;
     setKindsOpen(false);
-    $<HTMLButtonElement>("#pKinds .dd-btn")?.focus();
+    $<HTMLButtonElement>("#pKinds .flt-drop-btn")?.focus();
     const k = (item.dataset.k || "ALL") as "ALL" | WorkFamily;
     if (k === pstate.kind) return;
     pstate.kind = k;
@@ -1550,14 +1555,14 @@ export function initProposalsContent(
     const dd = $("#pKinds");
     if ((e as KeyboardEvent).key !== "Escape" || !dd?.classList.contains("open")) return;
     setKindsOpen(false);
-    dd.querySelector<HTMLButtonElement>(".dd-btn")?.focus();
+    dd.querySelector<HTMLButtonElement>(".flt-drop-btn")?.focus();
   });
   $("#pChips")?.addEventListener("click", (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLElement>(".pchip");
+    const chip = (e.target as HTMLElement).closest<HTMLElement>("[data-f]");
     if (!chip) return;
     pstate.filter = chip.dataset.f || "ALL";
     pstate.pageAll = 1;
-    root.querySelectorAll<HTMLElement>("#pChips .pchip").forEach((c) => c.classList.toggle("active", c === chip));
+    root.querySelectorAll<HTMLElement>("#pChips [data-f]").forEach((c) => c.classList.toggle("active", c === chip));
     // A filter toggle is NOT a list arriving — it repaints silently.
     renderAll();
   });

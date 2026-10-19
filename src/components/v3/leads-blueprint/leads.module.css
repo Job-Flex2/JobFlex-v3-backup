@@ -716,31 +716,19 @@
    ============================================================ */
 .bp :global(.content .is-hidden) { display: none !important; }
 
-/* ── WHERE THE LEADS CAME FROM (2026-10-16; Blueprint chips 2026-10-18) ──
-   The switch (All / From JobFlex / Your own leads) is the house filter chip
-   row — the same .pchip as Proposals' status row (below), blue when picked —
-   and under it the shop's own leads by source, the same chips with the
-   source's square. The row's source tag is a quiet near-square stamp:
-   JobFlex's in the blueprint tone, the shop's own in ink with its square. */
-.bp :global(.content .lorigin) { display: grid; gap: 10px; margin: 0 0 14px; }
-.bp :global(.content .lorigin .pchips) { margin: 0; }
-.bp :global(.content .lsrcs) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 28px; }
-.bp :global(.content .lsrcs-lbl) {
-  margin-right: 2px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
-  letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
-}
-.bp :global(.content .lsrcs-note) { font-size: 12.5px; color: var(--muted); }
-.bp :global(.content .lsrcs-note b) { color: var(--ink); }
-.bp :global(.content .lsrc-chip i),
-.bp :global(.content .lsrc-b i) { width: 8px; height: 8px; border-radius: 1px; background: var(--t, var(--muted)); flex: 0 0 auto; }
+/* ── WHERE THE LEADS CAME FROM (2026-10-16) ───────────────────
+   The filter bar itself is blueprint-shell/filter-bar.css (owner,
+   2026-10-18). The row's source tag speaks the same language: a flat
+   8px dot in the source's colour and its name in plain text — JobFlex's
+   dot and name in the blueprint tone. Nothing behind the dot. */
 .bp :global(.content .lsrc-b) {
-  display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 6px;
-  border: 1px solid var(--hair-soft); border-radius: var(--radius); background: #fff;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700; line-height: 1.2;
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
-  vertical-align: 1px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;
+  font-size: 12.5px; font-weight: 500; line-height: 1.2; letter-spacing: 0; text-transform: none;
+  color: var(--ink-muted); vertical-align: 0; white-space: nowrap;
 }
-.bp :global(.content .lsrc-b--jobflex) { border-color: var(--blueprint); background: var(--accent-soft); color: var(--blueprint); font-weight: 800; }
+.bp :global(.content .lsrc-b i) { width: 8px; height: 8px; border-radius: 50%; background: var(--t, var(--ink-faint)); flex: 0 0 auto; }
+.bp :global(.content .lsrc-b--jobflex) { color: var(--accent); font-weight: 600; }
+.bp :global(.content .lsrc-b--jobflex i) { background: var(--accent); }
 .bp :global(.content .fld-note) { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 
 .bp :global(.content .ptabs) { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
@@ -1848,9 +1836,3 @@
 .bp :global(.content .cname a.pt-link:focus-visible) { color: var(--blueprint); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
 .bp :global(.content .cname a.pt-link:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
 .bp :global(.content .ptable tbody tr.prow--link td.num) { white-space: nowrap; }
-
-/* The origin chips on narrow widths: one row, three equal parts. */
-@media (max-width: 860px) {
-  .bp :global(.content .lorigin .lseg) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .bp :global(.content .lorigin .lseg .pchip) { justify-content: center; min-height: 44px; padding: 0 6px; letter-spacing: 0.03em; }
-}
