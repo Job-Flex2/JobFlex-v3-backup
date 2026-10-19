@@ -82,6 +82,7 @@ export async function saveVisitReportForm(fd: FormData): Promise<void> {
   if (fd.get("then") === "send") {
     await sendVisitReport(appointmentId, organizationId, user.id);
     revalidatePath("/dashboard/service-plans");
+    revalidatePath("/dashboard/hvac-estimator/service-desk");
     revalidatePath("/dashboard/calendar");
   }
 }

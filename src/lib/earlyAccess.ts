@@ -13,8 +13,9 @@
 /** Accounts that see every early-access page. Lower case. */
 const EARLY_ACCESS_EMAILS: ReadonlySet<string> = new Set(["phillippapetenok@gmail.com"]);
 
-/** Dashboard pages still behind early access. Prefix-matched (sub-routes too). */
-export const EARLY_ACCESS_HREFS: readonly string[] = ["/dashboard/booking", "/dashboard/service-plans"];
+/** Dashboard pages still behind early access. Prefix-matched (sub-routes too).
+ *  Service plans left the list on 2026-10-18 as the HVAC services desk (owner: "for everybody"). */
+export const EARLY_ACCESS_HREFS: readonly string[] = ["/dashboard/booking"];
 
 export function canSeeEarlyAccess(email: string | null | undefined): boolean {
   return !!email && EARLY_ACCESS_EMAILS.has(email.trim().toLowerCase());

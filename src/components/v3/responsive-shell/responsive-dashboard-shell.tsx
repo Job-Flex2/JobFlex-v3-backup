@@ -304,6 +304,8 @@ const BLUEPRINT_HANDHELD = new Set([
   "/dashboard/roof-estimator/inventory",
   "/dashboard/fence-estimator/inventory",
   "/dashboard/hvac-estimator/inventory",
+  // HVAC services (2026-10-18): the service desk is one responsive page — tabs, then single-column cards.
+  "/dashboard/hvac-estimator/service-desk",
   // The three estimators (2026-10-02). Their pages already carry ≤860px
   // rules and read fine on a phone; what a phone was getting around them was
   // the DESK chrome — the sidebar's topbar with its search box clipped to
