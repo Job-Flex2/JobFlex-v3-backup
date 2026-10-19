@@ -716,10 +716,11 @@
    the card in the card … a good line with the title showing this is a different section"). Its parts are not cards of
    their own: each section opens with a full rule and its title, so nothing is framed inside the frame. */
 .jf-texting .txp-stepB {
+  --txp-pad: 22px;
   display: grid;
   gap: 16px;
   min-width: 0;
-  padding: 22px 22px 26px;
+  padding: 22px var(--txp-pad) 26px;
 }
 .jf-texting .txp-stepB[hidden] {
   display: none;
@@ -735,12 +736,46 @@
   background: transparent;
   padding-inline: 0;
 }
+/* The rule runs wall to wall of the card (owner, 2026-10-19: "connected to the walls, thicker"): the section reaches
+   out through the card's padding and pads itself back. */
 .jf-texting .txp-stepB > .jf-tx > :is(.tk-group, .tk-more, .tk-done, .tk-ideas, .tk-plate, .tk-form, .tk-ruleList, .tk-editor) {
-  padding-top: 18px;
-  border-top: 1.5px solid var(--ink);
+  margin-inline: calc(-1 * var(--txp-pad));
+  padding: 20px var(--txp-pad) 0;
+  border-top: 2px solid var(--ink);
 }
 .jf-texting .txp-stepB > .jf-tx > .tk-done {
   padding-bottom: 0;
+}
+/* A section's head: the title bigger, its line under it (not beside), and room before the people (owner, 2026-10-19). */
+.jf-texting .txp-stepB .tk-group {
+  gap: 18px;
+}
+.jf-texting .txp-stepB .tk-groupH {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+.jf-texting .txp-stepB .tk-groupH > h3,
+.jf-texting .txp-stepB .tk-group.is-empty > h3 {
+  font-size: 17px;
+  letter-spacing: 0.08em;
+}
+.jf-texting .txp-stepB .tk-groupH > .tk-count {
+  grid-column: 2;
+  grid-row: 1;
+}
+.jf-texting .txp-stepB .tk-groupH > p {
+  grid-column: 1 / -1;
+  flex: none;
+  font-size: 15px;
+}
+.jf-texting .txp-stepB .tk-group.is-empty {
+  display: grid;
+  gap: 6px;
+}
+.jf-texting .txp-stepB .tk-group.is-empty > p {
+  font-size: 15px;
 }
 /* a person is a row of the section: rules between them, no frame around them */
 .jf-texting .txp-stepB .tk-person {
@@ -802,7 +837,8 @@
     display: none;
   }
   .jf-texting .txp-stepB {
-    padding: 18px 14px 20px;
+    --txp-pad: 14px;
+    padding: 18px var(--txp-pad) 20px;
   }
   .jf-texting .txp-setupH {
     padding: 0 0 12px;
