@@ -40,44 +40,6 @@ const DATA_Q: Record<"roofing" | "fencing" | "hvac" | "other", Faq> = {
   },
 };
 
-/* HVAC v2 (?industry=hvac2, 2026-10-19, the conversion audit): its own six,
-   the questions a contractor asks before trusting an estimate made from an
-   address, answered by what the code does (src/actions/hvacEstimator,
-   src/lib/hvac) and by the billing rules in force — the card the trial
-   needs, the plan it turns into (hvac2-terms), cancelling from Settings →
-   Billing. */
-type Hvac2Plan = { name: string; amount: string } | null | undefined;
-function hvac2Questions(requiresCard: boolean, days: number, terms: string | undefined, plan: Hvac2Plan): Faq[] {
-  const named = plan ? `${plan.name} at ${plan.amount}` : "your selected plan";
-  return [
-    {
-      q: "Where does the property data come from?",
-      a: "From the public record for the address: the county parcel record (living area, year built, storeys), the building footprint the pin sits in, the ground elevation from USGS 3DEP and the county's ASHRAE design temperatures. Every figure is labelled with its source, and what no record holds starts at the house era's default until you type over it.",
-    },
-    {
-      q: "Can I change the inputs if the data is wrong?",
-      a: "Yes. Every field the load uses — conditioned area, storeys, windows, insulation, ducts, the equipment there now, and the state and county that set the design day — can be typed over before the load runs. What you type is marked as yours, and the load, the sizing and the price re-run as you type.",
-    },
-    requiresCard
-      ? { q: "Do I need a card for the trial?", a: `Yes. A card is required to start the ${days}-day free trial, and nothing is charged today. When the trial ends the plan starts — ${named} — unless you cancel before then from Settings → Billing.` }
-      : { q: "Do I need a card for the trial?", a: `No. Confirm your email to start the ${days}-day free trial. Add a card before it ends to keep the plan; without one your account moves to the free plan, your work stays and nothing is charged.` },
-    {
-      q: `What happens after ${days} days?`,
-      a: requiresCard
-        ? `${terms ? `${terms} ` : ""}On day ${days + 1} ${named} starts, at the price and billing interval shown in checkout. Cancel anytime from Settings → Billing: you keep the plan to the end of the period you've paid for, then your account moves to the free plan — no more charges, and your work stays.`
-        : "With a card added, the plan starts billing at the disclosed price when the trial ends. Without a card, nothing is charged: your account moves to the free plan and your work stays.",
-    },
-    {
-      q: "Does it work on my phone?",
-      a: "Yes. The estimator, the proposal and the rest of the app run in the phone's browser — nothing to install. Look up the address, photograph the nameplates and send the proposal from the driveway.",
-    },
-    {
-      q: "How long does it take to learn?",
-      a: "Most shops send their first proposal the same day. Type the address, check what the record found, and the estimate writes itself.",
-    },
-  ];
-}
-
 /* The card question, by signupTrialMode (lib/trialPolicyServer). */
 const cardQuestions = (days: number): Record<"card" | "cardless", Faq> => ({
   card: {
@@ -90,9 +52,9 @@ const cardQuestions = (days: number): Record<"card" | "cardless", Faq> => ({
   },
 });
 
-function questions(variant: LandingVariantKey | undefined, requiresCard: boolean, days: number, terms?: string, plan?: Hvac2Plan): Faq[] {
-  if (variant === "hvac2") return hvac2Questions(requiresCard, days, terms, plan);
+function questions(variant: LandingVariantKey | undefined, requiresCard: boolean, days: number): Faq[] {
   const CARD_Q = cardQuestions(days);
+  // A version of a trade's page (hvac2) asks its trade's questions.
   const trade = baseVariant(variant);
   const data = trade === "roofing" || trade === "fencing" || trade === "hvac" ? DATA_Q[trade] : DATA_Q.other;
   return [
@@ -117,9 +79,9 @@ function questions(variant: LandingVariantKey | undefined, requiresCard: boolean
   ];
 }
 
-export function LandingFaq({ variant, registerHref = "/auth/register", cta = "Start my free trial", requiresCard = true, trialTerms, trialPlan }: { variant?: LandingVariantKey; registerHref?: string; cta?: string; requiresCard?: boolean; /** hvac2: the hero's terms line, opening the trial's answer. */ trialTerms?: string; /** hvac2: the plan the trial turns into (hvac2-terms). */ trialPlan?: Hvac2Plan }) {
+export function LandingFaq({ variant, registerHref = "/auth/register", cta = "Start my free trial", requiresCard = true }: { variant?: LandingVariantKey; registerHref?: string; cta?: string; requiresCard?: boolean }) {
   const { days } = useTrialOffer();
-  const items = questions(variant, requiresCard, days, trialTerms, trialPlan);
+  const items = questions(variant, requiresCard, days);
   /* Opened by a click, a tap, Enter or Space; each card on its own. Hover and
      keyboard focus only SHOW the answer (CSS); this set is what aria-expanded
      reports and what keeps an answer up on a touch screen. */

@@ -74,13 +74,8 @@ const Integrations = dynamic(() => import("./integrations").then((m) => m.Integr
 const StatsSection = dynamic(() => import("./stats-section").then((m) => m.StatsSection));
 const BuiltSection = dynamic(() => import("./built-section").then((m) => m.BuiltSection));
 const ScrollFx = dynamic(() => import("./scroll-fx").then((m) => m.ScrollFx));
-// HVAC v2's own sections (?industry=hvac2, 2026-10-19 — hvac2/).
-import { Hvac2Hero } from "./hvac2/hvac2-hero";
-import { Hvac2Skeptic } from "./hvac2/hvac2-skeptic";
-import { Hvac2Sample } from "./hvac2/hvac2-sample";
+// HVAC v2's terms under its one hero button (?industry=hvac2, 2026-10-19).
 import { hvac2TrialTerms } from "./hvac2/hvac2-terms";
-import { HVAC2_DEMO_VIDEO } from "./hvac2/demo-media";
-const Hvac2Try = dynamic(() => import("./hvac2/hvac2-try").then((m) => m.Hvac2Try));
 import {
   baseVariant,
   hookContent,
@@ -194,21 +189,15 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // rendered as it always was; a landing that moves it down the page gives
   // it a content-visibility box like every other section under the fold.
   const order = landingSectionOrder(variant);
-  // HVAC v2: one button on the whole page and the trial's terms under it
-  // (hvac2-terms, from the catalogue) — the hero's, the sample's, the close's
-  // and the sticky bar's. Its sections are its own (hvac2/); the order and the
-  // sections it leaves out are lib/landing-sections'.
-  const hvac2 = variant === "hvac2";
-  const hvac2Cta = `Start My ${offer.days}-Day Free Trial`;
-  const hvac2Deal = hvac2 ? await hvac2TrialTerms(plans, requiresCard) : null;
-  const hvac2Terms = hvac2Deal?.lines ?? null;
+  // HVAC v2 (singleCta): one trial button in the hero with the trial's terms
+  // under it in place of the line under the pair, and the same words on the
+  // final block's and the sticky bar's buttons. Everything else is HVAC's.
+  const single = !!v.singleCta;
+  const singleCta = `Start My ${offer.days}-Day Free Trial`;
+  const terms = single ? await hvac2TrialTerms(plans, requiresCard) : null;
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
-    hero: hvac2 && hvac2Terms ? <Hvac2Hero variant={v} registerHref={register} trialCta={hvac2Cta} terms={hvac2Terms} hook={hook} /> : <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} />,
-    skeptic: hvac2 ? <div className="lp-cv lp-cv--skeptic"><Hvac2Skeptic /></div> : null,
-    sample: hvac2 && hvac2Terms ? <div className="lp-cv lp-cv--sample"><Hvac2Sample registerHref={register} trialCta={hvac2Cta} terms={hvac2Terms} hook={hook} /></div> : null,
-    // The estimator to try — while the hero plays the film; while the hero is the estimator itself, it is not repeated.
-    try: hvac2 && HVAC2_DEMO_VIDEO.READY ? <div className="lp-cv lp-cv--try"><Hvac2Try /></div> : null,
+    hero: single ? <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={singleCta} fbclid={fbclid} inAppBrowser={inAppBrowser} terms={terms} hook={hook} /> : <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
@@ -230,8 +219,8 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     stats: <div className="lp-cv lp-cv--stats"><StatsSection rows={g?.stats} /></div>,
     built: <div className="lp-cv lp-cv--built"><BuiltSection jobs={g?.jobs} phoneJobs={g?.phoneJobs} /></div>,
     pricing: <div className="lp-cv lp-cv--pricing"><LandingPricing plans={plans} registerHref={register} cta={low} customOffered={customPlanOffered()} spotlight={spotlight} /></div>,
-    faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={faqCta} requiresCard={requiresCard} {...(hvac2Deal ? { trialTerms: hvac2Deal.lines[0], trialPlan: hvac2Deal.plan } : {})} /></div>,
-    final: hvac2 && hvac2Terms ? <CtaFooter registerHref={register} cta={hvac2Cta} terms={hvac2Terms} /> : <CtaFooter registerHref={register} cta={low} />,
+    faq: <div className="lp-cv lp-cv--faq"><LandingFaq variant={variant} registerHref={register} cta={faqCta} requiresCard={requiresCard} /></div>,
+    final: <CtaFooter registerHref={register} cta={single ? singleCta : low} />,
   };
   return (
     <TrialOfferProvider offer={offer}>
@@ -242,7 +231,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
       <main>
         {order.map((key) => (blocks[key] ? <Fragment key={key}>{blocks[key]}</Fragment> : null))}
       </main>
-      {hvac2 && hvac2Terms ? <MobileCta registerHref={register} cta={`${hvac2Cta} →`} terms={hvac2Terms} /> : <MobileCta registerHref={register} cta={low} />}
+      <MobileCta registerHref={register} cta={single ? `${singleCta} →` : low} />
       <ScrollFx />
       <SmoothWheel />
       <LazyBg />

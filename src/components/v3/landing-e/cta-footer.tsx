@@ -18,14 +18,10 @@ const LINK = "inline-flex min-h-[44px] items-center transition-colors hover:text
 export function CtaFooter({
   registerHref = REGISTER,
   cta,
-  terms,
 }: {
   registerHref?: string;
   /** A trade variant's primary CTA words; the default page keeps its own. */
   cta?: string;
-  /** hvac2 only: the trial's two lines of terms under the button, as under every
-   *  button on that page (hvac2/hvac2-terms). Absent everywhere else. */
-  terms?: [string, string];
 }) {
   return (
     <section id="final" className="relative overflow-hidden bg-lp-base px-5 text-white sm:px-6">
@@ -52,12 +48,6 @@ export function CtaFooter({
               {cta ?? <TrialStartLabel />}
               <span aria-hidden>→</span>
             </a>
-            {terms ? (
-              <p className="lp-h2-final-terms">
-                <span>{terms[0]}</span>
-                <span>{terms[1]}</span>
-              </p>
-            ) : null}
           </div>
         </Reveal>
       </div>

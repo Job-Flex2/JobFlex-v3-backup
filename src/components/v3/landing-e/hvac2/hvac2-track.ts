@@ -1,7 +1,7 @@
 "use client";
 
 /* hvac2's own events (traffic-contract: demo_play, demo_25, demo_50,
-   demo_100, sample_open). Every one names the version — industry and
+   demo_100). Every one names the version — industry and
    landing "hvac2" — and the ad hook the headline showed, if any, the way
    landing_view and cta_click do on this page. Each fires once per browser
    session (sessionStorage; a blocked storage falls back to once per load),
@@ -10,7 +10,7 @@
 import { trackTraffic } from "@/lib/traffic-client";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 
-type Hvac2Event = "demoPlay" | "demo25" | "demo50" | "demo100" | "sampleOpen";
+type Hvac2Event = "demoPlay" | "demo25" | "demo50" | "demo100";
 
 const sentThisLoad = new Set<string>();
 

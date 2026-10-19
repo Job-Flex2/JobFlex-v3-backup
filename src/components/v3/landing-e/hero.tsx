@@ -3,7 +3,7 @@ import { PhoneOverview } from "./blueprint-phone";
 import { REGISTER } from "./routes";
 import { DashboardMock } from "./dashboard-mock";
 import { HeroVisual } from "./hero-visual";
-import { DEFAULT_LANDING, type LandingVariant, type LandingVariantKey, type UtmParams } from "./landing-variants";
+import { DEFAULT_LANDING, baseVariant, landingVersion, type LandingVariant, type LandingVariantKey, type UtmParams } from "./landing-variants";
 import { Reveal } from "./reveal";
 import { GoogleSignupButton } from "./google-signup-button";
 import { HeroEntrance } from "./hero-entrance";
@@ -24,7 +24,7 @@ import { HomeownerDoor } from "./homeowner-door";
    it as its motion starts; if that has not happened 1.8 s on, the timer
    here lifts it and the copy simply appears. No JavaScript, a phone, a
    touch screen: never armed, never hidden. */
-export const ENTRANCE_PRELUDE = `(function(){try{var d=document.documentElement,w=window;if(!w.matchMedia||!w.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)").matches||w.matchMedia("(prefers-reduced-motion: reduce)").matches)return;d.setAttribute("data-lp-entrance","pending");w.__jfEntranceTimer=setTimeout(function(){if(d.getAttribute("data-lp-entrance")==="pending"){d.removeAttribute("data-lp-entrance");if(w.__jfHeroShownAt===undefined)w.__jfHeroShownAt=Math.round(performance.now());}},1800);}catch(e){}})();`;
+const ENTRANCE_PRELUDE = `(function(){try{var d=document.documentElement,w=window;if(!w.matchMedia||!w.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)").matches||w.matchMedia("(prefers-reduced-motion: reduce)").matches)return;d.setAttribute("data-lp-entrance","pending");w.__jfEntranceTimer=setTimeout(function(){if(d.getAttribute("data-lp-entrance")==="pending"){d.removeAttribute("data-lp-entrance");if(w.__jfHeroShownAt===undefined)w.__jfHeroShownAt=Math.round(performance.now());}},1800);}catch(e){}})();`;
 
 /* The first screen, and the one screen a trade variant may replace. The
    headline, the line under it, the solid button's words and the product shot
@@ -41,7 +41,14 @@ export function Hero({
   fbclid,
   inAppBrowser = null,
   priceLine = null,
+  terms = null,
+  hook,
 }: {
+  /** A variant with `singleCta` (hvac2): the trial's two lines under its one
+   *  button (hvac2/hvac2-terms.ts), in place of the price line. */
+  terms?: [string, string] | null;
+  /** The ad hook the headline shows (`?hook=`), for the demo film's events. */
+  hook?: string;
   /** The solid button's words: the trial, as on the default page — "Start my
    *  7-day free trial" on every landing (owner, 2026-10-16). A trade's own
    *  heroCta stays in landing-variants.ts, unused here, to bring back. */
@@ -124,6 +131,23 @@ export function Hero({
         )}
         </HeroExperiment>
         <div className="lp-enter w-full sm:w-auto" data-entrance="cta">
+          {variant.singleCta ? (
+            /* ONE BUTTON (hvac2, 2026-10-19): the trial alone — Google stays on
+               the sign-up page — and the trial's terms under it. */
+            <div className="lp-h2-act">
+              <a href={registerHref} className="lp-btn-dark lp-cta lp-cta--solid lp-trial-cta" data-cta="hero">
+                {trialCta ?? cta ?? variant.primaryCta}
+                <span aria-hidden>→</span>
+              </a>
+              {terms ? (
+                <p className="lp-h2-terms">
+                  <span>{terms[0]}</span>
+                  <span>{terms[1]}</span>
+                </p>
+              ) : null}
+            </div>
+          ) : (
+          <>
           {/* The pair, and nothing under it (owner, 2026-10-15): the framed
               "Start your 7-day free trial" badge that sat beneath it is gone
               from every landing — it read as a third button. The product shot
@@ -164,6 +188,8 @@ export function Hero({
               in the landing's mono caps. The trial it follows is the button
               above it (owner, 2026-10-16), so the line says only the price. */}
           {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
+          </>
+          )}
         </div>
         </HeroEntrance>
       </div>
@@ -176,11 +202,11 @@ export function Hero({
             An estimator shot is one build for both: its takeoff rail stacks
             under the stage below 640px by its own media query. */}
         <Reveal shown className="sm:hidden">
-          {shot ? <HeroVisual variant={variant} /> : <PhoneOverview />}
+          {shot ? <HeroVisual variant={variant} slot="phone" hook={hook} landing={landingVersion(variantKey)} /> : <PhoneOverview />}
         </Reveal>
         <div className="mx-auto hidden lp-wrap sm:block">
           <Reveal shown>
-            <div data-parallax="18">{shot ? <HeroVisual variant={variant} /> : <DashboardMock />}</div>
+            <div data-parallax="18">{shot ? <HeroVisual variant={variant} slot="desk" hook={hook} landing={landingVersion(variantKey)} /> : <DashboardMock />}</div>
           </Reveal>
         </div>
         {/* THE BUTTON UNDER THE SHOT (2026-10-04; the analyst: "they leave at
@@ -196,7 +222,7 @@ export function Hero({
               <span aria-hidden>→</span>
             </a>
             {/* The homeowner who clicked a contractor ad, sent where they belong (2026-10-16). */}
-            <HomeownerDoor trade={variantKey} />
+            <HomeownerDoor trade={baseVariant(variantKey)} />
           </div>
         ) : null}
       </div>

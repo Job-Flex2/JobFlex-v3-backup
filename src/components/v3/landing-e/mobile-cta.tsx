@@ -6,14 +6,10 @@ import { REGISTER } from "./routes";
 export function MobileCta({
   registerHref = REGISTER,
   cta,
-  terms,
 }: {
   registerHref?: string;
   /** A trade variant's primary CTA words; the default page keeps its own. */
   cta?: string;
-  /** hvac2 only: the trial's two lines of terms under the button, as under every
-   *  button on that page (hvac2/hvac2-terms). Absent everywhere else. */
-  terms?: [string, string];
 }) {
   const [scrolled, setScrolled] = useState(false);
   const [ctaVisible, setCtaVisible] = useState(false);
@@ -44,15 +40,9 @@ export function MobileCta({
       {/* One full-width button, and nothing under it: the button says the
           trial itself on every landing (owner, 2026-10-16). */}
       <div className="flex flex-col items-stretch px-5 py-2.5">
-        <a href={registerHref} className={terms ? "lp-btn-lime lp-trial-cta lp-h2-sticky-cta" : "lp-btn-dark lp-trial-cta h-12 w-full text-[16px]"} data-cta="sticky">
+        <a href={registerHref} className="lp-btn-dark lp-trial-cta h-12 w-full text-[16px]" data-cta="sticky">
           {cta ?? "Start FREE Trial"}
         </a>
-        {terms ? (
-          <p className="lp-h2-sticky-terms">
-            <span>{terms[0]}</span>
-            <span>{terms[1]}</span>
-          </p>
-        ) : null}
       </div>
     </div>
   );

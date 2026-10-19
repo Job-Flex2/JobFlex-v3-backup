@@ -11,9 +11,8 @@
    the files sit on the CDN; a check from the browser would cost the first
    screen a request and a swap. So the six files land in public/landing-e/
    under the names below and READY turns true in the same commit. Until
-   then the demo is the real estimator playing itself
-   (hvac-estimator-shot, opening on the address), in the same box.
-   The six files are in (4cce4867): on. */
+   then hvac2's first screen shows HVAC's own estimator shot, as on
+   ?industry=hvac (hero-visual.tsx). The six files are in (4cce4867): on. */
 
 export const HVAC2_DEMO_VIDEO = {
   READY: true,

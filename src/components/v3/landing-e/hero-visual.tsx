@@ -13,6 +13,8 @@
 import { DeckShot } from "./deck-shots";
 import { FenceShot } from "./fence-shot";
 import { HvacEstimatorShot } from "./hvac-estimator-shot";
+import { HVAC2_DEMO_VIDEO } from "./hvac2/demo-media";
+import { Hvac2Film } from "./hvac2/hvac2-film";
 import type { LandingVariant } from "./landing-variants";
 import { RoofShot } from "./roof-shot";
 import { SmartProposalShot } from "./smart-proposal-shot";
@@ -20,7 +22,20 @@ import { SMART_SCENARIOS } from "./smart-scenarios";
 import { useEffect, useState } from "react";
 import { useInView } from "./use-in-view";
 
-export function HeroVisual({ variant }: { variant: LandingVariant }) {
+export function HeroVisual({
+  variant,
+  slot = "desk",
+  hook,
+  landing,
+}: {
+  variant: LandingVariant;
+  /** Which of the hero's two builds this is (hero.tsx): the film mounts its video in the one on screen. */
+  slot?: "phone" | "desk";
+  /** The ad hook the headline shows, for the film's events. */
+  hook?: string;
+  /** A version of a trade's page ("hvac2"), for the HVAC shot's events. */
+  landing?: string;
+}) {
   const { ref, inView } = useInView<HTMLDivElement>(0.2);
   /* landing-e (pass B): on a phone the shot opens FILLED — lines written,
      total on the plate — so the first screen of the mock shows the result;
@@ -44,6 +59,9 @@ export function HeroVisual({ variant }: { variant: LandingVariant }) {
       {variant.visual === "fence" && <FenceShot active={active} instant={now} />}
       {variant.visual === "roof" && <RoofShot active={active} instant={now} hero />}
       {variant.visual === "hvac" && <HvacEstimatorShot active={active} instant={now} hero />}
+      {/* hvac2: the demo film in the shot's frame; until its files are in, HVAC's shot (hvac2/demo-media). */}
+      {variant.visual === "hvac-video" &&
+        (HVAC2_DEMO_VIDEO.READY ? <Hvac2Film slot={slot} hook={hook} /> : <HvacEstimatorShot active={active} instant={now} hero landing={landing} />)}
       {variant.visual === "deck" && <DeckShot />}
       {variant.visual === "smart" && (
         <SmartProposalShot active={active} instant={now} scenario={SMART_SCENARIOS[variant.scenario ?? "kitchen"]} />

@@ -164,20 +164,16 @@ export const TRAFFIC_EVENTS = {
   hvacDemoStep: "hvac_demo_step",
   hvacDemoTier: "hvac_demo_tier",
   // The HVAC page's second version (?industry=hvac2, 2026-10-19), its first
-  // screen's demo above the button: `demo_play` once it starts, then
-  // `demo_25` / `demo_50` / `demo_100` as a quarter, half and all of it has
-  // played (the film's own time; the interactive walk-through's clock while
-  // the film is not in) — `kind` "video" | "interactive". `sample_open` when
-  // the finished estimate comes into view or a link to it is tapped (`from`
-  // "view" | "link"). Each once per browser session. Fired by
-  // landing-e/hvac2, always with industry and landing "hvac2" and the `hook`
-  // when the headline was an ad's. That page's cta_click also carries
-  // `position` (hero | sample | final | mobile) and `hook`.
+  // screen's demo film: `demo_play` once it starts, then `demo_25` /
+  // `demo_50` / `demo_100` as a quarter, half and all of it has played (the
+  // film's own time) — `kind` "video". Each once per browser session. Fired
+  // by landing-e/hvac2, always with industry and landing "hvac2" and the
+  // `hook` when the headline was an ad's. That page's cta_click also carries
+  // `position` (hero | final | mobile, …) and `hook`.
   demoPlay: "demo_play",
   demo25: "demo_25",
   demo50: "demo_50",
   demo100: "demo_100",
-  sampleOpen: "sample_open",
   // One per landing section the visitor actually reaches (the analyst,
   // 2026-10-02): section key (lib/landing-sections), its index, seconds since
   // the page opened, the trade hero shown. Fired by landing-e/section-tracker.

@@ -20,8 +20,9 @@ import type { LandingVariantKey } from "./landing-variants";
    buttons and the nav's (pricing-visit.tsx). `landing` names a version of a
    trade's page (landing-variants VARIANT_BASE: "hvac2"); absent elsewhere.
    On such a page the click also says its `position` in the page's own words
-   (hero | sample | final | mobile — the one button's four places) and the
-   ad `hook` the headline showed. */
+   (hero | final | mobile for the trial button's three places; hero-shot,
+   nav and the rest by their placement) and the ad `hook` the headline
+   showed. */
 const POSITION: Record<string, string> = { footer: "final", sticky: "mobile" };
 
 export function CtaTracker({ industry, only, landing, hook }: { industry: LandingVariantKey | undefined; only?: string[]; landing?: string; hook?: string }) {

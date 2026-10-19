@@ -36,8 +36,10 @@ export type LandingVariant = {
   /** Which estimator the showcase opens on; auto-advance carries on from it. */
   showcaseSlide: ShowcaseSlideKey;
   /** The hero's product shot. "dashboard" is the default's; a trade picks
-   *  one of the three estimator sequences. */
-  visual: "dashboard" | "roof" | "fence" | "hvac" | "smart" | "deck";
+   *  one of the three estimator sequences. "hvac-video" (hvac2): the HVAC
+   *  demo film in the shot's frame (hvac2/hvac2-film.tsx), the HVAC shot
+   *  until its files are in (hvac2/demo-media.ts). */
+  visual: "dashboard" | "roof" | "fence" | "hvac" | "hvac-video" | "smart" | "deck";
   /** For visual "smart": which job the sequence prices. */
   scenario?: SmartScenarioKey;
   /** A headline a sentence long (owner, 2026-10-01: HVAC, roofing): set a
@@ -73,12 +75,10 @@ export type LandingVariant = {
   /** A sign-up button stands under the product shot. */
   shotCta?: boolean;
 
-  /* A LANDING'S OWN FIRST SCREEN (hvac2, 2026-10-19). Only a page with its
-     own hero component reads these (hvac2/hvac2-hero.tsx). */
-  /** Mono caps over the headline ("FOR HVAC CONTRACTORS"). */
-  kicker?: string;
-  /** What the product does, ticked under the line. */
-  checks?: string[];
+  /** One trial button in the hero in place of the trial + Google pair, the
+   *  trial's two lines of terms under it in place of the line under the pair
+   *  (hvac2, 2026-10-19; hero.tsx, hvac2/hvac2-terms.ts). */
+  singleCta?: boolean;
 };
 
 /** The hero as it shipped on 2026-08-25 — the page with no `?industry=`. */
@@ -307,29 +307,11 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     playOnPhone: true,
     shotCta: true,
   },
-  // HVAC, VERSION 2 (2026-10-19; the conversion audit). The HVAC page with
-  // a first screen that says what the tool does without "AI" or "in
-  // seconds", a demo above one trial button, the trial's terms under it,
-  // and sections of its own (hvac2/): where the numbers come from, a
-  // finished estimate, the estimator to try. Every claim stays inside hvac's
-  // claims review above: the load is "Manual J-based" on the county's design
-  // day, the unit is matched from the shop's own equipment catalog (Manual S
-  // window), the property facts are the parcel record, the building
-  // footprint at the pin and the ground elevation, each with its source;
-  // code rules exist for six states plus the federal floors; no duct design,
-  // no permits filed, no texting. The ad hooks are hvac's.
-  hvac2: {
-    kicker: "For HVAC contractors",
-    h1: ["Stop Spending Hours", "on HVAC Estimates."],
-    h1Long: true,
-    sub: "Start with an address. JobFlex pulls the property data, runs the load, sizes the equipment and prices every line — you review, adjust and send the proposal from your phone.",
-    subEven: true,
-    checks: ["Manual J-based load from real property data", "Manual S equipment match from your inventory", "Every line priced, proposal ready to send"],
-    primaryCta: "Start free — price an HVAC job",
-    showcaseSlide: "hvac",
-    visual: "hvac",
-    scenario: "hvac",
-  },
+  // HVAC, VERSION 2 (2026-10-19). The HVAC page itself — every word, field
+  // and section — with two changes in the first screen: the demo film in the
+  // shot's place, and one trial button with its terms in place of the pair.
+  // Filled in from hvac below (HVAC2), so an edit to hvac is an edit to both.
+  hvac2: null,
   drywall: {
     h1: ["The complete drywall bid.", "From the sheet count."],
     sub: "Hang, tape, level 4 finish, texture and labor per sheet.",
@@ -391,6 +373,9 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     scenario: "general-contractor",
   },
 };
+
+// HVAC2: hvac's own entry, the film in the shot's place and one button.
+LANDING_VARIANTS.hvac2 = { ...LANDING_VARIANTS.hvac!, visual: "hvac-video", singleCta: true };
 
 /** The hero content for a key: its variant, or the default while unwritten. */
 export function variantContent(key: LandingVariantKey | undefined): LandingVariant {

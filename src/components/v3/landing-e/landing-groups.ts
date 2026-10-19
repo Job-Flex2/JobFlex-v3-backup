@@ -407,8 +407,7 @@ const MEP_PORTAL: PortalContent = {
    Better tier (AC + 96% furnace, $12,417.03; the heat pump at Better is
    $13,484.58 — the option) — so the page tells one story. The figures are
    the ledger's own, grouped into the four lines a proposal shows. */
-/** Exported for hvac2's finished-estimate section (hvac2/hvac2-sample.tsx). */
-export const HVAC_PROPOSAL: ProposalContent = {
+const HVAC_PROPOSAL: ProposalContent = {
   number: "P-1217",
   title: "Whitfield AC + furnace — 2.5 ton, 16 SEER2, 96% AFUE",
   blurb:
