@@ -31,6 +31,7 @@
 // type: a stick-built run follows a hill, a prefab privacy panel takes almost
 // none). LEVEL is a gradual segment under LEVEL_MAX_DEG that keeps to its
 // line. Steps are counted per bay at the type's post spacing.
+import { stepCountOn } from "@/lib/fence/slope";
 import type { PathPoint } from "./fenceTypes";
 import { localFeetToLatLng, type LatLng } from "./mapProjection";
 import { POST_SPACING_FT } from "./fenceGeometry";
@@ -132,6 +133,8 @@ export interface SegTerrain {
   steps?: number;
   /** Stepped only: the drop each step takes, |rise| / steps. */
   stepDropFt?: number;
+  /** Stepped only: the steps were planned on the profile itself (lib/fence/slope stepStations) — the count, as is. */
+  planned?: boolean;
   /** The ground rolls under this segment (up and down inside it): it steps
    *  for its shape, not its grade. */
   rolling?: boolean;
@@ -216,10 +219,15 @@ export function terrainFromProfile(segs: SegSampling[], elevFt: number[], rules:
       offLineFt: Math.round(shape.offLineFt * 100) / 100,
     };
     if (cls === "stepped") {
-      // One level panel per bay; the run drops between posts.
-      const steps = Math.max(1, Math.ceil(s.planFt / sectionFt));
+      // A level panel per bay, the posts where the ground spends a step (lib/fence/slope stepStations): every bump
+      // and dip counted, not only the net rise — rolling ground with a small net rise still drops feet under a panel.
+      const profile = elevFt.slice(s.start, s.start + s.count);
+      const steps = Math.max(1, stepCountOn(profile, ds, sectionFt));
+      let travel = 0;
+      for (let k = 1; k < profile.length; k++) travel += Math.abs(profile[k] - profile[k - 1]);
       t.steps = steps;
-      t.stepDropFt = Math.abs(riseFt) / steps;
+      t.planned = true;
+      t.stepDropFt = travel / steps;
     }
     out.push(t);
     planFt += s.planFt;

@@ -363,7 +363,7 @@ export function initFenceEstimatorContent(
     const t = usableTerrain();
     if (!t || !t.segs.length) return null;
     return summarizeSlope(
-      t.segs.map(function (sg) { return { planFt: sg.planFt, gradeFt: sg.gradeFt, riseFt: sg.riseFt, thetaDeg: sg.thetaDeg, cls: sg.cls, steps: sg.steps, stepDropFt: sg.stepDropFt }; }),
+      t.segs.map(function (sg) { return { planFt: sg.planFt, gradeFt: sg.gradeFt, riseFt: sg.riseFt, thetaDeg: sg.thetaDeg, cls: sg.cls, steps: sg.steps, stepDropFt: sg.stepDropFt, planned: sg.planned }; }),
       fs.height,
       effectiveSpacingFt(currentType().type, fs.spacing),
       market()?.frostIn ?? 0,
@@ -371,7 +371,7 @@ export function initFenceEstimatorContent(
   }
   /** The steps one stepped segment is priced with — the ticket's count, which
    *  the map's badge, the run's grade tag and the 3D all show. */
-  function pricedSteps(sg: { planFt: number; riseFt: number; cls: 'level' | 'racked' | 'stepped'; steps?: number }): number {
+  function pricedSteps(sg: { planFt: number; riseFt: number; cls: 'level' | 'racked' | 'stepped'; steps?: number; stepDropFt?: number; planned?: boolean }): number {
     return segmentSteps(sg, effectiveSpacingFt(currentType().type, fs.spacing)).steps;
   }
   /** The ground difficulty the labor is priced at. */

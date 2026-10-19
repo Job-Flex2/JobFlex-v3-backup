@@ -1,11 +1,13 @@
 // Synthetic check of the fence's ground geometry for the 3D view — no browser.
 //   npx tsx --tsconfig tsconfig.json qa/tests/logic/fence-3d-ground.check.ts
 // Flat ground changes nothing; a racked bay's panel follows the grade; a
-// stepped segment's bays are level at their uphill end with one step per bay
-// (the count fenceTerrain charges for) and the step posts are the tall ones;
+// stepped segment's bays are level on the high ground under them, a step where the ground spends a foot (never a bay
+// under 2 ft — lib/fence/slope stepStations, 2026-10-18), the count fenceTerrain charges for, and the step posts are
+// the tall ones;
 // gates hang level; a run that ends on a wall-mount point is a wall mount.
 import { computeFenceLayout, POST_SPACING_FT } from "../../../src/components/estimator/fence/fenceGeometry";
 import { terrainFromProfile, sampleFencePath } from "../../../src/components/estimator/fence/fenceTerrain";
+import { MIN_STEP_BAY_FT, segmentSteps } from "../../../src/lib/fence/slope";
 import type { PathPoint, GateSpec } from "../../../src/components/estimator/fence/fenceTypes";
 
 let failures = 0;
@@ -43,8 +45,9 @@ const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 {
   const pts: PathPoint[] = [{ x: 0, y: 0 }, { x: 40, y: 0 }];
   const l = computeFenceLayout(pts, [], { groundAt: (x) => 0.6 * x, segClass: () => "stepped" });
-  const bays = Math.ceil(40 / POST_SPACING_FT);
-  ok("one step per bay", l.steppedBays === bays, `${l.steppedBays} of ${bays}`);
+  // 24 ft of fall over 40 ft wants a step every 1.7 ft; the shortest bay (2 ft) holds — 20 steps, past that a wall.
+  const bays = Math.floor(40 / MIN_STEP_BAY_FT);
+  ok("a step every 2 ft at most — the shortest bay", l.steppedBays === bays && POST_SPACING_FT === 8, `${l.steppedBays} of ${bays}`);
   let level = true;
   for (let i = 0; i < l.bayCount; i++) {
     const o = i * 7;
@@ -52,8 +55,10 @@ const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
     if (!near(l.bays[o + 2], 0.6 * l.bays[o + 3], 1e-4)) level = false; // uphill = east end
   }
   ok("stepped bays are level at their uphill end", level);
-  // Post 2 (x = 16) carries bay 1 (level at x=16 → 9.6) and bay 2 (level at x=24 → 14.4).
-  ok("a step post carries the higher panel", near(l.postPanel[2], 14.4, 1e-3) && near(l.postBase[2], 9.6, 1e-3), `panel ${l.postPanel[2]} base ${l.postBase[2]}`);
+  // Post 2 carries bay 1 (level at its own spot) and bay 2 (level at bay 2's uphill end): the higher.
+  const x2 = l.posts[2 * 3];
+  const up2 = l.bays[2 * 7 + 3];
+  ok("a step post carries the higher panel", near(l.postPanel[2], 0.6 * up2, 1e-3) && near(l.postBase[2], 0.6 * x2, 1e-3) && up2 > x2, `panel ${l.postPanel[2]} base ${l.postBase[2]}`);
   ok("the end post stands on its ground", near(l.postBase[l.postCount - 1], 24, 1e-3) && near(l.postPanel[l.postCount - 1], 24, 1e-3));
 }
 
@@ -62,27 +67,32 @@ const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
   const pts: PathPoint[] = [{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 60 }];
   const ground = (x: number, y: number) => (y > 0 ? 0.7 * y : 0.05 * x); // 2.9° then 35°
   const s = sampleFencePath(pts, { lat: 47.7, lng: -122.1 });
-  const elev = s.segs.flatMap((sg) => {
-    const out: number[] = [];
+  // The flat sample list as the Elevation call answers it: neighbouring segments share their corner sample, so each
+  // sample is written at its own index (a concatenation shifted the second segment's profile).
+  const elev: number[] = new Array(Math.max(...s.segs.map((sg) => sg.start + sg.count))).fill(0);
+  for (const sg of s.segs) {
     const a = pts[sg.seg];
     const b = pts[sg.seg + 1];
     for (let k = 0; k < sg.count; k++) {
       const t = k / (sg.count - 1);
-      out.push(ground(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+      elev[sg.start + k] = ground(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
     }
-    return out;
-  });
+  }
   const report = terrainFromProfile(s.segs, elev);
   const classes: Record<number, "level" | "racked" | "stepped"> = {};
   report.segs.forEach((sg) => (classes[sg.seg] = sg.cls));
-  const l = computeFenceLayout(pts, [], { groundAt: ground, segClass: (i) => classes[i] });
   const priced = report.segs.find((sg) => sg.cls === "stepped");
+  // The page hands the 3D the ticket's count, as fence-estimator-behavior modelSteps does.
+  const l = computeFenceLayout(pts, [], { groundAt: ground, segClass: (i) => classes[i], segSteps: (i) => (priced && priced.seg === i ? segmentSteps(priced, POST_SPACING_FT).steps : null) });
   ok("priced classes: level then stepped", classes[0] === "level" && classes[1] === "stepped", JSON.stringify(classes));
-  ok("3D steps = priced steps", !!priced && l.steppedBays === priced.steps, `${l.steppedBays} vs ${priced?.steps}`);
-  // Corner post (x = 60, y = 0) carries the level segment's last bay AND the
-  // stepped segment's first bay (level at its uphill end, y = 7.5 → 5.25).
+  ok("3D steps = priced steps", !!priced && l.steppedBays === segmentSteps(priced, POST_SPACING_FT).steps, `${l.steppedBays} vs ${priced ? segmentSteps(priced, POST_SPACING_FT).steps : "-"}`);
+  // Corner post (x = 60, y = 0) carries the level segment's last bay AND the stepped segment's first bay (level on the
+  // high ground under it — its uphill end).
   const corner = [...Array(l.postCount).keys()].find((i) => near(l.posts[i * 3], 60, 1e-6) && near(l.posts[i * 3 + 1], 0, 1e-6));
-  ok("the corner post takes the higher panel", corner !== undefined && near(l.postPanel[corner], Math.max(3, 0.7 * 7.5), 1e-3), corner !== undefined ? String(l.postPanel[corner]) : "none");
+  let firstStep = -1;
+  for (let i = 0; i < l.bayCount; i++) if (near(l.bays[i * 7], 60, 1e-6) && near(l.bays[i * 7 + 1], 0, 1e-6) && l.bays[i * 7 + 6]) firstStep = i;
+  const want = firstStep >= 0 ? Math.max(3, l.bays[firstStep * 7 + 2]) : NaN;
+  ok("the corner post takes the higher panel", corner !== undefined && Number.isFinite(want) && near(l.postPanel[corner], want, 1e-3), corner !== undefined ? `${l.postPanel[corner]} vs ${want}` : "none");
 }
 
 // ── gates hang level ──
