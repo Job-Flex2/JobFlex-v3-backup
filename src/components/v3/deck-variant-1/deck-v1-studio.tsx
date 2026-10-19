@@ -325,6 +325,8 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const studioRef = React.useRef<HTMLDivElement>(null);
   const viewerRef = React.useRef<HTMLElement>(null);
   const qScrollRef = React.useRef<HTMLDivElement>(null);
+  /** Glides the desktop form to a section on the wheel's own motion; false on a phone, where the page scrolls natively. */
+  const glideRef = React.useRef<((section: HTMLElement) => boolean) | null>(null);
   React.useEffect(() => {
     const studio = studioRef.current;
     const shell = studio?.closest<HTMLElement>(".jf-blueprint");
@@ -397,6 +399,14 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         motion.move(wheelPixels(event, main.clientHeight) / scale);
       } else mobileMotion.move(wheelPixels(event, mobileScroller.clientHeight));
     };
+    // "Package & price" and the other go-tos (2026-10-19): a native smooth scroll moved the header and the form as two
+    // scrollers at once and stuttered; the glide drives the one combined position the wheel does.
+    glideRef.current = (section) => {
+      if (!desktop.matches) return false;
+      if (childCount !== studio.children.length) { childCount = studio.children.length; measure(); }
+      motion.glideTo(() => headerRange + Math.max(0, (section.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / scale + scroller.scrollTop));
+      return true;
+    };
     const onScroll = () => fit();
     const stop = () => { motion.stop(); mobileMotion.stop(); };
     const onKey = (event: KeyboardEvent) => {
@@ -414,6 +424,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     studio.addEventListener("keydown", onKey);
     return () => {
       stop();
+      glideRef.current = null;
       observer.disconnect();
       window.removeEventListener("resize", measure);
       wheelRoot.removeEventListener("wheel", onWheel, true);
@@ -870,7 +881,8 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     plan: { design, scene },
     clientToken,
   });
-  const convert = async () => {
+  /** Makes the proposal and opens it; false when it could not (the error shows in the package section). */
+  const convert = async (): Promise<boolean> => {
     setActAt("bottom");
     setBusy("convert");
     setError(null);
@@ -879,7 +891,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       const res = await convertDeckEstimateToProposal({ ...proposalPayload(), clientId: clientId ?? null });
       if (res.ok) {
         router.push(`/dashboard/manual-blueprint?proposal=${res.id}` as Route);
-        return;
+        return true;
       }
       if (res.code === "PLAN_LIMIT_REACHED") reportPlanLimitResult(res);
       setError(res.error);
@@ -887,6 +899,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       setError("The proposal could not be saved. Check the connection and try again.");
     }
     setBusy(false);
+    return false;
   };
   const update = async () => {
     if (!linked) return;
@@ -1151,9 +1164,22 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     if (!heading) return;
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     heading.focus({ preventScroll: true });
-    heading.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+    const section = heading.closest<HTMLElement>("[data-deck-section]") ?? heading;
+    if (!glideRef.current?.(section)) heading.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
     setPlacing((p) => (p?.kind === "fixture" ? null : p));
   }, [setPlacing]);
+  // Every section laid out once before the off-screen ones are skipped (deck-variant-1.css `data-sized`), so each is
+  // skipped at its own height and the form never grows under the wheel. Again when the sections change.
+  const sectionKey = stepList.map((x) => x.id).join(" ");
+  React.useEffect(() => {
+    const scroller = qScrollRef.current;
+    if (!scroller) return;
+    scroller.removeAttribute("data-sized");
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => scroller.setAttribute("data-sized", ""));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [sectionKey]);
   React.useEffect(() => {
     const scroller = qScrollRef.current;
     if (!scroller) return;
@@ -2876,6 +2902,12 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                 <span className="v1-foot-price" aria-label="Deck price before tax" aria-live="polite" data-v1-price>{money(pkg.subtotal)}</span>
                 <span className="v1-foot-note" aria-hidden="true">before tax</span>
               </span>
+              {/* The proposal from anywhere in the form (owner, 2026-10-19: "add second button save as proposal"); a
+                  failure glides to the package section, where its error is shown. */}
+              <button type="button" className="v1-btn v1-foot-save" disabled={!!busy} onClick={async () => { if (!(await convert())) go("package"); }} data-v1-foot-convert>
+                <FileText size={16} strokeWidth={2.5} aria-hidden="true" />
+                {busy === "convert" ? "Saving…" : linked ? "Save as new proposal" : "Save as proposal"}
+              </button>
               <button type="button" className="v1-btn v1-btn-primary" onClick={() => go("package")}>
                 Package &amp; price <ChevronRight size={16} aria-hidden="true" />
               </button>

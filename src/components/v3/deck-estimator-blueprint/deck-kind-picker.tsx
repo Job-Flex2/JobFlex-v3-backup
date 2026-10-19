@@ -69,6 +69,14 @@ function fitCanvas(canvas: HTMLCanvasElement, viewBox: string, scale: number) {
   return { cw, ch, k, ox: (cw - vw * k) / 2 - vx * k, oy: (ch - vh * k) / 2 - vy * k };
 }
 
+/** A picture's image rasterized onto `bm`, "meet" like a turn's frame (2026-10-19: drawn to the whole box it was
+ *  stretched to the card's shape, wider at rest than the same picture on hover). */
+function rasterMeet(bm: HTMLCanvasElement, img: HTMLImageElement, viewBox: string) {
+  const [, , vw, vh] = viewBox.split(/\s+/).map(Number);
+  const k = Math.min(bm.width / vw, bm.height / vh);
+  bm.getContext("2d")?.drawImage(img, (bm.width - vw * k) / 2, (bm.height - vh * k) / 2, vw * k, vh * k);
+}
+
 function paintFrame(canvas: HTMLCanvasElement, d: IsoDrawing) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -245,7 +253,7 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
         bm.width = cw;
         bm.height = ch;
         try {
-          bm.getContext("2d")?.drawImage(img, 0, 0, cw, ch);
+          rasterMeet(bm, img, rest.viewBox);
         } catch {
           bm = null;
         }
@@ -287,7 +295,7 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
         bm.width = cw;
         bm.height = ch;
         try {
-          bm.getContext("2d")?.drawImage(img, 0, 0, cw, ch);
+          rasterMeet(bm, img, rest.viewBox);
         } catch {
           return;
         }
@@ -405,7 +413,7 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
           bm.width = cw;
           bm.height = ch;
           try {
-            bm.getContext("2d")?.drawImage(imgs[i], 0, 0, cw, ch);
+            rasterMeet(bm, imgs[i], rest.viewBox);
           } catch {
             continue;
           }

@@ -127,8 +127,12 @@
 .jf-deck-v1 .v1-form-section { display: grid; gap: var(--deck-space-lg); min-width: 0; padding: var(--deck-panel-padding); background: var(--paper-deep); border: 2px solid var(--ink); border-radius: var(--r-sm); }
 /* A section off the screen is not laid out or painted (2026-10-18, perf): the header's scroll resizes the whole
    workspace every frame, and with the form's ~2,100 nodes one layout cost 46ms; skipping the sections out of view
-   brought it to 4ms. `auto` keeps a section's real height once it has been seen, so the scrollbar does not jump. */
-.jf-deck-v1 .v1-form-section { content-visibility: auto; contain-intrinsic-size: auto 640px; }
+   brought it to 4ms. `auto` keeps a section's real height once it has been seen, so the scrollbar does not jump.
+   (2026-10-19: a skipped section is never shrunk by the flex column — it was squeezed to its padding, 35px, and grew
+   to its real height as it scrolled in, so the form jumped by whole sections. And the skipping waits for
+   `data-sized`, set once every section has been laid out once, so each is skipped at its own remembered height.) */
+.jf-deck-v1 .v1-form-section { flex: none; contain-intrinsic-size: auto 640px; }
+.jf-deck-v1 .v1-q-scroll[data-sized] > .v1-form-section { content-visibility: auto; }
 .jf-deck-v1 .v1-form-heading { display: flex; align-items: center; gap: var(--deck-space-sm); }
 .jf-deck-v1 .v1-section-number { display: inline-grid; place-items: center; width: var(--deck-card-number); height: var(--deck-card-number); flex: none; border: 2px solid var(--ink); background: var(--ink); color: var(--paper-deep); font-size: var(--deck-body); font-weight: 800; }
 .jf-deck-v1 .v1-btn.v1-drafts-btn { min-height: var(--deck-tool-control); gap: var(--deck-space-xs); padding: 0 var(--deck-space-sm); font-size: var(--deck-meta); }
@@ -146,7 +150,7 @@
   background: var(--paper-deep);
   border: 2px solid var(--ink);
 }
-.jf-deck-v1 .v1-q-foot .v1-btn-primary { margin-left: auto; }
+.jf-deck-v1 .v1-q-foot .v1-foot-save { margin-left: auto; }
 .jf-deck-v1 .v1-foot-price { display: block; font-size: var(--deck-number); font-weight: 900; font-variant-numeric: tabular-nums; }
 .jf-deck-v1 .v1-foot-sum { display: grid; gap: 2px; min-width: 0; }
 .jf-deck-v1 .v1-foot-note { font-size: var(--deck-meta); color: var(--ink-soft); line-height: 1.2; }
