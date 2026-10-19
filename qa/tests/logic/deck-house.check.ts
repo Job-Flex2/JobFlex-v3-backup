@@ -40,13 +40,17 @@ const fitL = deckShapeForHouse(rect, bumpLeft);
 check("the wall stepping back at 5 ft (the left part out): a back-left notch 5 ft wide, 2 ft deep", fitL.shape.kind === "L" && fitL.shape.notch.corner === "back-left" && fitL.shape.notch.widthFt === 5 && fitL.shape.notch.depthFt === 2, JSON.stringify(fitL));
 const middle: HouseDesign = { ...plain, jogs: [{ id: "j1", atFt: 5, dir: "toward", depthFt: 3 }, { id: "j2", atFt: 9, dir: "away", depthFt: 3 }] };
 const fitM = deckShapeForHouse(rect, middle);
-check("a bump-out inside the deck leaves the shape and says to move it to an end", fitM.shape === rect && !!fitM.note && /inside the deck/.test(fitM.note), fitM.note ?? "");
+// 2026-10-19 (owner: "deck should follow house wall when moving wall in set out set"): every step under the deck the
+// deck can follow, it follows — it steps around a bump-out and reaches into a set-back, its back on the wall.
+check("a bump-out inside the deck: the deck steps around it — three parts, the middle 3 ft out, no note", fitM.note === null && fitM.shape.kind === "wall" && fitM.shape.back.length === 3 && fitM.shape.back[1].yFt === 3 && fitM.shape.back[1].x0Ft === 5 && fitM.shape.back[1].x1Ft === 9, JSON.stringify(fitM));
 const recess: HouseDesign = { ...plain, jogs: [{ id: "j1", atFt: 4, dir: "away", depthFt: 2 }, { id: "j2", atFt: 12, dir: "toward", depthFt: 2 }] };
 const fitRecess = deckShapeForHouse(rect, recess);
-check("the deck sitting in a recess between two bump-outs: the shape stays, the note says the wall comes out twice", fitRecess.shape === rect && /comes out twice/.test(fitRecess.note ?? ""), fitRecess.note ?? "");
+check("the deck sitting in a recess between two bump-outs: it steps around both ends, 2 ft out", fitRecess.note === null && fitRecess.shape.kind === "wall" && fitRecess.shape.back.map((b) => b.yFt).join(",") === "2,0,2", JSON.stringify(fitRecess));
 const away: HouseDesign = { ...plain, jogs: [{ id: "j1", atFt: 12, dir: "away", depthFt: 2 }] };
 const fitA = deckShapeForHouse(rect, away);
-check("the wall stepping back under the deck's right part: the ledger has nothing behind it, the note says so", fitA.shape === rect && /steps back 2 ft under the deck/.test(fitA.note ?? ""), fitA.note ?? "");
+check("the wall stepping back under the deck's right part: the deck reaches 2 ft back to it", fitA.note === null && fitA.shape.kind === "wall" && fitA.shape.back.length === 2 && fitA.shape.back[1].yFt === -2 && fitA.shape.back[1].x0Ft === 12, JSON.stringify(fitA));
+const bowedRect: DeckShape = { kind: "rect", widthFt: 16, depthFt: 12, front: { kind: "curve", bulgeFt: 2, clipFt: 2 } };
+check("…but not with a bowed front: the shape stays, the note says a deck follows the wall with a straight front", deckShapeForHouse(bowedRect, away).shape === bowedRect && /straight front/.test(deckShapeForHouse(bowedRect, away).note ?? ""));
 const deep: HouseDesign = { ...plain, jogs: [{ id: "j1", atFt: 12, dir: "toward", depthFt: 11 }] };
 const fitD = deckShapeForHouse(rect, deep);
 check("a bump-out deeper than the deck can wrap: the notch held at 9 ft and the note says it", fitD.shape.kind === "L" && fitD.shape.notch.depthFt === 9 && /held at 9 ft/.test(fitD.note ?? ""), fitD.note ?? "");
@@ -102,7 +106,7 @@ check("'Bump-out at the left end': the wall steps back at 4 ft — a back-left n
 const qn = quickWall("nook", rect, plain);
 check("'The deck in a nook': the wall comes out past both ends; the deck stays a rectangle, no note", qn.jogs.length === 2 && deckShapeForHouse(rect, qn).shape.kind === "rect" && deckShapeForHouse(rect, qn).note === null && quickWallOf(rect, qn) === "nook", JSON.stringify(qn.jogs));
 check("'Straight wall' clears the steps; a wall with none reads as straight", quickWall("straight", rect, qn).jogs.length === 0 && quickWallOf(rect, plain) === "straight");
-check("the words: a straight wall, a wrapped bump-out, a nook, a step the deck cannot frame", /straight wall/.test(wallWords(rect, plain)) && /wraps the bump-out at its right end: a 4 ft × 3 ft notch/.test(wallWords(rect, qr)) && /sits in a nook/.test(wallWords(rect, qn)) && /inside the deck/.test(wallWords(rect, middle)), [wallWords(rect, plain), wallWords(rect, qr)].join(" | "));
+check("the words: a straight wall, a wrapped bump-out, a nook, a step the deck cannot frame", /straight wall/.test(wallWords(rect, plain)) && /wraps the bump-out at its right end: a 4 ft × 3 ft notch/.test(wallWords(rect, qr)) && /sits in a nook/.test(wallWords(rect, qn)) && /follows the wall, 3 parts — 5 ft on the house line, 4 ft stepping 3 ft out around the wall, 7 ft on the house line/.test(wallWords(rect, middle)), [wallWords(rect, plain), wallWords(rect, qr), wallWords(rect, middle)].join(" | "));
 check("a step in words", stepWords(qr.jogs[0], rect) === "12 ft from the deck's left end, the wall to the right comes out 3 ft" && /at the deck's left end/.test(stepWords(qn.jogs[0], rect)) && /at the deck's right end/.test(stepWords(qn.jogs[1], rect)), stepWords(qr.jogs[0], rect));
 
 // ── shaped by hand: a part in or out, a step added where tapped, a step moved with order and snapping, the deck slid and sized

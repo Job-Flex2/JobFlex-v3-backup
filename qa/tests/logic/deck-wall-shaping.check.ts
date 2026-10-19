@@ -42,39 +42,49 @@ const level = levelWallPart(mid, shape, 1);
 check("the bump-out levelled: both its steps shrink to nothing", !!level && wallParts(level, shape)[1].depthFt === 0 && level.jogs.every((j) => j.depthFt === 0));
 check("the house line cannot be levelled (null); a level part is unchanged", levelWallPart(mid, shape, 0) === null && levelWallPart(level!, shape, 1) === level);
 
-// Fixes: the bump-out inside the deck
-const f1 = wallFixes(shape, mid, LIM);
-check("inside the deck: a note and fixes that all make it go away", !!deckShapeForHouse(shape, mid).note && f1.length >= 3 && resolves(f1), f1.map((f) => f.id).join(","));
+// 2026-10-19 (owner: "deck should follow house wall when moving wall in set out set"): the deck follows the wall — a
+// bump-out inside it, a recess, two bump-outs: no note, so nothing to fix.
+const recess: HouseDesign = { ...defaultHouse(), jogs: [{ id: "j1", atFt: 6, dir: "away", depthFt: 2 }, { id: "j2", atFt: 10, dir: "toward", depthFt: 2 }] };
+const two: HouseDesign = { ...defaultHouse(), jogs: [{ id: "j1", atFt: 2, dir: "toward", depthFt: 2 }, { id: "j2", atFt: 5, dir: "away", depthFt: 2 }, { id: "j3", atFt: 9, dir: "toward", depthFt: 3 }, { id: "j4", atFt: 13, dir: "away", depthFt: 3 }] };
+const fm = deckShapeForHouse(shape, mid);
+check("a bump-out inside the deck: the deck steps around it, no note, no fixes", fm.note === null && fm.shape.kind === "wall" && fm.shape.back.map((b) => b.yFt).join(",") === "0,3,0" && wallFixes(shape, mid, LIM).length === 0, JSON.stringify(fm.shape));
+const fr = deckShapeForHouse(shape, recess);
+check("a recess under the deck: the deck reaches 2 ft back into it, between 6 and 10 ft", fr.note === null && fr.shape.kind === "wall" && fr.shape.back[1].yFt === -2 && fr.shape.back[1].x0Ft === 6 && fr.shape.back[1].x1Ft === 10, JSON.stringify(fr.shape));
+const f2x = deckShapeForHouse(shape, two);
+check("two bump-outs inside the deck: five parts, stepped around both", f2x.note === null && f2x.shape.kind === "wall" && f2x.shape.back.map((b) => b.yFt).join(",") === "0,2,0,3,0", JSON.stringify(f2x.shape));
+
+// What the deck cannot follow keeps its note, and the one-tap fixes for it: a bowed front first.
+const bowed: DeckShape = { kind: "rect", widthFt: 16, depthFt: 12, front: { kind: "curve", bulgeFt: 2, clipFt: 2 } };
+const f1 = wallFixes(bowed, mid, LIM);
+check("a bowed front over a bump-out inside the deck: a note, and fixes that all make it go away", /straight front/.test(deckShapeForHouse(bowed, mid).note ?? "") && f1.length >= 3 && resolves(f1), f1.map((f) => f.id).join(","));
 const sh = f1.find((f) => f.id === "shift-to-end");
-check("…the bump-out shifted whole to the deck's end (the deck notches), the part levelled, the deck ended at it", !!sh && at(sh.house) === "0,4" && deckShapeForHouse(sh.shape, sh.house).shape.kind === "L" && f1.some((f) => f.id === "level") && f1.some((f) => f.id === "end-at"), sh ? at(sh.house) : "none");
-const endAt = f1.find((f) => f.id === "end-at")!;
-check("ending the deck at the bump-out leaves the house where it was", endAt.shape.widthFt === 6 && endAt.shape.widthFt + endAt.house.rightFt === shape.widthFt + mid.rightFt && endAt.house.leftFt === mid.leftFt, `w ${endAt.shape.widthFt} right ${endAt.house.rightFt}`);
+check("…the bump-out shifted whole to the deck's end (the deck notches), the part levelled, the deck ended at it", !!sh && at(sh.house) === "0,4" && deckShapeForHouse(sh.shape, sh.house).shape.kind === "L" && f1.some((f) => f.id === "level") && f1.some((f) => f.id === "end-at"), f1.map((f) => f.id).join(","));
+const endAt = f1.find((f) => f.id === "end-at");
+check("ending the deck at the bump-out leaves the house where it was", !!endAt && endAt.shape.widthFt === 6 && endAt.shape.widthFt + endAt.house.rightFt === bowed.widthFt + mid.rightFt && endAt.house.leftFt === mid.leftFt, endAt ? `w ${endAt.shape.widthFt} right ${endAt.house.rightFt}` : "none");
 check("with only 4 ft of wall past the ends the deck cannot slide 6 ft, so no slide is offered", !f1.some((f) => f.id.startsWith("slide")));
 const roomy: HouseDesign = { ...mid, leftFt: 10, rightFt: 10 };
-const f1b = wallFixes(shape, roomy, LIM);
+const f1b = wallFixes(bowed, roomy, LIM);
 const slid = f1b.find((f) => f.id.startsWith("slide"));
-check("with room past the ends the deck slides so the bump-out sits at its end, the house staying put", !!slid && slid.house.leftFt + slid.house.rightFt === roomy.leftFt + roomy.rightFt && slid.shape === shape && resolves(f1b), f1b.map((f) => f.id).join(","));
-
-// A recess under the deck
-const recess: HouseDesign = { ...defaultHouse(), jogs: [{ id: "j1", atFt: 6, dir: "away", depthFt: 2 }, { id: "j2", atFt: 10, dir: "toward", depthFt: 2 }] };
-const f2 = wallFixes(shape, recess, LIM);
-check("a recess under the deck: levelled, or the deck ended at it / started past it", /steps back/.test(deckShapeForHouse(shape, recess).note ?? "") && f2.some((f) => f.id === "level") && resolves(f2) && f2.length >= 2, f2.map((f) => f.id).join(","));
+check("with room past the ends the deck slides so the bump-out sits at its end, the house staying put", !!slid && slid.house.leftFt + slid.house.rightFt === roomy.leftFt + roomy.rightFt && slid.shape === bowed && resolves(f1b), f1b.map((f) => f.id).join(","));
+const f2 = wallFixes(bowed, recess, LIM);
+check("a bowed front over a recess: levelled, or the deck ended at it / started past it", f2.some((f) => f.id === "level") && resolves(f2) && f2.length >= 2, f2.map((f) => f.id).join(","));
 const recessLeft: HouseDesign = { ...defaultHouse(), rightFt: 8, jogs: [{ id: "j1", atFt: 0, dir: "away", depthFt: 2 }, { id: "j2", atFt: 5, dir: "toward", depthFt: 2 }] };
-const f3 = wallFixes(shape, recessLeft, LIM);
+const f3 = wallFixes(bowed, recessLeft, LIM);
 check("a recess at the deck's left end, 8 ft of wall past its right end: the deck can slide right past it", f3.some((f) => f.id === "slide-right") && resolves(f3), f3.map((f) => f.id).join(","));
-check("with only 4 ft past its right end it cannot (the house's end stops it)", !wallFixes(shape, { ...recessLeft, rightFt: 4 }, LIM).some((f) => f.id === "slide-right"));
-
-// Two bump-outs
-const two: HouseDesign = { ...defaultHouse(), jogs: [{ id: "j1", atFt: 2, dir: "toward", depthFt: 2 }, { id: "j2", atFt: 5, dir: "away", depthFt: 2 }, { id: "j3", atFt: 9, dir: "toward", depthFt: 3 }, { id: "j4", atFt: 13, dir: "away", depthFt: 3 }] };
-const f4 = wallFixes(shape, two, LIM);
-check("two bump-outs inside the deck: every one levelled is the way out", /twice/.test(deckShapeForHouse(shape, two).note ?? "") && f4.some((f) => f.id === "level-all") && resolves(f4), f4.map((f) => f.id).join(","));
+check("with only 4 ft past its right end it cannot (the house's end stops it)", !wallFixes(bowed, { ...recessLeft, rightFt: 4 }, LIM).some((f) => f.id === "slide-right"));
+const f4 = wallFixes(bowed, two, LIM);
+check("two bump-outs under a bowed front: every one levelled is a way out", f4.some((f) => f.id === "level-all") && resolves(f4), f4.map((f) => f.id).join(","));
 const twoEnd: HouseDesign = { ...defaultHouse(), jogs: [{ id: "j1", atFt: 2, dir: "toward", depthFt: 2 }, { id: "j2", atFt: 5, dir: "away", depthFt: 2 }, { id: "j3", atFt: 12, dir: "toward", depthFt: 3 }] };
-const f5 = wallFixes(shape, twoEnd, LIM);
+const f5 = wallFixes(bowed, twoEnd, LIM);
 check("two bump-outs, one at the end: level the other and the deck wraps the end one", f5.some((f) => f.id === "level-others") && resolves(f5) && deckShapeForHouse(f5.find((f) => f.id === "level-others")!.shape, f5.find((f) => f.id === "level-others")!.house).shape.kind === "L", f5.map((f) => f.id).join(","));
+// A bump-out that leaves less than a 3-ft leg in front of it: the deck cannot step around it.
+const fat: HouseDesign = { ...defaultHouse(), jogs: [{ id: "j1", atFt: 6, dir: "toward", depthFt: 10 }, { id: "j2", atFt: 10, dir: "away", depthFt: 10 }] };
+const f6 = wallFixes(shape, fat, LIM);
+check("a bump-out 10 ft out under a 12-ft deck: a note (3 ft kept in front), and fixes that clear it", /keeps at least 3 ft in front/.test(deckShapeForHouse(shape, fat).note ?? "") && f6.some((f) => f.id === "level") && resolves(f6), f6.map((f) => f.id).join(","));
 
 // Nothing to fix
 check("a straight wall and a bump-out at the end have no fixes", wallFixes(shape, defaultHouse(), LIM).length === 0 && wallFixes(shape, { ...defaultHouse(), jogs: [{ id: "j1", atFt: 12, dir: "toward", depthFt: 3 }] }, LIM).length === 0);
-check("every fix has a distinct id and a label", f1.concat(f2, f3, f4, f5).every((f) => f.label.length > 8) && new Set(f1.map((f) => f.id)).size === f1.length);
+check("every fix has a distinct id and a label", f1.concat(f2, f3, f4, f5, f6).every((f) => f.label.length > 8) && new Set(f1.map((f) => f.id)).size === f1.length);
 
 console.log(bad ? `${bad} FAILED` : "ALL PASS");
 process.exit(bad ? 1 : 0);

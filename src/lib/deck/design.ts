@@ -53,9 +53,23 @@ export interface FrontProfile {
 }
 export const FRONT_LABEL: Record<FrontKind, string> = { straight: "Straight", curve: "Curved (bowed out)", clipped: "Clipped corners" };
 
+/**
+ * THE DECK THAT FOLLOWS THE HOUSE WALL (owner, 2026-10-19, a 47½-ft deck along a wall that steps back 5½ ft for 11 ft:
+ * "deck should follow house wall when moving wall in set out set, make better"). One part of the deck's back edge:
+ * from `x0Ft` to `x1Ft` (the deck's feet from its left end) the back runs at `yFt` from the house line — out where the
+ * wall comes out (the deck steps around it), back (negative) where the wall steps back (the deck reaches in to it, its
+ * ledger on that wall). `depthFt` stays the house line to the front, the size the contractor gave.
+ */
+export interface BackPart {
+  x0Ft: number;
+  x1Ft: number;
+  yFt: number;
+}
+
 export type DeckShape =
   | { kind: "rect"; widthFt: number; depthFt: number; front?: FrontProfile }
-  | { kind: "L"; widthFt: number; depthFt: number; notch: { corner: NotchCorner; widthFt: number; depthFt: number } };
+  | { kind: "L"; widthFt: number; depthFt: number; notch: { corner: NotchCorner; widthFt: number; depthFt: number } }
+  | { kind: "wall"; widthFt: number; depthFt: number; back: BackPart[] };
 
 /**
  * How the deck meets the house:
@@ -305,16 +319,19 @@ export function defaultSpa(): SpaDesign {
  *  against the house wall, slid by its alignment. Null when off. */
 export function spaRectIn(design: Pick<DeckDesign, "spa" | "shape">): { x0: number; x1: number; y0: number; y1: number } | null {
   const spa = design.spa;
-  if (!spa?.on || design.shape.kind !== "rect") return null;
+  if (!spa?.on || design.shape.kind === "L") return null;
   const W = design.shape.widthFt * 12;
   const w = spa.widthFt * 12;
   const d = spa.depthFt * 12;
   const margin = 6;
   const D = design.shape.depthFt * 12;
   const x0 = spa.align === "left" ? margin : spa.align === "right" ? W - w - margin : (W - w) / 2;
+  // On a deck that follows the wall, the tub stays clear of a bump-out behind it.
+  const behind = design.shape.kind === "wall" ? Math.max(0, ...design.shape.back.filter((b) => b.x1Ft * 12 > x0 && b.x0Ft * 12 < x0 + w).map((b) => b.yFt * 12)) : 0;
+  if (behind + margin + d > D - margin + 0.01 && behind > 0) return null;
   // At the FRONT edge: by the rail with the view, clear of the door path
   // along the house — and where every drawing actually shows it.
-  return { x0, x1: x0 + w, y0: Math.max(margin, D - d - margin), y1: Math.max(margin + d, D - margin) };
+  return { x0, x1: x0 + w, y0: Math.max(margin + behind, D - d - margin), y1: Math.max(margin + behind + d, D - margin) };
 }
 
 export type DeckPattern = "straight" | "diagonal" | "herringbone";
@@ -652,6 +669,11 @@ function normalizeShape(raw: unknown, fallback: DeckShape): DeckShape {
   const r = obj(raw);
   const widthFt = toInch(clamp(num(r.widthFt, fallback.widthFt), DECK_LIMITS.widthFt.min, DECK_LIMITS.widthFt.max));
   const depthFt = toInch(clamp(num(r.depthFt, fallback.depthFt), DECK_LIMITS.depthFt.min, DECK_LIMITS.depthFt.max));
+  if (r.kind === "wall") {
+    const back = normalizeBack(r.back, widthFt, depthFt);
+    if (back) return { kind: "wall", widthFt, depthFt, back };
+    return { kind: "rect", widthFt, depthFt };
+  }
   if (r.kind !== "L") {
     const f = obj(r.front);
     const kind = oneOf(f.kind, ["straight", "curve", "clipped"] as const, "straight");
@@ -677,6 +699,40 @@ function normalizeShape(raw: unknown, fallback: DeckShape): DeckShape {
       depthFt: toInch(clamp(num(n.depthFt, depthFt / 2), DECK_LIMITS.notchFt.min, maxD)),
     },
   };
+}
+
+/** The narrowest part a deck follows the wall into; the most a deck reaches back behind the house line, ft. */
+export const BACK_LIMITS = { partFt: 2, reachFt: 16 } as const;
+
+/**
+ * A wall deck's back parts made buildable: in order, end to end over the deck's width, to the inch; each part leaves a
+ * leg of at least `legFt` in front of it and reaches back no farther than `reachFt` (nor past the 40-ft depth);
+ * neighbours at the same line are one part. Null when that leaves the back straight — the deck is a rectangle.
+ */
+export function normalizeBack(raw: unknown, widthFt: number, depthFt: number): BackPart[] | null {
+  if (!Array.isArray(raw)) return null;
+  const lo = -Math.min(BACK_LIMITS.reachFt, DECK_LIMITS.depthFt.max - depthFt);
+  const hi = depthFt - DECK_LIMITS.legFt.min;
+  const cuts = raw
+    .map((v) => obj(v))
+    .map((b) => ({ x0: num(b.x0Ft, NaN), x1: num(b.x1Ft, NaN), y: num(b.yFt, 0) }))
+    .filter((b) => Number.isFinite(b.x0) && Number.isFinite(b.x1) && b.x1 > b.x0)
+    .sort((a, b) => a.x0 - b.x0);
+  if (!cuts.length) return null;
+  const out: BackPart[] = [];
+  let x = 0;
+  for (let i = 0; i < cuts.length; i++) {
+    const x1 = i === cuts.length - 1 ? widthFt : toInch(clamp(cuts[i].x1, x, widthFt));
+    if (x1 - x < 1 / 12) continue;
+    const y = toInch(clamp(cuts[i].y, lo, hi));
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.yFt - y) < 1 / 24) last.x1Ft = x1;
+    else out.push({ x0Ft: x, x1Ft: x1, yFt: y });
+    x = x1;
+  }
+  if (out.length && out[out.length - 1].x1Ft < widthFt) out[out.length - 1].x1Ft = widthFt;
+  if (out.length < 2 && (!out.length || Math.abs(out[0].yFt) < 1 / 24)) return null;
+  return out;
 }
 
 /**
@@ -1009,7 +1065,7 @@ function normalizeLower(raw: unknown, shape: DeckShape, heightIn: number): Lower
   const d = defaultLowerLevel();
   const r = obj(raw);
   const front = shape.kind === "rect" ? shape.front : undefined;
-  const on = r.on === true && shape.kind === "rect" && heightIn > LOWER_LIMITS.dropIn.min + 4 && front?.kind !== "curve";
+  const on = r.on === true && shape.kind !== "L" && heightIn > LOWER_LIMITS.dropIn.min + 4 && front?.kind !== "curve";
   const maxDrop = Math.max(LOWER_LIMITS.dropIn.min, Math.min(LOWER_LIMITS.dropIn.max, heightIn - 4));
   // Between clipped corners the lower deck can be no wider than the straight part of the front.
   const maxWidth = Math.max(LOWER_LIMITS.widthFt.min, Math.min(LOWER_LIMITS.widthFt.max, shape.widthFt - (front?.kind === "clipped" ? 2 * front.clipFt : 0)));
@@ -1056,7 +1112,7 @@ function normalizeSite(raw: unknown, loadPsf: number, fallbackState?: string | n
 
 /** True when the design has a lower level in front of the main deck. */
 export function hasLowerLevel(design: DeckDesign): boolean {
-  return hasDeck(design) && design.lower.on && design.shape.kind === "rect";
+  return hasDeck(design) && design.lower.on && design.shape.kind !== "L";
 }
 
 /* ------------------------------------------------------------------ */
@@ -1175,7 +1231,8 @@ export function hasRoof(design: DeckDesign): boolean {
 
 /** One rectangle of the deck, inches. x runs along the house, y out from it. */
 export interface Zone {
-  id: "a" | "b";
+  /** "a", "b"… — an L has two, a deck that follows the wall one per part of its back. */
+  id: string;
   x0: number;
   x1: number;
   y0: number;
@@ -1191,6 +1248,8 @@ export function shapeZones(shape: DeckShape): Zone[] {
   const W = Math.round(shape.widthFt * 12);
   const D = Math.round(shape.depthFt * 12);
   if (shape.kind === "rect") return [{ id: "a", x0: 0, x1: W, y0: 0, y1: D }];
+  // A deck that follows the wall: one zone per part of its back, each framed off the wall behind it.
+  if (shape.kind === "wall") return shape.back.map((b, i) => ({ id: String.fromCharCode(97 + i), x0: Math.round(b.x0Ft * 12), x1: Math.round(b.x1Ft * 12), y0: Math.round(b.yFt * 12), y1: D }));
   const nw = Math.round(shape.notch.widthFt * 12);
   const nd = Math.round(shape.notch.depthFt * 12);
   const left = shape.notch.corner.endsWith("left");
@@ -1225,6 +1284,20 @@ export function shapeEdges(shape: DeckShape, placement: Placement): DeckEdge[] {
     // A clipped front shortens the sides; a bowed one lengthens the front (its real length is the arc's).
     const clip = shape.front?.kind === "clipped" ? shape.front.clipFt * 12 : 0;
     return [edge(0, 0, W, 0, "back", true), edge(W, 0, W, D - clip, "right", false), edge(0, D, W, D, "front", false, frontEdgeLengthIn(shape)), edge(0, 0, 0, D - clip, "left", false)];
+  }
+  if (shape.kind === "wall") {
+    // Every part's back lies on the wall, and so does each face where the wall steps between two parts — the side of
+    // a bump-out, or of the set-back the deck reaches into.
+    const out: DeckEdge[] = [];
+    zones.forEach((z, i) => {
+      out.push(edge(z.x0, z.y0, z.x1, z.y0, "back", true));
+      const n = zones[i + 1];
+      if (n && n.y0 !== z.y0) out.push(edge(z.x1, Math.min(z.y0, n.y0), z.x1, Math.max(z.y0, n.y0), n.y0 > z.y0 ? "right" : "left", true));
+    });
+    out.push(edge(0, D, W, D, "front", false));
+    out.push(edge(0, zones[0].y0, 0, D, "left", false));
+    out.push(edge(W, zones[zones.length - 1].y0, W, D, "right", false));
+    return out;
   }
   const [a, b] = zones;
   const left = shape.notch.corner.endsWith("left");
@@ -1272,6 +1345,18 @@ export function shapeOutline(shape: DeckShape): Array<{ x: number; y: number }> 
     }
     return [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }, { x: 0, y: D }];
   }
+  if (shape.kind === "wall") {
+    // Along the back, left to right, stepping with the wall; then the right side, the front and the left side.
+    const pts: Array<{ x: number; y: number }> = [];
+    for (const z of shapeZones(shape)) {
+      pts.push({ x: z.x0, y: z.y0 }, { x: z.x1, y: z.y0 });
+    }
+    pts.push({ x: W, y: D }, { x: 0, y: D });
+    return pts.filter((p, i) => {
+      const q = pts[(i + pts.length - 1) % pts.length];
+      return Math.abs(p.x - q.x) > 0.01 || Math.abs(p.y - q.y) > 0.01;
+    });
+  }
   const nw = Math.round(shape.notch.widthFt * 12);
   const nd = Math.round(shape.notch.depthFt * 12);
   switch (shape.notch.corner) {
@@ -1310,7 +1395,8 @@ export function sizeWords(design: DeckDesign): string {
     return p.shape === "square" ? `${ft(p.widthFt)} square` : `${ft(p.widthFt)} × ${ft(p.depthFt)}`;
   }
   const front = s.kind === "rect" && s.front && s.front.kind !== "straight" ? (s.front.kind === "curve" ? " curved front" : " clipped corners") : "";
-  const lower = design.lower.on && s.kind === "rect" ? " two levels" : "";
+  const lower = design.lower.on && s.kind !== "L" ? " two levels" : "";
+  if (s.kind === "wall") return `${ft(s.widthFt)} × ${ft(s.depthFt)} following the house wall${lower}`;
   return s.kind === "rect" ? `${ft(s.widthFt)} × ${ft(s.depthFt)}${front}${lower}` : `${ft(s.widthFt)} × ${ft(s.depthFt)} L-shaped`;
 }
 
