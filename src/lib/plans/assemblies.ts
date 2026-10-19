@@ -21,6 +21,7 @@ import { isBath, isBedroom, isCloset, isDen, isDining, isGarage, isKitchen, isLa
 import type { PlanRoom, SheetRead } from "./sheet";
 import type { AddItem, House, TakeoffCheck, TakeoffItem, TakeoffRole, TakeoffSource, TakeoffUnit } from "./takeoff";
 import { mechOf } from "./takeoff";
+import { loadWords, type PlanHvacLoad } from "./hvacEnvelope";
 
 export type AssemblyContext = {
   h: House;
@@ -30,6 +31,8 @@ export type AssemblyContext = {
   add: AddItem;
   checks: TakeoffCheck[];
   pages: { level: number[]; ground: number[]; all: number[] };
+  /** The Manual J-style load worked out from the plans (lib/plans/hvacLoad), when the job's place was known. */
+  hvac?: PlanHvacLoad | null;
 };
 
 const C = Math.ceil;
@@ -88,11 +91,14 @@ export function addAssemblies(ctx: AssemblyContext): void {
   /** The furnace or the water heater burns gas (a gas cooktop or fireplace alone does not make a gas house). */
   const gasHeat = /\bgas\b|furnace|propane/i.test(`${mech?.system ?? ""} ${mech?.waterHeater ?? ""}`);
   const electricWh = !gasHeat || /electric|heat pump|hybrid/i.test(mech?.waterHeater ?? "");
-  // Heating & cooling size: the plans' tons, else the design heat load, else ~800 sq ft a ton.
+  // Heating & cooling size: the plans' tons (the designer's call), else the Manual J-style load worked out from the
+  // plans (lib/plans/hvacLoad, 2026-10-18), else the design heat load the energy sheet writes, else ~800 sq ft a ton.
   const heatLoad = sheets.map((s) => s.mechanical.heatLoadBtu).find((x): x is number => !!x) ?? null;
-  const tons = mech?.tons ?? (heatLoad ? Math.max(1.5, Math.round((heatLoad / 12000) * 2) / 2) : Math.max(1.5, Math.round((h.livingSqFt / 800) * 2) / 2));
+  const load = ctx.hvac ?? null;
+  const byLoad = !!load && !mech?.tons;
+  const tons = mech?.tons ?? (load ? load.system.tons * load.system.systems : heatLoad ? Math.max(1.5, Math.round((heatLoad / 12000) * 2) / 2) : Math.max(1.5, Math.round((h.livingSqFt / 800) * 2) / 2));
   const statedSystems = Math.max(0, ...sheets.map((s) => s.mechanical.systems ?? 0));
-  const sysCount = Math.max(statedSystems, tons > 5 ? Math.ceil(tons / 5) : 1);
+  const sysCount = Math.max(statedSystems, byLoad && load ? load.system.systems : tons > 5 ? Math.ceil(tons / 5) : 1);
   const fx = { ...h.fixtures };
   const assumed: string[] = [];
   // What every house has whether or not the plans draw it.
@@ -671,14 +677,36 @@ export function addAssemblies(ctx: AssemblyContext): void {
   const first = Math.ceil((tons / sysCount) * 2) / 2;
   const split = sysCount > 1 ? ` (${sysCount} systems: ${[first, ...Array(sysCount - 1).fill(Math.max(1.5, round((tons - first) / (sysCount - 1), 1)))].join(" + ")} ton)` : "";
   const heatPump = /heat pump/i.test(mech?.system ?? "") || !gasHeat;
-  both("hvac", "system", `${heatPump ? "Heat pump" : "Furnace + A/C"} — ${mech?.system ?? (heatPump ? "ducted air-source heat pump" : "gas furnace with central A/C")}, ${tons} ton${split}: outdoor unit, air handler, coil`, sysCount, "each", mech?.tons || heatLoad ? "plan" : "rule", mech?.tons ? "mechanical plan" : heatLoad ? `design heat load ${heatLoad.toLocaleString("en-US")} Btu/h ÷ 12,000 Btu a ton` : `~800 sq ft a ton on ${h.livingSqFt} sq ft — a Manual J sets the real size`, "Equipment");
-  if (sysCount > 1 && statedSystems < 2) ctx.checks.push({ level: "info", text: `${tons} tons is past the largest single residential system (5 tons) — priced as ${sysCount} systems.` });
-  if (heatPump) mat("hvac", "heat-strips", "Electric backup heat strips (8–10 kW) in each air handler", sysCount, "each", "rule", "heat pump backup for design days", "Equipment");
+  const furnaceWords = byLoad && load?.system.furnaceInputBtu ? `${load.system.furnaceInputBtu.toLocaleString("en-US")} Btu/h gas furnace with central A/C` : "gas furnace with central A/C";
+  const sizeBasis = mech?.tons
+    ? "mechanical plan"
+    : byLoad && load
+      ? `Manual J-style load from the plans: ${loadWords(load)}. ${load.system.note}`
+      : heatLoad
+        ? `design heat load ${heatLoad.toLocaleString("en-US")} Btu/h ÷ 12,000 Btu a ton`
+        : `~800 sq ft a ton on ${h.livingSqFt} sq ft — a Manual J sets the real size`;
+  both("hvac", "system", `${heatPump ? "Heat pump" : "Furnace + A/C"} — ${mech?.system ?? (heatPump ? "ducted air-source heat pump" : furnaceWords)}, ${tons} ton${split}: outdoor unit, air handler, coil`, sysCount, "each", mech?.tons ? "plan" : byLoad ? "derived" : heatLoad ? "plan" : "rule", sizeBasis, "Equipment");
+  if (sysCount > 1 && statedSystems < 2 && !byLoad) ctx.checks.push({ level: "info", text: `${tons} tons is past the largest single residential system (5 tons) — priced as ${sysCount} systems.` });
+  if (load) {
+    const say = `${loadWords(load)} — ${load.loadTons} tons of load`;
+    if (byLoad) ctx.checks.push({ level: "info", text: `Heating & cooling sized from the plans with a Manual J-style load: ${say}. ${load.system.note}` });
+    // The energy sheet's own design heat load, set beside ours: a wide gap means one of the two read something else.
+    if (heatLoad && Math.abs(heatLoad - load.heatingBtuh) > heatLoad * 0.2) ctx.checks.push({ level: "info", text: `The energy sheet writes a design heat load of ${heatLoad.toLocaleString("en-US")} Btu/h; the load worked out from the plans' windows and insulation comes to ${load.heatingBtuh.toLocaleString("en-US")} Btu/h at ${load.climate.heatingF} °F — check the design temperature the sheet used.` });
+    else if (mech?.tons && Math.abs(mech.tons - load.loadTons) >= 0.5) ctx.checks.push({ level: "warn", text: `The mechanical plan calls for ${mech.tons} tons; a Manual J-style load from the same plans comes to ${load.loadTons} tons (${say}). Priced at the plans' ${mech.tons} tons — ask the designer before ordering.` });
+  } else if (!mech?.tons && !heatLoad) {
+    ctx.checks.push({ level: "info", text: "Heating & cooling sized at ~800 sq ft a ton — give the job's address and the size comes from a Manual J-style load on the plans' windows, insulation and climate." });
+  }
+  if (heatPump) {
+    const kw = byLoad && load?.system.backupKw ? load.system.backupKw : null;
+    mat("hvac", "heat-strips", `Electric backup heat strips (${kw ? `${kw} kW` : "8–10 kW"}) in each air handler`, sysCount, "each", kw ? "derived" : "rule", kw && load ? `the ${load.heatingBtuh.toLocaleString("en-US")} Btu/h heating load at ${load.climate.heatingF} °F, less what the heat pump still makes there` : "heat pump backup for design days", "Equipment");
+  }
   mat("hvac", "lineset", "Refrigerant line sets (insulated copper) with wall sleeves", sysCount * 35, "linear ft", "rule", "~35' per system", "Equipment");
   both("hvac", "pads", "Equipment pads / wall brackets and condensate drains", sysCount, "each", "derived", "every outdoor unit and air handler", "Equipment");
-  const supplies = rooms.reduce((a, r) => a + (isCloset(r) && !/\bw\.?i\.?c/i.test(r.name) ? 0 : (r.areaSqFt ?? 0) > 300 ? 3 : (r.areaSqFt ?? 0) > 180 ? 2 : 1), 0);
+  const byRoom = rooms.reduce((a, r) => a + (isCloset(r) && !/\bw\.?i\.?c/i.test(r.name) ? 0 : (r.areaSqFt ?? 0) > 300 ? 3 : (r.areaSqFt ?? 0) > 180 ? 2 : 1), 0);
+  // The design airflow, when the load gave one: a supply carries ~130 CFM, so the rooms' count is a floor.
+  const supplies = load ? Math.max(byRoom, Math.ceil(load.coolingCfm / 130)) : byRoom;
   const returns = stories + bedrooms.length;
-  both("hvac", "ducts", "Duct system: supply runs with boots and registers, returns, trunks, plenums, sealed with mastic", supplies + returns, "each", "derived", `${supplies} supplies + ${returns} returns`, "Distribution");
+  both("hvac", "ducts", "Duct system: supply runs with boots and registers, returns, trunks, plenums, sealed with mastic", supplies + returns, "each", "derived", `${supplies} supplies + ${returns} returns${load ? ` · ${load.coolingCfm.toLocaleString("en-US")} CFM of design airflow` : ""}`, "Distribution");
   mat("hvac", "registers", "Supply registers (floor/ceiling) with boots", supplies, "each", "derived", "1–3 per room by size", "Distribution");
   mat("hvac", "returns", "Return grilles (central + each bedroom) with filter grilles", returns, "each", "derived", "a central return per floor + every bedroom", "Distribution");
   mat("hvac", "flex", "Insulated flex duct R-8, 6\"–8\", 25' bags", C((supplies * 18) / 25), "bags", "derived", `${supplies} supplies × ~18'`, "Distribution");
@@ -690,7 +718,7 @@ export function addAssemblies(ctx: AssemblyContext): void {
   if (kitchens.length) both("hvac", "hood-duct", "Range hood duct 6\"–8\" to the exterior with cap (make-up air if over 400 CFM)", kitchens.length, "each", "rule", "every kitchen", "Ventilation");
   if (laundries.length) both("hvac", "dryer-vent", "Dryer vent: 4\" rigid duct, dryer box, wall cap", laundries.length, "each", "rule", "every laundry", "Ventilation");
   if (n("gasFireplace")) both("hvac", "fireplace", "Gas fireplace 42\"–48\" direct-vent: unit, vent kit, blower", n("gasFireplace"), "each", "plan", "the fireplace on the plans", "Fireplace");
-  both("hvac", "commission", "Load calculation (Manual J/S/D), start-up, duct leakage test and balancing", 1, "lot", "rule", "energy-code duct leakage test, start-up and balancing", "Start-up");
+  both("hvac", "commission", "Load calculation (Manual J/S/D), start-up, duct leakage test and balancing", 1, "lot", "rule", load ? "a Manual J-style load from the plans set this estimate's size; the permit's ACCA report, start-up, the energy-code duct leakage test and balancing are still to do" : "energy-code duct leakage test, start-up and balancing", "Start-up");
   both("hvac", "area", "Conditioned area served", h.livingSqFt, "sq ft", "plan", h.livingFrom, "Start-up");
 
   if (assumed.length) ctx.checks.push({ level: "info", text: `Not drawn on the plans, assumed because every house has them: ${assumed.join(", ")}.` });

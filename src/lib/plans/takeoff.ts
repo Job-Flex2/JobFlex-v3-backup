@@ -10,7 +10,8 @@
 //
 // The contractor sees and edits every item before anything is priced.
 import { pitchOf, round } from "./dims";
-import { levelName, type PlanOpening, type PlanRoom, type SheetRead } from "./sheet";
+import { levelName, type Compass, type PlanEnergy, type PlanFacade, type PlanOpening, type PlanRoom, type SheetRead } from "./sheet";
+import type { PlanHvacLoad } from "./hvacEnvelope";
 import { isBath, isGarage, isKitchen, isOverheadDoor, isPorch, isStairOrHall, isVoid, roomPerimeter, roomWeight } from "./rooms";
 import { addAssemblies } from "./assemblies";
 import type { Measured } from "./ask";
@@ -120,9 +121,15 @@ export type House = {
   electricalFrom: TakeoffSource;
   siding: string | null;
   notes: string[];
+  /** What the plans say the house is built to, for the heating & cooling load (2026-10-18): the energy-code
+   *  values, the glass on each elevation, the way the front faces. Optional — a house from older reads has none. */
+  energy?: PlanEnergy | null;
+  facades?: PlanFacade[];
+  frontFaces?: Compass | null;
 };
 
-export type Takeoff = { house: House; items: TakeoffItem[]; checks: TakeoffCheck[]; sheets: number };
+/** `hvac`: the heating & cooling load worked out from the plans (lib/plans/hvacLoad), when one was run. */
+export type Takeoff = { house: House; items: TakeoffItem[]; checks: TakeoffCheck[]; sheets: number; hvac?: PlanHvacLoad };
 
 /**
  * What the contractor corrected about the house on the takeoff screen. Each one
@@ -452,9 +459,28 @@ export function buildHouse(sheets: SheetRead[], edits: HouseEdits = {}): { house
     },
     voids: voidNames.size,
     notes: Array.from(new Set(sheets.flatMap((s) => s.notes))).slice(0, 30),
+    ...houseEnvelope(sheets),
   };
   if (!levels.length) checks.push({ level: "warn", text: "No floor plan was read — the takeoff needs at least one floor plan sheet." });
   return { house, checks };
+}
+
+/** The envelope the plans specify, merged over the sheets: each energy value from the first sheet that gives it,
+ *  each elevation's glass at the largest figure read for it, the front's facing from a site plan first. */
+function houseEnvelope(sheets: SheetRead[]): Pick<House, "energy" | "facades" | "frontFaces"> {
+  const keys: Array<keyof PlanEnergy> = ["wallR", "ceilingR", "floorR", "slabR", "basementWallR", "windowU", "windowShgc", "ach50", "ductLocation", "ductLeakage"];
+  const energy = {} as Record<keyof PlanEnergy, PlanEnergy[keyof PlanEnergy]>;
+  for (const k of keys) energy[k] = sheets.map((sh) => sh.energy?.[k] ?? null).find((v) => v != null) ?? null;
+  const anyEnergy = keys.some((k) => energy[k] != null);
+  const byFace = new Map<string, PlanFacade>();
+  for (const sh of sheets) {
+    for (const f of sh.facades ?? []) {
+      const was = byFace.get(f.facing);
+      if (!was || (f.glassSqFt ?? 0) > (was.glassSqFt ?? 0)) byFace.set(f.facing, f);
+    }
+  }
+  const site = sheets.find((sh) => sh.kind === "site" && sh.frontFaces)?.frontFaces ?? sheets.find((sh) => sh.frontFaces)?.frontFaces ?? null;
+  return { energy: anyEnergy ? (energy as PlanEnergy) : null, facades: Array.from(byFace.values()), frontFaces: site };
 }
 
 /**
@@ -463,7 +489,7 @@ export function buildHouse(sheets: SheetRead[], edits: HouseEdits = {}): { house
  * made, so whatever is computed from it — the slabs from the countertops, the sheets from
  * the walls — follows. The contractor's own numbers (`qtyEdits`) win over both.
  */
-export function computeTakeoff(sheets: SheetRead[], edits: HouseEdits = {}, qtyEdits: Record<string, number> = {}, measured: Record<string, Measured> = {}): Takeoff {
+export function computeTakeoff(sheets: SheetRead[], edits: HouseEdits = {}, qtyEdits: Record<string, number> = {}, measured: Record<string, Measured> = {}, opts: { hvac?: PlanHvacLoad | null } = {}): Takeoff {
   const { house: h, checks } = buildHouse(sheets, edits);
   const items: TakeoffItem[] = [];
   const allPages = uniq(sheets.map((s) => s.page));
@@ -715,11 +741,11 @@ export function computeTakeoff(sheets: SheetRead[], edits: HouseEdits = {}, qtyE
   // (lib/plans/assemblies). A quantity the contractor corrected is applied first, so the
   // materials that rest on it follow.
   applyQtyEdits(items, qtyEdits);
-  addAssemblies({ h, sheets, items, add, checks, pages: { level: levelPages, ground: groundPages, all: allPages } });
+  addAssemblies({ h, sheets, items, add, checks, pages: { level: levelPages, ground: groundPages, all: allPages }, hvac: opts.hvac ?? null });
   applyQtyEdits(items, qtyEdits);
 
   if (h.levels.some((l) => l.plateFrom === "rule")) checks.push({ level: "info", text: `Plate heights not found for ${h.levels.filter((l) => l.plateFrom === "rule").map((l) => l.name.toLowerCase()).join(", ")} — ${h.levels.filter((l) => l.plateFrom === "rule").map((l) => `${l.plateFt}'`).join(", ")} assumed.` });
-  return { house: h, items, checks, sheets: sheets.length };
+  return { house: h, items, checks, sheets: sheets.length, ...(opts.hvac ? { hvac: opts.hvac } : {}) };
 }
 
 export type AddItem = (

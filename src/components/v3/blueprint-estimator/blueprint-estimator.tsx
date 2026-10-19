@@ -20,18 +20,19 @@ import { useRouter } from "next/navigation";
 import s from "./blueprint-estimator.module.css";
 import { BlueprintLoadingCard } from "./blueprint-loading-card";
 import { clientErrorText } from "@/lib/staleDeploy";
-import { askPlan, getPlanPriceChecks, measurePlanSheet, readPlanSheet, skimPlanSheet, startPlanSession } from "@/actions/planEstimator";
+import { askPlan, getPlanPriceChecks, measurePlanSheet, planHvacLoadAction, readPlanSheet, skimPlanSheet, startPlanSession } from "@/actions/planEstimator";
+import { planEnvelopeOf, type PlanHvacLoad } from "@/lib/plans/hvacEnvelope";
 import { convertEstimateToProposal, saveEstimate } from "@/actions/advancedEstimator";
 import type { pricePlanTrade } from "@/actions/advancedEstimator";
 import { MAX_PLAN_PAGES, openPlanFiles, type PlanPage } from "@/lib/plans/pdfClient";
-import { formatTextLayer, pageWorthReading } from "@/lib/plans/readPrompt";
-import { SHEET_KINDS, type SheetRead } from "@/lib/plans/sheet";
+import { formatTextLayer } from "@/lib/plans/readPrompt";
+import type { SheetRead } from "@/lib/plans/sheet";
 import { computeTakeoff, PLAN_TRADES, TRADE_LABEL, type PlanTrade, type Takeoff, type TakeoffItem } from "@/lib/plans/takeoff";
 import { houseBriefOf, type HouseBrief } from "@/lib/plans/tradeBrief";
 import { mergePlanEstimate, type PlanEstimate, type TradeResult } from "@/lib/plans/merge";
 import { applyFocus, jobItems, partialTrades, scopeByRules, sheetLite, withFinish, type FocusRead, type FoundRow, type JobScope, type JobSpec, type SheetLite } from "@/lib/plans/ask";
 import { BASE_KINDS, kindsFor, readRank, readsAtAll, readsLight, type SheetSkim } from "@/lib/plans/readOrder";
-import { MAX_SHEET_IMAGE_CHARS } from "@/lib/plans/wire";
+import { fitImages, guessKind, pool, textKind } from "@/lib/plans/readClient";
 import { buildListCsv, downloadText, SOURCE_LABEL } from "@/lib/plans/csv";
 import { handPlanEstimate } from "@/lib/plans/handoff";
 import { estimateFromLines, isBilled, lineTotal, type ConsoleLine } from "@/lib/estimate/console-model";
@@ -137,42 +138,6 @@ async function postTradePrice(body: Parameters<typeof pricePlanTrade>[0], signal
   const data = (await res.json().catch(() => null)) as TradePriceRun | null;
   if (!data) return { ok: false, error: res.status === 504 ? "This trade took too long to price. Try it again." : "This trade could not be priced. Try it again." };
   return data;
-}
-
-async function pool<T>(items: T[], n: number, fn: (t: T) => Promise<void>): Promise<void> {
-  let next = 0;
-  const lane = async () => {
-    while (next < items.length) {
-      const i = next++;
-      await fn(items[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, lane));
-}
-
-/** The whole sheet always; close-ups while the request stays under Vercel's size. */
-function fitImages(overview: string, tiles: string[]): string[] {
-  const out = [overview];
-  let total = overview.length;
-  for (const t of tiles) {
-    if (total + t.length > MAX_SHEET_IMAGE_CHARS - 40_000) break;
-    out.push(t);
-    total += t.length;
-  }
-  return out;
-}
-
-/** A sheet not read (a details sheet): what its title block calls it. */
-function guessKind(p: PlanPage): SheetRead["kind"] {
-  const g = pageWorthReading(p.text, p.titleText).guess;
-  return (SHEET_KINDS as readonly string[]).includes(g) ? (g as SheetRead["kind"]) : "other";
-}
-
-/** What a sheet's own text says it is — null for a scan or CAD lettering drawn as lines. */
-function textKind(p: PlanPage): SheetRead["kind"] | null {
-  if (!p.text.trim()) return null;
-  const g = guessKind(p);
-  return g === "other" ? null : g;
 }
 
 export function BlueprintEstimator() {
@@ -563,10 +528,23 @@ export function BlueprintEstimator() {
       await waitFor(scope.wholeHouse ? "all" : kindsFor(jobTrades));
       if (!alive()) return;
       sheets = readSheets();
-      const takeoff = computeTakeoff(sheets, {}, {}, found.measured);
+      let takeoff = computeTakeoff(sheets, {}, {}, found.measured);
       const houseNow = houseBriefOf(takeoff.house);
       if (nowMs() - lapAt > 1500) lap("Finishing the plans");
-      const items = withFinish(scope.wholeHouse ? takeoff.items : jobItems(scope, takeoff.items, [...job.extra, ...found.added]), req);
+      const pick = (t: Takeoff) => withFinish(scope.wholeHouse ? t.items : jobItems(scope, t.items, [...job.extra, ...found.added]), req);
+      let items = pick(takeoff);
+      // HEATING & COOLING FROM A LOAD (owner, 2026-10-18: "estimate HVAC Manual J based"): when the job prices HVAC,
+      // the plans' windows, insulation, floors and the job's climate go through the HVAC engine's Manual J-style load
+      // and Manual S size, and the build list is made again on it. A failed load keeps the build list's rule size.
+      if (items.some((i) => i.trade === "hvac")) {
+        const ran = await planHvacLoadAction({ token: tok, location: loc || null, envelope: planEnvelopeOf(takeoff.house, sheets) }).catch(() => null);
+        if (!alive()) return;
+        if (ran?.ok) {
+          takeoff = computeTakeoff(sheets, {}, {}, found.measured, { hvac: ran.load });
+          items = pick(takeoff);
+        }
+        lap("Heating & cooling load");
+      }
       if (!items.length) throw new Error("Nothing on these plans matches that job. Try naming the trade or the finish.");
 
       // 4. priced, trade by trade
@@ -1086,6 +1064,7 @@ export function BlueprintEstimator() {
           ) : (
             <p className={s.p}>Every quantity of this job comes straight from the plans&apos; build list below.</p>
           )}
+          {result.takeoff.hvac && <HvacLoadCard load={result.takeoff.hvac} onPage={(pg) => void openViewer(pg)} />}
           {result.specs.length > 0 && (
             <div className={s.specs}>
               <h3 className={s.h3}>From the plans&apos; notes</h3>
@@ -1134,6 +1113,61 @@ export function BlueprintEstimator() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+/** The heating & cooling load worked out from the plans (2026-10-18): the size it calls for, then every input with
+ *  where it came from — the plans (with their pages) or an assumption — and the parts of the load, folded. */
+function HvacLoadCard({ load, onPage }: { load: PlanHvacLoad; onPage: (page: number) => void }) {
+  const n = (v: number) => v.toLocaleString("en-US");
+  const sys = load.system;
+  const size = `${sys.systems > 1 ? `${sys.systems} × ` : ""}${sys.tons} ton${sys.tons === 1 ? "" : "s"}`;
+  return (
+    <div className={s.hvac} data-hvac-load>
+      <h3 className={s.h3}>Heating &amp; cooling load · Manual J-style</h3>
+      <div className={s.hvacNums}>
+        <div><b>{n(load.coolingTotalBtuh)}</b><span>Btu/h cooling at {load.climate.coolingF} °F · {load.loadTons} tons of load</span></div>
+        <div><b>{n(load.heatingBtuh)}</b><span>Btu/h heating at {load.climate.heatingF} °F</span></div>
+        <div><b>{size}</b><span>{sys.heatPump ? "heat pump" : "A/C with furnace"} · {n(load.coolingCfm)} CFM</span></div>
+      </div>
+      <p className={s.hvacNote}>{sys.note}</p>
+      <ul className={s.hvacInputs}>
+        {load.inputs.map((i) => (
+          <li key={i.label}>
+            <span className={s.hvacLabel}>{i.label}</span>
+            <span className={s.hvacValue}>{i.value}</span>
+            <span className={s.hvacFrom}>
+              <span className={`${s.stamp} ${i.from === "plans" ? s.stampOk : s.stampWarn}`}>{i.from === "plans" ? "Plans" : "Assumed"}</span>
+              {(i.pages ?? []).slice(0, 4).map((pg) => (
+                <button key={pg} type="button" className={s.pageLink} onClick={() => onPage(pg)}>
+                  p. {pg}
+                </button>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <details className={s.more}>
+        <summary>
+          <span>Where the load comes from · {load.components.length} parts</span>
+          <svg className={s.moreChev} viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </summary>
+        <ul className={s.hvacParts}>
+          {load.components.map((c) => (
+            <li key={c.name}>
+              <span>{c.name}</span>
+              <span>{n(c.coolingBtuh)} cooling</span>
+              <span>{n(c.heatingBtuh)} heating</span>
+            </li>
+          ))}
+        </ul>
+        {load.levers.length > 0 && <p className={s.hvacNote}>{load.levers.join(" ")}</p>}
+        <ul className={s.hvacAssume}>
+          {load.assumptions.map((a) => <li key={a}>{a}</li>)}
+        </ul>
+      </details>
+      <p className={s.hvacFine}>The JobFlex HVAC engine&apos;s block load, estimating grade — not an ACCA-approved Manual J report. The permit&apos;s report stays on the build list.</p>
     </div>
   );
 }
