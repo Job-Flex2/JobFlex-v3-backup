@@ -16,16 +16,13 @@
    that reach outside are the two host neutralizers, `:has()`-gated so they
    undo themselves on unmount. globals.css is not touched.
 
-   ── THE SHARED COMPONENTS, SIZED FOR A HAND ──────────────────────────────
-   The texting-people components carry their own CSS module (desk sizes:
-   30px buttons, 34px inputs, 11px labels). Section C below re-sizes them for
-   a phone FROM THIS ROOT ONLY — 44px targets, 16px inputs (iOS zooms on
-   anything smaller), 48px fields with a 2px ink frame, single-column forms,
-   full-width actions. Colours, shapes, switches and chips stay theirs. Their
-   class names are hashed, so these rules reach them through their stable
-   data-* hooks and element structure, behind `.mtx-host` — every rule there
-   scores at least (0,3,1), above the module's strongest (0,3,0) layout rules
-   and its (0,5,0) hover rules where those are touched.
+   ── THE SHARED PARTS, SIZED FOR A HAND ───────────────────────────────────
+   The texting-people parts carry their own PLAIN stylesheet (texting-kit.css,
+   under `.jf-tx`, laid out by container query). Section B below gives them
+   what a thumb needs FROM THIS ROOT ONLY — 44px targets, 16px inputs (iOS
+   zooms on anything smaller), 48px fields, full-width actions — through the
+   kit's own class names and size variables; every rule there scores (0,3,0)
+   or more, above the kit's (0,2,0). Colours and shapes stay the kit's.
 
    Values come from the globals.css tokens. Light mode only, no `md:`/`lg:`,
    no layout breakpoint — fluid from 320px to 768px.
@@ -33,7 +30,7 @@
 
 .jf-mobile-texting {
   /* the shared MobileNav's token contract (mobile-nav.module.css), from the
-     global tokens; the texting-people module reads the same names */
+     global tokens */
   --sheet: var(--paper-deep);
   --blueprint: var(--accent);
   --blueprint-dark: var(--accent-ink);
@@ -560,331 +557,122 @@ body:has(.jf-mobile-texting)::before {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   B · THE STATUS — the shared overview, first thing under the head
+   B · THE INSIDE OF EACH STEP, SIZED FOR A HAND (2026-10-18)
+   The shared parts (texting-people/*, plain texting-kit.css under `.jf-tx`)
+   lay themselves out by container query; here only what a thumb needs:
+   44px controls, 48px fields with 16px type (no iOS focus zoom), full-width
+   actions. Every rule is under this page's root and scores (0,3,0) or more,
+   above the kit's (0,2,0).
    ════════════════════════════════════════════════════════════════════════ */
 
-/* "Texting is on from …" / "Nothing is texted yet …" — larger, it is the answer */
-.jf-mobile-texting .mtx-status [data-texting-overview] > [data-texting-status] {
-  padding: 14px 16px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.45;
+.jf-mobile-texting .jf-tx {
+  --tk-h: var(--tap);
+  --tk-field-h: var(--field-h);
 }
-.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] {
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 8px 12px;
-  align-items: start;
-  padding: 14px 16px;
-}
-.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span[aria-hidden="true"] {
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
-}
-.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span:not([aria-hidden]) {
-  gap: 4px;
-  padding-top: 4px;
-}
-.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span:not([aria-hidden]) > b {
+.jf-mobile-texting .jf-tx .tk-input {
   font-size: 16px;
 }
-.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > span:not([aria-hidden]) > span {
-  font-size: 14.5px;
-  line-height: 1.45;
+.jf-mobile-texting .jf-tx .tk-input--code {
+  max-width: none;
+  font-size: 20px;
 }
-.jf-mobile-texting .mtx-status [data-texting-overview] li[data-step] > button {
-  grid-column: 2;
-  justify-self: start;
-  min-width: 132px;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
-   C · THE SHARED COMPONENTS, SIZED FOR A HAND (sizes and layout only)
-   ════════════════════════════════════════════════════════════════════════ */
-
-/* every button a thumb can hit: 44px, 13px words */
-.jf-mobile-texting .mtx-host [data-nest] button {
+.jf-mobile-texting .jf-tx .tk-btn,
+.jf-mobile-texting .jf-tx .tk-switch,
+.jf-mobile-texting .jf-tx .tk-tick,
+.jf-mobile-texting .jf-tx .tk-link,
+.jf-mobile-texting .jf-tx .tk-fill,
+.jf-mobile-texting .jf-tx .tk-idea,
+.jf-mobile-texting .jf-tx .tk-more > summary {
   min-height: var(--tap);
-  font-size: 13px;
   -webkit-tap-highlight-color: transparent;
 }
-/* the texts on/off switches (people, clients): 44px, their own 12px caps */
-.jf-mobile-texting .mtx-host [data-nest] button[role="switch"] {
-  font-size: 12px;
-  padding-right: 14px;
+.jf-mobile-texting .jf-tx .tk-btn {
+  font-size: 13px;
 }
-/* the rule switches keep their drawn 42×24 track (the knob is placed in px);
-   the hit area grows around it instead */
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > button[role="switch"] {
+.jf-mobile-texting .jf-tx .tk-btn--primary {
+  min-height: var(--field-h);
+}
+.jf-mobile-texting .jf-tx .tk-tick {
+  font-size: 15px;
+}
+.jf-mobile-texting .jf-tx .tk-link--inline {
+  min-height: var(--tap);
+}
+/* a link inside a sentence keeps the sentence's line */
+.jf-mobile-texting .jf-tx .tk-sent > .tk-link--inline {
   min-height: 0;
-  overflow: visible;
+  padding: 10px 0;
 }
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > button[role="switch"]::before {
-  content: "";
-  position: absolute;
-  inset: -11px -6px;
+
+/* your team: the row's actions, the editors */
+.jf-mobile-texting .jf-tx .tk-whoName > b {
+  font-size: 17px;
 }
-/* chips: the texts a person gets, who a text goes to, the ideas, the fill-ins */
-.jf-mobile-texting .mtx-host [data-nest] button[data-event],
-.jf-mobile-texting .mtx-host [data-nest] button[data-to],
-.jf-mobile-texting .mtx-host [data-nest] button[data-preset],
-.jf-mobile-texting .mtx-host [data-rule-editor] button[aria-pressed],
-.jf-mobile-texting .mtx-host [data-rule-editor] button[title]:not([aria-pressed]) {
-  padding: 6px 12px;
-  font-size: 14px;
-  line-height: 1.25;
-  text-align: left;
+.jf-mobile-texting .jf-tx .tk-panel {
+  padding: 14px;
 }
+.jf-mobile-texting .jf-tx .tk-panelRow > .tk-field,
+.jf-mobile-texting .jf-tx .tk-panelRow > .tk-field--code {
+  flex: 1 1 100%;
+  max-width: none;
+}
+.jf-mobile-texting .jf-tx .tk-panelRow > .tk-btn {
+  flex: 1 1 140px;
+}
+.jf-mobile-texting .jf-tx .tk-picksH > .tk-allNone > .tk-link {
+  padding: 0 10px;
+}
+
+/* your number */
+.jf-mobile-texting .jf-tx .tk-plateH > .tk-num {
+  font-size: 24px;
+}
+.jf-mobile-texting .jf-tx .tk-doneF > .tk-btn,
+.jf-mobile-texting .jf-tx .tk-acts > .tk-btn,
+.jf-mobile-texting .jf-tx .tk-release > .tk-btn {
+  flex: 1 1 140px;
+}
+.jf-mobile-texting .jf-tx .tk-check > input {
+  width: 22px;
+  height: 22px;
+}
+
+/* your own texts */
+.jf-mobile-texting .jf-tx .tk-rulesH > .tk-btn {
+  flex: 1 1 100%;
+}
+.jf-mobile-texting .jf-tx .tk-edActs > .tk-btn {
+  flex: 1 1 120px;
+}
+.jf-mobile-texting .jf-tx .tk-edActs > .tk-btn:first-child {
+  flex-basis: 100%;
+}
+.jf-mobile-texting .jf-tx .tk-offset > .tk-input {
+  width: 104px;
+}
+
+/* the page's own "How it works" under a step: a thumb-sized target */
+.jf-mobile-texting .jf-texting .txp-how > summary {
+  min-height: var(--tap);
+}
+
+/* the clients switch stands as tall as a field */
+.jf-mobile-texting .jf-tx.tk-clients > .tk-switch {
+  min-height: var(--field-h);
+}
+
 /* sticky hover on a touch screen: no lift left behind after a tap */
 @media (hover: none) {
-  .jf-mobile-texting .mtx-host [data-nest] button:hover:not(:disabled) {
+  .jf-mobile-texting .jf-tx .tk-btn:hover:not(:disabled) {
     transform: none;
     box-shadow: none;
   }
-}
-
-/* inputs: 48px, 16px type (no focus zoom on iOS), a 2px ink frame */
-.jf-mobile-texting .mtx-host [data-nest] input:not([type="checkbox"]),
-.jf-mobile-texting .mtx-host [data-nest] select {
-  min-height: var(--field-h);
-  border-width: 2px;
-  font-size: 16px;
-}
-.jf-mobile-texting .mtx-host [data-nest] textarea {
-  min-height: 132px;
-  border-width: 2px;
-  font-size: 16px;
-}
-/* field labels: bold ink, 12px */
-.jf-mobile-texting .mtx-host [data-own-number] form > label,
-.jf-mobile-texting .mtx-host [data-rule-editor] > div > label,
-.jf-mobile-texting .mtx-host [data-rule-editor] > div > span:first-child,
-.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > label {
-  font-size: 12px;
-  color: var(--ink);
-}
-.jf-mobile-texting .mtx-host [data-nest] p {
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-/* ── the roster ── */
-.jf-mobile-texting .mtx-host [data-texting-people] [data-audience] > div:first-child > b {
-  font-size: 12px;
-}
-.jf-mobile-texting .mtx-host [data-texting-people] [data-audience] > div:first-child > span {
-  font-size: 14px;
-  line-height: 1.4;
-}
-.jf-mobile-texting .mtx-host [data-texting-people] [data-member] {
-  gap: 12px;
-  padding: 14px;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:first-child {
-  gap: 10px 12px;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span {
-  flex: 1 1 140px;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span > b {
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span > em {
-  font-size: 11px;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span + span {
-  flex-basis: 100%;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span + span > b {
-  font-size: 15px;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:first-child > button[role="switch"] + span + span > span {
-  font-size: 11px;
-}
-/* the mobile editor on a row: label, a full-width field, the actions under it */
-.jf-mobile-texting .mtx-host [data-member] > div:has(> input) {
-  gap: 10px;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > label {
-  flex-basis: 100%;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > input {
-  flex: 1 1 100%;
-}
-.jf-mobile-texting .mtx-host [data-member] > div:has(> input) > button {
-  flex: 1 1 120px;
-}
-.jf-mobile-texting .mtx-host [data-member] [data-texting-sent-to] {
-  font-size: 15px;
-}
-.jf-mobile-texting .mtx-host [data-member] [data-texting-sent-to] > button {
-  font-size: inherit;
-}
-/* the chips under a name, and All / None */
-/* one even column of chips (two when they fit), not a ragged run */
-.jf-mobile-texting .mtx-host [data-member] > div[role="group"] {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 8px;
-}
-.jf-mobile-texting .mtx-host [data-member] > div[role="group"] > span {
-  grid-column: 1 / -1;
-  gap: 4px;
-  margin-left: 0;
-}
-.jf-mobile-texting .mtx-host [data-member] > div[role="group"] > span > button {
-  padding: 0 10px;
-  font-size: 12px;
-}
-/* "What the texts say" */
-.jf-mobile-texting .mtx-host [data-audience] > details > summary {
-  display: flex;
-  align-items: center;
-  min-height: var(--tap);
-  font-size: 12px;
-}
-.jf-mobile-texting .mtx-host [data-audience] > details li > b {
-  font-size: 14px;
-}
-.jf-mobile-texting .mtx-host [data-audience] > details q {
-  font-size: 14px;
-}
-
-/* ── the number ── */
-.jf-mobile-texting .mtx-host [data-own-number] {
-  gap: 14px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] > div:not([data-sms-done-for-you]) > b:first-child {
-  font-size: 22px;
-  overflow-wrap: anywhere;
-}
-.jf-mobile-texting .mtx-host [data-own-number] [data-number-uses] li {
-  grid-template-columns: 56px minmax(0, 1fr);
-  font-size: 15px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] [data-number-uses] li > b {
-  font-size: 11px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] [data-sms-done-for-you] {
-  gap: 10px;
-  padding: 14px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] [data-sms-done-for-you] > b {
-  font-size: 12px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] [data-sms-done-for-you] li {
-  font-size: 15px;
-  line-height: 1.45;
-}
-.jf-mobile-texting .mtx-host [data-own-number] > ul:not([data-number-uses]) {
-  font-size: 14.5px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] > div:has(> button) > button,
-.jf-mobile-texting .mtx-host [data-own-number] form > div:last-child > button {
-  flex: 1 1 140px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] button[data-get-number] {
-  min-height: var(--field-h);
-}
-/* the registration form: one column, roomy */
-.jf-mobile-texting .mtx-host [data-own-number] form {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  padding: 14px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] form > label {
-  gap: 8px;
-}
-.jf-mobile-texting .mtx-host [data-own-number] form > label:not(:has(> input[type="checkbox"])) > span {
-  font-size: 13.5px;
-  font-weight: 500;
-}
-.jf-mobile-texting .mtx-host [data-own-number] form > label:has(> input[type="checkbox"]) {
-  align-items: flex-start;
-  gap: 12px;
-  font-size: 14px;
-  line-height: 1.45;
-  font-weight: 500;
-}
-.jf-mobile-texting .mtx-host [data-own-number] form > label:has(> input[type="checkbox"]) > input {
-  width: 22px;
-  height: 22px;
-  margin-top: 0;
-}
-.jf-mobile-texting .mtx-host [data-own-number] form > div:last-child > button[type="submit"] {
-  min-height: var(--field-h);
-  flex-basis: 100%;
-}
-
-/* ── your own texts ── */
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] {
-  gap: 10px 14px;
-  padding: 14px;
-}
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:nth-child(2) > b {
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:nth-child(2) > span {
-  font-size: 14px;
-  line-height: 1.45;
-}
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] q,
-.jf-mobile-texting .mtx-host [data-rule-editor] q {
-  font-size: 14px;
-}
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:last-child {
-  grid-column: 2;
-  gap: 8px;
-}
-.jf-mobile-texting .mtx-host [data-text-rules] [data-rule] > div:last-child > button {
-  flex: 1 1 0;
-}
-/* the ideas and + New text */
-.jf-mobile-texting .mtx-host [data-text-rules] > div:has(> [data-new-rule]) {
-  gap: 8px;
-}
-.jf-mobile-texting .mtx-host [data-text-rules] > div:has(> [data-new-rule]) > span {
-  flex-basis: 100%;
-  font-size: 12px;
-  color: var(--ink);
-}
-.jf-mobile-texting .mtx-host [data-text-rules] button[data-preset] {
-  flex: 1 1 100%;
-}
-.jf-mobile-texting .mtx-host [data-text-rules] button[data-new-rule] {
-  flex: 1 1 100%;
-  min-height: var(--field-h);
-  margin-top: 4px;
-}
-/* the editor */
-.jf-mobile-texting .mtx-host [data-rule-editor] {
-  gap: 16px;
-  padding: 14px;
-}
-.jf-mobile-texting .mtx-host [data-rule-editor] > div {
-  gap: 8px;
-}
-.jf-mobile-texting .mtx-host [data-rule-editor] input[type="number"] {
-  width: 96px;
-}
-.jf-mobile-texting .mtx-host [data-rule-editor] > div:last-child {
-  gap: 8px;
-}
-.jf-mobile-texting .mtx-host [data-rule-editor] > div:last-child > button {
-  flex: 1 1 120px;
-}
-.jf-mobile-texting .mtx-host [data-rule-editor] > div:last-child > button:first-child {
-  flex-basis: 100%;
-  min-height: var(--field-h);
-}
-
-/* ── the clients switch ── */
-.jf-mobile-texting .mtx-host [data-clients-card] button[role="switch"] {
-  min-height: var(--field-h);
+  .jf-mobile-texting .jf-tx .tk-tick:hover:not(:disabled) {
+    background: none;
+  }
+  .jf-mobile-texting .jf-tx .tk-idea:hover {
+    background: var(--paper-deep);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

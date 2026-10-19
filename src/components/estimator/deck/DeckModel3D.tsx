@@ -507,6 +507,8 @@ interface Built {
   knobs: HTMLButtonElement[];
   /** The world-space centre and size of every box (for the fly-to). */
   centres: Array<[THREE.Vector3, number]>;
+  /** The scene this was built from (a newer one may be waiting for its rebuild). */
+  scene: DeckScene;
   dispose: () => void;
 }
 
@@ -528,7 +530,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     editCbRef.current = onEdit;
   }, [onPick, onEdit]);
   /** Set by the mount effect: rebuild from the scene, re-apply what is standing, go back to the first view, fly somewhere. */
-  const api = React.useRef<{ rebuild: () => void; apply: () => void; reset: () => void; flyTo: (p: [number, number, number], size?: number) => void; highlight: () => void } | null>(null);
+  const api = React.useRef<{ rebuild: () => void; rebuildSoon: () => void; apply: () => void; reset: () => void; flyTo: (p: [number, number, number], size?: number) => void; highlight: () => void } | null>(null);
 
   React.useEffect(() => {
     if (resetToken) api.current?.reset();
@@ -537,7 +539,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
   const backdropKey = backdrop ? JSON.stringify(backdrop) : "";
   React.useEffect(() => {
     backdropRef.current = backdrop;
-    api.current?.rebuild();
+    api.current?.rebuildSoon();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is the backdrop's value
   }, [backdropKey]);
   React.useEffect(() => {
@@ -551,9 +553,11 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     api.current?.highlight();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is the highlight's value
   }, [highlightKey]);
+  // A new scene rebuilds after the page has painted the change that made it (2026-10-18, perf): the field, the price
+  // and the steps show at once, the 3D follows a frame later, and changes within one frame (a drag, fast clicks) build once.
   React.useEffect(() => {
     sceneRef.current = scene;
-    api.current?.rebuild();
+    api.current?.rebuildSoon();
   }, [scene]);
   React.useEffect(() => {
     builtRef.current = built;
@@ -583,12 +587,18 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const w0 = mount.clientWidth || 800;
     const h0 = mount.clientHeight || 480;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(w0, h0);
+    renderer.setSize(w0, h0, false);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // The sun stands still, so its shadow map changes only when what casts a shadow does (a rebuild, the build-up, a
+    // refit): it is redrawn then, not on every frame of an orbit or of a lit field's breathing (2026-10-18, perf).
+    renderer.shadowMap.autoUpdate = false;
+    let shadowsDirty = true;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.9;
     renderer.domElement.style.display = "block";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
     renderer.domElement.style.touchAction = "none";
     mount.appendChild(renderer.domElement);
     // The edit knobs (M3): DOM buttons that follow the handles across the screen — a thumb's size, focusable, with the arrow keys as a second way to move them.
@@ -664,6 +674,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const ribs = ribTexture();
     const concrete = concreteTexture();
     let dirty = true;
+    let requestFrame = () => {};
+    const invalidate = () => { dirty = true; requestFrame(); };
     let content: Built | null = null;
     // A handle drag: the pointer's movement along the handle's axis, read on a plane through the handle; `last` is the value last sent.
     let drag: { handle: SceneHandle; plane: THREE.Plane; start: THREE.Vector3; last: number } | null = null;
@@ -698,7 +710,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const cbs = photoLoads.get(href) ?? [];
           photoLoads.delete(href);
           if (img) for (const cb of cbs) cb(img);
-          dirty = true;
+          invalidate();
         },
         undefined,
         () => {
@@ -711,7 +723,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
               m.needsUpdate = true;
             }
           }
-          dirty = true;
+          invalidate();
         },
       );
       tex.colorSpace = THREE.SRGBColorSpace;
@@ -755,7 +767,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       key.shadow.normalBias = span * 0.0012;
       fitted = { w: s.widthFt, d: s.depthFt, h: peak };
       orbit.update();
-      dirty = true;
+      invalidate();
+      shadowsDirty = true;
     };
 
     /** The ground's tilt: the lawn falls away from the house (and across) as the site says. */
@@ -1308,7 +1321,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
             plainMat.color.copy(c.wall);
             returnMat.color.copy(c.wall).multiplyScalar(0.82);
             if (c.roof) roofMat.color.copy(c.roof);
-            dirty = true;
+            invalidate();
           });
           const photoMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false });
           owned.push(photoMat);
@@ -1426,6 +1439,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         handles,
         knobs,
         centres,
+        scene: s,
         dispose: () => {
           for (const k of knobs) k.remove();
           for (const o of owned) o.dispose();
@@ -1500,7 +1514,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         renderer.domElement.style.cursor = "";
       }
       renderer.domElement.style.cursor = placingRef.current ? "crosshair" : "";
-      dirty = true;
+      invalidate();
+      shadowsDirty = true;
     };
 
     /** Fly the camera to a point (scene feet), framing a part `size` ft across. */
@@ -1520,19 +1535,34 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         camera.position.lerpVectors(from, to, e);
         orbit.target.lerpVectors(fromT, target, e);
         orbit.update();
-        dirty = true;
+        invalidate();
         if (t < 1) requestAnimationFrame(step);
       };
       step();
     };
 
+    // What a rebuild or a new light replaces is disposed after the next frame is drawn, not before: the new parts' materials
+    // take over the old ones' compiled shaders instead of compiling them again (≈100 ms a rebuild).
+    let rebuildRaf = 0;
+    let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    let retired: Array<{ dispose: () => void }> = [];
+    const retire = (old: { dispose: () => void }) => {
+      retired.push(old);
+      if (retired.length > 4) retired.shift()!.dispose();
+    };
     const rebuild = () => {
+      if (rebuildRaf) cancelAnimationFrame(rebuildRaf);
+      if (rebuildTimer) clearTimeout(rebuildTimer);
+      rebuildRaf = 0;
+      rebuildTimer = null;
       if (content) {
         world.remove(content.group);
-        content.dispose();
+        for (const k of content.knobs) k.remove();
+        retire(content);
       }
       content = build();
       world.add(content.group);
+      shadowsDirty = true;
       tiltGround();
       const s = sceneRef.current;
       const peak = Math.max(s.heightFt, s.peakFt ?? s.heightFt);
@@ -1540,6 +1570,17 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       if (resized && !drag) frame(false);
       apply();
       api.current?.highlight();
+    };
+    /** Rebuild once the page has painted: after the next frame's paint, coalescing every call until then. */
+    const rebuildSoon = () => {
+      if (rebuildRaf || rebuildTimer) return;
+      rebuildRaf = requestAnimationFrame(() => {
+        rebuildRaf = 0;
+        rebuildTimer = setTimeout(() => {
+          rebuildTimer = null;
+          rebuild();
+        }, 0);
+      });
     };
 
     // THE FIELD BEING TYPED IN, SHOWN (2026-10-12): its part of the house in blueprint blue, through whatever stands in
@@ -1549,14 +1590,14 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const highlight = () => {
       if (lit) {
         world.remove(lit.group);
-        lit.dispose();
+        retire(lit);
         lit = null;
       }
       const h = highlightRef.current;
       const any = !!h && (h.boxes.length > 0 || !!h.boxIdx?.length || !!h.polyIdx?.length || !!h.footings || !!h.diagonal || !!h.tag);
       mount.dataset.deck3dHighlight = h && any ? h.tag?.text ?? "on" : "";
       if (!h || !any) {
-        dirty = true;
+        invalidate();
         return;
       }
       const s = sceneRef.current;
@@ -1678,10 +1719,10 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           tag?.dispose();
         },
       };
-      dirty = true;
+      invalidate();
     };
 
-    api.current = { rebuild, apply, reset: () => frame(true), flyTo, highlight };
+    api.current = { rebuild, rebuildSoon, apply, reset: () => frame(true), flyTo, highlight };
     rebuild();
     highlight();
 
@@ -1695,7 +1736,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
       ray.setFromCamera(pointer, camera);
-      const s = sceneRef.current;
+      const s = content.scene;
       const ox = s.widthFt / 2;
       const oz = s.depthFt / 2;
       // Callout tags first.
@@ -1791,7 +1832,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         hover.mesh.setColorAt(hover.id, hover.color);
         if (hover.mesh.instanceColor) hover.mesh.instanceColor.needsUpdate = true;
         hover = null;
-        dirty = true;
+        invalidate();
       }
     };
     const knobDown = (e: PointerEvent, mesh: THREE.Mesh, knob: HTMLButtonElement) => {
@@ -1843,7 +1884,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       r.mesh.setColorAt(r.instanceId, c.clone().lerp(new THREE.Color(0x4f8cff), 0.55));
       if (r.mesh.instanceColor) r.mesh.instanceColor.needsUpdate = true;
       renderer.domElement.style.cursor = placingRef.current ? "crosshair" : "pointer";
-      dirty = true;
+      invalidate();
       pickRef.current?.(r.pick, "hover");
     };
     const onDown = (e: PointerEvent) => {
@@ -1915,50 +1956,125 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       });
     };
 
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    let resizePending = false;
+    let bufferWidth = w0;
+    let bufferHeight = h0;
+    let viewWidth = w0;
+    let viewHeight = h0;
     let raf = 0;
+    let breathTimer: ReturnType<typeof setTimeout> | null = null;
+    let visible = true;
+    let stopped = false;
+    let breathAt = 0;
     const tick = () => {
-      raf = requestAnimationFrame(tick);
+      raf = 0;
+      if (stopped || !visible || document.hidden) return;
+      if (resizePending) {
+        resizePending = false;
+        if (bufferWidth !== viewWidth || bufferHeight !== viewHeight) {
+          camera.aspect = viewWidth / viewHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(viewWidth, viewHeight, false);
+          bufferWidth = viewWidth;
+          bufferHeight = viewHeight;
+          dirty = true;
+        }
+      }
       if (lit && !calm) {
-        lit.fill.opacity = 0.2 + 0.22 * (0.5 + 0.5 * Math.sin((performance.now() / 1600) * Math.PI * 2));
-        dirty = true;
+        const now = performance.now();
+        if (now - breathAt >= 32) {
+          breathAt = now;
+          lit.fill.opacity = 0.2 + 0.22 * (0.5 + 0.5 * Math.sin((now / 1600) * Math.PI * 2));
+          dirty = true;
+        }
       }
       const moved = orbit.update();
-      if (!moved && !dirty) return;
-      dirty = false;
-      // A tag keeps its size on the screen's scale of the deck, wherever the camera stands.
-      if (content || lit) {
-        const dist = camera.position.distanceTo(orbit.target);
-        const size = Math.max(0.3, Math.min(span * 0.035, dist * 0.045));
-        const fit = (o: THREE.Object3D) => {
-          const k = (o.userData.boost as number | undefined) ?? 1;
-          if (o instanceof THREE.Sprite && o.userData.dim) o.scale.set(size * k * (o.userData.aspect as number), size * k, 1);
-        };
-        content?.group.traverse(fit);
-        lit?.group.traverse(fit);
+      if (moved || dirty) {
+        dirty = false;
+        if (shadowsDirty) {
+          renderer.shadowMap.needsUpdate = true;
+          shadowsDirty = false;
+        }
+        // A tag keeps its size on the screen's scale of the deck, wherever the camera stands.
+        if (content || lit) {
+          const dist = camera.position.distanceTo(orbit.target);
+          const size = Math.max(0.3, Math.min(span * 0.035, dist * 0.045));
+          const fit = (o: THREE.Object3D) => {
+            const k = (o.userData.boost as number | undefined) ?? 1;
+            if (o instanceof THREE.Sprite && o.userData.dim) o.scale.set(size * k * (o.userData.aspect as number), size * k, 1);
+          };
+          content?.group.traverse(fit);
+          lit?.group.traverse(fit);
+        }
+        renderer.render(world, camera);
+        if (retired.length) {
+          for (const r of retired) r.dispose();
+          retired = [];
+        }
+        if (content && editRef.current) placeKnobs();
       }
-      renderer.render(world, camera);
-      if (content && editRef.current) placeKnobs();
+      if (moved) requestFrame();
+      else if (lit && !calm && !raf) {
+        breathTimer = setTimeout(() => { breathTimer = null; requestFrame(); }, 32);
+      }
     };
-    tick();
+    // Stop waking the main thread when the camera and scene are unchanged.
+    requestFrame = () => {
+      if (stopped || !visible || document.hidden || raf) return;
+      if (breathTimer) { clearTimeout(breathTimer); breathTimer = null; }
+      raf = requestAnimationFrame(tick);
+    };
+    orbit.addEventListener("change", invalidate);
+    const pause = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (breathTimer) { clearTimeout(breathTimer); breathTimer = null; }
+    };
+    const onVisibility = () => { if (document.hidden) pause(); else invalidate(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    const visibilityObserver = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (visible) invalidate(); else pause();
+    });
+    visibilityObserver.observe(mount);
+    requestFrame();
 
     let measured = mount.clientWidth > 0 && mount.clientHeight > 0;
-    const ro = new ResizeObserver(() => {
-      const w = mount.clientWidth || w0;
-      const h = mount.clientHeight || h0;
-      renderer.setSize(w, h);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+    const settleResize = () => { resizePending = true; invalidate(); };
+    const ro = new ResizeObserver(([entry]) => {
+      const w = Math.round(entry.contentRect.width) || w0;
+      const h = Math.round(entry.contentRect.height) || h0;
+      if (w === viewWidth && h === viewHeight && measured) return;
+      viewWidth = w;
+      viewHeight = h;
+      // CSS follows the panel immediately. Keep its drawing buffer intact until
+      // resizing settles, then resize and redraw together before the next paint.
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null;
+        settleResize();
+      }, 120);
       if (!measured && mount.clientWidth > 0 && mount.clientHeight > 0) {
         measured = true;
+        resizePending = true;
         frame(true);
       }
-      dirty = true;
     });
     ro.observe(mount);
 
     return () => {
       api.current = null;
-      cancelAnimationFrame(raf);
+      stopped = true;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      pause();
+      visibilityObserver.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
+      orbit.removeEventListener("change", invalidate);
+      if (rebuildRaf) cancelAnimationFrame(rebuildRaf);
+      if (rebuildTimer) clearTimeout(rebuildTimer);
+      for (const r of retired) r.dispose();
+      retired = [];
       ro.disconnect();
       renderer.domElement.removeEventListener("pointermove", onMove);
       renderer.domElement.removeEventListener("pointerdown", onDown);

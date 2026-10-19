@@ -739,8 +739,8 @@ body:has(.jf-blueprint) {
 /* A tool's row: [square] [name · Soon] [a count, when there is one]. The
    subpage button is the shell's own, laid over the row's right padding. */
 .jf-blueprint .sb .sb-bay .sb-link.sb-tool {
-  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center;
-  column-gap: 11px; min-height: 0; padding: 7px 8px; border-radius: var(--radius);
+  display: grid; grid-template-columns: var(--nav-tool-size) minmax(0, 1fr) auto; align-items: center;
+  column-gap: var(--nav-tool-gap); min-height: 0; padding: 7px var(--nav-tool-inset); border-radius: var(--radius);
 }
 /* 8px edge + the 26px square; the empty third column's gap keeps 11px
    between the name and the square, a count takes its own 11px. */
@@ -750,18 +750,18 @@ body:has(.jf-blueprint) {
 .jf-blueprint .sb .sb-bay .sb-tool .sb-slot-b:empty, .jf-blueprint .sb .sb-bay .sb-tool .sb-slot-c { display: none; }
 
 .jf-blueprint .sb .sb-bay .sb-tile {
-  width: 34px; height: 34px;
+  width: var(--nav-tool-size); height: var(--nav-tool-size);
   display: inline-flex; align-items: center; justify-content: center;
   border: 1.5px solid var(--ink); border-radius: var(--radius);
   background: #fff; box-shadow: 3px 3px 0 var(--tone);
   transition: transform 0.14s var(--ease-out), box-shadow 0.14s var(--ease-out), background 0.14s;
 }
-.jf-blueprint .sb .sb-bay .sb-link.sb-tool .sb-tile .ic { width: 18px; height: 18px; opacity: 1; color: var(--ink); }
+.jf-blueprint .sb .sb-bay .sb-link.sb-tool .sb-tile .ic { width: var(--nav-tool-icon); height: var(--nav-tool-icon); opacity: 1; color: var(--ink); }
 
 .jf-blueprint .sb .sb-bay .sb-txt { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .jf-blueprint .sb .sb-bay .sb-tool .sb-lbl {
   flex: 0 1 auto; min-width: 0;
-  font-family: var(--font-sans); font-size: 14px; font-weight: 800; line-height: 18px; color: var(--ink);
+  font-family: var(--font-sans); font-size: var(--nav-tool-label); font-weight: 800; line-height: 18px; color: var(--ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .jf-blueprint .sb .sb-bay .sb-txt .sb-soon {
@@ -799,8 +799,8 @@ body:has(.jf-blueprint) {
 .jf-blueprint .sb .sb-bay .sb-fold-btn:focus-visible::before { border-color: var(--ink); background: var(--ink); }
 
 /* An inventory under a tool: the guide line drops from the square's centre. */
-.jf-blueprint .sb .sb-bay .sb-sub::before { left: 31px; }
-.jf-blueprint .sb .sb-bay .sb-sub .sb-link { margin: 0 6px 0 40px; }
+.jf-blueprint .sb .sb-bay .sb-sub::before { left: var(--nav-tool-guide-inset); }
+.jf-blueprint .sb .sb-bay .sb-sub .sb-link { margin: 0 6px 0 var(--nav-tool-sub-inset); font-size: var(--nav-tool-label); }
 
 /* The folded rail: the bay is a slim frame round the squares, nothing else. */
 @media (min-width: 861px) {

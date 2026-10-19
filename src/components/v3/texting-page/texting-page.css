@@ -285,16 +285,27 @@
   border-top: 1px solid var(--ink-line);
 }
 .jf-texting .txp-listT {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 10px;
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 .jf-texting .txp-listT b {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+.jf-texting .txp-listS {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+/* the member's own verified mobile: number and stamp on one line */
+.jf-texting .txp-mine > .txp-listT {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 .jf-texting .txp-list > li.is-paused .txp-listT b,
 .jf-texting .txp-list > li.is-paused .txp-phone {
@@ -313,6 +324,14 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+/* name, mobile and Add number on one line, bottoms aligned */
+.jf-texting .txp-fields--add {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+}
+.jf-texting .txp-btn--field {
+  min-height: 46px;
 }
 .jf-texting .txp-field {
   display: grid;
@@ -417,8 +436,10 @@
   outline-offset: 2px;
 }
 
-/* ── Lead texts: ON | OFF as one switch ────────────────────────────────── */
-.jf-texting .txp-lead {
+/* ── Lead texts: ON | OFF as one switch, where it goes beside it ─────────
+   (its own class since 2026-10-18 — it shared `.txp-lead` with the steps'
+   lead line, whose later rule gave it a paragraph's size and colour) */
+.jf-texting .txp-leadRow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -462,8 +483,12 @@
   cursor: default;
 }
 .jf-texting .txp-leadTo {
-  font-size: 14px;
-  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.jf-texting .txp-leadTo .txp-phone {
+  font-size: 15px;
 }
 
 /* ── THE STATUS AND THE SETUP CHECKLIST (owner, 2026-10-17: the AI desk's
@@ -488,11 +513,11 @@
   border-color: var(--emerald);
   background: color-mix(in srgb, var(--emerald) 8%, var(--paper-deep));
 }
+/* 2026-10-18 (owner): the steps are separate cards with a gap between them, not
+   rows inside one frame; an open step's contents sit under its card as their own
+   cards — no card inside a card. */
 .jf-texting .txp-setup {
   min-width: 0;
-  border: 2px solid var(--ink);
-  border-radius: var(--r-sm);
-  background: var(--paper-deep);
 }
 .jf-texting .txp-setupH {
   display: flex;
@@ -500,11 +525,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px 20px;
-  padding: 18px 22px;
-  border-bottom: 2px solid var(--ink);
+  padding: 0 0 14px;
 }
 .jf-texting .txp-setupH h2 {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 900;
   letter-spacing: 0.04em;
   line-height: 1.2;
@@ -540,12 +564,11 @@
   transition: width 0.3s var(--ease-out);
 }
 .jf-texting .txp-steps {
+  display: grid;
+  gap: 14px;
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.jf-texting .txp-stepRow + .txp-stepRow {
-  border-top: 1.5px solid var(--ink);
 }
 .jf-texting .txp-stepBtn {
   appearance: none;
@@ -555,11 +578,12 @@
   align-items: center;
   gap: 6px 16px;
   width: 100%;
-  min-height: 72px;
+  min-height: 76px;
   margin: 0;
-  padding: 14px 22px;
-  border: 0;
-  border-radius: 0;
+  padding: 16px 22px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  overflow: hidden;
   background: var(--paper-deep);
   color: var(--ink);
   font: inherit;
@@ -576,7 +600,6 @@
 }
 .jf-texting .txp-stepRow[data-open="1"] > .txp-stepBtn {
   background: var(--accent-soft);
-  border-bottom: 1.5px solid var(--ink);
 }
 .jf-texting .txp-stepRow[data-open="1"] > .txp-stepBtn::before {
   content: "";
@@ -608,7 +631,7 @@
   min-width: 0;
 }
 .jf-texting .txp-stepT > b {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   letter-spacing: 0.04em;
   line-height: 1.25;
@@ -617,7 +640,7 @@
 }
 .jf-texting .txp-stepT > span {
   max-width: 72ch;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -679,14 +702,29 @@
 .jf-texting .txp-stepRow[data-open="1"] .txp-stepGo > svg {
   transform: rotate(180deg);
 }
+/* The open step's contents: on the page under the step's card, each block its own card. */
 .jf-texting .txp-stepB {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
-  padding: 24px 22px 26px;
+  padding: 18px 0 10px;
 }
 .jf-texting .txp-stepB[hidden] {
   display: none;
+}
+.jf-texting .txp-stepB .tk-people,
+.jf-texting .txp-stepB .tk-plate,
+.jf-texting .txp-stepB .tk-done,
+.jf-texting .txp-stepB .tk-form,
+.jf-texting .txp-stepB .tk-ruleList,
+.jf-texting .txp-stepB .tk-editor {
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+/* A panel opened inside one of those cards is a tinted area, not another frame. */
+.jf-texting .txp-stepB .tk-panel {
+  border-color: transparent;
 }
 .jf-texting .txp-stepB > .txp-note {
   margin-top: 0;
@@ -737,10 +775,10 @@
     display: none;
   }
   .jf-texting .txp-stepB {
-    padding: 18px 14px 20px;
+    padding: 14px 0 8px;
   }
   .jf-texting .txp-setupH {
-    padding: 16px 14px;
+    padding: 0 0 12px;
   }
   .jf-texting .txp-cardH {
     padding: 16px 18px;
@@ -748,7 +786,8 @@
   .jf-texting .txp-cardB {
     padding: 18px;
   }
-  .jf-texting .txp-fields {
+  .jf-texting .txp-fields,
+  .jf-texting .txp-fields--add {
     grid-template-columns: minmax(0, 1fr);
   }
   .jf-texting .txp-listA {

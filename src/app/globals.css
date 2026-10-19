@@ -63,6 +63,71 @@
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);   /* primary */
   --ease-soft: cubic-bezier(0.34, 1.2, 0.64, 1);   /* light overshoot — indicators, knobs */
   --ease-draw: cubic-bezier(0.4, 0, 0.2, 1);       /* line drawing */
+  --scroll-wheel-scale: 0.65;
+  --scroll-wheel-settle: 110;
+  --nav-tool-size: 32px;
+  --nav-tool-icon: 17px;
+  --nav-tool-label: 13px;
+  --nav-tool-gap: 10px;
+  --nav-tool-inset: 4px;
+  --nav-tool-sub-inset: 36px;
+  --nav-tool-guide-inset: 27px;
+}
+
+/* Deck estimator clarity scale. Scoped so other Blueprint pages keep their sizing. */
+.content:has(> .jf-deck-v1) {
+  --deck-shell-inset: 16px;
+}
+.jf-deck-v1 {
+  --deck-space-xs: 8px;
+  --deck-space-sm: 12px;
+  --deck-space-md: 16px;
+  --deck-space-lg: 24px;
+  --deck-space-xl: 32px;
+  --deck-title: 36px;
+  --deck-question: 24px;
+  --deck-section: 18px;
+  --deck-body: 16px;
+  --deck-meta: 14px;
+  --deck-number: 24px;
+  --deck-control: 48px;
+  --deck-stepper: 56px;
+  --deck-panel-padding: 24px;
+  --deck-preview-height: clamp(320px, calc(100vh - 420px), 520px);
+  --deck-view-control: 32px;
+  --deck-tool-control: 36px;
+  --deck-preview-min: 140px;
+  --deck-address-width: 520px;
+  --deck-card-number: 28px;
+  --deck-form-width: 500px;
+  --deck-form-width-compact: 440px;
+  --deck-column-gap: 12px;
+  --deck-footer-gap: 4px;
+}
+.jf-deck-v1 .v1-q {
+  --deck-question: 20px;
+  --deck-section: 16px;
+  --deck-body: 14px;
+  --deck-meta: 12px;
+  --deck-number: 20px;
+  --deck-control: 36px;
+  --deck-stepper: 40px;
+  --deck-panel-padding: 16px;
+  --deck-space-lg: 16px;
+  --deck-space-md: 12px;
+  --deck-space-sm: 8px;
+}
+@media (max-width: 768px) {
+  .jf-deck-v1 {
+    --deck-title: 30px;
+    --deck-question: 24px;
+    --deck-panel-padding: 16px;
+    --deck-preview-height: 360px;
+  }
+  .jf-deck-v1 .v1-q {
+    --deck-control: 44px;
+    --deck-stepper: 44px;
+  }
 }
 
 * { border-color: var(--ink-line); }

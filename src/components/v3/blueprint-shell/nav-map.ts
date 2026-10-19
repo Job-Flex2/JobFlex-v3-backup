@@ -165,6 +165,20 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "Automation",
+    items: [
+      { label: "AI desk", icon: "i-phone", href: "/dashboard/phone" },
+      // Texting (2026-10-16): its own page, out of Settings — who gets texted, from which number, saying what.
+      // `i-sms` is drawn in every sprite the nav reads (desk shell, MobileNav, the /dashboard handheld page).
+      { label: "Texting", icon: "i-sms", href: "/dashboard/texting" },
+      { label: "Messages", icon: "i-msg", href: "/dashboard/messages" },
+      { label: "Reviews", icon: "i-thumb", href: "/dashboard/reviews" },
+      { label: "Trade board", icon: "i-board", href: "/dashboard/trade" },
+      { label: "Referrals", icon: "i-gift", href: "/dashboard/referrals" },
+      { label: "Reports", icon: "i-chart", href: "/dashboard/reports" },
+    ],
+  },
+  {
     label: "Money",
     items: [
       { label: "Financials", icon: "i-bank", href: "/dashboard/financials" },
@@ -186,20 +200,6 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
 
-  {
-    label: "Automation",
-    items: [
-      { label: "AI desk", icon: "i-phone", href: "/dashboard/phone" },
-      // Texting (2026-10-16): its own page, out of Settings — who gets texted, from which number, saying what.
-      // `i-sms` is drawn in every sprite the nav reads (desk shell, MobileNav, the /dashboard handheld page).
-      { label: "Texting", icon: "i-sms", href: "/dashboard/texting" },
-      { label: "Messages", icon: "i-msg", href: "/dashboard/messages" },
-      { label: "Reviews", icon: "i-thumb", href: "/dashboard/reviews" },
-      { label: "Trade board", icon: "i-board", href: "/dashboard/trade" },
-      { label: "Referrals", icon: "i-gift", href: "/dashboard/referrals" },
-      { label: "Reports", icon: "i-chart", href: "/dashboard/reports" },
-    ],
-  },
 ];
 
 /**

@@ -1,0 +1,1415 @@
+/* ============================================================================
+   TEXTING · THE INSIDE OF EACH STEP (2026-10-18) — texting-people/*
+   ============================================================================
+   The parts the Texting page opens under its steps: your number (own-number),
+   your team (texting-people), texts to clients (ClientTextsSwitch), your own
+   texts (text-rules), and the status overview (texting-overview).
+
+   PLAIN STYLESHEET, NOT A CSS MODULE (it replaces texting-people.module.css —
+   the module + shell-reset trap that "ruined the whole design" twice): every
+   selector starts with the one literal root class `.jf-tx`, element prefix
+   `tk-`, nothing unscoped. Each part's root carries `jf-tx` and `data-nest`,
+   so the shell's `* { margin:0; padding:0 }` reset skips the tree; every rule
+   here is at least two classes (0,2,0), so no single-class reset can tie it.
+
+   The accepted look (712ecad9) is kept: Inter caps for labels, mono only on
+   phone numbers and figures, square switches (off — paper track and ink knob,
+   on — green; never red), square markers, thin light frames inside the step,
+   buttons coloured (blue fill for the one primary, white with an ink frame for
+   the rest), no pills, no dashes. What changed is the clarity: state first,
+   picks grouped in aligned columns and visibly idle when nothing can be sent,
+   one "What the texts say", empty groups one quiet line, bigger names and
+   values, one control height.
+
+   Responsive by container query: the parts sit inside `.jf-texting`, which is
+   an inline-size container on the desk page and in the handheld build.
+   Touch sizes (44px) come from mobile-texting.css. Values are globals.css
+   tokens. Light mode only.
+   ========================================================================= */
+
+.jf-tx {
+  --tk-line: rgba(10, 10, 10, 0.18);
+  --tk-rule: var(--ink-line);
+  --tk-h: 40px;
+  --tk-field-h: 44px;
+  --tk-amber-ink: color-mix(in srgb, var(--amber) 68%, var(--ink));
+  --tk-green-ink: color-mix(in srgb, var(--emerald) 85%, var(--ink));
+  --tk-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='square'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5'/%3E%3C/svg%3E");
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+.jf-tx .tk-nest {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ── type helpers ──────────────────────────────────────────────────────── */
+.jf-tx .tk-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.jf-tx .tk-caps {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-note {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-note a,
+.jf-tx .tk-callout a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.jf-tx .tk-msg {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.jf-tx .tk-msg.is-err {
+  color: var(--rose);
+}
+
+/* ── buttons: coloured, Inter caps, near-square, one height ───────────── */
+.jf-tx .tk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--tk-h);
+  padding: 0 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out), background 0.12s var(--ease-out);
+}
+.jf-tx .tk-btn--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.jf-tx .tk-btn--danger {
+  border-color: var(--rose);
+  background: var(--rose);
+  color: #fff;
+}
+.jf-tx .tk-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.jf-tx .tk-btn--primary:hover:not(:disabled) {
+  border-color: var(--accent-ink);
+  background: var(--accent-ink);
+}
+.jf-tx .tk-btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.jf-tx .tk-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.jf-tx .tk-btn:focus-visible,
+.jf-tx .tk-link:focus-visible,
+.jf-tx .tk-switch:focus-visible,
+.jf-tx .tk-tick:focus-visible,
+.jf-tx .tk-idea:focus-visible,
+.jf-tx .tk-fill:focus-visible,
+.jf-tx .tk-more > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* a word that acts: All / None, "Not your number? Change it" */
+.jf-tx .tk-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.jf-tx .tk-link:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.jf-tx .tk-link:disabled {
+  color: var(--ink-muted);
+  cursor: default;
+}
+.jf-tx .tk-link--inline {
+  min-height: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.jf-tx .tk-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── the switch: square; off — paper track, ink knob; on — green ──────── */
+.jf-tx .tk-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-height: var(--tk-h);
+  padding: 0 14px 0 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.jf-tx .tk-switch > i {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  transition: background 0.15s var(--ease-out);
+}
+.jf-tx .tk-switch > i::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--ink);
+  transition: transform 0.15s var(--ease-out);
+}
+.jf-tx .tk-switch.is-on {
+  border-color: var(--emerald);
+  color: var(--tk-green-ink);
+}
+.jf-tx .tk-switch.is-on > i {
+  background: var(--emerald);
+  box-shadow: none;
+}
+.jf-tx .tk-switch.is-on > i::after {
+  background: #fff;
+  transform: translateX(16px);
+}
+.jf-tx .tk-switch:disabled {
+  border-color: var(--tk-line);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+.jf-tx .tk-switch:disabled > i {
+  box-shadow: inset 0 0 0 1.5px var(--ink-faint);
+}
+.jf-tx .tk-switch:disabled > i::after {
+  background: var(--ink-faint);
+}
+/* a switch with no words beside it (a text of your own) */
+.jf-tx .tk-switch--bare {
+  padding: 0 6px;
+}
+
+/* ── tags (state stamps) and the callout ───────────────────────────────── */
+.jf-tx .tk-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.jf-tx .tk-tag[data-tone="ok"] {
+  border-color: var(--emerald);
+  color: var(--tk-green-ink);
+  background: color-mix(in srgb, var(--emerald) 7%, var(--paper-deep));
+}
+.jf-tx .tk-tag[data-tone="wait"] {
+  border-color: var(--amber);
+  color: var(--tk-amber-ink);
+  background: color-mix(in srgb, var(--amber) 8%, var(--paper-deep));
+}
+.jf-tx .tk-tag[data-tone="bad"] {
+  border-color: var(--rose);
+  color: var(--rose);
+  background: color-mix(in srgb, var(--rose) 7%, var(--paper-deep));
+}
+.jf-tx .tk-callout {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1.5px solid var(--tk-line);
+  border-left-width: 4px;
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.jf-tx .tk-callout[data-tone="ok"] {
+  border-color: var(--emerald);
+  background: color-mix(in srgb, var(--emerald) 7%, var(--paper-deep));
+}
+.jf-tx .tk-callout[data-tone="wait"] {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 8%, var(--paper-deep));
+}
+.jf-tx .tk-callout[data-tone="bad"] {
+  border-color: var(--rose);
+  background: color-mix(in srgb, var(--rose) 6%, var(--paper-deep));
+}
+.jf-tx .tk-callout > ul {
+  margin: 0;
+  padding-left: 20px;
+  list-style: square;
+  display: grid;
+  gap: 4px;
+}
+.jf-tx .tk-callout .tk-callErr {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rose);
+}
+
+/* ── fields: bold ink label over a 2px ink frame ───────────────────────── */
+.jf-tx .tk-field {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+}
+.jf-tx .tk-field > .tk-label,
+.jf-tx .tk-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.jf-tx .tk-input {
+  width: 100%;
+  min-width: 0;
+  height: var(--tk-field-h);
+  padding: 0 12px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+.jf-tx textarea.tk-input {
+  height: auto;
+  min-height: 104px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.jf-tx .tk-input--num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.jf-tx .tk-input--code {
+  max-width: 200px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 0.3em;
+}
+.jf-tx .tk-input::placeholder {
+  color: var(--ink-muted);
+  font-weight: 400;
+  opacity: 1;
+}
+.jf-tx .tk-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.jf-tx .tk-field.is-bad .tk-input {
+  border-color: var(--rose);
+}
+.jf-tx .tk-why {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--rose);
+}
+.jf-tx .tk-hint {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+/* ── a tick: square box + words (events, who gets a text, named people) ─ */
+.jf-tx .tk-tick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+.jf-tx .tk-tick > i {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--ink-muted);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep) no-repeat center / 12px;
+}
+.jf-tx .tk-tick.is-on > i {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: var(--tk-tick);
+}
+.jf-tx .tk-tick:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.jf-tx .tk-tick:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+.jf-tx .tk-tick:disabled > i {
+  border-color: var(--tk-line);
+  background-color: var(--paper);
+}
+/* a row of ticks (recipients) */
+.jf-tx .tk-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  margin-left: -8px;
+}
+.jf-tx .tk-ticks > .tk-tick {
+  width: auto;
+}
+.jf-tx .tk-ticks--cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 2px 18px;
+}
+.jf-tx .tk-ticks--cols > .tk-tick {
+  width: 100%;
+}
+
+/* ── "What the texts say" / an optional part, one click away ───────────── */
+.jf-tx .tk-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-more > summary::-webkit-details-marker {
+  display: none;
+}
+.jf-tx .tk-more > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s var(--ease-out);
+}
+.jf-tx .tk-more[open] > summary::before {
+  transform: rotate(90deg);
+}
+.jf-tx .tk-more > summary:hover {
+  color: var(--accent-ink);
+}
+.jf-tx .tk-bubble {
+  display: block;
+  max-width: 68ch;
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+  quotes: none;
+  overflow-wrap: anywhere;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   YOUR TEAM
+   ════════════════════════════════════════════════════════════════════════ */
+.jf-tx .tk-group {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.jf-tx .tk-groupH {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.jf-tx .tk-groupH > h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-groupH > p {
+  margin: 0;
+  flex: 1 1 260px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-groupH > .tk-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+/* an empty group: one quiet line, no frame */
+.jf-tx .tk-group.is-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--tk-rule);
+}
+.jf-tx .tk-group.is-empty > h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.jf-tx .tk-group.is-empty > p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.jf-tx .tk-people {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-tx .tk-person {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 18px;
+}
+.jf-tx .tk-person + .tk-person {
+  border-top: 1px solid var(--tk-line);
+}
+.jf-tx .tk-personH {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 16px;
+}
+.jf-tx .tk-who {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.jf-tx .tk-whoName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+.jf-tx .tk-whoName > b {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.jf-tx .tk-whoName > span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-whoLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.jf-tx .tk-whoLine > .tk-num {
+  font-size: 15px;
+}
+/* a long state ("No mobile — nothing is texted") wraps on a narrow row */
+.jf-tx .tk-whoLine > .tk-tag {
+  white-space: normal;
+}
+.jf-tx .tk-person[data-texting="none"] .tk-whoLine > .tk-num,
+.jf-tx .tk-person[data-texting="off"] .tk-whoLine > .tk-num {
+  color: var(--ink-muted);
+}
+.jf-tx .tk-personA {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* the row's own answer */
+.jf-tx .tk-person > .tk-msg {
+  padding-left: 2px;
+}
+
+/* the mobile editor under a row */
+.jf-tx .tk-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--tk-line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--paper) 55%, var(--paper-deep));
+}
+.jf-tx .tk-panelRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.jf-tx .tk-panelRow > .tk-field {
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+.jf-tx .tk-panelRow > .tk-field--code {
+  flex: 0 1 200px;
+}
+.jf-tx .tk-sent {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+/* what a person gets: labelled clusters in aligned columns */
+.jf-tx .tk-picks {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--tk-rule);
+}
+.jf-tx .tk-picksH {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.jf-tx .tk-picksH > b {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.jf-tx .tk-picksH > .tk-num {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.jf-tx .tk-picksH > .tk-idle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tk-amber-ink);
+}
+.jf-tx .tk-picksH > .tk-allNone {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.jf-tx .tk-clusters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px 24px;
+  align-items: start;
+}
+.jf-tx .tk-cluster {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+.jf-tx .tk-cluster > h4 {
+  margin: 0 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--tk-rule);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-cluster > .tk-tick {
+  margin-left: -8px;
+  width: calc(100% + 8px);
+}
+/* nothing can be sent to this person: the picks are kept, and read as kept — grey, not live */
+.jf-tx .tk-picks[data-live="0"] .tk-tick {
+  color: var(--ink-muted);
+}
+.jf-tx .tk-picks[data-live="0"] .tk-tick.is-on > i {
+  border-color: var(--ink-faint);
+  background-color: var(--ink-faint);
+}
+
+/* one "What the texts say" for the whole team */
+.jf-tx .tk-examples {
+  display: grid;
+  gap: 18px;
+  margin-top: 10px;
+}
+.jf-tx .tk-examples > section {
+  display: grid;
+  gap: 10px;
+}
+.jf-tx .tk-examples h4 {
+  margin: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--tk-rule);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-examples ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.jf-tx .tk-examples li {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: 6px 16px;
+  align-items: baseline;
+}
+.jf-tx .tk-examples li > b {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   YOUR NUMBER
+   ════════════════════════════════════════════════════════════════════════ */
+.jf-tx .tk-plate {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-tx .tk-plateH {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.jf-tx .tk-plateH > .tk-num {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.jf-tx .tk-uses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0;
+}
+.jf-tx .tk-uses > li {
+  display: grid;
+  grid-template-columns: 16px 64px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 8px 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.jf-tx .tk-uses > li + li {
+  border-top: 1px solid var(--tk-rule);
+}
+.jf-tx .tk-uses > li > i {
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 1px;
+  background: var(--paper-deep);
+}
+.jf-tx .tk-uses > li[data-on="1"] > i {
+  border-color: var(--emerald);
+  background: var(--emerald);
+}
+.jf-tx .tk-uses > li[data-on="wait"] > i {
+  border-color: var(--amber);
+  background: var(--amber);
+}
+.jf-tx .tk-uses > li > b {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-plate > .tk-note {
+  max-width: none;
+  padding-top: 12px;
+  border-top: 1px solid var(--tk-rule);
+}
+
+/* what JobFlex does for you, and the one button */
+.jf-tx .tk-done {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-tx .tk-done > h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-done > ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.jf-tx .tk-done > ul > li {
+  position: relative;
+  padding-left: 28px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.jf-tx .tk-done > ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-sm);
+  background: var(--accent) var(--tk-tick) no-repeat center / 12px;
+}
+.jf-tx .tk-doneF {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tk-rule);
+}
+.jf-tx .tk-doneF > .tk-note {
+  flex: 1 1 280px;
+  color: var(--ink-soft);
+}
+
+/* the registration form: four labelled groups */
+.jf-tx .tk-form {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+  padding: 20px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-tx .tk-fs {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.jf-tx .tk-fs > legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--tk-rule);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-fs > legend + * {
+  clear: both;
+}
+.jf-tx .tk-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.jf-tx .tk-grid > .tk-field {
+  grid-column: span 2;
+}
+.jf-tx .tk-grid > .tk-field.is-s1 {
+  grid-column: span 1;
+}
+.jf-tx .tk-grid > .tk-field.is-s3 {
+  grid-column: span 3;
+}
+.jf-tx .tk-grid > .tk-field.is-s4 {
+  grid-column: span 4;
+}
+.jf-tx .tk-grid > .tk-field.is-s6 {
+  grid-column: 1 / -1;
+}
+.jf-tx .tk-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  grid-column: 1 / -1;
+  font-size: 15px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.jf-tx .tk-check > input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+.jf-tx .tk-check b {
+  font-weight: 700;
+}
+.jf-tx .tk-formF {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tk-rule);
+}
+.jf-tx .tk-release {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tk-rule);
+}
+.jf-tx .tk-release > .tk-note {
+  flex: 1 1 240px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TEXTS TO CLIENTS — the switch on its own, with its state in words
+   ════════════════════════════════════════════════════════════════════════ */
+.jf-tx.tk-clients {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.jf-tx .tk-clientsState {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.jf-tx.tk-clients > .tk-msg {
+  flex-basis: 100%;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   YOUR OWN TEXTS
+   ════════════════════════════════════════════════════════════════════════ */
+.jf-tx .tk-rulesH {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.jf-tx .tk-rulesH > b {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-ruleList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-tx .tk-rule {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 16px;
+  padding: 16px 18px;
+}
+.jf-tx .tk-rule + .tk-rule {
+  border-top: 1px solid var(--tk-line);
+}
+.jf-tx .tk-ruleMain {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.jf-tx .tk-ruleName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.jf-tx .tk-ruleName > b {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.jf-tx .tk-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.jf-tx .tk-facts > span > em {
+  margin-right: 6px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-rule.is-off .tk-ruleName > b,
+.jf-tx .tk-rule.is-off .tk-bubble {
+  color: var(--ink-muted);
+}
+.jf-tx .tk-rule.is-off .tk-bubble {
+  border-left-color: var(--ink-faint);
+}
+.jf-tx .tk-ruleA {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.jf-tx .tk-ideas {
+  display: grid;
+  gap: 8px;
+}
+.jf-tx .tk-ideasL {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+.jf-tx .tk-idea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s var(--ease-out), background 0.12s var(--ease-out);
+}
+.jf-tx .tk-idea::before {
+  content: "+";
+  flex: none;
+  width: 18px;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+}
+.jf-tx .tk-idea:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* the editor */
+.jf-tx .tk-editor {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: 20px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-tx .tk-editor > h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.jf-tx .tk-edRow {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 16px;
+}
+.jf-tx .tk-edRow > .tk-label {
+  padding-top: 13px;
+}
+.jf-tx .tk-edRow > .tk-label--top {
+  padding-top: 9px;
+}
+.jf-tx .tk-edBody {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.jf-tx .tk-edBody > .tk-input:not(textarea) {
+  max-width: 480px;
+}
+.jf-tx .tk-offset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.jf-tx .tk-offset > .tk-input {
+  width: 96px;
+}
+.jf-tx .tk-fills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-fill {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.jf-tx .tk-fill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.jf-tx .tk-fills > .tk-num {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-preview {
+  display: grid;
+  gap: 8px;
+}
+.jf-tx .tk-preview > p {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.jf-tx .tk-preview em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.jf-tx .tk-edActs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tk-rule);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   THE OVERVIEW (status + four steps; kept for any surface that draws it)
+   ════════════════════════════════════════════════════════════════════════ */
+.jf-tx .tk-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--tk-line);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+.jf-tx .tk-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 16px;
+}
+.jf-tx .tk-step + .tk-step {
+  border-top: 1px solid var(--tk-line);
+}
+.jf-tx .tk-stepN {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 900;
+}
+.jf-tx .tk-step[data-tone="ok"] .tk-stepN {
+  border-color: var(--emerald);
+  background: var(--emerald) var(--tk-tick) no-repeat center / 14px;
+  color: transparent;
+}
+.jf-tx .tk-step[data-tone="wait"] .tk-stepN {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #fff;
+}
+.jf-tx .tk-step[data-tone="bad"] .tk-stepN {
+  border-color: var(--rose);
+  background: var(--rose);
+  color: #fff;
+}
+.jf-tx .tk-stepT {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.jf-tx .tk-stepT > b {
+  font-size: 15px;
+}
+.jf-tx .tk-stepT > span {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+/* ── narrow (a 1024px desk with the sidebar open, a tablet, a phone) ──── */
+@container (max-width: 760px) {
+  .jf-tx .tk-grid > .tk-field.is-s1,
+  .jf-tx .tk-grid > .tk-field.is-s2,
+  .jf-tx .tk-grid > .tk-field.is-s4 {
+    grid-column: span 3;
+  }
+  .jf-tx .tk-examples li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container (max-width: 600px) {
+  /* on a phone: the name and its state across the row first, then the switch with the row's action beside it */
+  .jf-tx .tk-personH {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+  .jf-tx .tk-personH > .tk-who {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .jf-tx .tk-personH > .tk-switch {
+    grid-row: 2;
+  }
+  .jf-tx .tk-personA {
+    grid-column: 2;
+    grid-row: 2;
+    justify-content: stretch;
+  }
+  .jf-tx .tk-personA > .tk-btn {
+    flex: 1 1 140px;
+  }
+  .jf-tx .tk-person,
+  .jf-tx .tk-rule {
+    padding: 14px;
+  }
+  /* two columns of clusters on a phone, one at 320px */
+  .jf-tx .tk-clusters {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px 12px;
+  }
+  .jf-tx .tk-picksH > .tk-allNone {
+    margin-left: -6px;
+    flex-basis: 100%;
+  }
+  .jf-tx .tk-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jf-tx .tk-grid > .tk-field.tk-field {
+    grid-column: 1 / -1;
+  }
+  .jf-tx .tk-form,
+  .jf-tx .tk-editor,
+  .jf-tx .tk-plate,
+  .jf-tx .tk-done {
+    padding: 16px 14px;
+  }
+  .jf-tx .tk-rule {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .jf-tx .tk-ruleA {
+    grid-column: 1 / -1;
+  }
+  .jf-tx .tk-ruleA > .tk-btn {
+    flex: 1 1 0;
+  }
+  .jf-tx .tk-ideasL {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jf-tx .tk-edRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .jf-tx .tk-edRow > .tk-label,
+  .jf-tx .tk-edRow > .tk-label--top {
+    padding-top: 0;
+  }
+  .jf-tx .tk-preview > p {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jf-tx .tk-step {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .jf-tx .tk-step > .tk-btn,
+  .jf-tx .tk-step > .tk-switch {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .jf-tx .tk-uses > li {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+  .jf-tx .tk-uses > li > span {
+    grid-column: 2;
+  }
+}
+
+/* the narrowest phones (320px): the switch over the name, so a number never runs out of the row */
+@container (max-width: 330px) {
+  .jf-tx .tk-personH {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jf-tx .tk-personH > .tk-switch {
+    justify-self: start;
+  }
+  .jf-tx .tk-personA {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jf-tx .tk-btn,
+  .jf-tx .tk-switch > i,
+  .jf-tx .tk-switch > i::after,
+  .jf-tx .tk-input,
+  .jf-tx .tk-idea,
+  .jf-tx .tk-more > summary::before {
+    transition: none;
+  }
+}
+
+/* the six-digit box: its example reads as an example, not as typed digits */
+.jf-tx .tk-input--code::placeholder {
+  color: var(--ink-faint);
+}

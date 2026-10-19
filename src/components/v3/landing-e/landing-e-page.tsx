@@ -220,9 +220,6 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
       </main>
       <MobileCta registerHref={register} cta={low} />
       <ScrollFx />
-      {/* Mouse-wheel notches glide, 0.7× the browser's step — on a desk only
-          (hover, fine pointer, wider than 768px); phones, tablets and touch
-          scroll natively (smooth-wheel.tsx). */}
       <SmoothWheel />
       <LazyBg />
       <WarmLayout />

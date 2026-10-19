@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { setClientTextsOn } from "@/actions/sms";
 import type { SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
 import { TEXTING_COPY } from "@/components/v3/settings-blueprint/settings-data";
-import s from "./texting-people.module.css";
+import "./texting-kit.css";
 
 export type TextingTone = "ok" | "wait" | "todo" | "bad";
 type Tone = TextingTone;
@@ -76,34 +76,34 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
   const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <div className={s.root} data-texting-overview data-nest="">
-      <p className={`${s.status}${live ? ` ${s.statusLive}` : ""}`} data-texting-status>
+    <div className="jf-tx tk-overview" data-texting-overview data-nest="">
+      <p className="tk-callout" data-tone={live ? "ok" : "wait"} data-texting-status>
         {status}
       </p>
-      <ol className={s.steps}>
-        <li className={s.step} data-step="number" data-tone={number.tone}>
-          <span className={s.stepN} aria-hidden="true">1</span>
-          <span className={s.stepT}>
+      <ol className="tk-steps">
+        <li className="tk-step" data-step="number" data-tone={number.tone}>
+          <span className="tk-stepN" aria-hidden="true">1</span>
+          <span className="tk-stepT">
             <b>{C.stepNumber}</b>
             <span>{number.line}</span>
           </span>
-          <button type="button" className={`${s.btn}${number.tone === "todo" || number.tone === "bad" ? ` ${s.btnPrimary}` : ""}`} onClick={() => go("texting-own-number")}>
+          <button type="button" className={`tk-btn${number.tone === "todo" || number.tone === "bad" ? " tk-btn--primary" : ""}`} onClick={() => go("texting-own-number")}>
             {number.go}
           </button>
         </li>
-        <li className={s.step} data-step="team" data-tone={team.tone}>
-          <span className={s.stepN} aria-hidden="true">2</span>
-          <span className={s.stepT}>
+        <li className="tk-step" data-step="team" data-tone={team.tone}>
+          <span className="tk-stepN" aria-hidden="true">2</span>
+          <span className="tk-stepT">
             <b>{C.stepTeam}</b>
             <span>{team.line}</span>
           </span>
-          <button type="button" className={s.btn} onClick={() => go("texting-roster")}>
+          <button type="button" className="tk-btn" onClick={() => go("texting-roster")}>
             {C.teamGo}
           </button>
         </li>
-        <li className={s.step} data-step="clients" data-tone={clients.tone}>
-          <span className={s.stepN} aria-hidden="true">3</span>
-          <span className={s.stepT}>
+        <li className="tk-step" data-step="clients" data-tone={clients.tone}>
+          <span className="tk-stepN" aria-hidden="true">3</span>
+          <span className="tk-stepT">
             <b>{C.stepClients}</b>
             <span>{clients.line}</span>
           </span>
@@ -112,7 +112,7 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
             role="switch"
             aria-checked={sms.clientsOn}
             aria-label={C.stepClients}
-            className={`${s.switch}${sms.clientsOn ? ` ${s.switchOn}` : ""}`}
+            className={`tk-switch${sms.clientsOn ? " is-on" : ""}`}
             disabled={busy}
             onClick={() => void flipClients()}
             data-clients-switch
@@ -121,18 +121,18 @@ export function TextingOverview({ sms }: { sms: SmsSettingsData }) {
             <span>{sms.clientsOn ? C.switchOn : C.switchOff}</span>
           </button>
         </li>
-        <li className={s.step} data-step="rules" data-tone={rules.tone}>
-          <span className={s.stepN} aria-hidden="true">4</span>
-          <span className={s.stepT}>
+        <li className="tk-step" data-step="rules" data-tone={rules.tone}>
+          <span className="tk-stepN" aria-hidden="true">4</span>
+          <span className="tk-stepT">
             <b>{C.stepRules}</b>
             <span>{rules.line}</span>
           </span>
-          <button type="button" className={s.btn} onClick={() => go("texting-rules")}>
+          <button type="button" className="tk-btn" onClick={() => go("texting-rules")}>
             {C.rulesGo}
           </button>
         </li>
       </ol>
-      {err ? <p className={`${s.note} ${s.noteErr}`} role="alert">{err}</p> : null}
+      {err ? <p className="tk-msg is-err" role="alert">{err}</p> : null}
     </div>
   );
 }
@@ -155,14 +155,15 @@ export function ClientTextsSwitch({ on }: { on: boolean }) {
       setBusy(false);
     }
   };
+  // The state in words beside the switch (2026-10-18): what it means right now, not only ON / OFF.
   return (
-    <div className={`${s.root} ${s.inline}`} data-clients-card data-nest="">
+    <div className="jf-tx tk-clients" data-clients-card data-nest="">
       <button
         type="button"
         role="switch"
         aria-checked={on}
         aria-label={TEXTING_COPY.stepClients}
-        className={`${s.switch}${on ? ` ${s.switchOn}` : ""}`}
+        className={`tk-switch${on ? " is-on" : ""}`}
         disabled={busy}
         onClick={() => void flip()}
         data-clients-switch
@@ -170,7 +171,8 @@ export function ClientTextsSwitch({ on }: { on: boolean }) {
         <i aria-hidden="true" />
         <span>{on ? TEXTING_COPY.switchOn : TEXTING_COPY.switchOff}</span>
       </button>
-      {err ? <p className={`${s.note} ${s.noteErr}`} role="alert">{err}</p> : null}
+      <span className="tk-clientsState">{on ? TEXTING_COPY.clientsStateOn : TEXTING_COPY.clientsStateOff}</span>
+      {err ? <p className="tk-msg is-err" role="alert">{err}</p> : null}
     </div>
   );
 }
