@@ -150,7 +150,6 @@
 .jf-deck-v1 .v1-foot-price { display: block; font-size: var(--deck-number); font-weight: 900; font-variant-numeric: tabular-nums; }
 .jf-deck-v1 .v1-foot-sum { display: grid; gap: 2px; min-width: 0; }
 .jf-deck-v1 .v1-foot-note { font-size: var(--deck-meta); color: var(--ink-soft); line-height: 1.2; }
-.jf-deck-v1 .v1-dock-btn { display: none; }
 
 .jf-deck-v1 .v1-sub { display: grid; gap: var(--deck-space-md); }
 .jf-deck-v1 .v1-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--deck-space-md); }
@@ -416,10 +415,15 @@
 /* ── The structure, pinned ──────────────────────────────────────────────── */
 .jf-deck-v1 .v1-stage { position: sticky; top: 12px; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .jf-deck-v1 .v1-viewer { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; background: var(--paper-deep); border: 2px solid var(--ink); border-radius: var(--r-sm); }
-.jf-deck-v1 .v1-view-head { display: grid; align-items: center; grid-template-columns: auto minmax(0, 1fr); gap: var(--deck-space-xs) var(--deck-space-md); padding: var(--deck-space-sm); border-bottom: 1px solid var(--ink); }
-.jf-deck-v1 .v1-view-title { white-space: nowrap; }
+/* The head (owner, 2026-10-19): the title and a small Full view on one line, the deck's facts under them, the
+   view tabs last. The button's size is set here, after .v1-btn, which would otherwise take it. */
+.jf-deck-v1 .v1-view-head { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) auto; gap: var(--deck-space-xs) var(--deck-space-md); padding: var(--deck-space-sm); border-bottom: 1px solid var(--ink); }
+.jf-deck-v1 .v1-view-title { grid-column: 1; grid-row: 1; align-self: center; white-space: nowrap; }
+.jf-deck-v1 .v1-view-head .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; align-self: center; gap: 5px; min-height: 32px; padding: 0 10px; font-size: 12px; }
+.jf-deck-v1 .v1-view-head .v1-dock-btn svg { width: 14px; height: 14px; }
+.jf-deck-v1 .v1-view-head .v1-view-facts { grid-column: 1 / -1; grid-row: 2; }
 .jf-deck-v1 .v1-view-head .v1-seg { flex: none; flex-wrap: nowrap; }
-.jf-deck-v1 .v1-view-head .v1-seg { grid-column: 1 / -1; }
+.jf-deck-v1 .v1-view-head .v1-seg { grid-column: 1 / -1; grid-row: 3; }
 .jf-deck-v1 .v1-view-head .v1-seg-btn { min-height: var(--deck-view-control); padding: 0 var(--deck-space-sm); font-size: var(--deck-meta); flex: none; }
 .jf-deck-v1 .v1-view-facts { min-width: 0; font-family: var(--font-sans); font-size: var(--deck-meta); letter-spacing: 0.02em; text-align: left; white-space: normal; overflow: visible; text-overflow: clip; }
 /* The picture takes what the window leaves once the head, price and tools are counted, so the whole pinned
@@ -601,7 +605,6 @@
   .jf-deck-v1 .v1-view-box { height: var(--deck-preview-height); }
   .jf-deck-v1 .v1-view-box.is-wall { height: 460px; }
   .jf-deck-v1 .v1-view-head { flex-wrap: nowrap; }
-  .jf-deck-v1 .v1-view-title, .jf-deck-v1 .v1-view-facts { grid-column: 1 / -1; }
   /* The view tabs share the width (at 320 the three labels overran the viewer). */
   .jf-deck-v1 .v1-view-head .v1-seg { flex: none; min-width: 0; width: 100%; }
   .jf-deck-v1 .v1-view-head .v1-seg-btn { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 6px; line-height: 1.15; }
@@ -657,14 +660,6 @@
    tables read as lists: the name, its quantity under it, the cost at the
    right; the per-unit columns stay on the desk. */
 @media (max-width: 768px) {
-  /* The head: the title and a small Full view on one line, the deck's facts under them (owner, 2026-10-19). */
-  .jf-deck-v1 .v1-view-head { grid-template-columns: minmax(0, 1fr) auto; }
-  .jf-deck-v1 .v1-view-title { grid-column: 1; grid-row: 1; align-self: center; }
-  .jf-deck-v1 .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; align-self: center; gap: 5px; min-height: 32px; padding: 0 10px; font-size: 12px; }
-  .jf-deck-v1 .v1-dock-btn svg { width: 14px; height: 14px; }
-  .jf-deck-v1 .v1-view-facts { grid-column: 1 / -1; grid-row: 2; }
-  .jf-deck-v1 .v1-view-head .v1-seg { grid-row: 3; }
-
   /* Compact, in the flow (owner, 2026-10-19: not pinned) — the steps scroll past it; Full view opens the whole viewer. */
   .jf-deck-v1 .v1-stage.is-docked { position: static; }
   .jf-deck-v1 .v1-stage.is-docked .v1-viewer { border-width: 2px; }

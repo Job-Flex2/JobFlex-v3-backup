@@ -115,6 +115,37 @@ const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3
 });
 /** The 3D re-renders only when what it shows changes (its callbacks are stable, below), not on every render of the studio. */
 const DeckModel3DView = React.memo(DeckModel3D);
+
+/* THE HOVER LIGHT, OUTSIDE THE STUDIO'S STATE (2026-10-19, perf). The field under the pointer lights its part in 3D.
+   As studio state, every field the mouse crossed re-rendered the whole studio — 60–150ms a hover, the "lag" of moving
+   the mouse down the form. The light is a small store now; Lit3D, the 3D's own wrapper, is the one thing that
+   subscribes, so a hover re-renders the 3D and nothing else. */
+interface HoverStore { get: () => FieldFocus | null; set: (f: FieldFocus | null) => void; subscribe: (s: () => void) => () => void }
+function hoverStore(): HoverStore {
+  let value: FieldFocus | null = null;
+  const subs = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (f) => {
+      value = f;
+      subs.forEach((s) => s());
+    },
+    subscribe: (s) => {
+      subs.add(s);
+      return () => {
+        subs.delete(s);
+      };
+    },
+  };
+}
+const nothingLit = () => null;
+type Model3DProps = React.ComponentProps<typeof DeckModel3DView>;
+/** The 3D with its highlight: the wall being drawn, else the focused field, else the field under the pointer. */
+const Lit3D = React.memo(function Lit3D({ hover, structure, focusLit, wallLit, ...rest }: Omit<Model3DProps, "highlight"> & { hover: HoverStore; structure: Parameters<typeof fieldLight>[1]; focusLit: SceneHighlight | null; wallLit: SceneHighlight | null }) {
+  const hovered = React.useSyncExternalStore(hover.subscribe, hover.get, nothingLit);
+  const hoverLit = React.useMemo<SceneHighlight | null>(() => (hovered ? fieldLight(rest.scene, structure, hovered) : null), [hovered, rest.scene, structure]);
+  return <DeckModel3DView {...rest} highlight={wallLit ?? focusLit ?? hoverLit} />;
+});
 /** The hover tag shows a part's legend: the same legend under the pointer is the same tag (no re-render per pointer move). */
 const sameLegend = (a: SceneLegend | null | undefined, b: SceneLegend | null | undefined) => a === b || (!!a && !!b && a.role === b.role && a.nominal === b.nominal && a.lengthFt === b.lengthFt && a.note === b.note);
 
@@ -457,7 +488,8 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [wallFocus, setWallFocus] = React.useState<WallFocus | null>(null);
   const [wallHover, setWallHover] = React.useState<WallFocus | null>(null);
   const [fieldFocus, setFieldFocus] = React.useState<FieldFocus | null>(null);
-  const [fieldHover, setFieldHover] = React.useState<FieldFocus | null>(null);
+  // The hover light lives outside the studio's state (2026-10-19, perf): see hoverStore.
+  const [hover] = React.useState(hoverStore);
   // NOT WHILE SCROLLING (2026-10-18, perf): a still pointer over a scrolling form gets a mouseenter for every field
   // that slides under it, and each one re-rendered the whole studio and redrew the 3D — the lag as the header scrolls
   // away. A hover light is dropped until the page has been still for a moment; a focus light always applies.
@@ -467,26 +499,20 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => document.removeEventListener("scroll", onScroll, true);
   }, []);
-  // The hover light as last set, readable without a render: a mouseleave for a field that is not lit (the one left
-  // behind when the page scrolls) sets nothing, where a setter call re-rendered the studio for no change.
-  const fieldHoverRef = React.useRef<FieldFocus | null>(null);
-  React.useLayoutEffect(() => {
-    fieldHoverRef.current = fieldHover;
-  }, [fieldHover]);
   const rootScope = React.useMemo<FieldScopeValue>(() => {
     const same = (a: FieldFocus | null, b: FieldFocus) => !!a && JSON.stringify(a) === JSON.stringify(b);
     return {
       where: {},
       light: (f, how) => {
         if (how === "focus") setFieldFocus(f);
-        else if (performance.now() >= scrollingUntil.current && !same(fieldHoverRef.current, f)) setFieldHover(f);
+        else if (performance.now() >= scrollingUntil.current && !same(hover.get(), f)) hover.set(f);
       },
       unlight: (f, how) => {
         if (how === "focus") setFieldFocus((x) => (same(x, f) ? null : x));
-        else if (same(fieldHoverRef.current, f)) setFieldHover(null);
+        else if (same(hover.get(), f)) hover.set(null);
       },
     };
-  }, []);
+  }, [hover]);
   const lightsFor = (f: WallFocus) => ({
     on: (how: "focus" | "hover") => (how === "focus" ? setWallFocus(f) : setWallHover(f)),
     off: (how: "focus" | "hover") => (how === "focus" ? setWallFocus((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x)) : setWallHover((x) => (x && JSON.stringify(x) === JSON.stringify(f) ? null : x))),
@@ -496,15 +522,13 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     const a = document.activeElement;
     if (a instanceof HTMLElement && a.matches("input, textarea, select") && !e.currentTarget.contains(a) && !a.closest("[data-deck-wall-full]")) a.blur();
     setFieldFocus(null);
-    setFieldHover(null);
+    hover.set(null);
     setWallFocus(null);
     setWallHover(null);
   };
   const scene = React.useMemo(() => deckScene(structure), [structure]);
-  const fieldLit = React.useMemo<SceneHighlight | null>(() => {
-    const f = fieldFocus ?? fieldHover;
-    return f ? fieldLight(scene, structure, f) : null;
-  }, [fieldFocus, fieldHover, scene, structure]);
+  // The focused field's light; the hovered field's is computed in Lit3D, from the store.
+  const focusLit = React.useMemo<SceneHighlight | null>(() => (fieldFocus ? fieldLight(scene, structure, fieldFocus) : null), [fieldFocus, scene, structure]);
   const wallLit = React.useMemo<SceneHighlight | null>(() => {
     const f = wallFocus ?? wallHover;
     const hs = scene.house;
@@ -1166,12 +1190,14 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         });
       });
     };
+    // Only the two sections anything is computed for are watched (2026-10-19, perf): every section's coming and going
+    // used to flush, and each flush rendered the studio (60–150ms) — several times over one scroll down the form.
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) pending.set((entry.target as HTMLElement).dataset.deckSection as StepId, entry.isIntersecting);
       if (timer) clearTimeout(timer);
       timer = setTimeout(flush, QUIET);
     }, { root: window.matchMedia("(min-width: 769px)").matches ? scroller : null });
-    scroller.querySelectorAll("[data-deck-section]").forEach((section) => observer.observe(section));
+    scroller.querySelectorAll('[data-deck-section="materials"], [data-deck-section="package"]').forEach((section) => observer.observe(section));
     return () => {
       observer.disconnect();
       scroller.removeEventListener("scroll", onScrolled);
@@ -2876,7 +2902,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                 </div>
               ) : view === "3d" ? (
                 <>
-                  <DeckModel3DView scene={scene} built={built} xray={xray} backdrop={ph.backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEditStable} resetToken={resetToken} focus={focus} onPick={onPickStable} highlight={wallLit ?? fieldLit} className="v1-canvas" label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+                  <Lit3D hover={hover} structure={structure} focusLit={focusLit} wallLit={wallLit} scene={scene} built={built} xray={xray} backdrop={ph.backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEditStable} resetToken={resetToken} focus={focus} onPick={onPickStable} className="v1-canvas" label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                   {editing && !placing ? (
                     <div className="v1-banner" data-deck-editing>
                       <span>Drag the blue knobs — width, depth, height, the roof and its pitch, each stair, the house&apos;s corners and steps. It re-frames and re-prices as you drag.</span>

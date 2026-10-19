@@ -44,22 +44,38 @@ const DETAIL = { card: { full: 2400, quick: 1100 }, thumb: { full: 900, quick: 5
    hovered card, whatever the frame rate or the number of parts. The faces are now painted onto a canvas laid over
    the picture (a few milliseconds for the same frame); the resting SVG underneath is never touched, and shows again,
    crisp and with its build-up, as soon as the picture is back at its angle. */
-function paintFrame(canvas: HTMLCanvasElement, d: IsoDrawing) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const box = canvas.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const cw = Math.max(1, Math.round(box.width * dpr));
-  const ch = Math.max(1, Math.round(box.height * dpr));
+/* A moving picture is drawn at no more than this many device pixels per CSS pixel (2026-10-19, perf): the
+   rasterizing of a frame grows with its pixels, and a picture in motion does not show the difference; the
+   resting image is as sharp as the screen. */
+const MOVING_DPR = 1.5;
+
+/** The picture's box in device pixels at `scale` a CSS pixel — measured on the canvas's parent, since the canvas itself
+ *  may be hidden at the time (0 × 0 would have made the raster one stretched pixel). */
+function pixelBox(canvas: HTMLCanvasElement, scale: number) {
+  const box = (canvas.parentElement ?? canvas).getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, scale);
+  return { cw: Math.max(1, Math.round(box.width * dpr)), ch: Math.max(1, Math.round(box.height * dpr)) };
+}
+
+/** The canvas sized to its box at `scale` device pixels a CSS pixel; `k` and the offsets place `viewBox` in it, "meet". */
+function fitCanvas(canvas: HTMLCanvasElement, viewBox: string, scale: number) {
+  const { cw, ch } = pixelBox(canvas, scale);
   if (canvas.width !== cw || canvas.height !== ch) {
     canvas.width = cw;
     canvas.height = ch;
   }
-  const [vx, vy, vw, vh] = d.viewBox.split(/\s+/).map(Number);
+  const [vx, vy, vw, vh] = viewBox.split(/\s+/).map(Number);
   const k = Math.min(cw / vw, ch / vh);
+  return { cw, ch, k, ox: (cw - vw * k) / 2 - vx * k, oy: (ch - vh * k) / 2 - vy * k };
+}
+
+function paintFrame(canvas: HTMLCanvasElement, d: IsoDrawing) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const { cw, ch, k, ox, oy } = fitCanvas(canvas, d.viewBox, MOVING_DPR);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cw, ch);
-  ctx.setTransform(k, 0, 0, k, (cw - vw * k) / 2 - vx * k, (ch - vh * k) / 2 - vy * k);
+  ctx.setTransform(k, 0, 0, k, ox, oy);
   // A gradient or pattern fill is painted as its first colour; a filter is dropped. A gradient that only fades one
   // colour out (the ground's edge, black to nothing) is a mask, not a surface: painted flat it was a dark wedge, so
   // a face filled with one is left out.
@@ -108,8 +124,19 @@ function sceneFor(sample: DeckSample): { scene: DeckScene; materials: IsoMateria
   return s;
 }
 
-/** The resting picture, drawn once per sample and size: its markup with the build-up's groups, and with still ones. */
-interface Resting { viewBox: string; markup: string; still: string; faces: number; steps: number }
+/* THE PICTURE IS AN IMAGE (2026-10-19, perf). A live picture is thousands of SVG nodes, and four of them on the
+   page made every scroll frame re-style and re-layerize them all; as an image the browser rasterizes it once and
+   scrolls the bitmap. An image sees none of the page's stylesheets, so it carries the one rule it needs: the thin
+   edges (without it every face was outlined at a full unit — "the 3D parts sticking out everywhere"). */
+const PICTURE_STYLE = "<style>path{stroke-width:.45;stroke-linejoin:round;vector-effect:non-scaling-stroke}</style>";
+function svgImage(viewBox: string, inner: string): string {
+  // A width and height (the viewBox's) give the image an intrinsic size, which a canvas needs before it will draw it.
+  const [, , w, h] = viewBox.split(/\s+/);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${w}" height="${h}">${PICTURE_STYLE}${inner}</svg>`)}`;
+}
+
+/** The resting picture, drawn once per sample and size: the whole as one image, and one image a build step. */
+interface Resting { key: string; viewBox: string; still: string; steps: string[]; faces: number }
 const resting = new Map<string, Resting>();
 function restingFor(sample: DeckSample, detail: "card" | "thumb"): Resting {
   const key = `${sample.id}:${detail}`;
@@ -118,11 +145,36 @@ function restingFor(sample: DeckSample, detail: "card" | "thumb"): Resting {
     const { scene, materials } = sceneFor(sample);
     const d = isoDrawing(scene, { maxSolids: DETAIL[detail].full, materials, yawDeg: REST_YAW });
     const prefix = `iso-${sample.id}-${detail}`;
-    r = { viewBox: d.viewBox, markup: isoMarkup(d, { prefix, layerClass: p.layer }), still: isoMarkup(d, { prefix, layerClass: p.still }), faces: d.faces.length, steps: d.ranks.length };
+    const index = new Map(d.ranks.map((rank, i) => [rank, i] as const));
+    const steps = d.ranks.map((_, i) => svgImage(d.viewBox, isoMarkup({ ...d, faces: d.faces.filter((f) => index.get(f.rank) === i) }, { prefix, layerClass: "step" })));
+    r = { key, viewBox: d.viewBox, still: svgImage(d.viewBox, isoMarkup(d, { prefix, layerClass: "step" })), steps, faces: d.faces.length };
     resting.set(key, r);
   }
   return r;
 }
+
+/* THE BUILD-UP IS BLITTED (2026-10-19, perf). It used to be the live SVG with a CSS animation a step — the browser
+   re-rasterized the whole picture every frame for a second and a half (276ms, 146ms, 121ms tasks on one hover).
+   Now each step is its own image, rasterized once onto a small bitmap the first frame it is due, and a frame of the
+   build-up is a dozen bitmap blits with an alpha and a rise. The step images are decoded ahead, in idle time. */
+const STEP_MS = 70;
+const RISE_MS = 420;
+const stepImages = new Map<string, HTMLImageElement[]>();
+function stepImagesFor(rest: Resting): HTMLImageElement[] {
+  let imgs = stepImages.get(rest.key);
+  if (!imgs) {
+    imgs = rest.steps.map((src) => {
+      // (createElement, not `new Image()`: `Image` here is next/image's component.)
+      const im = document.createElement("img");
+      im.decoding = "async";
+      im.src = src;
+      return im;
+    });
+    stepImages.set(rest.key, imgs);
+  }
+  return imgs;
+}
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 const reducedMotion = (): boolean => {
   try {
@@ -151,64 +203,134 @@ const pageStill = (now: number) => now - pageScrolledAt > SCROLL_QUIET_MS;
 export type Turn = { turn: () => void };
 
 /**
- * One picture. `play` > 0 stands it up layer by layer; a new value plays it
+ * One picture. `play` > 0 stands it up step by step; a new value plays it
  * again. It turns: a mouse drag on it, `turnRef` (the ↻ beside it), and a
  * slow turn of its own while `spin` (the mouse resting on its card) — then
  * it eases back to its angle.
  *
- * WHAT IS IN THE DOM (2026-10-19, perf). A live picture is thousands of SVG nodes, and four of them on the page
- * made every scroll frame re-style and re-layerize them all (2.9s of style, 4s of layerizing over one scroll). So:
- * at rest the picture is an IMAGE of its resting markup (crisp, one node); a turn is PAINTED on the canvas over it
- * (paintFrame); the live SVG is mounted only for the build-up — the second and a half after a card is picked —
- * and gives way to the image again as soon as it has stood up.
+ * WHAT IS IN THE DOM (2026-10-19, perf): one image, and a canvas over it. The image is the picture's source and its
+ * first showing; once it has loaded it is rasterized once, in idle time, onto the canvas, and the canvas is what the
+ * page scrolls — a bitmap. (An SVG image is replayed, all its thousands of paths, for every tile the scroll
+ * uncovers; four of them made the scroll drag while the cards were in view.) A turn is painted on the same canvas
+ * (paintFrame); the build-up is blitted on it from the step images (stepImagesFor). No live SVG, ever: the page's
+ * style and layout never see the picture's parts.
  */
 export function IsoFigure({ sample, detail, play = 0, spin = false, label, className, turnRef, staticPreview = false }: { sample: DeckSample; detail: "card" | "thumb"; play?: number; spin?: boolean; label: string; className?: string; turnRef?: React.MutableRefObject<Turn | null>; staticPreview?: boolean }) {
   const rest = restingFor(sample, detail);
-  const image = React.useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rest.viewBox}">${rest.still}</svg>`)}`, [rest]);
-  const svgRef = React.useRef<SVGSVGElement>(null);
   const stillRef = React.useRef<HTMLSpanElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const yaw = React.useRef(REST_YAW);
   const anim = React.useRef<number>(0);
   const settle = React.useRef<number>(0);
+  const build = React.useRef<number>(0);
   const drag = React.useRef<{ x: number; yaw: number; moved: boolean } | null>(null);
-  // The build-up's live SVG is in the DOM only while it plays. A new `play` turns it on during render (the sanctioned
-  // way to derive state from a prop); the timer below turns it off once the picture has stood up.
-  const [live, setLive] = React.useState(false);
-  const [seenPlay, setSeenPlay] = React.useState(play);
-  if (play !== seenPlay) {
-    setSeenPlay(play);
-    if (play && !staticPreview) setLive(true);
-  }
   const buildEnds = React.useRef(0);
-  const turning = React.useRef(false);
+  // The resting picture rasterized, at the screen's own density; null until the image has loaded and idle time came.
+  const stillBitmap = React.useRef<HTMLCanvasElement | null>(null);
+  const wrapRef = React.useRef<HTMLSpanElement>(null);
+  /** What the canvas shows: nothing (the image shows), the resting raster, or a moving picture. */
+  const onCanvas = React.useRef<"none" | "still" | "moving">("none");
 
-  /** The picture at `yawDeg`: at its angle the resting image (or the live SVG) shows; turned, a painted frame. */
+  /** The picture at its angle: the raster on the canvas once there is one, the image itself until then. */
+  const showStill = React.useCallback(() => {
+    const canvas = canvasRef.current;
+    const still = stillRef.current;
+    if (!canvas) return;
+    const img = still?.querySelector("img");
+    let bm = stillBitmap.current;
+    if (bm && img) {
+      const { cw, ch } = fitCanvas(canvas, rest.viewBox, 2);
+      if (bm.width !== cw || bm.height !== ch) {
+        // The card has changed size (the window did): rasterized again at the new one.
+        bm.width = cw;
+        bm.height = ch;
+        try {
+          bm.getContext("2d")?.drawImage(img, 0, 0, cw, ch);
+        } catch {
+          bm = null;
+        }
+      }
+    }
+    if (bm) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bm, 0, 0);
+        canvas.style.display = "block";
+        onCanvas.current = "still";
+        if (still) still.style.visibility = "hidden";
+        return;
+      }
+    }
+    canvas.style.display = "none";
+    onCanvas.current = "none";
+    if (still) still.style.visibility = "";
+  }, [rest.viewBox]);
+  // The raster, once the image has loaded and the box has a size, in idle time; the page is not held for it. Again
+  // whenever the box changes size (the window; a folded section opening).
+  React.useEffect(() => {
+    const img = stillRef.current?.querySelector("img");
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    if (!img || !canvas || !wrap) return;
+    let idle = 0;
+    const schedule = () => {
+      (window.cancelIdleCallback ?? window.clearTimeout)(idle);
+      idle = (window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 200)))(() => {
+        if (!img.complete || !img.naturalWidth) return;
+        const { cw, ch } = pixelBox(canvas, 2);
+        if (cw < 2 || ch < 2) return; // not laid out yet: the observer calls again when it is
+        const bm = stillBitmap.current ?? document.createElement("canvas");
+        if (bm.width === cw && bm.height === ch && stillBitmap.current) return;
+        bm.width = cw;
+        bm.height = ch;
+        try {
+          bm.getContext("2d")?.drawImage(img, 0, 0, cw, ch);
+        } catch {
+          return;
+        }
+        stillBitmap.current = bm;
+        // Shown now unless something else is moving on the canvas.
+        if (onCanvas.current !== "moving") showStill();
+      });
+    };
+    if (img.complete && img.naturalWidth) schedule();
+    else img.addEventListener("load", schedule, { once: true });
+    const ro = new ResizeObserver(schedule);
+    ro.observe(wrap);
+    return () => {
+      img.removeEventListener("load", schedule);
+      ro.disconnect();
+      (window.cancelIdleCallback ?? window.clearTimeout)(idle);
+      stillBitmap.current = null;
+    };
+  }, [rest, showStill]);
+
+  /** The picture at `yawDeg`: at its angle the resting picture; turned, a painted frame. */
   const draw = React.useCallback(
     (yawDeg: number, quality: "full" | "quick") => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const atRest = Math.abs(yawDeg - REST_YAW) < 0.01 && quality === "full";
       if (atRest) {
-        turning.current = false;
-        canvas.style.display = "none";
-        if (stillRef.current) stillRef.current.style.visibility = "";
-        if (svgRef.current) svgRef.current.style.visibility = "";
+        showStill();
         return;
       }
       const { scene, materials } = sceneFor(sample);
       const d = isoDrawing(scene, { maxSolids: DETAIL[detail][quality], materials, yawDeg, detail: quality });
-      turning.current = true;
       canvas.style.display = "block";
+      onCanvas.current = "moving";
       paintFrame(canvas, d);
       if (stillRef.current) stillRef.current.style.visibility = "hidden";
-      if (svgRef.current) svgRef.current.style.visibility = "hidden";
     },
-    [sample, detail],
+    [sample, detail, showStill],
   );
   const stopAll = React.useCallback(() => {
     cancelAnimationFrame(anim.current);
     cancelAnimationFrame(settle.current);
+    cancelAnimationFrame(build.current);
   }, []);
   /** The picture turned to `to` over `ms`, then drawn in full. */
   const turnTo = React.useCallback(
@@ -240,22 +362,69 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
     },
     [draw, stopAll],
   );
-  // The build-up: the live SVG for as long as it plays, then the image again.
+  // The step images decoded ahead, in idle time, so the first hover has them.
   React.useEffect(() => {
-    if (!live) return;
+    if (staticPreview) return;
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300));
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout;
+    const h = idle(() => {
+      for (const im of stepImagesFor(rest)) im.decode?.().catch(() => {});
+    });
+    return () => cancel(h);
+  }, [rest, staticPreview]);
+  // The build-up: the steps blitted onto the canvas one after the other, each fading in as it settles; then the
+  // image again. Replayed whenever `play` changes.
+  React.useEffect(() => {
+    if (!play || staticPreview) return;
     stopAll();
     yaw.current = REST_YAW;
-    draw(REST_YAW, "full");
-    buildEnds.current = performance.now() + rest.steps * 70 + 700;
-    const t = window.setTimeout(() => setLive(false), rest.steps * 70 + 700);
-    return () => window.clearTimeout(t);
-  }, [live, play, rest.steps, draw, stopAll]);
-  React.useLayoutEffect(() => {
-    const svg = svgRef.current;
-    if (!svg || !live) return;
-    svg.setAttribute("viewBox", rest.viewBox);
-    svg.innerHTML = rest.markup;
-  }, [rest, live, play]);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx || reducedMotion()) {
+      draw(REST_YAW, "full");
+      return;
+    }
+    const imgs = stepImagesFor(rest);
+    const bitmaps: (HTMLCanvasElement | null)[] = imgs.map(() => null);
+    const t0 = performance.now();
+    const total = (imgs.length - 1) * STEP_MS + RISE_MS;
+    buildEnds.current = t0 + total;
+    const frame = (now: number) => {
+      const t = now - t0;
+      const { cw, ch } = fitCanvas(canvas, rest.viewBox, MOVING_DPR);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, cw, ch);
+      for (let i = 0; i < imgs.length; i++) {
+        const since = t - i * STEP_MS;
+        if (since < 0) break;
+        let bm = bitmaps[i];
+        if (!bm || bm.width !== cw || bm.height !== ch) {
+          // Its first frame: the step rasterized once, onto its own bitmap (an image not yet decoded joins later).
+          if (!imgs[i].complete) continue;
+          bm = document.createElement("canvas");
+          bm.width = cw;
+          bm.height = ch;
+          try {
+            bm.getContext("2d")?.drawImage(imgs[i], 0, 0, cw, ch);
+          } catch {
+            continue;
+          }
+          bitmaps[i] = bm;
+        }
+        const k = easeOut(Math.min(1, since / RISE_MS));
+        ctx.globalAlpha = k;
+        ctx.drawImage(bm, 0, -(1 - k) * 0.025 * ch);
+      }
+      ctx.globalAlpha = 1;
+      canvas.style.display = "block";
+      onCanvas.current = "moving";
+      if (stillRef.current) stillRef.current.style.visibility = "hidden";
+      if (t < total) build.current = requestAnimationFrame(frame);
+      else draw(REST_YAW, "full");
+    };
+    build.current = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(build.current);
+  }, [play, rest, staticPreview, draw, stopAll]);
   // The ↻: a third of a turn.
   React.useEffect(() => {
     if (!turnRef) return;
@@ -267,9 +436,10 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
   // The mouse rests on the card: once the picture has stood up it turns slowly; off the card it eases back.
   React.useEffect(() => {
     if (!spin || reducedMotion()) return;
-    stopAll();
+    cancelAnimationFrame(anim.current);
+    cancelAnimationFrame(settle.current);
     watchPageScroll();
-    // Only once the build-up has stood every step up (70 ms a step, and the last step's rise).
+    // Only once the build-up has stood every step up.
     const start = Math.max(performance.now() + 350, buildEnds.current);
     let last = start;
     const step = (now: number) => {
@@ -290,7 +460,7 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
       cancelAnimationFrame(anim.current);
       if (Math.abs(yaw.current - REST_YAW) > 0.01) turnTo(REST_YAW, 600);
     };
-  }, [spin, play, draw, turnTo, stopAll]);
+  }, [spin, play, draw, turnTo]);
   React.useEffect(() => stopAll, [stopAll]);
 
   /* ── a mouse drag turns it by hand (a touch scrolls the page, as it should) ── */
@@ -328,27 +498,15 @@ export function IsoFigure({ sample, detail, play = 0, spin = false, label, class
   };
   const handlers = staticPreview ? {} : { onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp };
   return (
-    <>
-      {/* The resting picture: one image. Hidden under a painted turn or the build-up's live SVG. */}
-      <span ref={stillRef} className={cx(p.svg, className)} style={live ? { visibility: "hidden" } : undefined} {...handlers}>
-        <Image src={image} alt={label} width={480} height={320} unoptimized loading="lazy" className={p.svg} draggable={false} />
+    // The pointer's events on the wrapper: whichever of the two is showing, the drag is the same.
+    <span ref={wrapRef} className={cx(p.svg, className)} data-iso-faces={rest.faces} {...handlers}>
+      {/* The picture's image: its source, and its first showing until the raster is on the canvas. */}
+      <span ref={stillRef} className={p.svg}>
+        <Image src={rest.still} alt="" width={480} height={320} unoptimized loading="lazy" className={p.svg} draggable={false} />
       </span>
-      {live ? (
-        <svg
-          key={play}
-          ref={svgRef}
-          className={cx(p.svg, p.play, p.liveSvg, className)}
-          viewBox={rest.viewBox}
-          preserveAspectRatio="xMidYMid meet"
-          role="img"
-          aria-label={label}
-          data-iso-faces={rest.faces}
-          {...handlers}
-        />
-      ) : null}
-      {/* The turning frames, painted; shown only while the picture is off its angle. */}
-      <canvas ref={canvasRef} className={p.turnCanvas} aria-hidden="true" />
-    </>
+      {/* The picture as the page sees it: the raster at rest, the build-up and the turns as they play. */}
+      <canvas ref={canvasRef} className={p.turnCanvas} role="img" aria-label={label} />
+    </span>
   );
 }
 
