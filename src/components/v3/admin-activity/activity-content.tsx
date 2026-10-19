@@ -12,9 +12,20 @@
 // The proposal opens HERE, in a sheet, not on the client's page: the client
 // page counts every open as a view and would put the admin's reading into
 // the contractor's statistics.
+//
+// 2026-10-19 (owner: "search any client by his company name or email and look
+// what he's doing … and keep on the ones that are working right now"): a
+// search at the top finds any member by name, email or company and narrows
+// the whole page to them — their counts, their trail and the screens they
+// opened — and "Working right now" lists everyone in the app this minute,
+// refreshed every half minute, one click from their trail.
 
+import type { Route } from "next";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { refreshWorkingNow } from "@/actions/adminActivity";
+import type { WorkingNowRow } from "@/lib/adminActivityRead";
 import { longDate, money, relative, shortDate } from "@/lib/format";
 import { TEAM_TZ } from "@/lib/adminTasks/teamShared";
 import { Chip, Empty, Ic, KpiStrip, Sheet, type Tone, cx, useMdl, useReveal } from "@/components/v3/admin-influencers/admin-ui";
@@ -143,6 +154,8 @@ function describe(e: ActivityEventDTO): { verb: string; tone: Tone } {
       return { verb: "Measured a roof", tone: "wait" };
     case "ESTIMATE_HVAC":
       return { verb: "Sized an HVAC system", tone: "wait" };
+    case "SCREEN":
+      return { verb: "Opened a screen", tone: "mute" };
     case "PLAN_CHANGE":
       return { verb: "Plan changed by support", tone: "bp" };
     case "USAGE_RESET":
@@ -154,15 +167,17 @@ function describe(e: ActivityEventDTO): { verb: string; tone: Tone } {
   }
 }
 
-type Group = "ALL" | "PROPOSALS" | "ESTIMATES" | "PEOPLE" | "OTHER";
+type Group = "ALL" | "PROPOSALS" | "ESTIMATES" | "PEOPLE" | "SCREENS" | "OTHER";
 const GROUPS: { key: Group; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "PROPOSALS", label: "Proposals" },
   { key: "ESTIMATES", label: "Estimates" },
   { key: "PEOPLE", label: "Leads & clients" },
+  { key: "SCREENS", label: "Screens" },
   { key: "OTHER", label: "Other" },
 ];
 function groupOf(e: ActivityEventDTO): Exclude<Group, "ALL"> {
+  if (e.kind === "SCREEN") return "SCREENS";
   if (e.kind === "ESTIMATE_ROOF" || e.kind === "ESTIMATE_HVAC") return "ESTIMATES";
   if (e.proposalId) return "PROPOSALS";
   if (e.leadId || e.clientId) return "PEOPLE";
@@ -194,6 +209,16 @@ const PAGE = 60;
 
 type PeekHandle = { open: (p: ProposalPeek, trail: ActivityEventDTO[]) => void };
 
+/** The page's address for a range and a search. */
+function hrefFor(range: ActivityRange, q: string): Route {
+  const sp = new URLSearchParams();
+  if (range !== "30") sp.set("range", range);
+  if (q.trim()) sp.set("q", q.trim());
+  const qs = sp.toString();
+  return (qs ? `/admin/activity?${qs}` : "/admin/activity") as Route;
+}
+const REFRESH_MS = 30_000;
+
 export function AdminActivityContent({
   range,
   users,
@@ -201,12 +226,20 @@ export function AdminActivityContent({
   proposals,
   totals,
   now,
+  q,
+  found,
+  working: workingAtLoad,
 }: {
   range: ActivityRange;
   users: ActivityUserRow[];
   feed: ActivityEventDTO[];
   proposals: Record<string, ProposalPeek>;
   totals: ActivityTotals;
+  /** The search, and how many members it found (null: no search). */
+  q: string;
+  found: number | null;
+  /** Everyone in the app in the last ten minutes, as the page loaded; refreshed here every half minute. */
+  working: WorkingNowRow[];
   /** The server's clock at render. "4m ago" is drawn from it, so the server's
    *  HTML and the hydrating page agree (QA F-7f3279fd); this browser's clock
    *  takes over after mount. */
@@ -215,6 +248,39 @@ export function AdminActivityContent({
   const [clock, setClock] = useState(now);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- the browser's clock, read once after hydration
   useEffect(() => setClock(Date.now()), []);
+  const router = useRouter();
+  const [searching, startSearch] = useTransition();
+  // The search box: what's typed, sent to the server a moment after typing stops (or on Enter).
+  const [draft, setDraft] = useState(q);
+  const go = useCallback((text: string) => startSearch(() => router.replace(hrefFor(range, text), { scroll: false })), [range, router]);
+  useEffect(() => {
+    const t = draft.trim();
+    if (t === q || (t.length > 0 && t.length < 2)) return;
+    const id = window.setTimeout(() => go(t), 450);
+    return () => window.clearTimeout(id);
+  }, [draft, q, go]);
+  // Who's in the app: refreshed every half minute while the page is in view.
+  const [working, setWorking] = useState(workingAtLoad);
+  useEffect(() => {
+    const tick = async () => {
+      if (document.visibilityState !== "visible") return;
+      const r = await refreshWorkingNow().catch(() => null);
+      if (r?.ok) {
+        setWorking(r.rows);
+        setClock(r.at);
+      }
+    };
+    const id = window.setInterval(() => void tick(), REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, []);
+  const lookAt = useCallback(
+    (w: WorkingNowRow) => {
+      const term = w.email ?? w.name;
+      setDraft(term);
+      startSearch(() => router.push(hrefFor(range, term), { scroll: false }));
+    },
+    [range, router],
+  );
   // Days on the team's clock, never the machine's: the server runs on UTC.
   const when = { now: clock, timeZone: TEAM_TZ };
   const rootRef = useRef<HTMLDivElement>(null);
@@ -247,7 +313,7 @@ export function AdminActivityContent({
 
   const groupCounts = useMemo(() => {
     const base = userId ? feed.filter((e) => e.actorId === userId) : feed;
-    const c: Record<Group, number> = { ALL: base.length, PROPOSALS: 0, ESTIMATES: 0, PEOPLE: 0, OTHER: 0 };
+    const c: Record<Group, number> = { ALL: base.length, PROPOSALS: 0, ESTIMATES: 0, PEOPLE: 0, SCREENS: 0, OTHER: 0 };
     for (const e of base) c[groupOf(e)] += 1;
     return c;
   }, [feed, userId]);
@@ -294,13 +360,117 @@ export function AdminActivityContent({
         <div className="page-actions">
           <nav className={styles.range} aria-label="Range">
             {(Object.keys(RANGE_LABEL) as ActivityRange[]).map((r) => (
-              <Link key={r} href={r === "30" ? "/admin/activity" : `/admin/activity?range=${r}`} className={cx(styles.rangeBtn, r === range && styles.rangeOn)} aria-current={r === range ? "page" : undefined}>
+              <Link key={r} href={hrefFor(r, q)} className={cx(styles.rangeBtn, r === range && styles.rangeOn)} aria-current={r === range ? "page" : undefined}>
                 {RANGE_LABEL[r]}
               </Link>
             ))}
           </nav>
         </div>
       </div>
+
+      {/* ── find anyone ── */}
+      <form
+        className={cx(styles.find, "rv")}
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          go(draft);
+        }}
+      >
+        <Ic name="search" />
+        <input className={styles.findIn} type="search" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Name, company or email" aria-label="Find a contractor by name, company or email" data-activity-find />
+        {draft || q ? (
+          <button
+            type="button"
+            className={styles.findX}
+            aria-label="Clear the search"
+            onClick={() => {
+              setDraft("");
+              go("");
+            }}
+          >
+            <Ic name="x" />
+          </button>
+        ) : null}
+        <button type="submit" className={cx("btn", "btn-primary", ui.btnSm)} disabled={searching}>
+          {searching ? "Searching…" : "Search"}
+        </button>
+      </form>
+      {q ? (
+        <p className={styles.findNote} data-activity-found>
+          {found === 0 ? (
+            <>No member&apos;s name, email or company holds “{q}”.</>
+          ) : (
+            <>
+              {found === 1 ? "1 member matches" : `${found} members match`} “{q}” — the counts, the people and the trail below are {found === 1 ? "theirs" : "theirs alone"}, with every screen they opened
+              {range === "all" ? "" : ` in the last ${RANGE_LABEL[range].toLowerCase()}`}.
+            </>
+          )}{" "}
+          <Link href={hrefFor(range, "")} onClick={() => setDraft("")}>
+            Show everyone
+          </Link>
+        </p>
+      ) : null}
+
+      {/* ── who's in the app now ── */}
+      <section className="card rv" data-working-now>
+        <div className={cx("card-head", ui.cardHead)}>
+          <div className="card-titles">
+            <div className="card-title">
+              Working right now <span className={styles.liveDot} aria-hidden="true" /> <span className={styles.liveN}>{working.length}</span>
+            </div>
+            <div className="card-sub">Everyone with a screen open in JobFlex in the last ten minutes — the screen they&apos;re on, how long they&apos;ve been at it, the last thing they did. Refreshed every 30 seconds.</div>
+          </div>
+        </div>
+        {working.length === 0 ? (
+          <Empty>No one is in the app right now.</Empty>
+        ) : (
+          <div className={ui.tbl} role="table" aria-label="Working right now">
+            {working.map((w) => {
+              const mins = Math.max(1, Math.round((Date.parse(w.at) - Date.parse(w.since)) / 60000));
+              const d = w.lastAction ? describe({ id: "", at: w.lastAction.at, kind: w.lastAction.kind, summary: w.lastAction.summary, actorId: null, actorName: "", orgName: "", proposalId: null, leadId: null, clientId: null }) : null;
+              return (
+                <div key={w.userId} className={cx(ui.tr, styles.liveCols)} role="row" data-working={w.userId}>
+                  <div className={ui.tdWide}>
+                    <div className={ui.tdName}>{w.name}</div>
+                    <div className={ui.tdSub} title={w.email ?? undefined}>
+                      {[w.company, w.email].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <span className={ui.tdLbl}>On</span>
+                    <Chip tone="bp">{w.screen}</Chip>
+                    <span className={styles.whenSub}>
+                      {mins} min · {w.screens} screen{w.screens === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div className={ui.tdWide}>
+                    <span className={ui.tdLbl}>Last did</span>
+                    {w.lastAction && d ? (
+                      <>
+                        <div className={styles.detail}>{w.lastAction.summary || d.verb}</div>
+                        <span className={styles.whenSub}>{relative(w.lastAction.at, when)}</span>
+                      </>
+                    ) : (
+                      <span className={styles.whenSub}>Nothing saved this hour</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className={ui.tdLbl}>Seen</span>
+                    <span className={styles.when}>{relative(w.at, when)}</span>
+                  </div>
+                  <div className={ui.tdAct}>
+                    <button type="button" className={cx("btn", ui.btnGhost, ui.btnSm)} onClick={() => lookAt(w)} data-working-see={w.userId}>
+                      <Ic name="eye" />
+                      Their activity
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <KpiStrip
         cols={6}
@@ -309,7 +479,8 @@ export function AdminActivityContent({
           { label: "Proposals created", value: String(totals.created), accent: true },
           { label: "Proposals sent", value: String(totals.sent) },
           { label: "Accepted", value: String(totals.accepted), tone: totals.accepted ? "ok" : undefined },
-          { label: "Won", value: money(totals.acceptedValue), tone: totals.acceptedValue ? "ok" : undefined },
+          // Whole dollars: with the cents, six figures ran into the next tile.
+          { label: "Won", value: `$${Math.round(totals.acceptedValue).toLocaleString("en-US")}`, tone: totals.acceptedValue ? "ok" : undefined },
           { label: "Estimates made", value: String(totals.estimates) },
         ]}
       />
@@ -334,7 +505,7 @@ export function AdminActivityContent({
         </div>
 
         {userRows.length === 0 ? (
-          <Empty>No member did anything in this range.</Empty>
+          <Empty>{q ? "No member matches the search." : "No member did anything in this range."}</Empty>
         ) : (
           <div className={ui.tbl} role="table" aria-label="Activity by user">
             <div className={cx(ui.tr, ui.th, styles.userCols)} role="row">
@@ -411,14 +582,14 @@ export function AdminActivityContent({
                 </button>
               </span>
             ) : null}
-            {GROUPS.map((g) => (
+            {GROUPS.filter((g) => g.key !== "SCREENS" || groupCounts.SCREENS > 0).map((g) => (
               <button key={g.key} type="button" className={cx(ui.filter, group === g.key && ui.filterOn)} aria-pressed={group === g.key} onClick={() => setGroup(g.key)}>
                 {g.label}
                 <i>{groupCounts[g.key]}</i>
               </button>
             ))}
             <div className={styles.search}>
-              <input className={styles.searchIn} type="search" aria-label="Search activity" placeholder="Search a name, workspace or proposal" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input className={styles.searchIn} type="search" aria-label="Search activity" placeholder="Filter the trail — a word, a proposal" value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
           </div>
         </div>
