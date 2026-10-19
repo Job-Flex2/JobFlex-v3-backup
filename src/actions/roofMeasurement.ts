@@ -40,6 +40,7 @@ import {
   type PdPack,
 } from "@/lib/eagleview";
 import { satellitePhotoPng } from "@/lib/staticMapPhoto";
+import { orthoImage } from "@/lib/roofPictureFetch";
 import {
   collectPlacedOrders,
   hasRoof,
@@ -1275,7 +1276,9 @@ export async function getMeasurementOrtho(id: string): Promise<
     .sort((a, b) => (b.bbox![2] - b.bbox![0]) * (b.bbox![3] - b.bbox![1]) - (a.bbox![2] - a.bbox![0]) * (a.bbox![3] - a.bbox![1]))[0];
   if (!wide?.token || !wide.bbox) return { ok: false, error: "No ortho imagery on this measurement" };
   try {
-    const img = await fetchPropertyImage(wide.token);
+    // The same kept, one-attempt read as the client's picture (lib/roofPictureFetch): an old order's image EagleView
+    // refuses (410) is refused at once on the next ask, and the page falls back to the map.
+    const img = await orthoImage(wide.token);
     const b64 = Buffer.from(img.bytes).toString("base64");
     const mime = img.contentType || "image/png";
     return {

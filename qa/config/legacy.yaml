@@ -192,6 +192,7 @@ scripts:
   - { file: procedures.check.ts, suite: logic, kind: check, status: live }
   - { file: proposal-money.check.ts, suite: logic, kind: check, status: live }
   - { file: proposal-pictures.check.ts, suite: logic, kind: check, status: live }
+  - { file: roof-picture-fallback.check.ts, suite: logic, kind: check, status: live, note: "EagleView ortho 410/404/timeout → Google satellite with the same frame and pin; both down → stand-in, no pin; network stubbed (2026-10-19)" }
   - { file: remodel-method.check.ts, suite: logic, kind: check, status: live }
   - { file: roof-proposal-edit.check.ts, suite: logic, kind: check, status: live }
   - { file: roof-review.check.ts, suite: logic, kind: check, status: live }

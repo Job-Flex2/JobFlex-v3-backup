@@ -1,17 +1,21 @@
 import { db } from "@/lib/db";
 import { rateLimitShared, ipFromRequest, HOUR } from "@/lib/rateLimit";
-import { fetchPropertyImage, isEagleViewEnabled, type InstantRoofData } from "@/lib/eagleview";
-import { satellitePhotoPng } from "@/lib/staticMapPhoto";
-import { roofFactsLine, roofFrameFor, roofStandInSvg } from "@/lib/roofPictures";
+import type { InstantRoofData } from "@/lib/eagleview";
+import { loadRoofPicture } from "@/lib/roofPictureFetch";
+import { roofFactsLine, roofStandInSvg, type RoofFrame } from "@/lib/roofPictures";
 
 export const runtime = "nodejs";
 
 // The client's roof from the air (2026-09-23): EagleView's clear ortho when
 // the measurement carried imagery, else Google's satellite tile at the pin.
 // The page puts one pin on the roof (lib/roofPictures) — never the outline
-// (owner, 2026-10-12). If the aerial cannot be fetched right now, a plain
-// stand-in with the facts is sent (the page's pin lands on it the same), so
-// the picture is never broken.
+// (owner, 2026-10-12). ?f= is the frame the page chose and projected its pin
+// onto (lib/roofPictureFetch, 2026-10-19: an ortho EagleView no longer serves
+// falls to the satellite there); only that frame is served here. If no aerial
+// can be fetched, a plain stand-in with the facts is sent — the page then
+// draws no pin — so the picture is never broken.
+const FRAMES: ReadonlyArray<RoofFrame["kind"]> = ["ortho", "satellite"];
+
 export async function GET(req: Request, ctx: { params: Promise<{ publicId: string }> }) {
   const { publicId } = await ctx.params;
   const gate = await rateLimitShared(`roof-photo:${ipFromRequest(req)}`, 120, HOUR);
@@ -29,18 +33,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ publicId: strin
   if (!row) return new Response("Not found", { status: 404 });
   let instant: InstantRoofData | null = null;
   try { instant = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null; } catch { instant = null; }
-  const frame = roofFrameFor(instant, row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null, { ortho: isEagleViewEnabled(), satellite: Boolean(process.env.GOOGLE_MAPS_API_KEY) });
-  if (!frame) return new Response("Not found", { status: 404 });
-  const cache = { "Cache-Control": "public, max-age=86400, s-maxage=86400" };
-  try {
-    if (frame.kind === "ortho") {
-      const img = await fetchPropertyImage(frame.token);
-      return new Response(new Uint8Array(img.bytes), { headers: { "Content-Type": img.contentType || "image/png", ...cache } });
-    }
-    const photo = await satellitePhotoPng(row);
-    if (photo.ok) return new Response(new Uint8Array(photo.bytes), { headers: { "Content-Type": "image/png", ...cache } });
-  } catch {
-    /* the aerial is unavailable right now — the stand-in below */
+  const asked = new URL(req.url).searchParams.get("f");
+  if (asked !== "standin") {
+    const shot = await loadRoofPicture({ ...row, instant }, FRAMES.find((k) => k === asked));
+    if (shot.frame) return new Response(new Uint8Array(shot.bytes), { headers: { "Content-Type": shot.contentType, "Cache-Control": "public, max-age=86400, s-maxage=86400" } });
+    if (!shot.frames) return new Response("Not found", { status: 404 });
   }
   const facts = roofFactsLine({ areaSqft: row.areaSqft, squares: row.squares, pitch: row.predominantPitch, facetCount: row.facetCount, measuredOn: row.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) });
   return new Response(roofStandInSvg(facts), { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=600" } });

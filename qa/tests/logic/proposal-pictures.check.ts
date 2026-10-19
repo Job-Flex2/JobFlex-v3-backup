@@ -66,11 +66,12 @@ check("a pin off the picture is not drawn", roofPinOnFrame({ lat: 47.80, lng: -1
 const facts = roofFactsLine({ areaSqft: 2412, squares: 24.1, pitch: "6/12", facetCount: 8, measuredOn: "Sep 19, 2026" });
 check("the facts line reads like a report", facts === "2,412 sq ft · 24.1 squares · 6/12 pitch · 8 facets · measured Sep 19, 2026", facts);
 const stand = roofStandInSvg(facts);
-check("the stand-in for an aerial that cannot be fetched has the facts and no outline (the page's pin lands on it)", !/<polygon|<path/.test(stand) && /2,412 SQ FT/.test(stand));
+check("the stand-in for an aerial that cannot be fetched has the facts and no outline",!/<polygon|<path/.test(stand) && /2,412 SQ FT/.test(stand));
 // Never an outline to the client: nothing left that could draw one.
 check("the roof module has no outline drawers left", !("roofOverlayPoints" in roofPictures) && !("roofPlanSvg" in roofPictures) && !("roofFrameSvg" in roofPictures));
 const pics = readFileSync("src/lib/proposalPictures.ts", "utf8");
 check("the roof picture carries a pin and no overlay", /kind: "roof-photo"[^\n]*overlay: null, pin: roofPinOnFrame/.test(pics) && !/roof-plan/.test(pics.replace(/^\/\/.*$/gm, "")));
+check("the stand-in picture carries no pin (2026-10-19, roof-picture-fallback.check)", /roof-photo\?f=standin[^\n]*pin: null/.test(pics));
 check("the outline-plan route is gone", !existsSync("src/app/api/public-quote/[publicId]/roof-plan/route.ts"));
 for (const page of ["src/components/v3/mobile-proposal-client/mobile-proposal-client.tsx", "src/app/(portal)/portal/q/[publicId]/page.tsx"]) {
   check(`${page.split("/").slice(-2).join("/")} draws the pin`, /data-roof-pin/.test(readFileSync(page, "utf8")));

@@ -15,7 +15,11 @@
 //   roof-photo  the aerial (EagleView ortho, else Google satellite) with ONE
 //               PIN on the roof, when a key is on the server — never the
 //               measured outline (owner, 2026-10-12: "remove it and never
-//               send any outlines for the roof"); no aerial, no roof picture;
+//               send any outlines for the roof"); no aerial, no roof picture.
+//               The frame is the one that actually loads (2026-10-19, lib/
+//               roofPictureFetch): an old order's ortho EagleView refuses →
+//               the satellite, its pin projected onto it; neither loads →
+//               the stand-in, no pin. The src names the frame for its route;
 //   deck-scene  the Deck Studio's deck in 3D (2026-10-04): the scene frozen
 //               with the proposal (an ActivityEvent DECK_PLAN), served by
 //               /api/public-quote/[publicId]/deck-scene, mounted by
@@ -25,11 +29,12 @@
 //               by /api/public-quote/[publicId]/deck-photo (private store).
 
 import { db } from "@/lib/db";
-import { isEagleViewEnabled, type InstantRoofData } from "@/lib/eagleview";
+import type { InstantRoofData } from "@/lib/eagleview";
 import { FENCE_PLAN_EVENT, parseFencePlan } from "@/lib/fence/planSvg";
 import { DECK_PLAN_EVENT, parseDeckPlan } from "@/lib/deck/convertSchema";
 import { deckElevation, defaultPlacement, elevationOverlay } from "@/lib/deck/elevation";
-import { roofFactsLine, roofFrameFor, roofPinOnFrame, roofPinPoint, type RoofFacts } from "@/lib/roofPictures";
+import { roofFactsLine, roofPinOnFrame, roofPinPoint, type RoofFacts } from "@/lib/roofPictures";
+import { loadRoofPicture, subjectPin } from "@/lib/roofPictureFetch";
 import type { PortalPicture } from "@/components/v3/mobile-proposal-client/portal-view";
 
 const measuredOn = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -92,17 +97,19 @@ export async function proposalPictures(p: { id: string; publicId: string; trade?
   try {
     const link = await db.proposalSitePhoto.findUnique({ where: { proposalId: p.id }, select: { roofMeasurementId: true } });
     const row = link
-      ? await db.roofMeasurement.findUnique({ where: { id: link.roofMeasurementId }, select: { lat: true, lng: true, instantJson: true, areaSqft: true, squares: true, predominantPitch: true, facetCount: true, createdAt: true } })
+      ? await db.roofMeasurement.findUnique({ where: { id: link.roofMeasurementId }, select: { address: true, city: true, state: true, zip: true, lat: true, lng: true, instantJson: true, areaSqft: true, squares: true, predominantPitch: true, facetCount: true, createdAt: true } })
       : null;
     if (row) {
       let instant: InstantRoofData | null = null;
       try { instant = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null; } catch { instant = null; }
       const facts: RoofFacts = { areaSqft: row.areaSqft, squares: row.squares, pitch: row.predominantPitch, facetCount: row.facetCount, measuredOn: measuredOn(row.createdAt) };
       const factsLine = roofFactsLine(facts);
-      const pin = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
-      const frame = roofFrameFor(instant, pin, { ortho: isEagleViewEnabled(), satellite: Boolean(process.env.GOOGLE_MAPS_API_KEY) });
+      const shot = await loadRoofPicture({ ...row, instant });
+      const frame = shot.frame;
       if (frame) {
-        out.push({ kind: "roof-photo", src: `${base}/roof-photo`, alt: "Your roof from the air, a pin on the house", caption: frame.kind === "ortho" ? "Your roof, as measured from the air" : "Your roof, from the air", facts: factsLine || null, overlay: null, pin: roofPinOnFrame(roofPinPoint(instant, pin), frame) });
+        out.push({ kind: "roof-photo", src: `${base}/roof-photo?f=${frame.kind}`, alt: "Your roof from the air, a pin on the house", caption: frame.kind === "ortho" ? "Your roof, as measured from the air" : "Your roof, from the air", facts: factsLine || null, overlay: null, pin: roofPinOnFrame(roofPinPoint(instant, subjectPin(row)), frame) });
+      } else if (shot.frames) {
+        out.push({ kind: "roof-photo", src: `${base}/roof-photo?f=standin`, alt: "Your roof", caption: "Your roof", facts: factsLine || null, overlay: null, pin: null });
       }
     }
   } catch {

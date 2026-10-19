@@ -1440,12 +1440,14 @@ export async function requestInstantRoofData(
 /** Fetch one Property Data image (ortho / oblique PNG) by its token. */
 export async function fetchPropertyImage(
   imageToken: string,
+  opts: { attempts?: number } = {},
 ): Promise<{ bytes: ArrayBuffer; contentType: string }> {
   const token = await getToken();
   const res = await evRequest(
     `${PROPERTY_API_BASE}/property/v2/image/${encodeURIComponent(imageToken)}`,
     { headers: { Authorization: `Bearer ${token}` } },
     "property image",
+    opts.attempts,
   );
   return { bytes: await res.arrayBuffer(), contentType: res.headers.get("content-type") ?? "image/png" };
 }

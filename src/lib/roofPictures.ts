@@ -13,6 +13,13 @@
 // outline is still read here, but only to find a point well inside the roof
 // for the pin; no outline is drawn over the picture, drawn as a plan, or
 // drawn in the stand-in for the client any more.
+// WHEN THE AERIAL WILL NOT COME (2026-10-19): EagleView stops serving an
+// order's images after a while (410 "Image is older than the maximum allowed
+// age"), and any fetch can fail or time out. The picture then falls through
+// roofFrames in order — the ortho, then Google's satellite at the same point
+// with the pin projected onto that frame — and only when every source fails
+// is it the stand-in, which carries no pin (firstRoofPicture; the fetching
+// itself is lib/roofPictureFetch, server only).
 
 export type LatLng = { lat: number; lng: number };
 
@@ -43,13 +50,14 @@ export function roofRings(instant: InstantLike | null): LatLng[][] {
   return rings.sort((a, b) => area(b) - area(a));
 }
 
-/** Which picture the client gets, given what the server can reach. */
-export function roofFrameFor(instant: InstantLike | null, pin: LatLng | null, able: { ortho: boolean; satellite: boolean }, zoom = 20, px = 640): RoofFrame | null {
+/** Every picture the client could get, best first, given what the server can reach: the ortho, then the satellite. */
+export function roofFrames(instant: InstantLike | null, pin: LatLng | null, able: { ortho: boolean; satellite: boolean }, zoom = 20, px = 640): RoofFrame[] {
+  const out: RoofFrame[] = [];
   if (able.ortho) {
     const wide = (instant?.imagery ?? [])
       .filter((im) => im.view === "ortho" && im.bbox && im.masked === false && im.token)
       .sort((a, b) => (b.bbox![2] - b.bbox![0]) * (b.bbox![3] - b.bbox![1]) - (a.bbox![2] - a.bbox![0]) * (a.bbox![3] - a.bbox![1]))[0];
-    if (wide) return { kind: "ortho", token: wide.token, bbox: wide.bbox! };
+    if (wide) out.push({ kind: "ortho", token: wide.token, bbox: wide.bbox! });
   }
   if (able.satellite) {
     let lat = pin?.lat ?? instant?.lat ?? null;
@@ -58,9 +66,34 @@ export function roofFrameFor(instant: InstantLike | null, pin: LatLng | null, ab
       const all = roofRings(instant).flat();
       if (all.length) { lat = all.reduce((s, p) => s + p.lat, 0) / all.length; lng = all.reduce((s, p) => s + p.lng, 0) / all.length; }
     }
-    if (lat != null && lng != null) return { kind: "satellite", lat, lng, zoom, px };
+    if (lat != null && lng != null) out.push({ kind: "satellite", lat, lng, zoom, px });
   }
-  return null;
+  return out;
+}
+
+/** Which picture the client gets when every source answers: the first of roofFrames. */
+export function roofFrameFor(instant: InstantLike | null, pin: LatLng | null, able: { ortho: boolean; satellite: boolean }, zoom = 20, px = 640): RoofFrame | null {
+  return roofFrames(instant, pin, able, zoom, px)[0] ?? null;
+}
+
+export type RoofPictureTry<T> =
+  | { frame: RoofFrame; picture: T; failed: Array<{ kind: RoofFrame["kind"]; error: string }> }
+  | { frame: null; picture: null; failed: Array<{ kind: RoofFrame["kind"]; error: string }> };
+
+/**
+ * The first frame whose picture loads, trying them in order; any error (a 410 from EagleView, a 404, a timeout, a
+ * refused key) moves on to the next. No frame left: frame null — the stand-in, without a pin.
+ */
+export async function firstRoofPicture<T>(frames: RoofFrame[], load: (frame: RoofFrame) => Promise<T>): Promise<RoofPictureTry<T>> {
+  const failed: Array<{ kind: RoofFrame["kind"]; error: string }> = [];
+  for (const frame of frames) {
+    try {
+      return { frame, picture: await load(frame), failed };
+    } catch (err) {
+      failed.push({ kind: frame.kind, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { frame: null, picture: null, failed };
 }
 
 const TILE = 256;
@@ -163,8 +196,8 @@ const font = "Inter, Helvetica, Arial, sans-serif";
 const mono = "ui-monospace, 'JetBrains Mono', Menlo, monospace";
 
 /**
- * The picture's stand-in when the aerial cannot be fetched at request time: a plain square with the facts — no
- * outline. The page puts the pin over it, as over the aerial.
+ * The picture's stand-in when no aerial can be fetched at request time: a plain square with the facts — no outline,
+ * and no pin over it (there is no picture for a pin to point into).
  */
 export function roofStandInSvg(factsLine: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" role="img" aria-label="Your roof">` +

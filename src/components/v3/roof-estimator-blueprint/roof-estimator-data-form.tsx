@@ -694,9 +694,12 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // ── Photos ──
   // The EagleView clear ortho exists only when the paid answer carried imagery;
   // without it the ORTHO tab is hidden (not disabled) per the owner's call.
+  // An ortho EagleView will not serve (an old order's image answers 410, or
+  // any failure) is the same as none (2026-10-19): the tab goes and the Map —
+  // Google's satellite with the pin — is the picture.
   const orthoOf = (m: RoofMeasurementDTO | null | undefined) =>
     !!m && m.source !== "solar" && !!m.instant?.imagery?.some((im) => im.view === "ortho" && im.masked === false && !!im.token && !!im.bbox);
-  const hasOrtho = orthoOf(measurement);
+  const hasOrtho = orthoOf(measurement) && !orthoErr;
   const orthoShotDate = shotDateLabel(
     measurement?.instant?.imagery?.find((im) => im.view === "ortho" && im.masked === false)?.shotDate ??
       measurement?.provenance?.instantImageryDate,
@@ -716,15 +719,15 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       .finally(() => setPhotoBusy(false));
   }, []);
 
-  // `orMap`: the photo was opened for the user (the first tab) — if it cannot be read, the map takes its place.
-  const loadOrtho = React.useCallback((id: string, orMap = false) => {
+  // If the photo cannot be read, the map takes its place and the tab goes (hasOrtho).
+  const loadOrtho = React.useCallback((id: string) => {
     setOrthoPhoto(null);
     setOrthoErr(null);
     if (id === "unsaved") return;
     setPhotoBusy(true);
     const failed = (msg: string) => {
       setOrthoErr(msg);
-      if (orMap) setView("satellite");
+      setView("satellite");
     };
     void getMeasurementOrtho(id)
       .then((res) => {
@@ -831,7 +834,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       openedRef.current = m.id;
       const first = !wasUnsaved && m.id !== "unsaved" && orthoOf(m);
       setView(first ? "ortho" : "satellite");
-      if (first) loadOrtho(m.id, true);
+      if (first) loadOrtho(m.id);
     }
   }
 
