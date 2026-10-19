@@ -581,15 +581,25 @@
   min-height: 76px;
   margin: 0;
   padding: 16px 22px;
-  border: 2px solid var(--ink);
-  border-radius: var(--r-sm);
-  overflow: hidden;
+  border: 0;
+  border-radius: 0;
   background: var(--paper-deep);
   color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.14s var(--ease-out);
+}
+/* the step is ONE card: its head and, when open, its contents inside the same frame */
+.jf-texting .txp-stepRow {
+  min-width: 0;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--paper-deep);
+}
+.jf-texting .txp-stepRow[data-open="1"] > .txp-stepBtn {
+  border-bottom: 2px solid var(--ink);
 }
 .jf-texting .txp-stepBtn:hover {
   background: color-mix(in srgb, var(--ink) 4%, var(--paper-deep));
@@ -702,12 +712,14 @@
 .jf-texting .txp-stepRow[data-open="1"] .txp-stepGo > svg {
   transform: rotate(180deg);
 }
-/* The open step's contents: on the page under the step's card, each block its own card. */
+/* The open step's contents, inside the step's card (owner, 2026-10-19: "connected to its card … the text outside
+   the card in the card … a good line with the title showing this is a different section"). Its parts are not cards of
+   their own: each section opens with a full rule and its title, so nothing is framed inside the frame. */
 .jf-texting .txp-stepB {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
-  padding: 18px 0 10px;
+  padding: 22px 22px 26px;
 }
 .jf-texting .txp-stepB[hidden] {
   display: none;
@@ -718,11 +730,26 @@
 .jf-texting .txp-stepB .tk-form,
 .jf-texting .txp-stepB .tk-ruleList,
 .jf-texting .txp-stepB .tk-editor {
-  border: 1.5px solid var(--ink);
-  border-radius: var(--r-sm);
-  background: var(--paper-deep);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding-inline: 0;
 }
-/* A panel opened inside one of those cards is a tinted area, not another frame. */
+.jf-texting .txp-stepB > .jf-tx > :is(.tk-group, .tk-more, .tk-done, .tk-ideas, .tk-plate, .tk-form, .tk-ruleList, .tk-editor) {
+  padding-top: 18px;
+  border-top: 1.5px solid var(--ink);
+}
+.jf-texting .txp-stepB > .jf-tx > .tk-done {
+  padding-bottom: 0;
+}
+/* a person is a row of the section: rules between them, no frame around them */
+.jf-texting .txp-stepB .tk-person {
+  padding-inline: 0;
+}
+.jf-texting .txp-stepB .tk-person:first-child {
+  padding-top: 4px;
+}
+/* A panel opened inside a row is a tinted area, not another frame. */
 .jf-texting .txp-stepB .tk-panel {
   border-color: transparent;
 }
@@ -775,7 +802,7 @@
     display: none;
   }
   .jf-texting .txp-stepB {
-    padding: 14px 0 8px;
+    padding: 18px 14px 20px;
   }
   .jf-texting .txp-setupH {
     padding: 0 0 12px;
