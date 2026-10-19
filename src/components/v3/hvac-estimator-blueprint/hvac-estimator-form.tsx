@@ -466,7 +466,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
   const [job, setJob] = React.useState<JobKind>(DEFAULT_JOB);
   const [jobInput, setJobInput] = React.useState<JobInput>({});
   const def = jobDef(job);
-  React.useEffect(() => { setMode(defaultModeFor(def)); }, [def]);
+  React.useEffect(() => { setMode((m) => (m === "plans" && def.needs.load ? m : defaultModeFor(def))); }, [def]);
   const setWh = (patch: Partial<NonNullable<JobInput["wh"]>>) => {
     setJobInput((j) => ({ ...j, wh: { ...(j.wh ?? {}), ...patch } }));
     // A new fuel or type is a different appliance: the maker is picked again.
@@ -919,23 +919,23 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
   /** The state a job runs under: the one picked for this address, else the
    *  one the address carries ("…, Frisco, TX 75034"), else the select. */
   const stateFor = (addr: string) => (statePicked && stateCode ? stateCode : stateOfAddress(addr) || stateCode);
-  const lookupSite = async () => {
+  const lookupSite = async (): Promise<boolean> => {
     const text = (addrRef.current?.value ?? "").trim();
     const full = picked?.formatted && picked.typed !== true ? picked.formatted : text;
-    if (!full) { setSiteError("Enter the address first."); return; }
+    if (!full) { setSiteError("Enter the address first."); return false; }
     if (!def.needs.load) {
       // A tank swap or a service call does not wait for the parcel: the form
       // is up at once on the address and the state, and the house record
       // (county, year built, area) fills in behind it when the lookup lands.
       const st = stateFor(full);
-      if (!st) { setSiteError("Add the state to the address (e.g. WA)."); return; }
+      if (!st) { setSiteError("Add the state to the address (e.g. WA)."); return false; }
       const sameState = st === stateCode;
       const hadIntake = analysis || Object.keys(plates).length > 0 || Object.keys(typed).length > 0 || restored || pickId || Object.keys(jobInput).length > 0;
       const isSameHouse = site?.address === full;
-      if (hadIntake && !isSameHouse && !window.confirm("Start over? The answers, plates and service picks for this house will be cleared.")) return;
+      if (hadIntake && !isSameHouse && !window.confirm("Start over? The answers, plates and service picks for this house will be cleared.")) return false;
       setSiteError("");
       setRestored(null); setPickId(null); setOutdoorKind(null); setCustom(null); setSwapMsg(""); setSavedId(null); setPermit(null); setReportUrl(null); setPermitMsg(""); setTitle(null);
-      if (!isSameHouse) { setTyped({}); setAnalysis(null); plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
+      if (!isSameHouse) { setTyped({}); setAnalysis(null); if (site) plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
       setSite({ address: full, state: st, county: sameState && countyPicked && county ? county : undefined, sources: {} });
       setSiteLocal(true);
       setStateCode(st);
@@ -946,12 +946,12 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       try {
         const res = await hvacSiteFacts({ address: full, state: st, county: sameState && countyPicked && county ? county : undefined, lat: picked?.lat, lng: picked?.lng });
         // The contractor may have moved on to another address meanwhile.
-        if ((addrRef.current?.value ?? "").trim() !== text) return;
+        if ((addrRef.current?.value ?? "").trim() !== text) return true;
         if (!res.ok) {
           // The card-less trial's ceiling says its own sentence and opens the dialog.
-          if (reportPlanLimitResult(res)) { setSiteWarnings([res.error]); return; }
+          if (reportPlanLimitResult(res)) { setSiteWarnings([res.error]); return true; }
           setSiteWarnings([`House record not found for this address (${res.error}) — the job runs on the address and the state.`]);
-          return;
+          return true;
         }
         setSite(res.facts);
         setSiteLocal(false);
@@ -968,18 +968,18 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       } finally {
         setSiteBusy(false);
       }
-      return;
+      return true;
     }
     // A reopened estimate, a hand pick or a typed unit is as much work as a walk.
-    const hasIntake = analysis || Object.keys(plates).length > 0 || Object.keys(typed).length > 0 || !!restored || !!pickId || !!custom || outdoorKind !== null;
+    const hasIntake = analysis || Object.keys(plates).length > 0 || Object.keys(typed).length > 0 || !!restored || !!pickId || !!custom || outdoorKind !== null || (!!site && plans.status !== "idle");
     const sameHouse = site?.address === full;
-    if (hasIntake && !sameHouse && !window.confirm("Start over? The walk, plates and typed answers for this house will be cleared.")) return;
+    if (hasIntake && !sameHouse && !window.confirm("Start over? The walk, plates and typed answers for this house will be cleared.")) return false;
     setSiteBusy(true);
     setSiteError("");
     try {
       const st = stateFor(full);
       const res = await hvacSiteFacts({ address: full, state: st || undefined, county: st === stateCode && countyPicked && county ? county : undefined, lat: picked?.lat, lng: picked?.lng });
-      if (!res.ok) { setSiteError(res.error); reportPlanLimitResult(res); return; }
+      if (!res.ok) { setSiteError(res.error); reportPlanLimitResult(res); return false; }
       setRestored(null);
       setPickId(null); setOutdoorKind(null); setCustom(null); setSwapMsg("");
       setSavedId(null);
@@ -987,7 +987,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       setReportUrl(null);
       setPermitMsg("");
       setTitle(null);
-      if (!sameHouse) { setTyped({}); setAnalysis(null); plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
+      if (!sameHouse) { setTyped({}); setAnalysis(null); if (site) plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
       setSite(res.facts);
       setSiteLocal(false);
       setStateCode(res.facts.state);
@@ -998,8 +998,10 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       setCountyPicked(false);
       setSiteWarnings(res.warnings);
       setTimeout(() => go("intake"), 60);
+      return true;
     } catch (err) {
       setSiteError(errMsg(err));
+      return false;
     } finally {
       setSiteBusy(false);
     }
@@ -1015,14 +1017,14 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
     if (!text) { setSiteError("Type the address first — street, city, state."); return; }
     const st = stateFor(text);
     if (!st) { setSiteError("Pick the state (or end the address with it, e.g. WA) — the design day and the code rules come from it."); return; }
-    const hadIntake = analysis || Object.keys(plates).length > 0 || Object.keys(typed).length > 0 || !!restored || !!pickId || !!custom || outdoorKind !== null;
+    const hadIntake = analysis || Object.keys(plates).length > 0 || Object.keys(typed).length > 0 || !!restored || !!pickId || !!custom || outdoorKind !== null || (!!site && plans.status !== "idle");
     const sameHouse = site?.address === text;
     if (hadIntake && !sameHouse && !window.confirm("Start over? The answers, plates and picks for this house will be cleared.")) return;
     const sameState = st === stateCode;
     const hasCounty = sameState && countyPicked && !!county;
     setSiteError("");
     setRestored(null); setPickId(null); setOutdoorKind(null); setCustom(null); setSwapMsg(""); setSavedId(null); setPermit(null); setReportUrl(null); setPermitMsg(""); setTitle(null);
-    if (!sameHouse) { setTyped({}); setAnalysis(null); plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
+    if (!sameHouse) { setTyped({}); setAnalysis(null); if (site) plans.remove(); setPlates({}); setJobInput({}); setLinesetFt(undefined); }
     setSite({ address: text, state: st, county: hasCounty ? county : undefined, sources: {} });
     setSiteLocal(true);
     setStateCode(st);
@@ -1056,6 +1058,38 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
     if (!files.length) return;
     if (!(await ensureWithinLimit("hvacEstimates")) || !(await ensureWithinLimit("estimatorUses"))) return;
     await plans.pick(files);
+  };
+  // STEP 1'S WAY IN FOR A BUILD FROM PLANS (owner, 2026-10-19: "add that in the step 1 to have option blueprint, so
+  // you select full system what needed and option to upload"). The plans are read first; then the house is set from
+  // them — the address off the title block is looked up, and a lot with no record goes in by hand — and step 3 opens
+  // on the Blueprint tab with the plans already laid over the house. Reading takes a while, so whatever the contractor
+  // did meanwhile wins: a house set during the read is kept, a typed address is not overwritten. The latest render's
+  // lookupSite/startByHand are called (through the ref), never the ones closed over when the files were dropped.
+  const latest = React.useRef({ lookupSite, startByHand, site });
+  React.useEffect(() => { latest.current = { lookupSite, startByHand, site }; });
+  const onPlanFilesFromJob = async (files: File[]) => {
+    if (!files.length) return;
+    setMode("plans");
+    if (!(await ensureWithinLimit("hvacEstimates")) || !(await ensureWithinLimit("estimatorUses"))) return;
+    const out = await plans.pick(files);
+    if (!out || out.status !== "done") return;
+    if (latest.current.site) { go("intake"); return; }
+    const input = addrRef.current;
+    const fromPlans = out.house?.address?.trim() ?? "";
+    if (input && !input.value.trim() && fromPlans) {
+      input.value = fromPlans;
+      setPicked(null);
+      setStatePicked(false);
+    }
+    go("house");
+    if (!input?.value.trim()) {
+      setSiteError("The plans don't print the job's address — type it, then Look up the house (or Enter it by hand for a new lot).");
+      window.setTimeout(() => input?.focus(), 80);
+      return;
+    }
+    const found = await latest.current.lookupSite();
+    // A new lot has no house record yet: the job runs on the address and the plans, the county picked by hand.
+    if (!found && !latest.current.site) latest.current.startByHand();
   };
   const onPlateFile = async (key: SlotKey, hint: "outdoor" | "indoor" | "panel", f: File | undefined) => {
     if (!f) return;
@@ -1291,7 +1325,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
   const addrShort = site ? site.address.split(",")[0] : "";
   const needSqft = !!(site && model) && !ready;
   const S: Record<StepKey, StepMeta> = {
-    job: { n: 1, title: "The job", lead: "Pick the job. It sets what we ask for and what goes on the estimate.", summary: def.title, done: true, locked: false, reason: "" },
+    job: { n: 1, title: "The job", lead: def.needs.load ? "Pick the job. It sets what we ask for and what goes on the estimate. Building from plans? Upload them here." : "Pick the job. It sets what we ask for and what goes on the estimate.", summary: def.needs.load && plans.status === "done" ? `${def.title} · from the plans` : def.title, done: true, locked: false, reason: "" },
     house: { n: 2, title: "The house", lead: "Tell us the address — we'll pull the house size and the local climate.", summary: site ? [addrShort, sqftText].filter(Boolean).join(" · ") : "", done: !!site, locked: false, reason: "" },
     intake: { n: 3, title: "What is there", lead: def.needs.load ? "Walk it on video, photograph the plates, upload the plans, or type what you know — every figure shows where it came from." : "Walk it on video, photograph the plates, or type what you know — every figure shows where it came from.", summary: site && model ? [analysis ? "walk read" : "no walk", plans.envelope ? "plans read" : "", `${Object.keys(plates).length} plate${Object.keys(plates).length === 1 ? "" : "s"}`, `${Object.keys(typed).length} typed`, sqftText].filter(Boolean).join(" · ") : "", done: !!(site && model && ready), locked: !site, reason: "Look up the house first" },
     design: { n: 4, title: def.needs.load ? "The design" : "The checks", lead: def.needs.load ? "The load on the design day, the unit that fits it, and the checks an inspector would ask about." : engine?.waterHeater ? "The tank sized from the household, and the checks an inspector would ask about." : "What the visit needs, and the rule that applies.", summary: engine ? [def.selection !== "none" ? (chosen ? `${chosen.item.brand} ${chosen.item.model}` : "no catalog fit") : "", sizeText, defaultedCount ? `${defaultedCount} assumption${defaultedCount === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") : "", done: !!engine, locked: !site || needSqft, reason: !site ? "Look up the house first" : def.needs.zone ? "Type the zone's square footage" : "Type the conditioned square footage" },
@@ -1337,6 +1371,47 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
     </aside>
   );
 
+  // One plan-set panel, two places: step 1 (a build from plans starts there) and step 3's Blueprint tab. Both show the
+  // same read — it is one hook — and only step 3's copy carries the QA hooks.
+  const planPanel = (onFiles: (files: File[]) => void, where: "job" | "intake") => (
+    <>
+      {plans.status === "idle" ? (
+        <label className={cx("zone")} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void onFiles(Array.from(e.dataTransfer.files ?? [])); }}>
+          <input type="file" accept={PLAN_ACCEPT} multiple onChange={(e) => { const list = Array.from(e.target.files ?? []); e.target.value = ""; void onFiles(list); }} />
+          <svg className={cx("ic")}><use href="#i-plans" /></svg>
+          <span className={cx("zone-t")}>Upload the plan set</span>
+          <span className={cx("zone-h")}>PDF · or photos of the sheets · up to {MAX_PLAN_PAGES} pages · floor plans, window schedule, elevations, energy table</span>
+        </label>
+      ) : (
+        <div className={cx("clip")}>
+          <svg className={cx("ic")} style={{ width: 22, height: 22, flex: "none", color: "var(--blueprint)" }}><use href="#i-plans" /></svg>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className={cx("clip-t")}>{plans.fileName}</div>
+            <div className={cx("mono", "clip-m")}>{plans.status === "opening" ? "opening…" : `${plans.pages} page${plans.pages === 1 ? "" : "s"}${plans.total ? ` · ${plans.status === "done" ? `${plans.sheets.length} sheets read` : `${plans.done} of ${plans.total} sheets`}` : ""}`}</div>
+          </div>
+          <button type="button" className={cx("link")} onClick={plans.remove}>{plans.status === "failed" ? "Try another" : "Remove"}</button>
+        </div>
+      )}
+      {(plans.status === "opening" || plans.status === "reading") && (
+        <div className={cx("stage")}><div className={cx("stage-bar")}><div className={cx("stage-fill")} style={{ width: `${plans.total ? Math.max(6, Math.round((plans.done / plans.total) * 100)) : 4}%` }} /></div><span className={cx("stage-t")}>{plans.total ? "Reading the floor plans, the schedules, the elevations and the energy table…" : "Looking at each sheet…"}</span></div>
+      )}
+      {plans.status === "failed" && <div className={cx("call", "bad")} style={{ marginTop: 10 }}>{plans.error}</div>}
+      {plans.envelope && (
+        <div className={cx("call", "info")} style={{ marginTop: 12 }} {...(where === "intake" ? { "data-hvac-plans-read": true } : {})}>
+          <span className={cx("stamp")}>plan</span>
+          <span><b>{planFacts(plans.envelope).join(" · ")}</b> — {where === "intake" ? "the house below now runs on the plans" : "the next steps run on the plans"}: every figure they gave says <i>plan</i>; where they say nothing, a new house built to the energy code is assumed and marked <i>default</i>. What you type still wins.</span>
+        </div>
+      )}
+      {plans.envelope && (plans.envelope.stated.systems ?? 0) > 1 && (
+        <div className={cx("call", "warn")} style={{ marginTop: 8 }} {...(where === "intake" ? { "data-hvac-plans-systems": true } : {})}>
+          <span className={cx("stamp")}>note</span>
+          <span>The plans draw {plans.envelope.stated.systems} systems. This estimate sizes one system on the whole house&apos;s load — for {plans.envelope.stated.systems}, size each on its floor&apos;s share (the Blueprint estimator splits it).</span>
+        </div>
+      )}
+      {plans.skipped.length > 0 && <div className={cx("note")} style={{ marginTop: 8 }}>{plans.skipped.join(" ")}</div>}
+    </>
+  );
+
   return (
     <>
       <div className={cx("hv")}>
@@ -1351,7 +1426,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
                 <div className={cx("jg-k")}>{g.k}</div>
                 <div className={cx("jobs")} role="radiogroup" aria-label={g.k} onKeyDown={radioKeys}>
                   {g.ids.map((id) => { const j = jobDef(id); return (
-                    <button key={j.id} type="button" role="radio" aria-checked={job === j.id} className={cx("job", job === j.id && "on")} title={j.sub} onClick={() => { setJob(j.id); setTitle(null); setSavedId(null); setPermit(null); setReportUrl(null); setPermitMsg(""); setPickId(null); setOutdoorKind(null); setCustom(null); setSwapMsg(""); if (!site) setTimeout(() => { go("house"); addrRef.current?.focus(); }, 30); else if (siteLocal && j.needs.load) { setSite(null); setSiteLocal(false); setTimeout(() => { go("house"); addrRef.current?.focus(); }, 30); } }}>
+                    <button key={j.id} type="button" role="radio" aria-checked={job === j.id} className={cx("job", job === j.id && "on")} title={j.sub} onClick={() => { setJob(j.id); setTitle(null); setSavedId(null); setPermit(null); setReportUrl(null); setPermitMsg(""); setPickId(null); setOutdoorKind(null); setCustom(null); setSwapMsg(""); if (!site) { if (!j.needs.load) setTimeout(() => { go("house"); addrRef.current?.focus(); }, 30); } else if (siteLocal && j.needs.load) { setSite(null); setSiteLocal(false); setTimeout(() => { go("house"); addrRef.current?.focus(); }, 30); } }}>
                       <span className={cx("job-ic")} aria-hidden="true"><svg className={cx("ic")}><use href={`#${JOB_ICONS[j.id]}`} /></svg></span>
                       <span className={cx("job-t")}>{j.title}</span>
                       <span className={cx("job-stamp")} aria-hidden="true"><svg className={cx("ic")}><use href="#i-check" /></svg></span>
@@ -1361,8 +1436,15 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
               </div>
             ))}
           </div>
+          {def.needs.load && (
+            <div className={cx("from-plans")} data-hvac-step1-plans>
+              <div className={cx("fp-k")}><svg className={cx("ic")}><use href="#i-plans" /></svg>Building from plans?</div>
+              <p className={cx("fp-p")}>Upload the blueprint here. The address, the house, the windows and the energy table come off the sheets, and the next steps fill in from them. No plans? Continue with the address.</p>
+              {planPanel(onPlanFilesFromJob, "job")}
+            </div>
+          )}
           <div className={cx("st-next")}>
-            <button type="button" className={cx("btn", "btn-primary")} onClick={() => go("house")}>Continue<svg className={cx("ic")}><use href="#i-arrow" /></svg></button>
+            <button type="button" className={cx("btn", "btn-primary")} onClick={() => go("house")}>{!def.needs.load || plans.status === "done" ? "Continue" : plans.status === "idle" || plans.status === "failed" ? "Continue with the address" : "Continue — the plans keep reading"}<svg className={cx("ic")}><use href="#i-arrow" /></svg></button>
             <span className={cx("acts-note")}>{def.title} · {def.sub}</span>
           </div>
         </div>
@@ -1598,40 +1680,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
 
             {mode === "plans" && def.needs.load && (
               <div className={cx("mode")} data-hvac-plans>
-                {plans.status === "idle" ? (
-                  <label className={cx("zone")} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void onPlanFiles(Array.from(e.dataTransfer.files ?? [])); }}>
-                    <input type="file" accept={PLAN_ACCEPT} multiple onChange={(e) => { const list = Array.from(e.target.files ?? []); e.target.value = ""; void onPlanFiles(list); }} />
-                    <svg className={cx("ic")}><use href="#i-plans" /></svg>
-                    <span className={cx("zone-t")}>Upload the plan set</span>
-                    <span className={cx("zone-h")}>PDF · or photos of the sheets · up to {MAX_PLAN_PAGES} pages · floor plans, window schedule, elevations, energy table</span>
-                  </label>
-                ) : (
-                  <div className={cx("clip")}>
-                    <svg className={cx("ic")} style={{ width: 22, height: 22, flex: "none", color: "var(--blueprint)" }}><use href="#i-plans" /></svg>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div className={cx("clip-t")}>{plans.fileName}</div>
-                      <div className={cx("mono", "clip-m")}>{plans.status === "opening" ? "opening…" : `${plans.pages} page${plans.pages === 1 ? "" : "s"}${plans.total ? ` · ${plans.status === "done" ? `${plans.sheets.length} sheets read` : `${plans.done} of ${plans.total} sheets`}` : ""}`}</div>
-                    </div>
-                    <button type="button" className={cx("link")} onClick={plans.remove}>{plans.status === "failed" ? "Try another" : "Remove"}</button>
-                  </div>
-                )}
-                {(plans.status === "opening" || plans.status === "reading") && (
-                  <div className={cx("stage")}><div className={cx("stage-bar")}><div className={cx("stage-fill")} style={{ width: `${plans.total ? Math.max(6, Math.round((plans.done / plans.total) * 100)) : 4}%` }} /></div><span className={cx("stage-t")}>{plans.total ? "Reading the floor plans, the schedules, the elevations and the energy table…" : "Looking at each sheet…"}</span></div>
-                )}
-                {plans.status === "failed" && <div className={cx("call", "bad")} style={{ marginTop: 10 }}>{plans.error}</div>}
-                {plans.envelope && (
-                  <div className={cx("call", "info")} style={{ marginTop: 12 }} data-hvac-plans-read>
-                    <span className={cx("stamp")}>plan</span>
-                    <span><b>{planFacts(plans.envelope).join(" · ")}</b> — the house below now runs on the plans: every figure they gave says <i>plan</i>; where they say nothing, a new house built to the energy code is assumed and marked <i>default</i>. What you type still wins.</span>
-                  </div>
-                )}
-                {plans.envelope && (plans.envelope.stated.systems ?? 0) > 1 && (
-                  <div className={cx("call", "warn")} style={{ marginTop: 8 }} data-hvac-plans-systems>
-                    <span className={cx("stamp")}>note</span>
-                    <span>The plans draw {plans.envelope.stated.systems} systems. This estimate sizes one system on the whole house&apos;s load — for {plans.envelope.stated.systems}, size each on its floor&apos;s share (the Blueprint estimator splits it).</span>
-                  </div>
-                )}
-                {plans.skipped.length > 0 && <div className={cx("note")} style={{ marginTop: 8 }}>{plans.skipped.join(" ")}</div>}
+                {planPanel(onPlanFiles, "intake")}
               </div>
             )}
 
