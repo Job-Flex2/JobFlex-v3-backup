@@ -190,7 +190,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     hero: <Hero variant={v} variantKey={variant} registerHref={register} cta={top} trialCta={low} priceLine={heroLine} hook={v.film ? hook : undefined} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
-    showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
+    showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase slides={variant && isVariantReady(variant) ? v.showcaseSlides : undefined} ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
     hvac: variant === "hvac" ? <div className="lp-cv lp-cv--hvac"><HvacServiceSection registerHref={register} cta={top} /></div> : null,
     // The Deck Studio's film plays in the hero now (demo-media "deck", 2026-10-19), so no landing renders
     // its own section (deck-demo-video.tsx, kept to bring back); the key stays in lib/landing-sections.

@@ -104,6 +104,12 @@ check("the HVAC load is called Manual J-based, never ACCA-approved", (variantCon
 check("the default page keeps its headline as one line", DEFAULT_LANDING.title === "Turn your trade into a business.");
 check("a hook takes the headline from the one-line title, and keeps the description", withHook(variantContent("hvac"), hookContent("hvac", "tonnage")).title === undefined && withHook(variantContent("hvac"), hookContent("hvac", "tonnage")).pitch === variantContent("hvac").pitch && withHook(variantContent("hvac"), undefined).title === "Stop Spending Hours on HVAC Estimates.");
 
+// ── the showcase's set (2026-10-20): an ad landing shows its own estimator, then Smart, then Video; every other landing the full set
+const sc = (k: LandingVariantKey | undefined) => (variantContent(k).showcaseSlides ?? []).join();
+check("HVAC, roofing and fencing show their own estimator first, then Smart, then Video", sc("hvac") === "hvac,smart,video" && sc("roofing") === "roof,smart,video" && sc("fencing") === "fence,smart,video");
+check("the default page and every other trade keep the full set (no showcaseSlides)", !("showcaseSlides" in DEFAULT_LANDING) && (Object.keys(LANDING_VARIANTS) as LandingVariantKey[]).filter((k) => !!LANDING_VARIANTS[k]?.showcaseSlides).sort().join() === "fencing,hvac,roofing");
+check("an ad hook keeps the landing's showcase set", sc(undefined) === "" && (withHook(variantContent("hvac"), hookContent("hvac", "tonnage")).showcaseSlides ?? []).join() === "hvac,smart,video");
+
 // ── the price
 const plan = (slug: string, priceCents: number, features: string[]): PricedPlan => ({ slug, priceCents, isFree: priceCents === 0, features });
 const live = [plan("starter", 4500, ["Proposal management", "CRM", "1 user"]), plan("professional", 9500, ["Everything in Starter", "Smart proposal generation", "Roof estimator", "Fence estimator"]), plan("advanced", 19900, ["Everything in Professional", "Video estimator"])];

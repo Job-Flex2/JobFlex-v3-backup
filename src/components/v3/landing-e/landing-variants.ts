@@ -60,6 +60,10 @@ export type LandingVariant = {
   primaryCta: string;
   /** Which estimator the showcase opens on; auto-advance carries on from it. */
   showcaseSlide: ShowcaseSlideKey;
+  /** The showcase's own set, in order (2026-10-20): an ad landing shows its
+   *  own estimator first, then Smart, then Video — not the other trades'
+   *  tools. Absent: the full set, as every other landing has it. */
+  showcaseSlides?: readonly ShowcaseSlideKey[];
   /** The hero's product shot. "dashboard" is the default's; a trade picks
    *  one of the three estimator sequences. */
   visual: "dashboard" | "roof" | "fence" | "hvac" | "smart" | "deck";
@@ -277,6 +281,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     primaryCta: "Start free — estimate a fence",
     heroCta: "Create My Free Estimate →",
     showcaseSlide: "fence",
+    showcaseSlides: ["fence", "smart", "video"],
     visual: "fence",
     film: "fence",
     // The ad's first screen, as on roofing and HVAC (2026-10-04): the fence
@@ -301,6 +306,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     primaryCta: "Start free — measure a roof",
     heroCta: "Get My First Roofing Report & Proposal →",
     showcaseSlide: "roof",
+    showcaseSlides: ["roof", "smart", "video"],
     visual: "roof",
     film: "roof",
     // The ad's first screen (2026-10-04): the roof estimator's plan price
@@ -498,6 +504,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     primaryCta: "Start free — price an HVAC job",
     heroCta: "Build My First Estimate →",
     showcaseSlide: "hvac",
+    showcaseSlides: ["hvac", "smart", "video"],
     visual: "hvac",
     film: "hvac",
     scenario: "hvac",

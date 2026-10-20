@@ -216,6 +216,7 @@ const SLIDE_MIN_MS = 9000;
 const DEFAULT_SLIDES: ShowcaseSlideKey[] = ["smart", "roof", "fence", "video"];
 
 export function EstimatorsShowcase({
+  slides,
   ownSlide,
   scenario,
   registerHref = REGISTER,
@@ -225,6 +226,10 @@ export function EstimatorsShowcase({
    *  showcase opens on Smart so it does not repeat the hero's shot; the
    *  trade's own slide comes second, then the rest in the usual order. */
   ownSlide?: ShowcaseSlideKey;
+  /** The landing's own set, in its order (landing-variants `showcaseSlides`,
+   *  2026-10-20: an ad landing shows its estimator, Smart and Video). Given,
+   *  it replaces the full set and `ownSlide`'s place in it. */
+  slides?: readonly ShowcaseSlideKey[];
   /** The Smart slide plays the current trade's scenario, not the kitchen. */
   scenario?: SmartScenarioKey;
   registerHref?: string;
@@ -232,7 +237,7 @@ export function EstimatorsShowcase({
 }) {
   const { ref, inView } = useInView<HTMLDivElement>(0.15);
   const own = ownSlide && ownSlide !== "smart" ? ownSlide : undefined;
-  const SLIDES = (own ? ["smart" as const, own, ...DEFAULT_SLIDES.filter((k) => k !== "smart" && k !== own)] : DEFAULT_SLIDES).map((key) => ({ key, label: SLIDE_LABEL[key] }));
+  const SLIDES = (slides?.length ? slides : own ? ["smart" as const, own, ...DEFAULT_SLIDES.filter((k) => k !== "smart" && k !== own)] : DEFAULT_SLIDES).map((key) => ({ key, label: SLIDE_LABEL[key] }));
   /* Each slide lasts as long as its own sequence plus the reading hold
      (owner, 2026-09-26) — the timer bar runs for exactly this long. */
   const smartScenario = SMART_SCENARIOS[scenario ?? "kitchen"];
