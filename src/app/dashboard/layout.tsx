@@ -173,7 +173,9 @@ export default async function DashboardBlueprintLayout({
       canUseDeckEstimator({ id: ctx.user.id, email: ctx.user.email }, null).catch(() => false),
       isLimitedRole(ctx.role) ? Promise.resolve(false) : canUseDesignStudio({ id: ctx.user.id, email: ctx.user.email }).catch(() => false),
     ]);
-    if (ws) navView = { workspace: ws.workspace, unlocked: ws.deckAccess ? [...unlockedByEdition("deck")] : [], switchable: ws.switchable };
+    // The studio opens to its preview too (owner, 2026-10-19): the row and the New estimate card open for every
+    // account whose plan runs; the studio itself says what the add-on opens.
+    if (ws) navView = { workspace: ws.workspace, unlocked: ws.deckLevel !== "none" ? [...unlockedByEdition("deck")] : [], switchable: ws.switchable };
     if (deckPreview && !ws?.deckAccess) navView = { ...navView, preview: [...unlockedByEdition("deck")] };
     // The lawn estimator (lib/lawn/access) opens to the same accounts as the studio.
     if (designPreview) navView = { ...navView, tools: ["/dashboard/design-studio", "/dashboard/lawn-estimator"] };

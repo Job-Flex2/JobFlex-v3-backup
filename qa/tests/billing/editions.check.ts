@@ -4,7 +4,8 @@
 // switch, where a sign-in lands, what the deck workspace's sidebar keeps and
 // drops, and the sign-up link each door writes. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/billing/editions.check.ts
-import { EDITIONS, EDITION_OPEN, canSwitch, editionOnly, featureLineForSale, hasEdition, homeFor, isEditionPlan, navAllowed, parseDoor, planComingSoon, registerHref, unlockedByEdition, upgradeTargetFrom, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
+import { EDITIONS, EDITION_FOR_EVERY_ACCOUNT, EDITION_IN_TRIAL, EDITION_OPEN, canSwitch, editionLevel, editionOnly, featureLineForSale, hasEdition, homeFor, isEditionPlan, navAllowed, parseDoor, planComingSoon, registerHref, unlockedByEdition, upgradeTargetFrom, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
+import { DECK_ADDON_CENTS, addonHeld, deckAddonCents, deckAddonPriceWords, isDeckAddonLine, parseDeckAddonRecord, planLine, planLines } from "../../../src/lib/deckAddon";
 import { annualDeal, dealWords, savedWords } from "../../../src/lib/planDeal";
 import { NAV_SECTIONS, navSectionsFor, flattenNavItems } from "../../../src/components/v3/blueprint-shell/nav-map";
 
@@ -16,8 +17,10 @@ const check = (name: string, ok: boolean, extra = "") => {
 const facts = (over: Partial<AccessFacts>): AccessFacts => ({ planSlug: "PROFESSIONAL", lapsed: false, features: [], customPages: null, ...over });
 
 console.log("── the door cookie");
-// Since 2026-10-11 the Deck Studio is COMING SOON (EDITION_OPEN.deck false): the checks of an OPEN
-// edition pass the flag; the "as shipped" block at the end holds what is live today.
+// 2026-10-11 the Deck Studio went COMING SOON (EDITION_OPEN.deck false); 2026-10-19 18:05 it opened for EVERY
+// account (EDITION_FOR_EVERY_ACCOUNT); the same evening it became the trial's and the $49/month add-on's, a preview
+// for every other running plan. The checks of the plan-based rules pass the flags (open, everyone=false);
+// the "as shipped" block at the end holds what is live today.
 check("deck, platform and jobflex parse; junk does not (once open)", parseDoor("deck", true) === "deck" && parseDoor(" DECK ", true) === "deck" && parseDoor("platform") === "platform" && parseDoor("jobflex") === "platform" && parseDoor("roof") === null && parseDoor(null) === null);
 
 console.log("── which plans are the edition");
@@ -30,15 +33,15 @@ const customWithPage = facts({ planSlug: "custom", customPages: ["proposals", "d
 check("the Deck Studio plan holds it", hasEdition(deckPlan));
 check("a plan whose features name it holds it (once open)", hasEdition(proWithDeck, "deck", true) && hasEdition(facts({ features: ["the deck estimator"] }), "deck", true));
 check("the custom plan with the deck page holds it (once open)", hasEdition(customWithPage, "deck", true));
-check("a plain Professional does not; neither does a lapsed Deck Studio; neither does no plan", !hasEdition(facts({})) && !hasEdition(facts({ planSlug: "deck-studio", lapsed: true })) && !hasEdition(facts({ planSlug: null })));
+check("by plan alone, a plain Professional does not; neither does a lapsed Deck Studio; neither does no plan", !hasEdition(facts({}), "deck", true, false) && !hasEdition(facts({ planSlug: "deck-studio", lapsed: true }), "deck", true, false) && !hasEdition(facts({ planSlug: null }), "deck", true, false));
 check("the platform edition is open to everyone", hasEdition(facts({ planSlug: null }), "platform"));
 check("the Deck Studio plan is the edition alone; the add-ons are not", editionOnly(deckPlan) && !editionOnly(proWithDeck) && !editionOnly(customWithPage) && !editionOnly(facts({ planSlug: "deck-studio", lapsed: true })));
-check("only an account with both workspaces may switch (once open)", !canSwitch(deckPlan, true) && canSwitch(proWithDeck, true) && canSwitch(customWithPage, true) && !canSwitch(facts({}), true));
+check("by plan alone, only an account with both workspaces may switch (once open)", !canSwitch(deckPlan, true, false) && canSwitch(proWithDeck, true, false) && canSwitch(customWithPage, true, false) && !canSwitch(facts({}), true, false));
 
 console.log("── the workspace and the home");
 check("the Deck Studio plan works in the studio whatever the door", workspaceFor(deckPlan, "platform") === "deck" && workspaceFor(deckPlan, null) === "deck");
-check("an add-on account follows the door (once open)", workspaceFor(proWithDeck, "deck", true) === "deck" && workspaceFor(proWithDeck, "platform", true) === "platform" && workspaceFor(proWithDeck, null, true) === "platform");
-check("without the edition the deck door still works on the platform", workspaceFor(facts({}), "deck") === "platform");
+check("an add-on account follows the door (once open)", workspaceFor(proWithDeck, "deck", true, false) === "deck" && workspaceFor(proWithDeck, "platform", true, false) === "platform" && workspaceFor(proWithDeck, null, true, false) === "platform");
+check("without the edition the deck door still works on the platform", workspaceFor(facts({}), "deck", true, false) === "platform" && workspaceFor(facts({}), "deck", false, false) === "platform");
 check("a sign-in lands: the studio for the deck plan, the door's home otherwise, the studio page even without the plan", homeFor(deckPlan, "platform") === "/dashboard/deck-estimator" && homeFor(proWithDeck, "deck") === "/dashboard/deck-estimator" && homeFor(proWithDeck, "platform") === "/dashboard" && homeFor(facts({}), "deck") === "/dashboard/deck-estimator" && homeFor(null, null) === "/dashboard");
 
 console.log("── the deck workspace's sidebar");
@@ -79,14 +82,35 @@ check("the dearest plan on sale that names Deck Studio wins, never the deck plan
 check("with no such plan, the Deck Studio plan itself (once open)", upgradeTargetFrom(catalog.filter((p) => p.slug !== "professional"), "deck", true)?.slug === "deck-studio");
 check("with nothing on sale that carries it, nothing", upgradeTargetFrom(catalog.filter((p) => p.slug === "starter"), "deck", true) === null);
 
-console.log("── AS SHIPPED: the Deck Studio is coming soon (owner, 2026-10-11)");
-check("the edition is closed and the platform open", EDITION_OPEN.deck === false && EDITION_OPEN.platform === true);
-check("no door to it: a 'deck' cookie or link reads as no door", parseDoor("deck") === null && parseDoor("platform") === "platform");
-check("a feature line or the custom page opens nothing yet", !hasEdition(proWithDeck) && !hasEdition(customWithPage) && !canSwitch(proWithDeck) && workspaceFor(proWithDeck, "deck") === "platform");
-check("an account already ON the Deck Studio plan keeps it — that was bought", hasEdition(deckPlan) && editionOnly(deckPlan) && workspaceFor(deckPlan, null) === "deck" && !hasEdition(facts({ planSlug: "deck-studio", lapsed: true })));
-check("no plan is the way to it, so the upgrade page points at none", upgradeTargetFrom(catalog) === null);
-check("its own plans are not on sale; the others are", planComingSoon("deck-studio") && planComingSoon("DECK") && planComingSoon("deck-studio-yearly") && !planComingSoon("professional") && !planComingSoon(null) && !planComingSoon("deck-studio", true));
-check("a feature line naming it says coming soon, once; the others are untouched; nothing when open", featureLineForSale("Deck Studio — 3D design") === "Deck Studio — 3D design — coming soon" && featureLineForSale("Includes the deck estimator") === "Includes the deck estimator — coming soon" && featureLineForSale("Deck Studio (coming soon)") === "Deck Studio (coming soon)" && featureLineForSale("Unlimited proposals") === "Unlimited proposals" && featureLineForSale("Deck Studio", true) === "Deck Studio");
+console.log("── WHILE IT WAS COMING SOON (2026-10-11 → 2026-10-19), the flags passed");
+check("closed: no door, a feature line or the custom page opens nothing, the deck plan's own holders keep it", parseDoor("deck", false) === null && !hasEdition(proWithDeck, "deck", false) && !hasEdition(customWithPage, "deck", false) && !hasEdition(facts({}), "deck", false) && !canSwitch(proWithDeck, false) && workspaceFor(proWithDeck, "deck", false) === "platform" && hasEdition(deckPlan, "deck", false) && upgradeTargetFrom(catalog, "deck", false) === null);
+check("closed: its own plans are not on sale; a feature line naming it says coming soon, once", planComingSoon("deck-studio", false) && planComingSoon("DECK", false) && planComingSoon("deck-studio-yearly", false) && !planComingSoon("professional", false) && !planComingSoon(null, false) && featureLineForSale("Deck Studio — 3D design", false) === "Deck Studio — 3D design — coming soon" && featureLineForSale("Includes the deck estimator", false) === "Includes the deck estimator — coming soon" && featureLineForSale("Deck Studio (coming soon)", false) === "Deck Studio (coming soon)" && featureLineForSale("Unlimited proposals", false) === "Unlimited proposals");
+
+console.log("── FOR EVERY ACCOUNT (2026-10-19 18:05 → the same evening), the flag passed");
+check("open to everyone: every running plan holds it; a lapsed one does not", hasEdition(facts({}), "deck", true, true) && hasEdition(facts({ planSlug: "custom", customPages: ["calendar"] }), "deck", true, true) && !hasEdition(facts({ lapsed: true }), "deck", true, true) && canSwitch(facts({}), true, true));
+
+console.log("── AS SHIPPED: open; the trial, the add-on or a plan carrying it holds it; every other running plan previews it (owner, 2026-10-19)");
+check("the edition is open, not for every account, held in the trial; the platform is everyone's", EDITION_OPEN.deck === true && EDITION_OPEN.platform === true && EDITION_FOR_EVERY_ACCOUNT.deck === false && EDITION_IN_TRIAL.deck === true);
+check("a plain paid Professional does not hold it — it previews it", !hasEdition(facts({})) && editionLevel(facts({})) === "preview" && editionLevel(facts({ planSlug: "starter" })) === "preview" && editionLevel(facts({ planSlug: "custom", customPages: ["calendar"] })) === "preview");
+check("the add-on holds it; so does the free trial; so do its own plan, a plan naming it and the custom plan's old page", hasEdition(facts({ addon: true })) && hasEdition(facts({ trialing: true })) && hasEdition(deckPlan) && hasEdition(proWithDeck) && hasEdition(customWithPage) && editionLevel(facts({ addon: true })) === "full" && editionLevel(facts({ trialing: true })) === "full");
+check("a lapsed plan holds nothing and previews nothing — the add-on and the trial included", editionLevel(facts({ lapsed: true })) === "none" && editionLevel(facts({ lapsed: true, addon: true })) === "none" && editionLevel(facts({ lapsed: true, trialing: true })) === "none" && editionLevel(facts({ planSlug: "deck-studio", lapsed: true })) === "none");
+check("while it is coming soon there is no preview: closed is closed", editionLevel(facts({}), "deck", false) === "none" && editionLevel(deckPlan, "deck", false) === "full");
+check("the trial's hold can be switched off: then a trial previews it", editionLevel(facts({ trialing: true }), "deck", true, false, false) === "preview");
+check("the deck door opens the studio's workspace only for a holder; a preview works on the platform map", workspaceFor(facts({ addon: true }), "deck") === "deck" && workspaceFor(facts({ trialing: true }), "deck") === "deck" && workspaceFor(facts({}), "deck") === "platform" && workspaceFor(deckPlan, "platform") === "deck");
+check("holders with both workspaces may switch; a preview, the deck plan's own and a lapsed one may not", canSwitch(facts({ addon: true })) && canSwitch(facts({ trialing: true })) && canSwitch(proWithDeck) && !canSwitch(facts({})) && !canSwitch(deckPlan) && !canSwitch(facts({ lapsed: true, addon: true })));
+check("its own plans sell and feature lines read as written", !planComingSoon("deck-studio") && !planComingSoon("DECK") && featureLineForSale("Deck Studio — 3D design") === "Deck Studio — 3D design" && featureLineForSale("Includes the deck estimator") === "Includes the deck estimator");
+check("the upgrade target is still the dearest plan naming it", upgradeTargetFrom(catalog)?.slug === "professional");
+
+console.log("── THE ADD-ON (lib/deckAddon)");
+check("$49 a month; $490 a year (ten months for twelve, the custom plan's rule)", DECK_ADDON_CENTS === 4900 && deckAddonCents("MONTH") === 4900 && deckAddonCents("YEAR") === 49000 && deckAddonPriceWords("MONTH") === "$49/month" && deckAddonPriceWords("YEAR") === "$490/year");
+const planItem = { id: "si_plan", price: { id: "price_pro", metadata: { planSlug: "professional" } } };
+const addonItem = { id: "si_deck", price: { id: "price_deck", metadata: { jfKind: "deck-addon", interval: "MONTH" } } };
+const pageItem = { id: "si_page", price: { id: "price_page", metadata: { jfKind: "custom-page" } } };
+check("the add-on's line is told by its price's kind; the plan's line is never the add-on, whichever comes first", isDeckAddonLine(addonItem) && !isDeckAddonLine(planItem) && !isDeckAddonLine(pageItem) && !isDeckAddonLine(null) && planLine([addonItem, planItem])?.id === "si_plan" && planLine([planItem, addonItem])?.id === "si_plan" && planLines([planItem, pageItem, addonItem]).map((i) => i.id).join() === "si_plan,si_page");
+check("a line that is all there is stays the plan's line (nothing else to read)", planLine([addonItem])?.id === "si_deck" && planLine([]) === undefined);
+const rec = parseDeckAddonRecord(JSON.stringify({ subId: "sub_1", itemId: "si_deck", interval: "MONTH", since: "2026-10-19T00:00:00Z" }));
+check("a record reads back; a broken one reads as none", rec?.subId === "sub_1" && rec.itemId === "si_deck" && parseDeckAddonRecord("{") === null && parseDeckAddonRecord(JSON.stringify({ subId: "sub_1" })) === null && parseDeckAddonRecord(null) === null);
+check("the record holds only on the subscription it was bought on", addonHeld(rec, "sub_1") && !addonHeld(rec, "sub_2") && !addonHeld(rec, null) && !addonHeld(null, "sub_1"));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

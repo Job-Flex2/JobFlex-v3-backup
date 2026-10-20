@@ -28,6 +28,7 @@ import { isCardlessTrialLapse, mirrorPeriodEnd, mirrorStatusFor } from "@/lib/st
 import { mirrorSubAtKey, recordMirrorReference } from "@/lib/subscriptionRecord";
 import { patchCardlessRecord, readCardlessRecord } from "@/lib/trialState";
 import { mailChargeback, mailCommissionHeld } from "@/lib/influencerMail";
+import { planLine } from "@/lib/deckAddon";
 import {
   chargeIsInvoiceBacked,
   invoiceChargeId,
@@ -342,8 +343,10 @@ export async function syncSubscriptionFromStripe(
     sub = live;
   }
 
-  const stripePriceId = sub.items.data[0]?.price?.id ?? null;
-  const planSlug = await planSlugForPrice(sub.items.data[0]?.price);
+  // The plan's own line — never the Deck Studio add-on's (lib/deckAddon), whichever order Stripe lists them in.
+  const planItem = planLine(sub.items.data);
+  const stripePriceId = planItem?.price?.id ?? null;
+  const planSlug = await planSlugForPrice(planItem?.price);
   const discounts = await subscriptionDiscounts(sub, stripe);
   let promo: Awaited<ReturnType<typeof resolvePromoCode>> = null;
   for (const d of discounts) {

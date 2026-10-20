@@ -20,6 +20,7 @@ import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
 import { useUpdateCard } from "@/components/v3/payment-ribbon/payment-ribbon";
 import { nextChargeLines, usd } from "@/app/(dashboard)/dashboard/subscription/next-charge-lines";
 import styles from "./subscription.module.css";
+import { DeckAddonCard } from "@/components/v3/deck-addon/deck-addon";
 
 const UPGRADE = "/dashboard/upgrade" as Route;
 /** Usage rows in view before "View all usage". */
@@ -307,6 +308,11 @@ export function SubscriptionContent(props: SubscriptionViewProps) {
           </div>
         </div>
       </section>
+
+      {/* THE DECK STUDIO ADD-ON (owner, 2026-10-19): on the plan with Remove, or the way to add it — reads its own state. */}
+      <div className={cx(RV)}>
+        <DeckAddonCard />
+      </div>
 
       {/* THE SWITCH TO FREE, BOOKED (owner, 2026-10-13): the date and the
           way back. Cancelling itself lives in Settings → Billing. */}

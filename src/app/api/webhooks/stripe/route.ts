@@ -24,6 +24,7 @@ import { completeFromPackSession } from "@/lib/aiDesk/packs";
 import { cancelReplacedSubscription } from "@/lib/checkoutReturn";
 import { invoiceSubscriptionId, refId } from "@/lib/stripeCompat";
 import { alertInvoiceFailed, alertInvoicePaid, alertOneTimeCharge } from "@/lib/adminAlertsPayments";
+import { mirrorDeckAddon } from "@/lib/deckAddonBilling";
 
 export const runtime = "nodejs";
 
@@ -111,6 +112,8 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       // An admin change written from Stripe's reply is "syncing" until Stripe
       // reports the subscription back in that state (lib/planGrant).
       await confirmSyncingFromStripe(sub).catch((err) => console.warn("[webhook] sync mark:", err));
+      // The Deck Studio add-on's line (lib/deckAddonBilling): on the subscription or not, the record follows.
+      await mirrorDeckAddon(sub).catch((err) => console.warn("[webhook] deck add-on mirror:", err));
       break;
     }
     case "customer.subscription.deleted": {
@@ -125,6 +128,7 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       } else {
         await syncSubscriptionFromStripe(sub, stripe);
       }
+      await mirrorDeckAddon(sub, true).catch((err) => console.warn("[webhook] deck add-on mirror:", err));
       break;
     }
     // Three days before any trial ends. The mirror follows the subscription

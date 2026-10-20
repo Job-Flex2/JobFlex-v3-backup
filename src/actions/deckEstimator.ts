@@ -19,7 +19,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { NoOrgError, UnauthorizedError, isEstimatorRole, isSalesRole, requireEstimatorOrManager } from "@/lib/orgContext";
-import { canUseDeckEstimator } from "@/lib/deck/access";
+import { deckStudioAccess } from "@/lib/deck/access";
 import { checkPlanLimit } from "@/lib/limitsEngine";
 import { PLAN_LIMIT_MESSAGE, type LimitKey } from "@/lib/planLimits";
 import { ProposalStatus } from "@/lib/prismaEnums";
@@ -52,10 +52,14 @@ import { in3depCoverage, sample3depElevations } from "@/lib/elevation3dep";
 
 type Gate = { ok: true; organizationId: string; userId: string; role: string } | { ok: false; error: string };
 
-async function gate(): Promise<Gate> {
+/** "design": the studio's preview is enough (lib/deck/access) — reading the house, the site, the drafts already
+ *  there; "full" (the default): every save, send and print — the Deck Studio itself. */
+async function gate(need: "full" | "design" = "full"): Promise<Gate> {
   try {
     const ctx = await requireEstimatorOrManager();
-    if (!(await canUseDeckEstimator(ctx.user, ctx.organizationId))) return { ok: false, error: "The deck estimator is coming soon — it is open to admins for testing only." };
+    const level = await deckStudioAccess(ctx.user, ctx.organizationId);
+    if (level === "none") return { ok: false, error: "Your plan has ended, so the Deck estimator is closed. Pick a plan on Subscription to open it again." };
+    if (level === "preview" && need === "full") return { ok: false, error: "Saving, sending and printing are part of Deck Studio — add it to your plan ($49/month) from the Deck estimator." };
     return { ok: true, organizationId: ctx.organizationId, userId: ctx.user.id, role: ctx.role };
   } catch (err) {
     if (err instanceof UnauthorizedError) return { ok: false, error: "Only an estimator, a manager or the owner can do this." };
@@ -94,7 +98,7 @@ export type DeckPhotoResult = { ok: true; url: string; href: string; w: number; 
  * DECK_PLAN — and a 15-minute read link for the studio to show it with.
  */
 export async function uploadDeckPhoto(form: FormData): Promise<DeckPhotoResult> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error };
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, error: "No picture was sent." };
@@ -127,7 +131,7 @@ export type DeckPhotoRead = { ok: true; read: WallRead } | { ok: false; error: s
  * supposed to be, that wall on the picture."
  */
 export async function readDeckPhoto(form: FormData): Promise<DeckPhotoRead> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error, configured: true };
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, error: "No picture was sent.", configured: true };
@@ -156,7 +160,7 @@ function ownDeckPhoto(url: unknown, organizationId: string): boolean {
 
 /** A fresh read link for a photo the design already holds (the stored URL never goes to the browser as is). */
 export async function deckPhotoHref(url: string): Promise<string | null> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return null;
   if (typeof url !== "string" || !isPrivateFileUnder(url, `deck-photos/${g.organizationId}/`)) return null;
   return mediaHref(url);
@@ -377,7 +381,7 @@ export async function saveDeckDraft(input: { id?: string | null; title?: string 
 
 /** The shop's drafts, newest first. */
 export async function listDeckDrafts(): Promise<{ ok: true; drafts: DeckDraftRow[] } | { ok: false; error: string }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error };
   try {
     const rows = await db.syncState.findMany({ where: { key: { startsWith: `${DRAFT_PREFIX}${g.organizationId}:` } }, select: { key: true, cursor: true } });
@@ -409,7 +413,7 @@ export interface ReturnedClientDesign {
 }
 
 export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: DeckDraft; proposal: LinkedDeckProposal | null; client: ReturnedClientDesign | null } | { ok: false; error: string }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error };
   if (!/^[a-f0-9-]{8,40}$/i.test(id)) return { ok: false, error: "No such draft." };
   const row = await db.syncState.findUnique({ where: { key: draftKey(g.organizationId, id) }, select: { cursor: true } }).catch(() => null);
@@ -445,7 +449,7 @@ export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: Deck
 }
 
 export async function deleteDeckDraft(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error };
   if (!/^[a-f0-9-]{8,40}$/i.test(id)) return { ok: false, error: "No such draft." };
   await db.syncState.deleteMany({ where: { key: draftKey(g.organizationId, id) } }).catch(() => {});
@@ -465,7 +469,7 @@ async function linkedProposal(g: { organizationId: string; userId: string; role:
 
 /** The deck a saved proposal carries (its DECK_PLAN), to open it again in the studio. */
 export async function loadDeckFromProposal(proposalId: string): Promise<{ ok: true; design: DeckDesign; address: string | null; title: string; proposal: LinkedDeckProposal } | { ok: false; error: string }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error };
   const proposal = await db.proposal.findFirst({ where: { id: proposalId, organizationId: g.organizationId }, select: { id: true, title: true, address: true } }).catch(() => null);
   if (!proposal) return { ok: false, error: "No such proposal." };
@@ -578,7 +582,7 @@ export async function updateDeckProposal(raw: unknown): Promise<DeckUpdateResult
 export type DeckSiteResult = { ok: true; lat: number; lng: number; gradePct: number; downhillDeg: number; resM: number } | { ok: false; error: string };
 
 export async function readDeckSite(address: string): Promise<DeckSiteResult> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error };
   const text = (address ?? "").trim().slice(0, 300);
   if (text.length < 8) return { ok: false, error: "Type the job's street address first." };

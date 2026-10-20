@@ -910,6 +910,7 @@
 .jf-lp .lp-cv--built { --lp-cv: 1260px; }
 .jf-lp .lp-cv--pricing { --lp-cv: 1130px; }
 .jf-lp .lp-cv--faq { --lp-cv: 880px; }
+.jf-lp .lp-cv--demo { --lp-cv: 1180px; } /* the deck page's demo film: 16:9 on a desk, 4:5 on a phone (≈1050px) */
 .jf-lp .lp-cv--hvac { --lp-cv: 2000px; } /* the HVAC page's service book; 3600px on a phone, below */
 
 @media (min-width: 1280px) { /* the container has reached its width; the montage strip loses a row */

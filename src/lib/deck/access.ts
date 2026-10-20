@@ -10,18 +10,38 @@ import { db } from "@/lib/db";
 import { readAdminCookie } from "@/lib/adminAuth";
 import { canSeeEarlyAccess } from "@/lib/earlyAccess";
 import { editionFacts } from "@/lib/editionAccess";
-import { hasEdition } from "@/lib/editions";
+import { editionLevel, type EditionLevel } from "@/lib/editions";
 
-export async function canUseDeckEstimator(user: { id: string; email?: string | null }, organizationId?: string | null): Promise<boolean> {
-  // THE DECK STUDIO EDITION (2026-10-11, lib/editions): an organization on the Deck Studio plan, on a plan whose
-  // features name it, or holding the custom plan's deck page, works in it — the gate stays for everyone else.
+/**
+ * HOW FAR THE STUDIO OPENS TO THIS USER (owner, 2026-10-19): "full" — the organization holds the Deck Studio (its
+ * plan, a plan naming it, the add-on, the free trial — lib/editions) or the user is an admin; "preview" — its plan
+ * runs without it: the studio designs, and every save, send and print asks for the add-on; "none" — the plan has
+ * ended. The design-time actions ask for "preview" or better, every save for "full".
+ */
+export async function deckStudioAccess(user: { id: string; email?: string | null }, organizationId?: string | null): Promise<EditionLevel> {
+  let level: EditionLevel = "none";
   if (organizationId) {
     try {
-      if (hasEdition(await editionFacts(organizationId), "deck")) return true;
+      level = editionLevel(await editionFacts(organizationId), "deck");
+      if (level === "full") return "full";
     } catch {
       /* the plan could not be read: the admin checks below still answer */
     }
   }
+  return (await adminOpens(user)) ? "full" : level;
+}
+
+/** The whole studio — saving, sending and printing included (deckStudioAccess "full"). */
+export async function canUseDeckEstimator(user: { id: string; email?: string | null }, organizationId?: string | null): Promise<boolean> {
+  return (await deckStudioAccess(user, organizationId)) === "full";
+}
+
+/** The studio to design in: the whole of it, or its preview. */
+export async function canDesignDeck(user: { id: string; email?: string | null }, organizationId?: string | null): Promise<boolean> {
+  return (await deckStudioAccess(user, organizationId)) !== "none";
+}
+
+async function adminOpens(user: { id: string; email?: string | null }): Promise<boolean> {
   if (canSeeEarlyAccess(user.email)) return true;
   try {
     const row = await db.user.findUnique({ where: { id: user.id }, select: { isPlatformAdmin: true } });

@@ -114,8 +114,26 @@ export const EDITION_IDS: readonly EditionId[] = ["platform", "deck"];
  *   · the admins' preview stays (lib/deck/access), and an account already
  *     ON the edition's own plan keeps it — that was bought.
  * Set it to true to open the edition: every rule goes back to selling it.
+ * OPENED 2026-10-19 (owner: "now you can make deck estimator available to users").
  */
-export const EDITION_OPEN: Record<EditionId, boolean> = { platform: true, deck: false };
+export const EDITION_OPEN: Record<EditionId, boolean> = { platform: true, deck: true };
+
+/**
+ * EVERY ACCOUNT HAS IT — an open edition marked here is held by every account
+ * whose plan has not lapsed, no plan, feature line or add-on needed. The deck
+ * was (owner, 2026-10-19 18:05) and is not any more (owner, the same evening:
+ * "if existing users didn't purchase Deck Studio, they can't use it. Only
+ * preview it. And option to add it to the plan"): the Deck Studio is held by
+ * its own plan, a plan whose features name it, the custom plan's old deck
+ * page, the $49/month add-on (lib/deckAddon) and the free trial
+ * (EDITION_IN_TRIAL); every other account whose plan runs PREVIEWS it
+ * (deckLevel) — designs in the studio, saves and sends nothing.
+ */
+export const EDITION_FOR_EVERY_ACCOUNT: Record<EditionId, boolean> = { platform: true, deck: false };
+
+/** The free trial holds the edition (owner, 2026-10-19: "full during the trial"); once the plan is paid it is the
+ *  plan, the features or the add-on that hold it. */
+export const EDITION_IN_TRIAL: Record<EditionId, boolean> = { platform: true, deck: true };
 export const isEditionOpen = (edition: EditionId): boolean => EDITION_OPEN[edition];
 
 /** A catalog plan that is a closed edition's own: not on sale while it is coming soon. */
@@ -155,10 +173,15 @@ export interface AccessFacts {
   features: readonly string[];
   /** The custom plan's pages the organization holds; null on any other plan. */
   customPages: readonly string[] | null;
+  /** The plan is a running free trial (lib/planStatus: TRIALING and not lapsed). */
+  trialing?: boolean;
+  /** The Deck Studio add-on is on the subscription (lib/deckAddon addonHeld). */
+  addon?: boolean;
 }
 
-/** The edition is open to the account: its own plan, a plan whose features name it, or the custom plan's page. */
-export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): boolean {
+/** The edition is open to the account: every account when it is for every account; else its own plan, the add-on,
+ *  the free trial, a plan whose features name it, or the custom plan's page. */
+export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition), everyone: boolean = EDITION_FOR_EVERY_ACCOUNT[edition], inTrial: boolean = EDITION_IN_TRIAL[edition]): boolean {
   if (edition === "platform") return true;
   if (facts.lapsed) return false;
   const e = EDITIONS[edition];
@@ -166,9 +189,25 @@ export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open
   if (isEditionPlan(facts.planSlug, edition)) return true;
   // Coming soon: a feature line or the custom plan's page open nothing yet.
   if (!open) return false;
+  // Open to every account whose plan runs.
+  if (everyone) return true;
+  // Bought on top of the plan (lib/deckAddon), or the free trial (2026-10-19).
+  if (facts.addon) return true;
+  if (inTrial && facts.trialing) return true;
   const words = facts.features.map((f) => f.toLowerCase());
   if (words.some((f) => e.featureWords.some((w) => f.includes(w)))) return true;
   return !!e.customPage && !!facts.customPages?.includes(e.customPage);
+}
+
+/**
+ * HOW FAR THE STUDIO OPENS (owner, 2026-10-19): "full" — the account holds the edition (hasEdition); "preview" —
+ * its plan runs but it does not: the studio opens to design in, and nothing is saved, sent or printed until the
+ * add-on is on the plan; "none" — the plan has ended (or the edition is coming soon): the studio's offer page.
+ */
+export type EditionLevel = "full" | "preview" | "none";
+export function editionLevel(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition), everyone: boolean = EDITION_FOR_EVERY_ACCOUNT[edition], inTrial: boolean = EDITION_IN_TRIAL[edition]): EditionLevel {
+  if (hasEdition(facts, edition, open, everyone, inTrial)) return "full";
+  return facts.lapsed || !open ? "none" : "preview";
 }
 
 /** The account is the edition and nothing more: its workspace is the only one it has. */
@@ -177,8 +216,8 @@ export function editionOnly(facts: AccessFacts, edition: EditionId = "deck"): bo
 }
 
 /** Both workspaces are open to the account, so a switch is worth drawing. */
-export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("deck")): boolean {
-  return hasEdition(facts, "deck", open) && !editionOnly(facts, "deck");
+export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("deck"), everyone: boolean = EDITION_FOR_EVERY_ACCOUNT.deck): boolean {
+  return hasEdition(facts, "deck", open, everyone) && !editionOnly(facts, "deck");
 }
 
 /**
@@ -186,9 +225,9 @@ export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("dec
  * edition alone; else the door the browser chose when the account may use
  * it; else the whole platform.
  */
-export function workspaceFor(facts: AccessFacts, door: Door | null, open: boolean = isEditionOpen("deck")): Workspace {
+export function workspaceFor(facts: AccessFacts, door: Door | null, open: boolean = isEditionOpen("deck"), everyone: boolean = EDITION_FOR_EVERY_ACCOUNT.deck): Workspace {
   if (editionOnly(facts, "deck")) return "deck";
-  if (door === "deck" && hasEdition(facts, "deck", open)) return "deck";
+  if (door === "deck" && hasEdition(facts, "deck", open, everyone)) return "deck";
   return "platform";
 }
 

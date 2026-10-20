@@ -25,7 +25,7 @@ export const CUSTOM_PAGE_CENTS = 1000;
  *  the same number the signup switch reads off them. */
 export const CUSTOM_YEAR_MULTIPLIER = 10;
 
-/** The ten add-on pages, by the id stored with the subscription. */
+/** The add-on pages (and the retired deck page, RETIRED_PAGES), by the id stored with the subscription. */
 export type CustomPageId =
   | "smart-proposal"
   | "roof-estimator"
@@ -65,8 +65,6 @@ export const CUSTOM_PAGES: CustomPage[] = [
   { id: "video-estimator", label: "Video estimator", note: "Estimate from a walkthrough", href: "/dashboard/video-estimator",
     aliases: ["/mobile-video-estimator-v1"] },
   { id: "hvac-estimator", label: "HVAC estimator", note: "Load, unit and price for a replacement", href: "/dashboard/hvac-estimator",
-    aliases: [] },
-  { id: "deck-estimator", label: "Deck estimator", note: "Decks, gazebos and pergolas, framed to code (coming soon)", href: "/dashboard/deck-estimator",
     aliases: [] },
   { id: "calendar", label: "Calendar", note: "Scheduling and crew days", href: "/dashboard/calendar",
     aliases: ["/v3/calendar-a", "/mobile-calendar-v2"] },
@@ -122,7 +120,12 @@ export const CUSTOM_BASE_FEATURES = [
   "Jobs, messages & financials",
 ];
 
-const VALID = new Set<string>(CUSTOM_PAGES.map((p) => p.id));
+/** Pages no longer sold but still read off a stored selection, so a plan that holds one keeps its price.
+ *  The Deck estimator (2026-10-19): not sold as a page any more — Deck Studio is its own $49/month add-on on
+ *  any plan (lib/deckAddon) — but a custom plan that bought the page keeps it, and the studio with it. */
+const RETIRED_PAGES: readonly CustomPageId[] = ["deck-estimator"];
+
+const VALID = new Set<string>([...CUSTOM_PAGES.map((p) => p.id), ...RETIRED_PAGES]);
 
 /** Drop anything that is not a real add-on id, and de-duplicate. */
 export function normalizeCustomPages(pages: readonly string[] | null | undefined): string[] {

@@ -21,6 +21,7 @@
 // hand and let go of the Stripe subscription without cancelling it, which is
 // how a "trial → active" edit left the trial billing beside a comp.
 
+import { isDeckAddonLine, planLine } from "@/lib/deckAddon";
 import type Stripe from "stripe";
 import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
 import { z } from "zod";
@@ -143,8 +144,15 @@ interface Situation {
 }
 
 function intervalOf(sub: Stripe.Subscription | null): "MONTH" | "YEAR" | null {
-  const r = sub?.items.data[0]?.price?.recurring?.interval;
+  const r = planLine(sub?.items.data ?? [])?.price?.recurring?.interval;
   return r === "year" ? "YEAR" : r === "month" ? "MONTH" : null;
+}
+
+/** The lines a change of plan takes off with it: the plan's other lines (a custom plan's page quantity), and the
+ *  Deck Studio add-on (lib/deckAddon) only when the term changes — its price is the old term's. */
+function droppedLines(sub: Stripe.Subscription, planItem: Stripe.SubscriptionItem, interval: string): Stripe.SubscriptionItem[] {
+  const sameTerm = intervalOf(sub) === interval;
+  return sub.items.data.filter((i) => i.id !== planItem.id && !(sameTerm && isDeckAddonLine(i)));
 }
 
 function priceCentsOf(sub: Stripe.Subscription | null): number | null {
@@ -155,10 +163,11 @@ function priceCentsOf(sub: Stripe.Subscription | null): number | null {
 }
 
 function planSlugOf(sub: Stripe.Subscription, s: Situation): string | null {
-  const priceId = sub.items.data[0]?.price?.id;
+  const own = planLine(sub.items.data);
+  const priceId = own?.price?.id;
   const fromLedger = priceId ? s.slugByPrice.get(priceId) : undefined;
   if (fromLedger) return fromLedger;
-  const cands = [sub.metadata?.planSlug, sub.metadata?.planTier, sub.metadata?.planName, sub.items.data[0]?.price?.metadata?.planSlug, sub.items.data[0]?.price?.nickname];
+  const cands = [sub.metadata?.planSlug, sub.metadata?.planTier, sub.metadata?.planName, own?.price?.metadata?.planSlug, own?.price?.nickname];
   for (const c of cands) {
     const slug = c?.trim().toLowerCase();
     if (slug && s.catalog.some((p) => p.slug === slug)) return slug;
@@ -338,7 +347,7 @@ async function planChange(raw: unknown, forApply: boolean): Promise<Plan | { err
     if (s.stripe && sub && !priceId) {
       block(s.mode === "live" ? `No Stripe price for ${plan.name} (${interval.toLowerCase()}) — sync the plan in Admin → Plans first.` : `The sandbox price for ${plan.name} is created on apply.`);
     }
-    const curPriceId = sub?.items.data[0]?.price?.id ?? null;
+    const curPriceId = planLine(sub?.items.data ?? [])?.price?.id ?? null;
     const trialing = sub?.status === "trialing";
     const endsTrial = trialing && data.endTrialNow;
     if (sub && priceId && curPriceId === priceId && !endsTrial) block(`Already on ${plan.name} (${interval.toLowerCase()}) — nothing to change.`);
@@ -349,13 +358,13 @@ async function planChange(raw: unknown, forApply: boolean): Promise<Plan | { err
     let nextChargeCents: number | null = targetCents;
     if (sub && s.stripe && priceId && !blocked) {
       try {
-        const item = sub.items.data[0];
+        const item = planLine(sub.items.data)!;
         const pre = await s.stripe.invoices.createPreview({
           customer: typeof sub.customer === "string" ? sub.customer : sub.customer.id,
           subscription: sub.id,
           subscription_details: {
             // Any other line (a custom plan's page quantity) goes with the change.
-            items: [{ id: item.id, price: priceId }, ...sub.items.data.slice(1).map((i) => ({ id: i.id, deleted: true as const }))],
+            items: [{ id: item.id, price: priceId }, ...droppedLines(sub, item, interval).map((i) => ({ id: i.id, deleted: true as const }))],
             proration_behavior: data.proration,
             ...(endsTrial ? { trial_end: "now" as const } : {}),
           },
@@ -491,13 +500,13 @@ export async function applySubscriptionChange(raw: unknown, admin: EditorActor):
 
   if (data.mode === "billed") {
     const sub = s.sub!;
-    const item = sub.items.data[0];
+    const item = planLine(sub.items.data)!;
     const endsTrial = sub.status === "trialing" && data.endTrialNow;
     let updated: Stripe.Subscription;
     try {
       updated = await s.stripe!.subscriptions.update(sub.id, {
         // A custom plan's page line must not keep billing under a catalog plan.
-        items: [{ id: item.id, price: p.priceId! }, ...sub.items.data.slice(1).map((i) => ({ id: i.id, deleted: true as const }))],
+        items: [{ id: item.id, price: p.priceId! }, ...droppedLines(sub, item, p.interval).map((i) => ({ id: i.id, deleted: true as const }))],
         proration_behavior: data.proration,
         ...(endsTrial ? { trial_end: "now" } : {}),
         metadata: { ...(sub.metadata ?? {}), organizationId, planSlug: plan.slug, interval: p.interval, customPages: "" },
@@ -513,7 +522,7 @@ export async function applySubscriptionChange(raw: unknown, admin: EditorActor):
       provider: "STRIPE",
       externalCustomerId: typeof updated.customer === "string" ? updated.customer : updated.customer.id,
       externalSubId: updated.id,
-      stripePriceId: updated.items.data[0]?.price?.id ?? p.priceId,
+      stripePriceId: planLine(updated.items.data)?.price?.id ?? p.priceId,
       trialEndsAt: updated.trial_end ? new Date(updated.trial_end * 1000) : null,
       currentPeriodEnd: subscriptionPeriodEndDate(updated),
       canceledAt: updated.cancel_at_period_end && updated.canceled_at ? new Date(updated.canceled_at * 1000) : null,
@@ -630,7 +639,7 @@ export async function verifySubscriptionSync(organizationId: string): Promise<Ve
     return {
       ok: true,
       confirmed,
-      stripe: { status: sub.status, priceId: sub.items.data[0]?.price?.id ?? null, periodEnd: iso(subscriptionPeriodEnd(sub)) },
+      stripe: { status: sub.status, priceId: planLine(sub.items.data)?.price?.id ?? null, periodEnd: iso(subscriptionPeriodEnd(sub)) },
       mark: confirmed ? null : mark,
     };
   } catch (err) {

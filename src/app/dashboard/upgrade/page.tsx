@@ -25,6 +25,7 @@ import { db } from "@/lib/db";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
 import { editionUpgradeTarget } from "@/lib/editionAccess";
 import { isEditionOpen } from "@/lib/editions";
+import { deckAddonPriceWords } from "@/lib/deckAddon";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { getStripeMode } from "@/lib/stripeMode";
 import { isOwnerRole } from "@/lib/orgContext";
@@ -126,7 +127,7 @@ export default async function UpgradePage({
     <UpgradeResponsive
       spotlight={await orgSpotlight(ctx.organizationId)}
       focusSlug={target?.slug ?? null}
-      focusWords={target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? (isEditionOpen("deck") ? "No plan carries the Deck Studio yet — ask us to add it." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
+      focusWords={params.edition === "deck" && isEditionOpen("deck") ? (target ? `Deck Studio comes with ${target.name} — or put it on any plan for ${deckAddonPriceWords("MONTH")} from the Deck estimator.` : `Deck Studio is an add-on: ${deckAddonPriceWords("MONTH")} on the plan you have. Add it from the Deck estimator or Subscription.`) : target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? (isEditionOpen("deck") ? "No plan carries the Deck Studio yet — ask us to add it." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
       plans={plans}
       currentPlan={onFree ? FREE_PLAN_NAME : (sub?.plan ?? null)}
       currentInterval={onFree ? null : term.currentInterval}

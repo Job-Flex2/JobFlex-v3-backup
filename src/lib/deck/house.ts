@@ -10,9 +10,11 @@
 // yard, or steps back), measured in the deck's feet from its left end, so
 // the deck's own knobs never move them. The part of the wall under the deck's
 // main back edge is the house line; a bump-out at the deck's end notches the
-// deck around it on its own, and a step the deck cannot frame around is said
-// in a note instead of being drawn wrong.
-import type { DeckShape } from "./design";
+// deck around it on its own, and (2026-10-19) any other step under the deck —
+// the wall set back, a bump-out in the middle, several — makes the deck follow
+// the wall (shape kind "wall"); only a step the deck cannot follow is said in
+// a note instead of being drawn wrong.
+import { BACK_LIMITS, DECK_LIMITS, normalizeBack, type DeckShape } from "./design";
 
 export type HouseRoof = "hip" | "gable";
 export const HOUSE_ROOFS: readonly HouseRoof[] = ["hip", "gable"];
@@ -163,11 +165,13 @@ function partsUnderDeck(parts: WallPart[], W: number): WallPart[] {
 const ftWords = (n: number) => `${Math.round(n * 2) / 2} ft`;
 
 /**
- * The deck's shape made to fit the wall: a bump-out that takes one END of
- * the deck's back edge becomes a back notch of that size; no bump-out under
- * the deck takes a back notch away; anything else (a bump-out in the middle,
- * two of them, a part that steps back under the deck) leaves the shape and
- * says why in a note, so the contractor can move the step or the deck.
+ * The deck's shape made to fit the wall: a bump-out that takes one END of the deck's back edge becomes a back notch of
+ * that size (an L); no step under the deck takes a back notch away. Anything else (owner, 2026-10-19: "deck should
+ * follow house wall when moving wall in set out set") — the wall set back under the deck, a bump-out in the middle,
+ * two or more — and the deck's back FOLLOWS the wall: it reaches into a set-back, its ledger on that wall, and steps
+ * around a bump-out. What it cannot follow is said in a note: a curved or clipped front or a front corner cut (the
+ * deck follows the wall with a straight front), a set-back deeper than the deck may reach, a bump-out that leaves
+ * less than a 3-ft leg in front of it.
  */
 export function deckShapeForHouse(shape: DeckShape, house: HouseDesign): { shape: DeckShape; note: string | null } {
   const W = shape.widthFt;
@@ -176,20 +180,54 @@ export function deckShapeForHouse(shape: DeckShape, house: HouseDesign): { shape
   const out = under.filter((p) => p.depthFt > 0.5);
   const back = under.filter((p) => p.depthFt < -0.5);
   const hasBackNotch = shape.kind === "L" && shape.notch.corner.startsWith("back");
-  const rect = (): DeckShape => (hasBackNotch ? { kind: "rect", widthFt: W, depthFt: D } : shape);
+  // A wall brought level takes away the notch, or the steps the deck followed.
+  const rect = (): DeckShape => (hasBackNotch || shape.kind === "wall" ? { kind: "rect", widthFt: W, depthFt: D } : shape);
   if (!out.length && !back.length) return { shape: rect(), note: null };
-  if (back.length) {
-    const b = back[0];
-    return { shape, note: `The wall steps back ${ftWords(-b.depthFt)} under the deck between ${ftWords(b.x0)} and ${ftWords(b.x1)} — the deck's ledger needs the wall right behind it. Move that step past the deck's end, or make the wall come out instead.` };
-  }
-  if (out.length > 1) return { shape, note: `The wall comes out twice under the deck — a deck frames around one bump-out at its end. Keep one step under the deck, or move the others past its ends.` };
-  const t = out[0];
-  const atRight = t.x1 >= W - 0.01 && t.x0 > 0.01;
-  const atLeft = t.x0 <= 0.01 && t.x1 < W - 0.01;
-  if (!atRight && !atLeft) {
+  if (!back.length && out.length === 1) {
+    const t = out[0];
     if (t.x0 <= 0.01 && t.x1 >= W - 0.01) return { shape: rect(), note: null };
-    return { shape, note: `The wall comes out ${ftWords(t.depthFt)} between ${ftWords(t.x0)} and ${ftWords(t.x1)}, inside the deck — a deck frames around a bump-out at its end. Move the step to the deck's end, or make the deck end there.` };
+    const atRight = t.x1 >= W - 0.01 && t.x0 > 0.01;
+    const atLeft = t.x0 <= 0.01 && t.x1 < W - 0.01;
+    if (atRight || atLeft) return endNotch(shape, t, atRight, rect);
   }
+  return followWall(shape, under);
+}
+
+/** The deck's back made to follow every part of the wall under it — or the shape kept, with what stops it in a note. */
+function followWall(shape: DeckShape, under: WallPart[]): { shape: DeckShape; note: string | null } {
+  const W = shape.widthFt;
+  const D = shape.depthFt;
+  const front = shape.kind === "rect" ? shape.front : undefined;
+  const frontCut = shape.kind === "L" && shape.notch.corner.startsWith("front");
+  if ((front && front.kind !== "straight") || frontCut) {
+    return { shape, note: `The wall steps under the deck — the deck follows the wall's steps with a straight front. Make the front straight${frontCut ? " (no corner cut at the front)" : ""}, or move the step past the deck's end.` };
+  }
+  // Past its limits the deck is HELD there (normalizeBack clamps) and the note says so, as the L holds its notch.
+  const reach = Math.min(BACK_LIMITS.reachFt, DECK_LIMITS.depthFt.max - D);
+  const deep = under.find((p) => -p.depthFt > reach + 0.01);
+  const keep = D - DECK_LIMITS.legFt.min;
+  const far = under.find((p) => p.depthFt > keep + 0.01);
+  const note = deep
+    ? `The wall steps back ${ftWords(-deep.depthFt)} under the deck between ${ftWords(deep.x0)} and ${ftWords(deep.x1)} — farther than a deck reaches in, so it stops ${ftWords(reach)} back, short of that wall. Bring that part of the wall out, or end the deck before it.`
+    : far
+      ? `The wall comes out ${ftWords(far.depthFt)} between ${ftWords(far.x0)} and ${ftWords(far.x1)} — a ${ftWords(D)} deck keeps at least ${ftWords(DECK_LIMITS.legFt.min)} in front of a bump-out, so its back there is held at ${ftWords(keep)}. Make the deck deeper, or bring that part of the wall back.`
+      : null;
+  // A sliver of a set-back (under 2 ft wide) is bridged — the deck stops at the wall either side of it; a sliver
+  // that comes out (a chimney, a pilaster) is still stepped around. Taking the larger line never puts deck in the wall.
+  const parts = under.map((p, i) => {
+    if (p.x1 - p.x0 >= BACK_LIMITS.partFt) return p;
+    const near = [under[i - 1], under[i + 1]].filter((q): q is WallPart => !!q).map((q) => q.depthFt);
+    return { ...p, depthFt: Math.max(p.depthFt, ...near) };
+  });
+  const back = normalizeBack(parts.map((p) => ({ x0Ft: p.x0, x1Ft: p.x1, yFt: p.depthFt })), W, D);
+  if (!back) return { shape: { kind: "rect", widthFt: W, depthFt: D }, note };
+  return { shape: { kind: "wall", widthFt: W, depthFt: D, back }, note };
+}
+
+/** A bump-out at one end of the deck: the L's back notch, as before 2026-10-19. */
+function endNotch(shape: DeckShape, t: WallPart, atRight: boolean, rect: () => DeckShape): { shape: DeckShape; note: string | null } {
+  const W = shape.widthFt;
+  const D = shape.depthFt;
   const width = half(atRight ? W - t.x0 : t.x1);
   if (width < NOTCH_MIN_FT || width > W - NOTCH_KEEP_FT) return { shape: rect(), note: `The bump-out leaves ${ftWords(width)} at the deck's ${atRight ? "right" : "left"} end — too little to notch; the deck ends at the step instead.` };
   const depth = half(clamp(t.depthFt, NOTCH_MIN_FT, D - NOTCH_KEEP_FT));
@@ -444,6 +482,7 @@ export function wallWords(shape: DeckShape, house: HouseDesign): string {
   const fit = deckShapeForHouse(shape, house);
   if (fit.note) return fit.note;
   if (quickWallOf(shape, house) === "nook") return "The deck sits in a nook: the house wraps both its ends, its back edge on the wall.";
+  if (fit.shape.kind === "wall") return `The deck follows the wall, ${wallDeckWords(fit.shape)}.`;
   if (fit.shape.kind === "L" && fit.shape.notch.corner.startsWith("back")) return `The deck wraps the bump-out at its ${fit.shape.notch.corner === "back-right" ? "right" : "left"} end: a ${ftWords(fit.shape.notch.widthFt)} × ${ftWords(fit.shape.notch.depthFt)} notch, framed around it.`;
   return house.jogs.length ? "The wall's steps are past the deck's ends — the deck's back edge runs straight along the house." : "A straight wall behind the deck.";
 }
@@ -688,6 +727,22 @@ export function levelWallPart(house: HouseDesign, shape: DeckShape, part: number
   return moveWallPart(house, shape, part, -p.depthFt);
 }
 
+/** Every part of the wall under the deck brought level with the house line — the deck back to a plain rectangle. */
+export function levelUnderDeck(house: HouseDesign, shape: DeckShape): HouseDesign {
+  const W = shape.widthFt;
+  let h = house;
+  for (let guard = 0; guard < 12; guard++) {
+    const parts = wallParts(h, shape);
+    const ref = referencePartIndex(parts, shape);
+    const i = parts.findIndex((p, k) => k !== ref && Math.min(p.x1, W) - Math.max(p.x0, 0) > 0.5 && Math.abs(p.depthFt) > 0.01);
+    if (i < 0) return h;
+    const n = levelWallPart(h, shape, i);
+    if (!n || n === h) return h;
+    h = n;
+  }
+  return h;
+}
+
 /** The deck ended at `widthFt` with the house left where it is: the wall past its right end grows by what the deck gave up. */
 function endDeckAt(house: HouseDesign, shape: DeckShape, widthFt: number): { house: HouseDesign; shape: DeckShape } {
   const w = half(widthFt);
@@ -764,6 +819,16 @@ export function wallFixes(shape: DeckShape, house: HouseDesign, limits: { minWid
     if (toLeft >= limits.minWidthFt) offer("start-after", `Start the deck past the bump-out — ${ftWords(toLeft)} wide`, resizeDeckLeft(house, shape, toLeft, limits.minWidthFt, limits.maxWidthFt));
   }
   return fixes;
+}
+
+/** A deck that follows the wall, its back in words: "3 parts — 29.5 ft on the house line, 11 ft reaching 5.5 ft back, 7.5 ft on the house line". */
+export function wallDeckWords(shape: Extract<DeckShape, { kind: "wall" }>): string {
+  const part = (b: { x0Ft: number; x1Ft: number; yFt: number }) => {
+    const w = ftWords(b.x1Ft - b.x0Ft);
+    if (Math.abs(b.yFt) < 0.01) return `${w} on the house line`;
+    return b.yFt < 0 ? `${w} reaching ${ftWords(-b.yFt)} back` : `${w} stepping ${ftWords(b.yFt)} out around the wall`;
+  };
+  return `${shape.back.length} parts — ${shape.back.map(part).join(", ")}`;
 }
 
 /** One part of the wall in words: "8 ft wide · comes out 4 ft" / "the house line" / "steps back 2 ft". */

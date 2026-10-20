@@ -105,7 +105,7 @@ import { convertDeckEstimateToProposal, updateDeckProposal, deckPhotoHref, delet
 import { deckClientInbox } from "@/actions/deckClientDesign";
 import { jobLine, type ClientLinkRow } from "@/lib/deck/clientDesign";
 import { addDoor, addJog, addScaleLine, blankRead, fitPhoto, fitSummary, markedRead, removeDoor, removeJog, removeScaleLine, setJog, setScaleLength, shapeWithOffer, type FitDeck, type PhotoFit, type WallRead, rectifyPlan, transformPlaced, transformRead, wallQuadFromRead, type Placed, type Quad, autoRectify, wallExtent } from "@/lib/deck/photoFit";
-import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { HouseWallPlan } from "./house-wall-plan";
 import { DeckKindPicker } from "./deck-kind-picker";
 import { DeckStepRail } from "./deck-step-rail";
@@ -2126,7 +2126,17 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
 
           {withDeck ? (
             <Step n={next()} title={design.structure === "gazebo" || design.structure === "pergola" ? "The deck under it" : "Shape"} summary={shapeSummary} id="step-shape">
-              <Seg label="Shape" value={design.shape.kind} onChange={(k) => patch({ shape: k === "rect" ? { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt } : { kind: "L", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, notch: { corner: "front-right", widthFt: Math.max(2, Math.round(design.shape.widthFt / 2)), depthFt: Math.max(2, Math.round(design.shape.depthFt / 2)) } } })} options={[{ value: "rect", label: "Rectangle" }, { value: "L", label: "L-shaped" }]} />
+              <Seg
+                label="Shape"
+                value={design.shape.kind}
+                onChange={(k) => {
+                  if (k === design.shape.kind || k === "wall") return;
+                  // A rectangle asked for while the deck follows the wall: the wall under it goes straight, and the deck with it.
+                  if (k === "rect" && design.shape.kind === "wall") return patch({ house: levelUnderDeck(design.house, design.shape) });
+                  patch({ shape: k === "rect" ? { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt } : { kind: "L", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, notch: { corner: "front-right", widthFt: Math.max(2, Math.round(design.shape.widthFt / 2)), depthFt: Math.max(2, Math.round(design.shape.depthFt / 2)) } } });
+                }}
+                options={[{ value: "rect", label: "Rectangle" }, { value: "L", label: "L-shaped" }, ...(design.shape.kind === "wall" ? [{ value: "wall" as const, label: "Follows the wall" }] : [])]}
+              />
               <div className={s.grid2}>
                 <Field label="Along the house" aside="ft">
                   <NumberInput label="Width along the house, feet" value={design.shape.widthFt} parse={parseFeet} format={feetText} min={DECK_LIMITS.widthFt.min} max={DECK_LIMITS.widthFt.max} onCommit={(n2) => patch({ shape: { ...design.shape, widthFt: n2 } })} />
@@ -2152,9 +2162,20 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                 </>
               ) : (
                 <>
+                  {design.shape.kind === "wall" ? (
+                    <div className={s.sub} data-deck-follows-wall>
+                      <p className={s.hint}>
+                        <b>The back follows the house wall</b> — {wallDeckWords(design.shape)}. It reaches into a set-back, its ledger on that wall, and steps around a bump-out. Move the wall in The house step and the deck follows.
+                      </p>
+                      <button type="button" className={cx(s.btn, s.btnSm)} onClick={() => patch({ house: levelUnderDeck(design.house, design.shape) })} data-deck-straighten-wall>
+                        Straighten the wall under the deck
+                      </button>
+                    </div>
+                  ) : (
                   <Field label="The front edge" wide>
                     <Seg small label="The front edge" value={front?.kind ?? "straight"} onChange={(k: FrontKind) => patch({ shape: { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, front: k === "straight" ? undefined : { kind: k, bulgeFt: front?.bulgeFt ?? 2, clipFt: front?.clipFt ?? 2 } } })} options={(["straight", "curve", "clipped"] as const).map((k) => ({ value: k, label: FRONT_LABEL[k] }))} />
                   </Field>
+                  )}
                   {front?.kind === "curve" ? (
                     <Field label="The bow at the middle" aside="ft · laminated rim, joists cut to the arc" wide>
                       <NumberInput label="How far the front bows out at the middle, feet" value={front.bulgeFt} parse={parseFeet} format={feetText} min={DECK_LIMITS.bulgeFt.min} max={Math.min(DECK_LIMITS.bulgeFt.max, design.shape.widthFt / 3)} onCommit={(n2) => patch({ shape: { kind: "rect", widthFt: design.shape.widthFt, depthFt: design.shape.depthFt, front: { ...front, bulgeFt: n2 } } })} />
@@ -2186,7 +2207,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
                       </Scope>
                     ) : null}
                   </div>
-                  {design.shape.kind === "rect" ? (
+                  {design.shape.kind === "rect" || design.shape.kind === "wall" ? (
                     <div className={s.sub}>
                       <Toggle checked={design.spa.on} onChange={(v) => patch({ spa: { on: v } })}>A hot-tub spot — the frame under it doubled</Toggle>
                       {design.spa.on ? (

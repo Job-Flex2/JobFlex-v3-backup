@@ -19,9 +19,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { canUseDeckEstimator } from "@/lib/deck/access";
+import { deckStudioAccess } from "@/lib/deck/access";
 import { editionFacts } from "@/lib/editionAccess";
-import { hasEdition } from "@/lib/editions";
+import { hasEdition, type EditionLevel } from "@/lib/editions";
+import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { isLimitedRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { readDeckRateBook } from "@/lib/deck/rateBookStore";
 import { parseStateZip } from "@/lib/fence/market";
@@ -39,21 +40,30 @@ export const metadata: Metadata = {
 
 export default async function DeckEstimatorPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   let organizationId: string;
-  let open = false;
+  let level: EditionLevel = "none";
   let viaEdition = false;
+  let trialEndsAt: string | null = null;
   try {
     const ctx = await requireOrg();
     organizationId = ctx.organizationId;
     if (isLimitedRole(ctx.role)) redirect("/dashboard?error=forbidden");
-    open = await canUseDeckEstimator(ctx.user, ctx.organizationId);
+    // Full, a preview (the plan runs without Deck Studio: designs, saves nothing — owner, 2026-10-19), or closed.
+    level = await deckStudioAccess(ctx.user, ctx.organizationId);
+    const facts = level === "full" ? await editionFacts(ctx.organizationId).catch(() => null) : null;
     // The Deck Studio edition (lib/editions): a subscriber works here as of right, with no admin notice.
-    viaEdition = open && (await editionFacts(ctx.organizationId).then((f) => hasEdition(f, "deck")).catch(() => false));
+    viaEdition = !!facts && hasEdition(facts, "deck");
+    // Held by the free trial alone: the studio says, once, what keeps it after the trial.
+    if (facts?.trialing && !hasEdition({ ...facts, trialing: false }, "deck")) {
+      const sub = await readAccessSubscription(ctx.organizationId).catch(() => null);
+      trialEndsAt = sub?.trialEndsAt?.toISOString() ?? null;
+      if (!trialEndsAt) trialEndsAt = "";
+    }
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fdeck-estimator");
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");
     throw err;
   }
-  if (!open) return <DeckComingSoon />;
+  if (level === "none") return <DeckComingSoon />;
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   // Opened from a client's record (`?client=`): the client's address is in the field. Read from this org only.
@@ -84,5 +94,5 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
   }
   // Keyed by what was opened: a client-side push to another draft or proposal (the studio's own Open links) mounts a
   // fresh studio on it, as the old studio's full page loads did.
-  return <DeckV1Studio key={opened ? `${opened.from}:${opened.draftId ?? proposalId}` : `new:${clientId ?? ""}`} initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={!viaEdition} opened={opened} />;
+  return <DeckV1Studio key={opened ? `${opened.from}:${opened.draftId ?? proposalId}` : `new:${clientId ?? ""}`} initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={level === "full" && !viaEdition} opened={opened} preview={level === "preview"} trialEndsAt={trialEndsAt} />;
 }
