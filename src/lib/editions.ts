@@ -109,6 +109,8 @@ export interface AccessFacts {
   trialing?: boolean;
   /** The Deck Studio add-on is on the subscription (lib/deckAddon addonHeld). */
   addon?: boolean;
+  /** A Custom plan whose bought pages include "deck-estimator" (lib/customPlan) — the add-on, bought as a page. */
+  customDeckPage?: boolean;
   /** A complimentary plan (a grant, provider MANUAL — lib/planGrant) that has not ended. */
   granted?: boolean;
   /** The asking user sees everything in this organization (lib/fullAccess hasFullAccess — a platform admin). */
@@ -120,7 +122,8 @@ export interface AccessFacts {
  *   1. the 7-day free trial, without the add-on;
  *   2. after the trial, on ANY plan — Starter, Professional, Advanced, Custom, Enterprise, monthly or yearly — only
  *      the $49/month add-on ($490 on a yearly plan, lib/deckAddon). No plan carries it by itself: no plan of its own,
- *      no feature line, no custom-plan page;
+ *      no feature line. A Custom plan whose pages include "deck-estimator" bought it as a page: that counts as the
+ *      add-on (owner, 2026-10-20), with no second $49 line;
  *   3. a platform admin (hasFullAccess) and a complimentary grant, always.
  */
 export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): boolean {
@@ -129,7 +132,7 @@ export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open
   if (!open) return false;
   if (facts.granted) return true;
   if (facts.lapsed) return false;
-  return !!facts.trialing || !!facts.addon;
+  return !!facts.trialing || !!facts.addon || !!facts.customDeckPage;
 }
 
 /**

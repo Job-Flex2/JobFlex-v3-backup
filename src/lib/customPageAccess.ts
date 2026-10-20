@@ -28,6 +28,7 @@
 
 import { db } from "@/lib/db";
 import {
+  CUSTOM_DECK_PAGE,
   CUSTOM_PAGES,
   PLAN_ENDED_MARK,
   blockedCustomHrefs,
@@ -69,6 +70,14 @@ async function readPageAccess(organizationId: string): Promise<{ lapsed: boolean
   const sub = await readAccessSubscription(organizationId);
   if (planLapsed(sub)) return { lapsed: true, pages: [] };
   return { lapsed: false, pages: await readCustomPages(organizationId, sub?.plan ?? null) };
+}
+
+/** The organization is on the Custom plan and its bought pages include the Deck estimator — the Deck Studio
+ *  add-on bought as a page (lib/editions). `plan` when the caller has read it already. */
+export async function customDeckPageHeld(organizationId: string, plan?: string | null): Promise<boolean> {
+  if (plan !== undefined && (plan ?? "").toUpperCase() !== "CUSTOM") return false;
+  const pages = await readCustomPages(organizationId, plan).catch(() => null);
+  return !!pages?.includes(CUSTOM_DECK_PAGE);
 }
 
 /** The pages a custom-plan org holds (null when the org is not on it). */

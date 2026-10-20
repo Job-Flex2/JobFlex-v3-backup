@@ -9,6 +9,7 @@ import { getOrgPlanContext } from "@/lib/planCatalogServer";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { deckAddonHeld } from "@/lib/deckAddonBilling";
 import { hasFullAccess } from "@/lib/fullAccess";
+import { customDeckPageHeld } from "@/lib/customPageAccess";
 import { DOOR_COOKIE, canSwitch, editionLevel, hasEdition, homeFor, parseDoor, workspaceFor, type AccessFacts, type Door, type EditionLevel, type Workspace } from "@/lib/editions";
 
 /** `userId` undefined = the session's user (lib/fullAccess); null = nobody (the organization's own plan alone). */
@@ -20,9 +21,13 @@ export async function editionFacts(organizationId: string, userId?: string | nul
   ]);
   // A lapsed plan reads as FREE there whatever its name.
   const lapsed = ctx.tier === "FREE";
-  // The Deck Studio add-on (lib/deckAddon): its line on the subscription the organization is on.
-  const addon = sub?.externalSubId ? await deckAddonHeld(organizationId, sub.externalSubId).catch(() => false) : false;
-  return { lapsed, trialing: !lapsed && sub?.status === "TRIALING", addon, granted: !lapsed && sub?.provider === "MANUAL", fullAccess };
+  const [addon, customDeckPage] = await Promise.all([
+    // The Deck Studio add-on (lib/deckAddon): its line on the subscription the organization is on.
+    sub?.externalSubId ? deckAddonHeld(organizationId, sub.externalSubId).catch(() => false) : Promise.resolve(false),
+    // The Custom plan's deck page, bought: the add-on as a page (lib/editions).
+    customDeckPageHeld(organizationId, sub?.plan ?? null),
+  ]);
+  return { lapsed, trialing: !lapsed && sub?.status === "TRIALING", addon, customDeckPage, granted: !lapsed && sub?.provider === "MANUAL", fullAccess };
 }
 
 export async function readDoor(): Promise<Door | null> {

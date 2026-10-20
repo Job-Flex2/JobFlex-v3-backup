@@ -38,6 +38,9 @@ check("4. a platform admin (hasFullAccess): full — whatever the plan, lapsed t
 check("5. a grant (MANUAL): full", editionLevel(grant) === "full");
 check("6. an ended trial (the Free plan): preview — not the whole studio, not a closed page", editionLevel(trialEnded) === "preview" && editionLevel(facts({ lapsed: true, trialing: true })) === "preview");
 check("7. the add-on taken off: preview again", editionLevel({ ...paidAddon, addon: false }) === "preview");
+check("8. Custom with the deck page: full — the add-on bought as a page", editionLevel(facts({ customDeckPage: true })) === "full" && hasEdition(facts({ customDeckPage: true })));
+check("9. Custom without the deck page: preview", editionLevel(facts({ customDeckPage: false })) === "preview");
+check("a lapsed Custom plan's deck page opens nothing", editionLevel(facts({ lapsed: true, customDeckPage: true })) === "preview");
 check("a lapsed plan's stale add-on record opens nothing", editionLevel(facts({ lapsed: true, addon: true })) === "preview");
 check("while it is coming soon: closed for everyone but an admin — the trial, the add-on and a grant included", editionLevel(paid, "deck", false) === "none" && editionLevel(trial, "deck", false) === "none" && editionLevel(paidAddon, "deck", false) === "none" && editionLevel(grant, "deck", false) === "none");
 check("the platform edition is everyone's", hasEdition(facts({ lapsed: true }), "platform"));
@@ -45,7 +48,7 @@ check("the platform edition is everyone's", hasEdition(facts({ lapsed: true }), 
 console.log("── no plan carries it (the branches that gave it away are gone)");
 const gone = ["isEditionPlan", "editionOnly", "upgradeTargetFrom", "planComingSoon", "featureLineForSale", "EDITION_FOR_EVERY_ACCOUNT", "EDITION_IN_TRIAL"].filter((k) => k in editions);
 check("no deck plan, no feature-line or custom-page rule, no every-account switch is exported", gone.length === 0, gone.join(" "));
-check("the deck edition names no plans, feature words or custom page", !("planSlugs" in EDITIONS.deck) && !("featureWords" in EDITIONS.deck) && !("customPage" in EDITIONS.deck));
+check("the deck edition names no plans or feature words", !("planSlugs" in EDITIONS.deck) && !("featureWords" in EDITIONS.deck) && !("customPage" in EDITIONS.deck));
 
 console.log("── the workspace, the switch and the home");
 check("the deck door opens the studio's workspace only for a holder; a preview works on the platform map", workspaceFor(paidAddon, "deck") === "deck" && workspaceFor(trial, "deck") === "deck" && workspaceFor(admin, "deck") === "deck" && workspaceFor(paid, "deck") === "platform" && workspaceFor(paidAddon, "platform") === "platform" && workspaceFor(paidAddon, null) === "platform");

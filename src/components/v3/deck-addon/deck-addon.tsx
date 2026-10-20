@@ -105,7 +105,7 @@ export function DeckAddonDialog({ open, onClose, why, onAdded }: { open: boolean
     <dialog ref={ref} className={`${s.da} ${s.dialog}`} onClose={close} aria-labelledby="deck-addon-title" data-deck-addon-dialog data-deck-addon-included={included ?? undefined}>
       <div className={s.body}>
         <div className={s.kicker}>Deck Studio · add-on</div>
-        <h2 className={s.title} id="deck-addon-title">{included === "trial" ? "Included in your trial" : included === "grant" ? "Included in your plan" : (why ?? "Add Deck Studio to your plan")}</h2>
+        <h2 className={s.title} id="deck-addon-title">{included === "trial" ? "Included in your trial" : included === "custom" ? "Included in your Custom plan" : included === "grant" ? "Included in your plan" : (why ?? "Add Deck Studio to your plan")}</h2>
         <p className={s.lead}>The preview designs anything — the deck in 3D, checked to code, priced. Deck Studio adds the rest:</p>
         <ul className={s.list}>
           {UNLOCKS.map((u) => (
@@ -210,7 +210,7 @@ export function DeckAddonCard() {
       <div className={s.cardHead}>
         <h3 className={s.cardTitle}>Deck Studio add-on</h3>
         <span className={`${s.cardState} ${offer?.held || offer?.included ? s.cardOn : ""}`} data-deck-addon-state>
-          {offer?.held ? `On your plan · ${deckAddonPriceWords(offer.interval)}` : offer?.included === "trial" ? "Included in your trial" : offer?.included === "grant" ? "Included in your plan" : `${deckAddonPriceWords(offer?.interval ?? "MONTH")} · not added`}
+          {offer?.held ? `On your plan · ${deckAddonPriceWords(offer.interval)}` : offer?.included === "trial" ? "Included in your trial" : offer?.included === "custom" ? "Included in your Custom plan" : offer?.included === "grant" ? "Included in your plan" : `${deckAddonPriceWords(offer?.interval ?? "MONTH")} · not added`}
         </span>
       </div>
       {error ? <p className={s.error} role="alert">{error}</p> : null}
@@ -220,7 +220,9 @@ export function DeckAddonCard() {
             ? "The whole Deck estimator: drafts, proposals, the client's design link, material lists and the permit sheet."
             : offer.included === "trial"
               ? `${deckTrialWords(offer.interval)} Nothing is added to your subscription now — add it here once the trial is over to keep saving, sending and printing.`
-              : offer.included === "grant"
+              : offer.included === "custom"
+                ? "Your Custom plan has the Deck estimator page, so the whole Deck Studio is yours — no separate add-on."
+                : offer.included === "grant"
                 ? "Your complimentary plan includes the whole Deck estimator."
                 : "Without it the Deck estimator is a preview: design anything, save and send nothing. Add it to open the whole studio."}
         </p>
