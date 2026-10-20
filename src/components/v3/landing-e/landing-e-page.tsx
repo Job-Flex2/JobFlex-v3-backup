@@ -66,6 +66,8 @@ import { isEditionOpen } from "@/lib/editions";
 const Montage = dynamic(() => import("./montage").then((m) => m.Montage));
 // The HVAC page's own section (2026-10-01): plans, visits, units, menu, the tech's phone.
 const HvacServiceSection = dynamic(() => import("./hvac-service-section").then((m) => m.HvacServiceSection));
+// The Deck Studio's 87-second demo film, under the deck landing's hero (2026-10-19).
+const DeckDemoVideo = dynamic(() => import("./deck-demo-video").then((m) => m.DeckDemoVideo));
 const ProposalsSection = dynamic(() => import("./proposals-section").then((m) => m.ProposalsSection));
 const PortalSection = dynamic(() => import("./portal-section").then((m) => m.PortalSection));
 const JobsSection = dynamic(() => import("./jobs-section").then((m) => m.JobsSection));
@@ -190,6 +192,16 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
     hvac: variant === "hvac" ? <div className="lp-cv lp-cv--hvac"><HvacServiceSection registerHref={register} cta={top} /></div> : null,
+    demo:
+      variant === "decking" ? (
+        <div className="lp-cv lp-cv--demo">
+          <DeckDemoVideo
+            registerHref={register}
+            cta={top}
+            note={deckSoon ? "Deck Studio opens soon — start with JobFlex today and price your decks with Smart Proposal meanwhile. The demo company and client are made up." : "Try it on a deck you're quoting this week — the demo company and client are made up."}
+          />
+        </div>
+      ) : null,
     montage: (g?.montage ?? true) ? <div className="lp-cv lp-cv--montage"><Montage /></div> : null,
     proposals: <div className="lp-cv lp-cv--proposals"><ProposalsSection proposal={g?.proposal} registerHref={register} cta={low} /></div>,
     portal: <div className="lp-cv lp-cv--portal"><PortalSection portal={g?.portal} client={g?.proposal?.client} /></div>,

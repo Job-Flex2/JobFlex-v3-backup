@@ -563,10 +563,12 @@ export function analyse(sessions: LandingSession[], opts: { now?: number; timezo
       action: `Shorten «${cliff.at.label}» or move what matters below it («${cliff.next.label}») above it — and put a sign-up button right there, at the point where they stop.`, ...(lay.about ? { about: lay.about } : {}), n: lay.n });
 
     const second = lay.secs[1];
-    const demoIndex = lay.secs.findIndex((x) => x.key === "showcase");
+    // The estimators' showcase is the demo; on the deck page the film under the hero is one too (2026-10-19).
+    const DEMOS = new Set(["showcase", "demo"]);
+    const demoIndex = lay.secs.findIndex((x) => DEMOS.has(x.key));
     const secondReach = second?.reach ?? null;
     const demoReach = lay.secs[demoIndex]?.reach ?? null;
-    if (second && second.key !== "showcase" && demoIndex > 1 && secondReach !== null && demoReach !== null && secondReach >= 0.25 && demoReach < secondReach) {
+    if (second && !DEMOS.has(second.key) && demoIndex > 1 && secondReach !== null && demoReach !== null && secondReach >= 0.25 && demoReach < secondReach) {
       add({ id: `order${lay.id}`, tone: "warn", title: `${lay.on}${lay.on ? "the" : "The"} demo is the ${ordinal(demoIndex + 1)} screen; «${second.label}» comes before it`,
         evidence: `${pct(secondReach)} of ${lay.n} measured visits${lay.of} reach «${second.label}», ${pct(demoReach)} reach the demo («${lay.secs[demoIndex].label}») after it.`,
         action: "Put the estimator demo directly under the hero — it is what the ad showed — and move the rest down.",
