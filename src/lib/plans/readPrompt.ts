@@ -88,6 +88,7 @@ export function planReadPrompt(input: { page: number; pages: number; textLayer: 
     "9. energy: the energy-code table, the insulation schedule, the wall and roof sections and the general notes say what the house is built to (R-values, window U-factor and SHGC, the ACH50 air-leakage target, duct location and leakage). Copy them as written; null for anything the sheet does not say. Any sheet may carry them.",
     "10. facades: on an ELEVATION sheet, one row for each elevation drawn, named as its title names it (FRONT ELEVATION → FRONT, NORTH ELEVATION → NORTH). glass = the windows and glass doors on that face added up from their sizes (3'-0\" x 5'-0\" is 15 sq ft) or from the schedule by their tags; windows = how many. Other sheets: an empty list.",
     "11. frontFaces: on a SITE plan, the way the front of the house faces — the street side — read off the north arrow (a front wall toward the bottom of the sheet with north pointing up faces S). Other sheets: null.",
+    "12. project.address: the address of the property being built — the job site, as the title block or the project data gives it. Never the architect's, engineer's, designer's or surveyor's own office address (printed with their firm's name and phone), and never an owner's mailing address marked as such. When the sheet gives the site no house number — only a street, a parcel number or a section/township — address is null.",
     "Return only the JSON object.",
   ].join("\n");
 }
@@ -111,7 +112,8 @@ export function pageWorthReading(text: string, title = ""): { read: boolean; gue
 }
 
 function classifySheet(text: string): { read: boolean; guess: string } | null {
-  const t = text.toUpperCase();
+  // A title block's legal description ("PORTION OF SECTION 11, TOWNSHIP 26N, RANGE 5E") is land, not a building section.
+  const t = text.toUpperCase().replace(/\bSEC(TION|\.)?\s*\d+\s*,?\s*(TOWNSHIP|TWP\.?|T\.?\s*\d)/g, " ");
   if (!t.trim()) return null;
   if (/\b(COVER SHEET|TITLE SHEET|SHEET INDEX|DRAWING INDEX)\b/.test(t)) return { read: true, guess: "cover" };
   if (/\b(WINDOW|DOOR|FINISH|FIXTURE|ROOM FINISH) SCHEDULES?\b/.test(t)) return { read: true, guess: "schedule" };
