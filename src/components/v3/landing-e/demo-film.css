@@ -14,6 +14,28 @@
   .jf-lp .lp-film-fig { max-width: calc(var(--film-h) * 16 / 9); }
   .jf-lp .lp-film { aspect-ratio: 16 / 9; }
 }
+/* The ▶ over the poster when the film waits for a tap (reduced motion, or
+   a refused autoplay): a blue square in an ink frame, no shadow, centred. */
+.jf-lp .lp-film-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  padding: 0 0 0 3px; /* the triangle's optical centre */
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--accent, #1854a0);
+  border: 2px solid var(--ink, #0a0a0a);
+  border-radius: var(--r-sm, 2px);
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease-out, ease-out);
+}
+.jf-lp .lp-film-play:hover { background: var(--accent-ink, #0e3d7a); }
+.jf-lp .lp-film-play:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
 /* The line over it, lettered as the hero's line under the buttons (.lp-hero-price). */
 .jf-lp .lp-film-cap {
   margin: 0 0 10px;

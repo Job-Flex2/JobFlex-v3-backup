@@ -174,6 +174,11 @@ export const TRAFFIC_EVENTS = {
   demo25: "demo_25",
   demo50: "demo_50",
   demo100: "demo_100",
+  // The same film when the browser could play none of its files (2026-10-19):
+  // `code` the MediaError code (0 when every <source> failed, so there is no
+  // MediaError), `reason` "media" | "no_source", the browser's `message`,
+  // the file it tried and the `ua`. The poster stays. Once per landing load.
+  demoError: "demo_error",
   // One per landing section the visitor actually reaches (the analyst,
   // 2026-10-02): section key (lib/landing-sections), its index, seconds since
   // the page opened, the trade hero shown. Fired by landing-e/section-tracker.

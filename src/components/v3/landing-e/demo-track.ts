@@ -28,3 +28,20 @@ export function trackDemoOnce(event: DemoEvent, landing: string, hook?: string) 
   }
   trackTraffic(name, { kind: "video", industry: landing, landing, variant: "e", ...(hook ? { hook } : {}) });
 }
+
+/** demo_error: none of the film's files would play here. Once per landing per load. */
+export function trackDemoError(landing: string, error: { code: number; reason: "media" | "no_source"; message: string; src: string }, hook?: string) {
+  const key = `jf_demo_${landing}_error`;
+  if (sentThisLoad.has(key)) return;
+  sentThisLoad.add(key);
+  trackTraffic(TRAFFIC_EVENTS.demoError, {
+    kind: "video",
+    industry: landing,
+    landing,
+    variant: "e",
+    ...error,
+    message: error.message.slice(0, 200),
+    ua: navigator.userAgent.slice(0, 300),
+    ...(hook ? { hook } : {}),
+  });
+}

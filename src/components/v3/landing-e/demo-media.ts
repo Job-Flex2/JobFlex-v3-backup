@@ -3,7 +3,7 @@
    (advertisement/hvac, advertisement/roof, advertisement/fence), silent,
    "Real product demo · address to proposal in 40 seconds". Two cuts per
    film: 16:9 for a desk (≥ 640 px, inside the app frame) and 4:5 for a
-   phone (the column's full width), each as WebM first and MP4 second, and
+   phone (the column's full width), each as MP4 first and WebM second, and
    one poster per cut — the poster is the first screen's largest paint, the
    film plays over it once it has frames.
 
@@ -15,7 +15,9 @@
 
 export type DemoFilmKey = "hvac" | "roof" | "fence";
 
-type Cut = { webm: string; mp4: string; poster: string };
+/** `mp4Type` / `webmType`: the <source> types with their codecs, so a browser
+ *  skips a file it cannot decode instead of choosing it and stalling. */
+type Cut = { webm: string; mp4: string; poster: string; mp4Type: string; webmType: string };
 
 export type DemoFilm = {
   /** ≥ 640 px. */
@@ -34,9 +36,14 @@ export type DemoFilm = {
   label: string;
 };
 
+/* The codecs as the files carry them (render-demo.js: x264 High, libvpx-vp9),
+   read off each MP4's avcC box: the 16:9 cut is High 5.1 (avc1.640033), the
+   4:5 cut High 5.0 (avc1.640032), the same for all three films. A re-render
+   at another size or level changes them — read them again. */
+const WEBM_TYPE = 'video/webm; codecs="vp9"';
 const cuts = (name: string) => ({
-  desk: { webm: `/landing-e/${name}-demo-16x9.webm`, mp4: `/landing-e/${name}-demo-16x9.mp4`, poster: `/landing-e/${name}-demo-poster-16x9.webp` },
-  phone: { webm: `/landing-e/${name}-demo-4x5.webm`, mp4: `/landing-e/${name}-demo-4x5.mp4`, poster: `/landing-e/${name}-demo-poster-4x5.webp` },
+  desk: { webm: `/landing-e/${name}-demo-16x9.webm`, mp4: `/landing-e/${name}-demo-16x9.mp4`, poster: `/landing-e/${name}-demo-poster-16x9.webp`, mp4Type: 'video/mp4; codecs="avc1.640033"', webmType: WEBM_TYPE },
+  phone: { webm: `/landing-e/${name}-demo-4x5.webm`, mp4: `/landing-e/${name}-demo-4x5.mp4`, poster: `/landing-e/${name}-demo-poster-4x5.webp`, mp4Type: 'video/mp4; codecs="avc1.640032"', webmType: WEBM_TYPE },
 });
 
 export const DEMO_FILMS: Record<DemoFilmKey, DemoFilm> = {
@@ -68,3 +75,5 @@ export const DEMO_CAPTION = "Real product demo · address to proposal in 40 seco
 
 /** The one media query both the poster and the film switch on. */
 export const DEMO_DESK_MEDIA = "(min-width: 640px)";
+/** Its exact complement, for the phone copy's <source>s. */
+export const DEMO_PHONE_MEDIA = "not all and (min-width: 640px)";
