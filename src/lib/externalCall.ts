@@ -104,11 +104,18 @@ export async function externalFetch(
   const noDataOn = policy.noDataOn ?? [404];
   const accept = policy.acceptStatuses ?? [];
 
+  // Observe existing traffic only. Legacy EagleView OAuth/catalog cannot stand
+  // in for Property Data. Persist no URL, operation text, response body or customer data.
+  const observe = async (status: number) => {
+    if (service === "eagleview" && !["property request", "property result", "property image"].includes(op)) return;
+    try { const { recordIntegrationOutcome } = await import("@/lib/integrationTelemetry"); await recordIntegrationOutcome(service, status); } catch { /* Best effort. */ }
+  };
   let last: ExternalCallError | null = null;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       const res = await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(policy.timeoutMs) });
       policy.onResponse?.(res);
+      await observe(res.status);
       if (res.ok || accept.includes(res.status)) {
         meterPaidCall(service, op);
         return res;
@@ -124,6 +131,7 @@ export async function externalFetch(
       if (!retryOn(res.status)) throw err;
       last = err;
     } catch (err) {
+      if (!(err instanceof ExternalCallError)) await observe(0);
       // A definitive answer classified above must escape, not be retried past.
       if (err instanceof ExternalCallError && err.kind !== "unreachable") throw err;
       last =

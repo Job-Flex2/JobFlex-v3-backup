@@ -37,9 +37,25 @@ export function getOpenAI() {
    records it against the request's organization (lib/trialMeter). The model
    list (`models.retrieve`) is free and is not recorded. */
 const meteredFetch: typeof fetch = async (input, init) => {
-  const res = await fetch(input, init);
-  if (!res.ok) return res;
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  const featureRequest = /\/(chat\/completions|responses|audio\/transcriptions|images\/generations)(\?|$)/.test(url);
+  const observe = async (status: number, quotaExhausted = false) => {
+    if (!featureRequest) return;
+    const { recordOpenAIOutcome } = await import("@/lib/integrationTelemetry");
+    await recordOpenAIOutcome(status, quotaExhausted);
+  };
+  let res: Response;
+  try { res = await fetch(input, init); }
+  catch (error) { await observe(0).catch(() => {}); throw error; }
+  if (!res.ok) {
+    let exhausted = false;
+    if (res.status === 429) {
+      try { const body = await res.clone().json(); exhausted = body?.error?.code === "insufficient_quota"; } catch { /* No raw error stored. */ }
+    }
+    await observe(res.status, exhausted).catch(() => {});
+    return res;
+  }
+  await observe(res.status).catch(() => {});
   try {
     if (/\/chat\/completions(\?|$)/.test(url)) {
       void res

@@ -1,378 +1,201 @@
-// WHETHER THE OUTSIDE SERVICES ARE ANSWERING — one report, read from the
-// admin overview, refreshed nightly and on demand.
-//
-// WHY THIS EXISTS. lib/sdk/integrations.ts answers one question honestly and
-// only one: are the env keys present. That is not health. A ReportAll
-// allowance can run dry, an EagleView pack can be denied, a Regrid token
-// expires every thirty days and an OPENAI_MODEL can name a model the key's
-// project may not call — and every one of those looks exactly like "enabled"
-// until a contractor hits it mid-estimate. This module asks the cheapest
-// question that distinguishes them, and writes the answer down.
-//
-// THE RULE EVERY CHECK OBEYS: no check may spend money. Two of them speak to a
-// network at all, and both are free endpoints — OpenAI's models.retrieve
-// (metadata, no tokens) and SerpAPI's /account (plan info, not a search).
-// Everything else reads state this deployment already has: the quota header
-// ReportAll answers with, the entitlement rows EagleView probes wrote, the
-// last status Regrid returned, the last successful send of each transport.
-//
-// The report lives in SyncState under HEALTH_KEY, so the overview renders the
-// last known answer instantly and nothing is checked on page load.
-
+// Server-side only. No generation, searches, reports, messages or payment probes.
+// Sources and limits: docs/api-health-monitoring.md.
 import { db } from "@/lib/db";
 import { readOverpassDay } from "@/lib/overpassStore";
-import { QUOTA_KEY as PARCEL_QUOTA_KEY, QUOTA_FLOOR } from "@/lib/parcelLookup";
-import { QUOTA_ALLTIME } from "@/lib/reportall";
-import { isReportAllEnabled } from "@/lib/reportall";
-import { isRegridEnabled } from "@/lib/parcel";
-import { isEagleViewEnabled } from "@/lib/eagleview";
-import { isOpenAIEnabled, getOpenAI, getOpenAIModel } from "@/lib/sdk/openai";
-import { isResendEnabled, isEmailEnabled } from "@/lib/sdk/resend";
-import { isSmtpEnabled } from "@/lib/sdk/smtp";
-import { isTwilioEnabled } from "@/lib/sdk/twilio";
-import { isStripeEnabled } from "@/lib/sdk/stripe";
-import { isSquareEnabled, isSquareWebhookConfigured } from "@/lib/sdk/square";
-import { isGmailOAuthConfigured } from "@/lib/sdk/gmail";
-import { isSecretBoxConfigured } from "@/lib/crypto/secretBox";
-
-/** Where the report is kept, and the keys the checks read. */
+import { getIntegrationStatuses } from "@/lib/sdk/integrations";
+import { evidence, freshReport, isFresh, HEALTH_INTERVAL_MS, type HealthReport, type ServiceHealth } from "@/lib/integrationHealthModel";
+export type { HealthLevel, HealthReport, ServiceHealth } from "@/lib/integrationHealthModel";
 export const HEALTH_KEY = "integrations:health";
+const LEASE_KEY = "integrations:health-lease:v2";
 const ALERT_KEY = "integrations:health-alerted";
-/** Written by lib/parcel on every Regrid answer; see REGRID_STATUS_KEY there. */
 export const REGRID_STATUS_KEY = "regrid:last-status";
-/** Written by the mail and SMS transports on every successful send. */
 export const EMAIL_SENT_KEY = "email:last-sent";
 export const SMS_SENT_KEY = "sms:last-sent";
+const iso = (d: Date | null | undefined) => d?.toISOString();
+async function readState(key: string) { return db.syncState.findUnique({ where: { key } }); }
 
-/** `off` is not a failure: the service is not configured in this environment
- *  and nothing depends on it here. It is reported, never alerted on. */
-export type HealthLevel = "ok" | "degraded" | "down" | "off";
-
-export interface ServiceHealth {
-  key: string;
-  name: string;
-  level: HealthLevel;
-  /** One line, the shortest true statement of what the check found. */
-  reason: string;
-  /**
-   * NOT LOAD-BEARING. A service nothing waits on: its level is reported as
-   * found, but it is counted apart in the verdict and never wakes anybody at
-   * 04:40. Regrid is the case this exists for — since the roof measurement
-   * took its lot boundary from ParcelCache/ReportAll (lib/lotRing), Regrid is
-   * asked only when ReportAll says a point has no parcel at all, so an expired
-   * token is a job for this week, not an outage. Calling it one would teach
-   * everyone to ignore the panel.
-   */
-  optional?: boolean;
-  /** What the tag beside the name says, when there is one. */
-  note?: string;
-  /** When the state behind `reason` was established (a quota header's date, a
-   *  last send), when that is older than the check itself. */
-  asOf?: string;
-  checkedAt: string;
-}
-
-export interface HealthReport {
-  ranAt: string;
-  /** How long the whole sweep took, so a slow service is visible as slow. */
-  tookMs: number;
-  worst: HealthLevel;
-  services: ServiceHealth[];
-}
-
-const RANK: Record<HealthLevel, number> = { ok: 0, off: 1, degraded: 2, down: 3 };
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The allowance is stale after this long without a call refreshing it. */
-const QUOTA_STALE_DAYS = 7;
-/** A transport that has not sent anything in this long is worth a second look. */
-const SEND_QUIET_DAYS = 30;
-
-const iso = (d: Date | null | undefined) => (d ? d.toISOString() : undefined);
-const ago = (d: Date) => {
-  const days = Math.floor((Date.now() - d.getTime()) / DAY_MS);
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  return `${days} days ago`;
-};
-
-async function readState(key: string) {
-  return db.syncState.findUnique({ where: { key } }).catch(() => null);
-}
-
-/* ── OpenAI ────────────────────────────────────────────────────────────────
-   models.retrieve on the model the environment names. Free: it returns the
-   model's metadata, not a completion. A 403 or 404 here is the failure that
-   used to surface as a broken estimator, so it is reported with the name. */
-async function checkOpenAI(now: string): Promise<ServiceHealth> {
-  const base = { key: "openai", name: "OpenAI", checkedAt: now };
-  if (!isOpenAIEnabled()) return { ...base, level: "off", reason: "OPENAI_API_KEY is not set" };
-  const model = getOpenAIModel();
+export async function readIntegrationsHealth(): Promise<HealthReport | null> {
   try {
-    await getOpenAI().models.retrieve(model);
-    return { ...base, level: "ok", reason: `${model} available` };
-  } catch (err) {
-    const status = (err as { status?: number })?.status;
-    const code = (err as { code?: string })?.code;
-    if (status === 403 || status === 404 || code === "model_not_found") {
-      return { ...base, level: "down", reason: `this project may not call ${model} (${status ?? "403"})` };
-    }
-    if (status === 401) return { ...base, level: "down", reason: "the key was rejected (401)" };
-    return { ...base, level: "degraded", reason: `could not verify ${model}${status ? ` (${status})` : ""}` };
-  }
+    const row = await readState(HEALTH_KEY);
+    if (!row) return null;
+    const report = JSON.parse(row.cursor) as HealthReport;
+    // Legacy reports contain misleading green credentials/stale checks. Never reuse them.
+    if (report.version !== 2 || !Array.isArray(report.services) || !Number.isFinite(Date.parse(report.ranAt))) return null;
+    return freshReport(report);
+  } catch { return null; }
 }
 
-/* ── SerpAPI ───────────────────────────────────────────────────────────────
-   /account, which reports the plan and what is left on it. It is not a search
-   and costs nothing; a search would. */
-async function checkSerpApi(now: string): Promise<ServiceHealth> {
-  const base = { key: "serpapi", name: "SerpAPI", checkedAt: now };
-  const key = process.env.SERPAPI_API_KEY;
-  if (!key) return { ...base, level: "off", reason: "SERPAPI_API_KEY is not set" };
-  try {
-    const res = await fetch(`https://serpapi.com/account?api_key=${encodeURIComponent(key)}`, {
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
-    });
-    if (res.status === 401 || res.status === 403) {
-      return { ...base, level: "down", reason: `the key was rejected (${res.status})` };
-    }
-    if (!res.ok) return { ...base, level: "degraded", reason: `account endpoint answered ${res.status}` };
-    const acct = (await res.json()) as {
-      plan_name?: string;
-      total_searches_left?: number;
-      plan_searches_left?: number;
-      this_month_usage?: number;
-    };
-    const left = acct.total_searches_left ?? acct.plan_searches_left;
-    if (typeof left !== "number") return { ...base, level: "degraded", reason: "account answered without a balance" };
-    const plan = acct.plan_name ? `${acct.plan_name}, ` : "";
-    if (left <= 0) return { ...base, level: "down", reason: `${plan}no searches left` };
-    if (left < 100) return { ...base, level: "degraded", reason: `${plan}${left} searches left` };
-    return { ...base, level: "ok", reason: `${plan}${left} searches left` };
-  } catch (err) {
-    return { ...base, level: "degraded", reason: `account endpoint unreachable: ${short(err)}` };
-  }
+async function jsonGet(url: string) {
+  const response = await fetch(url, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(6000) });
+  return { status: response.status, body: response.ok ? await response.json() : null };
 }
 
-/* ── ReportAll ─────────────────────────────────────────────────────────────
-   Read, never asked: the allowance is ALLTIME and the only statement of it is
-   the header every parcel lookup answers with, which lib/reportall writes to
-   SyncState. Asking for the figure would spend one of the lookups it counts. */
-async function checkReportAll(now: string): Promise<ServiceHealth> {
-  const base = { key: "reportall", name: "ReportAll", checkedAt: now };
-  if (!isReportAllEnabled()) return { ...base, level: "off", reason: "REPORTALL_CLIENT_KEY is not set" };
-  const row = await readState(PARCEL_QUOTA_KEY);
-  if (!row) return { ...base, level: "degraded", reason: "no lookup has answered on this deployment yet" };
-  const left = Number(row.cursor);
-  const stale = Date.now() - row.updatedAt.getTime() > QUOTA_STALE_DAYS * DAY_MS;
-  const asOf = iso(row.updatedAt);
-  const read = `${Number.isFinite(left) ? left : "?"} of ${QUOTA_ALLTIME} lookups left, read ${ago(row.updatedAt)}`;
-  if (Number.isFinite(left) && left < QUOTA_FLOOR) {
-    return { ...base, level: "down", asOf, reason: `${read} — below the ${QUOTA_FLOOR} reserve, lookups are paused` };
-  }
-  if (Number.isFinite(left) && left < 300) return { ...base, level: "degraded", asOf, reason: read };
-  if (stale) return { ...base, level: "degraded", asOf, reason: `${read} — the figure is a memory, not a reading` };
-  return { ...base, level: "ok", asOf, reason: read };
-}
-
-/* ── EagleView ─────────────────────────────────────────────────────────────
-   The entitlement table is the verdict of probes that were already paid for;
-   reading it costs nothing and asking again would cost a report. */
-async function checkEagleView(now: string): Promise<ServiceHealth> {
-  const base = { key: "eagleview", name: "EagleView", checkedAt: now };
-  if (!isEagleViewEnabled()) return { ...base, level: "off", reason: "EagleView credentials are not set" };
-  const rows = await db.eagleViewEntitlement.findMany().catch(() => []);
-  if (!rows.length) return { ...base, level: "degraded", reason: "no pack has been probed yet" };
-  const live = rows.filter((r) => r.status === "live").length;
-  const denied = rows.filter((r) => r.status === "denied").length;
-  const last = rows.reduce((a, r) => (r.checkedAt > a ? r.checkedAt : a), rows[0].checkedAt);
-  const read = `${live} live, ${denied} denied · last verdict ${ago(last)}`;
-  const asOf = iso(last);
-  if (live === 0) return { ...base, level: "down", asOf, reason: `${read} — nothing is entitled` };
-  if (denied > 0) return { ...base, level: "degraded", asOf, reason: read };
-  return { ...base, level: "ok", asOf, reason: read };
-}
-
-/* ── Regrid ────────────────────────────────────────────────────────────────
-   The last status a Regrid call came back with, written by lib/parcel. Its
-   tokens are 30-day JWTs, so a working integration expires on a schedule and
-   the failure looks like "this address has no parcel" unless somebody says
-   otherwise. Nothing is called here. */
-async function checkRegrid(now: string): Promise<ServiceHealth> {
-  const base = {
-    key: "regrid",
-    name: "Regrid",
-    checkedAt: now,
-    optional: true,
-    note: "optional · last-resort fallback",
+async function checkService(item: Awaited<ReturnType<typeof getIntegrationStatuses>>[number], now: string): Promise<ServiceHealth> {
+  const service: ServiceHealth = {
+    key: item.key, name: item.name, checkedAt: now, level: item.enabled ? "unknown" : "off",
+    reason: item.enabled ? "End-to-end availability is not verified" : "Not configured in this deployment",
+    authentication: evidence("unsupported", "No verified free authentication probe", "Configuration only"),
+    quota: evidence("unsupported", "No verified free quota / trial endpoint; use provider billing", "No safe probe"),
+    provider: evidence("unsupported", "No verified public status API configured", "No safe probe"),
+    feature: evidence("unknown", "No recent end-to-end observation; monitoring does not perform customer actions", "No synthetic transactions"),
   };
-  if (!isRegridEnabled()) return { ...base, level: "off", reason: "REGRID_API_KEY is not set" };
-  const row = await readState(REGRID_STATUS_KEY);
-  if (!row) return { ...base, level: "degraded", reason: "no call has been made on this deployment yet" };
-  const status = Number(row.cursor);
-  const asOf = iso(row.updatedAt);
-  const when = ago(row.updatedAt);
-  if (status === 401 || status === 403) {
-    return { ...base, level: "down", asOf, reason: `token rejected (${status}) ${when} — Regrid issues 30-day JWTs` };
+  if (!item.enabled) return service;
+  try {
+    if (item.key === "overpass") {
+      const day = await readOverpassDay();
+      service.feature = evidence("unknown", `${day.ok} successful and ${day.failed} failed lookups in the rolling 24-hour window; aggregate history does not prove current availability`, "Existing Overpass telemetry", iso(day.lastAt));
+    }
+    if (item.key === "serpapi") {
+      const { status, body } = await jsonGet(`https://serpapi.com/account.json?api_key=${encodeURIComponent(process.env.SERPAPI_API_KEY!)}`);
+      const source = "SerpAPI free Account API";
+      service.probeFailed = status !== 200;
+      service.authentication = evidence(status === 200 ? "ok" : status === 401 || status === 403 ? "error" : "unknown", `Account endpoint HTTP ${status}`, source, now);
+      const left = body?.total_searches_left ?? body?.plan_searches_left;
+      service.quota = typeof left === "number" && Number.isFinite(left) && left >= 0
+        ? evidence(left === 0 ? "error" : left < 100 ? "limited" : "ok", `${left} searches remaining`, source, now)
+        : evidence(status === 429 ? "limited" : "unknown", status === 429 ? "Account endpoint rate limited; balance unknown" : "Balance unavailable", source, now);
+      // Allowlist states; never send provider bodies, account email, keys or arbitrary error text.
+      if (left !== 0 && body?.account_status && body.account_status !== "Active") service.quota = evidence("unknown", "Account is not reported Active; check provider billing / trial access", source, now);
+    }
+    const publicStatus = item.key === "twilio" ? "https://status.twilio.com/api/v2/status.json"
+      : item.key === "blob" ? "https://www.vercel-status.com/api/v2/status.json" : null;
+    if (publicStatus) {
+      const { status, body } = await jsonGet(publicStatus);
+      const indicator = body?.status?.indicator;
+      service.probeFailed = status !== 200 || !["none", "minor", "major", "critical"].includes(indicator);
+      service.provider = evidence(status === 200 && indicator === "none" ? "ok"
+        : status === 200 && ["minor", "major", "critical"].includes(indicator) ? "limited" : "unknown",
+        status === 200 && indicator === "none" ? "Provider reports no incident (provider-wide; not account or feature health)"
+          : status === 200 && ["minor", "major", "critical"].includes(indicator) ? "Provider reports an incident; JobFlex impact is unverified" : "Public status could not be read",
+        publicStatus, now);
+    }
+    if (item.key === "reportall" || item.key === "regrid" || item.key === "twilio") {
+      const key = item.key === "reportall" ? "reportall:quota-remaining" : item.key === "regrid" ? REGRID_STATUS_KEY : SMS_SENT_KEY;
+      const row = await readState(key);
+      if (row) {
+        const at = iso(row.updatedAt)!;
+        const number = row.cursor.trim() ? Number(row.cursor) : NaN;
+        const current = isFresh(at);
+        if (item.key === "reportall") service.quota = evidence(current && Number.isFinite(number) && number >= 0 ? number < 100 ? "error" : number < 300 ? "limited" : "ok" : "unknown",
+          Number.isFinite(number) && number >= 0 ? `${number} lookups last observed; below 100 reserve pauses lookups${current ? "" : " (stale)"}` : "Stored balance is invalid", "Existing ReportAll response header; no lookup performed", at);
+        if (item.key === "regrid") {
+          service.feature = evidence(current && number >= 400 ? "limited" : "unknown", `Last HTTP response: ${Number.isInteger(number) && number >= 100 && number < 600 ? number : "invalid"}${current ? "" : " (stale)"}; does not prove parcel coverage`, "Existing Regrid response telemetry", at);
+          if (number === 401) service.authentication = evidence(current ? "error" : "unknown", "Last request rejected the credentials (401)", "Existing Regrid response telemetry", at);
+          if (number === 403) service.quota = evidence(current ? "limited" : "unknown", "Last request denied (403); scope / entitlement may be limited", "Existing Regrid response telemetry", at);
+          if (number === 200) service.feature.lastSuccessAt = at;
+        }
+        if (item.key === "twilio") service.feature = { ...evidence("unknown", "Last SMS accepted; delivery and subsequent failures are not tracked here", "Existing successful-send telemetry", at), lastSuccessAt: at };
+      }
+    }
+    if (item.key === "openai") {
+      const row = await readState("integrations:observed:openai");
+      if (row) {
+        const record = JSON.parse(row.cursor) as { status?: number; quotaExhausted?: boolean; observedAt?: string; lastSuccessAt?: string };
+        const at = record.observedAt;
+        const status = record.status;
+        const current = isFresh(at);
+        const source = "Passive OpenAI feature request telemetry (platform-wide, latest request)";
+        const success = typeof status === "number" && status >= 200 && status < 300;
+        service.feature = { ...evidence(current && (status === 0 || (typeof status === "number" && status >= 500)) ? "limited" : "unknown", success ? "Last feature HTTP request accepted; streamed completion and every workflow are not verified" : "Last feature request failed; check authentication, limits and provider availability", source, at), lastSuccessAt: record.lastSuccessAt };
+        service.authentication = evidence(current && status === 401 ? "error" : current && success ? "ok" : "unknown", status === 401 ? "Key rejected (401)" : success ? "Key accepted on last feature request" : "Authentication not verified", source, at);
+        if (record.quotaExhausted) service.quota = evidence(current ? "error" : "unknown", "Last request reported insufficient_quota; balance / trial access needs attention", source, at);
+        else if (status === 429) service.quota = evidence(current ? "limited" : "unknown", "Rate limited (429); exhausted balance is not confirmed", source, at);
+        else if (status === 403) service.quota = evidence("unknown", "Access denied (403); scope, model or entitlement may be responsible", source, at);
+      }
+    }
+    if (item.key === "resend" || item.key === "smtp") {
+      const row = await readState(EMAIL_SENT_KEY);
+      service.feature = { ...evidence("unknown", "Shared email success history cannot identify this transport or prove delivery / absence of later failures", "Existing email transport telemetry", iso(row?.updatedAt)), lastSuccessAt: undefined };
+    }
+    if (item.key === "eagleview") {
+      const rows: { status: string; checkedAt: Date }[] = await db.eagleViewEntitlement.findMany({ select: { status: true, checkedAt: true } });
+      const latest = rows.reduce<Date | undefined>((d, r) => !d || r.checkedAt > d ? r.checkedAt : d, undefined);
+      service.quota = evidence("unknown", `${rows.filter(r => r.status === "live").length} historically live packs, ${rows.filter(r => r.status === "denied").length} denied; account balance and trial access unknown`, "Stored Property Data entitlement observations", iso(latest));
+      service.feature = evidence("unknown", "Property Data not probed: multipack orders may be billable. Legacy OAuth/catalog diagnostics do not prove this API works", "No report ordered");
+    }
+    if (["maps", "solar", "reportall", "regrid", "eagleview", "census", "fcc", "nominatim", "assessor", "naip", "usa-structures"].includes(item.key)) {
+      const row = await readState(`integrations:observed:${item.key}`);
+      if (row) {
+        const record = JSON.parse(row.cursor) as { status?: number; observedAt?: string; lastSuccessAt?: string };
+        const status = record.status;
+        const at = record.observedAt;
+        const current = isFresh(at);
+        if (item.key === "regrid") {
+          const priorAt = service.feature?.observedAt;
+          if (priorAt && at && Date.parse(priorAt) > Date.parse(at)) return service;
+          service.authentication = evidence("unknown", "Latest response does not verify authentication", "Passive feature HTTP telemetry", at);
+          service.quota = evidence("unknown", "Latest response does not verify account quota", "Passive feature HTTP telemetry", at);
+        }
+        const incident = status === 0 || status === 401 || status === 403 || (typeof status === "number" && status >= 500);
+        service.feature = { ...evidence(current && incident ? "limited" : "unknown", `Last observed HTTP outcome: ${typeof status === "number" && status >= 0 && status <= 599 ? status : "unknown"}. One request does not establish all features, addresses or packs`, "Passive feature HTTP telemetry; no synthetic requests", at), lastSuccessAt: record.lastSuccessAt };
+        if (status === 401) service.authentication = evidence(current ? "error" : "unknown", "Last feature request rejected the credentials (401)", "Passive feature HTTP telemetry", at);
+        if (status === 403) service.quota = evidence(current ? "limited" : "unknown", "One request denied (403): scope / entitlement may be limited; other features or packs may work", "Passive feature HTTP telemetry", at);
+        if (status === 429) service.quota = evidence(current ? "limited" : "unknown", "Last request rate/quota limited (429); balance not confirmed", "Passive feature HTTP telemetry", at);
+      }
+    }
+  } catch {
+    // Never include exception messages: fetch errors can contain credential URLs.
+    service.probeFailed = true;
+    service.note = "Check unavailable: timeout, network failure, invalid response or telemetry storage error";
   }
-  if (status === 200) return { ...base, level: "ok", asOf, reason: `last answer 200, ${when}` };
-  return { ...base, level: "degraded", asOf, reason: `last answer ${row.cursor}, ${when}` };
+  return service;
 }
 
-/* ── Overpass (OpenStreetMap) ──────────────────────────────────────────────
-   House footprints and street centrelines for the fence studio. Free, public,
-   and flaky by nature — so the row is the share of OUR OWN lookups that got an
-   answer in the last 24 hours (lib/overpassStore writes one tally per lookup).
-   Nothing is called here. Optional: without it the contractor traces the house
-   by hand, and nothing is priced off it. */
-async function checkOverpass(now: string): Promise<ServiceHealth> {
-  const base = { key: "overpass", name: "Overpass (OSM)", checkedAt: now, optional: true, note: "optional · house outlines" };
-  const day = await readOverpassDay();
-  const total = day.ok + day.failed;
-  if (!total) return { ...base, level: "off", reason: "no lookups in the last 24 hours" };
-  const share = Math.round((day.ok / total) * 100);
-  const asOf = iso(day.lastAt);
-  const via = day.viaFallback ? `, ${day.viaFallback} via the second host` : "";
-  const reason = `${share}% answered in 24 h — ${day.ok} of ${total}${via}`;
-  if (share >= 80) return { ...base, level: "ok", asOf, reason };
-  if (share >= 40) return { ...base, level: "degraded", asOf, reason };
-  return { ...base, level: "down", asOf, reason };
+let inFlight: Promise<HealthReport> | undefined;
+let memory: HealthReport | undefined;
+let localRetryAt = 0;
+export async function runIntegrationsHealth(): Promise<HealthReport> {
+  if (memory?.nextCheckAt && Date.parse(memory.nextCheckAt) > Date.now()) return freshReport(memory);
+  if (inFlight) return inFlight;
+  if (localRetryAt > Date.now()) throw new Error("Monitoring temporarily unavailable");
+  inFlight = sweep().catch(() => { localRetryAt = Date.now() + HEALTH_INTERVAL_MS; throw new Error("Monitoring temporarily unavailable"); }).finally(() => { inFlight = undefined; });
+  return inFlight;
 }
-
-/* ── Mail ──────────────────────────────────────────────────────────────────
-   Which transport is configured, and when one of them last got something out.
-   Nothing is sent: a health check that emails to prove email works would put a
-   message in somebody's inbox every night. */
-async function checkMail(now: string): Promise<ServiceHealth> {
-  const base = { key: "email", name: "Email", checkedAt: now };
-  const transport = isResendEnabled() ? "Resend" : isSmtpEnabled() ? "SMTP" : null;
-  if (!isEmailEnabled() || !transport) {
-    return { ...base, level: "off", reason: "neither RESEND_API_KEY nor the SMTP_* block is set" };
+async function sweep(): Promise<HealthReport> {
+  const started = Date.now();
+  const now = new Date(started).toISOString();
+  const previous = await readIntegrationsHealth();
+  if (previous?.nextCheckAt && Date.parse(previous.nextCheckAt) > started) { memory = previous; return previous; }
+  // Cross-instance CAS lease. No provider traffic unless shared storage grants it.
+  // Keep lease at least 5 min even after a crash; never delete a lock row.
+  await db.syncState.upsert({ where: { key: LEASE_KEY }, create: { key: LEASE_KEY, cursor: "0" }, update: {} });
+  const lease = await readState(LEASE_KEY);
+  if (!lease || Number(lease.cursor) > started) {
+    if (previous) return previous;
+    throw new Error("Another check is running; retry later");
   }
-  const row = await readState(EMAIL_SENT_KEY);
-  if (!row) return { ...base, level: "degraded", reason: `${transport} configured — nothing sent yet` };
-  const quiet = Date.now() - row.updatedAt.getTime() > SEND_QUIET_DAYS * DAY_MS;
-  const asOf = iso(row.updatedAt);
-  const read = `${transport} · last sent ${ago(row.updatedAt)}`;
-  return { ...base, level: quiet ? "degraded" : "ok", asOf, reason: quiet ? `${read} — quiet for a month` : read };
-}
-
-/* ── Twilio ────────────────────────────────────────────────────────────────
-   Same shape, same reason for not sending anything. */
-async function checkTwilio(now: string): Promise<ServiceHealth> {
-  const base = { key: "twilio", name: "Twilio", checkedAt: now };
-  if (!await isTwilioEnabled()) return { ...base, level: "off", reason: "TWILIO_* is not set" };
-  const row = await readState(SMS_SENT_KEY);
-  if (!row) return { ...base, level: "degraded", reason: "configured — nothing sent yet" };
-  const quiet = Date.now() - row.updatedAt.getTime() > SEND_QUIET_DAYS * DAY_MS;
-  const asOf = iso(row.updatedAt);
-  const read = `last sent ${ago(row.updatedAt)}`;
-  return { ...base, level: quiet ? "degraded" : "ok", asOf, reason: quiet ? `${read} — quiet for a month` : read };
-}
-
-/* ── The contractor-facing joins (2026-09-20) ──────────────────────────────
-   None of these is load-bearing for an estimate, so all four are optional:
-   reported on the panel, never in the night's alert. Nothing is called —
-   each reads the environment and the rows this deployment already has. */
-
-/** Stripe Connect: the platform key, a client id and a Connect webhook secret,
- *  per mode. Without the client id a contractor can still paste a key (that
- *  needs only the secret box). */
-async function checkStripeConnect(now: string): Promise<ServiceHealth> {
-  const base = { key: "stripe-connect", name: "Stripe Connect", checkedAt: now, optional: true, note: "optional · contractor payments" };
-  if (!isStripeEnabled()) return { ...base, level: "off", reason: "STRIPE_SECRET_KEY is not set" };
-  const modes = (["live", "test"] as const).filter((m) =>
-    m === "live" ? Boolean(process.env.STRIPE_CONNECT_CLIENT_ID) : Boolean(process.env.STRIPE_CONNECT_CLIENT_ID_TEST),
-  );
-  const box = isSecretBoxConfigured();
-  if (modes.length === 0) {
-    return {
-      ...base,
-      level: box ? "degraded" : "off",
-      reason: box
-        ? "no STRIPE_CONNECT_CLIENT_ID — OAuth joins are off; pasted keys work"
-        : "STRIPE_CONNECT_CLIENT_ID and TOKEN_ENCRYPTION_KEY not set — no way to connect an account",
-    };
+  const claimed = await db.syncState.updateMany({ where: { key: LEASE_KEY, cursor: lease.cursor }, data: { cursor: String(started + HEALTH_INTERVAL_MS) } });
+  if (!claimed.count) { if (previous) return previous; throw new Error("Another check is running"); }
+  const items = await getIntegrationStatuses();
+  if (Date.now() > started + HEALTH_INTERVAL_MS - 15_000) throw new Error("Monitoring lease expired before probes");
+  const services = await Promise.all(items.map(item => checkService(item, now)));
+  // Preserve the overview's operational payout warning without treating queue
+  // state (or a failed count) as proof that a payment provider is healthy.
+  const payout = await checkInfluencerPayouts(now).catch((): ServiceHealth => ({ key: "influencer-payouts", name: "Influencer payouts", level: "unknown", reason: "Queue unavailable", checkedAt: now, optional: true }));
+  payout.feature = evidence(payout.level === "degraded" ? "limited" : "unknown", payout.reason, "Stored payout queue; not a payment API probe", now);
+  services.push(payout);
+  for (const service of services) {
+    const prior = previous?.services.find(s => s.key === service.key);
+    for (const key of ["authentication", "quota", "provider", "feature"] as const) {
+      const part = service[key];
+      if (part) part.lastSuccessAt = part.state === "ok" ? part.observedAt : part.lastSuccessAt ?? prior?.[key]?.lastSuccessAt;
+    }
   }
-  const missingSecret = modes.filter((m) =>
-    m === "live" ? !process.env.STRIPE_CONNECT_WEBHOOK_SECRET : !process.env.STRIPE_CONNECT_WEBHOOK_SECRET_TEST,
-  );
-  if (missingSecret.length) {
-    return {
-      ...base,
-      level: "degraded",
-      reason: `client id set (${modes.join(", ")}) but no Connect webhook secret for ${missingSecret.join(", ")} — payments confirm only on return and by the reconcile cron`,
-    };
-  }
-  return { ...base, level: "ok", reason: `client id + Connect webhook secret set (${modes.join(", ")})${box ? "" : " · pasted keys off: no TOKEN_ENCRYPTION_KEY"}` };
+  const failed = services.some(s => s.probeFailed);
+  const failures = failed ? Math.min((previous?.failures ?? 0) + 1, 4) : 0;
+  const nextCheckAt = new Date(Date.now() + HEALTH_INTERVAL_MS * 2 ** failures).toISOString();
+  const report = freshReport({ version: 2, ranAt: now, tookMs: Date.now() - started, worst: "unknown", services, nextCheckAt, failures });
+  // Fence a worker that outlived its lease: it cannot overwrite a newer sweep.
+  // Persist report and cooldown together, so every instance observes backoff.
+  await db.$transaction(async (tx) => {
+    const owned = await tx.syncState.updateMany({ where: { key: LEASE_KEY, cursor: String(started + HEALTH_INTERVAL_MS) }, data: { cursor: String(Date.parse(nextCheckAt)) } });
+    if (!owned.count) throw new Error("Monitoring lease was superseded");
+    await tx.syncState.upsert({ where: { key: HEALTH_KEY }, create: { key: HEALTH_KEY, cursor: JSON.stringify(report) }, update: { cursor: JSON.stringify(report) } });
+  });
+  memory = report;
+  return report;
 }
 
-/** Square: the platform app for OAuth joins and its webhook signature key. A
- *  pasted access token needs only the secret box. */
-async function checkSquareApp(now: string): Promise<ServiceHealth> {
-  const base = { key: "square-app", name: "Square", checkedAt: now, optional: true, note: "optional · contractor payments" };
-  const box = isSecretBoxConfigured();
-  if (!isSquareEnabled()) {
-    return {
-      ...base,
-      level: box ? "degraded" : "off",
-      reason: box
-        ? "SQUARE_APPLICATION_ID/SECRET not set — OAuth joins off; pasted tokens work"
-        : "SQUARE_APPLICATION_ID/SECRET and TOKEN_ENCRYPTION_KEY not set",
-    };
-  }
-  if (!isSquareWebhookConfigured()) {
-    return { ...base, level: "degraded", reason: `app credentials set (${process.env.SQUARE_ENV === "production" ? "production" : "sandbox"}) but SQUARE_WEBHOOK_SIGNATURE_KEY is not — payments confirm only on return and by the reconcile cron` };
-  }
-  return { ...base, level: "ok", reason: `app credentials + webhook signature key set (${process.env.SQUARE_ENV === "production" ? "production" : "sandbox"})${box ? "" : " · pasted tokens off: no TOKEN_ENCRYPTION_KEY"}` };
-}
-
-/** Gmail OAuth: the client is configured, who may use it, and how many orgs
- *  hold a grant or lost one. */
-async function checkGmailOAuth(now: string): Promise<ServiceHealth> {
-  const base = { key: "gmail-oauth", name: "Gmail OAuth", checkedAt: now, optional: true, note: "optional · send from own address" };
-  if (!isGmailOAuthConfigured()) return { ...base, level: "off", reason: "GMAIL_OAUTH_CLIENT_ID / SECRET / REDIRECT_URI not set" };
-  const [connected, revoked] = await Promise.all([
-    db.organization.count({ where: { gmailTokensJson: { not: null } } }).catch(() => 0),
-    db.organization.count({ where: { gmailTokensJson: null, gmailSettingsJson: { contains: '"revokedAt":"20' } } }).catch(() => 0),
-  ]);
-  const audience =
-    process.env.GMAIL_OAUTH_PUBLIC === "true"
-      ? "open to everyone (app verified)"
-      : `Testing — ${(process.env.GMAIL_OAUTH_TEST_USERS ?? "").split(",").filter((e) => e.trim()).length} allow-listed user(s)`;
-  const grants = `${connected} org(s) connected, ${revoked} revoked by Google`;
-  if (!isSecretBoxConfigured()) return { ...base, level: "down", reason: `configured but TOKEN_ENCRYPTION_KEY is not set — grants cannot be stored · ${grants}` };
-  return { ...base, level: revoked > 0 ? "degraded" : "ok", reason: `${audience} · ${grants}` };
-}
-
-/** Contractor processor rows that need a human: REVOKED (the provider removed
- *  the app) or RESTRICTED (charges paused). */
-async function checkPaymentConnections(now: string): Promise<ServiceHealth> {
-  const base = { key: "payment-connections", name: "Processor links", checkedAt: now, optional: true, note: "optional · contractor payments" };
-  const rows = await db.paymentConnection.groupBy({ by: ["status"], _count: { _all: true } }).catch(() => []);
-  const count = (status: string) => rows.find((r) => r.status === status)?._count._all ?? 0;
-  const active = count("ACTIVE");
-  const restricted = count("RESTRICTED");
-  const revoked = count("REVOKED");
-  if (active + restricted + revoked === 0) return { ...base, level: "ok", reason: "no contractor has connected a processor yet" };
-  const read = `${active} active · ${restricted} restricted · ${revoked} revoked`;
-  return { ...base, level: restricted + revoked > 0 ? "degraded" : "ok", reason: restricted + revoked > 0 ? `${read} — the owners were told; nothing to do platform-side` : read };
-}
-
-/**
- * Partner payouts — the two states that need a person, and only those.
- *
- *   · a request nobody has decided on for more than 7 days. The queue at
- *     /admin/payouts has no timer on it, so a request approved late is
- *     indistinguishable from one approved on time until the partner writes in.
- *   · a transfer that FAILED or was REVERSED. runApprovedPayouts writes the
- *     failure onto the row and moves on; nothing has ever read it back.
- *
- * NOT a Stripe call — both are our own rows. Optional, because neither stops an
- * estimate: this is money owed to a partner, which is this week's job, not an
- * outage, and calling it one teaches everyone to ignore the panel.
- */
 const PAYOUT_STALE_DAYS = 7;
 
 /** Exported so scripts/qa can assert it without running the whole sweep — that
@@ -393,22 +216,22 @@ export async function checkInfluencerPayouts(now: string): Promise<ServiceHealth
   const unconfirmedBefore = new Date(Date.now() - 20 * 60 * 60 * 1000);
   const unconfirmed = await db.payoutTransfer
     .count({ where: { status: "PENDING", stripeTransferId: null, createdAt: { lt: unconfirmedBefore } } })
-    .catch(() => 0);
+    ;
   // A reversed transfer that nobody has decided on (Retry payout / Write off),
   // and a partial reversal, which the code deliberately does not guess at.
   const [reversedAwaiting, partialReversals] = await Promise.all([
-    db.payoutRequest.count({ where: { status: "REVERSED" } }).catch(() => 0),
+    db.payoutRequest.count({ where: { status: "REVERSED" } }),
     db.payoutTransfer
       .count({ where: { failureReason: { startsWith: "Partially reversed" } } })
-      .catch(() => 0),
+      ,
   ]);
   const [pending, stale, failedTransfers, stuck] = await Promise.all([
-    db.payoutRequest.count({ where: { status: "PENDING" } }).catch(() => 0),
-    db.payoutRequest.count({ where: { status: "PENDING", createdAt: { lt: staleBefore } } }).catch(() => 0),
-    db.payoutTransfer.count({ where: { status: "FAILED" } }).catch(() => 0),
+    db.payoutRequest.count({ where: { status: "PENDING" } }),
+    db.payoutRequest.count({ where: { status: "PENDING", createdAt: { lt: staleBefore } } }),
+    db.payoutTransfer.count({ where: { status: "FAILED" } }),
     // Approved but never sent: the cron could not pay it (no Connect account,
     // no cleared balance) or died mid-run and left it in PROCESSING.
-    db.payoutRequest.count({ where: { status: { in: ["APPROVED", "PROCESSING"] }, createdAt: { lt: staleBefore } } }).catch(() => 0),
+    db.payoutRequest.count({ where: { status: { in: ["APPROVED", "PROCESSING"] }, createdAt: { lt: staleBefore } } }),
   ]);
 
   if (pending + stale + failedTransfers + stuck + unconfirmed + reversedAwaiting + partialReversals === 0) {
@@ -436,69 +259,6 @@ export async function checkInfluencerPayouts(now: string): Promise<ServiceHealth
     level: needsSomeone ? "degraded" : "ok",
     reason: needsSomeone ? `${parts.join(" · ")} — /admin/payouts` : parts.join(" · "),
   };
-}
-
-function short(err: unknown): string {
-  return (err instanceof Error ? err.message : String(err)).replace(/\s+/g, " ").slice(0, 80);
-}
-
-/** Runs every check, writes the report, and returns it. Never throws: a health
- *  check that can fail is one more thing to watch. */
-export async function runIntegrationsHealth(): Promise<HealthReport> {
-  const started = Date.now();
-  const now = new Date().toISOString();
-  const settled = await Promise.all(
-    [
-      checkOpenAI,
-      checkSerpApi,
-      checkReportAll,
-      checkEagleView,
-      checkRegrid,
-      checkOverpass,
-      checkMail,
-      checkTwilio,
-      checkStripeConnect,
-      checkSquareApp,
-      checkGmailOAuth,
-      checkPaymentConnections,
-      checkInfluencerPayouts,
-    ].map((fn) =>
-      fn(now).catch(
-        (err): ServiceHealth => ({
-          key: fn.name,
-          name: fn.name.replace(/^check/, ""),
-          level: "degraded",
-          reason: `the check itself failed: ${short(err)}`,
-          checkedAt: now,
-        }),
-      ),
-    ),
-  );
-  // The headline is about what is load-bearing: an optional service that is
-  // down must not make the whole platform read as down.
-  const worst = settled
-    .filter((s) => !s.optional)
-    .reduce<HealthLevel>((a, s) => (RANK[s.level] > RANK[a] ? s.level : a), "ok");
-  const report: HealthReport = { ranAt: now, tookMs: Date.now() - started, worst, services: settled };
-  await db.syncState
-    .upsert({
-      where: { key: HEALTH_KEY },
-      update: { cursor: JSON.stringify(report) },
-      create: { key: HEALTH_KEY, cursor: JSON.stringify(report) },
-    })
-    .catch((err) => console.warn("[integrationsHealth] could not store the report:", err));
-  return report;
-}
-
-/** The last stored report, or null when nothing has run yet. */
-export async function readIntegrationsHealth(): Promise<HealthReport | null> {
-  const row = await readState(HEALTH_KEY);
-  if (!row) return null;
-  try {
-    return JSON.parse(row.cursor) as HealthReport;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -539,8 +299,8 @@ export async function alertIfDown(report: HealthReport): Promise<"sent" | "alrea
           `<p style="color:#555">Checked ${report.ranAt}. Admin → Overview has the full panel.</p>`,
       });
     }
-  } catch (err) {
-    console.warn("[integrationsHealth] alert email failed:", err);
+  } catch {
+    console.warn("[integrationsHealth] alert email failed");
   }
   await db.syncState
     .upsert({ where: { key: ALERT_KEY }, update: { cursor: today }, create: { key: ALERT_KEY, cursor: today } })

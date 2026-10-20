@@ -1,36 +1,22 @@
 "use client";
 
-// ADMIN INTEGRATIONS — /admin/integrations, blueprint.
-//
-// One row per external service: its name, the env keys that drive it, and its
-// state. Two states are evidence and the rest are configuration, so the words
-// differ and the legend says which is which once, at the top:
-//
-//   Live            — the service answered a request made for this render.
-//                     Only Stripe and PostHog can reach this state; they are
-//                     the only two with a live check in the codebase.
-//   Configured      — every env key on the row is present. Nothing contacted.
-//   Not configured  — at least one key is missing.
-//
-// Key NAMES are printed; key VALUES never leave the server. Nothing here reads
-// a secret's contents, not even its length.
+// Existing admin shell and controls, with bounded browser-open monitoring.
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { setStripeModeAction } from "@/actions/admin";
 import type { Route } from "next";
-import type { IntegrationGroup, IntegrationStatus, LiveProbe } from "@/lib/sdk/integrations";
+import type { IntegrationGroup, IntegrationStatus } from "@/lib/sdk/integrations";
 import s from "@/components/v3/admin-overview/admin-shared.module.css";
 import { Ic } from "@/components/v3/admin-overview/admin-ui";
 import { useAdminMotion } from "@/components/v3/admin-overview/admin-motion";
 import { IntegrationLinks } from "./integration-links";
 import i from "./integrations.module.css";
+import { checkIntegrationsNow } from "@/actions/integrationsHealth";
+import { freshReport, isFresh, HEALTH_INTERVAL_MS, type HealthReport, type ServiceHealth } from "@/lib/integrationHealthModel";
 
 const HEALTH = "/admin/health" as Route;
-
-export type LiveState = "ok" | "error" | "off";
-export type LiveMap = Partial<Record<LiveProbe, LiveState>>;
 
 const GROUPS: { key: IntegrationGroup; title: string }[] = [
   { key: "payments", title: "Payments" },
@@ -39,23 +25,42 @@ const GROUPS: { key: IntegrationGroup; title: string }[] = [
   { key: "platform", title: "Platform" },
 ];
 
-function state(it: IntegrationStatus, live: LiveMap): { cls: string; label: string } {
-  const probe = it.probe ? live[it.probe] : undefined;
-  if (probe === "ok") return { cls: "chip ok", label: "Live" };
-  if (probe === "error") return { cls: `chip ${s.chipDanger}`, label: "Error" };
-  return it.enabled
-    ? { cls: `chip ${s.chipInk}`, label: "Configured" }
-    : { cls: `chip ${s.chipMuted}`, label: "Not configured" };
+function statusLabel(item: IntegrationStatus, health?: ServiceHealth) {
+  if (!item.enabled) return "Not configured";
+  return health?.level === "ok" ? "Verified" : health?.level === "down" ? "Issue observed" : health?.level === "degraded" ? "Limited / incident" : "Unknown";
+}
+
+function EvidenceDetails({ health }: { health?: ServiceHealth }) {
+  if (!health) return <p className={i.evidence}>Not checked yet. Configuration does not prove availability.</p>;
+  return <div className={i.evidence}>
+    <p>{health.reason}</p>
+    <details><summary>Evidence, limits and timestamps</summary>
+    {health.note ? <p role="status">{health.note}</p> : null}
+    <dl>
+      {([ ["authentication", "Authentication"], ["quota", "Quota / trial access"], ["provider", "Provider availability"], ["feature", "Feature end-to-end"] ] as const).map(([key, label]) => {
+        const part = health[key];
+        const fresh = isFresh(part?.observedAt);
+        const state = part?.state === "unsupported" ? "Unsupported" : !fresh ? "Unknown" : part?.state === "ok" ? "Verified for this check" : part?.state === "error" ? "Issue observed" : part?.state === "limited" ? "Limited" : "Unknown";
+        return <div key={key}><dt>{label}</dt><dd><strong>{state}</strong> — {part?.detail ?? "No evidence"}
+          <span>Source: {part?.source ?? "None"}</span>
+          <span>Observed: {part?.observedAt ?? "Never"}{part?.observedAt ? fresh ? " · fresh" : " · stale" : ""}</span>
+          <span>Last successful observation: {part?.lastSuccessAt ?? "Not recorded"}</span>
+        </dd></div>;
+      })}
+    </dl>
+    <p>Last check: {health.checkedAt} · {isFresh(health.checkedAt) ? "fresh" : "stale"}</p>
+    </details>
+  </div>;
 }
 
 function GroupCard({
   title,
   items,
-  live,
+  report,
 }: {
   title: string;
   items: IntegrationStatus[];
-  live: LiveMap;
+  report: HealthReport | null;
 }) {
   return (
     <div className="card">
@@ -66,7 +71,7 @@ function GroupCard({
       </div>
       <hr className="card-rule" />
       {items.map((it) => {
-        const chip = state(it, live);
+        const health = report?.services.find(service => service.key === it.key);
         return (
           <div className={`${s.row} ${i.iRow}`} key={it.key}>
             <div className={s.rowMain}>
@@ -74,13 +79,14 @@ function GroupCard({
                 {it.name}
               </div>
             </div>
-            <span className={chip.cls}>{chip.label}</span>
+            <span className={`chip ${health?.level === "down" ? s.chipDanger : s.chipMuted}`}>{statusLabel(it, health)}</span>
             <IntegrationLinks id={it.key} />
             {it.setupHref ? (
               <Link className="btn btn-ghost btn-sm" href={it.setupHref as Route}>
                 Set up
               </Link>
             ) : null}
+            <EvidenceDetails health={health} />
             <div className={i.keys}>
               {it.envKeys.map((k) => (
                 <span className={s.envk} key={k}>
@@ -165,16 +171,55 @@ export function StripeModeSwitch({
 
 export function AdminIntegrationsContent({
   items,
-  live,
+  initialHealth,
   stripeMode,
   stripeModes,
 }: {
   items: IntegrationStatus[];
-  live: LiveMap;
+  initialHealth: HealthReport | null;
   stripeMode: "live" | "test";
   stripeModes: { live: boolean; test: boolean };
 }) {
   useAdminMotion();
+  const [report, setReport] = useState(initialHealth);
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(false);
+  const busy = useRef(false);
+  const retryAt = useRef(0);
+  const failures = useRef(0);
+  const mounted = useRef(false);
+  const refresh = useCallback(async () => {
+    if (busy.current || Date.now() < retryAt.current || document.hidden || !navigator.onLine) return;
+    busy.current = true;
+    setChecking(true);
+    setCooldown(true);
+    try {
+      const result = await checkIntegrationsNow();
+      if (!result.ok) throw new Error(result.error);
+      failures.current = 0;
+      retryAt.current = Math.max(Date.now() + HEALTH_INTERVAL_MS, Date.parse(result.report.nextCheckAt ?? "") || 0);
+      if (mounted.current) { setReport(result.report); setError(null); }
+    } catch {
+      failures.current = Math.min(failures.current + 1, 4);
+      retryAt.current = Date.now() + HEALTH_INTERVAL_MS * 2 ** failures.current;
+      if (mounted.current) setError("Refresh unavailable. Previous evidence is retained and expires after 10 minutes. Automatic retry uses backoff.");
+    } finally {
+      busy.current = false;
+      if (mounted.current) setChecking(false);
+    }
+  }, []);
+  useEffect(() => {
+    mounted.current = true;
+    const initialTimer = window.setTimeout(() => void refresh(), 0);
+    const tick = () => { setCooldown(Date.now() < retryAt.current); setReport(previous => previous ? freshReport(previous) : null); void refresh(); };
+    const timer = window.setInterval(tick, 30_000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("online", tick);
+    return () => { mounted.current = false; window.clearInterval(timer); window.clearTimeout(initialTimer); document.removeEventListener("visibilitychange", tick); window.removeEventListener("online", tick); };
+  }, [refresh]);
+  const currentReport = report ? freshReport(report) : null;
+
 
   const configured = items.filter((it) => it.enabled).length;
   const cards = GROUPS.map((g) => ({
@@ -187,7 +232,7 @@ export function AdminIntegrationsContent({
       <div className="page-head">
         <div>
           <div className="kicker">
-            Platform · {configured} of {items.length} configured
+            Platform · {configured} of {items.length} available or configured
           </div>
           <h1 className="page-title">Integrations</h1>
         </div>
@@ -199,23 +244,25 @@ export function AdminIntegrationsContent({
         </div>
       </div>
 
-      <div className={i.legend}>
-        <span className="chip ok">Live</span>
-        <em>answered</em>
-        <span className={`chip ${s.chipInk}`}>Configured</span>
-        <em>key present</em>
-      </div>
+      <section className={i.monitor} aria-label="Monitoring controls">
+        <p>Checks refresh about every five minutes while this page is visible and online. Failed checks back off. No searches, paid reports, generation, messages or transactions are performed.</p>
+        <p>The repository declares a daily server cron at 04:40 UTC; execution on this deployment is unverified. Browser refresh is not always-on monitoring.</p>
+        <p role="status">{checking ? "Checking safe sources…" : currentReport ? `Report: ${currentReport.ranAt} · ${isFresh(currentReport.ranAt) ? "fresh" : "stale"}. Next eligible check: ${currentReport.nextCheckAt ?? "unknown"}` : "No current report. Status is unknown until checked."}</p>
+        <button className="btn btn-ghost" disabled={checking || cooldown} onClick={() => void refresh()}>Refresh status</button>
+        {error ? <p role="alert">{error}</p> : null}
+        <p>Unknown means the available evidence cannot verify current service health. Unsupported means no documented free probe is configured. Provider status does not verify this account, quota or customer workflow.</p>
+      </section>
 
       <StripeModeSwitch mode={stripeMode} modes={stripeModes} />
 
       <div className="grid-11">
-        <GroupCard title={cards[0].title} items={cards[0].items} live={live} />
-        <GroupCard title={cards[1].title} items={cards[1].items} live={live} />
+        <GroupCard title={cards[0].title} items={cards[0].items} report={currentReport} />
+        <GroupCard title={cards[1].title} items={cards[1].items} report={currentReport} />
       </div>
 
       <div className="grid-11">
-        <GroupCard title={cards[2].title} items={cards[2].items} live={live} />
-        <GroupCard title={cards[3].title} items={cards[3].items} live={live} />
+        <GroupCard title={cards[2].title} items={cards[2].items} report={currentReport} />
+        <GroupCard title={cards[3].title} items={cards[3].items} report={currentReport} />
       </div>
     </>
   );

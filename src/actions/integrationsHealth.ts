@@ -9,7 +9,6 @@
 // and a button that mails the whole admin list on every press would train
 // everyone to ignore the alert that matters.
 
-import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { runIntegrationsHealth, type HealthReport } from "@/lib/integrationsHealth";
 
@@ -21,10 +20,8 @@ export async function checkIntegrationsNow(): Promise<{ ok: true; report: Health
   }
   try {
     const report = await runIntegrationsHealth();
-    revalidatePath("/admin");
     return { ok: true, report };
-  } catch (err) {
-    console.error("[integrationsHealth] manual check failed:", err);
-    return { ok: false, error: "The check could not finish. The server log has the reason." };
+  } catch {
+    return { ok: false, error: "Monitoring is unavailable or another check is running. Retry in five minutes." };
   }
 }

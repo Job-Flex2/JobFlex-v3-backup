@@ -11,15 +11,16 @@
 // "Check now" re-runs the same sweep the nightly cron runs, and the button says
 // which it is showing — a figure from last night is not a figure from now.
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { checkIntegrationsNow } from "@/actions/integrationsHealth";
-import type { HealthLevel, HealthReport } from "@/lib/integrationsHealth";
+import { freshReport, type HealthLevel, type HealthReport } from "@/lib/integrationHealthModel";
 import s from "./admin-shared.module.css";
 import { ago } from "./admin-ui";
 import { IntegrationLinks } from "@/components/v3/admin-integrations/integration-links";
 
 const WORD: Record<HealthLevel, string> = {
-  ok: "OK",
+  ok: "Verified",
+  unknown: "Unknown",
   degraded: "Degraded",
   down: "Down",
   off: "Not set up",
@@ -28,7 +29,7 @@ const WORD: Record<HealthLevel, string> = {
 function toneClass(level: HealthLevel): string {
   if (level === "down") return s.healthDown;
   if (level === "degraded") return s.healthWarn;
-  if (level === "off") return s.healthOff;
+  if (level === "off" || level === "unknown") return s.healthOff;
   return s.healthOk;
 }
 
@@ -43,11 +44,13 @@ function verdict(report: HealthReport | null): { text: string; level: HealthLeve
   const degraded = load.filter((x) => x.level === "degraded").length;
   const off = load.filter((x) => x.level === "off").length;
   const live = load.length - off;
+  const unknown = load.filter((x) => x.level === "unknown").length;
   const spare = report.services.filter((x) => x.optional && x.level === "down").length;
   const tail = spare ? ` · ${spare} optional down` : "";
-  if (down) return { text: `${down} down of ${live} live${tail}`, level: "down" };
-  if (degraded) return { text: `${degraded} degraded of ${live} live${tail}`, level: "degraded" };
-  return { text: `All ${live} live services OK${tail}`, level: spare ? "degraded" : "ok" };
+  if (down) return { text: `${down} down of ${live} configured${tail}`, level: "down" };
+  if (degraded) return { text: `${degraded} degraded of ${live} configured${tail}`, level: "degraded" };
+  if (unknown) return { text: `${unknown} unverified of ${live} configured${tail}`, level: "unknown" };
+  return { text: `All ${live} monitored services verified${tail}`, level: spare ? "degraded" : "ok" };
 }
 
 export function IntegrationsHealthCard({
@@ -61,7 +64,15 @@ export function IntegrationsHealthCard({
   const [report, setReport] = useState<HealthReport | null>(initial);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const v = verdict(report);
+  const [clock, setClock] = useState(now);
+  useEffect(() => {
+    const tick = () => setClock(new Date().toISOString());
+    const timer = window.setInterval(tick, 30_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
+  }, []);
+  const current = report ? freshReport(report, Date.parse(clock)) : null;
+  const v = verdict(current);
 
   return (
     <div className="card">
@@ -69,7 +80,7 @@ export function IntegrationsHealthCard({
         <div className="card-titles">
           <div className="card-title">Integrations health</div>
           <div className={s.kpiSrc}>
-            {report ? `Checked ${ago(report.ranAt, now)} · ${report.tookMs} ms` : "Nightly at 04:40 UTC, or on demand"}
+            {report ? `Checked ${ago(report.ranAt, clock)} · ${report.tookMs} ms` : "Nightly at 04:40 UTC, or on demand"}
           </div>
         </div>
         <div className={s.headSide}>
@@ -82,7 +93,7 @@ export function IntegrationsHealthCard({
               setErr(null);
               start(async () => {
                 const res = await checkIntegrationsNow();
-                if (res.ok) setReport(res.report);
+                if (res.ok) { setReport(res.report); setClock(new Date().toISOString()); }
                 else setErr(res.error);
               });
             }}
@@ -100,7 +111,7 @@ export function IntegrationsHealthCard({
 
       {report ? (
         <ul className={s.healthList}>
-          {report.services.map((x) => (
+          {current?.services.map((x) => (
             <li key={x.key} className={s.healthRow}>
               <span className={`${s.healthDot} ${toneClass(x.level)}`} aria-hidden />
               <span className={s.healthName}>
@@ -110,7 +121,7 @@ export function IntegrationsHealthCard({
               </span>
               <span className={`${s.healthLevel} ${toneClass(x.level)}`}>{WORD[x.level]}</span>
               <span className={s.healthReason}>{x.reason}</span>
-              <span className={s.healthWhen}>{ago(x.asOf ?? x.checkedAt, now)}</span>
+              <span className={s.healthWhen}>{ago(x.asOf ?? x.checkedAt, clock)}</span>
             </li>
           ))}
         </ul>

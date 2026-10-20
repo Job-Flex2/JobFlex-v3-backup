@@ -6,8 +6,8 @@
 // getIntegrationStatuses() opens a socket. Two services can be verified for
 // real, and only those two: Stripe through checkStripeReachable() below, and
 // PostHog through getTrafficSnapshot() in lib/posthog (a real HogQL POST).
-// Entries carrying a `probe` are the ones the admin pages may label "Live";
-// everything else is reported as "configured" and nothing stronger.
+// Live metadata checks do not prove feature or quota health.
+
 
 import { isOpenAIEnabled } from "./openai";
 import { getStripe, isStripeEnabled } from "./stripe";
@@ -62,6 +62,25 @@ export function isMapsBrowserKeySet(): boolean {
 
 export async function getIntegrationStatuses(): Promise<IntegrationStatus[]> {
   return [
+    ...([
+      ["coolcalc", "CoolCalc", "property", ["COOLCALC_CLIENT_ID", "COOLCALC_API_KEY", "COOLCALC_DEALER_ID"]],
+      ["google-auth", "Google sign-in", "platform", ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]],
+      ["stax", "Stax (per-organization credentials)", "payments", []],
+      ["paypal", "PayPal", "payments", ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET"]],
+      ["meta", "Meta lead import", "messaging", ["META_APP_ID", "META_APP_SECRET", "META_LOGIN_CONFIG_ID", "META_REDIRECT_URI", "TOKEN_ENCRYPTION_KEY"]],
+      ["meta-ads", "Meta ad spend", "platform", ["META_ADS_ACCESS_TOKEN", "META_AD_ACCOUNT_ID"]],
+      ["solar", "Google Solar", "property", ["GOOGLE_MAPS_API_KEY"]],
+      ["census", "US Census geocoder", "property", []],
+      ["fcc", "FCC geography", "property", []],
+      ["nominatim", "Nominatim geocoder", "property", []],
+      ["assessor", "County assessor / ArcGIS sources", "property", []],
+      ["naip", "NAIP / Planetary Computer imagery", "property", []],
+      ["usa-structures", "USA Structures / ArcGIS", "property", []],
+      ["overpass", "Overpass / OpenStreetMap", "property", []],
+      ["elevation", "USGS 3DEP elevation", "property", []],
+    ] as [string, string, IntegrationGroup, string[]][]).map(([key, name, group, envKeys]) => ({
+      key, name, group, envKeys, enabled: envKeys.every(k => Boolean(process.env[k])),
+    })),
     // ── Payments ──────────────────────────────────────────────────────────
     {
       key: "stripe",
