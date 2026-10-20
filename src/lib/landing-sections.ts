@@ -27,8 +27,8 @@ export const LANDING_SECTIONS: readonly LandingSection[] = [
   { key: "compare", label: "JobFlex vs other apps", selector: [".lp-cv--compare", "#compare"], shown: "all" },
   { key: "showcase", label: "Estimators", selector: [".lp-cv--showcase", "#showcase"], shown: "all" },
   { key: "hvac", label: "HVAC service book", selector: [".lp-cv--hvac", "#service"], shown: "some" },
-  // The Deck Studio's 87-second demo film (2026-10-19, landing-e/deck-demo-video): only the deck landing shows
-  // it, directly under its hero (its own order below). The HVAC, roofing and fence films play inside the hero.
+  // The Deck Studio's 87-second demo film as its own section (2026-10-19, landing-e/deck-demo-video): no landing
+  // renders it since the film moved into the deck hero the same evening, as the HVAC, roofing and fence films.
   { key: "demo", label: "Demo film", selector: [".lp-cv--demo", "#demo"], shown: "some" },
   { key: "montage", label: "Real work photos", selector: [".lp-cv--montage"], shown: "some" },
   { key: "proposals", label: "Proposals", selector: [".lp-cv--proposals", "#proposals"], shown: "all" },
@@ -76,12 +76,9 @@ const OWN_ORDER: Readonly<Record<string, { since: number; order: readonly string
     since: Date.parse("2026-10-05T06:55:00Z"),
     order: ["hero", "showcase", "hvac", "demo", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
   },
-  // The Deck Studio's landing (2026-10-19): its 87-second demo film directly under the hero; everything else
-  // where the usual order has it. Pushed 2026-10-19 ~5:35 PM Los Angeles.
-  decking: {
-    since: Date.parse("2026-10-20T00:35:00Z"),
-    order: ["hero", "demo", "compare", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "pricing", "faq", "final"],
-  },
+  // The Deck Studio's landing had its film's own section under the hero from 2026-10-19 ~5:35 PM Los
+  // Angeles; the same evening the film moved into the hero (landing-e/demo-media "deck") and decking went
+  // back to the usual order.
 };
 
 /** The landings laid out in an order of their own. */

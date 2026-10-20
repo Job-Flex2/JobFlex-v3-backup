@@ -1,10 +1,13 @@
 "use client";
 
 /* THE DEMO FILM IN THE HERO SHOT'S PLACE (2026-10-19) — the HVAC,
-   roofing and fencing landings. The landing's first screen with
+   roofing, fencing and deck landings. The landing's first screen with
    its estimator's film where the product shot plays: the same app frame
    (showcase-kit AppFrame), under the line "Real product demo · address to
-   proposal in 40 seconds". Which film is the landing's `film`
+   proposal in under a minute" (the film's own caption, if it has one).
+   THE WHOLE FILM IN THE FIRST SCREEN (2026-10-19): the frame is as wide as
+   lets the picture end above the screen's foot — hero.tsx measures where
+   the picture starts (data-fit) and the stylesheet does the rest. Which film is the landing's `film`
    (landing-variants); its files are in demo-media.ts.
 
    The hero renders its visual twice — a phone build under 640 px and a desk
@@ -35,7 +38,7 @@
    demo_play once it plays, then demo_25 / demo_50 / demo_100 by the film's
    own time — each once per browser session (demo-track). */
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { AppFrame } from "./showcase-kit";
 import { DEMO_CAPTION, DEMO_DESK_MEDIA, DEMO_FILMS, DEMO_PHONE_MEDIA, type DemoFilmKey } from "./demo-media";
@@ -154,10 +157,12 @@ export function DemoFilm({
   const cut = f[slot];
   const media = slot === "desk" ? DEMO_DESK_MEDIA : DEMO_PHONE_MEDIA;
   return (
-    <figure className="lp-film-fig" style={{ "--film-h": `${f.deskHeight}px` } as CSSProperties}>
-      <figcaption className="lp-film-cap">{DEMO_CAPTION}</figcaption>
+    <figure className="lp-film-fig">
+      <figcaption className="lp-film-cap">{f.caption ?? DEMO_CAPTION}</figcaption>
       <AppFrame path={f.path} body={f.body}>
-        <div className="lp-film">
+        {/* data-fit: the box hero-fit measures — the film's frame is as wide
+            as lets this box end inside the first screen (hero.tsx). */}
+        <div className="lp-film" data-fit="film">
           <picture>
             <source media={DEMO_DESK_MEDIA} srcSet={f.desk.poster} />
             <img className="lp-film-media" src={f.phone.poster} alt="" fetchPriority="high" decoding="async" />

@@ -66,8 +66,6 @@ import { isEditionOpen } from "@/lib/editions";
 const Montage = dynamic(() => import("./montage").then((m) => m.Montage));
 // The HVAC page's own section (2026-10-01): plans, visits, units, menu, the tech's phone.
 const HvacServiceSection = dynamic(() => import("./hvac-service-section").then((m) => m.HvacServiceSection));
-// The Deck Studio's 87-second demo film, under the deck landing's hero (2026-10-19).
-const DeckDemoVideo = dynamic(() => import("./deck-demo-video").then((m) => m.DeckDemoVideo));
 const ProposalsSection = dynamic(() => import("./proposals-section").then((m) => m.ProposalsSection));
 const PortalSection = dynamic(() => import("./portal-section").then((m) => m.PortalSection));
 const JobsSection = dynamic(() => import("./jobs-section").then((m) => m.JobsSection));
@@ -108,15 +106,15 @@ export interface LandingEProps {
   utm?: UtmParams;
   /** Meta's click id from an ad link — carried into the register links. */
   fbclid?: string;
-  /** The in-app browser the request's user agent names (lib/inAppBrowser), so
-   *  the hero's first paint already has no Google button there. */
+  /** The in-app browser the request's user agent names (lib/inAppBrowser).
+   *  Unread since 2026-10-19: the hero has no Google button on any browser. */
   inAppBrowser?: InAppBrowser | null;
   /** The ad's opening line for the headline: a key of the trade's own table
    *  (LANDING_HOOKS), resolved by the entry point. Absent: the trade's hero. */
   hook?: string;
 }
 
-export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, inAppBrowser = null, hook, tool }: LandingEProps) {
+export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, hook, tool }: LandingEProps) {
   // What the plan cards mark for this visitor: the ad's tool, else the trade's own estimator (lib/planSpotlight).
   const spotlight = spotlightFor({ tool, industry: variant });
   // The trade's hero — with the ad's two lines in place of its own when the
@@ -173,11 +171,13 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // it is near the viewport — the mobile LCP's render delay was style/layout
   // of the whole page.
 
-  // The line under the hero's buttons (owner, 2026-10-16): one sentence, the
+  // The line under the hero's button (owner, 2026-10-16): one sentence, the
   // same for every trade, where the price line was (.lp-hero-price) — the
   // button says the trial. The price line (hero-price.ts heroPriceLine) and the
-  // Deck Studio's coming-soon note are off. The default page has no line.
-  const heroLine = variant ? "Build your free estimates" : null;
+  // Deck Studio's coming-soon note are off. Since 2026-10-19 the default page
+  // carries it too: the first screen is one order on every landing. The
+  // trial's terms are never here — they are on Stripe's page.
+  const heroLine = "Build your free estimates";
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is
@@ -187,21 +187,14 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
     // The hook goes to the demo film's events (demo-film.tsx).
-    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} hook={v.film ? hook : undefined} />,
+    hero: <Hero variant={v} variantKey={variant} registerHref={register} cta={top} trialCta={low} priceLine={heroLine} hook={v.film ? hook : undefined} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,
     hvac: variant === "hvac" ? <div className="lp-cv lp-cv--hvac"><HvacServiceSection registerHref={register} cta={top} /></div> : null,
-    demo:
-      variant === "decking" ? (
-        <div className="lp-cv lp-cv--demo">
-          <DeckDemoVideo
-            registerHref={register}
-            cta={top}
-            note={deckSoon ? "Deck Studio opens soon — start with JobFlex today and price your decks with Smart Proposal meanwhile. The demo company and client are made up." : "Try it on a deck you're quoting this week — the demo company and client are made up."}
-          />
-        </div>
-      ) : null,
+    // The Deck Studio's film plays in the hero now (demo-media "deck", 2026-10-19), so no landing renders
+    // its own section (deck-demo-video.tsx, kept to bring back); the key stays in lib/landing-sections.
+    demo: null,
     montage: (g?.montage ?? true) ? <div className="lp-cv lp-cv--montage"><Montage /></div> : null,
     proposals: <div className="lp-cv lp-cv--proposals"><ProposalsSection proposal={g?.proposal} registerHref={register} cta={low} /></div>,
     portal: <div className="lp-cv lp-cv--portal"><PortalSection portal={g?.portal} client={g?.proposal?.client} /></div>,

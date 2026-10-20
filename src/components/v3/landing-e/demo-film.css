@@ -3,15 +3,13 @@
    the film renders, so no other landing is touched. */
 
 /* ── the film ─────────────────────────────────────────────────
-   The shot's app frame, its box shaped before anything has loaded: 4:5
-   across the column on a phone, 16:9 from 640 px. On a desk the frame is
-   no wider than a 16:9 box as tall as the shot it replaces (--film-h, from
-   demo-media.ts), so the hero keeps that landing's height. */
+   The shot's app frame, its box shaped before anything has loaded: 4:5 on
+   a phone, 16:9 from 640 px. How wide the frame is — the whole picture
+   inside the first screen — is hero-fit.css's. */
 .jf-lp .lp-film-fig { margin: 0 auto; }
 .jf-lp .lp-film { position: relative; aspect-ratio: 4 / 5; overflow: hidden; }
 .jf-lp .lp-film-media { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
 @media (min-width: 640px) {
-  .jf-lp .lp-film-fig { max-width: calc(var(--film-h) * 16 / 9); }
   .jf-lp .lp-film { aspect-ratio: 16 / 9; }
 }
 /* The ▶ over the poster when the film waits for a tap (reduced motion, or
