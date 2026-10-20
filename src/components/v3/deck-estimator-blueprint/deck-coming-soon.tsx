@@ -4,12 +4,14 @@
 // it. No data, no client code.
 import Link from "next/link";
 import type { Route } from "next";
-import { isEditionOpen } from "@/lib/editions";
+import { EDITION_FOR_EVERY_ACCOUNT, isEditionOpen } from "@/lib/editions";
 import s from "./deck-studio.module.css";
 
 export function DeckComingSoon() {
   // Coming soon (lib/editions EDITION_OPEN, owner 2026-10-11): said plainly, nothing to buy yet.
   const open = isEditionOpen("deck");
+  // Every account has it since 2026-10-19 (EDITION_FOR_EVERY_ACCOUNT): only an account whose plan has ended lands here.
+  if (open && EDITION_FOR_EVERY_ACCOUNT.deck) return <DeckPlanEnded />;
   return (
     <div className={s.studio}>
       <div className={s.pageHead}>
@@ -42,6 +44,37 @@ export function DeckComingSoon() {
             ) : null}
             <Link className={open ? s.btn : `${s.btn} ${s.btnPrimary}`} href={"/dashboard/advanced-ai" as Route}>
               Price a deck with Smart Proposal
+            </Link>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** Every plan includes the Deck estimator; this account's plan has ended, so the way back is a plan. */
+function DeckPlanEnded() {
+  return (
+    <div className={s.studio}>
+      <div className={s.pageHead}>
+        <div>
+          <div className={s.kicker}>Automation · Estimating</div>
+          <h1 className={s.pageTitle}>Deck estimator</h1>
+        </div>
+      </div>
+      <section className={`${s.card} ${s.soonCard}`} aria-label="Included in every plan">
+        <div className={s.head}>
+          <div>
+            <div className={s.cardTitle}>Included in every plan</div>
+            <div className={s.cardSub}>Your plan has ended — pick a plan and the Deck estimator opens with it, your drafts where you left them.</div>
+          </div>
+          <span className={`${s.stamp} ${s.stampWarn}`}>Plan ended</span>
+        </div>
+        <div className={s.soonBody}>
+          <p>Size a deck, choose what it is built from, and the estimator frames it from the building code&apos;s deck tables, stands it up in 3D and prices the material package and the labor.</p>
+          <div className={s.soonActs}>
+            <Link className={`${s.btn} ${s.btnPrimary}`} href={"/dashboard/upgrade" as Route} data-deck-offer="plans">
+              See the plans
             </Link>
           </div>
         </div>

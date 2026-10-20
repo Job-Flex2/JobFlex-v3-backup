@@ -114,8 +114,21 @@ export const EDITION_IDS: readonly EditionId[] = ["platform", "deck"];
  *   · the admins' preview stays (lib/deck/access), and an account already
  *     ON the edition's own plan keeps it — that was bought.
  * Set it to true to open the edition: every rule goes back to selling it.
+ * OPENED 2026-10-19 (owner: "now you can make deck estimator available to users").
  */
-export const EDITION_OPEN: Record<EditionId, boolean> = { platform: true, deck: false };
+export const EDITION_OPEN: Record<EditionId, boolean> = { platform: true, deck: true };
+
+/**
+ * EVERY ACCOUNT HAS IT (owner, 2026-10-19: the Deck estimator for every
+ * account, trial and paid, like the other estimators). An open edition marked
+ * here is held by every account whose plan has not lapsed — no plan, feature
+ * line or custom page needed — so the studio's sidebar row, the New estimate
+ * card, the deck door and the workspace switch open for all. Its own plan
+ * (Deck Studio, $89) still sells on the deck landing as the deck-only
+ * workspace when it is on sale in /admin/plans. Lapsed accounts get nothing,
+ * as with every other estimator.
+ */
+export const EDITION_FOR_EVERY_ACCOUNT: Record<EditionId, boolean> = { platform: true, deck: true };
 export const isEditionOpen = (edition: EditionId): boolean => EDITION_OPEN[edition];
 
 /** A catalog plan that is a closed edition's own: not on sale while it is coming soon. */
@@ -157,8 +170,9 @@ export interface AccessFacts {
   customPages: readonly string[] | null;
 }
 
-/** The edition is open to the account: its own plan, a plan whose features name it, or the custom plan's page. */
-export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): boolean {
+/** The edition is open to the account: every account when it is for every account; else its own plan, a plan
+ *  whose features name it, or the custom plan's page. */
+export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition), everyone: boolean = EDITION_FOR_EVERY_ACCOUNT[edition]): boolean {
   if (edition === "platform") return true;
   if (facts.lapsed) return false;
   const e = EDITIONS[edition];
@@ -166,6 +180,8 @@ export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open
   if (isEditionPlan(facts.planSlug, edition)) return true;
   // Coming soon: a feature line or the custom plan's page open nothing yet.
   if (!open) return false;
+  // Open to every account whose plan runs (2026-10-19).
+  if (everyone) return true;
   const words = facts.features.map((f) => f.toLowerCase());
   if (words.some((f) => e.featureWords.some((w) => f.includes(w)))) return true;
   return !!e.customPage && !!facts.customPages?.includes(e.customPage);
@@ -177,8 +193,8 @@ export function editionOnly(facts: AccessFacts, edition: EditionId = "deck"): bo
 }
 
 /** Both workspaces are open to the account, so a switch is worth drawing. */
-export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("deck")): boolean {
-  return hasEdition(facts, "deck", open) && !editionOnly(facts, "deck");
+export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("deck"), everyone: boolean = EDITION_FOR_EVERY_ACCOUNT.deck): boolean {
+  return hasEdition(facts, "deck", open, everyone) && !editionOnly(facts, "deck");
 }
 
 /**
@@ -186,9 +202,9 @@ export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("dec
  * edition alone; else the door the browser chose when the account may use
  * it; else the whole platform.
  */
-export function workspaceFor(facts: AccessFacts, door: Door | null, open: boolean = isEditionOpen("deck")): Workspace {
+export function workspaceFor(facts: AccessFacts, door: Door | null, open: boolean = isEditionOpen("deck"), everyone: boolean = EDITION_FOR_EVERY_ACCOUNT.deck): Workspace {
   if (editionOnly(facts, "deck")) return "deck";
-  if (door === "deck" && hasEdition(facts, "deck", open)) return "deck";
+  if (door === "deck" && hasEdition(facts, "deck", open, everyone)) return "deck";
   return "platform";
 }
 
