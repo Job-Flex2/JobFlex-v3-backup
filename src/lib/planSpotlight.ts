@@ -16,6 +16,8 @@
 // beside the trade; the signup writes it on the company (SyncState, no
 // schema change), so the Subscription page keeps marking it for the trial.
 
+import { deckAddonPriceWords } from "@/lib/deckAddon";
+
 export type SpotlightTool = "roof" | "hvac" | "fence" | "smart" | "blueprint" | "aidesk" | "deck";
 
 export const SPOTLIGHT_TOOLS: readonly SpotlightTool[] = ["roof", "hvac", "fence", "smart", "blueprint", "aidesk", "deck"];
@@ -88,14 +90,15 @@ export function withSpotlightFirst(rows: readonly string[], tool: SpotlightTool 
   return [hit, ...rows.filter((r) => r !== hit)];
 }
 
-/** Tools every plan includes whatever its feature lines say: the Deck Studio since 2026-10-19 (lib/editions
- *  EDITION_FOR_EVERY_ACCOUNT — every account has the Deck estimator). */
-const IN_EVERY_PLAN: ReadonlySet<SpotlightTool> = new Set<SpotlightTool>(["deck"]);
+/** Tools sold as an add-on to any plan rather than by a plan's feature line: the Deck Studio (owner, 2026-10-19 —
+ *  the free trial holds it, then $49/month on the plan; lib/deckAddon). */
+const ADD_ON: Partial<Record<SpotlightTool, string>> = { deck: `the trial includes it, then it's ${deckAddonPriceWords("MONTH")} on any plan` };
 
 /** The line over the cards. */
 export function spotlightLine(tool: SpotlightTool, listed: boolean): string {
   const def = SPOTLIGHT[tool];
-  if (!listed && IN_EVERY_PLAN.has(tool)) return `You came for ${def.the} — every plan includes it.`;
+  const addOn = ADD_ON[tool];
+  if (!listed && addOn) return `You came for ${def.the} — ${addOn}.`;
   return listed ? `You came for ${def.the} — it's marked on every plan below.` : `You came for ${def.the} — it comes with every plan's trial; ask us which plan carries it.`;
 }
 

@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { createWheelMotion, wheelPixels } from "@/lib/smooth-wheel";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Maximize2, Minimize2, Plus, RotateCcw, Send, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Lock, Maximize2, Minimize2, Plus, RotateCcw, Send, X } from "lucide-react";
 import { resolveMarket, parseStateZip, type MarketSnapshot } from "@/lib/fence/market";
 import { DECKING, DECKING_BRAND_LABEL, DECKING_BRAND_ORDER, DECKING_FAMILY_LABEL, DECKING_FAMILY_ORDER, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, treatedDecking, wallType, type DeckingFamily, type DeckingProduct } from "@/lib/deck/catalog";
 import { regionalPicks, regionalWords } from "@/lib/deck/regional";
@@ -106,6 +106,7 @@ import { DeckKindPicker } from "@/components/v3/deck-estimator-blueprint/deck-ki
 import { DeckPlan, type PlanEdgeHit, nearestStairEdge } from "@/components/v3/deck-estimator-blueprint/deck-plan";
 import { Answers, CUSTOM, CUSTOM_LABEL, CustomBox, Field, FieldScope, More, NameInput, NumberInput, Scope, Seg, Stepper, Toggle, ago, cx, feetText, intText, money, parseFeet, parseInches, priceShow, priceText, type FieldScopeValue } from "./deck-v1-parts";
 import { DeckV1Send } from "./deck-v1-send";
+import { DeckAddonDialog, DeckPreviewBanner } from "@/components/v3/deck-addon/deck-addon";
 import { PHOTO_ENABLED, PhotoFileInput, PhotoSection, PhotoTools, PhotoViewBox, PhotoWhere, useDeckPhoto, type V1View } from "./deck-v1-photo";
 import "./deck-variant-1.css";
 
@@ -233,8 +234,13 @@ export interface OpenedDesign {
 
 const DeckKindPickerView = React.memo(DeckKindPicker);
 
-export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId, opened = null }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null }) {
+export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId, opened = null, preview = false, trialEndsAt = null }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null; preview?: boolean; trialEndsAt?: string | null }) {
   const router = useRouter();
+  // THE PREVIEW (owner, 2026-10-19): an account whose plan runs without Deck Studio designs here freely; every save,
+  // send and print opens the add-on's dialog instead (components/v3/deck-addon; the server refuses them too —
+  // actions/deckEstimator gate). Nothing is saved to the server; the design keeps a copy in this browser.
+  const [addonAsk, setAddonAsk] = React.useState<string | null>(null);
+  const askAddon = React.useCallback((why: string) => setAddonAsk(why), []);
   const [address, setAddress] = React.useState(initialAddress ?? "");
   const [addressDraft, setAddressDraft] = React.useState(initialAddress ?? "");
   const market: MarketSnapshot = React.useMemo(() => {
@@ -723,7 +729,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [actAt, setActAt] = React.useState<"top" | "bottom">("bottom");
   const behind = !!linked && designSig !== proposalSig;
   /** The save's state in words, as the old studio said it (a draft of a saved proposal says so). */
-  const saveWords = saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `${linked ? "Draft saved" : "Saved"} ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : linked ? `Opened from ${linked.ref}` : "";
+  const saveWords = preview ? "Preview — not saved" : saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `${linked ? "Draft saved" : "Saved"} ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : linked ? `Opened from ${linked.ref}` : "";
   // THE CLIENT'S RETURN: a design a client sent back (their words ride over it), and returns nobody has opened yet.
   const [fromClient, setFromClient] = React.useState<ReturnedClientDesign | null>(opened?.client ?? null);
   const clientToken = fromClient?.token ?? null;
@@ -776,6 +782,15 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   }, []);
   const inboxNew = inbox.filter((l) => l.token !== clientToken && !inboxSeen.has(`${l.token}:${l.sentAt ?? ""}`));
   const saveNow = React.useCallback(async () => {
+    if (preview) {
+      // The preview keeps this browser's copy only: the server copy is Deck Studio's.
+      try {
+        localStorage.setItem("jf-deck-draft", JSON.stringify({ design, address, at: Date.now() }));
+      } catch {
+        /* nothing else to keep it in */
+      }
+      return;
+    }
     setSaveState("saving");
     try {
       localStorage.setItem("jf-deck-draft", JSON.stringify({ design, address, at: Date.now() }));
@@ -793,7 +808,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       // No connection: the next change tries again.
       setSaveState("failed");
     }
-  }, [design, address, draftId, draftTitle, linkedId, clientToken]);
+  }, [design, address, draftId, draftTitle, linkedId, clientToken, preview]);
   React.useEffect(() => {
     if (!dirty.current) return;
     const t = setTimeout(() => void saveNow(), 1500);
@@ -883,6 +898,10 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   });
   /** Makes the proposal and opens it; false when it could not (the error shows in the package section). */
   const convert = async (): Promise<boolean> => {
+    if (preview) {
+      askAddon("Make the proposal with Deck Studio");
+      return true;
+    }
     setActAt("bottom");
     setBusy("convert");
     setError(null);
@@ -903,6 +922,10 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   };
   const update = async () => {
     if (!linked) return;
+    if (preview) {
+      askAddon("Update the proposal with Deck Studio");
+      return;
+    }
     setBusy("update");
     setError(null);
     setConfirmAt(null);
@@ -923,6 +946,10 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     setBusy(false);
   };
   const askUpdate = (where: "top" | "bottom") => {
+    if (preview) {
+      askAddon("Update the proposal with Deck Studio");
+      return;
+    }
     setActAt(where);
     setError(null);
     if (linked?.seen) setConfirmAt(where);
@@ -965,6 +992,10 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const draftBook = React.useMemo(() => sanitizeDeckRateBook(Object.fromEntries(Object.entries(drafts2).filter(([, v]) => v.trim() !== "").map(([k, v]) => [k, Number(v)]))), [drafts2]);
   const unsaved = JSON.stringify(draftBook) !== JSON.stringify(book);
   const saveBook = async () => {
+    if (preview) {
+      askAddon("Save your prices with Deck Studio");
+      return;
+    }
     setSaving("saving");
     const res = await saveDeckRateBook(draftBook).catch(() => ({ ok: false as const, error: "" }));
     if (res.ok) {
@@ -2496,12 +2527,12 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </label>
         {error && actAt === "bottom" ? <p className="v1-call v1-call-bad" role="alert">{error}</p> : null}
         <div className="v1-finish-acts">
-          <button type="button" className="v1-btn" onClick={() => void saveNow()} disabled={saveState === "saving"} data-v1-save-draft>
-            <FileText size={16} strokeWidth={2.5} aria-hidden="true" />
+          <button type="button" className="v1-btn" onClick={() => (preview ? askAddon("Save drafts with Deck Studio") : void saveNow())} disabled={saveState === "saving"} data-v1-save-draft>
+            {preview ? <Lock size={15} strokeWidth={2.5} aria-hidden="true" /> : <FileText size={16} strokeWidth={2.5} aria-hidden="true" />}
             {saveState === "saving" ? "Saving…" : "Save draft"}
           </button>
-          <button type="button" className={cx("v1-btn", sendOpen && "is-on")} aria-expanded={sendOpen} onClick={() => setSendOpen((v) => !v)} data-v1-send>
-            <Send size={16} strokeWidth={2.5} aria-hidden="true" />
+          <button type="button" className={cx("v1-btn", sendOpen && "is-on")} aria-expanded={sendOpen} onClick={() => (preview ? askAddon("Send the design to your client with Deck Studio") : setSendOpen((v) => !v))} data-v1-send>
+            {preview ? <Lock size={15} strokeWidth={2.5} aria-hidden="true" /> : <Send size={16} strokeWidth={2.5} aria-hidden="true" />}
             Send to client{inbox.length ? <span className="v1-count">{inbox.length}</span> : null}
           </button>
           {linked && !linked.lock ? (
@@ -2515,6 +2546,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
             </>
           ) : (
             <button type="button" className="v1-btn v1-btn-primary v1-btn-big" disabled={!!busy} onClick={convert} data-deck-convert>
+              {preview ? <Lock size={16} strokeWidth={2.5} aria-hidden="true" /> : null}
               {busy === "convert" ? "Making the proposal…" : linked ? "Save as a new proposal" : summary.fail ? "Make proposal anyway" : "Make proposal"}
             </button>
           )}
@@ -2586,17 +2618,17 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </div>
         <div className="v1-row-acts">
           {yardHref ? (
-            <a className="v1-btn v1-btn-sm" href={yardHref} target="_blank" rel="noopener" data-deck-materials="yard">
+            <a className="v1-btn v1-btn-sm" href={yardHref} target="_blank" rel="noopener" onClick={(e) => { if (preview) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-materials="yard">
               List for the lumber yard <ExternalLink size={14} aria-hidden="true" />
             </a>
           ) : null}
           {installerHref ? (
-            <a className="v1-btn v1-btn-sm" href={installerHref} target="_blank" rel="noopener" data-deck-materials="installer">
+            <a className="v1-btn v1-btn-sm" href={installerHref} target="_blank" rel="noopener" onClick={(e) => { if (preview) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-materials="installer">
               For the installer to buy <ExternalLink size={14} aria-hidden="true" />
             </a>
           ) : null}
           {permitHref ? (
-            <a className="v1-btn v1-btn-sm" href={permitHref} target="_blank" rel="noopener" data-deck-permit>
+            <a className="v1-btn v1-btn-sm" href={permitHref} target="_blank" rel="noopener" onClick={(e) => { if (preview) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-permit>
               Permit sheet <ExternalLink size={14} aria-hidden="true" />
             </a>
           ) : null}
@@ -2812,6 +2844,11 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         }}>
           <label className="v1-field"><span className="v1-lbl">Job address</span><input className="v1-in" value={addressDraft} placeholder="Street, city, state ZIP" autoComplete="street-address" onChange={(event) => setAddressDraft(event.target.value)} onBlur={() => { if (addressDraft.trim() !== address) commitAddress(addressDraft); }} /></label>
         </form>
+        {preview ? (
+          <DeckPreviewBanner mode="preview" onAdd={() => askAddon("Add Deck Studio to your plan")} />
+        ) : trialEndsAt !== null ? (
+          <DeckPreviewBanner mode="trial" trialEndsAt={trialEndsAt || null} onAdd={() => askAddon("Keep Deck Studio after your trial")} />
+        ) : null}
       </header>
 
       {inboxNew.length ? (
@@ -2922,7 +2959,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
               {/* The proposal from anywhere in the form (owner, 2026-10-19: "add second button save as proposal"); a
                   failure glides to the package section, where its error is shown. */}
               <button type="button" className="v1-btn v1-foot-save" disabled={!!busy} onClick={async () => { if (!(await convert())) go("package"); }} data-v1-foot-convert>
-                <FileText size={16} strokeWidth={2.5} aria-hidden="true" />
+                {preview ? <Lock size={15} strokeWidth={2.5} aria-hidden="true" /> : <FileText size={16} strokeWidth={2.5} aria-hidden="true" />}
                 {busy === "convert" ? "Saving…" : linked ? "Save as new proposal" : "Save as proposal"}
               </button>
               <button type="button" className="v1-btn v1-btn-primary" onClick={() => go("package")}>
@@ -3099,6 +3136,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           </div>
         </aside>
       </div>
+      <DeckAddonDialog open={addonAsk !== null} why={addonAsk} onClose={() => setAddonAsk(null)} />
     </div>
   );
 }

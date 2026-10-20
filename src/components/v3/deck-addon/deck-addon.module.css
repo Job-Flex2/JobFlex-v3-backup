@@ -1,0 +1,107 @@
+/* THE DECK STUDIO ADD-ON (2026-10-19): the dialog that adds it, the studio's preview banner, the Subscription
+   card. Light theme only, the blueprint's own tokens (ink lines, the blueprint blue), with plain fallbacks.
+   Every rule hangs off `.da` on the piece's root: the studio's own reset (`.jf-deck-v1 *`, `.jf-deck-v1 button`)
+   would otherwise win over a single class — margin and padding gone, buttons bare, the dialog off-centre. */
+
+.da.dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 2px solid var(--ink, #111);
+  border-radius: var(--r-sm, 4px);
+  background: #fff;
+  color: var(--ink, #111);
+  box-shadow: 6px 6px 0 var(--ink, #111);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  overflow: auto;
+}
+.da.dialog::backdrop { background: rgba(17, 17, 17, 0.42); }
+.da .body { display: grid; gap: 14px; padding: 22px 22px 20px; }
+.da .kicker { font-size: 11.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-ink, #1d4ed8); }
+.da .title { margin: 0; font-size: 22px; font-weight: 900; line-height: 1.15; letter-spacing: -0.01em; text-transform: uppercase; }
+.da .lead { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-soft, #333); }
+.da .list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.4; }
+.da .list li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
+.da .tick { width: 16px; height: 16px; margin-top: 2px; color: var(--accent, #2563eb); }
+.da .price {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--ink, #111);
+  border-radius: var(--r-sm, 4px);
+  background: var(--paper-deep, #f6f5f1);
+}
+.da .priceBig { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.da .priceBig small { font-size: 13px; font-weight: 700; color: var(--ink-soft, #333); }
+.da .priceNote { font-size: 13px; line-height: 1.45; color: var(--ink-soft, #333); }
+.da .error { margin: 0; padding: 9px 12px; border: 1.5px solid var(--rose, #e11d48); border-radius: var(--r-sm, 4px); background: color-mix(in srgb, var(--rose, #e11d48) 6%, #fff); font-size: 13.5px; }
+.da .note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-soft, #333); }
+.da .acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+.da .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1.5px solid var(--ink, #111);
+  border-radius: var(--r-sm, 4px);
+  background: #fff;
+  color: var(--ink, #111);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+}
+.da .btn:disabled { opacity: 0.55; cursor: default; }
+.da .btnPrimary { border-color: var(--accent, #2563eb); background: var(--accent, #2563eb); color: #fff; }
+.da .btnQuiet { border-color: transparent; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+.da .btn:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }
+
+/* The studio's preview banner: one band across the top of the studio. */
+.da.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--accent, #2563eb);
+  border-radius: var(--r-sm, 4px);
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, #fff);
+}
+.da .bannerText { flex: 1 1 320px; min-width: 0; font-size: 14px; line-height: 1.45; }
+.da .stamp {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border: 1.5px solid var(--accent, #2563eb);
+  border-radius: 3px;
+  color: var(--accent-ink, #1d4ed8);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.da.trialLine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13.5px; line-height: 1.45; color: var(--ink-soft, #333); }
+.da.trialLine button { padding: 0; border: 0; background: none; color: var(--accent-ink, #1d4ed8); font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* The Subscription page's card. */
+.da.card { display: grid; gap: 12px; padding: 18px 20px; border: 1.5px solid var(--ink, #111); border-radius: var(--r-sm, 4px); background: #fff; }
+.da .cardHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.da .cardTitle { margin: 0; font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; }
+.da .cardState { font-size: 13px; font-weight: 800; }
+.da .cardOn { color: var(--emerald, #047857); }
+
+@media (max-width: 768px) {
+  .da .body { padding: 18px 16px 16px; }
+  .da .title { font-size: 19px; }
+  .da .acts .btn { flex: 1 1 100%; min-height: 46px; }
+  .da.banner .btn { flex: 1 1 100%; min-height: 44px; }
+}

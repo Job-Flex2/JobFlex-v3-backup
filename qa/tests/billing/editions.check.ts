@@ -4,7 +4,8 @@
 // switch, where a sign-in lands, what the deck workspace's sidebar keeps and
 // drops, and the sign-up link each door writes. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/billing/editions.check.ts
-import { EDITIONS, EDITION_FOR_EVERY_ACCOUNT, EDITION_OPEN, canSwitch, editionOnly, featureLineForSale, hasEdition, homeFor, isEditionPlan, navAllowed, parseDoor, planComingSoon, registerHref, unlockedByEdition, upgradeTargetFrom, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
+import { EDITIONS, EDITION_FOR_EVERY_ACCOUNT, EDITION_IN_TRIAL, EDITION_OPEN, canSwitch, editionLevel, editionOnly, featureLineForSale, hasEdition, homeFor, isEditionPlan, navAllowed, parseDoor, planComingSoon, registerHref, unlockedByEdition, upgradeTargetFrom, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
+import { DECK_ADDON_CENTS, addonHeld, deckAddonCents, deckAddonPriceWords, isDeckAddonLine, parseDeckAddonRecord, planLine, planLines } from "../../../src/lib/deckAddon";
 import { annualDeal, dealWords, savedWords } from "../../../src/lib/planDeal";
 import { NAV_SECTIONS, navSectionsFor, flattenNavItems } from "../../../src/components/v3/blueprint-shell/nav-map";
 
@@ -16,8 +17,9 @@ const check = (name: string, ok: boolean, extra = "") => {
 const facts = (over: Partial<AccessFacts>): AccessFacts => ({ planSlug: "PROFESSIONAL", lapsed: false, features: [], customPages: null, ...over });
 
 console.log("── the door cookie");
-// 2026-10-11 the Deck Studio went COMING SOON (EDITION_OPEN.deck false); 2026-10-19 it opened for EVERY
-// account (EDITION_FOR_EVERY_ACCOUNT). The checks of the plan-based rules pass the flags (open, everyone=false);
+// 2026-10-11 the Deck Studio went COMING SOON (EDITION_OPEN.deck false); 2026-10-19 18:05 it opened for EVERY
+// account (EDITION_FOR_EVERY_ACCOUNT); the same evening it became the trial's and the $49/month add-on's, a preview
+// for every other running plan. The checks of the plan-based rules pass the flags (open, everyone=false);
 // the "as shipped" block at the end holds what is live today.
 check("deck, platform and jobflex parse; junk does not (once open)", parseDoor("deck", true) === "deck" && parseDoor(" DECK ", true) === "deck" && parseDoor("platform") === "platform" && parseDoor("jobflex") === "platform" && parseDoor("roof") === null && parseDoor(null) === null);
 
@@ -84,14 +86,31 @@ console.log("── WHILE IT WAS COMING SOON (2026-10-11 → 2026-10-19), the fl
 check("closed: no door, a feature line or the custom page opens nothing, the deck plan's own holders keep it", parseDoor("deck", false) === null && !hasEdition(proWithDeck, "deck", false) && !hasEdition(customWithPage, "deck", false) && !hasEdition(facts({}), "deck", false) && !canSwitch(proWithDeck, false) && workspaceFor(proWithDeck, "deck", false) === "platform" && hasEdition(deckPlan, "deck", false) && upgradeTargetFrom(catalog, "deck", false) === null);
 check("closed: its own plans are not on sale; a feature line naming it says coming soon, once", planComingSoon("deck-studio", false) && planComingSoon("DECK", false) && planComingSoon("deck-studio-yearly", false) && !planComingSoon("professional", false) && !planComingSoon(null, false) && featureLineForSale("Deck Studio — 3D design", false) === "Deck Studio — 3D design — coming soon" && featureLineForSale("Includes the deck estimator", false) === "Includes the deck estimator — coming soon" && featureLineForSale("Deck Studio (coming soon)", false) === "Deck Studio (coming soon)" && featureLineForSale("Unlimited proposals", false) === "Unlimited proposals");
 
-console.log("── AS SHIPPED: open, and every account has it (owner, 2026-10-19)");
-check("the edition is open and for every account; the platform too", EDITION_OPEN.deck === true && EDITION_OPEN.platform === true && EDITION_FOR_EVERY_ACCOUNT.deck === true);
-check("every account whose plan runs holds it — a plain Professional, a trial, the custom plan without the page, no feature line", hasEdition(facts({})) && hasEdition(facts({ planSlug: "starter" })) && hasEdition(facts({ planSlug: "custom", customPages: ["calendar"] })) && hasEdition(proWithDeck) && hasEdition(deckPlan));
-check("a lapsed plan holds nothing, the deck plan's included", !hasEdition(facts({ lapsed: true })) && !hasEdition(facts({ planSlug: "deck-studio", lapsed: true })) && !hasEdition(facts({ planSlug: "custom", customPages: ["deck-estimator"], lapsed: true })));
-check("the deck door opens the studio's workspace for any account; the platform door the whole map; the deck plan the studio only", parseDoor("deck") === "deck" && workspaceFor(facts({}), "deck") === "deck" && workspaceFor(facts({}), "platform") === "platform" && workspaceFor(facts({}), null) === "platform" && workspaceFor(deckPlan, "platform") === "deck");
-check("so every platform account may switch; the deck plan's own may not (it is the studio alone); a lapsed one may not", canSwitch(facts({})) && canSwitch(proWithDeck) && !canSwitch(deckPlan) && !canSwitch(facts({ lapsed: true })));
+console.log("── FOR EVERY ACCOUNT (2026-10-19 18:05 → the same evening), the flag passed");
+check("open to everyone: every running plan holds it; a lapsed one does not", hasEdition(facts({}), "deck", true, true) && hasEdition(facts({ planSlug: "custom", customPages: ["calendar"] }), "deck", true, true) && !hasEdition(facts({ lapsed: true }), "deck", true, true) && canSwitch(facts({}), true, true));
+
+console.log("── AS SHIPPED: open; the trial, the add-on or a plan carrying it holds it; every other running plan previews it (owner, 2026-10-19)");
+check("the edition is open, not for every account, held in the trial; the platform is everyone's", EDITION_OPEN.deck === true && EDITION_OPEN.platform === true && EDITION_FOR_EVERY_ACCOUNT.deck === false && EDITION_IN_TRIAL.deck === true);
+check("a plain paid Professional does not hold it — it previews it", !hasEdition(facts({})) && editionLevel(facts({})) === "preview" && editionLevel(facts({ planSlug: "starter" })) === "preview" && editionLevel(facts({ planSlug: "custom", customPages: ["calendar"] })) === "preview");
+check("the add-on holds it; so does the free trial; so do its own plan, a plan naming it and the custom plan's old page", hasEdition(facts({ addon: true })) && hasEdition(facts({ trialing: true })) && hasEdition(deckPlan) && hasEdition(proWithDeck) && hasEdition(customWithPage) && editionLevel(facts({ addon: true })) === "full" && editionLevel(facts({ trialing: true })) === "full");
+check("a lapsed plan holds nothing and previews nothing — the add-on and the trial included", editionLevel(facts({ lapsed: true })) === "none" && editionLevel(facts({ lapsed: true, addon: true })) === "none" && editionLevel(facts({ lapsed: true, trialing: true })) === "none" && editionLevel(facts({ planSlug: "deck-studio", lapsed: true })) === "none");
+check("while it is coming soon there is no preview: closed is closed", editionLevel(facts({}), "deck", false) === "none" && editionLevel(deckPlan, "deck", false) === "full");
+check("the trial's hold can be switched off: then a trial previews it", editionLevel(facts({ trialing: true }), "deck", true, false, false) === "preview");
+check("the deck door opens the studio's workspace only for a holder; a preview works on the platform map", workspaceFor(facts({ addon: true }), "deck") === "deck" && workspaceFor(facts({ trialing: true }), "deck") === "deck" && workspaceFor(facts({}), "deck") === "platform" && workspaceFor(deckPlan, "platform") === "deck");
+check("holders with both workspaces may switch; a preview, the deck plan's own and a lapsed one may not", canSwitch(facts({ addon: true })) && canSwitch(facts({ trialing: true })) && canSwitch(proWithDeck) && !canSwitch(facts({})) && !canSwitch(deckPlan) && !canSwitch(facts({ lapsed: true, addon: true })));
 check("its own plans sell and feature lines read as written", !planComingSoon("deck-studio") && !planComingSoon("DECK") && featureLineForSale("Deck Studio — 3D design") === "Deck Studio — 3D design" && featureLineForSale("Includes the deck estimator") === "Includes the deck estimator");
-check("the upgrade target is still the dearest plan naming it (the upgrade page says every plan carries it)", upgradeTargetFrom(catalog)?.slug === "professional");
+check("the upgrade target is still the dearest plan naming it", upgradeTargetFrom(catalog)?.slug === "professional");
+
+console.log("── THE ADD-ON (lib/deckAddon)");
+check("$49 a month; $490 a year (ten months for twelve, the custom plan's rule)", DECK_ADDON_CENTS === 4900 && deckAddonCents("MONTH") === 4900 && deckAddonCents("YEAR") === 49000 && deckAddonPriceWords("MONTH") === "$49/month" && deckAddonPriceWords("YEAR") === "$490/year");
+const planItem = { id: "si_plan", price: { id: "price_pro", metadata: { planSlug: "professional" } } };
+const addonItem = { id: "si_deck", price: { id: "price_deck", metadata: { jfKind: "deck-addon", interval: "MONTH" } } };
+const pageItem = { id: "si_page", price: { id: "price_page", metadata: { jfKind: "custom-page" } } };
+check("the add-on's line is told by its price's kind; the plan's line is never the add-on, whichever comes first", isDeckAddonLine(addonItem) && !isDeckAddonLine(planItem) && !isDeckAddonLine(pageItem) && !isDeckAddonLine(null) && planLine([addonItem, planItem])?.id === "si_plan" && planLine([planItem, addonItem])?.id === "si_plan" && planLines([planItem, pageItem, addonItem]).map((i) => i.id).join() === "si_plan,si_page");
+check("a line that is all there is stays the plan's line (nothing else to read)", planLine([addonItem])?.id === "si_deck" && planLine([]) === undefined);
+const rec = parseDeckAddonRecord(JSON.stringify({ subId: "sub_1", itemId: "si_deck", interval: "MONTH", since: "2026-10-19T00:00:00Z" }));
+check("a record reads back; a broken one reads as none", rec?.subId === "sub_1" && rec.itemId === "si_deck" && parseDeckAddonRecord("{") === null && parseDeckAddonRecord(JSON.stringify({ subId: "sub_1" })) === null && parseDeckAddonRecord(null) === null);
+check("the record holds only on the subscription it was bought on", addonHeld(rec, "sub_1") && !addonHeld(rec, "sub_2") && !addonHeld(rec, null) && !addonHeld(null, "sub_1"));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

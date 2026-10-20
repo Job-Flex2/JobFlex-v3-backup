@@ -129,8 +129,9 @@ export const ENGINES: Engine[] = [
   {
     // A card since 2026-10-15 (it was a queued stub, then a stub that said
     // "coming soon"). The picker decides per account (view.unlocked): since
-    // 2026-10-19 every account whose plan runs has it (lib/editions
-    // EDITION_FOR_EVERY_ACCOUNT), so it is live for all of them.
+    // 2026-10-19 it opens for every account whose plan runs — the whole studio
+    // for the trial, the add-on and the plans carrying it, a preview that
+    // saves nothing for the rest (lib/editions editionLevel).
     id: "deck",
     no: "05",
     title: "Deck Studio",
