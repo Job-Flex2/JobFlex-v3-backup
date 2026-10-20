@@ -1,17 +1,31 @@
 /* THE FIRST SCREEN AND WHAT FOLLOWS IT (2026-10-19) — hero.tsx and
    hero-proof.tsx, every landing alike. The order, desk and phone the same:
-   one headline, the film (or the product shot) whole inside the first
-   screen, the one button and its line; then on paper the numbers, the
-   reviews and the description. Every rule hangs on an `lp-fold`, `lp-proof`
-   or `lp-stat`/`lp-review`/`lp-point` class only these render. */
+   one headline, the film (or the product shot) and the one button filling
+   the first screen; its line under the fold; then on paper the description
+   with its figures and the reviews. Every rule hangs on an `lp-fold`,
+   `lp-proof`, `lp-review` or `lp-pitch` class only these render. */
 
 .jf-lp {
   /* The 1px rule of the dashboard's Blueprint pages (--hair there), on the landing. */
   --hair: var(--ink-line, rgba(10, 10, 10, 0.12));
 }
 
-/* ── the fold ─────────────────────────────────────────────── */
-.jf-lp .lp-fold { padding-top: 20px; }
+/* ── the fold ───────────────────────────────────────────────
+   The first screen ends on the button (hero.tsx FIT_SCRIPT): the screen
+   box is at least the screen's height from its own top, less the foot
+   margin under the button, and its two gaps — headline to picture, picture
+   to button — share out what the picture leaves, from a minimum up to a
+   cap (a very tall phone keeps sane gaps; the room left goes under the
+   button). */
+.jf-lp .lp-fold-screen {
+  --lp-fold-foot: 16px;
+  display: flex;
+  flex-direction: column;
+  padding-top: 20px;
+  min-height: calc(100vh - var(--lp-fold-top, 64px) - var(--lp-fold-foot));
+  min-height: calc(100svh - var(--lp-fold-top, 64px) - var(--lp-fold-foot));
+}
+.jf-lp .lp-fold-gap { flex: 1 1 0; min-height: 16px; max-height: 96px; }
 .jf-lp .lp-fold-h1 {
   margin: 0 auto;
   max-width: 24ch;
@@ -21,11 +35,10 @@
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
-.jf-lp .lp-fold-vis { margin-top: 14px; }
 @media (min-width: 640px) {
-  .jf-lp .lp-fold { padding-top: 28px; }
+  .jf-lp .lp-fold-screen { --lp-fold-foot: 24px; padding-top: 28px; }
+  .jf-lp .lp-fold-gap { min-height: 20px; max-height: 120px; }
   .jf-lp .lp-fold-h1 { max-width: none; font-size: clamp(32px, 3.5vw, 54px); line-height: 1.04; }
-  .jf-lp .lp-fold-vis { margin-top: 20px; }
 }
 
 /* The film's line over it, a size down from the line under the button. */
@@ -34,76 +47,45 @@
   .jf-lp .lp-hero .lp-film-cap { font-size: 11px; }
 }
 
-/* THE FILM WHOLE ON SCREEN. --lp-fit-top is where the picture starts, in
-   page px (hero.tsx measures it as the page loads); the frame is as wide as
-   lets the picture — 4:5 on a phone, 16:9 from 640 px — end that far above
-   the screen's foot, and never wider than the column. svh: the screen with
-   the browser's bars showing, Safari's and Facebook's in-app alike. The
-   fallback tops are a two-line headline's, for a page whose script never ran. */
+/* THE FILM WHOLE ON SCREEN, THE BUTTON UNDER IT. --lp-fit-top is where the
+   picture starts with the gap above it at its minimum, --lp-fold-rest the
+   gap under it at its minimum, the button and the foot margin (hero.tsx
+   measures both as the page loads). The frame is as wide as lets the
+   picture — 4:5 on a phone, 16:9 from 640 px — and that row fit the screen,
+   and never wider than the column. svh: the screen with the browser's bars
+   showing, Safari's and Facebook's in-app alike. The fallbacks are a
+   two-line headline's, for a page whose script never ran. */
 .jf-lp .lp-fold .lp-film-fig .lp-mock-frame {
   margin-inline: auto;
-  max-width: max(240px, calc((100vh - var(--lp-fit-top, 200px) - 16px) * 4 / 5));
-  max-width: max(240px, calc((100svh - var(--lp-fit-top, 200px) - 16px) * 4 / 5));
+  max-width: max(240px, calc((100vh - var(--lp-fit-top, 200px) - var(--lp-fold-rest, 80px)) * 4 / 5));
+  max-width: max(240px, calc((100svh - var(--lp-fit-top, 200px) - var(--lp-fold-rest, 80px)) * 4 / 5));
 }
 @media (min-width: 640px) {
   .jf-lp .lp-fold .lp-film-fig .lp-mock-frame {
-    max-width: max(360px, calc((100vh - var(--lp-fit-top, 240px) - 24px) * 16 / 9));
-    max-width: max(360px, calc((100svh - var(--lp-fit-top, 240px) - 24px) * 16 / 9));
+    max-width: max(360px, calc((100vh - var(--lp-fit-top, 240px) - var(--lp-fold-rest, 92px)) * 16 / 9));
+    max-width: max(360px, calc((100svh - var(--lp-fit-top, 240px) - var(--lp-fold-rest, 92px)) * 16 / 9));
   }
 }
 
-/* The one button under the picture: a thumb wide on a phone, its own width
-   from 640 px; the line under it (.lp-hero-price) and the homeowner's door. */
-.jf-lp .lp-fold-cta {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  max-width: 26rem;
-  margin: 16px auto 0;
-  padding-bottom: 40px;
-}
-.jf-lp .lp-fold-cta .lp-hero-price { margin-top: 10px; }
+/* The one button: a thumb wide on a phone, its own width from 640 px. */
+.jf-lp .lp-fold-cta { display: flex; flex-direction: column; align-items: stretch; width: 100%; max-width: 26rem; margin: 0 auto; }
 @media (min-width: 640px) {
-  .jf-lp .lp-fold-cta { align-items: center; max-width: none; margin-top: 24px; padding-bottom: 72px; }
+  .jf-lp .lp-fold-cta { align-items: center; max-width: none; }
   .jf-lp .lp-fold-cta .lp-cta { min-width: 20rem; }
 }
+/* Under the fold: the line under the button and the homeowner's door —
+   further down than the foot margin, so neither shows in the first screen. */
+.jf-lp .lp-fold-after { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 28px; padding-bottom: 40px; }
+.jf-lp .lp-fold-after .lp-hero-price { margin-top: 0; }
+@media (min-width: 640px) {
+  .jf-lp .lp-fold-after { margin-top: 36px; padding-bottom: 72px; }
+}
 
-/* ── under the hero: numbers, reviews, description ───────── */
+/* ── under the hero: the description, then the reviews ───── */
 .jf-lp .lp-proof { background: #fff; color: var(--ink, #0a0a0a); padding: 40px 20px 8px; }
 .jf-lp .lp-proof-wrap { max-width: var(--lp-wrap); margin: 0 auto; }
 @media (min-width: 640px) {
   .jf-lp .lp-proof { padding: 72px 24px 24px; }
-}
-
-/* The numbers: flat cards, square corners, a hair frame, no shadow. Two
-   across on a phone (an odd last one takes the row), one row from 640 px. */
-.jf-lp .lp-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.jf-lp .lp-stats--odd > .lp-stat:last-child { grid-column: 1 / -1; }
-.jf-lp .lp-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  padding: 16px 14px;
-  border: 1.5px solid var(--hair);
-  border-radius: 0;
-  background: #fff;
-}
-.jf-lp .lp-stat-n { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; white-space: nowrap; }
-.jf-lp .lp-stat-t { font-size: 14px; line-height: 1.4; color: var(--ink-muted, #555); }
-@media (min-width: 640px) {
-  .jf-lp .lp-stats { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
-  .jf-lp .lp-stats--odd > .lp-stat:last-child { grid-column: auto; }
-  .jf-lp .lp-stat { padding: 24px 22px; gap: 10px; }
-  .jf-lp .lp-stat-n { font-size: clamp(34px, 3.4vw, 46px); }
-  .jf-lp .lp-stat-t { font-size: 15px; }
 }
 
 .jf-lp .lp-proof-block { margin-top: 40px; }
@@ -134,33 +116,54 @@
 .jf-lp .lp-review-name { font-weight: 700; }
 .jf-lp .lp-review-co { color: var(--ink-muted, #555); }
 
-/* The description and its three lines, each after a square tick in the
-   trade estimator's colour (--lp-tick, hero-proof.tsx) — flat, no shadow. */
+/* THE DESCRIPTION (hero-proof.tsx): the pitch as the heading, then three
+   rows — a figure in the trade estimator's colour (--lp-tool) on the left,
+   the line it stands behind on the right. Flat: square corners, a hair
+   frame, the tool's colour as a bar down each row's left edge and a wash
+   behind the block — no shadow. One column on a phone, a row of three from
+   768 px. */
+.jf-lp .lp-pitch {
+  margin-top: 0;
+  padding: 22px 16px 16px;
+  border: 1.5px solid var(--hair);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--lp-tool, var(--accent, #1854a0)) 6%, #fff);
+}
 .jf-lp .lp-pitch-text {
   margin: 0;
-  max-width: 44rem;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  max-width: 46rem;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
   text-wrap: pretty;
 }
-@media (min-width: 640px) {
-  .jf-lp .lp-pitch-text { font-size: clamp(22px, 2.2vw, 28px); line-height: 1.3; }
-}
-.jf-lp .lp-points { display: flex; flex-direction: column; gap: 12px; margin: 20px 0 0; padding: 0; list-style: none; }
-@media (min-width: 768px) {
-  .jf-lp .lp-points { flex-direction: row; flex-wrap: wrap; gap: 14px 32px; margin-top: 24px; }
-}
-.jf-lp .lp-point { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; line-height: 1.35; }
-.jf-lp .lp-tick {
-  flex: none;
+.jf-lp .lp-figs { display: grid; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.jf-lp .lp-fig {
   display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 14px 14px 12px;
+  border: 1.5px solid var(--hair);
+  border-left: 4px solid var(--lp-tool, var(--accent, #1854a0));
   border-radius: 0;
-  background: var(--lp-tick, var(--accent, #1854a0));
+  background: #fff;
+}
+.jf-lp .lp-fig-val { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--lp-tool, var(--accent, #1854a0)); }
+.jf-lp .lp-fig-n { font-size: 30px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; white-space: nowrap; }
+.jf-lp .lp-fig-l { font-size: 12px; line-height: 1.3; color: var(--ink-muted, #555); }
+.jf-lp .lp-fig-t { font-size: 14px; font-weight: 600; line-height: 1.4; }
+@media (min-width: 640px) {
+  .jf-lp .lp-pitch { padding: 32px 28px 28px; }
+  .jf-lp .lp-pitch-text { font-size: clamp(24px, 2.4vw, 32px); }
+  .jf-lp .lp-figs { margin-top: 24px; }
+  .jf-lp .lp-fig-n { font-size: 32px; }
+}
+@media (min-width: 768px) {
+  .jf-lp .lp-figs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .jf-lp .lp-fig { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); }
 }
 
 /* A product shot with no film, scaled to end inside the first screen

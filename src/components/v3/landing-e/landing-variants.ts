@@ -38,9 +38,13 @@ export type LandingVariant = {
   /** The description under the reviews (hero-proof.tsx): two short
    *  sentences on what the trade gets — never "AI analyzes". */
   pitch?: string;
-  /** Three short lines under the description, each after a square tick in
-   *  the trade estimator's colour — only what the estimator really does. */
+  /** Three short lines under the description — only what the estimator
+   *  really does. Each stands beside the figure of the same index in `proof`. */
   points?: [string, string, string];
+  /** The description's figures, one per line of `points` (hero-proof.tsx):
+   *  a big value in the trade estimator's colour and a few words under it.
+   *  Only facts the page already states (PROOF below says where each is from). */
+  proof?: [LandingProof, LandingProof, LandingProof];
   /** One line under the H1. Absent on the default hero, which never had one. */
   sub?: string;
   /** Words on the solid CTA. */
@@ -90,12 +94,44 @@ export type LandingVariant = {
   shotCta?: boolean;
 };
 
+/** A figure beside a line of the description: "0" over "site visits before the estimate". */
+export type LandingProof = { value: string; label: string };
+
+/* THE DESCRIPTION'S FIGURES (2026-10-19) — the facts the landing already
+   states, nothing new:
+   - "0 site visits": the HVAC, roof and fence heroes' own copy ("before the
+     first site visit", "without … driving to the job first");
+   - "< 1 min": the estimator films, address to proposal in 40–44 s
+     (demo-media DEMO_CAPTION);
+   - "90 s": the Deck Studio film's own card, "From the first click to the
+     client's signature, in ninety seconds";
+   - "50 deck boards": lib/deck/catalog DECKING, 50 boards;
+   - "1 app": estimate, proposal, the client's signature and the deposit in
+     one app (the roofing ads' "Address to Signature. One App.", "Get Paid
+     by Stage");
+   - "4 estimators": roof, fence, HVAC and deck, each a tool of its own;
+   - "$40M+": the stats section's "Companies using JobFlex made $40,000,000+". */
+const PROOF = {
+  visits: { value: "0", label: "site visits before the estimate" },
+  minute: { value: "< 1 min", label: "address to proposal in the demo" },
+  deckFilm: { value: "90 s", label: "first click to signature in the demo" },
+  boards: { value: "50", label: "deck boards in the catalog" },
+  oneApp: { value: "1 app", label: "estimate, proposal, signature and payment" },
+  estimators: { value: "4", label: "estimators of their own: roof, fence, HVAC, deck" },
+  made: { value: "$40M+", label: "made by companies using JobFlex" },
+} as const satisfies Record<string, LandingProof>;
+/** An address estimator's: the measure (no visit), the price (the film's minute), the proposal (one app). */
+const ADDRESS_PROOF: [LandingProof, LandingProof, LandingProof] = [PROOF.visits, PROOF.minute, PROOF.oneApp];
+/** A Smart Proposal trade's: no figure of its own yet — the app's. */
+const SMART_PROOF: [LandingProof, LandingProof, LandingProof] = [PROOF.oneApp, PROOF.estimators, PROOF.made];
+
 /** The hero as it shipped on 2026-08-25 — the page with no `?industry=`. */
 export const DEFAULT_LANDING: LandingVariant = {
   h1: ["Turn your trade", "into a business."],
   title: "Turn your trade into a business.",
   pitch: "Start with the first call. Estimate, send proposals, schedule your crew, and get paid in one app.",
   points: ["Estimates & proposals", "Jobs, crew & schedule", "Invoices & payments"],
+  proof: [PROOF.estimators, PROOF.oneApp, PROOF.made],
   primaryCta: "Start free trial",
   showcaseSlide: "smart",
   visual: "dashboard",
@@ -144,6 +180,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Fence Estimates.",
     pitch: "Start with an address. Draw the fence on the lot, price materials and labor, and create a customer-ready proposal.",
     points: ["Draw the fence on the lot line", "Material takeoff & pricing", "Professional proposals"],
+    proof: ADDRESS_PROOF,
     h1Long: true,
     sub: "Enter the project address. JobFlex generates the measurements, materials, labor, pricing, and a complete customer-ready estimate and proposal — in seconds, right from your phone.",
     subEven: true,
@@ -165,6 +202,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Roof Estimates.",
     pitch: "Start with an address. Measure the roof, price materials and labor, and create a customer-ready proposal.",
     points: ["Roof measurements from aerial imagery", "Materials, labor & pricing", "Professional proposals"],
+    proof: ADDRESS_PROOF,
     h1Long: true,
     sub: "Enter an address. JobFlex AI analyzes the property and generates a detailed, customer-ready proposal — roof measurements, materials, labor, pricing, and more — without waiting hours for a report or driving to the job first.",
     primaryCta: "Start free — measure a roof",
@@ -186,6 +224,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Remodel Estimates.",
     pitch: "Start with a description and a photo. Price demo, rough-in, cabinets, tile, fixtures and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Demo, rough-in, cabinets, tile, fixtures and labor — written in minutes.",
     primaryCta: "Start free — write an estimate",
     showcaseSlide: "smart",
@@ -197,6 +236,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Painting Estimates.",
     pitch: "Start with the square footage. Price prep, primer, coats, trim and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Prep, primer, coats, trim and labor — interior or exterior.",
     primaryCta: "Start free — quote a paint job",
     showcaseSlide: "smart",
@@ -211,6 +251,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Deck Estimates.",
     pitch: "Start with the house. Design the deck in 3D, frame it from the span tables, price it, and create a customer-ready proposal.",
     points: ["Deck design in 3D, framed to code", "Boards, framing & pricing", "Proposals & permit set"],
+    proof: [PROOF.deckFilm, PROOF.boards, PROOF.oneApp],
     sub: "Draw it on the house's own photo, frame it from the span tables, print the permit set and send the proposal — with the office around it: clients, calendar, crew and payments. Decks only, nothing else in the way.",
     primaryCta: "Start Deck Studio — free trial",
     showcaseSlide: "smart",
@@ -232,6 +273,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Siding Estimates.",
     pitch: "Start with the wall area. Price tear-off, wrap, siding, trim and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Tear-off, wrap, lap siding, trim and labor — per sq ft, in one proposal.",
     primaryCta: "Start free — quote a siding job",
     showcaseSlide: "smart",
@@ -243,6 +285,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Concrete Estimates.",
     pitch: "Start with the slab you describe. Price demo, base, forms, rebar, finish and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Demo, base, forms, rebar, finish and labor from the slab you describe.",
     primaryCta: "Start free — price a pour",
     showcaseSlide: "smart",
@@ -254,6 +297,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Landscaping Estimates.",
     pitch: "Start with the yard you describe. Price grading, pavers, retaining walls, sod and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Grading, pavers, retaining wall, sod and labor — priced line by line.",
     primaryCta: "Start free — estimate a yard",
     showcaseSlide: "smart",
@@ -265,6 +309,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Flooring Estimates.",
     pitch: "Start with a room list. Price tear-out, underlayment, planks, trim and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Tear-out, underlayment, planks, trim and labor — room by room.",
     primaryCta: "Start free — quote a floor",
     showcaseSlide: "smart",
@@ -276,6 +321,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Tile Estimates.",
     pitch: "Start with the rooms you describe. Price demo, prep, waterproofing, tile, grout and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Demo, prep, waterproofing, tile, grout and labor, floor to shower.",
     primaryCta: "Start free — price a tile job",
     showcaseSlide: "smart",
@@ -291,6 +337,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Plumbing Estimates.",
     pitch: "Start with the job you describe. Price the water heater, rough-ins, fixtures, drain runs and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Water heater, rough-ins, fixtures, drain runs and labor from what you describe.",
     primaryCta: "Start free — price a plumbing job",
     showcaseSlide: "smart",
@@ -302,6 +349,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Electrical Estimates.",
     pitch: "Start with the scope. Price the panel, circuits, outlets, cans and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Panel, circuits, outlets, cans and labor — point by point.",
     primaryCta: "Start free — quote electrical",
     showcaseSlide: "smart",
@@ -317,6 +365,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on HVAC Estimates.",
     pitch: "Start with an address. Build load estimates, size equipment, review pricing, and create a customer-ready proposal.",
     points: ["Load estimates & equipment sizing", "Equipment options & pricing", "Professional proposals"],
+    proof: ADDRESS_PROOF,
     h1Long: true,
     sub: "JobFlex AI analyzes the property and builds a detailed estimate with system sizing, equipment, pricing, energy costs, and more — before the first site visit.",
     subStrong: "No unnecessary drive. No hours of calculations.",
@@ -342,6 +391,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Drywall Estimates.",
     pitch: "Start with the sheet count. Price hanging, tape, finish, texture and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Hang, tape, level 4 finish, texture and labor per sheet.",
     primaryCta: "Start free — quote drywall",
     showcaseSlide: "smart",
@@ -353,6 +403,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Window Estimates.",
     pitch: "Start with your count of openings. Price the units, casing, install and haul-away, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Units, patio door, casing, install and haul-away in one proposal.",
     primaryCta: "Start free — price windows",
     showcaseSlide: "smart",
@@ -368,6 +419,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Countertop Estimates.",
     pitch: "Start with the slab and the run. Price the sq ft, sink cutout, backsplash, template and install, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Quartz by the sq ft, sink cutout, backsplash, template and install.",
     primaryCta: "Start free — price countertops",
     showcaseSlide: "smart",
@@ -379,6 +431,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Carpentry Estimates.",
     pitch: "Start with the scope you type. Price trim by the foot, doors, built-ins, framing and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Trim by the foot, doors, built-ins, framing and labor from the scope you type.",
     primaryCta: "Start free — quote carpentry",
     showcaseSlide: "smart",
@@ -390,6 +443,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Insulation Estimates.",
     pitch: "Start with the area and the R-value. Price removal, blown-in, batts, air sealing and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Removal, blown-in attic, batts, air sealing and labor per sq ft.",
     primaryCta: "Start free — price insulation",
     showcaseSlide: "smart",
@@ -401,6 +455,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Demolition Estimates.",
     pitch: "Start with the tear-out you describe. Price containment, demo, loads out, disposal and cleanup, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Containment, demo by the sq ft, loads out, disposal and cleanup.",
     primaryCta: "Start free — quote a tear-out",
     showcaseSlide: "smart",
@@ -412,6 +467,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Project Estimates.",
     pitch: "Start with the whole job. Price each phase at its sub's rate, demo to finish, and create one customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
+    proof: SMART_PROOF,
     sub: "Demo to finish — each phase at its sub's price, in a single proposal.",
     primaryCta: "Start free — price the whole job",
     showcaseSlide: "smart",

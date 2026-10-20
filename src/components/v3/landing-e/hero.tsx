@@ -27,26 +27,32 @@ import "./hero-fit.css";
    touch screen: never armed, never hidden. */
 const ENTRANCE_PRELUDE = `(function(){try{var d=document.documentElement,w=window;if(!w.matchMedia||!w.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)").matches||w.matchMedia("(prefers-reduced-motion: reduce)").matches)return;d.setAttribute("data-lp-entrance","pending");w.__jfEntranceTimer=setTimeout(function(){if(d.getAttribute("data-lp-entrance")==="pending"){d.removeAttribute("data-lp-entrance");if(w.__jfHeroShownAt===undefined)w.__jfHeroShownAt=Math.round(performance.now());}},1800);}catch(e){}})();`;
 
-/* THE PICTURE WHOLE IN THE FIRST SCREEN (2026-10-19). Runs as the HTML
-   streams in, right after the hero's two builds: finds the one on screen
-   (the box marked data-fit) and writes where its picture starts, in page px,
-   to html's --lp-fit-top. hero-fit.css sizes the film's frame from it — as
-   wide as lets the picture end above the screen's foot (100svh). Again on a
-   resize and once the fonts are in (the headline's lines move the box). A
-   product shot with no film (data-fit="shot") is drawn at its own size and
-   scaled down with `zoom` (html's --lp-fit-zoom — never the element's own
-   style, which React hydrates) until it ends there too: a few passes, as a
-   zoomed shot lays out wider and may grow taller in its own px. Without JavaScript the
-   stylesheet's fallback top applies. */
-const FIT_SCRIPT = `(function(){try{var d=document.documentElement,w=window,q=0;function fit(){q=0;var a=document.querySelectorAll("#hero [data-fit]"),el=null;for(var i=0;i<a.length;i++){if(a[i].getClientRects().length){el=a[i];break;}}if(!el)return;if(el.getAttribute("data-fit")==="shot"){d.style.removeProperty("--lp-fit-zoom");var z=1,foot=w.innerWidth<640?16:24;for(var k=0;k<5;k++){var r=el.getBoundingClientRect(),room=w.innerHeight-(r.top+w.scrollY)-foot;if(!(r.height>room+0.5)||z<=0.5)break;z=Math.max(0.5,Math.floor(z*room/r.height*1000)/1000);d.style.setProperty("--lp-fit-zoom",String(z));}return;}d.style.setProperty("--lp-fit-top",Math.round(el.getBoundingClientRect().top+w.scrollY)+"px");}function later(){if(!q)q=requestAnimationFrame(fit);}fit();w.addEventListener("resize",later);w.addEventListener("load",later);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(later);}catch(e){}})();`;
+/* THE FIRST SCREEN ENDS ON THE BUTTON (2026-10-19). Runs as the HTML
+   streams in, right after the fold: the headline, the picture and the one
+   button fill the screen (.lp-fold-screen, min-height 100svh from its own
+   top, written here as html's --lp-fold-top), the button a small margin
+   above the screen's foot and nothing else in it. What the picture may take
+   is the screen less what stands above it and the button's row under it:
+   - --lp-fit-top: where the picture starts, in page px, with the gap above
+     it at its minimum (the gaps share out whatever height is left over, so
+     they must not feed back into the picture's size);
+   - --lp-fold-rest: the gap under the picture at its minimum, the button
+     and the foot margin.
+   hero-fit.css sizes the film's frame from both. A product shot with no
+   film (data-fit="shot") is scaled with `zoom` instead (html's
+   --lp-fit-zoom — never the element's own style, which React hydrates), a
+   few passes, as a zoomed shot lays out differently. Again on a resize and
+   once the fonts are in. Without JavaScript the stylesheet's fallbacks apply. */
+const FIT_SCRIPT = `(function(){try{var d=document.documentElement,w=window,q=0;function px(v){return parseFloat(v)||0;}function vis(sel){var a=document.querySelectorAll(sel);for(var i=0;i<a.length;i++){if(a[i].getClientRects().length)return a[i];}return null;}function fit(){q=0;var scr=document.querySelector("#hero .lp-fold-screen"),el=vis("#hero [data-fit]"),btn=document.querySelector("#hero [data-cta='hero']");if(!scr||!el||!btn)return;d.style.setProperty("--lp-fold-top",Math.round(scr.getBoundingClientRect().top+w.scrollY)+"px");var gaps=scr.querySelectorAll(".lp-fold-gap"),g0=gaps[0],g1=gaps[1],cs=getComputedStyle(scr);function extra(){return g0?Math.max(0,g0.getBoundingClientRect().height-px(getComputedStyle(g0).minHeight)):0;}var rest=(g1?px(getComputedStyle(g1).minHeight):0)+btn.getBoundingClientRect().height+px(cs.getPropertyValue("--lp-fold-foot"));d.style.setProperty("--lp-fold-rest",Math.round(rest)+"px");if(el.getAttribute("data-fit")==="shot"){d.style.removeProperty("--lp-fit-zoom");var z=1;for(var k=0;k<5;k++){var r=el.getBoundingClientRect(),room=w.innerHeight-(r.top+w.scrollY-extra())-rest;if(!(r.height>room+0.5)||z<=0.5)break;z=Math.max(0.5,Math.floor(z*room/r.height*1000)/1000);d.style.setProperty("--lp-fit-zoom",String(z));}return;}d.style.setProperty("--lp-fit-top",Math.round(el.getBoundingClientRect().top+w.scrollY-extra())+"px");}function later(){if(!q)q=requestAnimationFrame(fit);}fit();w.addEventListener("resize",later);w.addEventListener("load",later);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(later);}catch(e){}})();`;
 
 /* The first screen, and the one screen a trade variant may replace.
    THE ORDER (2026-10-19, desk and phone alike): the one-thought headline
    (the variant's `title`; a `?hook=` puts the ad's two lines there), the
-   demo film — or, with no film, the product shot — whole inside the first
-   screen, then the one button and the line under it. Under the hero: the
-   numbers, the reviews and the description (hero-proof.tsx). No Google
-   button here — it stays on the register page. */
+   demo film — or, with no film, the product shot — and the one button, the
+   three filling the first screen and nothing under them in it; below the
+   fold the line under the button. Under the hero: the description with its
+   figures, then the reviews (hero-proof.tsx). No Google button here — it
+   stays on the register page. */
 export function Hero({
   variant = DEFAULT_LANDING,
   variantKey,
@@ -92,51 +98,60 @@ export function Hero({
             html[data-lp-entrance] (ENTRANCE_PRELUDE above). */}
         <script dangerouslySetInnerHTML={{ __html: ENTRANCE_PRELUDE }} />
         <HeroEntrance>
-        {/* A/B landing_hero_v1 (scaffold, not running): the headline block
-            is the experiment's slot, on the default hero only — a trade
-            variant is its own page and is never bucketed. */}
-        <HeroExperiment enabled={!variantKey}>
-        <h1 className={`lp-enter lp-fold-h1${variant.title ? "" : " lp-h1--lines"}`} data-entrance="h1">
-          {variant.title ?? (
-            <>
-              {variant.h1[0]}
-              <br />
-              {variant.h1[1]}
-            </>
-          )}
-        </h1>
-        </HeroExperiment>
-        {/* Two builds of the same screen, not one build clipped: the desktop
-            plate's 208px sidebar and four-across KPI row cannot survive a
-            phone column (owner, 2026-08-25). An estimator shot or a film is
-            one build for both, each copy switched by the same 640 px. */}
-        <div className="lp-fold-vis">
-          <Reveal shown className="sm:hidden">
-            {variant.film ? (
-              <HeroVisual variant={variant} slot="phone" hook={hook} landing={variantKey} />
-            ) : (
-              <div data-fit="shot">{shot ? <HeroVisual variant={variant} slot="phone" hook={hook} landing={variantKey} /> : <PhoneOverview />}</div>
+        {/* The first screen: the headline, the picture, the button — and the
+            two gaps between them share out the height left over, so the
+            button stands a small margin above the screen's foot. */}
+        <div className="lp-fold-screen">
+          {/* A/B landing_hero_v1 (scaffold, not running): the headline block
+              is the experiment's slot, on the default hero only — a trade
+              variant is its own page and is never bucketed. */}
+          <HeroExperiment enabled={!variantKey}>
+          <h1 className={`lp-enter lp-fold-h1${variant.title ? "" : " lp-h1--lines"}`} data-entrance="h1">
+            {variant.title ?? (
+              <>
+                {variant.h1[0]}
+                <br />
+                {variant.h1[1]}
+              </>
             )}
-          </Reveal>
-          <div className="mx-auto hidden lp-wrap sm:block">
-            <Reveal shown>
+          </h1>
+          </HeroExperiment>
+          <div className="lp-fold-gap" aria-hidden />
+          {/* Two builds of the same screen, not one build clipped: the desktop
+              plate's 208px sidebar and four-across KPI row cannot survive a
+              phone column (owner, 2026-08-25). An estimator shot or a film is
+              one build for both, each copy switched by the same 640 px. */}
+          <div className="lp-fold-vis">
+            <Reveal shown className="sm:hidden">
               {variant.film ? (
-                <HeroVisual variant={variant} slot="desk" hook={hook} landing={variantKey} />
+                <HeroVisual variant={variant} slot="phone" hook={hook} landing={variantKey} />
               ) : (
-                <div data-fit="shot">{shot ? <HeroVisual variant={variant} slot="desk" hook={hook} landing={variantKey} /> : <DashboardMock />}</div>
+                <div data-fit="shot">{shot ? <HeroVisual variant={variant} slot="phone" hook={hook} landing={variantKey} /> : <PhoneOverview />}</div>
               )}
             </Reveal>
+            <div className="mx-auto hidden lp-wrap sm:block">
+              <Reveal shown>
+                {variant.film ? (
+                  <HeroVisual variant={variant} slot="desk" hook={hook} landing={variantKey} />
+                ) : (
+                  <div data-fit="shot">{shot ? <HeroVisual variant={variant} slot="desk" hook={hook} landing={variantKey} /> : <DashboardMock />}</div>
+                )}
+              </Reveal>
+            </div>
+          </div>
+          <div className="lp-fold-gap" aria-hidden />
+          {/* The one button, a thumb wide on a phone. */}
+          <div className="lp-enter lp-fold-cta" data-entrance="cta">
+            <a href={registerHref} className={`lp-btn-dark lp-cta lp-cta--solid lp-trial-cta${words.length > 30 ? " lp-cta--long" : ""}`} data-cta="hero">
+              {words}
+            </a>
           </div>
         </div>
         <script dangerouslySetInnerHTML={{ __html: FIT_SCRIPT }} />
-        {/* The one button, right under the picture: a thumb wide on a phone.
-            The line under it is the page's (landing-e-page.tsx). */}
-        <div className="lp-enter lp-fold-cta" data-entrance="cta">
-          <a href={registerHref} className={`lp-btn-dark lp-cta lp-cta--solid lp-trial-cta${words.length > 30 ? " lp-cta--long" : ""}`} data-cta="hero">
-            {words}
-          </a>
+        {/* Under the fold: the page's line (landing-e-page.tsx) and the
+            homeowner who clicked a contractor ad, sent where they belong. */}
+        <div className="lp-fold-after">
           {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
-          {/* The homeowner who clicked a contractor ad, sent where they belong (2026-10-16). */}
           {adScreen ? <HomeownerDoor trade={variantKey} /> : null}
         </div>
         </HeroEntrance>
