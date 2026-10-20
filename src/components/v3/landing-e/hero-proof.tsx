@@ -1,17 +1,18 @@
 /* UNDER THE HERO (2026-10-19), on every landing: how it works (#how), then
    the reviews — before the page's usual sections.
 
-   HOW IT WORKS: on the light drafting grid, the trade's tool as a kicker,
-   the variant's `pitch` and its `lede` on the left; on the right the three
-   steps (how-steps.tsx) — each the line from `points` as the step's title
-   and the figure of the same index from `proof` under it (landing-variants.ts
-   — each figure belongs to its line, its source listed there), in the trade
-   tool's colour. Phone: the text above, the steps in a column. */
+   HOW IT WORKS: the trade's tool as a kicker, the variant's `pitch` and its
+   `lede`, centred; then three steps across the container. Each step is a
+   real frame of that step (`how`, landing-variants.ts) with its figure on a
+   plate in the tool's colour at the frame's lower-left corner, then the
+   step's number and line (`points`) and the figure's words (`proof`) —
+   each figure belongs to its line, its source listed in landing-variants.
+   No arrows, no scales, no motion. Phone: the steps in a column. */
 
 import type { CSSProperties } from "react";
 import type { LandingVariant } from "./landing-variants";
 import { LandingReviews } from "./landing-reviews";
-import { HowSteps, type HowIcon } from "./how-steps";
+import { HowImg } from "./how-img";
 
 /* The tool's colour (globals.css --tool-*); a Smart Proposal trade takes the
    Smart tool's, the default page the blueprint blue. */
@@ -24,33 +25,39 @@ const TOOL: Record<LandingVariant["visual"], string> = {
   dashboard: "var(--accent)",
 };
 
-/* Each step's icon: where the estimate starts (the address, the deck, the
-   description), the priced lines, the proposal. The default page's three
-   lines are the office's own: proposals, the calendar, payments. */
-const ADDRESS: [HowIcon, HowIcon, HowIcon] = ["pin", "calc", "file"];
-const ICONS: Record<LandingVariant["visual"], [HowIcon, HowIcon, HowIcon]> = {
-  hvac: ADDRESS,
-  roof: ADDRESS,
-  fence: ADDRESS,
-  deck: ["deck", "calc", "file"],
-  smart: ["pen", "calc", "file"],
-  dashboard: ["file", "cal", "card"],
-};
-
 export function HeroProof({ variant }: { variant: LandingVariant }) {
-  const icons = ICONS[variant.visual];
-  const steps = variant.points && variant.proof ? variant.points.map((title, i) => ({ title, ...variant.proof![i], icon: icons[i] })) : [];
+  const { points, proof, how } = variant;
+  const steps = points && proof && how ? points.map((title, i) => ({ title, ...proof[i], ...how[i] })) : [];
   return (
     <>
       {variant.pitch ? (
         <section id="how" className="lp-how" style={{ "--lp-tool": TOOL[variant.visual] } as CSSProperties}>
           <div className="lp-how-wrap">
-            <div className="lp-how-copy">
+            <header className="lp-how-head">
               {variant.kicker ? <p className="lp-how-kicker">{variant.kicker}</p> : null}
               <h2 className="lp-how-pitch">{variant.pitch}</h2>
               {variant.lede ? <p className="lp-how-lede">{variant.lede}</p> : null}
-            </div>
-            {steps.length ? <HowSteps steps={steps} /> : null}
+            </header>
+            {steps.length ? (
+              <ol className="lp-how-steps">
+                {steps.map((s, i) => (
+                  <li key={s.title} className="lp-how-step">
+                    <figure className="lp-how-shot">
+                      <HowImg src={s.img} alt={s.alt} />
+                      <figcaption className="lp-how-plate">
+                        <span className="lp-how-val">{s.value}</span>
+                        <span className="lp-how-plate-l">{s.label}</span>
+                      </figcaption>
+                    </figure>
+                    <h3 className="lp-how-title">
+                      <span className="lp-how-num">{String(i + 1).padStart(2, "0")}</span>
+                      {s.title}
+                    </h3>
+                    <p className="lp-how-label">{s.label}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
           </div>
         </section>
       ) : null}

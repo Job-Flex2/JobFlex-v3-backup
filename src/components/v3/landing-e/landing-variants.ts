@@ -48,6 +48,9 @@ export type LandingVariant = {
   /** The how-it-works section's kicker over the pitch: the tool the trade
    *  works in ("HVAC Estimator", "Smart Proposal"). */
   kicker?: string;
+  /** The how-it-works pictures, one per line of `points`: a real frame of
+   *  that step (public/landing-e/how/, 760×570, ≤ 90 KB each). */
+  how?: [LandingShot, LandingShot, LandingShot];
   /** One grey line under the pitch: the way from the trade's first input to
    *  the signed proposal. */
   lede?: string;
@@ -100,6 +103,9 @@ export type LandingVariant = {
   shotCta?: boolean;
 };
 
+/** A how-it-works picture: the file and what it shows, for a screen reader. */
+export type LandingShot = { img: string; alt: string };
+
 /** A figure beside a line of the description: "0" over "site visits before the estimate". */
 export type LandingProof = { value: string; label: string };
 
@@ -151,6 +157,47 @@ const DECK_PROOF: Proof3 = [
 ];
 /** A Smart Proposal trade's: written from what you describe, priced line by line, signed and paid in the app. */
 const SMART_PROOF: Proof3 = [{ value: "No site visit", label: "priced from what you describe" }, PROOF.everyLine, PROOF.signPay];
+/* THE HOW-IT-WORKS PICTURES (2026-10-19): real frames, cropped to the
+   step's fragment — the estimator films for HVAC, roof, fence and deck
+   (public/landing-e/*-demo-*.mp4, the same recordings as the hero's), and
+   the real pages on a local production build for Smart Proposal and the
+   default page (a demo company's fictional records). Cropped and encoded by
+   .cache/herofit/how/crop.sh. */
+const shots = (key: string, alts: [string, string, string]): [LandingShot, LandingShot, LandingShot] =>
+  alts.map((alt, i) => ({ img: `/landing-e/how/${key}-0${i + 1}.webp`, alt })) as [LandingShot, LandingShot, LandingShot];
+const HOW = {
+  hvac: shots("hvac", [
+    "The HVAC estimator: the address typed, the county's design temperatures and the house's records found",
+    "The HVAC estimator: the Good and Better equipment with prices and the unit's fit to the load under Manual S",
+    "The client's proposal: AC and furnace replacement, the total and the Accept proposal button",
+  ]),
+  roofing: shots("roofing", [
+    "The roof estimator: total area, roofing squares and pitch over the aerial measurement of the house",
+    "The roof estimate: total, materials and labor, 26 lines to review",
+    "The client's proposal: the roof as measured from the air, the Accept proposal button and the priced lines",
+  ]),
+  fencing: shots("fencing", [
+    "The fence estimator: the fence drawn along the property lines on the satellite map, each run measured",
+    "The fence takeoff: posts, concrete bags, rails, pickets and hardware, each counted",
+    "The client's proposal: a board-on-board fence, the total and the fence in 3D",
+  ]),
+  decking: shots("decking", [
+    "The deck estimator's framing plan: joists and beam picked from the span tables",
+    "The deck estimator's materials: Better and Best packages, the deck boards and the framing lumber",
+    "The deck's proposal on the client's phone beside the lumber-yard list and the permit set",
+  ]),
+  smart: shots("smart", [
+    "Smart Proposal: the job described in a few lines, ready to price",
+    "A proposal's estimate detail: materials and labor lines, subtotal, tax and the total due",
+    "The client's proposal: the total and the proposal accepted",
+  ]),
+  dashboard: shots("default", [
+    "Proposals: the total value of open proposals and the list with each one's status",
+    "The calendar: a month of jobs and visits, each with its crew",
+    "Financials: revenue against expenses and the month's revenue, expenses and profit",
+  ]),
+} as const;
+
 /** The line under the pitch, by where the trade's estimate starts. */
 const LEDE = {
   address: "From the first address to a signed proposal.",
@@ -165,6 +212,7 @@ export const DEFAULT_LANDING: LandingVariant = {
   pitch: "Start with the first call. Estimate, send proposals, schedule your crew, and get paid in one app.",
   points: ["Estimates & proposals", "Jobs, crew & schedule", "Invoices & payments"],
   kicker: "JobFlex",
+  how: HOW.dashboard,
   lede: "From the first call to the final invoice.",
   proof: [
     { value: "4", label: "estimators: roof, fence, HVAC and deck" },
@@ -220,6 +268,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with an address. Draw the fence on the lot, price materials and labor, and create a customer-ready proposal.",
     points: ["Draw the fence on the lot line", "Material takeoff & pricing", "Professional proposals"],
     proof: FENCE_PROOF,
+    how: HOW.fencing,
     kicker: "Fence Estimator",
     lede: LEDE.address,
     h1Long: true,
@@ -244,6 +293,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with an address. Measure the roof, price materials and labor, and create a customer-ready proposal.",
     points: ["Roof measurements from aerial imagery", "Materials, labor & pricing", "Professional proposals"],
     proof: ROOF_PROOF,
+    how: HOW.roofing,
     kicker: "Roof Estimator",
     lede: LEDE.address,
     h1Long: true,
@@ -268,6 +318,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with a description and a photo. Price demo, rough-in, cabinets, tile, fixtures and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Demo, rough-in, cabinets, tile, fixtures and labor — written in minutes.",
@@ -282,6 +333,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the square footage. Price prep, primer, coats, trim and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Prep, primer, coats, trim and labor — interior or exterior.",
@@ -299,6 +351,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the house. Design the deck in 3D, frame it from the span tables, price it, and create a customer-ready proposal.",
     points: ["Deck design in 3D, framed to code", "Boards, framing & pricing", "Proposals & permit set"],
     proof: DECK_PROOF,
+    how: HOW.decking,
     kicker: "Deck Studio",
     lede: LEDE.deck,
     sub: "Draw it on the house's own photo, frame it from the span tables, print the permit set and send the proposal — with the office around it: clients, calendar, crew and payments. Decks only, nothing else in the way.",
@@ -323,6 +376,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the wall area. Price tear-off, wrap, siding, trim and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Tear-off, wrap, lap siding, trim and labor — per sq ft, in one proposal.",
@@ -337,6 +391,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the slab you describe. Price demo, base, forms, rebar, finish and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Demo, base, forms, rebar, finish and labor from the slab you describe.",
@@ -351,6 +406,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the yard you describe. Price grading, pavers, retaining walls, sod and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Grading, pavers, retaining wall, sod and labor — priced line by line.",
@@ -365,6 +421,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with a room list. Price tear-out, underlayment, planks, trim and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Tear-out, underlayment, planks, trim and labor — room by room.",
@@ -379,6 +436,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the rooms you describe. Price demo, prep, waterproofing, tile, grout and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Demo, prep, waterproofing, tile, grout and labor, floor to shower.",
@@ -397,6 +455,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the job you describe. Price the water heater, rough-ins, fixtures, drain runs and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Water heater, rough-ins, fixtures, drain runs and labor from what you describe.",
@@ -411,6 +470,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the scope. Price the panel, circuits, outlets, cans and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Panel, circuits, outlets, cans and labor — point by point.",
@@ -429,6 +489,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with an address. Build load estimates, size equipment, review pricing, and create a customer-ready proposal.",
     points: ["Load estimates & equipment sizing", "Equipment options & pricing", "Professional proposals"],
     proof: HVAC_PROOF,
+    how: HOW.hvac,
     kicker: "HVAC Estimator",
     lede: LEDE.address,
     h1Long: true,
@@ -457,6 +518,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the sheet count. Price hanging, tape, finish, texture and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Hang, tape, level 4 finish, texture and labor per sheet.",
@@ -471,6 +533,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with your count of openings. Price the units, casing, install and haul-away, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Units, patio door, casing, install and haul-away in one proposal.",
@@ -489,6 +552,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the slab and the run. Price the sq ft, sink cutout, backsplash, template and install, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Quartz by the sq ft, sink cutout, backsplash, template and install.",
@@ -503,6 +567,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the scope you type. Price trim by the foot, doors, built-ins, framing and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Trim by the foot, doors, built-ins, framing and labor from the scope you type.",
@@ -517,6 +582,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the area and the R-value. Price removal, blown-in, batts, air sealing and labor, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Removal, blown-in attic, batts, air sealing and labor per sq ft.",
@@ -531,6 +597,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the tear-out you describe. Price containment, demo, loads out, disposal and cleanup, and create a customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Containment, demo by the sq ft, loads out, disposal and cleanup.",
@@ -545,6 +612,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     pitch: "Start with the whole job. Price each phase at its sub's rate, demo to finish, and create one customer-ready proposal.",
     points: ["Estimate from what you describe", "Materials, labor & pricing", "Professional proposals"],
     proof: SMART_PROOF,
+    how: HOW.smart,
     kicker: "Smart Proposal",
     lede: LEDE.smart,
     sub: "Demo to finish — each phase at its sub's price, in a single proposal.",
