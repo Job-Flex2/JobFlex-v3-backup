@@ -13,8 +13,12 @@
    poster this width needs (the first screen's largest paint).
 
    PLAYING IT EVERYWHERE (2026-10-19). The <video> is in the server's HTML in
-   both copies, autoplaying, muted, inline, with its poster and its files, so
-   a browser plays it even when the page's JavaScript never runs. Each copy's
+   both copies, autoplaying, muted, inline, with its files, so a browser
+   plays it even when the page's JavaScript never runs. No `poster` on it:
+   the <picture> under it is the poster (a poster attribute would fetch the
+   hidden copy's poster too), and a video with no frame yet is transparent.
+   While the ▶ waits the video is hidden — paused with data, it would paint
+   its first frame over the poster. Each copy's
    <source>s carry that copy's media query: only the copy this width shows
    chooses a file, so one is fetched — the 16:9 cut on a desk, the 4:5 cut on
    a phone. MP4 (H.264) first, WebM (VP9) second, each typed with its codecs:
@@ -160,8 +164,7 @@ export function DemoFilm({
           </picture>
           <video
             ref={videoRef}
-            className="lp-film-media"
-            poster={cut.poster}
+            className={tap ? "lp-film-media lp-film-media--wait" : "lp-film-media"}
             autoPlay
             muted
             playsInline
