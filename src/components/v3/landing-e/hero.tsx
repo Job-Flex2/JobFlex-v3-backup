@@ -29,21 +29,24 @@ const ENTRANCE_PRELUDE = `(function(){try{var d=document.documentElement,w=windo
 
 /* THE FIRST SCREEN ENDS ON THE BUTTON (2026-10-19). Runs as the HTML
    streams in, right after the fold: the headline, the picture and the one
-   button fill the screen (.lp-fold-screen, min-height 100svh from its own
-   top, written here as html's --lp-fold-top), the button a small margin
-   above the screen's foot and nothing else in it. What the picture may take
-   is the screen less what stands above it and the button's row under it:
+   button, the button a small margin above the screen's foot. What the
+   picture may take is the screen less what stands above it and the
+   button's row under it:
    - --lp-fit-top: where the picture starts, in page px, with the gap above
-     it at its minimum (the gaps share out whatever height is left over, so
+     it at its minimum (the gaps grow into whatever height is left over, so
      they must not feed back into the picture's size);
    - --lp-fold-rest: the gap under the picture at its minimum, the button
      and the foot margin.
    hero-fit.css sizes the film's frame from both. A product shot with no
    film (data-fit="shot") is scaled with `zoom` instead (html's
    --lp-fit-zoom — never the element's own style, which React hydrates), a
-   few passes, as a zoomed shot lays out differently. Again on a resize and
-   once the fonts are in. Without JavaScript the stylesheet's fallbacks apply. */
-const FIT_SCRIPT = `(function(){try{var d=document.documentElement,w=window,q=0;function px(v){return parseFloat(v)||0;}function vis(sel){var a=document.querySelectorAll(sel);for(var i=0;i<a.length;i++){if(a[i].getClientRects().length)return a[i];}return null;}function fit(){q=0;var scr=document.querySelector("#hero .lp-fold-screen"),el=vis("#hero [data-fit]"),btn=document.querySelector("#hero [data-cta='hero']");if(!scr||!el||!btn)return;d.style.setProperty("--lp-fold-top",Math.round(scr.getBoundingClientRect().top+w.scrollY)+"px");var gaps=scr.querySelectorAll(".lp-fold-gap"),g0=gaps[0],g1=gaps[1],cs=getComputedStyle(scr);function extra(){return g0?Math.max(0,g0.getBoundingClientRect().height-px(getComputedStyle(g0).minHeight)):0;}var rest=(g1?px(getComputedStyle(g1).minHeight):0)+btn.getBoundingClientRect().height+px(cs.getPropertyValue("--lp-fold-foot"));d.style.setProperty("--lp-fold-rest",Math.round(rest)+"px");if(el.getAttribute("data-fit")==="shot"){d.style.removeProperty("--lp-fit-zoom");var z=1;for(var k=0;k<5;k++){var r=el.getBoundingClientRect(),room=w.innerHeight-(r.top+w.scrollY-extra())-rest;if(!(r.height>room+0.5)||z<=0.5)break;z=Math.max(0.5,Math.floor(z*room/r.height*1000)/1000);d.style.setProperty("--lp-fit-zoom",String(z));}return;}d.style.setProperty("--lp-fit-top",Math.round(el.getBoundingClientRect().top+w.scrollY-extra())+"px");}function later(){if(!q)q=requestAnimationFrame(fit);}fit();w.addEventListener("resize",later);w.addEventListener("load",later);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(later);}catch(e){}})();`;
+   few passes, as a zoomed shot lays out differently. Then the height still
+   left — on a phone where the picture took the column's whole width — goes
+   to the two gaps, half each, up to the cap (--lp-fold-gap-max), as html's
+   --lp-fold-gap-extra; past the cap it stays under the button, where the
+   line under it may show. Again on a resize and once the fonts are in.
+   Without JavaScript the stylesheet's fallbacks apply. */
+const FIT_SCRIPT = `(function(){try{var d=document.documentElement,w=window,q=0;function px(v){return parseFloat(v)||0;}function vis(sel){var a=document.querySelectorAll(sel);for(var i=0;i<a.length;i++){if(a[i].getClientRects().length)return a[i];}return null;}function fit(){q=0;var scr=document.querySelector("#hero .lp-fold-screen"),el=vis("#hero [data-fit]"),btn=document.querySelector("#hero [data-cta='hero']");if(!scr||!el||!btn)return;var gaps=scr.querySelectorAll(".lp-fold-gap"),g0=gaps[0],g1=gaps[1],cs=getComputedStyle(scr),min0=g0?px(getComputedStyle(g0).minHeight):0;function extra(){return g0?Math.max(0,g0.getBoundingClientRect().height-min0):0;}var rest=(g1?px(getComputedStyle(g1).minHeight):0)+btn.getBoundingClientRect().height+px(cs.getPropertyValue("--lp-fold-foot"));d.style.setProperty("--lp-fold-rest",Math.round(rest)+"px");if(el.getAttribute("data-fit")==="shot"){d.style.removeProperty("--lp-fit-zoom");var z=1;for(var k=0;k<5;k++){var r=el.getBoundingClientRect(),room=w.innerHeight-(r.top+w.scrollY-extra())-rest;if(!(r.height>room+0.5)||z<=0.5)break;z=Math.max(0.5,Math.floor(z*room/r.height*1000)/1000);d.style.setProperty("--lp-fit-zoom",String(z));}}else{d.style.setProperty("--lp-fit-top",Math.round(el.getBoundingClientRect().top+w.scrollY-extra())+"px");}var p=el.getBoundingClientRect(),slack=w.innerHeight-(p.bottom+w.scrollY-extra())-rest,cap=Math.max(0,px(cs.getPropertyValue("--lp-fold-gap-max"))-min0),per=Math.max(0,Math.min(cap,Math.floor(slack/2)));d.style.setProperty("--lp-fold-gap-extra",per+"px");}function later(){if(!q)q=requestAnimationFrame(fit);}fit();w.addEventListener("resize",later);w.addEventListener("load",later);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(later);}catch(e){}})();`;
 
 /* The first screen, and the one screen a trade variant may replace.
    THE ORDER (2026-10-19, desk and phone alike): the one-thought headline
@@ -146,14 +149,14 @@ export function Hero({
               {words}
             </a>
           </div>
+          {/* The page's line (landing-e-page.tsx) and the homeowner who
+              clicked a contractor ad, sent where they belong. */}
+          <div className="lp-fold-after">
+            {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
+            {adScreen ? <HomeownerDoor trade={variantKey} /> : null}
+          </div>
         </div>
         <script dangerouslySetInnerHTML={{ __html: FIT_SCRIPT }} />
-        {/* Under the fold: the page's line (landing-e-page.tsx) and the
-            homeowner who clicked a contractor ad, sent where they belong. */}
-        <div className="lp-fold-after">
-          {priceLine ? <p className="lp-hero-price">{priceLine}</p> : null}
-          {adScreen ? <HomeownerDoor trade={variantKey} /> : null}
-        </div>
         </HeroEntrance>
       </div>
     </section>

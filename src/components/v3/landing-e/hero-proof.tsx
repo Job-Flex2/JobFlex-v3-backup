@@ -1,10 +1,11 @@
 /* UNDER THE HERO (2026-10-19), on every landing: the description, then the
    reviews — before the page's usual sections.
 
-   The description is the variant's `pitch` as the heading and three rows
-   under it, each the line from `points` beside the figure of the same index
-   from `proof` (landing-variants.ts — the figures' sources are listed
-   there), the figure in the trade estimator's colour. */
+   The description is the variant's `pitch` as the heading and three equal
+   cards under it: the line from `points` as the card's title, the figure of
+   the same index from `proof` under it in the trade estimator's colour, and
+   the figure's few words (landing-variants.ts — each figure belongs to its
+   line, and its source is listed there). */
 
 import type { CSSProperties } from "react";
 import type { LandingVariant } from "./landing-variants";
@@ -33,11 +34,9 @@ export function HeroProof({ variant }: { variant: LandingVariant }) {
               <ul className="lp-figs">
                 {rows.map((r) => (
                   <li key={r.text} className="lp-fig">
-                    <span className="lp-fig-val">
-                      <span className="lp-fig-n">{r.value}</span>
-                      <span className="lp-fig-l">{r.label}</span>
-                    </span>
-                    <span className="lp-fig-t">{r.text}</span>
+                    <h3 className="lp-fig-t">{r.text}</h3>
+                    <p className="lp-fig-n">{r.value}</p>
+                    <p className="lp-fig-l">{r.label}</p>
                   </li>
                 ))}
               </ul>

@@ -97,33 +97,54 @@ export type LandingVariant = {
 /** A figure beside a line of the description: "0" over "site visits before the estimate". */
 export type LandingProof = { value: string; label: string };
 
-/* THE DESCRIPTION'S FIGURES (2026-10-19) — the facts the landing already
-   states, nothing new:
-   - "0 site visits": the HVAC, roof and fence heroes' own copy ("before the
-     first site visit", "without … driving to the job first");
+/* THE DESCRIPTION'S FIGURES (2026-10-19). Each belongs to the line it
+   stands under (same index in `points`), and says only what the code or
+   the page already does:
+   - "Manual J + S": the HVAC load is Manual J-based (never "ACCA-approved" —
+     the claims review) and the unit is checked to Manual S (lib/hvac
+     checks.ts, engine.ts);
+   - "Every line" for HVAC: every line priced, the equipment in Good /
+     Better / Best tiers (lib/hvac engine.ts tiers);
+   - "Aerial": the roof measured from aerial imagery — EagleView by
+     default, Google's Solar data where it is the provider or the fallback;
+   - "Every line" for a roof: every quantity labelled measured, estimated or
+     entered, priced at the shop's rates (the "line-by-line" ad);
+   - "On the lot line": the fence drawn on the satellite map over the
+     parcel's property lines (the fence film, the "drive-out" ad);
+   - "Every post & bag": posts and 60 lb concrete bags per post counted and
+     priced (lib/fence concreteBagsPerPost);
+   - "To code": the deck's frame picked from the span tables (lib/deck
+     codeTables, structure.ts);
+   - "50 boards": lib/deck/catalog DECKING, 50 boards, each priced per foot;
    - "< 1 min": the estimator films, address to proposal in 40–44 s
-     (demo-media DEMO_CAPTION);
-   - "90 s": the Deck Studio film's own card, "From the first click to the
-     client's signature, in ninety seconds";
-   - "50 deck boards": lib/deck/catalog DECKING, 50 boards;
+     (demo-media DEMO_CAPTION); "90 s": the Deck Studio film's own card,
+     "From the first click to the client's signature, in ninety seconds";
+   - "No site visit": a Smart Proposal is written from the description (and
+     a photo) the contractor types;
    - "1 app": estimate, proposal, the client's signature and the deposit in
      one app (the roofing ads' "Address to Signature. One App.", "Get Paid
-     by Stage");
-   - "4 estimators": roof, fence, HVAC and deck, each a tool of its own;
-   - "$40M+": the stats section's "Companies using JobFlex made $40,000,000+". */
+     by Stage"); "4": roof, fence, HVAC and deck, each a tool of its own;
+     "$40M+": the stats section's "Companies using JobFlex made $40,000,000+". */
+type Proof3 = [LandingProof, LandingProof, LandingProof];
 const PROOF = {
-  visits: { value: "0", label: "site visits before the estimate" },
   minute: { value: "< 1 min", label: "address to proposal in the demo" },
-  deckFilm: { value: "90 s", label: "first click to signature in the demo" },
-  boards: { value: "50", label: "deck boards in the catalog" },
-  oneApp: { value: "1 app", label: "estimate, proposal, signature and payment" },
-  estimators: { value: "4", label: "estimators of their own: roof, fence, HVAC, deck" },
-  made: { value: "$40M+", label: "made by companies using JobFlex" },
+  everyLine: { value: "Every line", label: "materials and labor, priced" },
+  signPay: { value: "1 app", label: "your client signs and pays" },
 } as const satisfies Record<string, LandingProof>;
-/** An address estimator's: the measure (no visit), the price (the film's minute), the proposal (one app). */
-const ADDRESS_PROOF: [LandingProof, LandingProof, LandingProof] = [PROOF.visits, PROOF.minute, PROOF.oneApp];
-/** A Smart Proposal trade's: no figure of its own yet — the app's. */
-const SMART_PROOF: [LandingProof, LandingProof, LandingProof] = [PROOF.oneApp, PROOF.estimators, PROOF.made];
+const HVAC_PROOF: Proof3 = [
+  { value: "Manual J + S", label: "a Manual J-based load, the unit checked to Manual S" },
+  { value: "Every line", label: "priced, equipment in Good / Better / Best" },
+  PROOF.minute,
+];
+const ROOF_PROOF: Proof3 = [{ value: "Aerial", label: "measured from imagery, no ladder" }, { value: "Every line", label: "materials and labor at your rates" }, PROOF.minute];
+const FENCE_PROOF: Proof3 = [{ value: "On the lot line", label: "drawn on the satellite map" }, { value: "Every post & bag", label: "counted and priced" }, PROOF.minute];
+const DECK_PROOF: Proof3 = [
+  { value: "To code", label: "the frame picked from the span tables" },
+  { value: "50 boards", label: "in the catalog, each priced per foot" },
+  { value: "90 s", label: "first click to signature in the demo" },
+];
+/** A Smart Proposal trade's: written from what you describe, priced line by line, signed and paid in the app. */
+const SMART_PROOF: Proof3 = [{ value: "No site visit", label: "priced from what you describe" }, PROOF.everyLine, PROOF.signPay];
 
 /** The hero as it shipped on 2026-08-25 — the page with no `?industry=`. */
 export const DEFAULT_LANDING: LandingVariant = {
@@ -131,7 +152,11 @@ export const DEFAULT_LANDING: LandingVariant = {
   title: "Turn your trade into a business.",
   pitch: "Start with the first call. Estimate, send proposals, schedule your crew, and get paid in one app.",
   points: ["Estimates & proposals", "Jobs, crew & schedule", "Invoices & payments"],
-  proof: [PROOF.estimators, PROOF.oneApp, PROOF.made],
+  proof: [
+    { value: "4", label: "estimators: roof, fence, HVAC and deck" },
+    { value: "1 app", label: "jobs, crew and calendar in one place" },
+    { value: "$40M+", label: "made by companies using JobFlex" },
+  ],
   primaryCta: "Start free trial",
   showcaseSlide: "smart",
   visual: "dashboard",
@@ -180,7 +205,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Fence Estimates.",
     pitch: "Start with an address. Draw the fence on the lot, price materials and labor, and create a customer-ready proposal.",
     points: ["Draw the fence on the lot line", "Material takeoff & pricing", "Professional proposals"],
-    proof: ADDRESS_PROOF,
+    proof: FENCE_PROOF,
     h1Long: true,
     sub: "Enter the project address. JobFlex generates the measurements, materials, labor, pricing, and a complete customer-ready estimate and proposal — in seconds, right from your phone.",
     subEven: true,
@@ -202,7 +227,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Roof Estimates.",
     pitch: "Start with an address. Measure the roof, price materials and labor, and create a customer-ready proposal.",
     points: ["Roof measurements from aerial imagery", "Materials, labor & pricing", "Professional proposals"],
-    proof: ADDRESS_PROOF,
+    proof: ROOF_PROOF,
     h1Long: true,
     sub: "Enter an address. JobFlex AI analyzes the property and generates a detailed, customer-ready proposal — roof measurements, materials, labor, pricing, and more — without waiting hours for a report or driving to the job first.",
     primaryCta: "Start free — measure a roof",
@@ -251,7 +276,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on Deck Estimates.",
     pitch: "Start with the house. Design the deck in 3D, frame it from the span tables, price it, and create a customer-ready proposal.",
     points: ["Deck design in 3D, framed to code", "Boards, framing & pricing", "Proposals & permit set"],
-    proof: [PROOF.deckFilm, PROOF.boards, PROOF.oneApp],
+    proof: DECK_PROOF,
     sub: "Draw it on the house's own photo, frame it from the span tables, print the permit set and send the proposal — with the office around it: clients, calendar, crew and payments. Decks only, nothing else in the way.",
     primaryCta: "Start Deck Studio — free trial",
     showcaseSlide: "smart",
@@ -365,7 +390,7 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     title: "Stop Spending Hours on HVAC Estimates.",
     pitch: "Start with an address. Build load estimates, size equipment, review pricing, and create a customer-ready proposal.",
     points: ["Load estimates & equipment sizing", "Equipment options & pricing", "Professional proposals"],
-    proof: ADDRESS_PROOF,
+    proof: HVAC_PROOF,
     h1Long: true,
     sub: "JobFlex AI analyzes the property and builds a detailed estimate with system sizing, equipment, pricing, energy costs, and more — before the first site visit.",
     subStrong: "No unnecessary drive. No hours of calculations.",

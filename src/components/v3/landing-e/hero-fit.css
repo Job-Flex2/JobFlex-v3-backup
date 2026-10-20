@@ -11,21 +11,26 @@
 }
 
 /* ── the fold ───────────────────────────────────────────────
-   The first screen ends on the button (hero.tsx FIT_SCRIPT): the screen
-   box is at least the screen's height from its own top, less the foot
-   margin under the button, and its two gaps — headline to picture, picture
-   to button — share out what the picture leaves, from a minimum up to a
-   cap (a very tall phone keeps sane gaps; the room left goes under the
-   button). */
+   The first screen ends on the button (hero.tsx FIT_SCRIPT): the picture is
+   sized so the headline, the picture and the button fit, the button
+   --lp-fold-foot above the screen's foot. The two gaps — headline to
+   picture, picture to button — are their minimum plus the script's share of
+   the height left over (--lp-fold-gap-extra), never past --lp-fold-gap-max:
+   20–28 px on a phone, where the picture takes the column's whole width
+   first. On a phone taller than that needs (390×844 and up) the line under
+   the button shows at the foot; on a short one (375×667) the gaps stay at
+   16 px and the picture shrinks instead. */
 .jf-lp .lp-fold-screen {
   --lp-fold-foot: 16px;
+  --lp-fold-gap-max: 28px;
   display: flex;
   flex-direction: column;
   padding-top: 20px;
-  min-height: calc(100vh - var(--lp-fold-top, 64px) - var(--lp-fold-foot));
-  min-height: calc(100svh - var(--lp-fold-top, 64px) - var(--lp-fold-foot));
 }
-.jf-lp .lp-fold-gap { flex: 1 1 0; min-height: 16px; max-height: 96px; }
+.jf-lp .lp-fold-gap { flex: none; min-height: 20px; height: calc(20px + var(--lp-fold-gap-extra, 0px)); }
+@media (max-width: 639px) and (max-height: 700px) {
+  .jf-lp .lp-fold-gap { min-height: 16px; height: calc(16px + var(--lp-fold-gap-extra, 0px)); }
+}
 .jf-lp .lp-fold-h1 {
   margin: 0 auto;
   max-width: 24ch;
@@ -36,8 +41,7 @@
   text-wrap: balance;
 }
 @media (min-width: 640px) {
-  .jf-lp .lp-fold-screen { --lp-fold-foot: 24px; padding-top: 28px; }
-  .jf-lp .lp-fold-gap { min-height: 20px; max-height: 120px; }
+  .jf-lp .lp-fold-screen { --lp-fold-foot: 24px; --lp-fold-gap-max: 40px; padding-top: 28px; }
   .jf-lp .lp-fold-h1 { max-width: none; font-size: clamp(32px, 3.5vw, 54px); line-height: 1.04; }
 }
 
@@ -73,10 +77,14 @@
   .jf-lp .lp-fold-cta { align-items: center; max-width: none; }
   .jf-lp .lp-fold-cta .lp-cta { min-width: 20rem; }
 }
-/* Under the fold: the line under the button and the homeowner's door —
-   further down than the foot margin, so neither shows in the first screen. */
+/* The line under the button and the homeowner's door, inside the screen
+   box: where the picture had to shrink to fit (a desk, a short phone) they
+   start below the fold; on a tall phone the line may show at its foot. */
 .jf-lp .lp-fold-after { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 28px; padding-bottom: 40px; }
 .jf-lp .lp-fold-after .lp-hero-price { margin-top: 0; }
+/* The homeowner's door a step further down: on a tall phone the line above
+   it shows at the screen's foot, the door does not start half-cut under it. */
+.jf-lp .lp-fold-after .lp-home-door { margin-top: 28px; }
 @media (min-width: 640px) {
   .jf-lp .lp-fold-after { margin-top: 36px; padding-bottom: 72px; }
 }
@@ -117,18 +125,10 @@
 .jf-lp .lp-review-co { color: var(--ink-muted, #555); }
 
 /* THE DESCRIPTION (hero-proof.tsx): the pitch as the heading, then three
-   rows — a figure in the trade estimator's colour (--lp-tool) on the left,
-   the line it stands behind on the right. Flat: square corners, a hair
-   frame, the tool's colour as a bar down each row's left edge and a wash
-   behind the block — no shadow. One column on a phone, a row of three from
-   768 px. */
-.jf-lp .lp-pitch {
-  margin-top: 0;
-  padding: 22px 16px 16px;
-  border: 1.5px solid var(--hair);
-  border-radius: 0;
-  background: color-mix(in srgb, var(--lp-tool, var(--accent, #1854a0)) 6%, #fff);
-}
+   equal white cards on the section's paper — the line as the card's title,
+   the figure under it in the trade estimator's colour (--lp-tool), its few
+   words grey under that. Square corners, a hair frame, no fill, no bar, no
+   shadow. One column on a phone, a row of three from 768 px. */
 .jf-lp .lp-pitch-text {
   margin: 0;
   max-width: 46rem;
@@ -140,30 +140,32 @@
 }
 .jf-lp .lp-figs { display: grid; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
 .jf-lp .lp-fig {
-  display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr);
-  align-items: center;
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 14px 14px 14px 12px;
+  padding: 18px 16px;
   border: 1.5px solid var(--hair);
-  border-left: 4px solid var(--lp-tool, var(--accent, #1854a0));
   border-radius: 0;
   background: #fff;
 }
-.jf-lp .lp-fig-val { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--lp-tool, var(--accent, #1854a0)); }
-.jf-lp .lp-fig-n { font-size: 30px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; white-space: nowrap; }
-.jf-lp .lp-fig-l { font-size: 12px; line-height: 1.3; color: var(--ink-muted, #555); }
-.jf-lp .lp-fig-t { font-size: 14px; font-weight: 600; line-height: 1.4; }
+.jf-lp .lp-fig-t { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.jf-lp .lp-fig-n {
+  margin: 14px 0 0;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--lp-tool, var(--accent, #1854a0));
+  overflow-wrap: anywhere;
+}
+.jf-lp .lp-fig-l { margin: 6px 0 0; font-size: 13px; line-height: 1.4; color: var(--ink-muted, #555); }
 @media (min-width: 640px) {
-  .jf-lp .lp-pitch { padding: 32px 28px 28px; }
   .jf-lp .lp-pitch-text { font-size: clamp(24px, 2.4vw, 32px); }
   .jf-lp .lp-figs { margin-top: 24px; }
-  .jf-lp .lp-fig-n { font-size: 32px; }
+  .jf-lp .lp-fig { padding: 22px 20px; }
 }
 @media (min-width: 768px) {
   .jf-lp .lp-figs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-  .jf-lp .lp-fig { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); }
 }
 
 /* A product shot with no film, scaled to end inside the first screen
