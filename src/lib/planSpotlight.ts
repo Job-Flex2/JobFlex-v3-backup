@@ -88,9 +88,14 @@ export function withSpotlightFirst(rows: readonly string[], tool: SpotlightTool 
   return [hit, ...rows.filter((r) => r !== hit)];
 }
 
+/** Tools every plan includes whatever its feature lines say: the Deck Studio since 2026-10-19 (lib/editions
+ *  EDITION_FOR_EVERY_ACCOUNT — every account has the Deck estimator). */
+const IN_EVERY_PLAN: ReadonlySet<SpotlightTool> = new Set<SpotlightTool>(["deck"]);
+
 /** The line over the cards. */
 export function spotlightLine(tool: SpotlightTool, listed: boolean): string {
   const def = SPOTLIGHT[tool];
+  if (!listed && IN_EVERY_PLAN.has(tool)) return `You came for ${def.the} — every plan includes it.`;
   return listed ? `You came for ${def.the} — it's marked on every plan below.` : `You came for ${def.the} — it comes with every plan's trial; ask us which plan carries it.`;
 }
 
