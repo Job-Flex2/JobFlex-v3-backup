@@ -35,6 +35,7 @@ import type { SpotlightTool } from "@/lib/planSpotlight";
 import Link from "next/link";
 import type { Route } from "next";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { HandoffHelp, useBrowserHandoff } from "@/components/auth/open-in-browser";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
 import type { TradeType } from "@/lib/tradeTypes";
@@ -158,8 +159,9 @@ export function PasswordlessStep({
   fbclid?: string;
   initialError: string | null;
   onGoogle: () => void;
-  /** The address is proven and the pending signup exists: the plan step. */
-  onVerified: (signupToken: string) => void;
+  /** The address is proven and the pending signup exists: the plan step — or, straight to Professional with a card,
+   *  the server's hand-off to Stripe (register-content leaveForCheckout). `via` names the door for the analyst. */
+  onVerified: (signupToken: string, via: "email" | "google") => void;
 }) {
   const [screen, setScreen] = React.useState<Screen>(google ? "google" : restore?.stage === "code" ? "code" : "form");
   const [draft, setDraft] = React.useState<string | null>(restore && restore.stage !== "expired" ? restore.draft : null);
@@ -184,6 +186,10 @@ export function PasswordlessStep({
   useKeepInView(headRef, goRef, screen === "code");
   const verifying = React.useRef(false);
   const handoff = useBrowserHandoff(inApp ?? "instagram");
+  // A plan or an edition named by the link rides the form sent without JavaScript (./checkout picks the plan by it).
+  const params = useSearchParams();
+  const plan = params?.get("plan") ?? null;
+  const edition = params?.get("edition") === "deck" ? "deck" : null;
   const track = (outcome: string, reason = "", message = "") => {
     trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome, reason, variant: "e", steps: 2, mode: "otp", plan_mode: planMode, ...(quick ? { quick: true } : {}) });
     // The watcher's own reasons: a refusal the server answered in words is read from them (start_rejected).
@@ -220,12 +226,12 @@ export function PasswordlessStep({
 
   /* Proven: the plan step takes over, once — the code screen stops asking. */
   const proceeded = React.useRef(false);
-  function proceed(signupToken: string) {
+  function proceed(signupToken: string, via: "email" | "google" = "email") {
     if (proceeded.current) return;
     proceeded.current = true;
     setScreen("done");
     writeStored(null);
-    onVerified(signupToken);
+    onVerified(signupToken, via);
   }
 
   /* Where the draft stands on the server: moved on in another browser, gone, still waiting. */
@@ -327,7 +333,7 @@ export function PasswordlessStep({
       .then((res) => {
         if (res.ok) {
           track("continue", "google");
-          proceed(res.signupToken);
+          proceed(res.signupToken, "google");
           return;
         }
         setScreen("form");
@@ -565,7 +571,18 @@ export function PasswordlessStep({
 
   // The keyboard bridge stays put across the screens: the form hands the focus to it, the code field takes it.
   const view = (() => {
-    if (screen === "done") return <div className={css.otp} data-otp-screen="done" />;
+    /* Proven. Straight to Professional with a card: the server is opening Stripe's card page (./checkout) — said in
+       one line while the browser waits for it, nothing to press. Otherwise the plan step slides in over this. */
+    if (screen === "done")
+      return (
+        <div className={css.otp} data-otp-screen="done">
+          {auto && requiresCard ? (
+            <p className="auth-lede" role="status" id="otpLeaving">
+              Opening Stripe&apos;s secure checkout…
+            </p>
+          ) : null}
+        </div>
+      );
 
     if (screen === "google") {
       return (
@@ -695,14 +712,34 @@ export function PasswordlessStep({
           Yahoo, Outlook, iCloud, AOL, your work email — any address works.
         </p>
 
-        <form id="step1Form" className={css.form} noValidate onSubmit={(e) => void onContinue(e)}>
+        {/* WITHOUT JAVASCRIPT (2026-10-19) the short sign-up still works: the form posts to ./checkout, whose answer is
+            Stripe's card page (or step 1 again with the reason). With it, onContinue takes over and the same server
+            answer is reached by address (register-content leaveForCheckout). The code path needs the script. */}
+        <form
+          id="step1Form"
+          className={css.form}
+          noValidate
+          onSubmit={(e) => void onContinue(e)}
+          {...(quick ? { method: "post", action: "/auth/register/checkout" } : {})}
+        >
+          {quick ? (
+            <>
+              <input type="hidden" name="trialDays" value={trialDays} />
+              {industry ? <input type="hidden" name="industry" value={industry} /> : null}
+              {tool ? <input type="hidden" name="tool" value={tool} /> : null}
+              {fbclid ? <input type="hidden" name="fbclid" value={fbclid} /> : null}
+              {plan ? <input type="hidden" name="plan" value={plan} /> : null}
+              {edition ? <input type="hidden" name="edition" value={edition} /> : null}
+              {Object.entries(utm ?? {}).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
+            </>
+          ) : null}
           <label className="fld">
             <span className="fld-lbl">Your name</span>
-            <input className="fld-in" id="name" placeholder="First and last" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="fld-in" id="name" name="name" placeholder="First and last" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="fld">
             <span className="fld-lbl">Email</span>
-            <input className="fld-in" type="email" id="email" placeholder="you@yourshop.com" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input className="fld-in" type="email" id="email" name="email" placeholder="you@yourshop.com" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
           {/* A Gmail address typed in: the Google button would have done it in one tap. Offered, never forced. Not in an
               in-app browser — Google refuses to sign in there. */}

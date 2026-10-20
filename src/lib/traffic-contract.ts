@@ -220,6 +220,13 @@ export const TRAFFIC_EVENTS = {
   signupAway: "signup_away",
   signupBack: "signup_back",
   signupLeave: "signup_leave",
+  // THE HAND-OFF TO STRIPE, BY THE SERVER (2026-10-19): /auth/register/checkout answered with a 303 to Stripe's
+  // card page — `reason` step1 (the email step), google (back from Google), relogin (a sign-up reopened later),
+  // plan_pick (a plan card pressed); `plan`, `interval`. Sent from the server (lib/traffic-capture-server).
+  checkoutRedirect: "signup_checkout_redirect",
+  // The plan cards drawn without a press (2026-10-19): `reason` returned (Stripe's back arrow, or Back) or
+  // checkout_failed (the card page did not open). Fired by auth-register-blueprint/register-content.tsx.
+  plansShown: "signup_plans_shown",
 } as const;
 
 /** Events that come several per visit: the report's `raw` CTE leaves them out (lib/traffic-query). */

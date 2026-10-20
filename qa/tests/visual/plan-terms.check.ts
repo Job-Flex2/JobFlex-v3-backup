@@ -443,7 +443,8 @@ async function toPlanSheet(page: any, n: number, query = "") {
  *  a card's height or the rail; a swipe does not snap a card to the middle and make it the choice;
  *  the dots are not one per card with the middle one marked, or a dot does not bring its card; a
  *  tap on a neighbour does not choose it and bring it to the middle; the middle card's button does
- *  not start its own plan and term (its error under the step's head); the code field and the terms
+ *  not start its own plan and term (a card page that did not open: the cards again, that plan in
+ *  the middle, the line over them); the code field and the terms
  *  are not under the rail; or a cancelled Checkout does not come back to the plan chosen before it,
  *  in the middle. */
 const FIRST_FRAME = `(() => {
@@ -460,11 +461,14 @@ async function phoneCards(browser: any, width: number, height: number, n: number
   const name = `phone plan step ${engine} ${width}×${height}${cards === 4 ? " (custom)" : ""}`;
   const ctx = await visit(browser, width, height);
   await ctx.addInitScript({ content: FIRST_FRAME });
-  // The start buttons are pressed for real; the checkout route answers here, so no Stripe session is made.
+  // The start buttons are pressed for real; the server's hand-off (/auth/register/checkout, 2026-10-19) is answered
+  // here as a card page that did not open, so no Stripe session is made.
   const asked: any[] = [];
-  await ctx.route(`${BASE}/api/checkout/signup`, (route: any) => {
-    asked.push(JSON.parse(route.request().postData() || "{}"));
-    return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: "QA: checkout answered by the check." }) });
+  await ctx.route(`${BASE}/auth/register/checkout?*`, (route: any) => {
+    const q = new URL(route.request().url()).searchParams;
+    asked.push({ planSlug: q.get("plan"), interval: q.get("interval"), reason: q.get("reason") });
+    const back = new URLSearchParams({ signup: q.get("signup") ?? "", checkout: "failed", plan: q.get("plan") ?? "" });
+    return route.fulfill({ status: 303, headers: { Location: `/auth/register?${back.toString()}` }, body: "" });
   });
   const page = await ctx.newPage();
   const sheet = "section.plan-sheet.is-in";
@@ -507,8 +511,8 @@ async function phoneCards(browser: any, width: number, height: number, n: number
         cards: read,
         terms: box(root.querySelector("#pwTerms"))?.top ?? 0,
         promo: box(root.querySelector(".pw-promo"))?.top ?? 0,
-        err: (root.querySelector("#stepPlan > .err") as HTMLElement | null)?.innerText?.trim() ?? "",
-        errTop: box(root.querySelector("#stepPlan > .err"))?.top ?? null,
+        failed: (root.querySelector("[data-checkout-failed]") as HTMLElement | null)?.innerText?.trim() ?? "",
+        failedBottom: box(root.querySelector("[data-checkout-failed]"))?.bottom ?? null,
         headBottom: box(root.querySelector(".pw-head"))?.bottom ?? 0,
         railTop: rail.top,
       };
@@ -583,11 +587,12 @@ async function phoneCards(browser: any, width: number, height: number, n: number
     // The middle card's own button starts its plan on the switch's term; the error under the head.
     const btn = page.locator(`${sheet} .pw-plan.on .pw-go`);
     await btn.scrollIntoViewIfNeeded();
-    await btn.click();
+    await Promise.all([page.waitForURL(/checkout=failed/, { timeout: 60000 }), btn.click()]);
+    await page.locator(`${sheet} [data-plan-card]`).first().waitFor({ timeout: 60000 });
     await page.waitForTimeout(1200);
     const g = await look();
     const sent = asked[asked.length - 1] || {};
-    check(`${name}: ${t.middle}'s button starts ${t.middle} on Annual; the error under the step's head`, sent.planSlug === t.middle && sent.interval === "YEAR" && chosen(g) === t.middle && g.middle === t.middle && /QA: checkout answered/.test(g.err) && g.errTop !== null && g.errTop >= g.headBottom - 1 && g.errTop < g.railTop, `${JSON.stringify({ planSlug: sent.planSlug, interval: sent.interval })} · "${g.err}"`);
+    check(`${name}: ${t.middle}'s button starts ${t.middle} on Annual; a card page that did not open → the cards, ${t.middle} in the middle, the line over them`, sent.planSlug === t.middle && sent.interval === "YEAR" && sent.reason === "plan_pick" && chosen(g) === t.middle && g.middle === t.middle && /Secure checkout didn.t open/.test(g.failed) && g.failedBottom !== null && g.failedBottom <= g.railTop, `${JSON.stringify(sent)} · "${g.failed}"`);
     check(`${name}: the code field and the terms under the rail`, g.promo > g.rail.bottom && g.terms > g.promo, `promo ${Math.round(g.promo)} · terms ${Math.round(g.terms)} · rail ends ${Math.round(g.rail.bottom)}`);
     // A cancelled Checkout comes back to the plan chosen before it (the tab's memory), in the middle.
     const row = await db.syncState.findFirst({ where: { key: { startsWith: "signup:" }, cursor: { contains: `tiles.${n}@${MAIL_DOMAIN}` } }, select: { key: true } });

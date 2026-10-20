@@ -1,25 +1,21 @@
-// STRAIGHT TO PROFESSIONAL FOR A RETURNING VISITOR (2026-10-17; lib/signupAutoPlanServer). With the admin switch on
-// (Admin → Trials → "Plan at sign-up": Straight to Professional, SyncState `signupPlan`), a visitor who proved their
-// address on an earlier visit and comes back while the draft (cookie jf_otp_draft, 24 h) and its intent are alive goes
-// to the card page for Professional — the plan cards are never drawn. On a production build, at 390 (iPhone):
-//   · the landing's "Start my 7-day FREE TRIAL" with a live draft cookie (the intent written before the switch, no
-//     autoPlan mark; Starter remembered by the phone) → Professional, no cards;
-//   · the plan step's own address (?signup=<token>) opened in another tab → Professional, no cards;
-//   · a tab drawn while the switch was OFF, the code typed after it went ON → Professional, no cards (the step asks
-//     the server as it opens, not the page's copy);
-//   · the tab remembering Annual (and ?billing=annual) → the screen prints the MONTHLY price and Checkout is opened on
-//     it — read back from Stripe's sandbox when dev.db is in test mode;
-//   · BACK FROM THE CARD PAGE NEVER DRAWS THE CARDS (owner, 2026-10-18): Stripe's back link in the same tab, the
-//     browser's Back, a reload after it, and a `?checkout=cancelled` address opened in a new tab → Professional's
-//     screen waiting with its button (no second card page by itself, no cards); its button → the card page for
-//     Professional, monthly;
-//   · "See all plans" on that screen → the cards, Professional chosen — the only way to them; Start on a card then
-//     goes through;
+// STRAIGHT TO PROFESSIONAL, HANDED OFF BY THE SERVER (2026-10-17, 2026-10-18; rebuilt 2026-10-19 for
+// app/(auth)/auth/register/checkout). With the admin switch on (Admin → Trials → "Plan at sign-up": Straight to
+// Professional, SyncState `signupPlan`) and a card required, the sign-up never draws a screen of its own between step 1
+// and Stripe: the next document after step 1 is Stripe's card page for Professional, monthly — a 303 from the server.
+// On a production build, at 390 (iPhone):
+//   · step 1 (name + email) → checkout.stripe.com, with JavaScript and without it;
+//   · a returning visitor (a live proven draft in its cookie, the landing's "Start my 7-day FREE TRIAL"; the plan
+//     step's own address ?signup=<token> in a new tab) → checkout.stripe.com, no plan cards;
+//   · a tab drawn while the switch was OFF, the code typed after it went ON → checkout.stripe.com;
+//   · the tab remembering Annual (?billing=annual) → the session bills the MONTHLY price (read back from the sandbox);
+//   · Stripe's back arrow (?checkout=cancelled) and the browser's Back → ALL the plan cards, Professional chosen, the
+//     calm note, never the old "Add your card" screen; Starter pressed → Stripe's card page for Starter;
+//   · the card page did not open (?checkout=failed) → the cards with "Secure checkout didn't open — pick a plan to try
+//     again";
 //   · the switch OFF → the plan cards, as before;
 //   · on every step: no console error, no page error, no 4xx/5xx from this server.
-// The card page is not opened: /api/checkout/signup is answered here with a fake Checkout address, so the check reads
-// which plan the page asked for and creates nothing at Stripe. dev.db's `signupPlan` row is put back as it was; the
-// drafts, intents and brake rows the run writes are removed.
+// The sessions are real sandbox sessions when the server has STRIPE_SECRET_KEY_TEST (they expire unpaid; Stripe's page
+// loads and is not touched); the plan is then read back from the sandbox. dev.db's `signupPlan` row is put back as it was; the drafts, intents and brake rows the run writes are removed.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/signup/signup-auto-return.check.ts
 // QA_AUTO_URL=http://localhost:NNNN uses a server already up instead (no build, no start). QA_DATABASE_URL=file:<copy>
 // points the check (and the server it starts) at a copy of dev.db instead.
@@ -29,7 +25,6 @@ import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
 import { ROOT, ensureBuild, playwright, startServer, stopServer } from "../_lib/_prod-server";
-import { autoPlanPrice } from "../../../src/lib/signupAutoPlan";
 
 const PORT = Number(process.env.QA_AUTO_PORT || 3314);
 const BASE = (process.env.QA_AUTO_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
@@ -40,6 +35,7 @@ const MAIL_DOMAIN = `autoreturn${STAMP}.test`;
 const CODE = "864213";
 const HOUR = 3_600_000;
 const KEY = "signupPlan";
+const FAILED_LINE = "Secure checkout didn't open — pick a plan to try again";
 const db = new PrismaClient(DB_URL ? { datasources: { db: { url: DB_URL } } } : undefined);
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => { if (!ok) bad++; console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " — " + extra : ""}`); };
@@ -59,48 +55,37 @@ async function setSwitch(mode: "auto" | "pick") {
 
 // Playwright is loaded at run time (../_lib/_prod-server); its types come from wherever it was found.
 type Browser = Awaited<ReturnType<ReturnType<typeof playwright>["chromium"]["launch"]>>;
-type Req = { url(): string; method(): string; headers(): Record<string, string>; postData(): string | null };
-type Route = { request(): Req; continue(o?: object): Promise<void>; fulfill(o: object): Promise<void>; fetch(o?: object): Promise<{ json(): Promise<unknown> }> };
+type Req = { url(): string; method(): string; headers(): Record<string, string>; isNavigationRequest(): boolean; frame(): unknown };
+type Route = { request(): Req; continue(o?: object): Promise<void>; fulfill(o: object): Promise<void> };
 type Msg = { type(): string; text(): string };
 type Res = { status(): number; url(): string; request(): Req };
 
-/* A phone, its own made-up IP; the card page answered here. `seen()` says whether plan cards were ever on screen
-   (sampled every 50 ms from the first script on), `asked` which plan the page sent to the card page. */
-async function visitor(browser: Browser, opts: { realCheckout?: boolean } = {}) {
+/* A phone, its own made-up IP. `out.stripe` is Stripe's card page the tab was sent to (the session id is in it; a
+   page reached by a redirect cannot be answered by a route, so Stripe's own page loads and is left alone), `docs` every document the tab asked for with its status (303s included), `cardsSeen` whether
+   plan cards were ever on screen and `autoSeen` whether the old "Add your card" screen ever was (both sampled every
+   50 ms from the first script on). */
+async function visitor(browser: Browser, opts: { js?: boolean } = {}) {
   const ip = `10.${octet()}.${octet()}.${octet()}`;
   IPS.push(ip);
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, userAgent: IPHONE, locale: "en-US" });
-  await ctx.addInitScript({ content: "window.__name = function (f) { return f; };" });
-  const out: { asked: string | null; interval: string | null; session: string | null; checkout: boolean; cardsSeen: number; autoText: string } = { asked: null, interval: null, session: null, checkout: false, cardsSeen: 0, autoText: "" };
-  // Every 50 ms on the register page: how many plan cards are on screen — reported out, so a hand-off can't lose it.
-  await ctx.exposeBinding("__qaCards", (_src: unknown, n: number) => { out.cardsSeen = Math.max(out.cardsSeen, n); });
-  // …and the straight-to-Professional screen's own words (its price line), the moment it is drawn.
-  await ctx.exposeBinding("__qaAuto", (_src: unknown, t: string) => { if (t) out.autoText = t; });
-  await ctx.addInitScript({
-    content: `(function(){ if (location.pathname !== "/auth/register") return; setInterval(function(){
-      var n = [].slice.call(document.querySelectorAll("section.plan-sheet.is-in .pw-plan")).filter(function(c){ return c.offsetParent !== null && getComputedStyle(c).visibility !== "hidden"; }).length;
-      if (n && window.__qaCards) window.__qaCards(n);
-      var a = document.querySelector(".pw-auto .pw-auto-p"); if (a && window.__qaAuto) window.__qaAuto(a.textContent || ""); }, 50); })();`,
-  });
+  const js = opts.js !== false;
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, userAgent: IPHONE, locale: "en-US", javaScriptEnabled: js });
+  const out: { stripe: string | null; docs: string[]; cardsSeen: number; autoSeen: number } = { stripe: null, docs: [], cardsSeen: 0, autoSeen: 0 };
+  if (js) {
+    await ctx.addInitScript({ content: "window.__name = function (f) { return f; };" });
+    await ctx.exposeBinding("__qaCards", (_src: unknown, n: number, a: number) => { out.cardsSeen = Math.max(out.cardsSeen, n); out.autoSeen = Math.max(out.autoSeen, a); });
+    await ctx.addInitScript({
+      content: `(function(){ if (location.pathname !== "/auth/register") return; setInterval(function(){
+        var n = [].slice.call(document.querySelectorAll("section.plan-sheet.is-in .pw-plan")).filter(function(c){ return c.offsetParent !== null && getComputedStyle(c).visibility !== "hidden"; }).length;
+        var a = document.querySelectorAll(".pw-auto, #autoGo, [data-auto-wait]").length + (/Add your card/.test(document.body ? document.body.innerText : "") ? 1 : 0);
+        if (window.__qaCards) window.__qaCards(n, a); }, 50); })();`,
+    });
+  }
   const host = new URL(BASE).hostname;
   await ctx.addCookies([{ name: "jf_consent", value: encodeURIComponent(JSON.stringify({ v: 1, at: new Date().toISOString(), analytics: false, marketing: false, ack: true })), domain: host, path: "/" }]);
   await ctx.route("**/*", (route: Route) => {
     const req = route.request();
     const u = req.url();
-    if (u.startsWith(`${BASE}/api/checkout/signup`) && req.method() === "POST") {
-      try { const b = JSON.parse(req.postData() || "{}"); out.asked = b.planSlug ?? null; out.interval = b.interval ?? null; } catch { out.asked = "?"; }
-      // The real route (Stripe's sandbox), when the run can read the session it makes; a stand-in address otherwise.
-      if (opts.realCheckout) {
-        return route.fetch({ headers: { ...req.headers(), "x-forwarded-for": ip } }).then(async (resp) => {
-          const body = (await resp.json().catch(() => ({}))) as { url?: string };
-          out.session = body.url?.match(/cs_test_[A-Za-z0-9]+/)?.[0] ?? null;
-          return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url: "https://checkout.stripe.com/c/pay/qa-auto-return" }) });
-        });
-      }
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url: "https://checkout.stripe.com/c/pay/qa-auto-return" }) });
-    }
     if (u.startsWith(BASE)) return route.continue({ headers: { ...req.headers(), "x-forwarded-for": ip } });
-    if (/^https:\/\/checkout\.stripe\.com\//.test(u)) { out.checkout = true; return route.fulfill({ status: 200, contentType: "text/html", body: "<title>checkout</title>" }); }
     if (/^https:\/\/accounts\.google\.com\//.test(u)) return route.fulfill({ status: 200, contentType: "text/html", body: "<title>google</title>" });
     if (/facebook\.(com|net)|posthog|googletagmanager|google-analytics|doubleclick/.test(u)) return route.fulfill({ status: 204, body: "" });
     return route.continue();
@@ -108,9 +93,15 @@ async function visitor(browser: Browser, opts: { realCheckout?: boolean } = {}) 
   const page = await ctx.newPage();
   const log = { step: "", errs: [] as string[] };
   const push = (what: string) => log.errs.push(`[${log.step}] ${what.replace(/\s+/g, " ").slice(0, 220)}`);
-  page.on("console", (m: Msg) => { if (m.type() === "error" && !/does not have a registered handler|^\[Report Only\]|delivered in report-only mode/.test(m.text())) push("console: " + m.text()); });
+  page.on("console", (m: Msg) => { if (m.type() === "error" && page.url().startsWith(BASE) && !/does not have a registered handler|^\[Report Only\]|delivered in report-only mode/.test(m.text())) push("console: " + m.text()); });
   page.on("pageerror", (e: Error) => push("pageerror: " + String(e?.message || e)));
-  page.on("response", (r: Res) => { if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(BASE.length)}`); });
+  page.on("response", (r: Res) => {
+    const q = r.request();
+    if (!q.isNavigationRequest() || q.frame() !== page.mainFrame()) return void (r.status() >= 400 && r.url().startsWith(BASE) && push(`HTTP ${r.status()} ${q.method()} ${r.url().slice(BASE.length)}`));
+    out.docs.push(`${r.status()} ${r.url().replace(BASE, "")}`);
+    if (/^https:\/\/checkout\.stripe\.com\//.test(r.url()) && r.status() < 300) out.stripe = r.url();
+    if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${q.method()} ${r.url().slice(BASE.length)}`);
+  });
   return { ctx, page, out, step: (s: string) => { log.step = s; }, take: () => log.errs.splice(0).join(" | ") };
 }
 type V = Awaited<ReturnType<typeof visitor>>;
@@ -133,7 +124,7 @@ async function plantReturning(email: string, age: number): Promise<{ draft: stri
 async function holdDraft(v: V, draft: string) {
   await v.ctx.addCookies([{ name: "jf_otp_draft", value: draft, domain: new URL(BASE).hostname, path: "/" }]);
 }
-/** This tab's memory from the earlier visit: the phone's chosen card, and (optionally) the intent it handed off. */
+/** This tab's memory from an earlier visit (sessionStorage). */
 async function tabMemory(v: V, mem: Record<string, string>) {
   await v.page.goto(`${BASE}/robots.txt`, { timeout: 120000 });
   await v.page.evaluate((m: Record<string, string>) => { for (const [k, val] of Object.entries(m)) sessionStorage.setItem(k, val); }, mem);
@@ -156,37 +147,59 @@ async function plantCode(url: string) {
   throw new Error("no draft for " + url);
 }
 
-type Seen = { asked: string | null; checkout: boolean; cardsSeen: number; autoShown: boolean; waiting: boolean; chosen: string | null; note: boolean; gate: string | null };
-/** Until the card page is asked for (or `ms` pass): what the page asked for and whether cards were drawn. */
-async function outcome(v: V, ms = 15000): Promise<Seen> {
-  let autoShown = false;
-  for (let i = 0; i < ms / 100 && !v.out.checkout; i++) {
-    if (!autoShown) autoShown = (await v.page.locator(".pw-auto[data-auto-plan]").count().catch(() => 0)) > 0;
-    await v.page.waitForTimeout(100);
+/* The sandbox key, for reading back the Checkout session the server made (never the live key). */
+function sandboxKey(): string | null {
+  for (const file of [".env.local", ".env"]) {
+    try {
+      for (const line of fs.readFileSync(path.join(ROOT, file), "utf8").split(/\r?\n/)) {
+        const m = line.match(/^\s*STRIPE_SECRET_KEY_TEST\s*=\s*"?([^"\s]+)"?/);
+        if (m && m[1].startsWith("sk_test_")) return m[1];
+      }
+    } catch { /* no file */ }
   }
-  const here = v.out.checkout ? null : await v.page.evaluate(() => ({
-    waiting: !!(document.querySelector(".pw-auto[data-auto-wait] #autoGo") as HTMLElement | null)?.offsetParent,
-    chosen: document.querySelector("section.plan-sheet.is-in .pw-plan.on")?.getAttribute("data-plan-card") ?? null,
-    note: !!document.querySelector("[data-auto-plan-back]"),
-    gate: document.getElementById("planGate")?.getAttribute("data-gate") ?? null,
-  }));
-  return { asked: v.out.asked, checkout: v.out.checkout, autoShown, cardsSeen: v.out.cardsSeen, waiting: here?.waiting ?? false, chosen: here?.chosen ?? null, note: here?.note ?? false, gate: here?.gate ?? null };
+  return null;
 }
-/** A new leg in the same tab: what the page asks for from here on. */
-function fresh(v: V) {
-  v.out.asked = null;
-  v.out.interval = null;
-  v.out.checkout = false;
-  v.out.cardsSeen = 0;
+const SANDBOX = sandboxKey();
+type Sold = { plan: string | null; amount: number | null; interval: string | null };
+/** The plan and price of the session in a checkout.stripe.com address (the sandbox's answer), or nulls. */
+async function sold(url: string | null): Promise<Sold> {
+  const id = url?.match(/cs_test_[A-Za-z0-9]+/)?.[0];
+  if (!id || !SANDBOX) return { plan: null, amount: null, interval: null };
+  const r = await fetch(`https://api.stripe.com/v1/checkout/sessions/${id}/line_items?expand[]=data.price.product`, { headers: { Authorization: `Bearer ${SANDBOX}` } });
+  const b = (await r.json().catch(() => ({}))) as { data?: { price?: { unit_amount: number | null; recurring: { interval: string } | null; product?: { name?: string } } }[] };
+  const p = b.data?.[0]?.price;
+  return { plan: p?.product?.name?.replace(/^JobFlex\s+/i, "").toLowerCase() ?? null, amount: p?.unit_amount ?? null, interval: p?.recurring?.interval ?? null };
 }
 
-async function scenario(browser: Browser, name: string, run: (v: V) => Promise<void>, expect: (s: Seen) => boolean) {
-  const v = await visitor(browser);
+type Seen = { stripe: boolean; next: string; sold: Sold; cardsSeen: number; autoSeen: number };
+/** Until Stripe's page is reached (or `ms` pass): where the tab went, what it was sold, what was drawn on the way. */
+async function outcome(v: V, ms = 30000): Promise<Seen> {
+  for (let i = 0; i < ms / 100 && !v.out.stripe; i++) await v.page.waitForTimeout(100);
+  // The first document drawn after the last page of this site the tab showed: every hop between is a redirect.
+  const stripeAt = v.out.docs.findIndex((d) => /checkout\.stripe\.com/.test(d));
+  const upTo = stripeAt < 0 ? v.out.docs.length : stripeAt;
+  const lastOwn = v.out.docs.slice(0, upTo).map((d) => /^200 \//.test(d)).lastIndexOf(true);
+  const next = v.out.docs.slice(lastOwn + 1).find((d) => !/^30[1-8] /.test(d)) ?? "";
+  return { stripe: !!v.out.stripe, next, sold: await sold(v.out.stripe), cardsSeen: v.out.cardsSeen, autoSeen: v.out.autoSeen };
+}
+/** A new leg in the same tab. */
+function fresh(v: V) {
+  v.out.stripe = null;
+  v.out.docs = [];
+  v.out.cardsSeen = 0;
+  v.out.autoSeen = 0;
+}
+/** Professional's card page, monthly, reached as the next document — no plan cards, no "Add your card" on the way. */
+const straightToPro = (s: Seen) =>
+  s.stripe && /checkout\.stripe\.com/.test(s.next) && s.cardsSeen === 0 && s.autoSeen === 0 && (!SANDBOX || (s.sold.plan === "professional" && s.sold.interval === "month"));
+
+async function scenario(browser: Browser, name: string, run: (v: V) => Promise<void>, expect: (s: Seen) => boolean, opts: { js?: boolean } = {}) {
+  const v = await visitor(browser, opts);
   try {
     v.step(name);
     await run(v);
     const s = await outcome(v);
-    check(name, expect(s), JSON.stringify(s));
+    check(name, expect(s), JSON.stringify({ ...s, docs: v.out.docs.slice(-4) }));
     const e = v.take();
     check(`${name} — no console / page / HTTP errors`, !e, e);
   } catch (e) {
@@ -195,7 +208,6 @@ async function scenario(browser: Browser, name: string, run: (v: V) => Promise<v
     await v.ctx.close();
   }
 }
-const straightToPro = (s: Seen) => s.asked === "professional" && s.checkout && s.cardsSeen === 0;
 /** A scenario that makes its own checks (several legs in one tab). */
 async function journey(browser: Browser, name: string, run: (v: V, name: string) => Promise<void>) {
   const v = await visitor(browser);
@@ -210,72 +222,49 @@ async function journey(browser: Browser, name: string, run: (v: V, name: string)
     await v.ctx.close();
   }
 }
-/* Professional's screen waits (no card page by itself, no cards); its button then opens the card page for Professional,
-   monthly. */
-async function waitsThenGoes(v: V, name: string) {
-  const s = await outcome(v, 6000);
-  check(`${name}: Professional's screen waits with its button — no card page by itself, no cards`, !s.checkout && !s.asked && s.cardsSeen === 0 && s.waiting, JSON.stringify(s));
-  fresh(v);
-  await v.page.locator("#autoGo").click();
-  const t = await outcome(v);
-  check(`${name}: its button → the card page for Professional, monthly`, straightToPro(t) && v.out.interval === "MONTH", JSON.stringify({ ...t, interval: v.out.interval }));
+
+/** Step 1 of the short sign-up: name, email, the button. */
+async function stepOne(v: V, email: string, js = true) {
+  await v.page.goto(`${BASE}/auth/register?industry=hvac`, { waitUntil: "load", timeout: 180000 });
+  await v.page.locator("#nextBtn").waitFor({ timeout: 120000 });
+  if (js) await v.page.waitForFunction(() => (window as unknown as { __jfStep1?: { ready: boolean } }).__jfStep1?.ready, null, { timeout: 60000 }).catch(() => {});
+  await v.page.fill("#name", "Straight Through");
+  await v.page.fill("#email", email);
+  await v.page.click("#nextBtn");
 }
 
-/* The sandbox key, for reading back the Checkout session the route made (never the live key). */
-function sandboxKey(): string | null {
-  for (const file of [".env.local", ".env"]) {
-    try {
-      for (const line of fs.readFileSync(path.join(ROOT, file), "utf8").split(/\r?\n/)) {
-        const m = line.match(/^\s*STRIPE_SECRET_KEY_TEST\s*=\s*"?([^"\s]+)"?/);
-        if (m && m[1].startsWith("sk_test_")) return m[1];
-      }
-    } catch { /* no file */ }
-  }
-  return null;
+type Cards = { cards: number; chosen: string | null; note: boolean; failed: string | null; auto: number };
+async function cards(v: V): Promise<Cards> {
+  await v.page.locator("section.plan-sheet.is-in .pw-plan").first().waitFor({ timeout: 60000 });
+  await v.page.waitForTimeout(600);
+  return v.page.evaluate(() => ({
+    cards: Array.from(document.querySelectorAll<HTMLElement>("section.plan-sheet.is-in .pw-plan")).filter((c) => c.offsetParent !== null).length,
+    chosen: document.querySelector("section.plan-sheet.is-in .pw-plan.on")?.getAttribute("data-plan-card") ?? null,
+    note: !!document.querySelector("[data-auto-plan-back]"),
+    failed: document.querySelector("[data-checkout-failed]")?.textContent?.trim() ?? null,
+    auto: document.querySelectorAll(".pw-auto, #autoGo, [data-auto-wait]").length + (/Add your card/.test(document.body.innerText) ? 1 : 0),
+  }));
+}
+/** On the cards: a plan's own start button (a phone brings the card to the middle first). */
+async function start(v: V, slug: string) {
+  const card = v.page.locator(`section.plan-sheet.is-in .pw-plan[data-plan-card="${slug}"]`);
+  await card.click({ position: { x: 16, y: 16 } }).catch(() => {});
+  await v.page.waitForTimeout(700);
+  await card.locator(".pw-go").first().click();
 }
 
 /* A REMEMBERED ANNUAL (2026-10-17): the tab chose Annual earlier and the link says ?billing=annual; straight to
-   Professional has no term switch, so it prints the MONTHLY price and opens Checkout on the monthly price. With the
-   sandbox in reach the session the route made is read back from Stripe: its price is the catalog's monthly one. */
+   Professional has no term switch, so the session bills the monthly catalog price. */
 async function rememberedAnnual(browser: Browser) {
-  const pro = await db.pricingPlan.findUnique({ where: { slug: "professional" }, select: { priceCents: true, yearlyPriceCents: true } });
+  const pro = await db.pricingPlan.findUnique({ where: { slug: "professional" }, select: { priceCents: true } });
   if (!pro) return note("remembered Annual", "no professional plan in the catalog — skipped");
-  const mode = (await db.syncState.findUnique({ where: { key: "stripe:mode" } }))?.cursor;
-  const key = mode === "test" ? sandboxKey() : null;
-  if (!key) note("remembered Annual", `dev.db stripe:mode is "${mode ?? "live"}" or no sandbox key — the session is not read back, only the term asked`);
-  const v = await visitor(browser, { realCheckout: !!key });
-  const name = "switch ON: the tab remembers Annual (and the link says ?billing=annual) → the screen shows the monthly price, Checkout on the monthly price";
-  try {
-    v.step(name);
+  if (!SANDBOX) note("remembered Annual", "no sandbox key — the session's price is not read back");
+  await scenario(browser, "switch ON: the tab remembers Annual (?billing=annual) → Stripe bills the monthly price", async (v) => {
     const { draft } = await plantReturning(`back.annual.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
     await holdDraft(v, draft);
     await tabMemory(v, { jf_billing_term: "YEAR" });
     await v.page.goto(`${BASE}/auth/register?billing=annual`, { waitUntil: "load", timeout: 180000 });
-    const s = await outcome(v);
-    // The words lib/signupAutoPlan autoPlanPrice prints for the catalog's monthly price.
-    const monthly = autoPlanPrice({ priceCents: pro.priceCents });
-    const said = v.out.autoText.replace(/\s+/g, " ");
-    const yearly = pro.yearlyPriceCents ? said.includes(`$${pro.yearlyPriceCents / 100}`) : false;
-    check(`${name}: the screen`, said.includes(monthly) && !yearly && !/\/yr|\/year/.test(said), `"${said}" · expected ${monthly}`);
-    check(`${name}: Checkout asked for`, straightToPro(s) && v.out.interval === "MONTH", JSON.stringify({ ...s, interval: v.out.interval }));
-    if (key) {
-      const sessionId = v.out.session;
-      type StripePrice = { unit_amount: number | null; recurring: { interval: string } | null };
-      let price = null as StripePrice | null;
-      if (sessionId) {
-        const r = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}/line_items?expand[]=data.price`, { headers: { Authorization: `Bearer ${key}` } });
-        const b = (await r.json().catch(() => ({}))) as { data?: { price?: StripePrice }[] };
-        price = b.data?.[0]?.price ?? null;
-      }
-      check(`${name}: the Stripe session's price = the catalog's monthly price`, !!price && price.unit_amount === pro.priceCents && price.recurring?.interval === "month", JSON.stringify({ sessionId, unitAmount: price?.unit_amount ?? null, interval: price?.recurring?.interval ?? null, catalogMonthly: pro.priceCents }));
-    }
-    const e = v.take();
-    check(`${name} — no console / page / HTTP errors`, !e, e);
-  } catch (e) {
-    check(`${name} ran through`, false, failed(e, v));
-  } finally {
-    await v.ctx.close();
-  }
+  }, (s) => straightToPro(s) && (!SANDBOX || s.sold.amount === pro.priceCents));
 }
 
 async function main() {
@@ -287,11 +276,20 @@ async function main() {
       ensureBuild(note);
       server = await startServer(PORT, { STRIPE_SECRET_KEY: "", RESEND_API_KEY: "", SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "", SMTP_PASSWORD: "", ...(DB_URL ? { DATABASE_URL: DB_URL } : {}) }, "QA_AUTO_PORT");
     }
+    if (!SANDBOX) note("sandbox", "no STRIPE_SECRET_KEY_TEST — the plan of each card page is not read back");
     const browser = await pw.chromium.launch({ channel: "chrome", args: ["--disable-blink-features=AutomationControlled"] }).catch(() => pw.chromium.launch());
     try {
       await setSwitch("auto");
+      await scenario(browser, "switch ON: step 1 (name + email) → the next document is Stripe's card page for Professional", (v) => stepOne(v, `step1.${STAMP}@${MAIL_DOMAIN}`), straightToPro);
+      await scenario(
+        browser,
+        "switch ON, JavaScript off: step 1 → the next document is Stripe's card page for Professional",
+        (v) => stepOne(v, `nojs.${STAMP}@${MAIL_DOMAIN}`, false),
+        (s) => s.stripe && /checkout\.stripe\.com/.test(s.next) && (!SANDBOX || (s.sold.plan === "professional" && s.sold.interval === "month")),
+        { js: false },
+      );
       await rememberedAnnual(browser);
-      await scenario(browser, "switch ON: returning with a live draft → landing \"Start my 7-day FREE TRIAL\" → Professional's card page, no plan cards", async (v) => {
+      await scenario(browser, "switch ON: returning with a live draft → landing \"Start my 7-day FREE TRIAL\" → Stripe, no plan cards", async (v) => {
         const { draft } = await plantReturning(`back.landing.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
         await holdDraft(v, draft);
         await tabMemory(v, { jf_signup_plan: "starter" });
@@ -299,59 +297,37 @@ async function main() {
         const cta = v.page.locator('[data-cta="hero"]').first();
         await cta.waitFor({ timeout: 120000 });
         check("the landing's hero button says the trial", /Start my \d+-day FREE TRIAL/.test((await cta.innerText()).trim()), (await cta.innerText()).trim());
-        await Promise.all([v.page.waitForURL(/\/auth\/register/, { timeout: 120000 }), cta.click()]);
+        await cta.click();
       }, straightToPro);
-      await scenario(browser, "switch ON: returning by the plan step's address (?signup=<token>) → Professional, no plan cards", async (v) => {
-        const { draft, signup } = await plantReturning(`back.signup.${STAMP}@${MAIL_DOMAIN}`, 20 * HOUR);
-        await holdDraft(v, draft);
+      await scenario(browser, "switch ON: returning by the plan step's address (?signup=<token>) in a new tab → Stripe, no plan cards", async (v) => {
+        const { signup } = await plantReturning(`back.signup.${STAMP}@${MAIL_DOMAIN}`, 20 * HOUR);
         await v.page.goto(`${BASE}/auth/register?signup=${signup}`, { waitUntil: "load", timeout: 180000 });
       }, straightToPro);
-      await journey(browser, "switch ON: a ?checkout=cancelled address opened in a new tab", async (v, name) => {
-        const { draft, signup } = await plantReturning(`back.cancelled.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
-        await holdDraft(v, draft);
+      await journey(browser, "switch ON: Stripe's back arrow (?checkout=cancelled)", async (v, name) => {
+        const { signup } = await plantReturning(`back.cancelled.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
+        await tabMemory(v, { jf_signup_plan: "starter" });
         await v.page.goto(`${BASE}/auth/register?signup=${signup}&checkout=cancelled`, { waitUntil: "load", timeout: 180000 });
-        await waitsThenGoes(v, name);
+        const c = await cards(v);
+        check(`${name} → all the plan cards, Professional chosen, the note — no "Add your card" screen`, c.cards >= 3 && c.chosen === "professional" && c.note && !c.failed && c.auto === 0 && v.out.autoSeen === 0 && !v.out.stripe, JSON.stringify(c));
+        fresh(v);
+        await start(v, "starter");
+        const s = await outcome(v);
+        check(`${name}: Starter pressed → Stripe's card page for Starter`, s.stripe && (!SANDBOX || s.sold.plan === "starter"), JSON.stringify(s));
       });
-      await journey(browser, "switch ON: cancelled in Stripe (its back link, in the tab that handed off; Starter remembered)", async (v, name) => {
-        const { draft, signup } = await plantReturning(`back.out.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
-        await holdDraft(v, draft);
-        await tabMemory(v, { jf_signup_plan: "starter", jf_signup_handoff: signup });
-        await v.page.goto(`${BASE}/auth/register?signup=${signup}&checkout=cancelled`, { waitUntil: "load", timeout: 180000 });
-        await waitsThenGoes(v, name);
-      });
-      await journey(browser, "switch ON: the browser's Back from the card page", async (v, name) => {
-        const { draft, signup } = await plantReturning(`back.history.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
-        await holdDraft(v, draft);
-        await v.page.goto(`${BASE}/auth/register?signup=${signup}`, { waitUntil: "load", timeout: 180000 });
+      await journey(browser, "switch ON: the browser's Back from Stripe after step 1", async (v, name) => {
+        await stepOne(v, `back.history.${STAMP}@${MAIL_DOMAIN}`);
         const first = await outcome(v);
-        check(`${name}: the first arrival → the card page for Professional by itself`, straightToPro(first), JSON.stringify(first));
-        await v.page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 });
+        check(`${name}: step 1 → Stripe`, straightToPro(first), JSON.stringify(first));
         fresh(v);
         await v.page.goBack({ waitUntil: "load", timeout: 120000 });
-        await waitsThenGoes(v, `${name} (Back)`);
-        // …and again: Back from that card page, then a reload of the plan step.
-        await v.page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 });
-        await v.page.goBack({ waitUntil: "load", timeout: 120000 });
-        fresh(v);
-        await v.page.reload({ waitUntil: "load", timeout: 120000 });
-        await waitsThenGoes(v, `${name} (Back, then a reload)`);
+        const c = await cards(v);
+        check(`${name} → the plan cards — no "Add your card" screen, no second card page by itself`, c.cards >= 3 && c.auto === 0 && !v.out.stripe, JSON.stringify(c));
       });
-      await journey(browser, "switch ON: \"See all plans\" on Professional's screen", async (v, name) => {
-        const { draft, signup } = await plantReturning(`back.all.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
-        await holdDraft(v, draft);
-        await tabMemory(v, { jf_signup_plan: "starter", jf_signup_handoff: signup });
-        await v.page.goto(`${BASE}/auth/register?signup=${signup}&checkout=cancelled`, { waitUntil: "load", timeout: 180000 });
-        const s = await outcome(v, 6000);
-        check(`${name}: before the tap — the screen waits, no cards`, s.cardsSeen === 0 && s.waiting && !s.checkout, JSON.stringify(s));
-        await v.page.locator("[data-auto-plan-all]").click();
-        await v.page.locator("section.plan-sheet.is-in .pw-plan").first().waitFor({ timeout: 60000 });
-        const t = await outcome(v, 3000);
-        check(`${name} → the cards, Professional chosen (Starter remembered is ignored)`, !t.checkout && !t.asked && t.cardsSeen > 0 && t.chosen === "professional" && !t.waiting, JSON.stringify(t));
-        // Start on a card goes through: "See all plans" called back only the screen's own hand-off.
-        fresh(v);
-        await v.page.locator('section.plan-sheet.is-in .pw-plan[data-plan-card="professional"] .pw-acts button.pw-go').first().click();
-        const u = await outcome(v);
-        check(`${name}: Start on the Professional card → the card page`, u.asked === "professional" && u.checkout, JSON.stringify(u));
+      await journey(browser, "switch ON: the card page did not open (?checkout=failed)", async (v, name) => {
+        const { signup } = await plantReturning(`back.failed.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
+        await v.page.goto(`${BASE}/auth/register?signup=${signup}&checkout=failed`, { waitUntil: "load", timeout: 180000 });
+        const c = await cards(v);
+        check(`${name} → the cards with the line`, c.cards >= 3 && c.failed === FAILED_LINE && !c.note && c.auto === 0, JSON.stringify(c));
       });
 
       // A tab drawn while the switch was OFF: the code screen waits, the owner turns it ON, the code is typed.
@@ -371,7 +347,7 @@ async function main() {
         await stale.page.locator("#otpCode").focus();
         await stale.page.keyboard.type(CODE);
         const s = await outcome(stale);
-        check("a tab drawn with the switch OFF, the code typed after it went ON → Professional, no plan cards", straightToPro(s), JSON.stringify(s));
+        check("a tab drawn with the switch OFF, the code typed after it went ON → Stripe for Professional, no plan cards", straightToPro(s), JSON.stringify(s));
         const e = stale.take();
         check("stale tab — no console / page / HTTP errors", !e, e);
       } catch (e) {
@@ -381,13 +357,13 @@ async function main() {
       }
 
       await setSwitch("pick");
-      await scenario(browser, "switch OFF: returning with a live draft → the plan cards, as before (the phone's Starter chosen)", async (v) => {
+      await scenario(browser, "switch OFF: returning with a live draft → the plan cards, as before", async (v) => {
         const { draft } = await plantReturning(`back.off.${STAMP}@${MAIL_DOMAIN}`, 3 * HOUR);
         await holdDraft(v, draft);
         await tabMemory(v, { jf_signup_plan: "starter" });
         await v.page.goto(`${BASE}/auth/register?flow=otp`, { waitUntil: "load", timeout: 180000 });
         await v.page.locator("section.plan-sheet.is-in .pw-plan").first().waitFor({ timeout: 60000 });
-      }, (s) => !s.checkout && !s.asked && !s.autoShown && s.cardsSeen > 0 && s.chosen === "starter");
+      }, (s) => !s.stripe && s.autoSeen === 0 && s.cardsSeen > 0, {});
     } finally {
       await browser.close();
     }

@@ -7,21 +7,12 @@
 // account is created only when this session comes back complete.
 //
 // It is deliberately narrow:
-//   · the token must resolve to a live pending intent (a day — lib/pendingSignup) — no token, no
-//     session, so this cannot be used as an anonymous Stripe session factory;
-//   · the customer email is taken from the INTENT, never from the request body;
-//   · `client_reference_id` carries the token, which is what
-//     `completePendingSignup` checks the returned session against.
+//   · the token must resolve to a live pending intent (lib/signupCheckoutSession has the rules);
+//   · the customer email is taken from the INTENT, never from the request body.
 import { NextResponse } from "next/server";
-import type Stripe from "stripe";
-import { getStripeClient, isStripeEnabled } from "@/lib/sdk/stripe";
-import { readPendingSignup } from "@/actions/signupCheckout";
-import { resolveSignupDiscount, resolveSignupPrice } from "@/lib/signupPricing";
-import { customMetadata } from "@/lib/customBilling";
+import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { signupTrialMode } from "@/lib/trialPolicyServer";
-import { CUSTOM_PLAN_OFF_SALE, customPlanOffered } from "@/lib/customPlanFlag";
-import { trialOfferMetadata } from "@/lib/trialOffer";
-import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
+import { createSignupCheckout } from "@/lib/signupCheckoutSession";
 
 export const runtime = "nodejs";
 
@@ -51,87 +42,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "interval must be MONTH or YEAR." }, { status: 400 });
   }
 
-  // Off sale (CUSTOM_PLAN_ENABLED unset): a new shop cannot start on it.
-  if (String(planSlug) === CUSTOM_PLAN_SLUG && !customPlanOffered()) {
-    return NextResponse.json({ error: CUSTOM_PLAN_OFF_SALE }, { status: 410 });
-  }
-
-  const pending = await readPendingSignup(String(token));
-  if (!pending) {
-    return NextResponse.json({ error: "That signup expired. Start again." }, { status: 410 });
-  }
-
-  // Mode-aware from the top: the admin's live/sandbox switch (lib/stripeMode)
-  // decides which account this session is created on. The price and the
-  // discount are lib/signupPricing's — the card-less trial reads the same.
-  const { stripe, mode } = await getStripeClient();
-  const priced = await resolveSignupPrice({
-    stripe,
-    mode,
-    planSlug: String(planSlug),
-    interval,
-    customPages: pending.customPages,
-    trialOffer: pending.trialOffer,
-  });
-  if (!priced.ok) return NextResponse.json({ error: priced.error }, { status: priced.status });
-  // The saved offer determines the duration; then Stripe charges the selected price.
-  const { trialDays, planLabel, isCustom } = priced;
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = priced.lineItems;
-  const discount = await resolveSignupDiscount({
-    stripe,
-    mode,
-    attribution: pending.attribution,
-    trialDays,
-    where: "checkout/signup",
-    interval: priced.interval,
-    monthlyCents: priced.monthlyCents,
-  });
-  // `discounts` and `allow_promotion_codes` are mutually exclusive at Stripe,
-  // so a session with a discount attached has no promo field.
-  const discounts: Stripe.Checkout.SessionCreateParams.Discount[] | null = discount ? [discount] : null;
-
-  const origin = new URL(req.url).origin;
-  try {
-    // REHEARSALS ONLY: STRIPE_TEST_CLOCKS=1 opens the checkout for a customer
-    // made on a Stripe test clock of its own, so a harness can walk the trial
-    // to day 8 and see the first charge (the card-less trial's rule, in
-    // lib/cardlessTrial). Never in production, never on the live account.
-    let customer: string | null = null;
-    if (mode === "test" && process.env.NODE_ENV !== "production" && process.env.STRIPE_TEST_CLOCKS === "1") {
-      const clock = await stripe.testHelpers.testClocks.create({ frozen_time: Math.floor(Date.now() / 1000), name: `signup ${pending.email}`.slice(0, 300) });
-      customer = (await stripe.customers.create({ email: pending.email, name: pending.businessName, test_clock: clock.id, metadata: { signupToken: String(token) } })).id;
-    }
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      ...(customer ? { customer } : { customer_email: pending.email }),
-      client_reference_id: String(token),
-      line_items: lineItems,
-      // The custom plan's pages ride the subscription too (lib/customBilling);
-      // the organization is named on it once the account exists.
-      subscription_data:
-        trialDays > 0 || isCustom
-          ? {
-              ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
-              metadata: { ...(isCustom ? customMetadata(null, pending.customPages) : {}), ...trialOfferMetadata(pending.trialOffer) },
-            }
-          : undefined,
-      // A yearly bill takes no code typed at Stripe: a percent "first month"
-      // code there would come off the whole year (lib/firstMonthDiscount) —
-      // codes are applied on our plan step, as one month's worth.
-      ...(discounts ? { discounts } : priced.interval === "MONTH" ? { allow_promotion_codes: true } : {}),
-      metadata: {
-        ...trialOfferMetadata(pending.trialOffer),
-        signupToken: String(token),
-        planSlug: planLabel,
-        interval: priced.interval,
-        ...(isCustom ? { customPages: pending.customPages.join(",") } : {}),
-      },
-      success_url: `${origin}/auth/register?signup=${encodeURIComponent(String(token))}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/auth/register?signup=${encodeURIComponent(String(token))}&checkout=cancelled`,
-    });
-    return NextResponse.json({ url: session.url });
-  } catch (err) {
-    console.error("[checkout/signup] failed:", err);
-    return NextResponse.json({ error: "Couldn't open checkout." }, { status: 502 });
-  }
+  // The session itself (and its eight-second deadline) is lib/signupCheckoutSession's — the register page's own
+  // 303 to Stripe (app/(auth)/auth/register/checkout) makes the same one.
+  const res = await createSignupCheckout({ token: String(token), planSlug: String(planSlug), interval, origin: new URL(req.url).origin });
+  return res.ok ? NextResponse.json({ url: res.url }) : NextResponse.json({ error: res.error }, { status: res.status });
 }

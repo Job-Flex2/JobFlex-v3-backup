@@ -2,8 +2,9 @@
 // (./_prod-server — the same .cache/next-sweep build the phone sweep uses; production is where
 // a server action's thrown message is withheld and the visitor read "Minified React error #441"):
 //   · landing (/, ?industry=hvac, roofing, fencing, painting) → hero CTA → step 1 → step 2
-//     "Create account" → the plan sheet → "Start free trial" → /api/checkout/signup → the
-//     browser leaves for checkout.stripe.com — at 390 (iPhone) and 1440 (desktop);
+//     "Create account" → the plan sheet → "Start free trial" → /auth/register/checkout (the
+//     server's 303, 2026-10-19) → the browser leaves for checkout.stripe.com — at 390 (iPhone)
+//     and 1440 (desktop);
 //   · the same email path in Instagram's webview, iOS and Android user agents (no Google
 //     button on step 1 there);
 //   · the Google buttons (landing at 1440, step 1 at 390) hand off to accounts.google.com;
@@ -14,7 +15,8 @@
 //   · on every step: no console error, no page error, no 4xx/5xx from this server.
 // Stripe is reached only in TEST mode (dev.db `stripe:mode` = test, the server started with
 // STRIPE_SECRET_KEY blank); in live mode the run stops at the plan sheet and says so. The
-// Checkout and Google pages themselves are never loaded — the hand-off is what is checked.
+// hand-off is what is checked: Google's page is never loaded; Stripe's is reached by a redirect,
+// which a route cannot answer, so its sandbox page loads and is left alone.
 // Mail keys are blank on the server. Each run comes from its own made-up address (10.x, by
 // x-forwarded-for); its pending signups and brake rows are removed after.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/signup/signup-flow.check.ts
@@ -63,9 +65,13 @@ async function visitor(browser: any, kind: Kind, ip: string) {
   const page = await ctx.newPage();
   const log = { step: "landing", errs: [] as string[] };
   const push = (what: string) => log.errs.push(`[${log.step}] ${what.replace(/\s+/g, " ").slice(0, 220)}`);
-  page.on("console", (m: any) => { if (m.type() === "error") push("console: " + m.text()); });
+  page.on("console", (m: any) => { if (m.type() === "error" && page.url().startsWith(BASE)) push("console: " + m.text()); });
   page.on("pageerror", (e: any) => push("pageerror: " + String(e?.message || e)));
-  page.on("response", (r: any) => { if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(BASE.length)}`); });
+  page.on("response", (r: any) => {
+    if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(BASE.length)}`);
+    // Stripe's page arrives by the server's 303: seen as the tab's own document, not through the route above.
+    if (r.request().isNavigationRequest() && r.request().frame() === page.mainFrame() && /^https:\/\/checkout\.stripe\.com\//.test(r.url())) handoff.checkout = r.url();
+  });
   const step = (s: string) => { log.step = s; };
   const take = () => log.errs.splice(0).join(" | ");
   return { ctx, page, step, take, handoff };
@@ -120,7 +126,7 @@ async function step2(v: Awaited<ReturnType<typeof visitor>>) {
   return { ok, err };
 }
 
-/** The plan sheet's start → /api/checkout/signup → the browser heads for Stripe. A desk presses
+/** The plan sheet's start → /auth/register/checkout (a 303) → the browser heads for Stripe. A desk presses
  *  the first card's button; a phone (the swiped rail, 2026-10-14) the button of the card in the
  *  middle of the screen — the chosen one — and says which card that was. */
 async function toCheckout(v: Awaited<ReturnType<typeof visitor>>) {
@@ -138,7 +144,7 @@ async function toCheckout(v: Awaited<ReturnType<typeof visitor>>) {
         return { slug: on.dataset.planCard ?? "", hero: on.classList.contains("pw-plan--hero"), off: Math.round(((b.left + b.right) / 2 - (rail.left + rail.right) / 2) * 10) / 10 };
       })
     : null;
-  const answer = page.waitForResponse((r: any) => r.url().startsWith(BASE + "/api/checkout/signup"), { timeout: 90000 }).catch(() => null);
+  const answer = page.waitForResponse((r: any) => r.url().startsWith(BASE + "/auth/register/checkout"), { timeout: 90000 }).catch(() => null);
   await go.click();
   const r = await answer;
   for (let i = 0; i < 60 && !v.handoff.checkout; i++) await page.waitForTimeout(250);
@@ -162,7 +168,7 @@ async function emailPath(browser: any, kind: Kind, industry: string, ip: string,
     if (!toStripe) { const e = v.take(); check(`${name}: plan sheet`, !e, e); return; }
     const c = await toCheckout(v);
     if (c.middle) check(`${name}: the button pressed is the middle card's, the most-picked one (${c.middle.slug})`, Math.abs(c.middle.off) <= 1 && c.middle.hero, `${c.middle.slug} ${c.middle.off}px off the middle`);
-    check(`${name}: Start free trial → Stripe Checkout`, c.status === 200 && /^https:\/\/checkout\.stripe\.com\//.test(c.url), [`/api/checkout/signup ${c.status}`, c.url ? "→ " + c.url.slice(0, 40) + "…" : "no hand-off", v.take()].filter(Boolean).join(" · "));
+    check(`${name}: Start free trial → Stripe Checkout`, c.status === 303 && /^https:\/\/checkout\.stripe\.com\//.test(c.url), [`/auth/register/checkout ${c.status}`, c.url ? "→ " + c.url.slice(0, 40) + "…" : "no hand-off", v.take()].filter(Boolean).join(" · "));
   } catch (e) {
     check(`${name}: ran through`, false, `${String((e as Error)?.message || e).split("\n")[0]} · ${v.take()}`);
   } finally {

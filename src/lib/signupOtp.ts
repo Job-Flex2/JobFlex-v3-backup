@@ -38,7 +38,7 @@ import { HOUR, clientIp, rateLimitShared, retryInWords } from "@/lib/rateLimit";
 import { hashToken, tokensEqual } from "@/lib/tokens";
 import { mintSigninTicket } from "@/lib/signinTicket";
 import { signupNetworkBrake } from "@/lib/signupBrake";
-import { readSignupPlan } from "@/lib/trialPolicyServer";
+import { readSignupPlan, signupTrialMode } from "@/lib/trialPolicyServer";
 import { claimIfUnclaimed } from "@/lib/accountClaim";
 import { appBaseUrl } from "@/lib/appUrl";
 import { renderEmail } from "@/lib/email/renderEmail";
@@ -284,7 +284,9 @@ async function finalize(token: string, d: OtpDraft, via: "code" | "link"): Promi
 }
 
 /** Where a signed-in account goes: the plan picker when the owner's shop has
- *  no plan, the dashboard otherwise. */
+ *  no plan, the dashboard otherwise. While the sign-up opens the card page by
+ *  itself ("auto" with a card), that owner goes straight to Stripe's card page
+ *  instead (app/dashboard/upgrade/checkout — its back arrow is the plan cards). */
 export async function nextForUser(userId: string): Promise<string> {
   try {
     const m = await db.membership.findFirst({
@@ -292,7 +294,10 @@ export async function nextForUser(userId: string): Promise<string> {
       orderBy: { createdAt: "asc" },
       select: { role: true, organization: { select: { subscription: { select: { id: true } } } } },
     });
-    if (m?.role === "OWNER" && !m.organization.subscription) return "/dashboard/upgrade";
+    if (m?.role === "OWNER" && !m.organization.subscription) {
+      const [rule, trial] = await Promise.all([readSignupPlan(), signupTrialMode()]);
+      return rule.mode === "auto" && trial === "card" ? "/dashboard/upgrade/checkout?reason=relogin" : "/dashboard/upgrade";
+    }
   } catch {
     /* the dashboard sorts it out */
   }

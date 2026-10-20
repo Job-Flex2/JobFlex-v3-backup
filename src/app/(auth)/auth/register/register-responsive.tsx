@@ -26,7 +26,7 @@
 import { useSearchParams } from "next/navigation";
 import type { EditionId } from "@/lib/editions";
 import type { AutoPlanOffer } from "@/lib/signupAutoPlan";
-import { Suspense, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { RegisterContent } from "@/components/v3/auth-register-blueprint/register-content";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
 import type { TradeType } from "@/lib/tradeTypes";
@@ -95,6 +95,7 @@ function RegisterSwitch({
   inAppBrowser,
   requiresCard,
   initialError,
+  prefill = null,
   offerCustom,
   steps,
   mode,
@@ -118,6 +119,7 @@ function RegisterSwitch({
   inAppBrowser: InAppBrowser | null;
   requiresCard: boolean;
   initialError: string | null;
+  prefill?: { name: string; email: string } | null;
 }) {
   const isHandheld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const params = useSearchParams();
@@ -143,12 +145,15 @@ function RegisterSwitch({
   void isHandheld;
   void params;
   return <RegisterContent setup={setup} google={google} industry={industry} spotlight={spotlight}
-        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />;
+        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} prefill={prefill} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />;
 }
 
-// The attribution capture under either tree reads the query string, so the
-// boundary wraps the switch rather than either branch — a bare useSearchParams
-// without one is a static-prerender bailout in Next.
+// NO SUSPENSE BOUNDARY (2026-10-19). The page is dynamic (it reads cookies and
+// headers), so useSearchParams needs none — and the one that stood here made
+// React stream the form as a separate chunk that only a script reveals (a
+// boundary's content over ~12 KB is sent apart from the shell): with
+// JavaScript off, step 1 was a blank sheet. Without it the form is in the
+// first HTML and posts to ./checkout on its own.
 export function RegisterResponsive({
   setup = null,
   google = null,
@@ -159,6 +164,7 @@ export function RegisterResponsive({
   inAppBrowser = null,
   requiresCard = true,
   initialError = null,
+  prefill = null,
   offerCustom = false,
   steps = 3,
   mode = "password",
@@ -191,11 +197,11 @@ export function RegisterResponsive({
   requiresCard?: boolean;
   /** Step 1's error on arrival — a refused Google address (lib/disposableEmail). */
   initialError?: string | null;
+  /** Step 1's name and email, back after a refusal of the form sent without JavaScript. */
+  prefill?: { name: string; email: string } | null;
 }) {
   return (
-    <Suspense fallback={null}>
-      <RegisterSwitch setup={setup} google={google} industry={industry} spotlight={spotlight}
-        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />
-    </Suspense>
+    <RegisterSwitch setup={setup} google={google} industry={industry} spotlight={spotlight}
+        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} prefill={prefill} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />
   );
 }

@@ -70,6 +70,15 @@ function v(){var c=window.__jfClock,t=performance.now(),h=0;if(c){for(var i=0;i<
 document.addEventListener("input",function(e){var el=e.target;if(s.ready||!el||!el.form||el.form.id!=="step1Form"||!el.id)return;if(!s.typedAt)s.typedAt=v();s.values[el.id]=el.value;},true);
 document.addEventListener("submit",function(e){var f=e.target;if(s.ready||!f||f.id!=="step1Form")return;e.preventDefault();if(!s.submitAt)s.submitAt=v();},true);})();`;
 
+/** ./checkout's refusals of a step 1 sent without JavaScript, by their code in `?e1=`. */
+const STEP1_REFUSALS: Record<string, string> = {
+  taken: "That email already has an account. Sign in instead.",
+  disposable: DISPOSABLE_EMAIL_MESSAGE,
+  busy: "Too many sign-ups from this network just now. Try again in a little while.",
+  invalid: "Enter your name and a valid email address.",
+  trouble: "Something went wrong on our side. Try again in a minute.",
+};
+
 export const metadata: Metadata = {
   title: "JobFlex · Create account",
   description: "Set up your shop — your organization, your login, your first quote.",
@@ -186,19 +195,44 @@ export default async function RegisterPage({
     mode === "otp" && !setup && !google && typeof sp.signup !== "string"
       ? await draftRestore(typeof sp.d === "string" ? sp.d : null, jar.get(OTP_DRAFT_COOKIE)?.value ?? null).catch(() => null)
       : null;
+  const requiresCard = (await signupTrialMode()) === "card";
+  /* STRAIGHT TO STRIPE, BY THE SERVER (owner, 2026-10-19). With the plan picked for them and a card to take, a sign-up
+     that is ready to pay never draws a screen of its own: the plan step's address (`?signup=` — the emailed code's
+     button, a reload, a link opened later) and this browser's proven draft both go to ./checkout, whose answer is a
+     303 to Stripe's card page. Stripe's back arrow (`checkout=cancelled`), a card page that did not open
+     (`checkout=failed`) and the switch turned off (`checkout=pick`) draw the plan cards instead; a paid return
+     (`session_id`) the done panel. */
+  if (autoPlan && requiresCard && !google) {
+    const reopen =
+      typeof sp.signup === "string" && !sp.checkout && !sp.session_id
+        ? sp.signup
+        : typeof sp.signup !== "string" && otpRestore?.stage === "verified"
+          ? otpRestore.signupToken
+          : null;
+    if (reopen) {
+      const q = new URLSearchParams({ signup: reopen, reason: sp.via === "link" ? "step1" : "relogin" });
+      if (typeof sp.plan === "string") q.set("plan", sp.plan);
+      if (sp.edition === "deck") q.set("edition", "deck");
+      redirect(`/auth/register/checkout?${q.toString()}`);
+    }
+  }
+  /* Step 1 sent without JavaScript and refused (./checkout POST): the reason, and the name and email back in place. */
+  const e1 = typeof sp.e1 === "string" ? STEP1_REFUSALS[sp.e1] : undefined;
+  const step1Prefill = e1 ? { name: typeof sp.name === "string" ? sp.name.slice(0, 120) : "", email: typeof sp.email === "string" ? sp.email.slice(0, 200) : "" } : null;
   const pendingToken = typeof sp.signup === "string" ? sp.signup : (otpRestore?.signupToken ?? null);
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: STEP1_PRELUDE }} />
       <TrialOfferProvider trackExposure={false} offer={(pendingToken ? (await readPendingSignup(pendingToken))?.trialOffer : null) ?? await signupTrialOffer()}>
       <RegisterResponsive
-        requiresCard={(await signupTrialMode()) === "card"}
+        requiresCard={requiresCard}
         steps={signupFlow.steps}
         mode={mode}
         autoPlan={autoPlan}
         otpRestore={otpRestore}
         offerCustom={customPlanOffered()}
-        initialError={googleError}
+        initialError={googleError ?? e1 ?? null}
+        prefill={step1Prefill}
         setup={setup}
         google={google}
         industry={industry}

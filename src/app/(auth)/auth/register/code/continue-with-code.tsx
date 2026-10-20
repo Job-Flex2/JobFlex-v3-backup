@@ -31,6 +31,9 @@ export function ContinueWithCode() {
           const q = new URLSearchParams(res.query ?? "");
           q.set("signup", res.signupToken);
           q.set("flow", "otp");
+          // Step 1 finished by the email's button: with the plan picked and a card to take, the register page sends
+          // it on to Stripe as step 1 (app/(auth)/auth/register/checkout).
+          q.set("via", "link");
           window.location.replace(`/auth/register?${q.toString()}`);
           return;
         }

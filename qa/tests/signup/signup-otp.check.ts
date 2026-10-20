@@ -84,9 +84,14 @@ async function visitor(browser: any, kind: Kind, ip = newIp(), size?: { width: n
   const push = (what: string) => log.errs.push(`[${log.step}] ${what.replace(/\s+/g, " ").slice(0, 220)}`);
   // A custom-scheme hand-off (x-safari-https) cannot open in a desktop Chrome; that one line is expected.
   // WebKit also logs the report-only CSP (no report-to) and what it would refuse; report-only blocks nothing.
-  page.on("console", (m: any) => { if (m.type() === "error" && !/does not have a registered handler|^\[Report Only\]|delivered in report-only mode/.test(m.text())) push("console: " + m.text()); });
+  page.on("console", (m: any) => { if (m.type() === "error" && page.url().startsWith(BASE) && !/does not have a registered handler|^\[Report Only\]|delivered in report-only mode/.test(m.text())) push("console: " + m.text()); });
   page.on("pageerror", (e: any) => push("pageerror: " + String(e?.message || e)));
-  page.on("response", (r: any) => { if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(BASE.length)}`); });
+  page.on("response", (r: any) => {
+    if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(BASE.length)}`);
+    // Stripe's page arrives by the server's 303 (/auth/register/checkout, 2026-10-19), which a route cannot answer:
+    // seen as the tab's own document instead; its sandbox page loads and is left alone.
+    if (r.request().isNavigationRequest() && r.request().frame() === page.mainFrame() && /^https:\/\/checkout\.stripe\.com\//.test(r.url())) handoff.checkout = r.url();
+  });
   return { ctx, page, handoff, step: (s: string) => { log.step = s; }, take: () => log.errs.splice(0).join(" | ") };
 }
 type V = Awaited<ReturnType<typeof visitor>>;

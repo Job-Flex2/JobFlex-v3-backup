@@ -58,7 +58,7 @@ import { trackMetaLeadOnce } from "@/lib/metaLead";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
-import { autoPlanFor, autoPlanPrice, type AutoPlanOffer } from "@/lib/signupAutoPlan";
+import { autoPlanFor, type AutoPlanOffer } from "@/lib/signupAutoPlan";
 import { rememberOtpDraft, rememberSignupMode, type SignupMode } from "@/lib/signupMode";
 import { forgetOtpDraft, otpPendingState } from "@/actions/signupOtp";
 import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
@@ -108,7 +108,7 @@ function subscribeHandheld(onChange: () => void) {
 /* The plan this tab last chose, so a cancelled Checkout (or the Google return)
    reopens the phone's plan step on it; `?plan=<slug>` names one from a link. */
 const PLAN_KEY = "jf_signup_plan";
-/* Straight to Professional bills monthly — the term its screen prints (see autoPriceCents). */
+/* Straight to Professional bills monthly — the price step 1 prints (app/(auth)/auth/register/checkout picks the month). */
 const AUTO_TERM: BillingTerm = "MONTH";
 function rememberPlan(slug: string | null) {
   try {
@@ -124,23 +124,18 @@ function recalledPlan(): string | null {
     return null;
   }
 }
-/* The intent this tab last handed to Stripe's card page. A `?checkout=cancelled` return to that same tab is the
-   visitor backing out — the plan cards, as built; the same address opened anywhere else (history, a restored tab,
-   another browser) is a return like any other (2026-10-17). */
-const HANDOFF_KEY = "jf_signup_handoff";
-function rememberHandoff(token: string) {
-  try {
-    sessionStorage.setItem(HANDOFF_KEY, token);
-  } catch {
-    /* storage blocked: a back-out reads as a return */
+/* THE HAND-OFF TO STRIPE IS THE SERVER'S (owner, 2026-10-19). The browser goes to ./checkout
+   (app/(auth)/auth/register/checkout) and the answer is a 303 to Stripe's card page — or to the plan cards with a line
+   when the page did not open. Nothing is kept in the browser to tell a back-out apart: Stripe's back arrow and the
+   browser's Back both land on the plan cards (`checkout=cancelled`). */
+type HandOffReason = "step1" | "google" | "plan_pick";
+function checkoutHref(token: string, reason: HandOffReason, pick?: { slug: string; term: BillingTerm }): string {
+  const q = new URLSearchParams({ signup: token, reason });
+  if (pick) {
+    q.set("plan", pick.slug);
+    q.set("interval", pick.term);
   }
-}
-function recalledHandoff(): string | null {
-  try {
-    return sessionStorage.getItem(HANDOFF_KEY);
-  } catch {
-    return null;
-  }
+  return `/auth/register/checkout?${q.toString()}`;
 }
 
 // 1 account · 2 company · 3 THE PLAN (the paywall) · 4 done.
@@ -195,10 +190,14 @@ export function RegisterContent({
   mode = "password",
   otpRestore = null,
   autoPlan = null,
+  prefill = null,
 }: {
+  /* Step 1's name and email, back after the server refused a step 1 sent without JavaScript (?e1=). */
+  prefill?: { name: string; email: string } | null;
   /* STRAIGHT TO PROFESSIONAL (owner, 2026-10-15, lib/signupAutoPlan): the plan
      the server picked when the admin rule is "auto" — the short sign-up, then
-     the card page for it, no plan cards. Null: the plan cards, as built. */
+     the card page for it (handed off by the server, ./checkout). Null: the plan
+     cards, as built. */
   autoPlan?: AutoPlanOffer | null;
   /* THE PASSWORDLESS SIGN-UP (2026-10-10, lib/signupMode): step 1 is
      ./passwordless-step — name, email, a code from an email — and the plan
@@ -290,15 +289,17 @@ export function RegisterContent({
      and React threw the hydration-mismatch that made the whole return from a
      PAID checkout arrive as a crash-and-regenerate (owner's report,
      2026-08-31). useSearchParams gives both renders the same answer; the
-     RegisterSwitch above already provides the Suspense boundary it needs. */
+     page is dynamic, so it needs no Suspense boundary (register-responsive). */
   const searchParams = useSearchParams();
-  const ret = React.useMemo<{ token: string; sessionId: string | null; cancelled: boolean } | null>(() => {
+  const ret = React.useMemo<{ token: string; sessionId: string | null; cancelled: boolean; failed: boolean } | null>(() => {
     const t = searchParams?.get("signup");
     if (!t) return null;
     return {
       token: t,
       sessionId: searchParams.get("session_id"),
       cancelled: searchParams.get("checkout") === "cancelled",
+      // ./checkout could not open Stripe's card page (an error, or nothing within eight seconds).
+      failed: searchParams.get("checkout") === "failed",
     };
     // Read once: the params only change via full navigations on this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -457,22 +458,17 @@ export function RegisterContent({
      other start buttons dim behind it. Kept apart from `planSlug` so "Skip for
      now", which is busy too, never labels a card "Opening checkout…". */
   const [startingSlug, setStartingSlug] = React.useState<string | null>(null);
-  /* Set once the browser has been handed Stripe's URL. The busy state then
-     stays up until checkout's page replaces this one — resetting it straight
-     away put every button back to idle (and clickable) for the second the
-     browser spends loading Stripe. A page brought back by the Back button
-     from the back/forward cache returns idle — and straight to Professional's
-     screen then waits for its button (`autoHeld`) instead of sitting on
-     "Opening Stripe's secure card page…" (2026-10-18). */
+  /* Set once the browser is on its way to Stripe (./checkout). The busy state then stays up until Stripe's page
+     replaces this one — resetting it straight away put every button back to idle (and clickable) for the second the
+     browser spends loading Stripe. The address was turned into the plan cards' before leaving, so a page brought back
+     by the Back button from the back/forward cache is drawn again by the server: the cards (2026-10-19). */
   const leavingRef = React.useRef(false);
-  const [autoHeld, setAutoHeld] = React.useState(false);
+  const [leaving, setLeaving] = React.useState(false);
   React.useEffect(() => {
     const onShow = (e: PageTransitionEvent) => {
       if (!e.persisted || !leavingRef.current) return;
       leavingRef.current = false;
-      setPayBusy(false);
-      setStartingSlug(null);
-      setAutoHeld(true);
+      window.location.reload();
     };
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
@@ -608,9 +604,9 @@ export function RegisterContent({
     return map;
   }, [plans]);
 
-  const [name, setName] = React.useState(setup?.name ?? googlePrefill?.name ?? "");
+  const [name, setName] = React.useState(setup?.name ?? googlePrefill?.name ?? prefill?.name ?? "");
   const [biz, setBiz] = React.useState(setup?.businessName ?? "");
-  const [email, setEmail] = React.useState(setup?.email ?? googlePrefill?.email ?? "");
+  const [email, setEmail] = React.useState(setup?.email ?? googlePrefill?.email ?? prefill?.email ?? "");
   const [password, setPassword] = React.useState("");
   const [showPw, setShowPw] = React.useState(false);
   /* THE CONFIRMATION (owner, 2026-09-26). Checked here in the browser only —
@@ -788,6 +784,12 @@ export function RegisterContent({
         // Professional opens on its plan — a card this tab remembered (Starter, say) does not override it.
         const nowAuto = "autoPlan" in res ? (res.autoPlan ?? null) : autoPlan;
         setLiveAuto(nowAuto);
+        // A tab drawn before the switch went on, its code typed after: the switch as it stands now — off to Stripe by
+        // the server, as step 1 would have gone (no plan screen, no cards). Not a return: that one is the cards.
+        if (nowAuto && requiresCard && token && !(ret && !ret.sessionId)) {
+          leaveForCheckout(token, "step1");
+          return;
+        }
         // …and on Monthly: a remembered or linked Annual is not this tab's choice on this page (it can switch on the cards).
         if (nowAuto) setIntervalState(AUTO_TERM);
         if (nowAuto && res.plans.some((p) => p.slug === nowAuto.slug)) setPlanSlug(nowAuto.slug);
@@ -924,15 +926,11 @@ export function RegisterContent({
     }
   }
 
-  /* The trial starts at Stripe: the existing subscription checkout route takes
-     the plan and interval and auto-applies whatever promo is stamped on the org
-     — which is what `applySignupPromo` above writes. Nothing about discounts is
-     re-implemented here. */
+  /* The trial starts at Stripe. A plan card pressed goes to ./checkout with the plan and the term, and the server's
+     303 opens Stripe's card page for it (2026-10-19: the browser no longer hands itself over). Codes and pages are
+     stamped on the intent first — the session is priced from the intent alone. */
   async function onStartTrial(slug: string | null = planSlug, termAsked?: BillingTerm) {
     if (payBusy || !slug) return;
-    /* Started from straight-to-Professional's screen (the cards are not up): "See all plans instead" can still call
-       it back. A start from the cards cannot be — it was called back once and Start did nothing (2026-10-18). */
-    const fromAutoScreen = !autoOff;
     // The clicked card can differ from the selection until React commits it.
     const clickedTrialDays = slug === CUSTOM_PLAN_SLUG
       ? customTrialDays
@@ -963,33 +961,12 @@ export function RegisterContent({
           return;
         }
       }
-      const res = await fetch("/api/checkout/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, planSlug: slug, interval: term, customPages }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      // "See all plans instead" pressed while the card page was being opened: stay on the cards.
-      if (res.ok && body.url && fromAutoScreen && autoAbort.current) return;
-      if (res.ok && body.url) {
-        trackTraffic(TRAFFIC_EVENTS.opened, { plan_mode: planMode, plan: slug, interval: term, flow: trafficFlow });
-        signupLeavingTo("checkout");
-        leavingRef.current = true;
-        if (token) rememberHandoff(token);
-        window.location.href = body.url;
-        /* A hand-off that never happens (blocked, cancelled) must not leave
-           the page stuck on "Opening checkout…" with every button off. */
-        window.setTimeout(() => {
-          if (!leavingRef.current) return;
-          leavingRef.current = false;
-          setPayBusy(false);
-          setStartingSlug(null);
-          setAutoHeld(true);
-        }, 15000);
+      if (!token) {
+        trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_rejected" }); signupProblem("checkout_rejected");
+        await planRefused("That signup expired. Start again.");
         return;
       }
-      trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_rejected" }); signupProblem("checkout_rejected");
-      await planRefused(body.error || "Couldn't open checkout — your account has not been created.");
+      leaveForCheckout(token, "plan_pick", { slug, term });
     } catch {
       trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_unavailable" }); signupProblem("checkout_unavailable");
       setPlansErr("Couldn't reach checkout — your account has not been created.");
@@ -999,6 +976,29 @@ export function RegisterContent({
         setStartingSlug(null);
       }
     }
+  }
+
+  /** Off to ./checkout, whose 303 is Stripe's card page. The address becomes the plan cards' first, so Back from Stripe
+   *  (the browser's, or a page restored later) lands on the cards, as Stripe's own back arrow does. */
+  function leaveForCheckout(t: string, reason: HandOffReason, pick?: { slug: string; term: BillingTerm }) {
+    signupLeavingTo("checkout");
+    leavingRef.current = true;
+    // From the plan step without a press (a stale tab): it is not drawn on the way out.
+    if (!pick) setLeaving(true);
+    try {
+      // window.history.state, not null: the router's own state is kept, so it does not re-read the address (and redraw).
+      window.history.replaceState(window.history.state, "", `/auth/register?${new URLSearchParams({ signup: t, checkout: "cancelled" }).toString()}`);
+    } catch {
+      /* Back then reopens the page it left; the server still sends ?signup= on to the cards */
+    }
+    window.location.assign(checkoutHref(t, reason, pick));
+    /* A hand-off stopped in the browser (the stop button, no network) must not leave the cards busy for good. */
+    window.setTimeout(() => {
+      if (!leavingRef.current) return;
+      leavingRef.current = false;
+      setPayBusy(false);
+      setStartingSlug(null);
+    }, 20000);
   }
 
   /* TESTING EXIT (owner's call, while the product is in testing). It creates
@@ -1137,56 +1137,40 @@ export function RegisterContent({
   }
   const busyLabel = requiresCard ? "Opening checkout…" : "Starting your trial…";
 
-  /* STRAIGHT TO THE CARD PAGE (owner, 2026-10-15, lib/signupAutoPlan). Once the
-     plans are in, the plan the server picked opens Stripe's card page (or, with
-     no card, the trial starts) — no cards to compare. The cards come ONLY when
-     the visitor asks for them ("See all plans"): a back-out of the card page, the
-     browser's Back, a reload, a refusal on the way all come back to the plan's
-     own screen with a button that opens the card page again (owner, 2026-10-18:
-     "with the switch on, a person never lands on the plan cards by themselves"). */
-  const [autoOff, setAutoOff] = React.useState(false);
-  const autoAbort = React.useRef(false);
+  /* STRAIGHT TO PROFESSIONAL (owner, 2026-10-15, lib/signupAutoPlan) HAS NO SCREEN OF ITS OWN (owner, 2026-10-19).
+     With a card, the server hands the sign-up to Stripe's card page after step 1, after Google and on a return
+     (./checkout); this step is only ever the plan cards — Stripe's back arrow or Back (`checkout=cancelled`, with a
+     calm note), or a card page that did not open (`checkout=failed`, with a line to try again). The "Add your card"
+     screen of e7a88994 is gone: on a phone it was what a person saw on coming back from Stripe, and it read as the
+     step after step 1. */
   const autoSlug = React.useMemo(() => {
     if (!auto || plans.length === 0) return null;
     if (plans.some((p) => p.slug === auto.slug)) return auto.slug;
     const editionSlug = edition ? (plans.find((p) => isEditionPlan(p.slug, edition))?.slug ?? null) : null;
     return autoPlanFor({ plans, tool: spotlight, editionSlug, asked: searchParams?.get("plan") ?? null })?.slug ?? null;
   }, [auto, plans, spotlight, edition, searchParams]);
-  /* Back from the card page: Stripe's own back link (`?checkout=cancelled`, in whatever tab it is opened) or, in the tab
-     that handed this intent over, the browser's Back or a reload (the plan step's address, `?signup=` alone — read
-     after mount, sessionStorage). Either is a back-out: the plan's screen with its button, not a second card page
-     (Back never left Stripe, 2026-10-17) and not the cards (2026-10-18). Any other `?signup=` address — the emailed
-     code's button, a tab restored later — goes straight on, as a first arrival does. */
   const returned = !!ret && !ret.sessionId;
-  const [handedOffHere, setHandedOffHere] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage exists only in the browser; read once
-    if (returned) setHandedOffHere(recalledHandoff() === ret.token);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
-  }, []);
-  const backedOut = returned && (ret.cancelled || handedOffHere === true);
-  /* …and until it is read, straight-to-Professional neither draws its screen nor hands off (the server's HTML and the
-     hydrating page both wait on it), so a returning visitor sees no flash of anything. */
-  const handoffUnread = !!auto && returned && !ret.cancelled && handedOffHere === null;
-  /* The plan's screen: whenever the switch picked a plan, the cards were not asked for and nothing else holds the step
-     (the address's gate, the card-less link sent). It hands off by itself once; after a back-out, a refusal or a
-     return from the card page it waits for its button. */
-  const autoScreen = !!auto && step === 3 && !handoffUnread && !autoOff && !gate && !confirmSentTo;
-  const autoWaits = autoScreen && (backedOut || autoHeld || !!plansErr);
-  const autoView = autoScreen && !autoWaits;
+  /* …WITHOUT A CARD (the trial switch at "no card"): the picked plan's trial starts as the step opens, and the done
+     panel follows. The step stays blank meanwhile — no plan screen; a refusal shows the cards with its reason. */
+  const autoStart = !!auto && !requiresCard && step === 3 && !returned && !gate && !confirmSentTo && !plansErr;
   const autoRan = React.useRef(false);
   React.useEffect(() => {
-    if (!autoView || autoRan.current || !autoSlug || !token) return;
+    if (!autoStart || autoRan.current || !autoSlug || !token) return;
     autoRan.current = true;
     // After this render, not in it (the start sets state as it goes).
     void Promise.resolve().then(() => onStartPlan(autoSlug, AUTO_TERM));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the plan and the intent are both in
-  }, [autoView, autoSlug, token]);
-  const autoName = (autoSlug && plans.find((p) => p.slug === autoSlug)?.name) || auto?.name || "Professional";
-  /* MONTHLY, ALWAYS (owner, 2026-10-17: "the person pays exactly what they see"). The screen has no term switch, so a
-     remembered or linked Annual is not what it bills: the price it prints and the term the card page is opened for are
-     one pair — the plan's monthly catalog price, the price lib/signupPricing bills for MONTH. */
-  const autoPriceCents = (autoSlug && plans.find((p) => p.slug === autoSlug)?.priceCents) || auto?.priceCents || 0;
+  }, [autoStart, autoSlug, token]);
+  /* The cards drawn without a press, once per load for the analyst: back from Stripe, or its page did not open. */
+  const plansShownSent = React.useRef(false);
+  React.useEffect(() => {
+    if (step !== 3 || plans.length === 0 || !returned || plansShownSent.current) return;
+    const reason = ret?.failed ? "checkout_failed" : ret?.cancelled ? "returned" : null;
+    if (!reason) return;
+    plansShownSent.current = true;
+    trackTraffic(TRAFFIC_EVENTS.plansShown, { reason, plan_mode: planMode, flow: trafficFlow });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the cards arrive
+  }, [step, plans.length]);
 
   /* ONCE. The intent is spent by its first completion, and React's development
      StrictMode mounts effects twice — the second call came back "That signup
@@ -1538,7 +1522,16 @@ export function RegisterContent({
   /* The address is proven (code, link or Google) and the pending signup
      exists: the plan step, with the intent's token in the address so a
      reload opens it again. */
-  function onOtpVerified(signupToken: string) {
+  function onOtpVerified(signupToken: string, via: "email" | "google" = "email") {
+    /* Straight to Professional with a card: no plan step — the server opens Stripe's card page (./checkout). The
+       analyst still hears the plan stage reached, as when its screen flashed by on the way (`screen` says how). */
+    if (auto && requiresCard) {
+      setToken(signupToken);
+      trackTraffic(TRAFFIC_EVENTS.step, { plan_mode: planMode, step: 3, flow: trafficFlow, variant: "e", steps: 2, mode: signupMode, screen: "checkout" });
+      trackTraffic(TRAFFIC_EVENTS.attempt, { plan_mode: planMode, plan: auto.slug, interval: AUTO_TERM, intent: "trial", flow: trafficFlow });
+      leaveForCheckout(signupToken, via === "google" ? "google" : "step1");
+      return;
+    }
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("d");
@@ -2106,7 +2099,6 @@ export function RegisterContent({
             share one left and one right edge. */}
         <div
           className="plan-sheet-in"
-          data-auto-going={autoScreen || undefined}
           style={{ "--pw-cols": Math.max(1, orderedPlans.length + (offerCustom && plans.length > 0 ? 1 : 0)) } as React.CSSProperties}
         >
           {brand}
@@ -2130,7 +2122,7 @@ export function RegisterContent({
           <div
             className={step === 3 ? "step" : "step is-hidden"}
             id="stepPlan"
-            style={handoffUnread ? { visibility: "hidden" } : undefined}
+            style={autoStart || leaving || (otp && !returned && plans.length === 0 && !plansErr && !gate) ? { visibility: "hidden" } : undefined}
           >
             {/* Title and the billing switch on ONE line: the switch is the
                 control that rewrites every price under it, so it belongs beside
@@ -2145,73 +2137,13 @@ export function RegisterContent({
             {/* ONE ROW ON A DESK (owner, 2026-10-12): the question on the left; the trial's
                 stamp and the Monthly | Annual switch side by side on the right, so the head
                 takes one row (two when the window is narrow) and the cards fit the screen. */}
-            {/* STRAIGHT TO PROFESSIONAL'S SCREEN: handing off by itself (the bar), or — back from the card page, after a
-                reload or a refusal — waiting for its button (owner, 2026-10-18: the cards only when asked for). */}
-            {autoScreen ? (
-              <div className="pw-auto" role="status" data-auto-plan={autoSlug ?? auto?.slug} data-auto-wait={autoWaits || undefined}>
-                <span className="pw-confirm-k">{trialDays}-day free trial</span>
-                <h1 className="auth-h1">{autoName}</h1>
-                <p className="pw-auto-p">
-                  {autoWaits ? (
-                    requiresCard ? (
-                      <>
-                        No card yet, nothing charged. <b>$0 today</b>, then {autoPlanPrice({ priceCents: autoPriceCents })} — cancel any time.
-                      </>
-                    ) : (
-                      <>Nothing started yet — no card needed.</>
-                    )
-                  ) : requiresCard ? (
-                    <>
-                      Opening Stripe&apos;s secure card page… <b>$0 today</b>, then {autoPlanPrice({ priceCents: autoPriceCents })} — cancel any time.
-                    </>
-                  ) : (
-                    <>Starting your free trial — no card needed…</>
-                  )}{" "}
-                  You can change your plan any time in JobFlex.
-                </p>
-                {autoWaits && plansErr ? (
-                  <div className="err" role="alert">
-                    {plansErr}
-                  </div>
-                ) : null}
-                {autoWaits ? (
-                  <button
-                    type="button"
-                    className="btn pw-go"
-                    id="autoGo"
-                    data-auto-plan-go
-                    disabled={payBusy}
-                    aria-busy={payBusy || undefined}
-                    onClick={() => {
-                      const slug = autoSlug ?? auto?.slug;
-                      if (slug) void onStartPlan(slug, AUTO_TERM);
-                    }}
-                  >
-                    {payBusy ? busyLabel : requiresCard ? "Add your card" : `Start my ${trialDays}-day free trial`}
-                    <svg className="ic" aria-hidden="true">
-                      <use href="#i-arrow-r" />
-                    </svg>
-                  </button>
-                ) : (
-                  <div className="pw-auto-bar" aria-hidden="true">
-                    <span />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="link-ink pw-auto-all"
-                  onClick={() => {
-                    autoAbort.current = true;
-                    setAutoOff(true);
-                    trackTraffic(TRAFFIC_EVENTS.step, { plan_mode: planMode, step: "plans_asked", flow: trafficFlow, variant: "e", mode: signupMode });
-                  }}
-                  data-auto-plan-all
-                >
-                  {autoWaits ? "See all plans" : "See all plans instead"}
-                </button>
-              </div>
-            ) : null}
-            {auto && backedOut && !gate ? (
+            {/* THE ONE LINE OVER THE CARDS (owner, 2026-10-19): Stripe's card page did not open — the only time the cards
+                come up without being asked for; or, back from it, the plan that was picked. */}
+            {returned && ret?.failed && !gate ? (
+              <p className="pw-autonote" role="status" data-checkout-failed>
+                Secure checkout didn&apos;t open — pick a plan to try again
+              </p>
+            ) : auto && returned && ret?.cancelled && !gate ? (
               <p className="pw-autonote" data-auto-plan-back>
                 No card yet, nothing charged. <b>{auto.name}</b> is picked for you — start it below, or choose another plan.
               </p>
