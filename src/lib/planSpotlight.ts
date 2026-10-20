@@ -76,9 +76,10 @@ export function spotlightFor(input: { tool?: string | string[] | null; industry?
   return parseSpotlightTool(input.tool) ?? spotlightFromTrade(input.industry) ?? null;
 }
 
-/** The feature line that sells the tool, out of the plans' shared rows; null when no plan lists it. */
+/** The feature line that sells the tool, out of the plans' shared rows; null when no plan lists it — and always for a
+ *  tool sold as an add-on (no plan carries it, whatever a feature line says). */
 export function spotlightRow(rows: readonly string[], tool: SpotlightTool | null | undefined): string | null {
-  if (!tool) return null;
+  if (!tool || isAddOnTool(tool)) return null;
   const def = SPOTLIGHT[tool];
   return rows.find((r) => def.match.test(r)) ?? null;
 }
@@ -90,15 +91,19 @@ export function withSpotlightFirst(rows: readonly string[], tool: SpotlightTool 
   return [hit, ...rows.filter((r) => r !== hit)];
 }
 
-/** Tools sold as an add-on to any plan rather than by a plan's feature line: the Deck Studio (owner, 2026-10-19 —
- *  the free trial holds it, then $49/month on the plan; lib/deckAddon). */
+/** Tools sold as an add-on to any plan, never by a plan: the Deck Studio (owner-locked 2026-10-20 — the free trial
+ *  holds it, then $49/month on any plan; lib/deckAddon). */
 const ADD_ON: Partial<Record<SpotlightTool, string>> = { deck: `the trial includes it, then it's ${deckAddonPriceWords("MONTH")} on any plan` };
+
+export function isAddOnTool(tool: SpotlightTool): boolean {
+  return ADD_ON[tool] !== undefined;
+}
 
 /** The line over the cards. */
 export function spotlightLine(tool: SpotlightTool, listed: boolean): string {
   const def = SPOTLIGHT[tool];
   const addOn = ADD_ON[tool];
-  if (!listed && addOn) return `You came for ${def.the} — ${addOn}.`;
+  if (addOn) return `You came for ${def.the} — ${addOn}.`;
   return listed ? `You came for ${def.the} — it's marked on every plan below.` : `You came for ${def.the} — it comes with every plan's trial; ask us which plan carries it.`;
 }
 

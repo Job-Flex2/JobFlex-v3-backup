@@ -23,6 +23,7 @@ import { deckStudioAccess } from "@/lib/deck/access";
 import { editionFacts } from "@/lib/editionAccess";
 import { hasEdition, type EditionLevel } from "@/lib/editions";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
+import type { AddonInterval } from "@/lib/deckAddon";
 import { isLimitedRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { readDeckRateBook } from "@/lib/deck/rateBookStore";
 import { parseStateZip } from "@/lib/fence/market";
@@ -43,20 +44,22 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
   let level: EditionLevel = "none";
   let viaEdition = false;
   let trialEndsAt: string | null = null;
+  let addonInterval: AddonInterval = "MONTH";
   try {
     const ctx = await requireOrg();
     organizationId = ctx.organizationId;
     if (isLimitedRole(ctx.role)) redirect("/dashboard?error=forbidden");
-    // Full, a preview (the plan runs without Deck Studio: designs, saves nothing — owner, 2026-10-19), or closed.
+    // Full, a preview (no trial, add-on, grant or admin: designs, saves nothing — owner-locked 2026-10-20), or closed.
     level = await deckStudioAccess(ctx.user, ctx.organizationId);
-    const facts = level === "full" ? await editionFacts(ctx.organizationId).catch(() => null) : null;
-    // The Deck Studio edition (lib/editions): a subscriber works here as of right, with no admin notice.
-    viaEdition = !!facts && hasEdition(facts, "deck");
-    // Held by the free trial alone: the studio says, once, what keeps it after the trial.
-    if (facts?.trialing && !hasEdition({ ...facts, trialing: false }, "deck")) {
-      const sub = await readAccessSubscription(ctx.organizationId).catch(() => null);
-      trialEndsAt = sub?.trialEndsAt?.toISOString() ?? null;
-      if (!trialEndsAt) trialEndsAt = "";
+    const [facts, sub] = await Promise.all([editionFacts(ctx.organizationId, ctx.user.id).catch(() => null), readAccessSubscription(ctx.organizationId).catch(() => null)]);
+    // Held by the account itself, not by an admin's own access: no admin notice.
+    viaEdition = !!facts && hasEdition({ ...facts, fullAccess: false }, "deck");
+    // Held by the free trial alone: the studio says, once, what the studio is after the trial.
+    if (facts?.trialing && !hasEdition({ ...facts, trialing: false }, "deck")) trialEndsAt = sub?.trialEndsAt?.toISOString() ?? "";
+    // The add-on follows the plan's term ($490 a year on a yearly plan — lib/deckAddon).
+    if (sub?.stripePriceId) {
+      const price = await db.planPrice.findUnique({ where: { stripePriceId: sub.stripePriceId }, select: { interval: true } }).catch(() => null);
+      if (price?.interval === "YEAR") addonInterval = "YEAR";
     }
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fdeck-estimator");
@@ -94,5 +97,5 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
   }
   // Keyed by what was opened: a client-side push to another draft or proposal (the studio's own Open links) mounts a
   // fresh studio on it, as the old studio's full page loads did.
-  return <DeckV1Studio key={opened ? `${opened.from}:${opened.draftId ?? proposalId}` : `new:${clientId ?? ""}`} initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={level === "full" && !viaEdition} opened={opened} preview={level === "preview"} trialEndsAt={trialEndsAt} />;
+  return <DeckV1Studio key={opened ? `${opened.from}:${opened.draftId ?? proposalId}` : `new:${clientId ?? ""}`} initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={level === "full" && !viaEdition} opened={opened} preview={level === "preview"} trialEndsAt={trialEndsAt} addonInterval={addonInterval} />;
 }

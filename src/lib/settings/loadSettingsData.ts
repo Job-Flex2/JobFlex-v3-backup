@@ -20,6 +20,8 @@
 // `@/lib/settings`, and this module is only ever reached by its full path.
 
 import { db } from "@/lib/db";
+import { deckAddonHeld, readDeckAddonRecord } from "@/lib/deckAddonBilling";
+import { deckAddonShortWords } from "@/lib/deckAddon";
 import { appBaseUrl } from "@/lib/appUrl";
 import { longDate } from "@/lib/format";
 import { isOwnerOrManager, isOwnerRole, type requireOrg } from "@/lib/orgContext";
@@ -473,11 +475,13 @@ async function loadRegistrationView(organizationId: string, myUserId: string | n
  *  they quoted, clients). */
 async function cancelOffer(organizationId: string, plan: string, keepsUntil: Date | null, planName: string, accessAlreadyFree: boolean): Promise<NonNullable<BillingData["cancel"]>> {
   const slug = plan.toLowerCase();
-  const [pages, catalog, sent, clients] = await Promise.all([
+  const [pages, catalog, sent, clients, deck] = await Promise.all([
     readCustomPages(organizationId, plan).catch(() => null),
     db.pricingPlan.findMany({ select: { slug: true, limitsJson: true } }),
     db.proposal.groupBy({ by: ["currency"], where: { organizationId, sentAt: { not: null } }, _count: { _all: true }, _sum: { total: true } }),
     db.client.count({ where: { organizationId, deletedAt: null } }),
+    // The Deck Studio add-on on the subscription (lib/deckAddonBilling): the cancel ends it with the plan.
+    deckAddonHeld(organizationId).then((held) => (held ? readDeckAddonRecord(organizationId) : null)).catch(() => null),
   ]);
   const limitsOf = (s: string) => {
     const row = catalog.find((p) => p.slug.toLowerCase() === s);
@@ -489,7 +493,7 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
   return {
     planName,
     keepsUntil: keepsUntil?.toISOString() ?? null,
-    losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated) }),
+    losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated), deckAddon: deck ? deckAddonShortWords(deck.interval) : null }),
     tally: {
       proposalsSent: sent.reduce((n, g) => n + g._count._all, 0),
       quoted: sent.length === 1 ? { amount: sent[0]._sum.total ?? 0, currency: sent[0].currency.toUpperCase() } : null,

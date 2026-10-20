@@ -5,10 +5,10 @@
 // The admin switch on /admin/trials (lib/trialPolicyServer readSignupPlan) is "pick" (the plan cards, as built) or
 // "auto": the sign-up skips the company screen and the plan cards and opens the card page for one plan. Which plan:
 //   1. the one the visitor already chose (?plan= from a pricing page) — their choice wins;
-//   2. the edition's own plan (?edition=deck);
-//   3. Professional — unless the ad sold a tool Professional doesn't have: then the cheapest plan that has it;
-//   4. Professional missing from the catalog: the highlighted plan, else the first.
-import { SPOTLIGHT, type SpotlightTool } from "./planSpotlight";
+//   2. Professional — unless the ad sold a tool Professional doesn't have: then the cheapest plan that has it (a
+//      tool sold as an add-on on any plan, the Deck Studio, moves nothing — lib/planSpotlight isAddOnTool);
+//   3. Professional missing from the catalog: the highlighted plan, else the first.
+import { SPOTLIGHT, isAddOnTool, type SpotlightTool } from "./planSpotlight";
 
 export const AUTO_PLAN_SLUG = "professional";
 export type SignupPlanMode = "pick" | "auto";
@@ -17,12 +17,10 @@ export type AutoPlanInput = {
   plans: ReadonlyArray<{ slug: string; features: readonly string[]; priceCents: number; highlight?: boolean }>;
   preferred?: string;
   tool?: SpotlightTool | null;
-  /** The edition's plan slug when the visitor came in by an edition's door. */
-  editionSlug?: string | null;
   /** A plan the visitor chose before the sign-up (?plan=). */
   asked?: string | null;
 };
-export type AutoPlanPick = { slug: string; why: "asked" | "edition" | "tool" | "default" | "fallback" };
+export type AutoPlanPick = { slug: string; why: "asked" | "tool" | "default" | "fallback" };
 
 /** What the register page hands the form when the rule is "auto": the plan the server picked, to say on step 1 and
  *  to open the card page for. */
@@ -59,11 +57,10 @@ export function autoPlanFor(input: AutoPlanInput): AutoPlanPick | null {
   if (!plans.length) return null;
   const has = (slug: string | null | undefined) => !!slug && plans.some((p) => p.slug === slug);
   if (has(input.asked)) return { slug: input.asked!, why: "asked" };
-  if (has(input.editionSlug)) return { slug: input.editionSlug!, why: "edition" };
   const preferredSlug = input.preferred ?? AUTO_PLAN_SLUG;
   const preferred = plans.find((p) => p.slug === preferredSlug);
   const base = preferred ?? plans.find((p) => p.highlight) ?? plans[0];
-  if (input.tool) {
+  if (input.tool && !isAddOnTool(input.tool)) {
     const included = includedFeatures(plans);
     const carries = (slug: string) => (included.get(slug) ?? []).some((f) => SPOTLIGHT[input.tool!].match.test(f));
     if (!carries(base.slug)) {

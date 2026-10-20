@@ -15,7 +15,6 @@ import { PLAN_TIERS, type Plan } from "@/lib/entitlements";
 import { parsePlanLimits } from "@/lib/planLimits";
 import { planDisplayName, type PlanDTO } from "@/lib/planCatalog";
 import { CUSTOM_PLAN_TIER } from "@/lib/customPlan";
-import { featureLineForSale, planComingSoon } from "@/lib/editions";
 
 /** Canonical parser for the PricingPlan.features JSON column. */
 export function parseFeatures(raw: string | null | undefined): string[] {
@@ -67,13 +66,7 @@ export async function getPlanCatalog(opts?: { includeInactive?: boolean }): Prom
     where: opts?.includeInactive ? {} : { active: true },
     orderBy: { order: "asc" },
   });
-  const plans = rows.map(toPlanDTO);
-  if (opts?.includeInactive) return plans;
-  // ON SALE ONLY: a coming-soon edition's own plan is not sold, and a feature
-  // line naming it says so (lib/editions EDITION_OPEN, owner 2026-10-11). The
-  // landing, /pricing, the sign-up, the upgrade and subscription pages and the
-  // sign-up's checkout all read this list.
-  return plans.filter((p) => !planComingSoon(p.slug)).map((p) => ({ ...p, features: p.features.map((f) => featureLineForSale(f)) }));
+  return rows.map(toPlanDTO);
 }
 
 /** Case-insensitive slug lookup (accepts "starter", "STARTER", …). */
@@ -89,9 +82,6 @@ export async function getPlanBySlug(
       ...(opts?.includeInactive ? {} : { active: true }),
     },
   });
-  // A coming-soon edition's plan is not on sale (lib/editions); the
-  // includeInactive lookups — an account's own plan, the admin — still find it.
-  if (row && !opts?.includeInactive && planComingSoon(row.slug)) return null;
   return row ? toPlanDTO(row) : null;
 }
 

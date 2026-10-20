@@ -349,8 +349,8 @@ export const LANDING_VARIANTS: Record<LandingVariantKey, LandingVariant | null> 
     scenario: "painting",
   },
   // THE DECK STUDIO'S OWN PAGE (owner, 2026-10-11: "let's do vertical" — lib/editions).
-  // /deck and the deck host land here; the sign-up it writes carries the edition,
-  // and the price line reads the Deck Studio plan off the catalog.
+  // /deck and the deck host land here; the sign-up it writes carries the edition.
+  // No plan is the Deck Studio's: the trial holds it, then the $49/mo add-on (lib/editions).
   decking: {
     h1: ["Deck Studio: the deck in 3D,", "to your state's code, priced."],
     title: "Stop Spending Hours on Deck Estimates.",

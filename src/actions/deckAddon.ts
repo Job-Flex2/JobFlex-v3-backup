@@ -37,7 +37,7 @@ export async function getDeckAddonOffer(): Promise<{ ok: true; offer: DeckAddonV
   if (!w.ok) return w;
   try {
     const offer = await deckAddonOffer(w.organizationId);
-    if (!w.owner && !offer.held) return { ok: true, offer: { ...offer, owner: false, canAdd: false, reason: "The account owner adds it, from here or from Subscription." } };
+    if (!w.owner && offer.canAdd) return { ok: true, offer: { ...offer, owner: false, canAdd: false, reason: "The account owner adds it, from here or from Subscription." } };
     return { ok: true, offer: { ...offer, owner: w.owner } };
   } catch (err) {
     logServerError("deckAddon.offer", err, { kind: "action", organizationId: w.organizationId });
@@ -49,7 +49,8 @@ export type AddDeckStudioResult =
   | { ok: true; chargedCents: number; termCents: number; interval: AddonInterval; trialing: boolean }
   | { ok: false; error: string };
 
-/** Put Deck Studio on the plan: the rest of this period is charged now (nothing in a trial). */
+/** Put Deck Studio on the plan: the rest of this period is charged now. Refused in a trial ("Included in your
+ *  trial") — nothing is put on the subscription. */
 export async function addDeckStudio(): Promise<AddDeckStudioResult> {
   const w = await who();
   if (!w.ok) return w;
@@ -74,7 +75,7 @@ export async function addDeckStudio(): Promise<AddDeckStudioResult> {
   }
 }
 
-/** Take it off: the studio is a preview again now; no refund, the next bill is without it. */
+/** Take it off: the studio is a preview again now; the unused rest of the period is a credit on the next bill. */
 export async function removeDeckStudio(): Promise<{ ok: true } | { ok: false; error: string }> {
   const w = await who();
   if (!w.ok) return w;

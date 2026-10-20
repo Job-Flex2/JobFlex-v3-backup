@@ -1,27 +1,28 @@
 import "server-only";
 // WHAT AN ORGANIZATION MAY OPEN, BY EDITION (2026-10-11, lib/editions): the
-// facts are read off the subscription — the plan as stored, whether it has
-// lapsed, the catalog plan's feature lines, the custom plan's pages — and the
-// pure rules decide. The door a browser chose is a cookie.
+// facts are read off the subscription — whether the plan has lapsed, the free
+// trial, the Deck Studio add-on, a complimentary grant — and off the asking
+// user (hasFullAccess), and the pure rules decide. The door a browser chose is
+// a cookie.
 import { cookies } from "next/headers";
-import { getOrgPlanContext, getPlanCatalog } from "@/lib/planCatalogServer";
-import { readCustomPages } from "@/lib/customPageAccess";
-import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
+import { getOrgPlanContext } from "@/lib/planCatalogServer";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { deckAddonHeld } from "@/lib/deckAddonBilling";
-import { DOOR_COOKIE, canSwitch, editionLevel, hasEdition, homeFor, parseDoor, upgradeTargetFrom, workspaceFor, type AccessFacts, type Door, type EditionId, type EditionLevel, type Workspace } from "@/lib/editions";
+import { hasFullAccess } from "@/lib/fullAccess";
+import { DOOR_COOKIE, canSwitch, editionLevel, hasEdition, homeFor, parseDoor, workspaceFor, type AccessFacts, type Door, type EditionLevel, type Workspace } from "@/lib/editions";
 
-export async function editionFacts(organizationId: string): Promise<AccessFacts> {
-  const [ctx, sub] = await Promise.all([getOrgPlanContext(organizationId), readAccessSubscription(organizationId)]);
-  const planSlug = ctx.rawPlan === "NONE" ? null : ctx.rawPlan;
-  // A lapsed plan reads as FREE there whatever its name; FREE grants nothing here either.
-  const lapsed = ctx.tier === "FREE";
-  const [customPages, addon] = await Promise.all([
-    planSlug && planSlug.toLowerCase() === CUSTOM_PLAN_SLUG ? readCustomPages(organizationId, planSlug).catch(() => null) : Promise.resolve(null),
-    // The Deck Studio add-on (lib/deckAddon): its line on the subscription the organization is on.
-    sub?.externalSubId ? deckAddonHeld(organizationId, sub.externalSubId).catch(() => false) : Promise.resolve(false),
+/** `userId` undefined = the session's user (lib/fullAccess); null = nobody (the organization's own plan alone). */
+export async function editionFacts(organizationId: string, userId?: string | null): Promise<AccessFacts> {
+  const [ctx, sub, fullAccess] = await Promise.all([
+    getOrgPlanContext(organizationId),
+    readAccessSubscription(organizationId),
+    hasFullAccess(organizationId, userId).catch(() => false),
   ]);
-  return { planSlug, lapsed, features: ctx.plan?.features ?? [], customPages, trialing: !lapsed && sub?.status === "TRIALING", addon };
+  // A lapsed plan reads as FREE there whatever its name.
+  const lapsed = ctx.tier === "FREE";
+  // The Deck Studio add-on (lib/deckAddon): its line on the subscription the organization is on.
+  const addon = sub?.externalSubId ? await deckAddonHeld(organizationId, sub.externalSubId).catch(() => false) : false;
+  return { lapsed, trialing: !lapsed && sub?.status === "TRIALING", addon, granted: !lapsed && sub?.provider === "MANUAL", fullAccess };
 }
 
 export async function readDoor(): Promise<Door | null> {
@@ -49,12 +50,5 @@ export interface WorkspaceView {
 
 export async function workspaceOf(organizationId: string): Promise<WorkspaceView> {
   const [facts, door] = await Promise.all([editionFacts(organizationId), readDoor()]);
-  return { facts, door, workspace: workspaceFor(facts, door), deckAccess: hasEdition(facts, "deck"), deckLevel: editionLevel(facts, "deck"), switchable: canSwitch(facts), home: homeFor(facts, door) };
-}
-
-/** The catalog plan an existing customer is sent to for an edition (lib/editions upgradeTargetFrom), or null. */
-export async function editionUpgradeTarget(edition: EditionId = "deck"): Promise<{ slug: string; name: string; priceCents: number } | null> {
-  const plans = await getPlanCatalog().catch(() => []);
-  const t = upgradeTargetFrom(plans, edition);
-  return t ? { slug: t.slug, name: t.name, priceCents: t.priceCents } : null;
+  return { facts, door, workspace: workspaceFor(facts, door), deckAccess: hasEdition(facts, "deck"), deckLevel: editionLevel(facts, "deck"), switchable: canSwitch(facts), home: homeFor(door) };
 }

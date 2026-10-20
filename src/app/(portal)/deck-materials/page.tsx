@@ -9,7 +9,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { canUseDeckEstimator } from "@/lib/deck/access";
+import { deckStudioAccess } from "@/lib/deck/access";
 import { NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { normalizeDeckDesign, type DeckDesign } from "@/lib/deck/design";
 import { readDeckRateBook } from "@/lib/deck/rateBookStore";
@@ -24,16 +24,20 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function DeckMaterialsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   let organizationId: string;
+  const params = await searchParams;
   try {
     const ctx = await requireOrg();
     organizationId = ctx.organizationId;
-    if (!(await canUseDeckEstimator(ctx.user, ctx.organizationId))) redirect("/dashboard/deck-estimator");
+    // The whole studio prints anything; its preview prints a deck already saved (a draft or a proposal — owner,
+    // 2026-10-20: saved decks stay to look at and print), never a design carried in the address.
+    const level = await deckStudioAccess(ctx.user, ctx.organizationId);
+    const saved = !one(params.d) && !!(one(params.draft) || one(params.proposal));
+    if (level !== "full" && !(level === "preview" && saved)) redirect("/dashboard/deck-estimator");
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fdeck-estimator");
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");
     throw err;
   }
-  const params = await searchParams;
   let design: DeckDesign | null = null;
   let address: string | null = null;
   let title = "Deck";

@@ -1,6 +1,7 @@
 // THE DECK STUDIO ADD-ON (owner, 2026-10-19: "if existing users didn't purchase Deck Studio, they can't use it. Only
 // preview it. And option to add it to the plan." — then: preview = design without saving, $49/month added to the
-// plan, the whole studio during the free trial). Pure: the price, the Stripe line's kind, what a stored record says.
+// plan, the whole studio during the free trial; owner-locked 2026-10-20 in CLAUDE.md: no plan carries it, the trial
+// adds nothing to Stripe). Pure: the price, the Stripe line's kind, what a stored record says.
 //
 // The add-on is a SECOND LINE on the subscription the shop already has (lib/deckAddonBilling), never a plan of its
 // own and never a second subscription: one bill, one card, one cancel. A yearly plan carries the yearly line — ten
@@ -24,6 +25,17 @@ export function deckAddonCents(interval: AddonInterval = "MONTH"): number {
 /** "$49/month" · "$490/year". */
 export function deckAddonPriceWords(interval: AddonInterval = "MONTH"): string {
   return `$${Math.round(deckAddonCents(interval) / 100)}/${interval === "YEAR" ? "year" : "month"}`;
+}
+
+/** "$49/mo" · "$490/yr" — on a button. */
+export function deckAddonShortWords(interval: AddonInterval = "MONTH"): string {
+  return `$${Math.round(deckAddonCents(interval) / 100)}/${interval === "YEAR" ? "yr" : "mo"}`;
+}
+
+/** What the trial says wherever the add-on is offered (owner, 2026-10-20): the trial holds the studio, and adding
+ *  the add-on during it puts nothing on the subscription. */
+export function deckTrialWords(interval: AddonInterval = "MONTH"): string {
+  return `Included in your trial. After the trial, Deck Studio is a ${deckAddonShortWords(interval)} add-on.`;
 }
 
 /** A Stripe line (or anything with its price's metadata) that is the add-on. */

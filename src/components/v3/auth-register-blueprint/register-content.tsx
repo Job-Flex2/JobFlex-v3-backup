@@ -45,7 +45,7 @@ import { toast } from "@/components/ui/Toast";
 import { checkEmailAvailable, completeCompanySetup } from "@/actions/auth";
 import type { GooglePrefill, SetupPrefill } from "@/app/(auth)/auth/register/register-responsive";
 import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
-import { isEditionPlan, type EditionId } from "@/lib/editions";
+import type { EditionId } from "@/lib/editions";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, termFromParam, BILLING_PARAM, type BillingTerm } from "@/lib/planDeal";
 import { firstBillCents } from "@/lib/firstMonthDiscount";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch, recalledBillingTerm, rememberBillingTerm } from "@/components/billing/PlanTermSwitch";
@@ -359,8 +359,8 @@ export function RegisterContent({
      account exists — the step cannot price itself before there is an org to
      price for, and `signupPlans` is owner-scoped. */
   const [plans, setPlans] = React.useState<SignupPlan[]>([]);
-  /* The edition's plan first (lib/editions); every other plan as the catalog orders it. */
-  const orderedPlans = React.useMemo(() => (edition ? [...plans.filter((p) => isEditionPlan(p.slug, edition)), ...plans.filter((p) => !isEditionPlan(p.slug, edition))] : plans), [plans, edition]);
+  /* Every plan as the catalog orders it — no plan is an edition's own (lib/editions: Deck Studio is an add-on). */
+  const orderedPlans = plans;
   /* Custom and catalog plans share the saved offer returned by signupPlans. */
   const [customTrialDays, setCustomTrialDays] = React.useState<number>(offer.days);
   /* The row of cards. On a phone it is a swiped row again (owner, 2026-10-14):
@@ -798,11 +798,6 @@ export function RegisterContent({
         const asked = window.matchMedia(HANDHELD).matches ? (searchParams?.get("plan") ?? recalledPlan()) : null;
         const known = asked && (res.plans.some((p) => p.slug === asked) || (asked === CUSTOM_PLAN_SLUG && offerCustom && res.plans.length > 0)) ? asked : null;
         if (known) setPlanSlug((cur) => cur ?? known);
-        // The edition's own plan, pre-selected (lib/editions) — the visitor can still pick another.
-        if (edition) {
-          const own = res.plans.find((p) => isEditionPlan(p.slug, edition));
-          if (own) setPlanSlug((cur) => cur ?? own.slug);
-        }
         setCustomTrialDays(res.customTrialDays);
         setFirstChargeAt(res.firstChargeAt);
         setCheckoutReady(res.checkoutReady);
@@ -1146,9 +1141,8 @@ export function RegisterContent({
   const autoSlug = React.useMemo(() => {
     if (!auto || plans.length === 0) return null;
     if (plans.some((p) => p.slug === auto.slug)) return auto.slug;
-    const editionSlug = edition ? (plans.find((p) => isEditionPlan(p.slug, edition))?.slug ?? null) : null;
-    return autoPlanFor({ plans, tool: spotlight, editionSlug, asked: searchParams?.get("plan") ?? null })?.slug ?? null;
-  }, [auto, plans, spotlight, edition, searchParams]);
+    return autoPlanFor({ plans, tool: spotlight, asked: searchParams?.get("plan") ?? null })?.slug ?? null;
+  }, [auto, plans, spotlight, searchParams]);
   const returned = !!ret && !ret.sessionId;
   /* …WITHOUT A CARD (the trial switch at "no card"): the picked plan's trial starts as the step opens, and the done
      panel follows. The step stays blank meanwhile — no plan screen; a refusal shows the cards with its reason. */
@@ -2268,7 +2262,7 @@ export function RegisterContent({
                     key={p.slug}
                     role="button"
                     tabIndex={0}
-                    className={"pw-plan" + (on ? " on" : "") + (p.highlight || (!!edition && isEditionPlan(p.slug, edition)) ? " pw-plan--hero" : "")}
+                    className={"pw-plan" + (on ? " on" : "") + (p.highlight ? " pw-plan--hero" : "")}
                     aria-pressed={on}
                     data-plan-card={p.slug}
                     data-monthly-cents={p.priceCents}

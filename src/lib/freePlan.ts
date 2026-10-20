@@ -83,6 +83,8 @@ export interface FreeLoss {
   /** A symbol in the shell's sprite (desktop and handheld carry the same ids). */
   icon: "i-roof" | "i-file" | "i-target" | "i-cal" | "i-msg";
   text: string;
+  /** The square's tool colour when it is not the icon's own (the Deck Studio add-on's line). */
+  tone?: "deck";
 }
 
 const ESTIMATORS: Array<[string, string]> = [
@@ -96,15 +98,18 @@ const ESTIMATORS: Array<[string, string]> = [
 const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
 /**
- * At most five lines, one each: estimators, proposals past Free's cap,
- * leads, calendar and crews, texts.
+ * At most five lines, one each: the Deck Studio add-on when it is on the
+ * subscription (it ends with the plan — owner, 2026-10-20), estimators,
+ * proposals past Free's cap, leads, calendar and crews, texts.
  *   pages          — the custom plan's pages, or null on a catalog plan (every page open);
  *   planProposals  — the plan's own monthly proposal cap (null = none);
- *   freeProposals  — the Free plan's (null = none, then nothing is lost there).
+ *   freeProposals  — the Free plan's (null = none, then nothing is lost there);
+ *   deckAddon      — the add-on's price words ("$49/mo"), or null when it is not on the plan.
  */
-export function freePlanLosses(opts: { pages: readonly string[] | null; planProposals: number | null; freeProposals: number | null }): FreeLoss[] {
+export function freePlanLosses(opts: { pages: readonly string[] | null; planProposals: number | null; freeProposals: number | null; deckAddon?: string | null }): FreeLoss[] {
   const has = (id: string) => opts.pages === null || opts.pages.includes(id);
   const out: FreeLoss[] = [];
+  if (opts.deckAddon) out.push({ icon: "i-roof", tone: "deck", text: `Deck Studio — your ${opts.deckAddon} add-on ends with the plan` });
   const est = ESTIMATORS.filter(([id]) => has(id)).map(([, name]) => name);
   if (est.length) {
     const smart = est[0] === "Smart Proposal";

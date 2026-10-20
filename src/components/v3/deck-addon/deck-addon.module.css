@@ -89,6 +89,21 @@
   text-transform: uppercase;
   vertical-align: 1px;
 }
+.da .prints { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
+.da .prints a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--ink, #111);
+  border-radius: var(--r-sm, 4px);
+  background: #fff;
+  color: var(--ink, #111);
+  font-size: 13.5px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.da .prints a:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }
 .da.trialLine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13.5px; line-height: 1.45; color: var(--ink-soft, #333); }
 .da.trialLine button { padding: 0; border: 0; background: none; color: var(--accent-ink, #1d4ed8); font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
@@ -104,4 +119,5 @@
   .da .title { font-size: 19px; }
   .da .acts .btn { flex: 1 1 100%; min-height: 46px; }
   .da.banner .btn { flex: 1 1 100%; min-height: 44px; }
+  .da .prints a { flex: 1 1 100%; justify-content: center; }
 }

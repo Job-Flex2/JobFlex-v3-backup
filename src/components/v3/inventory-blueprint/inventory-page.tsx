@@ -33,7 +33,7 @@ export async function TradeInventoryPage({ trade, searchParams }: { trade: Trade
   // The deck inventory is Deck Studio's (lib/deck/access): a preview account is offered the add-on here.
   if (trade === "deck") {
     const level = await deckStudioAccess(user, organizationId);
-    if (level !== "full") return <DeckComingSoon level={level} />;
+    if (level !== "full") return <DeckComingSoon />;
   }
   const tab = parseTab(one(sp.tab), trade);
   const data = await loadInventoryPage(organizationId, trade, tab);

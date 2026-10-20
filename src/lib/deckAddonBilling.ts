@@ -5,9 +5,10 @@ import "server-only";
 //
 //   · ADD — proration_behavior "always_invoice": the rest of this period is invoiced and charged at once, under
 //     payment_behavior "pending_if_incomplete", so a declined card adds NOTHING (the pending update's invoice is
-//     voided). In a trial nothing is charged: the line waits for the trial's end.
-//   · REMOVE — the owner's no-refunds rule: proration_behavior "none". The studio goes back to preview now and the
-//     next bill is without the line.
+//     voided). Never in a trial (owner, 2026-10-20): the trial holds the studio already, so the add is refused with
+//     "Included in your trial" and no line is made — a $49 line left from the trial would be billed unnoticed.
+//   · REMOVE — Stripe's own proration (owner, 2026-10-20): proration_behavior "create_prorations", so the unused
+//     rest of the period comes back as a credit on the next bill. The studio goes back to preview now.
 //
 // WHAT OPENS THE STUDIO is our record, SyncState `deckAddon:<orgId>` ({ subId, itemId }), written when the line is
 // added and kept to Stripe by the webhook (mirrorDeckAddon): a line removed in Stripe, or a subscription replaced by
@@ -19,11 +20,13 @@ import { getStripeClient, isStripeEnabled } from "@/lib/sdk/stripe";
 import type { StripeMode } from "@/lib/stripeMode";
 import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { readScheduledSwitch } from "@/lib/planChange";
+import { onFreePlan } from "@/lib/freePlan";
 import {
   DECK_ADDON_KIND,
   DECK_ADDON_NAME,
   addonHeld,
   deckAddonCents,
+  deckTrialWords,
   isDeckAddonLine,
   parseDeckAddonRecord,
   planLine,
@@ -70,12 +73,18 @@ function termOf(sub: Stripe.Subscription): AddonInterval {
 const customerOf = (sub: Stripe.Subscription) => (typeof sub.customer === "string" ? sub.customer : sub.customer.id);
 
 type Ready = { ok: true; stripe: Stripe; mode: StripeMode; sub: Stripe.Subscription } | { ok: false; error: string; code: DeckAddonFailure };
-export type DeckAddonFailure = "no-subscription" | "unreachable" | "not-live" | "past-due" | "booked-switch" | "declined" | "failed";
+export type DeckAddonFailure = "no-subscription" | "unreachable" | "not-live" | "trial" | "past-due" | "booked-switch" | "declined" | "failed";
+
+const NO_PAID_PLAN = "Deck Studio goes on a paid plan. Pick a plan on Subscription first, then add it here.";
 
 /** The organization's live Stripe subscription, or why the add-on cannot be put on it. */
 async function liveSubscription(organizationId: string, forChange: boolean): Promise<Ready> {
   const row = await db.subscription.findUnique({ where: { organizationId } });
-  if (!row?.externalSubId || row.provider !== "STRIPE" || !isStripeEnabled()) {
+  // The Free plan (an ended trial, a cancelled plan — lib/freePlan) has nothing to add a line to.
+  if (!row || onFreePlan(row)) return { ok: false, code: "not-live", error: NO_PAID_PLAN };
+  // A card-less trial: no subscription yet, and the trial holds the studio anyway.
+  if (!row.externalSubId && row.status === "TRIALING") return { ok: false, code: "trial", error: deckTrialWords() };
+  if (!row.externalSubId || row.provider !== "STRIPE" || !isStripeEnabled()) {
     return { ok: false, code: "no-subscription", error: "Your plan isn't billed to a card on file, so the add-on can't go on it from here. Write to us from Help and we'll add it." };
   }
   if (forChange) {
@@ -118,7 +127,8 @@ function recordOf(sub: Stripe.Subscription, line: Stripe.SubscriptionItem, since
   return { subId: sub.id, itemId: line.id, interval: termOf(sub), since: since ?? new Date().toISOString() };
 }
 
-/** PUT THE ADD-ON ON THE PLAN: prorated and charged now, all or nothing on the card; nothing charged in a trial. */
+/** PUT THE ADD-ON ON THE PLAN: prorated and charged now, all or nothing on the card. Never in a trial: the trial
+ *  holds the studio, and nothing is put on the subscription for after it. */
 export async function addDeckAddon(organizationId: string): Promise<DeckAddonChange> {
   const ready = await liveSubscription(organizationId, true);
   if (!ready.ok) return ready;
@@ -127,11 +137,13 @@ export async function addDeckAddon(organizationId: string): Promise<DeckAddonCha
   const trialing = sub.status === "trialing";
   const interval = termOf(sub);
 
+  // A line already there (one put on in Stripe, or in a trial before 2026-10-20): the record catches up.
   const there = sub.items.data.find(isDeckAddonLine);
   if (there) {
     await writeRecord(organizationId, recordOf(sub, there, (await readDeckAddonRecord(organizationId))?.since));
     return { ok: true, chargedCents: 0, termCents: deckAddonCents(interval), interval, trialing, already: true };
   }
+  if (trialing) return { ok: false, code: "trial", error: deckTrialWords(interval) };
 
   let price: string;
   try {
@@ -144,9 +156,8 @@ export async function addDeckAddon(organizationId: string): Promise<DeckAddonCha
   try {
     sub = await stripe.subscriptions.update(sub.id, {
       items: [{ price, quantity: 1 }],
-      ...(trialing
-        ? { proration_behavior: "none" as const }
-        : { proration_behavior: "always_invoice" as const, payment_behavior: "pending_if_incomplete" as const }),
+      proration_behavior: "always_invoice",
+      payment_behavior: "pending_if_incomplete",
       metadata: { ...(sub.metadata ?? {}), organizationId, deckAddon: "1" },
       expand: ["latest_invoice"],
     });
@@ -176,13 +187,15 @@ export async function addDeckAddon(organizationId: string): Promise<DeckAddonCha
   return { ok: true, chargedCents, termCents: deckAddonCents(interval), interval, trialing, already: false };
 }
 
-/** TAKE IT OFF: no refund, no proration — the studio is a preview again now, the next bill is without it. */
+/** TAKE IT OFF: Stripe prorates — the unused rest of the period is a credit on the next bill; the studio is a
+ *  preview again now. */
 export async function removeDeckAddon(organizationId: string): Promise<{ ok: true } | { ok: false; error: string; code: DeckAddonFailure }> {
   const ready = await liveSubscription(organizationId, false);
   if (!ready.ok) {
     // Nothing billable to take it off: the record goes, so nothing stays open on it.
-    if (ready.code === "no-subscription" || ready.code === "not-live") await writeRecord(organizationId, null);
-    return ready.code === "no-subscription" || ready.code === "not-live" ? { ok: true } : ready;
+    const nothing = ready.code === "no-subscription" || ready.code === "not-live" || ready.code === "trial";
+    if (nothing) await writeRecord(organizationId, null);
+    return nothing ? { ok: true } : ready;
   }
   const { stripe, sub } = ready;
   const lines = sub.items.data.filter(isDeckAddonLine);
@@ -190,7 +203,7 @@ export async function removeDeckAddon(organizationId: string): Promise<{ ok: tru
     try {
       await stripe.subscriptions.update(sub.id, {
         items: lines.map((l) => ({ id: l.id, deleted: true as const })),
-        proration_behavior: "none",
+        proration_behavior: "create_prorations",
         metadata: { ...(sub.metadata ?? {}), deckAddon: "" },
       });
     } catch (err) {
@@ -211,11 +224,13 @@ export interface DeckAddonOffer {
   reason: string | null;
   interval: AddonInterval;
   termCents: number;
-  /** What adding it charges today (Stripe's own preview); 0 in a trial; null when Stripe could not say. */
+  /** What adding it charges today (Stripe's own preview); null when Stripe could not say. */
   dueNowCents: number | null;
   trialing: boolean;
   /** When the trial ends (ISO), while it runs. */
   trialEndsAt: string | null;
+  /** The studio is open without the add-on: the free trial, or a complimentary plan (lib/editions). */
+  included: "trial" | "grant" | null;
 }
 
 /** What adding it would cost, before it is added. */
@@ -231,19 +246,21 @@ export async function deckAddonOffer(organizationId: string): Promise<DeckAddonO
     dueNowCents: null,
     trialing: row?.status === "TRIALING",
     trialEndsAt: row?.status === "TRIALING" && row.trialEndsAt ? row.trialEndsAt.toISOString() : null,
+    included: null,
   };
   if (held) return base;
+  // A complimentary plan holds the studio (lib/editions): nothing to add.
+  if (row?.provider === "MANUAL" && !onFreePlan(row)) return { ...base, included: "grant", reason: "Deck Studio is included in your complimentary plan." };
   const ready = await liveSubscription(organizationId, true).catch(() => null);
   if (!ready) return { ...base, reason: "Couldn't reach your subscription. Try again in a minute." };
-  if (!ready.ok) {
-    // A card-less trial has no subscription to add a line to yet: it holds the studio until the plan is picked.
-    if (ready.code === "no-subscription" && base.trialing) return { ...base, reason: "Your trial includes Deck Studio. When you pick your plan, add it here to keep it." };
-    return { ...base, reason: ready.error };
-  }
+  if (!ready.ok) return { ...base, reason: ready.error, included: ready.code === "trial" ? "trial" : null };
   const { stripe, mode, sub } = ready;
   const interval = termOf(sub);
-  const out: DeckAddonOffer = { ...base, canAdd: true, interval, termCents: deckAddonCents(interval), trialing: sub.status === "trialing" };
-  if (out.trialing) return { ...out, dueNowCents: 0, trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : out.trialEndsAt };
+  // The trial holds the studio: nothing to add, nothing put on the subscription for after it (owner, 2026-10-20).
+  if (sub.status === "trialing") {
+    return { ...base, interval, termCents: deckAddonCents(interval), trialing: true, included: "trial", reason: deckTrialWords(interval), trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : base.trialEndsAt };
+  }
+  const out: DeckAddonOffer = { ...base, canAdd: true, interval, termCents: deckAddonCents(interval), trialing: false };
   try {
     const price = await deckAddonPrice(stripe, mode, interval);
     const pre = await stripe.invoices.createPreview({

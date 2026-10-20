@@ -110,7 +110,7 @@ Billing is owner-only ("Only the account owner can change the plan"). Prices, na
 - **Limits:** monthly, reset on the billing-cycle day (estimatorUses = AI estimator runs, proposals, jobs, projects, leads, messages, reviews…); lifetime (clients, workers, teamSeats = office seats + pending invites, managers).
 - **AI desk minutes / month (calendar month):** the plan's own limit, else Starter 0, Professional 150, top plan 500.
 - **Texts/month shown:** Starter 250, Professional 1,000, top plan 4,000.
-- **Deck Studio:** Coming soon — not sold ("Deck Studio is coming soon — it can't be bought yet."). Admins see a Preview; anyone already on its plan keeps it.
+- **Deck Studio:** an add-on, never part of a plan: the 7-day trial has the whole studio; after it, on any plan (Custom and yearly too), the studio is a preview until the owner adds Deck Studio for $49/mo ($490/yr on a yearly plan) from the Deck estimator or Subscription. Complimentary plans and JobFlex admins always have it.
 - **Custom plan ("Build your plan", $20 + $10/page):** off sale unless switched on; existing custom customers keep it.
 - **Free plan:** not sold; what a cancelled, unpaid or ended-trial account becomes. Data stays; limits from the hidden "free" row (seed: 5 proposals, 3 estimator runs a month…). Closed: Smart Proposal, roof/fence/video/HVAC/deck estimators, Calendar, Leads, Workers, Company, AI desk, texting. Online payments stay. Message: "Your plan has ended, so <page> is closed. Choose a plan on Subscription to open it again."
 
@@ -268,7 +268,7 @@ The reading: Measured from video, Site notes, Assumptions, **The work**, **What 
 - "Video analysis needs OPENAI_API_KEY — add it to enable this estimator." → escalate.
 
 ### Deck Studio
-**Coming soon — not sold.** Sidebar: "Deck estimator" marked Soon; the page says "Deck Studio — coming soon" with **Price a deck with Smart Proposal**; checkout: "Deck Studio is coming soon — it can't be bought yet." Only JobFlex admins get the working studio. Tell customers it is coming and to price decks in Smart Proposal; promise no date or price.
+**An add-on, $49/mo ($490/yr on a yearly plan).** In the trial: the whole studio; "Add Deck Studio" says "Included in your trial. After the trial, Deck Studio is a $49/mo add-on." and adds nothing — it is never added automatically when the trial ends. After the trial without the add-on the studio is a **Preview**: design anything, but saving, sending and printing ask for the add-on; saved decks stay, open **View only** and still print. The owner adds it with **Add Deck Studio · $49/mo** (the rest of the billing period is charged at once) and removes it on Subscription (the unused part comes back as a credit on the next bill). Cancelling the plan ends the add-on with it.
 Testers: drafts save as you go; **Convert to proposal**; **Edit the deck design** from the proposal (roof lock rules). **Client designs → New link → Make the link**: a \`/deck-design/<token>\` page (90 days, no prices) the shop copies, texts or emails itself; the client's "Send my design to <shop>" returns a draft and a notification.
 
 ### Internal — for the team (not for customers)

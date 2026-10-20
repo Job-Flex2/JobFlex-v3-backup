@@ -43,7 +43,6 @@ import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
 import { getBlockedCustomPages } from "@/lib/customPageAccess";
 import { workspaceOf } from "@/lib/editionAccess";
 import { unlockedByEdition } from "@/lib/editions";
-import { canUseDeckEstimator } from "@/lib/deck/access";
 import { canUseDesignStudio } from "@/lib/design/access";
 import type { NavView } from "@/components/v3/blueprint-shell/nav-role";
 import { UpgradeGate } from "@/components/v3/upgrade-gate/upgrade-gate";
@@ -165,18 +164,14 @@ export default async function DashboardBlueprintLayout({
     lockedPages = await getBlockedCustomPages(ctx.organizationId).catch(() =>
       getBlockedCustomPages(ctx.organizationId),
     );
-    // Deck Studio is not sold yet; the admins who test it (lib/deck/access) get it in the
-    // New estimate dialog as a Preview — read beside the workspace, not after it.
-    // The Home Design Studio (lib/design/access) the same way: its sidebar row is drawn only for the accounts it opens to.
-    const [ws, deckPreview, designPreview] = await Promise.all([
+    // The Home Design Studio (lib/design/access): its sidebar row is drawn only for the accounts it opens to.
+    const [ws, designPreview] = await Promise.all([
       workspaceOf(ctx.organizationId).catch(() => null),
-      canUseDeckEstimator({ id: ctx.user.id, email: ctx.user.email }, null).catch(() => false),
       isLimitedRole(ctx.role) ? Promise.resolve(false) : canUseDesignStudio({ id: ctx.user.id, email: ctx.user.email }).catch(() => false),
     ]);
     // The studio opens to its preview too (owner, 2026-10-19): the row and the New estimate card open for every
-    // account whose plan runs; the studio itself says what the add-on opens.
+    // account; the studio itself says what the add-on opens. A platform admin holds it (lib/editions, hasFullAccess).
     if (ws) navView = { workspace: ws.workspace, unlocked: ws.deckLevel !== "none" ? [...unlockedByEdition("deck")] : [], switchable: ws.switchable };
-    if (deckPreview && !ws?.deckAccess) navView = { ...navView, preview: [...unlockedByEdition("deck")] };
     // The lawn estimator (lib/lawn/access) opens to the same accounts as the studio.
     if (designPreview) navView = { ...navView, tools: ["/dashboard/design-studio", "/dashboard/lawn-estimator"] };
     announcements = await db.announcement

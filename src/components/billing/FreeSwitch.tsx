@@ -530,7 +530,7 @@ function BeforeYouGo({
       <ul className="jffs-list">
         {offer.losses.map((l) => (
           <li key={l.text}>
-            <span className="jffs-ic" data-tone={LOSS_TONE[l.icon]} aria-hidden="true">
+            <span className="jffs-ic" data-tone={l.tone ?? LOSS_TONE[l.icon]} aria-hidden="true">
               <svg>
                 <use href={`#${l.icon}`} />
               </svg>

@@ -8,7 +8,6 @@ import { INFLUENCER_LIVE_STATUSES, readAttributionCookie, validateAttribution } 
 import { promotionCodeIdForMode, type PromoForCheckout } from "@/lib/influencerPromoMode";
 import { checkoutDiscount } from "@/lib/checkoutDiscount";
 import { getPlanBySlug } from "@/lib/planCatalogServer";
-import { planComingSoon } from "@/lib/editions";
 import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { REFERRAL_DISCOUNT_PCT, ensureReferralCoupon, referralCouponMonths } from "@/lib/referralDiscount";
 import { ensureYearFirstMonthCoupon, promoPercentOff } from "@/lib/yearDiscount";
@@ -82,10 +81,6 @@ export async function POST(req: Request) {
   }
   if (!plan.active) {
     return NextResponse.json({ error: "This plan is no longer available." }, { status: 410 });
-  }
-  // A coming-soon edition is not sold, whatever the request says (lib/editions).
-  if (planComingSoon(plan.slug)) {
-    return NextResponse.json({ error: "Deck Studio is coming soon — it can't be bought yet." }, { status: 409 });
   }
   if (plan.isFree) {
     // $0 plans have nothing to charge — they cannot form a Stripe Checkout

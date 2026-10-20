@@ -12,7 +12,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Check } from "lucide-react";
 import { addDeckStudio, getDeckAddonOffer, removeDeckStudio, type DeckAddonView } from "@/actions/deckAddon";
-import { deckAddonCents, deckAddonPriceWords } from "@/lib/deckAddon";
+import { deckAddonCents, deckAddonPriceWords, deckAddonShortWords, deckTrialWords, type AddonInterval } from "@/lib/deckAddon";
 import { toast } from "@/components/ui/Toast";
 import s from "./deck-addon.module.css";
 
@@ -55,7 +55,6 @@ function useOffer(load: boolean) {
 /** What today's charge will be, in words. */
 function dueWords(o: DeckAddonView): string {
   const per = deckAddonPriceWords(o.interval);
-  if (o.trialing) return `Nothing today. It starts with your first bill after the trial${day(o.trialEndsAt) ? ` (${day(o.trialEndsAt)})` : ""}, then ${per}.`;
   if (o.dueNowCents === null) return `Today you pay for the rest of this billing period (prorated), then ${per} with each bill.`;
   if (o.dueNowCents === 0) return `Nothing more today; ${per} from your next bill.`;
   return `${dollars(o.dueNowCents)} today for the rest of this billing period, then ${per} with each bill.`;
@@ -88,10 +87,7 @@ export function DeckAddonDialog({ open, onClose, why, onAdded }: { open: boolean
         setFailed(res.error);
         void reload();
       } else {
-        toast.success(
-          "Deck Studio is on your plan",
-          res.trialing ? "Everything in the studio is open. The add-on starts with your first bill after the trial." : res.chargedCents > 0 ? `${dollars(res.chargedCents)} charged for the rest of this period. Everything in the studio is open.` : "Everything in the studio is open.",
-        );
+        toast.success("Deck Studio is on your plan", res.chargedCents > 0 ? `${dollars(res.chargedCents)} charged for the rest of this period. Everything in the studio is open.` : "Everything in the studio is open.");
         onAdded?.();
         close();
         router.refresh();
@@ -102,12 +98,14 @@ export function DeckAddonDialog({ open, onClose, why, onAdded }: { open: boolean
     setBusy(false);
   };
 
-  const per = deckAddonPriceWords(offer?.interval ?? "MONTH");
+  const short = deckAddonShortWords(offer?.interval ?? "MONTH");
+  // The trial (or a complimentary plan) holds the studio: the dialog says so and offers nothing to add.
+  const included = offer?.included ?? null;
   return (
-    <dialog ref={ref} className={`${s.da} ${s.dialog}`} onClose={close} aria-labelledby="deck-addon-title" data-deck-addon-dialog>
+    <dialog ref={ref} className={`${s.da} ${s.dialog}`} onClose={close} aria-labelledby="deck-addon-title" data-deck-addon-dialog data-deck-addon-included={included ?? undefined}>
       <div className={s.body}>
         <div className={s.kicker}>Deck Studio · add-on</div>
-        <h2 className={s.title} id="deck-addon-title">{why ?? "Add Deck Studio to your plan"}</h2>
+        <h2 className={s.title} id="deck-addon-title">{included === "trial" ? "Included in your trial" : included === "grant" ? "Included in your plan" : (why ?? "Add Deck Studio to your plan")}</h2>
         <p className={s.lead}>The preview designs anything — the deck in 3D, checked to code, priced. Deck Studio adds the rest:</p>
         <ul className={s.list}>
           {UNLOCKS.map((u) => (
@@ -122,15 +120,15 @@ export function DeckAddonDialog({ open, onClose, why, onAdded }: { open: boolean
             {`$${Math.round(deckAddonCents(offer?.interval ?? "MONTH") / 100)}`}
             <small> /{offer?.interval === "YEAR" ? "year" : "month"}, added to your plan</small>
           </div>
-          <div className={s.priceNote}>{offer ? (offer.canAdd ? dueWords(offer) : offer.interval === "YEAR" ? "Your plan is billed yearly, so the add-on is too — two months free." : "Cancel it any time from Subscription.") : "Reading your plan…"}</div>
+          <div className={s.priceNote}>{offer ? (included ? offer.reason : offer.canAdd ? dueWords(offer) : offer.interval === "YEAR" ? "Your plan is billed yearly, so the add-on is too — two months free." : "Cancel it any time from Subscription.") : "Reading your plan…"}</div>
         </div>
         {error ? <p className={s.error} role="alert">{error}</p> : null}
         {failed ? <p className={s.error} role="alert" data-deck-addon-error>{failed}</p> : null}
-        {offer && !offer.canAdd && offer.reason ? <p className={s.note} data-deck-addon-reason>{offer.reason}</p> : null}
+        {offer && !offer.canAdd && !included && offer.reason ? <p className={s.note} data-deck-addon-reason>{offer.reason}</p> : null}
         <div className={s.acts}>
           {offer?.canAdd ? (
             <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => void add()} disabled={busy} data-deck-addon-add>
-              {busy ? "Adding…" : `Add Deck Studio — ${per}`}
+              {busy ? "Adding…" : `Add Deck Studio · ${short}`}
             </button>
           ) : null}
           <button type="button" className={s.btn} onClick={close} disabled={busy}>
@@ -142,29 +140,39 @@ export function DeckAddonDialog({ open, onClose, why, onAdded }: { open: boolean
   );
 }
 
-/** The studio's band while it is a preview; while the trial holds it, one line about after the trial. */
-export function DeckPreviewBanner({ mode, trialEndsAt, onAdd }: { mode: "preview" | "trial"; trialEndsAt?: string | null; onAdd: () => void }) {
+/** The studio's band while it is a preview (a saved deck: to look at and print); while the trial holds it, one line
+ *  about after the trial — nothing to add in a trial (owner, 2026-10-20). */
+export function DeckPreviewBanner({ mode, trialEndsAt, interval = "MONTH", saved = false, onAdd, children }: { mode: "preview" | "trial"; trialEndsAt?: string | null; interval?: AddonInterval; saved?: boolean; onAdd?: () => void; children?: React.ReactNode }) {
   if (mode === "trial") {
+    const until = day(trialEndsAt ?? null);
     return (
       <p className={`${s.da} ${s.trialLine}`} data-deck-trial-line>
         <span>
-          Deck Studio is in your free trial{day(trialEndsAt ?? null) ? ` until ${day(trialEndsAt ?? null)}` : ""}. After it, the studio stays open for $49/month on your plan — without it, it&apos;s a preview.
+          {deckTrialWords(interval)}
+          {until ? ` Your trial runs until ${until}.` : ""}
         </span>
-        <button type="button" onClick={onAdd} data-deck-trial-add>
-          Keep it after the trial
-        </button>
       </p>
     );
   }
   return (
-    <div className={`${s.da} ${s.banner}`} role="note" data-deck-preview>
+    <div className={`${s.da} ${s.banner}`} role="note" data-deck-preview={saved ? "saved" : "design"}>
       <div className={s.bannerText}>
-        <span className={s.stamp}>Preview</span>
-        Design anything here — the deck in 3D, checked to code, priced. <b>Saving, sending and printing come with Deck Studio</b>, $49/month on your plan.
+        <span className={s.stamp}>{saved ? "View only" : "Preview"}</span>
+        {saved ? (
+          <>
+            A saved deck, to look at and print. <b>Changing it takes Deck Studio.</b>
+          </>
+        ) : (
+          <>
+            Design anything here — the deck in 3D, checked to code, priced. <b>Saving, sending and printing come with Deck Studio.</b>
+          </>
+        )}
       </div>
       <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={onAdd} data-deck-preview-add>
-        Add Deck Studio
+        Add Deck Studio · {deckAddonShortWords(interval)}
       </button>
+      {/* A saved deck's prints: from the saved copy, open in the preview too. */}
+      {children ? <div className={s.prints}>{children}</div> : null}
     </div>
   );
 }
@@ -185,7 +193,7 @@ export function DeckAddonCard() {
       const res = await removeDeckStudio();
       if (!res.ok) setFailed(res.error);
       else {
-        toast.success("Deck Studio removed", "The Deck estimator is a preview again. Your next bill is without it.");
+        toast.success("Deck Studio removed", "The Deck estimator is a preview again. The unused part of this period is a credit on your next bill.");
         setConfirm(false);
         await reload();
         router.refresh();
@@ -201,16 +209,20 @@ export function DeckAddonCard() {
     <section className={`${s.da} ${s.card}`} aria-label="Deck Studio add-on" data-deck-addon-card>
       <div className={s.cardHead}>
         <h3 className={s.cardTitle}>Deck Studio add-on</h3>
-        <span className={`${s.cardState} ${offer?.held ? s.cardOn : ""}`}>{offer?.held ? `On your plan · ${deckAddonPriceWords(offer.interval)}` : `${deckAddonPriceWords(offer?.interval ?? "MONTH")} · not added`}</span>
+        <span className={`${s.cardState} ${offer?.held || offer?.included ? s.cardOn : ""}`} data-deck-addon-state>
+          {offer?.held ? `On your plan · ${deckAddonPriceWords(offer.interval)}` : offer?.included === "trial" ? "Included in your trial" : offer?.included === "grant" ? "Included in your plan" : `${deckAddonPriceWords(offer?.interval ?? "MONTH")} · not added`}
+        </span>
       </div>
       {error ? <p className={s.error} role="alert">{error}</p> : null}
       {offer ? (
         <p className={s.note}>
           {offer.held
             ? "The whole Deck estimator: drafts, proposals, the client's design link, material lists and the permit sheet."
-            : offer.trialing
-              ? "Your trial includes the whole Deck estimator. Add it to keep saving, sending and printing decks after the trial; without it the studio is a preview."
-              : "Without it the Deck estimator is a preview: design anything, save and send nothing. Add it to open the whole studio."}
+            : offer.included === "trial"
+              ? `${deckTrialWords(offer.interval)} Nothing is added to your subscription now — add it here once the trial is over to keep saving, sending and printing.`
+              : offer.included === "grant"
+                ? "Your complimentary plan includes the whole Deck estimator."
+                : "Without it the Deck estimator is a preview: design anything, save and send nothing. Add it to open the whole studio."}
         </p>
       ) : null}
       {failed ? <p className={s.error} role="alert">{failed}</p> : null}
@@ -220,7 +232,7 @@ export function DeckAddonCard() {
             offer.owner ? (
               confirm ? (
                 <>
-                  <span className={s.note}>Remove it now? The studio becomes a preview at once; nothing is refunded.</span>
+                  <span className={s.note}>Remove it now? The studio becomes a preview at once; the unused part of this period is a credit on your next bill.</span>
                   <button type="button" className={s.btn} onClick={() => void remove()} disabled={busy} data-deck-addon-remove-yes>
                     {busy ? "Removing…" : "Remove Deck Studio"}
                   </button>
@@ -241,12 +253,12 @@ export function DeckAddonCard() {
             <>
               {offer.canAdd ? (
                 <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => setOpen(true)} data-deck-addon-open>
-                  Add Deck Studio
+                  Add Deck Studio · {deckAddonShortWords(offer.interval)}
                 </button>
-              ) : offer.reason ? (
+              ) : offer.reason && !offer.included ? (
                 <span className={s.note} data-deck-addon-reason>{offer.reason}</span>
               ) : null}
-              <Link className={s.btn} href={"/dashboard/deck-estimator" as Route}>{offer.trialing ? "Open the Deck estimator" : "Try the preview"}</Link>
+              <Link className={s.btn} href={"/dashboard/deck-estimator" as Route}>{offer.included ? "Open the Deck estimator" : "Try the preview"}</Link>
             </>
           )}
         </div>

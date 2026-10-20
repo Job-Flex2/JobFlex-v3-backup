@@ -6,7 +6,6 @@ import "server-only";
 // turned on — or off — and a draft or intent saved under the other setting still get what the switch says today.
 import { readSignupPlan } from "@/lib/trialPolicyServer";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
-import { isEditionPlan } from "@/lib/editions";
 import { autoPlanFor, type AutoPlanOffer } from "@/lib/signupAutoPlan";
 import type { SpotlightTool } from "@/lib/planSpotlight";
 
@@ -23,8 +22,7 @@ type Catalog = Awaited<ReturnType<typeof getPlanCatalog>>;
 export async function autoPlanOffer(ask: AutoPlanAsk, catalog?: Catalog): Promise<AutoPlanOffer | null> {
   if ((await readSignupPlan()).mode !== "auto") return null;
   const plans = (catalog ?? (await getPlanCatalog().catch(() => []))).filter((p) => !p.isFree);
-  const editionSlug = ask.edition === "deck" ? (plans.find((p) => isEditionPlan(p.slug, "deck"))?.slug ?? null) : null;
-  const pick = autoPlanFor({ plans, tool: ask.tool ?? null, editionSlug, asked: ask.asked ?? null });
+  const pick = autoPlanFor({ plans, tool: ask.tool ?? null, asked: ask.asked ?? null });
   const plan = pick ? plans.find((p) => p.slug === pick.slug) : null;
   return pick && plan ? { slug: plan.slug, name: plan.name, priceCents: plan.priceCents, why: pick.why } : null;
 }

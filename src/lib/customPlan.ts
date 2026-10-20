@@ -122,7 +122,8 @@ export const CUSTOM_BASE_FEATURES = [
 
 /** Pages no longer sold but still read off a stored selection, so a plan that holds one keeps its price.
  *  The Deck estimator (2026-10-19): not sold as a page any more — Deck Studio is its own $49/month add-on on
- *  any plan (lib/deckAddon) — but a custom plan that bought the page keeps it, and the studio with it. */
+ *  any plan (lib/deckAddon). A stored selection still reads (the plan keeps its price) but opens nothing: since
+ *  2026-10-20 only the trial, the add-on, a grant or a platform admin holds the studio (lib/editions). */
 const RETIRED_PAGES: readonly CustomPageId[] = ["deck-estimator"];
 
 const VALID = new Set<string>([...CUSTOM_PAGES.map((p) => p.id), ...RETIRED_PAGES]);

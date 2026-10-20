@@ -107,6 +107,7 @@ import { DeckPlan, type PlanEdgeHit, nearestStairEdge } from "@/components/v3/de
 import { Answers, CUSTOM, CUSTOM_LABEL, CustomBox, Field, FieldScope, More, NameInput, NumberInput, Scope, Seg, Stepper, Toggle, ago, cx, feetText, intText, money, parseFeet, parseInches, priceShow, priceText, type FieldScopeValue } from "./deck-v1-parts";
 import { DeckV1Send } from "./deck-v1-send";
 import { DeckAddonDialog, DeckPreviewBanner } from "@/components/v3/deck-addon/deck-addon";
+import type { AddonInterval } from "@/lib/deckAddon";
 import { PHOTO_ENABLED, PhotoFileInput, PhotoSection, PhotoTools, PhotoViewBox, PhotoWhere, useDeckPhoto, type V1View } from "./deck-v1-photo";
 import "./deck-variant-1.css";
 
@@ -234,7 +235,7 @@ export interface OpenedDesign {
 
 const DeckKindPickerView = React.memo(DeckKindPicker);
 
-export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId, opened = null, preview = false, trialEndsAt = null }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null; preview?: boolean; trialEndsAt?: string | null }) {
+export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId, opened = null, preview = false, trialEndsAt = null, addonInterval = "MONTH" }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null; preview?: boolean; trialEndsAt?: string | null; addonInterval?: AddonInterval }) {
   const router = useRouter();
   // THE PREVIEW (owner, 2026-10-19): an account whose plan runs without Deck Studio designs here freely; every save,
   // send and print opens the add-on's dialog instead (components/v3/deck-addon; the server refuses them too —
@@ -248,7 +249,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     return parsed.state || parsed.zip ? resolveMarket({ address }) : resolveMarket({ state: homeState });
   }, [address, homeState]);
   const site = React.useMemo(() => siteFromAddress(address, homeState), [address, homeState]);
-  const [design, setDesign] = React.useState<DeckDesign>(() => {
+  const [liveDesign, setDesign] = React.useState<DeckDesign>(() => {
     if (opened) {
       const d0 = normalizeDeckDesign(opened.design, { state: market.state || homeState });
       const h0 = houseForShape(d0.house, d0.shape, { drop: false });
@@ -257,6 +258,11 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     const d = defaultDeckDesign({ state: market.state || homeState, frostIn: market.frostIn });
     return applyDeckPatch(d, { loadPsf: site.deckLoad, frostIn: site.frostIn, site: { ...d.site, groundSnowPsf: site.groundSnowPsf, termite: site.termite } });
   });
+  // A SAVED DECK IN THE PREVIEW (owner, 2026-10-20): it opens to look at and to print, never to change — the studio
+  // shows the deck as saved, whatever the controls are asked; a new deck (Start over) designs freely again.
+  const [frozen, setFrozen] = React.useState<DeckDesign | null>(() => (preview && opened ? liveDesign : null));
+  const design = frozen ?? liveDesign;
+  const viewOnly = frozen !== null;
   const [book, setBook] = React.useState<DeckRateBook>(initialBook);
   /** What the contractor chose by hand; a new address does not overwrite those. */
   const touched = React.useRef(new Set<string>());
@@ -449,6 +455,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     });
 
   const commitAddress = (text: string) => {
+    if (viewOnly) return;
     const next = text.trim();
     setAddress(next);
     const parsed = parseStateZip(next);
@@ -729,7 +736,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [actAt, setActAt] = React.useState<"top" | "bottom">("bottom");
   const behind = !!linked && designSig !== proposalSig;
   /** The save's state in words, as the old studio said it (a draft of a saved proposal says so). */
-  const saveWords = preview ? "Preview — not saved" : saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `${linked ? "Draft saved" : "Saved"} ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : linked ? `Opened from ${linked.ref}` : "";
+  const saveWords = viewOnly ? "View only — saved deck" : preview ? "Preview — not saved" : saveState === "saving" ? "Saving…" : saveState === "saved" && savedAt ? `${linked ? "Draft saved" : "Saved"} ${ago(savedAt)}` : saveState === "failed" ? "Not saved — will retry" : linked ? `Opened from ${linked.ref}` : "";
   // THE CLIENT'S RETURN: a design a client sent back (their words ride over it), and returns nobody has opened yet.
   const [fromClient, setFromClient] = React.useState<ReturnedClientDesign | null>(opened?.client ?? null);
   const clientToken = fromClient?.token ?? null;
@@ -823,6 +830,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     if (!res.ok) return;
     dirty.current = false;
     setDesign(res.draft.design);
+    if (preview) setFrozen(res.draft.design);
     setDraftId(res.draft.id);
     setDraftTitle(res.draft.title);
     setAddress(res.draft.address ?? "");
@@ -848,6 +856,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   };
   const startFresh = () => {
     dirty.current = false;
+    setFrozen(null);
     setDesign(defaultDeckDesign({ state: market.state || homeState, frostIn: market.frostIn }));
     setDraftId(null);
     setDraftTitle("");
@@ -977,14 +986,17 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       </div>
     </div>
   ) : null;
+  // A saved deck in the preview prints from what was saved (`?draft=` / `?proposal=`), never from the page's copy.
+  const savedRef = viewOnly ? (draftId ? `draft=${encodeURIComponent(draftId)}` : linked ? `proposal=${encodeURIComponent(linked.id)}` : null) : null;
   const materialsHref = React.useCallback((forWhom: "yard" | "installer") => {
+    if (savedRef) return `/deck-materials?${savedRef}&for=${forWhom}`;
     try {
       const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ design, address, title: draftTitle.trim() || undefined }))));
       return `/deck-materials?d=${encodeURIComponent(payload)}&for=${forWhom}`;
     } catch {
       return null;
     }
-  }, [design, address, draftTitle]);
+  }, [design, address, draftTitle, savedRef]);
 
   /* ── the shop's prices ── */
   const [drafts2, setDrafts2] = React.useState<Record<string, string>>(() => Object.fromEntries(Object.entries(initialBook).map(([k, v]) => [k, String(v)])));
@@ -1304,6 +1316,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   // Encode export links only while their section is visible in the form.
   const onPackage = visibleSections.has("package");
   const permitHref = React.useMemo(() => {
+    if (savedRef) return `/deck-permit?${savedRef}`;
     if (!onPackage) return null;
     try {
       const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ design, address }))));
@@ -1311,9 +1324,9 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     } catch {
       return null;
     }
-  }, [onPackage, design, address]);
-  const yardHref = React.useMemo(() => (onPackage ? materialsHref("yard") : null), [onPackage, materialsHref]);
-  const installerHref = React.useMemo(() => (onPackage ? materialsHref("installer") : null), [onPackage, materialsHref]);
+  }, [onPackage, design, address, savedRef]);
+  const yardHref = React.useMemo(() => (onPackage || savedRef ? materialsHref("yard") : null), [onPackage, savedRef, materialsHref]);
+  const installerHref = React.useMemo(() => (onPackage || savedRef ? materialsHref("installer") : null), [onPackage, savedRef, materialsHref]);
   /* ── a check row ── */
   const checkRow = (c: DeckCheck) => (
     <li key={c.id} className={cx("v1-check", `is-${c.level}`)} data-check={c.id}>
@@ -2618,17 +2631,17 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </div>
         <div className="v1-row-acts">
           {yardHref ? (
-            <a className="v1-btn v1-btn-sm" href={yardHref} target="_blank" rel="noopener" onClick={(e) => { if (preview) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-materials="yard">
+            <a className="v1-btn v1-btn-sm" href={yardHref} target="_blank" rel="noopener" onClick={(e) => { if (preview && !viewOnly) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-materials="yard">
               List for the lumber yard <ExternalLink size={14} aria-hidden="true" />
             </a>
           ) : null}
           {installerHref ? (
-            <a className="v1-btn v1-btn-sm" href={installerHref} target="_blank" rel="noopener" onClick={(e) => { if (preview) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-materials="installer">
+            <a className="v1-btn v1-btn-sm" href={installerHref} target="_blank" rel="noopener" onClick={(e) => { if (preview && !viewOnly) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-materials="installer">
               For the installer to buy <ExternalLink size={14} aria-hidden="true" />
             </a>
           ) : null}
           {permitHref ? (
-            <a className="v1-btn v1-btn-sm" href={permitHref} target="_blank" rel="noopener" onClick={(e) => { if (preview) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-permit>
+            <a className="v1-btn v1-btn-sm" href={permitHref} target="_blank" rel="noopener" onClick={(e) => { if (preview && !viewOnly) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-permit>
               Permit sheet <ExternalLink size={14} aria-hidden="true" />
             </a>
           ) : null}
@@ -2828,9 +2841,11 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                       <button type="button" className="v1-btn v1-btn-sm" onClick={() => void openDraft(d.id)} disabled={d.id === draftId}>
                         Open
                       </button>
-                      <button type="button" className="v1-icon-btn v1-icon-danger" onClick={() => void removeDraft(d.id)} aria-label={`Delete the draft ${d.title}`}>
-                        <X size={16} strokeWidth={2.5} aria-hidden="true" />
-                      </button>
+                      {preview ? null : (
+                        <button type="button" className="v1-icon-btn v1-icon-danger" onClick={() => void removeDraft(d.id)} aria-label={`Delete the draft ${d.title}`}>
+                          <X size={16} strokeWidth={2.5} aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2842,12 +2857,20 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           event.preventDefault();
           if (addressDraft.trim() !== address) commitAddress(addressDraft);
         }}>
-          <label className="v1-field"><span className="v1-lbl">Job address</span><input className="v1-in" value={addressDraft} placeholder="Street, city, state ZIP" autoComplete="street-address" onChange={(event) => setAddressDraft(event.target.value)} onBlur={() => { if (addressDraft.trim() !== address) commitAddress(addressDraft); }} /></label>
+          <label className="v1-field"><span className="v1-lbl">Job address</span><input className="v1-in" value={addressDraft} readOnly={viewOnly} placeholder="Street, city, state ZIP" autoComplete="street-address" onChange={(event) => setAddressDraft(event.target.value)} onBlur={() => { if (addressDraft.trim() !== address) commitAddress(addressDraft); }} /></label>
         </form>
         {preview ? (
-          <DeckPreviewBanner mode="preview" onAdd={() => askAddon("Add Deck Studio to your plan")} />
+          <DeckPreviewBanner mode="preview" saved={viewOnly} interval={addonInterval} onAdd={() => askAddon(viewOnly ? "Change saved decks with Deck Studio" : "Add Deck Studio to your plan")}>
+            {viewOnly ? (
+              <>
+                {permitHref ? <a href={permitHref} target="_blank" rel="noopener" data-deck-saved-print="permit">Permit sheet</a> : null}
+                {yardHref ? <a href={yardHref} target="_blank" rel="noopener" data-deck-saved-print="yard">List for the lumber yard</a> : null}
+                {installerHref ? <a href={installerHref} target="_blank" rel="noopener" data-deck-saved-print="installer">For the installer</a> : null}
+              </>
+            ) : null}
+          </DeckPreviewBanner>
         ) : trialEndsAt !== null ? (
-          <DeckPreviewBanner mode="trial" trialEndsAt={trialEndsAt || null} onAdd={() => askAddon("Keep Deck Studio after your trial")} />
+          <DeckPreviewBanner mode="trial" trialEndsAt={trialEndsAt || null} interval={addonInterval} />
         ) : null}
       </header>
 
@@ -2944,8 +2967,9 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                 <section className="v1-form-section" key={section.id} data-deck-section={section.id} aria-labelledby={`v1-section-${section.id}`}>
                   <div className="v1-form-heading"><span className="v1-section-number" aria-hidden="true">{index + 1}</span><h2 className="v1-question" id={`v1-section-${section.id}`} tabIndex={-1}>{section.question}</h2></div>
                   <Scope step={scopeOf(section.id)}>
-                    <div className="v1-q-body">{stepBody[section.id]()}</div>
-                    {section.id === "size" ? <Scope step={scopeOf("house")}><h3 className="v1-h3">{withDeck ? "House & ground" : "Ground"}</h3><div className="v1-q-body">{houseStep()}</div>{stepChecks("house")}</Scope> : null}
+                    {/* A saved deck in the preview: shown as answered, not to be changed; its print links are in the band above. */}
+                    <div className="v1-q-body" inert={viewOnly} data-v1-view-only={viewOnly || undefined}>{stepBody[section.id]()}</div>
+                    {section.id === "size" ? <Scope step={scopeOf("house")}><h3 className="v1-h3">{withDeck ? "House & ground" : "Ground"}</h3><div className="v1-q-body" inert={viewOnly} data-v1-view-only={viewOnly || undefined}>{houseStep()}</div>{stepChecks("house")}</Scope> : null}
                     {section.id !== "checks" && section.id !== "package" ? stepChecks(section.id) : null}
                   </Scope>
                 </section>

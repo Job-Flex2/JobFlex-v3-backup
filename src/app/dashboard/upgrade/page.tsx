@@ -23,7 +23,6 @@ import { orgSpotlight } from "@/lib/planSpotlightServer";
 import { requireOrg } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
-import { editionUpgradeTarget } from "@/lib/editionAccess";
 import { isEditionOpen } from "@/lib/editions";
 import { deckAddonPriceWords } from "@/lib/deckAddon";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
@@ -121,13 +120,12 @@ export default async function UpgradePage({
       highlight: p.highlight,
     }));
 
-  // ?edition=deck (lib/editions): an existing customer adding the Deck Studio is pointed at the plan that carries it.
-  const target = params.edition === "deck" ? await editionUpgradeTarget("deck").catch(() => null) : null;
+  // ?edition=deck (lib/editions): no plan carries the Deck Studio — it is an add-on on whichever plan is picked.
   return (
     <UpgradeResponsive
       spotlight={await orgSpotlight(ctx.organizationId)}
-      focusSlug={target?.slug ?? null}
-      focusWords={params.edition === "deck" && isEditionOpen("deck") ? (target ? `Deck Studio comes with ${target.name} — or put it on any plan for ${deckAddonPriceWords("MONTH")} from the Deck estimator.` : `Deck Studio is an add-on: ${deckAddonPriceWords("MONTH")} on the plan you have. Add it from the Deck estimator or Subscription.`) : target ? `Deck Studio comes with ${target.name} — pick it below.` : params.edition === "deck" ? (isEditionOpen("deck") ? "No plan carries the Deck Studio yet — ask us to add it." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
+      focusSlug={null}
+      focusWords={params.edition === "deck" ? (isEditionOpen("deck") ? `Deck Studio is an add-on: ${deckAddonPriceWords("MONTH")} on any plan. Add it from the Deck estimator or Subscription.` : "Deck Studio is coming soon — it isn't on sale yet.") : null}
       plans={plans}
       currentPlan={onFree ? FREE_PLAN_NAME : (sub?.plan ?? null)}
       currentInterval={onFree ? null : term.currentInterval}
