@@ -1,9 +1,9 @@
 /* THE FIRST SCREEN AND WHAT FOLLOWS IT (2026-10-19) — hero.tsx and
    hero-proof.tsx, every landing alike. The order, desk and phone the same:
    one headline, the film (or the product shot) and the one button filling
-   the first screen; its line under the fold; then on paper the description
-   with its figures and the reviews. Every rule hangs on an `lp-fold`,
-   `lp-proof`, `lp-review` or `lp-pitch` class only these render. */
+   the first screen; its line under it; then how it works (#how) and the
+   reviews. Every rule hangs on an `lp-fold`, `lp-how` or `lp-review` class
+   only these render. */
 
 .jf-lp {
   /* The 1px rule of the dashboard's Blueprint pages (--hair there), on the landing. */
@@ -89,23 +89,138 @@
   .jf-lp .lp-fold-after { margin-top: 36px; padding-bottom: 72px; }
 }
 
-/* ── under the hero: the description, then the reviews ───── */
-.jf-lp .lp-proof { background: #fff; color: var(--ink, #0a0a0a); padding: 40px 20px 8px; }
-.jf-lp .lp-proof-wrap { max-width: var(--lp-wrap); margin: 0 auto; }
+/* ── under the hero: how it works (#how), then the reviews ── */
+
+/* HOW IT WORKS (hero-proof.tsx, how-steps.tsx). The landing's light
+   drafting grid (the comparison's: a 40 px fine cell, a 200 px major one,
+   1 px lines) on the paper, a hair rule along the top and the foot. The
+   copy takes 5/12 on a desk, the steps 7/12; on a phone the copy sits on
+   top. The trade tool's colour is --lp-tool (blueprint blue on the default
+   page). Square corners, no shadow, no gradient fill — the grid's lines are
+   gradient stops only because that is how CSS draws a grid. */
+.jf-lp .lp-how {
+  position: relative;
+  padding: 44px 20px 48px;
+  background-color: #f6f8fa;
+  background-image:
+    linear-gradient(rgba(10, 10, 10, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.09) 1px, transparent 1px),
+    linear-gradient(rgba(10, 10, 10, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.045) 1px, transparent 1px);
+  background-size: 200px 200px, 200px 200px, 40px 40px, 40px 40px;
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  color: var(--ink, #0a0a0a);
+  scroll-margin-top: 72px;
+}
+.jf-lp .lp-how-wrap { display: grid; gap: 28px; max-width: var(--lp-wrap); margin: 0 auto; }
+.jf-lp .lp-how-kicker {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lp-tool, var(--accent, #1854a0));
+}
+.jf-lp .lp-how-pitch { margin: 0; font-size: 28px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; text-wrap: pretty; }
+.jf-lp .lp-how-lede { margin: 14px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink-muted, #555); }
 @media (min-width: 640px) {
-  .jf-lp .lp-proof { padding: 72px 24px 24px; }
+  .jf-lp .lp-how { padding: 72px 24px; }
+}
+@media (min-width: 1024px) {
+  .jf-lp .lp-how-wrap { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
+  .jf-lp .lp-how-pitch { font-size: clamp(28px, 2.3vw, 32px); }
 }
 
-.jf-lp .lp-proof-block { margin-top: 40px; }
-@media (min-width: 640px) {
-  .jf-lp .lp-proof-block { margin-top: 64px; }
+/* The steps: a column on a phone, linked by a 16 px hair line and a chevron
+   down; a row of three from 768 px, a chevron right in each 28 px gap. */
+.jf-lp .lp-how-steps { display: grid; gap: 32px; margin: 0; padding: 0; list-style: none; }
+.jf-lp .lp-how-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px 18px 0;
+  background: #fff;
+  border: 1px solid var(--hair);
+  border-radius: 0;
 }
-.jf-lp .lp-proof-h { margin: 0 0 16px; font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -0.015em; }
-@media (min-width: 640px) {
-  .jf-lp .lp-proof-h { margin-bottom: 24px; font-size: clamp(26px, 2.6vw, 34px); }
+.jf-lp .lp-how-step:not(:last-child)::before,
+.jf-lp .lp-how-step:not(:last-child)::after { content: ""; position: absolute; pointer-events: none; }
+/* The link down to the next card: the hair line, then the chevron. */
+.jf-lp .lp-how-step:not(:last-child)::before { left: 50%; bottom: -17px; width: 1px; height: 16px; background: var(--hair); }
+.jf-lp .lp-how-step:not(:last-child)::after {
+  left: calc(50% - 8px);
+  bottom: -33px;
+  width: 16px;
+  height: 16px;
+  background: var(--ink-faint, #888);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+@media (min-width: 768px) {
+  .jf-lp .lp-how-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .jf-lp .lp-how-step:not(:last-child)::before { display: none; }
+  .jf-lp .lp-how-step:not(:last-child)::after {
+    left: auto;
+    right: -23px;
+    bottom: auto;
+    top: calc(50% - 8px);
+    transform: rotate(-90deg);
+  }
+}
+.jf-lp .lp-how-top { display: flex; align-items: center; gap: 12px; }
+.jf-lp .lp-how-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 0;
+  color: #fff;
+  background: var(--lp-tool, var(--accent, #1854a0));
+}
+.jf-lp .lp-how-num { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--ink-muted, #555); }
+.jf-lp .lp-how-title { margin: 16px 0 0; font-size: 16px; font-weight: 600; line-height: 1.35; }
+.jf-lp .lp-how-val {
+  margin: 12px 0 0;
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--lp-tool, var(--accent, #1854a0));
+  overflow-wrap: break-word;
+}
+.jf-lp .lp-how-label { margin: 6px 0 18px; font-size: 13px; line-height: 1.4; color: var(--ink-muted, #555); }
+/* The scale along the card's foot: a hair track, filled a third, two thirds,
+   the whole — the step's place in the three. */
+.jf-lp .lp-how-scale { display: block; margin: auto -18px 0; height: 3px; background: var(--hair); }
+.jf-lp .lp-how-fill {
+  display: block;
+  height: 100%;
+  background: var(--lp-tool, var(--accent, #1854a0));
+  transform: scaleX(var(--how-fill, 1));
+  transform-origin: left center;
+}
+.jf-lp .lp-how-steps[data-how="armed"] .lp-how-fill { transform: scaleX(0); }
+.jf-lp .lp-how-steps[data-how="on"] .lp-how-fill { transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .jf-lp .lp-how-steps .lp-how-fill { transition: none; transform: scaleX(var(--how-fill, 1)); }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .jf-lp .lp-how-val { font-size: 32px; }
 }
 
-/* The reviews (landing-reviews.tsx): the numbers' cards, one column on a phone, three from 768 px. */
+/* THE REVIEWS (landing-reviews.tsx): white cards with a hair frame, one
+   column on a phone, three from 768 px. Not rendered while the list is empty. */
+.jf-lp .lp-reviews-sec { background: #fff; color: var(--ink, #0a0a0a); padding: 40px 20px; }
+.jf-lp .lp-reviews-wrap { max-width: var(--lp-wrap); margin: 0 auto; }
+.jf-lp .lp-reviews-h { margin: 0 0 16px; font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -0.015em; }
+@media (min-width: 640px) {
+  .jf-lp .lp-reviews-sec { padding: 64px 24px; }
+  .jf-lp .lp-reviews-h { margin-bottom: 24px; font-size: clamp(26px, 2.6vw, 34px); }
+}
 .jf-lp .lp-reviews { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 @media (min-width: 768px) {
   .jf-lp .lp-reviews { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -123,50 +238,6 @@
 .jf-lp .lp-review-who { display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: 14px; line-height: 1.4; }
 .jf-lp .lp-review-name { font-weight: 700; }
 .jf-lp .lp-review-co { color: var(--ink-muted, #555); }
-
-/* THE DESCRIPTION (hero-proof.tsx): the pitch as the heading, then three
-   equal white cards on the section's paper — the line as the card's title,
-   the figure under it in the trade estimator's colour (--lp-tool), its few
-   words grey under that. Square corners, a hair frame, no fill, no bar, no
-   shadow. One column on a phone, a row of three from 768 px. */
-.jf-lp .lp-pitch-text {
-  margin: 0;
-  max-width: 46rem;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
-  text-wrap: pretty;
-}
-.jf-lp .lp-figs { display: grid; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
-.jf-lp .lp-fig {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 18px 16px;
-  border: 1.5px solid var(--hair);
-  border-radius: 0;
-  background: #fff;
-}
-.jf-lp .lp-fig-t { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
-.jf-lp .lp-fig-n {
-  margin: 14px 0 0;
-  font-size: 32px;
-  font-weight: 600;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  color: var(--lp-tool, var(--accent, #1854a0));
-  overflow-wrap: anywhere;
-}
-.jf-lp .lp-fig-l { margin: 6px 0 0; font-size: 13px; line-height: 1.4; color: var(--ink-muted, #555); }
-@media (min-width: 640px) {
-  .jf-lp .lp-pitch-text { font-size: clamp(24px, 2.4vw, 32px); }
-  .jf-lp .lp-figs { margin-top: 24px; }
-  .jf-lp .lp-fig { padding: 22px 20px; }
-}
-@media (min-width: 768px) {
-  .jf-lp .lp-figs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-}
 
 /* A product shot with no film, scaled to end inside the first screen
    (--lp-fit-zoom, written by hero.tsx's fit script; 1 when it fits as drawn).

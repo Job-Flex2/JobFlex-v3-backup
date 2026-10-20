@@ -1,5 +1,5 @@
-/* WHAT CONTRACTORS SAY ABOUT JOBFLEX (2026-10-19) — the reviews block
-   under the hero's numbers (hero-proof.tsx), on every landing.
+/* WHAT CONTRACTORS SAY ABOUT JOBFLEX (2026-10-19) — the reviews section
+   under how it works (hero-proof.tsx), on every landing.
 
    OWNER FILLS: real reviews only, each with the person's consent — the
    sign-in page once carried a quote from a customer who does not exist
@@ -23,8 +23,9 @@ export const LANDING_REVIEWS: LandingReview[] = [];
 export function LandingReviews({ reviews = LANDING_REVIEWS }: { reviews?: LandingReview[] }) {
   if (!reviews.length) return null;
   return (
-    <div className="lp-proof-block">
-      <h2 className="lp-proof-h">What contractors say</h2>
+    <section className="lp-reviews-sec" aria-label="Reviews">
+      <div className="lp-reviews-wrap">
+      <h2 className="lp-reviews-h">What contractors say</h2>
       <ul className="lp-reviews">
         {reviews.slice(0, 3).map((r) => (
           <li key={`${r.name}-${r.company}`} className="lp-review">
@@ -39,6 +40,7 @@ export function LandingReviews({ reviews = LANDING_REVIEWS }: { reviews?: Landin
           </li>
         ))}
       </ul>
-    </div>
+      </div>
+    </section>
   );
 }
