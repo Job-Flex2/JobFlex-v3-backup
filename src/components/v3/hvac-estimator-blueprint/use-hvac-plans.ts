@@ -17,6 +17,7 @@ import { fitImages, pool, textKind } from "@/lib/plans/readClient";
 import { computeTakeoff, type House } from "@/lib/plans/takeoff";
 import { planEnvelopeOf, type PlanEnvelope } from "@/lib/plans/hvacEnvelope";
 import { planGlass } from "@/lib/plans/hvacLoad";
+import { isCivilSet, noFloorPlanText, type PageSeen } from "@/lib/plans/noFloorPlan";
 import type { SheetKind, SheetRead } from "@/lib/plans/sheet";
 import { clientErrorText } from "@/lib/staleDeploy";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
@@ -70,6 +71,13 @@ export function useHvacPlans() {
       const left = [...skipped, ...(opened.length > MAX_PLAN_PAGES ? [`Only the first ${MAX_PLAN_PAGES} pages are kept.`] : [])];
       if (!pages.length) {
         setState((s) => ({ ...s, status: "failed", error: skipped[0] ?? "No pages could be opened from these files.", skipped: left }));
+        return { status: "failed", house: null, envelope: null };
+      }
+      // A civil set (erosion control, grading, drainage) names itself on every sheet and draws no house: said at once,
+      // before a run is spent on it.
+      const byText: PageSeen[] = pages.map((p) => ({ text: p.text, title: p.titleText, kind: textKind(p) }));
+      if (isCivilSet(byText)) {
+        setState((s) => ({ ...s, status: "failed", pages: pages.length, skipped: left, error: noFloorPlanText(byText, true) }));
         return { status: "failed", house: null, envelope: null };
       }
       setState((s) => ({ ...s, status: "reading", pages: pages.length, skipped: left }));
@@ -146,7 +154,12 @@ export function useHvacPlans() {
       sheets.sort((a, b) => a.page - b.page);
       const takeoff = computeTakeoff(sheets);
       if (!takeoff.house.levels.length) {
-        setState((s) => ({ ...s, status: "failed", sheets, error: "No floor plan could be read from these sheets — add the floor plans and try again." }));
+        const readAs = new Map(sheets.map((x) => [x.page, x]));
+        const why = noFloorPlanText(pages.map((p) => {
+          const r = readAs.get(p.page);
+          return { text: p.text, title: r?.title || p.titleText, kind: r?.kind ?? kinds.get(p.page) ?? null };
+        }));
+        setState((s) => ({ ...s, status: "failed", sheets, error: why }));
         return { status: "failed", house: takeoff.house, envelope: null };
       }
       const envelope = planEnvelopeOf(takeoff.house, sheets);
