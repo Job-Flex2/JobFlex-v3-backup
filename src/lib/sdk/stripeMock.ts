@@ -303,6 +303,15 @@ function prorationCents(store: MockStore, sub: MockSubscription, next: MockPrice
   return Math.round(((newCents - oldCents) * remaining) / total);
 }
 
+/** A NEW line's share of the rest of the period (0 in a trial), as Stripe prorates an added item. */
+function addedLineCents(store: MockStore, sub: MockSubscription, price: MockPrice, quantity: number): number {
+  if (sub.status === "trialing") return 0;
+  const now = nowOf(store);
+  const total = Math.max(1, sub.current_period_end - sub.current_period_start);
+  const remaining = Math.max(0, Math.min(total, sub.current_period_end - now));
+  return Math.round(((price.unit_amount ?? 0) * quantity * remaining) / total);
+}
+
 /** Build the client. Every call reads the file, acts, and writes it back. */
 export function mockStripeClient(file: string): Stripe {
   const load = () => readMockStore(file);
@@ -354,6 +363,28 @@ export function mockStripeClient(file: string): Stripe {
       if (items?.length) {
         const behavior = (params.proration_behavior as string | undefined) ?? "create_prorations";
         for (const it of items) {
+          // As Stripe: `deleted` takes the line off; a line with a price and no id is a NEW line (the custom plan's
+          // page quantity, the Deck Studio add-on — 2026-10-19; it used to overwrite the first line). A bare
+          // quantity with no id still means the first line, as before.
+          if (it.deleted && it.id) {
+            sub.items.data = sub.items.data.filter((d) => d.id !== it.id);
+            continue;
+          }
+          if (!it.id && it.price && sub.items.data.length) {
+            const price = s.prices[it.price];
+            if (!price) {
+              save(s);
+              throw new MockStripeError(`No such price: '${it.price}'`);
+            }
+            const line: MockItem = { id: `si_mock_${Date.now().toString(36)}_${sub.items.data.length}`, price: { ...price }, quantity: it.quantity ?? 1 };
+            const delta = addedLineCents(s, sub, price, line.quantity);
+            if (behavior === "always_invoice" && delta > 0) {
+              invoiceNow += delta;
+              invoiceLines.push({ description: `Proration — new line ${price.id}`, amount: delta, period: { start: now, end: sub.current_period_end }, proration: true });
+            }
+            sub.items.data.push(line);
+            continue;
+          }
           const target = it.id ? sub.items.data.find((d) => d.id === it.id) : sub.items.data[0];
           if (!target) throw new MockStripeError(`No such subscription item: '${it.id}'`);
           if (it.price && it.price !== target.price.id) {
@@ -452,7 +483,12 @@ export function mockStripeClient(file: string): Stripe {
         trial_end?: "now" | number;
       };
       let price = sub.items.data[0].price;
-      const proposed = details.items?.find((i) => i.price)?.price;
+      // A line with a price and no id is a NEW line (2026-10-19, as Stripe): it adds its share of the rest of the
+      // period, and its price to the next bill. A line with an id and a price swaps that line's price.
+      const addedRow = details.items?.find((i) => i.price && !i.id);
+      const added = addedRow?.price ? s.prices[addedRow.price] : undefined;
+      if (addedRow && !added) throw new MockStripeError(`No such price: '${addedRow.price}'`);
+      const proposed = details.items?.find((i) => i.price && i.id)?.price;
       if (proposed) {
         const p = s.prices[proposed];
         if (!p) throw new MockStripeError(`No such price: '${proposed}'`);
@@ -460,7 +496,7 @@ export function mockStripeClient(file: string): Stripe {
       }
       const behavior = details.proration_behavior ?? "create_prorations";
       const endsTrialNow = details.trial_end === "now" && sub.status === "trialing";
-      const base = (price.unit_amount ?? 0) * (sub.items.data[0].quantity || 1);
+      const base = (price.unit_amount ?? 0) * (sub.items.data[0].quantity || 1) + (added?.unit_amount ?? 0);
       const lines: MockInvoice["lines"]["data"] = [];
       let periodStart: number;
       let periodEnd: number;
@@ -482,7 +518,8 @@ export function mockStripeClient(file: string): Stripe {
       if (proposed && proposed !== sub.items.data[0].price.id && behavior !== "none" && !endsTrialNow) {
         proration += prorationCents(s, sub, price);
       }
-      if (proration !== 0) lines.push({ description: "Proration for the plan change", amount: proration, period: { start: now, end: sub.current_period_end }, proration: true });
+      if (added && behavior !== "none" && !endsTrialNow) proration += addedLineCents(s, sub, added, 1);
+      if (proration !== 0) lines.push({ description: added ? "Proration for the new line" : "Proration for the plan change", amount: proration, period: { start: now, end: sub.current_period_end }, proration: true });
       lines.push({ description: price.nickname ?? price.id, amount: base, period: { start: periodStart, end: periodEnd } });
       const subtotal = base + proration;
       const balance = s.customers[sub.customer]?.balance ?? 0;

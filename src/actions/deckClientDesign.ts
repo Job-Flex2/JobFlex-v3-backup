@@ -16,7 +16,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { NoOrgError, UnauthorizedError, requireEstimatorOrManager } from "@/lib/orgContext";
-import { canUseDeckEstimator } from "@/lib/deck/access";
+import { deckStudioAccess } from "@/lib/deck/access";
 import { appBaseUrl } from "@/lib/appUrl";
 import { logServerError } from "@/lib/server-events";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
@@ -53,10 +53,13 @@ import { markClientLinkSeen, unseenClientReturns, withProposals } from "@/lib/de
 
 type Gate = { ok: true; organizationId: string; userId: string } | { ok: false; error: string };
 
-async function gate(): Promise<Gate> {
+/** "design": the studio's preview is enough (the links already there); "full" (the default): a new client link. */
+async function gate(need: "full" | "design" = "full"): Promise<Gate> {
   try {
     const ctx = await requireEstimatorOrManager();
-    if (!(await canUseDeckEstimator(ctx.user, ctx.organizationId))) return { ok: false, error: "The deck estimator is coming soon — it is open to admins for testing only." };
+    const level = await deckStudioAccess(ctx.user, ctx.organizationId);
+    if (level === "none") return { ok: false, error: "Your plan has ended, so the Deck estimator is closed. Pick a plan on Subscription to open it again." };
+    if (level === "preview" && need === "full") return { ok: false, error: "Saving, sending and printing are part of Deck Studio — add it to your plan ($49/month) from the Deck estimator." };
     return { ok: true, organizationId: ctx.organizationId, userId: ctx.user.id };
   } catch (err) {
     if (err instanceof UnauthorizedError) return { ok: false, error: "Only an estimator, a manager or the owner can do this." };
@@ -187,7 +190,7 @@ export async function createDeckClientLink(input: {
 
 /** The shop's links, newest first. */
 export async function listDeckClientLinks(): Promise<{ ok: true; links: Array<ClientLinkRow & { url: string; message: string }> } | { ok: false; error: string }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return g;
   try {
     const tokens = await readIndex(g.organizationId);
@@ -215,7 +218,7 @@ export async function listDeckClientLinks(): Promise<{ ok: true; links: Array<Cl
 
 /** Designs sent back that nobody has opened yet (2026-10-13): the studio polls this and blooms. */
 export async function deckClientInbox(): Promise<{ ok: true; unseen: Array<ClientLinkRow & { url: string }>; count: number } | { ok: false; error: string }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return g;
   try {
     const base = (await appBaseUrl()).replace(/\/$/, "");
@@ -229,14 +232,14 @@ export async function deckClientInbox(): Promise<{ ok: true; unseen: Array<Clien
 
 /** The contractor looked at what came back: it stops blooming everywhere. */
 export async function markDeckClientSeen(token: string): Promise<{ ok: boolean }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return { ok: false };
   return { ok: !!(await markClientLinkSeen(token, g.organizationId)) };
 }
 
 /** Take a link back: the page stops opening. A design already sent stays in the drafts. */
 export async function deleteDeckClientLink(token: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const g = await gate();
+  const g = await gate("design");
   if (!g.ok) return g;
   const link = await readLink(token);
   if (!link || link.orgId !== g.organizationId) return { ok: false, error: "No such link." };

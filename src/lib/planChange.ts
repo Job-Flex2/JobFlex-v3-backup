@@ -35,6 +35,7 @@ import { getPlanBySlug, getPlanCatalog } from "@/lib/planCatalogServer";
 import { SubscriptionStatus } from "@/lib/prismaEnums";
 import { subscriptionPeriodEnd, subscriptionPeriodEndDate } from "@/lib/stripeCompat";
 import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
+import { isDeckAddonLine, planLines } from "@/lib/deckAddon";
 import { changeRoute, type BillingTermName, type ChangeRoute } from "@/lib/planChangeRoute";
 import { priceInterval } from "@/lib/priceInterval";
 import { ensureYearFirstMonthCoupon } from "@/lib/yearDiscount";
@@ -93,8 +94,9 @@ const PAST_DUE = "Your last payment didn't go through. Update your card first, t
 
 const termOf = (sub: Stripe.Subscription): Term =>
   sub.items.data.some((i) => i.price.recurring?.interval === "year") ? "YEAR" : "MONTH";
+// The plan's own lines: the Deck Studio add-on (lib/deckAddon) is not part of the plan being changed.
 const totalOf = (sub: Stripe.Subscription) =>
-  sub.items.data.reduce((n, i) => n + (i.price.unit_amount ?? 0) * (i.quantity ?? 1), 0);
+  planLines(sub.items.data).reduce((n, i) => n + (i.price.unit_amount ?? 0) * (i.quantity ?? 1), 0);
 const iso = (unix: number | null | undefined) => (unix ? new Date(unix * 1000).toISOString() : null);
 const customerOf = (sub: Stripe.Subscription) => (typeof sub.customer === "string" ? sub.customer : sub.customer.id);
 const DAY = 86_400;
@@ -174,7 +176,8 @@ async function resolve(
   /* ALREADY THERE (2026-10-12). Stripe holds the target price — an earlier
      press went through and only our row lags (its write failed, or the
      webhook has not landed). Nothing is charged again; the row is aligned. */
-  if (sub.items.data.length === 1 && sub.items.data[0].price.id === priceId) {
+  const own = planLines(sub.items.data);
+  if (own.length === 1 && own[0].price.id === priceId) {
     return { already: true, stripe, sub, plan, interval, termCents };
   }
   if (current === plan.slug && fromInterval === interval) return { ok: false, error: "That is already your plan.", code: "same_plan" };
@@ -189,7 +192,7 @@ async function resolve(
     rankTo: rank(plan.slug),
     currentCents: totalOf(sub),
     targetCents: termCents,
-    lines: sub.items.data.length,
+    lines: own.length,
   });
   if (route === "checkout") return { ok: true, route: "checkout", plan, interval };
   return { stripe, mode, sub, priceId, plan, interval, fromInterval, termCents, route, anchorNow: route === "charge" && fromInterval !== interval };
@@ -247,8 +250,12 @@ async function discountsForYear(r: Resolved): Promise<{ changed: boolean; discou
 }
 
 function itemsFor(r: Resolved): Stripe.SubscriptionUpdateParams.Item[] {
-  const [first, ...rest] = r.sub.items.data;
-  return [{ id: first.id, price: r.priceId, quantity: 1 }, ...rest.map((i) => ({ id: i.id, deleted: true as const }))];
+  const [first, ...rest] = planLines(r.sub.items.data);
+  // The Deck Studio add-on stays through a change of plan on the same term. A change of term takes it off — its
+  // price is the old term's and Stripe bills one term per subscription — and the webhook takes its record with it
+  // (lib/deckAddonBilling mirrorDeckAddon): the studio offers it again at the new term.
+  const addon = r.interval === r.fromInterval ? [] : r.sub.items.data.filter(isDeckAddonLine);
+  return [{ id: first.id, price: r.priceId, quantity: 1 }, ...[...rest, ...addon].map((i) => ({ id: i.id, deleted: true as const }))];
 }
 
 function metadataFor(r: Resolved, organizationId: string): Record<string, string> {

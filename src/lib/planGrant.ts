@@ -32,6 +32,7 @@
 // through the webhook, the reconcile cron, or the editor's own "Verify"
 // read. While it stands, the editor refuses a second change.
 
+import { planLine } from "@/lib/deckAddon";
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { ActivityKind, SubscriptionStatus } from "@/lib/prismaEnums";
@@ -256,7 +257,7 @@ export async function confirmSyncingFromStripe(sub: Stripe.Subscription, organiz
   if (!organizationId) return false;
   const mark = await readSyncingMark(organizationId);
   if (!mark || mark.subId !== sub.id) return false;
-  const priceId = sub.items.data[0]?.price?.id ?? null;
+  const priceId = planLine(sub.items.data)?.price?.id ?? null;
   if (mark.priceId && priceId !== mark.priceId) return false;
   if (mirrorStatusFor(sub) !== mark.status) return false;
   await clearSyncingMark(organizationId);
