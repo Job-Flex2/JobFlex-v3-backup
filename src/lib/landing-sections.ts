@@ -27,6 +27,9 @@ export const LANDING_SECTIONS: readonly LandingSection[] = [
   { key: "compare", label: "JobFlex vs other apps", selector: [".lp-cv--compare", "#compare"], shown: "all" },
   { key: "showcase", label: "Estimators", selector: [".lp-cv--showcase", "#showcase"], shown: "all" },
   { key: "hvac", label: "HVAC service book", selector: [".lp-cv--hvac", "#service"], shown: "some" },
+  // The Deck Studio's 87-second demo film (2026-10-19, landing-e/deck-demo-video): only the deck landing shows
+  // it, directly under its hero (its own order below). The HVAC, roofing and fence films play inside the hero.
+  { key: "demo", label: "Demo film", selector: [".lp-cv--demo", "#demo"], shown: "some" },
   { key: "montage", label: "Real work photos", selector: [".lp-cv--montage"], shown: "some" },
   { key: "proposals", label: "Proposals", selector: [".lp-cv--proposals", "#proposals"], shown: "all" },
   { key: "portal", label: "Client portal", selector: [".lp-cv--portal", "#portal"], shown: "all" },
@@ -58,20 +61,26 @@ const OWN_ORDER: Readonly<Record<string, { since: number; order: readonly string
   roofing: {
     // Pushed 2026-10-04 ~7:45 PM Los Angeles; live a few minutes later.
     since: Date.parse("2026-10-05T03:00:00Z"),
-    order: ["hero", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
+    order: ["hero", "showcase", "hvac", "demo", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
   },
   // The same move on HVAC: the estimators, then the HVAC service book, then
   // the rest; the comparison beside the pricing. Pushed 2026-10-04 ~10:35 PM
   // Los Angeles; live a few minutes later.
   hvac: {
     since: Date.parse("2026-10-05T05:45:00Z"),
-    order: ["hero", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
+    order: ["hero", "showcase", "hvac", "demo", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
   },
   // And on fencing. Pushed 2026-10-04 ~11:45 PM Los Angeles; live a few
   // minutes later.
   fencing: {
     since: Date.parse("2026-10-05T06:55:00Z"),
-    order: ["hero", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
+    order: ["hero", "showcase", "hvac", "demo", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "compare", "pricing", "faq", "final"],
+  },
+  // The Deck Studio's landing (2026-10-19): its 87-second demo film directly under the hero; everything else
+  // where the usual order has it. Pushed 2026-10-19 ~5:35 PM Los Angeles.
+  decking: {
+    since: Date.parse("2026-10-20T00:35:00Z"),
+    order: ["hero", "demo", "compare", "showcase", "hvac", "montage", "proposals", "portal", "crew", "integrations", "stats", "built", "pricing", "faq", "final"],
   },
 };
 
