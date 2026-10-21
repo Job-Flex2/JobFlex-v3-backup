@@ -447,6 +447,8 @@
 .be.be .meter span { display: block; height: 100%; background: var(--be-blue); transition: width 300ms linear; }
 .be.be .workHint { margin: 14px 0 0; font-size: 14px; line-height: 1.5; color: var(--be-soft); }
 .be.be .work .btnGhost { align-self: flex-start; margin-top: 14px; min-height: 44px; }
+.be.be .work .btnCancel { color: #fff; background: var(--rose, #a83232); }
+.be.be .work .btnCancel:hover:not(:disabled) { background: color-mix(in srgb, var(--rose, #a83232) 86%, #000); }
 
 /* ── 4 · result ───────────────────────────────────────────── */
 /* THE RESULT (owner, 2026-10-17, the AI desk's clarity pass): the estimate is
