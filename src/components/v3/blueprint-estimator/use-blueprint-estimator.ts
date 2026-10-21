@@ -20,11 +20,16 @@ import { applyFocus, jobItems, partialTrades, scopeByRules, sheetLite, withFinis
 import { BASE_KINDS, kindsFor, readRank, readsAtAll, readsLight, type SheetSkim } from "@/lib/plans/readOrder";
 import { fitImages, guessKind, pool, textKind } from "@/lib/plans/readClient";
 import { handPlanEstimate } from "@/lib/plans/handoff";
+import { measureReport, type MeasureReport, type SectionKey } from "@/lib/plans/measureReport";
 import { estimateFromLines, isBilled, lineTotal, type ConsoleLine } from "@/lib/estimate/console-model";
 import { toast } from "@/components/ui/Toast";
 import { ensureWithinLimit, reportPlanLimit, reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 
-export type Stage = "upload" | "ask" | "work" | "result";
+export type Stage = "upload" | "ask" | "work" | "result" | "sizes";
+/** What the plans are wanted for: a priced job, or the sizes and measurements alone (2026-10-21). */
+export type Mode = "estimate" | "sizes";
+/** The sizes and measurements, as last read (lib/plans/measureReport). */
+export type Sizes = { report: MeasureReport; request: string; focus: SectionKey | null };
 type ReadState = { status: "run" | "ok" | "fail"; sheet?: SheetRead; error?: string };
 type Failure = { ok: false; error: string; code?: string; resource?: string };
 
@@ -127,10 +132,25 @@ async function postTradePrice(body: Parameters<typeof pricePlanTrade>[0], signal
 /** The working card's four steps, and the meter over them (blueprint-loading-card, and the phone's working card). */
 export const WORK_STEPS = ["Reading your plans", "Working out the job", "Measuring it on the sheets", "Pricing"];
 export const PRICING_STEP = 3;
+/** The same card when only the sizes are wanted — nothing is priced. */
+export const MEASURE_STEPS = ["Reading your plans", "Finding what you asked for", "Measuring it on the sheets", "Putting the sizes together"];
 
-export function workProgress({ step, readDone, readTotal, priced = 0, priceTotal = 0 }: { step: number; readDone: number; readTotal: number; priced?: number; priceTotal?: number }) {
+/** One tap opens the sizes on that part of the house — no AI beyond the reading (2026-10-21). */
+export const SIZE_ASKS: Array<{ label: string; focus: SectionKey | null }> = [
+  { label: "Everything", focus: null },
+  { label: "Rooms & square feet", focus: "rooms" },
+  { label: "Floor areas", focus: "areas" },
+  { label: "Windows", focus: "windows" },
+  { label: "Doors", focus: "doors" },
+  { label: "Roof", focus: "roof" },
+  { label: "Walls & siding", focus: "walls" },
+  { label: "Foundation & concrete", focus: "foundation" },
+  { label: "Drywall, paint & trim", focus: "work" },
+];
+
+export function workProgress({ step, readDone, readTotal, priced = 0, priceTotal = 0, steps = WORK_STEPS.length }: { step: number; readDone: number; readTotal: number; priced?: number; priceTotal?: number; steps?: number }) {
   const within = step === 0 && readTotal ? readDone / readTotal : step === PRICING_STEP && priceTotal ? priced / priceTotal : 0.5;
-  const progress = Math.min(99, Math.round(((step + within) / WORK_STEPS.length) * 100));
+  const progress = Math.min(99, Math.round(((step + within) / steps) * 100));
   const pricingWords = step === PRICING_STEP && priceTotal ? `${priced} of ${priceTotal} trades` : "";
   return { progress, pricingWords };
 }
@@ -158,6 +178,10 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
   const [baseReady, setBaseReady] = useState(false);
   const [working, setWorking] = useState<{ title?: string; measuring?: string[]; notes?: number[] }>({});
   const [result, setResult] = useState<Result | null>(null);
+  const [mode, setMode] = useState<Mode>("estimate");
+  const [sizes, setSizes] = useState<Sizes | null>(null);
+  /** The steps the working card shows: the job's, or the sizes'. */
+  const [workSteps, setWorkSteps] = useState<string[]>(WORK_STEPS);
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [saving, setSaving] = useState<null | "saving" | "opening">(null);
   const [retrying, setRetrying] = useState<PlanTrade | null>(null);
@@ -410,6 +434,54 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
   const loc = (locEdit ?? planAddress ?? "").trim();
 
   // ── 2 · the ask → 3 · the work ─────────────────────────────────────────
+  /** Every sheet as the planner sees it: the ones read, and the rest as the first look found them. */
+  function liteOf(sheets: SheetRead[]): SheetLite[] {
+    const readPages = new Set(sheets.map((x) => x.page));
+    return [
+      ...sheets.map((x) => ({ ...sheetLite(x), contents: kindsRef.current[x.page]?.contents ?? [] })),
+      // Sheets not read yet (or never: details) — what the first look found them to be.
+      ...pagesRef.current
+        .filter((p) => !readPages.has(p.page))
+        .map((p) => {
+          const k = kindsRef.current[p.page];
+          return { page: p.page, kind: k?.kind ?? guessKind(p), title: k?.title ?? (p.titleText.split("\n")[0]?.slice(0, 120) || null), level: k?.level ?? null, rooms: [], contents: k?.contents ?? [] };
+        }),
+    ].sort((a, b) => a.page - b.page);
+  }
+
+  /** The sheets that show what the job needs measured, looked at again for exactly those things. */
+  async function measureScope(tok: string, req: string, scope: JobScope, lite: SheetLite[]): Promise<FocusRead[]> {
+    const asks = new Map<number, Array<{ n: number; label: string; unit: string; how: string }>>();
+    scope.measure.forEach((m, k) => m.pages.forEach((pg) => asks.set(pg, [...(asks.get(pg) ?? []), { n: k + 1, label: m.label, unit: m.unit, how: m.how }])));
+    // …and the sheets whose notes specify the job, read for what they specify.
+    for (const pg of scope.specPages) if (!asks.has(pg)) asks.set(pg, []);
+    const focus: FocusRead[] = [];
+    await pool(Array.from(asks.entries()), MEASURE_AT_ONCE, async ([pg, list]) => {
+      const p = pagesRef.current.find((x) => x.page === pg);
+      if (!p) return;
+      try {
+        const { overview, tiles, grid } = await p.render();
+        const images = fitImages(overview, tiles);
+        const res = await measurePlanSheet({
+          token: tok,
+          page: pg,
+          pages: pagesRef.current.length,
+          request: req,
+          title: scope.title,
+          sheetTitle: lite.find((x) => x.page === pg)?.title ?? null,
+          asks: list,
+          textLayer: formatTextLayer(p.textItems),
+          images: images.map((url) => ({ url })),
+          grid: grid && images.length === tiles.length + 1 ? grid : null,
+        });
+        if (res.ok) focus.push(res.read);
+      } catch {
+        // a sheet that could not be measured keeps the build list's number
+      }
+    });
+    return focus;
+  }
+
   async function runAsk(asked?: string) {
     const req = (asked ?? request).trim();
     if (req.length < 2) {
@@ -419,6 +491,7 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
     if (asked) setRequest(asked);
     setErr("");
     setStage("work");
+    setWorkSteps(WORK_STEPS);
     setStep(0);
     setPricing({ done: 0, total: 0, now: [] });
     setWorking({});
@@ -454,17 +527,7 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
       }
       lap("Reading the plans");
       const house = houseBriefOf(base.house);
-      const readPages = new Set(sheets.map((x) => x.page));
-      const lite: SheetLite[] = [
-        ...sheets.map((x) => ({ ...sheetLite(x), contents: kindsRef.current[x.page]?.contents ?? [] })),
-        // Sheets not read yet (or never: details) — what the first look found them to be.
-        ...pagesRef.current
-          .filter((p) => !readPages.has(p.page))
-          .map((p) => {
-            const k = kindsRef.current[p.page];
-            return { page: p.page, kind: k?.kind ?? guessKind(p), title: k?.title ?? (p.titleText.split("\n")[0]?.slice(0, 120) || null), level: k?.level ?? null, rooms: [], contents: k?.contents ?? [] };
-          }),
-      ].sort((a, b) => a.page - b.page);
+      const lite = liteOf(sheets);
 
       // 2. the job
       setStep(1);
@@ -477,34 +540,7 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
 
       // 3. measured on the sheets that show it
       setStep(2);
-      const asks = new Map<number, Array<{ n: number; label: string; unit: string; how: string }>>();
-      scope.measure.forEach((m, k) => m.pages.forEach((pg) => asks.set(pg, [...(asks.get(pg) ?? []), { n: k + 1, label: m.label, unit: m.unit, how: m.how }])));
-      // …and the sheets whose notes specify the job, read for what they specify.
-      for (const pg of scope.specPages) if (!asks.has(pg)) asks.set(pg, []);
-      const focus: FocusRead[] = [];
-      await pool(Array.from(asks.entries()), MEASURE_AT_ONCE, async ([pg, list]) => {
-        const p = pagesRef.current.find((x) => x.page === pg);
-        if (!p) return;
-        try {
-          const { overview, tiles, grid } = await p.render();
-          const images = fitImages(overview, tiles);
-          const res = await measurePlanSheet({
-            token: tok,
-            page: pg,
-            pages: pagesRef.current.length,
-            request: req,
-            title: scope.title,
-            sheetTitle: lite.find((x) => x.page === pg)?.title ?? null,
-            asks: list,
-            textLayer: formatTextLayer(p.textItems),
-            images: images.map((url) => ({ url })),
-            grid: grid && images.length === tiles.length + 1 ? grid : null,
-          });
-          if (res.ok) focus.push(res.read);
-        } catch {
-          // a sheet that could not be measured keeps the build list's number
-        }
-      });
+      const focus = await measureScope(tok, req, scope, lite);
       if (!alive()) return;
       lap("Measuring on the sheets");
       // Every kind of sheet the job's lines rest on, read before they are priced — usually
@@ -559,6 +595,61 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
       setResult({ request: req, scope, rows: found.rows, specs: found.specs, items, takeoff, house: houseNow, results, failed, merged, location: loc, timing });
       setLines(merged.lines);
       setStage("result");
+    } catch (e) {
+      if (!alive()) return;
+      setErr(clientErrorText(e, "Something went wrong."));
+      setStage("ask");
+    }
+  }
+
+  /**
+   * THE SIZES AND MEASUREMENTS ALONE (owner, 2026-10-21: "extract the sizes of anything in the plan — room sizes by
+   * name, sq ft, anything — so I need an estimate or the sizes and measurements"). Every sheet read, then the report
+   * (lib/plans/measureReport) — nothing priced. A typed request ("the master closet", "baseboard in linear feet") is
+   * planned and measured on the sheets that show it, the way a job's measures are; a chip (`focus`) only opens the
+   * report on that part of the house. `asked` null: the chip, not the box.
+   */
+  async function runMeasure(asked: string | null, focus: SectionKey | null = null) {
+    const req = (asked ?? "").trim();
+    setErr("");
+    setStage("work");
+    setWorkSteps(MEASURE_STEPS);
+    setStep(0);
+    setPricing({ done: 0, total: 0, now: [] });
+    setWorking({ title: req ? `Measuring · ${req}` : "Sizes & measurements" });
+    const run = ++askRun.current;
+    const alive = () => run === askRun.current;
+    try {
+      const tok = tokenRef.current ?? (await ensureToken());
+      if (!alive()) return;
+      if (!tok) throw new Error("The plans could not be opened for reading.");
+      // The whole set: the sizes are every sheet's.
+      await waitFor("all");
+      if (!alive()) return;
+      const sheets = readSheets();
+      if (!sheets.length) {
+        const failedRead = Object.values(readsRef.current).find((r) => r.status === "fail" && r.error);
+        throw new Error(failedRead?.error ?? "No sheet could be read from these plans.");
+      }
+      let takeoff = computeTakeoff(sheets);
+      let measured: { request: string; rows: FoundRow[] } | null = null;
+      if (req && takeoff.house.levels.length) {
+        setStep(1);
+        const lite = liteOf(sheets);
+        const job = await askPlan({ token: tok, request: `Measure from the plans (sizes only, nothing priced): ${req}`, house: houseBriefOf(takeoff.house), sheets: lite, items: takeoff.items });
+        if (!alive()) return;
+        if (!job.ok) throw new Error(failText(job));
+        setWorking({ title: `Measuring · ${req}`, measuring: job.scope.measure.map((m) => m.label), notes: job.scope.specPages });
+        setStep(2);
+        const reads = await measureScope(tok, req, job.scope, lite);
+        if (!alive()) return;
+        const found = applyFocus(job.scope, reads, takeoff.items);
+        takeoff = computeTakeoff(sheets, {}, {}, found.measured);
+        measured = { request: req, rows: found.rows };
+      }
+      setStep(3);
+      setSizes({ report: measureReport(takeoff, sheets, measured), request: req, focus });
+      setStage("sizes");
     } catch (e) {
       if (!alive()) return;
       setErr(clientErrorText(e, "Something went wrong."));
@@ -691,6 +782,7 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
     setReads({});
     setReadTotal(0);
     setResult(null);
+    setSizes(null);
     setLines([]);
     setRequest("");
     setErr("");
@@ -717,5 +809,6 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
     step, pricing, working, result, lines, saving, retrying, viewer, setViewer, err, setErr, planName, planAddress, loc,
     billed, total, setQty, removeLine, acceptLine, openFiles, runAsk, retryTrade, createProposal, editInSmartProposal,
     openViewer, startOver, cancelWork, kindOf,
+    mode, setMode, sizes, runMeasure, workSteps,
   };
 }

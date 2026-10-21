@@ -18,7 +18,8 @@
 import { useRef, useState } from "react";
 import s from "./blueprint-estimator.module.css";
 import { BlueprintLoadingCard } from "./blueprint-loading-card";
-import { ASKS, clockText, money, qtyText, UNIT_SHORT, useBlueprintEstimator } from "./use-blueprint-estimator";
+import { ASKS, clockText, money, qtyText, SIZE_ASKS, UNIT_SHORT, useBlueprintEstimator } from "./use-blueprint-estimator";
+import { MeasureReportView } from "./measure-report";
 import type { PlanHvacLoad } from "@/lib/plans/hvacEnvelope";
 import { MAX_PLAN_PAGES } from "@/lib/plans/pdfClient";
 import { TRADE_LABEL } from "@/lib/plans/takeoff";
@@ -33,6 +34,7 @@ export function BlueprintEstimator() {
     step, pricing, working, result, lines, saving, retrying, viewer, setViewer, err, setErr, planName, planAddress,
     billed, total, setQty, removeLine, acceptLine, openFiles, runAsk, retryTrade, createProposal, editInSmartProposal,
     openViewer, startOver, cancelWork, kindOf,
+    mode, setMode, sizes, runMeasure, workSteps,
   } = useBlueprintEstimator();
   const [drag, setDrag] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -138,8 +140,8 @@ export function BlueprintEstimator() {
     return (
       <div className={s.be}>
         {head("Working on it", working.title)}
-        <BlueprintLoadingCard request={request.trim()} step={step} readDone={readDone} readTotal={readTotal}
-          priced={pricing.done} priceTotal={pricing.total}
+        <BlueprintLoadingCard request={mode === "sizes" ? "" : request.trim()} step={step} readDone={readDone} readTotal={readTotal}
+          priced={pricing.done} priceTotal={pricing.total} steps={workSteps}
           onCancel={cancelWork} />
       </div>
     );
@@ -155,46 +157,104 @@ export function BlueprintEstimator() {
         {head(planName || "What do you want from these plans?", planAddress)}
         <div className={s.askGrid}>
           <section className={`${s.card} ${s.ask}`}>
-            <h2 className={s.h2}>What do you want estimated?</h2>
-            <p className={s.p}>Say the job the way you would to your estimator — the plans are measured for it, then priced.</p>
-            <textarea
-              className={s.area}
-              aria-label="What do you want estimated from these plans?"
-              placeholder="e.g. Granite countertops for the kitchen, the island and the bathroom vanities"
-              value={request}
-              onChange={(e) => setRequest(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void runAsk();
-              }}
-            />
-            <DictateButton
-              id="blueprintAskDictate"
-              label="Speak the job"
-              value={request}
-              onChange={setRequest}
-              wrapClassName={s.dictate}
-              buttonClassName={s.btnGhost}
-              onClassName={s.dictateOn}
-              noteClassName={s.dictateNote}
-              iconClassName={s.ic}
-            />
-            <div className={s.chips} role="group" aria-label="Common jobs">
-              {ASKS.map((a) => (
-                <button key={a.label} type="button" className={s.chip} onClick={() => setRequest(a.ask)}>
-                  {a.label}
-                </button>
-              ))}
-            </div>
-            <label className={s.loc}>
-              <span>Price it for</span>
-              <input value={locEdit ?? planAddress ?? ""} onChange={(e) => setLocEdit(e.target.value)} placeholder="City, ST — regional prices" />
-            </label>
-            {err && <div className={s.err}>{err}</div>}
-            <div className={s.bar}>
-              <button type="button" className={s.btnPrimary} disabled={request.trim().length < 2} onClick={() => void runAsk()}>
-                Estimate it
+            {/* An estimate, or the sizes alone (owner, 2026-10-21: "so need estimate or sizes measurements"). */}
+            <div className={s.modes} role="tablist" aria-label="What you want from the plans">
+              <button type="button" role="tab" aria-selected={mode === "estimate"} className={`${s.mode} ${mode === "estimate" ? s.modeOn : ""}`} onClick={() => setMode("estimate")} data-be-mode="estimate">
+                Estimate a job
+              </button>
+              <button type="button" role="tab" aria-selected={mode === "sizes"} className={`${s.mode} ${mode === "sizes" ? s.modeOn : ""}`} onClick={() => setMode("sizes")} data-be-mode="sizes">
+                Sizes &amp; measurements
               </button>
             </div>
+            {mode === "sizes" ? (
+              <>
+                <h2 className={s.h2}>What do you want measured?</h2>
+                <p className={s.p}>Every room by name with its size and square feet, the floors, walls, roof, windows and doors — each with its sheet, ready as a PDF. Tap a part of the house, or ask for something in particular.</p>
+                <div className={s.chips} role="group" aria-label="Parts of the house">
+                  {SIZE_ASKS.map((a) => (
+                    <button key={a.label} type="button" className={s.chip} onClick={() => void runMeasure(null, a.focus)} data-be-size={a.focus ?? "all"}>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  className={s.area}
+                  aria-label="What do you want measured on these plans?"
+                  placeholder="e.g. The master bedroom and its closet, the baseboard in linear feet, the kitchen counters"
+                  value={request}
+                  onChange={(e) => setRequest(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && request.trim().length >= 2) void runMeasure(request);
+                  }}
+                  data-be-measure-ask
+                />
+                <DictateButton
+                  id="blueprintMeasureDictate"
+                  label="Speak it"
+                  value={request}
+                  onChange={setRequest}
+                  wrapClassName={s.dictate}
+                  buttonClassName={s.btnGhost}
+                  onClassName={s.dictateOn}
+                  noteClassName={s.dictateNote}
+                  iconClassName={s.ic}
+                />
+                {err && <div className={s.err}>{err}</div>}
+                <div className={s.bar}>
+                  {sizes ? (
+                    <button type="button" className={s.btnGhost} onClick={() => setStage("sizes")}>
+                      Back to the sizes
+                    </button>
+                  ) : null}
+                  <button type="button" className={s.btnPrimary} disabled={request.trim().length < 2} onClick={() => void runMeasure(request)} data-be-measure-go>
+                    Measure it
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+              <h2 className={s.h2}>What do you want estimated?</h2>
+              <p className={s.p}>Say the job the way you would to your estimator — the plans are measured for it, then priced.</p>
+              <textarea
+                className={s.area}
+                aria-label="What do you want estimated from these plans?"
+                placeholder="e.g. Granite countertops for the kitchen, the island and the bathroom vanities"
+                value={request}
+                onChange={(e) => setRequest(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void runAsk();
+                }}
+              />
+              <DictateButton
+                id="blueprintAskDictate"
+                label="Speak the job"
+                value={request}
+                onChange={setRequest}
+                wrapClassName={s.dictate}
+                buttonClassName={s.btnGhost}
+                onClassName={s.dictateOn}
+                noteClassName={s.dictateNote}
+                iconClassName={s.ic}
+              />
+              <div className={s.chips} role="group" aria-label="Common jobs">
+                {ASKS.map((a) => (
+                  <button key={a.label} type="button" className={s.chip} onClick={() => setRequest(a.ask)}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+              <label className={s.loc}>
+                <span>Price it for</span>
+                <input value={locEdit ?? planAddress ?? ""} onChange={(e) => setLocEdit(e.target.value)} placeholder="City, ST — regional prices" />
+              </label>
+              {err && <div className={s.err}>{err}</div>}
+              <div className={s.bar}>
+                <button type="button" className={s.btnPrimary} disabled={request.trim().length < 2} onClick={() => void runAsk()}>
+                  Estimate it
+                </button>
+              </div>
+              </>
+            )}
           </section>
 
           <section className={`${s.card} ${s.set}`} aria-label="The plan set">
@@ -233,7 +293,30 @@ export function BlueprintEstimator() {
     );
   }
 
-  // 4 · result
+  // 4 · the sizes and measurements alone (2026-10-21) — the report on every sheet read, Download PDF.
+  if (stage === "sizes" && sizes) {
+    return (
+      <div className={s.be}>
+        {viewerEl}
+        <MeasureReportView
+          sizes={sizes}
+          plan={{ name: planName, address: planAddress, file: pages[0]?.fileName ?? "Plans" }}
+          onPage={(p) => void openViewer(p)}
+          onAsk={() => {
+            setMode("sizes");
+            setStage("ask");
+          }}
+          onEstimate={() => {
+            setMode("estimate");
+            setRequest("");
+            setStage("ask");
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 5 · result
   if (!result) return null;
   const m = result.merged;
   const groups = Array.from(new Set(lines.map((l) => l.group ?? ""))).map((g) => {
