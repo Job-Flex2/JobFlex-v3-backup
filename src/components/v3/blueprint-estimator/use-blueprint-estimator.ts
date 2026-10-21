@@ -16,18 +16,25 @@ import type { SheetRead } from "@/lib/plans/sheet";
 import { computeTakeoff, PLAN_TRADES, TRADE_LABEL, type PlanTrade, type Takeoff, type TakeoffItem } from "@/lib/plans/takeoff";
 import { houseBriefOf, type HouseBrief } from "@/lib/plans/tradeBrief";
 import { mergePlanEstimate, type PlanEstimate, type TradeResult } from "@/lib/plans/merge";
-import { applyFocus, jobItems, partialTrades, scopeByRules, sheetLite, withFinish, type FocusRead, type FoundRow, type JobScope, type JobSpec, type SheetLite } from "@/lib/plans/ask";
+import { applyFocus, jobItems, partialTrades, scopeByRules, sheetLite, withFinish, type FocusRead, type FoundRow, type JobScope, type JobSpec, type Measured, type SheetLite } from "@/lib/plans/ask";
 import { BASE_KINDS, kindsFor, readRank, readsAtAll, readsLight, type SheetSkim } from "@/lib/plans/readOrder";
 import { fitImages, guessKind, pool, textKind } from "@/lib/plans/readClient";
 import { handPlanEstimate } from "@/lib/plans/handoff";
 import { measureReport, type MeasureReport, type SectionKey } from "@/lib/plans/measureReport";
+import { MATERIAL_TOPICS, materialsReport, type MaterialsJob, type MaterialsReport } from "@/lib/plans/materialsReport";
+import { deckSpecFromPlans, deckSpecFromWords, isDeckAsk, type DeckMaterials, type DeckSpec } from "@/lib/plans/deckSpec";
+import type { PlanHvacLoad } from "@/lib/plans/hvacEnvelope";
+import { stateFromAddress } from "@/lib/pricing/salesTax";
 import { estimateFromLines, isBilled, lineTotal, type ConsoleLine } from "@/lib/estimate/console-model";
 import { toast } from "@/components/ui/Toast";
 import { ensureWithinLimit, reportPlanLimit, reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 
-export type Stage = "upload" | "ask" | "work" | "result" | "sizes";
+export type Stage = "upload" | "ask" | "work" | "result" | "sizes" | "materials";
 /** What the plans are wanted for: a priced job, or the sizes and measurements alone (2026-10-21). */
-export type Mode = "estimate" | "sizes";
+export type Mode = "estimate" | "sizes" | "materials";
+/** The materials asked for (lib/plans/materialsReport): the job, what was measured for it, the deck. `deckAsk`: a deck
+ *  was asked for and its size is still wanted (no deck on the plans, none in the words). */
+export type Mats = { job: MaterialsJob; measured: Record<string, Measured>; hvac: PlanHvacLoad | null; deck: DeckMaterials | null; deckAsk: Partial<DeckSpec> | null };
 /** The sizes and measurements, as last read (lib/plans/measureReport). */
 export type Sizes = { report: MeasureReport; request: string; focus: SectionKey | null };
 type ReadState = { status: "run" | "ok" | "fail"; sheet?: SheetRead; error?: string };
@@ -134,6 +141,8 @@ export const WORK_STEPS = ["Reading your plans", "Working out the job", "Measuri
 export const PRICING_STEP = 3;
 /** The same card when only the sizes are wanted — nothing is priced. */
 export const MEASURE_STEPS = ["Reading your plans", "Finding what you asked for", "Measuring it on the sheets", "Putting the sizes together"];
+/** …and when the materials are wanted. */
+export const MATERIAL_STEPS = ["Reading your plans", "Finding what you asked for", "Measuring it on the sheets", "Working out the materials"];
 
 /** One tap opens the sizes on that part of the house — no AI beyond the reading (2026-10-21). */
 export const SIZE_ASKS: Array<{ label: string; focus: SectionKey | null }> = [
@@ -180,6 +189,11 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
   const [result, setResult] = useState<Result | null>(null);
   const [mode, setMode] = useState<Mode>("estimate");
   const [sizes, setSizes] = useState<Sizes | null>(null);
+  const [mats, setMats] = useState<Mats | null>(null);
+  /** The measurements the contractor corrected (item id → quantity): the materials follow them. */
+  const [matEdits, setMatEdits] = useState<Record<string, number>>({});
+  /** Extra on top of the materials, %. */
+  const [extraPct, setExtraPct] = useState(0);
   /** The steps the working card shows: the job's, or the sizes'. */
   const [workSteps, setWorkSteps] = useState<string[]>(WORK_STEPS);
   const [lines, setLines] = useState<ConsoleLine[]>([]);
@@ -430,6 +444,11 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
   const ready = stage !== "upload" && (baseReady || (readTotal > 0 && readDone >= readTotal));
   const sheetsRead = useMemo(() => Object.values(reads).filter((r) => r.status === "ok" && r.sheet).map((r) => r.sheet!), [reads]);
   const planName = useMemo(() => sheetsRead.map((x) => x.project.name).find(Boolean) ?? null, [sheetsRead]);
+  // The materials as they stand: the takeoff made again with the contractor's corrections, the list from it.
+  const materials: MaterialsReport | null = useMemo(
+    () => (mats ? materialsReport(computeTakeoff(sheetsRead, {}, matEdits, mats.measured, { hvac: mats.hvac }), mats.job, extraPct, mats.deck, matEdits) : null),
+    [mats, matEdits, extraPct, sheetsRead],
+  );
   const planAddress = useMemo(() => sheetsRead.map((x) => x.project.address).find(Boolean) ?? null, [sheetsRead]);
   const loc = (locEdit ?? planAddress ?? "").trim();
 
@@ -657,6 +676,112 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
     }
   }
 
+  /**
+   * THE MATERIALS (owner, 2026-10-21: "calculate any materials needed — for drywall, deck, roof, any — make it smart").
+   * A part of the house (`topicKey`: lib/plans/materialsReport MATERIAL_TOPICS) lists its trades' materials straight
+   * from the build list; a typed job is planned and measured on its sheets first, and lists its own lines; a deck —
+   * tapped, or named in the words — is sized from the words or the plans and goes through the Deck Studio's frame
+   * (lib/plans/deckMaterials, loaded then). Nothing is priced.
+   */
+  async function runMaterials(asked: string | null, topicKey: string | null = null) {
+    const req = (asked ?? "").trim();
+    const topic = topicKey ? MATERIAL_TOPICS.find((x) => x.key === topicKey) ?? null : null;
+    const deckWanted = topic ? topic.trades === "deck" : !!req && isDeckAsk(req);
+    setErr("");
+    setStage("work");
+    setWorkSteps(MATERIAL_STEPS);
+    setStep(0);
+    setPricing({ done: 0, total: 0, now: [] });
+    setWorking({ title: req ? `Materials · ${req}` : `Materials · ${topic?.label ?? "the house"}` });
+    setMatEdits({});
+    const run = ++askRun.current;
+    const alive = () => run === askRun.current;
+    try {
+      const tok = tokenRef.current ?? (await ensureToken());
+      if (!alive()) return;
+      if (!tok) throw new Error("The plans could not be opened for reading.");
+      const trades = topic && topic.trades !== "deck" ? topic.trades : null;
+      // The sheets these trades rest on — every sheet for the whole house or a typed job.
+      await waitFor(trades && topic?.key !== "all" ? new Set([...BASE_KINDS, ...kindsFor(new Set(trades))]) : deckWanted ? new Set(BASE_KINDS) : "all");
+      if (!alive()) return;
+      const sheets = readSheets();
+      if (!sheets.length) {
+        const failedRead = Object.values(readsRef.current).find((r) => r.status === "fail" && r.error);
+        throw new Error(failedRead?.error ?? "No sheet could be read from these plans.");
+      }
+      let takeoff = computeTakeoff(sheets);
+      let job: MaterialsJob;
+      let measured: Record<string, Measured> = {};
+      let deck: DeckMaterials | null = null;
+      let deckAsk: Partial<DeckSpec> | null = null;
+      if (deckWanted) {
+        const state = stateFromAddress(loc || planAddress || "");
+        const fromWords = req ? deckSpecFromWords(req) : {};
+        const fromPlans = deckSpecFromPlans(takeoff.house, state);
+        const spec = { heightIn: 36, board: "composite" as const, stairs: true, railing: true, ...(fromPlans ?? {}), ...fromWords, state, from: (fromWords.widthFt ? "words" : fromPlans ? "plans" : "entered") as DeckSpec["from"] };
+        if (spec.widthFt && spec.depthFt) {
+          setStep(3);
+          const { deckMaterials } = await import("@/lib/plans/deckMaterials");
+          deck = deckMaterials(spec as DeckSpec);
+        } else deckAsk = spec;
+        job = { title: "Deck", request: req || null, trades: [], itemIds: null, asked: [] };
+      } else if (req) {
+        setStep(1);
+        const lite = liteOf(sheets);
+        const plan = await askPlan({ token: tok, request: `Materials from the plans (quantities to buy, nothing priced): ${req}`, house: houseBriefOf(takeoff.house), sheets: lite, items: takeoff.items });
+        if (!alive()) return;
+        if (!plan.ok) throw new Error(failText(plan));
+        setWorking({ title: `Materials · ${plan.scope.title}`, measuring: plan.scope.measure.map((m) => m.label), notes: plan.scope.specPages });
+        setStep(2);
+        const reads = await measureScope(tok, req, plan.scope, lite);
+        if (!alive()) return;
+        const found = applyFocus(plan.scope, reads, takeoff.items);
+        measured = found.measured;
+        takeoff = computeTakeoff(sheets, {}, {}, measured);
+        const items = plan.scope.wholeHouse ? takeoff.items : withFinish(jobItems(plan.scope, takeoff.items, [...plan.extra, ...found.added]), req);
+        if (!items.length) throw new Error("Nothing on these plans matches that. Try naming the trade or the material.");
+        job = { title: plan.scope.title, request: req, trades: PLAN_TRADES.filter((tr) => items.some((i) => i.trade === tr)), itemIds: plan.scope.wholeHouse ? null : items.map((i) => i.id), asked: found.rows };
+      } else {
+        job = { title: topic?.label ?? "The whole house", request: null, trades: trades ?? [...PLAN_TRADES], itemIds: null, asked: [] };
+      }
+      // Heating and cooling sized from the load when it is in the list (as the estimate does).
+      let hvac: PlanHvacLoad | null = null;
+      if (job.trades.includes("hvac")) {
+        const ran = await planHvacLoadAction({ token: tok, location: loc || null, envelope: planEnvelopeOf(takeoff.house, sheets) }).catch(() => null);
+        if (!alive()) return;
+        if (ran?.ok) hvac = ran.load;
+      }
+      setStep(3);
+      setMats({ job, measured, hvac, deck, deckAsk });
+      setStage("materials");
+    } catch (e) {
+      if (!alive()) return;
+      setErr(clientErrorText(e, "Something went wrong."));
+      setStage("ask");
+    }
+  }
+
+  /** A deck's size given (or changed) on the materials screen: the Deck Studio's frame for it. */
+  async function setDeckSize(spec: DeckSpec) {
+    try {
+      const { deckMaterials } = await import("@/lib/plans/deckMaterials");
+      const deck = deckMaterials(spec);
+      setMats((m) => (m ? { ...m, deck, deckAsk: null } : m));
+    } catch (e) {
+      setErr(clientErrorText(e, "The deck could not be worked out."));
+    }
+  }
+
+  /** A measurement corrected (null: back to the plans' own) — the materials that rest on it follow. */
+  function editMeasure(id: string, qty: number | null) {
+    setMatEdits((e) => {
+      const next = { ...e };
+      if (qty == null || !Number.isFinite(qty) || qty < 0) delete next[id];
+      else next[id] = qty;
+      return next;
+    });
+  }
+
   async function priceTrade(a: { tok: string; trade: PlanTrade; house: HouseBrief; items: TakeoffItem[]; trades: PlanTrade[]; scope: JobScope; req: string; partial: boolean; location: string; specs: JobSpec[]; signal?: AbortSignal }) {
     try {
       const res = await postTradePrice({
@@ -783,6 +908,8 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
     setReadTotal(0);
     setResult(null);
     setSizes(null);
+    setMats(null);
+    setMatEdits({});
     setLines([]);
     setRequest("");
     setErr("");
@@ -810,5 +937,6 @@ export function useBlueprintEstimator({ smartProposalHref = "/dashboard/advanced
     billed, total, setQty, removeLine, acceptLine, openFiles, runAsk, retryTrade, createProposal, editInSmartProposal,
     openViewer, startOver, cancelWork, kindOf,
     mode, setMode, sizes, runMeasure, workSteps,
+    mats, materials, runMaterials, setDeckSize, editMeasure, matEdits, extraPct, setExtraPct,
   };
 }

@@ -22,6 +22,8 @@ import { useSheetDrag } from "@/components/v3/mobile-shell/use-sheet-drag";
 import { WorkSquare } from "@/components/v3/estimators-blueprint/work-square";
 import { ASKS, clockText, money, PRICING_STEP, qtyText, SIZE_ASKS, UNIT_SHORT, useBlueprintEstimator, workProgress } from "@/components/v3/blueprint-estimator/use-blueprint-estimator";
 import { MeasureReportView } from "@/components/v3/blueprint-estimator/measure-report";
+import { MaterialsView } from "@/components/v3/blueprint-estimator/materials-view";
+import { MATERIAL_TOPICS } from "@/lib/plans/materialsReport";
 import type { PlanHvacLoad } from "@/lib/plans/hvacEnvelope";
 import { MAX_PLAN_PAGES } from "@/lib/plans/pdfClient";
 import { TRADE_LABEL } from "@/lib/plans/takeoff";
@@ -48,6 +50,7 @@ export function MobileBlueprintEstimator() {
     billed, total, setQty, removeLine, acceptLine, openFiles, runAsk, retryTrade, createProposal, editInSmartProposal,
     openViewer, startOver, cancelWork, kindOf,
     mode, setMode, sizes, runMeasure, workSteps,
+    mats, materials, runMaterials, setDeckSize, editMeasure, extraPct, setExtraPct, reads,
   } = useBlueprintEstimator({ smartProposalHref: SMART_PROPOSAL });
   const [drag, setDrag] = useState(false);
   // The open half of the answer, for this answer only: a new answer opens on its estimate.
@@ -225,8 +228,50 @@ export function MobileBlueprintEstimator() {
             <button type="button" role="tab" aria-selected={mode === "sizes"} className={`mbe-mode${mode === "sizes" ? " is-on" : ""}`} onClick={() => setMode("sizes")} data-be-mode="sizes">
               Sizes &amp; measurements
             </button>
+            <button type="button" role="tab" aria-selected={mode === "materials"} className={`mbe-mode${mode === "materials" ? " is-on" : ""}`} onClick={() => setMode("materials")} data-be-mode="materials">
+              Materials
+            </button>
           </div>
-          {mode === "sizes" ? (
+          {mode === "materials" ? (
+            <>
+              <h2 className="mbe-h2" id="mbe-ask-h">
+                What materials do you need?
+              </h2>
+              <p className="mbe-p">Everything to buy, in the units it is sold in, worked out from the plans. Tap a trade, or say the job.</p>
+              <div className="mbe-chips" role="group" aria-label="Trades">
+                {MATERIAL_TOPICS.map((t) => (
+                  <button key={t.key} type="button" className="mbe-chip" onClick={() => void runMaterials(null, t.key)} data-be-material={t.key}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                className="mbe-area"
+                aria-label="What materials do you need from these plans?"
+                placeholder="Or say the job — drywall for the garage only, a 16x20 composite deck 4 ft high…"
+                value={request}
+                onChange={(e) => setRequest(e.target.value)}
+                data-be-materials-ask
+              />
+              <DictateButton
+                id="blueprintMaterialsDictate"
+                label="Speak it"
+                value={request}
+                onChange={setRequest}
+                wrapClassName="mbe-dictate"
+                buttonClassName="mbe-btn mbe-btn--ghost mbe-btn--wide"
+                onClassName="is-listening"
+                noteClassName="mbe-dictate-note"
+                icon={<MicIcon className="mbe-ic" />}
+              />
+              {mats ? (
+                <button type="button" className="mbe-btn mbe-btn--ghost mbe-btn--wide" onClick={() => setStage("materials")}>
+                  Back to the materials
+                </button>
+              ) : null}
+              {errEl}
+            </>
+          ) : mode === "sizes" ? (
             <>
               <h2 className="mbe-h2" id="mbe-ask-h">
                 What do you want measured?
@@ -344,7 +389,11 @@ export function MobileBlueprintEstimator() {
     );
     foot = (
       <div className="mbe-foot">
-        {mode === "sizes" ? (
+        {mode === "materials" ? (
+          <button type="button" className="mbe-btn mbe-btn--primary mbe-btn--wide mbe-btn--lg" disabled={!canAsk} onClick={() => void runMaterials(request)} data-be-materials-go>
+            Work out the materials
+          </button>
+        ) : mode === "sizes" ? (
           <button type="button" className="mbe-btn mbe-btn--primary mbe-btn--wide mbe-btn--lg" disabled={!canAsk} onClick={() => void runMeasure(request)} data-be-measure-go>
             Measure it
           </button>
@@ -364,7 +413,7 @@ export function MobileBlueprintEstimator() {
       <>
         {head("Working on it", working.title, true)}
         <section className="mbe-card mbe-work" aria-label="Blueprint estimate progress">
-          {mode === "sizes" ? null : <div className="mbe-work-req">{request.trim()}</div>}
+          {mode === "estimate" ? <div className="mbe-work-req">{request.trim()}</div> : null}
           <div className="mbe-work-body">
             <div className="mbe-work-head">
               <div className="mbe-work-stage" role="status">
@@ -405,6 +454,31 @@ export function MobileBlueprintEstimator() {
         onPage={(p) => openSheet(p)}
         onAsk={() => {
           setMode("sizes");
+          setStage("ask");
+        }}
+        onEstimate={() => {
+          setMode("estimate");
+          setRequest("");
+          setStage("ask");
+        }}
+      />
+    );
+  }
+
+  // 4b · the materials (2026-10-21)
+  else if (stage === "materials" && materials && mats) {
+    body = (
+      <MaterialsView
+        report={materials}
+        deckAsk={mats.deckAsk}
+        plan={{ name: planName, address: planAddress, file: pages[0]?.fileName ?? "Plans", sheets: Object.values(reads).filter((r) => r.status === "ok").length }}
+        extraPct={extraPct}
+        onExtra={setExtraPct}
+        onMeasure={editMeasure}
+        onDeck={(spec) => void setDeckSize(spec)}
+        onPage={(p) => openSheet(p)}
+        onAsk={() => {
+          setMode("materials");
           setStage("ask");
         }}
         onEstimate={() => {

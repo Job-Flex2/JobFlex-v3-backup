@@ -273,8 +273,8 @@ body:has(.jf-mblueprint)::before { content: none; }
 .jf-mblueprint .mbe-dictate .mbe-btn.is-listening { border-color: var(--mbe-red); background: color-mix(in srgb, var(--mbe-red) 8%, #fff); color: var(--mbe-red); }
 .jf-mblueprint .mbe-dictate-note { font-size: 13px; color: var(--mbe-red); }
 /* An estimate, or the sizes alone (2026-10-21): two tabs over the question, a full thumb wide each. */
-.jf-mblueprint .mbe-modes { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--ink); border-radius: var(--radius); overflow: hidden; margin-bottom: 6px; }
-.jf-mblueprint .mbe-mode { min-height: var(--mbe-tap); padding: 0 8px; border: 0; background: var(--mbe-white); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 700; }
+.jf-mblueprint .mbe-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1.5px solid var(--ink); border-radius: var(--radius); overflow: hidden; margin-bottom: 6px; }
+.jf-mblueprint .mbe-mode { min-height: var(--mbe-tap); padding: 4px 6px; line-height: 1.2; border: 0; background: var(--mbe-white); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 700; }
 .jf-mblueprint .mbe-mode + .mbe-mode { border-left: 1.5px solid var(--ink); }
 .jf-mblueprint .mbe-mode.is-on { background: var(--ink); color: #fff; }
 .jf-mblueprint .mbe-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }

@@ -101,6 +101,36 @@
 .mr.mr .checks ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; color: var(--mr-soft); }
 .mr.mr .fine { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mr-muted); max-width: 90ch; }
 
+/* the materials (materials-view): an editable measurement, extra on top, the deck's size */
+.mr.mr .count { font-weight: 500; font-size: 13px; color: var(--mr-muted); }
+.mr.mr .qtyEdit { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.mr.mr .qtyEdit input {
+  width: 96px; height: 34px; padding: 0 8px; border: 1.5px solid var(--mr-ink); border-radius: var(--mr-r); background: var(--mr-paper);
+  color: var(--mr-ink); font: inherit; font-size: 14px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums;
+}
+.mr.mr .qtyEdit span { font-size: 12.5px; color: var(--mr-soft); }
+.mr.mr .linkBtn { padding: 0; border: 0; background: none; color: var(--mr-blue); font: inherit; font-size: 12.5px; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.mr.mr .extra { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 1 1 280px; font-size: 13px; color: var(--mr-soft); }
+.mr.mr .extra > span { font-family: var(--mr-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 4px; }
+.mr.mr .extra button {
+  min-height: 36px; padding: 0 12px; border: 1.5px solid var(--mr-line); border-radius: var(--mr-r); background: var(--mr-paper);
+  color: var(--mr-ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.mr.mr .extra .extraOn { border-color: var(--mr-ink); background: var(--mr-ink); color: #fff; }
+.mr.mr .deckForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 12px; align-items: end; margin: 6px 0 4px; }
+.mr.mr .deckForm label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--mr-soft); min-width: 0; }
+.mr.mr .deckForm input:not([type="checkbox"]),
+.mr.mr .deckForm select {
+  height: 38px; padding: 0 8px; border: 1.5px solid var(--mr-ink); border-radius: var(--mr-r); background: var(--mr-paper); color: var(--mr-ink); font: inherit; font-size: 14px;
+}
+.mr.mr .deckForm .tick { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--mr-ink); min-height: 38px; }
+.mr.mr .deckForm .tick input { width: 18px; height: 18px; accent-color: var(--mr-blue); }
+.mr.mr .linkBtn:focus-visible,
+.mr.mr .extra button:focus-visible,
+.mr.mr .qtyEdit input:focus-visible,
+.mr.mr .deckForm input:focus-visible,
+.mr.mr .deckForm select:focus-visible { outline: 2px solid var(--mr-blue); outline-offset: 2px; }
+
 /* a phone or a narrow column: each row stacks under its name */
 @media (max-width: 640px) {
   .mr.mr .title { font-size: 22px; }
