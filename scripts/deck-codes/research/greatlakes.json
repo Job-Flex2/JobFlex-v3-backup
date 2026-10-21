@@ -1,0 +1,1043 @@
+{
+  "region": "greatlakes",
+  "researched": "2026-10-20",
+  "states": [
+    {
+      "state": "OH",
+      "edition": "Residential Code of Ohio for One-, Two-, and Three-Family Dwellings (2019 RCO, OAC ch. 4101:8; amended effective March 1, 2024)",
+      "basis_irc": 2018,
+      "since": 2019,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Our row says 'the 2024 edition on the 2021 IRC' (RCO 2024, basis 2021, since 2024) — wrong. RCO 101.1 still names the 2018 IRC as its basis (rule 4101:8-1-01, effective July 1, 2019). The March 1, 2024 package only amended the 2019 RCO (frost exceptions, 2023 NEC, standards); the 2021 I-codes took effect 3/1/2024 only for the commercial OBC/OMC/OPC/OEBC. Should read: 2019 RCO, basis 2018 IRC, since 2019. Riser 8 1/4 / tread 9 is correct.",
+      "notes": [
+        "Decks not supported by a dwelling need not have footings below the frost line (RCO 403.1.4.1 exception 3, effective 3/1/2024).",
+        "No plan approval is needed for a deck of 200 sq ft or less, no more than 30 in. above grade at any point, not attached to the dwelling and not serving the required exit door (RCO 102.10 item 9).",
+        "Guards are required more than 30 in. above the grade within 36 in. horizontally, and must be at least 36 in. high (RCO 312.1.1, 312.1.2).",
+        "Frost depth and the other Table R301.2(1) values are filled in by each local certified building department, not statewide.",
+        "A July 2026 BBS stakeholder draft (Amendments Group 107) still keeps the RCO on the 2018 IRC; no 2021/2024 IRC adoption is pending in rule form."
+      ],
+      "sources": [
+        {
+          "title": "OAC 4101:8-1-01 (RCO Ch. 1, eff. 7/1/2019) — 101.1 basis = 2018 IRC; 102.10 deck exemption",
+          "url": "https://codes.ohio.gov/assets/laws/administrative-code/rules/4101/8/4101$8-1-01_eff_7_1_19.pdf"
+        },
+        {
+          "title": "OAC 4101:8-3-01 (RCO Ch. 3, eff. 7/1/2019) — 311.7.5 stairs, 312.1 guards",
+          "url": "https://codes.ohio.gov/assets/laws/administrative-code/rules/4101/8/4101$8-3-01_eff_7_1_19.pdf"
+        },
+        {
+          "title": "OAC 4101:8-4-01 (RCO Ch. 4, eff. 3/1/2024) — 403.1.4.1 frost exceptions",
+          "url": "https://codes.ohio.gov/assets/laws/administrative-code/rules/4101/8/4101$8-4-01_eff_3_1_24.pdf"
+        },
+        {
+          "title": "Ohio BBS Memo 414 — 2024 Code Update Information (Jan 30, 2024)",
+          "url": "https://www.richlandcountyoh.gov/media/Departments/Building/Documents/BBS%20Memo%20414%202024%20Code%20Update%20Information.pdf"
+        },
+        {
+          "title": "Ohio BBS Amendments Group 107 — Proposed RCO amendments (July 2026 stakeholder draft)",
+          "url": "https://dam.assets.ohio.gov/image/upload/com.ohio.gov/DICO/BBS/RCO_-_Rules_and_Summary.pdf"
+        }
+      ]
+    },
+    {
+      "state": "MI",
+      "edition": "2015 Michigan Residential Code (Mich. Admin. Code Part 5, R 408.30500 ff.)",
+      "basis_irc": 2015,
+      "since": 2016,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Edition, IRC basis and date (Feb 8, 2016) match. Missing stair override: Michigan amends risers to 8 1/4 in. max and treads to 9 in. min (R 408.30519) — add riserMaxIn 8.25 / treadMinIn 9. Update the note: the 2021 MRC (2021 IRC) was filed for Aug 29, 2025, but a July 7, 2025 Court of Claims stipulated order stopped LARA from implementing it; LARA still lists the 2015 MRC as the current code (Oct 2026) and the case was still in litigation.",
+      "notes": [
+        "All exterior footings must extend 42 in. below actual grade statewide; the building official may modify for local conditions (R 408.30522, R403.1.4).",
+        "Statewide Table R301.2(1): wind 90 mph (basic wind speed), weathering severe, frost 42 in.; ground snow is set per county/municipality in Table R301.2(5) (R 408.30515-30516).",
+        "No permit for a deck of 200 sq ft or less, no more than 30 in. above grade, not attached, not within 36 in. of the dwelling or an accessory structure, and serving no door (R 408.30505, amending R105.2).",
+        "Michigan replaces the IRC ledger fastener table (Table R507.2.3 not adopted), amends the ledger bolt placement figure, and requires corrosion-resistant flashing above an attached ledger (R 408.30523, 30523a).",
+        "Risers 8 1/4 in. max, treads 9 in. min (R 408.30519)."
+      ],
+      "sources": [
+        {
+          "title": "Michigan LARA Bureau of Construction Codes — Code Books (2015 MRC current, eff. 2/8/2016)",
+          "url": "https://www.michigan.gov/lara/bureau-list/bcc/rules-acts/codes/code-books"
+        },
+        {
+          "title": "LARA notice — Court of Claims stipulated order pausing 2021 MRC (July 7, 2025)",
+          "url": "https://www.michigan.gov/lara/-/media/Project/Websites/lara/bcc-media/ASD/2021-Code-Injunction-Residential-Part-5-and-Energy-Part-10.pdf"
+        },
+        {
+          "title": "Michigan Admin. Code Part 5 Residential Code rules (R 408.30500 ff.: 42-in footings, Table R301.2(1), snow by county, stairs, deck ledger flashing)",
+          "url": "https://dtmb.state.mi.us/ORRDocs/AdminCode/1836_2018-054LR_AdminCode.pdf"
+        },
+        {
+          "title": "Mich. Admin. Code R 408.30519 — Treads and risers (8 1/4 in. / 9 in.)",
+          "url": "https://www.law.cornell.edu/regulations/michigan/Mich-Admin-Code-R-408-30519"
+        },
+        {
+          "title": "Home Builders Association of Michigan — Legal Action (2021 MRC suit status)",
+          "url": "https://hbaofmichigan.com/legal/"
+        }
+      ]
+    },
+    {
+      "state": "IN",
+      "edition": "2020 Indiana Residential Code (675 IAC 14-4.4)",
+      "basis_irc": 2018,
+      "since": 2019,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Name and 2018 IRC basis are right, but it took effect Dec 26, 2019 (we say 2020). Missing stair override: Indiana amends risers to 8 1/4 in. max and treads to 9 in. min (675 IAC 14-4.4-16, -17). The rule was readopted unchanged in 2025 (LSA #24-566); no 2024-IRC residential code has been adopted (the 2024-IBC work is the commercial code only).",
+      "notes": [
+        "Indiana publishes one statewide Table R301.2(1) listing all 92 counties; its 'Foundation' column is the minimum depth in inches from finish grade to the bottom of the footing (675 IAC 14-4.4-5).",
+        "Decks not supported by a dwelling need not have footings below the frost line (675 IAC 14-4.4-43).",
+        "Deck posts on concrete footings need lateral restraint by manufactured connectors or at least 12 in. of embedment in soil or concrete piers (675 IAC 14-4.4-69).",
+        "Risers 8 1/4 in. max, treads 9 in. min (675 IAC 14-4.4-16, -17); guards are not amended except R312.2 is deleted, so the IRC's 36 in. applies."
+      ],
+      "sources": [
+        {
+          "title": "Indiana DHS — General Information Circular on the 2020 Indiana Residential Code (eff. Dec 26, 2019)",
+          "url": "https://secure.iot.in.gov/dhs/files/Adoption-and-Implementation-of-2020-Indiana-Residential-Code.pdf"
+        },
+        {
+          "title": "2020 Indiana Residential Code final rule, 675 IAC 14-4.4 (statewide Table R301.2(1) by county, stair/frost/deck amendments) — copy posted by Clark County, IN",
+          "url": "https://www.clarkcounty.in.gov/~ccounty/images/pdf/2020/Plan_Commission/2020-Indiana-Residential-Code-Final-Rule.pdf"
+        },
+        {
+          "title": "Indiana FPBSC 2025 Readoption Review (675 IAC 14-4.4 readopted; 2018 IRC basis)",
+          "url": "https://secure.in.gov/dhs/files/2025-Readoption-Review.pdf"
+        }
+      ]
+    },
+    {
+      "state": "IL",
+      "edition": "No statewide residential building code",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": null,
+      "riser_max_in": null,
+      "tread_min_in": null,
+      "differs_from_app": "Matches in substance (no statewide code). Details to change: unincorporated Cook County runs the 2021 IRC (adopted July 29, 2021; required for drawings after Dec 1, 2021); DuPage County reviews residential work under its own DuPage County Building Code; Chicago uses the 2019 Chicago Building Code (Title 14B, based on the 2018 IBC), not the IRC.",
+      "notes": [
+        "Under 815 ILCS 670, in places that have not adopted a residential code, the home builder and buyer must name a code in the contract; if they don't, the current IRC applies by law.",
+        "Guard, riser and tread limits depend on the local code; there is no state value to apply."
+      ],
+      "sources": [
+        {
+          "title": "Illinois Residential Building Code Act, 815 ILCS 670",
+          "url": "https://www.ilga.gov/Legislation/ILCS/Articles?ActID=2585&ChapterID=67"
+        },
+        {
+          "title": "Cook County Dept. of Building & Zoning — Cook County Codes 2023 posting (2021 IRC adopted July 29, 2021)",
+          "url": "https://www.cookcountyil.gov/sites/g/files/ywwepo161/files/documents/2024-03/Code%20Posting%202023.pdf"
+        },
+        {
+          "title": "City of Chicago DOB — Chicago Construction Codes (2019 Chicago Building Code, Title 14B, based on 2018 IBC)",
+          "url": "https://www.chicago.gov/city/en/depts/bldgs/provdrs/bldg_code/svcs/chicago_buildingcodeonline.html"
+        }
+      ]
+    },
+    {
+      "state": "WI",
+      "edition": "Wisconsin Uniform Dwelling Code, SPS 320–325 (Wisconsin's own code, not the IRC)",
+      "basis_irc": null,
+      "since": 1980,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8,
+      "tread_min_in": 9,
+      "differs_from_app": "Row is right that the UDC is Wisconsin's own code. Fill in since = 1980 (UDC took effect June 1, 1980; chapters current through Register Nov 2024). The guard trigger is 24 in., not 30 in. (SPS 321.04(3)(c)); footings must be at least 48 in. below adjacent grade statewide (SPS 321.16) — make sure the app doesn't use a county frost table here.",
+      "notes": [
+        "Guards are required on decks, porches and landings more than 24 in. above grade; outdoors, measure from the lowest point within 3 ft of the edge; guards must be at least 36 in. high and stop a 4 3/8 in. sphere (SPS 321.04(3)(c)).",
+        "Risers 8 in. max, treads 9 in. min (SPS 321.04(2)).",
+        "Footings go below frost penetration or at least 48 in. below adjacent grade, whichever is deeper (SPS 321.16).",
+        "Attached decks, and detached decks that serve an exit, must meet the UDC; decks built to SPS 325 Appendix B/C are deemed to comply (SPS 321.225). Detached decks not serving an exit are exempt from the UDC (SPS 320.05(5)).",
+        "Deck live load is 40 psf (Table 321.02-1); wind is 20 psf or per ASCE 7-05, and roof snow loads come from the UDC zone map, so there is no IRC-style wind mph or ground-snow value."
+      ],
+      "sources": [
+        {
+          "title": "Wis. Admin. Code SPS 320 (UDC scope; 320.05(5) detached decks)",
+          "url": "https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/320_325/320.pdf"
+        },
+        {
+          "title": "Wis. Admin. Code SPS 321 (UDC construction: 321.02 loads, 321.04 stairs/guards, 321.16 frost, 321.225 decks)",
+          "url": "https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/320_325/321.pdf"
+        }
+      ]
+    },
+    {
+      "state": "MN",
+      "edition": "2020 Minnesota Residential Code, Minn. R. ch. 1309",
+      "basis_irc": 2018,
+      "since": 2020,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Edition, 2018 IRC basis and 2020 date are right (effective March 31, 2020). The parenthetical is wrong: no MN Residential Code based on the 2021 IRC exists or is pending. DLI's ch. 1309 rulemaking targets the 2024 IRC and is still at the request-for-comments stage (State Register Feb 2, 2026), with no adoption or effective date. Fix the frost note too: Minn. R. 1303.1600 sets Zone I = 5 ft (60 in.) and Zone II = 3 1/2 ft (42 in.) by named county; the Twin Cities counties are Zone II.",
+      "notes": [
+        "Statewide Table R301.2(1): wind 115 mph (2018 IRC Figure R301.2(5)A), seismic category A, weathering severe; frost per 1303.1600 and ground snow per 1303.1700 (60 psf northern counties, 50 psf elsewhere).",
+        "Guards are required more than 30 in. above the floor or grade, measured vertically, with no 36 in. horizontal clause (1309.0312).",
+        "Deck footing, joist, beam and ledger tables are rewritten for 40 psf live + 10 psf dead load (1309.0507).",
+        "Ch. 1309 does not amend IRC R311.7.5, so the IRC 7 3/4 in. riser and 10 in. tread apply."
+      ],
+      "sources": [
+        {
+          "title": "Minn. R. ch. 1309 — 2020 Minnesota Residential Code (2018 IRC; Table R301.2(1), R312.1.1, R507 deck tables)",
+          "url": "https://www.revisor.mn.gov/rules/1309/full"
+        },
+        {
+          "title": "Minn. R. 1303.1600 / 1303.1700 — frost footing depth zones and ground snow load by county",
+          "url": "https://www.revisor.mn.gov/rules/1303/full"
+        },
+        {
+          "title": "MN DLI rulemaking docket, ch. 1309 (2024 IRC; request for comments Feb 2, 2026)",
+          "url": "https://dli.mn.gov/about-department/rulemaking/rulemaking-docket-minnesota-rules-1309"
+        }
+      ]
+    },
+    {
+      "state": "IA",
+      "edition": "Iowa State Building Code, 481 IAC ch. 301 — residential: 2024 IRC with Iowa amendments (481—301.8)",
+      "basis_irc": 2024,
+      "since": 2025,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Basis is now the 2024 IRC, not 2021: 481—301.8 adopts the 2024 IRC (ARC 9474C, effective Sept 10, 2025), so since = 2025. The rules also moved from 661 IAC (Public Safety) to 481 IAC (Inspections, Appeals & Licensing) on 11/26/2025. The 'binds only where adopted' note stands: it applies to state-funded work and where a city or county adopts it by ordinance (Iowa Code 103A.12). Big cities adopt the IRC directly: Des Moines and Cedar Rapids are on the 2024 IRC, Davenport on the 2021 IRC.",
+      "notes": [
+        "Table R301.2 values are set by the project's location (481—301.8(3)); there is no statewide table.",
+        "Iowa's residential amendments don't touch stairs or guards, so the IRC's 7 3/4 in. riser, 10 in. tread and 36 in. guard apply (confirmed in the Cedar Rapids deck handout)."
+      ],
+      "sources": [
+        {
+          "title": "Iowa Admin. Code 481—ch. 301, State Building Code (481—301.8 adopts the 2024 IRC; ARC 9474C eff. 9/10/2025)",
+          "url": "https://www.legis.iowa.gov/docs/iac/chapter/481.301.pdf"
+        },
+        {
+          "title": "Iowa Admin. Code 481—ch. 300, State Building Code administration (applicability)",
+          "url": "https://www.legis.iowa.gov/docs/iac/chapter/481.300.pdf"
+        },
+        {
+          "title": "Iowa Admin. Code 661 (Public Safety) — ch. 301 transferred to 481 IAC (IAC Supp. 11/26/25)",
+          "url": "https://www.legis.iowa.gov/docs/iac/chapter/661.301.pdf"
+        },
+        {
+          "title": "City of Cedar Rapids — Residential Deck Handout (IRC)",
+          "url": "https://www.cedar-rapids.org/Building%20Services/Forms%20and%20Handouts/Handouts/Deck%20Handout%202021%20IRC.pdf"
+        }
+      ]
+    }
+  ],
+  "counties": [
+    {
+      "state": "OH",
+      "county": "Franklin County",
+      "fips": "39049",
+      "population_2020": 1323807,
+      "jurisdiction": "City of Columbus, Department of Building & Zoning Services (county seat and largest city) — CIC-09 Table R301.2(1)",
+      "edition": "Residential Code of Ohio (2019 RCO on the 2018 IRC, amended 3/1/2024)",
+      "frost_depth_in": 32,
+      "ground_snow_psf": 20,
+      "wind_mph": 90,
+      "wind_basis": "basic wind speed per Columbus CIC-09 (Table R301.2(1) footnote e)",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A permit is required for decks; the only exemption is a detached deck of 200 sq ft or less, no more than 30 in. above grade at any point, that does not serve the required exit door (CIC-23).",
+        "Columbus requires zoning approval for any deck over 169 sq ft, whatever its height or location.",
+        "Guards must be 36 in. high where the grade is more than 30 in. below the deck surface, measured 3 ft out from the edge; risers 8 1/4 in. max, treads 9 in. min, and the step from the door down to the deck 8 1/4 in. max.",
+        "Attached decks must resist vertical and horizontal movement without toenails or nails in withdrawal, and need corrosion-resistant flashing at the wall.",
+        "Submit 2 sets of plans with a plot plan showing dimensions to property lines; plans must be at 1/8 in. = 1 ft or fully dimensioned, drawn with a straight edge (no freehand sketches)."
+      ],
+      "note": "Values are Columbus's (CIC-09, revised 4/3/2026). Suburbs and unincorporated Franklin County may publish different values. CIC-23 cites older RCO section numbers (311.7.4).",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Ohio (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Ohio/oh2020.pl.zip"
+        },
+        {
+          "title": "Columbus BZS CIC-09 Climatic and Geographic Design Criteria (rev. 4/3/2026)",
+          "url": "https://www.columbus.gov/files/sharedassets/city/v/4/bzs/cic/construction-industry-communication-09-climatic-geographic-design.pdf"
+        },
+        {
+          "title": "Columbus BZS CIC-23 1, 2 and 3 Family Dwelling Decks and Exterior Egress Components (rev. 4/3/2026)",
+          "url": "https://www.columbus.gov/files/sharedassets/city/v/4/bzs/cic/construction-industry-communication-23-1-2-and-3-family-dwelling-decks-and-exterior-egress-components.pdf"
+        },
+        {
+          "title": "Columbus BZS Residential Plan Requirements (BA 4/26)",
+          "url": "https://www.columbus.gov/files/sharedassets/city/v/3/bzs/building/residential-plan-requirements.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "OH",
+      "county": "Cuyahoga County",
+      "fips": "39035",
+      "population_2020": 1264817,
+      "jurisdiction": "City of Cleveland, Department of Building & Housing (county seat and largest city) — local Table R301.2(1) criteria",
+      "edition": "Residential Code of Ohio (2019 RCO on the 2018 IRC, amended 3/1/2024)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 30,
+      "wind_mph": 90,
+      "wind_basis": "Cleveland local criteria, Exposure B (Exposure D within 600 ft of the Lake Erie shoreline)",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Cleveland requires a permit to build decks, porches and ramps, and a homeowner's affidavit with each homeowner permit application.",
+        "Footings must be at least 42 in. below finish grade unless the code specifically allows a shallower depth.",
+        "Use wind Exposure D within 600 ft of the Lake Erie shoreline (Exposure B elsewhere)."
+      ],
+      "note": "Cleveland's criteria table is dated 02/19/08. No Cleveland deck handout was found; suburbs have their own departments and values.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Ohio (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Ohio/oh2020.pl.zip"
+        },
+        {
+          "title": "City of Cleveland — Construction Permitting Resources (Climatic and Geographic Design Criteria)",
+          "url": "https://www.clevelandohio.gov/city-hall/departments/building-housing/divisions/construction-permitting/resources"
+        },
+        {
+          "title": "City of Cleveland Building & Housing — FAQs",
+          "url": "https://www.clevelandohio.gov/city-hall/departments/building-housing/faqs"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "OH",
+      "county": "Hamilton County",
+      "fips": "39061",
+      "population_2020": 830639,
+      "jurisdiction": "Hamilton County Planning + Development, Building Inspections (unincorporated townships and six contract jurisdictions)",
+      "edition": "Residential Code of Ohio (2019 RCO on the 2018 IRC, amended 3/1/2024); plus the 2007 Hamilton County Building Code (county deck notes cite the 2013 RCO)",
+      "frost_depth_in": 30,
+      "ground_snow_psf": null,
+      "wind_mph": 90,
+      "wind_basis": "3-second gust, as stated in the county's Residential Deck General Notes",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "No permit is needed for a deck of 200 sq ft or less that is at least 6 ft from the home and all other structures and at least 3 ft from every property line; a zoning certificate is required for all decks.",
+        "Submit 3 copies of plans, each with the approved site plan attached. The plot plan must be at least 1 in. = 50 ft and show the deck height at every corner; building plans must be at least 1/4 in. = 1 ft with a framing plan, deck section, stair section and elevations.",
+        "Design loads: 40 psf live, 90 mph wind, 1,500 psf soil bearing. Guards 36 in. min where the deck is 30 in. or more above grade, guard posts no more than 6 ft apart and through-bolted.",
+        "Stairs at least 36 in. wide, risers 8 1/4 in. max, treads 9 in. min, with a landing at least 3 ft deep at the bottom; the door threshold can be no more than 16 1/2 in. above the deck without a landing.",
+        "The county's sample deck drawing shows footings 30 in. min. below finished grade; inspections are soil, framing and final."
+      ],
+      "note": "The 30 in. frost depth comes from the county's sample deck drawing (sheet dated 8.30.18), not a published Table R301.2(1). The permit guide is dated 01/01/05 and the deck notes cite the 2013 RCO, so confirm with the department. Snow, seismic, weathering and termite values were not published.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Ohio (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Ohio/oh2020.pl.zip"
+        },
+        {
+          "title": "Hamilton County — Residential Decks permit guide (Decks-05, 01/01/05)",
+          "url": "https://www.hamiltoncountyohio.gov/Documents/Government/Departments/Planning%20and%20Development/Buildings%20And%20Inspections/Applications%20and%20Forms/Residential%20Permit%20Guides/Decks-05.pdf"
+        },
+        {
+          "title": "Hamilton County — Residential Deck General Notes",
+          "url": "https://www.hamiltoncountyohio.gov/Documents/Government/Departments/Planning%20and%20Development/Buildings%20And%20Inspections/Applications%20and%20Forms/Residential%20Permit%20Guides/Deck-General-Notes.pdf"
+        },
+        {
+          "title": "Hamilton County — Residential Deck Drawings (custom deck handout)",
+          "url": "https://www.hamiltoncountyohio.gov/Documents/Government/Departments/Planning%20and%20Development/Buildings%20And%20Inspections/Applications%20and%20Forms/Residential%20Permit%20Guides/DeckHandout.pdf"
+        },
+        {
+          "title": "Hamilton County Building Inspections — Building Codes page",
+          "url": "https://www.hamiltoncountyohio.gov/government/departments/planning_and_development/buildings_and_inspections/building_codes.php"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "MI",
+      "county": "Wayne County",
+      "fips": "26163",
+      "population_2020": 1793561,
+      "jurisdiction": "State of Michigan (MRC Part 5 statewide criteria); permits are issued by each city/township — City of Detroit BSEED for Detroit",
+      "edition": "2015 Michigan Residential Code (2015 IRC with Part 5 amendments), effective Feb 8, 2016; 2021 MRC stayed by court order",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 20,
+      "wind_mph": 90,
+      "wind_basis": "basic wind speed, statewide MRC Table R301.2(1) (R 408.30516)",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": null,
+      "deck_notes": [
+        "All exterior footings must extend 42 in. below grade statewide; only the building official may modify that (R 408.30522).",
+        "Detroit's 'Do I Need a Permit' sheet lists decks of no more than 200 sq ft as no-permit work. The state exemption also requires the deck to be no more than 30 in. above grade, unattached, more than 36 in. from the house, and serving no door (R 408.30505).",
+        "Attached-deck ledgers need corrosion-resistant flashing above them, and the IRC ledger fastener table is not adopted in Michigan (R 408.30500, 30523a).",
+        "Risers 8 1/4 in. max, treads 9 in. min (R 408.30519)."
+      ],
+      "note": "Ground snow is 20 psf for Wayne County except Northville (25 psf) per Michigan Table R301.2(5). Seismic and termite are left to the IRC maps in Michigan's table, so no value is published.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Michigan (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Michigan/mi2020.pl.zip"
+        },
+        {
+          "title": "Michigan Admin. Code Part 5 Residential Code rules (R 408.30500 ff.: 42-in footings, Table R301.2(1), snow by county, stairs, deck ledger flashing)",
+          "url": "https://dtmb.state.mi.us/ORRDocs/AdminCode/1836_2018-054LR_AdminCode.pdf"
+        },
+        {
+          "title": "Michigan LARA Bureau of Construction Codes — Code Books (2015 MRC current, eff. 2/8/2016)",
+          "url": "https://www.michigan.gov/lara/bureau-list/bcc/rules-acts/codes/code-books"
+        },
+        {
+          "title": "City of Detroit BSEED — Do I Need a Building or Trade Permit? (Dec 2025)",
+          "url": "https://detroitmi.gov/sites/detroitmi.localhost/files/2025-12/Do%20I%20NEED%20A%20PERMIT_0.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MI",
+      "county": "Oakland County",
+      "fips": "26125",
+      "population_2020": 1274395,
+      "jurisdiction": "State of Michigan (MRC Part 5 statewide criteria); deck rules from the City of Troy Building Inspection (largest city)",
+      "edition": "2015 Michigan Residential Code (2015 IRC with Part 5 amendments), effective Feb 8, 2016; 2021 MRC stayed by court order",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 25,
+      "wind_mph": 90,
+      "wind_basis": "basic wind speed, statewide MRC Table R301.2(1) (R 408.30516)",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": null,
+      "deck_notes": [
+        "All exterior footings must extend 42 in. below grade statewide; only the building official may modify that (R 408.30522).",
+        "Troy takes applications only electronically (PDF by email or a BS&A request). Include a site drawing (plot plan, mortgage/boundary survey or aerial screenshot) with the deck drawn and distances to lot lines labeled.",
+        "Plans must show footing sizes, post sizes, joist and beam spans with lumber species and grade, attachment, stair, guard and handrail details. Replacing deck boards also needs a permit.",
+        "A deck may project up to 10 ft into a required front yard, or up to 15 ft into a rear yard while leaving at least 25 ft to the rear lot line. A deck that encroaches can't have fixed canopies, gazebos or enclosures, and can't sit higher than the first floor.",
+        "Decks more than 24 in. above grade need post-to-beam angle bracing. Guards are required more than 30 in. above grade and must carry a 200 lb load. Risers 8 1/4 in. max, treads 9 in. min.",
+        "Inspections: open post hole, structural frame, final."
+      ],
+      "note": "Troy's deck guide (rev. 11/12/25) does not state a footing depth; the 42 in. is the statewide MRC rule. Troy notes the 2021 MRC is paused and the 2015 code governs.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Michigan (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Michigan/mi2020.pl.zip"
+        },
+        {
+          "title": "Michigan Admin. Code Part 5 Residential Code rules (R 408.30500 ff.: 42-in footings, Table R301.2(1), snow by county, stairs, deck ledger flashing)",
+          "url": "https://dtmb.state.mi.us/ORRDocs/AdminCode/1836_2018-054LR_AdminCode.pdf"
+        },
+        {
+          "title": "City of Troy — Wood Deck Permit Guidelines (rev. 11/12/25)",
+          "url": "https://troymi.gov/Departments/Building%20Inspections/Permits%20and%20Applications/DeckGuidelines.pdf"
+        },
+        {
+          "title": "City of Troy — Codes Currently in Effect",
+          "url": "https://troymi.gov/departments/building_inspections/codes_currently_in_effect.php"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MI",
+      "county": "Macomb County",
+      "fips": "26099",
+      "population_2020": 881217,
+      "jurisdiction": "State of Michigan (MRC Part 5 statewide criteria); deck rules from the City of Warren Building Division (largest city)",
+      "edition": "2015 Michigan Residential Code (2015 IRC with Part 5 amendments), effective Feb 8, 2016; 2021 MRC stayed by court order",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 25,
+      "wind_mph": 90,
+      "wind_basis": "basic wind speed, statewide MRC Table R301.2(1) (R 408.30516)",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": null,
+      "deck_notes": [
+        "Warren wants a plot plan showing the deck's distance from the side and rear lot lines (setbacks are measured to the deck edge) and two sets of plans.",
+        "Post holes must be 42 in. deep with a 12 in. diameter x 8 in. concrete pad at the base of each post. Don't mix concrete in the holes or encase posts in concrete.",
+        "The ledger must be mounted and flashed before the post-hole inspection, and decks may not be attached to brick.",
+        "A guardrail detail is required if the deck is 30 in. or more off the ground. Warren's sample shows a 36 in. guard, 34–38 in. handrail, 8 1/4 in. max riser and 9 in. min tread, and a handrail is required with 3 or more steps.",
+        "Inspections: post holes, then final."
+      ],
+      "note": "Warren's deck guideline is undated (uploaded 2019); its 42 in. matches the statewide MRC footing rule.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Michigan (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Michigan/mi2020.pl.zip"
+        },
+        {
+          "title": "Michigan Admin. Code Part 5 Residential Code rules (R 408.30500 ff.: 42-in footings, Table R301.2(1), snow by county, stairs, deck ledger flashing)",
+          "url": "https://dtmb.state.mi.us/ORRDocs/AdminCode/1836_2018-054LR_AdminCode.pdf"
+        },
+        {
+          "title": "City of Warren — Permit Application Guidelines: Residential Decks",
+          "url": "https://www.cityofwarren.org/wp-content/uploads/2019/08/Building_Deck.pdf"
+        },
+        {
+          "title": "Macomb Township — Codes Currently in Effect (2015 MRC)",
+          "url": "https://macomb-mi.gov/DocumentCenter/View/2629"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "IN",
+      "county": "Marion County",
+      "fips": "18097",
+      "population_2020": 977203,
+      "jurisdiction": "State of Indiana — statewide Table R301.2(1) by county (675 IAC 14-4.4-5); local permits by Indianapolis/Marion County",
+      "edition": "2020 Indiana Residential Code (675 IAC 14-4.4, 2018 IRC basis), effective Dec 26, 2019",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "2018 IRC basis (ultimate design wind speed); Indiana statewide Table R301.2(1), 675 IAC 14-4.4-5",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Footing depth comes from the statewide Indiana Table R301.2(1) 'Foundation' column (minimum inches from finish grade to the bottom of the footing).",
+        "Decks not supported by the dwelling don't need footings below the frost line (675 IAC 14-4.4-43).",
+        "Deck posts on concrete footings need manufactured connectors or at least 12 in. of embedment for lateral restraint (675 IAC 14-4.4-69).",
+        "Risers 8 1/4 in. max, treads 9 in. min statewide (675 IAC 14-4.4-16, -17)."
+      ],
+      "note": "Climatic values are statewide rule values, so confidence is high. No Indianapolis deck handout could be read (indy.gov pages render client-side), so there are no city-specific submittal rules. Table also lists decay 'slight to moderate' and winter design temp 2°F.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Indiana (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Indiana/in2020.pl.zip"
+        },
+        {
+          "title": "2020 Indiana Residential Code final rule, 675 IAC 14-4.4 (statewide Table R301.2(1) by county, stair/frost/deck amendments) — copy posted by Clark County, IN",
+          "url": "https://www.clarkcounty.in.gov/~ccounty/images/pdf/2020/Plan_Commission/2020-Indiana-Residential-Code-Final-Rule.pdf"
+        },
+        {
+          "title": "Indiana DHS — General Information Circular on the 2020 Indiana Residential Code (eff. Dec 26, 2019)",
+          "url": "https://secure.iot.in.gov/dhs/files/Adoption-and-Implementation-of-2020-Indiana-Residential-Code.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "IN",
+      "county": "Lake County",
+      "fips": "18089",
+      "population_2020": 498700,
+      "jurisdiction": "State of Indiana — statewide Table R301.2(1) by county (675 IAC 14-4.4-5); unincorporated permits via the Lake County Plan Commission",
+      "edition": "2020 Indiana Residential Code (675 IAC 14-4.4, 2018 IRC basis), effective Dec 26, 2019",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 30,
+      "wind_mph": 115,
+      "wind_basis": "2018 IRC basis (ultimate design wind speed); Indiana statewide Table R301.2(1), 675 IAC 14-4.4-5",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Footing depth comes from the statewide Indiana Table R301.2(1) 'Foundation' column (minimum inches from finish grade to the bottom of the footing).",
+        "Decks not supported by the dwelling don't need footings below the frost line (675 IAC 14-4.4-43).",
+        "Deck posts on concrete footings need manufactured connectors or at least 12 in. of embedment for lateral restraint (675 IAC 14-4.4-69).",
+        "Risers 8 1/4 in. max, treads 9 in. min statewide (675 IAC 14-4.4-16, -17)."
+      ],
+      "note": "Statewide rule values. The Lake County Plan Commission forms page lists no deck handout. Cities (Hammond, Gary and others) run their own departments. Table also lists winter design temp 1°F.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Indiana (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Indiana/in2020.pl.zip"
+        },
+        {
+          "title": "2020 Indiana Residential Code final rule, 675 IAC 14-4.4 (statewide Table R301.2(1) by county, stair/frost/deck amendments) — copy posted by Clark County, IN",
+          "url": "https://www.clarkcounty.in.gov/~ccounty/images/pdf/2020/Plan_Commission/2020-Indiana-Residential-Code-Final-Rule.pdf"
+        },
+        {
+          "title": "Lake County, IN — Plan Commission (online building permit application)",
+          "url": "https://lakecountyin.gov/departments/planning-commission"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "IN",
+      "county": "Allen County",
+      "fips": "18003",
+      "population_2020": 385410,
+      "jurisdiction": "State of Indiana — statewide Table R301.2(1) by county (675 IAC 14-4.4-5); local permits by the Allen County / Fort Wayne building department",
+      "edition": "2020 Indiana Residential Code (675 IAC 14-4.4, 2018 IRC basis), effective Dec 26, 2019",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "2018 IRC basis (ultimate design wind speed); Indiana statewide Table R301.2(1), 675 IAC 14-4.4-5",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Footing depth comes from the statewide Indiana Table R301.2(1) 'Foundation' column (minimum inches from finish grade to the bottom of the footing).",
+        "Decks not supported by the dwelling don't need footings below the frost line (675 IAC 14-4.4-43).",
+        "Deck posts on concrete footings need manufactured connectors or at least 12 in. of embedment for lateral restraint (675 IAC 14-4.4-69).",
+        "Risers 8 1/4 in. max, treads 9 in. min statewide (675 IAC 14-4.4-16, -17)."
+      ],
+      "note": "Statewide rule values. allencounty.in.gov blocked automated fetches (403), so there are no local deck submittal rules. Table also lists winter design temp 1°F and air freezing index 2000.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Indiana (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Indiana/in2020.pl.zip"
+        },
+        {
+          "title": "2020 Indiana Residential Code final rule, 675 IAC 14-4.4 (statewide Table R301.2(1) by county, stair/frost/deck amendments) — copy posted by Clark County, IN",
+          "url": "https://www.clarkcounty.in.gov/~ccounty/images/pdf/2020/Plan_Commission/2020-Indiana-Residential-Code-Final-Rule.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "IL",
+      "county": "Cook County",
+      "fips": "17031",
+      "population_2020": 5275541,
+      "jurisdiction": "Unincorporated Cook County — Cook County Department of Building and Zoning (the City of Chicago enforces its own Chicago Construction Codes)",
+      "edition": "Unincorporated Cook: 2021 IRC with local amendments (adopted July 29, 2021; drawings after Dec 1, 2021). Chicago: 2019 Chicago Building Code (Title 14B, based on the 2018 IBC) and, for work on existing buildings, the 2019 Chicago Building Rehabilitation Code (14R).",
+      "frost_depth_in": 42,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Submit digitally: email if 10 MB or less, otherwise PDF on a flash drive or CD. Include a Plat of Survey signed and sealed by an Illinois surveyor, no more than 5 years old, with the deck drawn on it.",
+        "Deck drawings must give overall size, distance to property lines, height above grade, joist/beam/post sizes, footing size and depth (42 in. minimum), guard height, baluster spacing, stair rise/run and stair width.",
+        "Design for 40 psf live load. Show basement windows so the deck blocks no escape window, and show the ComEd service line (overhead or underground) on the plat.",
+        "A deck that reaches into rear or side setbacks may need a zoning variance."
+      ],
+      "note": "Values are for unincorporated Cook only (deck sheet rev. 07/06/2015). Chicago's design criteria and porch/deck guidance couldn't be read (chicago.gov sub-pages and amlegal returned 403), so Chicago snow/wind/frost are not given here. The county deck sheet publishes no snow, wind or seismic values.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Illinois (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Illinois/il2020.pl.zip"
+        },
+        {
+          "title": "Cook County Dept. of Building and Zoning — Deck Permit Requirements (rev. 07/06/2015)",
+          "url": "https://www.cookcountyil.gov/sites/g/files/ywwepo161/files/service/deckpermitrequirements.pdf"
+        },
+        {
+          "title": "Cook County Dept. of Building & Zoning — Cook County Codes 2023 posting (2021 IRC adopted July 29, 2021)",
+          "url": "https://www.cookcountyil.gov/sites/g/files/ywwepo161/files/documents/2024-03/Code%20Posting%202023.pdf"
+        },
+        {
+          "title": "City of Chicago DOB — Chicago Construction Codes (2019 Chicago Building Code, Title 14B, based on 2018 IBC)",
+          "url": "https://www.chicago.gov/city/en/depts/bldgs/provdrs/bldg_code/svcs/chicago_buildingcodeonline.html"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "IL",
+      "county": "DuPage County",
+      "fips": "17043",
+      "population_2020": 932877,
+      "jurisdiction": "DuPage County Building & Zoning (unincorporated DuPage County)",
+      "edition": "DuPage County Building Code for residential construction (County Code ch. 8); 2021 IBC/IFC/IMC for other work",
+      "frost_depth_in": 42,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Deck piers 8 in. diameter x 42 in. deep. Posts are anchored to the top of the piers, not encased in concrete.",
+        "Any deck or porch floor more than 24 in. above grade needs a 36 in. guardrail with intermediate members no more than 6 in. apart (lattice is accepted). Stairs with more than two risers need the guard/handrail.",
+        "Plans must show the size, direction and spacing of beams and joists, fully dimensioned to scale."
+      ],
+      "note": "From the County's 'Minimum Building Plan Requirements' PDF (Feb 2022, in the department's archive folder). Its 24 in./6 in. guard rule differs from the IRC's 30 in./4 in., so confirm the current county code (Municode ch. 8, not read). No climatic values are published.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Illinois (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Illinois/il2020.pl.zip"
+        },
+        {
+          "title": "DuPage County — Minimum Building Plan Requirements",
+          "url": "https://www.dupagecounty.gov/Document_Center/Department/Building%20and%20Zoning/Archive/Minimum%20Building%20Plan%20Requirements.pdf"
+        },
+        {
+          "title": "DuPage County Building & Zoning — Building Code page",
+          "url": "https://www.dupagecounty.gov/government/departments/building_and_zoning/building_and_permits/building_code.php"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "IL",
+      "county": "Lake County",
+      "fips": "17097",
+      "population_2020": 714342,
+      "jurisdiction": "Lake County Planning, Building & Development (unincorporated Lake County) — not reached",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Nothing sourced: lakecountyil.gov and waukeganil.gov (county seat) returned HTTP 403 to every automated fetch, and web search was unavailable. All values are null and need a manual check.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Illinois (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Illinois/il2020.pl.zip"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "WI",
+      "county": "Milwaukee County",
+      "fips": "55079",
+      "population_2020": 939489,
+      "jurisdiction": "Wisconsin UDC statewide rules; local enforcement by the City of Milwaukee (DNS) and other municipalities",
+      "edition": "Wisconsin Uniform Dwelling Code, SPS 320–325 (statewide; not IRC-based)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "UDC uses 20 psf horizontal/uplift or ASCE 7-05 loads, not an IRC wind speed",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Footings go below frost penetration or at least 48 in. below adjacent grade, whichever is deeper (SPS 321.16).",
+        "Guards at least 36 in. high wherever the deck is more than 24 in. above grade, measured from the lowest point within 3 ft of the edge, with openings under 4 3/8 in. (SPS 321.04(3)(c)).",
+        "Risers 8 in. max, treads 9 in. min (SPS 321.04(2)).",
+        "Attached decks, and detached decks that serve an exit, must meet the UDC (SPS 321.225). Detached decks that don't serve an exit are exempt (SPS 320.05(5))."
+      ],
+      "note": "The 48 in. is the statewide UDC minimum. city.milwaukee.gov returned 403, so there are no Milwaukee-specific deck rules. Ground snow is null because the UDC uses a roof snow-load zone map.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Wisconsin (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Wisconsin/wi2020.pl.zip"
+        },
+        {
+          "title": "Wis. Admin. Code SPS 321 (UDC construction: 321.02 loads, 321.04 stairs/guards, 321.16 frost, 321.225 decks)",
+          "url": "https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/320_325/321.pdf"
+        },
+        {
+          "title": "Wis. Admin. Code SPS 320 (UDC scope; 320.05(5) detached decks)",
+          "url": "https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/320_325/320.pdf"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "WI",
+      "county": "Dane County",
+      "fips": "55025",
+      "population_2020": 561504,
+      "jurisdiction": "City of Madison Building Inspection (county seat and largest city), enforcing the Wisconsin UDC",
+      "edition": "Wisconsin Uniform Dwelling Code, SPS 320–325 (statewide; not IRC-based)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "UDC uses 20 psf horizontal/uplift or ASCE 7-05 loads, not an IRC wind speed",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Madison requires a permit to build any deck. Replacing deck boards needs no permit if the cost is under $500.",
+        "Footings at least 48 in. deep. Guards at least 36 in. high on any deck more than 2 ft above ground. Stairs with more than 3 risers need a handrail, with guard openings that stop a 4 3/8 in. ball.",
+        "Decks under 3 ft high can usually extend to the lot line; decks 3 ft or higher must meet the district setbacks.",
+        "For decks over 3 ft high, submit a site plan to scale (e.g. 1 in. = 20 ft). Construction drawings at a common scale (e.g. 1/4 in. = 1 ft) show deck size, posts, beams and joists. Lakefront lots need a surveyor's survey."
+      ],
+      "note": "",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Wisconsin (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Wisconsin/wi2020.pl.zip"
+        },
+        {
+          "title": "City of Madison — Decks (Development Services Center)",
+          "url": "https://www.cityofmadison.com/development-services-center/1-2-family-residential/additions/decks"
+        },
+        {
+          "title": "Wis. Admin. Code SPS 321 (UDC construction: 321.02 loads, 321.04 stairs/guards, 321.16 frost, 321.225 decks)",
+          "url": "https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/320_325/321.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "WI",
+      "county": "Waukesha County",
+      "fips": "55133",
+      "population_2020": 406978,
+      "jurisdiction": "City of Waukesha Community Development – Building Inspection (county seat and largest city), enforcing the Wisconsin UDC",
+      "edition": "Wisconsin Uniform Dwelling Code, SPS 320–325 (statewide; not IRC-based)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "UDC uses 20 psf horizontal/uplift or ASCE 7-05 loads, not an IRC wind speed",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "New decks need a building permit with a current, accurate plat of survey showing property lines, existing buildings and the deck's size and location.",
+        "Plans show post size and spacing, footing diameter and depth, joist and beam sizes, spacing and spans, the ledger/post attachment, decking, stairs, guards, and any doors onto the deck.",
+        "Decks 12 in. or more above grade that are attached to, or within 10 ft of, the house must meet side-yard setbacks and may project up to 10 ft into the rear yard. Freestanding decks must be at least 10 ft from the house and 3 ft from lot lines.",
+        "A deck reached from inside the house needs an electrical outlet within its perimeter, on a separate electrical permit.",
+        "Inspections: footings/post holes before concrete, framing, final."
+      ],
+      "note": "Waukesha's page sets no footing depth of its own; the 48 in. is the statewide UDC minimum.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Wisconsin (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Wisconsin/wi2020.pl.zip"
+        },
+        {
+          "title": "City of Waukesha — Residential Decks",
+          "url": "https://www.waukesha-wi.gov/government/departments/residential-decks.php"
+        },
+        {
+          "title": "City of Waukesha — Decks (zoning)",
+          "url": "https://www.waukesha-wi.gov/departments/decks.php"
+        },
+        {
+          "title": "Wis. Admin. Code SPS 321 (UDC construction: 321.02 loads, 321.04 stairs/guards, 321.16 frost, 321.225 decks)",
+          "url": "https://docs.legis.wisconsin.gov/code/admin_code/sps/safety_and_buildings_and_environment/320_325/321.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MN",
+      "county": "Hennepin County",
+      "fips": "27053",
+      "population_2020": 1281565,
+      "jurisdiction": "State of Minnesota (Minn. R. 1303/1309 statewide criteria); deck rules from City of Minneapolis Construction Code Services",
+      "edition": "2020 Minnesota Residential Code (Minn. R. ch. 1309, 2018 IRC basis), effective March 31, 2020",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 50,
+      "wind_mph": 115,
+      "wind_basis": "2018 IRC Figure R301.2(5)A (ultimate design wind speed); statewide MN Table R301.2(1)",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": null,
+      "deck_notes": [
+        "Minneapolis requires a permit when the deck is more than 30 in. above grade, attached to the house, or part of an accessible route.",
+        "Submit a scaled, dimensioned site plan showing the deck's size and distances to property lines and nearby structures. Property lines must be located by a surveyor or by found markers.",
+        "Plans and a section drawing must show footing type, depth and width (at least 14 in. round or 12 in. square), the ledger (2x8 min., no smaller than the joists), lateral-load connections, beams, guards and stairs.",
+        "Guards at least 36 in. high where more than 30 in. above grade, with 4 in. sphere openings. A graspable handrail is required at 4 or more risers, and a bottom landing at every stair."
+      ],
+      "note": "Hennepin is Frost Zone II (42 in.) and 50 psf ground snow by Minn. R. 1303.1600/1700. Termite is left to the jurisdiction in MN's table and not published. Minneapolis deck guide updated 06/2025.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Minnesota (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Minnesota/mn2020.pl.zip"
+        },
+        {
+          "title": "Minn. R. ch. 1309 — 2020 Minnesota Residential Code (2018 IRC; Table R301.2(1), R312.1.1, R507 deck tables)",
+          "url": "https://www.revisor.mn.gov/rules/1309/full"
+        },
+        {
+          "title": "Minn. R. 1303.1600 / 1303.1700 — frost footing depth zones and ground snow load by county",
+          "url": "https://www.revisor.mn.gov/rules/1303/full"
+        },
+        {
+          "title": "City of Minneapolis — Decks at single-family and two-family dwellings (updated 06/2025)",
+          "url": "https://www.minneapolismn.gov/media/-www-content-assets/documents/Wood-Deck-Guidelines-One-and-Two-Family-Dwellings.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MN",
+      "county": "Ramsey County",
+      "fips": "27123",
+      "population_2020": 552352,
+      "jurisdiction": "State of Minnesota (Minn. R. 1303/1309 statewide criteria); deck rules from City of Saint Paul Department of Safety & Inspections",
+      "edition": "2020 Minnesota Residential Code (Minn. R. ch. 1309, 2018 IRC basis), effective March 31, 2020",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 50,
+      "wind_mph": 115,
+      "wind_basis": "2018 IRC Figure R301.2(5)A (ultimate design wind speed); statewide MN Table R301.2(1)",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": null,
+      "deck_notes": [
+        "Saint Paul requires a building permit for decks. A deck is exempt only if it is not attached to a structure with frost footings, is not a landing outside an exterior door, and is no more than 30 in. above grade.",
+        "Any deck or platform more than 24 in. above grade must meet zoning setbacks and lot-coverage limits, even when no permit is needed."
+      ],
+      "note": "Ramsey is Frost Zone II (42 in.) and 50 psf ground snow by Minn. R. 1303.1600/1700.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Minnesota (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Minnesota/mn2020.pl.zip"
+        },
+        {
+          "title": "Minn. R. ch. 1309 — 2020 Minnesota Residential Code (2018 IRC; Table R301.2(1), R312.1.1, R507 deck tables)",
+          "url": "https://www.revisor.mn.gov/rules/1309/full"
+        },
+        {
+          "title": "Minn. R. 1303.1600 / 1303.1700 — frost footing depth zones and ground snow load by county",
+          "url": "https://www.revisor.mn.gov/rules/1303/full"
+        },
+        {
+          "title": "City of Saint Paul DSI — When is a building permit required? (Dec 2023)",
+          "url": "https://www.stpaul.gov/sites/default/files/2023-12/DSI.Bldg_WhenIsPermitRequired.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MN",
+      "county": "Dakota County",
+      "fips": "27037",
+      "population_2020": 439882,
+      "jurisdiction": "State of Minnesota (Minn. R. 1303/1309 statewide criteria); permits by each city (Lakeville, Eagan, Burnsville, etc.)",
+      "edition": "2020 Minnesota Residential Code (Minn. R. ch. 1309, 2018 IRC basis), effective March 31, 2020",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 50,
+      "wind_mph": 115,
+      "wind_basis": "2018 IRC Figure R301.2(5)A (ultimate design wind speed); statewide MN Table R301.2(1)",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": null,
+      "deck_notes": [
+        "Guards are required more than 30 in. above the floor or grade, measured vertically (Minn. R. 1309.0312).",
+        "Minnesota's deck footing, joist, beam and ledger tables assume 40 psf live + 10 psf dead load (Minn. R. 1309.0507)."
+      ],
+      "note": "Dakota is Frost Zone II (42 in.) and 50 psf ground snow by Minn. R. 1303.1600/1700. No city handout could be read: Lakeville's deck PDF timed out and Eagan's site returned no content.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Minnesota (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Minnesota/mn2020.pl.zip"
+        },
+        {
+          "title": "Minn. R. ch. 1309 — 2020 Minnesota Residential Code (2018 IRC; Table R301.2(1), R312.1.1, R507 deck tables)",
+          "url": "https://www.revisor.mn.gov/rules/1309/full"
+        },
+        {
+          "title": "Minn. R. 1303.1600 / 1303.1700 — frost footing depth zones and ground snow load by county",
+          "url": "https://www.revisor.mn.gov/rules/1303/full"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "IA",
+      "county": "Polk County",
+      "fips": "19153",
+      "population_2020": 492401,
+      "jurisdiction": "City of Des Moines Permit & Development Center (county seat and largest city) — published design criteria",
+      "edition": "2024 IRC with Des Moines amendments, effective Jan 1, 2026",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 33,
+      "wind_mph": 115,
+      "wind_basis": "Des Moines design criteria (topographic effects none; no special wind region)",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Apply online through the Customer Self Service portal ('Residential Other Building Permit'). Include a site plan with approximate distances to property lines and a deck plan showing the deck's height above grade.",
+        "Frost depth is 42 in. Footings are at least 12 in. thick, and round footing diameter goes from 8 in. at 10 sq ft to 20 in. at 80 sq ft of tributary area (40 psf live, 2,000 psf soil). Freestanding non-frost-protected decks also use this table.",
+        "Ledgers 2x8 minimum. No attaching to house cantilevers or brick veneer without specialty fasteners or engineering, and a hot tub requires structural engineering.",
+        "Guards at least 36 in. high (34 in. on stairs), posts no more than 6 ft apart and never notched, 4 in. sphere rule. Inspections: footings, framing, final."
+      ],
+      "note": "The deck handout is written to the 2021 IRC; the city moved to the 2024 IRC on Jan 1, 2026. The criteria also list decay slight to moderate, winter design 0°F, air freezing index 1833.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Iowa (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Iowa/ia2020.pl.zip"
+        },
+        {
+          "title": "City of Des Moines — Construction Codes (design criteria; 2024 IRC eff. Jan 1, 2026)",
+          "url": "https://www.dsm.city/departments/development_services/permit_development_center/construction_codes.php"
+        },
+        {
+          "title": "City of Des Moines — Residential Deck Handout (2021 IRC)",
+          "url": "https://www.dsm.city/Documents/Departments/Development%20Services/Permit%20Development%20Center/Residential/Deck%20Handout-LEGAL-2021%20IRC.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "IA",
+      "county": "Linn County",
+      "fips": "19113",
+      "population_2020": 230299,
+      "jurisdiction": "City of Cedar Rapids Building Services (county seat and largest city)",
+      "edition": "2024 IRC with local amendments (City of Cedar Rapids)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Fill in the city's deck building guide and add a site plan showing project dimensions, nearby buildings, utilities, property lines and easements, post locations and spacing, and joist/beam spans.",
+        "Footings at least 42 in. deep, sized with the handout's footing table, and inspected before the pour.",
+        "Ledgers 2x8 minimum and may not carry beam or girder loads. Guards at least 36 in. high where more than 30 in. above grade. Risers 7 3/4 in. max, treads 10 in. min, stairs at least 36 in. wide."
+      ],
+      "note": "The deck handout file is labeled 2021 IRC while the city's codes page lists the 2024 IRC. The city publishes no snow, wind or seismic values.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Iowa (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Iowa/ia2020.pl.zip"
+        },
+        {
+          "title": "City of Cedar Rapids — Residential Deck Handout",
+          "url": "https://www.cedar-rapids.org/Building%20Services/Forms%20and%20Handouts/Handouts/Deck%20Handout%202021%20IRC.pdf"
+        },
+        {
+          "title": "City of Cedar Rapids — Codes",
+          "url": "https://www.cedar-rapids.org/local_government/departments_a_-_f/building_services/building_and_trades/codes.php"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "IA",
+      "county": "Scott County",
+      "fips": "19163",
+      "population_2020": 174669,
+      "jurisdiction": "Scott County Planning & Development (unincorporated Scott County); the City of Davenport (county seat, largest city) runs its own department",
+      "edition": "Davenport: 2021 IRC with local amendments (City Code ch. 15.12). Unincorporated Scott County: County Code ch. 5 'Construction Codes' (edition not confirmed).",
+      "frost_depth_in": 42,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Scott County requires a building permit for every deck. Submit a plot plan with dimensions to the property lines and a plan with the deck size, lumber sizes, and post and beam locations.",
+        "Footings for unroofed decks are 12 in. diameter x 42 in. deep and inspected before the pour; roofed decks have different standards.",
+        "Decks more than 30 in. above grade need a guard with the top rail at least 36 in. above the deck and spindles no more than 4 in. apart.",
+        "Davenport exempts platforms/decks that serve no door, are no more than 30 in. above grade, aren't attached to a structure, and aren't over a basement or story below."
+      ],
+      "note": "The 42 in. comes from the county deck page. Davenport's IRC amendments (City Code 15.12) couldn't be read (Municode 403), so Davenport climatic values are unknown.",
+      "sources": [
+        {
+          "title": "2020 Census PL 94-171 redistricting file, Iowa (county POP100)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Iowa/ia2020.pl.zip"
+        },
+        {
+          "title": "Scott County Planning & Development — Decks",
+          "url": "https://www.scottcountyiowa.gov/planning/building-permits/decks"
+        },
+        {
+          "title": "City of Davenport — Building Codes",
+          "url": "https://www.davenportiowa.com/cms/One.aspx?portalId=6481456&pageId=14252425"
+        },
+        {
+          "title": "City of Davenport — What Does/Does Not Require a Permit",
+          "url": "https://www.davenportiowa.com/our_community/building_land_development/what_does_does_not_requires_a_permit__"
+        }
+      ],
+      "confidence": "medium"
+    }
+  ]
+}

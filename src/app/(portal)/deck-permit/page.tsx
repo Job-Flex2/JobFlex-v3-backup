@@ -1,7 +1,7 @@
-// THE PERMIT SHEET (Deck Studio M3, 2026-10-10) — a printable set for the
-// building office: the plan, the framing plan, the front elevation, the
-// schedules (joists, beams, posts, footings, ledger, stairs, rails, roof) with
-// the table each number was read from, and the notes. Opened from the studio
+// THE PERMIT SET (Deck Studio M3, 2026-10-10; the 11 × 17 submittal set
+// 2026-10-20) — two sheets for a deck, three with a roof: the site plan and
+// the project's data (A1), the floor framing, section and lateral (S1), the
+// roof (S2). See components/v3/deck-permit. Opened from the studio
 // in a new tab with the design in the address (`?d=`), or from a saved draft
 // (`?draft=`) or proposal (`?proposal=`). Behind the same gate as the studio.
 import type { Metadata } from "next";
@@ -12,14 +12,17 @@ import { NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { normalizeDeckDesign, type DeckDesign } from "@/lib/deck/design";
 import { loadDeckDraft, loadDeckFromProposal } from "@/actions/deckEstimator";
 import { DeckPermitSheet } from "@/components/v3/deck-permit/deck-permit";
+import { readSitePlan } from "@/lib/deck/sitePlanStore";
+import { BASE_SITE_PLAN } from "@/lib/deck/sitePlan";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "JobFlex · Deck permit sheet", description: "The plan, the framing and the schedules for the building office." };
+export const metadata: Metadata = { title: "JobFlex · Deck permit set", description: "The site plan, the framing and the details for the building office." };
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function DeckPermitPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   let organizationId: string;
+  let editable = false;
   const params = await searchParams;
   try {
     const ctx = await requireOrg();
@@ -29,6 +32,7 @@ export default async function DeckPermitPage({ searchParams }: { searchParams: P
     const level = await deckStudioAccess(ctx.user, ctx.organizationId);
     const saved = !one(params.d) && !!(one(params.draft) || one(params.proposal));
     if (level !== "full" && !(level === "preview" && saved)) redirect("/dashboard/deck-estimator");
+    editable = level === "full";
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard%2Fdeck-estimator");
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");
@@ -63,6 +67,10 @@ export default async function DeckPermitPage({ searchParams }: { searchParams: P
       title = res.title;
     }
   }
-  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true, address: true, phone: true } }).catch(() => null);
-  return <DeckPermitSheet design={design} address={address} title={title} shop={{ name: org?.name ?? "", address: org?.address ?? null, phone: org?.phone ?? null, email: null }} />;
+  const [org, sitePlan] = await Promise.all([
+    db.organization.findUnique({ where: { id: organizationId }, select: { name: true, address: true, phone: true } }).catch(() => null),
+    // The site plan is kept by the property (lib/deck/sitePlanStore): the draft, the proposal and an unsaved design at this address share it.
+    readSitePlan(organizationId, address, BASE_SITE_PLAN),
+  ]);
+  return <DeckPermitSheet design={design} address={address} title={title} shop={{ name: org?.name ?? "", address: org?.address ?? null, phone: org?.phone ?? null, email: null }} initialPlan={sitePlan} editable={editable} />;
 }

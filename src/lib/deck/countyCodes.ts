@@ -1,0 +1,129 @@
+// THE COUNTY'S OWN DESIGN VALUES (2026-10-20) — pure.
+//
+// Owner: "check the deck estimator for the local codes, per state and per the
+// biggest counties." The state names the code (lib/deck/stateCodes); the
+// county — or the city that issues the permits there — fills in the code's
+// Table R301.2(1), "Climatic and geographic design criteria": the frost line,
+// the ground snow, the wind, the seismic category, the termite and decay
+// hazard, and it publishes its own deck rules (a handout, typical details,
+// what a deck permit must show). Those are the numbers a plan reviewer checks
+// the drawings against.
+//
+// COUNTY_CODES (countyCodes.data.ts) carries the three most populous counties
+// of every state, each figure read from the jurisdiction's own published page
+// or the adopted code — with the source — and null where none was found. The
+// research date is RESEARCHED_ON; every line still says to confirm with the
+// building department, because a city inside a county may publish its own.
+
+import { COUNTY_CODES, COUNTY_RESEARCHED_ON } from "./countyCodes.data";
+import type { DeckStructure } from "./structure";
+import { TERMITE_LABEL } from "./site";
+
+export interface DeckCountyCode {
+  state: string;
+  /** "Harris County", "Orleans Parish", "Anchorage Municipality", "New York City (5 boroughs)". */
+  county: string;
+  fips: string | null;
+  /** Who publishes these figures: the county's building department, or the main city's. */
+  jurisdiction: string;
+  /** The code edition enforced there for one- and two-family dwellings. */
+  edition: string | null;
+  frostIn: number | null;
+  groundSnowPsf: number | null;
+  windMph: number | null;
+  windBasis: string | null;
+  /** Seismic design category: A, B, C, D0, D1, D2, E. */
+  sdc: string | null;
+  weathering: string | null;
+  termite: string | null;
+  /** The department's own deck rules, one plain sentence each. */
+  deckNotes: string[];
+  /** What is uncertain about the figures. */
+  note: string | null;
+  sources: Array<{ title: string; url: string }>;
+  confidence: "high" | "medium" | "low";
+}
+
+export const RESEARCHED_ON = COUNTY_RESEARCHED_ON;
+
+/** "Harris County" / "harris" / "Orleans Parish" / "St. Louis city" → a key part. */
+export function countyKey(name: string | null | undefined): string {
+  return (name ?? "")
+    .toLowerCase()
+    // "Denver (City and County of Denver)" → "denver"; "City and County of Denver" → "denver".
+    .replace(/\(.*?\)/g, "")
+    .replace(/\bcity and county of\b/g, "")
+    .replace(/\b(county|parish|borough|municipality|city and borough|census area|municipio)\b/g, "")
+    .replace(/\bsaint\b/g, "st")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+const BY_KEY = new Map<string, DeckCountyCode>();
+for (const c of COUNTY_CODES) {
+  BY_KEY.set(`${c.state}:${countyKey(c.county)}`, c);
+  if (c.fips) BY_KEY.set(`fips:${c.fips}`, c);
+}
+// New York City's five boroughs answer to one entry.
+const NYC = COUNTY_CODES.find((c) => c.state === "NY" && /new york city/i.test(c.county));
+if (NYC) for (const b of ["new york", "kings", "queens", "bronx", "richmond"]) BY_KEY.set(`NY:${countyKey(b)}`, NYC);
+
+/** The county's own figures, when it is one of the counties on file. */
+export function countyCodeFor(state: string | null | undefined, county: string | null | undefined): DeckCountyCode | null {
+  const st = (state ?? "").trim().toUpperCase();
+  if (!st || !county) return null;
+  return BY_KEY.get(`${st}:${countyKey(county)}`) ?? null;
+}
+
+export interface CriteriaRow {
+  label: string;
+  /** What the drawings were made to. */
+  value: string;
+  /** Where the figure comes from. */
+  source: string;
+  /** The county publishes a stricter figure than the drawings use: fix before submitting. */
+  short?: boolean;
+}
+
+export interface DesignCriteria {
+  rows: CriteriaRow[];
+  /** Mismatches a reviewer would catch, in plain words (shown on screen, fixed in the studio). */
+  warnings: string[];
+  /** The county's own deck rules, for the general notes. */
+  countyNotes: string[];
+  county: DeckCountyCode | null;
+}
+
+/**
+ * The design criteria table for sheet A1: the state's code, the county's
+ * published figures where it is on file, and what the deck was drawn to —
+ * with the place where the county asks for more than the drawings give.
+ */
+export function designCriteria(s: DeckStructure, county: DeckCountyCode | null, countyName: string | null): DesignCriteria {
+  const d = s.design;
+  const code = s.code;
+  const rows: CriteriaRow[] = [];
+  const warnings: string[] = [];
+  const where = county ? `${county.jurisdiction}` : countyName ? `${countyName} — confirm with its building department` : "the state's figure";
+  rows.push({ label: "Code", value: county?.edition ?? code.name, source: county?.edition ? where : code.statewide ? "statewide" : "the city or county names the edition" });
+  if (countyName || county) rows.push({ label: "Jurisdiction", value: county ? `${county.county}, ${county.state}` : countyName ?? "", source: county ? county.jurisdiction : "not on file — confirm with the building department" });
+  // Frost: the footings were dug to the design's frost line; the county may ask for more.
+  const deepest = s.frame ? Math.min(...s.frame.posts.filter((p) => p.footing.type === "poured").map((p) => p.footing.depthIn)) : null;
+  const footingDepth = deepest != null && Number.isFinite(deepest) ? deepest : null;
+  const frostShort = county?.frostIn != null && footingDepth != null && footingDepth < county.frostIn;
+  rows.push({ label: "Frost depth", value: `${d.frostIn} in.${footingDepth != null ? ` · footings ${footingDepth} in. below grade` : ""}`, source: county?.frostIn != null ? `${where}: ${county.frostIn} in.` : "the state's typical depth", short: frostShort });
+  if (frostShort && county) warnings.push(`${county.county} asks for footings at least ${county.frostIn} in. deep; the drawings show ${footingDepth} in. Set the frost line to ${county.frostIn} in. in the studio's Site section.`);
+  // Snow: the deck's design load follows the ground snow.
+  const snow = d.site.groundSnowPsf;
+  const snowShort = county?.groundSnowPsf != null && county.groundSnowPsf > snow && county.groundSnowPsf > 40 && d.loadPsf < county.groundSnowPsf;
+  rows.push({ label: "Ground snow", value: `${snow} psf`, source: county?.groundSnowPsf != null ? `${where}: ${county.groundSnowPsf} psf` : "the map's figure (IRC Figure R301.2(5))", short: snowShort });
+  if (snowShort && county) warnings.push(`${county.county} publishes a ${county.groundSnowPsf} psf ground snow load, more than the deck's ${d.loadPsf} psf design load. Set the ground snow to ${county.groundSnowPsf} psf in the studio.`);
+  rows.push({ label: "Design loads", value: `${d.loadPsf} psf live · 10 psf dead${s.roof ? ` · roof ${s.roof.roofLoad} psf${s.roof.roofLoad === 20 ? " live" : " snow"}` : ""}`, source: "IRC Table R301.5; R507" });
+  rows.push({ label: "Wind", value: county?.windMph != null ? `${county.windMph} mph${county.windBasis ? ` (${county.windBasis})` : ""}` : "per the jurisdiction's map", source: county?.windMph != null ? where : "IRC Figure R301.2(2)" });
+  rows.push({ label: "Seismic category", value: county?.sdc ?? "per the jurisdiction's map", source: county?.sdc ? where : "IRC Figure R301.2(3)" });
+  const termite = county?.termite ?? (d.site.termite ? TERMITE_LABEL[d.site.termite] : null);
+  if (termite) rows.push({ label: "Termite", value: termite, source: county?.termite ? where : "IRC Figure R301.2(6)" });
+  if (county?.weathering) rows.push({ label: "Weathering", value: county.weathering, source: where });
+  rows.push({ label: "Soil bearing", value: `${d.soilPsf.toLocaleString("en-US")} psf presumptive`, source: "IRC Table R401.4.1 — the building official may require a soil test" });
+  rows.push({ label: "Guard / stairs", value: `guard ${code.guardIn} in. · risers ≤ ${code.riserMaxIn} in. · treads ≥ ${code.treadMinIn} in.`, source: code.short });
+  return { rows, warnings, countyNotes: county?.deckNotes ?? [], county };
+}

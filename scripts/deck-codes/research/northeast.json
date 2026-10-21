@@ -1,0 +1,1527 @@
+{
+  "region": "northeast",
+  "researched": "2026-10-20",
+  "states": [
+    {
+      "state": "ME",
+      "edition": "Maine Uniform Building and Energy Code (MUBEC) — Residential Building Code for One- and Two-Family Dwellings, 16-642 CMR Chapter 5 (2021 IRC with Maine amendments)",
+      "basis_irc": 2021,
+      "since": 2025,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Edition (2021 IRC) is right but 'since' should be 2025: the 2021 package (rule amended March 4, 2025, filing 2025-046) took effect April 7, 2025 and replaced the 2015 IRC. Population rule: the statute says MUBEC MUST be enforced in towns with MORE THAN 4,000 residents (10 MRSA 9724(1)); towns of 4,000 or fewer are not required to enforce it but may not adopt any other building code. The '48 to 72 in.' frost range could not be verified: Kennebunk publishes 48 in. and Bangor 60 in.; no official 72 in. figure was found.",
+      "notes": [
+        "Maine amends nothing in the IRC stair (R311.7) or guard (R312) sections, so IRC 7-3/4 in. risers, 10 in. treads and 36 in. guards apply.",
+        "Maine's R105.1 amendment requires permits only 'where required by municipal ordinance', and R105.2 adds exemptions a town makes by ordinance, so deck permit rules are local.",
+        "The state does not fill in Table R301.2(1); snow, frost and wind values come from each town's code office.",
+        "MUBEC applies to all construction regardless of population, but towns of 4,000 or fewer residents need not enforce it.",
+        "Chapter 5 adds a required radon control system (ASTM E1465) in new one- and two-family dwellings (new R301.2.5)."
+      ],
+      "sources": [
+        {
+          "title": "16-642 CMR Ch. 5 — MUBEC Residential Building Code (2021 IRC adoption and amendments)",
+          "url": "https://www.maine.gov/dps/fmo/sites/maine.gov.dps.fmo/files/inline-files/642C005.pdf"
+        },
+        {
+          "title": "16-642 CMR Ch. 1 — MUBEC Administration (2021 editions; 4,000-resident enforcement rule)",
+          "url": "https://www.maine.gov/dps/fmo/sites/maine.gov.dps.fmo/files/inline-files/642C001.pdf"
+        },
+        {
+          "title": "MUBEC Standards and Amendments — 'Effective beginning April 7, 2025'",
+          "url": "https://www.maine.gov/dps/fmo/sites/maine.gov.dps.fmo/files/inline-files/MUBEC%20Standards%20and%20Amendments.pdf"
+        },
+        {
+          "title": "10 MRSA §9724 — enforcement in municipalities over 4,000 residents",
+          "url": "https://legislature.maine.gov/statutes/10/title10sec9724.html"
+        }
+      ]
+    },
+    {
+      "state": "NH",
+      "edition": "New Hampshire State Building Code (RSA 155-A:1, IV) — 2024 International Residential Code with New Hampshire amendments (2018 IECC for energy)",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Outdated twice. The 2021 IRC replaced the 2018 IRC on July 1, 2024 (HB 1059-2024). The 2024 IRC then took effect July 1, 2026 (board amendments through Oct 10, 2025, ratified by HB 1159-2026). Under RSA 155-A:2 there is a 6-month concurrency period, July 1 to December 31, 2026, in which an applicant may use either the 2021 or the 2024 IRC but not a mix. From January 1, 2027 the 2024 IRC is required. So basis 2018 and since 2022 are wrong: use basis 2024, since 2026, and accept 2021 IRC drawings until 12/31/2026.",
+      "notes": [
+        "Neither the 2021 nor the 2024 NH amendment set changes IRC stair or guard rules, so 7-3/4 in. risers, 10 in. treads and 36 in. guards apply.",
+        "NH amends Table R301.2: each jurisdiction fills in ground snow load from Table 1 of 'Ground Snow Loads for New Hampshire' (ERDC/CRREL TR-02-6), so snow loads are set town by town.",
+        "The state's admin chapter (105.2.2 item 10) exempts from permit a deck of 200 sq ft or less, no more than 30 in. above grade at any point, not attached to the dwelling and not serving the required exit door; many towns (e.g., Manchester, Derry, Concord) still require deck permits.",
+        "The state admin chapter (107.2.2.6) requires a site plan with permit documents showing new and existing structures and distances from lot lines; the building official may waive it.",
+        "SB 437 (2024, effective July 1, 2024) requires the Building Code Review Board to review and confirm every local amendment, existing ones included, before a town enforces it."
+      ],
+      "sources": [
+        {
+          "title": "RSA 155-A (State Building Code definition = 2024 IRC; 6-month concurrency, RSA 155-A:2)",
+          "url": "https://www.gc.nh.gov/rsa/html/xii/155-a/155-a-mrg.htm"
+        },
+        {
+          "title": "New Hampshire Building Code including Amendments, July 1, 2026 (BCRB courtesy summary; copy hosted by NH Building Officials Association — the mm.nh.gov original blocked automated download)",
+          "url": "https://nhboa.net/wp-content/uploads/State-Building-Code-Amendments-July-1-2026.pdf"
+        },
+        {
+          "title": "New Hampshire Building Code Amendments effective July 1, 2024 (2021 IRC; HB1059-2024)",
+          "url": "https://cityofportsmouth.com/sites/default/files/2024-08/2024_07_01%20Amendments%20to%20the%20NH%20State%20Building%20Code.pdf"
+        },
+        {
+          "title": "City of Portsmouth — NH Building Code and Fire Code updates (HB 1059, SB 437)",
+          "url": "https://www.portsmouthnh.gov/inspection/news/nh-building-code-and-fire-code-updates"
+        }
+      ]
+    },
+    {
+      "state": "VT",
+      "edition": "No statewide residential (IRC) code for owner-occupied one- and two-family dwellings. The 2025 Vermont Fire & Building Safety Code (effective Nov 4, 2025; NFPA 1 and NFPA 101 2021, IBC/IEBC 2021) covers 'public buildings', which include rented one- and two-family homes and ADUs. RBES energy code applies statewide.",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": null,
+      "riser_max_in": null,
+      "tread_min_in": null,
+      "differs_from_app": "'Burlington adopts the IRC' is wrong. Burlington Code of Ordinances §8-2 adopts the Vermont Fire & Building Safety Code (2025 VFBSC: NFPA 1/101 2021 + IBC/IEBC 2021) for all buildings, and its department lists no IRC; Rutland City (§1024) does the same. The 'local' kind and 'no residential code beyond fire and energy' are right only for owner-occupied single-family homes. Rented one- and two-family homes are regulated by the Division of Fire Safety (construction permit required). Where the VFBSC applies, its values differ from the IRC: guards 42 in. (NFPA 101), stairs 7-3/4 in. / 10 in. allowed for one- and two-family dwellings, frost depth at least 5 ft, and a statewide ground-snow-load map by town (40-70 psf).",
+      "notes": [
+        "Owner-occupied single-family projects need no state construction permit (VFBSC permit matrix), though a city like Burlington or Rutland may still require a local building permit.",
+        "For one- and two-family dwellings under the VFBSC, Vermont amendment 101:24.2.5.7 permits 7-3/4 in. max risers and 10 in. min treads in new construction.",
+        "Guards under the VFBSC follow NFPA 101: at least 42 in. high, with no opening that passes a 4 in. sphere up to 34 in. (DFS code sheet). The 2025 code's window-balcony rule also calls 42 in. the standard guard height.",
+        "VFBSC amends IBC 1809.5: foundations must reach below the local frost line but not less than 5 ft below finished grade.",
+        "VFBSC Annex V sets minimum ground snow loads by town (40/50/60/70 psf). Above 2,500 ft elevation the authority having jurisdiction sets the value. The minimum roof snow load is 40 psf on roofs of 5 degrees or less, and Cs times 40 psf on steeper roofs.",
+        "H.718 (2026) passed the House on Apr 24, 2026 and would have the Director of Fire Safety assess adopting a residential code by Jan 15, 2027. Its final status was not confirmed."
+      ],
+      "sources": [
+        {
+          "title": "2025 Vermont Fire & Building Safety Code (effective 11/04/2025)",
+          "url": "https://firesafety.vermont.gov/sites/firesafety/files/Rules/2025%20Vermont%20Fire%20%26%20Building%20Safety%20Code.pdf"
+        },
+        {
+          "title": "VT Division of Fire Safety testimony on H.718 (Jan 30, 2026) — no IRC; public buildings exclude owner-occupied single-family",
+          "url": "https://legislature.vermont.gov/Documents/2026/Workgroups/House%20Energy%20and%20Digital/Bills/H.718/Witness%20Documents/H.718~Michael%20Desrochers~Energy%20Efficiency%20Division%20of%20Fire%20Safety~1-30-2026.pdf"
+        },
+        {
+          "title": "DFS presentation to BECWG (Sep 10, 2024) — 'We do not regulate single-family owner-occupied dwellings'",
+          "url": "https://publicservice.vermont.gov/sites/dps/files/documents/DFS%20Presentation%20to%20BECWG_2024.09.10.pdf"
+        },
+        {
+          "title": "Burlington Code of Ordinances §8-2 Building codes adopted (VFBSC)",
+          "url": "https://www.codepublishing.com/VT/Burlington/html/Burlington08/Burlington0801.html"
+        }
+      ]
+    },
+    {
+      "state": "MA",
+      "edition": "780 CMR 51.00 Massachusetts Residential Code — Massachusetts State Building Code, 10th Edition, Residential Volume (2021 IRC with Massachusetts amendments)",
+      "basis_irc": 2021,
+      "since": 2024,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "",
+      "notes": [
+        "The 10th edition took effect October 11, 2024; permit applications filed through June 30, 2025 could use the 9th or 10th edition (not a mix), and since then only the 10th edition applies (R102).",
+        "Ground snow load and ultimate wind speed are set per city and town in Table R301.2(2); the residential prescriptive wind provisions do not apply where Vult is 140 mph or more (R301.2.1.1).",
+        "Frost line depth is 48 in. statewide; weathering severe; termite moderate to heavy (Table R301.2(1)).",
+        "Risers may be up to 8 1/4 in. and treads at least 9 in., including winders at the walkline (R311.7.5.1, R311.7.5.2, R311.7.5.2.1).",
+        "R312 (guards) is not amended, so the IRC 36-in. minimum guard height stands.",
+        "Decks of 200 sq ft or less, 30 in. or less above grade, not attached and not serving a required exit door are permit-exempt (R105.2 item 10).",
+        "AWC DCA6 is listed as an alternative provision for decks (R301.1.1 item 4); Chapter R5 amendments do not touch R507.",
+        "Table R301.2(1) shows 'YES' in the Seismic Design Category row instead of a letter; the building volume (780 CMR 1613.1) assigns any structure that could be SDC A to SDC B."
+      ],
+      "sources": [
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R1 Scope and Application — mass.gov PDF (read via Web Archive snapshot 2025-09-01; mass.gov blocks automated fetch)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-1-scope-and-application/download"
+        },
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R3 Building Planning — Table R301.2(1) and Table R301.2(2) snow loads and wind speeds by city/town (read via Web Archive snapshot 2025-09-01)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-3-building-planning/download"
+        },
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R4 Foundations amendments (Web Archive snapshot 2025-09-01)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-4-foundations-amendments/download"
+        },
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R5 Floors amendments (Web Archive snapshot 2025-09-01)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-5-floors-amendments/download"
+        },
+        {
+          "title": "780 CMR (10th ed.) Chapter 16 Structural Design — Table 1604.11 snow, wind and seismic parameters by town (Web Archive snapshot 2025-12-06)",
+          "url": "https://www.mass.gov/doc/10th-edition-chapter-16-structural-design/download"
+        }
+      ]
+    },
+    {
+      "state": "RI",
+      "edition": "Rhode Island One & Two Family Dwelling Code, SBC-2 (510-RICR-00-00-2) — 2021 IRC with Rhode Island amendments",
+      "basis_irc": 2021,
+      "since": 2025,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Two errors. (1) Rhode Island amends the stairs: max riser 8 1/4 in. and min tread 9 in. (SBC-2 R311.7.5.1 and R311.7.5.2), not IRC 7 3/4 / 10. (2) 'since' should be 2025: the 2021-IRC amendment of 510-RICR-00-00-2 took effect December 1, 2025 (a formatting-only technical revision with the same date is the current text). The version in force Feb 1, 2022 – Dec 1, 2025 was an earlier edition (reportedly the 2018 IRC; not opened).",
+      "notes": [
+        "SBC-2 adopts the 2021 IRC 'not including any further editions'; the current text is effective December 1, 2025.",
+        "Frost line depth is 40 in. (3 ft 4 in.) statewide except New Shoreham at 2 ft 6 in.; decks, platforms and landings need footings 3 ft 4 in. below grade (Table R301.2(1) Note 1a and §2.4).",
+        "Stairs off decks, balconies or platforms more than 30 in. above grade need stringer supports 12 in. below grade, secured against lateral displacement (Table R301.2(1) Note 1a).",
+        "Risers may be up to 8 1/4 in. and treads at least 9 in. (R311.7.5.1, R311.7.5.2); landings at exterior doors other than the required egress door may be up to 8 1/4 in. below the threshold (R311.3.2).",
+        "R312 (guards) is not amended, so the IRC 36-in. minimum guard height stands; Chapters 4 and 5 (incl. R507) are adopted with no changes.",
+        "SBC-2 R105.2 replaces the IRC exemption list and does not exempt decks.",
+        "Ground snow load, wind speed by risk category and frost depth are tabulated per municipality in §2.4; Table R301.2(1) shows weathering severe, termite moderate to heavy, decay slight to moderate, and 'None' for seismic design criteria.",
+        "2026 bill H 7774 Sub A would require the 2024 IRC for one- to three-family dwellings by January 1, 2027; its enactment was not confirmed in this research, and no 2024-IRC rulemaking is listed on the RICR page."
+      ],
+      "sources": [
+        {
+          "title": "510-RICR-00-00-2 RISBC-2 Rhode Island One & Two Family Dwelling Code — RI Secretary of State (version history; current eff. 12/01/2025)",
+          "url": "https://rules.sos.ri.gov/regulations/part/510-00-00-2"
+        },
+        {
+          "title": "510-RICR-00-00-2 full text (IRC 2021 adoption, Table R301.2(1), R311.7.5, §2.4 snow/wind/frost table)",
+          "url": "https://risos-apa-production-public.s3.amazonaws.com/BCC/REG_13394_20250930093046621.pdf"
+        },
+        {
+          "title": "RI H 7774 Sub A (2026) — 2024 IRC for 1–3 family dwellings not later than Jan 1, 2027 (bill text; enactment not confirmed)",
+          "url": "https://webserver.rilegislature.gov/BillText26/HouseText26/H7774A.htm"
+        }
+      ]
+    },
+    {
+      "state": "CT",
+      "edition": "2022 Connecticut State Building Code (2021 IRC with Connecticut amendments)",
+      "basis_irc": 2021,
+      "since": 2022,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Stairs are wrong: Connecticut does amend them, to max riser 8 1/4 in. (R311.7.5.1) and min tread 9 in. (R311.7.5.2). This is confirmed in the 2022 CSBC text, so the app should use 8.25 / 9, not 7 3/4 / 10. Edition, basis and since (October 1, 2022) are correct; the 2026 CSBC (2024 I-codes) is not in effect.",
+      "notes": [
+        "The 2022 CSBC applies to permit applications filed on or after October 1, 2022.",
+        "The 2026 CSBC (2024 I-codes) was targeted for July 1, 2026 but DAS says it is delayed while awaiting Legislative Regulation Review Committee approval; it will apply to permits applied for after its effective date.",
+        "Table R301.2 sets statewide: SDC B, weathering severe, frost line depth 42 in., termite moderate-heavy; ground snow load and ultimate wind speed are per municipality in Appendix AY.",
+        "Risers may be up to 8 1/4 in. and treads at least 9 in. (R311.7.5.1, R311.7.5.2).",
+        "R312.1.2 (guard height) is not amended, so the IRC 36-in. minimum guard height stands; CT only adds R312.1.1.1 retaining-wall guards.",
+        "Decks not supported by a dwelling need not have frost-depth footings, and stair/ramp landing footings at grade need only be 12 in. deep (R403.1.4.1 exceptions 3 and 4).",
+        "Decks or ramps of 200 sq ft or less, 30 in. or less above grade, not attached, needing no guards and not serving the required exit door are permit-exempt (R105.2 item 10)."
+      ],
+      "sources": [
+        {
+          "title": "2022 Connecticut State Building Code (w/ Errata #1), ED October 1, 2022 — IRC amendments incl. Table R301.2, R311.7.5, R403.1.4.1, Appendix AY",
+          "url": "https://portal.ct.gov/das/-/media/das/office-of-state-building-inspector/2022-state-codes/2022-csbc-final.pdf"
+        },
+        {
+          "title": "CT DAS — Connecticut State Building Code regulations page",
+          "url": "https://portal.ct.gov/das/home/office-of-state-building-inspector/connecticut-state-building-code/regulations"
+        },
+        {
+          "title": "CT DAS — Building and Fire Code Adoption Process (2026 codes delayed pending Legislative Regulation Review Committee)",
+          "url": "https://portal.ct.gov/dascodechange"
+        }
+      ]
+    },
+    {
+      "state": "NY",
+      "edition": "2025 Residential Code of New York State (2024 IRC with New York amendments), part of the 2025 Uniform Code",
+      "basis_irc": 2024,
+      "since": 2025,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Outdated. Since Dec 31, 2025 the code in force is the 2025 Residential Code of New York State, based on the 2024 IRC, not the 2020 RCNYS / 2018 IRC. The note that a '2021-based Uniform Code is in adoption' is wrong: the new code is 2024-based and already in force (the 2020 code was repealed). Riser 8.25 / tread 9 are still correct (now Section R318.7.5). The NYC note is correct.",
+      "notes": [
+        "The 2025 Uniform Code took effect Dec 31, 2025; from Oct 1 to Dec 30, 2025 applicants could use either the 2020 or 2025 code, and every permit application from Dec 31, 2025 must meet the 2025 code.",
+        "Stair sections are renumbered in the 2024-based code: risers max 8 1/4 in (R318.7.5.1) and treads min 9 in (R318.7.5.2), both NY amendments.",
+        "Guards are required where a walking surface is more than 30 in above grade within 36 in horizontally, and must be at least 36 in high (R321.1.1, R321.1.2).",
+        "At exterior doors other than the required egress door, the deck or landing may be up to 8 1/4 in below the threshold, and no landing is needed where a stair of two risers or fewer is outside and the door does not swing over it (R318.3.2, NY).",
+        "Decks, landings and stairs must be positively anchored to the house for vertical and lateral loads or be self-supporting, and toenails or nails in withdrawal are not allowed (R318.5).",
+        "Table R301.2 climatic values (frost depth, wind speed, snow, seismic, termite, weathering) are filled in by each local authority having jurisdiction; there are no statewide numbers.",
+        "Wind speeds in Figure R301.2(2) are ultimate 3-second gusts at 33 ft, Exposure C, about a 700-year return period; ground snow is the larger of Figure R301.2(3) and the NY snow figure, or per Section 1608 of the NYS Building Code.",
+        "New York City is not covered; it enforces its own NYC Construction Codes."
+      ],
+      "sources": [
+        {
+          "title": "NYS DOS: Amended Notice of Adoption, rule amending and updating the Uniform Code (effective Dec 31, 2025; transition period)",
+          "url": "https://dos.ny.gov/notice-adoption"
+        },
+        {
+          "title": "2025 Residential Code of New York State (full text PDF; 'derivative work of the 2024 edition of the IRC'; R301.2, R318, R321)",
+          "url": "https://dos.ny.gov/system/files/documents/2025/07/2025rcnys_noa_2025-07-24_compressed.pdf"
+        },
+        {
+          "title": "NYS DOS: Adoption of the 2025 Uniform Fire Prevention and Building Code (informational announcement)",
+          "url": "https://dos.ny.gov/system/files/documents/2026/02/2025-uniform-code-adoption.pdf"
+        }
+      ]
+    },
+    {
+      "state": "NJ",
+      "edition": "International Residential Code/2024, New Jersey Edition (one- and two-family dwelling subcode, N.J.A.C. 5:23-3.21)",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Outdated. Since Aug 17, 2026 the one- and two-family subcode is the IRC/2024 New Jersey edition, so basis 2024 and since 2026. For six months after Aug 17, 2026 (to about Feb 17, 2027), a complete application may still be reviewed under the 2021 NJ edition. Also, the 2021 NJ edition was adopted in September 2022, not 2023 (its grace period ran into 2023). Riser 8.25 / tread 9 are still correct.",
+      "notes": [
+        "N.J.A.C. 5:23-3.21 adopts the 2024 IRC as the one- and two-family dwelling subcode, effective Aug 17, 2026 (58 N.J.R. 8(2), R.2026 d.086).",
+        "Grace period: for six months after a subcode revision takes effect, a complete permit application may be reviewed under the code in force just before it.",
+        "Risers max 8 1/4 in and treads min 9 in (R318.7.5.1, R318.7.5.2 as amended).",
+        "At exterior doors, the landing or deck may be up to 8 1/4 in below the threshold, instead of the IRC's 7 3/4 in (R318.3.1 exception, R318.3.2 as amended).",
+        "Handrail height minimum is lowered from 34 in to 30 in (R320.2 as amended); guard height is not amended and stays 36 in.",
+        "NJ fills in Table R301.2 statewide: frost depth 3'-0\" in northern NJ (Mercer, Middlesex and all counties north) and 2'-6\" in southern NJ (Monmouth, Burlington and all counties south).",
+        "Also statewide in Table R301.2: weathering Severe, termite Moderate to Heavy, seismic design category N/A, and ground snow and wind speed per DCA Bulletin 19-1, which means site-specific values from the ATC or ASCE 7 hazard tools.",
+        "In Table R301.5, NJ adds an 'Exterior Balconies' row at 60 psf live load; the deck row keeps the IRC value.",
+        "NJ deletes 2024 IRC Section R507.9.1.7, 'Existing walls', from the deck section."
+      ],
+      "sources": [
+        {
+          "title": "NJ DCA adopted amendments, 2024 model codes (N.J.A.C. 5:23-3.14 to 3.22), effective Aug 17, 2026",
+          "url": "https://www.nj.gov/dca/codes/codreg/pdf_rule_adoptions/model_codes_2024_adopt.pdf"
+        },
+        {
+          "title": "N.J.A.C. 5:23-3 (current through 58 N.J.R. No. 16, Aug 17, 2026), section 5:23-3.21 one- and two-family dwelling subcode",
+          "url": "https://www.nj.gov/dca/codes/codreg/pdf_regs/njac_5_23_3.pdf"
+        },
+        {
+          "title": "NJ DCA rule proposal, 2024 model codes (stair, landing and handrail amendments)",
+          "url": "https://www.nj.gov/dca/codes/codreg/pdf_rule_proposals/2024_prop_p1.pdf"
+        },
+        {
+          "title": "NJ DCA: Previously adopted UCC model codes, UCC history and grace period",
+          "url": "https://www.nj.gov/dca/codes/codreg/previous.shtml"
+        },
+        {
+          "title": "NJ DCA Bulletin 19-1: Design Loads for Ground Snow, Wind and Seismic (rev. Sept 2022)",
+          "url": "https://www.nj.gov/dca/codes/publications/pdf_bulletins/b_19_1.pdf"
+        }
+      ]
+    },
+    {
+      "state": "PA",
+      "edition": "Pennsylvania Uniform Construction Code, residential (2021 IRC with Pennsylvania amendments, 34 Pa. Code 403.21)",
+      "basis_irc": 2021,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Outdated. Since Jan 1, 2026 the UCC adopts the 2021 IRC, so basis 2021 and since 2026. Projects with a design or construction contract signed before Jan 1, 2026 could still use the 2018 codes only if they applied within six months (by about July 1, 2026), and that window has closed. Riser 8.25 / tread 9 are still correct. The Philadelphia note is correct; Philadelphia also requires the 2021 codes for every application filed on or after July 1, 2026.",
+      "notes": [
+        "34 Pa. Code 403.21(a)(7) adopts the 'International Residential Code of 2021' with exceptions, amended Nov 7, 2025 and effective Jan 1, 2026 (55 Pa.B. 7701).",
+        "PA statewide stair amendment: maximum riser 8 1/4 in and minimum tread 9 in, measured nosing to nosing, with 3/8 in maximum variation in a flight.",
+        "PA does not amend guards, so the 2021 IRC guard rule applies: at least 36 in high where a deck is more than 30 in above grade.",
+        "The 2021 IRC deck section (R507) sizes footings, posts, beams and joists for live load or snow load, whichever governs, and adds load-path rules for deck guards (R507.10).",
+        "There is no statewide Table R301.2; each municipality or its third-party code agency sets frost depth, snow and wind values.",
+        "Enforcement of the 2021 accessibility provisions is enjoined by court order, so the 2018 accessibility provisions remain in effect."
+      ],
+      "sources": [
+        {
+          "title": "34 Pa. Code 403.21 Uniform Construction Code (2021 IRC adoption, stair amendment, effective Jan 1, 2026)",
+          "url": "https://www.pacodeandbulletin.gov/Display/pacode?file=/secure/pacode/data/034/chapter403/s403.21.html"
+        },
+        {
+          "title": "PA L&I: UCC Review and Advisory Council (triennial update published Nov 8, 2025, effective Jan 1, 2026)",
+          "url": "https://www.pa.gov/agencies/dli/programs-services/labor-management-relations/bureau-of-occupational-and-industrial-safety/uniform-construction-code-home/ucc-review-and-advisory-council"
+        },
+        {
+          "title": "Philadelphia L&I Code Bulletin B-2501: Implementation of 2021 International Codes (Oct 20, 2025)",
+          "url": "https://www.phila.gov/media/20251021080549/B-2501-Implementation-of-2021-International-Codes.pdf"
+        },
+        {
+          "title": "Philadelphia L&I: 2021 IRC Significant Changes FAQ (PB_031)",
+          "url": "https://www.phila.gov/media/20250613131048/PB_031_FAQ_2021-IRC-Significant-Changes-FAQ-FINAL.pdf"
+        }
+      ]
+    }
+  ],
+  "counties": [
+    {
+      "state": "ME",
+      "county": "Cumberland County",
+      "fips": "23005",
+      "population_2020": 303069,
+      "jurisdiction": "City of Portland Permitting & Inspections Department (county seat and largest city; Maine counties have no building departments)",
+      "edition": "MUBEC — 2021 IRC with Maine amendments (since April 7, 2025)",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "A deck on a one- or two-family property is filed as a 'Residential Construction — Addition' permit.",
+        "All permit applications are submitted online through Portland's Citizen Self Service portal; fax, email, mail and walk-in applications are not accepted.",
+        "Attachments must be two PDF files, one named 'Drawings' with all drawing sheets and one named 'Documents' with supporting papers.",
+        "Every drawing sheet must carry a graphic scale or scale reference.",
+        "Professionally drawn sets need bookmarked sheets and a code analysis sheet covering MUBEC, NFPA and Chapter 10 of Portland's ordinance."
+      ],
+      "note": "Portland's website loads its building pages by script, and no Portland Table R301.2(1), deck handout or design-load sheet could be opened, so frost, snow, wind and seismic are null. Do not assume Bangor's 60 in. frost or 70 psf snow for Portland. For reference only, Kennebunk in York County publishes 48 in. frost.",
+      "sources": [
+        {
+          "title": "City of Portland — Permit Type Guide (PDF)",
+          "url": "https://me-portland4.civicplus.pro/asset/ce365b38-6529-445b-bd92-4c0202d8c46f"
+        },
+        {
+          "title": "City of Portland — Instructions for Submitting Permit Applications Online (PDF)",
+          "url": "https://me-portland4.civicplus.pro/asset/a4407d99-0167-4549-9690-be700bfea7e0"
+        },
+        {
+          "title": "Wikipedia — List of counties in Maine (2020 Census table)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Maine"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "ME",
+      "county": "York County",
+      "fips": "23031",
+      "population_2020": 211972,
+      "jurisdiction": "Town of Kennebunk Code Enforcement for design values. The City of Biddeford (largest city) publishes the code list and permit requirements but no design values; the county seat is Alfred.",
+      "edition": "MUBEC — 2021 IRC with Maine amendments (Biddeford and Kennebunk both list the 2021 IRC)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Kennebunk: foundations must be at least 4 ft below grade for frost protection.",
+        "Kennebunk: guards are required more than 30 in. above floor or grade and must be at least 36 in. high in one- and two-family dwellings (34 in. on open sides of stairs).",
+        "Kennebunk: residential stairs need a 7-3/4 in. max riser, 10 in. min tread, 3 ft min width and 6 ft 8 in. headroom.",
+        "Kennebunk: deck permits are applied for online and usually turn around in about a week.",
+        "Biddeford: applications need plans drawn to scale (elevations, cross sections, floor plans).",
+        "Biddeford: applications need a scaled site plan showing all structures and distances to lot lines, drawn with the accuracy of a typical boundary survey.",
+        "Biddeford: building permits expire one year from issue."
+      ],
+      "note": "Snow, wind and seismic values were not found on Biddeford, Sanford or Kennebunk pages. The frost value comes from Kennebunk's FAQ, not a filled-in Table R301.2(1).",
+      "sources": [
+        {
+          "title": "Town of Kennebunk — Code Enforcement FAQs (frost, stairs, guards, codes in effect)",
+          "url": "https://www.kennebunkmaine.us/Faq.aspx?QID=162"
+        },
+        {
+          "title": "Town of Kennebunk — Residential Guards tip sheet",
+          "url": "https://www.kennebunkmaine.us/DocumentCenter/View/20938/Residential-Guards"
+        },
+        {
+          "title": "City of Biddeford — Building Permit Information",
+          "url": "https://www.biddefordmaine.org/2191/Building-Permit-Information"
+        },
+        {
+          "title": "City of Biddeford — Code Enforcement (2021 IRC)",
+          "url": "https://www.biddefordmaine.org/2179/Code-Enforcement"
+        },
+        {
+          "title": "Wikipedia — List of counties in Maine (2020 Census table)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Maine"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "ME",
+      "county": "Penobscot County",
+      "fips": "23019",
+      "population_2020": 152199,
+      "jurisdiction": "City of Bangor Code Enforcement (county seat and largest city)",
+      "edition": "MUBEC — 2021 IRC with Maine amendments (Bangor enforces it from April 7, 2025)",
+      "frost_depth_in": 60,
+      "ground_snow_psf": 70,
+      "wind_mph": 107,
+      "wind_basis": "'107 mph - 3 seconds Sustained Gust' as listed under Bangor's 'IBC Base Climate Data'; the ASCE 7 edition and risk category are not stated",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Bangor requires building permits for residential work including decks; apply through the Code Enforcement Office.",
+        "Bangor's design frost depth is 5 ft, so deck footings go 60 in. below grade.",
+        "Bangor's ground snow load is 70 psf; check it for roofed decks and porches."
+      ],
+      "note": "Bangor's page lists 'No Special seismic requirements' and gives no Seismic Design Category, so SDC is null. Bangor labels these values 'IBC Base Climate Data' rather than a filled-in IRC Table R301.2(1), so the 107 mph basis is uncertain.",
+      "sources": [
+        {
+          "title": "City of Bangor — Building Codes (MUBEC 2021 and IBC Base Climate Data)",
+          "url": "https://www.bangormaine.gov/194/Building-Codes"
+        },
+        {
+          "title": "City of Bangor — Building Permit Information",
+          "url": "https://www.bangormaine.gov/201/Building-Permit-Information"
+        },
+        {
+          "title": "Wikipedia — List of counties in Maine (2020 Census table)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Maine"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "NH",
+      "county": "Hillsborough County",
+      "fips": "33011",
+      "population_2020": 422937,
+      "jurisdiction": "City of Manchester Planning & Community Development Department, Building Division (largest city; NH counties have no building departments)",
+      "edition": "NH State Building Code: 2024 IRC with NH amendments from July 1, 2026, with the 2021 IRC also allowed until Dec 31, 2026. Manchester's own page still says the 2021 editions, effective July 1, 2024. Manchester's local IRC amendments were adopted July 6, 2021.",
+      "frost_depth_in": 48,
+      "ground_snow_psf": 70,
+      "wind_mph": 115,
+      "wind_basis": "Speed as inserted in Manchester's local amendment to IRC Table R301.2(1) (no topographic effects, no special wind region, no wind-borne debris zone); the ASCE 7 basis is not stated",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "slight to moderate",
+      "deck_notes": [
+        "Manchester deletes IRC R105.2 Building exemptions 1, 2, 3, 5 and 10. Item 10 is the deck exemption, so every deck needs a building permit.",
+        "Manchester's IRC amendment sets the frost line depth at 4 ft 0 in., and its IBC amendment says foundations extend below the frost line, 4 feet below grade.",
+        "Deck permits need the city's 'Deck Details' form listing material, size and span of beam, joists, bolts at the house, decking, columns and foundation, plus joist-hanger and column-connector brand and model.",
+        "The Deck Details form shows a 4 ft 0 in. minimum footing depth below finished grade and a 3 ft 0 in. minimum guard when the deck is 30 in. or more above grade, with 4 in. maximum openings.",
+        "The Deck Details form sets stairs at a 7-3/4 in. max riser, 10 in. min tread, 36 in. width and 6 ft 8 in. headroom, with a 34-38 in. handrail on one side with returns.",
+        "Trusses or manufactured lumber need a computer-generated load calculation printout.",
+        "Outdoor projects need a residential site/plot plan drawn to scale showing every structure on the lot with setback distances noted.",
+        "Manchester's other Table R301.2(1) entries are winter design temperature 0°F, ice barrier underlayment required, air freezing index 1262 and mean annual temperature 46.4°F."
+      ],
+      "note": "Values come from Manchester's local amendment to IRC Table R301.2(1) in the city building code adopted July 6, 2021; the city says these amendments survive later state code updates. Under SB 437 (2024) local amendments need Building Code Review Board confirmation, which was not checked. The Deck Details form cites old IRC section numbers (R314-R316), but its numbers match the current IRC.",
+      "sources": [
+        {
+          "title": "Building Code of the City of Manchester, NH (adopted July 6, 2021) — §151.31 IRC amendments incl. Table R301.2(1)",
+          "url": "https://www.manchesternh.gov/pcd/Regulations/BuildingCode.pdf"
+        },
+        {
+          "title": "Manchester — Deck Details for 1 & 2 Family Residential Structures (form)",
+          "url": "https://www.manchesternh.gov/pcd/Forms/DeckDetailsFor1And2FamilyResidentialStructures.pdf"
+        },
+        {
+          "title": "Manchester — Building Permit Applications (deck details, plot plans)",
+          "url": "https://www.manchesternh.gov/Departments/Planning-and-Comm-Dev/Building/Permit-Applications"
+        },
+        {
+          "title": "Manchester — Building Codes page",
+          "url": "https://www.manchesternh.gov/Departments/Planning-and-Comm-Dev/Building/Building-Codes"
+        },
+        {
+          "title": "Wikipedia — List of counties in New Hampshire (2020 Census column)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_Hampshire"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "NH",
+      "county": "Rockingham County",
+      "fips": "33015",
+      "population_2020": 314176,
+      "jurisdiction": "Town of Londonderry Building & Zoning Enforcement for the frost value. Derry, the largest town, publishes deck permit rules but no design values; Portsmouth publishes neither. County seat: Brentwood.",
+      "edition": "NH State Building Code: 2024 IRC with NH amendments from July 1, 2026, with the 2021 IRC also allowed until Dec 31, 2026. Derry's site still says 'we are using 2021'.",
+      "frost_depth_in": 48,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Derry requires a building permit for new or replacement decks and screen porches.",
+        "Londonderry: footings for sheds of 200 sq ft or more must reach the 48 in. frost depth (the town's only published frost figure).",
+        "Londonderry: residential stairs need a 36 in. min width, 10 in. min tread and 7-3/4 in. max riser.",
+        "Londonderry: handrails are required at 4 or more risers, 34-38 in. above the nosing.",
+        "Londonderry AR-1 zone setbacks are 40 ft front and 15 ft side and rear for all structures.",
+        "Portsmouth requires a site plan for most projects showing the lot, all structures and their sizes, and setback dimensions.",
+        "Portsmouth: structural work needs framing plan and section views on sketches or engineered plans; most residential projects need no stamped plans."
+      ],
+      "note": "No Rockingham town's filled-in Table R301.2(1) could be opened. Derry's site has no design values and Portsmouth's inspection pages have none, so snow, wind and seismic are null. Under the NH amendment, snow must come from CRREL TR-02-6 for the site. The 48 in. frost value is from Londonderry's FAQ, not a design-criteria table.",
+      "sources": [
+        {
+          "title": "Town of Londonderry — Building & Zoning Enforcement (FAQs: frost depth 48 in., stairs)",
+          "url": "https://www.londonderrynh.gov/467/Building-Zoning-Enforcement"
+        },
+        {
+          "title": "Town of Derry — Items That Require a Building Permit",
+          "url": "https://www.derrynh.gov/245/Items-That-Require-a-Building-Permit"
+        },
+        {
+          "title": "City of Portsmouth — Inspection Department (permit/site plan requirements)",
+          "url": "https://www.portsmouthnh.gov/inspection"
+        },
+        {
+          "title": "Wikipedia — List of counties in New Hampshire (2020 Census column)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_Hampshire"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "NH",
+      "county": "Merrimack County",
+      "fips": "33013",
+      "population_2020": 153808,
+      "jurisdiction": "City of Concord Code Administration (county seat and largest city)",
+      "edition": "NH State Building Code: 2024 IRC with NH amendments from July 1, 2026, with the 2021 IRC also allowed until Dec 31, 2026 (Concord enforces it under RSA 674:51)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": 70,
+      "wind_mph": 90,
+      "wind_basis": "'Basic Wind Speed = 90 mph for a 3-second gust', IBC 2006 Figure 1609 (old nominal basis, not ASCE 7-16 ultimate speed); the Nov 2025 permit guide also lists 'Wind speed of 90 miles per hour'",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "slight to moderate",
+      "deck_notes": [
+        "Concord requires building permits for decks, porches, sheds and garages; its exemption list has no deck exemption (only accessory structures and sheds of 60 sq ft or less are exempt).",
+        "Concord's frost line is 48 in., so footings go at least 48 in. below grade.",
+        "Plans must be scaled drawings at 1/4 in. = 1 ft.",
+        "Plans must show stair riser, tread depth, headroom, guard and handrail details, plus footing or pier sizes and depths below finished grade.",
+        "New buildings and additions need a plot plan with distances to front, side and rear property lines.",
+        "Concord gives a Deck Design Worksheet (the AWC DCA 6 prescriptive deck guide) as its deck reference."
+      ],
+      "note": "Snow load depends on elevation: 70 psf at 600 ft (main city value), less 2.1 psf per 100 ft lower and plus 2.1 psf per 100 ft higher, ranging from 61.6 psf at 200 ft to 75.8 psf at 875 ft (source: SENH-CRREL). The structural-loads sheet gives seismic as Ss = 0.40 g and S1 = 0.10 g (Site Class B, IBC 2006 maps), and the Nov 2025 guide says 'Seismic design Class B'. The 90 mph wind uses an outdated basis, so confirm with the city before using it in ASCE 7-16/7-22 calculations.",
+      "sources": [
+        {
+          "title": "City of Concord — Residential Building Permit Application Guide (Nov 2025; local climate & geographic design criteria)",
+          "url": "https://www.concordnh.gov/DocumentCenter/View/1197/Residential-Building-Permit-Requirements"
+        },
+        {
+          "title": "City of Concord — Structural Loads for Concord NH",
+          "url": "https://www.concordnh.gov/DocumentCenter/View/16281/Structural-Loads-for-Concord-NH"
+        },
+        {
+          "title": "City of Concord — Building Construction Requirements & Resources",
+          "url": "https://www.concordnh.gov/1782/Building-Construction-Requirements-Resou"
+        },
+        {
+          "title": "Wikipedia — List of counties in New Hampshire (2020 Census column)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_Hampshire"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "VT",
+      "county": "Chittenden County",
+      "fips": "50007",
+      "population_2020": 168323,
+      "jurisdiction": "City of Burlington Department of Permitting & Inspections, Building & Trades Division (county seat and largest city)",
+      "edition": "2025 Vermont Fire & Building Safety Code, adopted by BCO Chapter 8 §8-2 for all buildings (NFPA 1 and NFPA 101 2021, IBC and IEBC 2021). Burlington does NOT adopt the IRC.",
+      "frost_depth_in": 60,
+      "ground_snow_psf": 40,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Burlington requires a building permit for all non-MEP work except carpeting, painting, nonsolid fences, storm doors/windows and in-kind repairs of $1,000 or less, so every deck needs one.",
+        "A short-form permit application for decks is on the city's OpenGov portal.",
+        "Plans must be complete 11x17 construction plans; electronic PDF is accepted.",
+        "Plans must include a cross section with foundation, floor joist and structural members, stair rise and run, guardrail and handrail details, and a plot view (a copy of the approved zoning plan is accepted).",
+        "Guards follow NFPA 101: required more than 30 in. above floor or grade, at least 42 in. high for new work (existing dwelling-unit guards may stay at 36 in.), with openings that block a 4 in. sphere up to 34 in.",
+        "One- and two-family stairs may use 7-3/4 in. max risers and 10 in. min treads (Vermont amendment).",
+        "New handrails go 34-38 in. above the tread nosing.",
+        "Frost: the VFBSC IBC 1809.5 amendment requires footings below the local frost line and not less than 5 ft below finished grade.",
+        "Building permit fee is $8.50 per $1,000 of construction cost, with a $30 minimum."
+      ],
+      "note": "The 40 psf snow load was read from the VFBSC Annex V town map: Burlington, South Burlington, Winooski and Colchester are in the lightest band. The 60 in. frost depth is the VFBSC statewide minimum that Burlington adopts, not a city table. Burlington's guard and stair sheets are 2017 DFS code sheets, and the 2025 code keeps the 7-3/4/10 amendment and the 42 in. 'standard' guard. No wind speed or SDC is published.",
+      "sources": [
+        {
+          "title": "Burlington DPI — Adopted Codes & Standards (2025 VFBSC)",
+          "url": "https://www.burlingtonvt.gov/546/Adopted-Codes-Standards"
+        },
+        {
+          "title": "Burlington DPI — Building & Trades Division (permit required for all non-MEP work)",
+          "url": "https://www.burlingtonvt.gov/438/Building-Trades-Division"
+        },
+        {
+          "title": "Burlington Code of Ordinances Ch. 8 §8-2 (adopts VFBSC)",
+          "url": "https://www.codepublishing.com/VT/Burlington/html/Burlington08/Burlington0801.html"
+        },
+        {
+          "title": "Burlington — Construction Plans, Documentation, and Permit Applications (11x17 plans)",
+          "url": "https://www.burlingtonvt.gov/DocumentCenter/View/2427/Construction-Plans-Documentation-and-Permit-Applications-PDF"
+        },
+        {
+          "title": "Burlington/DFS — Handrails and Guards code sheet",
+          "url": "https://www.burlingtonvt.gov/DocumentCenter/View/2420/Handrails-and-Guards-PDF"
+        },
+        {
+          "title": "Burlington/DFS — Requirements for Stairs code sheet",
+          "url": "https://www.burlingtonvt.gov/DocumentCenter/View/2417/Requirements-for-Stairs-PDF"
+        },
+        {
+          "title": "2025 Vermont Fire & Building Safety Code (IBC 1809.5 frost; Annex V ground snow loads by town)",
+          "url": "https://firesafety.vermont.gov/sites/firesafety/files/Rules/2025%20Vermont%20Fire%20%26%20Building%20Safety%20Code.pdf"
+        },
+        {
+          "title": "Wikipedia — List of counties in Vermont (2020 Census table)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Vermont"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "VT",
+      "county": "Rutland County",
+      "fips": "50021",
+      "population_2020": 60572,
+      "jurisdiction": "City of Rutland Building Department (shire town and largest city)",
+      "edition": "Vermont Fire & Building Safety Code (now the 2025 edition), adopted as the city building code by City Ordinance Title 9 §1024 for all buildings erected, reconstructed or materially changed. No IRC.",
+      "frost_depth_in": 60,
+      "ground_snow_psf": 50,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Rutland City requires both a zoning permit and a building permit for all decks and porches (including on mobile homes); ground-level uncovered patios are exempt from zoning.",
+        "Attached decks and porches must meet the zoning district setbacks.",
+        "Guard height and spacing for decks more than 30 in. above ground, and stair risers, follow the city's 'special guidelines', which are the DFS code sheets: 42 in. guards and 7-3/4 in. / 10 in. stairs for one- and two-family dwellings.",
+        "Rutland City: most renovation projects need both state and city building permits.",
+        "A permit with no work started within 6 months expires.",
+        "An above-ground pool with walls 4 ft or higher may use a locked gate at the top of the deck stairs, with 42 in. rails around the deck."
+      ],
+      "note": "The 50 psf snow load was read from the VFBSC Annex V town map: Rutland City and Rutland Town are in the 50 psf band, and neighbouring Mendon, Killington and Chittenden are in the 70 psf band. The 60 in. frost depth is the VFBSC statewide IBC 1809.5 minimum, not a city-published number. No wind speed or SDC is published.",
+      "sources": [
+        {
+          "title": "City of Rutland — Building Department",
+          "url": "https://www.rutlandcity.org/departments/building-department/"
+        },
+        {
+          "title": "Rutland City Ordinance Title 9 — Buildings (§1024 codes applicable)",
+          "url": "https://www.rutlandcity.org/wp-content/uploads/2022/11/Title_9.pdf"
+        },
+        {
+          "title": "Rutland City — Residential Project Information brochure",
+          "url": "https://www.rutlandcity.org/wp-content/uploads/2022/11/residential_projects_brochure2.pdf"
+        },
+        {
+          "title": "2025 Vermont Fire & Building Safety Code (IBC 1809.5 frost; Annex V ground snow loads by town)",
+          "url": "https://firesafety.vermont.gov/sites/firesafety/files/Rules/2025%20Vermont%20Fire%20%26%20Building%20Safety%20Code.pdf"
+        },
+        {
+          "title": "Wikipedia — List of counties in Vermont (2020 Census table)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Vermont"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "VT",
+      "county": "Washington County",
+      "fips": "50023",
+      "population_2020": 59807,
+      "jurisdiction": "City of Montpelier Building Inspector (shire town). Barre City's website refused automated access.",
+      "edition": "Montpelier's building permit form says the city enforces NFPA 101 (2015) and NFPA 1 (2015) under Chapter 4 of the City Ordinances, with state DFS permits under a municipal agreement. The state code is now the 2025 VFBSC (2021 NFPA editions). No IRC.",
+      "frost_depth_in": null,
+      "ground_snow_psf": 50,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Montpelier requires a building permit before work starts; a deck for a single-family home uses the short-form 'Minor Project' building permit attachment.",
+        "Montpelier wants printed and digital plans; mark which are included (site, foundation, elevation, floor/roof structural, etc.).",
+        "When work is done, the applicant submits a Certificate of Work Completed to the Building Inspector to get the final inspection and Certificate of Occupancy.",
+        "Building permits are valid 2 years, with a 1-year extension if requested before expiry.",
+        "A project may also need a state Division of Fire Safety permit, for example for a rental."
+      ],
+      "note": "Frost depth is null because Montpelier publishes none and its form cites only the NFPA codes. The state VFBSC IBC 1809.5 amendment would require at least 60 in. if it applies. The 50 psf snow load was read from the VFBSC Annex V town map: Montpelier, Barre City and Barre Town are 50 psf, and adjacent Berlin and Middlesex-area towns run 50-60 psf. No wind speed or SDC is published.",
+      "sources": [
+        {
+          "title": "City of Montpelier — Apply for a Permit",
+          "url": "https://www.montpelier-vt.org/1602/Apply-for-a-Permit"
+        },
+        {
+          "title": "City of Montpelier — Building Permit Attachment, Short Form (Minor Project)",
+          "url": "https://www.montpelier-vt.org/DocumentCenter/View/12148"
+        },
+        {
+          "title": "2025 Vermont Fire & Building Safety Code (Annex V ground snow loads by town)",
+          "url": "https://firesafety.vermont.gov/sites/firesafety/files/Rules/2025%20Vermont%20Fire%20%26%20Building%20Safety%20Code.pdf"
+        },
+        {
+          "title": "Wikipedia — List of counties in Vermont (2020 Census table)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Vermont"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "MA",
+      "county": "Middlesex County",
+      "fips": "25017",
+      "population_2020": 1632002,
+      "jurisdiction": "State (780 CMR 51.00 Table R301.2(2), municipality table); value shown for Cambridge, the county's largest city",
+      "edition": "780 CMR 51.00 Massachusetts Residential Code — Massachusetts State Building Code, 10th Edition, Residential Volume (2021 IRC with Massachusetts amendments)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": 40,
+      "wind_mph": 120,
+      "wind_basis": "Vult (ultimate design wind speed), ASCE/SEI 7-16 Risk Category II — 780 CMR 51 Table R301.2(2)",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A deck of 200 sq ft or less, 30 in. or less above grade at every point, not attached to the dwelling and not serving a required exit door needs no building permit (780 CMR 51 R105.2 item 10).",
+        "Deck footings go below the 48-in. statewide frost line (Table R301.2(1)); frost-protected shallow foundations follow R403.3.",
+        "AWC DCA6 (Prescriptive Residential Wood Deck Construction Guide) is an accepted alternative to the code's deck provisions (R301.1.1 item 4).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (R311.7.5.1, R311.7.5.2); the deck or landing outside a door may sit up to 8 1/4 in. below the threshold (R311.3.1 exception, R311.3.2).",
+        "Massachusetts does not amend IRC R507 (decks) or R312 (guards), so the IRC deck and 36-in. guard rules apply.",
+        "Cambridge ISD's permit guide asks for two sets of construction plans and a site plan showing existing and proposed structures, lot lines, required setbacks, street grades and finished grades.",
+        "Cambridge says one- and two-family plans normally need no architect or engineer stamp, but the inspector may require an engineer to certify load-bearing parts."
+      ],
+      "note": "Ground snow ranges 40-60 psf across the 54 towns: 24 towns at 40 (Cambridge, Newton, Somerville, Framingham...), 25 at 50 (Lowell is 50 psf / 116 mph) and 5 at 60 (Ashby, Groton, Pepperell, Shirley, Townsend). Vult ranges 114-120 mph. Cambridge's minimum flat-roof snow load Pf1 is 30 psf. Seismic is null because no residential SDC letter is published: Table R301.2(1) says 'YES', and Table 1604.11 gives Cambridge Ss 0.272 g, S1 0.066 g. The values come from the state-posted (unofficial) chapter PDFs read through Web Archive snapshots (Sept/Dec 2025) because mass.gov returns 403 to automated fetches, so amendments after those dates were not checked. The Cambridge permit guide is undated and not deck-specific.",
+      "sources": [
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R3 Building Planning — Table R301.2(1) and Table R301.2(2) snow loads and wind speeds by city/town (read via Web Archive snapshot 2025-09-01)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-3-building-planning/download"
+        },
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R1 Scope and Application — mass.gov PDF (read via Web Archive snapshot 2025-09-01; mass.gov blocks automated fetch)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-1-scope-and-application/download"
+        },
+        {
+          "title": "780 CMR (10th ed.) Chapter 16 Structural Design — Table 1604.11 snow, wind and seismic parameters by town (Web Archive snapshot 2025-12-06)",
+          "url": "https://www.mass.gov/doc/10th-edition-chapter-16-structural-design/download"
+        },
+        {
+          "title": "Cambridge ISD — Step-by-step guide to building permits (PDF)",
+          "url": "https://www.cambridgema.gov/-/media/Files/inspectionalservicesdepartment/stepbystepguidetobulidingpermits.pdf"
+        },
+        {
+          "title": "Cambridge ISD home (news item: 'MA State Building Code 10th Edition Became Effective on 10-11-24')",
+          "url": "https://www.cambridgema.gov/inspection"
+        },
+        {
+          "title": "Wikipedia — List of counties in Massachusetts (2020 Census table, citing Census P2)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Massachusetts"
+        },
+        {
+          "title": "Wikipedia — List of municipalities in Massachusetts (town-to-county membership used for county ranges)",
+          "url": "https://en.wikipedia.org/wiki/List_of_municipalities_in_Massachusetts"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MA",
+      "county": "Worcester County",
+      "fips": "25027",
+      "population_2020": 862111,
+      "jurisdiction": "State (780 CMR 51.00 Table R301.2(2), municipality table); value shown for the City of Worcester",
+      "edition": "780 CMR 51.00 Massachusetts Residential Code — Massachusetts State Building Code, 10th Edition, Residential Volume (2021 IRC with Massachusetts amendments)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": 50,
+      "wind_mph": 117,
+      "wind_basis": "Vult (ultimate design wind speed), ASCE/SEI 7-16 Risk Category II — 780 CMR 51 Table R301.2(2)",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A deck of 200 sq ft or less, 30 in. or less above grade at every point, not attached to the dwelling and not serving a required exit door needs no building permit (780 CMR 51 R105.2 item 10).",
+        "Deck footings go below the 48-in. statewide frost line (Table R301.2(1)); frost-protected shallow foundations follow R403.3.",
+        "AWC DCA6 (Prescriptive Residential Wood Deck Construction Guide) is an accepted alternative to the code's deck provisions (R301.1.1 item 4).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (R311.7.5.1, R311.7.5.2); the deck or landing outside a door may sit up to 8 1/4 in. below the threshold (R311.3.1 exception, R311.3.2).",
+        "Massachusetts does not amend IRC R507 (decks) or R312 (guards), so the IRC deck and 36-in. guard rules apply.",
+        "Worcester takes building permit applications online through its OpenGov portal; its Inspectional Services pages post no deck handout."
+      ],
+      "note": "Ground snow ranges 40-60 psf across the 60 towns: 14 at 40 (Milford, Southbridge, Uxbridge...), 35 at 50 (incl. Worcester) and 11 at 60 in the north (Fitchburg, Leominster, Gardner, Athol...). Vult ranges 113-121 mph. Worcester's Pf1 is 35 psf. For IBC-volume designs only, Table 1604.11 note 3 raises Pg by 0.021 x (site elevation - mean elevation) in towns with a listed mean elevation (in this county e.g. Ashburnham, Gardner, Lunenburg, Phillipston, Templeton, North Brookfield); the residential Table R301.2(2) has no such note. Seismic is null: no residential SDC letter is published (Table 1604.11 gives Worcester Ss 0.210 g, S1 0.060 g). The air freezing index is 2000 for Worcester County (Table R301.2(1)). Values were read through Web Archive snapshots of the mass.gov PDFs.",
+      "sources": [
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R3 Building Planning — Table R301.2(1) and Table R301.2(2) snow loads and wind speeds by city/town (read via Web Archive snapshot 2025-09-01)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-3-building-planning/download"
+        },
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R1 Scope and Application — mass.gov PDF (read via Web Archive snapshot 2025-09-01; mass.gov blocks automated fetch)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-1-scope-and-application/download"
+        },
+        {
+          "title": "780 CMR (10th ed.) Chapter 16 Structural Design — Table 1604.11 snow, wind and seismic parameters by town (Web Archive snapshot 2025-12-06)",
+          "url": "https://www.mass.gov/doc/10th-edition-chapter-16-structural-design/download"
+        },
+        {
+          "title": "City of Worcester — Building & Zoning (permits via OpenGov)",
+          "url": "https://www.worcesterma.gov/building-zoning"
+        },
+        {
+          "title": "Wikipedia — List of counties in Massachusetts (2020 Census table, citing Census P2)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Massachusetts"
+        },
+        {
+          "title": "Wikipedia — List of municipalities in Massachusetts (town-to-county membership used for county ranges)",
+          "url": "https://en.wikipedia.org/wiki/List_of_municipalities_in_Massachusetts"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MA",
+      "county": "Essex County",
+      "fips": "25009",
+      "population_2020": 809829,
+      "jurisdiction": "State (780 CMR 51.00 Table R301.2(2), municipality table); value shown for Lynn, the county's largest city",
+      "edition": "780 CMR 51.00 Massachusetts Residential Code — Massachusetts State Building Code, 10th Edition, Residential Volume (2021 IRC with Massachusetts amendments)",
+      "frost_depth_in": 48,
+      "ground_snow_psf": 40,
+      "wind_mph": 119,
+      "wind_basis": "Vult (ultimate design wind speed), ASCE/SEI 7-16 Risk Category II — 780 CMR 51 Table R301.2(2)",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A deck of 200 sq ft or less, 30 in. or less above grade at every point, not attached to the dwelling and not serving a required exit door needs no building permit (780 CMR 51 R105.2 item 10).",
+        "Deck footings go below the 48-in. statewide frost line (Table R301.2(1)); frost-protected shallow foundations follow R403.3.",
+        "AWC DCA6 (Prescriptive Residential Wood Deck Construction Guide) is an accepted alternative to the code's deck provisions (R301.1.1 item 4).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (R311.7.5.1, R311.7.5.2); the deck or landing outside a door may sit up to 8 1/4 in. below the threshold (R311.3.1 exception, R311.3.2).",
+        "Massachusetts does not amend IRC R507 (decks) or R312 (guards), so the IRC deck and 36-in. guard rules apply."
+      ],
+      "note": "Lynn is one of only 5 Essex towns at 40 psf (Lynn, Saugus, Marblehead, Swampscott, Nahant); the other 29 towns, including Lawrence, Haverhill, Peabody, Methuen, Salem and Beverly, are 50 psf, and they hold most of the county's people. Lawrence is 50 psf / 116 mph. Use 50 psf as a county-wide default if one number is needed. Vult ranges 116-120 mph. Lynn's Pf1 is 30 psf. Seismic is null: no residential SDC letter is published (Table 1604.11: Lynn Ss 0.295 g, S1 0.068 g; Lawrence Ss 0.368 g, S1 0.077 g). No Lynn or Lawrence deck handout was retrieved (lynnma.gov returned 403). Values were read through Web Archive snapshots of the mass.gov PDFs.",
+      "sources": [
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R3 Building Planning — Table R301.2(1) and Table R301.2(2) snow loads and wind speeds by city/town (read via Web Archive snapshot 2025-09-01)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-3-building-planning/download"
+        },
+        {
+          "title": "780 CMR 51.00 (10th ed.) Residential Chapter R1 Scope and Application — mass.gov PDF (read via Web Archive snapshot 2025-09-01; mass.gov blocks automated fetch)",
+          "url": "https://www.mass.gov/doc/10th-edition-residential-chapter-1-scope-and-application/download"
+        },
+        {
+          "title": "780 CMR (10th ed.) Chapter 16 Structural Design — Table 1604.11 snow, wind and seismic parameters by town (Web Archive snapshot 2025-12-06)",
+          "url": "https://www.mass.gov/doc/10th-edition-chapter-16-structural-design/download"
+        },
+        {
+          "title": "Wikipedia — List of counties in Massachusetts (2020 Census table, citing Census P2)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Massachusetts"
+        },
+        {
+          "title": "Wikipedia — List of municipalities in Massachusetts (town-to-county membership used for county ranges)",
+          "url": "https://en.wikipedia.org/wiki/List_of_municipalities_in_Massachusetts"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "RI",
+      "county": "Providence County",
+      "fips": "44007",
+      "population_2020": 660741,
+      "jurisdiction": "State (SBC-2 §2.4 municipality table and Table R301.2(1)); value shown for the City of Providence",
+      "edition": "Rhode Island One & Two Family Dwelling Code, SBC-2 (510-RICR-00-00-2) — 2021 IRC with Rhode Island amendments",
+      "frost_depth_in": 40,
+      "ground_snow_psf": 30,
+      "wind_mph": 125,
+      "wind_basis": "Basic wind speed V, Risk Category II column (from IBC Fig. 1609.3(1)) — SBC-2 §2.4 table",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Rhode Island has no deck permit exemption: SBC-2 replaces IRC R105.2 and its list leaves decks out (detached one-story accessory structures are exempt only up to 64 sq ft).",
+        "Footings for decks, platforms and landings extend 3 ft 4 in. (40 in.) below grade (Table R301.2(1) Note 1a).",
+        "Stairs off a deck, balcony or platform more than 30 in. above grade need stringer supports extending 12 in. below grade, secured against lateral movement or collapse (Table R301.2(1) Note 1a).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (RI R311.7.5.1, R311.7.5.2).",
+        "IRC Chapter 5 (including R507 decks) and Chapter 4 are adopted without Rhode Island changes."
+      ],
+      "note": "Ground snow ranges 30-40 psf: 30 in Providence, Cranston, East Providence and Central Falls; 35 in Pawtucket, Johnston, North Providence and Scituate; 40 in the northern and western towns (Woonsocket, Cumberland, Lincoln, Smithfield, North Smithfield, Burrillville, Glocester, Foster). Risk Cat. II wind is 121-126 mph, except Scituate, which the table prints as 132 (probably a typo: its Cat. I/III values are 114/133). Providence also has a wind-borne debris flag (#) at Risk Cat. III/IV only. Seismic is null: Table R301.2(1) gives seismic design criteria as 'None', not a letter. Decay is slight to moderate. No Providence deck handout was retrieved (the site returned a redirect loop).",
+      "sources": [
+        {
+          "title": "510-RICR-00-00-2 full text (IRC 2021 adoption, Table R301.2(1), R311.7.5, §2.4 snow/wind/frost table)",
+          "url": "https://risos-apa-production-public.s3.amazonaws.com/BCC/REG_13394_20250930093046621.pdf"
+        },
+        {
+          "title": "510-RICR-00-00-2 RISBC-2 Rhode Island One & Two Family Dwelling Code — RI Secretary of State (version history; current eff. 12/01/2025)",
+          "url": "https://rules.sos.ri.gov/regulations/part/510-00-00-2"
+        },
+        {
+          "title": "Wikipedia — Providence County, Rhode Island (2020 Census population, municipalities)",
+          "url": "https://en.wikipedia.org/wiki/Providence_County,_Rhode_Island"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "RI",
+      "county": "Kent County",
+      "fips": "44003",
+      "population_2020": 170363,
+      "jurisdiction": "State (SBC-2 §2.4 municipality table and Table R301.2(1)); value shown for Warwick, the county's largest city",
+      "edition": "Rhode Island One & Two Family Dwelling Code, SBC-2 (510-RICR-00-00-2) — 2021 IRC with Rhode Island amendments",
+      "frost_depth_in": 40,
+      "ground_snow_psf": 30,
+      "wind_mph": 127,
+      "wind_basis": "Basic wind speed V, Risk Category II column (from IBC Fig. 1609.3(1)) — SBC-2 §2.4 table",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Rhode Island has no deck permit exemption: SBC-2 replaces IRC R105.2 and its list leaves decks out (detached one-story accessory structures are exempt only up to 64 sq ft).",
+        "Footings for decks, platforms and landings extend 3 ft 4 in. (40 in.) below grade (Table R301.2(1) Note 1a).",
+        "Stairs off a deck, balcony or platform more than 30 in. above grade need stringer supports extending 12 in. below grade, secured against lateral movement or collapse (Table R301.2(1) Note 1a).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (RI R311.7.5.1, R311.7.5.2).",
+        "IRC Chapter 5 (including R507 decks) and Chapter 4 are adopted without Rhode Island changes."
+      ],
+      "note": "Ground snow is 30 psf in Warwick, West Warwick and East Greenwich, and 35 psf in Coventry and West Greenwich. Risk Cat. II wind is 126-128 mph. Seismic is null: Table R301.2(1) gives 'None'. Warwick takes permits through an OpenGov portal; no Warwick deck handout was retrieved.",
+      "sources": [
+        {
+          "title": "510-RICR-00-00-2 full text (IRC 2021 adoption, Table R301.2(1), R311.7.5, §2.4 snow/wind/frost table)",
+          "url": "https://risos-apa-production-public.s3.amazonaws.com/BCC/REG_13394_20250930093046621.pdf"
+        },
+        {
+          "title": "510-RICR-00-00-2 RISBC-2 Rhode Island One & Two Family Dwelling Code — RI Secretary of State (version history; current eff. 12/01/2025)",
+          "url": "https://rules.sos.ri.gov/regulations/part/510-00-00-2"
+        },
+        {
+          "title": "Wikipedia — Kent County, Rhode Island (2020 Census population, municipalities)",
+          "url": "https://en.wikipedia.org/wiki/Kent_County,_Rhode_Island"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "RI",
+      "county": "Washington County",
+      "fips": "44009",
+      "population_2020": 129839,
+      "jurisdiction": "State (SBC-2 §2.4 municipality table and Table R301.2(1)); value shown for South Kingstown",
+      "edition": "Rhode Island One & Two Family Dwelling Code, SBC-2 (510-RICR-00-00-2) — 2021 IRC with Rhode Island amendments",
+      "frost_depth_in": 40,
+      "ground_snow_psf": 30,
+      "wind_mph": 130,
+      "wind_basis": "Basic wind speed V, Risk Category II column (from IBC Fig. 1609.3(1)) — SBC-2 §2.4 table",
+      "seismic_sdc": null,
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Rhode Island has no deck permit exemption: SBC-2 replaces IRC R105.2 and its list leaves decks out (detached one-story accessory structures are exempt only up to 64 sq ft).",
+        "Footings for decks, platforms and landings extend 3 ft 4 in. (40 in.) below grade (Table R301.2(1) Note 1a).",
+        "Stairs off a deck, balcony or platform more than 30 in. above grade need stringer supports extending 12 in. below grade, secured against lateral movement or collapse (Table R301.2(1) Note 1a).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (RI R311.7.5.1, R311.7.5.2).",
+        "IRC Chapter 5 (including R507 decks) and Chapter 4 are adopted without Rhode Island changes.",
+        "On Block Island (New Shoreham), frost depth is 2 ft 6 in. (30 in.) instead of 3 ft 4 in. (SBC-2 §2.4)."
+      ],
+      "note": "South Kingstown's 130 mph carries the # flag: wind-borne debris region within a mile of the coastal mean high water line. Ground snow ranges 25-35 psf: 25 in New Shoreham; 30 in South Kingstown, North Kingstown, Narragansett, Charlestown and Westerly; 35 in Exeter, Hopkinton and Richmond. Risk Cat. II wind is 128-134 mph as printed, except Westerly, printed as 137 (probably a typo next to Cat. I 120 / Cat. III 138). Frost depth is 40 in. except New Shoreham at 30 in. Seismic is null: Table R301.2(1) gives 'None'. South Kingstown is used as the county's largest town per the task; its rank was not re-verified, and North Kingstown has the same 30 psf.",
+      "sources": [
+        {
+          "title": "510-RICR-00-00-2 full text (IRC 2021 adoption, Table R301.2(1), R311.7.5, §2.4 snow/wind/frost table)",
+          "url": "https://risos-apa-production-public.s3.amazonaws.com/BCC/REG_13394_20250930093046621.pdf"
+        },
+        {
+          "title": "510-RICR-00-00-2 RISBC-2 Rhode Island One & Two Family Dwelling Code — RI Secretary of State (version history; current eff. 12/01/2025)",
+          "url": "https://rules.sos.ri.gov/regulations/part/510-00-00-2"
+        },
+        {
+          "title": "Wikipedia — Washington County, Rhode Island (2020 Census population, municipalities)",
+          "url": "https://en.wikipedia.org/wiki/Washington_County,_Rhode_Island"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "CT",
+      "county": "Fairfield County",
+      "fips": "09001",
+      "population_2020": 957419,
+      "jurisdiction": "State (2022 CSBC Table R301.2 and IRC Appendix AY municipality table); value shown for Bridgeport. CT has no county government; the 2020 Census county is used.",
+      "edition": "2022 Connecticut State Building Code (2021 IRC with Connecticut amendments)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 30,
+      "wind_mph": 120,
+      "wind_basis": "Vult (ultimate design wind speed), Risk Category II — 2022 CSBC IRC Appendix AY (same as the Risk Cat. II column of IBC Appendix P)",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate-heavy",
+      "deck_notes": [
+        "A deck or ramp of 200 sq ft or less, 30 in. or less above grade at every point, not attached to the dwelling, needing no guards and not serving the required exit door needs no permit (CT R105.2 item 10).",
+        "Footings go below the 42-in. statewide frost line (Table R301.2), but a deck or ramp not supported by the dwelling may skip frost-depth footings (R403.1.4.1 exception 3).",
+        "The grade-level footing for stairs or ramps off a deck or landing only needs to be 12 in. below undisturbed ground (R403.1.4.1 exception 4).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (CT R311.7.5.1, R311.7.5.2).",
+        "Adding a porch or deck does not trigger the smoke-alarm or CO-alarm upgrade for the house (R314.2.2 and R315.2.2 exceptions).",
+        "Bridgeport requires a building permit to build or repair a deck, applied for on its Park City Portal together with a separate Zoning Plan application, with every document uploaded as a PDF.",
+        "A Bridgeport permit needs a site or plot plan showing the structures and the work, a written scope listing materials, sizes and attachment method, and construction drawings or sketches.",
+        "Bridgeport requires an architect's or engineer's seal on the plans only where the 2022 CSBC (Section 107.1) calls for one."
+      ],
+      "note": "Appendix AY puts 21 of the 23 towns at 120 mph; New Fairfield and Sherman are 115. Ground snow is 30 psf in 22 towns and 35 in Sherman. Bridgeport's Vasd is 93 mph. Seismic SDC B is the statewide Table R301.2 entry.",
+      "sources": [
+        {
+          "title": "2022 Connecticut State Building Code (w/ Errata #1), ED October 1, 2022 — IRC amendments incl. Table R301.2, R311.7.5, R403.1.4.1, Appendix AY",
+          "url": "https://portal.ct.gov/das/-/media/das/office-of-state-building-inspector/2022-state-codes/2022-csbc-final.pdf"
+        },
+        {
+          "title": "Bridgeport Building Department — Building Permit",
+          "url": "https://www.bridgeportct.gov/government/departments/building-department/building-permit"
+        },
+        {
+          "title": "Bridgeport — Applicable Codes, Ordinances and Statutes (2022 CSBC)",
+          "url": "https://www.bridgeportct.gov/government/departments/building-department/applicable-codes-ordinances-and-statutes"
+        },
+        {
+          "title": "Wikipedia — Fairfield County, Connecticut (2020 Census population)",
+          "url": "https://en.wikipedia.org/wiki/Fairfield_County,_Connecticut"
+        },
+        {
+          "title": "Wikipedia — List of municipalities in Connecticut (town-to-county membership used for county ranges)",
+          "url": "https://en.wikipedia.org/wiki/List_of_municipalities_in_Connecticut"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "CT",
+      "county": "Hartford County",
+      "fips": "09003",
+      "population_2020": 899498,
+      "jurisdiction": "State (2022 CSBC Table R301.2 and IRC Appendix AY municipality table); value shown for the City of Hartford. CT has no county government; the 2020 Census county is used.",
+      "edition": "2022 Connecticut State Building Code (2021 IRC with Connecticut amendments)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 30,
+      "wind_mph": 120,
+      "wind_basis": "Vult (ultimate design wind speed), Risk Category II — 2022 CSBC IRC Appendix AY (same as the Risk Cat. II column of IBC Appendix P)",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate-heavy",
+      "deck_notes": [
+        "A deck or ramp of 200 sq ft or less, 30 in. or less above grade at every point, not attached to the dwelling, needing no guards and not serving the required exit door needs no permit (CT R105.2 item 10).",
+        "Footings go below the 42-in. statewide frost line (Table R301.2), but a deck or ramp not supported by the dwelling may skip frost-depth footings (R403.1.4.1 exception 3).",
+        "The grade-level footing for stairs or ramps off a deck or landing only needs to be 12 in. below undisturbed ground (R403.1.4.1 exception 4).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (CT R311.7.5.1, R311.7.5.2).",
+        "Adding a porch or deck does not trigger the smoke-alarm or CO-alarm upgrade for the house (R314.2.2 and R315.2.2 exceptions)."
+      ],
+      "note": "Ground snow is 30 psf in 16 of 29 towns (Hartford, West Hartford, Manchester, East Hartford, Southington...) and 35 psf in 13 northern and western towns (Enfield, Bristol, Farmington, Simsbury, Avon, Plainville, Suffield, Windsor Locks, Granby, East Granby, Canton, Burlington, Hartland). Vult is 120 mph except Hartland at 115 and Marlborough at 125. Hartford's Vasd is 93 mph. No Hartford deck handout was retrieved (hartfordct.gov returned 403/404).",
+      "sources": [
+        {
+          "title": "2022 Connecticut State Building Code (w/ Errata #1), ED October 1, 2022 — IRC amendments incl. Table R301.2, R311.7.5, R403.1.4.1, Appendix AY",
+          "url": "https://portal.ct.gov/das/-/media/das/office-of-state-building-inspector/2022-state-codes/2022-csbc-final.pdf"
+        },
+        {
+          "title": "Wikipedia — Hartford County, Connecticut (2020 Census population)",
+          "url": "https://en.wikipedia.org/wiki/Hartford_County,_Connecticut"
+        },
+        {
+          "title": "Wikipedia — List of municipalities in Connecticut (town-to-county membership used for county ranges)",
+          "url": "https://en.wikipedia.org/wiki/List_of_municipalities_in_Connecticut"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "CT",
+      "county": "New Haven County",
+      "fips": "09009",
+      "population_2020": 864835,
+      "jurisdiction": "State (2022 CSBC Table R301.2 and IRC Appendix AY municipality table); value shown for the City of New Haven. CT has no county government; the 2020 Census county is used.",
+      "edition": "2022 Connecticut State Building Code (2021 IRC with Connecticut amendments)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 30,
+      "wind_mph": 125,
+      "wind_basis": "Vult (ultimate design wind speed), Risk Category II — 2022 CSBC IRC Appendix AY (same as the Risk Cat. II column of IBC Appendix P)",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate-heavy",
+      "deck_notes": [
+        "A deck or ramp of 200 sq ft or less, 30 in. or less above grade at every point, not attached to the dwelling, needing no guards and not serving the required exit door needs no permit (CT R105.2 item 10).",
+        "Footings go below the 42-in. statewide frost line (Table R301.2), but a deck or ramp not supported by the dwelling may skip frost-depth footings (R403.1.4.1 exception 3).",
+        "The grade-level footing for stairs or ramps off a deck or landing only needs to be 12 in. below undisturbed ground (R403.1.4.1 exception 4).",
+        "Stairs: risers up to 8 1/4 in., treads at least 9 in. (CT R311.7.5.1, R311.7.5.2).",
+        "Adding a porch or deck does not trigger the smoke-alarm or CO-alarm upgrade for the house (R314.2.2 and R315.2.2 exceptions).",
+        "Meriden (New Haven County) publishes a design-criteria sheet repeating the state values for Meriden: 30 psf snow, 120 mph Vult, SDC B, 42-in. frost line, severe weathering, moderate-to-heavy termite."
+      ],
+      "note": "Vult is 125 mph in the 7 shoreline towns (New Haven, West Haven, East Haven, Branford, North Branford, Guilford, Madison) and 120 mph in the other 20. Ground snow is 30 psf in 23 towns and 35 psf in Waterbury, Southbury, Wolcott and Middlebury. New Haven's Vasd is 97 mph. No New Haven city deck handout was retrieved (newhavenct.gov returned 403).",
+      "sources": [
+        {
+          "title": "2022 Connecticut State Building Code (w/ Errata #1), ED October 1, 2022 — IRC amendments incl. Table R301.2, R311.7.5, R403.1.4.1, Appendix AY",
+          "url": "https://portal.ct.gov/das/-/media/das/office-of-state-building-inspector/2022-state-codes/2022-csbc-final.pdf"
+        },
+        {
+          "title": "City of Meriden Building Department — Design Criteria (July 2024)",
+          "url": "https://www.meridenct.gov/Customer-Content/www/CMS/files/Building/Meriden_Design_Criteria_2024_07.pdf"
+        },
+        {
+          "title": "Wikipedia — New Haven County, Connecticut (2020 Census population)",
+          "url": "https://en.wikipedia.org/wiki/New_Haven_County,_Connecticut"
+        },
+        {
+          "title": "Wikipedia — List of municipalities in Connecticut (town-to-county membership used for county ranges)",
+          "url": "https://en.wikipedia.org/wiki/List_of_municipalities_in_Connecticut"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NY",
+      "county": "New York City (5 boroughs)",
+      "fips": null,
+      "population_2020": 8804190,
+      "jurisdiction": "NYC Department of Buildings (2022 NYC Building Code)",
+      "edition": "2022 NYC Construction Codes: NYC Building Code 2022 as amended by local law; NYC does not use the IRC, and one- and two-family dwellings are Group R-3 under the NYC Building Code",
+      "frost_depth_in": 48,
+      "ground_snow_psf": 25,
+      "wind_mph": 117,
+      "wind_basis": "Basic design wind speed V, Risk Category II, ultimate 3-second gust at 33 ft, Exposure C (NYC BC Table 1609.3); Risk Category I is 110 mph",
+      "seismic_sdc": "B",
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Footings must reach at least 4 ft below the lowest adjacent exposed grade for frost, and never less than 12 in (BC 1809.3, 1809.3.1).",
+        "Deck guards must be at least 42 in high; the 34 in exception for R-3 applies only along stairs (BC 1015.3).",
+        "Guards are required where a walking surface is more than 30 in above the grade below within 36 in horizontally (BC 1015.2).",
+        "In R-3 dwellings, stairs may have risers up to 8 1/4 in and treads of at least 9 in plus nosing, with 2 risers plus 1 tread between 24 and 25 1/2 in (BC 1011.5.2, Exception 4).",
+        "Solid-riser stairs with treads shallower than 11 in need a 1 1/4 in nosing (BC 1011.5.2, Exception 4.2).",
+        "A deck attached to an exterior wall must be positively anchored for vertical and lateral loads without toenails or nails in withdrawal, or else be self-supporting (BC 1604.8.3).",
+        "Deck live load equals the live load of the occupancy it serves (BC Table 1607.1, item 5).",
+        "Decks must match the building's construction type; on Type VB buildings they may be combustible (BC 1406.4, 1406.4.3).",
+        "Wood decks on Type III, IV and VA buildings must meet all of BC 1406.4.2 or be fire-retardant-treated wood: building at most 3 stories / 40 ft and R-2 or R-3, 15 ft separation, at most 150 sq ft, and not above the second-story window sills."
+      ],
+      "note": "Seismic: NYC BC 1613.3.1 sets Ss = 0.296 g and S1 = 0.061 g. Under Table 1613.3.5, Risk Category I-III gives SDC B for Site Class B/C/D, C for Site Class E and A for Site Class A. Site Class D is the default when soil is unknown, which gives B. BC 1613.1, Exception 1, exempts one- and two-family dwellings of three stories or fewer from seismic design. Snow is a single citywide value of 25 psf (BC 1608.2). NYC publishes no weathering or termite entries because it does not use IRC Table R301.2. Population is the sum of the five counties' 2020 Census totals: Kings 2,736,074, Queens 2,405,464, New York 1,694,251, Bronx 1,472,654, Richmond 495,747.",
+      "sources": [
+        {
+          "title": "2022 NYC Building Code, Chapter 16 Structural Design (1604.8.3, 1608.2, Table 1609.3, 1613)",
+          "url": "https://www.nyc.gov/assets/buildings/codes-pdf/cons_codes_2022/2022BC_Chapter16_StructuralDesignWBwm.pdf"
+        },
+        {
+          "title": "2022 NYC Building Code, Chapter 18 Soils and Foundations (1809.3, 1809.3.1)",
+          "url": "https://www.nyc.gov/assets/buildings/codes-pdf/cons_codes_2022/2022BC_Chapter18_SoilsFoundationsWBwm.pdf"
+        },
+        {
+          "title": "2022 NYC Building Code, Chapter 10 Means of Egress (1011.5.2, 1015.2, 1015.3)",
+          "url": "https://www.nyc.gov/assets/buildings/codes-pdf/cons_codes_2022/2022BC_Chapter10_EgressWBwm.pdf"
+        },
+        {
+          "title": "2022 NYC Building Code, Chapter 14 Exterior Walls (1406.4 decks and appendages)",
+          "url": "https://www.nyc.gov/assets/buildings/codes-pdf/cons_codes_2022/2022BC_Chapter14_ExteriorWallsWBwm.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in New York (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_York"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NY",
+      "county": "Suffolk County",
+      "fips": "36103",
+      "population_2020": 1525920,
+      "jurisdiction": "Town of Brookhaven Building Division (largest town); its website refused our fetch (HTTP 403), so the town's filled-in Table R301.2 could not be read",
+      "edition": "2025 Residential Code of New York State (2024 IRC with NY amendments), in force since Dec 31, 2025",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Vult from 2025 RCNYS Figure R301.2(2): 3-second gust at 33 ft, Exposure C, about 700-year return period; the town's value could not be read",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "The state code applies: risers at most 8 1/4 in, treads at least 9 in, and guards 36 in where the deck is more than 30 in above grade.",
+        "The 2025 RCNYS Table R403.3(2) lists Suffolk County with an air-freezing index of 1,500 or less, which matters for frost-protected shallow footings."
+      ],
+      "note": "No value was published that we could open. Brookhaven's site (and Islip's) returned HTTP 403, and web search had run out. The 2025 RCNYS leaves Table R301.2 to each town. Get frost depth, wind, snow, seismic, weathering and termite from Brookhaven's Building Division before using them.",
+      "sources": [
+        {
+          "title": "2025 Residential Code of New York State (Table R301.2 footnotes, Table R403.3(2))",
+          "url": "https://dos.ny.gov/system/files/documents/2025/07/2025rcnys_noa_2025-07-24_compressed.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in New York (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_York"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "NY",
+      "county": "Nassau County",
+      "fips": "36059",
+      "population_2020": 1395774,
+      "jurisdiction": "Town of Hempstead Building Department (largest town); its pages publish no design criteria, and permit forms sit in an OpenGov portal we could not read",
+      "edition": "2025 Residential Code of New York State (2024 IRC with NY amendments), in force since Dec 31, 2025",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Vult from 2025 RCNYS Figure R301.2(2): 3-second gust at 33 ft, Exposure C, about 700-year return period; the town's value could not be read",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "The state code applies: risers at most 8 1/4 in, treads at least 9 in, and guards 36 in where the deck is more than 30 in above grade.",
+        "Hempstead sends permit applications and building forms to its online permit center at hempsteadny.portal.opengov.com.",
+        "The 2025 RCNYS Table R403.3(2) lists Nassau County with an air-freezing index of 1,500 or less."
+      ],
+      "note": "The Town of Hempstead Building Department page has no design-criteria table or deck handout; it points only to the OpenGov permit portal, which is script-rendered and unreadable to our fetch. Get the town's Table R301.2 values from the department (516-538-8500) before using any numbers.",
+      "sources": [
+        {
+          "title": "Town of Hempstead Building Department",
+          "url": "https://hempsteadny.gov/191/Building-Department"
+        },
+        {
+          "title": "2025 Residential Code of New York State (Table R301.2 footnotes, Table R403.3(2))",
+          "url": "https://dos.ny.gov/system/files/documents/2025/07/2025rcnys_noa_2025-07-24_compressed.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in New York (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_York"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "NJ",
+      "county": "Bergen County",
+      "fips": "34003",
+      "population_2020": 955732,
+      "jurisdiction": "NJ DCA statewide Table R301.2 in N.J.A.C. 5:23-3.21, enforced by each municipal construction office",
+      "edition": "IRC/2024 NJ edition (effective Aug 17, 2026); the IRC/2021 NJ edition is allowed for complete applications during the six-month grace period",
+      "frost_depth_in": 36,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Site-specific per DCA Bulletin 19-1 (ATC Hazards by Location or ASCE 7 Hazard Tool), using the ASCE 7 edition referenced in IRC Chapter 44",
+      "seismic_sdc": null,
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "Footings go at least 3 ft below grade because Bergen is in the northern NJ frost zone.",
+        "A foundation location survey is not required for decks (N.J.A.C. 5:23-2.18).",
+        "Repairing or replacing deck parts with the same or closely similar materials is ordinary maintenance with no permit, unless the deck supports a roof (N.J.A.C. 5:23-2.7).",
+        "Stairs may have risers up to 8 1/4 in and treads of at least 9 in, and handrails may be as low as 30 in.",
+        "Exterior balconies carry a 60 psf live load in NJ; the deck row keeps the IRC value."
+      ],
+      "note": "NJ's table enters 'see Bulletin 19-1' for ground snow and wind speed, so there is no single county number. Bulletin 19-1 sends users to site-specific hazard tools, and its fallback values cover only Sussex, Warren, Hunterdon, Passaic, Morris and Somerset. Seismic design category is 'N/A' in NJ's Table R301.2, and Bulletin 19-1 says seismic criteria do not apply to the one- and two-family subcode.",
+      "sources": [
+        {
+          "title": "N.J.A.C. 5:23-3.21 (in N.J.A.C. 5:23-3 PDF, current through Aug 17, 2026), Table R301.2 amendments",
+          "url": "https://www.nj.gov/dca/codes/codreg/pdf_regs/njac_5_23_3.pdf"
+        },
+        {
+          "title": "N.J.A.C. 5:23-2 administration (2.7 ordinary maintenance, 2.18 inspections)",
+          "url": "https://www.nj.gov/dca/codes/codreg/pdf_regs/njac_5_23_2.pdf"
+        },
+        {
+          "title": "NJ DCA Bulletin 19-1: Design Loads for Ground Snow, Wind and Seismic",
+          "url": "https://www.nj.gov/dca/codes/publications/pdf_bulletins/b_19_1.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in New Jersey (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_Jersey"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NJ",
+      "county": "Essex County",
+      "fips": "34013",
+      "population_2020": 863728,
+      "jurisdiction": "NJ DCA statewide Table R301.2 in N.J.A.C. 5:23-3.21, enforced by each municipal construction office",
+      "edition": "IRC/2024 NJ edition (effective Aug 17, 2026); the IRC/2021 NJ edition is allowed for complete applications during the six-month grace period",
+      "frost_depth_in": 36,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Site-specific per DCA Bulletin 19-1 (ATC Hazards by Location or ASCE 7 Hazard Tool), using the ASCE 7 edition referenced in IRC Chapter 44",
+      "seismic_sdc": null,
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "Footings go at least 3 ft below grade because Essex is in the northern NJ frost zone.",
+        "A foundation location survey is not required for decks (N.J.A.C. 5:23-2.18).",
+        "Repairing or replacing deck parts with the same or closely similar materials is ordinary maintenance with no permit, unless the deck supports a roof (N.J.A.C. 5:23-2.7).",
+        "Stairs may have risers up to 8 1/4 in and treads of at least 9 in, and handrails may be as low as 30 in."
+      ],
+      "note": "Essex (863,728) edges out Middlesex (863,162) by 566 people in the 2020 Census. Ground snow and wind are site-specific per Bulletin 19-1. Seismic is 'N/A' in NJ's table.",
+      "sources": [
+        {
+          "title": "N.J.A.C. 5:23-3.21 (in N.J.A.C. 5:23-3 PDF, current through Aug 17, 2026), Table R301.2 amendments",
+          "url": "https://www.nj.gov/dca/codes/codreg/pdf_regs/njac_5_23_3.pdf"
+        },
+        {
+          "title": "NJ DCA Bulletin 19-1: Design Loads for Ground Snow, Wind and Seismic",
+          "url": "https://www.nj.gov/dca/codes/publications/pdf_bulletins/b_19_1.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in New Jersey (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_Jersey"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NJ",
+      "county": "Middlesex County",
+      "fips": "34023",
+      "population_2020": 863162,
+      "jurisdiction": "NJ DCA statewide Table R301.2 in N.J.A.C. 5:23-3.21, enforced by each municipal construction office",
+      "edition": "IRC/2024 NJ edition (effective Aug 17, 2026); the IRC/2021 NJ edition is allowed for complete applications during the six-month grace period",
+      "frost_depth_in": 36,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Site-specific per DCA Bulletin 19-1 (ATC Hazards by Location or ASCE 7 Hazard Tool), using the ASCE 7 edition referenced in IRC Chapter 44",
+      "seismic_sdc": null,
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "Footings go at least 3 ft below grade: N.J.A.C. 5:23-3.21 names Middlesex as part of the northern NJ frost zone.",
+        "A foundation location survey is not required for decks (N.J.A.C. 5:23-2.18).",
+        "Repairing or replacing deck parts with the same or closely similar materials is ordinary maintenance with no permit, unless the deck supports a roof (N.J.A.C. 5:23-2.7).",
+        "Stairs may have risers up to 8 1/4 in and treads of at least 9 in, and handrails may be as low as 30 in."
+      ],
+      "note": "Middlesex is the southern boundary of the northern NJ zone, so its frost depth is 3'-0\"; Monmouth, just south, uses 2'-6\". Ground snow and wind are site-specific per Bulletin 19-1. Seismic is 'N/A' in NJ's table.",
+      "sources": [
+        {
+          "title": "N.J.A.C. 5:23-3.21 (in N.J.A.C. 5:23-3 PDF, current through Aug 17, 2026), Table R301.2 amendments",
+          "url": "https://www.nj.gov/dca/codes/codreg/pdf_regs/njac_5_23_3.pdf"
+        },
+        {
+          "title": "NJ DCA Bulletin 19-1: Design Loads for Ground Snow, Wind and Seismic",
+          "url": "https://www.nj.gov/dca/codes/publications/pdf_bulletins/b_19_1.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in New Jersey (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_New_Jersey"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "PA",
+      "county": "Philadelphia County",
+      "fips": "42101",
+      "population_2020": 1603797,
+      "jurisdiction": "City of Philadelphia Department of Licenses and Inspections (L&I)",
+      "edition": "2021 IRC as amended by the PA UCC and the Philadelphia Code, Title 4 (Philadelphia Residential Code); the 2021 codes took effect Jan 1, 2026 and are required for every application filed on or after July 1, 2026",
+      "frost_depth_in": 30,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "L&I states only that Philadelphia design wind speeds are above 110 mph (2021 IRC ultimate design wind speed); no exact value is published",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Decks less than 12 in above grade, and not over a basement or other story, need no permit; higher decks need zoning and building permits.",
+        "A site plan is required if the deck is over 216 sq ft, above the first floor, or in a front or side yard.",
+        "Construction plans are required if the deck is over 216 sq ft or above the first floor.",
+        "EZ deck permit (no plans) covers only rear-yard, first-floor decks attached to an existing single-family house.",
+        "EZ decks are limited to 160 sq ft, or 216 sq ft with intermediate posts, with no roof and no hot tub.",
+        "EZ decks need 3 ft clearance to the rear lot line and posts at least 1'-6\" from all lot lines.",
+        "Footings go 30 in below grade on undisturbed soil, at least 6 in thick, 16 in diameter at end posts and 19 in at intermediate posts.",
+        "EZ framing: posts at least 6x6 with 2x4 diagonal bracing, pressure-treated Southern Pine, and hot-dipped galvanized or stainless hardware.",
+        "The ledger is fastened with 1/2 in fasteners at 16 in on center, staggered, and may not bear on stone or masonry veneer.",
+        "Guards are required over 30 in above grade: 36 to 42 in high with no opening over 4 in, and 4x4 guard posts may not be notched.",
+        "EZ stairs need risers of at most 7 3/4 in, treads of at least 10 in and handrails 34 to 38 in, stricter than the PA UCC's 8 1/4 / 9.",
+        "Under the EZ permit, stairs to grade are allowed only on detached or semi-detached houses."
+      ],
+      "note": "The 30 in frost line comes from L&I's EZ Deck Permit standard (rev. 8/26, IRC-2021). L&I documents give no ground snow, wind speed or seismic category. Its 2021 IRC FAQ says live load, not snow, governs deck design in Philadelphia, and its webinar slides say only that wind speeds exceed 110 mph. Philadelphia Code Title 4 on American Legal refused our fetch (HTTP 403).",
+      "sources": [
+        {
+          "title": "Philadelphia L&I EZ Permit Standard: Deck (PB_018_F, rev. 8/26, IRC-2021)",
+          "url": "https://www.phila.gov/media/20260821140955/PB_018_F-EZ-Deck-Permit-2021-Code.pdf"
+        },
+        {
+          "title": "Philadelphia L&I Start Right guide (permit and plan thresholds for decks, rev. 6/2026)",
+          "url": "https://www.phila.gov/media/20260602151416/StartRight-FINAL-6.2026.pdf"
+        },
+        {
+          "title": "Philadelphia L&I Code Bulletin B-2501: Implementation of 2021 International Codes",
+          "url": "https://www.phila.gov/media/20251021080549/B-2501-Implementation-of-2021-International-Codes.pdf"
+        },
+        {
+          "title": "Philadelphia L&I 2021 IRC webinar slides, part 2 (wind speeds over 110 mph)",
+          "url": "https://www.phila.gov/media/20250728085247/Part-2-2021-Code-Adoption-IRC-Webinar-Slides.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in Pennsylvania (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Pennsylvania"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "PA",
+      "county": "Allegheny County",
+      "fips": "42003",
+      "population_2020": 1250578,
+      "jurisdiction": "City of Pittsburgh Department of Permits, Licenses and Inspections (PLI), the county seat and largest municipality; the other Allegheny municipalities enforce the UCC separately",
+      "edition": "PA UCC 2021 IRC (effective Jan 1, 2026) plus Pittsburgh Code 1002 local amendments; 2018 codes were allowed only for pre-2026 contracts accepted by July 1, 2026",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 30,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "An uncovered deck less than 30 in above grade does not need a permit.",
+        "Drawings sealed by a PA design professional are required for decks more than 8 ft above finished grade or more than one story.",
+        "Single-story decks 8 ft or less above grade may be permitted without drawings if built to AWC DCA 6, with posts at least 6x6.",
+        "The ledger may not be attached on or through brick veneer.",
+        "The deck application asks for width, depth, height, post, beam and joist sizes, spans and spacing, footing size and thickness, and the type of lateral support.",
+        "Footings must be at least 36 in below grade.",
+        "Drawings must show the city's amended 30 psf ground snow load."
+      ],
+      "note": "Ground snow 30 psf ('City of PGH amended ground snow load', Pittsburgh Code 1002.2) and the 36 in footing depth come from PLI's residential plan-review checklist (XLSX), whose publication date we could not read. PLI publishes no wind speed, seismic, weathering or termite values. Pittsburgh Code 1002 on ecode360 refused our fetch (HTTP 403).",
+      "sources": [
+        {
+          "title": "City of Pittsburgh PLI Residential Building Review Checklist (XLSX)",
+          "url": "https://www.pittsburghpa.gov/files/assets/city/v/1/pli/documents/apps-amp-forms-checklists/14619_residential_building_checklist.xlsx"
+        },
+        {
+          "title": "City of Pittsburgh PLI Residential Deck Permit Application (rev. 1/7/19)",
+          "url": "https://www.pittsburghpa.gov/files/assets/city/v/1/pli/documents/residential_deck_application.pdf"
+        },
+        {
+          "title": "City of Pittsburgh PLI External Policy EP-2025-01: UCC 2021 Code Adoption (rev. 12/15/25)",
+          "url": "https://www.pittsburghpa.gov/files/assets/city/v/1/pli/documents/pli-bulletins/ucc-2021-code-adoption_12152025.pdf"
+        },
+        {
+          "title": "City of Pittsburgh PLI Standard Permit Application Requirements (decks may use the PLI deck form instead of stamped drawings)",
+          "url": "https://www.pittsburghpa.gov/files/assets/city/v/1/pli/documents/pli-bulletins/14102_standard_permit_application_requirements.pdf"
+        },
+        {
+          "title": "Wikipedia: List of counties in Pennsylvania (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Pennsylvania"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "PA",
+      "county": "Montgomery County",
+      "fips": "42091",
+      "population_2020": 856553,
+      "jurisdiction": "Abington Township Code Enforcement (large township); Lower Merion's website refused our fetch (HTTP 403), and Norristown publishes no design criteria",
+      "edition": "PA UCC: 2021 IRC with PA amendments (effective Jan 1, 2026)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "A deck permit needs a plot plan (it may be non-engineered), an elevation from the footer up, and a framing plan with member sizes, spans and spacing.",
+        "Decks require Abington's impervious-coverage calculation sheet in addition to the site plan.",
+        "Footers must be 3 ft below final grade.",
+        "At the footing inspection, property lines must be marked, and a survey may be required."
+      ],
+      "note": "The 3 ft footing depth is from Abington's 'Order of Inspections' sheet, a 2009 PDF still posted, so it is official but old. Abington publishes no snow, wind, seismic, weathering or termite values. Norristown (county seat) documents were checked and also give no design criteria.",
+      "sources": [
+        {
+          "title": "Abington Township: Order of Inspections (footers 3 ft below final grade)",
+          "url": "https://www.abingtonpa.gov/DocumentCenter/View/397"
+        },
+        {
+          "title": "Abington Township: Building Permits, Use and Occupancy Permits and Inspections Policies (deck permit information)",
+          "url": "https://www.abingtonpa.gov/DocumentCenter/View/424"
+        },
+        {
+          "title": "Abington Township: Calculation Sheet (impervious coverage, required for decks)",
+          "url": "https://www.abingtonpa.gov/DocumentCenter/View/405"
+        },
+        {
+          "title": "Wikipedia: List of counties in Pennsylvania (2020 Census totals)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Pennsylvania"
+        }
+      ],
+      "confidence": "medium"
+    }
+  ]
+}

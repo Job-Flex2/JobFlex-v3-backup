@@ -59,7 +59,7 @@ const FIXTURE_MARK: Record<string, string> = { "led-strip": "L", "post-cap": "c"
  * `show`: "all" (the studio), "floor" (the permit set's floor framing plan: no roof over it, the posts and footings
  * named) or "roof" (the roof framing plan alone, the deck as a faint outline under it).
  */
-export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all" }: { structure: DeckStructure; placing?: "stair" | null; onPlaceStair?: (hit: PlanEdgeHit) => void; show?: "all" | "floor" | "roof" }) {
+export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all", marks = [] }: { structure: DeckStructure; placing?: "stair" | null; onPlaceStair?: (hit: PlanEdgeHit) => void; show?: "all" | "floor" | "roof"; /** Points to call out on the plan, deck inches (the permit set's lateral devices, 2026-10-20). */ marks?: ReadonlyArray<{ x: number; y: number; label: string }> }) {
   const { frame: frameIn, roof: roofIn } = structure;
   const frame = show === "roof" ? null : frameIn;
   const roof = show === "floor" ? null : roofIn;
@@ -304,6 +304,12 @@ export function DeckPlan({ structure, placing = null, onPlaceStair, show = "all"
             ));
           })()
         : null}
+      {marks.map((m, i) => (
+        <g key={`mark${i}`} data-plan-mark={m.label}>
+          <circle cx={m.x} cy={m.y + font * 0.9} r={font * 0.42} fill="var(--blueprint)" stroke="var(--ink)" strokeWidth={lw} />
+          <text x={m.x} y={m.y + font * 2.35} fontSize={font * 0.72} textAnchor="middle" className={s.planNote} fill="var(--blueprint)">{m.label}</text>
+        </g>
+      ))}
       {placing ? (
         <text x={(minX + maxX) / 2} y={minY - pad * 0.45 - (onHouse ? houseBand : 0)} fontSize={font * 1.1} textAnchor="middle" className={s.planNote}>
           Click an open edge to put the stairs there

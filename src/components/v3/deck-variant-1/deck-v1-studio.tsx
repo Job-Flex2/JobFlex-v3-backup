@@ -2872,6 +2872,8 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           if (addressDraft.trim() !== address) commitAddress(addressDraft);
         }}>
           <label className="v1-field"><span className="v1-lbl">Job address</span><input className="v1-in" value={addressDraft} readOnly={viewOnly} placeholder="Street, city, state ZIP" autoComplete="street-address" onChange={(event) => setAddressDraft(event.target.value)} onBlur={() => { if (addressDraft.trim() !== address) commitAddress(addressDraft); }} /></label>
+          {/* 2026-10-21: what the address drives, said where it is typed (the permit set's site plan starts from it). */}
+          <p className="v1-hint" data-deck-address-hint>The address sets the state&apos;s and the county&apos;s codes, and the lot on the permit set&apos;s site plan — where you also say which side of the house the deck is on.</p>
         </form>
         {preview ? (
           <DeckPreviewBanner mode="preview" saved={viewOnly} interval={addonInterval} onAdd={() => askAddon(viewOnly ? "Change saved decks with Deck Studio" : "Add Deck Studio to your plan")}>
