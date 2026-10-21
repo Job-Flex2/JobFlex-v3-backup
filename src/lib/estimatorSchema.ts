@@ -102,9 +102,15 @@ export const estimateSchema = z.object({
   notes: z.array(z.string()).optional(),
   // Priced the company's way (labor in hours at its rate, its markup, its tax rule) — absent: the price book's way.
   pricing: pricingSnapshotSchema.optional(),
+  // The estimate this same brief got before (lib/estimate/sameBrief): when it was made. Absent: just priced.
+  remembered: z.object({ at: z.string() }).optional(),
 });
 
 export type GeneratedEstimate = z.infer<typeof estimateSchema>;
+
+/** The note on an estimate this same brief got before (lib/estimate/sameBrief) — shared so a screen that shows its own
+ *  line for it can leave the note out of the list. */
+export const SAME_BRIEF_NOTE = "Same brief as before, so the same estimate and the same price. Change the brief, the photos or your prices for a new one — or ask for a fresh estimate.";
 
 // ── Prompt analysis (intake gate) ───────────────────────────────────────────
 // Before generating, the AI checks the brief is descriptive enough and corrects
