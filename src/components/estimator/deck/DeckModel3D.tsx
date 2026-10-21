@@ -32,6 +32,9 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SCENE_LAYERS, sceneBuildLayers, memberBoxCorners, memberIsSawn, MEMBER_BOX_FACES, type DeckScene, type SceneHandle, type SceneLayer, type SceneLegend } from "@/lib/deck/scene";
 
+/** Where the camera can be asked to look from. */
+export type DeckLook = "yard" | "top" | "front" | "left" | "right" | "under" | "house" | "spin";
+
 /** A drag on a handle: the design number it moves, and the value it should take now (feet for sizes, inches for heights). */
 export interface DeckEdit {
   kind: SceneHandle["kind"];
@@ -75,8 +78,14 @@ export interface DeckModel3DProps {
   resetToken?: number;
   /** A part touched or clicked (null when the touch left every part). */
   onPick?: (pick: DeckPick | null, kind: "hover" | "click") => void;
-  /** Fly to this point in the scene's feet when it changes. */
-  focus?: [number, number, number] | null;
+  /** Fly to this point in the scene's feet when it changes; a fourth number frames that many feet across (4 by default). */
+  focus?: [number, number, number] | [number, number, number, number] | null;
+  /**
+   * Look at the structure from a side (2026-10-21, the studio's voice: "show me from the top", "from underneath", "spin it
+   * around"): a new `token` moves the camera there — from the yard, above, the left or right, under the deck, from the
+   * house looking out — or takes it once all the way round. A drag on the scene stops a spin.
+   */
+  look?: { token: number; from: DeckLook } | null;
   /** Show the handles and let them be dragged. */
   edit?: boolean;
   /** A handle moved: the design number it stands for, and its new value. */
@@ -519,7 +528,7 @@ interface Built {
   dispose: () => void;
 }
 
-export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = false, night = false, connections = false, placing = false, className, label, resetToken = 0, onPick, focus = null, edit = false, onEdit, backdrop = null , highlight = null }: DeckModel3DProps) {
+export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = false, night = false, connections = false, placing = false, className, label, resetToken = 0, onPick, focus = null, look = null, edit = false, onEdit, backdrop = null , highlight = null }: DeckModel3DProps) {
   const mountRef = React.useRef<HTMLDivElement>(null);
   const [supported] = React.useState(webglSupported);
   const sceneRef = React.useRef(scene);
@@ -537,7 +546,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     editCbRef.current = onEdit;
   }, [onPick, onEdit]);
   /** Set by the mount effect: rebuild from the scene, re-apply what is standing, go back to the first view, fly somewhere. */
-  const api = React.useRef<{ rebuild: () => void; rebuildSoon: () => void; apply: () => void; reset: () => void; flyTo: (p: [number, number, number], size?: number) => void; highlight: () => void } | null>(null);
+  const api = React.useRef<{ rebuild: () => void; rebuildSoon: () => void; apply: () => void; reset: () => void; flyTo: (p: [number, number, number], size?: number) => void; lookFrom: (from: DeckLook) => void; highlight: () => void } | null>(null);
 
   React.useEffect(() => {
     if (resetToken) api.current?.reset();
@@ -550,8 +559,15 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is the backdrop's value
   }, [backdropKey]);
   React.useEffect(() => {
-    if (focus) api.current?.flyTo(focus, 4);
+    if (focus) api.current?.flyTo([focus[0], focus[1], focus[2]], focus[3] ?? 4);
   }, [focus]);
+  // A new token moves the camera; the side rides with it.
+  const lookToken = look?.token ?? 0;
+  const lookSide = look?.from ?? null;
+  React.useEffect(() => {
+    if (lookToken && lookSide) api.current?.lookFrom(lookSide);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new token moves the camera; the side alone does not
+  }, [lookToken]);
   // The lit part follows its value, not the parent's fresh object.
   const highlightRef = React.useRef(highlight);
   const highlightKey = highlight ? JSON.stringify(highlight) : "";
@@ -1638,6 +1654,77 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       step();
     };
 
+    /** The camera moved to a side of the structure, eased like a fly-to; "spin" takes it once around. A drag stops a spin. */
+    let spinRaf = 0;
+    const stopSpin = () => {
+      if (spinRaf) cancelAnimationFrame(spinRaf);
+      spinRaf = 0;
+    };
+    renderer.domElement.addEventListener("pointerdown", stopSpin);
+    const lookFrom = (from: DeckLook) => {
+      stopSpin();
+      const s = sceneRef.current;
+      const peak = Math.max(s.heightFt, s.peakFt ?? s.heightFt, s.house && !backdropRef.current ? s.house.heightFt : 0);
+      const size = Math.max(s.widthFt, s.depthFt, peak * 1.4, 10);
+      const narrow = Math.max(1, 1.4 / Math.max(0.3, camera.aspect));
+      const target = new THREE.Vector3(0, Math.max(1, peak * 0.45), 0);
+      if (from === "spin") {
+        const t0 = performance.now();
+        const center = orbit.target.clone();
+        const start = camera.position.clone().sub(center);
+        const turn = () => {
+          const t = Math.min(1, (performance.now() - t0) / 9000);
+          const a = t * Math.PI * 2;
+          const off = start.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), a);
+          camera.position.copy(center).add(off);
+          orbit.update();
+          invalidate();
+          spinRaf = t < 1 ? requestAnimationFrame(turn) : 0;
+        };
+        spinRaf = requestAnimationFrame(turn);
+        return;
+      }
+      let to: THREE.Vector3;
+      switch (from) {
+        case "top":
+          // Straight down would leave the orbit without a "forward"; a hair toward the yard keeps the deck square on screen.
+          to = new THREE.Vector3(0, size * 1.9 * narrow, size * 0.08);
+          break;
+        case "under":
+          // Under the deck from the yard, at a crouch: the posts, the beams and the joists' undersides.
+          target.set(0, Math.max(0.3, Math.min(1.2, s.heightFt * 0.3)), -s.depthFt * 0.15);
+          to = new THREE.Vector3(size * 0.28, Math.max(0.45, Math.min(1.4, s.heightFt * 0.22)), s.depthFt / 2 + size * 0.75 * narrow);
+          break;
+        case "left":
+          to = new THREE.Vector3(-size * 1.5 * narrow, size * 0.42 + peak * 0.2, size * 0.25);
+          break;
+        case "right":
+          to = new THREE.Vector3(size * 1.5 * narrow, size * 0.42 + peak * 0.2, size * 0.25);
+          break;
+        case "house":
+          // Standing at the back door, eye height on the deck, looking out to the yard.
+          target.set(0, s.heightFt + 3.5, s.depthFt / 2 + 6);
+          to = new THREE.Vector3(0, s.heightFt + 5.3, -s.depthFt / 2 + 0.8);
+          break;
+        default:
+          to = new THREE.Vector3(size * 0.15, size * 0.42 + peak * 0.25, size * 1.55 * narrow);
+      }
+      const from0 = camera.position.clone();
+      const fromT = orbit.target.clone();
+      const t0 = performance.now();
+      const step = () => {
+        const t = Math.min(1, (performance.now() - t0) / 800);
+        const e = 1 - Math.pow(1 - t, 3);
+        camera.position.lerpVectors(from0, to, e);
+        orbit.target.lerpVectors(fromT, target, e);
+        orbit.update();
+        invalidate();
+        if (t < 1) spinRaf = requestAnimationFrame(step);
+        else spinRaf = 0;
+      };
+      step();
+    };
+
     // What a rebuild or a new light replaces is disposed after the next frame is drawn, not before: the new parts' materials
     // take over the old ones' compiled shaders instead of compiling them again (≈100 ms a rebuild).
     let rebuildRaf = 0;
@@ -1818,7 +1905,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       invalidate();
     };
 
-    api.current = { rebuild, rebuildSoon, apply, reset: () => frame(true), flyTo, highlight };
+    api.current = { rebuild, rebuildSoon, apply, reset: () => frame(true), flyTo, lookFrom, highlight };
     rebuild();
     highlight();
 
@@ -2276,6 +2363,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       renderer.domElement.removeEventListener("pointerup", onUp);
       renderer.domElement.removeEventListener("pointerleave", onLeave);
       renderer.domElement.removeEventListener("pointercancel", onCancel);
+      stopSpin();
+      renderer.domElement.removeEventListener("pointerdown", stopSpin);
       orbit.dispose();
       if (content) {
         world.remove(content.group);
