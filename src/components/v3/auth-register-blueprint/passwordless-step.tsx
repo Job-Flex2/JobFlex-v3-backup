@@ -782,14 +782,6 @@ export function PasswordlessStep({
             Sign in
           </Link>
         </div>
-        <p className={css.compare}>
-          <Link href={"/pricing" as Route} id="comparePlans">
-            Compare all plans
-            <svg className="ic" aria-hidden="true">
-              <use href="#i-arrow-r" />
-            </svg>
-          </Link>
-        </p>
       </div>
     );
   })();
