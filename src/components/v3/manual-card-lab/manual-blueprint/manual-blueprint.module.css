@@ -3688,3 +3688,9 @@
 .crewMediaTag { position: absolute; left: 6px; top: 6px; padding: 2px 6px; border-radius: 2px; background: rgba(10, 10, 10, 0.72); color: #fff; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
 .crewMediaBy { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px; background: linear-gradient(transparent, rgba(10, 10, 10, 0.6)); color: #fff; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 640px) { .crewMediaGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* View proposal on the bar (owner, 2026-10-20): its eye alone on a phone,
+   the label kept for screen readers. */
+@media (max-width: 768px) {
+  :global(.jf-blueprint) .barViewLbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+}

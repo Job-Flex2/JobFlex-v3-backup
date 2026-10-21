@@ -298,7 +298,7 @@ const PROPOSALS = `## Proposals, clients & projects
 
 ### Creating a proposal
 - Ways in: topbar **New Estimate** (Manual, Smart Proposal, Blueprint, Roof, Fence, Video, HVAC, Deck Studio); Proposals page **Smart Proposal** / **Manual proposal**; **New proposal** on a client or project page; a lead's "Estimate this job" cards.
-- Every proposal opens in the "Manual proposal" builder (\`/dashboard/manual-blueprint\`). Cards: The job, The client, Line items, The drawing (fence/deck), Cost adjustment, Scope & notes, Show to client, Terms, Payment & deposits, Files, Their copy, The PDF. Bar: **Save** / **Save & send**. Blocks: "Add a title before saving", "Add at least one named line item".
+- Every proposal opens in the "Manual proposal" builder (\`/dashboard/manual-blueprint\`). Cards: The job, The client, Line items, Show to client (with Copy client link / Text the link once saved), The drawing (fence/deck), Cost adjustment, Scope & notes, Terms, Payment & deposits, Files, The PDF. Bar: **View proposal** (opens the client's page in a new tab, saving first if there are unsaved edits) / **Save** / **Save & send**. Blocks: "Add a title before saving", "Add at least one named line item".
 - Never saved: the Terms box ("Prints on the sheet — not stored on the proposal yet") and Files (**Attach a file** uploads nothing).
 - Reference: \`PRO-XXXX\` in the app, "Proposal № XXXX" on the client page; the server PDF prints a different "#XXXXXXXX".
 - "Valid until" = created + 14 days, display only: nothing expires a proposal or its link; the "Expired" filter stays empty.
