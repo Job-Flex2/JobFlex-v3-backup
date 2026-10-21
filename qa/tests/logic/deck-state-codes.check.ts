@@ -26,11 +26,12 @@ check("every state and the District are in the table, and nothing else", STATES.
 check("every entry is sane", STATES.every((s) => { const c = DECK_STATE_CODES[s]; return c.state === s && c.name.length > 10 && c.short.length >= 3 && [36, 42].includes(c.guardIn) && [7.75, 8, 8.25].includes(c.riserMaxIn) && [9, 10].includes(c.treadMinIn) && c.lateral && Array.isArray(c.notes) && (c.basis === null || [2015, 2018, 2021, 2024].includes(c.basis)); }));
 check("a state with 8-in. or 8¼-in. risers always allows 9-in. treads, never the other way round", STATES.every((s) => { const c = DECK_STATE_CODES[s]; return (c.riserMaxIn === 7.75) === (c.treadMinIn === 10); }));
 check("California asks 42-in. guards; every other state 36", DECK_STATE_CODES.CA.guardIn === 42 && STATES.filter((s) => s !== "CA").every((s) => DECK_STATE_CODES[s].guardIn === 36));
-const eightQuarter = ["NJ", "NY", "PA", "MA", "VA", "NC", "OH"];
+const eightQuarter = ["NJ", "NY", "PA", "MA", "VA", "NC", "OH", "CT", "RI", "WV", "MI", "IN", "MT", "KY"]; // re-checked 2026-10-20 (lib/deck/countyCodes research)
 check("the 8¼-in. riser states", eightQuarter.every((s) => DECK_STATE_CODES[s].riserMaxIn === 8.25 && DECK_STATE_CODES[s].treadMinIn === 9) && STATES.filter((s) => !eightQuarter.includes(s)).every((s) => DECK_STATE_CODES[s].riserMaxIn !== 8.25));
 check("Wisconsin's UDC and Utah: 8-in. risers on 9-in. treads", DECK_STATE_CODES.WI.riserMaxIn === 8 && DECK_STATE_CODES.WI.treadMinIn === 9 && DECK_STATE_CODES.WI.basis === null && DECK_STATE_CODES.UT.riserMaxIn === 8);
 const local = STATES.filter((s) => !DECK_STATE_CODES[s].statewide);
-check("the states that leave the code to their cities are flagged, each saying so", ["AK", "AZ", "CO", "DE", "IL", "KS", "MS", "MO", "NV", "SD", "TX", "VT", "WY"].every((s) => local.includes(s)) && local.every((s) => DECK_STATE_CODES[s].verify && DECK_STATE_CODES[s].notes[0].includes("no statewide")), local.join(","));
+// West Virginia and Iowa (2026-10-20): a state code that binds only where a county or city adopts it — not statewide, its own notes.
+check("the states that leave the code to their cities are flagged, each saying so", ["AK", "AZ", "CO", "DE", "IL", "KS", "MS", "MO", "NV", "SD", "TX", "VT", "WY"].every((s) => local.includes(s)) && local.filter((s) => s !== "WV" && s !== "IA").every((s) => DECK_STATE_CODES[s].verify && DECK_STATE_CODES[s].notes[0].includes("no statewide")) && ["WV", "IA"].every((s) => DECK_STATE_CODES[s].verify && !DECK_STATE_CODES[s].statewide), local.join(","));
 check("every state names itself", STATES.every((s) => !!stateName(s)) && stateName("ca") === "California" && stateName("XX") === null);
 check("an unknown or empty state falls back to the IRC", deckCodeFor("XX") === IRC_CODE && deckCodeFor("") === IRC_CODE && deckCodeFor(null) === IRC_CODE && deckCodeFor("va").state === "VA");
 check("fractions print as a carpenter says them", inFrac(7.75) === "7¾ in." && inFrac(8.25) === "8¼ in." && inFrac(8) === "8 in.");
@@ -51,9 +52,9 @@ const waLow = normalizeDeckDesign({ ...base("WA"), rail: { ...ca.rail, type: "tr
 check("the same rail in Washington passes", !deckChecks(buildStructure(waLow)).some((c) => c.id === "guard-height"));
 const nj = buildStructure(base("NJ"));
 const njRiser = deckChecks(nj).find((c) => c.id === "stair-s1-riser");
-check("the New Jersey stair check speaks in 8¼-in. risers and 9-in. treads, citing the New Jersey edition", !!njRiser && /8¼ in\. at most/.test(njRiser.text) && /9 in\. at least/.test(njRiser.text) && !!njRiser.rule && /IRC-NJ 2021 R311\.7\.5\.1/.test(njRiser.rule), `${njRiser?.text} (${njRiser?.rule})`);
+check("the New Jersey stair check speaks in 8¼-in. risers and 9-in. treads, citing the New Jersey edition", !!njRiser && /8¼ in\. at most/.test(njRiser.text) && /9 in\. at least/.test(njRiser.text) && !!njRiser.rule && /IRC-NJ 2024 R311\.7\.5\.1/.test(njRiser.rule), `${njRiser?.text} (${njRiser?.rule})`);
 const caRiser = deckChecks(sCA).find((c) => c.id === "stair-s1-riser");
-check("the California one in 7¾ and 10, citing the CRC", !!caRiser && /7¾ in\. at most/.test(caRiser.text) && /10 in\. at least/.test(caRiser.text) && /CRC 2022/.test(caRiser.rule ?? ""), caRiser?.rule);
+check("the California one in 7¾ and 10, citing the CRC", !!caRiser && /7¾ in\. at most/.test(caRiser.text) && /10 in\. at least/.test(caRiser.text) && /CRC 2025/.test(caRiser.rule ?? ""), caRiser?.rule);
 check("the riser count itself does not change by state (aimed at 7½ in. everywhere)", nj.stairs[0].risers === sCA.stairs[0].risers);
 const njStep = buildStructure(base("NJ", { lower: { on: true, widthFt: 10, depthFt: 6, dropIn: 8, align: "centre" }, stairs: [] }));
 const caStep = buildStructure(base("CA", { lower: { on: true, widthFt: 10, depthFt: 6, dropIn: 8, align: "centre" }, stairs: [] }));
@@ -65,7 +66,7 @@ check("and warns where the city names the edition (Texas)", !!txCode && txCode.l
 check("the state's notes ride along as information", deckChecks(sCA).some((c) => c.id === "code-0" && /42 in\. high at least/.test(c.text)) && deckChecks(buildStructure(base("FL"))).some((c) => c.part === "Code" && /hurricane ties/.test(c.text)));
 check("the stair rules function speaks the state's figures", /8 in\./.test(stairRules(DECK_STATE_CODES.WI).riser) && /UDC R311/.test(stairRules(DECK_STATE_CODES.WI).riser) && /7¾/.test(stairRules().riser));
 const pkg = priceDeck(ca);
-check("the proposal's first note names the code", /Builds to the 2022 California Residential Code/.test(deckNotes(pkg)[0]) && deckNotes(pkg).length <= 20);
+check("the proposal's first note names the code", /Builds to the 2025 California Residential Code/.test(deckNotes(pkg)[0]) && deckNotes(pkg).length <= 20);
 const facts = siteFromAddress("1600 Pennsylvania Ave, Washington, DC 20500", null);
 check("the site facts carry the code and its line", facts.code.state === "DC" && /District of Columbia Residential Code/.test(facts.codeLine));
 check("no address: the shop's own state", siteFromAddress("", "MN").code.state === "MN" && siteFromAddress(null, null).code === IRC_CODE);

@@ -187,10 +187,11 @@ export function sectionDrawing(s: DeckStructure): Drawing | null {
   return { box: { x: boxL, z: -deepest - 10, w: Math.max(right, stairRight) - boxL + 4, h: top + deepest + 14 }, items };
 }
 
-/** The details a reviewer expects fastened the way the tables say — drawn from this deck's own numbers. */
-export function detailDrawings(s: DeckStructure): DetailDrawing[] {
+/** The details a reviewer expects fastened the way the tables say — drawn from this deck's own numbers. `which`
+ *  (2026-10-20): the floor sheet's details, the roof sheet's, or both. */
+export function detailDrawings(s: DeckStructure, which: "floor" | "roof" | "all" = "all"): DetailDrawing[] {
   const out: DetailDrawing[] = [];
-  const f = s.frame;
+  const f = which === "roof" ? null : s.frame;
   const d: DeckDesign = s.design;
   if (f) {
     const joistDepth = JOIST_DEPTH[f.joistSize] ?? 7.25;
@@ -222,6 +223,8 @@ export function detailDrawings(s: DeckStructure): DetailDrawing[] {
           `The ledger is flashed; no ledger on a cantilevered floor, brick veneer or a hollow wall. ${RULE.ledgerWall}.`,
         ],
       });
+      const lateral = lateralDetail(f);
+      if (lateral) out.push(lateral);
     }
     const post = sectionPost(f);
     if (post) {
@@ -293,11 +296,14 @@ export function detailDrawings(s: DeckStructure): DetailDrawing[] {
       out.push({
         title: "Lateral bracing, free-standing",
         drawing: { box: { x: -18, z: -6, w: 56, h: 60 }, items },
-        notes: [`A deck that stands free braces itself: knee braces at the end posts of every beam, both ways, where the posts are over 2 ft. ${RULE.bracing}; ${RULE.selfSupporting}.`],
+        notes: [
+          `A deck that stands free braces itself: knee braces at the end posts of every beam, both ways, where the posts are over 2 ft — ${f.hardware.braces || "none"} on this deck. ${RULE.bracing}; ${RULE.selfSupporting}.`,
+          "This bracing is the deck's lateral system: it takes the sideways load a ledger would otherwise hand to the house.",
+        ],
       });
     }
   }
-  const roof = s.roof;
+  const roof = which === "floor" ? null : s.roof;
   if (roof && roof.kind !== "pergola") {
     const items: DrawItem[] = [];
     const H = roof.headers[0];
@@ -328,6 +334,206 @@ export function detailDrawings(s: DeckStructure): DetailDrawing[] {
       ],
     });
   }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  THE SUBMITTAL SET (2026-10-20)                                      */
+/* ------------------------------------------------------------------ */
+//
+// Owner: "the building plans in separate pages with roof, and floor and
+// lateral — two or three pages, understandable and submittable, for the
+// county to accept; and a site plan." Three 11 × 17 sheets at most:
+//   A1  the site plan and the project's data (the code, the design criteria,
+//       the scope, the notes) with the front elevation;
+//   S1  the floor: its framing plan, the section, the details — the ledger,
+//       the LATERAL load connection, the post and footing, the guard — and
+//       the framing, footing and connector schedules;
+//   S2  the roof (only when there is one): its framing plan, the uplift path
+//       from rafter to footing, the bracing, its schedule.
+// The material list stays its own page (the yard's, not the reviewer's).
+
+export type PermitSheetKind = "site" | "floor" | "roof";
+export interface PermitSheet {
+  no: string;
+  name: string;
+  kind: PermitSheetKind;
+}
+
+/** The set a structure needs: two sheets for a deck, three with a roof over it. */
+export function permitSheets(s: DeckStructure): PermitSheet[] {
+  const out: PermitSheet[] = [{ no: "A1", name: "Site plan and project data", kind: "site" }];
+  if (s.frame) out.push({ no: "S1", name: "Floor framing, section and lateral", kind: "floor" });
+  if (s.roof) out.push({ no: s.frame ? "S2" : "S1", name: s.roof.kind === "pergola" ? "Pergola framing and bracing" : "Roof framing, uplift and bracing", kind: "roof" });
+  return out;
+}
+
+export interface LateralDevice {
+  /** Along the house, inches from the deck's left end (the yard's view), and out from the house. */
+  x: number;
+  y: number;
+  /** The device's least capacity, lb (ASD). */
+  lb: 750 | 1500;
+}
+
+/**
+ * Where the lateral load connection goes (IRC R507.9.2): two 1,500-lb
+ * hold-down tension devices within 24 in. of each end of the deck, or four
+ * 750-lb ones — two at each end. Each on a deck joist: the first joist in
+ * from the end that lies inside the 24 in. (the outside joist itself when
+ * none does).
+ */
+export function lateralDevices(f: DeckFrame): LateralDevice[] {
+  if (f.design.placement !== "attached" || !f.ledgers.length) return [];
+  const x0 = Math.min(...f.ledgers.map((l) => l.x0));
+  const x1 = Math.max(...f.ledgers.map((l) => l.x1));
+  const y = Math.min(...f.ledgers.map((l) => l.y));
+  const xs = [...new Set(f.joists.filter((j) => !j.sister).map((j) => Math.round(j.x * 10) / 10))].filter((x) => x >= x0 - 0.5 && x <= x1 + 0.5).sort((a, b) => a - b);
+  const four = f.design.ledger.lateral === "four";
+  const lb: 750 | 1500 = four ? 750 : 1500;
+  const per = four ? 2 : 1;
+  const pick = (cands: number[], fallback: number[]) => (cands.length >= per ? cands.slice(0, per) : fallback.slice(0, per));
+  // The first joist in from each end takes the device (its rod reaches the house's framing inside the band); the
+  // outside joist only when a second device at that end needs it.
+  const inward = (d: (x: number) => number) => xs.filter((x) => d(x) > 0.5 && d(x) <= 24).sort((a, b) => (d(a) < 6 ? 1 : 0) - (d(b) < 6 ? 1 : 0) || d(a) - d(b));
+  const fromLeft = inward((x) => x - x0);
+  const fromRight = inward((x) => x1 - x);
+  const left = pick(fromLeft, [Math.min(x0 + 12, (x0 + x1) / 2), Math.min(x0 + 20, (x0 + x1) / 2)]);
+  const right = pick(fromRight, [Math.max(x1 - 12, (x0 + x1) / 2), Math.max(x1 - 20, (x0 + x1) / 2)]);
+  return [...left, ...right].map((x) => ({ x, y, lb }));
+}
+
+/** The lateral load connection, drawn: a section through the house joist, the band, the ledger and the deck joist, the
+ *  two hold-downs and the rod between them. Where the devices go is marked on the framing plan (LD-1, LD-2 …). */
+export function lateralDetail(f: DeckFrame): DetailDrawing | null {
+  const devices = lateralDevices(f);
+  if (!devices.length) return null;
+  const d = f.design;
+  const jd = JOIST_DEPTH[f.joistSize] ?? 7.25;
+  const top = 9.25;
+  const zRod = top - jd / 2;
+  const items: DrawItem[] = [];
+  // The house's floor joist and subfloor, its band, the ledger, the deck joist.
+  items.push({ t: "rect", x: -27, z: 0, w: 23.5, h: 9.25, cls: "wood" });
+  items.push({ t: "rect", x: -27, z: 9.25, w: 25.5, h: 0.75, cls: "wood" });
+  items.push({ t: "rect", x: -3.5, z: -0.5, w: 2, h: 10.5, cls: "hatch" });
+  items.push({ t: "rect", x: -1.5, z: top - jd, w: 1.5, h: jd, cls: "wood" });
+  items.push({ t: "rect", x: 0, z: top - jd, w: 27, h: jd, cls: "wood" });
+  // The hold-downs and the rod.
+  items.push({ t: "rect", x: 2.5, z: zRod - 2.6, w: 2.2, h: 5.2, cls: "steel" });
+  items.push({ t: "rect", x: -24.5, z: zRod - 2.6, w: 2.2, h: 5.2, cls: "steel" });
+  items.push({ t: "line", x1: -23.4, z1: zRod, x2: 3.6, z2: zRod, cls: "steel" });
+  // The words, clear of the members, each with its leader.
+  items.push({ t: "line", x1: 3.6, z1: zRod + 2.6, x2: 6, z2: 15.5, cls: "thin" });
+  items.push({ t: "text", x: 6.5, z: 16, s: `hold-down, ≥ ${devices[0].lb.toLocaleString("en-US")} lb`, cls: "note" });
+  items.push({ t: "line", x1: -12, z1: zRod, x2: -12, z2: 15.5, cls: "thin" });
+  items.push({ t: "text", x: -12.5, z: 16, s: "½-in. threaded rod", anchor: "end", cls: "note" });
+  items.push({ t: "line", x1: -23.4, z1: zRod - 2.6, x2: -23.4, z2: -4.2, cls: "thin" });
+  items.push({ t: "text", x: -27, z: -6.6, s: "hold-down on the house joist", cls: "note" });
+  items.push({ t: "line", x1: -2.75, z1: -0.5, x2: 12, z2: -4.2, cls: "thin" });
+  items.push({ t: "text", x: 12.5, z: -6.6, s: "band · ledger", cls: "note" });
+  items.push({ t: "text", x: -11.5, z: 1.8, s: "house floor joist", anchor: "middle", size: 0.8, cls: "note" });
+  items.push({ t: "text", x: 16, z: top - jd + 1.4, s: `${f.joistSize} deck joist`, anchor: "middle", size: 0.8, cls: "note" });
+  const L = Math.max(...f.ledgers.map((l) => l.x1)) - Math.min(...f.ledgers.map((l) => l.x0));
+  const at = devices.map((dv, i) => `LD-${i + 1} at ${ftIn(dv.x)}`).join(", ");
+  return {
+    title: "Lateral load connection",
+    drawing: { box: { x: -30, z: -9, w: 62, h: 28 }, items },
+    notes: [
+      `${devices.length === 2 ? "Two" : "Four"} ${devices[0].lb.toLocaleString("en-US")}-lb hold-down tension devices (allowable stress), ${devices.length === 2 ? "one" : "two"} within 24 in. of each end of the ${ftIn(L)} ledger — marked on the framing plan: ${at} from the deck's left end. ${RULE.lateral}, Figure R507.9.2(${devices.length === 2 ? 1 : 2}).`,
+      "Each device is fastened to a deck joist and, through the ledger and the band, to a house floor joist — or to blocking between the house's first two joists where they run parallel to the ledger — with ½-in. threaded rod, washers and nuts, or the device maker's listed fasteners.",
+      `The ledger carries the vertical load (${LEDGER_FASTENER_LABEL[d.ledger.fastener]}); these devices take the deck's pull away from the house. Both are required.`,
+    ],
+  };
+}
+
+/** The roof's own details beyond the rafter seat: the uplift path down to the footing, and the bracing a free-standing roof stands on. */
+export function roofDetails(s: DeckStructure, windMph: number | null): DetailDrawing[] {
+  const roof = s.roof;
+  if (!roof) return [];
+  const out: DetailDrawing[] = [...detailDrawings(s, "roof")];
+  // The uplift path: tie → header → post cap → post → post base → footing.
+  const items: DrawItem[] = [];
+  items.push({ t: "line", x1: -18, z1: 0, x2: 30, z2: 0, cls: "grade" });
+  items.push({ t: "rect", x: -6, z: -14, w: 12, h: 14, cls: "concrete" });
+  items.push({ t: "rect", x: -3.6, z: 1, w: 7.2, h: 1.2, cls: "steel" });
+  items.push({ t: "rect", x: -2.75, z: 2.2, w: 5.5, h: 40, cls: "wood" });
+  items.push({ t: "rect", x: -3.6, z: 42.2, w: 7.2, h: 1.2, cls: "steel" });
+  items.push({ t: "rect", x: -12, z: 43.4, w: 24, h: 9.25, cls: "wood" });
+  items.push({ t: "poly", pts: [-18, 50, 26, 58, 26, 63.5, -18, 55.5], cls: "wood", closed: true });
+  items.push({ t: "rect", x: 2, z: 51, w: 1.6, h: 6, cls: "steel" });
+  items.push({ t: "text", x: 6, z: 61, s: "1 · hurricane tie at every rafter", cls: "note" });
+  items.push({ t: "text", x: 13, z: 47, s: "2 · post cap / strap to the header", cls: "note" });
+  items.push({ t: "text", x: 5, z: 22, s: "3 · post", cls: "note" });
+  items.push({ t: "text", x: 5, z: 3, s: "4 · uplift-rated post base", cls: "note" });
+  items.push({ t: "text", x: 8, z: -8, s: "5 · footing, anchor cast in", cls: "note" });
+  out.push({
+    title: "Uplift path",
+    drawing: { box: { x: -22, z: -18, w: 74, h: 86 }, items },
+    notes: [
+      `The roof's uplift runs tie → header → post cap → post → post base → footing; every link is a listed connector, none is toe-nailed.${windMph ? ` Sized for the ${windMph} mph design wind speed from the connector maker's tables.` : ""} IRC R802.11.`,
+      "Post bases are the uplift-rated kind, anchored into the footing's concrete (a wet-set or an epoxy anchor), not a standoff that only sits on it.",
+      ...(windMph && windMph >= 130 ? [`At ${windMph} mph the IRC's own provisions stop for the roof (R301.2.1.1): its wind design follows the WFCM, ICC 600 or ASCE 7 — an engineer's letter may be asked for.`] : []),
+    ],
+  });
+  if (roof.attach !== "wall") {
+    const b: DrawItem[] = [];
+    b.push({ t: "rect", x: 0, z: 0, w: 5.5, h: 44, cls: "wood" });
+    b.push({ t: "rect", x: 40, z: 0, w: 5.5, h: 44, cls: "wood" });
+    b.push({ t: "rect", x: -6, z: 44, w: 57.5, h: 9.25, cls: "wood" });
+    // A knee brace runs from its own post up to the header beside it — 45°, about 14 in. each way, never across the span.
+    b.push({ t: "poly", pts: [5.5, 30, 19.5, 44, 17.5, 45.2, 4.3, 32], cls: "wood", closed: true });
+    b.push({ t: "poly", pts: [40, 30, 26, 44, 28, 45.2, 41.2, 32], cls: "wood", closed: true });
+    b.push({ t: "line", x1: -10, z1: 0, x2: 56, z2: 0, cls: "grade" });
+    b.push({ t: "text", x: 22.75, z: 16, s: "knee braces, 45°, both ways", anchor: "middle", cls: "note" });
+    b.push({ t: "text", x: 22.75, z: 56.5, s: "header", anchor: "middle", cls: "label" });
+    out.push({
+      title: roof.kind === "pergola" ? "Pergola bracing" : "Roof bracing",
+      drawing: { box: { x: -14, z: -6, w: 74, h: 66 }, items: b },
+      notes: [
+        `A roof that stands on its own posts braces itself both ways: 4x4 knee braces at 45° from each post to the header, ½-in. lag or through-bolt each end (${roof.posts.length} posts). ${RULE.bracing}.`,
+        "The braces are the roof's lateral system; with no house wall to lean on, none of them may be left out.",
+      ],
+    });
+  }
+  return out;
+}
+
+/**
+ * The general notes a plan reviewer reads on sheet A1: how it is built, with
+ * the rule each line rests on — construction notes, not the estimate's
+ * assumptions (those stay on the proposal). The county's own deck rules, when
+ * it is on file, follow as "Local".
+ */
+export function permitNotes(s: DeckStructure, local: string[] = [], edition: string | null = null): string[] {
+  const out: string[] = [];
+  const d = s.design;
+  const f = s.frame;
+  const code = s.code;
+  // The county's own edition when it is on file (lib/deck/countyCodes), else the state's.
+  out.push(`All work to the ${edition ?? code.name} and the local amendments; the building department's review and inspections govern.`);
+  if (f) {
+    out.push(`Framing lumber: ${f.species.label}, No. 2 or better. Preservative-treated per AWPA U1 — ground-contact for posts and anything within 6 in. of the soil, above-ground elsewhere (${RULE.treatment}).`);
+    out.push(`Fasteners and connectors hot-dip galvanized or stainless steel${d.extras.stainless ? " — stainless throughout here (within 300 ft of salt water)" : ""}; connectors installed with the maker's listed fasteners (${RULE.fasteners}).`);
+    const poured = f.posts.filter((p) => p.footing.type === "poured");
+    if (poured.length) out.push(`Footings on undisturbed soil, the bottom at least ${Math.min(...poured.map((p) => p.footing.depthIn))} in. below grade${d.placement === "attached" || d.footing.frostAlways ? ` (frost line ${d.frostIn} in.)` : ""}, sized for ${d.soilPsf.toLocaleString("en-US")} psf presumptive bearing; the inspector sees the holes before the concrete (${RULE.footing}; ${RULE.footingDepth}).`);
+    else out.push(`Precast pier blocks on compacted gravel — a free-standing deck only (${RULE.pierBlock}).`);
+    if (d.placement === "attached" && f.ledgers.length) {
+      out.push(`Ledger: ${LEDGER_FASTENER_LABEL[d.ledger.fastener]} into the house band, two staggered rows at ${f.ledgers[0].spacingIn} in.; flashed over the top; never to brick veneer, a cantilevered floor or a hollow wall (${RULE.ledger}; ${RULE.ledgerWall}).`);
+      const devices = lateralDevices(f);
+      if (devices.length) out.push(`Lateral load connection: ${devices.length} hold-down tension devices of at least ${devices[0].lb.toLocaleString("en-US")} lb, within 24 in. of each end of the deck — see the detail on S1 (${RULE.lateral}).`);
+    } else out.push(`Free-standing: the deck stands on its own posts and beams, braced both ways at the posts — see the detail on S1 (${RULE.selfSupporting}; ${RULE.bracing}).`);
+    out.push(`Joists ${f.joistSize} at ${f.spacingIn} in. on center; a hanger at every joist end on a ledger or a flush beam, a tie at every joist on a dropped beam (${RULE.hangers}; ${RULE.restraint}).`);
+    out.push(`Posts ${d.framing.post} in metal post bases and caps; beams bear fully on the posts, never toe-nailed (${RULE.post}; ${RULE.beam}).`);
+    out.push(`Decking: ${f.decking.label}, fastened to its maker's instructions; joist spacing ${f.spacingIn} in. (the boards allow ${f.deckingMaxSpacingIn} in.) (${RULE.decking}).`);
+  }
+  if (s.rails.on) out.push(`Guards ${s.rails.heightIn} in. high where the walking surface is more than 30 in. above grade; no opening passes a 4-in. sphere; guard posts through-bolted to the rim and blocked; the top rail resists 200 lb (${RULE.guard}; IRC Table R301.5).`);
+  if (s.stairs.length) out.push(`Stairs: risers no more than ${code.riserMaxIn} in., treads at least ${code.treadMinIn} in., uniform within ⅜ in.; a graspable handrail 34–38 in. high on any stair of four or more risers; a light at the stairs (${RULE.stairs}; IRC R303.8).`);
+  if (s.electrical.on) out.push("Receptacles GFCI-protected and weather-resistant, in-use covers; wiring by a licensed electrician, under its own permit where the jurisdiction requires one (NEC 210.8, 406.9).");
+  if (s.roof && s.roof.kind !== "pergola") out.push(`Roof framing per S${f ? 2 : 1}: ${s.roof.trusses ? "manufactured trusses to the truss maker's stamped drawings" : `${s.roof.rafters.size} rafters at ${s.roof.rafters.spacingIn} in.`}, a hurricane tie at every rafter or truss, uplift-rated post bases (IRC R802.11).`);
+  if (s.roof && s.roof.kind === "pergola") out.push(`Pergola per S${f ? 2 : 1}: open slats, no roof covering; posts braced both ways (${RULE.bracing}).`);
+  out.push("Call 811 at least two business days before digging, so the utility lines are marked.");
+  for (const l of local) out.push(`Local: ${l}`);
   return out;
 }
 
