@@ -113,6 +113,10 @@
 :global(.jf-blueprint .content) .au-del-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
 :global(.jf-blueprint .content) .au-del-row > button { white-space: nowrap; }
 :global(.jf-blueprint .content) .au-del-copy { margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+/* The latest cancellation's reasons under the subscription editor (2026-10-20). */
+:global(.jf-blueprint .content) .au-cancel { display: grid; gap: 3px; margin: 12px 0 0; padding: 10px 12px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; font-size: 13px; line-height: 1.45; color: var(--ink); }
+:global(.jf-blueprint .content) .au-cancel-k { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+:global(.jf-blueprint .content) .au-cancel-o { color: var(--ink-soft); overflow-wrap: anywhere; }
 
 /* The delete window: one dashed panel per thing that goes (the .au-cmp idiom),
    a danger rule down the left of what is deleted. */

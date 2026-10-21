@@ -12,8 +12,8 @@
 //
 // SHELL. The blueprint admin chrome (components/v3/admin-shell) replaces the
 // classic Tailwind header + rail. The nav badges — unread support tickets,
-// pending payout requests, leads in the manual queue, and (2026-10-11) the
-// signed-in admin's own open tasks — are the same
+// pending payout requests, leads in the manual queue, (2026-10-11) the
+// signed-in admin's own open tasks and (2026-10-20) open trial-extension asks — are the same
 // queries the old rail received as props, handed to the sidebar through the
 // shared NavRoleProvider's `badges` channel keyed by nav href.
 
@@ -51,7 +51,7 @@ export default async function AdminRootLayout({ children }: { children: React.Re
   // Which door the admin came through decides what Sign out clears.
   const viaCookie = (await readAdminCookie()) !== null;
 
-  const [unreadSupport, pendingPayouts, manualQueueLeads, myOpenTasks] = await Promise.all([
+  const [unreadSupport, pendingPayouts, manualQueueLeads, myOpenTasks, pendingTrialAsks] = await Promise.all([
     unreadSupportCount(),
     // A reversed transfer waits on an admin's Retry payout / Write off exactly
     // as a new request waits on Approve, so both light the badge.
@@ -60,6 +60,9 @@ export default async function AdminRootLayout({ children }: { children: React.Re
     // Open tasks given to whoever is signed in (/admin/tasks); 0, never a
     // 500, if the task tables are not there yet.
     myOpenTaskCountSafe(admin.id),
+    // Trial-extension asks waiting on a decision (2026-10-20); 0 while the
+    // table is not in this database yet.
+    db.trialExtensionRequest.count({ where: { status: "PENDING" } }).catch(() => 0),
   ]);
 
   const badges: Record<string, number> = {
@@ -67,6 +70,7 @@ export default async function AdminRootLayout({ children }: { children: React.Re
     "/admin/payouts": pendingPayouts,
     "/admin/lead-center": manualQueueLeads,
     "/admin/tasks": myOpenTasks,
+    "/admin/trial-requests": pendingTrialAsks,
   };
 
   const adminName = admin.name || admin.email;

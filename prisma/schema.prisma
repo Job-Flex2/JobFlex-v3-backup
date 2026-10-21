@@ -162,6 +162,9 @@ model Organization {
   clientEquipment      ClientEquipment[]
   visitReports         VisitReport[]
   bookings             Booking[]
+  // Why a plan was cancelled, and asks for more trial days (2026-10-20).
+  cancellationFeedback CancellationFeedback[]
+  trialExtensionRequests TrialExtensionRequest[]
   signupPromo          PromoCode?            @relation("OrgSignupPromo", fields: [signupPromoCodeId], references: [id], onDelete: SetNull)
 
   @@index([slug])
@@ -356,6 +359,11 @@ model User {
   adminSubtasksAssigned AdminTaskSubtask[] @relation("AdminSubtaskAssignee")
   adminTaskComments     AdminTaskComment[] @relation("AdminTaskCommentAuthor")
   adminTaskEvents       AdminTaskEvent[]   @relation("AdminTaskEventActor")
+
+  // The cancel window's reasons and the trial-extension asks (2026-10-20) — back-relations only.
+  cancellationFeedback   CancellationFeedback[]
+  trialExtensionRequests TrialExtensionRequest[] @relation("TrialExtensionRequester")
+  trialExtensionsDecided TrialExtensionRequest[] @relation("TrialExtensionDecider")
 }
 
 model Account {
@@ -1607,6 +1615,64 @@ model SupportTicket {
   messages     SupportMessage[]
 
   @@index([lastMessageAt])
+}
+
+// ── Why a plan was cancelled (owner, 2026-10-20) ────────────────────────────
+// One row per cancellation booked from Settings → Billing → Manage
+// subscription → … → "Cancel <plan>?" (actions/billing cancelSubscription),
+// where the owner must tick at least one reason. `reasons` is a JSON array of
+// lib/cancelFeedback keys; `otherText` is the "Other" box (3–500 chars) and
+// null otherwise. `plan` and `periodEnd` are as they stood when it was booked.
+// Read by /admin/cancellations and the /admin/users sheet.
+model CancellationFeedback {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String?
+  plan           String
+  reasons        String    @default("[]")
+  otherText      String?
+  periodEnd      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([createdAt])
+}
+
+// ── More trial days, asked from "Before you go" (owner, 2026-10-20) ─────────
+// Offered only while the plan is on its trial or the trial ended at most 14
+// days ago (lib/trialExtension). One PENDING row per organization at a time.
+// status: PENDING | APPROVED | DENIED. A platform admin decides in
+// /admin/trial-requests: Approve moves the Stripe trial_end (or, for a plan
+// with no Stripe subscription, only the local date — `localOnly`), Deny keeps
+// a short reason. `plan`, `trialStartedAt` and `trialEndsAt` are as they stood
+// when it was asked; `extendedUntil` is the trial end Approve set.
+model TrialExtensionRequest {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String?
+  requestedDays  Int
+  note           String?
+  status         String    @default("PENDING")
+  plan           String?
+  trialStartedAt DateTime?
+  trialEndsAt    DateTime?
+  grantedDays    Int?
+  extendedUntil  DateTime?
+  localOnly      Boolean   @default(false)
+  decisionNote   String?
+  decidedBy      String?
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation("TrialExtensionRequester", fields: [userId], references: [id], onDelete: SetNull)
+  decider      User?        @relation("TrialExtensionDecider", fields: [decidedBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([status, createdAt])
 }
 
 // ── The conversation under a support ticket (owner, 2026-10-17) ─────────────

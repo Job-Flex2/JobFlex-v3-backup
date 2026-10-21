@@ -466,3 +466,221 @@
     width: 100%;
   }
 }
+
+/* ── The form bits: square boxes, a square radio, a text box (owner,
+   2026-10-20) ─────────────────────────────────────────────────────────────
+   Shared by window 2's "Why are you cancelling?" (the house dialog itself)
+   and window 1's trial-extension form (the house frame). Square corners,
+   hairline (--ink-line) rules, no shadow; the native input stays in the
+   label, visually hidden but focusable, and the square beside it is drawn.
+   Each row is 44px to the touch. */
+.jf-confirm.jf-confirm fieldset.jffs-why,
+.jf-confirm.jf-confirm fieldset.jffs-ext-days {
+  min-inline-size: 0;
+  border: 0;
+}
+.jf-confirm.jf-confirm .jffs-ext-lbl {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--ink, #0a0a0a);
+}
+.jf-confirm.jf-confirm .jffs-opt-note {
+  margin-left: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-muted, #555);
+}
+.jf-confirm.jf-confirm .jffs-check,
+.jf-confirm.jf-confirm .jffs-radio {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 12px;
+  background: #fff;
+  color: var(--ink, #0a0a0a);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background-color 0.14s var(--ease-out, ease);
+}
+.jf-confirm.jf-confirm .jffs-check input,
+.jf-confirm.jf-confirm .jffs-radio input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.jf-confirm.jf-confirm .jffs-box {
+  flex: 0 0 auto;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--ink, #0a0a0a);
+  border-radius: var(--r-sm, 2px);
+  background: #fff;
+  color: #fff;
+}
+.jf-confirm.jf-confirm .jffs-box svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: square;
+  opacity: 0;
+}
+.jf-confirm.jf-confirm .jffs-check input:checked + .jffs-box {
+  border-color: var(--accent, #1854a0);
+  background: var(--accent, #1854a0);
+}
+.jf-confirm.jf-confirm .jffs-check input:checked + .jffs-box svg {
+  opacity: 1;
+}
+/* The radio is square too: a filled inner square when picked. */
+.jf-confirm.jf-confirm .jffs-radio input:checked + .jffs-box {
+  border-color: var(--accent, #1854a0);
+}
+.jf-confirm.jf-confirm .jffs-radio input:checked + .jffs-box::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: var(--accent, #1854a0);
+}
+.jf-confirm.jf-confirm .jffs-check input:focus-visible + .jffs-box,
+.jf-confirm.jf-confirm .jffs-radio input:focus-visible + .jffs-box {
+  outline: 2px solid var(--accent, #1854a0);
+  outline-offset: 2px;
+}
+.jf-confirm.jf-confirm .jffs-check:has(input:checked),
+.jf-confirm.jf-confirm .jffs-radio:has(input:checked) {
+  background: var(--accent-soft, rgba(24, 84, 160, 0.08));
+}
+@media (hover: hover) {
+  .jf-confirm.jf-confirm .jffs-check:hover:not(:has(input:checked)),
+  .jf-confirm.jf-confirm .jffs-radio:hover:not(:has(input:checked)) {
+    background: var(--paper, #f2f0eb);
+  }
+}
+.jf-confirm.jf-confirm fieldset:disabled .jffs-check,
+.jf-confirm.jf-confirm fieldset:disabled .jffs-radio {
+  opacity: 0.55;
+  cursor: default;
+}
+.jf-confirm.jf-confirm .jffs-area {
+  display: block;
+  width: 100%;
+  min-height: 84px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--ink, #0a0a0a);
+  border-radius: var(--r-sm, 2px);
+  background: #fff;
+  color: var(--ink, #0a0a0a);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.jf-confirm.jf-confirm .jffs-area.jffs-area--short {
+  min-height: 64px;
+}
+.jf-confirm.jf-confirm .jffs-area::placeholder {
+  color: var(--ink-faint, #888);
+}
+.jf-confirm.jf-confirm .jffs-area:focus-visible {
+  outline: 2px solid var(--accent, #1854a0);
+  outline-offset: 1px;
+}
+
+/* ── Window 2: "Why are you cancelling?" ─────────────────────────────────
+   The reasons are one framed list, a hairline between rows; Other opens a
+   box under it; the hint holds its line so nothing moves when it clears. */
+.jf-confirm.jf-confirm .jffs-why {
+  margin-top: 18px;
+}
+.jf-confirm.jf-confirm .jffs-why-sub {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-muted, #555);
+}
+.jf-confirm.jf-confirm .jffs-why-opts {
+  margin-top: 10px;
+  display: grid;
+  border: 1.5px solid var(--ink-line, rgba(10, 10, 10, 0.12));
+  border-radius: var(--r-sm, 2px);
+}
+.jf-confirm.jf-confirm .jffs-why-opts .jffs-check + .jffs-check {
+  border-top: 1px solid var(--ink-line, rgba(10, 10, 10, 0.12));
+}
+.jf-confirm.jf-confirm .jffs-why-other {
+  margin-top: 12px;
+}
+.jf-confirm.jf-confirm .jffs-count {
+  display: block;
+  margin-top: 4px;
+  text-align: right;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted, #555);
+}
+.jf-confirm.jf-confirm .jffs-why-hint {
+  min-height: 1.4em;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-soft, #2a2a2a);
+}
+
+/* ── Window 1: "Request a trial extension" and its form ─────────────────
+   The framed second button between "Keep <plan>" and "Continue to cancel"
+   — white, an ink frame, the house button's hover. The form: two square
+   radios side by side (7 / 14 days), the optional text box, then the
+   window's own big button and link. */
+.jf-confirm.jffs-go-dlg .jffs-acts .jf-confirm-btn.jffs-extbtn {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  background: #fff;
+}
+.jf-confirm.jffs-go-dlg .jffs-acts .jf-confirm-btn.jffs-extbtn:focus-visible {
+  outline: 2px solid var(--ink, #0a0a0a);
+  outline-offset: 3px;
+}
+.jf-confirm.jffs-go-dlg .jffs-ext {
+  margin-top: 18px;
+}
+.jf-confirm.jffs-go-dlg .jffs-ext .jffs-ext-days + .jffs-ext-lbl {
+  margin-top: 18px;
+}
+.jf-confirm.jffs-go-dlg .jffs-ext-opts {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.jf-confirm.jffs-go-dlg .jffs-ext-opts .jffs-radio {
+  min-height: 48px;
+  border: 1.5px solid var(--ink-line, rgba(10, 10, 10, 0.12));
+  border-radius: var(--r-sm, 2px);
+  font-weight: 700;
+}
+.jf-confirm.jffs-go-dlg .jffs-ext-opts .jffs-radio:has(input:checked) {
+  border-color: var(--accent, #1854a0);
+}
+.jf-confirm.jffs-go-dlg .jffs-link:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

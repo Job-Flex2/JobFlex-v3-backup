@@ -13,6 +13,7 @@ import { buildTrialConfirm, buildTrialEndingSoon, buildTrialReminder } from "./b
 import { buildOtpCode, buildOtpNoAccount } from "./build/otp";
 import { buildPasswordSet } from "./build/accountPassword";
 import { buildFreeSwitchBooked, buildPaymentFailed } from "./build/billing";
+import { buildTrialExtended, buildTrialExtensionAsked, buildTrialExtensionDenied } from "./build/trialExtension";
 import { buildJobAssignment, buildWorkerInvite, buildTeamInvite } from "./build/worker";
 import {
   buildPasswordReset,
@@ -612,6 +613,24 @@ export const FIXTURES: { id: string; label: string; note?: string; doc: EmailDoc
     label: "18h · buildFreeSwitchBooked()",
     note: "The owner cancelled from Settings → Billing: the plan switches to Free at the end of the paid cycle (actions/billing cancelSubscription).",
     doc: buildFreeSwitchBooked({ name: "Jordan Rivera", planName: "Professional", switchAt: new Date("2026-11-12T17:00:00Z"), href: "https://example.com/dashboard/settings?tab=billing" }),
+  },
+  {
+    id: "b-trial-extension-asked",
+    label: "18i · buildTrialExtensionAsked()",
+    note: "To the platform admins: an owner on a trial asked for more days from \"Before you go\" (actions/trialExtension). Nothing was cancelled.",
+    doc: buildTrialExtensionAsked({ orgName: "Cedar & Oak Builders", ownerEmail: "rob@cedarandoak.com", planName: "Professional", trialEndsAt: new Date("2026-10-24T17:00:00Z"), ended: false, days: 7, note: "I want to send a roof estimate to two real clients before I decide.", href: "https://example.com/admin/trial-requests?request=fixture" }),
+  },
+  {
+    id: "b-trial-extended",
+    label: "18j · buildTrialExtended()",
+    note: "To the owner: an admin approved the request in /admin/trial-requests and the trial end moved.",
+    doc: buildTrialExtended({ name: "Jordan Rivera", planName: "Professional", until: new Date("2026-10-31T17:00:00Z"), days: 7, href: "https://example.com/dashboard" }),
+  },
+  {
+    id: "b-trial-extension-denied",
+    label: "18k · buildTrialExtensionDenied()",
+    note: "To the owner: an admin denied the request, with the short reason they typed.",
+    doc: buildTrialExtensionDenied({ name: "Jordan Rivera", planName: "Professional", reason: "Your account already had one extension this month.", href: "https://example.com/dashboard/subscription" }),
   },
   {
     id: "b-request-received",

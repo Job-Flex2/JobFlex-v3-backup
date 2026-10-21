@@ -19,6 +19,7 @@
 // directory coexist. Node/TS extension resolution takes the FILE for
 // `@/lib/settings`, and this module is only ever reached by its full path.
 
+import { trialExtensionOffer } from "@/lib/trialExtensionServer";
 import { db } from "@/lib/db";
 import { deckAddonHeld, readDeckAddonRecord } from "@/lib/deckAddonBilling";
 import { deckAddonShortWords } from "@/lib/deckAddon";
@@ -159,10 +160,14 @@ export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingL
   const stripeSub = sub?.provider === "STRIPE" && Boolean(sub.externalSubId) && isStripeEnabled();
   const cancellable =
     isOwnerHere && !granted && !booked && !!sub && (LIVE_STATUSES as readonly string[]).includes(sub.status) && (!lapsed || stripeSub);
-  const [cancel, manage] = await Promise.all([
+  const [offer, manage, extension] = await Promise.all([
     cancellable && sub ? cancelOffer(organizationId, sub.plan, lapsed ? null : freeSwitchDate(sub), wasName, lapsed) : null,
     isOwnerHere ? manageView(organizationId, sub, { planDto: planContext.plan, onFree, granted, booked, lapsed, stripeSub, live: opts.billingLive === true }) : null,
+    // "Request a trial extension" on Before you go (owner, 2026-10-20): on the
+    // trial, or within 14 days after it (lib/trialExtension).
+    cancellable && sub && !lapsed ? trialExtensionOffer(organizationId, sub) : null,
   ]);
+  const cancel = offer ? { ...offer, extension } : null;
 
   /* ── settings blobs ── */
   const payment = parsePaymentSettings(org.paymentSettingsJson);

@@ -34,6 +34,9 @@ export interface ConfirmPlanChangeProps {
   /** The way out; "Keep my plan" unless the box is not about a plan. */
   cancelLabel?: string;
   busy?: boolean;
+  /** The confirm button stays off while the box's own form is not whole
+   *  (the cancel reasons, FreeSwitch); the body says why. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   /** Free content — used when no plan comparison applies. */
@@ -133,6 +136,7 @@ export function ConfirmPlanChange({
   confirmLabel,
   cancelLabel = "Keep my plan",
   busy = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmPlanChangeProps) {
@@ -200,7 +204,7 @@ export function ConfirmPlanChange({
           <button type="button" className="jf-confirm-btn" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button type="button" className="jf-confirm-btn primary" disabled={busy} onClick={onConfirm}>
+          <button type="button" className="jf-confirm-btn primary" disabled={busy || confirmDisabled} onClick={onConfirm}>
             {busy ? "Working…" : confirmLabel}
           </button>
         </div>

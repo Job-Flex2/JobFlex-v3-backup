@@ -44,6 +44,11 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     label: "Manage",
     items: [
       { label: "Users & subscriptions", icon: "i-users", href: "/admin/users" },
+      // Added 2026-10-20: owners on a trial asking for more days from the
+      // cancel window — approve 7/14 days or deny; the badge is the open ones.
+      { label: "Trial requests", icon: "i-hourglass", href: "/admin/trial-requests" },
+      // Added 2026-10-20: every cancellation with the reasons the owner ticked.
+      { label: "Cancellations", icon: "i-ban", href: "/admin/cancellations" },
       { label: "Plans", icon: "i-file", href: "/admin/plans" },
       { label: "Influencers", icon: "i-megaphone", href: "/admin/influencers" },
       { label: "Payouts", icon: "i-bank", href: "/admin/payouts" },

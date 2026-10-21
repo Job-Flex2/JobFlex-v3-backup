@@ -1,0 +1,60 @@
+/* ============================================================
+   ADMIN TRIAL REQUESTS — BLUEPRINT
+   /admin/trial-requests
+   Page vocabulary only; the furniture is admin-influencers/admin-ui.module.css.
+   Two classes on every selector (the shell's resets, CLAUDE.md).
+   ============================================================ */
+
+:global(.jf-blueprint .content) .root { display: flex; flex-direction: column; gap: 22px; }
+
+/* asked · company · owner · plan · trial · days · note · status */
+:global(.jf-blueprint .content) .cols {
+  grid-template-columns: 74px minmax(0, 1.3fr) minmax(0, 1.3fr) 104px 128px 48px minmax(0, 1.6fr) 104px;
+}
+:global(.jf-blueprint .content) .left { text-align: left; }
+:global(.jf-blueprint .content) .mail,
+:global(.jf-blueprint .content) .note {
+  display: block; font-size: 13px; color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+:global(.jf-blueprint .content) .note { color: var(--muted); }
+:global(.jf-blueprint .content) .cell { font-size: 13px; color: var(--ink); }
+:global(.jf-blueprint .content) .span { font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
+
+/* The drawer */
+:global(.jf-blueprint .content .pmdl) .who { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 14px; }
+:global(.jf-blueprint .content .pmdl) .usage { margin-top: 18px; }
+:global(.jf-blueprint .content .pmdl) .quote { font-size: 14px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content .pmdl) .facts3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Three to a row: a rule right of every cell but the third, under every row
+   but the last (doubled class: the kit's two-column rules are 5 classes deep). */
+:global(.jf-blueprint .content .pmdl) .facts3.facts3 > div { border-right: 1.5px solid var(--hair); border-bottom: 1.5px solid var(--hair); }
+:global(.jf-blueprint .content .pmdl) .facts3.facts3 > div:nth-child(3n) { border-right: none; }
+:global(.jf-blueprint .content .pmdl) .facts3.facts3 > div:nth-child(3n + 1):nth-last-child(-n + 3),
+:global(.jf-blueprint .content .pmdl) .facts3.facts3 > div:nth-child(3n + 1):nth-last-child(-n + 3) ~ div { border-bottom: none; }
+:global(.jf-blueprint .content .pmdl) .zero > div:last-child { color: var(--muted-light); }
+:global(.jf-blueprint .content .pmdl) .fine { margin-top: 8px; }
+:global(.jf-blueprint .content .pmdl) .used { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
+
+:global(.jf-blueprint .content .pmdl) .decide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+:global(.jf-blueprint .content .pmdl) .block {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 14px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff;
+}
+:global(.jf-blueprint .content .pmdl) .block :global(.mf) { width: 100%; margin: 0; }
+:global(.jf-blueprint .content .pmdl) .blockH { font-size: 13px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content .pmdl) .blockP { font-size: 13px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content .pmdl) .blockP b { font-weight: 800; color: var(--ink); }
+:global(.jf-blueprint .content .pmdl) .outcome { display: grid; gap: 6px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+
+@media (max-width: 860px) {
+  :global(.jf-blueprint .content) .mail,
+  :global(.jf-blueprint .content) .note { white-space: normal; }
+  :global(.jf-blueprint .content .pmdl) .facts3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :global(.jf-blueprint .content .pmdl) .facts3.facts3 > div { border-right: 1.5px solid var(--hair); border-bottom: 1.5px solid var(--hair); }
+  :global(.jf-blueprint .content .pmdl) .facts3.facts3 > div:nth-child(2n) { border-right: none; }
+  :global(.jf-blueprint .content .pmdl) .facts3.facts3 > div:nth-child(2n + 1):nth-last-child(-n + 2),
+  :global(.jf-blueprint .content .pmdl) .facts3.facts3 > div:nth-child(2n + 1):nth-last-child(-n + 2) ~ div { border-bottom: none; }
+  :global(.jf-blueprint .content .pmdl) .decide { grid-template-columns: 1fr; }
+  :global(.jf-blueprint .content .pmdl) .block :global(.btn) { width: 100%; justify-content: center; min-height: 44px; }
+}

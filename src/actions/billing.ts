@@ -28,6 +28,8 @@ import { planSnapshot, reportPlanChange } from "@/lib/activation-events";
 import { logServerError } from "@/lib/server-events";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { FREE_SWITCH_META, LIVE_STATUSES, freeSwitchBooked, onFreePlan } from "@/lib/freePlan";
+import { checkCancelFeedback } from "@/lib/cancelFeedback";
+import { trackActivation } from "@/lib/activation-events";
 
 const billingSaved = (organizationId: string, actorId: string, summary: string, meta?: Record<string, unknown>) =>
   logActivity({ organizationId, actorId, kind: TRAIL_KINDS.SETTINGS, summary, meta: { area: "billing", ...meta } });
@@ -225,7 +227,14 @@ export async function listSubscriptionInvoices(): Promise<{
 
    Keeping clears the booking on both sides while the cycle is still running.
    Once the period has actually ended Stripe has ended the subscription and
-   there is nothing to keep — a plan card checks out again, paid at once. */
+   there is nothing to keep — a plan card checks out again, paid at once.
+
+   WHY (owner, 2026-10-20; lib/cancelFeedback): the confirmation asks for at
+   least one reason, and "Other" needs its own words. No reason, no cancel —
+   checked here before anything else. The cancel itself is unchanged; once it
+   is booked the answer is kept on CancellationFeedback (a failed write is
+   logged, never a failed cancel) and sent to PostHog as
+   subscription_cancel_reason — the keys only, never the words. */
 export type CancelSubscriptionResult =
   | { ok: true; endsAt: string | null }
   | { ok: false; error: string };
@@ -233,8 +242,10 @@ export type CancelSubscriptionResult =
 /** The booked switch the move to Free let go of, for "Keep" (SyncState). */
 const heldSwitchKey = (orgId: string) => `freeHeldSwitch:${orgId}`;
 
-export async function cancelSubscription(): Promise<CancelSubscriptionResult> {
+export async function cancelSubscription(feedback?: unknown): Promise<CancelSubscriptionResult> {
   const { organizationId, user } = await requireOwner();
+  const why = checkCancelFeedback(feedback);
+  if (!why.ok) return { ok: false, error: why.error };
   const sub = await db.subscription.findUnique({ where: { organizationId } });
   if (!sub || !(LIVE_STATUSES as readonly string[]).includes(sub.status)) return { ok: false, error: "There's no subscription to cancel." };
   if (sub.provider === "MANUAL") return { ok: false, error: "Your plan is complimentary — there's nothing to cancel." };
@@ -273,6 +284,15 @@ export async function cancelSubscription(): Promise<CancelSubscriptionResult> {
   revalidatePath("/dashboard/settings");
   await billingSaved(organizationId, user.id, `Updated billing settings — subscription set to cancel${endsAt ? ` on ${endsAt.toLocaleDateString("en-US")}` : ""}, then the Free plan`, { canceled: true, endsAt: endsAt?.toISOString() });
   await sendFreeSwitchEmail(organizationId, sub.plan, endsAt).catch((err) => console.warn("[billing] free-switch email failed:", err));
+  await db.cancellationFeedback
+    .create({ data: { organizationId, userId: user.id, plan: sub.plan, reasons: JSON.stringify(why.reasons), otherText: why.otherText, periodEnd: endsAt } })
+    .catch((err) => logServerError("billing.cancelFeedback", err, { kind: "action", organizationId }));
+  trackActivation("subscription_cancel_reason", organizationId, {
+    reasons: why.reasons.join(","),
+    reason_count: why.reasons.length,
+    has_other: why.otherText !== null,
+    trialing: sub.status === "TRIALING",
+  });
   return { ok: true, endsAt: endsAt ? endsAt.toISOString() : null };
 }
 

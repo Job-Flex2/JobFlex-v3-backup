@@ -17,6 +17,7 @@
  */
 
 import type { FreeLoss, FreeTally } from "@/lib/freePlan";
+import type { TrialExtensionOffer } from "@/lib/trialExtension";
 
 /* ------------------------------------------------------------------ */
 /* Shared primitive types                                              */
@@ -1366,6 +1367,9 @@ export interface BillingData {
     tally: FreeTally;
     /** Access already lapsed to Free while the Stripe subscription still renews. */
     accessAlreadyFree?: boolean;
+    /** "Request a trial extension" on Before you go — present only on the
+     *  trial or within 14 days after it (lib/trialExtension). */
+    extension?: TrialExtensionOffer | null;
   } | null;
   /** The owner's manage window (owner, 2026-10-17 — the one place a plan is
    *  cancelled): the plan's price, its date, the card and why there is no

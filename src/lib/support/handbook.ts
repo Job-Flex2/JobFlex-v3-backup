@@ -138,8 +138,8 @@ Press **Upgrade / Downgrade / Switch to annual / Switch to monthly** on a card, 
 
 ### Cancel and keep
 1. Settings → Billing (/dashboard/settings?pane=billing) → **Cancel subscription** at the foot.
-2. "Before you go" → **Continue to cancel** (or **Keep <plan>**).
-3. "Cancel <plan>?" → **Cancel subscription**.
+2. "Before you go" → **Continue to cancel** (or **Keep <plan>**). On a trial, or within 14 days after it ended, a third button **Request a trial extension**: "How many more days would help?" (7 / 14) and "What do you still want to try?" (optional) → **Send request** → "Request sent — We'll answer by email within one business day." Nothing is cancelled. One open request per company; pressing it again shows "Request pending". A JobFlex admin approves (email "Your trial is extended until <date>") or declines (email "We couldn't extend your trial this time"). Support cannot promise an extension — the admins decide.
+3. "Cancel <plan>?" → tick at least one "Why are you cancelling?" reason (Other needs 3–500 characters of their own words; until then the button is off with a hint) → **Cancel subscription**.
 - Effect: "You keep <plan> until <date> — the cycle you've already paid for — and you won't be billed again. Then your account moves to the Free plan. Nothing is refunded for the days you don't use." Email: "Your plan switches to Free on <date>". Cancelling during a trial: no charge.
 - Undo before the date: **Keep <plan>** (Settings → Billing or Subscription). After: "Your plan has already switched to Free. Choose a plan to start again." — paid at once, no new trial.
 - Comp plans: "Your plan is complimentary — there's nothing to cancel."
@@ -544,6 +544,8 @@ In production a server action's *thrown* error text is hidden; only *returned* e
 - /admin/support: all tickets, with email replies.
 - /admin/trials: trials scored for tour-like use.
 - /admin/subscribers: paying and Free companies (cancelled hidden).
+- /admin/trial-requests: trial-extension asks, with what the trial was used for; Approve 7/14 days or Deny.
+- /admin/cancellations: every cancellation with its reasons.
 - Also /admin/traffic/signups, /admin/activity (member trails, proposals readable), /admin/plans, /admin/integrations.
 
 **Where to look first**

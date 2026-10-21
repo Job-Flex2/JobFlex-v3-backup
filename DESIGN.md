@@ -87,7 +87,14 @@ colour, one row on a desk, the amount across over the two counts on a phone;
 each "what the plan gives" line on a flat square filled with its own tool
 colour and a white icon; the keep date in bold; "Keep <plan>"
 one full-width blue button with a resting 3px ink offset; "Continue to
-cancel" a 14px bold ink link under it, never small or grey. Owner rule
+cancel" a 14px bold ink link under it, never small or grey. On a trial (or
+up to 14 days after it) a framed white "Request a trial extension" sits
+between them and opens a small form in the same box: two square radios
+(7 / 14 days), an optional text box, "Send request" in the big button's
+place, "Back" as the link (owner, 2026-10-20). The confirmation "Cancel
+<plan>?" asks "Why are you cancelling?" — square checkboxes in one
+hairline-framed list, 44px rows, the picked row on `--accent-soft`, the
+confirm button off with a one-line hint until a reason is ticked. Owner rule
 (2026-10-18): no shadow or offset behind a coloured square or dot, and none
 on number tiles — flat colour only.
 The handheld drawer folds each estimator's inventory the same way (2026-10-17).

@@ -24,7 +24,11 @@ export type ActivationEvent =
   | "invoice_sent"
   | "payment_recorded"
   | "estimator_used"
-  | "plan_changed";
+  | "plan_changed"
+  // The cancel window's reasons and the ask for more trial days (2026-10-20):
+  // the reason keys and the days asked, never the owner's own words.
+  | "subscription_cancel_reason"
+  | "trial_extension_requested";
 
 export type EstimatorKind = "smart" | "roof" | "fence" | "hvac" | "video";
 /** Where a proposal came from; "duplicate" can never be an org's first. */

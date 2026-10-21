@@ -90,6 +90,9 @@ export interface AdminUserDTO {
   /** The organization is JobFlex's own — the only kind a Lead Center test
    *  lead can be sent to (Organization.isInternal). */
   orgInternal: boolean;
+  /** The organization's latest cancellation and the reasons ticked on it
+   *  (lib/cancelFeedback, 2026-10-20); null when it never cancelled. */
+  lastCancel: { at: string; reasons: string[]; otherText: string | null } | null;
   createdAt: string;
 }
 
@@ -580,6 +583,13 @@ function UserForm({
         ) : (
           <SubscriptionEditor key={user.orgId + user.recordStatus + user.recordPlan + (user.syncing?.since ?? "")} user={user} plans={plans} />
         )}
+        {user.lastCancel ? (
+          <p className={cx("au-cancel")} data-last-cancel="">
+            <span className={cx("au-cancel-k")}>{`Last cancellation · ${longDate(user.lastCancel.at)}`}</span>
+            <span>{user.lastCancel.reasons.join(" · ") || "No reason recorded"}</span>
+            {user.lastCancel.otherText ? <span className={cx("au-cancel-o")}>{`“${user.lastCancel.otherText}”`}</span> : null}
+          </p>
+        ) : null}
       </div>
 
       {/* The custom plan's pages — what its gate opens, beside what Stripe

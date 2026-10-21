@@ -1,0 +1,32 @@
+/* ============================================================
+   ADMIN CANCELLATIONS — BLUEPRINT
+   /admin/cancellations
+   Page vocabulary only; the furniture is admin-influencers/admin-ui.module.css.
+   ============================================================ */
+
+:global(.jf-blueprint .content) .root { display: flex; flex-direction: column; gap: 22px; }
+
+/* The reason filter sits on its own line under the card head: seven reasons
+   do not fit beside the title. */
+:global(.jf-blueprint .content) .filters { margin: 0 0 14px; }
+:global(.jf-blueprint .content) .pick { display: none; }
+
+/* date · company · plan · reasons · to Free */
+:global(.jf-blueprint .content) .cols { grid-template-columns: 74px minmax(0, 1.2fr) 110px minmax(0, 2.4fr) 120px; align-items: start; }
+:global(.jf-blueprint .content) .date { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+
+/* A reason is a plain flat label — no dot, no caps (DESIGN.md, filters and tags). */
+:global(.jf-blueprint .content) .reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+:global(.jf-blueprint .content) .reason {
+  display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px;
+  border: 1px solid var(--hair); border-radius: var(--radius); background: #fff;
+  font-size: 12.5px; font-weight: 600; color: var(--ink);
+}
+:global(.jf-blueprint .content) .other { display: block; margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--ink-soft); overflow-wrap: anywhere; }
+
+@media (max-width: 860px) {
+  :global(.jf-blueprint .content) .filters.filters { display: none; }
+  :global(.jf-blueprint .content) .pick { display: block; margin: 0 0 14px; }
+  :global(.jf-blueprint .content) .pick :global(.bp-sel) { display: block; width: 100%; }
+  :global(.jf-blueprint .content) .pick select { width: 100%; min-height: 44px; }
+}

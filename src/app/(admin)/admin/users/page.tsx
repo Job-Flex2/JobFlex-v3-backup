@@ -12,6 +12,7 @@ import type { Metadata } from "next";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { getAdminUsersData } from "@/actions/adminUsers";
+import { parseReasons, reasonLabel } from "@/lib/cancelFeedback";
 import { AdminUsersContent, type AdminUserDTO } from "@/components/v3/admin-users/admin-users-content";
 
 export const dynamic = "force-dynamic";
@@ -24,13 +25,19 @@ export const metadata: Metadata = {
 export default async function AdminUsersPage() {
   const me = await requirePlatformAdmin();
 
-  const [data, plans, internalOrgs] = await Promise.all([
+  const [data, plans, internalOrgs, lastCancels] = await Promise.all([
     getAdminUsersData(),
     db.pricingPlan.findMany({ orderBy: { order: "asc" }, select: { slug: true, name: true } }),
     // JobFlex's own organizations (Lead Center test leads go only to these).
     db.organization.findMany({ where: { isInternal: true }, select: { id: true } }),
+    // The latest cancellation's reasons per organization (2026-10-20); none
+    // while the table is not in this database yet.
+    db.cancellationFeedback
+      .findMany({ orderBy: { createdAt: "desc" }, distinct: ["organizationId"], select: { organizationId: true, reasons: true, otherText: true, createdAt: true } })
+      .catch(() => [] as { organizationId: string; reasons: string; otherText: string | null; createdAt: Date }[]),
   ]);
   const internal = new Set(internalOrgs.map((o) => o.id));
+  const lastCancel = new Map(lastCancels.map((c) => [c.organizationId, c]));
 
   const rows: AdminUserDTO[] = data.rows.map((u) => ({
     ...u,
@@ -39,6 +46,10 @@ export default async function AdminUsersPage() {
     canceledAt: u.canceledAt?.toISOString() ?? null,
     createdAt: u.createdAt.toISOString(),
     orgInternal: u.orgId ? internal.has(u.orgId) : false,
+    lastCancel: (() => {
+      const c = u.orgId ? lastCancel.get(u.orgId) : undefined;
+      return c ? { at: c.createdAt.toISOString(), reasons: parseReasons(c.reasons).map(reasonLabel), otherText: c.otherText } : null;
+    })(),
   }));
 
   return (
