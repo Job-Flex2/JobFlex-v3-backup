@@ -50,7 +50,8 @@ export const SECTION_TITLE: Record<SectionKey, string> = {
   work: "Work quantities",
 };
 
-export type MeasureSection = { key: SectionKey; title: string; rows: MeasureRow[] };
+/** `key`: a SectionKey for the sizes; the materials list (lib/plans/materialsReport) keys its own sections. */
+export type MeasureSection = { key: SectionKey | (string & {}); title: string; rows: MeasureRow[] };
 
 export type RoomRow = {
   level: string;

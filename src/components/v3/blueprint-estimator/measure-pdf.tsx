@@ -122,11 +122,15 @@ function Rooms({ rooms }: { rooms: RoomRow[] }) {
   );
 }
 
-function MeasureFile({ report, plan, date }: { report: MeasureReport; plan: { name: string; address: string | null; file: string }; date: string }) {
+/** What the file is: the sizes (default), or a materials list. */
+export type PdfHeading = { kicker: string; fileWord: string };
+const SIZES_HEADING: PdfHeading = { kicker: "Sizes & measurements · from the plans", fileWord: "sizes and measurements" };
+
+function MeasureFile({ report, plan, date, heading }: { report: MeasureReport; plan: { name: string; address: string | null; file: string }; date: string; heading: PdfHeading }) {
   return (
-    <Document title={`${plan.name} — sizes and measurements`} author="JobFlex" subject="Sizes and measurements read from the plans">
+    <Document title={`${plan.name} — ${heading.fileWord}`} author="JobFlex" subject={`${heading.fileWord[0].toUpperCase()}${heading.fileWord.slice(1)} read from the plans`}>
       <Page size="LETTER" style={st.page}>
-        <Text style={st.kicker}>Sizes & measurements · from the plans</Text>
+        <Text style={st.kicker}>{heading.kicker}</Text>
         <Text style={st.title}>{plan.name}</Text>
         {plan.address ? <Text style={st.sub}>{plan.address}</Text> : null}
         <Text style={st.meta}>
@@ -192,21 +196,21 @@ function MeasureFile({ report, plan, date }: { report: MeasureReport; plan: { na
 }
 
 /** The report as a PDF (a Blob). `origin`: where the fonts are served from — the site, or a folder for the checks. */
-export async function buildMeasurePdf(report: MeasureReport, plan: { name: string | null; address: string | null; file: string }, origin: string): Promise<{ blob: Blob; name: string }> {
+export async function buildMeasurePdf(report: MeasureReport, plan: { name: string | null; address: string | null; file: string }, origin: string, heading: PdfHeading = SIZES_HEADING): Promise<{ blob: Blob; name: string }> {
   registerFonts(origin);
   const name = (plan.name || plan.file.replace(/\.pdf$/i, "") || "Plans").trim();
   const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const blob = await pdf(<MeasureFile report={report} plan={{ name, address: plan.address, file: plan.file }} date={date} />).toBlob();
+  const blob = await pdf(<MeasureFile report={report} plan={{ name, address: plan.address, file: plan.file }} date={date} heading={heading} />).toBlob();
   return { blob, name };
 }
 
 /** The report as a PDF file, saved to the device under the plan's name. */
-export async function downloadMeasurePdf(report: MeasureReport, plan: { name: string | null; address: string | null; file: string }): Promise<void> {
-  const { blob, name } = await buildMeasurePdf(report, plan, window.location.origin);
+export async function downloadMeasurePdf(report: MeasureReport, plan: { name: string | null; address: string | null; file: string }, heading: PdfHeading = SIZES_HEADING): Promise<void> {
+  const { blob, name } = await buildMeasurePdf(report, plan, window.location.origin, heading);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${name.replace(/[\\/:*?"<>|]+/g, " ").slice(0, 80)} — sizes and measurements.pdf`;
+  a.download = `${name.replace(/[\\/:*?"<>|]+/g, " ").slice(0, 80)} — ${heading.fileWord}.pdf`;
   document.body.appendChild(a);
   a.click();
   a.remove();

@@ -20,6 +20,8 @@ import s from "./blueprint-estimator.module.css";
 import { BlueprintLoadingCard } from "./blueprint-loading-card";
 import { ASKS, clockText, money, qtyText, SIZE_ASKS, UNIT_SHORT, useBlueprintEstimator } from "./use-blueprint-estimator";
 import { MeasureReportView } from "./measure-report";
+import { MaterialsView } from "./materials-view";
+import { MATERIAL_TOPICS } from "@/lib/plans/materialsReport";
 import type { PlanHvacLoad } from "@/lib/plans/hvacEnvelope";
 import { MAX_PLAN_PAGES } from "@/lib/plans/pdfClient";
 import { TRADE_LABEL } from "@/lib/plans/takeoff";
@@ -35,6 +37,7 @@ export function BlueprintEstimator() {
     billed, total, setQty, removeLine, acceptLine, openFiles, runAsk, retryTrade, createProposal, editInSmartProposal,
     openViewer, startOver, cancelWork, kindOf,
     mode, setMode, sizes, runMeasure, workSteps,
+    mats, materials, runMaterials, setDeckSize, editMeasure, extraPct, setExtraPct, reads,
   } = useBlueprintEstimator();
   const [drag, setDrag] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -140,7 +143,7 @@ export function BlueprintEstimator() {
     return (
       <div className={s.be}>
         {head("Working on it", working.title)}
-        <BlueprintLoadingCard request={mode === "sizes" ? "" : request.trim()} step={step} readDone={readDone} readTotal={readTotal}
+        <BlueprintLoadingCard request={mode === "estimate" ? request.trim() : ""} step={step} readDone={readDone} readTotal={readTotal}
           priced={pricing.done} priceTotal={pricing.total} steps={workSteps}
           onCancel={cancelWork} />
       </div>
@@ -165,8 +168,56 @@ export function BlueprintEstimator() {
               <button type="button" role="tab" aria-selected={mode === "sizes"} className={`${s.mode} ${mode === "sizes" ? s.modeOn : ""}`} onClick={() => setMode("sizes")} data-be-mode="sizes">
                 Sizes &amp; measurements
               </button>
+              <button type="button" role="tab" aria-selected={mode === "materials"} className={`${s.mode} ${mode === "materials" ? s.modeOn : ""}`} onClick={() => setMode("materials")} data-be-mode="materials">
+                Materials
+              </button>
             </div>
-            {mode === "sizes" ? (
+            {mode === "materials" ? (
+              <>
+                <h2 className={s.h2}>What materials do you need?</h2>
+                <p className={s.p}>Everything to buy, in the units it is sold in — drywall in sheets with its mud and tape, shingles in bundles, lumber by the piece, concrete by the yard — worked out from the plans, with how each was figured. Tap a trade, or say the job.</p>
+                <div className={s.chips} role="group" aria-label="Trades">
+                  {MATERIAL_TOPICS.map((t) => (
+                    <button key={t.key} type="button" className={s.chip} onClick={() => void runMaterials(null, t.key)} data-be-material={t.key}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  className={s.area}
+                  aria-label="What materials do you need from these plans?"
+                  placeholder="e.g. Drywall for the garage only · a 16x20 composite deck, 4 ft high · roof materials for a metal roof"
+                  value={request}
+                  onChange={(e) => setRequest(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && request.trim().length >= 2) void runMaterials(request);
+                  }}
+                  data-be-materials-ask
+                />
+                <DictateButton
+                  id="blueprintMaterialsDictate"
+                  label="Speak it"
+                  value={request}
+                  onChange={setRequest}
+                  wrapClassName={s.dictate}
+                  buttonClassName={s.btnGhost}
+                  onClassName={s.dictateOn}
+                  noteClassName={s.dictateNote}
+                  iconClassName={s.ic}
+                />
+                {err && <div className={s.err}>{err}</div>}
+                <div className={s.bar}>
+                  {mats ? (
+                    <button type="button" className={s.btnGhost} onClick={() => setStage("materials")}>
+                      Back to the materials
+                    </button>
+                  ) : null}
+                  <button type="button" className={s.btnPrimary} disabled={request.trim().length < 2} onClick={() => void runMaterials(request)} data-be-materials-go>
+                    Work out the materials
+                  </button>
+                </div>
+              </>
+            ) : mode === "sizes" ? (
               <>
                 <h2 className={s.h2}>What do you want measured?</h2>
                 <p className={s.p}>Every room by name with its size and square feet, the floors, walls, roof, windows and doors — each with its sheet, ready as a PDF. Tap a part of the house, or ask for something in particular.</p>
@@ -304,6 +355,34 @@ export function BlueprintEstimator() {
           onPage={(p) => void openViewer(p)}
           onAsk={() => {
             setMode("sizes");
+            setStage("ask");
+          }}
+          onEstimate={() => {
+            setMode("estimate");
+            setRequest("");
+            setStage("ask");
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 4b · the materials (2026-10-21) — every material to buy for a trade, a typed job or a deck, from the plans.
+  if (stage === "materials" && materials && mats) {
+    return (
+      <div className={s.be}>
+        {viewerEl}
+        <MaterialsView
+          report={materials}
+          deckAsk={mats.deckAsk}
+          plan={{ name: planName, address: planAddress, file: pages[0]?.fileName ?? "Plans", sheets: Object.values(reads).filter((r) => r.status === "ok").length }}
+          extraPct={extraPct}
+          onExtra={setExtraPct}
+          onMeasure={editMeasure}
+          onDeck={(spec) => void setDeckSize(spec)}
+          onPage={(p) => void openViewer(p)}
+          onAsk={() => {
+            setMode("materials");
             setStage("ask");
           }}
           onEstimate={() => {
