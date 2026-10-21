@@ -209,7 +209,8 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
   const signupAlerts = await part("sign-up alerts", gaps, [] as Awaited<ReturnType<typeof readSignupAlerts>>, () => readSignupAlerts(now));
   for (const v of invVisitors) {
     const at = Date.parse(v.lastSeen);
-    if (at >= dayStart) feedItems.push({ at, kind: "investor", who: v.name, text: `${v.visits > 1 ? "came back to" : "opened"} the investor page · ${v.company} · ${v.kind}` });
+    // A request still waiting on us (2026-10-20) is asked, not opened.
+    if (at >= dayStart) feedItems.push({ at, kind: "investor", who: v.name, text: `${v.status === "pending" ? "asks to see" : v.visits > 1 ? "came back to" : "opened"} the investor page · ${v.company} · ${v.kind}` });
   }
   for (const o of invOffers) {
     const at = Date.parse(o.at);
@@ -260,6 +261,7 @@ export async function readOfficeScreen(now = Date.now()): Promise<OfficeScreenDa
     sentToday: sentT,
     sentYesterday: sentY,
     recentOffers: invOffers.filter((o) => now - Date.parse(o.at) < 3 * 24 * HOUR).map((o) => ({ company: o.company, amount: o.amount, at: Date.parse(o.at) })),
+    investorRequests: invVisitors.filter((v) => v.status === "pending").map((v) => ({ name: v.name, company: v.company })),
     // Alarms never carry an outside script's failure (signupAlertsOf drops them), so the side here is ours or theirs.
     signupAlerts: signupAlerts.map((a) => ({ words: a.words, side: a.side === "ours" ? ("ours" as const) : ("theirs" as const), visits: a.visits, times: a.times, screen: a.screen })),
   });

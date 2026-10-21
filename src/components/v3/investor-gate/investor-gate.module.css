@@ -54,3 +54,10 @@
   .primary, .vc { width: 100%; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .vcDot { animation: none; } }
+
+/* Waiting for approval (2026-10-20) */
+.wait { margin: 0; display: inline-flex; align-items: center; gap: 10px; font: 700 12px var(--font-mono, ui-monospace, monospace); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft, #2a2a2a); }
+.waitDot { width: 10px; height: 10px; border-radius: 50%; background: #1854a0; animation: invWait 1.6s ease-in-out infinite; }
+@keyframes invWait { 0%, 100% { opacity: 0.25; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .waitDot { animation: none; } }
+.waitOffer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-top: 12px; border-top: 1px solid rgba(10, 10, 10, 0.12); font-size: 13.5px; color: var(--ink-soft, #2a2a2a); }

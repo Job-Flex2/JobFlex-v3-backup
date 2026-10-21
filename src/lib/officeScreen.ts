@@ -129,6 +129,8 @@ export interface AttentionFacts {
   sentYesterday: number;
   /** VC offers sent from the investor link in the last three days (2026-10-13). */
   recentOffers?: { company: string; amount: string; at: number }[];
+  /** Readers of the investor link waiting for an admin's yes (2026-10-20). */
+  investorRequests?: { name: string; company: string }[];
   /** The sign-up form's alarm: the same problem for several visitors in the last hour (2026-10-14, lib/signup-alerts). */
   signupAlerts?: { words: string; side: "ours" | "theirs"; visits: number; times: number; screen: string }[];
 }
@@ -145,6 +147,8 @@ export function buildAttention(f: AttentionFacts): OfficeAttention[] {
   for (const a of f.signupAlerts ?? []) {
     out.push({ tone: a.side === "ours" ? "bad" : "warn", text: `Sign-up: ${plural(a.visits, "visitor")} hit "${a.words}" in the last hour${a.side === "ours" ? " — on our side" : ""}`, who: [`${a.times} ${a.times === 1 ? "time" : "times"}${a.screen ? ` · ${screenName(a.screen)} screen` : ""}`] });
   }
+  // Someone at the investor link's door, waiting for a yes (2026-10-20): nothing opens until a person answers.
+  if (f.investorRequests?.length) out.push({ tone: "warn", text: `${plural(f.investorRequests.length, "investor request")} to review — they wait until you approve`, who: f.investorRequests.map((r) => `${r.name} · ${r.company}`) });
   // An offer is good news that waits on a person.
   if (f.recentOffers?.length) out.push({ tone: "good", text: `${plural(f.recentOffers.length, "VC offer")} to answer — from the investor link`, who: f.recentOffers.map((o) => `${o.company} · ${o.amount}`) });
   if (f.failedPayments.length) out.push({ tone: "bad", text: `${plural(f.failedPayments.length, "payment")} failed — the card was declined`, who: f.failedPayments });

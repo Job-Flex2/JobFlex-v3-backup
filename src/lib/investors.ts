@@ -54,9 +54,11 @@ export interface InvestorSettings extends InvestorAssumptions {
   linkEnabled: boolean;
   /** When the link was last made. */
   linkMadeAt: string | null;
+  /** Each reader waits for an admin's yes before the figures open (owner, 2026-10-20). On unless switched off. */
+  approveReaders: boolean;
 }
 
-export const DEFAULT_SETTINGS: InvestorSettings = { realisticPct: 60, spendPerDayCents: null, horizonDays: 180, trialDays: 7, dailyBudgetCents: null, budgetFrom: null, sinceDate: null, linkToken: null, linkEnabled: false, linkMadeAt: null };
+export const DEFAULT_SETTINGS: InvestorSettings = { realisticPct: 60, spendPerDayCents: null, horizonDays: 180, trialDays: 7, dailyBudgetCents: null, budgetFrom: null, sinceDate: null, linkToken: null, linkEnabled: false, linkMadeAt: null, approveReaders: true };
 const MAX_ENTRIES = 3000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -201,6 +203,7 @@ export function cleanSettings(raw: unknown): InvestorSettings {
     linkToken: typeof r.linkToken === "string" && /^[A-Za-z0-9_-]{16,64}$/.test(r.linkToken) ? r.linkToken : null,
     linkEnabled: r.linkEnabled === true,
     linkMadeAt: typeof r.linkMadeAt === "string" ? r.linkMadeAt : null,
+    approveReaders: r.approveReaders !== false,
   };
 }
 
