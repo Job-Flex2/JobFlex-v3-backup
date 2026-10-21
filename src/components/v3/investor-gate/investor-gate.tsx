@@ -4,10 +4,14 @@
 // company, what they do, an email — and we hear about it; then the page opens for them (a pass in this browser,
 // lib/investorVisitors). And on the page itself, "We accept VC offers": a short offer, sent to us with the
 // investor's address to reply to.
+//
+// 2026-10-20 (owner: "don't open the link till we approve it"): with approvals on, the door sends a request — the
+// reader then waits on InvestorWaiting, which asks every little while and opens the page itself when an admin says
+// yes. An email already let in, typed in a new browser, gets an open link by email instead of the figures.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { introduceInvestorAction, sendInvestorOfferAction } from "@/actions/investorGate";
+import { introduceInvestorAction, investorRequestStatusAction, sendInvestorOfferAction } from "@/actions/investorGate";
 import { INVESTOR_KINDS, OFFER_AMOUNTS, OFFER_INSTRUMENTS, OFFER_TIMELINES, OFFER_TYPES, type InvestorVisitorView } from "@/lib/investorGate";
 import s from "./investor-gate.module.css";
 
@@ -42,12 +46,20 @@ function Chips({ name, options, value, onPick, problem }: { name: string; option
 }
 
 /** Before the figures: who is reading. An admin goes through it too (2026-10-14), to see the page as a reader does. */
-export function InvestorGate({ token, admin = false }: { token: string; admin?: boolean }) {
+/** "j•••@acme.vc": enough for the reader to know which inbox to look in. */
+const maskEmail = (e: string) => {
+  const [user, domain] = e.split("@");
+  return domain ? `${user.slice(0, 1)}•••@${domain}` : e;
+};
+
+export function InvestorGate({ token, admin = false, approval = true, notice }: { token: string; admin?: boolean; approval?: boolean; notice?: "expired" | "closed" }) {
   const router = useRouter();
   const [f, setF] = useState({ name: "", company: "", kind: "", email: "", phone: "" });
   const [problems, setProblems] = useState<Problems>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The address an open link was sent to — this email was let in before, from another browser. */
+  const [mailed, setMailed] = useState<string | null>(null);
   const set = (k: keyof typeof f, v: string) => {
     setF((x) => ({ ...x, [k]: v }));
     setProblems((p) => ({ ...p, [k]: "" }));
@@ -61,7 +73,11 @@ export function InvestorGate({ token, admin = false }: { token: string; admin?: 
       const r = await introduceInvestorAction(token, f);
       if (!r.ok) {
         setError(r.error);
-        setProblems(r.problems ?? {});
+        setProblems("problems" in r ? (r.problems ?? {}) : {});
+        return;
+      }
+      if ("outcome" in r && r.outcome === "check-email") {
+        setMailed(r.email);
         return;
       }
       router.refresh();
@@ -76,8 +92,20 @@ export function InvestorGate({ token, admin = false }: { token: string; admin?: 
       <div className={s.kicker}>JobFlex · Investors</div>
       <h1 className={s.h1}>Before the figures — who&apos;s reading?</h1>
       <p className={s.sub}>
-        The live numbers are one step away: what the ads cost, how many contractors start a trial, and how soon the ads pay for themselves. Tell us who you are and the page opens — this browser remembers you.
+        {approval
+          ? "The live numbers — what the ads cost, how many contractors start a trial, and how soon the ads pay for themselves — are shared one reader at a time. Tell us who you are; we look at each request and open the page for you. You'll hear by email, and this page opens on its own."
+          : "The live numbers are one step away: what the ads cost, how many contractors start a trial, and how soon the ads pay for themselves. Tell us who you are and the page opens — this browser remembers you."}
       </p>
+      {notice ? (
+        <p className={s.note} data-open-notice={notice}>
+          {notice === "expired" ? "That open link has expired or belongs to an earlier link. Ask again below — it only takes a moment." : "That request has not been approved yet. Ask again below, or wait for our email."}
+        </p>
+      ) : null}
+      {mailed ? (
+        <p className={s.note} role="status" data-open-mailed>
+          We know this email — it was let in before. For your security the figures don&apos;t open on an address alone: we&apos;ve sent a link to <b>{maskEmail(mailed)}</b>. Open it on this device and the page opens.
+        </p>
+      ) : null}
       {admin ? <p className={s.note} data-admin-note>You are signed in as an admin. Every reader goes through this door before the figures — go through it yourself to see the page as they do. Your entry is marked as yours and kept out of the reader list, and nobody is emailed about it.</p> : null}
       <form className={s.form} onSubmit={submit} noValidate>
         <div className={s.pair}>
@@ -106,10 +134,69 @@ export function InvestorGate({ token, admin = false }: { token: string; admin?: 
           </p>
         ) : null}
         <button type="submit" className={s.primary} disabled={busy} data-investor-open>
-          {busy ? "Opening…" : "See the figures"}
+          {busy ? (approval ? "Sending…" : "Opening…") : approval ? "Ask to see the figures" : "See the figures"}
         </button>
         <p className={s.fine}>Used only to know who is reading and to answer you. Never shared.</p>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Waiting for our yes (2026-10-20): what happens next, in one breath — and the page asks every 15 seconds while it is
+ * on screen (and when the reader comes back to the tab), opening the figures itself the moment an admin approves. A
+ * declined request gets a polite, final word. The offer button stays: an investor need not wait to make an offer.
+ */
+export function InvestorWaiting({ token, visitor, status }: { token: string; visitor: InvestorVisitorView; status: "pending" | "declined" }) {
+  const router = useRouter();
+  const first = visitor.name.split(/\s+/)[0] || visitor.name;
+  useEffect(() => {
+    if (status !== "pending") return;
+    let stop = false;
+    const ask = async () => {
+      if (stop || document.visibilityState !== "visible") return;
+      try {
+        const r = await investorRequestStatusAction(token);
+        if (!stop && r.status !== "pending") router.refresh();
+      } catch {
+        /* the next tick asks again */
+      }
+    };
+    const t = window.setInterval(ask, 15_000);
+    const onShow = () => void ask();
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener("focus", onShow);
+    return () => {
+      stop = true;
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener("focus", onShow);
+    };
+  }, [status, token, router]);
+  if (status === "declined") {
+    return (
+      <div className={s.gate} data-investor-waiting="declined">
+        <div className={s.kicker}>JobFlex · Investors</div>
+        <h1 className={s.h1}>Thank you, {first}</h1>
+        <p className={s.sub}>We share these figures with a small circle for now, and we can&apos;t open them to you at this time. Thank you for your interest in JobFlex.</p>
+      </div>
+    );
+  }
+  return (
+    <div className={s.gate} data-investor-waiting="pending">
+      <div className={s.kicker}>JobFlex · Investors</div>
+      <h1 className={s.h1}>Thanks, {first} — it&apos;s with us</h1>
+      <p className={s.sub}>
+        We look at each request before the figures open. The moment we do, you&apos;ll get an email at <b>{maskEmail(visitor.email)}</b> with your link — and this page opens on its own, so you can leave it open.
+      </p>
+      <p className={s.wait} role="status">
+        <span className={s.waitDot} aria-hidden="true" />
+        Waiting for approval · {visitor.company}
+      </p>
+      <div className={s.waitOffer}>
+        <span>While you wait — we accept VC offers.</span>
+        <VcOfferButton token={token} visitor={visitor} lead={false} />
+      </div>
     </div>
   );
 }

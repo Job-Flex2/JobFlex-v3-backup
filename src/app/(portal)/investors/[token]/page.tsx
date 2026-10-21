@@ -9,13 +9,18 @@
 // "We accept VC offers" sends a short offer to us. The door is for everyone
 // (owner, 2026-10-14): a signed-in admin goes through it too and sees the page
 // as a reader does — their entry marked as a test, told to nobody.
+//
+// AND WAITS FOR OUR YES (owner, 2026-10-20): with approvals on, a reader who
+// introduced themselves waits here (InvestorWaiting) until an admin approves on
+// /admin/investors; the page opens on its own then. ?open= carries a word back
+// from an open link that could not open (expired, or not approved).
 import type { Metadata } from "next";
-import { investorLinkOpen, investorReport } from "@/lib/investors";
+import { investorLinkOpen, investorReport, readInvestorSettings } from "@/lib/investors";
 import { visitorForLink } from "@/lib/investorVisitors";
-import { INVESTING_KINDS } from "@/lib/investorGate";
+import { INVESTING_KINDS, mayRead, statusOf } from "@/lib/investorGate";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { InvestorReportView } from "@/components/v3/admin-investors/investor-report";
-import { InvestorGate, VcOfferButton } from "@/components/v3/investor-gate/investor-gate";
+import { InvestorGate, InvestorWaiting, VcOfferButton } from "@/components/v3/investor-gate/investor-gate";
 import { longDate } from "@/lib/investorModel";
 import s from "./investors-public.module.css";
 
@@ -31,8 +36,10 @@ async function signedInAdmin(): Promise<boolean> {
   }
 }
 
-export default async function InvestorsPublicPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function InvestorsPublicPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ open?: string }> }) {
   const { token } = await params;
+  const { open: openWord } = await searchParams;
+  const notice = openWord === "expired" || openWord === "closed" ? openWord : undefined;
   const open = /^[A-Za-z0-9_-]{16,64}$/.test(token) && (await investorLinkOpen(token));
   if (!open) {
     return (
@@ -45,11 +52,18 @@ export default async function InvestorsPublicPage({ params }: { params: Promise<
       </main>
     );
   }
-  const [admin, visitor] = await Promise.all([signedInAdmin(), visitorForLink(token, { countVisit: true })]);
+  const [admin, visitor, settings] = await Promise.all([signedInAdmin(), visitorForLink(token, { countVisit: true }), readInvestorSettings()]);
   if (!visitor) {
     return (
       <main className={s.page}>
-        <InvestorGate token={token} admin={admin} />
+        <InvestorGate token={token} admin={admin} approval={settings.approveReaders} notice={notice} />
+      </main>
+    );
+  }
+  if (!mayRead(visitor, settings.approveReaders)) {
+    return (
+      <main className={s.page}>
+        <InvestorWaiting token={token} visitor={{ name: visitor.name, company: visitor.company, kind: visitor.kind, email: visitor.email, phone: visitor.phone }} status={statusOf(visitor) === "declined" ? "declined" : "pending"} />
       </main>
     );
   }

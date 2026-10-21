@@ -15,7 +15,9 @@ import { readInvestorOffers, readInvestorVisitors } from "@/lib/investorVisitors
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "JobFlex Admin · Investors" };
 
-export default async function AdminInvestorsPage() {
+export default async function AdminInvestorsPage({ searchParams }: { searchParams: Promise<{ review?: string }> }) {
+  // ?review=<id>: a request a text or an email pointed to (2026-10-20) — brought into view.
+  const { review } = await searchParams;
   await requirePlatformAdmin();
   const report = await investorReport({ refreshMeta: true });
   // The shared link is printed with this deployment's own host.
@@ -28,7 +30,7 @@ export default async function AdminInvestorsPage() {
     <AdminInvestorsContent
       initial={report}
       origin={`${proto}://${host}`}
-      audience={<InvestorAudience visitors={visitors} offers={offers} linkMadeAt={report.settings.linkMadeAt} />}
+      audience={<InvestorAudience visitors={visitors} offers={offers} linkMadeAt={report.settings.linkMadeAt} approveReaders={report.settings.approveReaders} review={typeof review === "string" ? review.slice(0, 40) : undefined} />}
     />
   );
 }
