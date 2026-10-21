@@ -270,6 +270,24 @@ function measurementCaption(t: string) {
       return "Lump sum";
     case "HOUR":
       return "Hour";
+    case "CU_YARD":
+      return "Cubic yd";
+    case "SQ_YARD":
+      return "Sq yd";
+    case "EACH":
+    case "SHEET":
+    case "BUNDLE":
+    case "ROLL":
+    case "BOX":
+    case "BAG":
+    case "PIECE":
+    case "GALLON":
+    case "TON":
+    case "SET":
+    case "BUCKET":
+    case "TUBE":
+      // "Each", "Sheet", "Bundle"… — the measure the line is counted or bought in.
+      return t.charAt(0) + t.slice(1).toLowerCase();
     default:
       return "Unit";
   }

@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { InstallmentStatus } from "@/lib/prismaEnums";
+import { InstallmentStatus, MEASUREMENT_TYPES } from "@/lib/prismaEnums";
 import { diffUnpaid, resolveSchedule } from "@/lib/paymentSchedule";
 import { expireOpenCheckoutsForProposal } from "@/lib/payments/checkouts";
 import { repriceOpenInvoices } from "@/lib/payments/invoiceRecord";
@@ -30,7 +30,7 @@ import { findClientForLead } from "@/lib/leadClient";
 const lineItemSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  measurementType: z.enum(["SQFT", "LINEAR_FT", "CUBIC_FT", "UNIT", "HOUR", "LUMP_SUM", "SQUARE"]),
+  measurementType: z.enum(MEASUREMENT_TYPES),
   quantity: z.number().min(0),
   unitPrice: z.number().min(0),
   materialCost: z.number().min(0).default(0),

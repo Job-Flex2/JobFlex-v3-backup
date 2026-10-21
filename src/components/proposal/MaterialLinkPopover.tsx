@@ -16,6 +16,8 @@ const UNIT_LABEL: Record<string, string> = {
   UNIT: "unit",
   HOUR: "hour",
   LUMP_SUM: "lump sum",
+  CU_YARD: "cu yd",
+  SQ_YARD: "sq yd",
 };
 
 function formatQty(q: number): string {

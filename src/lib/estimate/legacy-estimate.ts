@@ -22,7 +22,7 @@
 
 import { ESTIMATOR_MASTER_PROMPT } from "./master-prompt";
 import { hvacPromptBlock, isHvacBrief } from "./hvac-prompt";
-import { normalizeUnit } from "./console-model";
+import { measureUnit } from "./console-model";
 import { buildQuoteDraftPromptAnchored } from "./legacy/prompt";
 import { parseAiDraftResponse, type AiDraftOutput, type AiDraftPricingLineItem } from "./legacy/parse";
 import { detectSpecialty } from "./legacy/specialtyDetector";
@@ -320,6 +320,20 @@ const UNIT_OF_MEASUREMENT: Record<string, string> = {
   linearft: "linear ft",
   lf: "lf",
   cubic: "cu yards",
+  // The spellings a model writes, its spaces taken out (2026-10-21: "cu yards" arrived as "cuyards" and was stored
+  // as "unit"; a yard of concrete is a cubic yard).
+  cuyards: "cu yards",
+  cuyard: "cu yards",
+  cuyd: "cu yards",
+  cubicyards: "cu yards",
+  cubicyard: "cu yards",
+  sqyd: "sq yards",
+  squareyards: "sq yards",
+  squarefeet: "sqft",
+  linearfeet: "linear ft",
+  lnft: "linear ft",
+  hours: "hour",
+  hr: "hour",
   unit: "unit",
   hour: "hour",
   fixed: "fixed",
@@ -361,7 +375,7 @@ export function legacyLineToItem(l: AiDraftPricingLineItem): LegacyItem | null {
   const name = (l.name ?? "").trim();
   if (!name) return null;
   const mt = (l.measurementType ?? "").toLowerCase().replace(/[^a-z]/g, "");
-  let unit = normalizeUnit(UNIT_OF_MEASUREMENT[mt] ?? mt ?? "unit");
+  let unit = measureUnit(UNIT_OF_MEASUREMENT[mt] ?? mt ?? "unit");
   // The old shape filed roofing squares under 'unit' ("use 'unit' with
   // quantity in squares"); this picker has a word for them.
   // A line that names its package ("shingles, 3 bundles a square", "10-square rolls") is

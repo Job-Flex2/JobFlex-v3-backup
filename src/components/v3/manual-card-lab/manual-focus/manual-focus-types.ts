@@ -63,6 +63,9 @@ export type Line = {
   /** Optional. Prints under the name on the client's copy. */
   description: string;
   unit: Unit;
+  /** The measure the line was stored in when the picker has no option for it ("EACH", "BUNDLE"…) — kept on save
+   *  while `unit` is left as it was loaded (manual-blueprint-bridge). */
+  measure?: string;
   quantity: number;
   /** $/unit before markup — the internal split, behind the row's disclosure. */
   materialCost: number;

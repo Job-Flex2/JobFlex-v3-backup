@@ -6,7 +6,8 @@ import { nanoid } from "nanoid";
 import { sellUnitPrice } from "@/lib/pricing/markup";
 import { stateTaxRate, resolveStateCode, stateFromAddress } from "@/lib/pricing/salesTax";
 
-export type MeasurementType = "SQFT" | "LINEAR_FT" | "CUBIC_FT" | "UNIT" | "HOUR" | "LUMP_SUM" | "SQUARE";
+import type { MeasurementType } from "@/lib/prismaEnums";
+export type { MeasurementType };
 
 export interface DraftLineItem {
   id: string;
