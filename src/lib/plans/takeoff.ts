@@ -789,7 +789,7 @@ export function roofArea(h: House): number {
   if (h.roof.statedAreaSqFt) return h.roof.statedAreaSqFt;
   return round(roofPlanArea(h) * h.roof.factor);
 }
-function eaveLf(h: House): number {
+export function eaveLf(h: House): number {
   const ground = h.levels.find((l) => l.name === "Main") ?? h.levels[0];
   const long = ground ? longSide(ground) : 0;
   const o = (h.roof.overhangIn / 12) * 2;
@@ -802,7 +802,7 @@ function eaveLf(h: House): number {
   const houseEaves = hip ? hipEaves : mixed ? (gableEaves + hipEaves) / 2 : gableEaves;
   return round(houseEaves + 2 * garageSide);
 }
-function ridgeLf(h: House): number {
+export function ridgeLf(h: House): number {
   const ground = h.levels.find((l) => l.name === "Main") ?? h.levels[0];
   if (!ground) return 0;
   const long = longSide(ground);
@@ -812,7 +812,7 @@ function ridgeLf(h: House): number {
   const garageRidge = h.garage && !h.garageInOutline ? (h.garage.depthFt ?? Math.sqrt(h.garage.areaSqFt)) : 0;
   return round(houseRidge + garageRidge);
 }
-function rakeLf(h: House): number {
+export function rakeLf(h: House): number {
   if (/hip/i.test(h.roof.style ?? "")) return 0;
   const ground = h.levels.find((l) => l.name === "Main") ?? h.levels[0];
   if (!ground) return 0;

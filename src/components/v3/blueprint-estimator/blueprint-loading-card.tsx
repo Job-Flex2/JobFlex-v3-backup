@@ -5,10 +5,9 @@ import s from "./blueprint-estimator.module.css";
 import { PRICING_STEP, WORK_STEPS, workProgress } from "./use-blueprint-estimator";
 
 // The steps and the meter live with the estimator's state (use-blueprint-estimator), shared with the phone page.
-const STEPS = WORK_STEPS;
 const PRICING = PRICING_STEP;
 
-export function BlueprintLoadingCard({ request, step, readDone, readTotal, priced = 0, priceTotal = 0, onCancel }: {
+export function BlueprintLoadingCard({ request, step, readDone, readTotal, priced = 0, priceTotal = 0, onCancel, steps: STEPS = WORK_STEPS }: {
   request: string;
   step: number;
   readDone: number;
@@ -17,11 +16,13 @@ export function BlueprintLoadingCard({ request, step, readDone, readTotal, price
   priced?: number;
   priceTotal?: number;
   onCancel: () => void;
+  /** The job's four steps (default), or the sizes' (MEASURE_STEPS) — nothing priced there. */
+  steps?: string[];
 }) {
-  const { progress, pricingWords } = workProgress({ step, readDone, readTotal, priced, priceTotal });
+  const { progress, pricingWords } = workProgress({ step, readDone, readTotal, priced, priceTotal, steps: STEPS.length });
   return (
     <section className={`${s.card} ${s.work}`} aria-label="Blueprint estimate progress">
-      <div className={s.workRequest}>{request}</div>
+      {request ? <div className={s.workRequest}>{request}</div> : null}
       <div className={s.workHead}>
         <div className={s.workStage} role="status">{STEPS[step]}…</div>
         <div className={s.workPercent}>{progress}%</div>
