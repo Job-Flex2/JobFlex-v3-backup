@@ -63,7 +63,7 @@ import {
   saveEstimate,
   convertEstimateToProposal,
 } from "@/actions/advancedEstimator";
-import type { ClarifyQuestion, PricingSnapshotWire } from "@/lib/estimatorSchema";
+import { SAME_BRIEF_NOTE, type ClarifyQuestion, type PricingSnapshotWire } from "@/lib/estimatorSchema";
 import {
   briefWithAnswers,
   computeTotals,
@@ -190,6 +190,9 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   /** What the post-generation validation changed, in the contractor's words
    *  (lib/estimate/validate-estimate). Contractor-facing only. */
   const [checkNotes, setCheckNotes] = useState<string[]>([]);
+  // When this estimate is the one the same brief got before (lib/estimate/sameBrief): its date, for the line that
+  // offers a fresh one.
+  const [remembered, setRemembered] = useState<string | null>(null);
   const [timelineDays, setTimelineDays] = useState<number | null>(null);
   const [discount, setDiscount] = useState<DiscountState>(NO_DISCOUNT);
   // Rate and pin live in ONE state object so the Places pick handler — which is
@@ -364,7 +367,8 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     resolve?.(value);
   }, []);
 
-  async function generate() {
+  /** `fresh`: price it again even when this exact brief was priced before ("Ask for a fresh estimate"). */
+  async function generate(fresh = false) {
     if (!canGenerate) return;
     // Each photo in its own object — see SitePhoto in actions/advancedEstimator.
     const photoUrls = photos.map((p) => ({ url: p.dataUrl }));
@@ -424,6 +428,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
         description,
         location: useLocation || undefined,
         photos: photoUrls,
+        ...(fresh ? { fresh: true } : {}),
       });
       if (!res.ok) {
         await closeOverlay();
@@ -447,6 +452,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
         });
       }
       setCheckNotes(est.notes ?? []);
+      setRemembered(est.remembered?.at ?? null);
       setTitle(est.title);
       setScope(est.scope || description);
       setAssumptions(est.assumptions);
@@ -481,6 +487,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     setPricing(null);
     setLines(r.lines);
     setCheckNotes(r.notes);
+    setRemembered(null);
     setTitle(r.title);
     setScope(r.scope);
     setAssumptions(r.assumptions);
@@ -513,6 +520,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     setPricing(null);
     setAssumptions([]);
     setCheckNotes([]);
+    setRemembered(null);
     setTitle("");
     setScope("");
     setTimelineDays(null);
@@ -793,11 +801,32 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
             ))}
         </div>
       )}
-      {checkNotes.length > 0 && (
+      {remembered ? (
+        <div className={cx("sp-same")} data-sp-same>
+          <span>
+            Same brief as {new Date(remembered).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} — so the same estimate and the same price.
+          </span>
+          <button
+            type="button"
+            className={cx("btn", "btn-ghost", "btn-sm")}
+            disabled={generating}
+            onClick={() => {
+              setPanel("intake");
+              void generate(true);
+            }}
+            data-sp-fresh
+          >
+            Ask for a fresh estimate
+          </button>
+        </div>
+      ) : null}
+      {checkNotes.filter((n) => !(remembered && n === SAME_BRIEF_NOTE)).length > 0 && (
         <ul className={cx("sp-checks")}>
-          {checkNotes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
+          {checkNotes
+            .filter((n) => !(remembered && n === SAME_BRIEF_NOTE))
+            .map((n) => (
+              <li key={n}>{n}</li>
+            ))}
         </ul>
       )}
     </section>
@@ -1000,7 +1029,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
               className={cx("btn", "btn-primary")}
               type="button"
               disabled={!canGenerate}
-              onClick={generate}
+              onClick={() => void generate()}
             >
               <svg className={cx("ic")}>
                 <use href="#i-bulb" />

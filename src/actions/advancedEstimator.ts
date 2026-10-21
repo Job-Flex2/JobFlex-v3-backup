@@ -48,6 +48,7 @@ import {
 import { trackActivation, trackProposalCreated } from "@/lib/activation-events";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { takeTrialCap } from "@/lib/trialMeter";
+import { briefFingerprint, keepEstimate, photoPrint, SAME_NOTE, sameEstimate } from "@/lib/estimate/sameBrief";
 import { requirePage } from "@/lib/customPageAccess";
 import { readPlanPass } from "@/lib/plans/planToken";
 import { bindLinesToTakeoff } from "@/lib/plans/tradeBrief";
@@ -123,6 +124,8 @@ interface GenerateInput {
    * Sent to the model as vision input, never stored. See `safePhotos`.
    */
   photos?: SitePhoto[];
+  /** "Ask for a fresh estimate": price it again even when this exact brief was priced before (lib/estimate/sameBrief). */
+  fresh?: boolean;
 }
 
 /**
@@ -246,10 +249,11 @@ export async function analyzeEstimatePrompt(input: {
   try {
     const client = getOpenAI();
     const completion = await client.chat.completions.create({
-      // The model this process may call (lib/sdk/openai), at the temperature
-      // the estimator was tuned to.
+      // The model this process may call (lib/sdk/openai), at temperature 0 with a seed (2026-10-21): this read
+      // corrects the place the job is priced in and words the questions, so the same brief should read the same way
+      // twice — at 0.2 the place could come back differently and move the city's price index.
       model: await resolveOpenAIModel(),
-      ...(await samplingOptions(0.2)),
+      ...(await samplingOptions(0, 42)),
       messages: [
         {
           role: "system",
@@ -574,6 +578,31 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
       return { ...r, items: merged.items as typeof r.items };
     };
 
+    // ── Same brief, same estimate (lib/estimate/sameBrief) ──────────────────
+    // The fingerprint of exactly this question: the built prompt carries the brief, the place, the price book, the
+    // procedures and the tier; the rest is what decides the answer outside it.
+    const fingerprint = briefFingerprint({
+      v: 1,
+      model,
+      system: overrides.system?.trim() || LEGACY_SYSTEM_MESSAGE,
+      prompt: legacy.prompt,
+      plan: plan?.block ?? null,
+      computed: computedBlock,
+      photos: photos.map(photoPrint),
+      company: companyOn ? snapshotOf(companyOn) : null,
+      markup: [org?.materialMarkupPct ?? null, org?.laborMarkupPct ?? null],
+      tier: qualityTier,
+    });
+    if (!input.fresh) {
+      const before = await sameEstimate(organizationId, fingerprint);
+      if (before) {
+        // No AI was spent: the trial's use goes back.
+        await refund().catch(() => {});
+        console.info(`[advancedEstimator] same brief as ${before.at} · the estimate it got then (${fingerprint.slice(0, 10)})`);
+        return { ok: true, data: { ...before.estimate, notes: [SAME_NOTE, ...(before.estimate.notes ?? [])], remembered: { at: before.at } } };
+      }
+    }
+
     let called = withComputed(await askEstimateOnce(computedBlock));
 
     /* ONE RE-ASK BUDGET, TWO REASONS TO SPEND IT (merge, 2026-09-19).
@@ -750,6 +779,8 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
       ...(companyOn ? { pricing: snapshotOf(companyOn) } : {}),
     };
     console.info(`[advancedEstimator] Step 2 complete · ${materials.length} lines, ${labor.length} carry labor`);
+    // This brief's answer from now on (a fresh estimate replaces the one before).
+    await keepEstimate(organizationId, fingerprint, estimate);
 
     return { ok: true, data: estimate };
   } catch (err: any) {

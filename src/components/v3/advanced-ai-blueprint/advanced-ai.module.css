@@ -269,6 +269,10 @@
   border: 1.5px dashed var(--blueprint); border-radius: var(--radius); color: var(--blueprint);
   font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: .12em;
   text-transform: uppercase; }
+:global(.jf-blueprint .content) .sp-same { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 14px 0;
+  padding: 8px 10px; border: 1.5px dashed var(--blueprint); border-radius: var(--radius);
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--ink); }
+:global(.jf-blueprint .content) .sp-same span { flex: 1 1 260px; }
 :global(.jf-blueprint .content) .sp-checks { margin: 8px 14px 14px; padding: 0 0 0 16px;
   font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: var(--muted); }
 :global(.jf-blueprint .content) .sp-in { width: 100%; box-sizing: border-box; height: 35px; padding: 0 9px;
