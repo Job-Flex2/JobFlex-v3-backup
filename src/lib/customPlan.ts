@@ -121,11 +121,22 @@ export const CUSTOM_BASE_FEATURES = [
 ];
 
 /** Pages no longer sold but still read off a stored selection, so a plan that holds one keeps its price.
- *  The Deck estimator (2026-10-19): not sold as a page any more — Deck Studio is its own $49/month add-on on
+ *  The Deck estimator (2026-10-19): not sold as a page any more — Deck Studio is its own $45/month add-on on
  *  any plan (lib/deckAddon). A stored selection still reads (the plan keeps its price) and counts as the add-on
- *  bought as a page: the whole Deck Studio, no second $49 line (owner, 2026-10-20 — lib/editions). */
+ *  bought as a page: the whole Deck Studio, no second $45 line (owner, 2026-10-20 — lib/editions). */
 export const CUSTOM_DECK_PAGE: CustomPageId = "deck-estimator";
 const RETIRED_PAGES: readonly CustomPageId[] = [CUSTOM_DECK_PAGE];
+
+/** THE DECK STUDIO PLAN (owner, 2026-10-20): its own $45/month plan on the pricing page — the Deck Studio and the
+ *  office around it (the Deck Studio workspace, lib/editions), no other estimator. It is gated like a Custom plan
+ *  whose pages are fixed: these open, every other add-on page stays closed (lib/customPageAccess). Its limits are
+ *  its own catalog row's; its feature tier is Professional's, like the Custom plan's. */
+export const DECK_PLAN_SLUG = "deck-studio";
+export const DECK_PLAN_PAGES: readonly CustomPageId[] = ["calendar", "leads", "workers", "company", "phone", CUSTOM_DECK_PAGE];
+export const DECK_PLAN_TIER = "PROFESSIONAL" as const;
+export function isDeckPlan(slug: string | null | undefined): boolean {
+  return (slug ?? "").trim().toLowerCase() === DECK_PLAN_SLUG;
+}
 
 const VALID = new Set<string>([...CUSTOM_PAGES.map((p) => p.id), ...RETIRED_PAGES]);
 
@@ -180,6 +191,9 @@ export const DEFAULT_CUSTOM_TRIAL_DAYS = 7;
  *  bought, and the gate says so (upgrade-gate). Not a page href, so the nav
  *  and isCustomBlockedPath never match it. */
 export const PLAN_ENDED_MARK = "#plan-ended";
+/** A marker the blocked list carries on the Deck Studio plan (lib/customPlan DECK_PLAN_SLUG): its closed pages are
+ *  opened by a bigger plan, not added one by one, and the gate says so. Not a page href either. */
+export const DECK_PLAN_MARK = "#deck-plan";
 
 export function blockedCustomHrefs(bought: readonly string[] | null | undefined): string[] {
   const have = new Set(normalizeCustomPages(bought));

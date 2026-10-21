@@ -7,7 +7,7 @@
 // corrects the reading inside the lot (never over the house); a tap counts a dimmed piece in or leaves a piece out.
 // The numbers redo when the stroke ends. A lot line can be clicked in where the county has none, corner by corner.
 import * as React from "react";
-import s from "./lawn.module.css";
+// Styled by the page that mounts it: `.lw-map` and `.lw-map-attr` live in lawn-estimator.css (desk and phone).
 import type { Pt } from "@/lib/lawn/geo";
 import { CLS } from "@/lib/lawn/classify";
 import { chaikin, outlinesOf, pieceSpots } from "@/lib/lawn/vectorize";
@@ -378,7 +378,7 @@ export function YardMap({ w, h, gsdM, photoUrl, labels, lot, lotRing, paint, bru
   };
 
   return (
-    <div className={s.mapWrap} ref={wrapRef}>
+    <div className="lw-map" ref={wrapRef} data-mode={drawing ? "draw" : onTap ? "tap" : paint != null ? "paint" : "idle"}>
       <canvas
         ref={canvasRef}
         aria-label="The yard on the aerial photo"
@@ -422,13 +422,13 @@ export function YardMap({ w, h, gsdM, photoUrl, labels, lot, lotRing, paint, bru
         }}
         data-lawn-map
       />
-      {photoFailed ? <div className={s.mapAttr} style={{ left: 6, right: "auto", color: "#b91c1c" }}>The aerial photo didn&apos;t load — the classes are still here</div> : null}
+      {photoFailed ? <div className="lw-map-attr lw-map-attr--left lw-map-attr--bad">The aerial photo didn&apos;t load — the classes are still here</div> : null}
       {!photoReady && !photoFailed && view !== "classes" ? (
-        <div className={s.mapAttr} style={{ left: 6, right: "auto", top: 6, bottom: "auto" }} data-lawn-photo-loading>
+        <div className="lw-map-attr lw-map-attr--top" data-lawn-photo-loading>
           Loading the aerial photo…
         </div>
       ) : null}
-      <div className={s.mapAttr}>USDA NAIP aerial · tree heights Meta/WRI (CC BY 4.0)</div>
+      <div className="lw-map-attr">USDA NAIP aerial · tree heights Meta/WRI (CC BY 4.0)</div>
     </div>
   );
 }

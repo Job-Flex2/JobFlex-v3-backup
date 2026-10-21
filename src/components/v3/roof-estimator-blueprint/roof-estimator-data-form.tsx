@@ -331,7 +331,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // The reveal, reachable from the collect loop below without re-running it.
   const revealRef = React.useRef<() => void>(() => {});
   const [msReport, setMsReport] = React.useState<string>("—");
-  const [msHint, setMsHint] = React.useState<string | null>(null);
 
   // ── Measurement / photo viewer ──
   const [measurement, setMeasurement] = React.useState<RoofMeasurementDTO | null>(null);
@@ -902,7 +901,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setMeasurementBusy(true);
     setMs({ pct: 0, step: 0, done: false });
     setMsReport(input.address);
-    setMsHint("Checking the roof at this address. The report opens when the measurements are ready.");
     setPanel("measuring");
     try {
       const res = await measureRoof(input);
@@ -920,7 +918,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         showMeasurement(res.measurement, false, false);
         holdRef.current = { id: res.measurement.id, startedAt: nowMs() };
         setHolding(true);
-        setMsHint("The roof area is measured. The pitch, facets and details are being read now — the report opens when everything is in.");
         startHoldProgress();
         return;
       }
@@ -974,7 +971,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setInstantBusy(true);
     setReusedInstant(null);
     setMsReport(input.address);
-    setMsHint("Usually under a minute. The roof opens as soon as it is measured; any detail that finishes later fills into the report by itself.");
     setPanel("measuring");
     const stop = runProgress();
     try {
@@ -1017,7 +1013,6 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         showMeasurement(res.measurement, false, false);
         holdRef.current = { id: res.measurement.id, startedAt: nowMs() };
         setHolding(true);
-        setMsHint("The roof area is measured. The pitch, facets and details are being read now — the report opens when everything is in.");
         startHoldProgress();
         return;
       }
@@ -2047,15 +2042,12 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               ))}
             </ol>
             </>}
-            <div className="ms-hint">
-              {msHint ?? "Measuring the structure, pitch by pitch."}
-            </div>
+            {/* No description lines under the bars (owner, 2026-10-20). */}
             {holding && (
               <div className="ms-acts">
                 <button type="button" className="btn btn-ghost btn--sm" id="msOpenNow" onClick={revealHeld}>
                   Open the report now
                 </button>
-                <span className="ms-acts-note">The details keep loading into it.</span>
               </div>
             )}
           </div>

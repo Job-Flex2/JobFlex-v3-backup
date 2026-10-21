@@ -52,7 +52,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Fragment } from "react";
 import { useRouter } from "next/navigation";
-import { useScrollFade } from "@/components/v3/mobile-shell/use-scroll-fade";
 import styles from "./mobile-proposals.module.css";
 import { MobileNav } from "@/components/v3/mobile-shell/mobile-nav";
 import { Who } from "@/components/v3/who/who";
@@ -82,7 +81,7 @@ import {
   type TabKey,
 } from "./proposals-data";
 import { chainsOf, chained, paidTier, type PaidTier } from "@/components/v3/proposals-blueprint/proposals-data";
-import { familyCounts, type ProposalKind, type WorkFamily } from "@/lib/proposalKind";
+import { familyCounts, kindWord, type ProposalKind, type WorkFamily } from "@/lib/proposalKind";
 import { clientProposalUrl, proposalTextMessage, smsHref } from "@/lib/proposalLink";
 import { ensureCompanyName } from "@/components/company-name/company-name-gate";
 
@@ -93,20 +92,22 @@ import { ensureCompanyName } from "@/components/company-name/company-name-gate";
  */
 function Views({ p }: { p: ProposalRow }) {
   if (p.status === "DRAFT") return <span className={styles.viewsNa}>Not sent</span>;
+  // The count names itself — "3 views" — and when it was last opened goes under it (owner, 2026-10-20:
+  // a bare "3" beside "1mo ago" read as nothing).
   if (p.views <= 0) {
     // Amber only while the proposal is still waiting on the client.
     const waiting = p.status === "SENT" || p.status === "VIEWED";
     return (
       <span className={`${styles.views} ${waiting ? styles.viewsNone : styles.viewsQuiet}`}>
-        <b>0</b>
+        <b>0 <small>views</small></b>
         <i>not opened</i>
       </span>
     );
   }
   return (
     <span className={`${styles.views} ${styles.viewsSeen}`}>
-      <b>{p.views}</b>
-      <i>{p.lastViewed ?? (p.views === 1 ? "view" : "views")}</i>
+      <b>{p.views} <small>{p.views === 1 ? "view" : "views"}</small></b>
+      {p.lastViewed ? <i>{p.lastViewed}</i> : null}
     </span>
   );
 }
@@ -352,11 +353,14 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
      room there — an absolutely positioned box does not lengthen the scroller it
      overflows, so a menu hanging off the bottom edge would be unreachable. */
   const [typeOpen, setTypeOpen] = useState(false);
-  /** The filter row slides sideways when it does not fit; this fades the side that holds more. */
-  const segFade = useScrollFade<HTMLDivElement>(filter);
+  /* Status is a dropdown beside Type (owner, 2026-10-20), on the same rules. */
+  const [statusOpen, setStatusOpen] = useState(false);
   const typeRef = useRef<HTMLDivElement>(null);
   const typeMenuRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
   useMenuPlacement(typeOpen, typeRef, typeMenuRef);
+  useMenuPlacement(statusOpen, statusRef, statusMenuRef);
 
   /* ---------- the book, when nobody handed one down -------------------
      Only the shell-mounted copy gets here (rows === undefined). The rows
@@ -386,14 +390,18 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
     return () => window.clearTimeout(id);
   }, [note]);
 
-  /* ---------- Type menu: close on outside tap / Esc ------------------ */
+  /* ---------- Status / Type menus: close on outside tap / Esc --------- */
   useEffect(() => {
-    if (!typeOpen) return;
+    if (!typeOpen && !statusOpen) return;
     const onDown = (e: PointerEvent) => {
       if (!typeRef.current?.contains(e.target as Node)) setTypeOpen(false);
+      if (!statusRef.current?.contains(e.target as Node)) setStatusOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setTypeOpen(false);
+      if (e.key === "Escape") {
+        setTypeOpen(false);
+        setStatusOpen(false);
+      }
     };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
@@ -401,7 +409,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [typeOpen]);
+  }, [typeOpen, statusOpen]);
 
   /* ---------- viewport height + effective-width classes --------------
      Mandatory rule: viewport heights only via var(--app-h). A phone's URL
@@ -925,14 +933,11 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             <div className={styles.kicker}>Sales · Documents</div>
             <h1 className={styles.pageTitle}>Proposals</h1>
             <div className={styles.pageActions}>
-              {/* The two live creation routes. Anchors, not handlers: they are
-                  navigations and they work without JavaScript. */}
-              <Link className={`${styles.btn} ${styles.btnPrimary}`} href="/dashboard/proposals/ai">
-                <Icon id="i-bulb" />Smart Proposal
-              </Link>
-              {/* Same destination as the desktop proposals page and the
-                  estimator picker's "Manual" card — the wired blueprint
-                  builder, which serves both viewports from one URL. */}
+              {/* One creation route here, as on the desk (owner, 2026-10-20:
+                  Smart Proposal left the list). An anchor: a navigation that
+                  works without JavaScript. Same destination as the desktop
+                  proposals page and the estimator picker's "Manual" card —
+                  the wired blueprint builder, one URL for both viewports. */}
               <Link
                 className={`${styles.btn} ${styles.btnGhost}`}
                 href="/dashboard/manual-blueprint"
@@ -977,22 +982,32 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             ))}
           </div>
 
-          {/* FILTERS (owner, 2026-10-18): one row under the tabs — the All
-              list's statuses as the Blueprint segmented control, sliding
-              sideways when they do not fit,
-              never clipped; then TYPE (deck · roof · fence · HVAC · remodel ·
-              other, each with its tool's flat dot), whose menu opens across the
+          {/* FILTERS (owner, 2026-10-20): one row under the tabs, two
+              Blueprint dropdowns — STATUS (the All list's statuses, All tab
+              only) and TYPE (deck · roof · fence · HVAC · remodel · other,
+              each with its tool's flat square). Each menu opens across the
               whole row. Type narrows every tab, so it stays on all three. */}
           {tab === "all" || kindChips.length > 1 ? (
             <div className={styles.fbar}>
               {tab === "all" ? (
-                <div className={styles.fseg}>
-                  <div className={styles.fsegScroll} ref={segFade} role="group" aria-label="Status">
+                <div className={`${styles.fdrop} ${statusOpen ? styles.open : ""} ${filter !== "ALL" ? styles.isSet : ""}`} ref={statusRef}>
+                  <button className={styles.fdropBtn} type="button" aria-haspopup="listbox"
+                    aria-expanded={statusOpen} onClick={() => { setStatusOpen((v) => !v); setTypeOpen(false); }}>
+                    <span className={styles.fdropKey}>Status</span>
+                    <span className={styles.fdropVal}>
+                      {FILTERS.find((f) => f.key === filter)?.label}
+                      <span className={styles.fsegN}>{chipCounts[filter] ?? 0}</span>
+                    </span>
+                    <Icon id="i-chev" className={`${styles.ic} ${styles.fdropCaret}`} />
+                  </button>
+                  <div className={styles.fmenu} role="listbox" aria-label="Status" ref={statusMenuRef}>
                     {FILTERS.map((f) => (
-                      <button key={f.key} type="button" className={`${styles.fsegBtn} ${filter === f.key ? styles.on : ""}`}
-                        aria-pressed={filter === f.key} onClick={() => { setFilter(f.key); setPageAll(1); }}>
+                      <button key={f.key} className={`${styles.fitem} ${filter === f.key ? styles.on : ""}`}
+                        type="button" role="option" aria-selected={filter === f.key}
+                        onClick={() => { setFilter(f.key); setPageAll(1); setStatusOpen(false); }}>
                         {f.label}
                         <span className={styles.fsegN}>{chipCounts[f.key] ?? 0}</span>
+                        {filter === f.key ? <Icon id="i-check" /> : null}
                       </button>
                     ))}
                   </div>
@@ -1001,12 +1016,15 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
               {kindChips.length > 1 ? (
                 <div className={`${styles.fdrop} ${typeOpen ? styles.open : ""} ${kindNow !== "ALL" ? styles.isSet : ""}`} ref={typeRef}>
                   <button className={styles.fdropBtn} type="button" aria-haspopup="listbox"
-                    aria-expanded={typeOpen} onClick={() => setTypeOpen((v) => !v)}>
-                    {kindNow === "ALL" ? (
-                      <><span className={styles.fdropKey}>Type:</span> All</>
-                    ) : (
-                      <><i className={styles.fdot} data-fam={kindNow} aria-hidden="true" />{kindChips.find((f) => f.key === kindNow)?.label}</>
-                    )}
+                    aria-expanded={typeOpen} onClick={() => { setTypeOpen((v) => !v); setStatusOpen(false); }}>
+                    <span className={styles.fdropKey}>Type</span>
+                    <span className={styles.fdropVal}>
+                      {kindNow === "ALL" ? (
+                        "All"
+                      ) : (
+                        <><i className={styles.fdot} data-fam={kindNow} aria-hidden="true" />{kindChips.find((f) => f.key === kindNow)?.label}</>
+                      )}
+                    </span>
                     <Icon id="i-chev" className={`${styles.ic} ${styles.fdropCaret}`} />
                   </button>
                   <div className={styles.fmenu} role="listbox" aria-label="Type of work" ref={typeMenuRef}>
@@ -1031,7 +1049,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             listAll.length === 0 ? (
               <div className={styles.pempty}>
                 {data.length === 0
-                  ? "No proposals yet — start one with Smart Proposal or Manual proposal above."
+                  ? "No proposals yet — start one with Manual proposal above."
                   : "No proposals match this filter."}
               </div>
             ) : (
@@ -1063,10 +1081,11 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                       role="link" tabIndex={0} aria-label={`Open ${p.title}`}
                       onClick={(e) => openFromTap(e, p.id)} onKeyDown={(e) => { if (e.key === "Enter") router.push(`/dashboard/proposals/${p.id}`); }}>
                       <div>
-                        <div className={styles.prowId}>
-                          {/* The owner only when it is someone else (2026-09-25). */}
-                          {p.updated}{p.mine ? null : <> · {p.ownerWho ? <Who who={p.ownerWho} compact /> : p.owner}</>}
-                        </div>
+                        {/* The owner only when it is someone else (2026-09-25); no "1mo ago" above the
+                            title (owner, 2026-10-20). */}
+                        {p.mine ? null : (
+                          <div className={styles.prowId}>{p.ownerWho ? <Who who={p.ownerWho} compact /> : p.owner}</div>
+                        )}
                         <KindMark k={p.kind} />
                         <div className={styles.prowTitle}>{p.title}</div>
                       </div>
@@ -1074,11 +1093,12 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                         aria-label={`Actions for ${p.title}`} onClick={() => setSheetId(p.id)}>
                         <Icon id="i-dots" />
                       </button>
-                      {/* Row 2 — who and where, hard left */}
+                      {/* Row 2 — who and where, hard left; accepted / declined on its own line under it
+                          (owner, 2026-10-20). */}
                       <div className={styles.prowWho}>
                         {[p.client, p.city].filter(Boolean).join(" · ")}
                         {p.projectName && !inChain ? <span className={styles.prowProj}> · {p.projectName}</span> : null}
-                        {p.decided ? <span className={p.status === "DECLINED" ? styles.prowDeclined : styles.prowAccepted}> · {p.decided}</span> : null}
+                        {p.decided ? <div className={p.status === "DECLINED" ? styles.prowDeclined : styles.prowAccepted}>{p.decided}</div> : null}
                       </div>
                       {/* The client's deck design on this proposal (2026-10-13): where it stands; Open when it came back. */}
                       {p.clientDesign ? (
@@ -1123,7 +1143,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                         <div className={styles.pjobTitle}>{p.title}</div>
                         <div className={styles.pjobSub}>
                           <span>{p.client}</span>{p.city ? <span>{p.city}</span> : null}
-                          <span>signed {p.accepted ?? "—"}</span>
+                          <span className={styles.pjobSubLine}>signed {p.accepted ?? "—"}</span>
                         </div>
                         <div className={styles.pjobTotal}>
                           <div className={styles.pjobTotalL}>Contract value</div>
@@ -1146,8 +1166,14 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                                 <div className={styles.pcolVal}>{money(instDollars(p, it))}</div>
                                 {sub ? <div className={styles.pcolSub}>{sub}</div> : null}
                                 {!paid && it.status !== "WAIVED" ? (
-                                  <button className={styles.pschedRem} type="button" disabled={writing}
-                                    onClick={() => void runMarkPaid(it.id)}>Mark paid</button>
+                                  <div className={styles.pcolActs}>
+                                    <button className={`${styles.pschedRem} ${styles.remPaid}`} type="button" disabled={writing}
+                                      onClick={() => void runMarkPaid(it.id)}><Icon id="i-check" />Mark paid</button>
+                                    {/* Real: mails THIS instalment's reminder (2026-10-20, as on the desk). */}
+                                    <button className={`${styles.pschedRem} ${styles.remRemind}`} type="button"
+                                      disabled={writing || !p.clientEmail}
+                                      onClick={() => void runReminder(p, it.id)}><Icon id="i-bell" />Remind</button>
+                                  </div>
                                 ) : null}
                               </div>
                             );
@@ -1164,10 +1190,10 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                               </div>
                               {it.status === "PAID" || it.status === "WAIVED" ? null : (
                                 <>
-                                  <button className={styles.pschedRem} type="button" disabled={writing}
+                                  <button className={`${styles.pschedRem} ${styles.remPaid}`} type="button" disabled={writing}
                                     onClick={() => void runMarkPaid(it.id)}>Mark paid</button>
                                   {/* Real: mails THIS instalment's reminder. */}
-                                  <button className={styles.pschedRem} type="button"
+                                  <button className={`${styles.pschedRem} ${styles.remRemind}`} type="button"
                                     disabled={writing || !p.clientEmail}
                                     onClick={() => void runReminder(p, it.id)}>Remind</button>
                                 </>
@@ -1215,16 +1241,13 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
               <div className={styles.psheets}>
                 {sliceDone.map((p, i) => (
                   <div key={p.id} className={`${styles.psheet} ${styles.rowIn}`} style={{ animationDelay: `${i * 60}ms` }}>
+                    {/* No "Completed" stamp over the title and no "1mo ago" under it (owner, 2026-10-20):
+                        the Done tab already says it, and the Paid column says when. */}
                     <div className={styles.psheetHead}>
-                      <div className={styles.psheetStamp}>
-                        <Icon id="i-check" />
-                        {p.owed > 0 ? "Completed" : "Paid in full"}
-                      </div>
                       <KindMark k={p.kind} />
                       <div className={styles.pjobTitle}>{p.title}</div>
                       <div className={styles.pjobSub}>
                         <span>{p.client}</span>{p.city ? <span>{p.city}</span> : null}
-                        <span>{p.updated}</span>
                       </div>
                     </div>
 
@@ -1443,16 +1466,14 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
    "switched-on" bulb (Smart Proposal).
    ============================================================ */
 
-/** WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind): the work's square and word, then the tool —
- *  "Deck · Deck Studio", "Kitchen remodel · Smart Proposal". */
+/** WHAT KIND (2026-10-17, lib/proposalKind): the work's square and its one word — "Roof", "Deck"; a proposal
+ *  no trade could be read from says how it was made, "Manual" (owner, 2026-10-20). */
 function KindMark({ k }: { k?: ProposalKind }) {
   if (!k) return null;
-  const tool = k.tool === "template" && k.via ? `Template · ${k.via}` : k.toolWords;
   return (
     <div className={styles.pkind} data-fam={k.family}>
       <i className={styles.pkSq} aria-hidden="true" />
-      <b>{k.work}</b>
-      <span className={styles.pkTool} data-tool={k.tool}>{tool}</span>
+      <b>{kindWord(k)}</b>
     </div>
   );
 }

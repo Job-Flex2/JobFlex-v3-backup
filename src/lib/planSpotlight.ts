@@ -92,7 +92,7 @@ export function withSpotlightFirst(rows: readonly string[], tool: SpotlightTool 
 }
 
 /** Tools sold as an add-on to any plan, never by a plan: the Deck Studio (owner-locked 2026-10-20 — the free trial
- *  holds it, then $49/month on any plan; lib/deckAddon). */
+ *  holds it, then $45/month on any plan; lib/deckAddon). */
 const ADD_ON: Partial<Record<SpotlightTool, string>> = { deck: `the trial includes it, then it's ${deckAddonPriceWords("MONTH")} on any plan` };
 
 export function isAddOnTool(tool: SpotlightTool): boolean {

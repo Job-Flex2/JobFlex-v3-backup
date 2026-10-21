@@ -1,0 +1,1029 @@
+{
+  "region": "southcentral",
+  "researched": "2026-10-20",
+  "states": [
+    {
+      "state": "AL",
+      "edition": "Alabama Energy and Residential Codes (ADECA): 2015 IRC as modified by Ala. Admin. Code r. 305-2-4-.09; adoption authority moved to the Home Builders Licensure Board on Oct 1, 2024 (Act 2024-443)",
+      "basis_irc": 2015,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Our row says 2021 IRC since 2023 and treats Alabama as a statewide IRC state. The state-level residential code on record (ADECA rule 305-2-4-.09, last supplemented 9/30/17) is the 2015 IRC with Alabama changes, and it is enforced only where local governments run permit programs. Since Oct 1, 2024 the Home Builders Licensure Board adopts the Alabama Residential Building Code; from Jan 1, 2027 builders must follow that code or the local code, but the edition the Board adopted is not published on its site. Big jurisdictions set their own: Birmingham 2021 IRC; unincorporated Mobile County 2024 IRC from July 1, 2026. Suggest kind \"local\".",
+      "notes": [
+        "From Jan 1, 2027 a home builder must build to the Board-adopted Alabama Residential Building Code or, where one exists, the local residential code (Ala. Code 34-14A-12.1).",
+        "Local residential codes in effect on Jan 1, 2027 are not superseded; local codes adopted later must meet the state building and energy code minimums (and may not exceed the state energy code without cause).",
+        "Where no local code exists, the Board applied the 2015 IRC in its investigations for contracts signed on or after Feb 13, 2022.",
+        "ADECA's 2015 IRC modifications change no deck, stair or guard sections, so IRC values (36 in guard, 7-3/4 in riser, 10 in tread) stand.",
+        "Unincorporated Mobile County requires ASCE 7-22 wind speeds (160 mph Risk Category II minimum) and engineered or WFCM plans for dwellings."
+      ],
+      "sources": [
+        {
+          "title": "Alabama Administrative Code ch. 305-2-4 (ADECA Energy and Residential Codes Board), r. 305-2-4-.09 Residential Building Codes",
+          "url": "https://admincode.legislature.state.al.us/api/chapter/305-2-4"
+        },
+        {
+          "title": "Alabama DCM State Building Code page: residential code adoption authority moved to HBLB Oct 1, 2024 (Act 2024-443)",
+          "url": "https://dcm.alabama.gov/bldg_code.aspx"
+        },
+        {
+          "title": "Home Builders Licensure Board statute effective Oct 1, 2026 (Ala. Code 34-14A-2, 34-14A-12, 34-14A-12.1)",
+          "url": "https://hblb.alabama.gov/wp-content/uploads/2026/09/Statute-Effective-10.1.2026.pdf"
+        },
+        {
+          "title": "HBLB Administrative Rules and Regulations page (2015 IRC used where no local code)",
+          "url": "https://hblb.alabama.gov/administrative-rules-and-regulations/"
+        },
+        {
+          "title": "HBLB: Changes to Statutory Regulations effective March 17, 2025 (Residential Building Code Advisory Council)",
+          "url": "https://hblb.alabama.gov/changes-to-statutory-regulations-become-effective-march-17-2025/"
+        }
+      ]
+    },
+    {
+      "state": "MS",
+      "edition": "No statewide residential code found; local governments adopt their own (City of Jackson: 2018 IRC with amendments)",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "\"Local\" matches what we could see, and the City of Jackson is confirmed on the 2018 IRC with amendments. The claim that the coastal counties use the 2018 IRC could not be verified: Harrison County's site refused automated access and Gulfport's building pages do not name an edition. No state agency page on a Mississippi building code council could be opened, so the state-level status rests on our existing row.",
+      "notes": [
+        "Guard, riser and tread values are the IRC model values and apply only where a local government has adopted the IRC.",
+        "City of Jackson adopts the 2018 IRC with amendments and appendices A, B, C, D, E, G, H, I, J, M, N, O, P and Q."
+      ],
+      "sources": [
+        {
+          "title": "City of Jackson, MS — Building Permits (adopted codes: 2018 IRC with amendments)",
+          "url": "https://jacksonms.gov/government/city-departments/planning-and-development/office-of-code-services/building-permits/"
+        },
+        {
+          "title": "City of Gulfport — Building Code Services",
+          "url": "https://gulfport-ms.gov/departments/urban_development/building_code_services/index.php"
+        }
+      ]
+    },
+    {
+      "state": "TN",
+      "edition": "Tennessee State Fire Marshal's Office: 2018 IRC (with 2018 IECC) for one- and two-family dwellings and townhouses, Rule 0780-02-23",
+      "basis_irc": 2018,
+      "since": 2020,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "",
+      "notes": [
+        "The SFMO's adoption table shows the 2018 IRC effective July 16, 2020.",
+        "The state residential program applies only where the city or county is not an exempt jurisdiction (own codes) and has not opted out by a 2/3 vote; Memphis, Shelby County, Nashville/Davidson County, Knox County and Knoxville are exempt and set their own editions.",
+        "Exempt jurisdictions must adopt codes within 7 years of the most current published edition (TCA 68-120-101(b)(5)(A)); Metro Nashville is on the 2024 IRC since July 16, 2025, Knox County on the 2018 IRC.",
+        "Under the state program, additions over 30 sq ft to an existing home need a permit (since Oct 1, 2011).",
+        "Rule 0780-02-23 adopts the 2018 IRC with Appendix Q and makes no deck, stair or guard amendments; sprinklers are not mandatory."
+      ],
+      "sources": [
+        {
+          "title": "TN SFMO — Currently Adopted Codes and history",
+          "url": "https://www.tn.gov/commerce/fire/codes-enforcement/history.html"
+        },
+        {
+          "title": "TN SFMO — Residential Permits (state program scope, 2018 IRC)",
+          "url": "https://www.tn.gov/commerce/fire/permit/residential.html"
+        },
+        {
+          "title": "TN SFMO — Exempt Jurisdictions",
+          "url": "https://www.tn.gov/commerce/fire/codes-enforcement/exempt-jurisdictions.html"
+        },
+        {
+          "title": "Rule 0780-02-23 One and Two Family Dwellings and Townhouses (2020-07-16 version)",
+          "url": "https://publications.tnsosfiles.com/rules/0780/0780-02/0780-02-23.20200716.pdf"
+        }
+      ]
+    },
+    {
+      "state": "KY",
+      "edition": "2018 Kentucky Residential Code, Third Edition (Aug 2024): the 2015 IRC with Kentucky amendments, 815 KAR 7:125",
+      "basis_irc": 2015,
+      "since": 2018,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Our row says the KRC is based on the 2018 IRC, in force since 2019, with a 2021-based KRC in adoption. The 2018 KRC is based on the 2015 IRC. Its 2018 amendment took effect Aug 22, 2018, and the current Third Edition took effect Dec 3, 2024. The regulation shows no 2021-based KRC; its only pending item is that same Third Edition. Kentucky also amends stairs: 8-1/4 in max riser and 9 in min tread, not the IRC's 7-3/4 and 10.",
+      "notes": [
+        "The KRC is a mini/maxi code: local governments may not adopt or enforce any other code for one- and two-family dwellings and townhouses.",
+        "Permits, inspections and certificates of occupancy are not required for a single-family dwelling unless a local ordinance requires them (815 KAR 7:125 Section 2(2)).",
+        "Statewide Table R301.2(1): Vult 115 mph in every county, weathering severe, termite moderate to heavy; ground snow 15 or 20 psf by county.",
+        "Frost depth (Table R403.1.4) is 24 in in most counties; 27–33 in for listed eastern and northern counties (e.g. Kenton, Boone, Campbell 30 in).",
+        "Seismic Design Category is set by county (Table R301.2.2.1): A in Boone, Campbell and Kenton; D0–D2 in the far-western New Madrid counties (e.g. McCracken, Fulton, Hickman D2).",
+        "KRC R507.2.2: deck girders may not bear on ledgers or band joists, and ledgers may not hang on stone or masonry veneer unless designed or using a listed fastening method."
+      ],
+      "sources": [
+        {
+          "title": "815 KAR 7:125 Kentucky Residential Code (current text and history)",
+          "url": "https://apps.legislature.ky.gov/law/kar/titles/815/007/125"
+        },
+        {
+          "title": "2018 Kentucky Residential Code, Second Edition (May 2020) — DHBC",
+          "url": "https://dhbc.ky.gov/Documents/2018%20Kentucky%20Residential%20Code%20-%20CLEAN_FINAL%207.17.20.pdf"
+        },
+        {
+          "title": "815 KAR 7:125 pending version (Third Edition, Aug 2024)",
+          "url": "https://apps.legislature.ky.gov/law/kar/titles/815/007/125/REG"
+        }
+      ]
+    },
+    {
+      "state": "AR",
+      "edition": "Arkansas Fire Prevention Code, 2021 edition, Volume III — Residential (2021 IRC with Arkansas changes), adopted by the State Fire Marshal",
+      "basis_irc": 2021,
+      "since": null,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Edition and IRC basis match. \"Since 2024\" looks too late: Little Rock's enforced-codes sheet dated Jan 7, 2023 already lists the 2021 AFPC Vol. III. The state effective date was not found because the Arkansas Fire Marshal pages no longer load.",
+      "notes": [
+        "The AFPC applies statewide, including rural and unincorporated areas (Bentonville Building Codes page).",
+        "Guard, riser and tread values come from Fayetteville's deck guide figures (36 in min guard, 7-3/4 in max riser, 10 in min tread, handrail 34–38 in)."
+      ],
+      "sources": [
+        {
+          "title": "City of Bentonville — Building Codes (2021 AFPC Vols. I–III)",
+          "url": "https://www.bentonvillear.com/734/Building-Codes"
+        },
+        {
+          "title": "City of Little Rock — Enforced Construction Codes, Jan 7, 2023",
+          "url": "https://www.littlerock.gov/media/18644/enforced-construction-codes-2023-c-sized-sheet.pdf"
+        },
+        {
+          "title": "City of Fayetteville — Deck Construction Guide (2021 IRC)",
+          "url": "https://www.fayetteville-ar.gov/DocumentCenter/View/40569/Deck-Construction-Guide"
+        }
+      ]
+    },
+    {
+      "state": "LA",
+      "edition": "Louisiana State Uniform Construction Code — 2021 IRC with Louisiana amendments (LAC 17:I.107), administered by the Louisiana Uniform Construction Code Commission (LUCCC)",
+      "basis_irc": 2021,
+      "since": 2023,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Matches (2021 ICC codes effective Jan 1, 2023). Coming change: the LUCCC's Notice of Intent (Louisiana Register, Aug 20, 2026) adopts the 2024 I-codes, including the 2024 IRC, effective Jan 1, 2027. The council is now named the LUCCC.",
+      "notes": [
+        "Louisiana's IRC amendments do not change deck (R507), stair (R311.7) or guard (R312) sections.",
+        "No code may require fire sprinklers in one- and two-family dwellings; local floodplain managers may require more freeboard than ASCE 24 but not less."
+      ],
+      "sources": [
+        {
+          "title": "LUCCC — Louisiana Construction Code Information (code history, next cycle Jan 1, 2027)",
+          "url": "http://luccc.louisiana.gov/wp-content/uploads/2025/11/LSUCCC_Louisiana-Construction-Code-Information.pdf"
+        },
+        {
+          "title": "LUCCC — 2023 NEC & 2024 I-Code Adoption notice",
+          "url": "https://luccc.louisiana.gov/2023-nec-2024-i-code-adoption-proposed-language-2/"
+        },
+        {
+          "title": "Louisiana Register Aug 20, 2026 — LUCCC Notice of Intent (LAC 17:I.101–117)",
+          "url": "http://luccc.louisiana.gov/wp-content/uploads/Louisiana-Register_August-2026-publication.pdf"
+        },
+        {
+          "title": "Current LAC 17:I Uniform Construction Code text (posted by EBR)",
+          "url": "https://www.brla.gov/DocumentCenter/View/23928/Uniform-Construction-Code-"
+        }
+      ]
+    },
+    {
+      "state": "OK",
+      "edition": "Oklahoma statewide minimum residential code: 2024 IRC (second printing) with OUBCC amendments, OAC 748:20-6",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Our row says 2018 IRC since 2021, with the 2021 IRC in adoption. The OUBCC expressly chose not to adopt the 2021 IRC. The 2018 IRC took effect Sept 14, 2022 (not 2021), and the 2024 IRC replaced it effective Sept 14, 2026.",
+      "notes": [
+        "Oklahoma exception to R318.7.5.1: the top and bottom riser of each flight may vary by 3/4 in (max riser stays 7-3/4 in).",
+        "The OUBCC leaves Table R301.2(1) blank for each jurisdiction to fill in, except ice barrier underlayment = No.",
+        "Oklahoma's R403.1 amendment adds two #4 rebar to all concrete footings (written in the exterior-wall footing section).",
+        "Other jurisdictions may amend or alter the statewide code only as Oklahoma law allows; Norman still listed the 2018 IRC with state and local amendments (effective June 22, 2023) when checked."
+      ],
+      "sources": [
+        {
+          "title": "OUBCC — International Residential Code Adoptions",
+          "url": "https://oklahoma.gov/oubcc/codes-and-rules/international-residential-code-adoptions.html"
+        },
+        {
+          "title": "OUBCC — 2026-09-14 IRC 2024 Permanent Rule (OAC 748:20-6)",
+          "url": "https://oklahoma.gov/content/dam/ok/en/oubcc/documents/rules/2026%2009%2014%20IRC%202024%20Permanent%20Rule.pdf"
+        },
+        {
+          "title": "OUBCC — Proposed Rules (2024 IRC amendments planned fall 2026)",
+          "url": "https://oklahoma.gov/oubcc/codes-and-rules/proposed-rules.html"
+        }
+      ]
+    },
+    {
+      "state": "TX",
+      "edition": "No statewide residential code. Local Gov't Code §214.212 adopts the IRC as it existed on May 1, 2012 as the municipal residential building code; cities may adopt later editions and local amendments by ordinance after a public hearing",
+      "basis_irc": 2012,
+      "since": 2022,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Our row cites §214.212 correctly but should say its baseline is the 2012 IRC (\"as it existed on May 1, 2012\"), set by HB 738 effective Jan 1, 2022, and that local amendments require a public hearing and an ordinance. Houston (2021 IRC with Houston amendments, effective Jan 1, 2024) and Fort Worth (2021 IRC, effective Apr 1, 2022) are confirmed on 2021. Dallas's residential edition, Austin and San Antonio were not verified here.",
+      "notes": [
+        "§214.212 covers municipalities only: the IRC applies to all construction, alteration, remodeling, enlargement and repair of residential structures in a municipality.",
+        "Houston and Fort Worth make no deck (R507), stair or guard amendments, so IRC values stand there."
+      ],
+      "sources": [
+        {
+          "title": "Texas Local Government Code ch. 214 (Sec. 214.212)",
+          "url": "https://tcss.legis.texas.gov/resources/LG/htm/LG.214.htm"
+        },
+        {
+          "title": "HB 738 (87R) enrolled text",
+          "url": "https://capitol.texas.gov/tlodocs/87R/billtext/html/HB00738F.htm"
+        },
+        {
+          "title": "Houston Permitting Center — Code Development (2021 Houston Construction Code, effective Jan 1, 2024)",
+          "url": "https://www.houstonpermittingcenter.org/building-code-enforcement/code-development"
+        },
+        {
+          "title": "Fort Worth — Building & Energy Codes",
+          "url": "https://www.fortworthtexas.gov/departments/development-services/permits/building-energy-codes"
+        }
+      ]
+    }
+  ],
+  "counties": [
+    {
+      "state": "AL",
+      "county": "Jefferson County",
+      "fips": "01073",
+      "population_2020": 674721,
+      "jurisdiction": "City of Birmingham, Dept. of Planning, Engineering & Permits (Jefferson County's site, jccal.org, refused automated access)",
+      "edition": "2021 IRC as amended by the Technical Code of the City of Birmingham, 2024 edition (Article III deletes IRC Chapter 11 and Section R313)",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Birmingham's Technical Code does not fill in Table R301.2(1), so climate and soil values are null. Unincorporated Jefferson County (county Development Services) was not reachable. Wind, frost and seismic values must come from the permit office.",
+      "sources": [
+        {
+          "title": "City of Birmingham — Building Codes",
+          "url": "https://www.birminghamal.gov/work/building-codes"
+        },
+        {
+          "title": "Technical Code of the City of Birmingham, 2024",
+          "url": "https://s3.us-east-2.amazonaws.com/assets.birminghamal.gov/s3fs-public/migrated-files/documents/2024/07/PEPDOC_2024TechCode.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "AL",
+      "county": "Mobile County",
+      "fips": "01097",
+      "population_2020": 414809,
+      "jurisdiction": "Mobile County Inspection Services (unincorporated Mobile County; the City of Mobile runs its own permits)",
+      "edition": "2024 IRC with Mobile County amendments, effective July 1, 2026",
+      "frost_depth_in": 12,
+      "ground_snow_psf": 0,
+      "wind_mph": 160,
+      "wind_basis": "Vult, ASCE 7-22, Risk Category II minimum for dwellings (Risk Cat I 148 mph, III/IV 174 mph), or the site value from the ASCE Hazard Tool",
+      "seismic_sdc": "A",
+      "weathering": "negligible",
+      "termite": "very heavy",
+      "deck_notes": [
+        "Plans for one- and two-family dwellings must be prepared by an Alabama-licensed engineer or architect, unless designed to the 2024 Wood Frame Construction Manual.",
+        "Plans for structures in Exposure Category D must be prepared by an Alabama-licensed engineer or architect.",
+        "Where the ASCE Hazard Tool gives Vult of 130 mph or more, IRC prescriptive wind provisions do not apply; design to WFCM, ICC 600, ASCE 7, AISI S230 or the IBC.",
+        "Topographic effects are site-specific per ASCE 7-22."
+      ],
+      "note": "The 160 mph figure is the published minimum for Risk Category II; the county lets the site value from the ASCE Hazard Tool govern. Footing depth is published as 'Minimum Depth of Footing: 12 Inches below grade'.",
+      "sources": [
+        {
+          "title": "Mobile County Building Code Adoption and Amendments, effective July 1, 2026",
+          "url": "https://www.mobilecountyal.gov/uploads/2024CodeAdoption7-1-2026.pdf"
+        },
+        {
+          "title": "Mobile County Inspection Services — Adopted Codes",
+          "url": "https://www.mobilecountyal.gov/government/departments/inspection-services/adopted-codes/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "AL",
+      "county": "Madison County",
+      "fips": "01089",
+      "population_2020": 388153,
+      "jurisdiction": "City of Huntsville Inspection (county seat); Madison County's site refused automated access",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Huntsville's building pages name no code edition and publish no design criteria or deck handout; its code is on Municode, which blocks automated access. Every value is unknown.",
+      "sources": [
+        {
+          "title": "City of Huntsville — Building License & Permits",
+          "url": "https://www.huntsvilleal.gov/development/building-construction/building-license-permits/"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "MS",
+      "county": "Hinds County",
+      "fips": "28049",
+      "population_2020": 227742,
+      "jurisdiction": "City of Jackson, Office of Code Services (county seat; Hinds County's own program not checked)",
+      "edition": "2018 IRC with City of Jackson amendments (adopting ordinance: Jackson Code §26-60); appendices A, B, C, D, E, G, H, I, J, M, N, O, P, Q",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Jackson lists decks among the accessory structures that need a building permit."
+      ],
+      "note": "Jackson's pages give no Table R301.2(1) values; the adopting ordinance is on Municode, which blocks automated access.",
+      "sources": [
+        {
+          "title": "City of Jackson — Building Permits (adopted codes)",
+          "url": "https://jacksonms.gov/government/city-departments/planning-and-development/office-of-code-services/building-permits/"
+        },
+        {
+          "title": "City of Jackson — Residential Building and Permits",
+          "url": "https://jacksonms.gov/residents/residential-building-and-permits/"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "MS",
+      "county": "Harrison County",
+      "fips": "28047",
+      "population_2020": 208621,
+      "jurisdiction": "Harrison County Code Administration (site refused automated access); City of Gulfport Building Code Services checked",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Gulfport takes building permit applications as PDF files only, through its online drop box."
+      ],
+      "note": "Neither source opened names the code edition or design criteria. Harrison is a coastal county with high wind, so check wind speed and the flood zone (Gulfport asks for FEMA elevation certificates) before drawing.",
+      "sources": [
+        {
+          "title": "City of Gulfport — Building Code Services",
+          "url": "https://gulfport-ms.gov/departments/urban_development/building_code_services/index.php"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "MS",
+      "county": "DeSoto County",
+      "fips": "28033",
+      "population_2020": 185314,
+      "jurisdiction": "DeSoto County Planning & Building Department (unincorporated county)",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "DeSoto County's zoning ordinance measures setbacks to the nearest load-bearing building plane, which includes covered projection decks but excludes steps and ramps."
+      ],
+      "note": "The county's building permit form is a scanned image and its pages do not name a code edition or design criteria.",
+      "sources": [
+        {
+          "title": "DeSoto County — Permits",
+          "url": "https://www.desotocountyms.gov/536/Permits"
+        },
+        {
+          "title": "DeSoto County Zoning Ordinance (signed 3.17.2026)",
+          "url": "https://www.desotocountyms.gov/DocumentCenter/View/10775/Desoto-County-Zoning-Ordinance--Current-signed-3172026"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "TN",
+      "county": "Shelby County",
+      "fips": "47157",
+      "population_2020": 929744,
+      "jurisdiction": "Memphis and Shelby County code enforcement (Shelby County and Memphis are SFMO-exempt jurisdictions with their own codes); shelbycountytn.gov refused automated access",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Shelby County is in the New Madrid seismic zone, so expect a seismic category above A, but no published value was opened. Edition, design criteria and deck rules are all unknown.",
+      "sources": [
+        {
+          "title": "TN SFMO — Exempt Jurisdictions (Memphis, Shelby County)",
+          "url": "https://www.tn.gov/commerce/fire/codes-enforcement/exempt-jurisdictions.html"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "TN",
+      "county": "Davidson County",
+      "fips": "47037",
+      "population_2020": 715884,
+      "jurisdiction": "Metropolitan Nashville and Davidson County, Department of Codes and Building Safety",
+      "edition": "2024 IRC with Metro amendments (BL2025-898, Metro Code ch. 16.08); applies to plans and applications submitted after July 16, 2025 (Metro allowed a 180-day grace period for projects designed under the 2018 codes)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": 10,
+      "wind_mph": 115,
+      "wind_basis": "As published in Metro's Table R301.2 ('Wind Design Speed (mph) 115'); basis not stated (the 2024 IRC table uses ultimate design wind speed); no topographic effects, special wind region or wind-borne debris zone",
+      "seismic_sdc": "C",
+      "weathering": "severe",
+      "termite": "heavy",
+      "deck_notes": [
+        "A new or replacement deck needs a permit, as does replacing more than 100 sq ft of deck boards or any footings or framing; demolishing a deck without replacing it does not.",
+        "Apply with the residential permit application and a site plan showing the deck with distances to property lines, existing structures and easements labeled.",
+        "Decks may not extend over platted setbacks, utility easements or a corner lot's side-street setback.",
+        "Uncovered decks may use a reduced 10 ft rear setback but must meet full side setbacks; covered decks must meet full rear and side setbacks.",
+        "An owner who lives in or will live in the house may self-permit a deck (notarized affidavits); LLC/trust-owned or rental properties only for work under $25,000."
+      ],
+      "note": "Values come straight from the Table R301.2 substitution in BL2025-898. Metro makes no amendments to IRC stair, guard or deck sections.",
+      "sources": [
+        {
+          "title": "Metro Nashville — Adopted Codes List",
+          "url": "https://www.nashville.gov/departments/codes/codes-administration/adopted-codes-list"
+        },
+        {
+          "title": "BL2025-898 Building Code Adoption Ordinance (Legistar, with text)",
+          "url": "https://nashville.legistar.com/ViewReport.ashx?M=R&N=Master&GID=787&ID=7433986&GUID=B8491A2F-6B1C-4507-A310-2058064BA422&Extra=WithText&Title=Legislation+Details+(With+Text)"
+        },
+        {
+          "title": "Metro Codes news — Metro adopts 2024 International Building Codes",
+          "url": "https://www.nashville.gov/departments/codes/news/metro-adopts-2024-international-building-codes"
+        },
+        {
+          "title": "Metro Nashville — Add a Deck or Patio to a Residence",
+          "url": "https://www.nashville.gov/departments/codes/construction-and-permits/building-permits-central/add-deck"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "TN",
+      "county": "Knox County",
+      "fips": "47093",
+      "population_2020": 478971,
+      "jurisdiction": "Knox County Codes Administration (unincorporated Knox County; the City of Knoxville is a separate exempt jurisdiction)",
+      "edition": "2018 IRC with Knox County amendments (Ordinance O-18-10-101, adopted Nov 19, 2018)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": 10,
+      "wind_mph": 90,
+      "wind_basis": "As published in Knox County's Table R301.2(1) amendment ('90'); basis not stated; no topographic effects",
+      "seismic_sdc": "C",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Deck footings at least 12 in deep and 6 in thick, with two #4 bars each way at 6 in on center; size by beam, from 12x12 in square / 14 in round (2-2x6 or single beam) up to 24x24 in / 27 in round (2-2x12).",
+        "The ledger must be at least the joist size, fastened with 1/2 in lags or through-bolts staggered top to bottom: 30 in o.c. for joist spans up to 6 ft, down to 10 in o.c. for 16–18 ft. Never bolt to brick.",
+        "Z-flashing over the ledger and flat flashing behind it; aluminum flashing is not allowed against treated lumber.",
+        "Guards at least 36 in where the deck is more than 30 in above grade; stair guards at least 34 in; openings must stop a 4 in sphere.",
+        "Stairs: max riser 7-3/4 in, min tread 10 in, nosing 3/4–1-1/4 in on treads under 11 in; a handrail is required on stairs with 4 or more risers; landings at least stair width x 36 in.",
+        "Lateral-load hold-down devices are required in at least two locations per deck (four with the alternate detail).",
+        "All fasteners, hangers and nails must be double hot-dipped galvanized or stainless steel."
+      ],
+      "note": "The 90 mph wind value is copied as published; Knox does not say whether it is ultimate or nominal speed.",
+      "sources": [
+        {
+          "title": "Knox County — Amendments to the 2018 IRC (Table R301.2(1))",
+          "url": "https://www.knoxcounty.org/codes/pdfs/IRC_ammendments.pdf"
+        },
+        {
+          "title": "Knox County — Code Adoption History",
+          "url": "https://www.knoxcounty.org/codes/pdfs/historyofcodes.pdf"
+        },
+        {
+          "title": "Knox County — Residential Deck Code Handout (2018 IRC, rev. 060821)",
+          "url": "https://www.knoxcounty.org/codes/pdfs/construction_info/DeckInformation.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "KY",
+      "county": "Jefferson County",
+      "fips": "21111",
+      "population_2020": 782969,
+      "jurisdiction": "Louisville Metro enforces the statewide Kentucky Residential Code; values are from the KRC's county tables (louisvilleky.gov refused automated access)",
+      "edition": "2018 Kentucky Residential Code, Third Edition (Aug 2024) — 2015 IRC with Kentucky amendments (815 KAR 7:125, eff. Dec 3, 2024); statewide mini/maxi code",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 15,
+      "wind_mph": 115,
+      "wind_basis": "Vult, all Kentucky counties (KRC Table R301.2(1)); topographic effects must be investigated",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "KRC stairs: max riser 8-1/4 in, min tread 9 in.",
+        "KRC R507.2.2: deck girders may not bear on ledgers or band joists, and ledgers may not hang on stone or masonry veneer unless designed or using a listed fastening method."
+      ],
+      "note": "Louisville's own deck handout and permit pages could not be opened; the deck notes are statewide KRC rules. Jefferson falls under 'all other KY counties' (24 in) in KRC Table R403.1.4.",
+      "sources": [
+        {
+          "title": "2018 Kentucky Residential Code, Second Edition — Tables R301.2(1), R301.2.2.1, R403.1.4",
+          "url": "https://dhbc.ky.gov/Documents/2018%20Kentucky%20Residential%20Code%20-%20CLEAN_FINAL%207.17.20.pdf"
+        },
+        {
+          "title": "815 KAR 7:125",
+          "url": "https://apps.legislature.ky.gov/law/kar/titles/815/007/125"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "KY",
+      "county": "Fayette County",
+      "fips": "21067",
+      "population_2020": 322570,
+      "jurisdiction": "Lexington-Fayette Urban County Government, Division of Building Inspection (enforces the statewide KRC)",
+      "edition": "2018 Kentucky Residential Code, Third Edition (Aug 2024) — 2015 IRC with Kentucky amendments (815 KAR 7:125, eff. Dec 3, 2024); statewide mini/maxi code",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 15,
+      "wind_mph": 115,
+      "wind_basis": "Vult, all Kentucky counties (KRC Table R301.2(1))",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A permit is required for every deck attached to the house, and for freestanding decks that are 200 sq ft or more, serve the primary egress door, or are 30 in or more above grade.",
+        "Submit a site plan (lot dimensions, easements, house and deck dimensions, distances to property lines), a framing plan and cross-section with the footing detail, and the Homeowner Responsibility Acknowledgement form, as PDFs on the online portal.",
+        "Footings at least 24 in from finished grade to the base of the footing; footings under 4x6 or larger posts at least 14 in in diameter (may be belled).",
+        "Guards at least 36 in on decks 30 in or more above grade, with openings that stop a 4 in sphere; guards continue down stairs more than 30 in above grade.",
+        "Stairs: max rise 8-1/4 in, min run 9 in; the step down from the interior floor to the deck at the patio door may not exceed 8-1/4 in.",
+        "Ledgers need a lateral restraint connection (2018 KRC) and metal flashing at the top.",
+        "Exterior stair lighting must be switched from inside the house; solar lighting is not approved."
+      ],
+      "note": "Climate values come from the KRC county tables; Lexington's deck guide agrees (24 in footing depth, 36 in guard, 8-1/4/9 in stairs).",
+      "sources": [
+        {
+          "title": "2018 Kentucky Residential Code, Second Edition — Tables R301.2(1), R301.2.2.1, R403.1.4",
+          "url": "https://dhbc.ky.gov/Documents/2018%20Kentucky%20Residential%20Code%20-%20CLEAN_FINAL%207.17.20.pdf"
+        },
+        {
+          "title": "815 KAR 7:125",
+          "url": "https://apps.legislature.ky.gov/law/kar/titles/815/007/125"
+        },
+        {
+          "title": "LFUCG — Residential Deck Help and Guide",
+          "url": "https://content.lexingtonky.gov/sites/default/files/2024-11/Residential%20Deck%20Help%20and%20Guide.pdf"
+        },
+        {
+          "title": "LFUCG — 2026 Permit Guide, Residential Deck Additions",
+          "url": "https://content.lexingtonky.gov/sites/default/files/2026-03/2026%20%20Permit%20Guide%20Residential%20Deck%20Addition.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "KY",
+      "county": "Kenton County",
+      "fips": "21117",
+      "population_2020": 169064,
+      "jurisdiction": "Planning and Development Services of Kenton County (PDS) Building Codes Administration (enforces the statewide KRC)",
+      "edition": "2018 Kentucky Residential Code, Third Edition (Aug 2024) — 2015 IRC with Kentucky amendments (815 KAR 7:125, eff. Dec 3, 2024); statewide mini/maxi code",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "Vult, all Kentucky counties (KRC Table R301.2(1))",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "PDS reviews residential permits such as decks in about 12 business days."
+      ],
+      "note": "Values come from the KRC county tables (Kenton: 30 in frost, 20 psf snow, SDC A). PDS's construction-resource documents load by script and could not be read.",
+      "sources": [
+        {
+          "title": "2018 Kentucky Residential Code, Second Edition — Tables R301.2(1), R301.2.2.1, R403.1.4",
+          "url": "https://dhbc.ky.gov/Documents/2018%20Kentucky%20Residential%20Code%20-%20CLEAN_FINAL%207.17.20.pdf"
+        },
+        {
+          "title": "815 KAR 7:125",
+          "url": "https://apps.legislature.ky.gov/law/kar/titles/815/007/125"
+        },
+        {
+          "title": "PDS of Kenton County — Building Codes Administration",
+          "url": "https://www.pdskc.org/pds-departments/building-codes-administration/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "AR",
+      "county": "Pulaski County",
+      "fips": "05119",
+      "population_2020": 399125,
+      "jurisdiction": "City of Little Rock, Planning & Development, Building Codes Division (county seat; Pulaski County's own program not checked)",
+      "edition": "2021 Arkansas Fire Prevention Code Vol. III (Residential), per Little Rock's Enforced Construction Codes sheet dated Jan 7, 2023",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "For additions, decks, porches and fences, bring four copies of the property survey with the work drawn to scale (Little Rock's 'Documents Needed for Permits', 2012)."
+      ],
+      "note": "Little Rock publishes no Table R301.2(1) values on the pages opened, and the deck-survey rule comes from a 2012 handout. Values are unknown.",
+      "sources": [
+        {
+          "title": "City of Little Rock — Enforced Construction Codes, Jan 7, 2023",
+          "url": "https://www.littlerock.gov/media/18644/enforced-construction-codes-2023-c-sized-sheet.pdf"
+        },
+        {
+          "title": "City of Little Rock — Documents Needed for Permits",
+          "url": "https://www.littlerock.gov/!userfiles/editor/docs/planning/building%20codes/Documents%20Needed%20For%20Permits%20030212.pdf"
+        },
+        {
+          "title": "City of Little Rock — Planning & Development Divisions",
+          "url": "https://littlerock.gov/government/city-departments/planning-and-development/divisions/"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "AR",
+      "county": "Benton County",
+      "fips": "05007",
+      "population_2020": 284333,
+      "jurisdiction": "City of Bentonville Building Inspections (county seat; Rogers is the largest city)",
+      "edition": "2021 Arkansas Fire Prevention Code Vol. III (Residential); the state code applies statewide, including rural and unincorporated areas",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Bentonville files decks under the Accessory Structure permit type.",
+        "Accessory structure submittals need a site plan drawn to scale with north arrow, distances to all property lines and structures, easements and right-of-way, subdivision/phase/lot/block, adjacent street names and utility locations."
+      ],
+      "note": "No design criteria table was found on Bentonville's pages; values are unknown.",
+      "sources": [
+        {
+          "title": "City of Bentonville — Building Codes",
+          "url": "https://www.bentonvillear.com/734/Building-Codes"
+        },
+        {
+          "title": "Bentonville — Residential Permit Types and Subtypes",
+          "url": "https://www.bentonvillear.com/DocumentCenter/View/21182/Residental-Permit-Types-and-Subtypes-for-Website"
+        },
+        {
+          "title": "Bentonville — Residential Accessory Structure Permit Submittal Checklist",
+          "url": "https://www.bentonvillear.com/DocumentCenter/View/21059/Residential-Accessory-Structure-Permit-Submittal-Checklist"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "AR",
+      "county": "Washington County",
+      "fips": "05143",
+      "population_2020": 245871,
+      "jurisdiction": "City of Fayetteville Development Services (county seat)",
+      "edition": "2021 IRC basis under the 2021 Arkansas Fire Prevention Code Vol. III; Fayetteville's deck guide is written to the 2021 IRC",
+      "frost_depth_in": 24,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Footings at least 24 in deep for attached decks, on undisturbed soil, sized from IRC Table R507.3.1 at 50 psf and 1,500 psf soil.",
+        "Submit deck construction plans and a scaled site plan, with page 1 of the deck guide filled in (footings, posts, beams, joists).",
+        "Decks are not approved for future hot tubs, must be at least 30 ft from wells, and may not attach to overhangs, bay windows or chimneys.",
+        "Ledgers: min 2x8 treated No. 2 lumber, not on stone or masonry veneer, flashed per IRC R703.4.",
+        "Guards at least 36 in, stair risers 7-3/4 in max, treads 10 in min, handrail 34–38 in above nosings (guide figures).",
+        "Emergency escape openings under a deck must open fully and keep a path at least 36 in high and wide.",
+        "A deck within 4 in of the house needs at least one receptacle outlet reachable from the deck (NEC 210.52(E)(3)).",
+        "Inspections: footings, framing and final."
+      ],
+      "note": "The 24 in figure is Fayetteville's deck-footing minimum for attached decks, not a published frost line. Snow, wind, seismic and termite values were not found.",
+      "sources": [
+        {
+          "title": "City of Fayetteville — Deck Construction Guide (2021 IRC)",
+          "url": "https://www.fayetteville-ar.gov/DocumentCenter/View/40569/Deck-Construction-Guide"
+        },
+        {
+          "title": "City of Fayetteville — Documents and Checklists",
+          "url": "https://www.fayetteville-ar.gov/300/Documents-and-Checklists"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "LA",
+      "county": "East Baton Rouge Parish",
+      "fips": "22033",
+      "population_2020": 456781,
+      "jurisdiction": "City of Baton Rouge / Parish of East Baton Rouge, Inspection & Permits",
+      "edition": "2021 IRC with Louisiana amendments (statewide LSUCC); the 2024 IRC is proposed statewide from Jan 1, 2027",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Residential plans must comply with the 2021 IRC, state amendments and the EBR Unified Development Code, show design loads (wind, seismic) and be drawn to scale.",
+        "Residential work over $7,500 must be done by a registered home improvement or licensed residential contractor; a homeowner may self-permit with a notarized affidavit."
+      ],
+      "note": "EBR's pages give no Table R301.2(1) values; wind speed, frost depth and termite rating are unknown. The plan-review requirements are written for new homes.",
+      "sources": [
+        {
+          "title": "EBR — Residential permits",
+          "url": "https://www.brla.gov/2691/Residential"
+        },
+        {
+          "title": "EBR — Residential Plan Review Requirements",
+          "url": "https://www.brla.gov/DocumentCenter/View/21778/Residential-Plan-Review-Requirements-Information"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "LA",
+      "county": "Jefferson Parish",
+      "fips": "22051",
+      "population_2020": 440781,
+      "jurisdiction": "Jefferson Parish Inspection & Code Enforcement (site refused automated access)",
+      "edition": "2021 IRC with Louisiana amendments (statewide LSUCC, LAC 17:I.107); 2024 IRC proposed from Jan 1, 2027",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Edition is from the mandatory state code; no parish design criteria or deck rules could be opened.",
+      "sources": [
+        {
+          "title": "LUCCC — Louisiana Construction Code Information",
+          "url": "http://luccc.louisiana.gov/wp-content/uploads/2025/11/LSUCCC_Louisiana-Construction-Code-Information.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "LA",
+      "county": "Orleans Parish",
+      "fips": "22071",
+      "population_2020": 383997,
+      "jurisdiction": "City of New Orleans, Department of Safety & Permits",
+      "edition": "2021 IRC with Louisiana amendments (statewide LSUCC, LAC 17:I.107); 2024 IRC proposed from Jan 1, 2027",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Edition is from the mandatory state code; nola.gov's residential permit pages give no design criteria or deck handout.",
+      "sources": [
+        {
+          "title": "City of New Orleans — Residential permits",
+          "url": "https://nola.gov/next/services/permits/residential"
+        },
+        {
+          "title": "LUCCC — Louisiana Construction Code Information",
+          "url": "http://luccc.louisiana.gov/wp-content/uploads/2025/11/LSUCCC_Louisiana-Construction-Code-Information.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "OK",
+      "county": "Oklahoma County",
+      "fips": "40109",
+      "population_2020": 796292,
+      "jurisdiction": "City of Oklahoma City, Development Services (okc.gov blocks direct downloads; read through its pages)",
+      "edition": "Statewide minimum: 2024 IRC with OUBCC amendments from Sept 14, 2026; OKC's own adoption and amendments were not confirmed",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "OKC's residential new construction, add-on and remodel checklist asks for a site plan drawn to scale with dimensioned property lines, easements, right-of-way, north arrow and distances to each property line.",
+        "Upload all files as PDF, combined into one file where possible."
+      ],
+      "note": "No OKC Table R301.2(1) values were found; climate values are unknown.",
+      "sources": [
+        {
+          "title": "OKC — Building & Trade Permits",
+          "url": "https://www.okc.gov/Services/Permits/Building-Trade-Permits"
+        },
+        {
+          "title": "OKC — Residential New Construction, Add-on and Remodel checklist",
+          "url": "https://www.okc.gov/files/assets/city/v/1/development-services/documents/application-checklists/residential-construction.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "OK",
+      "county": "Tulsa County",
+      "fips": "40143",
+      "population_2020": 669279,
+      "jurisdiction": "City of Tulsa, Development Services",
+      "edition": "Statewide minimum: 2024 IRC with OUBCC amendments from Sept 14, 2026; Tulsa's own adoption was not confirmed",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Tulsa's development-services pages load their content by script; no edition, design criteria or deck handout could be read.",
+      "sources": [
+        {
+          "title": "City of Tulsa — Development Services",
+          "url": "https://www.cityoftulsa.org/government/departments/development-services/"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "OK",
+      "county": "Cleveland County",
+      "fips": "40027",
+      "population_2020": 295528,
+      "jurisdiction": "City of Norman, Development Services Division (county seat)",
+      "edition": "2018 IRC including state and local amendments (Norman, effective June 22, 2023), per Norman's adopted-codes sheet; the statewide minimum moved to the 2024 IRC on Sept 14, 2026",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Norman site plans go on 8-1/2 x 11 in paper (11 x 17 in max) at an engineering scale (1 in = 20 ft, 30 ft, etc.) with a north arrow.",
+        "The site plan must show property lines, easements and right-of-way, existing and proposed buildings with dimensions, front/rear/side setbacks, and the building footprint including covered patios."
+      ],
+      "note": "Norman's posted design-criteria sheet covers only Manual J values; no structural Table R301.2(1) values (frost, wind, snow, seismic) were found.",
+      "sources": [
+        {
+          "title": "City of Norman — Adopted Building Codes",
+          "url": "https://www.normanok.gov/sites/default/files/documents/2026-04/250420_Adopted%20Building%20Codes%20.pdf"
+        },
+        {
+          "title": "City of Norman — Residential Site Plan Checklist",
+          "url": "https://www.normanok.gov/sites/default/files/documents/2026-04/260420_Residential%20Site%20Plan%20checklist%20%281%29.pdf"
+        },
+        {
+          "title": "City of Norman — Supporting Documents & FAQs",
+          "url": "https://www.normanok.gov/your-government/departments/planning-and-community-development/development-services/supporting"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "TX",
+      "county": "Harris County",
+      "fips": "48201",
+      "population_2020": 4731145,
+      "jurisdiction": "City of Houston Public Works, Houston Permitting Center (city limits only; unincorporated Harris County not covered)",
+      "edition": "2021 Houston Construction Code: 2021 IRC with Houston amendments (Ord. 2023-907), effective Jan 1, 2024",
+      "frost_depth_in": 6,
+      "ground_snow_psf": 0,
+      "wind_mph": null,
+      "wind_basis": "Site-specific: Vult from the ASCE 7 Hazard Tool for the property address, Risk Category II; attach the printout to the plans. Wind-borne debris Zone 1 or 2; no topographic effects or special wind region.",
+      "seismic_sdc": "A",
+      "weathering": "negligible",
+      "termite": "very heavy",
+      "deck_notes": [
+        "No permit is needed for a deck of 200 sq ft or less that is no more than 30 in above grade at any point, not attached to the dwelling, and not serving the required exit door.",
+        "Attach the ASCE 7 Hazard Tool wind-speed printout for the address to the plans.",
+        "Where wind design is required (IRC Figure R301.2.1.1, or Vult of 140 mph or more in a special wind region), design to WFCM, ICC 600, ASCE 7, AISI S230, the IBC or IRC Appendix L."
+      ],
+      "note": "Houston publishes no single wind speed; the value is looked up per address.",
+      "sources": [
+        {
+          "title": "Houston Permitting Center — Code Development (2021 amendments, effective Jan 1, 2024)",
+          "url": "https://www.houstonpermittingcenter.org/building-code-enforcement/code-development"
+        },
+        {
+          "title": "Exhibit I — Houston Amendments to the 2021 IRC (Table R301.2(1), R105.2)",
+          "url": "https://www.houstonpermittingcenter.org/media/9056/download"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "TX",
+      "county": "Dallas County",
+      "fips": "48113",
+      "population_2020": 2613539,
+      "jurisdiction": "City of Dallas, Development Services — Building Inspection (city limits)",
+      "edition": "Not confirmed. Dallas's FAQ lists the 2021 IBC, IFC and IMC with Dallas amendments; its residential code edition was not on any page that loaded",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Dallas's residential addition checklist asks for a site plan to a standard scale with legal description, north arrow, property lines, building lines, easements, setbacks, and footprints including all projections beyond the foundation."
+      ],
+      "note": "Dallas's code pages load by script and its code is on American Legal, which blocks automated access, so no Table R301.2(1) values were found. Dallas also has a Termite Protection Form.",
+      "sources": [
+        {
+          "title": "City of Dallas — Building Inspection FAQ list (SharePoint 'DCH Faq')",
+          "url": "https://dallascityhall.com/departments/sustainabledevelopment/buildinginspection/Pages/faqs.aspx"
+        },
+        {
+          "title": "City of Dallas — Residential permits",
+          "url": "https://dallascityhall.com/departments/sustainabledevelopment/buildinginspection/pages/residential.aspx"
+        },
+        {
+          "title": "City of Dallas — Residential Addition Checklist",
+          "url": "https://dallascityhall.com/departments/sustainabledevelopment/buildinginspection/DCH%20documents/RESIDENTIAL%20ADDITION-A.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "TX",
+      "county": "Tarrant County",
+      "fips": "48439",
+      "population_2020": 2110640,
+      "jurisdiction": "City of Fort Worth, Development Services (city limits)",
+      "edition": "2021 IRC with Fort Worth amendments (Ord. 25383-03-2022), adopted March 8, 2022, effective April 1, 2022",
+      "frost_depth_in": 6,
+      "ground_snow_psf": 5,
+      "wind_mph": 105,
+      "wind_basis": "As published: '105 mph (3-sec-gust)' in Fort Worth's Table R301.2(1); whether this is ultimate or nominal speed is not stated. No topographic effects, special wind region or wind-borne debris zone.",
+      "seismic_sdc": "A",
+      "weathering": "moderate",
+      "termite": "very heavy",
+      "deck_notes": [
+        "Fort Worth's 2021 IRC amendments make no deck (R507), stair or guard changes."
+      ],
+      "note": "Values were read from the image of Fort Worth's Table R301.2(1) on page 6 of the ordinance. The table labels the wind speed '3-sec-gust' without saying ultimate or nominal, so confirm the design wind speed with the city before using it for uplift design.",
+      "sources": [
+        {
+          "title": "Fort Worth — Building & Energy Codes",
+          "url": "https://www.fortworthtexas.gov/departments/development-services/permits/building-energy-codes"
+        },
+        {
+          "title": "Fort Worth — 2021 IRC Amendments, Ordinance 25383-03-2022",
+          "url": "https://www.fortworthtexas.gov/files/assets/public/v/2/development-services/documents/building-code-local-amendments/2021-approved-local-amendments/irc-amendments-2021-ordinance-25383-03-2022.pdf"
+        }
+      ],
+      "confidence": "high"
+    }
+  ]
+}

@@ -1863,9 +1863,9 @@
 .bp :global(.content .pt-cd--new .pt-cd-open) { color: #fff; background: var(--success); padding: 1px 8px; border-radius: var(--radius); text-decoration: none; }
 
 /* ── WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind) ───────────────────
-   A flat dot in the work's colour (the estimating tools' own colours: deck cedar,
+   A flat square in the work's colour (the estimating tools' own colours: deck cedar,
    roof blue, fence spruce, HVAC teal; a remodel the blueprint navy; anything
-   else grey), the work's word and the tool that made it, in the page's plain
+   else grey) and the work's one word (2026-10-20; the tool only in the tooltip), in the page's plain
    type (owner, 2026-10-18: no shadow behind the dot, no mono caps). Smart
    Proposal speaks in its violet. The Type filter is blueprint-shell/filter-bar.css. */
 .bp :global([data-fam]) { --fam: var(--muted); }
@@ -1874,7 +1874,7 @@
 .bp :global([data-fam="fence"]) { --fam: var(--tool-fence); }
 .bp :global([data-fam="hvac"]) { --fam: var(--tool-hvac); }
 .bp :global([data-fam="remodel"]) { --fam: var(--tool-plan); }
-.bp :global(.pkind-sq) { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--fam); }
+.bp :global(.pkind-sq) { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 0; background: var(--fam); }
 .bp :global(.pkind) {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   margin-bottom: 4px;
@@ -1889,3 +1889,88 @@
 .bp :global(.pkind-tool[data-tool="video"]) { color: var(--tool-video); }
 .bp :global(.pkind-tool[data-tool="blueprint"]) { color: var(--tool-plan); }
 .bp :global(.pjob-head .pkind), .bp :global(.psheet-head .pkind) { margin-bottom: 6px; }
+
+/* ── THE TABS' ROW + THE CONTRACT CARDS, TIGHTER (owner, 2026-10-20) ──────────
+   Type sits on the tabs' row at its right edge (blueprint-shell/filter-bar.css
+   `flt-drop--bp`). On the accepted and completed cards: the kind is one word
+   beside a square, a long title wraps to a second line, a payment stage is
+   one compact block — label, then the amount with its share beside it — with
+   small tinted actions (Mark paid green, Send invoice blue, Remind amber), and
+   the action bar is one row of cells split by rules, so each action reads as
+   a button rather than a word. */
+.bp :global(.content .ptabs-row) { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 16px; }
+.bp :global(.content .ptabs-row .ptabs) { margin-bottom: 0; }
+.bp :global(.content .ptabs-row .flt-drop) { margin-left: auto; }
+
+.bp :global(.content .pjob .pjob-title), .bp :global(.content .psheet .pjob-title) { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+
+.bp :global(.content .pjob .pcol) {
+  container-type: inline-size;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline; column-gap: 10px; row-gap: 4px;
+  padding: 14px 20px;
+}
+.bp :global(.content .pjob .pcol > .kpi-lbl) { grid-column: 1 / 3; grid-row: 1; margin: 0; }
+.bp :global(.content .pjob .pcol > .pcol-val) { grid-column: 1; grid-row: 2; margin: 0; line-height: 1.1; }
+.bp :global(.content .pjob .pcol > .pcol-sub) { grid-column: 2; grid-row: 2; margin: 0; font-size: 10.5px; }
+.bp :global(.content .pjob .pcol > .pinst-acts) {
+  grid-column: 3; grid-row: 1 / span 2; align-self: center;
+  display: flex; flex-wrap: nowrap; gap: 6px; margin: 0;
+}
+@container (max-width: 460px) {
+  .bp :global(.content .pjob .pcol > .pinst-acts) { grid-column: 1 / -1; grid-row: 3; margin-top: 6px; flex-wrap: wrap; }
+}
+.bp :global(.content .pjob .pinst-acts .btn.btn--sm) {
+  min-height: 30px; height: 30px; padding: 0 10px;
+  border-width: 1.5px; gap: 6px;
+  font-size: 10px; letter-spacing: 0.08em;
+  box-shadow: none; transform: none;
+}
+.bp :global(.content .pjob .pinst-acts .btn .ic) { width: 13px; height: 13px; }
+.bp :global(.content .pjob .pinst-acts .btn[data-act="markpaid"]) { border-color: var(--success); background: var(--success-soft); color: var(--success-dark); }
+.bp :global(.content .pjob .pinst-acts .btn[data-act="markpaid"]:hover) { background: color-mix(in srgb, var(--success) 16%, #fff); }
+.bp :global(.content .pjob .pinst-acts .btn[data-act="invoice"]) { border-color: var(--blueprint); background: var(--accent-soft); color: var(--blueprint); }
+.bp :global(.content .pjob .pinst-acts .btn[data-act="invoice"]:hover) { background: color-mix(in srgb, var(--blueprint) 15%, #fff); }
+.bp :global(.content .pjob .pinst-acts .btn[data-act="remind"]) { border-color: var(--warning); background: var(--warning-soft); color: var(--warning-dark); }
+.bp :global(.content .pjob .pinst-acts .btn[data-act="remind"]:hover) { background: color-mix(in srgb, var(--warning) 16%, #fff); }
+.bp :global(.content .pjob .pinst-acts .btn:disabled) { opacity: 0.45; cursor: not-allowed; }
+
+.bp :global(.content .pjob .pjob-foot), .bp :global(.content .psheet .psheet-foot) {
+  flex-wrap: nowrap; align-items: stretch; gap: 0;
+  min-height: 0; padding: 0;
+  border-top: 2px solid var(--ink);
+}
+.bp :global(.content .pjob .pjob-foot .pjob-foot-l), .bp :global(.content .pjob .pjob-foot .pjob-foot-r),
+.bp :global(.content .psheet .psheet-foot .psheet-foot-l), .bp :global(.content .psheet .psheet-foot .psheet-foot-r) {
+  flex-wrap: nowrap; align-items: stretch; gap: 0; padding: 0;
+}
+.bp :global(.content .pjob .pjob-foot .pjob-foot-r), .bp :global(.content .psheet .psheet-foot .psheet-foot-r) { margin-left: auto; border-left: 1.5px solid var(--ink-line); }
+.bp :global(.content .pjob .pjob-foot .btn.btn--sm), .bp :global(.content .psheet .psheet-foot .btn.btn--sm) {
+  align-self: stretch;
+  height: auto; min-height: 44px; margin: 0; padding: 0 14px;
+  border: 0; border-right: 1.5px solid var(--ink-line); border-radius: 0;
+  background: transparent; box-shadow: none; transform: none;
+  font-size: 10px; letter-spacing: 0.08em; white-space: nowrap;
+  color: var(--ink-soft);
+}
+.bp :global(.content .pjob .pjob-foot .btn.btn--sm .ic), .bp :global(.content .psheet .psheet-foot .btn.btn--sm .ic) { width: 14px; height: 14px; }
+.bp :global(.content .pjob .pjob-foot .btn.btn--sm:hover:not(:disabled)), .bp :global(.content .psheet .psheet-foot .btn.btn--sm:hover:not(:disabled)) {
+  border-color: var(--ink-line); background: var(--accent-soft); color: var(--blueprint); transform: none; box-shadow: none;
+}
+.bp :global(.content .pjob .pjob-foot .btn.btn--accent) { color: var(--blueprint); }
+.bp :global(.content .pjob .pjob-foot .pjob-foot-r .btn.btn--sm:last-child), .bp :global(.content .psheet .psheet-foot .psheet-foot-r .btn.btn--sm:last-child) { border-right: 0; }
+.bp :global(.content .pjob .pjob-foot .pjob-foot-r .btn.btn-primary.btn--sm), .bp :global(.content .psheet .psheet-foot .psheet-foot-r .btn.btn-primary.btn--sm) {
+  padding: 0 18px; background: var(--blueprint); color: #fff;
+}
+.bp :global(.content .pjob .pjob-foot .pjob-foot-r .btn.btn-primary.btn--sm:hover:not(:disabled)), .bp :global(.content .psheet .psheet-foot .psheet-foot-r .btn.btn-primary.btn--sm:hover:not(:disabled)) {
+  background: var(--blueprint-dark); color: #fff;
+}
+.bp :global(.content .pjob .pjob-foot .btn:disabled), .bp :global(.content .psheet .psheet-foot .btn:disabled) { opacity: 0.45; cursor: not-allowed; }
+/* A narrower desk drops the left group's icons before anything wraps. */
+@media (max-width: 1440px) {
+  .bp :global(.content .pjob .pjob-foot .pjob-foot-l .btn .ic) { display: none; }
+  .bp :global(.content .pjob .pjob-foot .btn.btn--sm) { padding: 0 11px; }
+}
+@media (max-width: 1100px) {
+  .bp :global(.content .pjob .pjob-foot), .bp :global(.content .pjob .pjob-foot .pjob-foot-l) { flex-wrap: wrap; }
+}

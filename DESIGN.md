@@ -229,6 +229,23 @@ monthly" is one 12px line (weight 600) under the price.
   a flat dot and plain text (● JobFlex, ● Facebook, ● HVAC · HVAC estimator).
   Desk: [filter-bar.css](src/components/v3/blueprint-shell/filter-bar.css);
   phone: the `.fbar` rules in the mobile Leads and Proposals modules.
+- Proposals, owner pass 2026-10-20 (supersedes the bar above for Proposals
+  only; Leads unchanged). Filters are the Blueprint plate (`flt-bar--bp` /
+  `flt-drop--bp`): 2px ink frame, white, 11.5–12px Inter 800 caps, 1.5px ink
+  rules between segments, the picked one a solid blueprint fill with white
+  type. Desk: Type sits on the All / Accepted / Completed row at its right
+  edge on every tab; Status shows on All only. Phone: two dropdowns side by
+  side — Status (All tab only) and Type — each opening across the row. The
+  kind tag is a flat 8px SQUARE and one word ("Roof"); "General" (no trade
+  read) prints the tool instead ("Manual"). No Smart Proposal button on the
+  list — Manual proposal only, white. Contract cards: titles wrap; a payment
+  stage is label, then amount with its share, beside small tinted actions —
+  Mark paid green, Send invoice blue, Remind amber (soft fill + coloured
+  1.5px frame); the desk action bar is one row of cells split by rules, the
+  primary a full-height blue cell. Phone cards and strips are white on the
+  cream page; views read "3 views" with when under it; status plates sit on
+  the foot's bottom edge; accepted/declined gets its own line; no "1mo ago"
+  above the title and no "Completed" stamp on Done cards.
 - Use existing Lucide icons at consistent sizes; decorative icons are hidden
   from assistive technology, icon-only controls have accessible names.
 - Preserve all existing actions, validation, units, permissions and data

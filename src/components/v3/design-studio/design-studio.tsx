@@ -1393,7 +1393,7 @@ export function DesignStudio({ initial, market, shopAddress }: { initial: { id: 
           </section>
         </aside>
       </div>
-      {focus && focusRoom && (doc.items ?? []).some((i) => i.room === focus) ? <EstimateSheet doc={doc} focus={focus} designId={id} market={market} shopAddress={shopAddress} onPatch={patch} products={products} /> : null}
+      {focus && focusRoom && (doc.items ?? []).some((i) => i.room === focus) ? <EstimateSheet doc={doc} focus={focus} designId={id} market={market} shopAddress={shopAddress} onPatch={patch} products={products} onSave={() => save(true)} /> : null}
     </div>
   );
 }

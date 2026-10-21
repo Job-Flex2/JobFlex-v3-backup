@@ -107,6 +107,47 @@
 .jf-blueprint .content .flt-dot { display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dot, var(--fam, var(--muted-light))); }
 .jf-blueprint .content .flt-dot--none { background: transparent; }
 
+/* ── THE BLUEPRINT PLATE (owner, 2026-10-20, Proposals) ──
+   "More blueprint": the frame is the cards' 2px ink, the labels the buttons'
+   bold caps, the picked segment a solid blueprint fill with white type, and
+   the colour squares square. `--bp` on the bar or on a lone Type button;
+   `--end` hangs the menu from the right edge (the Type on the tabs' row).
+   Four classes: outweighs the plain rules above in any order. */
+.jf-blueprint .content .flt-bar--bp .flt-seg,
+.jf-blueprint .content .flt-drop--bp .flt-drop-btn {
+  height: 38px;
+  border: 2px solid var(--ink);
+  background: #fff;
+}
+.jf-blueprint .content .flt-bar--bp .flt-seg-btn {
+  padding: 0 15px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.jf-blueprint .content .flt-bar--bp .flt-seg-btn + .flt-seg-btn { border-left: 1.5px solid var(--ink); }
+.jf-blueprint .content .flt-bar--bp .flt-seg-btn:hover { background: var(--accent-soft); color: var(--blueprint); }
+.jf-blueprint .content .flt-bar--bp .flt-seg-btn.active { background: var(--blueprint); color: #fff; }
+.jf-blueprint .content .flt-bar--bp .flt-seg-btn.active::after { display: none; }
+.jf-blueprint .content .flt-bar--bp .flt-n { font-size: 11px; font-weight: 700; letter-spacing: 0; color: var(--muted-light); }
+.jf-blueprint .content .flt-bar--bp .flt-seg-btn.active .flt-n { color: rgba(255, 255, 255, 0.78); }
+
+.jf-blueprint .content .flt-drop--bp .flt-drop-btn {
+  gap: 8px; padding: 0 12px 0 14px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.jf-blueprint .content .flt-drop--bp .flt-drop-btn:hover,
+.jf-blueprint .content .flt-drop--bp.open .flt-drop-btn { background: var(--accent-soft); }
+.jf-blueprint .content .flt-drop--bp .flt-key { padding-right: 8px; border-right: 1.5px solid var(--ink-line); color: var(--muted); }
+.jf-blueprint .content .flt-drop--bp .flt-face { font-weight: 800; }
+.jf-blueprint .content .flt-drop--bp .flt-drop-btn .ic { color: var(--ink); }
+.jf-blueprint .content .flt-drop--bp.is-set .flt-drop-btn { border-color: var(--blueprint); }
+.jf-blueprint .content .flt-drop--bp.is-set .flt-face { color: var(--blueprint); }
+.jf-blueprint .content .flt-drop--bp .flt-menu { border-width: 2px; background: #fff; }
+.jf-blueprint .content .flt-drop--bp .flt-item { font-weight: 600; }
+.jf-blueprint .content .flt-drop--bp .flt-item.active { background: var(--accent-soft); }
+.jf-blueprint .content .flt-drop--end .flt-menu { left: auto; right: 0; }
+.jf-blueprint .content .flt-drop--bp .flt-dot { border-radius: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .jf-blueprint .content .flt-seg-btn, .jf-blueprint .content .flt-drop-btn,
   .jf-blueprint .content .flt-menu, .jf-blueprint .content .flt-item,

@@ -1226,3 +1226,73 @@
 .fitem.on .fsegN { color: var(--blueprint); }
 .fitem .ic { width: 15px; height: 15px; color: var(--blueprint); margin-left: 4px; }
 @media (prefers-reduced-motion: reduce) { .fsegBtn, .fdropBtn, .fmenu, .fdropCaret { transition: none; } }
+
+/* ── OWNER PASS 2026-10-20 ─────────────────────────────────────────────────
+   As on the desk: every card and button white on the cream page (the zoned
+   strips too — the desk's paper-deep IS white), the kind a flat SQUARE and
+   one word, the views a count that names itself with when under it, the
+   status plate held at the foot's bottom edge, accepted/declined on its own
+   line, compact stage blocks with tinted Mark paid (green) / Remind (amber),
+   and the filters two Blueprint dropdowns — Status and Type — in the cards'
+   2px ink frame and the buttons' bold caps. */
+.btnGhost, .pmast, .pmastCnt, .ptabs, .pledger, .pgrp,
+.pjob, .pcols, .psched, .pjobFoot, .psheet, .psheetFoot { background: #fff; }
+.ptab.active { background: var(--accent-soft); }
+
+.pkSq, .fdot { border-radius: 0; }
+
+.views b { display: inline-flex; align-items: baseline; gap: 4px; font-family: var(--font); font-size: 15px; font-weight: 800; }
+.views b small { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
+.viewsSeen b small { color: var(--accent); }
+.views i { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; }
+.prowFoot { align-items: flex-end; }
+.prowAccepted, .prowDeclined { display: block; margin-top: 3px; }
+
+.pjobSubLine { flex-basis: 100%; }
+.pjobSub { margin-top: 12px; }
+
+.pcol { padding: 10px var(--card-pad) 11px; }
+.pcolLbl { margin-bottom: 3px; }
+.pcolVal { font-size: 19px; line-height: 1.15; }
+.pcolSub { margin-top: 2px; font-size: 10.5px; }
+.pcolActs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pcol .pcolActs .pschedRem { margin-top: 0; }
+.pschedRem {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-height: 34px; padding: 0 10px;
+  font-size: 10.5px; letter-spacing: 0.08em;
+  background: #fff;
+}
+.pschedRem svg { width: 13px; height: 13px; flex: none; }
+.pschedRem:disabled { opacity: 0.45; }
+.remPaid { border-color: var(--success); background: var(--success-soft); color: var(--success-dark, #2c5f34); }
+.remRemind { border-color: var(--warning); background: var(--warning-soft); color: var(--warning-dark, #8a6113); }
+.remPaid:active:not(:disabled) { background: var(--success); border-color: var(--success); color: #fff; }
+.remRemind:active:not(:disabled) { background: var(--warning); border-color: var(--warning); color: #fff; }
+
+.pjobAct { min-height: 48px; font-size: 11px; }
+
+/* The two dropdowns share the row; each menu opens across all of it. */
+.fbar { gap: 8px; }
+.fdrop { flex: 1 1 0; min-width: 0; margin-left: 0; }
+.fdropBtn {
+  width: 100%; min-width: 0;
+  min-height: 46px; padding: 0 12px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fdropKey { flex: none; padding-right: 8px; border-right: 1.5px solid var(--ink-line); font-weight: 700; color: var(--muted); }
+.fdropVal { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.fdropVal .fsegN { font-size: 11px; font-weight: 700; letter-spacing: 0; }
+.fdropCaret { margin-left: auto; flex: none; color: var(--ink); }
+.fdrop.open .fdropBtn, .fdrop.isSet .fdropBtn { background: var(--accent-soft); }
+.fdrop.isSet .fdropBtn { border-color: var(--blueprint); }
+.fdrop.isSet .fdropVal { color: var(--blueprint); }
+.fmenu { border-width: 2px; }
+.fitem { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.fitem + .fitem { border-top: 1px solid var(--ink-line); }
+.fitem.on { background: var(--accent-soft); }
+
+/* A long title gets a third line before it is cut (owner, 2026-10-20). */
+.prowTitle { -webkit-line-clamp: 3; }

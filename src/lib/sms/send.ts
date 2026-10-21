@@ -33,7 +33,7 @@ import {
   SMS_URGENT_KEYS,
   smsDecision,
   type PrefKey, allowsSms, audienceForRole, textEventsFor } from "@/lib/notificationPrefsShared";
-import { brand, clip, heldDigestText, SMS_MAX, unbrand } from "./format";
+import { brand, clip, heldDigestText, jobflexRoundupText, SMS_MAX, unbrand } from "./format";
 import { trialBlocksText } from "@/lib/trialMeter";
 import { hasTextConsent, isTeamPhone } from "./consent";
 import { jobflexSender } from "./jobflexSender";
@@ -314,9 +314,12 @@ export async function flushHeldTexts(now = new Date()): Promise<number> {
   let out = 0;
   for (const rows of groups.values()) {
     const orgName = rows[0].organizationId ? (orgs.get(rows[0].organizationId) ?? null) : null;
-    const body = rows.length === 1 ? rows[0].body : heldDigestText(orgName, rows.map((r) => unbrand(orgName, r.body)));
+    // JobFlex's own texts (the team's alerts, no company) fold into one roundup and keep their "jobflex-" kind — the
+    // kind is what lets them leave from JobFlex's number at all (dispatch).
+    const jobflex = !rows[0].organizationId && rows.every((r) => r.kind?.startsWith("jobflex-"));
+    const body = rows.length === 1 ? rows[0].body : jobflex ? jobflexRoundupText(rows.map((r) => r.body)) : heldDigestText(orgName, rows.map((r) => unbrand(orgName, r.body)));
     await db.smsMessage.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { status: "MERGED" } });
-    const r = await dispatch({ organizationId: rows[0].organizationId, to: rows[0].to, body, kind: rows.length === 1 ? (rows[0].kind ?? "held") : "overnight" });
+    const r = await dispatch({ organizationId: rows[0].organizationId, to: rows[0].to, body, kind: rows.length === 1 ? (rows[0].kind ?? "held") : jobflex ? "jobflex-overnight" : "overnight" });
     if (r.ok) out++;
   }
   return out;

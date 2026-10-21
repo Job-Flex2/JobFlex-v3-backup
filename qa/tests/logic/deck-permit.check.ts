@@ -46,8 +46,9 @@ check("a free-standing deck's section has no ledger", !texts(freeSec).some((x) =
 
 // ── the details
 const titles = (s: ReturnType<typeof buildStructure>) => detailDrawings(s).map((d) => d.title);
-check("an attached deck without a rail details the ledger and the post and footing", !deck.rails.on && titles(deck).join(",") === "Ledger attachment,Post, beam and footing", titles(deck).join(","));
-check("…with a rail it adds the guard post", railed.rails.on && titles(railed).join(",") === "Ledger attachment,Post, beam and footing,Guard post", titles(railed).join(","));
+// 2026-10-20: the lateral load connection is its own detail, drawn after the ledger (lib/deck/permit lateralDetail).
+check("an attached deck without a rail details the ledger, its lateral connection and the post and footing", !deck.rails.on && titles(deck).join(",") === "Ledger attachment,Lateral load connection,Post, beam and footing", titles(deck).join(","));
+check("…with a rail it adds the guard post", railed.rails.on && titles(railed).join(",") === "Ledger attachment,Lateral load connection,Post, beam and footing,Guard post", titles(railed).join(","));
 check("…and the section then draws the guard", texts(sectionDrawing(railed)!).some((x) => /in\. guard/.test(x)));
 check("…the ledger detail cites the lateral connectors and the fastener rows", detailDrawings(deck)[0].notes.some((n) => /lateral load connectors/.test(n)) && detailDrawings(deck)[0].notes.some((n) => /two staggered rows/.test(n)));
 check("a free-standing deck details its bracing instead of a ledger", titles(free).includes("Lateral bracing, free-standing") && !titles(free).includes("Ledger attachment"), titles(free).join(","));

@@ -236,9 +236,9 @@ async function main() {
     // action layer sends. The list is SyncState; what was there before is put back after.
     const teamBefore = await db.syncState.findMany({ where: { key: { in: ["adminTeam:members:v1", "adminTeam:assign:v1", "adminTeam:confirm:v1"] } } });
     await team.writeMembers([
-      { id: "ivan01", name: "Ivan Petrov", phone: "+12065550101", on: true, quietNights: true, addedAt: "" },
-      { id: "ana001", name: "Ana Lee", phone: "+12065550102", on: true, quietNights: true, addedAt: "" },
-      { id: "zed001", name: "Zed Quiet", phone: "+12065550103", on: true, quietNights: true, addedAt: "" },
+      { id: "ivan01", name: "Ivan Petrov", phone: "+12065550101", on: true, addedAt: "" },
+      { id: "ana001", name: "Ana Lee", phone: "+12065550102", on: true, addedAt: "" },
+      { id: "zed001", name: "Zed Quiet", phone: "+12065550103", on: true, addedAt: "" },
     ]);
     await db.syncState.deleteMany({ where: { key: { in: ["adminTeam:assign:v1", "adminTeam:confirm:v1"] } } });
     try {

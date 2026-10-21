@@ -107,7 +107,6 @@ import { MarkupBlock } from "./bp-markup";
 import { PrintOptions, FilesBlock } from "./bp-blocks";
 import { FenceSceneFigure } from "@/components/v3/fence-scene/fence-scene-figure";
 import { DeckSceneFigure } from "@/components/v3/deck-scene/deck-scene-figure";
-import { TheirCopy } from "./bp-proof";
 // Card 11. The same proposal as PAPER — see the header of bp-pdf.tsx for why
 // the file is produced by print CSS rather than by a PDF library.
 import { DEFAULT_PDF_SETUP, PdfBlock, type PdfSetup } from "./bp-pdf";
@@ -245,13 +244,13 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
   const [savedId, setSavedId] = useState<string | null>(data.proposal?.id ?? null);
   /** The client's page exists once the proposal is saved — the link to copy or text (2026-09-24). */
   const [publicId, setPublicId] = useState<string | null>(data.proposal?.publicId ?? null);
-  // A fence traced on the map gets a card of its own after the line items;
-  // the cards after it move down one number.
+  // A fence traced on the map gets a card of its own after the line items and
+  // Show to client (05); the cards after it move down one number.
   const fenceDrawing = !!data.proposal?.fenceDrawing;
   // A deck from the Deck Studio gets the same card, its 3D alone (2026-10-04).
   const deckDrawing = !!data.proposal?.deckDrawing;
   const drawing = fenceDrawing || deckDrawing;
-  const N = (k: number) => String(drawing && k >= 4 ? k + 1 : k).padStart(2, "0");
+  const N = (k: number) => String(drawing && k >= 5 ? k + 1 : k).padStart(2, "0");
   // The page's own host, for the link shown and copied: "" on the server and
   // on the first client paint (so they agree), the real origin right after.
   const origin = useSyncExternalStore(noSubscribe, () => window.location.origin, () => "");
@@ -495,7 +494,7 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
    * router push here would re-render the server component and replay the whole
    * entrance cascade over a form the user is still typing in.
    */
-  async function persist(opts?: { sendAfter?: boolean; sentTo?: string }) {
+  async function persist(opts?: { sendAfter?: boolean; sentTo?: string; view?: boolean }): Promise<string | null> {
     /* THE SLIDERS ARE BAKED IN HERE (owner, 2026-09-05). Card 04's two cost
        adjustments are a tool until save: the saved lines carry the adjusted
        costs and the sliders go back to neutral — no memory of the original
@@ -509,12 +508,12 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
       // which a touch screen never shows — so a tap on Save & send did
       // nothing at all. The buttons stay live and the reason is said here.
       toast.error(opts?.sendAfter ? "Can't send yet" : "Can't save yet", why);
-      return;
+      return null;
     }
     // The client card's name, email and phone reach the client RECORD on every
     // save now, not only on a send (settleClient below).
     const settled = await settleClient(baked, Boolean(opts?.sendAfter));
-    if (!settled) return;
+    if (!settled) return null;
     const d = settled.draft;
     // A send with nowhere to go used to complete "successfully" and report
     // "marked sent — no client email on file", which reads as a delivery.
@@ -528,20 +527,20 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
       if (pick.mode !== "record") {
         setNote({ tone: "err", text: "Name the client before sending" });
         toast.error("Can't send yet", "Name the client in card 02 first");
-        return;
+        return null;
       }
       if (!settled.email) {
         const rec = clients.find((c) => c.id === pick.id);
         setAskEmail({ clientId: pick.id, name: rec?.name ?? settled.name ?? "this client" });
-        return;
+        return null;
       }
       opts = { ...opts, sentTo: settled.email };
     }
     // A brand-new proposal counts against the monthly cap; the dialog the shell
     // already mounts is what explains it.
-    if (!savedId && !(await ensureWithinLimit("proposalsCreated"))) return;
+    if (!savedId && !(await ensureWithinLimit("proposalsCreated"))) return null;
     // The first send to a client names the business first (lib/orgName).
-    if (opts?.sendAfter && !(await ensureCompanyName())) return;
+    if (opts?.sendAfter && !(await ensureCompanyName())) return null;
 
     setBusy(opts?.sendAfter ? "send" : "save");
     setNote({ tone: "live", text: "Saving…" });
@@ -584,15 +583,20 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
         const text = to ? `${ref} was sent to ${to}` : `${ref} was sent`;
         setNote({ tone: "ok", text });
         setDone({ sent: true, ref, text });
+      } else if (opts?.view) {
+        // Saved on the way to the client's page: no done panel, whose clock
+        // would carry this tab off to the list while the page opens in another.
+        setNote({ tone: "ok", text: `${ref} saved — the client's page is open in a new tab` });
       } else {
         const text = `${ref} was saved to your proposals`;
         setNote({ tone: "ok", text });
         setDone({ sent: false, ref, text });
       }
+      return res.publicId;
     } catch (err: unknown) {
       if (reportPlanLimit(err)) {
         setNote({ tone: "err", text: "Monthly proposal limit reached" });
-        return;
+        return null;
       }
       // A zod failure serialises to a JSON array — never surface that raw.
       const raw = err instanceof Error ? err.message : "";
@@ -604,8 +608,38 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
       // The chip in the masthead is easy to miss from the bar at the bottom of
       // a long sheet, which is how a failed send read as a dead button.
       toast.error(opts?.sendAfter ? "Couldn't send" : "Couldn't save", text);
+      return null;
     } finally {
       setBusy(null);
+    }
+  }
+
+  /**
+   * VIEW THE PROPOSAL (owner, 2026-10-20) — the client's own page, in a new
+   * tab: the whole copy they get, which is why the on-sheet "Their copy" card
+   * went. Saved first when the sheet holds unsaved edits (or was never saved),
+   * so the page shows what is on screen. The tab opens on the click itself and
+   * is pointed at the page after the save — a window opened after an `await`
+   * is a popup the browser blocks.
+   */
+  async function viewProposal() {
+    // Clean = nothing typed since the last load or save ("Edited — not saved" is `live`; a failed save is `err`).
+    if (publicId && (note.tone === "idle" || note.tone === "ok")) {
+      window.open(clientProposalUrl(publicId, origin || undefined), "_blank", "noopener,noreferrer");
+      return;
+    }
+    const win = window.open("about:blank", "_blank");
+    const pid = await persist({ view: true });
+    if (!pid) {
+      win?.close();
+      return;
+    }
+    const url = clientProposalUrl(pid, origin || undefined);
+    if (win) {
+      win.opener = null;
+      win.location.href = url;
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
     }
   }
 
@@ -862,12 +896,52 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
           />
         </Card>
 
-        {/* 04 (a fence traced on the map) — THE DRAWING. The 3D the estimator
+        {/* 04 — WHAT THE CLIENT SEES, right under the lines it prints
+            (owner, 2026-10-20). The client's link to copy or text rides here
+            now that "Their copy" is gone — the bar's View proposal opens the
+            page itself. */}
+        <Card num="04" title="Show to client" id="q-06">
+          {publicId ? (
+            <div className={styles.shareRow} data-client-link>
+              <Btn
+                icon="link"
+                title="Copy the client's link to paste into a text"
+                onClick={() => {
+                  const url = clientProposalUrl(publicId, origin || undefined);
+                  navigator.clipboard.writeText(url).then(
+                    () => setNote({ tone: "ok", text: "Client link copied — paste it into a text." }),
+                    () => setNote({ tone: "err", text: `Couldn't copy. The link: ${url}` }),
+                  );
+                }}
+              >
+                Copy client link
+              </Btn>
+              <Btn
+                icon="phone"
+                title="Opens your messages with the link filled in"
+                onClick={() => {
+                  window.location.assign(
+                    smsHref(
+                      contactOf(clients, draft.client).phone,
+                      proposalTextMessage({ org: identity.orgName, clientName, title: draft.title, link: clientProposalUrl(publicId, origin || undefined) }),
+                    ),
+                  );
+                }}
+              >
+                Text the link
+              </Btn>
+              <span className={styles.shareNote}>{clientProposalUrl(publicId, origin).replace(/^https?:\/\//, "")}</span>
+            </div>
+          ) : null}
+          <PrintOptions options={draft.options} onPatch={patchOptions} />
+        </Card>
+
+        {/* 05 (a fence traced on the map) — THE DRAWING. The 3D the estimator
             showed and the fence on the lot, both from the stored plan — the two
             the client's page carries (2026-09-27: "when I open the fence
             proposal after saving, it shows no 3D and no layout"). */}
         {deckDrawing && publicId ? (
-          <Card num="04" title="The drawing" id="q-drawing">
+          <Card num="05" title="The drawing" id="q-drawing">
             <DeckSceneFigure className={styles.drawingScene} src={`/api/public-quote/${publicId}/deck-scene`} caption="In 3D" facts="Drag to look around · Build it stands it up layer by layer" />
             <p className={styles.drawingNote}>The client&apos;s page carries the same 3D, frozen as it was priced.</p>
             {/* Open it again (owner, 2026-10-12): the studio re-prices THIS proposal from the changed design. */}
@@ -892,7 +966,7 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
           </Card>
         ) : null}
         {fenceDrawing && publicId ? (
-          <Card num="04" title="The drawing" id="q-drawing">
+          <Card num="05" title="The drawing" id="q-drawing">
             <div className={styles.drawing}>
               <FenceSceneFigure className={styles.drawingScene} src={`/api/public-quote/${publicId}/fence-scene`} caption="In 3D" facts="Drag to look around · click to walk through" />
               <figure className={styles.drawingPlan}>
@@ -915,7 +989,7 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
             Still deliberately NOT merged with the deposits below — the split is
             by question ("what am I charging?" vs "when do they pay it?"), not
             by arithmetic. ------------------------------------------- */}
-        <Card num={N(4)} title="Cost adjustment" id="q-04">
+        <Card num={N(5)} title="Cost adjustment" id="q-04">
           <MarkupBlock
             materialMarkupPct={draft.materialMarkupPct}
             laborMarkupPct={draft.laborMarkupPct}
@@ -944,7 +1018,7 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
         </Card>
 
         {/* 05 ------------------------------------------------------- */}
-        <Card num={N(5)} title="Scope & notes" id="q-05">
+        <Card num={N(6)} title="Scope & notes" id="q-05">
           <Field label="Scope of work" htmlFor="q-scope">
             <TextArea
               id="q-scope"
@@ -961,11 +1035,6 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
               onChange={(v) => patch({ notes: v })}
             />
           </Field>
-        </Card>
-
-        {/* 06 ------------------------------------------------------- */}
-        <Card num={N(6)} title="Show to client" id="q-06">
-          <PrintOptions options={draft.options} onPatch={patchOptions} />
         </Card>
 
         {/* 07 ------------------------------------------------------- */}
@@ -1045,64 +1114,13 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
           ) : null}
         </Card>
 
-        {/* 10 ------------------------------------------------------- */}
-        <Card num={N(10)} title="Their copy" id="q-10" sheet>
-          {publicId ? (
-            <div className={styles.shareRow} data-client-link>
-              <Btn
-                icon="link"
-                title="Copy the client's link to paste into a text"
-                onClick={() => {
-                  const url = clientProposalUrl(publicId, origin || undefined);
-                  navigator.clipboard.writeText(url).then(
-                    () => setNote({ tone: "ok", text: "Client link copied — paste it into a text." }),
-                    () => setNote({ tone: "err", text: `Couldn't copy. The link: ${url}` }),
-                  );
-                }}
-              >
-                Copy client link
-              </Btn>
-              <Btn
-                icon="phone"
-                title="Opens your messages with the link filled in"
-                onClick={() => {
-                  window.location.assign(
-                    smsHref(
-                      contactOf(clients, draft.client).phone,
-                      proposalTextMessage({ org: identity.orgName, clientName, title: draft.title, link: clientProposalUrl(publicId, origin || undefined) }),
-                    ),
-                  );
-                }}
-              >
-                Text the link
-              </Btn>
-              <span className={styles.shareNote}>{clientProposalUrl(publicId, origin).replace(/^https?:\/\//, "")}</span>
-            </div>
-          ) : null}
-          <TheirCopy
-            identity={identity}
-            title={draft.title}
-            clientName={clientName}
-            address={draft.address}
-            scopeOfWork={draft.scopeOfWork}
-            terms={draft.terms}
-            taxPct={draft.taxPct}
-            discountPct={draft.discountIsPercent === false ? 0 : draft.discountPct}
-            options={draft.options}
-            totals={totals}
-          />
-        </Card>
-
-        {/* 11 — THE SAME PROPOSAL AS PAPER.
-            Card 10 answers "what will they see"; this answers "what will they
-            receive". It is a separate card and not a button on card 10 because
-            the document has decisions of its own — trim size, cover, running
-            furniture — and none of them belongs to the on-screen copy.
-
-            It carries `sheet` as card 10 does: the column now ends on a
-            two-card coda, the same artifact in two media, and both are
-            documents rather than forms. */}
-        <Card num={N(11)} title="The PDF" id="q-11" sheet>
+        {/* 10 — THE SAME PROPOSAL AS PAPER.
+            The bar's View proposal answers "what will they see" (the on-sheet
+            "Their copy" card went 2026-10-20); this answers "what will they
+            receive". The document has decisions of its own — trim size,
+            cover, running furniture — so it keeps a card, drawn as a `sheet`:
+            a document rather than a form. */}
+        <Card num={N(10)} title="The PDF" id="q-11" sheet>
           <PdfBlock
             setup={pdf}
             onPatch={(p) => {
@@ -1165,11 +1183,20 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
             {money(totals.total)}
           </div>
         </div>
-        {/* The two actions that move the proposal forward, and nothing else —
-            which is what a persistent bar should carry. Both are DISABLED
-            rather than hidden while the sheet is not savable, and the reason
-            travels in `title` and in the masthead chip. */}
+        {/* The actions that move the proposal forward — plus View proposal
+            (owner, 2026-10-20), the client's own page in a new tab. Each is
+            DISABLED rather than hidden while a write is in flight, and the
+            reason travels in `title` and in the masthead chip. On a phone
+            View is its eye alone; the label stays for screen readers. */}
         <div className={styles.barActions}>
+          <Btn
+            icon="eye"
+            onClick={() => void viewProposal()}
+            disabled={working}
+            title={blocked ?? "View the proposal as the client sees it — opens a new tab"}
+          >
+            <span className={styles.barViewLbl}>View proposal</span>
+          </Btn>
           <Btn onClick={() => void persist()} disabled={working} title={blocked ?? undefined}>
             {busy === "save" ? "Saving…" : "Save"}
           </Btn>

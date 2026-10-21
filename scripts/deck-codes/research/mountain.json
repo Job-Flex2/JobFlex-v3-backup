@@ -1,0 +1,1315 @@
+{
+  "region": "mountain",
+  "researched": "2026-10-20",
+  "states": [
+    {
+      "state": "MO",
+      "edition": "No statewide residential building code — counties and cities adopt their own",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Row says 'St. Louis and Kansas City: 2018 IRC'. St. Louis County's residential code is the 2015 IRC with county amendments (Ord. 27,654, in force April 1, 2020) per the sources that could be read; Kansas City, MO could not be checked (kcmo.gov blocked). Nearby: Independence is on the 2024 IRC (Jan 1, 2025), unincorporated Jackson County on the 2018 IRC, St. Charles County on the 2021 IRC. Suggest: 'St. Louis County: 2015 IRC; St. Charles County: 2021; Independence: 2024 — Kansas City unverified'.",
+      "notes": [
+        "Guard/stair values are the IRC defaults; local codes checked keep them (Independence lists 7¾ in. rise / 10 in. run and 3⅞ in. baluster gaps).",
+        "Deck permit exemptions vary widely: St. Louis County and Independence have none, unincorporated Jackson County exempts decks up to 36 in. above grade, St. Charles County keeps the IRC 200 sq ft / 30 in. exemption."
+      ],
+      "sources": [
+        {
+          "title": "St. Louis County 2015 Residential Code (Ord. 27,654) — user-friendly copy hosted by City of Pagedale",
+          "url": "https://public.powerdms.com/Pagedale/documents/2893041/2015%20Building-Exist%20Bldg-Residential%20Code%20User%20Friendly"
+        },
+        {
+          "title": "City of Sunset Hills — Building Code Details",
+          "url": "https://www.sunset-hills.com/856/Building-Code-Details"
+        },
+        {
+          "title": "City of Independence — 2024 IRC Residential Code Amendments",
+          "url": "https://www.independencemo.gov/sites/default/files/2025-03/2024%20IRC%20Residential%20Code%20Amendments.pdf"
+        },
+        {
+          "title": "St. Charles County — Building and Construction Codes",
+          "url": "https://www.sccmo.org/209/Building-and-Construction-Codes"
+        }
+      ]
+    },
+    {
+      "state": "KS",
+      "edition": "No statewide residential building code — counties and cities adopt their own",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Row 'Wichita, Overland Park and Johnson County: 2018 IRC' is right for Wichita/Sedgwick (MABCD UBTC, 2018 IRC) and unincorporated Johnson County (2018 IRC since July 1, 2020), but Johnson County commissioners vote Oct 22, 2026 on the 2024 codes, effective Jan 1, 2027 if adopted. Overland Park was not verified. Topeka/Shawnee County is on the 2021 IRC (Ord. 20467, Dec 2023).",
+      "notes": [
+        "Wichita/Sedgwick exempts decks no more than 30 in. above grade with no roof and no basement below, regardless of size, and uses a 24 in. frost depth.",
+        "Johnson County's Residential Deck Guidelines are endorsed by the county building officials for all Johnson County cities."
+      ],
+      "sources": [
+        {
+          "title": "Johnson County — Code of Regulations for Buildings and Construction",
+          "url": "https://www.jocogov.org/department/building-codes/code-regulation-building-and-construction"
+        },
+        {
+          "title": "MABCD — Codes, resolutions and ordinances",
+          "url": "https://www.sedgwickcounty.org/mabcd/codes-resolutions-ordinances/"
+        },
+        {
+          "title": "City of Topeka — Ordinance 20467 (2021 IRC)",
+          "url": "https://files.topeka.gov/community/ordinances/2023/Ordinance20467.pdf"
+        }
+      ]
+    },
+    {
+      "state": "NE",
+      "edition": "Nebraska State Building Code — 2018 International Residential Code, except section R313 and chapters 25–33 (Neb. Rev. Stat. 71-6403)",
+      "basis_irc": 2018,
+      "since": 2019,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Edition matches. 'Since' should be 2019: LB 348 (approved by the Governor April 17, 2019) moved the IRC reference from the 2012 to the 2018 edition; the bill has no emergency clause and its operative date was not confirmed. Also, the state does not inspect homes itself: a county/city/village that enforces a code must adopt the state code or one that 'conforms generally' (a newer edition counts, e.g. Lincoln is on the 2021 IRC), and must update within two years of a state update (71-6406).",
+      "notes": [
+        "Section R313 (residential fire sprinklers) and chapters 25–33 (plumbing) are excluded from the state adoption.",
+        "No state amendments to guards, stairs or decks — IRC values apply unless the local code changes them (Lincoln allows 5 in. guard openings).",
+        "LB 1134 (2026 session) would keep the 2018 IRC as the state edition; its status was not confirmed."
+      ],
+      "sources": [
+        {
+          "title": "Neb. Rev. Stat. 71-6403 (state building code)",
+          "url": "https://nebraskalegislature.gov/laws/statutes.php?statute=71-6403"
+        },
+        {
+          "title": "Neb. Rev. Stat. 71-6406 (local codes)",
+          "url": "https://nebraskalegislature.gov/laws/statutes.php?statute=71-6406"
+        },
+        {
+          "title": "LB 348 (2019), approved April 17, 2019",
+          "url": "https://www.NebraskaLegislature.gov/FloorDocs/106/PDF/Slip/LB348.pdf"
+        },
+        {
+          "title": "LB 1134 (2026) introduced",
+          "url": "https://nebraskalegislature.gov/FloorDocs/109/PDF/Intro/LB1134.pdf"
+        }
+      ]
+    },
+    {
+      "state": "SD",
+      "edition": "No statewide residential building code — SDCL 11-10-5/11-10-6 set the 2024 IBC only for non-residential buildings; homes follow local ordinances",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Row says 'Sioux Falls and Rapid City: 2021 IRC'. Sioux Falls has moved to the 2024 IRC (effective July 1, 2026; required for permits issued after Oct 15, 2026) and amends risers to 8 in. max and guard openings to 5 in. Rapid City could not be checked (site blocked).",
+      "notes": [
+        "SDCL 11-10-6 makes the 2024 IBC the default design standard after July 1, 2026 where no local code exists, but it expressly excludes residential structures.",
+        "South Dakota adopts the 2009 IECC only as a voluntary standard for new homes (SDCL 11-10-7)."
+      ],
+      "sources": [
+        {
+          "title": "SDCL 11-10-5",
+          "url": "https://sdlegislature.gov/api/Statutes/11-10-5.html"
+        },
+        {
+          "title": "SDCL 11-10-6",
+          "url": "https://sdlegislature.gov/api/Statutes/11-10-6.html"
+        },
+        {
+          "title": "City of Sioux Falls — Local Amendments to the 2024 IRC",
+          "url": "https://www.siouxfalls.gov/files/assets/public/v/2/planning-and-development/building-services/adopted-building-codes/local-amendments-to-the-2024-irc.pdf"
+        }
+      ]
+    },
+    {
+      "state": "ND",
+      "edition": "North Dakota State Building Code — 2024 International Residential Code with North Dakota amendments",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8,
+      "tread_min_in": 9,
+      "differs_from_app": "Row is outdated: the state code moved from the 2021 to the 2024 IRC on January 1, 2026. North Dakota also amends stairs (R318.7.5.1/R318.7.5.2): risers up to 8 in. and treads at least 9 in., not 7¾/10. The code applies only where a city, township or county elects to enforce building codes (N.D.C.C. 54-21.3-03); those jurisdictions must adopt it and may amend it.",
+      "notes": [
+        "R507.3 and R403.1.4.1 amendments: decks not supported by a frost-protected structure (free-standing decks) need not have footings below the frost line.",
+        "R105.2 amendment: the deck permit exemption is narrowed to decks of 120 sq ft or less, no more than 7 in. above grade, not attached and not serving the required exit door (as printed in the 2026 code book).",
+        "No ND amendment to guard height (36 in.); guard placement follows the IRC."
+      ],
+      "sources": [
+        {
+          "title": "ND Department of Commerce — Building Codes",
+          "url": "https://www.commerce.nd.gov/community-services/building-codes"
+        },
+        {
+          "title": "2026 North Dakota State Building Code book (effective Jan 1, 2026)",
+          "url": "https://www.medialibrary.nd.gov/assetbank-nd/assetfile/156311.pdf"
+        }
+      ]
+    },
+    {
+      "state": "MT",
+      "edition": "Montana state building code — 2024 International Residential Code as amended by ARM 24.301.154",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "Row is outdated: DLI's Current Codes page lists the 2024 IRC effective September 26, 2026 (the 2021 IRC had been effective June 11, 2022). Montana amends stairs — risers up to 8¼ in. and treads at least 9 in. (same under the 2021 and 2024 rules) — so 7¾/10 is wrong for Montana. Certified cities may lag: Billings and Missoula still list the 2021 IRC; Missoula's 2024 cycle starts January 1, 2027.",
+      "notes": [
+        "Guards are required on open-sided walking surfaces, including stairs, ramps and landings, more than 30 in. above the floor or grade below — the IRC's 'within 36 in. horizontally' clause is dropped.",
+        "R301.6 replaced: snow loads are set by the building official; outside certified jurisdictions use ASCE 7-22 ground snow (ASCE 7 Hazard Tool) with a minimum design roof snow load of 30 psf after reductions.",
+        "R403.1.1 exception: the building official may allow footings per 2012 IRC R403 or footings engineered by a design professional.",
+        "The 2024 amendment text used here is the department's draft MAR Notice 2026-95.2; the adopted effective date comes from DLI's Current Codes page."
+      ],
+      "sources": [
+        {
+          "title": "Montana DLI Building Codes — Current Codes",
+          "url": "https://bsd.dli.mt.gov/building-codes-permits/current-codes"
+        },
+        {
+          "title": "Montana 2024 Building Code Adoption Amendments (MAR Notice 2026-95.2, ARM 24.301.154)",
+          "url": "https://bsd.dli.mt.gov/_docs/building-codes-permits/2024-BUILDING-CODE-ADOPTION-AMENDMENTS.pdf"
+        }
+      ]
+    },
+    {
+      "state": "WY",
+      "edition": "No statewide residential building code — cities and counties adopt their own",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Row says 'Cheyenne and Casper: 2018 IRC; Teton County: 2021' — outdated: Cheyenne, Casper and Gillette now all enforce the 2024 IRC (Gillette by Ord. 4052, Dec 17, 2024). Teton County was not checked.",
+      "notes": [
+        "The state Department of Fire Prevention & Electrical Safety reviews plans to the 2024 IBC, IFC, IFGC, IMC and IEBC (from June 28, 2024); no state residential code is listed.",
+        "Frost depths differ a lot between the big towns: Cheyenne 36 in., Casper 36 in. to the top of the footing, Gillette 42 in."
+      ],
+      "sources": [
+        {
+          "title": "Wyoming State Fire Marshal — Plan Review (state-adopted codes)",
+          "url": "https://wsfm.wyo.gov/fire-prevention/plan-review"
+        },
+        {
+          "title": "City of Cheyenne — Plan Review Information (2026)",
+          "url": "https://www.cheyennecity.org/files/sharedassets/public/v/1/departments/compliance-division/building/building-handouts/updated-handouts/plan-review-information-2026.pdf"
+        },
+        {
+          "title": "City of Casper — Building and Fire Codes",
+          "url": "https://www.casperwy.gov/services/building_and_inspections/building_and_fire_codes.php"
+        },
+        {
+          "title": "Gillette City Code Chapter 5 (rev. 6-2026)",
+          "url": "https://www.gillettewy.gov/files/assets/public/v/5/city-attorney/documents/05gcc_6-2026.pdf"
+        }
+      ]
+    },
+    {
+      "state": "CO",
+      "edition": "No statewide residential building code — counties, cities and regional departments adopt their own",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Row 'Denver, Boulder and most Front Range counties: 2021 IRC' is partly outdated: Denver adopted the 2025 Denver Building and Fire Code on the 2024 I-codes (June 13, 2025), and unincorporated Jefferson County moved to the 2024 IRC for permits applied for after June 30, 2026. Pikes Peak Regional (Colorado Springs/El Paso County) and unincorporated Arapahoe County are still on the 2021 IRC. Boulder was not checked. The row's '30 psf on the plains' is now low for the metro: Denver 43 psf, PPRBD 43 psf below 7,000 ft (57 above), Jefferson County 43 psf below 6,500 ft rising to 172 psf at 10,500 ft.",
+      "notes": [
+        "Local governments that adopt or update building codes must also apply the state energy and electric-/solar-ready requirements (HB22-1362, Colorado Model Electric Ready and Solar Ready Code), as Arapahoe County lists them.",
+        "Arapahoe and Jefferson counties remove the IRC small-deck permit exemption; Denver and PPRBD keep a 200 sq ft / 30 in. exemption."
+      ],
+      "sources": [
+        {
+          "title": "Denver — Building Codes, Policies and Guides",
+          "url": "https://www.denvergov.org/Government/Agencies-Departments-Offices/Agencies-Departments-Offices-Directory/Community-Planning-and-Development/Building-Codes-Policies-and-Guides"
+        },
+        {
+          "title": "Jefferson County — Adopted Building Codes",
+          "url": "https://www.jeffco.us/2055/Adopted-Building-Codes"
+        },
+        {
+          "title": "PPRBD — Basic Design Information",
+          "url": "https://www.pprbd.org/File/ByAlias/DesignCriteria"
+        },
+        {
+          "title": "Arapahoe County — Code Central",
+          "url": "https://www.arapahoeco.gov/your_county/county_departments/public_works_and_development/divisions/building/code_central_/index.php"
+        }
+      ]
+    },
+    {
+      "state": "NM",
+      "edition": "2021 New Mexico Residential Building Code (14.7.3 NMAC) — 2021 IRC with New Mexico amendments",
+      "basis_irc": 2021,
+      "since": 2023,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8,
+      "tread_min_in": 9,
+      "differs_from_app": "Edition matches; 'since' should be 2023 — effective July 14, 2023, with permits under the old 2015 rule allowed until December 14, 2023. New Mexico amends stairs (R311.7.5.1/R311.7.5.2): risers up to 8 in. and treads at least 9 in., not 7¾/10.",
+      "notes": [
+        "R312.1.1 replaced: guards are required on open-sided floors, stairs, ramps and landings more than 30 in. above the floor or grade below (no 36 in. horizontal clause); guard height stays 36 in.",
+        "Open risers are allowed if openings more than 30 in. above grade do not pass a 4 in. sphere.",
+        "The state Construction Industries Division issues permits where there is no local building department (e.g. unincorporated Santa Fe County uses the state building application)."
+      ],
+      "sources": [
+        {
+          "title": "14.7.3 NMAC — 2021 New Mexico Residential Building Code",
+          "url": "https://www.srca.nm.gov/parts/title14/14.007.0003.pdf"
+        },
+        {
+          "title": "Santa Fe County — Accessory Structure checklist (Multi-Purpose State Building Application, CID)",
+          "url": "https://www.santafecountynm.gov/uploads/documents/Accessory_Structure_Checklist.pdf"
+        }
+      ]
+    }
+  ],
+  "counties": [
+    {
+      "state": "MO",
+      "county": "St. Louis County",
+      "fips": "29189",
+      "population_2020": 1004125,
+      "jurisdiction": "St. Louis County Department of Transportation and Public Works (unincorporated county and municipalities that contract with the county for permits), Residential Code = Chapter 1116 SLCRO",
+      "edition": "2015 IRC with St. Louis County amendments (Ordinance 27,654, approved Dec 18, 2019, in force April 1, 2020; Sunset Hills lists implementation July 1, 2020)",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "Vult = 115 mph (Vasd = 89 mph), as printed in the county's amended 2015 IRC Table R301.2(1); topographic effects NO, special wind region NO, wind-borne debris zone NO",
+      "seismic_sdc": "C",
+      "weathering": "Severe",
+      "termite": "Slight to Moderate",
+      "deck_notes": [
+        "The county replaced IRC R105 with IBC Section 105, and its list of work exempt from permit has no deck exemption, so even small or low decks need a permit.",
+        "The county amendment deletes IRC R507.2.4 (deck lateral load connection).",
+        "Guards are required where the walking surface is more than 30 inches above the floor or grade below (R312.1.1 as amended).",
+        "A permit application needs at least four sets of construction documents (IBC 107.1 as adopted).",
+        "Construction documents and site plans must be sealed by a Missouri registered design professional, except 'miscellaneous structures accessory to one- and two-family dwellings' such as carports, garages and sheds; the ordinance does not say whether decks count.",
+        "Footing inspection happens after the footing excavations are complete and any required reinforcing steel is in place (IBC 110.3.3 as adopted).",
+        "Residents of municipalities that do not contract with the county must check their own city's permit rules."
+      ],
+      "note": "Values come from an unofficial 'user-friendly' copy of Ordinance 27,654 hosted by the City of Pagedale; the City of Sunset Hills' code table also lists the county Residential Code as 2015 IRC (Ch. 1116, Ord. 27,654). The county's own site (stlouiscountymo.gov, including its 'Decks and Covered Decks' guide and its 'Plastics - Residential Decks' notice) and Municode both returned HTTP 403 (Cloudflare), so the county deck guide could not be read. A later adoption (2018/2021/2024 IRC) could not be ruled out; no evidence of one was found. Winter design temp 20 F, ice barrier NO, AFI 1,000, MAT 55.2 F per the same table.",
+      "sources": [
+        {
+          "title": "St. Louis County Ordinance 27,654 (2015 Building/Residential/Existing Building/Pool codes), unofficial user-friendly copy, hosted by City of Pagedale",
+          "url": "https://public.powerdms.com/Pagedale/documents/2893041/2015%20Building-Exist%20Bldg-Residential%20Code%20User%20Friendly"
+        },
+        {
+          "title": "City of Sunset Hills - Building Code Details (St. Louis County adopted codes table)",
+          "url": "https://www.sunset-hills.com/856/Building-Code-Details"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "MO",
+      "county": "Jackson County",
+      "fips": "29095",
+      "population_2020": 717204,
+      "jurisdiction": "City of Independence, MO (Jackson County seat), Community Development - Building Inspections; unincorporated Jackson County (Jackson County Public Works, Code Ch. 54) is listed separately in the deck notes. Kansas City, MO (the largest city) could not be checked because kcmo.gov returned HTTP 403.",
+      "edition": "2024 IRC with Independence amendments (effective January 1, 2025); unincorporated Jackson County enforces the 2018 IRC (County Code Ch. 54)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "115 mph as listed in Independence's 2024 IRC amendment to Table R301.2(1); the amendment does not say whether this is Vult or Vasd. Topographic effects No, special wind region No, windborne debris zone No.",
+      "seismic_sdc": "A",
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "Independence's 2024 IRC amendments delete R105.2 Building item 10, which in the IRC is the small freestanding deck exemption, so small decks are not exempt in Independence.",
+        "Independence deck permits need the residential permit application, a Deck Plan Review Sheet, a Covered Deck sheet if roofed, an expanded deck detail and a plot plan.",
+        "Independence deck footings must be at least 36 inches deep and at least twice the post size in width or diameter.",
+        "Independence limits openings between spindles and the rail gap to 3-7/8 inches, stair rise to 7-3/4 inches, and requires stair run of at least 10 inches.",
+        "Independence's packet requires a handrail 34 to 38 inches high on stairs with 3 or more risers.",
+        "Independence's review sheet says beams must be notched and bolted through support posts, and the rim joist must be bolted through rail posts; ledgers use 1/2-inch lag screws or bolts.",
+        "Independence reviews deck permits within 5 business days through Building, Zoning (setbacks) and Engineering (easements and floodplains).",
+        "In unincorporated Jackson County, decks that do not exceed 36 inches above grade are exempt from a building permit (Ch. 54).",
+        "An unincorporated Jackson County deck permit needs a legal description, 2 copies of a site plan (property and structure dimensions, setbacks on all 4 sides, north arrow, streams, septic), 2 sets of drawings with lumber sizes and spacing, and the square footage and valuation."
+      ],
+      "note": "Unincorporated Jackson County publishes no filled-in Table R301.2(1) (its Ch. 54 adopts the 2018 I-codes without climatic values), so the climatic values are Independence's. The posted Independence amendment PDF is the unsigned council bill (dated 11/15/24, effective Jan 1, 2025), listed by the city as its adopted 2024 IRC amendments; the city's deck packet also cites the 2024 IRC. Kansas City, MO values could not be verified (kcmo.gov and Municode returned 403). Independence also lists winter design temp 6 F, ice barrier Yes, AFI 927 and MAT 55.5 F.",
+      "sources": [
+        {
+          "title": "City of Independence - 2024 IRC Residential Code Amendments",
+          "url": "https://www.independencemo.gov/sites/default/files/2025-03/2024%20IRC%20Residential%20Code%20Amendments.pdf"
+        },
+        {
+          "title": "City of Independence - Deck Information Packet",
+          "url": "https://www.independencemo.gov/sites/default/files/2025-01/Deck%20Information%20Packet.pdf"
+        },
+        {
+          "title": "City of Independence - Applications, Forms & Permits (adopted codes list)",
+          "url": "https://www.independencemo.gov/government/city-departments/community-development/applications-forms-permits"
+        },
+        {
+          "title": "Jackson County Code Chapter 54 - Building Code",
+          "url": "https://www.jacksongov.org/files/sharedassets/public/v/1/departments/public-works/zoning-amp-subdivision-applications/54-building-code.pdf"
+        },
+        {
+          "title": "Jackson County Public Works - 2025 Building Permit Packet",
+          "url": "https://www.jacksongov.org/files/sharedassets/public/v/1/departments/public-works/zoning-amp-subdivision-applications/2025-building-permit-packet.pdf"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "MO",
+      "county": "St. Charles County",
+      "fips": "29183",
+      "population_2020": 405262,
+      "jurisdiction": "St. Charles County Community Development - Building & Code Enforcement Division (unincorporated St. Charles County)",
+      "edition": "2021 St. Charles County Residential Code (2021 IRC with county amendments, Appendices AE, AG, AI, AJ, AK, AM, AP, AQ)",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 20,
+      "wind_mph": 107,
+      "wind_basis": "107 mph (48 m/s) as printed in the county's amended 2021 Table R301.2; footnote d points to Figure R301.2(2), and the county's key-changes sheet says the wind maps now match the IBC and ASCE 7 maps. The table does not label it Vult or Vasd.",
+      "seismic_sdc": "C",
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "A deck is exempt only if it is 200 sq ft or smaller, no more than 30 inches above grade at any point, not attached to a dwelling, and does not serve the required exit door (R105.2 item 10 as amended).",
+        "Permit plans (PDF preferred) must show footing and foundation detail, framing member sizes, and any stair details.",
+        "A detailed plot plan must show the structure on the lot with distances to property lines.",
+        "Structures may not be located over easements or septic systems.",
+        "Plan review typically takes about 10 working days.",
+        "At least one inspection is required; call inspections in by 5 p.m. the business day before.",
+        "The permit must be posted so it is visible from the street.",
+        "The county's key-changes sheet notes that 2021 deck design now considers snow load, tributary area for footings, post height and guard details, and adds specific deck guardrail requirements."
+      ],
+      "note": "Ice barrier NO; flood hazard dates 9/15/1978 and 3/9/2021; AFI 1000; MAT 55. The county links to the full integrated code on ICC (codes.iccsafe.org/content/MOSTCCRESC2021P1), which was not opened. Incorporated cities in the county may have their own building departments and codes. No county deck handout was found.",
+      "sources": [
+        {
+          "title": "St. Charles County - Building and Construction Codes (current adopted codes)",
+          "url": "https://www.sccmo.org/209/Building-and-Construction-Codes"
+        },
+        {
+          "title": "St. Charles County - 2021 Residential Code amendments (PDF)",
+          "url": "https://www.sccmo.org/DocumentCenter/View/22409/2021-Residential-Building-Code-Amendments"
+        },
+        {
+          "title": "St. Charles County - Key Changes to the St. Charles County Residential Code",
+          "url": "https://www.sccmo.org/DocumentCenter/View/22428/Key-Changes-to-the-St-Charles-County-Residential-Code-PDF"
+        },
+        {
+          "title": "St. Charles County - Residential Building Permit",
+          "url": "https://www.sccmo.org/1826/Residential-Building-Permit"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "KS",
+      "county": "Johnson County",
+      "fips": "20091",
+      "population_2020": 609863,
+      "jurisdiction": "Johnson County Planning, Housing and Community Development - Building Codes Division (unincorporated Johnson County only; cities such as Overland Park and Olathe run their own departments)",
+      "edition": "2018 IRC with amendments in the Johnson County Code of Regulations for Buildings and Construction, 2018 Edition (effective July 1, 2020); the 2024 I-codes are up for adoption on Oct 22, 2026, effective Jan 1, 2027 if adopted",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "115 mph as printed in the county's amended 2018 IRC Table R301.2(1) (not labeled Vult or Vasd); topographic effects No, special wind region No, windborne debris zone No. The draft 2024 table keeps 115 mph, and its footnote d cites the 'ultimate design wind speeds map [Figure R301.2(2)]'.",
+      "seismic_sdc": "A",
+      "weathering": "Severe",
+      "termite": "M-H (moderate to heavy)",
+      "deck_notes": [
+        "The county permits page says all decks require a permit, including deck repairs; however, the county's posted exemption list repeats the IRC exemption for freestanding decks of 200 sq ft or less, no more than 30 inches above grade, and not serving the required exit door.",
+        "Submit a scaled site plan with lot dimensions, easements, building lines and distances to property lines (setbacks); the builder or homeowner may draw it, with no seal required.",
+        "Submit a scaled deck plan showing decking, joist size and spacing, beams, posts, pier sizes and depth, and ledger attachment; no seal is needed for decks built within the guideline.",
+        "Piers must be at least 36 inches deep (below frost), with the top at least 1 inch above grade and sloped for drainage; pier diameter depends on the deck area each pier supports (for example 12 in. for 24 sq ft, 14 in. for 32 sq ft, at 1,500 psf soil).",
+        "The guideline covers only 40 psf live and 10 psf dead load; multi-level decks, roofs, hot tubs, spas and over-limit cantilevers need specific approval or a design professional.",
+        "Ledgers must be lagged or bolted to the house rim joist (never nailed) with double flashing and hot-dip galvanized or stainless fasteners, and may not be attached to or through brick, stone, stucco or masonry veneer; build a freestanding deck instead.",
+        "Posts need a column anchor that resists uplift and lateral movement (e.g., Simpson AB66R); a drift pin alone is not enough.",
+        "Freestanding decks more than 2 feet above grade need diagonal bracing or attachment to the house for lateral load.",
+        "Guards at least 36 inches high are required where the deck floor is more than 30 inches above grade within 36 inches horizontally of the edge.",
+        "An exterior light for the deck and stair lighting are required, and overhead power lines must be at least 10 ft above the deck floor or 3 ft away horizontally.",
+        "The draft 2024 county code amends R507.1 so that decks built to the Johnson County Residential Deck Guidelines are deemed approved."
+      ],
+      "note": "The deck guide ('Residential Decks Permit and Construction Guidelines under the 2018 IRC', 4th ed., Jan 2019) is endorsed by the Johnson County Building Officials Association for use across Johnson County jurisdictions, so Overland Park and other cities' rules are likely similar; Overland Park's own site was not readable (JavaScript-rendered) and was not checked. Code change pending: on Oct 22, 2026 (two days from now) the Board of County Commissioners will consider the 2024 I-codes, effective Jan 1, 2027 if adopted. The draft 2024 table keeps snow 20, wind 115, SDC A, Severe, frost 36 in., termite M-H, and changes AFI from 927 to 1000. Other 2018 table values: winter design temp 6 F, ice barrier Yes, flood Aug. 2009, MAT 55 F.",
+      "sources": [
+        {
+          "title": "Johnson County KS - Codes (Code of Regulation for Building and Construction; 2024 draft notice)",
+          "url": "https://www.jocogov.org/department/building-codes/code-regulation-building-and-construction"
+        },
+        {
+          "title": "Johnson County Code of Regulations for Buildings and Construction, 2018 Edition",
+          "url": "https://www.jocogov.org/sites/default/files/files/2026-02/joco-code-regulations-buildings-construction-R.pdf"
+        },
+        {
+          "title": "Draft Johnson County Code of Regulations for Buildings and Construction, 2024 Edition",
+          "url": "https://www.jocogov.org/sites/default/files/files/2026-10/Johnson%20County%20Code%20of%20Regulations%20for%20Buildings%20and%20Construction%202024%20Edition_0.pdf"
+        },
+        {
+          "title": "Residential Decks Permit and Construction Guidelines under the 2018 IRC (Johnson County)",
+          "url": "https://www.jocogov.org/sites/default/files/files/2021-09/residential-deck-construction-guildelines.pdf"
+        },
+        {
+          "title": "Johnson County KS - Building Permits (FAQ)",
+          "url": "https://www.jocogov.org/department/building-codes/building-permits"
+        },
+        {
+          "title": "Johnson County KS - Building Permit Exemptions",
+          "url": "https://www.jocogov.org/sites/default/files/files/2021-10/Permit%20Exemptions.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "KS",
+      "county": "Sedgwick County",
+      "fips": "20173",
+      "population_2020": 523824,
+      "jurisdiction": "Metropolitan Area Building and Construction Department (MABCD), serving the City of Wichita and the Sedgwick County jurisdiction under the Wichita-Sedgwick County Unified Building and Trade Code (UBTC)",
+      "edition": "2018 IRC with UBTC amendments (County Resolution 120-2019 / City Ordinance 50-833); UBTC compilation current to 1-27-25",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 15,
+      "wind_mph": 90,
+      "wind_basis": "Printed as '76w/90-3 sec. gust' in the UBTC's amended Table R301.2(1), an older basic-wind-speed style (76 fastest-mile / 90 mph 3-second gust) that is not labeled as the 2018 IRC ultimate design wind speed; confirm with MABCD before using it as Vult.",
+      "seismic_sdc": "A",
+      "weathering": "Severe",
+      "termite": "Mod./Severe",
+      "deck_notes": [
+        "Decks, stoops and porches no more than 30 inches above adjacent grade, with no overhead structure and not over a basement or story below, are exempt from a building permit (R105.2 item 6 as amended); there is no size limit.",
+        "R507 as amended allows decks to be designed and built to the 'City of Wichita Standard for Residential Wood Framed Decks'; decks outside that standard need design by a Kansas licensed architect or engineer.",
+        "Attached decks must be positively anchored for vertical and lateral loads, without toenails or nails in withdrawal; if the connection can't be verified at inspection the deck must be self-supporting.",
+        "Cantilevered deck framing connections must resist uplift from the full live load on the cantilever.",
+        "Footings must go below the 24-inch frost line ('Frost depth in Wichita is 24 inches'), and footings may not bear on frozen soil.",
+        "The amended table lists a 40 psf live load and 10 psf dead load for floors.",
+        "Permit staff check site plans for FEMA flood soils, easements and rights-of-way.",
+        "Residential permit fees for decks are $0.30 per square foot."
+      ],
+      "note": "Unusual: the MABCD table's wind entry uses an older basic-wind format (76/90 mph), and its 15 psf snow and 24-inch frost are lower than the Kansas City area. MABCD lists 2018 IRC as current even though the IBC and IEBC moved to 2024 (Resolutions 205-2024 / 203-2024). The 'City of Wichita Standard for Residential Wood Framed Decks' is referenced but was not located. Other table values: winter design temp 7 (97.5%), ice barrier None Required, air freezing 400, mean air temp 55-60 deg.",
+      "sources": [
+        {
+          "title": "MABCD - Current Adopted Codes, Resolutions & Ordinances",
+          "url": "https://www.sedgwickcounty.org/mabcd/codes-resolutions-ordinances/"
+        },
+        {
+          "title": "Wichita-Sedgwick County Unified Building and Trade Code (complete, current 1-27-25)",
+          "url": "https://www.sedgwickcounty.org/media/68299/wichita-sedgwick-county-unified-building-trade-code-ubtc-current-1-27-25-complete-ubtc.pdf"
+        },
+        {
+          "title": "MABCD - Permits",
+          "url": "https://www.sedgwickcounty.org/mabcd/permits/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "KS",
+      "county": "Shawnee County",
+      "fips": "20177",
+      "population_2020": 178909,
+      "jurisdiction": "City of Topeka Development Services (county seat). Unincorporated Shawnee County (Land Use & Development) adopts Topeka's Title 14, including Ch. 14.55 IRC, by reference under HR Resolution 2018-1.",
+      "edition": "2021 IRC with Topeka amendments (TMC Ch. 14.55, Ordinance 20467, passed Dec 5, 2023, published Dec 11, 2023, effective 90 days after publication)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 20,
+      "wind_mph": 114,
+      "wind_basis": "114 mph as amended in Topeka's Table R301.2(1) by Ord. 20467 (the old 90 was struck); the table does not label it Vult or Vasd, and its footnote d still says 'basic wind speed map'. Topographic effects NO.",
+      "seismic_sdc": "A",
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "In unincorporated Shawnee County, any improvement that needs a building permit must include a notarized Affidavit of Code Compliance; the county applies Topeka's codes whatever their edition year.",
+        "Ordinance 20467 repealed Topeka's local deck section (former TMC 14.55.540), so 2021 IRC R507 applies as published.",
+        "Topeka's residential portal guide asks for footing/foundation/pier plans, framing sizes and spacing, support posts, decking, railings, stairs, and a dimensioned site plan showing property lines, easements and rights-of-way.",
+        "Topeka's permit scope options include 'Attached Deck' and 'Deck/Patio Cover'.",
+        "Topeka requires a footing inspection after piers are set or holes are excavated, forms are erected and any reinforcing is in place, before concrete is placed (R109.1.1 as amended)."
+      ],
+      "note": "Topeka Municipal Code online (topeka.municipal.codes and codepublishing.com) returned HTTP 403, so the values come from the adopting Ordinance 20467 PDF rather than the codified chapter; Topeka's code page (checked today) still lists the 2021 IRC as current. Ord. 20467 also changed SDC from B to A. Permit exemptions (TMC Ch. 14.10) were not read, and the county excludes that chapter anyway. Other table values: winter design temp 4, ice barrier NO, flood Oct 23, 1971 NFIP entry / FIRM Sept 29, 2011, AFI 1000, MAT 54.3.",
+      "sources": [
+        {
+          "title": "City of Topeka Ordinance No. 20467 - adoption of the 2021 International Residential Code (TMC Ch. 14.55)",
+          "url": "https://files.topeka.gov/community/ordinances/2023/Ordinance20467.pdf"
+        },
+        {
+          "title": "City of Topeka - Code/Ordinances/Resolutions (adopted codes list)",
+          "url": "https://www.topeka.gov/community/code_ordinances_resolutions/index.php"
+        },
+        {
+          "title": "Shawnee County Land Use & Development - Building Code",
+          "url": "https://www.snco.gov/ludev/building_code.php"
+        },
+        {
+          "title": "Shawnee County Home Rule Resolution No. 2018-1",
+          "url": "https://cdn.snco.gov/ludev/document/building_code_resolution_2018_1.pdf"
+        },
+        {
+          "title": "City of Topeka - What to Expect: Residential New Building (portal guide)",
+          "url": "https://cot-wp-uploads.s3.amazonaws.com/wp-content/uploads/developmentservices/applications/WhatToExpect-ResNewBldg.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NE",
+      "county": "Douglas County",
+      "fips": "31055",
+      "population_2020": 584526,
+      "jurisdiction": "City of Omaha Planning Department, Permits & Inspections (county seat and largest city) — not readable",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "planning.omaha.gov, cityofomaha.org, douglascounty-ne.gov and Omaha's Municode all returned HTTP 403 / bot challenge, and the web-search budget ran out, so nothing could be sourced. Under Neb. Rev. Stat. 71-6406 Omaha's code must be the state building code (2018 IRC) or conform generally with it (a newer edition counts). Fill in from Omaha Permits & Inspections before use.",
+      "sources": [
+        {
+          "title": "Neb. Rev. Stat. 71-6406 (local codes must conform to the state building code)",
+          "url": "https://nebraskalegislature.gov/laws/statutes.php?statute=71-6406"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "NE",
+      "county": "Lancaster County",
+      "fips": "31109",
+      "population_2020": 322608,
+      "jurisdiction": "Lincoln-Lancaster County Planning & Development Services, Building & Safety (City of Lincoln and its 3-mile area; serves Lancaster County residents)",
+      "edition": "2021 IRC (2nd printing) with Lincoln amendments — Lincoln Municipal Code ch. 20.12 (Ord. 21820, Dec 15, 2025; earlier Ord. 20937, June 29, 2020)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 25,
+      "wind_mph": 115,
+      "wind_basis": "Lincoln amended Table R301.2 (2021 IRC, ultimate design wind speed per footnote d)",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Moderate to heavy",
+      "deck_notes": [
+        "All new and replacement decks require a building permit; Lincoln's exempt-work list (LMC 20.12.035) has no deck exemption.",
+        "The permit needs a site plan with lot dimensions and setback distances from the deck to the property lines, plus how the deck will be built.",
+        "Attached decks must bear on the house and/or frost-free footings at least 36 in. deep; freestanding decks under 400 sq ft not supported by a dwelling may skip frost footings (LMC 20.12.445).",
+        "Guards at least 36 in. high are required where the deck is more than 30 in. above grade, and also where there is a drop of more than 30 in. within 60 in. of the walking-surface edge (LMC 20.12.355).",
+        "Lincoln allows guard openings up to a 5 in. sphere (LMC 20.12.360), not the IRC's 4 in.",
+        "Stair risers 4 in. minimum and 7¾ in. maximum; treads 10 in. minimum; handrail on at least one side when there are more than three risers.",
+        "Posts must sit on top of and be connected to the footing (manufactured connectors for lateral restraint), never buried in the ground or footing.",
+        "Joists may cantilever no more than 24 in. past the beam and beams no more than 16 in. past the post; a hot tub adds 50 psf to the design load.",
+        "Lateral load: at least two 1,500 lb hold-down devices within 24 in. of each end of the deck, or four 750 lb devices (LMC 20.12.595)."
+      ],
+      "note": "Values are the Lincoln Municipal Code 20.12.140 Table R301.2 (as amended Dec 15, 2025): ground snow 25 psf, wind 115 mph, SDC B, severe weathering, frost 36 in., termite moderate to heavy, winter design temp printed as '70° F' (looks like a typo in the code), ice barrier yes. Lincoln uses a newer IRC edition than the 2018 state code, which Neb. Rev. Stat. 71-6406 permits. Deck brochure updated 2/23/2026; deck detail drawing dated 27 March 2026.",
+      "sources": [
+        {
+          "title": "Lincoln Municipal Code 20.12.140 — Table R301.2 amended",
+          "url": "https://online.encodeplus.com/regs/lincoln-ne/doc-viewer.aspx?secid=12858"
+        },
+        {
+          "title": "Lincoln Municipal Code 20.12.010 — Adoption of 2021 IRC",
+          "url": "https://online.encodeplus.com/regs/lincoln-ne/doc-viewer.aspx?secid=12832"
+        },
+        {
+          "title": "Lincoln Municipal Code 20.12.445 — Frost protection (deck exception)",
+          "url": "https://online.encodeplus.com/regs/lincoln-ne/doc-viewer.aspx?secid=12919"
+        },
+        {
+          "title": "Lincoln Municipal Code 20.12.355 / 20.12.360 — Guards",
+          "url": "https://online.encodeplus.com/regs/lincoln-ne/doc-viewer.aspx?secid=12901"
+        },
+        {
+          "title": "Lincoln Building & Safety — How to design & build your deck (brochure, updated 2/23/2026)",
+          "url": "https://www.lincoln.ne.gov/files/sharedassets/public/v/1/building-amp-safety/permits/brochure-deck-tri-four-panel-v4-print.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NE",
+      "county": "Sarpy County",
+      "fips": "31153",
+      "population_2020": 190604,
+      "jurisdiction": "Sarpy County Planning & Building (unincorporated county) — no building-code values published online; Papillion (county seat) site returned 403",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "Sarpy County's Planning & Building and Building Inspection pages list no adopted code edition or Table R301.2 values, and its zoning regulations have no deck rules. papillion.org returned 403 and Bellevue's code is on American Legal (not checked). Under Neb. Rev. Stat. 71-6406 the local code must be the state building code (2018 IRC) or conform to it. Fill in before use.",
+      "sources": [
+        {
+          "title": "Sarpy County — Building Inspection",
+          "url": "https://www.sarpy.gov/219/Building-Inspection"
+        },
+        {
+          "title": "Neb. Rev. Stat. 71-6406",
+          "url": "https://nebraskalegislature.gov/laws/statutes.php?statute=71-6406"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "SD",
+      "county": "Minnehaha County",
+      "fips": "46099",
+      "population_2020": 197214,
+      "jurisdiction": "City of Sioux Falls Planning & Development Services, Building Services (county seat and largest city)",
+      "edition": "2024 IRC with Sioux Falls local amendments (Code of Ordinances §150.001; effective July 1, 2026, applied to permits issued after Oct 15, 2026)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 55,
+      "wind_mph": 112,
+      "wind_basis": "Ultimate design wind speed from Figure R301.2(2) (2024 IRC table footnote d)",
+      "seismic_sdc": "A",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "Sioux Falls removes the IRC permit exemption for small, low, detached decks (its R105.2 item 10 covers only window, door and siding work), so decks need a permit.",
+        "Decks not supported by a dwelling need not have footings below the frost line (R507.3 exception as amended).",
+        "A deck projection less than 3 ft from a common property line needs a 1-hour fire-rated wall, rated from both sides with no openings, extending at least 30 in. above the deck (R302.1 as amended).",
+        "Exterior stairs to grade with three or fewer risers serving a deck may have a 36 in. wide bottom landing if they are not the required egress route.",
+        "Sioux Falls amends stairs to allow risers up to 8 in. (R318.7.5.1) and guards with openings up to a 5 in. sphere (R321.1.3); treads stay at the IRC 10 in.",
+        "Handrails are required on flights with four or more risers, except where the total rise is 30 in. or less.",
+        "The city publishes a homeowner 'Residential Decks' guide (image-only PDF; contents not machine-readable)."
+      ],
+      "note": "Values from the city's 2024 IRC local amendments Table R301.2: ground snow 55 psf (2024 IRC basis), wind 112 mph, SDC A, severe weathering, frost 42 in., termite slight to moderate, ice barrier yes, AFI 2,530, MAT 45.3°F. The PDF posted on the city's Adopted Building Codes page is the ordinance text dated 4/29/2026 with the adoption-date blanks unfilled; the city page lists the 2024 IRC as the edition in effect.",
+      "sources": [
+        {
+          "title": "City of Sioux Falls — Local Amendments to the 2024 IRC",
+          "url": "https://www.siouxfalls.gov/files/assets/public/v/2/planning-and-development/building-services/adopted-building-codes/local-amendments-to-the-2024-irc.pdf"
+        },
+        {
+          "title": "City of Sioux Falls — Adopted Building Codes",
+          "url": "https://www.siouxfalls.gov/business-permits/permits-licenses-inspections/ordinances-codes/adopted-codes"
+        },
+        {
+          "title": "City of Sioux Falls — Residential Decks homeowner guide",
+          "url": "https://www.siouxfalls.gov/files/assets/public/v/1/business-and-permits/ordinances/homeowner-construction/2c25145_homeowner_decks_22.pdf"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "SD",
+      "county": "Pennington County",
+      "fips": "46103",
+      "population_2020": 109222,
+      "jurisdiction": "Pennington County Planning (unincorporated county; has a Building Code and Construction Ordinance) and City of Rapid City Building Services — neither readable",
+      "edition": null,
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "rcgov.org returned 403, and Pennington County's 'Building Code and Construction Ordinance' PDF (documents-on-demand.com) returned 403, so no values could be sourced; the Black Hills portion likely has elevation-dependent snow loads, but that is not verified. South Dakota has no statewide residential code (SDCL 11-10-5/11-10-6 exclude residential structures).",
+      "sources": [
+        {
+          "title": "Pennington County Planning — Ordinances (lists Building Code and Construction Ordinance)",
+          "url": "https://www.pennco.org/services/planning/ordinances.php"
+        },
+        {
+          "title": "Pennington County Planning — Permits & Forms",
+          "url": "https://www.pennco.org/services/planning/permits_forms.php"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "SD",
+      "county": "Lincoln County",
+      "fips": "46083",
+      "population_2020": 65161,
+      "jurisdiction": "City of Sioux Falls Building Services (the part of Sioux Falls inside Lincoln County — the county's largest urban population); unincorporated Lincoln County (Canton) not checked — its website did not respond",
+      "edition": "2024 IRC with Sioux Falls local amendments (effective July 1, 2026; permits issued after Oct 15, 2026)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 55,
+      "wind_mph": 112,
+      "wind_basis": "Ultimate design wind speed (Sioux Falls 2024 IRC Table R301.2)",
+      "seismic_sdc": "A",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "Inside Sioux Falls city limits the city's deck rules apply: no small-deck permit exemption, free-standing decks may skip frost footings, deck projections within 3 ft of a common lot line need a 1-hour wall, risers up to 8 in., and guard openings up to a 5 in. sphere."
+      ],
+      "note": "Same table as Minnehaha County because the values are the City of Sioux Falls'. lincolncountysd.org did not respond, so the county's own rules for unincorporated land (and Tea, Harrisburg, Canton) were not checked.",
+      "sources": [
+        {
+          "title": "City of Sioux Falls — Local Amendments to the 2024 IRC",
+          "url": "https://www.siouxfalls.gov/files/assets/public/v/2/planning-and-development/building-services/adopted-building-codes/local-amendments-to-the-2024-irc.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "ND",
+      "county": "Cass County",
+      "fips": "38017",
+      "population_2020": 184525,
+      "jurisdiction": "City of Fargo Inspections Department (county seat and largest city; Cass County itself is not on the state's list of code-enforcing jurisdictions — West Fargo and Casselton enforce their own)",
+      "edition": "2024 IRC with Fargo local amendment (in effect in Fargo as of July 2, 2025)",
+      "frost_depth_in": 54,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Every new or replacement patio deck needs a building permit in Fargo.",
+        "Fargo does not require footings for uncovered decks attached to the house to go below the 4½-ft frost depth, but encourages it; freestanding decks should have footings at least 12 in. below grade.",
+        "A deck designed or engineered for a future enclosure needs frost footings and a foundation inspection.",
+        "The permit plan must show the size and location of posts, beams and stairs, drawn to scale or fully dimensioned so spans and cantilevers can be checked.",
+        "Ledgers must be at least 2x8 pressure-treated, fastened with two staggered rows of ½ in. hot-dipped galvanized or stainless lags or bolts, flashed, and may not attach to cantilevered floors or bay windows.",
+        "Beam and joist cantilevers are limited to one quarter of the adjacent span.",
+        "Inspections: framing (before decking goes on) and final; a flat 2x4 or 2x6 is not accepted as a handrail.",
+        "Guards at least 36 in. high are required where the deck is more than 30 in. above grade."
+      ],
+      "note": "Fargo publishes no Table R301.2 values online that I could find; the 4½-ft (54 in.) frost depth is stated in the city's Patio Decks handout (revised 10/2/2019, written for an earlier IRC). Snow, wind, seismic, weathering and termite left null. The ND state amendment for the 2024 IRC (R507.3 exception) also lets decks not supported by a frost-protected structure skip frost footings. Fargo's current-codes page links its 2024 IRC local amendment on Municode, which I could not open (bot wall).",
+      "sources": [
+        {
+          "title": "City of Fargo — Current Codes (2024 International Codes in effect July 2, 2025)",
+          "url": "https://www.fargond.gov/city-government/departments/inspections/commercial-building-permits-fees/current-codes"
+        },
+        {
+          "title": "City of Fargo — Patio Decks handout (revised 10/2/19)",
+          "url": "https://download.fargond.gov/0/deck_handout_current.pdf"
+        },
+        {
+          "title": "ND Code Enforcing Jurisdictions (as of 2022)",
+          "url": "https://www.commerce.nd.gov/sites/www/files/documents/Community%20Services/Building%20Codes/CodeEnforcementContactList.pdf"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "ND",
+      "county": "Burleigh County",
+      "fips": "38015",
+      "population_2020": 98458,
+      "jurisdiction": "Burleigh County Building, Planning & Zoning (unincorporated county); City of Bismarck runs its own department",
+      "edition": "2021 IRC (county 'Applicable Codes' sheet); the ND State Building Code moved to the 2024 IRC on Jan 1, 2026 and Bismarck posted draft 2024 IRC amendments in Sept 2026",
+      "frost_depth_in": 48,
+      "ground_snow_psf": 35,
+      "wind_mph": 115,
+      "wind_basis": "2021 IRC Table R301.2(1) as filled in by Burleigh County (ultimate design wind speed)",
+      "seismic_sdc": "A",
+      "weathering": "Severe",
+      "termite": "None",
+      "deck_notes": [
+        "Under the ND state amendments to the 2024 IRC, decks not supported by a frost-protected structure (free-standing decks) need not have footings below the frost line.",
+        "Bismarck's draft 2024 amendments keep the IRC exemption for detached decks of 200 sq ft or less, no more than 30 in. above grade, not serving the required exit door."
+      ],
+      "note": "Burleigh County sheet: ground snow 35 psf, wind 115 mph, SDC A, weathering severe, frost 4 ft, termite none, winter design temp -18°F, ice barrier yes, AFI 4,000, mean annual temp 41.5°F. City of Bismarck DRAFT 2024 IRC amendments (posted 9/15/2026, not yet final) list a higher table: ground snow 52 psf, wind 111 mph, SDC A, severe, frost 4 ft, termite no, winter design -20°F — use the county sheet for rural Burleigh and check Bismarck's final ordinance for city lots.",
+      "sources": [
+        {
+          "title": "Burleigh County Building, Planning, Zoning — Applicable Codes / Climatic and Geographic Design Criteria",
+          "url": "https://www.burleigh.gov/media/mucm4lyr/applicable-codes.pdf"
+        },
+        {
+          "title": "City of Bismarck — DRAFT 2024 IRC Amendments (09/15/2026)",
+          "url": "https://www.bismarcknd.gov/DocumentCenter/View/56546/DRAFT_2024-IRC-Amendments_09152026"
+        },
+        {
+          "title": "2026 North Dakota State Building Code (effective Jan 1, 2026)",
+          "url": "https://www.medialibrary.nd.gov/assetbank-nd/assetfile/156311.pdf"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "ND",
+      "county": "Grand Forks County",
+      "fips": "38035",
+      "population_2020": 73170,
+      "jurisdiction": "Grand Forks County and City of Grand Forks both enforce codes (per ND Commerce list); neither site could be opened (403)",
+      "edition": "Must be the North Dakota State Building Code (2024 IRC from Jan 1, 2026) with any local amendments — local adoption date not verified",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Under the ND state amendments to the 2024 IRC, decks not supported by a frost-protected structure need not have footings below the frost line.",
+        "The ND state amendment narrows the IRC deck permit exemption to decks of 120 sq ft or less, no more than 7 in. above grade, not attached and not serving the required exit door (unless a local amendment changes it)."
+      ],
+      "note": "grandforksgov.com and gfcounty.nd.gov returned HTTP 403 to every request and the web-search budget was exhausted, so no local Table R301.2 values could be sourced. Fill in from the city/county before use.",
+      "sources": [
+        {
+          "title": "ND Code Enforcing Jurisdictions (as of 2022)",
+          "url": "https://www.commerce.nd.gov/sites/www/files/documents/Community%20Services/Building%20Codes/CodeEnforcementContactList.pdf"
+        },
+        {
+          "title": "2026 North Dakota State Building Code (effective Jan 1, 2026)",
+          "url": "https://www.medialibrary.nd.gov/assetbank-nd/assetfile/156311.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "MT",
+      "county": "Yellowstone County",
+      "fips": "30111",
+      "population_2020": 164731,
+      "jurisdiction": "City of Billings Building Division (county seat and largest city; certified local jurisdiction)",
+      "edition": "2021 IRC as adopted and amended by Montana (ARM 24.301) — city Design Criteria page; the state moved to the 2024 IRC effective Sept 26, 2026",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 33,
+      "wind_mph": 110,
+      "wind_basis": "Exposure C, 3-second gust, residential (Risk Category II); I 100, III 115, IV 120 mph",
+      "seismic_sdc": "A",
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Montana amendments apply: stair risers up to 8¼ in. and treads at least 9 in.; guards required on open sides more than 30 in. above the floor or grade below."
+      ],
+      "note": "Billings lists 'Foundation Depth 42 in. frost depth', residential seismic 'A', wind 110 mph Exposure C, and a minimum design roof snow load of 30 psf after reductions (Montana law) with Pg = 33 psf for drift/unbalanced loading — 33 is used here as the ground snow load. The city page still says 'Design per IRC 2021'; the state's 2024 adoption (Sept 26, 2026) gives certified cities time to follow. No Billings deck handout was found online.",
+      "sources": [
+        {
+          "title": "City of Billings — Design Criteria",
+          "url": "https://billingsmt.gov/324/Design-Criteria"
+        },
+        {
+          "title": "City of Billings — Adopted Codes",
+          "url": "https://billingsmt.gov/323/Adopted-Codes"
+        },
+        {
+          "title": "Montana DLI — Current Codes",
+          "url": "https://bsd.dli.mt.gov/building-codes-permits/current-codes"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "MT",
+      "county": "Gallatin County",
+      "fips": "30031",
+      "population_2020": 118960,
+      "jurisdiction": "City of Bozeman Building Division (county seat) — site returned HTTP 403",
+      "edition": "Montana state code (2021 IRC with ARM 24.301 amendments until the 2024 IRC took effect Sept 26, 2026); Bozeman's own adoption date not verified",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Montana amendments apply statewide: stair risers up to 8¼ in., treads at least 9 in., and guards on open sides more than 30 in. above the floor or grade below."
+      ],
+      "note": "bozemanmt.gov and belgrademt.gov (Belgrade design criteria) returned 403 and the search budget ran out, so no local values were sourced. Montana's ARM 24.301.154(5) leaves snow loads to the building official (outside certified jurisdictions: ASCE 7-22 Hazard Tool ground snow, 30 psf minimum roof snow after reductions). Fill in from Bozeman before use — Gallatin snow loads vary strongly with elevation.",
+      "sources": [
+        {
+          "title": "Montana 2024 building code adoption amendments (ARM 24.301.154)",
+          "url": "https://bsd.dli.mt.gov/_docs/building-codes-permits/2024-BUILDING-CODE-ADOPTION-AMENDMENTS.pdf"
+        },
+        {
+          "title": "Montana DLI — Current Codes",
+          "url": "https://bsd.dli.mt.gov/building-codes-permits/current-codes"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "MT",
+      "county": "Missoula County",
+      "fips": "30063",
+      "population_2020": 117922,
+      "jurisdiction": "Missoula County Building Division (unincorporated county); City of Missoula Building Division has the same IRC edition and points to the same deck guide",
+      "edition": "2021 IRC with Montana amendments (county criteria sheet 2/2024; City of Missoula: 2024 code cycle takes effect January 1, 2027)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": null,
+      "wind_mph": 105,
+      "wind_basis": "Basic wind speed 105 mph (county sheet: 'wind gusts of up to 105 mph for a three-second duration')",
+      "seismic_sdc": "D0",
+      "weathering": "Severe",
+      "termite": "None",
+      "deck_notes": [
+        "Every permit plan set needs a cover sheet listing code year, site-specific ground snow load, wind speed 105 mph, seismic category D0, and risk category.",
+        "The City of Missoula links the Colorado Chapter ICC 'Uncovered Decks' building guide (2021 IRC) as its deck guide.",
+        "Montana amendments apply: stair risers up to 8¼ in., treads at least 9 in., guards on open sides more than 30 in. above grade."
+      ],
+      "note": "Ground snow load is site-specific: the county says to use the ASCE 7-22 Hazard Tool by latitude/longitude, and per Montana law the minimum design roof snow load is 30 psf — so ground_snow_psf is null. Ice shield required; AFI 2,000; IECC climate zone 6B.",
+      "sources": [
+        {
+          "title": "Missoula County — Climatic and Geographic Design Criteria (Table R301.2), 2.2024",
+          "url": "https://missoulacounty.build/media/hdzhrtru/irc-design-criteria-r301-2.pdf"
+        },
+        {
+          "title": "Missoula County — Building Permits & Inspections",
+          "url": "https://www.missoulacounty.gov/departments/public-works/building-permits-inspections/"
+        },
+        {
+          "title": "City of Missoula — Codes and Regulations (2024 cycle effective Jan 1, 2027)",
+          "url": "https://www.ci.missoula.mt.us/2962/Codes-and-Regulations"
+        },
+        {
+          "title": "City of Missoula — Building Division (deck guide link)",
+          "url": "https://www.ci.missoula.mt.us/3202/Building-Division"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "WY",
+      "county": "Laramie County",
+      "fips": "56021",
+      "population_2020": 100512,
+      "jurisdiction": "City of Cheyenne Building Safety Division (county seat and largest city; Laramie County Planning & Development permits the unincorporated county separately — not checked)",
+      "edition": "2024 IRC (Cheyenne Plan Review Information 2026; IECC 2018 for energy)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 30,
+      "wind_mph": 115,
+      "wind_basis": "Ultimate design wind speed, Risk Category II, Exposure C",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "Foundation plans must be prepared by a Wyoming registered design professional unless the project follows the Building Safety Department's Residential Deck Table specifications.",
+        "Applications, fees and drawings are submitted together online through the OpenGov portal; plan review fee is 65% of the permit fee and permits expire after 180 days."
+      ],
+      "note": "Cheyenne lists snow load as '30 psf - ground; includes no snowdrift', frost line 36 in. minimum for foundations, winter design temp -1°F, decay none to slight. Cheyenne's codes page also shows a design-criteria image (wind/snow) that could not be read; values here are from the 2026 Plan Review Information sheet. No deck handout is posted; the Residential Deck Table referenced in the plan-review sheet was not found online.",
+      "sources": [
+        {
+          "title": "City of Cheyenne — Plan Review Information (2026)",
+          "url": "https://www.cheyennecity.org/files/sharedassets/public/v/1/departments/compliance-division/building/building-handouts/updated-handouts/plan-review-information-2026.pdf"
+        },
+        {
+          "title": "City of Cheyenne — ICC 2024 Building Codes",
+          "url": "https://www.cheyennecity.org/Your-Government/Departments/Compliance-Department/Building-Permitting-Licensing/ICC-2024-Building-Codes"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "WY",
+      "county": "Natrona County",
+      "fips": "56025",
+      "population_2020": 79955,
+      "jurisdiction": "City of Casper Building & Inspections (county seat and largest city)",
+      "edition": "2024 IRC (City of Casper adopts the 2024 International Codes; amendments in Municipal Code Title 15)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "1 & 2 family dwellings: 115 mph 3-second gust (93 mph fastest-mile), Exposure C",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "None to slight",
+      "deck_notes": [
+        "Decks need a permit; all exterior work such as decks requires a plot plan.",
+        "Use the city's 'Single Family Residential Uncovered Decks and Porches' building guide: fill in the blanks, pick the construction details, and submit plans drawn to scale.",
+        "The plot plan must show the deck's dimensions, its relation to existing buildings, distances to lot lines, post locations and spacing, and joist and beam spans.",
+        "Only flatwork (landings, walkways, driveways) no more than 30 in. above grade and not over a basement is listed as exempt."
+      ],
+      "note": "Casper's frost line is stated as '3 feet to top of footing' — i.e. the top of the footing must be 36 in. down, so the footing bottom is deeper. Casper gives no fixed ground snow load: 'Snow loads shall be determined based off of the structures risk category' via ASCE 7 Ch. 7 / ASCE Hazard Tool, so ground_snow_psf is null. Winter design temp -10°F, decay none to slight.",
+      "sources": [
+        {
+          "title": "City of Casper — Engineering and Climatic Criteria",
+          "url": "https://www.casperwy.gov/services/building_and_inspections/engineering_and_climatic_criteria.php"
+        },
+        {
+          "title": "City of Casper — Building and Fire Codes",
+          "url": "https://www.casperwy.gov/services/building_and_inspections/building_and_fire_codes.php"
+        },
+        {
+          "title": "City of Casper — Building Guide: Uncovered Decks and Porches",
+          "url": "https://www.casperwy.gov/Community%20Development/Permit%20Handouts/Uncovered%20Decks%20and%20Porches.pdf"
+        },
+        {
+          "title": "City of Casper — Permit Requirements",
+          "url": "https://www.casperwy.gov/services/building_and_inspections/permit_requirements.php"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "WY",
+      "county": "Campbell County",
+      "fips": "56005",
+      "population_2020": 47026,
+      "jurisdiction": "City of Gillette Development Services, Building Division (county seat; incorporated city only)",
+      "edition": "2024 IRC with Gillette amendments (Gillette City Code ch. 5, Ord. 4052, Dec 17, 2024)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "Ultimate design wind speed (nominal 90 mph)",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "Gillette amends only the retaining-wall item of IRC R105.2, so the 2024 IRC exemption for small, low, detached decks is unchanged; permitted decks carry a flat $20 deck fee in the city fee schedule."
+      ],
+      "note": "Gillette's design-criteria table gives roof live loads (30 psf for roofs 1:12 or steeper, 35 psf below 1:12, no reductions) instead of a ground snow load, so ground_snow_psf is null. SDC is 'B minimum'; decay none to slight; winter design temp -8°F; ice shield required. The city code covers only the incorporated area; unincorporated Campbell County was not checked.",
+      "sources": [
+        {
+          "title": "Gillette City Code Chapter 5 — Buildings (revised 6-2026)",
+          "url": "https://www.gillettewy.gov/files/assets/public/v/5/city-attorney/documents/05gcc_6-2026.pdf"
+        },
+        {
+          "title": "City of Gillette — Building Division",
+          "url": "https://www.gillettewy.gov/Departments/Development-Services/Building-Division"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "CO",
+      "county": "El Paso County",
+      "fips": "08041",
+      "population_2020": 730395,
+      "jurisdiction": "Pikes Peak Regional Building Department (PPRBD) — Colorado Springs and unincorporated El Paso County (plus member towns)",
+      "edition": "2023 Pikes Peak Regional Building Code (2nd printing 6/30/2026), adopting the 2021 IRC with regional amendments (RBC303)",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 43,
+      "wind_mph": 130,
+      "wind_basis": "Ultimate design wind speed Vult per ASCE 7-16, Exposure C minimum (PPRBC Table R301.2; Risk Cat. I/II; 135 Cat. III, 140 Cat. IV)",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "Detached decks of 200 sq ft or less, no more than 30 in. above grade within 36 in. of the deck edge and not serving the required egress door, need no permit (RBC105.2.1 item 9).",
+        "Foundation drawings must normally be sealed by a Colorado-licensed engineer, but decks set on unreinforced concrete piers are exempt from that (R401.1.1 exception 3).",
+        "Detached, uncovered decks with a walking surface no more than 24 in. above grade may sit directly on grade instead of frost footings (R403.1.4.1 exception 2).",
+        "Decks are designed for the floor live load of R301.5; R507.1 is amended so the deck snow load is not used.",
+        "Ledger must be at least a 2x8, may not hang on stone or masonry veneer, and may not attach to an unsupported rim without an engineered connection (R507.9 as amended).",
+        "IRC R507.10 (exterior guards) is deleted, so deck guards follow the general guard rules of R312."
+      ],
+      "note": "Snow load is set by elevation of the grade plane: below 7,000 ft pg = 43 psf (flat roof pf = 30 psf); at or above 7,000 ft pg = 57 psf (pf = 40 psf). Colorado Springs is below 7,000 ft, so 43 psf ground / 30 psf roof. PPRBD's Basic Design Information sheet (updated 06/30/2026) lists Ss 18.5%, S1 5.9%. Frost depth, SDC, weathering and termite are from the PPRBC Table R301.2. The regional code is still on the 2021 IRC as of the 2nd printing dated 6/30/2026.",
+      "sources": [
+        {
+          "title": "PPRBD Basic Design Information (codes and loads), updated 06/30/2026",
+          "url": "https://www.pprbd.org/File/ByAlias/DesignCriteria"
+        },
+        {
+          "title": "2023 Pikes Peak Regional Building Code, 2nd printing 6/30/2026",
+          "url": "https://www.pprbd.org/File/ByAlias/2023PPRBC2ndPrinting"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "CO",
+      "county": "Denver (City and County of Denver)",
+      "fips": "08031",
+      "population_2020": 715522,
+      "jurisdiction": "City and County of Denver, Community Planning & Development (Denver Residential Code)",
+      "edition": "2025 Denver Building and Fire Code — 2025 Denver Residential Code based on the 2024 IRC (adopted June 13, 2025; city page: effective December 31; 2nd-printing updates adopted Nov 24, 2025)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 43,
+      "wind_mph": 115,
+      "wind_basis": "Table R301.2 lists 115/125/140 mph (ultimate design wind speeds by risk category, 2024 IRC/ASCE 7-22 basis); 115 is the Risk Category II value used for dwellings",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Slight/Mod",
+      "deck_notes": [
+        "Uncovered decks (with their guards, stairs and ramps) of 200 sq ft or less with walking surfaces no more than 30 in. above grade need no building permit.",
+        "Uncovered decks more than 12 in. off the ground need a zoning permit, and decks 30 in. or more off the ground also need a building permit; covered decks need both.",
+        "The site plan must be drawn to scale with a scale and north arrow, dimensioned zone lot lines, streets/alleys, existing structures, and distances from the new deck to structures and lot lines.",
+        "Plans must show beam and joist sizes and spans, post size, footing size and depth, ledger connection, uplift connection, roll blocking at cantilevers, decking, stair, guard and handrail details, and cantilever lengths.",
+        "Where a built-in bench or similar raised surface abuts an open side more than 72 in. above grade, the 36 in. guard is measured from the top of that raised surface (Denver amendment to R321.1.2)."
+      ],
+      "note": "Ground snow 43 psf is the allowable-stress (pg(asd)) worst case within city limits (was 35 psf before the 2025 code); a new footnote allows a location-specific value from the ASCE 7 Hazard Tool (Risk Category II). The Residential Decks web page gives no frost depth; 36 in. comes from the Denver Residential Code Table R301.2. The 'effective December 31' date on the city page has no year shown; the adoption was June 13, 2025.",
+      "sources": [
+        {
+          "title": "2025 Denver Building Code (incl. Denver Residential Code amendments), 2nd printing",
+          "url": "https://denvergov.org/files/assets/public/v/1/community-planning-and-development/documents/ds/building-codes/2025_Denver_Building_Code.pdf"
+        },
+        {
+          "title": "Denver — 2025 DBC snow load changes",
+          "url": "https://denvergov.org/files/assets/public/v/1/community-planning-and-development/documents/ds/building-codes/2025_dbc_snow_load_changes.pdf"
+        },
+        {
+          "title": "Denver — Residential Decks, Porches, Patios, Pergolas, and Carports",
+          "url": "https://www.denvergov.org/Government/Agencies-Departments-Offices/Agencies-Departments-Offices-Directory/Community-Planning-and-Development/Plan-Review-Permits-and-Inspections/Single-Family-and-Duplex-Projects/Residential-Decks"
+        },
+        {
+          "title": "Denver — Building Codes, Policies and Guides",
+          "url": "https://www.denvergov.org/Government/Agencies-Departments-Offices/Agencies-Departments-Offices-Directory/Community-Planning-and-Development/Building-Codes-Policies-and-Guides"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "CO",
+      "county": "Arapahoe County",
+      "fips": "08005",
+      "population_2020": 655070,
+      "jurisdiction": "Arapahoe County Public Works & Development, Building Division (unincorporated county; Aurora, Centennial, Englewood, Littleton etc. run their own departments)",
+      "edition": "2021 IRC with Arapahoe County amendments (Resolution No. 21-394; effective April 1, 2022)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "Ultimate design wind speed (county Table R301.2(A))",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "Every deck needs a building permit: the county deleted IRC R105.2 item 10 (the small low deck exemption).",
+        "Pier footings must be at least 12 in. diameter by 36 in. deep unless stamped engineered details are provided.",
+        "The site plan must show the deck relative to property lines and other structures with distances, plus overhead and underground utilities; setbacks come from the Zoning Division.",
+        "Construction drawings must be to scale and show all spans, total deck square footage, lumber species/size/spacing, beam build-up, ledger bolt type, diameter, length and spacing, hanger type, post anchorage, pier size, and stair details.",
+        "A 36 in. by 36 in. landing is required at the bottom of deck stairs.",
+        "Ledger bolts through existing brick veneer are not allowed without county approval.",
+        "A Colorado-licensed engineer's stamp may be required for roof-covered decks, designs outside the IRC tables, and decks carrying hot tubs, spas or planters.",
+        "Applicants complete page 3 of the Colorado Chapter ICC 'Single Family Residential Uncovered Decks and Porches' building guide and submit PDFs online."
+      ],
+      "note": "The county table gives a 30 psf non-reducible ROOF snow load instead of a ground snow load (ASCE 7 governs ground snow for engineered roofs), so ground_snow_psf is left null. Other table values: winter design temp 1°F, ice barrier not required, air freezing index 712, mean annual temp 50.3°F, FIRM 1989 / FIS 12/2010. Deck permits are reviewed to minimum 2021 IRC criteria only.",
+      "sources": [
+        {
+          "title": "Arapahoe County — Resolution No. 21-394, adopted 2021 I-Codes and amendments (effective April 1, 2022)",
+          "url": "https://www.arapahoeco.gov/Public%20Works_Development/Building/Resolution.2021.Building.I-Codes.FinaltoSet.pdf"
+        },
+        {
+          "title": "Arapahoe County — Residential Remodel Building Permit Requirements: Uncovered Deck (rev. Aug 20, 2024)",
+          "url": "https://www.arapahoeco.gov/Public%20Works_Development/Building/Residential%20Permit%20Application%20Requirements/Residential%20Remodel%20-%20Uncovered%20Deck2023.pdf"
+        },
+        {
+          "title": "Arapahoe County — Residential permit application requirements (deck section)",
+          "url": "https://www.arapahoeco.gov/your_county/county_departments/public_works_and_development/divisions/building/building_permit_instructions_and_guidelines/residential_permit_application_requirements.php"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "CO",
+      "county": "Jefferson County",
+      "fips": "08059",
+      "population_2020": 582910,
+      "jurisdiction": "Jefferson County Planning & Zoning, Division of Building Safety (unincorporated county; Lakewood, Arvada, Golden, Westminster etc. run their own departments)",
+      "edition": "2024 IRC with the 2024 Jefferson County Building Code Supplement (effective for permits applied for after June 30, 2026)",
+      "frost_depth_in": 36,
+      "ground_snow_psf": 43,
+      "wind_mph": 129,
+      "wind_basis": "Vult, Exposure B (about 100 mph Vasd); Rocky Mountain Metropolitan Airport area: 155 mph Vult Exposure C",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "Decks are not on the county's permit-exempt list, so every deck needs a building permit (R105.2 replaced by the county's own list).",
+        "Decks must be designed for 40 psf live load or the roof snow load of Table R301.2.3 for the site elevation, whichever is greater (R507.1 as amended).",
+        "Permit applications must state the site elevation above sea level and the ground snow load.",
+        "The county points applicants to the Colorado Chapter ICC building guides for typical deck submittals."
+      ],
+      "note": "Snow load is by elevation (county Table R301.2.3, ground/roof psf): below 6,500 ft 43/30; 6,625 ft 46/32; 6,750 ft 49/34; 7,000 ft 54/38; 7,250 ft 60/42; 7,500 ft 67/47; 8,000 ft 82/57; 8,500 ft 97/68; 9,000 ft 114/79; 9,500 ft 134/92; 10,000 ft 152/106; 10,500 ft 172/120. Minimum 30/42.9 psf. Above Pg(asd) 70 psf an engineered design is required. The plains part of the county (below 6,500 ft) is 43 psf ground; Evergreen/Conifer foothills are higher — read the table by elevation. Bonus 4th row (Jefferson is #4 by 2020 population).",
+      "sources": [
+        {
+          "title": "Jefferson County — Table R301.2(1) Climatic and Geographic Design Criteria (2024)",
+          "url": "https://www.jeffco.us/DocumentCenter/View/1481/24-Climatic-and-Geographic-Design-Criteria-PDF"
+        },
+        {
+          "title": "Jefferson County — Table R301.2.3 Snow Load Table (2024)",
+          "url": "https://www.jeffco.us/DocumentCenter/View/28574/24-Snow-Load-Chart-Table-PDF-"
+        },
+        {
+          "title": "2024 Jefferson County Building Code Supplements (effective 7-1-26)",
+          "url": "https://www.jeffco.us/DocumentCenter/View/54624/2024-Jefferson-County-Building-Code-Supplements-Fee-Schedule-and-Fee-Refund-Procedure-Effective-7-1-26"
+        },
+        {
+          "title": "Jefferson County — Adopted Building Codes",
+          "url": "https://www.jeffco.us/2055/Adopted-Building-Codes"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NM",
+      "county": "Bernalillo County",
+      "fips": "35001",
+      "population_2020": 676444,
+      "jurisdiction": "City of Albuquerque Planning Department, Building Safety Division (largest city; unincorporated Bernalillo County runs its own department — bernco.gov returned 403)",
+      "edition": "2021 New Mexico Residential Building Code (14.7.3 NMAC, 2021 IRC basis) with the 2024 City of Albuquerque Uniform Administrative Code",
+      "frost_depth_in": 16,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "3-second gust (Albuquerque UAC Table R301.2)",
+      "seismic_sdc": "C",
+      "weathering": "Moderate",
+      "termite": "Moderate to heavy",
+      "deck_notes": [
+        "The UAC exempts platforms, walks and driveways no more than 30 in. above adjacent grade and not over a story or basement; there is no other deck exemption.",
+        "New Mexico state amendments: stair risers up to 8 in., treads at least 9 in., guards required on open sides more than 30 in. above the floor or grade below."
+      ],
+      "note": "Albuquerque UAC 2024 Table R301.2: ground snow 20 psf, wind 115 mph (3-second gust), rainfall 2 in./hr, SDC C, weathering moderate, frost line 16 in., termite moderate to heavy, winter design 12°F, ice shield N/A, AFI 263, MAT 54.6°F. The table is for the City of Albuquerque only; the East Mountains (unincorporated county) are higher and colder and were not checked.",
+      "sources": [
+        {
+          "title": "2024 City of Albuquerque Uniform Administrative Code (adopted)",
+          "url": "https://www.cabq.gov/planning/documents/2024-uac-adopted.pdf"
+        },
+        {
+          "title": "City of Albuquerque — Current Building Codes",
+          "url": "https://www.cabq.gov/planning/building-safety-division/current-building-codes"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NM",
+      "county": "Doña Ana County",
+      "fips": "35013",
+      "population_2020": 219561,
+      "jurisdiction": "Doña Ana County Building Services (unincorporated county); City of Las Cruces runs its own department",
+      "edition": "2021 IRC as adopted in the New Mexico Residential Building Code (county Building Codes page)",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "New Mexico state amendments: stair risers up to 8 in., treads at least 9 in., guards on open sides more than 30 in. above the floor or grade below."
+      ],
+      "note": "Neither Doña Ana County (Building Codes and Permit Requirements pages, Single Family Dwelling checklist) nor the City of Las Cruces pages I opened publish Table R301.2 values or a deck handout; the county says the codes themselves are only viewable at its office. Fill in before use.",
+      "sources": [
+        {
+          "title": "Doña Ana County Building Services — Building Codes",
+          "url": "https://www.donaana.gov/departments/community_services/building_services/building_codes.php"
+        },
+        {
+          "title": "Doña Ana County Building Services — Permit Requirements & Forms",
+          "url": "https://www.donaana.gov/departments/community_services/building_services/permit_requirements.php"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "NM",
+      "county": "Santa Fe County",
+      "fips": "35049",
+      "population_2020": 154823,
+      "jurisdiction": "City of Santa Fe Building Division (county seat); in unincorporated Santa Fe County the building permit is the state 'Multi-Purpose State Building Application' through NM Construction Industries Division, with county land-use review",
+      "edition": "2021 New Mexico Residential Building Code (14.7.3 NMAC; 2021 IRC basis) — City of Santa Fe Adopted Construction Codes page",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "New Mexico state amendments: stair risers up to 8 in., treads at least 9 in., guards on open sides more than 30 in. above the floor or grade below."
+      ],
+      "note": "The City of Santa Fe's local amendments (Chapter VII) are on Municode, which returned a bot challenge, and the county's checklists do not list design criteria; snow load by elevation could not be sourced. Santa Fe is much higher than Albuquerque, so do not reuse Albuquerque's 20 psf. Fill in before use.",
+      "sources": [
+        {
+          "title": "City of Santa Fe — Adopted Construction Codes",
+          "url": "https://santafenm.gov/land-use/building-permits/adopted-construction-codes"
+        },
+        {
+          "title": "Santa Fe County — Residential Development (checklists)",
+          "url": "https://www.santafecountynm.gov/growth-management/building-development/residential-development"
+        },
+        {
+          "title": "Santa Fe County — Accessory Structure checklist (state building application, CID contact)",
+          "url": "https://www.santafecountynm.gov/uploads/documents/Accessory_Structure_Checklist.pdf"
+        }
+      ],
+      "confidence": "low"
+    }
+  ]
+}

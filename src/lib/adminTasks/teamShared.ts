@@ -15,7 +15,9 @@
 // Replies (owner, 2026-10-15: "mark to confirm they will do it, in the SMS reply"): OK takes the task or confirms the
 // one given to them, DONE finishes it, NO hands it back; anything else lands on the task as their note
 // (lib/adminTasks/textReply). Not YES: Twilio keeps it as a re-subscribe word (it is still understood).
-// Never a switched-off phone; nothing 9 PM–7 AM (Los Angeles) to a phone that keeps quiet nights — unless Urgent.
+// Never a switched-off phone; nothing outside a person's texting hours (Pacific time) — unless Urgent. Texting hours
+// (owner, 2026-10-21: "set the time to receive texts — 24 hours or a limit, but default 24 hours"): any time unless
+// they set "only between" two hours; the old 9 PM–7 AM quiet-nights switch (on for everyone by default) is retired.
 
 /* THE PLATFORM ALERTS a team member can subscribe to (owner, 2026-10-17: "set the
  * text messaging for when someone signs up … converted from free trial … anything
@@ -23,7 +25,7 @@
  * time"; then "text when payment got charged in Stripe or failed"). Off for everyone
  * until ticked — an alert text costs money and attention.
  * The texts themselves: lib/adminAlerts. */
-export const ALERT_KEYS = ["signup", "converted", "canceled", "paid", "failed", "support", "surge", "cleanup"] as const;
+export const ALERT_KEYS = ["signup", "converted", "canceled", "paid", "failed", "support", "investor", "surge", "cleanup"] as const;
 export type AlertKey = (typeof ALERT_KEYS)[number];
 export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
   signup: { label: "Sign-ups", hint: "a company signs up" },
@@ -32,9 +34,12 @@ export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
   paid: { label: "Payments", hint: "Stripe charges a company — plans, leads, minute packs" },
   failed: { label: "Failed payments", hint: "a plan charge is declined — the first try and the last" },
   support: { label: "Support", hint: "a support ticket arrives" },
+  investor: { label: "Investor link requests", hint: "someone asks to see the investor figures — approve or decline" },
   surge: { label: "Traffic surge", hint: "the site is busy right now" },
   cleanup: { label: "Cleanup failures", hint: "a deleted company's Twilio number could not be released" },
 };
+/** An alert outside someone's texting hours waits until their hours start; "busy right now" is stale by then. */
+export const holdsOffHours = (k: AlertKey) => k !== "surge";
 export const isAlertKey = (v: unknown): v is AlertKey => typeof v === "string" && (ALERT_KEYS as readonly string[]).includes(v);
 
 export type TeamMember = {
@@ -43,7 +48,8 @@ export type TeamMember = {
   /** E.164. */
   phone: string;
   on: boolean;
-  quietNights: boolean;
+  /** When they take texts (Pacific): absent or null = any time, the default. */
+  hours?: TextHours | null;
   addedAt: string;
   /** Which platform alerts they asked to be texted about (lib/adminAlerts). */
   alerts?: AlertKey[];
@@ -66,16 +72,48 @@ export type TaskText =
 
 export const TEAM_TZ = "America/Los_Angeles";
 
-/** 9 PM–7 AM on the team's clock. */
-export function isQuietHour(now: Date, tz = TEAM_TZ): boolean {
-  const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(now));
-  return h >= 21 || h < 7;
+/** Texting hours: from `from`:00 up to `to`:00 on the team's clock, hours 0–23; `from` > `to` runs past midnight
+ *  (10 PM–6 AM). */
+export type TextHours = { from: number; to: number };
+/** What "Only between…" starts at. */
+export const DEFAULT_LIMIT: TextHours = { from: 7, to: 21 };
+
+const hourOn = (now: Date, tz: string) => Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(now));
+
+/** Inside their texting hours now (no hours: always). */
+export function inHours(hours: TextHours | null | undefined, now: Date, tz = TEAM_TZ): boolean {
+  if (!hours) return true;
+  const h = hourOn(now, tz);
+  return hours.from < hours.to ? h >= hours.from && h < hours.to : h >= hours.from || h < hours.to;
+}
+
+/** When their texting hours next start: `now` inside them, else the first full hour that is. (The team's zone is off
+ *  UTC by whole hours, so UTC's hour marks are its own.) */
+export function hoursOpenAt(hours: TextHours | null | undefined, now: Date, tz = TEAM_TZ): Date {
+  if (inHours(hours, now, tz)) return now;
+  let t = Math.floor(now.getTime() / 3_600_000) * 3_600_000 + 3_600_000;
+  for (let i = 0; i < 24 && !inHours(hours, new Date(t), tz); i++) t += 3_600_000;
+  return new Date(t);
+}
+
+/** "7 AM", "12 PM", "12 AM". */
+export const hourWord = (h: number) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "AM" : "PM"}`;
+
+/** "Any time" / "7 AM–9 PM". */
+export const hoursWords = (hours: TextHours | null | undefined) => (hours ? `${hourWord(hours.from)}–${hourWord(hours.to)}` : "Any time");
+
+/** Hours as sent or stored: two whole hours 0–23 that differ, else null (any time). */
+export function cleanHours(raw: unknown): TextHours | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { from, to } = raw as { from?: unknown; to?: unknown };
+  const ok = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 23;
+  return ok(from) && ok(to) && from !== to ? { from, to } : null;
 }
 
 /** Who a text goes to: member ids, in the list's order. */
 export function textRecipients(t: TaskText, members: readonly TeamMember[], now: Date): string[] {
-  const quiet = t.task.priority !== "URGENT" && isQuietHour(now);
-  const can = (m: TeamMember) => m.on && !(m.quietNights && quiet);
+  const urgent = t.task.priority === "URGENT";
+  const can = (m: TeamMember) => m.on && (urgent || inHours(m.hours, now));
   if (t.kind === "assigned") return members.filter((m) => m.id === t.to && can(m)).map((m) => m.id);
   const skip = t.kind === "taken" || t.kind === "done" || t.kind === "declined" ? t.member : null;
   return members.filter((m) => m.id !== skip && can(m)).map((m) => m.id);
@@ -149,7 +187,9 @@ export function cleanMembers(raw: unknown): TeamMember[] {
     if (!id || !name || !phone || seen.has(id)) continue;
     seen.add(id);
     const alerts = Array.isArray(o.alerts) ? (ALERT_KEYS as readonly string[]).filter((k) => (o.alerts as unknown[]).includes(k)) as AlertKey[] : [];
-    out.push({ id, name, phone, on: o.on !== false, quietNights: o.quietNights !== false, addedAt: typeof o.addedAt === "string" ? o.addedAt : "", ...(alerts.length ? { alerts } : {}) });
+    // The retired quiet-nights flag is dropped: a person takes texts at any hour until they set hours.
+    const hours = cleanHours(o.hours);
+    out.push({ id, name, phone, on: o.on !== false, ...(hours ? { hours } : {}), addedAt: typeof o.addedAt === "string" ? o.addedAt : "", ...(alerts.length ? { alerts } : {}) });
   }
   return out.slice(0, TEAM_MAX);
 }
@@ -157,8 +197,9 @@ export function cleanMembers(raw: unknown): TeamMember[] {
 /** Can texts go at all from this server — Twilio set up, JobFlex's number approved. */
 export type TextingStatus = { ready: boolean; words: string };
 
-/** The latest task text to a number, as SmsMessage keeps it (the Twilio status callback fills in delivery). */
-export type LastText = { status: string; error: string | null; at: string };
+/** The latest task text to a number, as SmsMessage keeps it (the Twilio status callback fills in delivery). `after`: a
+ *  held text's send time. */
+export type LastText = { status: string; error: string | null; at: string; after?: string | null };
 
 /** One person on the team, as the Team sheet shows them. */
 export type TeamMemberView = {
@@ -166,11 +207,14 @@ export type TeamMemberView = {
   name: string;
   phone: string;
   on: boolean;
-  quietNights: boolean;
+  /** Texting hours (null: any time). */
+  hours: TextHours | null;
   /** Open tasks given to them now. */
   open: number;
   /** Did the last text reach them. */
   last: LastText | null;
+  /** The last alert text to them (sent, held for 7 AM, or why not). */
+  lastAlert: LastText | null;
   /** They replied STOP: nothing reaches them until they text START. */
   stopped: boolean;
   /** The platform alerts they get texts about (lib/adminAlerts). */
@@ -191,16 +235,19 @@ const CARRIER_WORDS: Record<string, string> = {
   "30032": "JobFlex's toll-free number isn't verified yet",
 };
 
-/** What became of the last text, in words, with a tone for the dot beside it. */
-export function deliveryWords(last: LastText | null): { tone: "ok" | "wait" | "bad"; words: string } | null {
+/** What became of the last text (or alert), in words, with a tone for the dot beside it. */
+export function deliveryWords(last: LastText | null, noun: "text" | "alert" = "text"): { tone: "ok" | "wait" | "bad"; words: string } | null {
   if (!last) return null;
   const s = last.status.toUpperCase();
-  if (s === "DELIVERED" || s === "READ") return { tone: "ok", words: "Last text delivered" };
-  if (s === "QUEUED" || s === "SENT" || s === "SENDING" || s === "ACCEPTED" || s === "SCHEDULED" || s === "HELD") return { tone: "wait", words: "Last text sent — no delivery receipt yet" };
+  const L = `Last ${noun}`;
+  if (s === "DELIVERED" || s === "READ") return { tone: "ok", words: `${L} delivered` };
+  if (s === "HELD") return { tone: "wait", words: `${L} waits for their texting hours${last.after ? ` — ${hourWord(hourOn(new Date(last.after), TEAM_TZ))}` : ""}` };
+  if (s === "MERGED") return { tone: "wait", words: `${L} went out in a roundup when their hours started` };
+  if (s === "QUEUED" || s === "SENT" || s === "SENDING" || s === "ACCEPTED" || s === "SCHEDULED") return { tone: "wait", words: `${L} sent — no delivery receipt yet` };
   if (s === "UNDELIVERED" || s === "FAILED") {
     const code = /^(\d{5})/.exec(last.error ?? "")?.[1];
     const why = code ? CARRIER_WORDS[code] ?? `carrier error ${code}` : null;
-    return { tone: "bad", words: `Last text didn't arrive${why ? ` — ${why}` : ""}` };
+    return { tone: "bad", words: `${L} didn't arrive${why ? ` — ${why}` : ""}` };
   }
   if (s === "SKIPPED") {
     const e = last.error ?? "";
@@ -209,9 +256,9 @@ export function deliveryWords(last: LastText | null): { tone: "ok" | "wait" | "b
       e === "no-number" ? "JobFlex's number isn't approved yet" :
       e === "cap-number" ? "today's texts to this number were used up" :
       e.startsWith("cap-") ? "today's texting limit was reached" : "it was held back";
-    return { tone: "bad", words: `Last text not sent — ${why}` };
+    return { tone: "bad", words: `${L} not sent — ${why}` };
   }
-  return { tone: "wait", words: "Last text sent" };
+  return { tone: "wait", words: `${L} sent` };
 }
 
 // ── Replies to a task text ─────────────────────────────────────────

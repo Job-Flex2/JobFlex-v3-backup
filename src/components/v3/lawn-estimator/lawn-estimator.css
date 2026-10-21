@@ -1,0 +1,482 @@
+/* ============================================================================
+   LAWN ESTIMATOR — BLUEPRINT (desk /dashboard/lawn-estimator, phone /mobile-lawn-estimator-v1)
+   Redrawn 2026-10-20.
+   ============================================================================
+
+   One stylesheet for both pages. The parts (lawn-parts.tsx) share one markup
+   vocabulary, `lw-*`, styled once under either root:
+     .jf-lawn   — the desk page, inside the dashboard shell's `.content`
+     .jf-mlawn  — the phone page, its own fixed frame under the shared MobileNav
+   The phone section at the end restates only what its composition changes; it
+   lives in THIS file so its rules always come after the shared ones, whatever
+   order the production build emits chunks in.
+
+   PLAIN STYLESHEET, NOT A CSS MODULE (deliberate — project memory
+   "css-modules-break-blueprint-ports", the owner's "style CSS that ruined the
+   whole design"): a module leaves `*`, element and attribute selectors
+   unscoped. Every selector here starts with a root class; the only exceptions
+   are the two `body:has(.jf-mlawn)` host neutralizers, which undo themselves on
+   unmount. The desk root wears `data-nest`, so the shell's always-on resets
+   step around this tree; the reset below puts the same baseline back at zero
+   specificity.
+
+   Design: DESIGN.md (white sheets in 2px ink frames on the drafting paper,
+   uppercase 800–900 headings, blue for the one primary action per group, ink
+   fill for what is selected, tabular numerals, no resting card shadows) with
+   the owner's clarity rules — 15–16px working text, bold ink labels, big key
+   values, ≥44px targets on the phone. Tokens from globals.css only.
+   ========================================================================= */
+
+/* ── Baseline (the shell's reset, re-scoped, zero specificity) ───────────── */
+:where(.jf-lawn, .jf-mlawn),
+:where(.jf-lawn, .jf-mlawn) :where(*) { box-sizing: border-box; margin: 0; padding: 0; }
+:where(.jf-lawn, .jf-mlawn) :where(button, input, select, textarea) { font: inherit; color: inherit; }
+:where(.jf-lawn, .jf-mlawn) :where(button) { border: 0; background: none; cursor: pointer; }
+:where(.jf-lawn, .jf-mlawn) :where(a) { color: inherit; text-decoration: none; }
+:where(.jf-lawn, .jf-mlawn) :where(ul, ol) { list-style: none; }
+:where(.jf-lawn, .jf-mlawn) :where(fieldset) { border: 0; min-width: 0; }
+:where(.jf-lawn, .jf-mlawn) :where(h1, h2, h3) { font-size: inherit; font-weight: inherit; }
+:is(.jf-lawn, .jf-mlawn) [hidden] { display: none !important; }
+
+/* ── Root ─────────────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) {
+  --lw-sheet: #fff;
+  --lw-frame: 2px solid var(--ink);
+  --lw-frame-thin: 1.5px solid var(--ink);
+  --lw-rule: 1px solid var(--ink-line);
+  --lw-ink-soft: var(--ink-soft);
+  --lw-ink-quiet: var(--ink-muted);
+  --lw-amber-ink: color-mix(in srgb, var(--amber) 62%, var(--ink));
+  --lw-rose-soft: color-mix(in srgb, var(--rose) 8%, #fff);
+  --lw-amber-soft: color-mix(in srgb, var(--amber) 10%, #fff);
+  --lw-emerald-soft: color-mix(in srgb, var(--emerald) 9%, #fff);
+  --lw-ctl: 40px;      /* a button */
+  --lw-tool: 36px;     /* a map tool */
+  --lw-field: 46px;    /* a text field */
+  --lw-pad: 24px;      /* card padding */
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+:is(.jf-lawn, .jf-mlawn) ::selection { background: color-mix(in srgb, var(--accent) 24%, #fff); color: var(--ink); }
+:is(.jf-lawn, .jf-mlawn) :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:is(.jf-lawn, .jf-mlawn) svg.lucide { width: 16px; height: 16px; flex: none; stroke-width: 2.25; }
+
+.jf-lawn { display: flex; flex-direction: column; gap: 20px; min-width: 0; padding-bottom: 32px; }
+
+/* ── Page head ────────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; padding-top: 4px; }
+:is(.jf-lawn, .jf-mlawn) .lw-head-text { min-width: 0; display: grid; gap: 8px; }
+:is(.jf-lawn, .jf-mlawn) .lw-title { font-size: 34px; font-weight: 900; letter-spacing: -0.015em; text-transform: uppercase; line-height: 1.05; }
+:is(.jf-lawn, .jf-mlawn) .lw-title--entity { display: flex; align-items: flex-start; gap: 10px; font-size: 28px; overflow-wrap: anywhere; }
+:is(.jf-lawn, .jf-mlawn) .lw-title--entity svg.lucide { width: 26px; height: 26px; margin-top: 2px; color: var(--accent); stroke-width: 2.5; }
+:is(.jf-lawn, .jf-mlawn) .lw-sub { font-size: 15px; line-height: 1.45; color: var(--lw-ink-soft); max-width: 72ch; }
+:is(.jf-lawn, .jf-mlawn) .lw-head-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+:is(.jf-lawn, .jf-mlawn) .lw-saved-at { font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--lw-ink-quiet); margin-right: 4px; }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--lw-ctl); padding: 0 16px;
+  border: var(--lw-frame); border-radius: var(--r-sm); background: var(--lw-sheet); color: var(--ink);
+  font-size: 13px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap;
+  transition: transform 140ms var(--ease-out), box-shadow 140ms var(--ease-out), background-color 140ms var(--ease-out);
+}
+:is(.jf-lawn, .jf-mlawn) .lw-btn--primary { background: var(--accent); color: #fff; box-shadow: 3px 3px 0 var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-btn.is-on { background: var(--ink); color: #fff; }
+:is(.jf-lawn, .jf-mlawn) .lw-btn--wide { width: 100%; min-height: 52px; padding-block: 8px; font-size: 14px; white-space: normal; text-align: center; line-height: 1.3; }
+:is(.jf-lawn, .jf-mlawn) .lw-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+@media (hover: hover) {
+  :is(.jf-lawn, .jf-mlawn) .lw-btn:not(:disabled):hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+  :is(.jf-lawn, .jf-mlawn) .lw-btn--primary:not(:disabled):hover { background: var(--accent-ink); box-shadow: 4px 4px 0 var(--ink); }
+}
+:is(.jf-lawn, .jf-mlawn) .lw-btn:not(:disabled):active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+
+:is(.jf-lawn, .jf-mlawn) .lw-icon-btn {
+  display: inline-grid; place-items: center; flex: none;
+  width: 40px; height: 40px; border: 1.5px solid var(--ink-line); border-radius: var(--r-sm); background: var(--lw-sheet); color: var(--lw-ink-soft);
+  transition: border-color 140ms var(--ease-out), color 140ms var(--ease-out), background-color 140ms var(--ease-out);
+}
+:is(.jf-lawn, .jf-mlawn) .lw-icon-btn svg.lucide { width: 18px; height: 18px; }
+@media (hover: hover) {
+  :is(.jf-lawn, .jf-mlawn) .lw-icon-btn:hover { border-color: var(--ink); color: var(--ink); }
+  :is(.jf-lawn, .jf-mlawn) .lw-icon-btn--danger:hover { border-color: var(--rose); color: var(--rose); background: var(--lw-rose-soft); }
+}
+
+:is(.jf-lawn, .jf-mlawn) .lw-link {
+  display: inline; padding: 0; color: var(--accent); font-size: inherit; font-weight: 700;
+  text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px;
+}
+:is(.jf-lawn, .jf-mlawn) .lw-link:hover { color: var(--accent-ink); }
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-card { background: var(--lw-sheet); border: var(--lw-frame); border-radius: var(--r-sm); min-width: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px var(--lw-pad) 14px; border-bottom: 1px solid var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-card-head--stack { flex-direction: column; gap: 6px; }
+:is(.jf-lawn, .jf-mlawn) .lw-card-title { font-size: 16px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.25; }
+:is(.jf-lawn, .jf-mlawn) .lw-card-sub { font-size: 14px; line-height: 1.5; color: var(--lw-ink-soft); max-width: 68ch; }
+:is(.jf-lawn, .jf-mlawn) .lw-card-body { padding: 18px var(--lw-pad) 22px; display: grid; gap: 16px; }
+:is(.jf-lawn, .jf-mlawn) .lw-count { min-width: 28px; height: 24px; padding: 0 7px; display: inline-grid; place-items: center; border: 1.5px solid var(--ink); font-size: 13px; font-weight: 800; }
+:is(.jf-lawn, .jf-mlawn) .lw-cap { font-size: 13px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lw-ink-soft); }
+
+/* ── Text ─────────────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-note { font-size: 14px; line-height: 1.5; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-empty { padding: 22px var(--lw-pad) 26px; font-size: 15px; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-alert { padding: 12px 16px; border: 2px solid var(--rose); background: var(--lw-rose-soft); color: color-mix(in srgb, var(--rose) 80%, var(--ink)); font-size: 15px; font-weight: 700; border-radius: var(--r-sm); }
+:is(.jf-lawn, .jf-mlawn) .lw-done { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; color: var(--emerald); font-size: 15px; font-weight: 800; }
+:is(.jf-lawn, .jf-mlawn) .lw-done svg.lucide { width: 18px; height: 18px; stroke-width: 3; }
+:is(.jf-lawn, .jf-mlawn) .lw-stamp {
+  display: inline-flex; align-items: center; flex: none; padding: 5px 9px; border: 1.5px solid currentColor; border-radius: var(--r-sm);
+  font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+}
+:is(.jf-lawn, .jf-mlawn) .lw-stamp--good { color: var(--emerald); background: var(--lw-emerald-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-stamp--warn { color: var(--lw-amber-ink); background: var(--lw-amber-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-stamp--bad { color: var(--rose); background: var(--lw-rose-soft); }
+
+/* ── Fields ───────────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-field { display: grid; gap: 6px; min-width: 0; align-content: start; }
+:is(.jf-lawn, .jf-mlawn) .lw-label { display: block; font-size: 13px; font-weight: 800; color: var(--ink); line-height: 1.3; }
+:is(.jf-lawn, .jf-mlawn) .lw-opt { font-weight: 600; color: var(--lw-ink-quiet); }
+:is(.jf-lawn, .jf-mlawn) .lw-input {
+  width: 100%; min-width: 0; height: var(--lw-field); padding: 0 12px;
+  border: var(--lw-frame); border-radius: var(--r-sm); background: var(--lw-sheet); color: var(--ink);
+  font-size: 15px; font-weight: 600;
+  transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+}
+:is(.jf-lawn, .jf-mlawn) .lw-input::placeholder { color: var(--ink-faint); font-weight: 500; }
+:is(.jf-lawn, .jf-mlawn) .lw-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+:is(.jf-lawn, .jf-mlawn) .lw-select { position: relative; }
+:is(.jf-lawn, .jf-mlawn) .lw-select select { appearance: none; -webkit-appearance: none; padding-right: 38px; cursor: pointer; }
+:is(.jf-lawn, .jf-mlawn) .lw-select svg.lucide { position: absolute; right: 12px; top: 50%; translate: 0 -50%; pointer-events: none; }
+:is(.jf-lawn, .jf-mlawn) .lw-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+
+/* A checkbox: the native box kept for keyboard and screen readers, drawn as a square. */
+:is(.jf-lawn, .jf-mlawn) .lw-check { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+:is(.jf-lawn, .jf-mlawn) .lw-box {
+  display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px;
+  border: 2px solid var(--ink); border-radius: var(--r-sm); background: #fff; color: #fff;
+  transition: background-color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+}
+:is(.jf-lawn, .jf-mlawn) .lw-box svg.lucide { width: 14px; height: 14px; stroke-width: 3.5; opacity: 0; transition: opacity 120ms var(--ease-out); }
+:is(.jf-lawn, .jf-mlawn) .lw-check:checked + .lw-box { background: var(--accent); border-color: var(--accent); }
+:is(.jf-lawn, .jf-mlawn) .lw-check:checked + .lw-box svg.lucide { opacity: 1; }
+:is(.jf-lawn, .jf-mlawn) .lw-check:focus-visible + .lw-box { outline: 2px solid var(--accent); outline-offset: 2px; }
+:is(.jf-lawn, .jf-mlawn) .lw-tick { position: relative; display: inline-flex; align-items: center; gap: 10px; min-height: 36px; font-size: 14.5px; font-weight: 700; cursor: pointer; }
+
+/* ── Search (the start page) ──────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-search { display: grid; gap: 10px; }
+:is(.jf-lawn, .jf-mlawn) .lw-search .lw-label { font-size: 14px; }
+:is(.jf-lawn, .jf-mlawn) .lw-search-row { display: flex; gap: 12px; align-items: stretch; }
+:is(.jf-lawn, .jf-mlawn) .lw-search-in { flex: 1 1 auto; height: 60px; padding: 0 18px; font-size: 18px; }
+:is(.jf-lawn, .jf-mlawn) .lw-search-go { min-height: 60px; padding: 0 24px; font-size: 14px; }
+:is(.jf-lawn, .jf-mlawn) .lw-search-go svg.lucide { width: 18px; height: 18px; }
+:is(.jf-lawn, .jf-mlawn) .lw-sources { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 8px; }
+:is(.jf-lawn, .jf-mlawn) .lw-sources li { display: inline-flex; align-items: baseline; gap: 6px; font-size: 14px; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-sources li::before { content: ""; width: 8px; height: 8px; background: var(--accent); flex: none; align-self: center; }
+:is(.jf-lawn, .jf-mlawn) .lw-sources b { color: var(--ink); font-weight: 800; }
+
+/* Saved estimates */
+:is(.jf-lawn, .jf-mlawn) .lw-saved-list { padding: 4px var(--lw-pad) 10px; }
+:is(.jf-lawn, .jf-mlawn) .lw-saved-row { display: flex; align-items: center; gap: 10px; border-top: var(--lw-rule); }
+:is(.jf-lawn, .jf-mlawn) .lw-saved-row:first-child { border-top: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-saved-open { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; padding: 14px 0; text-align: left; }
+:is(.jf-lawn, .jf-mlawn) .lw-saved-name { font-size: 16px; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; transition: color 140ms var(--ease-out); }
+:is(.jf-lawn, .jf-mlawn) .lw-saved-meta { font-size: 13.5px; color: var(--lw-ink-soft); }
+@media (hover: hover) { :is(.jf-lawn, .jf-mlawn) .lw-saved-open:hover .lw-saved-name { color: var(--accent); } }
+
+/* ── The read in progress (the roof estimator's measuring card, same values) ─ */
+:is(.jf-lawn, .jf-mlawn) .lw-reading { max-width: 520px; overflow: hidden; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-body { padding: 26px 22px 24px; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-num { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: var(--lw-ink-quiet); overflow-wrap: anywhere; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 10px; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-stage { font-size: 18px; font-weight: 900; letter-spacing: -0.005em; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-pct { font-family: var(--font-mono); font-size: 14px; font-weight: 700; letter-spacing: 0.06em; color: var(--accent); }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-track { margin-top: 12px; height: 10px; border: 1.5px solid var(--ink); background: #fff; overflow: hidden; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-fill { display: block; height: 100%; width: 0; background: var(--accent); transition: width 300ms linear; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-steps { margin: 16px 0 0; display: grid; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-step { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px dashed rgba(10, 10, 10, 0.16); font-size: 14px; color: var(--lw-ink-quiet); }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-step:last-child { border-bottom: none; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-step-state { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-step.is-done { color: var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-step.is-active { color: var(--ink); font-weight: 700; }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-step.is-active .lw-ms-step-state { color: var(--accent); }
+:is(.jf-lawn, .jf-mlawn) .lw-ms-hint { margin-top: 14px; font-size: 12.5px; line-height: 1.5; color: var(--lw-ink-quiet); }
+
+/* ── The map card ─────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-mapcard { overflow: hidden; }
+:is(.jf-lawn, .jf-mlawn) .lw-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 18px; border-bottom: 1px solid var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-tgroup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-tlabel { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lw-ink-soft); margin-right: 2px; }
+:is(.jf-lawn, .jf-mlawn) .lw-paints { display: flex; flex-wrap: wrap; gap: 6px; }
+:is(.jf-lawn, .jf-mlawn) .lw-reach { flex-basis: 100%; }
+:is(.jf-lawn, .jf-mlawn) .lw-tnote { font-size: 13.5px; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-tool {
+  display: inline-flex; align-items: center; gap: 7px; min-height: var(--lw-tool); padding: 0 12px;
+  border: var(--lw-frame-thin); border-radius: var(--r-sm); background: #fff; color: var(--ink);
+  font-size: 13.5px; font-weight: 700; white-space: nowrap;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+}
+:is(.jf-lawn, .jf-mlawn) .lw-tool.is-on { background: var(--ink); color: #fff; }
+:is(.jf-lawn, .jf-mlawn) .lw-tool:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (hover: hover) { :is(.jf-lawn, .jf-mlawn) .lw-tool:not(:disabled):not(.is-on):hover { box-shadow: inset 0 0 0 1px var(--ink); background: var(--accent-soft); } }
+:is(.jf-lawn, .jf-mlawn) .lw-swatch { width: 12px; height: 12px; flex: none; border: 1.5px solid rgba(10, 10, 10, 0.45); }
+:is(.jf-lawn, .jf-mlawn) .lw-tool.is-on .lw-swatch { border-color: #fff; }
+:is(.jf-lawn, .jf-mlawn) .lw-seg { display: inline-flex; border: var(--lw-frame-thin); border-radius: var(--r-sm); overflow: hidden; background: #fff; }
+:is(.jf-lawn, .jf-mlawn) .lw-seg-b { min-height: calc(var(--lw-tool) - 3px); padding: 0 12px; font-size: 13.5px; font-weight: 700; white-space: nowrap; transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out); }
+:is(.jf-lawn, .jf-mlawn) .lw-seg-b + .lw-seg-b { border-left: 1.5px solid var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-seg-b.is-on { background: var(--ink); color: #fff; }
+@media (hover: hover) { :is(.jf-lawn, .jf-mlawn) .lw-seg-b:not(.is-on):hover { background: var(--accent-soft); } }
+:is(.jf-lawn, .jf-mlawn) .lw-hint { padding: 10px 18px; background: var(--accent-soft); border-bottom: 1px solid var(--ink); color: var(--accent-ink); font-size: 14px; font-weight: 700; }
+
+:is(.jf-lawn, .jf-mlawn) .lw-map { position: relative; width: 100%; background: #e8ece6; }
+:is(.jf-lawn, .jf-mlawn) .lw-map[data-mode="paint"], :is(.jf-lawn, .jf-mlawn) .lw-map[data-mode="tap"], :is(.jf-lawn, .jf-mlawn) .lw-map[data-mode="draw"] { touch-action: none; }
+:is(.jf-lawn, .jf-mlawn) .lw-map canvas { display: block; width: 100%; height: auto; }
+:is(.jf-lawn, .jf-mlawn) .lw-map-attr { position: absolute; right: 8px; bottom: 8px; padding: 3px 7px; background: rgba(255, 255, 255, 0.9); color: var(--ink-soft); font-size: 11px; font-weight: 600; border-radius: var(--r-sm); pointer-events: none; max-width: calc(100% - 16px); }
+:is(.jf-lawn, .jf-mlawn) .lw-map-attr--left { left: 8px; right: auto; }
+:is(.jf-lawn, .jf-mlawn) .lw-map-attr--top { left: 8px; right: auto; top: 8px; bottom: auto; }
+:is(.jf-lawn, .jf-mlawn) .lw-map-attr--bad { color: var(--rose); font-weight: 800; }
+:is(.jf-lawn, .jf-mlawn) .lw-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 14px 18px; border-top: 1px solid var(--ink); font-size: 14px; color: var(--ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-legend li { display: inline-flex; align-items: center; gap: 8px; }
+:is(.jf-lawn, .jf-mlawn) .lw-key { display: inline-block; width: 18px; height: 12px; flex: none; }
+:is(.jf-lawn, .jf-mlawn) .lw-key--yard { border: 2px solid #fff; outline: 1.5px solid rgba(0, 0, 0, 0.6); background: #6b7f5a; }
+:is(.jf-lawn, .jf-mlawn) .lw-key--lawn { border: 2px solid #84cc16; background: rgba(163, 230, 53, 0.45); }
+:is(.jf-lawn, .jf-mlawn) .lw-key--bed { border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.4); }
+:is(.jf-lawn, .jf-mlawn) .lw-key--pool { border: 2px solid #38bdf8; background: rgba(56, 189, 248, 0.45); }
+:is(.jf-lawn, .jf-mlawn) .lw-key--out { background: rgba(63, 74, 60, 0.75); }
+:is(.jf-lawn, .jf-mlawn) .lw-mapcard > .lw-note { padding: 0 18px 16px; }
+
+/* More map tools (phone) */
+:is(.jf-lawn, .jf-mlawn) .lw-more { flex-basis: 100%; }
+:is(.jf-lawn, .jf-mlawn) .lw-more-sum, :is(.jf-lawn, .jf-mlawn) .lw-disclose-sum {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; cursor: pointer; list-style: none;
+  font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+}
+:is(.jf-lawn, .jf-mlawn) :is(.lw-more-sum, .lw-disclose-sum)::-webkit-details-marker { display: none; }
+:is(.jf-lawn, .jf-mlawn) :is(.lw-more-sum, .lw-disclose-sum) svg.lucide { transition: rotate 200ms var(--ease-out); }
+:is(.jf-lawn, .jf-mlawn) details[open] > :is(.lw-more-sum, .lw-disclose-sum) svg.lucide { rotate: 180deg; }
+:is(.jf-lawn, .jf-mlawn) .lw-more-body { display: grid; gap: 14px; padding: 4px 0 6px; }
+
+/* ── What was measured ────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-meas-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; padding: 20px var(--lw-pad) 6px; }
+:is(.jf-lawn, .jf-mlawn) .lw-meas-lead { display: grid; gap: 4px; }
+:is(.jf-lawn, .jf-mlawn) .lw-meas-big { font-size: 44px; font-weight: 900; letter-spacing: -0.025em; line-height: 1; }
+:is(.jf-lawn, .jf-mlawn) .lw-unit { margin-left: 8px; font-size: 17px; font-weight: 700; letter-spacing: 0; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-meas-why { padding: 6px var(--lw-pad) 0; font-size: 14px; color: var(--lw-ink-soft); max-width: 80ch; }
+:is(.jf-lawn, .jf-mlawn) .lw-cells { display: grid; margin-top: 18px; border-top: 1px solid var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-cells + .lw-cells { margin-top: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-cells--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:is(.jf-lawn, .jf-mlawn) .lw-cells--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:is(.jf-lawn, .jf-mlawn) .lw-cell { display: grid; gap: 4px; align-content: start; padding: 14px var(--lw-pad) 16px; min-width: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-cell + .lw-cell { border-left: var(--lw-rule); }
+:is(.jf-lawn, .jf-mlawn) .lw-cell dt { font-size: 13px; font-weight: 700; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-cell dd { font-size: 21px; font-weight: 850; letter-spacing: -0.01em; line-height: 1.15; overflow-wrap: anywhere; }
+
+/* The site's facts */
+:is(.jf-lawn, .jf-mlawn) .lw-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 18px; padding: 18px var(--lw-pad) 22px; font-size: 14.5px; }
+:is(.jf-lawn, .jf-mlawn) .lw-facts dt { font-weight: 800; }
+:is(.jf-lawn, .jf-mlawn) .lw-facts dd { color: var(--ink-soft); font-weight: 500; }
+:is(.jf-lawn, .jf-mlawn) .lw-facts .lw-facts-quiet { color: var(--lw-ink-quiet); font-size: 13.5px; }
+
+/* Rules */
+:is(.jf-lawn, .jf-mlawn) .lw-rules { padding: 4px var(--lw-pad) 10px; }
+:is(.jf-lawn, .jf-mlawn) .lw-rule { display: grid; gap: 4px; padding: 14px 0; border-top: var(--lw-rule); }
+:is(.jf-lawn, .jf-mlawn) .lw-rule:first-child { border-top: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-rule-t { font-size: 15px; font-weight: 800; line-height: 1.35; }
+:is(.jf-lawn, .jf-mlawn) .lw-rule-k { margin-right: 8px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+:is(.jf-lawn, .jf-mlawn) .lw-rule-d { font-size: 14px; color: var(--ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-rule-s { font-size: 12.5px; color: var(--lw-ink-quiet); }
+
+/* The season, month by month */
+:is(.jf-lawn, .jf-mlawn) .lw-months { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; padding: 18px var(--lw-pad) 22px; }
+:is(.jf-lawn, .jf-mlawn) .lw-month { display: grid; gap: 2px; align-content: start; padding: 10px 11px 11px; border: 1.5px solid var(--ink); min-width: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-month.is-quiet { border-color: var(--ink-line); }
+:is(.jf-lawn, .jf-mlawn) .lw-month.is-quiet .lw-month-l, :is(.jf-lawn, .jf-mlawn) .lw-month.is-quiet .lw-month-mow { color: var(--lw-ink-quiet); }
+:is(.jf-lawn, .jf-mlawn) .lw-month-l { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-month-mow { margin-top: 2px; font-size: 15px; font-weight: 850; }
+:is(.jf-lawn, .jf-mlawn) .lw-month-v { font-size: 13px; font-weight: 600; color: var(--ink-soft); line-height: 1.35; }
+
+/* ── The season's price ───────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-quote { display: grid; gap: 16px; padding: 20px var(--lw-pad) var(--lw-pad); border-color: var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-quote-top { display: grid; gap: 4px; padding-bottom: 16px; border-bottom: 1px solid var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-quote-big { font-size: 46px; font-weight: 900; letter-spacing: -0.03em; line-height: 1; overflow-wrap: anywhere; }
+:is(.jf-lawn, .jf-mlawn) .lw-quote-month { margin-top: 6px; font-size: 15px; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-quote-month b { color: var(--accent); font-weight: 850; font-size: 17px; }
+:is(.jf-lawn, .jf-mlawn) .lw-quote-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; font-size: 14.5px; }
+:is(.jf-lawn, .jf-mlawn) .lw-quote-rows dt { color: var(--ink-soft); font-weight: 600; }
+:is(.jf-lawn, .jf-mlawn) .lw-quote-rows dd { font-weight: 850; text-align: right; }
+:is(.jf-lawn, .jf-mlawn) .lw-quote > .lw-note { font-size: 13.5px; margin-top: -6px; }
+
+/* Client */
+:is(.jf-lawn, .jf-mlawn) .lw-client-on { display: grid; gap: 6px; }
+:is(.jf-lawn, .jf-mlawn) .lw-client-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: var(--lw-field); padding: 0 4px 0 12px; border: var(--lw-frame); border-radius: var(--r-sm); font-size: 15px; }
+:is(.jf-lawn, .jf-mlawn) .lw-client-row strong { font-weight: 800; overflow-wrap: anywhere; }
+:is(.jf-lawn, .jf-mlawn) .lw-client-row .lw-icon-btn { width: 36px; height: 36px; border-color: transparent; }
+:is(.jf-lawn, .jf-mlawn) .lw-found { display: grid; border: var(--lw-frame); border-radius: var(--r-sm); margin-top: -2px; }
+:is(.jf-lawn, .jf-mlawn) .lw-found li + li { border-top: var(--lw-rule); }
+:is(.jf-lawn, .jf-mlawn) .lw-found-b { display: grid; gap: 1px; width: 100%; padding: 10px 12px; text-align: left; }
+@media (hover: hover) { :is(.jf-lawn, .jf-mlawn) .lw-found-b:hover { background: var(--accent-soft); } }
+:is(.jf-lawn, .jf-mlawn) .lw-found-name { font-size: 15px; font-weight: 800; }
+:is(.jf-lawn, .jf-mlawn) .lw-found-meta { font-size: 13px; color: var(--lw-ink-soft); overflow-wrap: anywhere; }
+
+/* ── Services ─────────────────────────────────────────────────────────────── */
+:is(.jf-lawn, .jf-mlawn) .lw-freq { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; padding: 16px var(--lw-pad) 6px; }
+:is(.jf-lawn, .jf-mlawn) .lw-freq-n { font-size: 14px; font-weight: 700; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-svcs { padding: 4px var(--lw-pad) 4px; }
+:is(.jf-lawn, .jf-mlawn) .lw-svc { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 4px 12px; align-items: start; padding: 14px 0; border-top: var(--lw-rule); cursor: pointer; }
+:is(.jf-lawn, .jf-mlawn) .lw-svcs li:first-child .lw-svc { border-top: 0; }
+:is(.jf-lawn, .jf-mlawn) .lw-svc .lw-box { margin-top: 1px; }
+:is(.jf-lawn, .jf-mlawn) .lw-svc-name { font-size: 15.5px; font-weight: 800; line-height: 1.35; }
+:is(.jf-lawn, .jf-mlawn) .lw-svc-price { font-size: 16px; font-weight: 900; text-align: right; white-space: nowrap; line-height: 1.35; }
+:is(.jf-lawn, .jf-mlawn) .lw-svc-unit { display: block; font-size: 12.5px; font-weight: 600; color: var(--lw-ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-svc-desc { grid-column: 2 / 4; font-size: 13.5px; line-height: 1.45; color: var(--ink-soft); }
+:is(.jf-lawn, .jf-mlawn) .lw-market { display: block; margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--lw-ink-quiet); }
+:is(.jf-lawn, .jf-mlawn) .lw-market.is-off { color: var(--lw-amber-ink); font-weight: 800; }
+:is(.jf-lawn, .jf-mlawn) .lw-svc:not(.is-on) :is(.lw-svc-name, .lw-svc-price) { color: var(--lw-ink-quiet); }
+:is(.jf-lawn, .jf-mlawn) .lw-disclose { margin: 4px var(--lw-pad) 0; padding-bottom: 6px; border-top: 1px solid var(--ink); }
+:is(.jf-lawn, .jf-mlawn) .lw-disclose[open] { padding-bottom: 20px; }
+:is(.jf-lawn, .jf-mlawn) .lw-disclose .lw-fields { margin-top: 6px; }
+
+/* Rates */
+:is(.jf-lawn, .jf-mlawn) .lw-mowers { display: grid; gap: 8px; }
+:is(.jf-lawn, .jf-mlawn) .lw-mowers-row { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+:is(.jf-lawn, .jf-mlawn) .lw-rates-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DESK COMPOSITION (.jf-lawn)
+   ════════════════════════════════════════════════════════════════════════════ */
+.jf-lawn .lw-start { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
+.jf-lawn .lw-start-main { display: grid; gap: 20px; min-width: 0; }
+.jf-lawn .lw-searchcard { padding: 28px 28px 26px; }
+.jf-lawn .lw-work { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 20px; align-items: start; }
+.jf-lawn .lw-stage { display: grid; gap: 20px; min-width: 0; container-type: inline-size; }
+.jf-lawn .lw-side { display: grid; gap: 20px; min-width: 0; }
+.jf-lawn .lw-side-foot { display: flex; }
+.jf-lawn .lw-pair { display: grid; gap: 20px; align-items: start; }
+@container (min-width: 900px) { .jf-lawn .lw-pair:has(> :nth-child(2)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 1180px) { .jf-lawn .lw-work { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1000px) { .jf-lawn .lw-start { grid-template-columns: minmax(0, 1fr); } }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PHONE (.jf-mlawn) — /mobile-lawn-estimator-v1
+   A fixed frame pinned by its edges (docs/design/mobile.md): the shared
+   MobileNav topbar, one scroller, and on the yard a foot with the season's
+   total and Create proposal in the thumb zone.
+   ════════════════════════════════════════════════════════════════════════════ */
+body:has(.jf-mlawn) { background-image: none; }
+body:has(.jf-mlawn)::before { content: none; }
+.jf-mlawn {
+  --lw-ctl: 46px;
+  --lw-tool: 44px;
+  --lw-field: 50px;
+  --lw-pad: 18px;
+  --mlw-pad-x: clamp(12px, 3.8vw, 20px);
+  --topbar-h: 64px;
+  /* The shared MobileNav reads its token contract off the page root (the values every handheld page gives it). */
+  --blueprint: var(--accent);
+  --border: 2px solid var(--ink);
+  --muted: #555555;
+  --muted-light: #888888;
+  --muted-faint: #b0aea8;
+  --sky: #4a9eff;
+  --danger: var(--rose);
+  --warning: var(--amber);
+  --sidebar-w: min(84vw, 288px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  position: fixed; inset: 0; z-index: 20;
+  width: 100%; height: 100%;
+  display: grid; grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr);
+  overflow: hidden; background: var(--paper);
+  line-height: 1.5; text-rendering: auto; font-feature-settings: "cv11", "ss01", "ss03";
+  font-size: 16px;
+}
+.jf-mlawn .mlw-scroll {
+  position: relative; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
+  background-color: var(--paper);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.jf-mlawn .mlw-content { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 18px var(--mlw-pad-x) 28px; }
+
+.jf-mlawn .lw-head { align-items: stretch; gap: 12px; }
+.jf-mlawn .lw-title { font-size: clamp(26px, 7.6vw, 34px); }
+.jf-mlawn .lw-title--entity { font-size: clamp(21px, 6vw, 26px); }
+.jf-mlawn .lw-title--entity svg.lucide { width: 22px; height: 22px; }
+.jf-mlawn .lw-sub { font-size: 15px; }
+.jf-mlawn .lw-head-acts { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.jf-mlawn .lw-head-acts .lw-saved-at { grid-column: 1 / -1; margin: 0; }
+.jf-mlawn .lw-btn { font-size: 13px; padding: 0 12px; }
+
+.jf-mlawn .lw-card-head { padding: 16px var(--lw-pad) 12px; }
+.jf-mlawn .lw-card-title { font-size: 15px; }
+.jf-mlawn .lw-card-body { padding: 16px var(--lw-pad) 20px; }
+.jf-mlawn .lw-input { font-size: 16px; }                     /* iOS zooms on anything smaller */
+.jf-mlawn .lw-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 420px) { .jf-mlawn .lw-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.jf-mlawn .lw-icon-btn { width: 44px; height: 44px; }
+.jf-mlawn .lw-tick { min-height: 44px; max-width: 100%; }
+
+/* Search */
+.jf-mlawn .lw-searchcard { padding: 20px var(--lw-pad) 20px; }
+.jf-mlawn .lw-search-row { flex-direction: column; gap: 10px; }
+.jf-mlawn .lw-search-in { height: 56px; font-size: 17px; padding: 0 14px; }
+.jf-mlawn .lw-search-go { min-height: 54px; width: 100%; }
+.jf-mlawn .lw-sources { flex-direction: column; gap: 6px; }
+.jf-mlawn .lw-saved-open { padding: 14px 0; min-height: 56px; }
+.jf-mlawn .lw-reading { max-width: none; }
+
+/* Map tools: the brushes slide sideways; the rest folds under "More map tools". */
+.jf-mlawn .lw-tools { gap: 12px; padding: 12px var(--lw-pad) 6px; }
+.jf-mlawn .lw-tgroup { width: 100%; }
+.jf-mlawn .lw-tgroup--paint { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.jf-mlawn .lw-paints { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(var(--lw-pad) * -1); padding: 0 var(--lw-pad) 2px; scroll-padding-inline: var(--lw-pad); }
+.jf-mlawn .lw-paints::-webkit-scrollbar { display: none; }
+.jf-mlawn .lw-tgroup--paint .lw-seg { justify-self: start; }
+.jf-mlawn .lw-seg-b { min-height: var(--lw-tool); padding: 0 14px; }
+.jf-mlawn .lw-hint { padding: 10px var(--lw-pad); }
+.jf-mlawn .lw-legend { gap: 6px 16px; padding: 12px var(--lw-pad); font-size: 13.5px; }
+.jf-mlawn .lw-mapcard > .lw-note { padding: 0 var(--lw-pad) 14px; }
+
+/* Measured */
+.jf-mlawn .lw-meas-top { padding: 18px var(--lw-pad) 4px; }
+.jf-mlawn .lw-meas-big { font-size: clamp(34px, 10vw, 44px); }
+.jf-mlawn .lw-meas-why { padding-inline: var(--lw-pad); }
+.jf-mlawn .lw-cells--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.jf-mlawn .lw-cells--4 .lw-cell:nth-child(3) { border-left: 0; }
+.jf-mlawn .lw-cells--4 .lw-cell:nth-child(n + 3) { border-top: var(--lw-rule); }
+.jf-mlawn .lw-cell { padding: 12px var(--lw-pad) 14px; }
+.jf-mlawn .lw-cells--3 .lw-cell { padding-inline: 12px; }
+.jf-mlawn .lw-cells--3 .lw-cell:first-child { padding-left: var(--lw-pad); }
+.jf-mlawn .lw-cell dd { font-size: 18px; }
+.jf-mlawn .lw-facts { grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 14px var(--lw-pad) 18px; }
+.jf-mlawn .lw-facts dd { margin-bottom: 10px; }
+.jf-mlawn .lw-months { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 16px var(--lw-pad) 20px; }
+.jf-mlawn .lw-month { padding: 8px 9px 9px; }
+
+/* Price and services */
+.jf-mlawn .lw-quote { padding: 18px var(--lw-pad) 20px; }
+.jf-mlawn .lw-quote-big { font-size: clamp(36px, 10vw, 46px); }
+.jf-mlawn .lw-freq { padding: 14px var(--lw-pad) 4px; }
+.jf-mlawn .lw-seg--fill { width: 100%; }
+.jf-mlawn .lw-seg--fill .lw-seg-b { flex: 1 1 0; }
+.jf-mlawn .lw-svcs { padding-inline: var(--lw-pad); }
+.jf-mlawn .lw-svc { padding: 14px 0; min-height: 56px; }
+.jf-mlawn .lw-disclose { margin-inline: var(--lw-pad); }
+
+/* The foot: the season's total + Create proposal, above the home indicator. */
+.jf-mlawn .mlw-foot {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px var(--mlw-pad-x) calc(12px + env(safe-area-inset-bottom, 0px));
+  background: #fff; border-top: 2px solid var(--ink);
+}
+.jf-mlawn .mlw-foot-sum { flex: 1 1 auto; min-width: 0; display: grid; line-height: 1.15; }
+.jf-mlawn .mlw-foot-l { font-size: 11.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+.jf-mlawn .mlw-foot-v { font-size: 22px; font-weight: 900; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.jf-mlawn .mlw-foot-m { font-size: 13px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+.jf-mlawn .mlw-foot .lw-btn--wide { width: auto; flex: 0 0 auto; min-height: 50px; padding: 0 clamp(12px, 4vw, 18px); font-size: clamp(12.5px, 3.6vw, 14px); }
+.jf-mlawn .mlw-foot .lw-done { flex: 0 1 auto; font-size: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.jf-lawn, .jf-mlawn) *, :is(.jf-lawn, .jf-mlawn) *::before, :is(.jf-lawn, .jf-mlawn) *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

@@ -11,6 +11,7 @@ import { DEFAULT_OPTIONS, GROUPS, benchmarkFor, benchmarkTone, estimateTotal, li
 import { KIND_LABEL } from "@/lib/design/rooms";
 import { roomFinishes } from "@/lib/design/roomKinds";
 import type { DesignProduct } from "@/lib/design/inventory";
+import { ClientLinkCard } from "./client-link-card";
 import { convertDesignToProposal, designLocation, findDesignClients, readDesignBook, saveDesignPrice, type DesignClient, type DesignLocation } from "@/actions/designStudio";
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n >= 1000 ? 0 : 2 });
@@ -25,9 +26,11 @@ type Props = {
   onPatch: (fn: (d: DesignDoc) => void) => void;
   /** The shop's products: a piece that is one is supplied at its price. */
   products?: readonly DesignProduct[];
+  /** Saves the design and gives its id (a client's link opens the saved design). */
+  onSave?: () => Promise<string | null>;
 };
 
-export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPatch, products = [] }: Props) {
+export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPatch, products = [], onSave }: Props) {
   const [book, setBook] = React.useState<Record<string, number>>({});
   const [found, setFound] = React.useState<{ address: string; loc: DesignLocation } | null>(null);
   const [made, setMade] = React.useState<{ id: string } | null>(null);
@@ -275,6 +278,7 @@ export function EstimateSheet({ doc, focus, designId, market, shopAddress, onPat
             </button>
           </div>
         </div>
+        {onSave ? <ClientLinkCard key={focus} doc={doc} focus={focus} designId={designId} onSave={onSave} onPatch={onPatch} factor={loc.factor} book={book} opts={opts} products={products} client={client} title={doc.estimate?.title ?? ""} address={address.trim() || client?.address || null} /> : null}
       </div>
     </section>
   );

@@ -24,3 +24,44 @@
 .inv { font-weight: 700; color: #1854a0; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .old td { opacity: 0.55; }
+
+/* Waiting for you (2026-10-20): the requests to approve, the switch, where each reader stands. */
+.sumWait { color: #a35a00; }
+.switchRow { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1.5px solid rgba(10, 10, 10, 0.18); cursor: pointer; }
+.switchRow input { width: 18px; height: 18px; margin-top: 1px; accent-color: #1854a0; flex: none; }
+.switchRow b { display: block; font-size: 13.5px; }
+.switchRow em { display: block; font-style: normal; font-size: 12.5px; color: var(--muted, #6b6760); }
+.requests { display: grid; gap: 10px; }
+.reqTitle { margin: 0; font-size: 12px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: #a35a00; }
+.request { display: grid; gap: 8px; padding: 12px 14px; border: 2px solid #c27a12; background: rgba(194, 122, 18, 0.06); min-width: 0; transition: box-shadow 0.3s; }
+.request[data-focused="true"] { box-shadow: 0 0 0 4px rgba(24, 84, 160, 0.35); }
+.rTop { display: flex; align-items: baseline; gap: 6px 10px; flex-wrap: wrap; }
+.rName { font-size: 16px; }
+.rCo { font-size: 14px; font-weight: 600; }
+.chipQuiet { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border: 1.5px solid rgba(10, 10, 10, 0.3); color: var(--muted, #6b6760); }
+.rContact { font-size: 13px; overflow-wrap: anywhere; }
+.rContact a, .look a { color: #1854a0; }
+.hints { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.hints li { font-size: 12px; line-height: 1.3; padding: 3px 8px; border: 1px solid; }
+.hGood { color: #1f6b3a; border-color: rgba(31, 107, 58, 0.4); background: rgba(31, 107, 58, 0.06); }
+.hWarn { color: #8a4b00; border-color: rgba(163, 90, 0, 0.45); background: rgba(194, 122, 18, 0.08); }
+.hInfo { color: var(--muted, #6b6760); border-color: rgba(10, 10, 10, 0.18); }
+.rActs { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.look { font-size: 12.5px; color: var(--muted, #6b6760); }
+.decide { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.yes, .no { min-height: 36px; padding: 0 14px; font: 800 12px var(--font-sans, Inter, system-ui, sans-serif); letter-spacing: 0.08em; text-transform: uppercase; border: 2px solid var(--ink, #0a0a0a); border-radius: 2px; cursor: pointer; }
+.yes { background: var(--ink, #0a0a0a); color: #fff; }
+.yes:hover:not(:disabled) { background: #1f6b3a; border-color: #1f6b3a; }
+.no { background: #fff; color: var(--ink, #0a0a0a); }
+.no:hover:not(:disabled) { border-color: #a83232; color: #a83232; }
+.yes:disabled, .no:disabled { opacity: 0.5; cursor: default; }
+.err { font-size: 12px; color: #a83232; }
+.stWait, .stYes, .stNo { display: inline-block; font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 6px; border: 1.5px solid; }
+.stWait { color: #a35a00; border-color: #c27a12; }
+.stYes { color: #1f6b3a; border-color: rgba(31, 107, 58, 0.5); }
+.stNo { color: #a83232; border-color: rgba(168, 50, 50, 0.5); }
+@media (max-width: 560px) {
+  .rActs { flex-direction: column; align-items: stretch; }
+  .yes, .no { min-height: 44px; flex: 1; }
+  .decide { display: flex; }
+}

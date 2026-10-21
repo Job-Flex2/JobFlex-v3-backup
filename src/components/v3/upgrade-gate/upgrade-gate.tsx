@@ -28,7 +28,7 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { addCustomPages, previewCustomPagesChange } from "@/actions/billing";
 import { toast } from "@/components/ui/Toast";
-import { CUSTOM_PAGE_CENTS, CUSTOM_PAGES, PLAN_ENDED_MARK, pageForPath } from "@/lib/customPlan";
+import { CUSTOM_PAGE_CENTS, CUSTOM_PAGES, DECK_PLAN_MARK, PLAN_ENDED_MARK, pageForPath } from "@/lib/customPlan";
 import "./upgrade-gate.css";
 import { BillingRecovery } from "../payment-ribbon/billing-recovery";
 
@@ -59,7 +59,10 @@ export function UpgradeGate({
   // card-less trial run out (lib/planStatus) — every add-on is closed for that
   // reason, and the way back is a plan, not one page.
   const ended = Boolean(locked?.includes(PLAN_ENDED_MARK));
-  const canAdd = Boolean(page && isOwner && locked && !ended);
+  // The Deck Studio plan (owner, 2026-10-20): its pages are fixed — a closed one comes with a bigger plan, never
+  // as a $10 page.
+  const deckPlan = Boolean(locked?.includes(DECK_PLAN_MARK));
+  const canAdd = Boolean(page && isOwner && locked && !ended && !deckPlan);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -111,21 +114,23 @@ export function UpgradeGate({
   return (
     <div className="jf-upgate" data-nest="">
       <div className="jf-upgate-card">
-        <div className="jf-upgate-kick">Custom plan · not included</div>
+        <div className="jf-upgate-kick">{deckPlan ? "Deck Studio plan · not included" : "Custom plan · not included"}</div>
         <svg className="jf-upgate-lock" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="11" width="16" height="10" rx="1.5" />
           <path d="M8 11V7a4 4 0 0 1 8 0v4" />
         </svg>
         <h1 className="jf-upgate-h">{label} isn&apos;t in your plan.</h1>
         <p className="jf-upgate-p">
-          {page ? (
+          {deckPlan ? (
+            "Your Deck Studio plan has the Deck estimator and the office. Move to a bigger plan to open this page."
+          ) : page ? (
             <>
               <b>{page.label}</b> ({page.note.toLowerCase()}) is a {money(CUSTOM_PAGE_CENTS)}/mo add-on to your custom plan.
             </>
           ) : (
             "Your custom plan doesn't include this page."
           )}{" "}
-          {page && !isOwner ? "Ask the account owner to add it." : null}
+          {page && !isOwner ? (deckPlan ? "Ask the account owner to change the plan." : "Ask the account owner to add it.") : null}
         </p>
         {canAdd ? (
           <p className="jf-upgate-note" aria-live="polite">

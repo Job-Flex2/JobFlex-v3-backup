@@ -1,5 +1,5 @@
 // THE DECK STUDIO ADD-ON (owner, 2026-10-19: "if existing users didn't purchase Deck Studio, they can't use it. Only
-// preview it. And option to add it to the plan." — then: preview = design without saving, $49/month added to the
+// preview it. And option to add it to the plan." — then: preview = design without saving, $45/month added to the
 // plan, the whole studio during the free trial; owner-locked 2026-10-20 in CLAUDE.md: no plan carries it, the trial
 // adds nothing to Stripe). Pure: the price, the Stripe line's kind, what a stored record says.
 //
@@ -9,8 +9,8 @@
 
 import { CUSTOM_YEAR_MULTIPLIER } from "@/lib/customPlan";
 
-/** $49 a month. */
-export const DECK_ADDON_CENTS = 4900;
+/** $45 a month. */
+export const DECK_ADDON_CENTS = 4500;
 /** The Stripe price's `jfKind` (lib/stripePriceCache) — how the line is told from the plan's own. */
 export const DECK_ADDON_KIND = "deck-addon";
 export const DECK_ADDON_NAME = "JobFlex Deck Studio add-on";
@@ -22,12 +22,12 @@ export function deckAddonCents(interval: AddonInterval = "MONTH"): number {
   return interval === "YEAR" ? DECK_ADDON_CENTS * CUSTOM_YEAR_MULTIPLIER : DECK_ADDON_CENTS;
 }
 
-/** "$49/month" · "$490/year". */
+/** "$45/month" · "$450/year". */
 export function deckAddonPriceWords(interval: AddonInterval = "MONTH"): string {
   return `$${Math.round(deckAddonCents(interval) / 100)}/${interval === "YEAR" ? "year" : "month"}`;
 }
 
-/** "$49/mo" · "$490/yr" — on a button. */
+/** "$45/mo" · "$450/yr" — on a button. */
 export function deckAddonShortWords(interval: AddonInterval = "MONTH"): string {
   return `$${Math.round(deckAddonCents(interval) / 100)}/${interval === "YEAR" ? "yr" : "mo"}`;
 }

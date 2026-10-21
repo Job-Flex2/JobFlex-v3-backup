@@ -104,7 +104,7 @@ const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(
  *   pages          — the custom plan's pages, or null on a catalog plan (every page open);
  *   planProposals  — the plan's own monthly proposal cap (null = none);
  *   freeProposals  — the Free plan's (null = none, then nothing is lost there);
- *   deckAddon      — the add-on's price words ("$49/mo"), or null when it is not on the plan.
+ *   deckAddon      — the add-on's price words ("$45/mo"), or null when it is not on the plan.
  */
 export function freePlanLosses(opts: { pages: readonly string[] | null; planProposals: number | null; freeProposals: number | null; deckAddon?: string | null }): FreeLoss[] {
   const has = (id: string) => opts.pages === null || opts.pages.includes(id);

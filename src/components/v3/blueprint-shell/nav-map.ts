@@ -225,6 +225,7 @@ const SURFACE_ALIASES: Record<string, string> = {
   "/mobile-company-v2": "/dashboard/company",
   "/mobile-financials-v2": "/dashboard/financials",
   "/mobile-advanced-ai-v2": "/dashboard/advanced-ai",
+  "/mobile-blueprint-estimator-v1": "/dashboard/blueprint-estimator",
   "/mobile-roof-estimator-v2": "/dashboard/roof-estimator",
   "/mobile-fence-estimator-v2": "/dashboard/fence-estimator",
   "/mobile-phone-v2": "/dashboard/phone",

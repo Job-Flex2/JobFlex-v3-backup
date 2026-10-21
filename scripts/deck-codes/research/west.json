@@ -1,0 +1,1771 @@
+{
+  "region": "west",
+  "researched": "2026-10-20",
+  "states": [
+    {
+      "state": "AZ",
+      "edition": "No statewide residential code — each city and county adopts the IRC (City of Phoenix: 2024 IRC since Aug 1, 2025; Pima County: 2024 IRC since Jan 1, 2026; unincorporated Maricopa County: 2018 IRC)",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Our examples are outdated. Phoenix has enforced the 2024 Phoenix Building Construction Code (2024 IRC) since Aug 1, 2025, not the 2018 IRC. Pima County (around Tucson) moved to the 2024 IRC on Jan 1, 2026. Unincorporated Maricopa County is still on the 2018 IRC; a 2024 package is in draft. Tucson, Mesa and Scottsdale city codes were not checked. The local() default basis of 2021 matches none of the jurisdictions checked.",
+      "notes": [
+        "Codes are adopted locally in Arizona, so the edition depends on the city or county that issues the permit.",
+        "The guard, riser and tread figures are the IRC model values; a local amendment can change them."
+      ],
+      "sources": [
+        {
+          "title": "ICC adoptions map — Arizona (\"Codes are adopted locally in Arizona\")",
+          "url": "https://www.iccsafe.org/advocacy/adoptions-map/arizona/"
+        },
+        {
+          "title": "City of Phoenix — Building Code (2024 PBCC approved June 18, 2025, effective Aug 1, 2025; includes the 2024 IRC)",
+          "url": "https://www.phoenix.gov/administration/departments/pdd/tools-resources/codes-ordinance/building-code.html"
+        },
+        {
+          "title": "Pima County Ordinance 2025-15 Exhibit B — 2024 IRC amendments, effective Jan 1, 2026",
+          "url": "https://www.pima.gov/asset/2f62bbcc-b366-416d-b40e-848de7a0e479"
+        },
+        {
+          "title": "Maricopa County Local Additions & Addenda (2018 I-Codes)",
+          "url": "https://www.maricopa.gov/DocumentCenter/View/5808/Local-Additions-and-Addenda-PDF?bidId="
+        },
+        {
+          "title": "WAC 51-51-0312 — R312.1.2 text of the 2021 IRC as adopted in Washington (guards not less than 36 in.)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0312"
+        },
+        {
+          "title": "UpCodes — 2018 IRC (Hawaii) Chapter 3, R311.7.5.1 riser not more than 7¾ in., R311.7.5.2 tread not less than 10 in.",
+          "url": "https://up.codes/viewer/hawaii/irc-2018/chapter/3/building-planning"
+        }
+      ]
+    },
+    {
+      "state": "UT",
+      "edition": "Utah State Construction Code — 2021 IRC with Utah statewide amendments (Utah Code 15A-2-103 and 15A-3-202)",
+      "basis_irc": 2021,
+      "since": 2023,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8,
+      "tread_min_in": 9,
+      "differs_from_app": "",
+      "notes": [
+        "Risers may be up to 8 in. and treads at least 9 in. deep (15A-3-202 replaces IRC R311.7.5.1–R311.7.5.3).",
+        "Decks not more than 30 in. above grade at any point, needing no guards and not serving the required exit door, need no permit (Utah amendment to IRC R105.2 item 10).",
+        "Ground snow comes from Utah's own table (e.g. Salt Lake City 28 psf at 4,239 ft, Provo 31 psf at 4,541 ft, Farmington 35 psf at 4,318 ft) or, elsewhere, the Utah Snow Load Study (R301.6 amendment).",
+        "The 2021 IRC took effect July 1, 2023, and the version of 15A-2-103 effective Jan 1, 2027 still names the 2021 IRC — no 2024 IRC adoption is scheduled.",
+        "Utah does not amend the IRC guard height (R312.1.2); it deletes only R312.2, window fall protection."
+      ],
+      "sources": [
+        {
+          "title": "Utah Code 15A-2-103 (current version, effective 7/1/2026): 2021 edition of the IRC",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter2/C15A-2-S103_2026050620260701.html"
+        },
+        {
+          "title": "Utah Code 15A-2-103 (version effective 1/1/2027): still the 2021 IRC",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter2/C15A-2-S103_2026050620270101.html"
+        },
+        {
+          "title": "Utah Code 15A-2-103 (version effective 7/1/2023): first names the 2021 IRC",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter2/C15A-2-S103_2023050320230701.html"
+        },
+        {
+          "title": "Utah Code 15A-3-202 — Amendments to Chapters 1 through 5 of IRC (stairs 8/9, deck exemption, snow table)",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter3/C15A-3-S202_2026050620260701.html"
+        },
+        {
+          "title": "WAC 51-51-0312 — R312.1.2 text of the 2021 IRC as adopted in Washington (guards not less than 36 in.)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0312"
+        }
+      ]
+    },
+    {
+      "state": "NV",
+      "edition": "No statewide residential code — counties and cities adopt the IRC with regional amendments (Clark County: 2024 IRC with Southern Nevada amendments since Jan 11, 2026; Washoe County: 2024 IRC with Northern Nevada amendments since July 1, 2025; Lyon County: 2024 IRC since Jan 1, 2026)",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Our row is outdated. Clark County moved to the 2024 IRC with the Southern Nevada amendments (effective Jan 11, 2026). Washoe County moved to the 2024 IRC with the Northern Nevada amendments (effective July 1, 2025, required for submittals from Jan 1, 2026). Lyon County moved to the 2024 IRC on Jan 1, 2026. The row's '2018 IRC' for Clark and Washoe is wrong, and the local() default basis of 2021 should be 2024 for these counties.",
+      "notes": [
+        "Nevada adopts codes statewide only for state-owned or state-funded buildings; for houses, 'blended' codes are adopted locally after regional committees draft amendments.",
+        "The guard, riser and tread figures are the IRC model values; check the regional amendments the county adopted."
+      ],
+      "sources": [
+        {
+          "title": "ICC adoptions map — Nevada",
+          "url": "https://www.iccsafe.org/advocacy/adoptions-map/nevada/"
+        },
+        {
+          "title": "Clark County — 2024 IRC Southern Nevada Amendments (Clark County amended)",
+          "url": "https://www.clarkcountynv.gov/adobe/assets/urn:aaid:aem:1bb5e7a7-96e5-4940-82c6-d6903f7c5695/original/as/2024-IRC-Southern-NV-Amendments---Clark-County-Amended.pdf"
+        },
+        {
+          "title": "Washoe County Building — adopted building codes",
+          "url": "https://www.washoecounty.gov/building/getting_started/building_codes.php"
+        },
+        {
+          "title": "WAC 51-51-0312 — R312.1.2 text of the 2021 IRC as adopted in Washington (guards not less than 36 in.)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0312"
+        },
+        {
+          "title": "UpCodes — 2018 IRC (Hawaii) Chapter 3, R311.7.5.1 riser not more than 7¾ in., R311.7.5.2 tread not less than 10 in.",
+          "url": "https://up.codes/viewer/hawaii/irc-2018/chapter/3/building-planning"
+        }
+      ]
+    },
+    {
+      "state": "ID",
+      "edition": "Idaho Residential Code — 2018 IRC with Idaho Building Code Board amendments (IDAPA 24.39.30, Section 600.03)",
+      "basis_irc": 2018,
+      "since": 2021,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "",
+      "notes": [
+        "The rule as published in June 2026 (with a 7-1-26 fee change) still adopts the 2018 IRC; Ada, Canyon and Kootenai counties all enforce it.",
+        "Idaho's amendments do not touch stairs, guards or decks, so IRC 2018 R311.7.5, R312.1.2 and R507 apply as written.",
+        "A new edition takes effect on January 1 of the year after the board adopts it (Idaho Code 39-4109(4)), and the legislature must approve the rule.",
+        "Local amendments may not be less strict than the state code."
+      ],
+      "sources": [
+        {
+          "title": "IDAPA 24.39.30 — Rules of Building Safety (current rule, PDF dated June 2026): International Residential Code, 2018 Edition",
+          "url": "https://adminrules.idaho.gov/rules/current/24/243930.pdf"
+        },
+        {
+          "title": "Idaho Code 39-4109 — Application of codes",
+          "url": "https://legislature.idaho.gov/statutesrules/idstat/title39/t39ch41/sect39-4109/"
+        },
+        {
+          "title": "ICC adoptions map — Idaho (Division of Building Safety adopted codes, effective January 1, 2021)",
+          "url": "https://www.iccsafe.org/advocacy/adoptions-map/idaho/"
+        },
+        {
+          "title": "WAC 51-51-0312 — R312.1.2 text of the 2021 IRC as adopted in Washington (guards not less than 36 in.)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0312"
+        },
+        {
+          "title": "UpCodes — 2018 IRC (Hawaii) Chapter 3, R311.7.5.1 riser not more than 7¾ in., R311.7.5.2 tread not less than 10 in.",
+          "url": "https://up.codes/viewer/hawaii/irc-2018/chapter/3/building-planning"
+        }
+      ]
+    },
+    {
+      "state": "WA",
+      "edition": "2021 Washington State Residential Code — WAC 51-51 (2021 IRC with Washington amendments)",
+      "basis_irc": 2021,
+      "since": 2024,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "The edition, year and figures match. Our seismic note overstates the rule: the King County (MyBuildingPermit) and Pierce County deck guides require knee braces only on posts taller than 4 ft, not bracing on every deck.",
+      "notes": [
+        "In force since March 15, 2024 (WAC 51-51-008); the 2024 WSRC on the 2024 IRC is targeted for adoption Oct 16, 2026 and takes effect May 3, 2027.",
+        "Washington does not adopt IRC Tables R507.5(1)–(4); deck beams are sized from Washington's own Table R507.5 (60 psf live or 70 psf ground snow), per WAC 51-51-0507.",
+        "Washington does not amend riser, tread or guard height (WAC 51-51-0311 and -0312), so the IRC's 7¾ in., 10 in. and 36 in. apply.",
+        "Each county or city sets its own Table R301.2(1) climatic and geographic design criteria (WAC 51-51-0301).",
+        "The draft 2024 WSRC adds a Washington special-wind-region map, Figure R301.2(2.1), with a 120 mph ultimate design wind speed."
+      ],
+      "sources": [
+        {
+          "title": "WAC 51-51 (full chapter) — 51-51-003 adopts the 2021 IRC; 51-51-008 effective March 15, 2024",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51&full=true"
+        },
+        {
+          "title": "WAC 51-51-0312 — Guards (R312.1.2: not less than 36 in.)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0312"
+        },
+        {
+          "title": "WAC 51-51-0311 — Means of egress (no riser/tread amendment)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0311"
+        },
+        {
+          "title": "WAC 51-51-0507 — Decks (Tables R507.5(1)–(4) not adopted)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0507"
+        },
+        {
+          "title": "Washington State Building Code Council — 2024 codes: final adoption targeted Oct 16, 2026, effective May 3, 2027",
+          "url": "https://sbcc.wa.gov/"
+        },
+        {
+          "title": "WSR 26-10-071 — proposed rule adopting the 2024 IRC (WAC 51-51)",
+          "url": "https://lawfilesext.leg.wa.gov/law/wsr/2026/10/26-10-071.htm"
+        }
+      ]
+    },
+    {
+      "state": "OR",
+      "edition": "2026 Oregon Residential Specialty Code (2024 IRC with Oregon amendments), effective Oct 1, 2026 — the 2023 ORSC (2021 IRC) may still be used until April 1, 2027",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8,
+      "tread_min_in": 9,
+      "differs_from_app": "Stairs are wrong: the ORSC allows risers up to 8 in. on treads at least 9 in. deep (2023 ORSC R311.7.5.1/R311.7.5.2, and the state's permit-ready deck plan), not the IRC's 7¾/10. The edition is outdated: the 2026 ORSC on the 2024 IRC took effect Oct 1, 2026. Until April 1, 2027 an applicant may use either the 2023 or the 2026 ORSC; after that only the 2026 edition is allowed. No source was found for our note about the 'wet-season soil figure' for footings west of the Cascades. The county pages give 1,500 psf presumptive soil bearing and a 12 in. frost depth at low elevation.",
+      "notes": [
+        "The stair and guard figures (8/9 and 36 in.) are verified in the 2023 ORSC; the 2026 ORSC chapters 2–44 were not yet published to check, so confirm them for 2026-ORSC permits.",
+        "Decks and porches whose walking surface is not more than 30 in. above grade, measured within 3 ft, are exempt from permit, whether attached or detached (ORSC R105.2).",
+        "Oregon's site design values (ground snow, wind, seismic design category, frost line depth, weathering, decay) come from the Building Codes Division's Oregon Design Criteria Hub map, not a single state table.",
+        "The Building Codes Division publishes a permit-ready deck plan (2023 ORSC) for single-level attached wood decks. Its limits are seismic categories up to D2, ground snow under 70 psf and wind under 120 mph, and it uses 36-in. guards, 8-in. maximum risers and 9-in. minimum treads."
+      ],
+      "sources": [
+        {
+          "title": "Oregon BCD — Adopted codes (2023 ORSC mandatory April 1, 2024; 2026 ORSC effective Oct 1, 2026)",
+          "url": "https://www.oregon.gov/bcd/codes-stand/Pages/adopted-codes.aspx"
+        },
+        {
+          "title": "Oregon BCD — 2026 ORSC adoption (six-month phase-in, mandatory April 1, 2027)",
+          "url": "https://www.oregon.gov/bcd/codes-stand/Pages/orsc-adoption.aspx"
+        },
+        {
+          "title": "2026 ORSC Chapter 1 (based on the 2024 IRC; R105.2 deck exemptions)",
+          "url": "https://www.oregon.gov/bcd/codes-stand/Documents/26orsc-ch01.pdf"
+        },
+        {
+          "title": "Oregon BCD permit-ready deck plan (2023 ORSC): 8 in. max riser, 9 in. min tread, 36 in. guard",
+          "url": "https://www.oregon.gov/bcd/permit-services/Documents/permit-ready-deck.pdf"
+        },
+        {
+          "title": "UpCodes — 2023 ORSC Chapter 3 (R311.7.5.1 riser not more than 8 in.; R311.7.5.2 tread not less than 9 in.)",
+          "url": "https://up.codes/viewer/oregon/irc-2021/chapter/3/building-planning"
+        },
+        {
+          "title": "Oregon BCD — Oregon Design Criteria Hub",
+          "url": "https://www.oregon.gov/bcd/codes-stand/Pages/design-criteria.aspx"
+        }
+      ]
+    },
+    {
+      "state": "CA",
+      "edition": "2025 California Residential Code — Title 24, Part 2.5 (2024 IRC with California amendments)",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 42,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "The edition is outdated. Our row names the 2022 CRC on the 2021 IRC (since 2023), but the 2025 CRC on the 2024 IRC has been in force since Jan 1, 2026. Our note's citation is stale: the 42-in. guard is now CRC R321.1.2 (was R312.1.2), and stairs are R318.7.5 (was R311.7.5). The wildfire note's 'Chapter 7A' now sits in Part 7, the California Wildland-Urban Interface Code, which CRC R337 points to. The figures themselves are right: 42-in. guards and 7¾/10 stairs.",
+      "notes": [
+        "Guards must be at least 42 in. high (CRC R321.1.2, a California amendment); guards on the open sides of stairs may be 34 in.",
+        "Wildfire rules for deck walking surfaces in Fire Hazard Severity Zones and WUI areas are now in Part 7, the 2025 California Wildland-Urban Interface Code (CRC R337 points there); counties amend it.",
+        "California carries forward its amendment R304.1.3, on ventilation beneath balconies and elevated walking surfaces, into the 2025 CRC.",
+        "Each county or city adopts the 2025 CRC with its own amendments and Table R301.2 values."
+      ],
+      "sources": [
+        {
+          "title": "HCD Initial Statement of Reasons, 2025 California Residential Code (\"based on the 2024 IRC ... effective on January 1, 2026\")",
+          "url": "https://www.dgs.ca.gov/-/media/Divisions/BSC/03-Rulemaking/2024-Triennial-Cycle/CAC/2024-07-09-BFO/HCD0724ISORPT25.pdf"
+        },
+        {
+          "title": "ICC — 2025 California Residential Code, Title 24 Part 2.5 (based on the 2024 IRC; effective January 1, 2026)",
+          "url": "https://shop.iccsafe.org/2025-california-residential-code-title-24-part-2-5.html"
+        },
+        {
+          "title": "2025 CRC R321 Guards (R321.1.2: 42 in., California amendment) — GoCodebook",
+          "url": "https://gocodebook.com/library/us/ca/ca-residential-code/chapter-3-building-planning/section-r321-guards-and-window-fall-protection"
+        },
+        {
+          "title": "2025 CRC R318 Means of egress (R318.7.5.1 riser 7¾ in.; R318.7.5.2 tread 10 in.) — GoCodebook",
+          "url": "https://gocodebook.com/library/us/ca/ca-residential-code/chapter-3-building-planning/section-r318-means-of-egress"
+        },
+        {
+          "title": "2025 CRC R337 — points to Part 7, California Wildland-Urban Interface Code — GoCodebook",
+          "url": "https://gocodebook.com/library/us/ca/ca-residential-code/chapter-3-building-planning/section-r337-materials-and-construction-methods-for-exterior-wildfire-exposure"
+        },
+        {
+          "title": "County of San Diego PDS 075 Guards and Handrails (42 in. guards)",
+          "url": "https://www.sandiegocounty.gov/pds/docs/pds075.pdf"
+        }
+      ]
+    },
+    {
+      "state": "AK",
+      "edition": "No statewide residential code for private one- and two-family dwellings (State Fire Marshal plan review exempts triplexes and smaller) — cities adopt the IRC locally: Municipality of Anchorage 2024 IRC with AMC 23.85 amendments (since May 2026); City of Fairbanks 2018 IRC",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Our row is wrong on two points. First, Anchorage enforces the 2024 IRC, not the 2021: AO 2026-33 (passed Apr 14, 2026, effective 30 days later) adopts the 2024 IRC with AMC 23.85 amendments. Second, the frost note understates deck footings. Anchorage's Table R403.1 asks 120 in. for cold (unheated) concrete piers and exterior isolated footings, 60 in. in non-frost-susceptible soil; 42 in. is only the warm (heated) perimeter footing. Attached decks not more than 72 in. above grade may bear directly on the ground unless a door swings out onto them. The City of Fairbanks uses 42-in. footings on the 2018 IRC. The local() default basis of 2021 matches neither city.",
+      "notes": [
+        "The State Fire Marshal plan review exempts residential housing that is a triplex or smaller.",
+        "Alaska Housing Finance Corporation applies its Alaska amendments to the IRC/IECC only to homes seeking AHFC financing.",
+        "The Fairbanks North Star Borough has no building code; building permits exist only inside the cities of Fairbanks and North Pole.",
+        "No Matanuska-Susitna Borough building code was found; the borough, Palmer and Wasilla code sites could not be read, so this is unconfirmed.",
+        "Anchorage is Seismic Design Category D2 and Fairbanks D1 (local Table R301.2 values)."
+      ],
+      "sources": [
+        {
+          "title": "Alaska DPS, Division of Fire and Life Safety — Plan Review (\"Residential housing that is three-plex or smaller is exempt\")",
+          "url": "https://dps.alaska.gov/fire/plan-review/"
+        },
+        {
+          "title": "ICC adoptions map — Alaska (state codes administered by DPS or AHFC; AHFC IRC amendments affect financing eligibility)",
+          "url": "https://www.iccsafe.org/advocacy/adoptions-map/alaska/"
+        },
+        {
+          "title": "Anchorage AO 2026-33, As Amended (AMC 23.05.010: 2024 IRC; 23.85 Table R403.1 footing depths)",
+          "url": "https://www.muni.org/Departments/OCPD/development-services/codes-handouts/Code%20Archive%202018/AO%202026-033,%20As%20Amended.pdf"
+        },
+        {
+          "title": "City of Fairbanks Ordinance 6153 (2018 IRC with local amendments)",
+          "url": "https://files.aptuitivcdn.com/K9gxWNkmZ2-1856/docs/ordinances/ord_6153_amend_fgc_chap.10_art.xiii_international_bldg_code_by_adopting_2018_international_bldg_code_with_local_amendments.pdf.pdf"
+        },
+        {
+          "title": "Fairbanks North Star Borough FAQ (no borough building code)",
+          "url": "https://www.fnsb.gov/FAQ.aspx"
+        },
+        {
+          "title": "WAC 51-51-0312 — R312.1.2 text of the 2021 IRC as adopted in Washington (guards not less than 36 in.)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0312"
+        },
+        {
+          "title": "UpCodes — 2018 IRC (Hawaii) Chapter 3, R311.7.5.1 riser not more than 7¾ in., R311.7.5.2 tread not less than 10 in.",
+          "url": "https://up.codes/viewer/hawaii/irc-2018/chapter/3/building-planning"
+        }
+      ]
+    },
+    {
+      "state": "HI",
+      "edition": "Hawaii State Residential Code — 2018 IRC with State amendments (adopted by the State Building Code Council Nov 17, 2020; each county adopts it with its own amendments)",
+      "basis_irc": 2018,
+      "since": 2020,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "'since' should be 2020, not null: the State Residential Code (2018 IRC) took effect Nov 17, 2020. The 2018 basis is still right. Honolulu enforces the 2018 IRC with Ord. 24-15 (effective Aug 9, 2024), and Hawaii County the 2018 IRC under HCC Chapter 5B (Ord. 21-61). Maui's residential edition was not confirmed. No county was found on the 2021 or 2024 IRC.",
+      "notes": [
+        "The state code took effect Nov 17, 2020; each county had until Nov 17, 2022 to adopt it with amendments, after which it applied as an interim county code.",
+        "Termite protection takes one of chemical termiticide, baiting or a physical barrier, plus one of pressure-treated wood, cold-formed steel or naturally durable wood (state amendment R318.1).",
+        "Raised floor systems on post or pier foundations must be designed per accepted engineering practice and the State Building Code (state amendment R401.5).",
+        "Hawaii replaces the IRC wind maps with its own ultimate wind speed maps and adds a topographic speed-up method (amendments R301.2(5), R301.2.1.5.1).",
+        "A Governor's emergency proclamation suspends the Council's power to update the state codes, but counties may still update their own county codes.",
+        "Honolulu and Hawaii County require at least 6 in. of ground clearance for every wood member of an open slat deck.",
+        "Hawaii County requires raised floors on post or pier foundations to be designed under its Chapter 5A building code, not the IRC prescriptive rules."
+      ],
+      "sources": [
+        {
+          "title": "Hawaii State Residential Code — 2018 IRC with amendments (SBCC adopted Nov 17, 2020)",
+          "url": "https://ags.hawaii.gov/bcc/files/2021/09/2018StateResidentialCode_20201117rev1.pdf"
+        },
+        {
+          "title": "Hawaii State Building Code Council — Building code rules (State Residential Code, 2018 IRC; emergency proclamation note)",
+          "url": "https://ags.hawaii.gov/bcc/building-code-rules/"
+        },
+        {
+          "title": "Honolulu DPP — building permits / codes currently in effect",
+          "url": "https://www.honolulu.gov/dpp/permitting/building-permits-home/"
+        },
+        {
+          "title": "WAC 51-51-0312 — R312.1.2 text of the 2021 IRC as adopted in Washington (guards not less than 36 in.)",
+          "url": "https://app.leg.wa.gov/wac/default.aspx?cite=51-51-0312"
+        },
+        {
+          "title": "UpCodes — 2018 IRC (Hawaii) Chapter 3, R311.7.5.1 riser not more than 7¾ in., R311.7.5.2 tread not less than 10 in.",
+          "url": "https://up.codes/viewer/hawaii/irc-2018/chapter/3/building-planning"
+        }
+      ]
+    }
+  ],
+  "counties": [
+    {
+      "state": "AZ",
+      "county": "Maricopa County",
+      "fips": "04013",
+      "population_2020": 4420568,
+      "jurisdiction": "Maricopa County Planning & Development Department (unincorporated county) - 'Local Additions & Addenda' TA2022001, Tab G (IRC), Table R301.2.1",
+      "edition": "2018 IRC with Maricopa County Local Additions & Addenda (Board of Supervisors adopted the 2018 I-Codes on 17 Aug 2022). 2024 I-Code / 2023 NEC amendments were still a DRAFT before the Building Code Advisory Board on 11 Aug and 15 Sep 2026; no Board of Supervisors adoption found as of Oct 2026.",
+      "frost_depth_in": 0,
+      "ground_snow_psf": 0,
+      "wind_mph": 115,
+      "wind_basis": "Windspeed (mph) 115 per county Table R301.2.1 (2018 IRC addenda); topographic effects NO, special wind region NO, windborne debris zone NO; exposure not stated. The 2024 draft lists 105 mph.",
+      "seismic_sdc": "B",
+      "weathering": "Negligible",
+      "termite": "Moderate to heavy",
+      "deck_notes": [
+        "The current 2018 addenda replace IRC Chapter 1 with IBC Chapter 1 as amended, and that Section 105.2 exemption list has no deck exemption.",
+        "The 2024 draft (BCAB 15 Sep 2026) adds an exemption for decks of 200 sq ft or less, no more than 30 in. above grade at any point, not attached to a dwelling and not serving the required exit door (R318.4).",
+        "The county Construction Plan Checklist asks for framing plans, cross sections and foundation plans, preferably at 1/4 in. = 1 ft-0 in.",
+        "Foundation plans must show footing size, depth and keyed details, plus post sizes at columns carrying concentrated loads.",
+        "Stair and guard details must show tread, riser, landing, handrail, guard height and baluster spacing.",
+        "A dimensioned site plan (Typical Site Plan with Checklist) with property lines, all structures and lot coverage is required with the application."
+      ],
+      "note": "Ground snow load is listed as 'N/A' in the county table (no snow load), entered here as 0. Frost line depth is listed as 0, air freezing index N/A, mean annual temperature 71.2 F, winter design temperature 'None to slight', ice barrier NO, and flood hazards go to the Maricopa County Flood Control District. The 2024 draft keeps snow N/A, SDC B, Negligible, frost 0 and Moderate to Heavy, and changes wind to 105 mph. Before release, check whether the Board of Supervisors has adopted the 2024 package. Cities (Phoenix, Mesa, etc.) have their own codes.",
+      "sources": [
+        {
+          "title": "Maricopa County Local Additions & Addenda (2018 codes), TA2022001, 19 Sep 2022",
+          "url": "https://www.maricopa.gov/DocumentCenter/View/5808/Local-Additions-and-Addenda-PDF?bidId="
+        },
+        {
+          "title": "Maricopa County Ordinances, Regulations and Codes (2018 I-Codes adopted 17 Aug 2022)",
+          "url": "https://www.maricopa.gov/2271/Ordinances-Regulations-and-Codes"
+        },
+        {
+          "title": "BCAB special meeting 15 Sep 2026 packet - FINAL DRAFT TA2026001 (2024 I-Codes)",
+          "url": "https://www.maricopa.gov/AgendaCenter/ViewFile/Agenda/_09152026-3846?packet=true"
+        },
+        {
+          "title": "Minimum Information Required in Residential Construction Plans (Construction Plan Checklist)",
+          "url": "https://www.maricopa.gov/DocumentCenter/View/4722/Construction-Plan-Checklist-PDF"
+        },
+        {
+          "title": "Residential Construction page",
+          "url": "https://www.maricopa.gov/1674/Residential-Construction"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "AZ",
+      "county": "Pima County",
+      "fips": "04019",
+      "population_2020": 1043433,
+      "jurisdiction": "Pima County Development Services (unincorporated county) - Ordinance 2025-15 Exhibit B, 2024 IRC amendments, Table R301.2",
+      "edition": "2024 IRC with Pima County amendments (Ordinance 2025-15 Exhibit B), effective January 1, 2026",
+      "frost_depth_in": 0,
+      "ground_snow_psf": 0,
+      "wind_mph": 105,
+      "wind_basis": "105 mph (168.981 kph) 3 second gust; topographic effects 'As Required'",
+      "seismic_sdc": "B",
+      "weathering": "Negligible (up to 4000 ft); Moderate (above 4000 ft)",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "A permit is required for a deck more than 30 in. above finished grade or floor level.",
+        "No permit is needed for decks no more than 30 in. above adjacent grade that are not over a basement or story below and are not part of an accessible route.",
+        "No deck handout was found; the county's only standard detail is a covered porch detail marked 2018.",
+        "That porch detail uses 18 in. square x 1 ft deep footings for 10 ft porches and 2 ft square x 1 ft deep footings for 12 ft porches.",
+        "The porch detail also calls for 2500 psi concrete, Douglas Fir #2 or better and 12 in. minimum below undisturbed soil at masonry column footings."
+      ],
+      "note": "These values change with elevation. Frost depth is 0 in. up to 4000 ft and 24 in. above 4000 ft. Ground snow load is 0 psf below 4000 ft, 20 psf at 4,000-5,000 ft, 40 psf at 5,000-7,000 ft, 60 psf at 7,000-8,000 ft and 80 psf over 8000 ft. The Tucson valley floor uses the below-4000 ft values; mountain areas such as Mt. Lemmon use the higher tiers. Separately, a county amendment to R802.11.1 (roof uplift) uses a 110 mph design wind value; that is a roof rule, not the Table R301.2 wind speed. The City of Tucson and other cities have their own amendments.",
+      "sources": [
+        {
+          "title": "Pima County Ordinance 2025-15 Exhibit B - Amendments to the 2024 International Residential Code",
+          "url": "https://www.pima.gov/asset/2f62bbcc-b366-416d-b40e-848de7a0e479"
+        },
+        {
+          "title": "Pima County Building Permits Resources (2024 codes effective January 1, 2026)",
+          "url": "https://www.pima.gov/1038/Building-Permits-Resources"
+        },
+        {
+          "title": "Pima County - Do I Need a Permit?",
+          "url": "https://www.pima.gov/1125/Do-I-Need-a-Permit"
+        },
+        {
+          "title": "Pima County Porch Construction Drawings (standard detail)",
+          "url": "https://content.civicplus.com/api/assets/abb9a339-1408-4c75-aa23-0601cff0f7cd?scope=all"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "AZ",
+      "county": "Pinal County",
+      "fips": "04021",
+      "population_2020": 425264,
+      "jurisdiction": "Pinal County Development Services / Building Safety (unincorporated county) - NOT VERIFIED: every pinal.gov page returned HTTP 403 (Cloudflare) to automated fetches, so no county value could be read",
+      "edition": "Unverified for unincorporated Pinal County (see note). The City of Maricopa, Pinal County's largest city, enforces the 2024 I-Codes and 2023 NEC from February 20, 2026.",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [],
+      "note": "These pages could not be opened: pinal.gov Building Safety (/189/Building-Safety), FAQ QID=125, the 004R Residential Submittal Requirements PDF, and the county code on amlegal and municode. All returned 403, and 403 blocks were not bypassed. A search-engine snippet (not opened, so not used for any value) said the Building Safety page lists the 2018 IRC and 2017 NEC, and that the 004R sheet lists '115 mph wind speed and Seismic Design Category B'. Confirm these by phone or browser before use. The City of Maricopa's adoption notice was opened (approved Jan 20, 2026, effective Feb 20, 2026); its design criteria page (maricopa-az.gov) also returned 403. The web-search budget ran out, so no other official sources could be found.",
+      "sources": [
+        {
+          "title": "City of Maricopa - Public Notice: Building Codes Implementation (2024 I-Codes effective Feb 20, 2026)",
+          "url": "https://www.maricopa-az.gov/Maricopa-eNews/PUBLIC-NOTICE-City-of-Maricopa-Building-Codes-Implementation"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "UT",
+      "county": "Salt Lake County",
+      "fips": "49035",
+      "population_2020": 1185238,
+      "jurisdiction": "Greater Salt Lake Municipal Services District (MSD) Building Services - unincorporated Salt Lake County plus Kearns, Magna, White City, Copperton, Emigration Canyon and Brighton - 'Codes and Design Criteria' page",
+      "edition": "2021 IRC (with Appendix AQ) plus Utah statewide amendments (Utah Code 15A-2-103 and 15A-3-202, amended in the 2026 General Session), alongside the 2024 IBC and other 2024 I-Codes, effective July 1, 2026. Utah did NOT move the IRC to 2024; the 15A-2-103 version effective 1/1/2027 still lists the 2021 IRC.",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 28,
+      "wind_mph": 105,
+      "wind_basis": "Residential 105 mph, 3-second gust at 33 ft above ground; exposure site-specific per ASCE 7-16 Ch. 26, typically B or C (MSD page)",
+      "seismic_sdc": "D2",
+      "weathering": "Severe",
+      "termite": "None to Slight",
+      "deck_notes": [
+        "Under Utah's R105.2 amendment, no permit is needed for decks no more than 30 in. above grade at any point that do not require guardrails and do not serve the required exit door (R311.4); there is no 200 sq ft limit.",
+        "The MSD Residential Deck & Patio Plan Submittal Guide says a permit is required if the deck or patio cover is attached to the house or more than 30 in. above the ground.",
+        "The guide's checklist covers overall dimensions, elevation above grade, footing size, depth and locations, post, beam and joist sizes and spacing, and decking material.",
+        "It also asks for a ledger attachment detail, flashing at the ledger, railing height and baluster spacing (max 4 in.), stairs with rise and run, guards and handrails, setbacks, hardware, finish grade, and north arrow and scale.",
+        "The guide shows railing height min 36 in. (residential), stair width min 36 in. (recommended), stair rise max 7-3/4 in. and tread min 10 in.",
+        "Utah's statewide amendment actually allows an 8 in. max riser and 9 in. min tread (R311.7.5.1/.2), so the guide's 7-3/4 in. and 10 in. are stricter than the code.",
+        "Wood in contact with concrete or within 8 in. of the ground must be pressure-treated, and approved flashing is required at the ledger.",
+        "Footings go below frost depth (30 in.).",
+        "Utah amends R507.2.1 (deck wood materials) to add 'field applied weather resistant barrier applied to the top of untreated material'."
+      ],
+      "note": "Ground snow load is at least 28 psf at or below 4,239 ft MSL. Above that, use the USU Utah Snow Load tool (utahsnowload.usu.edu), as the state code directs. The statewide Table R301.2(3) lists Salt Lake City at 28 psf / 4239 ft, applied at and below the cited elevation with a 100 ft tolerance. Roof snow is per ASCE 7-16 Ch. 7. Frost depth is 30 in. and 'may increase at higher elevations'. Winter design temperature is 8 F, ice barrier yes, air freezing index at most 1500, mean annual temperature 45 F, climate zone 5B and allowable soil bearing 1,500 psf. The MSD deck guide is a generic statewide-style template ('City of ___'). Salt Lake City and the other incorporated cities run their own building departments.",
+      "sources": [
+        {
+          "title": "Greater Salt Lake MSD - Codes and Design Criteria",
+          "url": "https://msd.utah.gov/316/Codes-and-Design-Criteria"
+        },
+        {
+          "title": "MSD Residential Deck & Patio Plan Submittal Guide",
+          "url": "https://ut-greatersaltlakemsd.civicplus.com/DocumentCenter/View/1675/Residential-Deck-and-Patio-Plan-Submittal-Guide-"
+        },
+        {
+          "title": "Utah Code 15A-2-103 (effective 7/1/2026) - adopted codes",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter2/C15A-2-S103_2026050620260701.html"
+        },
+        {
+          "title": "Utah Code 15A-2-103 (effective 1/1/2027)",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter2/C15A-2-S103_2026050620270101.html"
+        },
+        {
+          "title": "Utah Code 15A-3-202 (effective 7/1/2026) - IRC statewide amendments",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter3/C15A-3-S202_2026050620260701.html"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "UT",
+      "county": "Utah County",
+      "fips": "49049",
+      "population_2020": 659399,
+      "jurisdiction": "Utah County Community Development - Building Division (unincorporated county), codev.utahcounty.gov/building",
+      "edition": "2021 IRC with Utah statewide amendments (Utah Code Title 15A), alongside the 2024 IBC/IPC/IMC/IECC/IFGC/IEBC and 2023 NEC, as listed on the county Building page",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 31,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Under Utah's R105.2 amendment, no permit is needed for decks no more than 30 in. above grade at any point that do not require guardrails and do not serve the required exit door.",
+        "Frost depth is 30 in. or engineer's design if deeper.",
+        "The county's submittal requirements (single-family new construction, remodels and additions) ask for an electronic copy plus two paper sets at 1/4 in. per foot on 24 x 36 in. paper.",
+        "The statewide amendment allows an 8 in. max stair riser and 9 in. min tread.",
+        "No county deck handout or standard deck detail was found on the Building or Forms pages."
+      ],
+      "note": "The county page gives only 'Frost Depth 30 in. or engineer's design if deeper', 'Seismic Zone: IBC Section 1613', 'Wind Load in MPH: IBC Section 1609' and 'Snow Load (See Utah Code Title 15A-3-107 ...)'. It publishes no wind speed, SDC, weathering or termite values, so those are null; they are site-specific. The 31 psf is from the statewide Table R301.2(3) (Utah Code 15A-3-202) for Provo: 31 psf at 4,541 ft, applied at and below that elevation with a 100 ft tolerance. Higher sites use the USU Utah Snow Load Study tool (utahsnowload.usu.edu) under the Utah R301.6 amendment. Provo's own site (provo.gov) returned 403 and could not be checked. Cities (Provo, Orem, etc.) run their own departments.",
+      "sources": [
+        {
+          "title": "Utah County Community Development - Building",
+          "url": "https://codev.utahcounty.gov/building"
+        },
+        {
+          "title": "Utah County Building Permit Submittal Requirements - Single Family Homes (2026)",
+          "url": "https://codev.utahcounty.gov/codev/forms/submittal-requirements-single-family-2026.pdf"
+        },
+        {
+          "title": "Utah Code 15A-3-202 (effective 7/1/2026) - Table R301.2(3), R301.6, R105.2, R311.7.5",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter3/C15A-3-S202_2026050620260701.html"
+        },
+        {
+          "title": "Utah Code 15A-2-103 (effective 7/1/2026)",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter2/C15A-2-S103_2026050620260701.html"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "UT",
+      "county": "Davis County",
+      "fips": "49011",
+      "population_2020": 362679,
+      "jurisdiction": "Layton City Community & Economic Development - Building Division (largest city in Davis County; very little of the county is unincorporated). Layton's 'Design Criteria & Adopted Codes' sheet (rev. 7/1/26) and Deck Requirements handout.",
+      "edition": "2021 IRC (with Appendices AQ and AE) plus Utah statewide amendments, alongside the 2024 IBC and other 2024 codes, effective 7/1/26 under State Construction Code 15A-2-103",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 43,
+      "wind_mph": 115,
+      "wind_basis": "115 mph (Conventional Construction); ASCE 7-10 (Non-Conventional); Exposure B (Residential), C (Commercial) - Layton design criteria sheet",
+      "seismic_sdc": "D2",
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Permits are required for decks attached to the home or 30 in. or more above grade; decks and platforms no more than 30 in. above adjacent grade need no permit.",
+        "Footings must extend to frost depth (30 in.) if the deck is attached to the house.",
+        "Guards at least 36 in. high are required where a deck, landing or stair is more than 30 in. above grade, with openings that a 4 in. sphere cannot pass through.",
+        "Stairs must be at least 36 in. wide, with 8 in. max rise and 9 in. min run (largest may exceed smallest by no more than 3/8 in.).",
+        "Handrails are required on stairs with 4 or more risers, 34-38 in. above the nosing and returned to a wall or post.",
+        "Two sets of plans are required: a survey or site plan with setbacks, a floor plan, and an elevation plan.",
+        "The floor plan shows deck size, joist size and spacing, decking, posts and beams.",
+        "The elevation plan shows height above grade, footing size and depth, guard, stair rise and run, handrail, and overhead-wire clearance.",
+        "Overhead power lines must be at least 10 ft above decks and platforms.",
+        "The handout gives 40 psf live load for decks and 60 psf for balconies; note the handout is marked 'Revised 4/07'."
+      ],
+      "note": "Layton's own sheet says 'Ground Snow Load: 43 psf (www.usu.edu/utahsnowload)', roof snow load 30 psf and allowable soil bearing 1,500 psf. The statewide Table R301.2(3) lists only Farmington (county seat), at 35 psf / 4,318 ft, for Davis County; Layton is not in that table. Use the city's own value or the USU tool by site. Layton publishes no weathering or termite values (null). The Layton deck handout predates the 2021 IRC (revised 4/07), so treat its structural numbers as guidance only. Its stair and guard values match the current Utah amendments. Davis County government was not checked for a building department of its own (the web-search budget ran out). Other Davis cities (Bountiful, Kaysville, Farmington, etc.) publish their own criteria.",
+      "sources": [
+        {
+          "title": "Layton City Design Criteria & Adopted Codes (rev. 7/1/26)",
+          "url": "https://www.laytoncityutah.gov/pdf/CD/BuildingDivision/Document/DesignCriteria.pdf"
+        },
+        {
+          "title": "Layton City Deck Requirements handout",
+          "url": "https://www.laytoncityutah.gov/pdf/CD/BuildingDivision/Document/DeckRequirements.pdf"
+        },
+        {
+          "title": "Layton City Building Division page",
+          "url": "https://www.laytoncityutah.gov/LC/CD/BuildingDivision"
+        },
+        {
+          "title": "Utah Code 15A-3-202 (effective 7/1/2026) - Table R301.2(3) (Farmington 35 psf)",
+          "url": "https://le.utah.gov/xcode/Title15A/Chapter3/C15A-3-S202_2026050620260701.html"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "NV",
+      "county": "Clark County",
+      "fips": "32003",
+      "population_2020": 2265461,
+      "jurisdiction": "Clark County Department of Building & Fire Prevention (unincorporated county) - Southern Nevada Amendments to the 2024 IRC (Clark County Amended), Table R301.2. The Southern Nevada (SNBO) amendments are shared with Las Vegas, Henderson, North Las Vegas, Boulder City, Pahrump and Mesquite, but each city adopts them separately.",
+      "edition": "2024 IRC with Southern Nevada Amendments (Clark County amended), adopted by the County Commission July 15, 2025, effective January 11, 2026",
+      "frost_depth_in": 12,
+      "ground_snow_psf": 10,
+      "wind_mph": 98,
+      "wind_basis": "98 mph from the ultimate design wind speeds map [Figure R301.2(2)]; Exposure C unless the applicant justifies a site-specific category per R301.2.1.4; topographic effects, special wind region and windborne debris all 'No' (below 3900 ft)",
+      "seismic_sdc": "D0",
+      "weathering": "Negligible (below 3500 ft); Severe (3500-3900 ft)",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "The county's amended Table R301.5 sets 40 psf live load for exterior balconies and decks and a 200 lb concentrated load on guards.",
+        "Frost depth is 1 ft (12 in.) below 5000 ft and 3 ft (36 in.) above 5000 ft.",
+        "No deck guide was found on the Building & Fire Prevention site (Building Plan Guidelines, How-to Guides, Standard Design, Code Interpretations).",
+        "Related standards on that site cover covered patios only: B-102 and B-103 SFR covered-patio designs and BD-CI-216, post-installed anchor special inspection for patio covers (02.2026).",
+        "The county deletes IRC Chapter 1 except R101, so permit exemptions come from the county's own administrative code rather than IRC R105.2."
+      ],
+      "note": "Ground snow load depends on elevation: 5 psf below 1,600 ft, 10 psf below 2,700 ft, 15 psf below 3,500 ft and 20 psf below 3,900 ft. Above 3,900 ft, use the IBC for snow, wind, seismic, weathering and air freezing index. The 10 psf given here assumes the Las Vegas Valley floor sits between 1,600 and 2,700 ft; that elevation is general knowledge, not from the source, so the generator should pick the tier from site elevation. At 3,500-3,900 ft the table gives weathering Severe, ice barrier YES and air freezing index 2000; below that, ice barrier No and air freezing index 1500. The table gives the termite value only in the first row ('Moderate to Heavy'). The caller expected a county deck guide; none was found.",
+      "sources": [
+        {
+          "title": "Southern Nevada Amendments to the 2024 IRC (Clark County Amended)",
+          "url": "https://www.clarkcountynv.gov/adobe/assets/urn:aaid:aem:1bb5e7a7-96e5-4940-82c6-d6903f7c5695/original/as/2024-IRC-Southern-NV-Amendments---Clark-County-Amended.pdf"
+        },
+        {
+          "title": "Clark County Building & Fire Prevention - Standard Design",
+          "url": "https://www.clarkcountynv.gov/government/departments/building___fire_prevention/plan_review/standard-design"
+        },
+        {
+          "title": "Clark County Building & Fire Prevention - Building Plan Guidelines",
+          "url": "https://www.clarkcountynv.gov/government/departments/building___fire_prevention/how-to-guides-bpg-s"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NV",
+      "county": "Washoe County",
+      "fips": "32031",
+      "population_2020": 486492,
+      "jurisdiction": "Washoe County Building & Safety (Community Services Dept., unincorporated county) - Design Requirements page (IRC Table R301.2 Northern Nevada Amendment) and 2024 Northern Nevada Code Amendments (NNICC)",
+      "edition": "2024 IRC with the 2024 Northern Nevada Amendments, adopted effective July 1, 2025, with a 6-month grace period; required for all submittals from January 1, 2026",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 43,
+      "wind_mph": 120,
+      "wind_basis": "Vult 120 mph (Special Wind Region, IBC Table 1609.3.2: 'II & 2024 IRC' = 120 Vult / 93 Vasd), Exposure C, Risk Category II per county deck handout; topographic effects No, special wind region Yes, windborne debris No",
+      "seismic_sdc": "D2",
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "Uncovered decks and porches need structural engineering if ground snow load is over 70 psf, the deck projects more than 12 ft from the existing structure, it is more than 10 ft above finish grade, or it exceeds a 25 ft braced wall line.",
+        "Required drawings are a site plan, foundation/footing details, elevations/sections and roof framing (for covered work), with structural calculations listed among required documents.",
+        "The site plan must show property lines with dimensions, setbacks, easements, drainage and all structures, at a preferred scale of 1 in. = 40 ft; structures may not sit on easements.",
+        "Plans must be drawn by a Nevada-licensed design professional, a contractor within license scope, or an owner-builder with affidavit.",
+        "Submittals are electronic only through OneNV, following the county naming conventions.",
+        "The county deck and patio cover handout (2022) still prints the older snow table (30 psf at or below 5,000 ft); the 2024 table now governs."
+      ],
+      "note": "Ground snow load comes from IBC Table 1608.2.1 (2024 NNICC) or the ASCE Hazard Tool (ASCE 7-22), whichever is lower. For Risk Category II (all residential) the table gives 43 psf at 4,500-5,000 ft both west and east of US 395, then rises steeply west of 395: 59 psf at 5100 ft, 92 at 5300 and 123 at 5500. Intermediate values may be interpolated. 43 psf is the Reno/Sparks valley-floor value. The NNICC text calls these 'reliability-targeted (strength based)' loads, while IRC footnote o refers to an allowable-stress-design table, so confirm with plan review before feeding them into IRC span tables. Final roof snow load is at least 29 psf. Ice barrier is required above 5300 ft. Winter design temperature is 17 F, air freezing index 594 and mean annual temperature 49.4 F. Frost depth is a flat 24 in. on the county page and the NNICC appendix. Reno and Sparks enforce the same NNICC values separately.",
+      "sources": [
+        {
+          "title": "Washoe County Building - Design Requirements (Table R301.2 Northern Nevada Amendment, Table 1608.2.1)",
+          "url": "https://www.washoecounty.gov/building/getting_started/Construction_Design_Requirements.php"
+        },
+        {
+          "title": "Washoe County - Adopted Building Codes",
+          "url": "https://www.washoecounty.gov/building/getting_started/building_codes.php"
+        },
+        {
+          "title": "2024 Northern Nevada Code Amendments (NNICC, published Feb 20, 2025)",
+          "url": "https://www.washoecounty.gov/building/Files_2020/2024-NNICC-Amendments-Final-3-12-25.pdf"
+        },
+        {
+          "title": "Washoe County Decks & Patio Covers handout (2022)",
+          "url": "https://www.washoecounty.gov/building/Files_2020/Decks-and-Patio-Covers-handout-2022.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NV",
+      "county": "Lyon County",
+      "fips": "32019",
+      "population_2020": 59235,
+      "jurisdiction": "Lyon County Community Development - Building Division (unincorporated county) - 2024 Lyon County Amendments (amended NNICC Table R301.2) and 'Building Information and Design Criteria' sheet (rev. 12/11/25)",
+      "edition": "2024 IRC with the 2024 Northern Nevada ICC Amendments and the 2024 Lyon County Amendments (Bill 25-04, approved Aug 7, 2025), effective January 1, 2026",
+      "frost_depth_in": 18,
+      "ground_snow_psf": 15,
+      "wind_mph": 120,
+      "wind_basis": "Vult 120 mph for 'II & 2024 IRC' (Vasd 93 mph) per the county Design Criteria sheet's Table 1609.3.2 (rev. 12/11/25); the county's amended Table R301.2 (9/29/2025) still prints 115 mph. Topographic effects No, special wind region No, windborne debris No.",
+      "seismic_sdc": "D2",
+      "weathering": "Severe",
+      "termite": "Moderate to Heavy",
+      "deck_notes": [
+        "Prescriptive 2024 IRC projects must be designed to Seismic Design Category D2; non-prescriptive projects must be fully engineered to IBC SDC D, and the two methods may not be mixed.",
+        "Frost depth is 18 in. below 5,000 ft elevation and 24 in. at or above 5,000 ft.",
+        "The county's residential information sheet lists only fences and detached accessory structures under 200 sq ft (without electrical or plumbing) as permit exceptions and does not mention decks.",
+        "Paper submittals need two complete sets of drawings, neatly drawn to scale and fully dimensioned; free-hand sketches are not accepted.",
+        "Out-of-state designers' plans need a Nevada license stamp, and structural engineering must bear an original wet seal.",
+        "No deck-specific handout was found on the county Building pages."
+      ],
+      "note": "The county's Table R301.2 amendment strikes the NNICC values D1 and a flat 18 in. and replaces them with D2 and 18 in. below 5000 ft / 24 in. at or above 5000 ft. The NNICC appendix row for Lyon still shows 115 mph, D1 and 18 in. The wind sources conflict: the Lyon amended Table R301.2 and the NNICC appendix say 115 mph, while the county Design Criteria sheet (latest, rev. 12/11/25) gives Vult 120 mph for Risk Category II and the 2024 IRC. 120 is used here as the later and more conservative value; confirm with the county (775-463-6591). Ground snow load follows Lyon's column of IBC Table 1608.2.1. For Risk Category II it is 15 psf at 4,500 ft, 43 at 5,000, 45 at 5100, 49 at 5300 and 53 at 5,500 ft, interpolated in between. The NNICC 1608.2 text says the table applies above 4,500 ft and ASCE 7 strength-based values apply below that. Most of the valley floor (Fernley, Dayton, Yerington) is near or below 4,500 ft, which is general knowledge, not from the source, so 15 psf is the table's lowest row, not a site value. These are strength-based loads (see the Washoe note on ASD). Final roof snow load is not less than the table value or 20 psf. Winter design temperature is 11 F, ice barrier No, air freezing index 445 and mean annual temperature 51.2 F.",
+      "sources": [
+        {
+          "title": "Lyon County Building page (2024 codes effective Jan 1, 2026; Bill 25-04)",
+          "url": "https://www.lyon-county.org/153/Building"
+        },
+        {
+          "title": "2024 Lyon County Building Code Amendments (Sept 29, 2025)",
+          "url": "https://www.lyon-county.org/DocumentCenter/View/13661"
+        },
+        {
+          "title": "Lyon County Building Information and Design Criteria (rev. 12/11/25)",
+          "url": "https://www.lyon-county.org/DocumentCenter/View/14005"
+        },
+        {
+          "title": "Lyon County Residential Building Information",
+          "url": "https://www.lyon-county.org/DocumentCenter/View/14003"
+        },
+        {
+          "title": "2024 Northern Nevada Code Amendments (NNICC) - Appendix Table R301.2 and IBC Table 1608.2.1",
+          "url": "https://www.washoecounty.gov/building/Files_2020/2024-NNICC-Amendments-Final-3-12-25.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "ID",
+      "county": "Ada County",
+      "fips": "16001",
+      "population_2020": 494967,
+      "jurisdiction": "Ada County Development Services, Building Division (unincorporated Ada County only; the county issues building permits only outside city limits; Boise, Meridian, etc. have their own departments)",
+      "edition": "2018 IRC (statewide Idaho adoption, IDAPA 24.39.30, with Idaho amendments), as amended by Ada County Ordinance #919",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 20,
+      "wind_mph": 115,
+      "wind_basis": "Ada County Table R301.2(1), 'Wind Design - Speed (MPH)': 115; Topographic effects: No",
+      "seismic_sdc": "C",
+      "weathering": "Severe",
+      "termite": "Slight Moderate (printed that way in the county table)",
+      "deck_notes": [
+        "Ada County's exemption list says decks no more than 30 in. above grade at any point that do not serve the required exit door (R311.4) need no building permit.",
+        "Footings must reach the 24 in. frost line from the county design criteria table.",
+        "A covered deck roof must be designed for at least 25 psf roof snow load, and no reduction below that is allowed (table footnote a).",
+        "Submit a site plan to scale showing new and existing structures relative to all property lines, easements, wells and septic tanks/drainfields.",
+        "All plans must be drawn to scale and dimensioned and submitted as digital PDF files (mechanical@adacounty.id.gov).",
+        "A stamped design by an Idaho-licensed professional may be required when the work is not standard or not prescriptive conventional light-frame construction."
+      ],
+      "note": "No Ada County deck guide could be found. The Development Services site, its forms page and the site's own search had no deck handout. Values come from the county's 'Design Criteria' Word handout (Table R301.2(1)). The same table lists winter design temperature, ice barrier No, air freezing index 894 and mean annual temperature 51.1. Idaho code edition: the current IDAPA 24.39.30 PDF (regenerated June 12, 2026, with a 7-1-26 fee change) still adopts the 2018 IRC (Parts I, II, III and IX). The Building Code Board's 2025 rulemaking to move to the 2024 IBC/IRC/IECC (docket 24-3930-2502) did not take effect. A BoiseDev report (Feb 23, 2026) says the House Business Committee rejected it; that article was blocked and was seen only through a search summary.",
+      "sources": [
+        {
+          "title": "Ada County Development Services - 2018 IRC Design Criteria, Table R301.2(1) (Word)",
+          "url": "https://adacounty.id.gov/developmentservices/wp-content/uploads/sites/37/Design-Criteria-.docx"
+        },
+        {
+          "title": "Ada County - Work Exempt From a Building Permit (Word)",
+          "url": "https://adacounty.id.gov/developmentservices/wp-content/uploads/sites/37/Exemptions.docx"
+        },
+        {
+          "title": "Ada County Adopted Codes and Amendments / Required Items for a Building Permit Application",
+          "url": "https://adacounty.id.gov/developmentservices/wp-content/uploads/sites/37/PROPOSED-Building-Permit-Application-Checklist.pdf"
+        },
+        {
+          "title": "Ada County - How to Get a Building Permit for a Single Family Dwelling (Word)",
+          "url": "https://adacounty.id.gov/developmentservices/wp-content/uploads/sites/37/Single-Family-Dwellings.docx"
+        },
+        {
+          "title": "IDAPA 24.39.30 Rules of Building Safety (current, Idaho Building Code Board)",
+          "url": "https://adminrules.idaho.gov/rules/current/24/243930.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "ID",
+      "county": "Canyon County",
+      "fips": "16027",
+      "population_2020": 231105,
+      "jurisdiction": "Canyon County Development Services Department, Building Department (unincorporated Canyon County); Table R301.2(1) as amended by the county",
+      "edition": "2018 IRC (statewide Idaho adoption, IDAPA 24.39.30, with Idaho amendments), with the county's amended Table R301.2(1)",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 25,
+      "wind_mph": 115,
+      "wind_basis": "Canyon County Table R301.2(1) wind speed column: '115 Exposure C'",
+      "seismic_sdc": "B",
+      "weathering": "Severe",
+      "termite": "Slight to moderate",
+      "deck_notes": [
+        "The site plan must be drawn to scale and show property lines, setback measurements, septic and well, easements, and new and existing structures.",
+        "Plans must note the design criteria used.",
+        "Elevations must be drawn at 1/4 in. = 1 ft or larger and show the location of any decks, stairs and balconies.",
+        "Foundation plans at 1/4 in. = 1 ft or larger must show footing, pier and spread-footing sizes.",
+        "Framing sections must be drawn at 1/2 in. = 1 ft or larger.",
+        "Additional details are required for stairways and guard rails.",
+        "Aluminum or metal patio cover systems require engineering, as do materials or systems not described in the adopted codes.",
+        "Footings must reach the 24 in. frost line from the county table."
+      ],
+      "note": "Values were read from the county's published Table R301.2(1) image on the Building Department page. The same table gives decay None to slight, winter design temperature 10 F, ice shield No, flood hazards CCFHAR 9/19/87, air freezing index 980 and mean annual temperature 51 F. The county building ordinance on American Legal returned 403, so the county ordinance itself was not read. The edition is from the statewide IDAPA 24.39.30 rule; see the Idaho note on the Ada County entry. No Canyon County deck handout was found.",
+      "sources": [
+        {
+          "title": "Canyon County Building Department page (Design Criteria, amended Table R301.2(1))",
+          "url": "https://www.canyoncounty.id.gov/building-department/"
+        },
+        {
+          "title": "Canyon County design criteria table image",
+          "url": "https://www.canyoncounty.id.gov/wp-content/uploads/2023/09/design-criteria-DSD-building-research-page-1.jpg"
+        },
+        {
+          "title": "Canyon County Building Permit Checklist (revised 1-12-26)",
+          "url": "https://www.canyoncounty.id.gov/wp-content/uploads/2026/01/NEW-BP-Checklist-REVISED-1-12-26.pdf"
+        },
+        {
+          "title": "IDAPA 24.39.30 Rules of Building Safety (current)",
+          "url": "https://adminrules.idaho.gov/rules/current/24/243930.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "ID",
+      "county": "Kootenai County",
+      "fips": "16055",
+      "population_2020": 171362,
+      "jurisdiction": "Kootenai County Community Development (unincorporated Kootenai County); Ordinance 608 local amendments",
+      "edition": "2018 IRC (the county guide lists Parts I-VI and Appendix G) with Idaho amendments and Kootenai County Ordinance 608 ('2025 Building Code Ordinance Amendments', effective Jan 1, 2025)",
+      "frost_depth_in": 24,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "Ord. 608 Table R301.2(1): 'Three Second gust: 115 mph' (fastest mile 90 mph); county guide: 'IRC prescriptive Ultimate Design Wind Speed 115 mph with correct exposure B, C, or D'",
+      "seismic_sdc": "C",
+      "weathering": "Severe",
+      "termite": "Slight",
+      "deck_notes": [
+        "The foundation plan must show the deck post layout and post hole size, including any punch pad, and footing depth for frost protection of at least 24 in.",
+        "The floor framing plan must show deck framing, stair, guard and handrail details and specific hardware, including a lateral restraint detail.",
+        "Pressure-treated material is required where a deck is not covered.",
+        "Covered patios or decks with a top plate more than 12 ft above grade require Idaho engineer drawings with calculations.",
+        "A covered deck roof must be checked against the county snow-load map: Zone A at least 40 psf, Zone B 50 psf, Zone C 60 psf, Zone D engineered by an Idaho engineer.",
+        "Submit a scaled site plan, 8.5 x 11 in. or larger, with north arrow, lot lines, easements, utilities and setbacks to all existing and proposed structures.",
+        "Submittal is electronic (PDF via IMS), and a printed set of the approved plans must be kept on the jobsite for inspections."
+      ],
+      "note": "Ground snow load is listed as 'Varies'. It is set per parcel from 'Ground and Roof Snow Loads for Idaho' (University of Idaho, 1986), so there is no single number and the field is null. The county instead publishes roof snow-load zones (40/50/60 psf or engineered), and R301.2.3 as amended keys the flat-roof minimum to ground snow bands (60, 70 and 85 psf). The Ord. 608 table also gives decay Slight, ice barrier Yes, air freezing index 1500 and a 30 psf minimum for mobile/manufactured homes. Deck notes come from the county residential submittal checklist; no separate deck handout was found.",
+      "sources": [
+        {
+          "title": "Kootenai County Residential Building Permit Submittal Guide (codes and design criteria)",
+          "url": "https://www.kcgov.us/DocumentCenter/View/26391/Residential-Building-Guide-Information"
+        },
+        {
+          "title": "Kootenai County Ordinance No. 608 - Building Code Ordinance Amendments (Table R301.2(1))",
+          "url": "https://www.kcgov.us/DocumentCenter/View/25206/Ordinance-Number-608-Building-Code-Ordinance-PDF"
+        },
+        {
+          "title": "Kootenai County Residential Permit Submittal Checklist",
+          "url": "https://www.kcgov.us/DocumentCenter/View/26392/Residential-Building-Plan-Review-Submittal-Checklist-PDF"
+        },
+        {
+          "title": "Kootenai County Snowload Areas map",
+          "url": "https://www.kcgov.us/DocumentCenter/View/1461/Snow-Load-PDF"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "WA",
+      "county": "King County",
+      "fips": "53033",
+      "population_2020": 2269675,
+      "jurisdiction": "King County Department of Local Services, Permitting Division, for unincorporated King County. The values come from King County Code 16.05.040, which replaces IRC Table R301.2(1) for the county. Cities inside the county (Seattle, Bellevue, Kent and others) publish their own tables.",
+      "edition": "2021 Washington State Residential Code (2021 IRC as amended by WAC 51-51), in force statewide since March 15, 2024. The 2024 WSRC (based on the 2024 IRC) is not in force yet: the State Building Code Council targets final adoption on Oct 16, 2026, and the 2024 codes take effect May 3, 2027.",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": 110,
+      "wind_basis": "110 mph per KCC 16.05.040 Table R301.2(1). The table gives no basis or exposure. King County's Residential Basics Program lists 110 mph wind with Exposure C as structural design criteria.",
+      "seismic_sdc": "D2; D1 in eastern unincorporated King County (east of the Snoqualmie River line, the city of Snoqualmie, Snoqualmie Parkway/Echo Lake-Snoqualmie Cut-off, and south/east of SR 18), per KCC 16.05.040 footnote 2",
+      "weathering": "Moderate",
+      "termite": "Slight to Moderate",
+      "deck_notes": [
+        "Frost depth is 12 in. for sites up to 1,000 ft elevation, 18 in. from 1,000 to 2,000 ft, and 24 in. above 2,000 ft. A site analysis may set it otherwise, but never less than 12 in. (KCC 16.05.040 footnote 3).",
+        "No permit is needed for decks not more than 30 in. above grade, not over a basement or story below, and not part of an accessible route (KCC 16.02.240 item 6).",
+        "Measure the 30 in. vertically to grade at any point within 36 in. of the deck's outer edge (MyBuildingPermit Tip Sheet 00, which lists King County).",
+        "King County's permit-forms page points to the MyBuildingPermit 'Basic Deck' Tip Sheet 05 (2021 IRC with Washington amendments). It is based on 60 psf live load, 10 psf dead load and 1,500 psf soil bearing.",
+        "That tip sheet says an architect or engineer may be needed in these cases: multi-level decks, hot tubs or pavers, a walking surface more than 14 ft above grade, a ledger on an overhang, bay window, brick, stone or CMU, slopes steeper than 1:1, or a freestanding (self-supporting) deck.",
+        "Knee braces are required on posts taller than 4 ft. A post base is required at the footing, and a connector is required at post to beam (Tip Sheet 05).",
+        "Ledgers must be flashed per R703.4 and fastened with ½ in. lag screws or bolts, spaced by joist span per the Tip Sheet 05 table.",
+        "Guards are required when the deck is more than 30 in. above grade (Tip Sheet 05).",
+        "Land on a critical area may need a Critical Areas Designation or critical areas review. A site in shoreline jurisdiction needs a Shoreline Substantial Development Permit unless exempt (King County remodel/addition permit checklist).",
+        "Minimum roof design snow load is 25 psf. Ground snow load is site-specific (King County Public Rule 16-04)."
+      ],
+      "note": "Ground snow load is published only as 'Varies'. Per King County Public Rule 16-04 (Oct 2001), Pg = Cg × site elevation in ft. Cg comes from the King County Ground Snow Load Map, and Table 16-V gives 0.05 for most lowland communities. The minimum roof design snow load is 25 psf, so ground_snow_psf is left null. The text of KCC 16.02.110 (Title 16 updated June 5, 2026) still names the 2018 IRC effective Feb 1, 2021. The county code text has not caught up, but the statewide 2021 code took effect March 15, 2024. Decay in the county table is 'Slight to Mod.' and the winter design temperature is 25°F. The wind basis is not stated in the code table.",
+      "sources": [
+        {
+          "title": "King County Code Title 16 (updated June 5, 2026): 16.05.040 Table R301.2(1) and 16.02.240 permit exemptions",
+          "url": "https://aqua.kingcounty.gov/council/clerk/code/19_Title_16.pdf"
+        },
+        {
+          "title": "King County Public Rule 16-04, Minimum Roof Snow Loads",
+          "url": "https://cdn.kingcounty.gov/-/media/king-county/depts/local-services/permits/public-rules/16-04snowload.pdf?rev=d69d792da4274539887603b24633927b&hash=BAA759BD2652A948B144458654937CBC"
+        },
+        {
+          "title": "King County Residential Basics Program (April 2026): design criteria D2, 110 mph, Exposure C, 25 psf roof snow",
+          "url": "https://cdn.kingcounty.gov/-/media/king-county/depts/local-services/permits/building-land-use-permits/r/residential-basics-program.pdf?hash=3E4C066FFEA7DEA5282DAF68A26A3CA8&rev=dad4281bc02a4545bdf3c2736069cbd3"
+        },
+        {
+          "title": "MyBuildingPermit Construction Tip Sheet 05, Basic Deck (2021 IRC with WA amendments)",
+          "url": "https://mybuildingpermit.com/sites/default/files/TS_05_Basic%20Decks_2021_Final_1.pdf"
+        },
+        {
+          "title": "MyBuildingPermit Tip Sheet 00, Permits Required and Not Required (June 11, 2026)",
+          "url": "https://mybuildingpermit.com/sites/default/files/TS-00_Permits%20Required%20and%20Not%20Required_FINAL_6.11.26.pdf"
+        },
+        {
+          "title": "King County residential remodel/addition/repair permit overview and checklist (Dec 2024)",
+          "url": "https://cdn.kingcounty.gov/-/media/king-county/depts/local-services/permits/building-land-use-permits/r/residential-building-permit-remodel-overview-checklist-combined.pdf?rev=823bf00909e64cfda40eb6e1e2314267&hash=3ECC05A2D5A6BDA3FA5C4BA601F24CE5"
+        },
+        {
+          "title": "Washington State Building Code Council: 2024 codes effective May 3, 2027",
+          "url": "https://sbcc.wa.gov/"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "WA",
+      "county": "Pierce County",
+      "fips": "53053",
+      "population_2020": 921130,
+      "jurisdiction": "Pierce County Planning & Public Works (PPW), for unincorporated Pierce County. The values come from the PPW Technical Bulletin 'Residential Design Criteria for 2021 International Codes & PCC 17C.20.170' (revised 3/26/2024).",
+      "edition": "2021 Washington State Residential Code (2021 IRC as amended by WAC 51-51), in force since March 15, 2024. The bulletin and the deck guide both cite the 2021 IRC. The 2024 WSRC takes effect May 3, 2027.",
+      "frost_depth_in": 12,
+      "ground_snow_psf": 30,
+      "wind_mph": 110,
+      "wind_basis": "110 mph Ultimate with a 3-second gust. Exposure B is assumed unless the site meets the definition of another category. Topographic effects: No (Pierce County Residential Design Criteria bulletin).",
+      "seismic_sdc": "D1; D2 in the area abutting Kitsap County (Gig Harbor area)",
+      "weathering": "Moderate",
+      "termite": "Slight to Moderate",
+      "deck_notes": [
+        "A building permit is required for any residential deck more than 30 in. tall, measured vertically from the walking surface to grade within 36 in. of any edge.",
+        "The county's Predesigned Deck Guide (updated 12/3/2024) can serve as the plans. All construction must follow 2021 IRC Section R507.",
+        "Submit a site plan showing property lines, all existing structures, septic (if any), the new deck and setbacks.",
+        "Extra review applies when the site has an unknown septic drain field, steep slopes, flood hazard, a small lot, setback or property-line concerns, or wetlands or shoreline.",
+        "The predesigned guide cannot be used for decks taller than 14 ft, covered decks, decks closer than 5 ft to a property line, or decks carrying a hot tub or pool. It allows a single joist span and a single beam span only.",
+        "Guide basis: 60 psf live load, 10 psf dead load, 1,500 psf soil bearing and 2,500 psi concrete. The minimum frost depth for the site must be met; confirm it with the department.",
+        "Ledgers use ½ in. lag screws, spaced by joist span per the guide table, and must be flashed per R703.4. A lateral tension device is required per the guide details.",
+        "Knee braces are required on posts over 4 ft tall. Post-cap hardware is required at post to beam, and a standard post base at post to footing.",
+        "Guard and railing post attachments must resist a 200 lb lateral force.",
+        "Hardware and fasteners must be hot-dipped galvanized or stainless steel. Lumber, including ledgers, must be naturally durable or preservative-treated.",
+        "Inspections are setback/footing (before concrete), framing (before decking) and final."
+      ],
+      "note": "IRC structural tables carry a 30 psf minimum ground snow load, and projects designed to the IRC must use at least 30 psf. IBC-engineered designs may use 25 psf up to 700 ft elevation. Higher elevations, above 700 ft, may have higher snow loads, and loads over 70 psf need a WA-registered engineer. Low-land frost depth is 12 in.; higher elevations are deeper (parcel lookup at PierceCountyWa.gov/AboutMyProperty). The bulletin table has no decay column; it lists winter design temperature 26°F, air freezing index 50, ice barrier No, and flood hazard 'Ask Engineering'. Soil is assumed Site Class D. The live piercecountywa.gov and pierce.county.codes sites returned a Cloudflare 403 to automated fetches. The bulletin and the deck guide were read from Internet Archive copies of the official PDFs, captured March 2025 (bulletin revised 3/26/2024; deck guide updated 12/3/2024). A newer revision may exist.",
+      "sources": [
+        {
+          "title": "Pierce County PPW Technical Bulletin: Residential Design Criteria (revised 3/26/2024), official URL",
+          "url": "https://www.piercecountywa.gov/DocumentCenter/View/4405/Bulletin-Residential-Design-Criteria"
+        },
+        {
+          "title": "Same bulletin, as read (Internet Archive capture 2025-03-24)",
+          "url": "https://web.archive.org/web/20250324025726/https://www.piercecountywa.gov/DocumentCenter/View/4405/Bulletin-Residential-Design-Criteria?bidId="
+        },
+        {
+          "title": "Pierce County Predesigned Deck Guide (updated 12/3/2024), official URL",
+          "url": "https://www.piercecountywa.gov/DocumentCenter/View/96950/Predesigned-Project-Guide-Deck"
+        },
+        {
+          "title": "Same deck guide, as read (Internet Archive capture 2025-03-23)",
+          "url": "https://web.archive.org/web/20250323170702/https://www.piercecountywa.gov/DocumentCenter/View/96950/Predesigned-Project-Guide-Deck?bidId="
+        },
+        {
+          "title": "Washington State Building Code Council: 2024 codes effective May 3, 2027",
+          "url": "https://sbcc.wa.gov/"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "WA",
+      "county": "Snohomish County",
+      "fips": "53061",
+      "population_2020": 827957,
+      "jurisdiction": "Snohomish County Planning & Development Services (PDS), for unincorporated Snohomish County only (the deck bulletin says it does not apply inside city limits). The values come from SCC 30.52F.300, the county's amended Table R301.2(1), as printed in PDS 'Minimum Submittal Requirements for Structural Plans' (revised March 15, 2024).",
+      "edition": "2021 IRC as amended and adopted by Washington State (2021 WSRC, WAC 51-51), effective March 15, 2024 per the PDS Building Construction Codes page. The 2024 WSRC takes effect May 3, 2027.",
+      "frost_depth_in": 18,
+      "ground_snow_psf": 25,
+      "wind_mph": 110,
+      "wind_basis": "110 mph shall be used for prescriptive IRC structural design (SCC 30.52F.300 Table R301.2(1) footnote b). The exposure category is determined site-specifically by the designer. IBC designs use the adopted IBC wind maps and include topographic effects.",
+      "seismic_sdc": "D2 for prescriptive IRC design (SDC D for IBC design)",
+      "weathering": "Moderate to Severe (site-specific per the IRC weathering probability map, footnote e)",
+      "termite": "Moderate",
+      "deck_notes": [
+        "A permit is required if the walking surface is more than 30 in. above floor or grade at any point within 36 in. of the open side. It is also required if the deck is over a basement or story below, is part of a required accessible route, or has a roof cover whose framing also supports the deck (Assistance Bulletin #21).",
+        "Any roof cover attached to a residence always needs a building permit, regardless of height or location.",
+        "Apply online in the PDS Permit Portal: Construction Permit > Residential Building Permit > Deck.",
+        "The site plan must cover items 1–13 of the Residential Site Plan Submittal Checklist, drawn to an engineering scale (1 in. = 10, 20, 30, 100 or 200 ft).",
+        "Structural plans must be at architect's scale (¼ in. = 1 ft preferred), with at least one plan view and one elevation view. For an attached deck, show the connection details and any openings below the ledger.",
+        "Plans must show deck details, including the method of attachment and ledger flashing. Sheets must be at least 11×17 in. for projects of 600 sq ft or less, and at least 18×24 in. for larger ones (Minimum Submittal Requirements).",
+        "Uncovered decks, porches and steps may project into a required setback if they are not higher than 4 ft above finished grade, stay at least 30 in. from every property line, and project no more than 6 ft into a street setback. Taller or covered decks must meet full building setbacks.",
+        "Critical-area review may be assigned to a residential permit, and a PDS site reviewer may visit the property (Assistance Bulletin #23)."
+      ],
+      "note": "The published column is 'Minimum Roof Snow Load (PSF) 25, may increase'. Footnote a says ground snow load varies by site and is applied as the roof snow load for prescriptive IRC design. It must be verified with a Plans Examiner, and the design value may not be less than 25 psf. The 25 is therefore a floor, not a site value; higher-elevation sites will be more. Other table entries: special wind region NO, windborne debris NO, ice barrier NO, winter design temperature 26°F, air freezing index 175, mean annual temperature 50.5°F.",
+      "sources": [
+        {
+          "title": "Snohomish County PDS, Minimum Submittal Requirements for Structural Plans, incl. SCC 30.52F.300 Table R301.2(1) (revised March 15, 2024)",
+          "url": "https://www.snohomishcountywa.gov/DocumentCenter/View/10905/Minimum-Submittal-Requirements-for-Structural-Plans"
+        },
+        {
+          "title": "Snohomish County PDS Assistance Bulletin #21, Decks (Uncovered Decks, Porches & Steps), revised January 2025",
+          "url": "https://www.snohomishcountywa.gov/DocumentCenter/Home/View/8128"
+        },
+        {
+          "title": "Snohomish County PDS Assistance Bulletin #23, Residential Building Permit Process",
+          "url": "https://www.snohomishcountywa.gov/DocumentCenter/Home/View/8099"
+        },
+        {
+          "title": "Snohomish County PDS, Building Construction Codes (2021 IRC effective March 15, 2024)",
+          "url": "https://snohomishcountywa.gov/1262/Building-Construction-Codes"
+        },
+        {
+          "title": "Washington State Building Code Council: 2024 codes effective May 3, 2027",
+          "url": "https://sbcc.wa.gov/"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "OR",
+      "county": "Multnomah County",
+      "fips": "41051",
+      "population_2020": 815428,
+      "jurisdiction": "Portland Permitting & Development (City of Portland), whose start guide says the city 'also issues building permits for the City of Maywood Park [and] some areas of unincorporated Multnomah County'. Multnomah County Land Use Planning does zoning review only ('the city will refer you to us'). The text says 'some areas' only and does not name who issues permits in the rest of unincorporated Multnomah County. The values below come from Portland's permit-ready deck guide, which is the Oregon BCD 2023 ORSC deck guide modified for Portland.",
+      "edition": "Oregon Residential Specialty Code. The 2026 ORSC (based on the 2024 IRC) took effect Oct 1, 2026, with a six-month phase-in: applicants may use either the 2023 ORSC (2021 IRC) or the 2026 ORSC through March 31, 2027, and the 2026 ORSC is mandatory from April 1, 2027. Portland's deck guide is written to the 2023 ORSC.",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": "Moderate (Portland deck guide; use 3,000 psi minimum concrete)",
+      "termite": null,
+      "deck_notes": [
+        "A building permit is needed if the walking surface is over 30 in. from the ground, measured 36 in. from the deck edge. If the whole deck is 30 in. or lower, no building permit is needed (ORSC R105.2: not more than 30 in. within 3 ft horizontally).",
+        "A zoning permit may still be needed in the Environmental, Greenway or River overlay zones. Covered decks must meet zoning rules regardless of height.",
+        "Submit a site plan (e.g. 1 in. = 10 ft or ¼ in. = 1 ft) with property lines, structures, ground elevations and trees 12 in. or larger. Also submit one elevation drawing at ¼ in. = 1 ft and structural plans.",
+        "Structural plans need a framing and foundation plan showing joists, beams, posts and footings. Details are required for joist-to-beam, post-to-beam, post-to-footing, rim, ledger attachment, guard height/spacing/attachment, and lateral support method and connection.",
+        "Portland's permit-ready deck plans cover single-level, attached, wood-framed decks only: live load ≤ 40 psf, dead load ≤ 10 psf, no hot tubs and no concrete or tile finishes.",
+        "The guide's climatic box is pre-filled for Portland: ground snow load ≤ 40 psf, frost line depth 12 in., weathering moderate, decay slight.",
+        "Footings bear on native, undisturbed soil, with the frost line depth at 12 in. minimum and 3,000 psi minimum concrete.",
+        "The lateral load connection is either four 750 lb hold-downs (one within 24 in. of each ledger end) or two 1,500 lb devices within 24 in. of each end of the deck (R507.9.2).",
+        "Guards are 36 in. minimum, with openings that block a 4 in. sphere and posts at 6 ft maximum spacing. Each guard post needs a 1,800 lb hold-down to a joist or blocking.",
+        "Glass, cable, steel or aluminum guards need manufacturer drawings plus stamped calculations.",
+        "Keep underground drainage at least 10 ft from foundations and deck footings. In a flood hazard area or a wildfire hazard (R327) area, the applicant must adapt the plans."
+      ],
+      "note": "No Portland or Multnomah climatic table (wind, seismic, termite) was found. Oregon's site-specific values come from the BCD Oregon Design Criteria Hub (https://tools.oregonexplorer.info/viewer/design_criteria_hub), and the hub could not be queried here. Portland's deck guide pre-selects the ≤ 40 psf ground-snow deck tables. That is a table category, not a site ground snow load, so ground_snow_psf is left null; use 40 only as the deck-table category. Wind, SDC and termite are left null for the same reason. Which agency issues building permits in the parts of unincorporated Multnomah County that Portland does not serve was not verified.",
+      "sources": [
+        {
+          "title": "Portland Permitting & Development, Start Guide: How to get a building permit (Maywood Park and some unincorporated Multnomah County)",
+          "url": "https://www.portland.gov/ppd/get-permit"
+        },
+        {
+          "title": "Multnomah County Land Use Planning, Submitting a Building Plan for Zoning Review",
+          "url": "https://multco.us/info/submitting-building-plan-zoning-review"
+        },
+        {
+          "title": "Portland deck permits: Research (30 in. / 36 in. rule, overlay zones)",
+          "url": "https://www.portland.gov/ppd/residential-permitting/decks/research"
+        },
+        {
+          "title": "Portland deck permits: Create detailed plans",
+          "url": "https://www.portland.gov/ppd/residential-permitting/decks/prepare/create-detailed-plans"
+        },
+        {
+          "title": "Portland Deck Design Guide: Permit-Ready Plans (BCD 2023 ORSC guide modified for Portland, 2025)",
+          "url": "https://www.portland.gov/ppd/documents/deck-design-guide-permit-ready-plans/download"
+        },
+        {
+          "title": "Portland PPD news: new residential codes took effect Oct. 1 (2026 ORSC phase-in)",
+          "url": "https://www.portland.gov/ppd/residential-permitting/news/2026/9/9/new-residential-codes-took-effect-oct-1"
+        },
+        {
+          "title": "Oregon BCD Notice of Permanent Rule: 2026 ORSC adoption (BCD 14-2026, effective 10/01/2026)",
+          "url": "https://www.oregon.gov/bcd/laws-rules/Documents/20261001-2026orsc-adoption-pr.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "OR",
+      "county": "Washington County",
+      "fips": "41067",
+      "population_2020": 600372,
+      "jurisdiction": "Washington County Land Use & Transportation, Building Services (Hillsboro). For prescriptive (residential) design criteria, its Residential Buildings page links to the state's Oregon Design Criteria Hub. Which cities the county serves was not checked.",
+      "edition": "Oregon Residential Specialty Code. The 2026 ORSC (2024 IRC) took effect Oct 1, 2026, and either the 2023 ORSC (2021 IRC) or the 2026 ORSC may be used until March 31, 2027. The 2026 ORSC is mandatory from April 1, 2027. The deck guide the county posts is the Oregon Prescriptive Deck Guide 2023 (2023 ORSC).",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "The county posts the state 'Oregon Prescriptive Deck Guide 2023' (2023 ORSC). It covers single-level wood decks attached to the house: live load ≤ 40 psf, ground snow load ≤ 70 psf.",
+        "Decks whose walking surface is not more than 30 in. above adjacent grade at any point within 3 ft horizontally are exempt from permit (ORSC R105.2, per the deck guide).",
+        "The applicant must attach a site-specific Oregon Design Criteria Hub summary report to the deck guide.",
+        "From that report, check the deck guide boxes: ground snow ≤ 40, 50, 60 or 70 psf; frost line depth 12, 18 or 24 in.; weathering moderate (3,000 psi concrete) or severe (3,500 psi); decay slight or moderate.",
+        "The lateral load connection is either four 750 lb hold-down tension devices or two 1,500 lb devices (R507.9.2).",
+        "Guards are 36 in. minimum, with openings that block a 4 in. sphere.",
+        "A site/plot plan is required for every building permit. It must be at a measurable scale on 11×17 in. paper with a north arrow, and show setbacks, corner elevations (2 ft contours), easements and the full footprint including decks and exterior stairs.",
+        "Plan sheets must be no larger than 2×3 ft and no smaller than 11×17 in. Upload each sheet as a single landscape PDF page, numbered 001, 002 and so on, with a page title.",
+        "Floor plans must show balconies and decks 30 in. above grade (Residential Building Permit Checklist)."
+      ],
+      "note": "Washington County publishes no residential Table R301.2(1). Snow, wind, SDC, weathering, decay and frost are per-site from the Oregon Design Criteria Hub, and the state deck guide requires the Hub report to be attached. Those fields are left null. The frost depth of 12 in. comes from the county's 'Engineering Structural Design Criteria' sheet, which is dated 01/01/2015 and written for the 2014 OSSC: 12 in. minimum below 500 ft elevation, and 18 in. at or above 500 ft unless the building official requires deeper. That sheet is still linked from the Residential Buildings page. It also lists Vult 120 mph (Risk Category II, ASCE 7-10) and 1,500 psf default bearing for engineered work. Those values are outdated and were not used for the residential wind field.",
+      "sources": [
+        {
+          "title": "Washington County LUT Building Services, Residential Buildings (design criteria and deck guide links)",
+          "url": "https://www.washingtoncountyor.gov/lut/building-services/residential-buildings"
+        },
+        {
+          "title": "Washington County Engineering Structural Design Criteria (dated 01/01/2015)",
+          "url": "https://www.washingtoncountyor.gov/lut/documents/engineering-structural-design-criteria/download?inline"
+        },
+        {
+          "title": "Oregon Prescriptive Deck Guide 2023 (posted by Washington County)",
+          "url": "https://www.washingtoncountyor.gov/lut/building-services/documents/oregon-prescriptive-deck-guide-2023/download?inline"
+        },
+        {
+          "title": "Washington County Residential Building Permit Checklist",
+          "url": "https://www.washingtoncountyor.gov/lut/building-services/documents/residential-building-permit-checklist/download?inline"
+        },
+        {
+          "title": "Oregon BCD, Design Criteria (Oregon Design Criteria Hub)",
+          "url": "https://www.oregon.gov/bcd/codes-stand/pages/design-criteria.aspx"
+        },
+        {
+          "title": "Oregon BCD Notice of Permanent Rule: 2026 ORSC adoption (effective 10/01/2026)",
+          "url": "https://www.oregon.gov/bcd/laws-rules/Documents/20261001-2026orsc-adoption-pr.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "OR",
+      "county": "Clackamas County",
+      "fips": "41005",
+      "population_2020": 421401,
+      "jurisdiction": "Clackamas County Building Codes Division (Oregon City). It issues all types of building permits in unincorporated Clackamas County; inside incorporated cities, the issuing agency varies by city and permit type. The values come from the county page 'Design Criteria and Current Codes'.",
+      "edition": "Oregon Residential Specialty Code. The 2026 ORSC (2024 IRC) took effect Oct 1, 2026, and either the 2023 ORSC (2021 IRC) or the 2026 ORSC may be used until March 31, 2027. The 2026 ORSC is mandatory from April 1, 2027.",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": 98,
+      "wind_basis": "Basic design wind speed 98 mph per ORSC Table R301.2(1) (Clackamas County design criteria for residential structures); 120 mph in a special wind region. Exposure is site-specific.",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Minimum frost depth to bottom of footing is 12 in. below 2,500 ft elevation, 18 in. from 2,500 to 4,000 ft, and 24 in. above 4,000 ft.",
+        "Presumptive residential soil bearing is 1,500 psf (ML silts, ORSC Table R401.4.1) unless there is a geotechnical report.",
+        "Ground snow load comes from the Structural Engineers Association of Oregon (SEAO) lookup or map. The minimum roof snow load in Oregon is 20 psf (OSSC 1608.1).",
+        "In unincorporated areas the county issues all building permits. In incorporated cities, check the county's jurisdiction table first; some require city approval before the county accepts an application.",
+        "The site/plot plan must be to scale, no larger than 11×17 in. It must show setbacks, corner elevations (2 ft contours if the site varies more than 4 ft), easements and the structure footprint including decks (One & Two Family Dwelling checklist, Rev. 3/23).",
+        "Floor plans must show balconies and decks 30 in. above grade.",
+        "No county handout for site-built decks was found; the only deck document covers manufactured-dwelling landings and decks."
+      ],
+      "note": "For residential seismic, the county page cites 'ORSC Figure R301.2.2.1' without printing a category, so seismic_sdc is left null. The commercial (OSSC 1613) entry on the same page says SDC D. Ground snow is site-specific (SEAO lookup / Oregon Design Criteria Hub), so it is left null. The county snow page notes it is 'Based on the 2019 Oregon Structural Specialty Code'. Weathering, termite and decay are not published by the county and are per-site from the Oregon Design Criteria Hub. The OSSC basic wind speeds on the same page are 92/98/105/109 mph for Risk Categories I/II/III/IV.",
+      "sources": [
+        {
+          "title": "Clackamas County Building Codes, Design Criteria and Current Codes",
+          "url": "https://www.clackamas.us/building/criteria.html"
+        },
+        {
+          "title": "Clackamas County, Snow Load Design Criteria",
+          "url": "https://www.clackamas.us/building/groundandroofsnowload.html"
+        },
+        {
+          "title": "Clackamas County, Building Permit Responsibility by Jurisdiction",
+          "url": "https://www.clackamas.us/building/jurisdiction.html"
+        },
+        {
+          "title": "Clackamas County One- and Two-Family Dwelling Building Permit Application Checklist (CCP-PW195 Rev. 3/23)",
+          "url": "https://dochub.clackamas.us/documents/drupal/69b77632-552d-44e9-88c2-f1e62b473e08"
+        },
+        {
+          "title": "Oregon BCD Notice of Permanent Rule: 2026 ORSC adoption (effective 10/01/2026)",
+          "url": "https://www.oregon.gov/bcd/laws-rules/Documents/20261001-2026orsc-adoption-pr.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "CA",
+      "county": "Los Angeles County",
+      "fips": "06037",
+      "population_2020": 10014009,
+      "jurisdiction": "County of Los Angeles Department of Public Works, Building and Safety Division (unincorporated Los Angeles County). Title 30 (Residential Code) does not fill in Table R301.2; it says to consult the Building Official.",
+      "edition": "2026 County of Los Angeles Residential Code (LA County Code Title 30), which adopts the 2025 California Residential Code (Chapters 2-10, 44, and Appendices AH, AQ, AS, BB, BF, BJ, CJ) with county amendments. The ordinance says it becomes operative January 1, 2026. The department's 2/1/2026 Residential Plan General Notes cite the 2026 edition of the County Building and Residential Codes.",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Title 30 replaces the local criteria text of CRC R301.2 with 'Consult with the Building Official regarding additional criteria in Table R301.2', so there is no published county-wide snow, wind, seismic, frost, weathering or termite value.",
+        "The County publishes no stand-alone deck handout. Its deck-specific sheet is 'VHFHSZ Patio & Deck Details' (rev. 02/26/2025), whose heavy-timber decking option is 3x decking min., 6x10 floor joists and beams min., and 8x8 columns min.",
+        "In a Fire Hazard Severity Zone or WUI area, the County's 2026 Fire Hazard Notes (2025 CWUIC Ch. 5) say deck, porch, balcony and stair walking surfaces must be one of: ignition-resistant material or material meeting SFM 12-7A-4 plus Sec. 503.2.4; fire-retardant-treated wood labeled for exterior use per CBC 2303.2; noncombustible material; material meeting SFM 12-7A-4A where the attached exterior wall covering is noncombustible or ignition-resistant; or material meeting ASTM E2632 and ASTM E2726 (Sec. 504.7.3.2).",
+        "Title 30 amends CWUIC 501.1 so that additions, alterations and repairs to existing buildings in any FHSZ or WUI area must meet the WUI rules when the permit application is filed on or after January 1, 2026. It also removes the exception for buildings built before July 1, 2008.",
+        "Attached or detached accessory structures within 50 ft of an applicable building (trellises, arbors, patio covers, gazebos and similar) must be noncombustible, ignition-resistant or heavy timber (CWUIC 504.11, per the County fire notes).",
+        "Title 26 Sec. 106.3 says that permit-exempt work is still regulated by the WUI (Chapter 7A) rules. The County ordinance does not change the deck-exemption wording itself.",
+        "Title 26 Sec. 108.4.9 requires an inspection of the impervious moisture barrier on weather-exposed balconies and elevated walking surfaces before it is concealed.",
+        "The County's hillside-building seismic provisions (Title 26 Sec. 1613.9) exempt decks that do not support, and are not supported by, the main building.",
+        "The County's residential minimum plan list (2/1/2026) asks for drawings to scale (1/8 in. min., 1/4 in. recommended) on 18x24 in. min. sheets (24x36 recommended). It also asks for a dimensioned site plan with all structure-to-property-line setbacks, dimensioned structural, framing and foundation plans, and sections. That list is written for new SFR/MFR work, not decks specifically.",
+        "No County deck handout found mentions coastal or Coastal Commission requirements."
+      ],
+      "note": "None of the climatic values could be sourced: the 2026 Title 30 ordinance leaves Table R301.2 to the Building Official, and no County design-criteria handout was found. Two things in the files are not frost or deck values and should not be read as such: (1) the County's 2026 Wood Frame Prescriptive Provisions sheet shows foundations for 1-story R-3/U buildings on expansive soil with 18-24 in. minimum embedment and a 16 in. square interior pad at 18 in. min. depth; (2) the County's rooftop-PV structural criteria are a generic statewide form. The Title 30/Title 26 PDFs read are the 08/19/2025 stakeholder-outreach versions (ordinance number blank); the department's 2026-dated handouts confirm the 2026 codes are in use. The City of Los Angeles (LADBS) was not checked because web search was exhausted and its bulletin listings load only through JavaScript. For a real address, get the seismic category and wind speed site-specifically (ASCE 7 hazard tool) or ask LA County Building & Safety.",
+      "sources": [
+        {
+          "title": "LA County Title 30 - Residential Code Ordinance (2025 CRC adoption, operative 1/1/2026), 08/19/2025 version",
+          "url": "https://dpw.lacounty.gov/bsd/lib/fp/Stakeholder%20Outreach%20Meeting%20on%20September%2011,%202025/Title%2030%20-%20Residential%20Code%20Ordinance%2008192025.pdf"
+        },
+        {
+          "title": "LA County Title 26 - Building Code Ordinance, 08/19/2025 version",
+          "url": "https://dpw.lacounty.gov/bsd/lib/fp/Stakeholder%20Outreach%20Meeting%20on%20September%2011,%202025/Title%2026%20-%20Building%20Code%20Ordinance%2008192025.pdf"
+        },
+        {
+          "title": "LA County B&S Standard Construction Notes - Fire Hazard Severity Zone (2026 LA County Building Code / 2025 CWUIC Ch. 5)",
+          "url": "https://dpw.lacounty.gov/bsd/lib/fp/Building/Very%20High%20Fire%20Hazard%20Severity%20Zone/2026%20Code%20Version/Fire%20Hazard%20Notes%202026.pdf"
+        },
+        {
+          "title": "LA County VHFHSZ Patio & Deck Details",
+          "url": "https://dpw.lacounty.gov/bsd/lib/fp/Building/Very%20High%20Fire%20Hazard%20Severity%20Zone/2023%20Code%20Version/VHFHSZ%20Patio%20and%20Deck%20Details.pdf"
+        },
+        {
+          "title": "LA County Residential Plan General Notes (2/1/2026)",
+          "url": "https://dpw.lacounty.gov/bsd/lib/fp/Building/Residential/Residential%20Plan%20General%20Notes_2026.pdf"
+        },
+        {
+          "title": "LA County Minimum Plan Submittal Requirements - Residential (2/1/2026)",
+          "url": "https://dpw.lacounty.gov/bsd/lib/fp/Building/Residential/Minimum%20Plan%20Req%27s%20-%20Residential_2026.pdf"
+        },
+        {
+          "title": "LA County Building & Safety publications index",
+          "url": "https://dpw.lacounty.gov/bsd/content/publications.aspx"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "CA",
+      "county": "San Diego County",
+      "fips": "06073",
+      "population_2020": 3298634,
+      "jurisdiction": "County of San Diego Planning & Development Services, Building Division (unincorporated San Diego County). The values come from the County Residential Code, Sec. 92.2.R301.2 (Table R301.2), in Ordinance No. 10982 (N.S.).",
+      "edition": "2025 California Residential Code (2024 IRC basis) with County of San Diego amendments, under Ordinance No. 10982 (N.S.). The ordinance was adopted March 4, 2026 and takes effect 30 days after passage; state law already made the 2025 CBSC effective January 1, 2026. PDS 081 (rev. 01/01/2026) lists the 2025 CRC/CBC and the 2025 California Wildland-Urban Interface Code. The County WUI Code (1st ed.) is effective April 2, 2026.",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": 110,
+      "wind_basis": "Ultimate design wind speed 110 mph, Exposure C; topographic effects No; special wind region No; windborne debris zone No (County Table R301.2, Sec. 92.2.R301.2). The table does not state the ASCE 7 edition or risk category.",
+      "seismic_sdc": null,
+      "weathering": "Negligible",
+      "termite": "Per CRC R318",
+      "deck_notes": [
+        "Decks, walks and driveways not more than 30 in. above adjacent grade, not over a basement or story below, and not part of an accessible route need no building permit (County Building Code exemption list, item 9). No area limit is stated.",
+        "PDS 044 'Residential Decks' (rev. 01/01/2023) is a standard plan for single-family decks only. It must come with a plot plan per PDS 090 and be used together with PDS 081 (Minimum Construction Specifications) and PDS 075 (Guards and Handrails).",
+        "PDS 044 design limits: 60 psf live load; no hot tubs or other heavy concentrated loads; 10 ft max post height; no support from an overhang or cantilever; no window, door or opening wider than 4 ft under a deck supported by the existing building.",
+        "PDS 044 typical post footing on undisturbed firm soil: 12 in. below grade and 6 in. above grade; 18x18 in. for posts at 8 ft o.c. or 20x20 in. at 10 ft o.c.; concrete f'c 2,500 psi min.; deck stair footing 12 in. min. deep and 12 in. wide.",
+        "PDS 044 sets a 7 ft minimum horizontal distance from the bottom leading edge of a footing to daylight (slope face).",
+        "PDS 044 ledger at rim joist: min. 3x ledger with 5/16 or 3/8 in. lag bolts at 8 in. o.c., flashing above and below, joists in hangers.",
+        "PDS 044 framing: 4x8 min. joists with a 12 ft max span, at 32 in. o.c. with 2x fire-retardant-treated decking or 16 in. o.c. (or per the product listing) with alternative decking; 4x10 or 6x8 min. beams; 6x6 posts; knee braces required on decks 4 ft and higher.",
+        "PDS 044 materials: Douglas Fir-Larch No. 2 or better; preservative-treated joists within 18 in. of grade and girders within 12 in.; fasteners in treated wood must be hot-dip galvanized, stainless steel, silicon bronze or copper.",
+        "The County's guard handout (PDS 075) requires guards where a walking surface is more than 30 in. above grade, at least 42 in. high, with openings that stop a 4 in. sphere. Stair handrails are 34-38 in. above nosings, and the PDS 044 stair section shows a 42 in. guard.",
+        "PDS 044 stairs: 36 in. min. width, 6 ft 8 in. min. headroom, 36 in. min. landings top and bottom, risers 4 to 7-3/4 in., 10 in. min. treads, 3/4 to 1-1/4 in. nosings where treads are under 11 in., 4x12 stringers at 48 in. max. spacing.",
+        "PDS 044 says it meets WUI fire-resistive requirements, with decking of 2x approved fire-retardant-treated lumber or an alternative material meeting the County code. It cites County Building Code 92.1.709A.1.4, a pre-2026 section number.",
+        "The 2026 County WUI Code Sec. 504.7.3.2 says deck, porch, balcony and stair walking surfaces must be one of: material meeting ASTM E2632/E2726 per 504.7.3.3; material meeting SFM 12-7A-4 plus Sec. 503.2.4; noncombustible material; material meeting SFM 12-7A-4A with a noncombustible or ignition-resistant attached wall (with a Class B flame-spread exception); or material meeting 504.7.3.4 per ASTM E2632 with the same wall condition.",
+        "The County WUI Code applies to all unincorporated SRA land in Moderate, High and Very High FHSZs, plus locally designated VHFHSZ and WUI areas.",
+        "Plot plan (PDS 090, rev. 07/24/2026): two sets on 18x24 in. min. sheets (11x17 for minor permits and small additions), drawn to an engineer's scale, with north arrow, vicinity map, all property-line dimensions, required setbacks, easements, drainage and stormwater BMPs.",
+        "No coastal or Coastal Commission requirements appear in the County deck handouts."
+      ],
+      "note": "The frost depth is the County table's 'Minimum 12-inch footing depth' (no frost-line figure is given). Ground snow load is null because the table says 'Per County of San Diego guidance documents' (mountain areas vary); no snow guidance document was found in the County Building Code ordinance or the forms list. Seismic design category is null because the table says 'Per USGS ground motion parameter calculator', so it is site-specific. The termite entry 'Per CRC R318' is copied as printed, but the same ordinance amends R318.1 as Means of Egress in the 2025 CRC, so that cross-reference looks stale; the new termite section number was not verified. Air freezing index '1500 or less'. PDS 044/075 are rev. 01/2023 but are still listed on the current forms page.",
+      "sources": [
+        {
+          "title": "County of San Diego Ordinance No. 10982 (N.S.) - Triennial County Building Code Update (County Residential Code Sec. 92.2.R301.2, Table R301.2; permit exemptions)",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/pds/docs/ord10982.pdf"
+        },
+        {
+          "title": "PDS 044 Residential Decks (standard plan, rev. 01/01/2023)",
+          "url": "https://www.sandiegocounty.gov/pds/docs/pds044.pdf"
+        },
+        {
+          "title": "PDS 075 Guards and Handrails",
+          "url": "https://www.sandiegocounty.gov/pds/docs/pds075.pdf"
+        },
+        {
+          "title": "PDS 081 Minimum Construction Specifications (rev. 01/01/2026)",
+          "url": "https://www.sandiegocounty.gov/pds/docs/pds081.pdf"
+        },
+        {
+          "title": "PDS 090 Plot Plan Minimum Requirements (rev. 07/24/2026)",
+          "url": "https://www.sandiegocounty.gov/pds/docs/pds090.pdf"
+        },
+        {
+          "title": "2026 County of San Diego Wildland-Urban Interface Code (effective April 2, 2026)",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/pds/docs/COSDWUI2026.pdf"
+        },
+        {
+          "title": "PDS Building forms and handouts page",
+          "url": "https://www.sandiegocounty.gov/content/sdc/pds/bldgforms.html"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "CA",
+      "county": "Orange County",
+      "fips": "06059",
+      "population_2020": 3186989,
+      "jurisdiction": "County of Orange, OC Public Works / OC Development Services Building & Safety (unincorporated Orange County). The values come from the amended CRC Table R301.2(1) in Ordinance No. 25-018 (OC Codified Ordinances Sec. 7-1-47).",
+      "edition": "2025 California Residential Code (with the 2025 CBC, 2024 IBC and 2025 California Wildland-Urban Interface Code) adopted and amended by Ordinance No. 25-018, passed November 4, 2025 and effective 30 days after passage. OC Development Services says the 2025 codes apply to all submittals from January 1, 2026; to keep the 2022 code, an application had to be submitted and the plan-review fee paid by December 31, 2025.",
+      "frost_depth_in": 12,
+      "ground_snow_psf": 0,
+      "wind_mph": 95,
+      "wind_basis": "'Speed (mph)' 95 in the County's amended CRC Table R301.2(1); the footnote says it comes from the basic wind speed map, Figure R301.2(2). The table does not say ultimate (Vult) or ASD, ASCE 7 edition, or risk category. Exposure category is determined site by site per R301.2.1.4. Topographic effects NO, special wind region printed as '0', windborne debris zone NO.",
+      "seismic_sdc": "D2 or E",
+      "weathering": "Negligible",
+      "termite": "Very Heavy",
+      "deck_notes": [
+        "OC Development Services publishes no deck handout or typical deck detail; its Applications & Forms page has only typical lattice and roofed patio cover sheets.",
+        "OC amends CRC R105.2 only for sheds up to 120 sq ft, fences up to 6 ft, and a new item letting the Building Official exempt minor incidental structures. The CRC deck exemption stays as written in the state code.",
+        "OC's Building Plan Check Submittal Checklist asks for scaled PDF drawings, where applicable: a site plan with distances to property lines, a foundation plan with footing sizes and reinforcing, sections, structural plans with member sizes, and stamped engineer calculations for framing, footings, lateral system and connections. No sheet size is stated.",
+        "OC's foundation policy for residential projects and accessory structures (effective June 22, 2020; written under the 2019 code; decks are not named) requires a geotechnical report unless the project is excepted. Its alternate method uses 12 in. wide x 24 in. deep continuous footings, 18 in. min. embedment for interior piers, and f'c 4,500 psi concrete with Type V cement.",
+        "In WUI fire areas OC requires Class A roofs and OCFA-approved fuel modification plans for new buildings. Ordinance 25-018 does not amend the CWUIC decking section, so 2025 CWUIC 504.7.3.2 decking materials apply there.",
+        "OC's 2025 ordinance deletes CRC R403.1.3.6 (isolated plain concrete footings); check this with plan check before using unreinforced isolated post footings.",
+        "No coastal or Coastal Commission requirements appear in the OC building documents reviewed."
+      ],
+      "note": "The amended Table R301.2(1) in the posted ordinance is a scanned image; it was read visually. The wind speed glyph reads '95' (consistent with the same ordinance's tile-roof 'Special Wind Region with a basic wind speed over nominal 95 mph' amendments), and 'Special wind region' is printed as '0'. Frost line depth is printed as a range, '12-24' (inches), with no explanation of which value applies when. 12 is given as the minimum; use 24 in. if you want the conservative reading, and confirm with OC Building. Other table entries: ice barrier underlayment No, air freezing index 0, mean annual temperature 60. A separate County foundation memo states that most of the County is in Seismic Design Category D.",
+      "sources": [
+        {
+          "title": "County of Orange Ordinance No. 25-018 (adopts 2025 CBC/CRC/CWUIC with amendments; Sec. 7-1-47 Table R301.2(1))",
+          "url": "https://pwds.oc.gov/sites/ocpwocds/files/2026-04/Building%20Code%20-%20California%20Building%20Code%202025%20Edition%2C%20adopted%20and%20amended%20by%20Ordinance%20No%2025-018%20on%20November%204%2C%202025..pdf"
+        },
+        {
+          "title": "OC Development Services - Codes and Regulations (2025 code adoption notice)",
+          "url": "https://pwds.oc.gov/service-areas/oc-development-services/building-safety/building-grading-information/codes"
+        },
+        {
+          "title": "OC Building Plan Check Submittal Checklist",
+          "url": "https://pwds.oc.gov/sites/ocpwocds/files/2022-07/Building%20Plan%20Check%20Submittal%20Checklist1.pdf"
+        },
+        {
+          "title": "OC Foundation Requirements for Residential Projects and Accessory Structures (2020)",
+          "url": "https://pwds.oc.gov/sites/ocpwocds/files/2021-06/FoundationResidentialProjectsStructures.pdf"
+        },
+        {
+          "title": "OC Development Services - Applications and Forms",
+          "url": "https://pwds.oc.gov/service-areas/oc-development-services/planning-development/applications-and-forms"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "AK",
+      "county": "Municipality of Anchorage",
+      "fips": "02020",
+      "population_2020": 291247,
+      "jurisdiction": "Municipality of Anchorage Development Services Department, Building Safety Division (AMC Title 23 local amendments)",
+      "edition": "2024 IRC with AMC Chapter 23.85 local amendments (AO 2026-33, as amended, passed Apr 14, 2026, effective 30 days after passage, about May 14, 2026); the 2018 IRC preceded it",
+      "frost_depth_in": 120,
+      "ground_snow_psf": 50,
+      "wind_mph": null,
+      "wind_basis": "Per site from the Anchorage Bowl 'Three Second Gust' Wind Zone Map (AMC 23.85 Figure R301.2(2)), which replaces the IRC map. Legend (minimum ultimate speeds, Risk Category I / II / III-IV): Zone I 120/130/135, Zone II 135/145/150, Zone III 145/155/160, Zone IV 150/160/165 mph. Houses are Risk Category II, so 130, 145, 155 or 160 mph by zone.",
+      "seismic_sdc": "D2",
+      "weathering": "Yes, severe",
+      "termite": "No",
+      "deck_notes": [
+        "A permit is required for any deck over 30 in. above finished grade, whether attached to or detached from the residence (Handout R.13).",
+        "Decks may be built to the American Wood Council Prescriptive Residential Wood Deck Construction Guide.",
+        "The plot plan must be an as-built drawing sealed by an Alaska-registered land surveyor, to scale, showing the house, the deck and stairs and their distances from all lot lines, easements, utilities and overhead wires.",
+        "Footing depth follows AMC 23.85 Table R403.1: cold (unheated) exterior isolated foundations and piers need 120 in., or 60 in. in non-frost-susceptible material; warm perimeter footings need 42 in.",
+        "Attached decks, landings and platforms no more than 72 in. above grade may bear directly on the ground unless an exterior door swings outward onto them; frost heave must be considered (Table R403.1 note 3).",
+        "Frost protection is not required for deck stair footings that are not attached to or in contact with the frost-protected structure (AMC 23.85.R507.3.3).",
+        "Deck framing exposed to weather must be pressure-preservative-treated or naturally durable, with hot-dip galvanized or stainless fasteners.",
+        "Deck beams and joists not protected like a roof need decay protection unless fully painted or stained and capped with 24-gauge galvanized flashing over ice-and-water shield (AMC 23.85.R304.1 item 10).",
+        "Plans must show the ledger-to-house connection (fastener diameter, length and spacing), ledger flashing, joist uplift clips, post and beam connector part numbers, bracing, and a lateral tie-back to the house.",
+        "The IRC ledger flashing rule (R507.9.1.5) is amended locally to 1 in. down the exterior ledger face instead of 4 in.",
+        "Guards are required where the walking surface is more than 30 in. above grade within 36 in. horizontally. They must be at least 36 in. high with openings smaller than a 4 in. sphere, resist 200 lb on the top rail, and resist 50 lb on infill (Handout R.13; IRC R507.10 is deleted locally).",
+        "Deck snow load is determined per section R301.2.3 instead of Table R301.2 (AMC 23.85.R507.1)."
+      ],
+      "note": "frost_depth_in = 120 is the code minimum for a cold exterior isolated foundation (deck piers/footings) in AMC 23.85 Table R403.1. It may be 60 in. in non-frost-susceptible material (note 5). The 'frost line' in Table R301.2 just points to this table; 42 in. is the warm perimeter value. Ground snow load is 50 psf allowable / 80 psf ultimate (for ASCE 7). Other table values: winter design temperature -7 F, ice barrier Yes, flood hazards Yes, air freezing index 3500, mean annual temperature 35 F. The wind legend was read from a low-resolution map image, so check the zone values against the map at the permit counter. Handout R.13 is dated May 7, 2021 (written under the 2018 code) but is still the posted deck handout. Permits are issued by Anchorage Building Safety within its building safety service area.",
+      "sources": [
+        {
+          "title": "MOA Handout R.13 Prescriptive Residential Wood Deck Construction Guide",
+          "url": "https://www.muni.org/Departments/OCPD/development-services/codes-handouts/Handouts/handoutr13.pdf"
+        },
+        {
+          "title": "AMC Chapter 23.85 Local Amendments to the International Residential Code (2024 cycle)",
+          "url": "https://www.muni.org/Departments/OCPD/development-services/codes-handouts/Code%20Archive%202018/CH%2023.85.pdf"
+        },
+        {
+          "title": "AO 2026-33, As Amended (repeal and reenactment of Title 23; adopts 2024 IRC)",
+          "url": "https://www.muni.org/Departments/OCPD/development-services/codes-handouts/Code%20Archive%202018/AO%202026-033,%20As%20Amended.pdf"
+        },
+        {
+          "title": "MOA Handout R.06 Residential Handrails and Guards",
+          "url": "https://www.muni.org/Departments/OCPD/development-services/codes-handouts/Handouts/handoutr06.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "AK",
+      "county": "Matanuska-Susitna Borough",
+      "fips": "02170",
+      "population_2020": 107081,
+      "jurisdiction": "No borough building code was found. The State Fire Marshal (Alaska DPS, Division of Fire and Life Safety) reviews plans but exempts residential housing of a three-plex or smaller. AHFC BEES is an energy standard tied to state/AHFC financing. The City of Palmer is a State Fire Marshal 'deferred jurisdiction' that does plan review locally; its site could not be read.",
+      "edition": "None found for one- and two-family homes in the borough at large. The State Fire Marshal plan review (Alaska Building and Fire Codes) does not apply to housing of a three-plex or smaller. AHFC BEES (2018 IECC + ASHRAE 62.2-2016 with Alaska amendments) applies only when AHFC or other state financing is used.",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "No local building permit or deck design criteria were found for unincorporated Mat-Su.",
+        "State Fire Marshal plan review exempts residential housing of a three-plex or smaller, so single-family decks get no state structural review.",
+        "If the home is financed through AHFC or other state assistance, BEES energy compliance (PUR-101/PUR-102 forms) applies, but that is an energy standard, not deck structure.",
+        "Inside the City of Palmer (and possibly Wasilla), check the city building department; Palmer handles plan review locally as a State Fire Marshal deferred jurisdiction."
+      ],
+      "note": "Every design value is null because no Mat-Su Borough, Wasilla or Palmer design-criteria source could be opened. matsu.gov pages render client-side with no building-code content. The borough code (ecode360 MA4745), wasilla.municipal.codes and palmerak.org all returned 403 or a Cloudflare challenge. A borough-wide 'no building code' statement could not be confirmed from a borough page. The State Fire Marshal page lists 'Central Mat-Su FSA' and the City of Palmer as deferred jurisdictions for plan review. Whether Palmer or Wasilla enforce the IRC for houses, and with what design criteria, is unverified.",
+      "sources": [
+        {
+          "title": "Alaska DPS State Fire Marshal - Plan Review Bureau (three-plex-or-smaller exemption; deferred jurisdictions)",
+          "url": "https://dps.alaska.gov/fire/plan-review/"
+        },
+        {
+          "title": "AHFC Building Energy Efficiency Standard (BEES)",
+          "url": "https://www.ahfc.us/pros/builders/building-energy-efficiency-standard"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "AK",
+      "county": "Fairbanks North Star Borough",
+      "fips": "02090",
+      "population_2020": 95655,
+      "jurisdiction": "City of Fairbanks Building Department. Values apply inside Fairbanks city limits only; the FNSB has not adopted a building code, so permits are required only in the City of Fairbanks and the City of North Pole.",
+      "edition": "2018 IRC with City of Fairbanks Local Amendments (Ordinance No. 6153, adopted April 12, 2021; Fairbanks General Code Ch. 10, Art. XIII)",
+      "frost_depth_in": 42,
+      "ground_snow_psf": 60,
+      "wind_mph": 90,
+      "wind_basis": "City Table R301.2(1) 'Wind speed: 90 mph'; Building Resources page 'Basic wind speed: 90 MPH' (ultimate vs. nominal basis not stated)",
+      "seismic_sdc": "D1",
+      "weathering": "Severe",
+      "termite": "None to slight",
+      "deck_notes": [
+        "Uncovered decks no more than 30 in. above grade at any point are exempt from a building permit (local R105.2 item 10).",
+        "All exterior footings must be at least 42 in. below finished grade unless the foundation is designed by an Alaska-licensed engineer (local R403.1.4).",
+        "The local frost-protection exception reads: 'Decks not covered with a roof and decks which are not more than 30 inches above grade at any point need not be provided with footings that extend below the frost line.'",
+        "Roof snow load is 50 psf and ground snow load is 60 psf. The snow exposure coefficient is 1.0, and the 15% load duration factor is not allowed for snow on wood-framed roofs (matters for covered decks).",
+        "Submit two sets of plans. The plot plan must be drawn to scale, fully dimensioned, and show distances to all property lines and known easements, with a copy of the FNSB zoning permit.",
+        "The floor framing plan must give joist, beam, header and post sizes and spacing, and the lumber species and grade.",
+        "A stair detail is required, showing rise/run, handrail and headroom."
+      ],
+      "note": "Ground snow load (60 psf) is from the city's 'Minimum Design Parameters' web page; the ordinance table lists only roof snow load (50 psf). The table also gives decay None to slight, winter design temperature -47, and flood hazards per FNSB Title 15. The city deleted IRC R318 (termites). No permafrost-specific deck rule was found in the opened sources; local foundation rules simply require 42 in. or an engineered design. North Pole's criteria were not checked. Outside the two cities, no building permit or design criteria apply (FNSB FAQ).",
+      "sources": [
+        {
+          "title": "City of Fairbanks - Building Resources (Minimum Design Parameters)",
+          "url": "https://www.fairbanks.gov/building/building-resources"
+        },
+        {
+          "title": "City of Fairbanks Ordinance 6153 - Local Amendments to the 2018 IRC",
+          "url": "https://files.aptuitivcdn.com/K9gxWNkmZ2-1856/docs/ordinances/ord_6153_amend_fgc_chap.10_art.xiii_international_bldg_code_by_adopting_2018_international_bldg_code_with_local_amendments.pdf.pdf"
+        },
+        {
+          "title": "City of Fairbanks - Building Code Information",
+          "url": "https://www.fairbanks.gov/building/building-codes"
+        },
+        {
+          "title": "City of Fairbanks - Residential Plan Submittal Checklist",
+          "url": "https://files.aptuitivcdn.com/K9gxWNkmZ2-1856/docs/residential_plan_submittal_checklist.pdf"
+        },
+        {
+          "title": "FNSB FAQ - Do I need a building permit before starting construction?",
+          "url": "https://www.fnsb.gov/FAQ.aspx"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "HI",
+      "county": "Honolulu County (City and County of Honolulu)",
+      "fips": "15003",
+      "population_2020": 1016508,
+      "jurisdiction": "City and County of Honolulu Department of Planning and Permitting (DPP); ROH Chapter 16 (building code) and Chapter 18 (permits)",
+      "edition": "2018 IRC as the Hawaii State Residential Code with State and City amendments (Ordinance 24-15), effective 08/09/2024, plus City Addendum #1 effective 03/11/2025 (per the DPP 'Codes Currently in Effect' table)",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Honolulu Table R301.2(1): wind speed 'Per Figure R301.2(8) State Residential Code'. IRC wind provisions may be used only where the effective ultimate design wind speed Veff_ult is below 140 mph; at 140 mph or more the alternative provisions/wind design apply and windborne debris protection is required (Honolulu Table R301.2.1).",
+      "seismic_sdc": "C or D0",
+      "weathering": "Negligible",
+      "termite": "Very heavy",
+      "deck_notes": [
+        "Open slat wood decks must have at least 6 in. of ground clearance for any wood member (ROH amendment R317.6 exception).",
+        "Wood protected from decay must be preservative-treated per AWPA U1 (amended R317.1).",
+        "Fasteners in non-borate pressure-treated or fire-retardant-treated wood must be hot-dip zinc-coated galvanized steel, stainless steel, silicon bronze or copper (amended R317.3.1).",
+        "Termite protection follows the Formosan-termite rules: soil treatment at the maximum label rate by a licensed operator, or approved barriers such as basaltic termite barrier or stainless mesh, where wood framing sits on slabs or foundations (R318.1.3, R318.2, R318.3 amendments).",
+        "Plan sheets must be at least 36 x 24 in., all the same size, landscape, black and white, drawn to scale with a graphic scale bar, and must leave a blank 5.75 x 3.75 in. DPP stamp space at the top right of each sheet.",
+        "The plot plan must show the entire parcel with TMK lot dimensions, building and yard setbacks, easements, and the location and scope of the work.",
+        "Decks are not on DPP's list of commonly applicable permit exemptions (see ROH 18-3.1(b) for the full list).",
+        "Stamped plans are required when, for example, work on a one-story residence exceeds $180,000 or the site is in a special management or flood hazard area."
+      ],
+      "note": "Honolulu's amended Table R301.2(1) has no ground snow load or frost line depth columns: it lists only wind, seismic, weathering, termite, decay (Moderate to severe) and flood hazards (FEMA). So frost_depth_in and ground_snow_psf are null, with no published local value. The IRC footing-depth rule R403.1.4 is not amended by Honolulu; a Hawaii County DPW procedure quotes it as 12 in. below undisturbed ground (2006 text), but no Honolulu source stating a number was opened. The State table R301.2(4) assigns Oahu SDC D0, while Honolulu's table says 'C or D0'. The ROH sections on American Legal returned 403, so the ordinance PDF (Ord. 24-15, from hnldoc) was used.",
+      "sources": [
+        {
+          "title": "Honolulu DPP - Building Permits (Codes Currently in Effect)",
+          "url": "https://www.honolulu.gov/dpp/permitting/building-permits-home/"
+        },
+        {
+          "title": "Honolulu Ordinance 24-15 (Bill 65 (2023) CD2 FD1) - adoption of State Building and Residential Codes with amendments",
+          "url": "https://hnldoc.ehawaii.gov/hnldoc/document-download?id=21721"
+        },
+        {
+          "title": "Honolulu DPP Building Permit Plan Format Checklist",
+          "url": "https://www4.honolulu.gov/docushare/dsweb/Get/Document-347535/building-permit-checklist.pdf"
+        },
+        {
+          "title": "Honolulu DPP - Do You Need a Building Permit?",
+          "url": "https://www.honolulu.gov/dpp/permitting/building-permits-home/building-permit-requriements/"
+        },
+        {
+          "title": "Hawaii State Residential Code (2018 IRC with amendments), SBCC Nov 17, 2020",
+          "url": "https://ags.hawaii.gov/wp-content/uploads/2021/09/2018StateResidentialCode_20201117rev1.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "HI",
+      "county": "Hawaii County",
+      "fips": "15001",
+      "population_2020": 200629,
+      "jurisdiction": "County of Hawaii Department of Public Works, Building Division; Hawaii County Code Chapter 5 (administrative), 5A (building) and 5B (residential)",
+      "edition": "2018 IRC per Hawaii County Code Chapter 5B 'Residential Building Code' (Ord. 21-61, 2021; code supplement 11, 1-2022). Chapter 5A (non-residential and post/pier raised floors) is still the 2006 IBC (Ord. 20-61, amended by 21-61).",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Hawaii County Table R301.2(1): wind speed 'Per Figure R301.2(8)' (county ultimate wind speed maps). IRC wind provisions may be used only where Vult is below 130 mph, or below 140 mph for single-story slab-on-grade buildings in Exposure B (HCC 5B amended R301.2.1).",
+      "seismic_sdc": "D2 or E",
+      "weathering": "Negligible",
+      "termite": "Very Heavy",
+      "deck_notes": [
+        "Detached decks or platforms less than 30 in. above grade are exempt from a building permit, but must still meet the zoning 'yards' setbacks (HCC 5-3-22(a)(1)(C)).",
+        "Raised floor systems on post or pier foundations must be designed under the Chapter 5A building code, not the IRC prescriptive rules (HCC 5B amended R401.5).",
+        "Open slat wood decks must have at least 6 in. of ground clearance for any wood member (HCC 5B R408.8).",
+        "Decay protection must use naturally durable wood approved by the building official or wood preservative-treated per AWPA U1 (amended R317.1).",
+        "Termite protection needs one of chemical termiticide, a baiting system or a physical barrier, plus one of treated wood, cold-formed steel or naturally durable termite-resistant wood (amended R318.1).",
+        "Footings must be at least 12 in. below undisturbed ground except on solid rock (DPW Division Procedure 2017-0602, citing R403.1.4); embedment in in-situ basalt is waived only for slab-on-grade footings.",
+        "Plans should be 22x34, 24x36 or 34x44 in. sheets, all the same size, landscape, to scale, with a 6 x 6 in. DPW block on the cover, submitted digitally through EPIC.",
+        "The site plan must show distances to property lines and other buildings, access roads and easements, the driveway and utilities.",
+        "The design-criteria block on the plans lists basic and effective wind speed, wind exposure category and seismic design category."
+      ],
+      "note": "Seismic design category is D2 in the North and South Kohala, Hamakua and North Hilo districts and E in all other districts (HCC 5B Table R301.2(4)). The county table has no ground snow load or frost depth column, so ground_snow_psf is null; Mauna Kea/Mauna Loa summits were not addressed. frost_depth_in = 12 is the minimum footing depth below undisturbed ground stated in the county's 2017 procedure, which quotes the 2006 IBC/IRC text; HCC 5B does not amend R403.1.4. The county table also lists decay Moderate to severe and flood hazards per FEMA or HCC Chapter 27. A county non-residential checklist still says 'Code Date: IBC 2006 (State projects IBC 2018)'. The 5B text came from the county's Laserfiche records copy of the Hawaii County Code (supp. 11, 1-2022); later amendments are not ruled out. The DPW website itself (dpw.hawaiicounty.gov) returned 403.",
+      "sources": [
+        {
+          "title": "Hawaii County Code Chapter 5B Residential Building Code (county records)",
+          "url": "https://records.hawaiicounty.gov/WebLink/DocView.aspx?id=112877&dbid=1&repo=PublicDocuments"
+        },
+        {
+          "title": "Hawaii County Code Chapter 5 Construction Administrative Code (county records)",
+          "url": "https://records.hawaiicounty.gov/WebLink/DocView.aspx?id=110694&dbid=1&repo=PublicDocuments"
+        },
+        {
+          "title": "Hawaii County Code Chapter 5A Building Code (county records)",
+          "url": "https://records.hawaiicounty.gov/WebLink/DocView.aspx?id=110695&dbid=1&repo=PublicDocuments"
+        },
+        {
+          "title": "DPW Building Division Procedure 2017-0602, R-3 Minimum Footing Depth",
+          "url": "https://records.hawaiicounty.gov/WebLink/DocView.aspx?id=88707&dbid=1&repo=PublicDocuments"
+        },
+        {
+          "title": "DPW Building Division - Residential Permit Minimum Construction Drawing Guidelines (rev. 6/03/24)",
+          "url": "https://records.hawaiicounty.gov/WebLink/ElectronicFile.aspx?docid=113173&dbid=1&repo=PublicDocuments"
+        },
+        {
+          "title": "DPW Residential Plans Designer Checklist",
+          "url": "https://records.hawaiicounty.gov/WebLink/DocView.aspx?id=110547&dbid=1&repo=PublicDocuments"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "HI",
+      "county": "Maui County",
+      "fips": "15009",
+      "population_2020": 164754,
+      "jurisdiction": "County of Maui Department of Public Works, Development Services Administration (DSA); Maui County Code Chapters 16.25 and 16.26C",
+      "edition": "2018 IBC (MCC Chapter 16.26C, Bill 15 CD1 FD1 (2023)) with administrative provisions in MCC Chapter 16.25 (Bill 14 CD1 FD1 (2023)). One- and two-family dwellings 'shall comply with this code or the International Residential Code' (16.25, 101.2.2 exception 1). The IRC edition and county amendments for Maui were not confirmed; the State SBCC notice says the 2018 Hawaii State Residential Code becomes an interim county code where a county has not amended it (HRS 107-28(b)).",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "State Residential Code: ultimate wind speed per Figure R301.2(5)(b) 'County of Maui, Island of Maui' (also (c) Molokai and (d) Lanai). IRC wind provisions apply only where Vult is below 130 mph.",
+      "seismic_sdc": "D1",
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Detached unroofed decks 30 in. or less from adjacent grade to the deck floor are exempt from a building permit (MCC 16.25, 105.2 item 5, per Bill 14 CD1 FD1 (2023)).",
+        "The site plan must show the Tax Map Key number and address, the new construction and existing structures to scale, distances from lot lines, street and finished grades, and flood hazard information. It must be drawn from an accurate boundary survey (16.25, 107.2.6).",
+        "Open decks are valued at $40/sq ft and covered decks at $60/sq ft for permit fees (16.25 Table 109.1)."
+      ],
+      "note": "The SDC of D1 is the State Residential Code Table R301.2(4) value for the island of Maui; the same table gives Oahu, Molokai and Lanai D0, so Molokai and Lanai in Maui County are D0, not D1. No Maui-specific Table R301.2(1) was found, so weathering, termite, frost and snow are null. mauicounty.gov, Municode and mauicounty.us all returned 403 or a JS challenge. Maui sources are the Bill 14 and Bill 15 (2023) texts from the council's Legistar. The Legistar API shows no passed date for them, but later bills (2024-2026) amend Chapter 16.25, which shows that chapter is in force. Confirm the residential code edition and any Maui design criteria with DSA.",
+      "sources": [
+        {
+          "title": "Maui County Bill 14, CD1, FD1 (2023) - MCC Chapter 16.25 Building Code administrative and supplemental provisions",
+          "url": "https://mauicounty.legistar1.com/mauicounty/attachments/3b9b1394-17e3-4558-8579-821d8fd71507.pdf"
+        },
+        {
+          "title": "Maui County Bill 15, CD1, FD1 (2023) - MCC Chapter 16.26C (adopts 2018 IBC)",
+          "url": "https://mauicounty.legistar1.com/mauicounty/attachments/db045d16-9072-464b-ac7d-a78353bbaf34.pdf"
+        },
+        {
+          "title": "Hawaii State Residential Code (2018 IRC with amendments), SBCC Nov 17, 2020",
+          "url": "https://ags.hawaii.gov/wp-content/uploads/2021/09/2018StateResidentialCode_20201117rev1.pdf"
+        },
+        {
+          "title": "U.S. Census Bureau, 2020 Census Redistricting Data (P.L. 94-171), state geographic header files (POP100 for county records)",
+          "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/"
+        }
+      ],
+      "confidence": "low"
+    }
+  ]
+}

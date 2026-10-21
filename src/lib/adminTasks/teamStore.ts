@@ -1,6 +1,6 @@
 // THE TEAM'S LIST AND WHO HAS WHICH TASK — server only, no schema change (2026-10-15).
 //
-//   adminTeam:members:v1   the list: [{ id, name, phone, on, quietNights, addedAt }]
+//   adminTeam:members:v1   the list: [{ id, name, phone, on, hours?, addedAt, alerts? }]
 //   adminTeam:assign:v1    taskId → member id, for a task given to someone on the list (its assignee column stays
 //                          empty — that column only takes a sign-in account)
 //   adminTeam:confirm:v1   taskId → { member, at, how }: they said they'll do it — replied OK to the text, or took

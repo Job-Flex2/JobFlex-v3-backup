@@ -3,10 +3,10 @@
 // Studio workspace: the deck studio and the office around it — proposals,
 // clients, calendar, jobs, crew, money — and nothing of the other trades. It
 // is the same account, the same data and the same sign-in as the whole
-// platform; the edition is a view, never a second app and never a plan of its
-// own. The door a browser last chose is a cookie; whether the account holds
-// the studio is read off its subscription (the trial, the add-on, a grant) and
-// the asking user. Pure — the server reads the facts, this decides.
+// platform; the edition is a view, never a second app. The door a browser
+// last chose is a cookie; whether the account holds the studio is read off its
+// subscription (the trial, the Deck Studio plan, the Advanced plan, the add-on,
+// a grant) and the asking user. Pure — the server reads the facts, this decides.
 
 export type EditionId = "platform" | "deck";
 export type Door = EditionId;
@@ -111,6 +111,10 @@ export interface AccessFacts {
   addon?: boolean;
   /** A Custom plan whose bought pages include "deck-estimator" (lib/customPlan) — the add-on, bought as a page. */
   customDeckPage?: boolean;
+  /** The Deck Studio plan itself (lib/customPlan DECK_PLAN_SLUG), running. */
+  deckPlan?: boolean;
+  /** The Advanced plan (slug "enterprise", sold as "Advanced" — lib/planCatalog planDisplayName), running. */
+  advancedPlan?: boolean;
   /** A complimentary plan (a grant, provider MANUAL — lib/planGrant) that has not ended. */
   granted?: boolean;
   /** The asking user sees everything in this organization (lib/fullAccess hasFullAccess — a platform admin). */
@@ -118,13 +122,14 @@ export interface AccessFacts {
 }
 
 /**
- * WHO HOLDS THE DECK STUDIO (owner-locked, 2026-10-20 — CLAUDE.md):
+ * WHO HOLDS THE DECK STUDIO (owner, 2026-10-20 — CLAUDE.md):
  *   1. the 7-day free trial, without the add-on;
- *   2. after the trial, on ANY plan — Starter, Professional, Advanced, Custom, Enterprise, monthly or yearly — only
- *      the $49/month add-on ($490 on a yearly plan, lib/deckAddon). No plan carries it by itself: no plan of its own,
- *      no feature line. A Custom plan whose pages include "deck-estimator" bought it as a page: that counts as the
- *      add-on (owner, 2026-10-20), with no second $49 line;
- *   3. a platform admin (hasFullAccess) and a complimentary grant, always.
+ *   2. the Deck Studio plan ($45/month, its own card on the pricing page — lib/customPlan DECK_PLAN_SLUG) and the
+ *      Advanced plan;
+ *   3. on any other plan — Starter, Professional, Custom, monthly or yearly — the $45/month add-on ($450 on a yearly
+ *      plan, lib/deckAddon). A Custom plan whose pages include "deck-estimator" bought it as a page: that counts as
+ *      the add-on, with no second line;
+ *   4. a platform admin (hasFullAccess) and a complimentary grant, always.
  */
 export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): boolean {
   if (edition === "platform") return true;
@@ -132,7 +137,12 @@ export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open
   if (!open) return false;
   if (facts.granted) return true;
   if (facts.lapsed) return false;
-  return !!facts.trialing || !!facts.addon || !!facts.customDeckPage;
+  return !!facts.trialing || !!facts.deckPlan || !!facts.advancedPlan || !!facts.addon || !!facts.customDeckPage;
+}
+
+/** The account is the Deck Studio plan and nothing more: the studio's workspace is the only one it has. */
+export function editionOnly(facts: AccessFacts): boolean {
+  return !facts.lapsed && !!facts.deckPlan && !facts.fullAccess;
 }
 
 /**
@@ -148,11 +158,13 @@ export function editionLevel(facts: AccessFacts, edition: EditionId = "deck", op
 
 /** Both workspaces are open to the account, so a switch is worth drawing. */
 export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("deck")): boolean {
-  return hasEdition(facts, "deck", open);
+  return hasEdition(facts, "deck", open) && !editionOnly(facts);
 }
 
-/** The workspace a request works in: the deck door's when the account holds the studio; else the whole platform. */
+/** The workspace a request works in: the studio's on the Deck Studio plan, or through the deck door when the
+ *  account holds the studio; else the whole platform. */
 export function workspaceFor(facts: AccessFacts, door: Door | null, open: boolean = isEditionOpen("deck")): Workspace {
+  if (editionOnly(facts)) return "deck";
   return door === "deck" && hasEdition(facts, "deck", open) ? "deck" : "platform";
 }
 

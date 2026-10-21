@@ -1,0 +1,696 @@
+/* ============================================================================
+   BLUEPRINT ESTIMATOR · HANDHELD  —  /mobile-blueprint-estimator-v1
+   ============================================================================
+
+   The desk estimator (blueprint-estimator.module.css, untouched) composed for a phone, 320px → 768px with no
+   desktop breakpoint. Same Blueprint: paper, white sheets, 2px ink frames, Inter 800–900 caps headings, blue
+   actions with white text, hard offset shadows with no blur. The upload keeps the desk's look (owner); the ask,
+   the working card and the answer are composed for one hand, with the stage's next step in a thumb-zone foot.
+
+   PLAIN STYLESHEET, NOT A CSS MODULE (owner rule): a module leaves a `*` reset unscoped and once flattened the
+   whole app. Every selector carries the literal root `.jf-mblueprint`; class names carry the prefix `mbe-`
+   (both checked against the repo). The only rules that do not start with the root are the two
+   `body:has(.jf-mblueprint)` host neutralizers, which undo themselves on unmount. globals.css is not touched.
+   Tokens are the shared ones from globals.css; the root only restates what the shared MobileNav reads off a page.
+   ========================================================================= */
+
+.jf-mblueprint {
+  /* The shared MobileNav reads its token contract off the page root (the values every handheld page gives it). */
+  --topbar-h: 64px;
+  --blueprint: var(--accent);
+  --border: 2px solid var(--ink);
+  --radius: var(--r-sm, 2px);
+  --muted: #555555;
+  --muted-light: #888888;
+  --muted-faint: #b0aea8;
+  --sky: #4a9eff;
+  --danger: var(--rose);
+  --warning: var(--amber);
+  --sidebar-w: min(84vw, 288px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+
+  /* The page's own scale. */
+  --mbe-pad-x: clamp(12px, 3.8vw, 22px);
+  --mbe-card-pad: clamp(16px, 4.6vw, 22px);
+  --mbe-tap: 44px;
+  --mbe-field: 50px;
+  --mbe-tabs-h: 52px;
+  --mbe-white: var(--paper-deep, #ffffff);
+  --mbe-red: var(--rose, #a83232);
+  --mbe-mono: var(--font-mono, ui-monospace, monospace);
+
+  /* Pinned by its edges and sized 100% (docs/design/mobile.md), never vh/dvh. Row 3 is the thumb-zone foot. */
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  font-size: 16px;
+  line-height: 1.45;
+  text-rendering: auto;
+  font-feature-settings: "cv11", "ss01", "ss03";
+}
+
+/* Resets at zero specificity: they beat the UA and lose to every author rule — the shared nav's included. */
+:where(.jf-mblueprint),
+:where(.jf-mblueprint) :where(*) { box-sizing: border-box; margin: 0; padding: 0; }
+:where(.jf-mblueprint) :where(button, input, textarea) { font: inherit; color: inherit; }
+:where(.jf-mblueprint) :where(button) { border: 0; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
+:where(.jf-mblueprint) :where(a) { color: inherit; text-decoration: none; }
+:where(.jf-mblueprint) :where(ul, ol) { list-style: none; }
+:where(.jf-mblueprint) :where(h1, h2, h3) { font-size: inherit; font-weight: inherit; }
+.jf-mblueprint [hidden] { display: none !important; }
+.jf-mblueprint ::selection { background: color-mix(in srgb, var(--accent) 24%, #fff); color: var(--ink); }
+.jf-mblueprint :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* HOST NEUTRALIZERS — globals' fixed drafting grid on <body> and its grain overlay; this page draws its own grid
+   inside its scroller. `:has()` restores both when the page unmounts. */
+body:has(.jf-mblueprint) { background-image: none; }
+body:has(.jf-mblueprint)::before { content: none; }
+
+.jf-mblueprint .mbe-ic {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── the scroller and the column ─────────────────────────────────────────── */
+.jf-mblueprint .mbe-scroll {
+  position: relative;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.jf-mblueprint .mbe-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 18px var(--mbe-pad-x) 28px;
+}
+
+/* ── head ─────────────────────────────────────────────────────────────── */
+.jf-mblueprint .mbe-head { display: grid; gap: 6px; min-width: 0; padding-top: 2px; }
+.jf-mblueprint .mbe-title {
+  font-size: clamp(26px, 7.6vw, 34px);
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.jf-mblueprint .mbe-title--entity { font-size: clamp(22px, 6.4vw, 28px); line-height: 1.06; }
+.jf-mblueprint .mbe-sub { font-size: 15px; line-height: 1.45; color: var(--ink-soft); overflow-wrap: anywhere; }
+
+/* ── cards and type ───────────────────────────────────────────────────── */
+.jf-mblueprint .mbe-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: var(--mbe-card-pad);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--mbe-white);
+}
+.jf-mblueprint .mbe-h2 { font-size: 18px; font-weight: 900; line-height: 1.15; letter-spacing: 0.01em; text-transform: uppercase; }
+.jf-mblueprint .mbe-h3 { font-size: 13px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+.jf-mblueprint .mbe-p { font-size: 15px; line-height: 1.5; color: var(--ink-soft); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-note { font-size: 13.5px; line-height: 1.45; color: var(--ink-muted); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-err {
+  padding: 12px 14px;
+  border: 1.5px solid var(--mbe-red);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--mbe-red) 7%, #fff);
+  color: var(--mbe-red);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Status stamp: near-square, 10.5px, 800, caps, a semantic frame and soft fill. */
+.jf-mblueprint .mbe-stamp {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.jf-mblueprint .mbe-stamp--ok { border-color: var(--emerald); background: color-mix(in srgb, var(--emerald) 9%, #fff); color: color-mix(in srgb, var(--emerald) 82%, #000); }
+.jf-mblueprint .mbe-stamp--warn { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 10%, #fff); color: color-mix(in srgb, var(--amber) 70%, #000); }
+
+/* ── buttons: blue fill + white text, white ghost; 2px ink frame, hard offset, no blur ─── */
+.jf-mblueprint .mbe-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  min-width: var(--mbe-tap);
+  padding: 0 18px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: 3px 3px 0 var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  touch-action: manipulation;
+  transition: transform 0.12s var(--ease-out, ease), box-shadow 0.12s var(--ease-out, ease), background-color 0.15s var(--ease-out, ease);
+}
+.jf-mblueprint .mbe-btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.jf-mblueprint .mbe-btn--primary { background: var(--accent); color: #fff; letter-spacing: 0.04em; text-transform: uppercase; }
+.jf-mblueprint .mbe-btn--ghost { background: var(--mbe-white); color: var(--ink); }
+.jf-mblueprint .mbe-btn--cancel { background: var(--mbe-red); color: #fff; letter-spacing: 0.04em; text-transform: uppercase; }
+.jf-mblueprint .mbe-btn--wide { width: 100%; }
+.jf-mblueprint .mbe-btn--lg { min-height: 54px; font-size: 15.5px; }
+.jf-mblueprint .mbe-btn--sm { min-height: var(--mbe-tap); padding: 0 12px; font-size: 13.5px; box-shadow: 2px 2px 0 var(--ink); }
+.jf-mblueprint .mbe-btn--sm .mbe-ic { width: 16px; height: 16px; }
+.jf-mblueprint .mbe-btn:disabled { cursor: not-allowed; opacity: 0.45; box-shadow: none; }
+.jf-mblueprint .mbe-btn[aria-busy="true"]:disabled { opacity: 0.8; }
+
+/* ── the foot: the stage's next step in the thumb zone ─────────────────── */
+.jf-mblueprint .mbe-foot {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px var(--mbe-pad-x) calc(12px + var(--safe-b));
+  border-top: 2px solid var(--ink);
+  background: var(--mbe-white);
+}
+.jf-mblueprint .mbe-foot > .mbe-btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+.jf-mblueprint .mbe-foot--total > .mbe-btn { padding: 0 14px; font-size: 14.5px; }
+.jf-mblueprint .mbe-foot-total { display: grid; flex: 0 1 auto; min-width: 0; line-height: 1.1; }
+.jf-mblueprint .mbe-foot-total span { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted); }
+.jf-mblueprint .mbe-foot-total b { font-size: clamp(19px, 5.8vw, 24px); font-weight: 900; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* ══ 1 · UPLOAD — the desk's look, fitted to the phone ═══════════════════ */
+.jf-mblueprint .mbe-drop {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 300px;
+  text-align: center;
+  border-style: dashed;
+  background:
+    linear-gradient(var(--accent-soft) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, var(--accent-soft) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--mbe-white);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.jf-mblueprint .mbe-drop.is-on { border-color: var(--accent); background-color: var(--accent-soft); }
+.jf-mblueprint .mbe-drop-ic { width: 56px; height: 56px; fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.jf-mblueprint .mbe-drop-h { font-size: clamp(20px, 5.8vw, 22px); font-weight: 900; line-height: 1.25; letter-spacing: 0.01em; text-transform: uppercase; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-drop .mbe-btn { margin-top: 8px; }
+.jf-mblueprint .mbe-drop .mbe-err { width: 100%; text-align: left; }
+.jf-mblueprint .mbe-how { display: grid; border: 2px solid var(--ink); border-radius: var(--radius); background: var(--mbe-white); }
+.jf-mblueprint .mbe-how li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 4px;
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.jf-mblueprint .mbe-how li + li { border-top: 1px solid var(--ink); }
+.jf-mblueprint .mbe-how li > span:last-child { grid-column: 2; }
+.jf-mblueprint .mbe-how b { font-size: 14px; font-weight: 900; text-transform: uppercase; color: var(--ink); }
+.jf-mblueprint .mbe-how-n { grid-row: 1 / 3; font-family: var(--mbe-mono); font-size: 12px; font-weight: 700; line-height: 1.6; color: var(--accent); }
+
+/* ══ 2 · ASK ═════════════════════════════════════════════════════════════ */
+.jf-mblueprint .mbe-area {
+  display: block;
+  width: 100%;
+  min-height: 128px;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 16px;            /* iOS zooms on anything smaller */
+  line-height: 1.5;
+  resize: vertical;
+}
+.jf-mblueprint .mbe-area::placeholder { color: var(--muted-light); }
+.jf-mblueprint .mbe-area:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.jf-mblueprint .mbe-dictate { display: grid; gap: 6px; }
+.jf-mblueprint .mbe-dictate .mbe-btn.is-listening { border-color: var(--mbe-red); background: color-mix(in srgb, var(--mbe-red) 8%, #fff); color: var(--mbe-red); }
+.jf-mblueprint .mbe-dictate-note { font-size: 13px; color: var(--mbe-red); }
+.jf-mblueprint .mbe-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.jf-mblueprint .mbe-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--mbe-tap);
+  padding: 0 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--mbe-white);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  touch-action: manipulation;
+  transition: background-color 0.15s var(--ease-out, ease), color 0.15s var(--ease-out, ease);
+}
+.jf-mblueprint .mbe-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.jf-mblueprint .mbe-loc { display: grid; gap: 6px; }
+.jf-mblueprint .mbe-loc span { font-family: var(--mbe-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); }
+.jf-mblueprint .mbe-loc input {
+  width: 100%;
+  min-height: var(--mbe-field);
+  padding: 0 14px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 16px;
+}
+.jf-mblueprint .mbe-loc input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* the plan set */
+.jf-mblueprint .mbe-set { gap: 12px; }
+.jf-mblueprint .mbe-set-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.jf-mblueprint .mbe-set-plate { display: grid; place-items: center; flex: none; width: 40px; height: 40px; background: var(--tool-plan, var(--accent)); color: #fff; }
+.jf-mblueprint .mbe-set-name { display: grid; flex: 1 1 auto; min-width: 0; line-height: 1.25; }
+.jf-mblueprint .mbe-set-name b { font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-set-name span { font-size: 13px; color: var(--ink-muted); }
+/* One swiped rail of sheets, bled to the card's edges; it scrolls inside itself, never the page. */
+.jf-mblueprint .mbe-thumbs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 124px;
+  gap: 10px;
+  margin: 0 calc(-1 * var(--mbe-card-pad));
+  padding: 2px var(--mbe-card-pad) 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--mbe-card-pad);
+  scrollbar-width: none;
+}
+.jf-mblueprint .mbe-thumbs::-webkit-scrollbar { display: none; }
+.jf-mblueprint .mbe-thumbs li { scroll-snap-align: start; min-width: 0; }
+.jf-mblueprint .mbe-thumb {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: var(--mbe-tap);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  text-align: left;
+  overflow: hidden;
+}
+.jf-mblueprint .mbe-thumb img { display: block; width: 100%; height: 92px; object-fit: contain; background: #fff; border-bottom: 1px solid var(--ink-line); }
+.jf-mblueprint .mbe-thumb-cap {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding: 6px 8px 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.jf-mblueprint .mbe-thumb-cap b { font-family: var(--mbe-mono); font-weight: 700; color: var(--accent); }
+.jf-mblueprint .mbe-thumb:active { background: var(--accent-soft); }
+
+/* ══ 3 · WORKING — one raised card; nothing written under the bars ════════ */
+.jf-mblueprint .mbe-work {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.jf-mblueprint .mbe-work-req {
+  padding: 12px var(--mbe-card-pad);
+  border-bottom: 2px solid var(--ink);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--mbe-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+.jf-mblueprint .mbe-work-body { display: flex; flex-direction: column; padding: 18px var(--mbe-card-pad) var(--mbe-card-pad); }
+.jf-mblueprint .mbe-work-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; min-width: 0; }
+.jf-mblueprint .mbe-work-stage { flex: 1 1 auto; min-width: 0; font-size: clamp(18px, 5.4vw, 21px); font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-work-pct {
+  flex: none;
+  font-size: clamp(38px, 12vw, 48px);
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.jf-mblueprint .mbe-work-pct small { margin-left: 1px; font-size: 0.42em; font-weight: 900; letter-spacing: 0; }
+.jf-mblueprint .mbe-meter { margin-top: 14px; height: 14px; border: 2px solid var(--ink); background: var(--paper); overflow: hidden; }
+.jf-mblueprint .mbe-meter span { display: block; height: 100%; background: var(--accent); transition: width 300ms linear; }
+.jf-mblueprint .mbe-steps { display: grid; margin-top: 12px; }
+.jf-mblueprint .mbe-steps li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--ink-line);
+  font-size: 15px;
+  color: var(--ink-muted);
+}
+.jf-mblueprint .mbe-steps li:last-child { border-bottom: 0; }
+.jf-mblueprint .mbe-step-label { min-width: 0; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-step-state { font-family: var(--mbe-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+.jf-mblueprint .mbe-steps li.is-done,
+.jf-mblueprint .mbe-steps li.is-now { color: var(--ink); }
+.jf-mblueprint .mbe-steps li.is-now { font-weight: 800; }
+.jf-mblueprint .mbe-steps li.is-now .mbe-step-state { color: var(--accent); }
+.jf-mblueprint .mbe-work .mbe-btn--cancel { margin-top: 14px; }
+
+/* ══ 4 · THE ANSWER ═══════════════════════════════════════════════════════ */
+/* The total on a blue plate — the page's one showcase surface. */
+.jf-mblueprint .mbe-plate {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+.jf-mblueprint .mbe-plate-k { font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+.jf-mblueprint .mbe-plate-v { font-size: clamp(32px, 10.5vw, 46px); font-weight: 900; line-height: 1.02; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* One framed switch, the open half filled with ink; it stays under the topbar while the answer scrolls. */
+.jf-mblueprint .mbe-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: var(--mbe-tabs-h);
+  margin-bottom: -4px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--mbe-white);
+}
+.jf-mblueprint .mbe-tab {
+  min-width: 0;
+  min-height: calc(var(--mbe-tabs-h) - 4px);
+  padding: 4px 10px;
+  font-size: 14.5px;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  transition: background-color 0.15s var(--ease-out, ease), color 0.15s var(--ease-out, ease);
+}
+.jf-mblueprint .mbe-tab + .mbe-tab { border-left: 2px solid var(--ink); }
+.jf-mblueprint .mbe-tab[aria-selected="true"] { background: var(--ink); color: #fff; }
+.jf-mblueprint .mbe-tab:focus-visible { outline-offset: -4px; outline-color: var(--sky); }
+.jf-mblueprint .mbe-panel { min-width: 0; }
+
+/* the estimate */
+.jf-mblueprint .mbe-est { gap: 12px; }
+.jf-mblueprint .mbe-fail {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--mbe-red);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--mbe-red) 6%, #fff);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.jf-mblueprint .mbe-fail b { color: var(--mbe-red); }
+.jf-mblueprint .mbe-lines { display: grid; min-width: 0; }
+.jf-mblueprint .mbe-group { min-width: 0; }
+.jf-mblueprint .mbe-group + .mbe-group { margin-top: 10px; }
+/* A trade's head and subtotal stay under the switch while its lines scroll. */
+.jf-mblueprint .mbe-group-head {
+  position: sticky;
+  top: var(--mbe-tabs-h);
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0 8px;
+  border-bottom: 2px solid var(--ink);
+  background: var(--mbe-white);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.jf-mblueprint .mbe-group-head span { min-width: 0; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-group-head b { flex: none; font-size: 15px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.jf-mblueprint .mbe-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name act" "qty total";
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ink-line);
+}
+.jf-mblueprint .mbe-line-name { grid-area: name; display: grid; gap: 3px; min-width: 0; font-size: 15px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-line-note { font-size: 12.5px; font-weight: 700; color: color-mix(in srgb, var(--amber) 72%, #000); }
+.jf-mblueprint .mbe-line-act {
+  grid-area: act;
+  align-self: start;
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--mbe-tap);
+  height: var(--mbe-tap);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--mbe-white);
+  touch-action: manipulation;
+}
+.jf-mblueprint .mbe-line-remove svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.jf-mblueprint .mbe-line-remove:active { border-color: var(--mbe-red); background: color-mix(in srgb, var(--mbe-red) 8%, #fff); color: var(--mbe-red); }
+.jf-mblueprint .mbe-line-add { padding: 0 14px; border-color: var(--accent); color: var(--accent); font-size: 14px; font-weight: 800; }
+.jf-mblueprint .mbe-line-add:active { background: var(--accent-soft); }
+.jf-mblueprint .mbe-line-qty { grid-area: qty; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.jf-mblueprint .mbe-line-qty input {
+  width: 104px;
+  min-width: 0;
+  height: var(--mbe-tap);
+  padding: 0 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.jf-mblueprint .mbe-line-qty input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.jf-mblueprint .mbe-line-unit { min-width: 0; font-size: 13px; color: var(--ink-muted); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-line-total { grid-area: total; justify-self: end; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jf-mblueprint .mbe-line.is-suggested { border-bottom-style: dashed; }
+.jf-mblueprint .mbe-line.is-suggested .mbe-line-name,
+.jf-mblueprint .mbe-line.is-suggested .mbe-line-total { color: var(--ink-muted); }
+.jf-mblueprint .mbe-total-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 2px solid var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.jf-mblueprint .mbe-total-row b { font-size: clamp(24px, 7.4vw, 30px); letter-spacing: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-actions { display: grid; gap: 12px; padding-top: 4px; }
+
+/* folds: "Notes and checks", "Every quantity of this job", "Where the load comes from" — read as buttons */
+.jf-mblueprint .mbe-more { min-width: 0; }
+.jf-mblueprint .mbe-more summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--mbe-white);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+  list-style: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.jf-mblueprint .mbe-more summary::-webkit-details-marker { display: none; }
+.jf-mblueprint .mbe-more summary span { min-width: 0; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-more summary:active { background: var(--accent-soft); }
+.jf-mblueprint .mbe-more-chev { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.2s var(--ease-out, ease); }
+.jf-mblueprint .mbe-more[open] summary { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.jf-mblueprint .mbe-more[open] .mbe-more-chev { transform: rotate(180deg); }
+.jf-mblueprint .mbe-more > :not(summary) { margin-top: 12px; }
+.jf-mblueprint .mbe-notes { display: grid; gap: 8px; }
+.jf-mblueprint .mbe-notes li { padding-left: 12px; border-left: 2px solid var(--ink-line); font-size: 14px; line-height: 1.5; color: var(--ink-soft); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-notes li.mbe-timing { border-left-color: transparent; font-family: var(--mbe-mono); font-size: 11.5px; letter-spacing: 0.04em; color: var(--ink-muted); }
+
+/* found on your plans */
+.jf-mblueprint .mbe-found { gap: 14px; }
+.jf-mblueprint .mbe-rows { display: grid; }
+.jf-mblueprint .mbe-found-row { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--ink-line); min-width: 0; }
+.jf-mblueprint .mbe-found-row:first-child { padding-top: 0; }
+.jf-mblueprint .mbe-found-main { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; }
+.jf-mblueprint .mbe-found-main b { min-width: 0; font-size: 15px; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-found-qty { flex: none; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jf-mblueprint .mbe-found-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.jf-mblueprint .mbe-page {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--mbe-tap);
+  min-height: var(--mbe-tap);
+  padding: 0 10px;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--mbe-white);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+.jf-mblueprint .mbe-page:active { background: var(--accent-soft); }
+.jf-mblueprint .mbe-as-written { font-size: 13.5px; line-height: 1.45; color: var(--ink-muted); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-specs { display: grid; gap: 8px; padding-top: 4px; }
+.jf-mblueprint .mbe-specs ul { display: grid; }
+.jf-mblueprint .mbe-specs li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--ink-line); font-size: 14px; line-height: 1.45; }
+.jf-mblueprint .mbe-specs li span { min-width: 0; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-items { display: grid; }
+.jf-mblueprint .mbe-items li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ink-line);
+  font-size: 14px;
+}
+.jf-mblueprint .mbe-item-name { min-width: 0; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-item-qty { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jf-mblueprint .mbe-src { grid-column: 1 / -1; justify-self: start; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); }
+.jf-mblueprint .mbe-src--measured { color: color-mix(in srgb, var(--emerald) 82%, #000); }
+.jf-mblueprint .mbe-src--rule { color: color-mix(in srgb, var(--amber) 70%, #000); }
+.jf-mblueprint .mbe-not-in { font-size: 14px; line-height: 1.5; color: var(--ink-soft); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-not-in b { color: var(--ink); }
+
+/* the heating & cooling load */
+.jf-mblueprint .mbe-hvac { display: grid; gap: 12px; padding: 14px; border: 1.5px solid var(--ink); border-radius: var(--radius); min-width: 0; }
+.jf-mblueprint .mbe-hvac-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.jf-mblueprint .mbe-hvac-nums div { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--ink-line); border-radius: var(--radius); min-width: 0; }
+.jf-mblueprint .mbe-hvac-nums b { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-hvac-nums span { font-size: 12.5px; line-height: 1.4; color: var(--ink-muted); }
+.jf-mblueprint .mbe-hvac-note { font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-hvac-inputs { display: grid; }
+.jf-mblueprint .mbe-hvac-inputs li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 0; border-bottom: 1px solid var(--ink-line); font-size: 14px; }
+.jf-mblueprint .mbe-hvac-label { min-width: 0; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-hvac-value { font-weight: 800; text-align: right; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-hvac-from { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.jf-mblueprint .mbe-hvac-parts { display: grid; }
+.jf-mblueprint .mbe-hvac-parts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--ink-line); font-size: 13.5px; }
+.jf-mblueprint .mbe-hvac-parts li span:first-child { grid-row: 1 / 3; min-width: 0; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-hvac-parts li span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-muted); white-space: nowrap; }
+.jf-mblueprint .mbe-hvac-assume { display: grid; gap: 6px; }
+.jf-mblueprint .mbe-hvac-assume li { font-size: 13px; line-height: 1.45; color: var(--ink-muted); overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-hvac-fine { font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
+
+/* ══ THE SHEET VIEWER — a bottom sheet hung from the page frame (--msheet-* table) ═══ */
+.jf-mblueprint .mbe-layer { position: absolute; inset: 0; z-index: var(--msheet-z, 81); }
+.jf-mblueprint .mbe-scrim { position: absolute; inset: 0; background: var(--msheet-scrim, rgba(10, 10, 10, 0.35)); animation: jf-mbe-fade 0.2s var(--ease-out, ease); }
+.jf-mblueprint .mbe-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: var(--msheet-max-h, 92%);
+  border-top: 2px solid var(--ink);
+  background: var(--mbe-white);
+  transition: transform 0.3s var(--ease-out, ease);
+  animation: jf-mbe-rise 0.28s var(--ease-out, ease);
+}
+.jf-mblueprint .mbe-sheet-grab { width: var(--msheet-grab-w, 44px); height: var(--msheet-grab-h, 3px); margin: var(--msheet-grab-top, 10px) auto 0; background: var(--ink); }
+.jf-mblueprint .mbe-sheet-head { display: flex; align-items: center; gap: 8px; min-width: 0; padding: var(--msheet-head-pad, 14px 16px 12px); border-bottom: 1px solid var(--ink); }
+.jf-mblueprint .mbe-sheet-title { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.jf-mblueprint .mbe-sheet-body { min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; background: #fff; padding-bottom: var(--msheet-safe-b, 0px); }
+.jf-mblueprint .mbe-sheet-img { display: block; width: 100%; height: auto; max-width: none; }
+.jf-mblueprint .mbe-sheet-body.is-zoom .mbe-sheet-img { width: 260%; }
+.jf-mblueprint .mbe-sheet-wait { padding: 60px 20px; text-align: center; color: var(--ink-muted); }
+
+/* Hover only where there is a pointer — a tap must not leave a chip or a button looking chosen. */
+@media (hover: hover) {
+  .jf-mblueprint .mbe-btn--primary:hover:not(:disabled) { background: var(--accent-ink); }
+  .jf-mblueprint .mbe-btn--ghost:hover:not(:disabled) { background: var(--accent-soft); }
+  .jf-mblueprint .mbe-btn--cancel:hover:not(:disabled) { background: color-mix(in srgb, var(--mbe-red) 86%, #000); }
+  .jf-mblueprint .mbe-chip:hover { background: var(--accent-soft); }
+  .jf-mblueprint .mbe-chip[aria-pressed="true"]:hover { background: var(--accent-soft); }
+}
+
+@keyframes jf-mbe-rise { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes jf-mbe-fade { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .jf-mblueprint .mbe-sheet,
+  .jf-mblueprint .mbe-scrim { animation: none; transition: none; }
+  .jf-mblueprint .mbe-meter span,
+  .jf-mblueprint .mbe-btn,
+  .jf-mblueprint .mbe-chip,
+  .jf-mblueprint .mbe-tab,
+  .jf-mblueprint .mbe-more-chev { transition: none; }
+}

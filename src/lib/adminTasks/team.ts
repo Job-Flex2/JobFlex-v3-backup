@@ -15,19 +15,24 @@ import { taskPath } from "./model";
 import { sendTaskNotices } from "./mail";
 import type { TaskReplyPlan } from "./textReply";
 import { dropMemberAssignments, readAssignments, readMembers, writeMembers } from "./teamStore";
-import { NAME_MAX, phoneE164, phoneWords, TEAM_MAX, TEAM_TZ, taskTextBody, textRecipients, welcomeTextBody, type AlertKey, type LastText, type TaskText, type TeamMember, type TeamMemberView, type TextingStatus } from "./teamShared";
+import { NAME_MAX, phoneE164, phoneWords, TEAM_MAX, TEAM_TZ, taskTextBody, textRecipients, welcomeTextBody, type AlertKey, type LastText, type TaskText, type TeamMember, type TeamMemberView, type TextHours, type TextingStatus } from "./teamShared";
 
 const KIND = "jobflex-admin-task";
+/** The platform alerts (lib/adminAlerts) and their 7 AM roundup. */
+const ALERT_KINDS = ["jobflex-admin-alert", "jobflex-overnight"];
 
 /** The team as the sheet shows it: each person's open tasks, whether their last text arrived, whether they said STOP. */
 export async function teamView(): Promise<TeamMemberView[]> {
   const [members, assign] = await Promise.all([readMembers(), readAssignments()]);
   const taskIds = Object.keys(assign);
   const phones = members.map((m) => m.phone);
-  const [open, sent, stops, twilio] = await Promise.all([
+  const [open, sent, alerts, stops, twilio] = await Promise.all([
     taskIds.length ? db.adminTask.findMany({ where: { id: { in: taskIds }, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } }, select: { id: true } }).catch(() => []) : [],
     phones.length
       ? db.smsMessage.findMany({ where: { kind: KIND, direction: "OUT", to: { in: phones } }, orderBy: { createdAt: "desc" }, take: 400, select: { to: true, status: true, error: true, createdAt: true } }).catch(() => [])
+      : [],
+    phones.length
+      ? db.smsMessage.findMany({ where: { kind: { in: ALERT_KINDS }, direction: "OUT", to: { in: phones } }, orderBy: { createdAt: "desc" }, take: 400, select: { to: true, status: true, error: true, createdAt: true, sendAfter: true } }).catch(() => [])
       : [],
     phones.length ? db.smsOptOut.findMany({ where: { phone: { in: phones } }, select: { phone: true } }).catch(() => []) : [],
     isTwilioEnabled().catch(() => false),
@@ -37,15 +42,18 @@ export async function teamView(): Promise<TeamMemberView[]> {
   const last = new Map<string, LastText>();
   // Without Twilio there is no JobFlex number either: say the real reason.
   for (const r of sent) if (!last.has(r.to)) last.set(r.to, { status: r.status, error: r.error === "no-number" && !twilio ? "not-configured" : r.error, at: r.createdAt.toISOString() });
+  const lastAlert = new Map<string, LastText>();
+  for (const r of alerts) if (!lastAlert.has(r.to)) lastAlert.set(r.to, { status: r.status, error: r.error === "no-number" && !twilio ? "not-configured" : r.error, at: r.createdAt.toISOString(), after: r.sendAfter?.toISOString() ?? null });
   const stopped = new Set(stops.map((s) => s.phone));
   return members.map((m) => ({
     id: m.id,
     name: m.name,
     phone: phoneWords(m.phone),
     on: m.on,
-    quietNights: m.quietNights,
+    hours: m.hours ?? null,
     open: count.get(m.id) ?? 0,
     last: last.get(m.phone) ?? null,
+    lastAlert: lastAlert.get(m.phone) ?? null,
     stopped: stopped.has(m.phone),
     alerts: m.alerts ?? [],
   }));
@@ -100,15 +108,16 @@ export async function addMember(nameRaw: string, phoneRaw: string, by: string | 
   const list = await readMembers();
   if (list.length >= TEAM_MAX) return { ok: false, error: `The team holds ${TEAM_MAX} people.` };
   if (list.some((m) => m.phone === phone)) return { ok: false, error: "That number is already on the team." };
-  const member: TeamMember = { id: randomBytes(6).toString("hex"), name, phone, on: true, quietNights: true, addedAt: new Date().toISOString() };
+  // Texts at any hour until they set hours (owner, 2026-10-21: "default 24 hours").
+  const member: TeamMember = { id: randomBytes(6).toString("hex"), name, phone, on: true, addedAt: new Date().toISOString() };
   await writeMembers([...list, member]);
   const r = await textOne(phone, welcomeTextBody(name, by));
   const sent = !!r && r.ok && r.status !== "SKIPPED";
   return { ok: true, note: `${name} is on the team — ${sent ? "texted a welcome that says how to stop" : sentWords(r, await isTwilioEnabled().catch(() => false))}.` };
 }
 
-/** A name, a number, texts on/off, quiet nights. */
-export async function updateMember(id: string, patch: { name?: string; phone?: string; on?: boolean; quietNights?: boolean; alerts?: AlertKey[]; alertSet?: { key: AlertKey; on: boolean } }): Promise<TeamWrite> {
+/** A name, a number, texts on/off, texting hours (null: any time). */
+export async function updateMember(id: string, patch: { name?: string; phone?: string; on?: boolean; hours?: TextHours | null; alerts?: AlertKey[]; alertSet?: { key: AlertKey; on: boolean } }): Promise<TeamWrite> {
   const list = await readMembers();
   const i = list.findIndex((m) => m.id === id);
   if (i < 0) return { ok: false, error: "That person isn't on the team any more." };
@@ -125,7 +134,8 @@ export async function updateMember(id: string, patch: { name?: string; phone?: s
     next.phone = phone;
   }
   if (typeof patch.on === "boolean") next.on = patch.on;
-  if (typeof patch.quietNights === "boolean") next.quietNights = patch.quietNights;
+  if (patch.hours === null) delete next.hours;
+  else if (patch.hours) next.hours = patch.hours;
   if (Array.isArray(patch.alerts)) {
     if (patch.alerts.length) next.alerts = patch.alerts;
     else delete next.alerts;

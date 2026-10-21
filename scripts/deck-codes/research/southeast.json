@@ -1,0 +1,1840 @@
+{
+  "region": "southeast",
+  "researched": "2026-10-20",
+  "states": [
+    {
+      "state": "DE",
+      "edition": "No statewide residential code; counties adopt their own: New Castle County 2024 IRC (reported effective 2026-01-01, unverified), Kent County 2018 IRC (effective 2020-10-05), Sussex County 2021 IRC Ch. 1-10 (effective 2023-01-01)",
+      "basis_irc": null,
+      "since": null,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Kent (2018 IRC) and Sussex (2021) are right, and so is 'local'. New Castle County is out of date: it is no longer on the 2018 IRC. A county proposal moved it to the 2021 IRC from 2024-01-01, and county pages seen only through search extracts say the 2024 IRC took effect 2026-01-01. The county website blocks automated reads, so the 2024 edition could not be opened and confirmed.",
+      "notes": [
+        "Delaware has no statewide residential building code: 16 Del. C. §7601 lets Kent Levy Court and the New Castle and Sussex County Councils adopt and enforce their own codes, and small towns usually have the county do plan review and inspections.",
+        "Guard/stair values are the plain IRC numbers. Sussex County deleted its old 8-1/4 in. riser / 9 in. tread exemption when it adopted the 2021 IRC (Ordinance 2851), so it now uses 7-3/4 in. / 10 in. Kent's IRC amendments (eCode360) could not be opened to check for stair changes.",
+        "Kent County requires a permit for any deck larger than 16 sq ft, which is stricter than the IRC's 200 sq ft / 30 in. exemption."
+      ],
+      "sources": [
+        {
+          "title": "Delaware Code Title 16, Chapter 76 (Building Codes), §7601-7602",
+          "url": "https://delcode.delaware.gov/title16/c076/index.html"
+        },
+        {
+          "title": "American Wood Council - Delaware code adoption (codes adopted at county and municipal level)",
+          "url": "https://awc.org/priorities/codes-standards/adoption/delaware/"
+        },
+        {
+          "title": "Kent County - Permitting Requirements & Adopted Codes",
+          "url": "https://www.kentcountyde.gov/Residents/Permits/Building-Permits/Permitting-Requirements-Adopted-Codes"
+        },
+        {
+          "title": "Sussex County Ordinance No. 2851 (adopts 2021 IBC/IRC, effective 2023-01-01)",
+          "url": "https://sussexcountyde.gov/sites/default/files/ordinances/o2851_0.pdf"
+        },
+        {
+          "title": "Sussex County - Staff presentation on 2021 IRC (Jan 2023)",
+          "url": "https://sussexcountyde.gov/sites/default/files/PDFs/IRC_Update_January_2023.pdf"
+        }
+      ]
+    },
+    {
+      "state": "MD",
+      "edition": "Maryland Building Performance Standards (COMAR 09.12.51) - 2021 International Residential Code with Maryland modifications; each county/municipality enforces it and may add local amendments",
+      "basis_irc": 2021,
+      "since": 2023,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "",
+      "notes": [
+        "The state effective date of the 2021 IRC was May 29, 2023, and local jurisdictions had to be enforcing it by May 29, 2024.",
+        "The state's IRC modifications (COMAR 09.12.51.04C) do not touch stairs, guards, footings or decks (R311, R312, R403, R507), so IRC 7-3/4 in. risers, 10 in. treads and 36 in. guards apply unless the county amends them; Prince George's County does (8-1/4 in. / 9 in.).",
+        "The state adopts only IRC Appendices AF (radon) and AQ (tiny houses).",
+        "Local jurisdictions must enforce the Standards plus any local amendments within 12 months of each state update (COMAR 09.12.51.06).",
+        "A 2024 IBC/IRC/IECC update was published in the Maryland Register on June 26, 2026, and comments closed July 27, 2026. It is not yet final, so the 2021 IRC is still in force."
+      ],
+      "sources": [
+        {
+          "title": "Maryland Dept. of Labor - Building Codes Administration (2021 codes effective May 29, 2023)",
+          "url": "https://labor.maryland.gov/labor/build/buildadmin.shtml"
+        },
+        {
+          "title": "COMAR 09.12.51.04 Incorporation by Reference (2021 IBC/IRC/IECC; amended eff. May 29, 2023)",
+          "url": "https://regs.maryland.gov/us/md/exec/comar/09.12.51.04"
+        },
+        {
+          "title": "COMAR 09.12.51.06 Local implementation and amendments",
+          "url": "https://regs.maryland.gov/us/md/exec/comar/09.12.51.06"
+        },
+        {
+          "title": "Maryland Building Codes - What's New (2024 codes proposal, Md. Register June 26, 2026)",
+          "url": "https://www.dllr.state.md.us/labor/build/buildnews.shtml"
+        }
+      ]
+    },
+    {
+      "state": "DC",
+      "edition": "District of Columbia Residential Code (2017): the 2015 IRC as amended by the Residential Code Supplement of 2017 (12-B DCMR)",
+      "basis_irc": 2015,
+      "since": 2020,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "The edition, basis (2015 IRC) and year (in force since 2020-05-29) are correct. The words 'a 2021-based edition is in adoption' are out of date. In February 2026 DOB took over code development from the dissolved Construction Codes Coordinating Board and is now speeding up adoption of the 2024 I-codes. Its timeline is a first proposed rule in fall 2026 and final codes in late 2027, so nothing newer is in force today.",
+      "notes": [
+        "DC's residential supplement replaces IRC Table R301.2(1) with DC values: 30 psf ground snow, 115 mph wind, Seismic Design Category A, severe weathering, 30 in. frost line, moderate-to-heavy termite.",
+        "DC does not amend IRC R311 (stairs), R312 (guards) or R507 (decks). Its Chapter 3 supplement amends only R301, R303, R310, R313, R319, R324 and R327, so the plain 2015 IRC 36 in. guard and 7-3/4 in. riser / 10 in. tread apply.",
+        "Residential permits are run under Chapter 1 of the DC Building Code (12-A DCMR), whose permit-exemption list (§105.2) has no exemption for decks, so a new deck needs a building permit."
+      ],
+      "sources": [
+        {
+          "title": "DC DOB - 2017 DC Construction Codes (effective May 29, 2020; 2015 ICC base)",
+          "url": "https://dob.dc.gov/page/dc-construction-codes"
+        },
+        {
+          "title": "DCRegs 12-B DCMR §R301 Design Criteria (2017), Table R301.2(1)",
+          "url": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-B301"
+        },
+        {
+          "title": "DCRegs 12-B DCMR Chapter 3 section list (2017)",
+          "url": "https://www.dcregs.dc.gov/Common/DCMR/RuleList.aspx?ChapterNum=2017-12-B3"
+        },
+        {
+          "title": "DCRegs 12-B DCMR §R101 (administration under 12-A Chapter 1)",
+          "url": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-B101"
+        },
+        {
+          "title": "2017 District of Columbia Building Code Part 1 (Chapter 1, §105.2 work exempt from permit)",
+          "url": "https://dob.dc.gov/sites/default/files/dc/sites/dob/publication/attachments/2017%20District%20of%20Columbia%20Building%20Code_Part%201.pdf"
+        },
+        {
+          "title": "DOB release, Feb 11 2026 - DOB to quicken pace of DC construction code development",
+          "url": "https://dob.dc.gov/release/dc-department-buildings-quicken-pace-dc-construction-code-development-under-organizational"
+        },
+        {
+          "title": "DOB - Construction Code Development (timeline to late 2027)",
+          "url": "https://dob.dc.gov/page/construction-code-development"
+        }
+      ]
+    },
+    {
+      "state": "VA",
+      "edition": "2021 Virginia Residential Code (VRC) — part of the 2021 Virginia Uniform Statewide Building Code (USBC/VCC, 13VAC5-63): 2021 IRC as amended by VCC Section 310.8",
+      "basis_irc": 2021,
+      "since": 2024,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "",
+      "notes": [
+        "The 2021 USBC took effect January 18, 2024 (DHCD memo of Nov 29, 2023); applicants could choose 2018 or 2021 technical provisions until January 17, 2025, and the 2021 edition has been mandatory for all new permit applications since January 18, 2025.",
+        "The 2024-based USBC is still in development (Board acted on 160+ proposals by Aug 2026); it is tentatively scheduled to take effect in October 2027 with a one-year transition, mandatory about October 2028, so the 2021 VRC is the edition in force on 2026-10-20.",
+        "VCC 310.8 item 20 changes R311.7.5.1 so the riser height shall be not more than 8-1/4 inches (210 mm), with the 3/8-inch variation limit and 4-inch-sphere open-riser rule kept.",
+        "VCC 310.8 item 21 changes R311.7.5.2 so the tread depth shall be not less than 9 inches (229 mm), with the 3/8-inch variation limit kept.",
+        "Guards (R312.1) and the deck section (R507) are not amended, so the IRC 36-inch guard and IRC prescriptive deck rules apply statewide.",
+        "VCC 103.4 item 3 lets each locality set its own Table R301.2(1) climatic and geographic design criteria, so frost depth, snow, wind and the rest come from the local building department.",
+        "Decks and open porches are added as Exception 6 to R302.1, so they are exempt from the exterior-wall fire-separation-distance requirements.",
+        "Decks are not in the statewide permit exemptions of VCC 108.2; only temporary ramps up to 30 inches and the building official's minor-and-ordinary-work exemption could apply, so localities set their own low-deck thresholds (Prince William uses 16-1/2 inches).",
+        "New R332.1 makes Appendix AH mandatory for patio covers, which matters for roofs over decks.",
+        "New R403.1 Exception 2 says footings are not required for ramps serving R-3/R-5 dwellings where the entrance is no more than 30 inches above grade.",
+        "R301.2.1 is amended so special wind regions and mountainous areas use 140 mph Vult at 4,000 ft elevation or higher and 110 mph below 4,000 ft.",
+        "A 2021 VCC snow-load error (ASCE 7-16 figures with ASCE 7-22 references) is being corrected by DHCD; until then Fairfax and Prince William say to use the VCC figures with ASCE 7-16 throughout, or ASCE 7-22 throughout, and never to mix the two."
+      ],
+      "sources": [
+        {
+          "title": "DHCD — Virginia Building Codes (2021 Virginia Codes effective Jan. 18, 2024)",
+          "url": "https://dhcd.virginia.gov/codes"
+        },
+        {
+          "title": "DHCD memo, 2021 Virginia Codes – Effective Date (Nov 29, 2023)",
+          "url": "https://www.dhcd.virginia.gov/sites/default/files/DocX/technical-memos-bulletins/2021-virginia-codes-effective-date.pdf"
+        },
+        {
+          "title": "DHCD — 2021 Virginia Construction Code (Part I of USBC, incl. Section 310.8 IRC amendments)",
+          "url": "https://www.dhcd.virginia.gov/sites/default/files/DocX/building-codes-regulations/archive-codes/2021/2021-virginia-construction-code.pdf"
+        },
+        {
+          "title": "HBAV — Building Codes (Aug 2026 update on 2024 USBC cycle)",
+          "url": "https://hbav.com/advocacy/building-codes/"
+        },
+        {
+          "title": "Prince William County — top ten changes / 2021 VUSBC transition",
+          "url": "https://pwcva.gov/news/prince-william-county-highlights-top-ten-list-changes-virginia-uniform-statewide-building-code"
+        }
+      ]
+    },
+    {
+      "state": "WV",
+      "edition": "West Virginia State Building Code, 87 CSR 4 (State Fire Commission) - 2018 International Residential Code with state amendments; applies only where a county or city adopts it",
+      "basis_irc": 2018,
+      "since": 2022,
+      "statewide": false,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "\"since\" should be 2022, not 2020. The 2018 IRC took effect August 1, 2022 (87 CSR 4 filed May 5, 2022), and the August 1, 2020 version of the rule still adopted the 2015 IRC. \"statewide\" must be false: counties (W. Va. Code 7-1-3n) and cities (8-12-13) may choose to adopt the code, and where they do it must be the state code.",
+      "notes": [
+        "87 CSR 4 section 4.1.i sets the maximum stair riser at 8-1/4 in. and the minimum tread at 9 in. statewide wherever the code is adopted.",
+        "87 CSR 4 sections 4.1.j and 4.1.k make IRC R403.1.7.1 (clearance from ascending slopes) and R403.1.7.2 (footing setback from descending slopes) not applicable.",
+        "IRC appendices are not part of the State Building Code unless the local jurisdiction adopts them separately (87 CSR 4 section 7.3).",
+        "Group U sheds of 200 sq ft or less with no plumbing or electric are not subject to local inspection (87 CSR 4 section 6.1).",
+        "A rule update moving to the 2024 IRC is still in progress, not in force. Notice was filed 6/29/2026, agency approval 7/31/2026, and Legislative Rule-Making Review Committee changes 10/13-14/2026; it still needs authorization from the 2027 Legislature. The proposal keeps the 8-1/4 in. / 9 in. stair limits.",
+        "The current rule's sunset date is August 1, 2027."
+      ],
+      "sources": [
+        {
+          "title": "W. Va. Code R. 87-4-4 National Standards and Codes (2018 IRC; stair amendment) - LII",
+          "url": "https://www.law.cornell.edu/regulations/west-virginia/W-Va-C-S-R-SS-87-4-4"
+        },
+        {
+          "title": "W. Va. Code R. 87-4-1 (filed May 5, 2022; effective Aug 1, 2022; sunset Aug 1, 2027) - LII",
+          "url": "https://www.law.cornell.edu/regulations/west-virginia/W-Va-C-S-R-SS-87-4-1"
+        },
+        {
+          "title": "W. Va. Code R. 87-4-7 Adoption by Local Jurisdiction - LII",
+          "url": "https://www.law.cornell.edu/regulations/west-virginia/W-Va-C-S-R-SS-87-4-7"
+        },
+        {
+          "title": "WV Secretary of State - rule 87-04 history (active version eff. 8/1/2022)",
+          "url": "https://apps.sos.wv.gov/adlaw/csr/rule.aspx?rule=87-04"
+        },
+        {
+          "title": "WV SOS - 87-04 in-progress 2024-code update (document 18565)",
+          "url": "https://apps.sos.wv.gov/adlaw/csr/ruleview.aspx?document=18565"
+        },
+        {
+          "title": "87 CSR 4 August 1, 2020 version (2015 IRC) - WV SOS Word file",
+          "url": "https://apps.sos.wv.gov/adlaw/csr/readfile.aspx?DocId=53270&Format=WORD&KeyWord="
+        },
+        {
+          "title": "W. Va. Code 8-12-13 (municipal adoption of state building code)",
+          "url": "https://code.wvlegislature.gov/8-12-13/"
+        },
+        {
+          "title": "W. Va. Code 7-1-3n (county adoption of state building code)",
+          "url": "https://code.wvlegislature.gov/7-1-3n/"
+        }
+      ]
+    },
+    {
+      "state": "NC",
+      "edition": "2018 North Carolina State Building Code: Residential Code (2015 IRC with North Carolina amendments)",
+      "basis_irc": 2015,
+      "since": 2019,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 8.25,
+      "tread_min_in": 9,
+      "differs_from_app": "",
+      "notes": [
+        "The 2018 NC Residential Code (effective January 1, 2019) is still the code in force on 2026-10-20; the adopted 2024 NC Residential Code is not yet effective.",
+        "Under S.L. 2025-2 Sec. 5.12, the 2024 code takes effect 12 months after the first day of the month after the State Fire Marshal certifies that the code is published and the Residential Code Council is fully constituted. A June 1, 2026 state licensing-board notice says that has not happened and the earliest possible date is May 1, 2027.",
+        "The 2024 NC Residential Code is based on the 2021 IRC. It moves the deck rules out of Appendix M into a new Chapter 47 'Wood Decks' (in the 2024 code, Appendix AM is Home Day Care) and keeps the 8 1/4 in. riser, 9 in. tread and 36 in. guard.",
+        "Appendix M 'Wood Decks' is a North Carolina addition adopted as part of the code. It governs decks and roofed porches built under it, and computer deck-design programs may be accepted.",
+        "Deck post footings must be at least 12 in. below finished grade and sized by tributary area from Table AM102.1 (e.g. 8x16 in. for up to 36 sq ft, up to 24x24 in. for 150 sq ft). The statewide frost line depth is 12 in.",
+        "The deck band is attached to the house band per Table AM104.1: 5/8 in. hot-dip galvanized bolts plus 12d HDG nails, or self-drilling screws, spaced for 8 ft or 16 ft joist spans. On brick veneer, bolts only per Table AM104.1(2).",
+        "Aluminum flashing is not allowed; siding must not be left between the house band and the deck band, and the house needs a treated band or corrosion-resistant flashing (brick houses excepted).",
+        "Girder and joist span tables (AM105.2, AM106.1) are based on 40 psf live/snow load and 10 psf dead load, No. 2 wet-service lumber. Joists and girders may cantilever up to 1/4 of the adjacent span.",
+        "Maximum post height, from top of footing to bottom of girder, is 8 ft for 4x4 and 20 ft for 6x6 No. 2 SYP posts. Taller posts need a registered design professional.",
+        "No lateral bracing is needed for an attached deck under 4 ft high, or a freestanding deck 30 in. or less. Otherwise use knee braces, 2x6 cross bracing or post embedment (AM109).",
+        "Stair stringers may span at most 7 ft between supports and need at least 3 1/2 in. of wood behind the step cuts (AM110).",
+        "Decking must be No. 2 treated SYP or equivalent, with thickness by joist spacing from Table AM107.1 (e.g. 1 in. T&G at 16 in. o.c., 2 in. S4S at 24-36 in.).",
+        "NC deleted the IRC snow-load section (R301.2.3). Table R301.2(1) sets a statewide 20 psf roof load, 'Moderate' weathering, a 12 in. frost line, and termite protection required statewide."
+      ],
+      "sources": [
+        {
+          "title": "NC OSFM - Codes Current and Past (2018 Residential Code effective Jan 1, 2019, currently effective)",
+          "url": "https://www.ncosfm.gov/codes/codes-current-and-past"
+        },
+        {
+          "title": "NC OSFM press release Apr 7, 2025 - North Carolina delays implementation of 2024 State Building Code",
+          "url": "https://ncosfm.gov/news/press-releases/2025/04/07/north-carolina-delays-implementation-2024-state-building-code"
+        },
+        {
+          "title": "NC State Board of Examiners of Plumbing, Heating & Fire Sprinkler Contractors - Update on NC State Building Code effective dates (June 1, 2026)",
+          "url": "https://nclicensing.org/wp-content/uploads/2026/05/2026-06-01-Code-Update.pdf"
+        },
+        {
+          "title": "2018 NC Residential Code, Chapter 3 (Tables R301.2(1), R301.2(4), R301.2(7); R311.7.5.1, R311.7.5.2, R312.1.2)",
+          "url": "https://codes.iccsafe.org/content/NCRC2018/chapter-3-building-planning"
+        },
+        {
+          "title": "2018 NC Residential Code, Appendix M Wood Decks",
+          "url": "https://codes.iccsafe.org/content/NCRC2018/appendix-m-wood-decks"
+        },
+        {
+          "title": "ICC store - NC Residential Code 2018 ('fully integrated code based on the 2015 IRC')",
+          "url": "https://shop.iccsafe.org/north-carolina-state-building-code-residential-code-2018-1.html"
+        },
+        {
+          "title": "2024 NC Residential Code (ICC) - table of contents incl. Chapter 47 Wood Decks",
+          "url": "https://codes.iccsafe.org/content/NCRC2024V1.0"
+        },
+        {
+          "title": "2024 NC Residential Code, Chapter 47 Wood Decks",
+          "url": "https://codes.iccsafe.org/content/NCRC2024V1.0/chapter-47-wood-decks"
+        },
+        {
+          "title": "2024 NC Residential Code, Chapter 3 (riser 8 1/4, tread 9, guard 36)",
+          "url": "https://codes.iccsafe.org/content/NCRC2024V1.0/chapter-3-building-planning"
+        }
+      ]
+    },
+    {
+      "state": "SC",
+      "edition": "2021 South Carolina Residential Code (2021 IRC with South Carolina modifications)",
+      "basis_irc": 2021,
+      "since": 2023,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "'since' should be 2023, not 2024: the Building Codes Council adopted the 2021 codes on Oct 6, 2021 and every county and city had to enforce them from Jan 1, 2023. Edition, basis and short name are correct. The 2024 South Carolina Residential Code (2024 IRC with SC modifications, adopted Aug 26, 2025) takes effect Jan 1, 2027, so the row will need updating then; its SC riser rule stays at 7 3/4 in.",
+      "notes": [
+        "The SC Building Codes Council adopts the mandatory codes, and every SC municipality and county must enforce them. IRC appendices can be used only where the Council adopts them, statewide or as a local modification.",
+        "The 2024 SC codes (2024 IRC with SC modifications, published in the State Register May 22, 2026) take effect January 1, 2027.",
+        "SC modifies R312.1.1: guards are required on deck, porch and stair walking surfaces more than 30 in. above the floor or grade below, and also wherever the ground within 36 in. of the open edge slopes down steeper than 3:12.",
+        "SC modifies R311.7.5.1: maximum riser is 7 3/4 in. (8 in. for masonry stairs). The tread minimum stays at the IRC's 10 in.; guard height stays at the IRC's 36 in. (R312.1.2).",
+        "Wind speed and seismic design category come from the Council's approved county wind/seismic maps (based on the 2015 IRC). Where a county has no map, the ASCE Hazard Tool is used, and the local building official may delineate zones but not exceed it.",
+        "SC's definition of 'crawl space' excludes spaces under decks and porches that contain no mechanical equipment.",
+        "Appendix AH (Patio Covers) is adopted statewide.",
+        "R317.1.1: field-cut ends, notches and drilled holes in preservative-treated wood must be field-treated per AWPA M4 or the manufacturer's instructions."
+      ],
+      "sources": [
+        {
+          "title": "SC LLR Building Codes Council - Building Code Adoption",
+          "url": "https://llr.sc.gov/bcc/BCAdoption.aspx"
+        },
+        {
+          "title": "SC LLR - Building Codes in Effect for South Carolina (2021 IRC adopted Oct 6, 2021, implementation Jan 1, 2023)",
+          "url": "https://llr.sc.gov/bcc/PDFfiles/Building%20Codes%20in%20Effect%20for%20South%20Carolina%20Final.pdf"
+        },
+        {
+          "title": "SC LLR - 2024 South Carolina Code Adoptions notice (implementation Jan 1, 2027)",
+          "url": "https://llr.sc.gov/bcc/PDFfiles/2024%20Code%20Adoption%20Notice.pdf"
+        },
+        {
+          "title": "SC State Register May 27, 2022 - 2021 Code Modifications (IRC 8-1200 to 8-1257)",
+          "url": "https://llr.sc.gov/bcc/PDFfiles/2021-Code-Modifications.pdf"
+        },
+        {
+          "title": "SC State Register May 22, 2026 - 2024 Code Modifications (IRC Doc. No. 5417)",
+          "url": "https://llr.sc.gov/bcc/PDFfiles/State%20Register%20-%20May%2022,%202026.pdf"
+        },
+        {
+          "title": "2021 South Carolina Residential Code, Chapter 3 (ICC)",
+          "url": "https://codes.iccsafe.org/content/SCRC2021P1/chapter-3-building-planning"
+        },
+        {
+          "title": "SC LLR - Wind/Seismic Maps",
+          "url": "https://llr.sc.gov/bcc/maps.aspx"
+        }
+      ]
+    },
+    {
+      "state": "GA",
+      "edition": "Georgia State Minimum Standard One- and Two-Family Dwelling Code (2024 International Residential Code with Georgia State Amendments, revised January 1, 2026)",
+      "basis_irc": 2024,
+      "since": 2026,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "Our row is out of date. The DCA Board adopted the 2024 IRC with Georgia Amendments, effective January 1, 2026. Sources: DCA memo of December 1, 2025, the DCA 'Georgia State Minimum Standard Codes' sheet dated January 1, 2026, and the DCA IRC amendment packet 'Revised January 1, 2026'. Change the edition to the 2024 IRC with Georgia Amendments, short 'GA IRC 2024', basis 2024, since 2026. Drop the 'confirm which edition' note. No DCA document opened (memo, codes sheet, amendment packet) mentions a statewide grace period; any transition windows were set locally and ended early in 2026. Gwinnett, Cobb, Marietta, Acworth and Roswell all list the 2024 IRC as in force from January 1, 2026. Georgia does not amend the stair riser/tread or guard-height sections, so the 2024 IRC values apply: 7-3/4 in. maximum riser, 10 in. minimum tread, 36 in. guards.",
+      "notes": [
+        "Georgia rewrites R507.9.1.3 so that 1/2-inch lag screw holes are predrilled with two bits: a 1/2-inch hole through the ledger and any sheathing, and a 5/16-inch to 3/8-inch hole into the band joist.",
+        "Georgia redraws Figure R507.9.1.3(2), showing ledger fastener placement with and without wall cladding below the ledger. The 'with cladding' detail adds flashing over the top of the cladding, which the City of Roswell enforces as a minimum three-piece flashing.",
+        "Georgia redraws the lateral-load Figures R507.9.2(1) and R507.9.2(2). The detail for house floor joists parallel to and offset from the deck joists uses hold-downs of at least 750 lb at 4 locations, one within 24 inches of each end of the ledger. Each hold-down is fastened with a fully threaded 3/8-inch lag screw, predrilled, with at least 3 inches of penetration into the top plate, studs or header.",
+        "Georgia adds a 'Corner Beam Over Post' illustration to Figure R507.5.2(1), Deck Beam to Deck Post.",
+        "Georgia does not amend the stair geometry or guard height sections. It only deletes the alternating-tread-device exception (R318.7.12) and window fall protection (R321.2), so the 2024 IRC 7-3/4 in. riser, 10 in. tread and 36 in. guard rules apply.",
+        "Chapter 1 (administration, including permit exemptions) is deleted from the state code. Each city or county sets its own deck permit rules and exemptions.",
+        "Appendices are not enforceable unless referenced in the code or adopted by DCA or the local jurisdiction. DCA adopts Appendix U (Disaster Resilient Construction, with optional higher wind speeds) as optional only.",
+        "A Georgia amendment to R301.1.1 adds Appendix AY. It allows ungraded lumber, at 19% maximum moisture content, in accessory structures with no habitable space.",
+        "The older DCA 'Georgia Prescriptive Deck Details' (based on the 2012 IRC, with 2015 Georgia amendments) is not among DCA's current mandatory codes. Some cities still accept it as an optional alternative, for example Acworth in Cobb County."
+      ],
+      "sources": [
+        {
+          "title": "Georgia DCA - Current State Minimum Codes for Construction",
+          "url": "https://dca.georgia.gov/community-assistance/construction-codes/current-state-minimum-codes-construction"
+        },
+        {
+          "title": "Georgia State Amendments to the International Residential Code (2024 Edition), Revised January 1, 2026 (DCA packet)",
+          "url": "https://dca.georgia.gov/document/document/irc-2026-amendment-packet-2024-edition/download"
+        },
+        {
+          "title": "DCA - Georgia State Minimum Standard Codes sheet, January 1, 2026",
+          "url": "https://dca.georgia.gov/document/document/green-sheet-current-codes-greenpdf/download"
+        },
+        {
+          "title": "DCA memo (Dec 1, 2025): adoption of 2024 ICC codes effective January 1, 2026 (posted by Cobb County)",
+          "url": "https://assets.cobbcounty.gov/files/2026-03/2024%20CODE%20ADOPTION%20BY%20DCA%20GA.pdf"
+        },
+        {
+          "title": "DCA - Industrialized Buildings codes info sheet, January 1, 2026 (2024 IRC w/ 2026 GA Amendments for R-3)",
+          "url": "https://dca.georgia.gov/document/document/grey-sheet-ib-codes-info-sheetpdf/download"
+        },
+        {
+          "title": "City of Acworth - Current Construction Codes (Jan 1, 2026), lists GA Prescriptive Deck Details as optional",
+          "url": "https://acworth-ga.gov/wp-content/uploads/2025/12/Construction-Codes-Current-1-2026.pdf"
+        }
+      ]
+    },
+    {
+      "state": "FL",
+      "edition": "Florida Building Code, Residential, 8th Edition (2023), on the 2021 IRC",
+      "basis_irc": 2021,
+      "since": 2023,
+      "statewide": true,
+      "guard_in": 36,
+      "riser_max_in": 7.75,
+      "tread_min_in": 10,
+      "differs_from_app": "",
+      "notes": [
+        "High-Velocity Hurricane Zone (HVHZ) = Miami-Dade and Broward counties: there FBC-R R301.1/R501.1 send structural work to FBC-R Chapter 44, which points to the FBC-Building HVHZ sections (1616-1626 loads, 2314-2330 wood), so the prescriptive R507 deck path does not govern; wind is fixed by FBC-B 1620.2 at 175 mph (Miami-Dade) / 170 mph (Broward) for Risk Category II, Exposure C unless D applies (1620.3), deck/balcony live loads follow ASCE 7 (1616.5), and joist hangers and devices need product approval (2319.3.3).",
+        "The 9th Edition (2026) FBC-R, on the 2024 IRC, takes effect Dec 31, 2026, so it is NOT in force on 2026-10-20; switch the row then (Miami-Dade applies it to applications filed on/after Dec 31, 2026, or online after 4 PM Dec 30, 2026).",
+        "Deck footings follow R403.1.4 (R507.3): at least 12 in. below finished grade; Florida has no frost line (the Table R301.2(1) frost-line footnote is Reserved).",
+        "Termite probability is 'very heavy' statewide (Table R301.2(1)); R318 requires a registered termiticide treatment with a Certificate of Compliance from the licensed pest-control company to the building department (R318.1).",
+        "If soil treatment is used, it must also go under all exterior concrete or grade within 1 ft of the house walls, with a vertical barrier after landscaping (R318.1.6).",
+        "All wood grade stakes, forms and other cellulose debris must be removed from under the building and within 1 ft of it, and wood may not be stored on the ground under any building (R318.6.3).",
+        "R318.7 requires 6 in. clearance between exterior wall coverings and final grade (4 in. above patio slabs); the R318.4 veneer exception needs a 6 in. clear inspection space above any adjoining deck, porch or soil.",
+        "In the FBC-R, deck ledger and lateral attachment are R507.8 and the Exterior guards section added in the 8th Edition is R507.9 (guard loads carried to the deck joists by a continuous load path), so cite Florida's section numbers, not the IRC's.",
+        "The 8th Edition removed ground-snow references from the deck tables (R507.5, R507.6, R507.8.1.3(1)), and Florida has no seismic provisions (R301.2.2 and FBC-B 1613 are Reserved).",
+        "Where Vult is 115 mph or more, R301.2.1.1 requires wind design by WFCM, ICC 600, ASCE 7, AISI S230, the FBC-Building or the MAF guide; the 8th Edition wind map (Figure R301.2(4)) follows ASCE 7-22, and the exposure category is set site by site (R301.2.1.4).",
+        "The coming 9th Edition adds R501.3: fasteners and connectors within 3,000 ft of a saltwater coastline must meet new R332."
+      ],
+      "sources": [
+        {
+          "title": "Miami-Dade RER notice: Florida Building Code 9th Edition code change (effective Dec 31, 2026)",
+          "url": "https://www.miamidade.gov/resources/economy/building/documents/fbc-ninth-code-change.pdf"
+        },
+        {
+          "title": "Florida Building Commission, 2026 FBC Workplan, October 2026 (9th edition effective 12/31/2026)",
+          "url": "https://www.floridabuilding.org/fbc/commission/FBC_1026/Commission/Workplan_October_2026.pdf"
+        },
+        {
+          "title": "Florida Building Commission, Analysis of Changes, 9th Edition (2026) FBC-Residential (model code 2024 IRC)",
+          "url": "https://www.floridabuilding.org/fbc/thecode/2026_Code_Development/Analysis_Code_Changes/Analysis_of_changes_9th_Edition-2026-FBC-Residential.pdf"
+        },
+        {
+          "title": "Analysis of Changes, 8th Edition (2023) FBC-Residential (model code 2021 IRC), Leon County copy",
+          "url": "https://www.lcfla.com/sites/default/files/fileattachments/growth_management/page/7092/analysis_of_changes_8th_ed_2023_fbcr_final.pdf"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 3 (R301.1 HVHZ exception, Table R301.2(1), R301.2.1.1)",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/3/building-planning"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 4 (R403.1.4 minimum footing depth)",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/4/foundations"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 5 (R501.1 HVHZ, R507 decks)",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/5/floors"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 44 High-Velocity Hurricane Zones",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/44/high-velocity-hurricane-zones"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 2 (HVHZ definition: Broward and Miami-Dade counties)",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/2/definitions"
+        },
+        {
+          "title": "2023 FBC-Building Chapter 16 (1613 Reserved; 1616.5; 1620.2 HVHZ wind speeds; 1620.3 exposure)",
+          "url": "https://up.codes/viewer/florida/fl-building-code-2023/chapter/16/structural-design"
+        },
+        {
+          "title": "2023 FBC-Building Chapter 23 (HVHZ wood 2314-2319, product approval for hangers 2319.3.3)",
+          "url": "https://up.codes/viewer/florida/fl-building-code-2023/chapter/23/wood"
+        },
+        {
+          "title": "Putnam County: Florida Building Code Residential Stair Construction (riser 7-3/4, tread 10, guards 36 in.)",
+          "url": "https://www.putnam-fl.gov/wp-content/uploads/2026/03/FBCR-Residential-Stair.pdf"
+        },
+        {
+          "title": "Charlotte County: 2023 FBC-Residential Section R318 Protection Against Termites (full text)",
+          "url": "https://www.charlottecountyfl.gov/core/fileparse.php/363/urlt/termite-protection-florida-building-code-residential.pdf"
+        },
+        {
+          "title": "Miami-Dade Residential Plan Review Guidelines (Building), 2023 FBC, Table RB-1 stairways",
+          "url": "https://www.miamidade.gov/resources/economy/permits/documents/building-residential.pdf"
+        }
+      ]
+    }
+  ],
+  "counties": [
+    {
+      "state": "DE",
+      "county": "New Castle County",
+      "fips": "10003",
+      "population_2020": 570719,
+      "jurisdiction": "City of New Castle (a city inside New Castle County), filled-in IRC Table R301.2(1) in its Ordinance 561. New Castle County Land Use publishes its own values, but its site (newcastlede.gov) returns a Cloudflare 403 to every automated read.",
+      "edition": "2024 IRC with New Castle County Code Chapter 6 amendments (reported effective 2026-01-01; not opened)",
+      "frost_depth_in": 32,
+      "ground_snow_psf": 25,
+      "wind_mph": 115,
+      "wind_basis": "Vult, 2024 IRC basis (ASCE 7-22), Risk Cat II; value from the City of New Castle's filled-in Table R301.2(1); topographic effects No, special wind region No, wind-borne debris zone No",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "yes (protection required; table says 'Yes')",
+      "deck_notes": [
+        "Deck footings must go at least 32 in. below grade (the frost line depth in the filled-in Table R301.2(1))."
+      ],
+      "note": "Every newcastlede.gov page (Laws & Code page, Chapter 6, deck documents) and the county code on Municode returned a Cloudflare 403, so the county's own documents could not be opened. Search-engine extracts of those county documents report the following. (1) The Laws & Code page lists the 2024 IRC effective 1/1/2026. (2) A July 2023 Chapter 6 proposal adopted the 2021 IRC effective 1/1/2024. (3) The '2024 Residential Deck Footing Certification' form cites the 2024 IRC as adopted by the county, with a 32 in. minimum footing depth (contractor self-certification; the county may still inspect). (4) The 'Deck Permit Requirements' sheet requires a licensed contractor or an owner-occupant, plans with a cross section from the bottom of the footing to the top of the rail plus a framing top view, a signed and sealed plot plan, and any setback variance granted before the permit is issued. (5) The 'Deck Design FAQ' gives the 4 in. sphere rule for guards and 7-3/4 in. max riser, 10 in. min tread and 36 in. min stair width. The 32 in. frost depth and 25 psf snow load in those extracts match the City of New Castle table opened here. A secondary site (apexpergola.com) also cites 32 in. for New Castle County (Chapter 6, §6.05.002, Table R301.2(1)). The wind, seismic, weathering and termite entries come from the City of New Castle table, not the county's. Verify the edition and deck rules with NCC Land Use (302-395-5400).",
+      "sources": [
+        {
+          "title": "City of New Castle Ordinance 561 (adopts 2024 ICC codes; Table R301.2(1) filled in, p. 11)",
+          "url": "https://newcastlecity.delaware.gov/files/2026/01/561-Ordinance-Adopting-ICC-Recs-05920144-3xCCC1C-002-for-CC-meeting.pdf"
+        },
+        {
+          "title": "New Castle County - County Laws & Code (blocked to automated fetch)",
+          "url": "https://www.newcastlede.gov/229"
+        },
+        {
+          "title": "New Castle County - 2024 Residential Deck Footing Certification (blocked to automated fetch)",
+          "url": "https://www.newcastlede.gov/DocumentCenter/View/62262/2024-Residential-Deck-Footing-Certification"
+        },
+        {
+          "title": "New Castle County - Deck Permit Requirements (blocked to automated fetch)",
+          "url": "https://www.newcastlede.gov/DocumentCenter/View/32995/Deck-Permit-Requirements"
+        },
+        {
+          "title": "Apex Pergola - Frost depth by state (secondary; cites NCC Chapter 6 Table R301.2(1))",
+          "url": "https://www.apexpergola.com/frost-depth"
+        },
+        {
+          "title": "Wikipedia - List of counties in Delaware (2020 census populations)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Delaware"
+        },
+        {
+          "title": "Wikipedia - List of United States FIPS codes by county",
+          "url": "https://en.wikipedia.org/wiki/List_of_United_States_FIPS_codes_by_county"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "DE",
+      "county": "Sussex County",
+      "fips": "10005",
+      "population_2020": 237378,
+      "jurisdiction": "Sussex County Building Code Office (Georgetown)",
+      "edition": "2021 IRC Chapters 1-10 (Sussex County Code §52-1, Ordinance 2851, effective 2023-01-01); residential fire sprinklers exempted",
+      "frost_depth_in": 24,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "Vult, 2021 IRC Figure R301.2(2) (ASCE 7-16); the county says this puts Sussex at 115 to under 130 mph depending on location",
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Decks over 30 in. high need one complete set of plans drawn to a legible scale.",
+        "The plans need a footer/foundation plan (size, depth and location of all post holes, with spacing), an overhead/framing plan, a cross section (footing type, girder/beam, joist and post sizes and spacing, steps) and elevations.",
+        "Footings go at least 24 in. to the bottom of the footer from final grade, and a concrete footer must be at least 3 times the post size.",
+        "Fasten the deck band/ledger to the house with 1/2 in. lags at 16 in. on center (or an ASTM-comparable fastener) with flashing; the deck must be positively anchored or self-supporting, with no toenailing, and ledgers per Tables R507.9.1.3(1)/(2).",
+        "Decks over 30 in. above grade need a guard at least 36 in. high with openings that do not pass a 4 in. sphere, and the triangle at the stair tread must be under 6 in.",
+        "Stairs: 7-3/4 in. max riser, 10 in. min tread, graspable handrail 34-38 in. above the nosing where there are 4 or more risers, and a 36 in. min landing at the bottom.",
+        "Beam splices must fall over a post, using an approved post cap; multi-ply beams are fastened with two 1/2 in. through-bolts or an approved connector."
+      ],
+      "note": "The county does not publish a filled-in Table R301.2(1). The 24 in. footing depth is from the county's Building Code FAQ (the frost line for commercial work is also 24 in.) and its Additional Code Requirements sheet (R403.1). On wind, the county's 2021 IRC presentation gives only a range, 115 to <130 mph Vult, and its commercial FAQ says 105-140 mph by location and risk category. The governing value for 'most of the county' could not be confirmed, so wind_mph is null; use the site value from 2021 IRC Figure R301.2(2). The county requires termite protection per R318 but does not publish a termite-hazard rating. No county source gives ground snow, seismic category or weathering, so those are null. No newer IRC adoption was found as of 2026-10; the county's next change is the energy code (2024 IECC, effective 2027-04-11).",
+      "sources": [
+        {
+          "title": "Sussex County Ordinance No. 2851 (2021 IRC, effective 2023-01-01)",
+          "url": "https://sussexcountyde.gov/sites/default/files/ordinances/o2851_0.pdf"
+        },
+        {
+          "title": "Sussex County - 2021 IRC staff presentation (wind, stairs, footings)",
+          "url": "https://sussexcountyde.gov/sites/default/files/PDFs/IRC_Update_January_2023.pdf"
+        },
+        {
+          "title": "Sussex County - Building Code FAQs (24 in. footing depth, wind range)",
+          "url": "https://sussexcountyde.gov/building-code-FAQs"
+        },
+        {
+          "title": "Sussex County - Additional Code Requirements, 2021 IRC",
+          "url": "https://sussexcountyde.gov/sites/default/files/PDFs/Additional_Code_Requirements.pdf"
+        },
+        {
+          "title": "Sussex County - Plan requirements: Decks over 30 in. / open and screen porches",
+          "url": "https://sussexcountyde.gov/sites/default/files/PDFs/Decks_Porches_Requirements.pdf"
+        },
+        {
+          "title": "Sussex County - Deck & Stair Plan Requirements (plan example)",
+          "url": "https://sussexcountyde.gov/sites/default/files/PDFs/DeckStairRail_PlanExample.pdf"
+        },
+        {
+          "title": "Sussex County - Building Code office page",
+          "url": "https://sussexcountyde.gov/building-code"
+        },
+        {
+          "title": "Wikipedia - List of counties in Delaware (2020 census populations)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Delaware"
+        },
+        {
+          "title": "Wikipedia - List of United States FIPS codes by county",
+          "url": "https://en.wikipedia.org/wiki/List_of_United_States_FIPS_codes_by_county"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "DE",
+      "county": "Kent County",
+      "fips": "10001",
+      "population_2020": 181851,
+      "jurisdiction": "Kent County Levy Court, Department of Planning Services (Inspections & Enforcement), Dover",
+      "edition": "2018 IRC with Kent County amendments (adopted 2020-08-18, effective 2020-10-05)",
+      "frost_depth_in": 24,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "A permit is needed for any deck larger than 16 sq ft, and for a deck at a sliding glass door that is wider than the door opening and extends more than 36 in. out.",
+        "Elevated patios (walking surface more than 8.25 in. above grade) need a permit with a plan view and a cross section showing finished height and foundation.",
+        "Upload a plot plan, a framing plan view labeling joists, ledgers, beams, post/footing locations and stair stringers with every span dimensioned, and a cross section showing the load path to the footings.",
+        "Plans must be clear, scalable PDFs uploaded online; photos and CAD files are not accepted.",
+        "Footings for single-story decks must be at least 3 times the widest nominal side of the post and sized for the load (Kent Co. Code §105-24.C.1(3)(a)).",
+        "The county points designers to its annotated AWC DCA 6 deck guide and says to check post heights against 2018 IRC Table R507.4.",
+        "Soil bearing capacity is taken as 2,000 psf (county amendment to Table R301.2(1)).",
+        "Decks at manufactured homes must be freestanding and put no load on the home.",
+        "A deck next to an above-ground pool must meet the pool-barrier rules.",
+        "Inside town limits the town's zoning official must approve the project first; the county then does plan review and inspections."
+      ],
+      "note": "Kent's filled-in Table R301.2(1) is in its IRC amendments (Kent County Code §105-24) on eCode360, which returned a Cloudflare 403. The 24 in. frost depth is from a secondary site (apexpergola.com) that cites §105-24 Table R301.2(1); it was not read from the county text. The county's own page confirms only the 2,000 psf soil bearing entry. Ground snow, wind, seismic, weathering and termite are null because no openable Kent source states them. The City of Dover site (county seat) was also unreachable. The 2018 IRC is still listed as current on the county's adopted-codes page, which already lists the NEC 2023 effective 2026-01-01.",
+      "sources": [
+        {
+          "title": "Kent County - Permitting Requirements & Adopted Codes",
+          "url": "https://www.kentcountyde.gov/Residents/Permits/Building-Permits/Permitting-Requirements-Adopted-Codes"
+        },
+        {
+          "title": "Kent County - Permitting Requirements: Decks, Ramps & Patios",
+          "url": "https://www.kentcountyde.gov/files/sharedassets/public/v/1/website-pdfs_web/i-amp-e-pdfs/kent-county-permitting-requirements-decks-ramps-patios.pdf"
+        },
+        {
+          "title": "Kent County - Annotated AWC DCA 6 deck guide (county footing amendment notes)",
+          "url": "https://www.kentcountyde.gov/files/sharedassets/public/v/1/content-publishers/inspections_enforcement/i_e-pdf/annotated-awc-dca6-2018-prescriptive-residential-wood-deck-construction-guide-based-on-2015-irc.pdf"
+        },
+        {
+          "title": "Kent County - Check These 3 Things Before You Submit",
+          "url": "https://www.kentcountyde.gov/files/sharedassets/public/v/1/content-publishers/inspections_enforcement/i_e-pdf/check-these-3-things-before-you-submit.pdf"
+        },
+        {
+          "title": "Apex Pergola - Frost depth by state (secondary; cites Kent §105-24 Table R301.2(1))",
+          "url": "https://www.apexpergola.com/frost-depth"
+        },
+        {
+          "title": "Wikipedia - List of counties in Delaware (2020 census populations)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Delaware"
+        },
+        {
+          "title": "Wikipedia - List of United States FIPS codes by county",
+          "url": "https://en.wikipedia.org/wiki/List_of_United_States_FIPS_codes_by_county"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "MD",
+      "county": "Montgomery County",
+      "fips": "24031",
+      "population_2020": 1062061,
+      "jurisdiction": "Montgomery County Department of Permitting Services (DPS)",
+      "edition": "2021 IRC with Montgomery County amendments (Executive Regulation 13-24, approved by Council Resolution 20-687, effective December 10, 2024)",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 30,
+      "wind_mph": 115,
+      "wind_basis": "Ultimate design wind speed (Vult) per the county's Table R301.2(1), 2021 IRC / ASCE 7-16, Risk Cat II; topographic effects: No",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A building permit is required for every deck regardless of height; the county's R105.2 amendment exempts only decks whose joists bear completely on grade and support no other structure.",
+        "Submit a scaled site plan drawn on the house location plat/survey showing distances from the deck to lot lines and the height from grade to deck top.",
+        "Drawings go in electronically (eServices/ProjectDox) on sheets no smaller than 11x17 in. at a minimum scale of 1/4 in. = 1 ft.",
+        "Footings must bottom at least 30 in. below grade on undisturbed soil. The typical-details footing is at least 20 in. square or 22 in. round.",
+        "Deck footings within 5 ft of the house foundation must go down to the depth of the existing house footings (county amendment to R507.3.3).",
+        "Lag screws are not allowed for ledgers (county deleted them from R507.9.1.3); use 1/2 in. through-bolts into the band or rim board, or the deck must be free-standing.",
+        "Ledgers may not attach to brick, stone or other veneer, cantilevered floors, bay windows, chimneys or open-web trusses.",
+        "Decks more than 30 in. above grade (measured at any point within 36 in. horizontally) need a guard; guard-post hold-downs must be rated at least 1,800 lb for a 36 in. guard.",
+        "Stairs need a light at the top landing that lights all treads and landings, switched from inside the house.",
+        "Stairs must be at least 36 in. wide with stringers at least 2x12; a stairway rising more than 12 ft needs an intermediate landing.",
+        "The county's Residential Typical Deck Details may replace construction plans only for single-level, single-span rectangular decks with no roof, screened porch or hot tub; a hot tub needs sealed plans.",
+        "Three inspections are required: footing (before concrete), framing (before decking), and final.",
+        "Manufactured railings and composite decking need a current code evaluation report at the framing inspection."
+      ],
+      "note": "The plan-submittal guideline (rev. 04/15/2025) assumes 1,500 psf soil bearing, while the Typical Deck Details (3/7/2025) assume 2,000 psf soil and 3,000 psi concrete. There are no county amendments to the R311.7.5 stair limits, so IRC 7-3/4 in. / 10 in. apply. The county's 2026 design-criteria sheet (dated 08/13/2026) matches the ER 13-24 table.",
+      "sources": [
+        {
+          "title": "Montgomery County DPS - Residential Construction Design Criteria Parameters (Table R301.2(1), 08/13/2026)",
+          "url": "https://assets.montgomerycountymd.gov/files/2026-04/ResidentialConstructionDesignCriteriaParameters.pdf"
+        },
+        {
+          "title": "Montgomery County Executive Regulation 13-24 (2021 IRC amendments incl. Table R301.2(1), R105.2, R507)",
+          "url": "https://assets.montgomerycountymd.gov/files/2026-04/MCER13-24.pdf"
+        },
+        {
+          "title": "Montgomery County Residential Typical Deck Details (2021 IRC, 3/7/2025)",
+          "url": "https://assets.montgomerycountymd.gov/files/2026-04/MCResidentialDeckDetails.pdf"
+        },
+        {
+          "title": "Plan Submittal Guidelines for Residential Decks (rev. 04/15/2025)",
+          "url": "https://assets.montgomerycountymd.gov/files/2026-04/GuidelinesForResidentialDecks2021IRCFinal.pdf"
+        },
+        {
+          "title": "Montgomery County DPS - Residential Decks Permit Process",
+          "url": "https://www.montgomerycountymd.gov/department-permitting-services/all-permits/residential-permits/residential-decks-permit-process"
+        },
+        {
+          "title": "List of counties in Maryland (2020 Census, FIPS) - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Maryland"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "MD",
+      "county": "Prince George's County",
+      "fips": "24033",
+      "population_2020": 967201,
+      "jurisdiction": "Prince George's County Department of Permitting, Inspections and Enforcement (DPIE). The Table R301.2(1) values come from the county's table as filed with and posted by the Maryland Department of Labor.",
+      "edition": "2021 IRC with Prince George's County amendments (County Code Subtitle 4, CB-047-2025: enacted Oct 7, 2025, signed Oct 27, 2025, in effect 45 days after becoming law, about mid-December 2025); previously 2018 IRC (CB-056-2020)",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 35,
+      "wind_mph": 115,
+      "wind_basis": "Ultimate design wind speed; the county table lists '90/115' (90 mph nominal/ASD, 115 mph ultimate); topographic effects, special wind region and windborne debris zone all 'No'",
+      "seismic_sdc": "B/C",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "All exterior footings must bottom at 30 in. below finished grade (county amendment to R403.1.4).",
+        "Stair risers may be up to 8-1/4 in. and treads no less than 9 in., with no more than 3/8 in. variation within a flight (county amendment to R311.7.5).",
+        "All exterior steps need a light controlled by a switch inside the house (county R303.7.2).",
+        "Guards may not use an ornamental pattern that creates a ladder effect (county R312.1.3).",
+        "The county's own list of permit-exempt work (R105.2) does not include decks, so deck permits are required. No exemptions apply in the Chesapeake Bay Critical Area Overlay Zones.",
+        "Call Miss Utility before any excavation deeper than 12 in.; skipping it is grounds to revoke the permit.",
+        "Keep the permit posted on site, visible from the street, until the work is complete.",
+        "Decks may not be placed inside retaining-wall easements."
+      ],
+      "note": "The DPIE website (princegeorgescountymd.gov) refused automated access (HTTP 403), so the county's own deck handout could not be read. The Table R301.2(1) is the county's table posted by the MD Dept. of Labor (file dated Aug 2023, before the 2021 code took effect; its footnotes use 2015-IRC figure numbers), hence medium confidence. The table lists seismic as 'B/C', reported as published. Termite says 'map' in the PG table; 'moderate to heavy' is taken from adjoining Montgomery County's table. The 35 psf ground snow figure is in the county table, and the county's IBC amendment also sets 35 psf minimum ground snow.",
+      "sources": [
+        {
+          "title": "Prince George's County Table R301.2(1) (posted by MD Dept. of Labor)",
+          "url": "https://labor.maryland.gov/labor/build/doc/irc-table-princegeorges.pdf"
+        },
+        {
+          "title": "MD Dept. of Labor - county building code contacts and R301.2 tables",
+          "url": "https://labor.maryland.gov/labor/build/buildcounties.shtml"
+        },
+        {
+          "title": "CB-047-2025 bill text (2021 codes; IRC amendments Secs. 4-240 to 4-255)",
+          "url": "https://princegeorgescountymd.legistar1.com/princegeorgescountymd/attachments/594de061-7944-496f-a15b-d557318b14cb.docx"
+        },
+        {
+          "title": "CB-047-2025 legislative record (enacted 10/7/2025, signed 10/27/2025)",
+          "url": "https://webapi.legistar.com/v1/princegeorgescountymd/matters/18118/histories"
+        },
+        {
+          "title": "List of counties in Maryland (2020 Census, FIPS) - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Maryland"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "MD",
+      "county": "Baltimore County",
+      "fips": "24005",
+      "population_2020": 854535,
+      "jurisdiction": "Baltimore County Department of Permits, Approvals and Inspections (PAI). Values are from the Baltimore County Code Article 35 Title 2 IRC amendments, as posted by the Maryland Department of Labor.",
+      "edition": "Maryland Building Performance Standards (2021 IRC) as required by state law since May 29, 2024. The county code text that could be opened (Municode printout of 7/11/2023) still cited the 2015 IRC under Bill 40-15; the county's current adopting bill was not verified.",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 30,
+      "wind_mph": 115,
+      "wind_basis": "Ultimate design wind speed per Baltimore County Table R301.2(1) amendment",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Open decks and porches must be set back at least 4 in. from property lines. They may run continuously across a lot line only where zoning allows it and the adjoining owners agree in writing (county R302.2.5).",
+        "Enclosed spaces under decks or porches with 5 ft or more clear height, within 5 ft of a property line, need fire-rated exterior walls per Table R302.1 (county R302.2.6).",
+        "The county table also sets roof snow load at 30 psf with no slope reduction and presumes a 2,000 psf soil bearing value.",
+        "The county deleted the IRC's list of permit-exempt work (R105.2), so decks are not exempt from permits under the IRC list."
+      ],
+      "note": "The county website (baltimorecountymd.gov) and its code host refused automated access (HTTP 403), so the PAI deck handout and current code text could not be read. Deck notes and values come from the 2015-cycle county amendments (Bill 40-15). The climatic values are unlikely to have changed, but the 2021-cycle county amendments may differ. No county amendment to the R311.7.5 stair limits was found in that text.",
+      "sources": [
+        {
+          "title": "Baltimore County Table R301.2(1) amendment (posted by MD Dept. of Labor)",
+          "url": "https://labor.maryland.gov/labor/build/doc/irc-table-baltimorecounty.pdf"
+        },
+        {
+          "title": "Baltimore County Building Codes and Amendments (Art. 35 Title 2, printout 7/11/2023)",
+          "url": "https://labor.maryland.gov/labor/build/doc/baltcounty-code-amendments.pdf"
+        },
+        {
+          "title": "MD Dept. of Labor - county building code contacts and R301.2 tables",
+          "url": "https://labor.maryland.gov/labor/build/buildcounties.shtml"
+        },
+        {
+          "title": "List of counties in Maryland (2020 Census, FIPS) - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Maryland"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "DC",
+      "county": "District of Columbia",
+      "fips": "11001",
+      "population_2020": 689545,
+      "jurisdiction": "DC Department of Buildings (DOB); values from 12-B DCMR §R301, Table R301.2(1)",
+      "edition": "District of Columbia Residential Code (2017) = 2015 IRC + 12-B DCMR, effective 2020-05-29",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 30,
+      "wind_mph": 115,
+      "wind_basis": "115 mph per 12-B DCMR Table R301.2(1), on the 2015 IRC wind map (ultimate design speed, ASCE 7-10, Risk Cat II); topographic effects not applicable",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "DC's permit-exemption list (12-A DCMR §105.2) has no exemption for decks, so every new deck needs a building permit.",
+        "DOB's Homeowner's Center reviews and issues permits for one-level decks under 500 sq ft and less than 10 ft above grade, for owners of one- and two-family homes or their authorized agents.",
+        "Homes in a historic district or under Commission of Fine Arts review need that review before the permit is issued."
+      ],
+      "note": "Other entries in DC's Table R301.2(1): winter design temperature 17°F, ice barrier underlayment required YES, air freezing index 500, mean annual temperature 55°F, flood maps of 09/27/2010. No DOB deck handout or typical-deck-details sheet was found on dob.dc.gov; DOB's site search returned 403. DC does not amend IRC R507 decks, R311 stairs or R312 guards.",
+      "sources": [
+        {
+          "title": "DCRegs 12-B DCMR §R301 (2017) - Table R301.2(1) for DC",
+          "url": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-B301"
+        },
+        {
+          "title": "DC DOB - DC Construction Codes",
+          "url": "https://dob.dc.gov/page/dc-construction-codes"
+        },
+        {
+          "title": "DC DOB - Homeowner's Center",
+          "url": "https://dob.dc.gov/page/homeowners-center"
+        },
+        {
+          "title": "2017 District of Columbia Building Code Part 1 (§105.2 exemptions)",
+          "url": "https://dob.dc.gov/sites/default/files/dc/sites/dob/publication/attachments/2017%20District%20of%20Columbia%20Building%20Code_Part%201.pdf"
+        },
+        {
+          "title": "Wikipedia - Washington, D.C. (2020 census 689,545)",
+          "url": "https://en.wikipedia.org/wiki/Washington,_D.C."
+        },
+        {
+          "title": "Wikipedia - List of United States FIPS codes by county",
+          "url": "https://en.wikipedia.org/wiki/List_of_United_States_FIPS_codes_by_county"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "VA",
+      "county": "Fairfax County",
+      "fips": "51059",
+      "population_2020": 1150309,
+      "jurisdiction": "Fairfax County Land Development Services (LDS)",
+      "edition": "2021 Virginia Residential Code (2021 USBC); mandatory for applications since Jan 18, 2025",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 25,
+      "wind_mph": 115,
+      "wind_basis": "Ultimate design wind speed (Vult), Risk Category II and residential (105 mph Risk Cat I, 120 mph Risk Cat III); ASCE edition not stated on the page",
+      "seismic_sdc": "A",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "The county's Typical Deck Details (v2021.0, 1/5/2024, based on the 2021 VRC) cover single-level residential decks only, and any deviation needs county approval before construction.",
+        "Under the details, multi-level decks that share posts and footings are prohibited, as are privacy screens, planters, built-in seating, surface-mounted guard posts and hot tubs.",
+        "The details are designed for 40 psf live load plus 10 psf dead load, using preservative-treated #2 southern pine and G-185 or stainless hardware.",
+        "Footings must bear on solid ground 24 inches below grade, and county inspectors verify bearing before concrete is placed.",
+        "A footing whose edge is less than 5 ft from the house wall must bear at the same elevation as the house footings.",
+        "Footing types A to H run from 12 in. square / 14 in. round by 6 in. thick up to 26 in. square / 29 in. round by 10 in. thick, using 3,000 psi concrete.",
+        "Posts must be 6x6 (4x4 allowed up to 2.5 ft tall), with a maximum height of up to 14 ft set by Table 4.",
+        "The ledger must be at least 2x8 and no shallower than the joists, with continuous flashing at wood-framed walls and no lead anchors.",
+        "Attaching the ledger through brick or stone veneer, to open-web floor trusses, to chimneys or to overhangs is prohibited, so those cases need a free-standing deck or an engineered design.",
+        "A guard is required where the deck is more than 30 in. above grade at a point 36 in. from its edge; it must be at least 36 in. high and stop a 4-in. sphere.",
+        "Guard posts must not be notched and must be fastened with hold-down anchors rated at least 1,800 lb.",
+        "Stairs need risers of 8-1/4 in. max, treads of 9 in. min and a width of at least 36 in., with an intermediate free-standing landing where the total rise is more than 12 ft.",
+        "Hidden decking fasteners combined with posts over 2.5 ft tall require continuous 2x6 diagonal bracing under the joists.",
+        "A copy of the details with Section 10 (deck design record and sketch) filled in, plus the approved plat and building plans, must be on the job site for inspections.",
+        "Required inspections are footing (holes dug and ledger attached), framing and final; framing can be skipped if the joists are more than 48 in. above grade.",
+        "Technical Bulletin 24-1 (2/9/2024) lets LDS accept a house location plat instead of a grading-plan revision for an uncovered standalone deck on a lot with active bonded grading plans, if no impervious features or grade, utility, easement or tree-area changes are involved."
+      ],
+      "note": "Design criteria come from the LDS Codes and Standards page ('Local Design Load Criteria'). That page also lists a winter design temperature of 17°F, required ice-shield underlayment, NFIP entry 3/5/1990, air freezing index <=1500, mean annual temperature 50°F and decay 'slight to moderate'. It still says the county 'references the 2018 International Codes' but also states that all applications since Jan 18, 2025 must meet the 2021 USBC. Snow caveat: 25 psf is valid only when designing with the VCC Figures 1608.2 and ASCE 7-16 throughout; with ASCE 7-22 the snow load comes from ASCE 7-22 maps, pending a DHCD correction. Deck permit threshold, number of plan copies and paper size are not stated in the documents I opened.",
+      "sources": [
+        {
+          "title": "Fairfax County LDS — Codes and Standards (Local Design Load Criteria)",
+          "url": "https://www.fairfaxcounty.gov/landdevelopment/codes-and-standards"
+        },
+        {
+          "title": "Fairfax County — Typical Deck Details, based on the 2021 Virginia Residential Code (v2021.0)",
+          "url": "https://www.fairfaxcounty.gov/landdevelopment/sites/landdevelopment/files/assets/documents/pdf/publications/deck-details.pdf"
+        },
+        {
+          "title": "Fairfax County LDS — Typical Deck Details page",
+          "url": "https://www.fairfaxcounty.gov/landdevelopment/node/1028"
+        },
+        {
+          "title": "LDS Technical Bulletin 24-1 — Plats for residential standalone deck permits",
+          "url": "https://www.fairfaxcounty.gov/landdevelopment/sites/landdevelopment/files/Assets/documents/24-01-lds-accepting-plats-residential-standalone-deck-permits.pdf"
+        },
+        {
+          "title": "Wikipedia — Fairfax County, Virginia (2020 census population)",
+          "url": "https://en.wikipedia.org/wiki/Fairfax_County,_Virginia"
+        },
+        {
+          "title": "Wikipedia — List of counties in Virginia (FIPS)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Virginia"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "VA",
+      "county": "Prince William County",
+      "fips": "51153",
+      "population_2020": 482204,
+      "jurisdiction": "Prince William County Department of Development Services, Building Development Division",
+      "edition": "2021 Virginia Residential Code (2021 VUSBC); all permit applications must comply with the 2021 VUSBC",
+      "frost_depth_in": 24,
+      "ground_snow_psf": 30,
+      "wind_mph": 115,
+      "wind_basis": "Table R301.2(1) wind design speed as filled in by the county (IRC ultimate design wind speed); special wind region No, topographic effects No, wind-borne debris zone No; ASCE edition and risk category not stated",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Decks more than 16-1/2 in. above finished grade need plan review and a building permit.",
+        "Decks 16-1/2 in. or less above grade count as an on-grade patio and need a permit only if they carry a roof, walls or a hot tub.",
+        "All decks need Zoning Approval (on the approved plat) before the building permit application.",
+        "No plans are required when the county's Typical Residential Deck Design (Typical Deck Detail v2023-09-29) is used with its completed layout form, but that design cannot be used for customized decks.",
+        "Under the typical detail, multi-level decks, attaching to an existing deck, roofs, privacy screens, planters, surface-mounted guard posts and hot tubs are not allowed.",
+        "Custom decks need two plan sets on paper at least 11x17 with a framing plan, joist and beam sizes and spans, elevations, cross sections, connection details and stair and guard details, plus two zoning-approval sets with the deck highlighted.",
+        "Footings must bear on solid undisturbed soil 24 in. below grade and be at least 8 in. thick, and footings closer than 5 ft to a house footing must bear at the same elevation.",
+        "Posts must be 6x6 up to 14 ft tall; 4x4 is allowed up to 2'-6\" and for landing posts up to 8 ft.",
+        "The ledger must match the joist depth and be at least a 2x8, must not be supported by stone or masonry veneer, and needs flashing and fasteners that go past the inside face of the band board.",
+        "A guard is required for any part of the deck more than 30 in. above grade within 36 in. of the edge; guards cannot attach to decks framed with 2x6 joists, and joist cantilevers may not exceed 1/4 of the span.",
+        "Deck stairways must be illuminated (solar lighting is not accepted), and every deck needs at least one accessible receptacle.",
+        "Required inspections are footing (before the pour), concealment (for decks 42 in. or less to the lowest framing) and final."
+      ],
+      "note": "Values come from the county policy 'Climatic and Geographic Design Criteria' (effective 11/16/2006, revised 12/20/2020, linked to the 2021 VRC). It also lists a winter design temperature of 17°F, required ice barrier, flood hazards 12/01/81, air freezing index <=1500 and mean annual temperature 55°F. Seismic Design Category A may be used if supported by a geotechnical report. The county's separate 'Typical Residential Construction Specifications' (v2021-08-12) still lists 'Design Wind Speed 90 mph / 3 second gust', an older basic-wind-speed figure; I used the 115 mph Table R301.2(1) value. Ground Snow Load policy (effective 12/16/2024): designs on ASCE 7-22 must use ASCE 7-22 snow maps; designs on the VCC Figures 1608.2 must follow ASCE 7-16 entirely; no mixing.",
+      "sources": [
+        {
+          "title": "PWC policy — Climatic and Geographic Design Criteria (Table R301.2(1))",
+          "url": "https://www.pwcva.gov/assets/2024-01/PP-ClimaticandGeographicDesignCriteria.pdf"
+        },
+        {
+          "title": "PWC policy — Deck Construction Permit Requirement",
+          "url": "https://www.pwcva.gov/assets/2024-01/PP-DeckConstructionPermitRequirement.pdf"
+        },
+        {
+          "title": "PWC — Residential Deck permit page",
+          "url": "https://www.pwcva.gov/department/building-development-division/residential-deck"
+        },
+        {
+          "title": "PWC — Typical Residential Deck Design (Typical Deck Detail v2023-09-29)",
+          "url": "https://www.pwcva.gov/assets/2023-04/DeckDetail2023_0.pdf"
+        },
+        {
+          "title": "PWC policy — Ground Snow Load (VUSBC 2021)",
+          "url": "https://www.pwcva.gov/assets/2024-12/GroundSnowLoad.pdf"
+        },
+        {
+          "title": "PWC — Typical Residential Construction Specifications (v2021-08-12)",
+          "url": "https://www.pwcva.gov/assets/2021-04/005524.pdf"
+        },
+        {
+          "title": "Wikipedia — Prince William County, Virginia (2020 census, FIPS 51153)",
+          "url": "https://en.wikipedia.org/wiki/Prince_William_County,_Virginia"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "VA",
+      "county": "Virginia Beach city",
+      "fips": "51810",
+      "population_2020": 459470,
+      "jurisdiction": "City of Virginia Beach Planning & Community Development, Permits & Inspections (independent city)",
+      "edition": "2021 Virginia Residential Code (2021 USBC)",
+      "frost_depth_in": 24,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "The city's Typical Deck Details (based on the 2021 VRC; PDF dated Oct 2025, adapted from Fairfax County's) cover single-level residential decks only, and deviations need city approval.",
+        "Under the details, multi-level decks that share posts and footings are prohibited, as are privacy screens, planters, built-in seating, surface-mounted guard posts and hot tubs.",
+        "Footings must bear on solid ground 24 inches below grade (the figure shows a 24-in. minimum frost depth), and inspectors verify bearing before concrete is placed.",
+        "A footing less than 5 ft from the house wall must bear at the house-footing elevation.",
+        "The ledger must be at least 2x8 and match the joist depth; attachment through brick or stone veneer, to open-web trusses, chimneys or overhangs is prohibited, and lead anchors are not allowed.",
+        "A guard is required where the deck is more than 30 in. above grade at a point 36 in. from its edge; it must be at least 36 in. high and have post hold-downs rated at least 1,800 lb.",
+        "Stairs need risers of 8-1/4 in. max, treads of 9 in. min and a width of at least 36 in., with an intermediate landing where the total rise is more than 12 ft.",
+        "Joist-to-beam connectors or hurricane clips must have at least 100 lb capacity in both uplift and lateral directions.",
+        "Decks are listed as work needing a residential building permit, and uncovered decks of any size can be reviewed at the counter if the plan set is five pages or fewer.",
+        "The approved plat and building plans must be on site; inspections are footing (holes dug and ledger attached), framing (can be skipped if joists are more than 48 in. above grade) and final.",
+        "New structures in a Chesapeake Bay Preservation Area, flood zone or the Southern Rivers Watershed may need environmental approvals before a building permit is issued.",
+        "To add a roof over an existing deck, the owner can request a notarized modification waiving the R403.1 continuous footing; any later enclosure voids it."
+      ],
+      "note": "Virginia Beach does not publish a filled-in Table R301.2(1) or other design criteria on its current Permits & Inspections pages. I checked the residential and building permit pages, the deck guide, the permit applications, the V-Zone documents and the Hampton Roads hazard plan, and found nothing. Ground snow, wind speed, wind-borne debris region, seismic, weathering and termite are therefore null and should be confirmed with Permits & Inspections at (757) 385-4211 or perminsp@vbgov.com. Coastal wind speed and whether any area is a wind-borne debris region (IRC: Vult >=130 mph within 1 mile of the coast, or >=140 mph) could not be confirmed from an official city source. The web-search budget ran out before I could look for a neighbouring Hampton Roads table. Frost/footing depth of 24 in. comes from the city's own deck guide. FIPS 51810 is the county-equivalent code (place code 51-82000).",
+      "sources": [
+        {
+          "title": "City of Virginia Beach — Typical Deck Details (Deck Guide, 2021 VRC)",
+          "url": "https://s3.us-east-1.amazonaws.com/virginia-beach-departments-docs/planning/Divisions-Offices/Permits_Inspections/Documents/Deck_Guide.pdf"
+        },
+        {
+          "title": "City of Virginia Beach — Residential Building Permits",
+          "url": "https://planning.virginiabeach.gov/permits/building/residential-building-permits"
+        },
+        {
+          "title": "City of Virginia Beach — Building Permits (counter-review criteria)",
+          "url": "https://planning.virginiabeach.gov/permits/building"
+        },
+        {
+          "title": "City of Virginia Beach — Modification Request: Footing for Roof Addition Over Existing Deck",
+          "url": "https://s3.us-east-1.amazonaws.com/virginia-beach-departments-docs/planning/Permits/Building/Footing-Roof-Addition-Over-Deck.pdf"
+        },
+        {
+          "title": "Wikipedia — Virginia Beach, Virginia (2020 census population)",
+          "url": "https://en.wikipedia.org/wiki/Virginia_Beach,_Virginia"
+        },
+        {
+          "title": "Wikipedia — List of counties in Virginia (independent cities table, FIPS 810)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Virginia"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "WV",
+      "county": "Kanawha County",
+      "fips": "54039",
+      "population_2020": 180745,
+      "jurisdiction": "City of Charleston Building Commission / Building Department (county seat and largest city). Kanawha County Planning & Development issues land-use and floodplain building permits in unincorporated areas but publishes no design criteria or construction inspection program.",
+      "edition": "WV State Building Code (87 CSR 4: 2018 IRC, 8-1/4 in. risers / 9 in. treads) where adopted. Kanawha County posts the 2022 87 CSR 4 rule; Charleston's adopting ordinance could not be read.",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Charleston requires a permit for all construction work in city limits; permit fees are waived for total job cost up to $2,500.",
+        "Charleston residential projects need 2 sets of plans and specifications, including site, sanitary and storm sewers, storm-water drainage and erosion control, and parking.",
+        "One approved plan set must stay on the job site, and all required inspections including the final must be passed.",
+        "In unincorporated Kanawha County, any new structure needs a county building permit (land use/floodplain).",
+        "In the county 100-year floodplain, a scaled site plan showing stream flow direction and an elevation certificate are required; the lowest floor must be 2 ft above base flood elevation."
+      ],
+      "note": "No published Table R301.2(1) values were found. Charleston's municipal code is hosted on Municode, which blocked automated access, and the Charleston and Kanawha County sites post no design criteria or deck handout. All design values are therefore null.",
+      "sources": [
+        {
+          "title": "City of Charleston - How to obtain permits",
+          "url": "https://www.charlestonwv.gov/government/city-departments/building-commission/permits"
+        },
+        {
+          "title": "City of Charleston - How to submit plans",
+          "url": "https://www.charlestonwv.gov/government/city-departments/building-commission/plans-review"
+        },
+        {
+          "title": "Kanawha County Planning & Development",
+          "url": "https://kanawha.us/about-us/commission-departments/planning-development/"
+        },
+        {
+          "title": "Kanawha County Building Permit Guidelines and Procedures",
+          "url": "https://kanawha.us/wp-content/uploads/2025/02/Permit_-App_Guidelines_and_Procedures_.pdf"
+        },
+        {
+          "title": "Kanawha County - State Building Code (87 CSR 4, eff. Aug 1, 2022)",
+          "url": "https://kanawha.us/wp-content/uploads/2024/11/State-Building-Code.pdf"
+        },
+        {
+          "title": "List of counties in West Virginia (2020 Census, FIPS) - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_West_Virginia"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "WV",
+      "county": "Berkeley County",
+      "fips": "54003",
+      "population_2020": 122076,
+      "jurisdiction": "Berkeley County Building Permits & Inspections (county-wide enforcement under the Berkeley County Council's building code ordinance)",
+      "edition": "WV State Building Code re-adopted as the Berkeley County Building Code, effective August 1, 2022: 2018 IRC (all appendices except L) with 87 CSR 4 amendments (8-1/4 in. risers / 9 in. treads)",
+      "frost_depth_in": 30,
+      "ground_snow_psf": 30,
+      "wind_mph": 115,
+      "wind_basis": "Vult per county Table R301.2(1), 2018 IRC Figure R301.2(5)A (ASCE 7-16), Risk Cat II; topographic effects marked YES",
+      "seismic_sdc": "B",
+      "weathering": "severe",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A building permit is required for decks.",
+        "A residential permit needs one set of construction plans (footing/foundation plan, floor plan, cross sections) and one plot plan. The plot plan shows existing structures, driveway access, limits of disturbance, septic and well locations, and drainage direction.",
+        "Per the county's Basic Deck Diagram, footings need at least a 6 in. concrete base and must be at least 30 in. deep if the deck is attached to a permanent structure, or 18 in. deep if it is not.",
+        "A guardrail is required where the deck is 30 in. or more above the ground. Railing posts may not be notched.",
+        "Carriage bolts are not permitted.",
+        "Decks may not be supported by cantilevered parts of the house.",
+        "Attached decks need lateral hold-down devices in at least 2 locations.",
+        "Attachment to a rim board must follow the rim-board maker's instructions or a WV-licensed design professional's design.",
+        "The county deck detail is not valid for hot tubs or spas, which need a design by a WV design professional.",
+        "Decks less than 3 ft above grade need a framing inspection, and all decks need a second footing inspection after the concrete pour."
+      ],
+      "note": "The table is handwritten in the county ordinance and reads: snow 30, wind 115, topographic YES, SDC B, weathering Severe, frost 30 in., termite moderate to heavy. The deck diagram's footing note (18 in. for free-standing decks) is shallower than the 30 in. frost line in the county table; treat 30 in. as governing unless the county confirms otherwise.",
+      "sources": [
+        {
+          "title": "Berkeley County - Building Codes (2018 codes in effect as of Aug 1, 2022)",
+          "url": "https://berkeleywv.org/582/Building-Codes"
+        },
+        {
+          "title": "Berkeley County Building Code Ordinance with Table R301.2(1) (2018 Building Code PDF)",
+          "url": "https://berkeleywv.org/DocumentCenter/View/318/2018-Building-Code-PDF"
+        },
+        {
+          "title": "Berkeley County - Basic Deck Diagram",
+          "url": "https://berkeleywv.org/DocumentCenter/View/176"
+        },
+        {
+          "title": "Berkeley County - Building Permit Process",
+          "url": "https://berkeleywv.org/580/Building-Permit-Process"
+        },
+        {
+          "title": "List of counties in West Virginia (2020 Census, FIPS) - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_West_Virginia"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "WV",
+      "county": "Monongalia County",
+      "fips": "54061",
+      "population_2020": 105822,
+      "jurisdiction": "City of Morgantown Development Services / Code Enforcement (county seat and largest city). Monongalia County states there is no local building code enforcement in its unincorporated areas; the State Fire Marshal inspects only commercial, industrial and multi-family buildings there.",
+      "edition": "WV State Building Code (87 CSR 4: 2018 IRC, 8-1/4 in. risers / 9 in. treads) as adopted by Morgantown (Codified Ordinances Part Seventeen); Morgantown's adopting ordinance could not be read.",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Morgantown deck permits are applied for only online through the Morgantown Access Portal; paper applications are not accepted.",
+        "Submit a site plan showing property lines, true lot dimensions and area, adjacent street names, and existing structures. It must also show the deck's exact location and size, its distance from property lines, and a storm-water discharge plan.",
+        "A Morgantown Utility Board (MUB) storm-water permit application must accompany a deck application.",
+        "Deck drawings must show all dimensions and lumber sizes with spacing and spans for posts, ledger, joists and beams, plus connections for vertical and lateral loads.",
+        "Drawings must also show the footing detail (location, depth, size, thickness), guard and handrail height with infill, stair riser/tread/stringer spacing, and the decking material.",
+        "In unincorporated Monongalia County there is no local building-code permit or inspection for one- and two-family work, though zoning, health-department septic/well and storm-water permits may apply."
+      ],
+      "note": "No published Table R301.2(1) values were found. Morgantown's code is on Municode, which blocked automated access, the city posts no design-criteria table, and the county does no code enforcement. All design values are therefore null.",
+      "sources": [
+        {
+          "title": "Monongalia County Planning Commission - Building Enforcement (no local enforcement)",
+          "url": "https://www.monongaliacounty.gov/moncpc/about/building_enforcement.php"
+        },
+        {
+          "title": "City of Morgantown - Deck, Porch, Ramp Permit Guidance (2026)",
+          "url": "https://www.morgantownwv.gov/DocumentCenter/View/6775/Deck-Porch-Ramp-Permit-Guidance"
+        },
+        {
+          "title": "City of Morgantown - Permitting, Licensing, Registration",
+          "url": "https://www.morgantownwv.gov/747/Permitting-Licensing-Registration"
+        },
+        {
+          "title": "City of Morgantown - Code Enforcement",
+          "url": "https://www.morgantownwv.gov/167/Code-Enforcement"
+        },
+        {
+          "title": "List of counties in West Virginia (2020 Census, FIPS) - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_West_Virginia"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "NC",
+      "county": "Wake County",
+      "fips": "37183",
+      "population_2020": 1129410,
+      "jurisdiction": "Wake County Permits & Inspections (unincorporated Wake County plus Knightdale, Rolesville, Wendell and Zebulon). Climatic values are from the NC Residential Code's statewide Table R301.2(1)/(4)/(7); NC fills the table in the code itself.",
+      "edition": "2018 North Carolina Residential Code (2015 IRC with NC amendments)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "Vult 3-second gust, 2018 NCRC Table R301.2(4) (counties not listed = 115 mph); Wake County Residential Code Summary: '115 MPH 3 second gust, Exposure B'",
+      "seismic_sdc": null,
+      "weathering": "moderate",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Deck plans must follow the 2018 NC Residential Code Appendix M.",
+        "Submit a site plan, building plans and proof of workers' comp (or an exemption affidavit); owner-contractors on jobs of $40,000 or more need a notarized owner-contractor affidavit.",
+        "Deck plans may be hand-drawn but must be a neat, legible top view; elevations are optional but encouraged.",
+        "Plans must show outside dimensions, spans between posts/footings, and the tallest deck floor height above finished grade.",
+        "Footings must go at least 12 in. into the soil; show footing width, depth and location.",
+        "Show post and girder sizes, number of members and spans; joist direction, size, spacing and span; 2x2 ledger strips or joist hangers at girders/bands; the deck-to-house band attachment; and cantilever spans.",
+        "36 in. guardrails are required where the deck floor is more than 30 in. above grade.",
+        "Bracing is required for freestanding decks, and for attached decks with a floor height of 4 ft or more.",
+        "Two-story decks and decks that support hot tubs or spas need engineer-sealed plans.",
+        "The site plan must show the whole lot to scale with lot lines, all structures and distances to fixed points, plus impervious-surface totals (sq ft and % of lot).",
+        "For lots under 5 acres, use a scale of 1 in. = 20, 30, 40, 50, 60 or 100 ft, on paper no larger than 11x17 in.",
+        "Flood-hazard areas or impervious-limit cases may need a $50 Watershed Management review."
+      ],
+      "note": "Seismic is null because NC Table R301.2(7) lists only the SDC C counties; Wake is not listed, so it is 'SDC A or B' and the code does not pick between them. Neither A nor B brings in IRC seismic rules for dwellings or decks. Ground snow is null because NC deleted IRC R301.2.3 (snow loads) and uses a statewide 20 psf roof load; the Appendix M span tables assume 40 psf live/snow. Raleigh, Cary and other towns not served by Wake County run their own permit offices. Wake's deck page has no other deck PDF.",
+      "sources": [
+        {
+          "title": "Wake County - Build a Deck or Porch",
+          "url": "https://www.wake.gov/departments-government/permits-and-inspections/permit-guidance/build-deck-or-porch"
+        },
+        {
+          "title": "Wake County Residential Building Code Summary (2018 NCRC, 115 mph)",
+          "url": "https://s3.us-west-1.amazonaws.com/wakegov.com.if-us-west-1/s3fs-public/documents/2021-08/Wake%20County%202018%20Code%20Summary.pdf"
+        },
+        {
+          "title": "Wake County Site Plan Requirements and Example",
+          "url": "https://s3.us-west-1.amazonaws.com/wakegov.com.if-us-west-1/s3fs-public/documents/2026-05/Site%20Plan%20Requirements%20and%20Example%20.pdf"
+        },
+        {
+          "title": "Wake County Planning, Permit and Inspection Forms",
+          "url": "https://www.wake.gov/departments-government/planning-and-development-services/planning-permit-and-inspection-forms"
+        },
+        {
+          "title": "2018 NC Residential Code Chapter 3 (Tables R301.2(1), R301.2(4), R301.2(7))",
+          "url": "https://codes.iccsafe.org/content/NCRC2018/chapter-3-building-planning"
+        },
+        {
+          "title": "Wikipedia - Wake County, North Carolina (2020 census 1,129,410)",
+          "url": "https://en.wikipedia.org/wiki/Wake_County,_North_Carolina"
+        },
+        {
+          "title": "Wikipedia - List of counties in North Carolina (FIPS 183)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_North_Carolina"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NC",
+      "county": "Mecklenburg County",
+      "fips": "37119",
+      "population_2020": 1115482,
+      "jurisdiction": "Mecklenburg County LUESA Code Enforcement (building permits countywide, including Charlotte). Climatic values are from the NC Residential Code's statewide Table R301.2(1)/(4)/(7).",
+      "edition": "2018 North Carolina Residential Code (2015 IRC with NC amendments)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "Vult 3-second gust, 2018 NCRC Table R301.2(4) (Mecklenburg not listed = 115 mph)",
+      "seismic_sdc": null,
+      "weathering": "moderate",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "A building permit is required before building a deck. Decks get an open-footing inspection, a framing inspection and a final inspection.",
+        "Footings must be dug into undisturbed soil at least 12 in. below finished grade, sized by tributary area per Table AM102.1 (e.g. 8x16 in. minimum for 30 sq ft).",
+        "Guards at least 36 in. high are required where the walking surface is more than 30 in. above finished grade; a 4 in. sphere must not pass.",
+        "Guard rail posts may be at most 8 ft o.c., attached to the outer bands with two 3/8 in. galvanized bolts. A 4x4 post may not be notched, per an NC DOI interpretation.",
+        "Stairs: 8 1/4 in. maximum riser and 9 in. minimum tread (plus 3/4 in. nosing), at least 36 in. wide.",
+        "Stairs need a handrail on one side with 4 or more risers; at 30 in. or more of rise, open sides need a combined guard/handrail 34-38 in. high.",
+        "Lateral bracing is required when the deck is 48 in. or more from top of footing to deck floor, and for self-supported decks of any height (AM109). Posts must be anchored at the top with approved straps or post brackets.",
+        "Attached decks connect to the house band with 5/8 in. galvanized through-bolts per Table AM104.1. Siding other than brick must be removed so the deck band fully contacts the house band.",
+        "Non-aluminum, corrosion-resistant flashing is required between the house band and the deck band.",
+        "Joists are sized for a 40 psf live load. Cantilevered joists and girders must be No. 1 grade SYP; a cantilevered girder carries floor loads only, no roof loads.",
+        "Decks are excluded from the 100 sq ft enclosed-addition trigger for Mecklenburg's residential plan review. Converting a deck to a sunroom needs a full masonry foundation with a continuous footing."
+      ],
+      "note": "Seismic is null because Mecklenburg is not on NC Table R301.2(7) (SDC C counties), so it is 'SDC A or B' and the code does not distinguish further. Ground snow is null because NC deleted the IRC snow-load section and uses a statewide 20 psf roof load. The county deck brochure is dated 07/2020 and cites the 2018 NCRC, which is still in force. Its bracing rule for self-supported decks (any height) is stricter than Appendix M (freestanding decks 30 in. or less need none).",
+      "sources": [
+        {
+          "title": "Mecklenburg County Code Enforcement - What You Need To Know About Decks (deck brochure, updated 07/2020)",
+          "url": "https://mecknc.widen.net/s/jqlscxxdzx/deck-brochure"
+        },
+        {
+          "title": "Mecklenburg County Code Enforcement - Tools for Homeowners",
+          "url": "https://code.mecknc.gov/tools-for-homeowners"
+        },
+        {
+          "title": "Mecklenburg County Code Enforcement - Residential Plan Review (scope)",
+          "url": "https://code.mecknc.gov/plan-review/residential"
+        },
+        {
+          "title": "Mecklenburg County CIRC Residential FAQ (deck to sunroom conversion)",
+          "url": "https://code.mecknc.gov/service/code-info-resource-center-circ-residential"
+        },
+        {
+          "title": "2018 NC Residential Code Chapter 3 (Tables R301.2(1), R301.2(4), R301.2(7))",
+          "url": "https://codes.iccsafe.org/content/NCRC2018/chapter-3-building-planning"
+        },
+        {
+          "title": "Wikipedia - Mecklenburg County, North Carolina (2020 census 1,115,482)",
+          "url": "https://en.wikipedia.org/wiki/Mecklenburg_County,_North_Carolina"
+        },
+        {
+          "title": "Wikipedia - List of counties in North Carolina (FIPS 119)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_North_Carolina"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "NC",
+      "county": "Guilford County",
+      "fips": "37081",
+      "population_2020": 541299,
+      "jurisdiction": "Guilford County Inspections (unincorporated Guilford County; the towns of Jamestown, Oak Ridge, Sedalia, Summerfield and Whitsett issue development clearance first). Climatic values are from the NC Residential Code's statewide Table R301.2(1)/(4)/(7).",
+      "edition": "2018 North Carolina Residential Code (2015 IRC with NC amendments)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "Vult 3-second gust, 2018 NCRC Table R301.2(4) (Guilford not listed = 115 mph)",
+      "seismic_sdc": null,
+      "weathering": "moderate",
+      "termite": "moderate to heavy",
+      "deck_notes": [
+        "Decks and deck-supported porches must comply with NC Residential Code Appendix M.",
+        "Decks with posts taller than Table AM108.1 allows, and decks that support hot tubs or spas, must be designed by an NC registered design professional; a hot tub deck needs an engineer's letter or sealed plans.",
+        "Plans must give the designer's name, address, phone and email, and state the deck square footage and any covered porch area.",
+        "Plans must be to scale with a bar scale, legible, with a blank space left for the reviewer's stamp.",
+        "The deck floor plan is a top view that shows part of the house and labels the rooms that open onto the deck.",
+        "Provide at least two elevations, dimensioning the tallest deck floor height from finished grade (and, for porches, how the roof ties to the house and its pitch).",
+        "Show stair width and overall dimensions; footing size, width, depth, location and spacing; post size, height (top of footing to bottom of girder) and spacing; girder size, species/grade, span, plies and attachment; and joist size, spacing, species/grade, span, direction and attachment.",
+        "Show bracing details for freestanding decks and for attached decks 4 ft or more above grade, plus the deck-to-house band attachment and cantilever spans.",
+        "Guardrails are required where the deck floor is more than 30 in. above grade.",
+        "A to-scale plot plan is required: bar scale, north arrow, preparer's contact information, property lines, all structures with distances to the closest property lines, driveways/patios, water features and easements, and watershed built-upon area."
+      ],
+      "note": "Seismic is null because Guilford is not on NC Table R301.2(7), so it is 'SDC A or B' and the code does not distinguish further. Ground snow is null because NC deleted the IRC snow-load section (20 psf statewide roof load instead). Greensboro is the county seat; this row reflects Guilford County Inspections' own permit-guidance page.",
+      "sources": [
+        {
+          "title": "Guilford County Inspections - Permit Guidance (Decks and Porches; Plot Plan Requirements)",
+          "url": "https://www.guilfordcountync.gov/government/departments-and-agencies/inspections/permit-guidance"
+        },
+        {
+          "title": "2018 NC Residential Code Appendix M Wood Decks",
+          "url": "https://codes.iccsafe.org/content/NCRC2018/appendix-m-wood-decks"
+        },
+        {
+          "title": "2018 NC Residential Code Chapter 3 (Tables R301.2(1), R301.2(4), R301.2(7))",
+          "url": "https://codes.iccsafe.org/content/NCRC2018/chapter-3-building-planning"
+        },
+        {
+          "title": "Wikipedia - Guilford County, North Carolina (2020 census 541,299)",
+          "url": "https://en.wikipedia.org/wiki/Guilford_County,_North_Carolina"
+        },
+        {
+          "title": "Wikipedia - List of counties in North Carolina (FIPS 081)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_North_Carolina"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "SC",
+      "county": "Greenville County",
+      "fips": "45045",
+      "population_2020": 525534,
+      "jurisdiction": "Greenville County Building Safety (Planning & Code Compliance). The county publishes no filled-in Table R301.2(1) or deck handout, and the SC Building Codes Council has no approved wind/seismic map for Greenville County. The City of Greenville publishes none either.",
+      "edition": "2021 South Carolina Residential Code (2021 IRC with SC modifications), including Appendix F (Radon) and Appendix Q (Tiny Houses); the 2024 SC codes take effect Jan 1, 2027",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": "No Council map for Greenville County; per SC mod 8-1202, ASCE Hazard Tool (not machine-readable here). Where Vult is below the lowest prescriptive IRC speed, the lowest prescriptive speed is used.",
+      "seismic_sdc": null,
+      "weathering": "moderate",
+      "termite": "very heavy",
+      "deck_notes": [
+        "Greenville County publishes no deck handout; its permitting FAQ says any new construction, addition or alteration of a residential structure needs a permit.",
+        "The permit application must be submitted, signed and picked up by the SC-licensed contractor or by the owner doing the work; work on residential rental property must be done by an SC-licensed contractor."
+      ],
+      "note": "Values not published, so left null: frost depth (IRC R403.1.4 sets a 12 in. minimum below undisturbed ground for exterior footings, but no local frost depth is published), ground snow (a county solar guideline citing the 2015 IRC mentions a '10 lb per sq ft snow load', which is not a ground snow load table), and wind (no Council map; ASCE Hazard Tool not readable here). Seismic: USGS ASCE 7-16 values (Risk Cat II, Site Class D) at Greenville, northern and southern county points give SDS 0.30-0.32 and SD1 about 0.15. That is SDC B by the IRC SDS-only Table R301.2.2.1.1 but SDC C by ASCE 7 (which the ASCE Hazard Tool reports), so it stays null; for comparison, adjacent Abbeville County is 'entire county SDC C' on the Council's list. Weathering and termite are read from the IRC national maps (Figure R301.2(1) and Figure R318.4) in the 2021 SC Residential Code, not from a county table.",
+      "sources": [
+        {
+          "title": "Greenville County Building Safety - Current Adopted Codes (rev. Oct 2, 2026)",
+          "url": "https://www.greenvillecounty.org/BuildingSafety/forms/CurrentCodeListICC.pdf"
+        },
+        {
+          "title": "Greenville County Building Safety - Permits / FAQ",
+          "url": "https://www.greenvillecounty.org/BuildingSafety/Permits.aspx"
+        },
+        {
+          "title": "Greenville County Building Safety - Forms",
+          "url": "https://www.greenvillecounty.org/BuildingSafety/Forms.aspx"
+        },
+        {
+          "title": "SC LLR - Wind/Seismic Maps (no Greenville County map)",
+          "url": "https://llr.sc.gov/bcc/maps.aspx"
+        },
+        {
+          "title": "USGS ASCE 7-16 design values, Greenville SC (34.8526, -82.3940)",
+          "url": "https://earthquake.usgs.gov/ws/building-codes/asce7-16/calculate?latitude=34.8526&longitude=-82.3940&riskCategory=II&siteClass=D&title=Greenville"
+        },
+        {
+          "title": "2021 South Carolina Residential Code, Chapter 3 (Figures R301.2(1), R318.4)",
+          "url": "https://codes.iccsafe.org/content/SCRC2021P1/chapter-3-building-planning"
+        },
+        {
+          "title": "Wikipedia - Greenville County, South Carolina (2020 census 525,534)",
+          "url": "https://en.wikipedia.org/wiki/Greenville_County,_South_Carolina"
+        },
+        {
+          "title": "Wikipedia - List of counties in South Carolina (FIPS 045)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_South_Carolina"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "SC",
+      "county": "Richland County",
+      "fips": "45079",
+      "population_2020": 416147,
+      "jurisdiction": "Richland County Building Permitting and Inspections, which publishes no design-criteria table or deck handout. Wind is from the SC Building Codes Council's approved Richland County wind map. The City of Columbia (county seat) site blocks automated access, so it was not checked.",
+      "edition": "2021 South Carolina Residential Code (2021 IRC with SC modifications); the 2024 SC codes take effect Jan 1, 2027",
+      "frost_depth_in": null,
+      "ground_snow_psf": null,
+      "wind_mph": 115,
+      "wind_basis": "Vult, SC Building Codes Council Richland County wind map (2015 IRC basis): the 115 mph line runs through Columbia; a 120 mph line crosses southern (Lower) Richland; the AHJ interpolates between lines",
+      "seismic_sdc": "C",
+      "weathering": "moderate",
+      "termite": "very heavy",
+      "deck_notes": [],
+      "note": "Seismic C is derived, not published: the Council's Richland map shows wind lines only, so SC defers to the ASCE Hazard Tool. USGS ASCE 7-16 values (Risk Cat II, Site Class D) at Columbia and NW/NE/SE county points give SDS 0.34-0.38, which is SDC C under both IRC Table R301.2.2.1.1 and ASCE 7. Wind is 115 mph for Columbia and the north, rising toward 120 mph in the south of the county. Frost depth and ground snow are not published (IRC R403.1.4 sets a 12 in. minimum footing depth below undisturbed ground). Weathering and termite are read from the IRC national maps in the 2021 SC Residential Code. The county site has no deck page, but it says design-professional plans are required for all residential new homes, alterations and additions, with a plot/site plan showing property-line offsets. Applications are made in person and approval can take up to 14 days; a footing inspection is required before concrete is placed.",
+      "sources": [
+        {
+          "title": "SC LLR - Richland County wind/seismic map",
+          "url": "https://llr.sc.gov/bcc/PDFfiles/WSMaps/Richland%2015.pdf"
+        },
+        {
+          "title": "SC LLR - Wind/Seismic Maps",
+          "url": "https://llr.sc.gov/bcc/maps.aspx"
+        },
+        {
+          "title": "USGS ASCE 7-16 design values, Columbia SC (34.0007, -81.0348)",
+          "url": "https://earthquake.usgs.gov/ws/building-codes/asce7-16/calculate?latitude=34.0007&longitude=-81.0348&riskCategory=II&siteClass=D&title=Columbia"
+        },
+        {
+          "title": "Richland County - Plan Review (residential plan requirements)",
+          "url": "https://www.richlandcountysc.gov/Property-Business/Comprehensive-Planning/Land-Development/Plan-Review"
+        },
+        {
+          "title": "Richland County - Building Permits",
+          "url": "https://www.richlandcountysc.gov/Property-Business/Comprehensive-Planning/Land-Development/Permits/Building-Permits"
+        },
+        {
+          "title": "2021 South Carolina Residential Code, Chapter 3 (Figures R301.2(1), R318.4)",
+          "url": "https://codes.iccsafe.org/content/SCRC2021P1/chapter-3-building-planning"
+        },
+        {
+          "title": "Wikipedia - Richland County, South Carolina (2020 census 416,147)",
+          "url": "https://en.wikipedia.org/wiki/Richland_County,_South_Carolina"
+        },
+        {
+          "title": "Wikipedia - List of counties in South Carolina (FIPS 079)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_South_Carolina"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "SC",
+      "county": "Charleston County",
+      "fips": "45019",
+      "population_2020": 408235,
+      "jurisdiction": "City of Charleston Building Inspections (county seat and largest city), from its 'Climatic and Geographic Design Criteria' table for the 2021 SC codes. Charleston County Building Inspection Services publishes no filled-in table; the countywide wind/seismic boundaries are on the SC Building Codes Council's Charleston County map.",
+      "edition": "2021 South Carolina Residential Code (2021 IRC with SC modifications); the 2024 SC codes take effect Jan 1, 2027",
+      "frost_depth_in": 0,
+      "ground_snow_psf": 5,
+      "wind_mph": 150,
+      "wind_basis": "Vult (ultimate design wind speed), 2021 SC codes - City of Charleston table; SC BCC Charleston County map shows 140 mph (inland/west) and 150 mph (coast) lines, with the AHJ interpolating between them",
+      "seismic_sdc": "D2",
+      "weathering": "moderate",
+      "termite": "very heavy",
+      "deck_notes": [
+        "Neither the City of Charleston nor Charleston County publishes a deck handout or typical deck details.",
+        "Charleston County's inspection list requires the approved, stamped plan set on site for every inspection, and a footing inspection after footers are excavated (termite certificate required at footings).",
+        "Construction in V (coastal high-hazard) flood zones needs Charleston County's V-Zone Design Certificate."
+      ],
+      "note": "Values are the City of Charleston table (2023, 2021 SC codes): wind-borne debris Zone 2, topographic effects No, special wind region No, ice barrier No, air freezing index under 1500, mean annual temperature 66.1 F. Across unincorporated Charleston County, the Council map shows wind from about 140 mph inland to 150 mph at the coast, and SDC zones C, D0, D1 and D2 (D2 around the Charleston peninsula and North Charleston, C/D0 toward the northeast near Cape Romain). Sites outside the City may therefore have lower values. A USGS ASCE 7-16 check gives SDS 0.875 for downtown Charleston (D2 under the IRC table) and 1.30 near North Charleston. Wind-borne debris protection applies to glazing (R301.2.1.2), not to the deck frame. Frost depth 0 is the City of Charleston table entry; the IRC R403.1.4 minimum of 12 in. below undisturbed ground still sets the footing depth, so the app must not draw 0-in. footings.",
+      "sources": [
+        {
+          "title": "City of Charleston - Climatic and Geographic Design Criteria (2021 SC Building Codes)",
+          "url": "https://www.charleston-sc.gov/DocumentCenter/View/18835"
+        },
+        {
+          "title": "City of Charleston - Building Inspections",
+          "url": "https://www.charleston-sc.gov/324/Building-Inspections"
+        },
+        {
+          "title": "SC LLR - Charleston County wind/seismic map",
+          "url": "https://llr.sc.gov/bcc/PDFfiles/WSMaps/Charleston%2015(Mays).pdf"
+        },
+        {
+          "title": "Charleston County Building Inspection Services - Inspections",
+          "url": "https://www.charlestoncounty.gov/departments/building-inspection-services/inspections.php"
+        },
+        {
+          "title": "Charleston County Building Inspection Services - Forms (V-Zone Design Certificate)",
+          "url": "https://www.charlestoncounty.gov/departments/building-inspection-services/forms.php"
+        },
+        {
+          "title": "USGS ASCE 7-16 design values, Charleston SC (32.7765, -79.9311)",
+          "url": "https://earthquake.usgs.gov/ws/building-codes/asce7-16/calculate?latitude=32.7765&longitude=-79.9311&riskCategory=II&siteClass=D&title=Charleston"
+        },
+        {
+          "title": "Wikipedia - Charleston County, South Carolina (2020 census 408,235)",
+          "url": "https://en.wikipedia.org/wiki/Charleston_County,_South_Carolina"
+        },
+        {
+          "title": "Wikipedia - List of counties in South Carolina (FIPS 019)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_South_Carolina"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "GA",
+      "county": "Fulton County",
+      "fips": "13121",
+      "population_2020": 1066710,
+      "jurisdiction": "Since July 3, 2017, Fulton County Public Works issues building permits only for the Fulton Industrial Business District; the rest of Fulton is inside cities. The City of Atlanta Office of Buildings site (atlantaga.gov) returned HTTP 403 to every fetch, so Atlanta's criteria could not be read. The deck rules here come from the City of Roswell Building Division (a Fulton County city, deck checklist revised 6/26/2026) and Sandy Springs. The frost value comes from the Georgia Prescriptive Deck Details still hosted by Fulton County.",
+      "edition": "2024 IRC with 2026 Georgia Amendments (effective January 1, 2026)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Roswell requires a permit for every new deck and every deck replacement. Submit a site plan showing existing and proposed structures (for the setback check), plus deck structure, decking and railing details.",
+        "Roswell's prescriptive review covers only single-level wood-framed decks under IRC R507. A deck that carries a roof, a hot tub or another structure needs a Georgia-licensed Professional Engineer.",
+        "Roswell's site plan must show windows, doors, HVAC, electrical equipment and vents within 5 ft of the deck, with dimensions. It must also show egress windows under the deck with less than 36 in. clearance, service-conductor clearances, and setbacks to property lines.",
+        "Roswell: ledgers attach to dimensional lumber only, never to stone or masonry veneer. Drawings must give the bolt or lag type, length, on-center spacing and edge distances.",
+        "Roswell requires a flashing detail at the ledger. Where wall cladding continues below the ledger, a minimum three-piece flashing is required under the 2026 Georgia amendments.",
+        "Roswell: joist hangers must be at least 60% of the joist depth. Footing size, depth and post connection must follow R507.3 and Table R507.3.1, with the top of the footing sloped to drain.",
+        "Roswell: guards need a deem-to-comply system with manufacturer documentation. 4x4 or 6x6 posts bolted only to the outside face of a beam or joist are not approved.",
+        "Roswell requires deck stairs and handrails to be designed by a Georgia-licensed Professional Engineer. Every stair needs a footing and landing at grade and an illumination source.",
+        "Roswell rejects drawings that say 'per code' or 'typical', or that copy code tables. A title block with the designer's name and contact, code references and a sheet index is required.",
+        "Sandy Springs runs an 'EasyBuild' streamlined permit for simple uncovered decks up to 500 sq ft. Decks in a stream buffer or river corridor are excluded."
+      ],
+      "note": "Ground snow, wind, seismic category, weathering and termite are null: no accessible Fulton-area jurisdiction publishes a filled-in Table R301.2(1). Atlanta's pages returned 403, Municode is behind a Cloudflare challenge, and Roswell's 'Design Criteria' link only points to the DCA home page. The search engine budget ran out before other Fulton cities could be searched. The 12 in. frost/footing depth comes from the 2012-IRC-based Georgia Prescriptive Deck Details on fultoncountyga.gov ('Bottom of footing should be at least 12 inches below grade'). That is old and indirect; confirm with the City of Atlanta or the city the job is in.",
+      "sources": [
+        {
+          "title": "Wikipedia - Fulton County, Georgia (2020 census 1,066,710)",
+          "url": "https://en.wikipedia.org/wiki/Fulton_County,_Georgia"
+        },
+        {
+          "title": "Fulton County - Planning, Zoning and Permitting (scope since July 3, 2017)",
+          "url": "https://www.fultoncountyga.gov/Inside-Fulton-County/Fulton-County-Departments/Public-Works/Planning-Zoning-and-Permitting"
+        },
+        {
+          "title": "City of Roswell - Residential Deck Plan Review Checklist (rev. 6/26/2026)",
+          "url": "https://www.roswellgov.com/wp-content/uploads/Residential-Deck-Plan-Review-Checklist.pdf"
+        },
+        {
+          "title": "City of Roswell - Building Division page (deck permit FAQ)",
+          "url": "https://www.roswellgov.com/government/departments-division/community-development/building/"
+        },
+        {
+          "title": "City of Sandy Springs - EasyBuild Permitting Program",
+          "url": "https://www.sandyspringsga.gov/easybuild"
+        },
+        {
+          "title": "Georgia Prescriptive Deck Details (2012 IRC basis) hosted by Fulton County",
+          "url": "https://www.fultoncountyga.gov/-/media/Departments/Public-Works/Planning-Zoning-and-Permits/Permits-and-plan-review/GaPrescriptiveDeckDetails.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "GA",
+      "county": "Gwinnett County",
+      "fips": "13135",
+      "population_2020": 957062,
+      "jurisdiction": "Gwinnett County Department of Planning and Development, Building Division (unincorporated Gwinnett; cities such as Lawrenceville and Peachtree Corners issue their own permits)",
+      "edition": "2024 IRC with 2026 Georgia Amendments (Gwinnett 'Construction and Fire Codes', effective January 1, 2026)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Gwinnett's deck handout 'Examples of Residential Deck Construction' (January 2024) applies to single-span, single-level residential decks. A copy must be on site for every inspection.",
+        "The bottom of each footing must be at least 12 in. below grade, on solid ground the county inspector verifies before concrete. Concrete must be air-entrained, at least 3,000 psi.",
+        "Deck footings closer than 5 ft to an existing house wall must bear at the same elevation as the house footings.",
+        "A guard is required where the deck is more than 30 in. above grade at a point 36 in. from its edge. Guards are 36 in. high, and openings must not pass a 4 in. sphere.",
+        "Pre-fabricated guard systems need a plan submission and a valid evaluation report from an accredited listing agency.",
+        "Stairs are at least 36 in. wide with a maximum riser of 7-3/4 in. Stringers are continuous 2x12s at no more than 18 in. on center, bearing on footings 12 in. deep at grade.",
+        "Stairs with 4 or more risers need a handrail on one side at 34 to 38 in. A landing is required at the top and bottom, and an intermediate landing where total stair rise exceeds 12 ft.",
+        "Decks built to the county details are not approved for privacy screens, planters, built-in seating or hot tubs.",
+        "The permit needs a 'Deck Addition Location Plan' drawn to scale (1 in.=10 ft or 1 in.=20 ft). It shows lot lines, the house, driveway, easements, streams and buffers, and is reviewed by Development Review and Stormwater. This comes from 2012 guidance; applications now go through the online ZIP portal ('Build a Deck').",
+        "Homes on septic need Gwinnett Environmental Health approval of the deck location before the permit is issued.",
+        "Footing inspection (and electrical rough-in, if any) must pass before the final inspection. A Certificate of Completion is issued after the final. Decks are not on the county's no-permit list."
+      ],
+      "note": "The frost/footing depth of 12 in. is from Gwinnett's own deck handout (January 2024). The handout was written to the 2018 IRC and sends readers to the latest Georgia-adopted IRC for span and footing tables. Ground snow, wind, seismic category, weathering and termite are null: Gwinnett publishes no filled-in Table R301.2(1) on its site, its Construction Code on Municode is behind a Cloudflare challenge, and the search budget ran out. The 2012 deck-addition guidance is old (its fees and paper-counter steps may have changed); only its location-plan content is used here.",
+      "sources": [
+        {
+          "title": "Wikipedia - Gwinnett County, Georgia (2020 census 957,062)",
+          "url": "https://en.wikipedia.org/wiki/Gwinnett_County,_Georgia"
+        },
+        {
+          "title": "Wikipedia - List of counties in Georgia (FIPS 135)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Georgia"
+        },
+        {
+          "title": "Gwinnett County - Construction and Fire Codes effective January 1, 2026",
+          "url": "https://www.gwinnettcounty.com/static/upload/pnd/Code/Ordinance/373/construction_and_fire_codes_2026.pdf"
+        },
+        {
+          "title": "Gwinnett County - Examples of Residential Deck Construction (Jan 2024)",
+          "url": "https://www.gwinnettcounty.com/static/upload/pnd/Guidance/342/examples_of_residential_deck_construction_compliance.pdf"
+        },
+        {
+          "title": "Gwinnett County - Deck Additions to a Home, Building Permit Requirements (rev. Aug 2012)",
+          "url": "https://www.gwinnettcounty.com/static/departments/planning/pdf/BNS-09_deck_additions_building_permit_requirements.pdf"
+        },
+        {
+          "title": "Gwinnett County - Planning and Development Building Services (permit exemptions)",
+          "url": "https://www.gwinnettcounty.com/government/departments/planning-development/services/building-services"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "GA",
+      "county": "Cobb County",
+      "fips": "13067",
+      "population_2020": 766149,
+      "jurisdiction": "Cobb County Community Development Agency, Development and Inspections Division (unincorporated Cobb; cities such as Marietta, Acworth and Powder Springs run their own building departments, and Cobb's site offers a lookup to check for the City of Mableton)",
+      "edition": "2024 IRC with Georgia Amendments (Cobb 'Codes, Standards and Guidelines': in effect as of January 1, 2026)",
+      "frost_depth_in": 12,
+      "ground_snow_psf": null,
+      "wind_mph": null,
+      "wind_basis": null,
+      "seismic_sdc": null,
+      "weathering": null,
+      "termite": null,
+      "deck_notes": [
+        "Cobb files an attached deck as an 'Addition Permit', which covers all attached structures that add to the home's footprint (checklist rev. 01/2026).",
+        "Required with the application: a recorded survey/plat with a box drawn where the deck goes (or a site plan), a scope-of-work letter, the contract or estimate, and a basic drawing of the deck. Also required: photo ID, state and business licenses, and a notarized agent form if the applicant is not the cardholder.",
+        "Properties on septic need an Environmental Health red-stamped approval. Zoning and site plan review follow intake; allow up to 10 business days for issuance.",
+        "The footing inspection must be approved before concrete is poured. The inspector checks setbacks and easements and may require a footprint survey or an engineered footing.",
+        "Acworth, a city in Cobb County, still accepts the Georgia Prescriptive Deck Details with 2015 Georgia Amendments as an optional all-in-one deck guide. Current Georgia deck amendments must still be followed."
+      ],
+      "note": "Cobb County publishes no filled-in Table R301.2(1) or deck construction handout on cobbcounty.gov. The building pages, codes page, checklists and required-inspections sheet were all checked; the county Code of Ordinances on Municode is behind a Cloudflare challenge. The 12 in. frost/footing depth is indirect. It comes from the Georgia Prescriptive Deck Details, which Acworth lists as an optional code it enforces ('Bottom of footing should be at least 12 inches below grade'). It matches neighbouring Gwinnett's published 12 in., but confirm with Cobb. Ground snow, wind, seismic category, weathering and termite are null; no Cobb-published value was found and the search budget ran out.",
+      "sources": [
+        {
+          "title": "Wikipedia - Cobb County, Georgia (2020 census 766,149; FIPS 13067)",
+          "url": "https://en.wikipedia.org/wiki/Cobb_County,_Georgia"
+        },
+        {
+          "title": "Cobb County - Codes, Standards and Guidelines (editions in effect Jan 1, 2026)",
+          "url": "https://www.cobbcounty.gov/community-development/building-development/codes-standards-guidelines"
+        },
+        {
+          "title": "Cobb County - Addition Permit Application checklist (rev. 01/2026)",
+          "url": "https://assets.cobbcounty.gov/files/2026-01/ADDITIONS_PERMIT_APPLICATION_CHECKLIST_2026.pdf"
+        },
+        {
+          "title": "Cobb County - Required Inspections (rev. June 2023)",
+          "url": "https://assets.cobbcounty.gov/files/2023-06/Cobb%20Required%20Inspections%202023.pdf"
+        },
+        {
+          "title": "City of Acworth - Current Construction Codes (Jan 1, 2026)",
+          "url": "https://acworth-ga.gov/wp-content/uploads/2025/12/Construction-Codes-Current-1-2026.pdf"
+        },
+        {
+          "title": "Georgia Prescriptive Deck Details (2012 IRC basis) - footing depth text",
+          "url": "https://www.fultoncountyga.gov/-/media/Departments/Public-Works/Planning-Zoning-and-Permits/Permits-and-plan-review/GaPrescriptiveDeckDetails.pdf"
+        }
+      ],
+      "confidence": "low"
+    },
+    {
+      "state": "FL",
+      "county": "Miami-Dade County",
+      "fips": "12086",
+      "population_2020": 2701767,
+      "jurisdiction": "Miami-Dade County Department of Regulatory and Economic Resources (RER), Permitting and Inspection Center (unincorporated Miami-Dade); wind speed and exposure are set for Miami-Dade County directly in FBC-Building 1620.2/1620.3 (HVHZ)",
+      "edition": "Florida Building Code, 8th Edition (2023), with the High-Velocity Hurricane Zone provisions (FBC-R Ch. 44 -> FBC-B 1616-1626, 2314-2330); 9th Edition (2026) applies to applications filed on/after Dec 31, 2026",
+      "frost_depth_in": 0,
+      "ground_snow_psf": 0,
+      "wind_mph": 175,
+      "wind_basis": "Vult 3-second gust, Risk Cat II, prescribed for Miami-Dade by FBC-B 1620.2 (HVHZ; loads per ASCE 7 Ch. 26-31, ASCE 7-22 edition in the 8th Ed. FBC); Exposure C unless D applies (FBC-B 1620.3)",
+      "seismic_sdc": null,
+      "weathering": "negligible",
+      "termite": "very heavy",
+      "deck_notes": [
+        "In the HVHZ: yes, so decks are designed under the FBC-Building HVHZ sections rather than the prescriptive R507 tables.",
+        "Wood decks 18 in. or less above ground do not need a permit (unincorporated Miami-Dade exemption list, within the $5,000 per 12 months cap for houses, duplexes, townhouses and condos).",
+        "Under the HB 803 rules from July 1, 2026, work under $7,500 may skip a building permit, but structural work always needs one (decks are not named), and flood-hazard-area properties are excluded.",
+        "Construction documents must be complete and signed and sealed (FBC-R 101.2.1 / FBC 107.1); portal submittals must be digitally signed and sealed, and paper submittals pay a conversion fee.",
+        "Structural review checks basic wind speed (1620.2), exposure (1620.3), safeguards and railings (1607.9), and wood decay and termite protection (2326).",
+        "Soil bearing of 2,000 psf or less needs a statement by an architect or engineer (form CS-1); more than 2,000 psf needs a geotechnical report.",
+        "Joist hangers and connection devices need product approval (FBC-B 2319.3.3), searchable in Miami-Dade Product Control (NOA) or the state product approval system.",
+        "Stairs per Miami-Dade Table RB-1: 36 in. minimum width, 7-3/4 in. maximum rise, 10 in. minimum tread, 3/4 to 1-1/4 in. nosing, 6 ft 8 in. headroom.",
+        "Footings at least 12 in. below finished grade (FBC-R R403.1.4); there is no frost line."
+      ],
+      "note": "HVHZ: yes. frost_depth_in 0 because Florida has no frost line (FBC-R Table R301.2(1) frost footnote Reserved); the governing deck footing depth is 12 in. below finished grade (R507.3 -> R403.1.4). Ground snow is NA in FBC-R Table R301.2(1), entered as 0. seismic_sdc is null because the FBC has no seismic provisions (FBC-B 1613 and FBC-R R301.2.2 Reserved; table shows NA), which in practice means the same as SDC A. Weathering 'negligible' and termite 'very heavy' come from the statewide FBC-R Table R301.2(1), not a county table. Risk Cat I/III/IV speeds are 165/186/195 mph. Miami-Dade publishes no wood-deck handout or typical deck details that we could find; the deck notes come from its permit-exemption page and plan-review checklists.",
+      "sources": [
+        {
+          "title": "2023 FBC-Building Chapter 16, Section 1620 HVHZ wind loads (1620.2 Miami-Dade speeds, 1620.3 exposure)",
+          "url": "https://up.codes/viewer/florida/fl-building-code-2023/chapter/16/structural-design"
+        },
+        {
+          "title": "Miami-Dade County Permit Exemptions (wood decks 18 in. or less; HB 803)",
+          "url": "https://www.miamidade.gov/global/permit.page?Mduid_permit=per1614110071046330"
+        },
+        {
+          "title": "Miami-Dade Residential & Commercial Plan Review Guidelines (Structural Review), 2023 FBC",
+          "url": "https://www.miamidade.gov/resources/economy/permits/documents/structural-residential.pdf"
+        },
+        {
+          "title": "Miami-Dade Residential Plan Review Guidelines (Building Review), Table RB-1",
+          "url": "https://www.miamidade.gov/resources/economy/permits/documents/building-residential.pdf"
+        },
+        {
+          "title": "Miami-Dade Plan Review Information (digitally signed and sealed submittals)",
+          "url": "https://www.miamidade.gov/global/economy/building/plan-review.page"
+        },
+        {
+          "title": "Miami-Dade notice: FBC 9th Edition effective Dec 31, 2026",
+          "url": "https://www.miamidade.gov/resources/economy/building/documents/fbc-ninth-code-change.pdf"
+        },
+        {
+          "title": "2023 FBC-Building Chapter 23 (2319.3.3 product approval for hangers)",
+          "url": "https://up.codes/viewer/florida/fl-building-code-2023/chapter/23/wood"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 3, Table R301.2(1)",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/3/building-planning"
+        },
+        {
+          "title": "Wikipedia: Miami-Dade County, Florida (2020 population, FIPS 12086)",
+          "url": "https://en.wikipedia.org/wiki/Miami-Dade_County,_Florida"
+        }
+      ],
+      "confidence": "high"
+    },
+    {
+      "state": "FL",
+      "county": "Broward County",
+      "fips": "12011",
+      "population_2020": 1944375,
+      "jurisdiction": "Wind and exposure: FBC-Building 1620.2/1620.3 (HVHZ), which sets Broward County's values directly; deck submittal rules: City of Fort Lauderdale Development Services, Building Services (county seat), because broward.org (Broward County Building Code Division and Board of Rules and Appeals) refused automated access (HTTP 403)",
+      "edition": "Florida Building Code, 8th Edition (2023), with the High-Velocity Hurricane Zone provisions (FBC-R Ch. 44 -> FBC-B 1616-1626, 2314-2330)",
+      "frost_depth_in": 0,
+      "ground_snow_psf": 0,
+      "wind_mph": 170,
+      "wind_basis": "Vult 3-second gust, Risk Cat II, prescribed for Broward by FBC-B 1620.2 (HVHZ; loads per ASCE 7 Ch. 26-31; Broward Board of Rules and Appeals uses ASCE 7-22 for the 8th Ed.); Exposure C unless D applies (FBC-B 1620.3)",
+      "seismic_sdc": null,
+      "weathering": "negligible",
+      "termite": "very heavy",
+      "deck_notes": [
+        "In the HVHZ: yes, so decks are designed under the FBC-Building HVHZ sections rather than the prescriptive R507 tables, and joist hangers and devices need product approval (FBC-B 2319.3.3).",
+        "Fort Lauderdale: all exterior work needs a current signed and sealed survey plus a site plan locating the proposed work, and a deck may be filed with a copy of a current valid survey and a completed Zoning Affidavit.",
+        "Fort Lauderdale Accessory Structure checklist (rev. 3/6/2024): site plan with setbacks to all property lines, plans signed and sealed by a Florida-licensed architect or engineer, all required product approvals, and a Special Inspector form if piles are used.",
+        "Fort Lauderdale: replacing dock decking needs a permit and Broward County approval.",
+        "Footings at least 12 in. below finished grade (FBC-R R403.1.4); there is no frost line."
+      ],
+      "note": "HVHZ: yes. Risk Cat I/III/IV speeds are 156/180/185 mph (FBC-B 1620.2). broward.org returned HTTP 403 to automated fetches, so Broward County's own building-division handouts were not read; deck submittal notes are from Fort Lauderdale (county seat), and unincorporated Broward or other cities may differ. Fort Lauderdale's checklist is for accessory structures generally, not decks specifically. frost_depth_in 0 because there is no frost line (FBC-R Table R301.2(1) frost footnote Reserved); deck footings go at least 12 in. below finished grade (R507.3 -> R403.1.4). Ground snow NA -> 0. seismic_sdc null because the FBC has no seismic provisions (FBC-B 1613 / FBC-R R301.2.2 Reserved), which in practice means the same as SDC A. Weathering and termite are from the statewide FBC-R Table R301.2(1).",
+      "sources": [
+        {
+          "title": "2023 FBC-Building Chapter 16, Section 1620 HVHZ wind loads (1620.2 Broward speeds, 1620.3 exposure)",
+          "url": "https://up.codes/viewer/florida/fl-building-code-2023/chapter/16/structural-design"
+        },
+        {
+          "title": "Broward County Board of Rules and Appeals Formal Interpretation #24 with Broward voluntary wind load chart (ASCE 7-22, 8th Ed.)",
+          "url": "https://www.fortlauderdale.gov/files/assets/public/v/1/development-services/documents/docs-forms/wind_load_calc_form1.pdf"
+        },
+        {
+          "title": "City of Fort Lauderdale Permitting Services FAQ (survey/site plan, decks, dock decking, HVHZ sheds)",
+          "url": "https://www.fortlauderdale.gov/Government/Departments/Development-Services/Permitting-Services"
+        },
+        {
+          "title": "City of Fort Lauderdale Accessory Structure Permit Checklist (rev. 3/6/2024)",
+          "url": "https://www.fortlauderdale.gov/files/assets/public/v/1/development-services/documents/docs-forms/checklists/accessory-stucture-permit-checklist.pdf"
+        },
+        {
+          "title": "2023 FBC-Building Chapter 23 (2319.3.3 product approval for hangers)",
+          "url": "https://up.codes/viewer/florida/fl-building-code-2023/chapter/23/wood"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 3, Table R301.2(1)",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/3/building-planning"
+        },
+        {
+          "title": "Wikipedia: Broward County, Florida (2020 population, FIPS 12011)",
+          "url": "https://en.wikipedia.org/wiki/Broward_County,_Florida"
+        }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "state": "FL",
+      "county": "Palm Beach County",
+      "fips": "12099",
+      "population_2020": 1492191,
+      "jurisdiction": "Palm Beach County Planning, Zoning & Building Department, Building Division (unincorporated Palm Beach County), via its Amendments to the FBC 8th Edition (2023) incl. its local Figure 1609.3(1) wind map",
+      "edition": "Florida Building Code, 8th Edition (2023), with Palm Beach County amendments effective Dec 31, 2023 (not in the HVHZ)",
+      "frost_depth_in": 0,
+      "ground_snow_psf": 0,
+      "wind_mph": 170,
+      "wind_basis": "Vult 3-second gust, Risk Cat II, Palm Beach County amended Figure 1609.3(1) (FBC 8th Ed., ASCE 7-22-based map, MRI 700 yr); exposure category site-specific per FBC-B 1609.4 / FBC-R R301.2.1.4",
+      "seismic_sdc": null,
+      "weathering": "negligible",
+      "termite": "very heavy",
+      "deck_notes": [
+        "Not in the HVHZ: the prescriptive FBC-R R507 deck provisions apply.",
+        "All of unincorporated Palm Beach County is in the wind-borne debris region.",
+        "The county's local permit-exemption list (105.2) has no deck exemption, so a new deck needs a building permit; the nearest exemption is replacement or repair work under $1,000 that does not affect structural integrity.",
+        "Construction documents go in two or more sets, or one set when filed electronically; registered design professionals must seal their drawings, and plans must be at least 1/8 in. = 1 ft scale (107.1, 107.2.1.3).",
+        "A site plan drawn to scale from an accurate boundary survey must show the new work, existing structures and distances from lot lines (107.2.6).",
+        "Residential documents must show the professionally prepared drainage plan, setbacks, design loads, wind requirements, foundation, floor system and termite protection.",
+        "Decks or patios that significantly cut permeable area or change drainage need a professionally prepared drainage plan and a licensed professional's certification at final (110.10).",
+        "Elevated walking surfaces with an impervious moisture barrier need full barrier details and the manufacturer's instructions (107.2.5).",
+        "The parcel's wind speed comes from the county's GIS wind-speed tool at discover.pbcgov.org/pzb/Maps/WindSpeeds.aspx.",
+        "Footings at least 12 in. below finished grade (FBC-R R403.1.4); there is no frost line."
+      ],
+      "note": "HVHZ: no. Wind varies by zone on the county map: 170 mph from the coast west to the 160-mph line (the whole urban east, including West Palm Beach, Boca Raton, Delray, Boynton, Jupiter and Wellington), 160 mph in the central band, and 150 mph in the western Glades (Belle Glade, Pahokee); 170 is given because most homes are in the 170 zone. frost_depth_in 0 because there is no frost line (FBC-R Table R301.2(1) frost footnote Reserved); deck footings go at least 12 in. below finished grade (R507.3 -> R403.1.4). Ground snow NA -> 0. seismic_sdc null because the FBC has no seismic provisions (FBC-B 1613 / FBC-R R301.2.2 Reserved), which in practice means the same as SDC A. Weathering and termite are from the statewide FBC-R Table R301.2(1). The county's online submittal checklists date from 2005 (FBC 2004), so the current 8th Edition amendments were used for the deck notes.",
+      "sources": [
+        {
+          "title": "Palm Beach County Amendments to the Florida Building Code, 8th Edition (2023), incl. Figure 1609.3(1) Risk Cat II wind map",
+          "url": "https://discover.pbc.gov/pzb/building/BuildingCodes/PBC-Amendments-to-the-Florida-Building-Code-8th-Edition-2023.pdf"
+        },
+        {
+          "title": "Palm Beach County PZB Building Division: Codes, Interpretations, and Policies",
+          "url": "https://discover.pbc.gov/pzb/building/Pages/Building-Code.aspx"
+        },
+        {
+          "title": "Palm Beach County Type 3(A) Application Submittal Checklist (older, 2005)",
+          "url": "https://discover.pbc.gov/pzb/building/Forms/Type%203a%20Application%20Sufficiency%20Checklist.pdf"
+        },
+        {
+          "title": "2023 FBC-Residential Chapter 3, Table R301.2(1)",
+          "url": "https://up.codes/viewer/florida/fl-residential-code-2023/chapter/3/building-planning"
+        },
+        {
+          "title": "Wikipedia: Palm Beach County, Florida (2020 population)",
+          "url": "https://en.wikipedia.org/wiki/Palm_Beach_County,_Florida"
+        },
+        {
+          "title": "Wikipedia: List of counties in Florida (FIPS 099 -> 12099)",
+          "url": "https://en.wikipedia.org/wiki/List_of_counties_in_Florida"
+        }
+      ],
+      "confidence": "high"
+    }
+  ]
+}

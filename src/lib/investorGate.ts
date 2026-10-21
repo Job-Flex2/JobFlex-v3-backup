@@ -97,6 +97,10 @@ export function checkOffer(raw: Partial<InvestorOfferInput>): { value: InvestorO
   return { value, problems };
 }
 
+/** Where a reader's request stands (owner, 2026-10-20: "don't open the link till we approve it"). An entry from before
+ *  approvals has no status: those readers were let in already, so it reads as approved. */
+export type ReaderStatus = "pending" | "approved" | "declined";
+
 /** The visitor the public page knows, as it may be shown back to them. */
 export interface InvestorVisitorView {
   name: string;
@@ -106,6 +110,57 @@ export interface InvestorVisitorView {
   phone: string | null;
   /** A signed-in platform admin who went through the door to see the page as a reader (2026-10-14): a test, not a reader. */
   admin?: boolean;
+  status?: ReaderStatus;
+}
+
+export const statusOf = (v: { status?: ReaderStatus; admin?: boolean }): ReaderStatus => (v.admin ? "approved" : (v.status ?? "approved"));
+/** May this reader see the figures? Approved; or waiting while approvals are switched off (the door opens for them too). */
+export const mayRead = (v: { status?: ReaderStatus; admin?: boolean }, approveReaders: boolean): boolean => {
+  const st = statusOf(v);
+  return st === "approved" || (st === "pending" && !approveReaders);
+};
+/** The requests waiting on us, oldest first — the order they asked in. */
+export function pendingOf<T extends { status?: ReaderStatus; admin?: boolean; at: string }>(list: readonly T[]): T[] {
+  return list.filter((v) => !v.admin && v.status === "pending").sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/** Mailboxes anyone can open — an address there says nothing about where the person works. */
+const PERSONAL_MAIL = new Set(["gmail.com", "googlemail.com", "yahoo.com", "ymail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "icloud.com", "me.com", "mac.com", "aol.com", "proton.me", "protonmail.com", "gmx.com", "gmx.net", "mail.com", "zoho.com", "yandex.com", "yandex.ru", "fastmail.com", "hey.com", "pm.me", "comcast.net", "att.net", "verizon.net", "sbcglobal.net"]);
+const WORDS_TO_SKIP = new Set(["capital", "ventures", "venture", "partners", "fund", "funds", "group", "holdings", "investments", "investment", "family", "office", "the", "and", "llc", "inc", "ltd", "co", "company", "management", "advisors", "global", "labs"]);
+
+export type ReviewHint = { tone: "good" | "warn" | "info"; text: string };
+
+/**
+ * What a reviewer can tell at a glance from the request itself — nothing looked up: the email's domain against the
+ * company they named, a free mailbox, whether they invest, a phone left or not, and how often this email asked before.
+ */
+export function reviewHints(v: { name: string; company: string; kind: string; email: string; phone: string | null }, history: { earlierApproved?: number; earlierDeclined?: number } = {}): ReviewHint[] {
+  const out: ReviewHint[] = [];
+  const domain = (v.email.split("@")[1] ?? "").toLowerCase();
+  if (PERSONAL_MAIL.has(domain)) out.push({ tone: "warn", text: `A personal mailbox (${domain}) — nothing ties it to ${v.company}` });
+  else if (domain) {
+    const root = domain.split(".").slice(0, -1).join("").replace(/[^a-z0-9]/g, "");
+    const words = v.company.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !WORDS_TO_SKIP.has(w));
+    const squashed = v.company.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const match = !!root && (words.some((w) => root.includes(w)) || (root.length >= 4 && squashed.includes(root)));
+    out.push(match ? { tone: "good", text: `Email at ${domain} — matches ${v.company}` } : { tone: "warn", text: `Email at ${domain} — not the name ${v.company}` });
+  }
+  out.push(INVESTING_KINDS.has(v.kind) ? { tone: "good", text: `Invests — ${v.kind.toLowerCase()}` } : { tone: "info", text: `Not an investor — ${v.kind.toLowerCase()}` });
+  if (!v.phone) out.push({ tone: "info", text: "No phone left" });
+  if (history.earlierApproved) out.push({ tone: "good", text: `You let this email in on an earlier link` });
+  if (history.earlierDeclined) out.push({ tone: "warn", text: `You declined this email before` });
+  return out;
+}
+
+/** One click to look them up — the reviewer's own search, nothing fetched for them. */
+export function lookupLinks(v: { name: string; company: string; email: string }): Array<{ label: string; href: string }> {
+  const q = (s: string) => encodeURIComponent(s);
+  const domain = (v.email.split("@")[1] ?? "").toLowerCase();
+  return [
+    { label: "LinkedIn", href: `https://www.linkedin.com/search/results/all/?keywords=${q(`${v.name} ${v.company}`)}` },
+    { label: "Google", href: `https://www.google.com/search?q=${q(`"${v.name}" ${v.company}`)}` },
+    ...(domain && !PERSONAL_MAIL.has(domain) ? [{ label: domain, href: `https://${domain}` }] : []),
+  ];
 }
 
 /** The readers, without the admins' own walk-throughs. */

@@ -65,6 +65,7 @@ export async function saveInvestorSettingsAction(input: Record<string, unknown> 
   else if (typeof input.dailyBudgetDollars === "number" && Number.isFinite(input.dailyBudgetDollars) && input.dailyBudgetDollars > 0) patch.dailyBudgetCents = Math.round(input.dailyBudgetDollars * 100);
   if (input.budgetFrom === null) patch.budgetFrom = null;
   else if (typeof input.budgetFrom === "string" && DATE.test(input.budgetFrom)) patch.budgetFrom = input.budgetFrom;
+  if (typeof input.approveReaders === "boolean") patch.approveReaders = input.approveReaders;
   if (input.sinceDate === null) patch.sinceDate = null;
   else if (typeof input.sinceDate === "string" && DATE.test(input.sinceDate)) patch.sinceDate = input.sinceDate;
   try {
@@ -98,4 +99,22 @@ export async function investorLinkAction(input: Record<string, unknown> = {}): P
     return { ok: false, error: "The link could not be changed. Try again." };
   }
   return fresh();
+}
+
+/** An admin's yes or no on a reader of the investor link (2026-10-20): a yes opens their page and emails them their
+ *  link; a no keeps the door shut (or shuts it again on someone let in before). */
+export async function decideInvestorReaderAction(input: Record<string, unknown> = {}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const me = await requirePlatformAdmin();
+  const id = typeof input.id === "string" ? input.id.slice(0, 40) : "";
+  const decision = input.decision === "approve" ? "approve" : input.decision === "decline" ? "decline" : null;
+  if (!id || !decision) return { ok: false, error: "Pick approve or decline." };
+  const { decideVisitor, readInvestorVisitors } = await import("@/lib/investorVisitors");
+  const settings = await readInvestorSettings();
+  const reader = (await readInvestorVisitors()).find((v) => v.id === id);
+  if (!reader) return { ok: false, error: "That request is no longer on the list." };
+  // The email's open link is made on the link they asked on — only while that link is still the live one.
+  const token = settings.linkEnabled && settings.linkToken && reader.linkMadeAt === settings.linkMadeAt ? settings.linkToken : null;
+  const who = ("name" in me && me.name) || ("email" in me && me.email) || "an admin";
+  const done = await decideVisitor(id, decision, token, String(who));
+  return done ? { ok: true } : { ok: false, error: "That request is no longer on the list." };
 }
