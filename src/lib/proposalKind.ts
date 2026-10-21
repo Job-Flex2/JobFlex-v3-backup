@@ -156,6 +156,12 @@ export function familyCounts(kinds: Array<Pick<ProposalKind, "family">>): Array<
   return WORK_FAMILIES.filter((f) => (n.get(f.key) ?? 0) > 0).map((f) => ({ ...f, count: n.get(f.key) ?? 0 }));
 }
 
+/** The one word the list's tag prints (owner, 2026-10-20: "Roof", not "Roof · Manual"). "General" only means no
+ *  trade could be read from the proposal, so it says how the proposal was made instead — "Manual", "Template". */
+export function kindWord(k: ProposalKind): string {
+  return k.family === "other" && k.work === "General" ? k.toolWords : k.work;
+}
+
 /** "Kitchen remodel · Smart Proposal", "Deck · Deck Studio", "Gutters · Template". */
 export function kindLine(k: ProposalKind): string {
   return `${k.work} · ${k.toolWords}`;

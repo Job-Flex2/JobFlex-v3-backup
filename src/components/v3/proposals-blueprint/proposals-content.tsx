@@ -64,21 +64,12 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
               topbar's search is the one search on the page, and a second box a
               few pixels below it asks the user which one they meant. The tabs
               and status chips are this page's filtering. */}
-          {/* The donor drew these as dead <button>s. They are the two live
-              creation routes; `Link` keeps them a soft navigation even though
-              the target lives in the classic-shell route group. */}
-          <Link className="btn btn-primary" href="/dashboard/proposals/ai">
-            <svg className="ic">
-              <use href="#i-bulb" />
-            </svg>
-            Smart Proposal
-          </Link>
-          {/* The manual builder is the blueprint one now (2026-08-15): it
-              reads real clients, writes through saveProposal / sendProposal and
-              is the destination the estimator picker's "Manual" card already
-              points at, so the two entry points land in the same place. The old
-              /dashboard/proposals/new editor is untouched and still reachable
-              directly. */}
+          {/* One creation route here (owner, 2026-10-20: Smart Proposal left
+              the list; it is still in the sidebar). The manual builder is the
+              blueprint one (2026-08-15): it reads real clients, writes through
+              saveProposal / sendProposal and is the destination the estimator
+              picker's "Manual" card already points at. `Link` keeps it a soft
+              navigation. */}
           <Link className="btn btn-ghost" href="/dashboard/manual-blueprint">
             <svg className="ic">
               <use href="#i-file" />
@@ -91,27 +82,39 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
       {/* KPI STRIP */}
       <div className="pmast" id="pMast"></div>
 
-      {/* TABS */}
-      <div className="ptabs" id="pTabs">
-        <button className="ptab active" type="button" data-tab="all">
-          All<span className="ptab-count" data-count="all">0</span>
-        </button>
-        <button className="ptab" type="button" data-tab="accepted">
-          Accepted<span className="ptab-count" data-count="accepted">0</span>
-        </button>
-        <button className="ptab" type="button" data-tab="completed">
-          Completed<span className="ptab-count" data-count="completed">0</span>
-        </button>
+      {/* TABS + TYPE (owner, 2026-10-20): Type — the families of work the
+          book holds, each with its estimating tool's square and a count —
+          narrows every tab, chip and figure, so it sits on the tabs' row at
+          the right edge on all three. Painted by proposals-behavior
+          renderKinds and hidden while the book holds one family. */}
+      <div className="ptabs-row">
+        <div className="ptabs" id="pTabs">
+          <button className="ptab active" type="button" data-tab="all">
+            All<span className="ptab-count" data-count="all">0</span>
+          </button>
+          <button className="ptab" type="button" data-tab="accepted">
+            Accepted<span className="ptab-count" data-count="accepted">0</span>
+          </button>
+          <button className="ptab" type="button" data-tab="completed">
+            Completed<span className="ptab-count" data-count="completed">0</span>
+          </button>
+        </div>
+        <div className="flt-drop flt-drop--bp flt-drop--end" id="pKinds" hidden>
+          <button className="flt-drop-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="pKindsMenu">
+            <span className="flt-key">Type</span>
+            <span className="flt-face"></span>
+            <svg className="ic">
+              <use href="#i-chev" />
+            </svg>
+          </button>
+          <div className="flt-menu" id="pKindsMenu" role="listbox" aria-label="Type of work"></div>
+        </div>
       </div>
 
-      {/* FILTERS (owner, 2026-10-18, blueprint-shell/filter-bar.css): the
-          status of the All tab's list as a segmented control,
-          then TYPE — the families of work the book holds, each with its
-          estimating tool's dot and a count. Type narrows every tab, chip and
-          figure, so the bar stays on every tab; the statuses only on All.
-          Type is painted by proposals-behavior renderKinds and hidden while
-          the book holds one family. */}
-      <div className="flt-bar" id="pFilters">
+      {/* STATUS (owner, 2026-10-18, blueprint-shell/filter-bar.css; drawn
+          in the Blueprint plate 2026-10-20): the All tab's list as a
+          segmented control, shown on All only. */}
+      <div className="flt-bar flt-bar--bp" id="pFilters">
         <div className="flt-seg" id="pChips" role="group" aria-label="Status">
           {(
             [
@@ -127,16 +130,6 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
               {label} <span className="flt-n" data-cf={f}>0</span>
             </button>
           ))}
-        </div>
-        <div className="flt-drop" id="pKinds" hidden>
-          <button className="flt-drop-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="pKindsMenu">
-            <span className="flt-key">Type:</span>
-            <span className="flt-face"></span>
-            <svg className="ic">
-              <use href="#i-chev" />
-            </svg>
-          </button>
-          <div className="flt-menu" id="pKindsMenu" role="listbox" aria-label="Type of work"></div>
         </div>
       </div>
 

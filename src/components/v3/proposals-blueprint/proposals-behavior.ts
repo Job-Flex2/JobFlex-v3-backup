@@ -61,7 +61,7 @@ import { MDL_EXIT_MS, closeMdl, openMdl } from "@/components/v3/blueprint-shell/
 import { mountIsland, type Island } from "@/components/v3/blueprint-shell/react-island";
 import { clientProposalUrl } from "@/lib/proposalLink";
 import { whoHtml } from "@/lib/team/who";
-import { familyCounts, type WorkFamily } from "@/lib/proposalKind";
+import { familyCounts, kindWord, type WorkFamily } from "@/lib/proposalKind";
 import {
   PAGE_ACC,
   PAGE_ALL,
@@ -364,17 +364,15 @@ export function initProposalsContent(
   function book() {
     return pstate.kind === "ALL" ? proposalsData : proposalsData.filter((p) => (p.kind?.family ?? "other") === pstate.kind);
   }
-  /** WHAT KIND, MADE BY WHAT (2026-10-17, lib/proposalKind): a square in the work's colour, the work's word,
-   *  and the tool that made it — Smart Proposal in its own violet. Above the title on the row and the cards. */
+  /** WHAT KIND (2026-10-17, lib/proposalKind): a square in the work's colour and the work's one word (owner,
+   *  2026-10-20: "Roof", the tool that made it only in the tooltip). Above the title on the row and the cards. */
   function kindHtml(p: ProposalRow): string {
     const k = p.kind;
     if (!k) return "";
-    const tool = k.tool === "template" && k.via ? "Template · " + k.via : k.toolWords;
     const tip = k.work + " — made with " + k.toolWords + (k.tool === "copy" && k.via ? ', a copy of "' + k.via + '"' : k.tool === "template" && k.via ? ' "' + k.via + '"' : "");
     return (
       '<div class="pkind" data-fam="' + esc(k.family) + '" title="' + esc(tip) + '">' +
-      '<i class="pkind-sq" aria-hidden="true"></i><b>' + esc(k.work) + '</b>' +
-      '<span class="pkind-tool" data-tool="' + esc(k.tool) + '">' + esc(tool) + "</span></div>"
+      '<i class="pkind-sq" aria-hidden="true"></i><b>' + esc(kindWord(k)) + "</b></div>"
     );
   }
   /** The Type dropdown on the filter bar (owner, 2026-10-18): All types + each family the book holds,
@@ -728,7 +726,7 @@ export function initProposalsContent(
     if (empty && rows.length === 0) {
       empty.textContent = book().length
         ? "No proposals match this filter"
-        : "No proposals yet — start one with Smart Proposal or Manual proposal above";
+        : "No proposals yet — start one with Manual proposal above";
     }
     renderPager($("#allPager"), pstate.pageAll, pages, "all");
   }
@@ -1514,8 +1512,8 @@ export function initProposalsContent(
     pstate.tab = btn.dataset.tab || "all";
     root.querySelectorAll<HTMLElement>("#pTabs .ptab").forEach((t) => t.classList.toggle("active", t === btn));
     $$(".ppanel").forEach((pn) => pn.classList.toggle("is-hidden", pn.dataset.panel !== pstate.tab));
-    // The statuses belong to the All list; Type stays on the bar for every tab.
-    $("#pChips")?.classList.toggle("is-hidden", pstate.tab !== "all");
+    // The statuses belong to the All list; Type sits on the tab row for every tab (owner, 2026-10-20).
+    $("#pFilters")?.classList.toggle("is-hidden", pstate.tab !== "all");
     renderKpis();
     // A panel's rows arrive the first time it is actually on screen. Playing
     // the cascade earlier — while the panel is display:none — would leave every
@@ -1527,7 +1525,10 @@ export function initProposalsContent(
       if (stack) staggerIn(Array.from(stack.querySelectorAll<HTMLElement>(".prow, .pjob, .psheet")));
     }
   });
-  $("#pKinds")?.addEventListener("click", (e) => {
+  // Through `on` (2026-10-20): a raw listener outlived a re-mount (StrictMode's second mount in development),
+  // and the two of them toggled the menu open and shut on one click.
+  const kindsDd = $("#pKinds");
+  if (kindsDd) on(kindsDd, "click", (e) => {
     const target = e.target as HTMLElement;
     if (target.closest(".flt-drop-btn")) {
       setKindsOpen(!$("#pKinds")?.classList.contains("open"));
