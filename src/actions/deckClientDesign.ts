@@ -59,7 +59,7 @@ async function gate(need: "full" | "design" = "full"): Promise<Gate> {
     const ctx = await requireEstimatorOrManager();
     const level = await deckStudioAccess(ctx.user, ctx.organizationId);
     if (level === "none") return { ok: false, error: "Deck Studio isn't open yet." };
-    if (level === "preview" && need === "full") return { ok: false, error: "Saving, sending and printing are part of Deck Studio — add it to your plan ($49/mo) from the Deck estimator." };
+    if (level === "preview" && need === "full") return { ok: false, error: "Saving, sending and printing are part of Deck Studio — add it to your plan ($45/mo) from the Deck estimator." };
     return { ok: true, organizationId: ctx.organizationId, userId: ctx.user.id };
   } catch (err) {
     if (err instanceof UnauthorizedError) return { ok: false, error: "Only an estimator, a manager or the owner can do this." };

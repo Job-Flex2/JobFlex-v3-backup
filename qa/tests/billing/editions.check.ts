@@ -1,12 +1,13 @@
 // THE EDITIONS (2026-10-11, lib/editions): the doors of one platform. The
-// cookie's values, who holds the Deck Studio (owner-locked 2026-10-20: the
-// trial, the $49/mo add-on, a grant, a platform admin — never a plan), how far
+// cookie's values, who holds the Deck Studio (owner, 2026-10-20: the trial,
+// the $45/mo Deck Studio plan, the Advanced plan, the $45/mo add-on, a grant,
+// a platform admin), how far
 // the studio opens to everyone else, who may switch, where a sign-in lands,
 // what the deck workspace's sidebar keeps and drops, and the sign-up link each
 // door writes. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/billing/editions.check.ts
 import * as editions from "../../../src/lib/editions";
-import { EDITIONS, canSwitch, editionLevel, hasEdition, homeFor, navAllowed, parseDoor, registerHref, unlockedByEdition, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
+import { EDITIONS, canSwitch, editionLevel, editionOnly, hasEdition, homeFor, navAllowed, parseDoor, registerHref, unlockedByEdition, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
 import { DECK_ADDON_CENTS, addonHeld, deckAddonCents, deckAddonPriceWords, deckAddonShortWords, deckTrialWords, isDeckAddonLine, parseDeckAddonRecord, planLine, planLines } from "../../../src/lib/deckAddon";
 import { annualDeal, dealWords, savedWords } from "../../../src/lib/planDeal";
 import { autoPlanFor } from "../../../src/lib/signupAutoPlan";
@@ -45,8 +46,15 @@ check("a lapsed plan's stale add-on record opens nothing", editionLevel(facts({ 
 check("while it is coming soon: closed for everyone but an admin — the trial, the add-on and a grant included", editionLevel(paid, "deck", false) === "none" && editionLevel(trial, "deck", false) === "none" && editionLevel(paidAddon, "deck", false) === "none" && editionLevel(grant, "deck", false) === "none");
 check("the platform edition is everyone's", hasEdition(facts({ lapsed: true }), "platform"));
 
-console.log("── no plan carries it (the branches that gave it away are gone)");
-const gone = ["isEditionPlan", "editionOnly", "upgradeTargetFrom", "planComingSoon", "featureLineForSale", "EDITION_FOR_EVERY_ACCOUNT", "EDITION_IN_TRIAL"].filter((k) => k in editions);
+console.log("── the Deck Studio plan and Advanced carry it (owner, 2026-10-20)");
+const deckPlan = facts({ deckPlan: true });
+check("the Deck Studio plan: full, its own workspace only, no switch", editionLevel(deckPlan) === "full" && editionOnly(deckPlan) && workspaceFor(deckPlan, null) === "deck" && workspaceFor(deckPlan, "platform") === "deck" && !canSwitch(deckPlan));
+check("Advanced: full, the whole platform, may switch", editionLevel(facts({ advancedPlan: true })) === "full" && !editionOnly(facts({ advancedPlan: true })) && workspaceFor(facts({ advancedPlan: true }), null) === "platform" && canSwitch(facts({ advancedPlan: true })));
+check("a lapsed Deck Studio or Advanced plan opens nothing", editionLevel(facts({ lapsed: true, deckPlan: true })) === "preview" && editionLevel(facts({ lapsed: true, advancedPlan: true })) === "preview" && !editionOnly(facts({ lapsed: true, deckPlan: true })));
+check("an admin in a Deck Studio plan's organization keeps the whole map", !editionOnly(facts({ deckPlan: true, fullAccess: true })));
+
+console.log("── the old plan branches stay gone");
+const gone = ["isEditionPlan", "upgradeTargetFrom", "planComingSoon", "featureLineForSale", "EDITION_FOR_EVERY_ACCOUNT", "EDITION_IN_TRIAL"].filter((k) => k in editions);
 check("no deck plan, no feature-line or custom-page rule, no every-account switch is exported", gone.length === 0, gone.join(" "));
 check("the deck edition names no plans or feature words", !("planSlugs" in EDITIONS.deck) && !("featureWords" in EDITIONS.deck) && !("customPage" in EDITIONS.deck));
 
@@ -63,12 +71,12 @@ const signupPlans = [
 ];
 const deckPick = autoPlanFor({ plans: signupPlans, tool: "deck" });
 check("a deck ad never moves the sign-up off Professional, even onto a plan whose features name Deck Studio", deckPick?.slug === "professional" && deckPick?.why === "default", JSON.stringify(deckPick));
-check("Deck Studio is an add-on tool: never marked on a plan's row, and the line says the trial includes it", isAddOnTool("deck") && !isAddOnTool("roof") && spotlightRow(["Deck Studio", "Roof estimator"], "deck") === null && spotlightRow(["Roof estimator"], "roof") === "Roof estimator" && spotlightLine("deck", true) === "You came for Deck Studio — the trial includes it, then it's $49/month on any plan.");
+check("Deck Studio is an add-on tool: never marked on a plan's row, and the line says the trial includes it", isAddOnTool("deck") && !isAddOnTool("roof") && spotlightRow(["Deck Studio", "Roof estimator"], "deck") === null && spotlightRow(["Roof estimator"], "roof") === "Roof estimator" && spotlightLine("deck", true) === "You came for Deck Studio — the trial includes it, then it's $45/month on any plan.");
 
 console.log("── Before you go names the add-on when it is on the plan");
-const withDeck = freePlanLosses({ pages: null, planProposals: null, freeProposals: 5, deckAddon: "$49/mo" });
+const withDeck = freePlanLosses({ pages: null, planProposals: null, freeProposals: 5, deckAddon: "$45/mo" });
 const without = freePlanLosses({ pages: null, planProposals: null, freeProposals: 5 });
-check("the add-on's line comes first, in the deck colour, and the list stays at five", withDeck[0]?.text === "Deck Studio — your $49/mo add-on ends with the plan" && withDeck[0]?.tone === "deck" && withDeck.length === 5, JSON.stringify(withDeck[0]));
+check("the add-on's line comes first, in the deck colour, and the list stays at five", withDeck[0]?.text === "Deck Studio — your $45/mo add-on ends with the plan" && withDeck[0]?.tone === "deck" && withDeck.length === 5, JSON.stringify(withDeck[0]));
 check("without it, no Deck Studio line", !without.some((l) => /deck studio/i.test(l.text)));
 
 console.log("── the deck workspace's sidebar");
@@ -98,8 +106,8 @@ check("a year that is not a whole number of months off gets no stamp, not a perc
 check("no yearly price, a dearer year, or a free plan: no deal", annualDeal(8900, null) === null && annualDeal(8900, 106800) === null && annualDeal(8900, 120000) === null && annualDeal(0, 1000) === null);
 
 console.log("── THE ADD-ON (lib/deckAddon)");
-check("$49 a month; $490 a year (ten months for twelve, the custom plan's rule)", DECK_ADDON_CENTS === 4900 && deckAddonCents("MONTH") === 4900 && deckAddonCents("YEAR") === 49000 && deckAddonPriceWords("MONTH") === "$49/month" && deckAddonPriceWords("YEAR") === "$490/year" && deckAddonShortWords("MONTH") === "$49/mo" && deckAddonShortWords("YEAR") === "$490/yr");
-check("the trial's words, as the owner wrote them", deckTrialWords() === "Included in your trial. After the trial, Deck Studio is a $49/mo add-on." && deckTrialWords("YEAR") === "Included in your trial. After the trial, Deck Studio is a $490/yr add-on.");
+check("$45 a month; $450 a year (ten months for twelve, the custom plan's rule)", DECK_ADDON_CENTS === 4500 && deckAddonCents("MONTH") === 4500 && deckAddonCents("YEAR") === 45000 && deckAddonPriceWords("MONTH") === "$45/month" && deckAddonPriceWords("YEAR") === "$450/year" && deckAddonShortWords("MONTH") === "$45/mo" && deckAddonShortWords("YEAR") === "$450/yr");
+check("the trial's words, as the owner wrote them", deckTrialWords() === "Included in your trial. After the trial, Deck Studio is a $45/mo add-on." && deckTrialWords("YEAR") === "Included in your trial. After the trial, Deck Studio is a $450/yr add-on.");
 const planItem = { id: "si_plan", price: { id: "price_pro", metadata: { planSlug: "professional" } } };
 const addonItem = { id: "si_deck", price: { id: "price_deck", metadata: { jfKind: "deck-addon", interval: "MONTH" } } };
 const pageItem = { id: "si_page", price: { id: "price_page", metadata: { jfKind: "custom-page" } } };
