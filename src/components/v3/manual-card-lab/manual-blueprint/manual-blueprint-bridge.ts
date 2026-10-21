@@ -24,13 +24,13 @@
 //
 // ── THE UNIT MAP IS LOSSY, ON PURPOSE ───────────────────────────────
 // The builder's picker carries the original Job-FLEX list of ten units;
-// `LineItem.measurementType` carries the six the schema has always had. Four of
-// the ten have no column value, so they land on their nearest neighbour and the
-// reverse map cannot tell them apart afterwards:
+// `LineItem.measurementType` carries its own list (lib/prismaEnums). Two of the
+// ten still land on a neighbour and reopen as it:
 //     LF, YARDS        → LINEAR_FT   (reopens as "linear ft")
-//     SQ_YARDS         → SQFT        (reopens as "sqft")
-//     SQ_BOARDS        → UNIT        (reopens as "unit")
-//     CU_YARDS         → CUBIC_FT    (reopens as "cu yards" — exact)
+// Exact since 2026-10-21: SQ_YARDS → SQ_YARD, SQ_BOARDS → SQUARE, CU_YARDS →
+// CU_YARD (it had been stored as cubic FEET). A measure the picker has no
+// option for (each, sheets, bundles…) reopens as "unit" and is saved back as
+// it was unless the unit is changed (Line.measure).
 // The alternative was inventing a column, which is schema work this pass is not
 // allowed to do. The PRICE is unaffected either way: quantity and the
 // material/labor split are stored exactly, and the unit is a label on them.
@@ -46,38 +46,38 @@ import { estimateFromAddress } from "../manual-focus/manual-focus-data";
 import { computeTotals, newId, round2 } from "../manual-focus/manual-focus-math";
 import type { ContractCo } from "@/lib/contractTotal";
 
-/** The six values `LineItem.measurementType` is allowed to hold — the literal
- *  union `saveProposal`'s zod schema parses. */
-export type MeasurementType =
-  | "SQFT"
-  | "LINEAR_FT"
-  | "CUBIC_FT"
-  | "UNIT"
-  | "HOUR"
-  | "LUMP_SUM"
-  | "SQUARE";
+/** The values `LineItem.measurementType` may hold — the list `saveProposal`'s zod schema parses (lib/prismaEnums;
+ *  since 2026-10-21 with the real measures: each, sheets, bundles, cubic yards…). */
+import type { MeasurementType } from "@/lib/prismaEnums";
+export type { MeasurementType };
 
 const MEASUREMENT_OF: Record<Unit, MeasurementType> = {
   SQFT: "SQFT",
   LF: "LINEAR_FT",
   LINEAR_FT: "LINEAR_FT",
-  SQ_BOARDS: "UNIT",
-  CU_YARDS: "CUBIC_FT",
+  // Exact since 2026-10-21: roofing squares, cubic yards and square yards have their own values now (cubic yards
+  // had been saved as cubic FEET and square yards as square feet).
+  SQ_BOARDS: "SQUARE",
+  CU_YARDS: "CU_YARD",
   YARDS: "LINEAR_FT",
-  SQ_YARDS: "SQFT",
+  SQ_YARDS: "SQ_YARD",
   UNIT: "UNIT",
   HOUR: "HOUR",
   FIXED: "LUMP_SUM",
 };
 
-const UNIT_OF: Record<MeasurementType, Unit> = {
+/** The builder's picker has ten units; a stored measure it has no option for (each, sheets, bundles…) shows as
+ *  "unit" and is kept on save while the unit is not changed (Line.measure). */
+const UNIT_OF: Partial<Record<MeasurementType, Unit>> = {
   SQFT: "SQFT",
   LINEAR_FT: "LINEAR_FT",
   CUBIC_FT: "CU_YARDS",
+  CU_YARD: "CU_YARDS",
+  SQ_YARD: "SQ_YARDS",
   UNIT: "UNIT",
   HOUR: "HOUR",
   LUMP_SUM: "FIXED",
-  SQUARE: "UNIT",
+  SQUARE: "SQ_BOARDS",
 };
 
 export function measurementOf(unit: Unit): MeasurementType {
@@ -337,7 +337,8 @@ export function payloadFromDraft(draft: Draft, id?: string): SaveProposalPayload
     lineItems: named.map((l) => ({
       name: l.name.trim(),
       description: l.description || undefined,
-      measurementType: measurementOf(l.unit),
+      // The measure it was stored in (each, bundles…) while the builder's unit for it is unchanged.
+      measurementType: l.measure && unitOf(l.measure) === l.unit ? (l.measure as MeasurementType) : measurementOf(l.unit),
       quantity: l.quantity,
       // The RAW per-unit cost. saveProposal applies the markup itself
       // (sellUnitPrice) and stores the sell price on top of these two, so
@@ -468,6 +469,7 @@ export function draftFromProposal(row: ProposalRowForDraft, defaults: ManualDefa
               name: l.name,
               description: l.description ?? "",
               unit: unitOf(l.measurementType),
+              measure: l.measurementType,
               quantity: l.quantity,
               materialCost: raw > 0 ? l.materialCost : unsplit,
               laborCost: raw > 0 ? l.laborCost : 0,

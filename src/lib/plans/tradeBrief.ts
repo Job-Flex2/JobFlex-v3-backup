@@ -168,6 +168,32 @@ export const ESTIMATE_UNIT: Record<TakeoffItem["unit"], string> = {
   "sq yd": "sq yards",
   lot: "fixed",
 };
+/**
+ * The measure a priced line is SHOWN and STORED in once it is held to a takeoff item (2026-10-21, owner: "make sure
+ * it uses the right measures, not only units"): the item's own — a fixture "each", drywall "sheets", shingles
+ * "bundles", pipe "linear ft", concrete "cu yards". ESTIMATE_UNIT above stays the coarse word the lines are MATCHED
+ * in (and the model answers in).
+ */
+export const LINE_UNIT: Record<TakeoffItem["unit"], string> = {
+  "sq ft": "sqft",
+  "linear ft": "linear ft",
+  each: "each",
+  "cu yards": "cu yards",
+  squares: "sq boards",
+  sheets: "sheets",
+  tons: "tons",
+  boxes: "boxes",
+  bundles: "bundles",
+  rolls: "rolls",
+  gallons: "gallons",
+  bags: "bags",
+  pieces: "pieces",
+  sets: "sets",
+  buckets: "buckets",
+  tubes: "tubes",
+  "sq yd": "sq yards",
+  lot: "fixed",
+};
 const qtyWords = (i: TakeoffItem) => `${fmtQty(i.qty)} ${ESTIMATE_UNIT[i.unit]}${ESTIMATE_UNIT[i.unit] === "unit" && i.unit !== "each" ? ` (${i.unit})` : ""}`;
 
 const ROLE_HEAD: Array<[NonNullable<TakeoffItem["role"]>, string]> = [
@@ -322,7 +348,10 @@ export function bindLinesToTakeoff<T extends BoundLine>(input: T[], items: Takeo
       const best = named(exact);
       // Two items of the same size (the roof and its underlayment) — either is the line's
       // quantity, and when they are the same kind of line its role is known too.
-      return best && (best.s >= 0.34 || exact.length === 1 || exact.every((i) => i.role === exact[0].role)) ? best.i : null;
+      const hit = best && (best.s >= 0.34 || exact.length === 1 || exact.every((i) => i.role === exact[0].role)) ? best.i : null;
+      // Held to it: the item's own measure ("63 each", not "63 unit").
+      if (hit) l.unit = LINE_UNIT[hit.unit];
+      return hit;
     }
     // Two items measured at once (walls + ceilings) — each a real share of the line, not
     // a bundle count that happens to equal shingles + roof vents.
@@ -338,10 +367,15 @@ export function bindLinesToTakeoff<T extends BoundLine>(input: T[], items: Takeo
     if (!target) return null;
     const r = l.quantity / target.qty;
     l.quantity = target.qty;
+    l.unit = LINE_UNIT[target.unit];
     l.materialUnitPrice = Math.round(l.materialUnitPrice * r * 100) / 100;
     l.laborUnitPrice = Math.round(l.laborUnitPrice * r * 100) / 100;
     snapped++;
     return target;
+  });
+  // A line held to nothing that still says "unit" counts something — a fixture, a fitting, a permit: "each".
+  lines.forEach((l, k) => {
+    if (!targets[k] && (l.unit ?? "").trim().toLowerCase() === "unit") l.unit = "each";
   });
   const pricesMaterials = targets.some((t) => t?.role === "material");
   const pricesWork = targets.some((t) => t?.role === "labor");

@@ -47,6 +47,20 @@ const UNIT_LABEL: Record<string, string> = {
   UNIT: "unit",
   HOUR: "hour",
   LUMP_SUM: "lump sum",
+  EACH: "each",
+  SHEET: "sheet",
+  BUNDLE: "bundle",
+  ROLL: "roll",
+  BOX: "box",
+  BAG: "bag",
+  PIECE: "piece",
+  GALLON: "gallon",
+  TON: "ton",
+  SET: "set",
+  BUCKET: "bucket",
+  TUBE: "tube",
+  CU_YARD: "cu yd",
+  SQ_YARD: "sq yd",
 };
 
 /** Whole number when it is one, else trimmed to 2 decimals. */
