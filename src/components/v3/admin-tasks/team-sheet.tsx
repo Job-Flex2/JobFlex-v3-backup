@@ -8,16 +8,17 @@
 // gets which text: lib/adminTasks/teamShared.
 
 import { useEffect, useState } from "react";
-import { BellOff, Check, Moon, Pencil, Phone, Send, Trash2, UserPlus } from "lucide-react";
+import { BellOff, Check, Clock, Pencil, Phone, Send, Trash2, UserPlus } from "lucide-react";
 import { Note, SheetBody, SheetFoot } from "@/components/v3/admin-users/admin-kit";
 import { addAdminTeamMember, getAdminTeam, removeAdminTeamMember, setAdminSurgeThreshold, testAdminTeamText, updateAdminTeamMember, type TeamResult } from "@/actions/adminTasks";
-import { ALERT_KEYS, ALERT_WORDS, deliveryWords, type TeamMemberView, type TextingStatus } from "@/lib/adminTasks/teamShared";
+import { ALERT_KEYS, ALERT_WORDS, DEFAULT_LIMIT, deliveryWords, hourWord, type TeamMemberView, type TextingStatus } from "@/lib/adminTasks/teamShared";
 import type { AdminPersonDTO } from "@/lib/adminTasks/model";
 import { cx } from "./task-bits";
 
 type Ok = Extract<TeamResult, { ok: true }>;
 const NO_LINE = { ok: false as const, error: "No connection — try again." };
 
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 function Member({ m, onTeam }: { m: TeamMemberView; onTeam: (r: TeamResult) => string | null }) {
@@ -40,6 +41,7 @@ function Member({ m, onTeam }: { m: TeamMemberView; onTeam: (r: TeamResult) => s
   };
 
   const sent = deliveryWords(m.last);
+  const alerted = deliveryWords(m.lastAlert, "alert");
   const state = m.stopped ? "stop" : m.on ? "on" : "off";
   return (
     <li className={cx("tmRow")} data-team-member={m.id} data-state={state}>
@@ -105,12 +107,57 @@ function Member({ m, onTeam }: { m: TeamMemberView; onTeam: (r: TeamResult) => s
           <input type="checkbox" checked={m.on} disabled={busy !== null} onChange={(e) => void act("flags", () => updateAdminTeamMember(m.id, { on: e.target.checked }))} data-team-on />
           <span>Task texts</span>
         </label>
-        <label className={cx("tmFlag")}>
-          <input type="checkbox" checked={m.quietNights} disabled={busy !== null || !m.on} onChange={(e) => void act("flags", () => updateAdminTeamMember(m.id, { quietNights: e.target.checked }))} data-team-quiet />
-          <span>
-            <Moon size={13} aria-hidden /> Quiet 9 PM–7 AM <small>(Urgent still texts)</small>
-          </span>
-        </label>
+      </div>
+
+      {/* Texting hours (owner, 2026-10-21): any time by default, or only between two hours, Pacific time. */}
+      <div className={cx("tmHours")} data-team-hours={m.hours ? "limit" : "any"}>
+        <Clock size={13} aria-hidden />
+        <label htmlFor={`team-hours-${m.id}`}>Texts</label>
+        <select
+          id={`team-hours-${m.id}`}
+          className={cx("tmSel")}
+          value={m.hours ? "limit" : "any"}
+          disabled={busy !== null || !m.on}
+          onChange={(e) => void act("flags", () => updateAdminTeamMember(m.id, { hours: e.target.value === "any" ? null : DEFAULT_LIMIT }))}
+          data-team-hours-mode
+        >
+          <option value="any">any time (24 hours)</option>
+          <option value="limit">only between…</option>
+        </select>
+        {m.hours ? (
+          <>
+            <select
+              className={cx("tmSel")}
+              aria-label="Texts from"
+              value={m.hours.from}
+              disabled={busy !== null || !m.on}
+              onChange={(e) => void act("flags", () => updateAdminTeamMember(m.id, { hours: { from: Number(e.target.value), to: m.hours!.to } }))}
+              data-team-hours-from
+            >
+              {HOURS.map((h) => (
+                <option key={h} value={h}>
+                  {hourWord(h)}
+                </option>
+              ))}
+            </select>
+            <span>and</span>
+            <select
+              className={cx("tmSel")}
+              aria-label="Texts until"
+              value={m.hours.to}
+              disabled={busy !== null || !m.on}
+              onChange={(e) => void act("flags", () => updateAdminTeamMember(m.id, { hours: { from: m.hours!.from, to: Number(e.target.value) } }))}
+              data-team-hours-to
+            >
+              {HOURS.map((h) => (
+                <option key={h} value={h}>
+                  {hourWord(h)}
+                </option>
+              ))}
+            </select>
+            <small>Pacific time · Urgent tasks still text; alerts wait until {hourWord(m.hours.from)}</small>
+          </>
+        ) : null}
       </div>
 
       <div className={cx("tmAlerts")} data-team-alerts>
@@ -126,6 +173,19 @@ function Member({ m, onTeam }: { m: TeamMemberView; onTeam: (r: TeamResult) => s
             );
           })}
         </div>
+        {m.alerts.length ? (
+          alerted && m.lastAlert ? (
+            <p className={cx("tmSent", alerted.tone === "ok" ? "tmSentOk" : alerted.tone === "bad" ? "tmSentBad" : "tmSentWait")} data-team-alert-sent={alerted.tone}>
+              <span className={cx("tmDot")} aria-hidden="true" />
+              {alerted.words} · {when(m.lastAlert.at)}
+            </p>
+          ) : (
+            <p className={cx("tmSent")} data-team-alert-sent="none">
+              <span className={cx("tmDot")} aria-hidden="true" />
+              No alert sent yet
+            </p>
+          )
+        ) : null}
       </div>
 
       <div className={cx("tmBtns")}>
@@ -221,7 +281,12 @@ function SurgeDial({ threshold, onTeam }: { threshold: number; onTeam: (r: TeamR
   const [value, setValue] = useState(String(threshold));
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  useEffect(() => setValue(String(threshold)), [threshold]);
+  // A new threshold from the server resets the box (during render, not in an effect).
+  const [seen, setSeen] = useState(threshold);
+  if (seen !== threshold) {
+    setSeen(threshold);
+    setValue(String(threshold));
+  }
   const dirty = value.trim() !== String(threshold);
   return (
     <form

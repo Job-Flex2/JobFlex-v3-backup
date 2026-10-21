@@ -1,12 +1,16 @@
 // THE JOBFLEX TEAM, BY TEXT (2026-10-15, no logins) — the pure rules (lib/adminTasks/teamShared): who on the name +
-// phone list gets each task text, quiet nights (Urgent still goes), never a switched-off phone, never the person who
+// phone list gets each task text, texting hours (any time by default; Urgent still goes), never a switched-off phone, never the person who
 // took or had it; what the texts say; phones as typed; the stored list checked; delivery receipts in words.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/admin-tasks-team.check.ts
 import {
   cleanMembers,
   deliveryWords,
+  cleanHours,
+  holdsOffHours,
+  hoursOpenAt,
+  hoursWords,
+  inHours,
   isMemberRef,
-  isQuietHour,
   memberIdOf,
   memberRef,
   parseTaskReply,
@@ -21,7 +25,9 @@ import {
   welcomeTextBody,
   type TaskText,
   type TeamMember,
+  type TextHours,
 } from "../../../src/lib/adminTasks/teamShared";
+import { jobflexRoundupText } from "../../../src/lib/sms/format";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -29,11 +35,12 @@ const check = (name: string, ok: boolean, extra = "") => {
   console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " — " + extra : ""}`);
 };
 
-const m = (id: string, name: string, phone: string, on = true, quietNights = true): TeamMember => ({ id, name, phone, on, quietNights, addedAt: "2026-10-15T00:00:00Z" });
+const DAY: TextHours = { from: 7, to: 21 };
+const m = (id: string, name: string, phone: string, on = true, hours: TextHours | null = DAY): TeamMember => ({ id, name, phone, on, ...(hours ? { hours } : {}), addedAt: "2026-10-15T00:00:00Z" });
 const team: TeamMember[] = [
   m("dima01", "Dmitriy Apetenok", "+14257726587"),
   m("ivan01", "Ivan Petrov", "+12065550101"),
-  m("ana001", "Ana", "+12065550102", true, false),
+  m("ana001", "Ana", "+12065550102", true, null),
   m("off001", "Off Person", "+12065550103", false),
 ];
 const task = { id: "t1", title: "Fix the roof estimator's photo upload on iPhone", priority: "NORMAL", dueDate: "2026-10-16" };
@@ -47,9 +54,12 @@ check("given to someone with texts off: nobody", ids({ kind: "assigned", task, b
 check("Ivan took it: everyone else", ids({ kind: "taken", task, member: "ivan01", name: "Ivan Petrov" }) === "dima01,ana001");
 check("done, Ivan had it: everyone but Ivan", ids({ kind: "done", task, member: "ivan01", name: "Ivan Petrov" }) === "dima01,ana001");
 check("done, an admin had it: the whole team", ids({ kind: "done", task, member: null, name: "Alex" }) === "dima01,ivan01,ana001");
-check("at night: only the phone that doesn't keep quiet", ids({ kind: "new", task, by: null }, night) === "ana001");
+check("at night: only the phone that takes texts any time", ids({ kind: "new", task, by: null }, night) === "ana001");
 check("…unless it's Urgent", ids({ kind: "new", task: { ...task, priority: "URGENT" }, by: null }, night) === "dima01,ivan01,ana001");
-check("quiet hours are 9 PM–7 AM Los Angeles", isQuietHour(night) && !isQuietHour(noon) && isQuietHour(new Date("2026-10-15T04:30:00Z")) && !isQuietHour(new Date("2026-10-15T14:30:00Z")));
+check("7 AM–9 PM Pacific: in at noon and 7:00, out at 11:30 PM and 9:00 PM", inHours(DAY, noon) && !inHours(DAY, night) && inHours(DAY, new Date("2026-10-15T14:00:00Z")) && !inHours(DAY, new Date("2026-10-16T04:00:00Z")));
+check("no hours set: any time, the default", inHours(null, night) && inHours(undefined, noon) && hoursWords(null) === "Any time");
+const shift: TextHours = { from: 22, to: 6 };
+check("hours past midnight (10 PM–6 AM)", inHours(shift, night) && !inHours(shift, noon) && hoursWords(shift) === "10 PM–6 AM");
 
 const href = "https://www.jobflex.app/admin/tasks?task=t1";
 const t1 = taskTextBody({ kind: "new", task, by: "Dmitriy Apetenok" }, href);
@@ -77,9 +87,12 @@ const cleaned = cleanMembers([
   { id: "ijkl56", name: "No phone", phone: "nope" },
   { id: "abcd12", name: "Twice", phone: "+12065550103" },
   7,
-  { id: "mnop78", name: "Ana", phone: "+12065550104", on: false, quietNights: false },
+  { id: "mnop78", name: "Ana", phone: "+12065550104", on: false, quietNights: true, hours: { from: 8, to: 18 } },
+  { id: "qrst90", name: "Old quiet", phone: "+12065550105", quietNights: true },
 ]);
-check("the stored list checked: junk and repeats dropped, names tidied, defaults on", cleaned.map((x) => x.id).join() === "abcd12,mnop78" && cleaned[0].name === "Ivan Petrov" && cleaned[0].phone === "+12065550101" && cleaned[0].on && cleaned[0].quietNights && !cleaned[1].on && !cleaned[1].quietNights);
+check("the stored list checked: junk and repeats dropped, names tidied, defaults on", cleaned.map((x) => x.id).join() === "abcd12,mnop78,qrst90" && cleaned[0].name === "Ivan Petrov" && cleaned[0].phone === "+12065550101" && cleaned[0].on && !cleaned[1].on);
+check("hours kept as set; the old quiet-nights flag means any time now", JSON.stringify(cleaned[1].hours) === '{"from":8,"to":18}' && !cleaned[2].hours && !cleaned[0].hours && !("quietNights" in cleaned[2]));
+check("hours as sent: two different whole hours, else any time", JSON.stringify(cleanHours({ from: 7, to: 21 })) === '{"from":7,"to":21}' && cleanHours({ from: 7, to: 7 }) === null && cleanHours({ from: 7.5, to: 21 }) === null && cleanHours({ from: -1, to: 24 }) === null && cleanHours("7-21") === null);
 check("not a list → empty", cleanMembers(null).length === 0 && cleanMembers({}).length === 0);
 check("a task given to someone on the list: m:<id>", memberRef("abcd12") === "m:abcd12" && isMemberRef("m:abcd12") && !isMemberRef("m:") && !isMemberRef("cmv698hn70000") && !isMemberRef(null) && memberIdOf("m:abcd12") === "abcd12");
 
@@ -113,6 +126,30 @@ check("the answers say what the reply did",
     /no task to answer/.test(replyTextBody("none", null, "Ivan")));
 check("a texted note keeps who wrote it", JSON.stringify(readTextNote(textNoteBody("Ivan Petrov", "on my way\nsecond line"))) === JSON.stringify({ name: "Ivan Petrov", note: "on my way\nsecond line" }) && readTextNote("plain comment") === null);
 check("the task a text was about, from its link", taskIdInText(`JobFlex: Ivan took “x”. ${href.replace("t1", "cmv9ybdra003c17o4nq86y8xy")}`) === "cmv9ybdra003c17o4nq86y8xy" && taskIdInText("JobFlex: hi Ivan — you're added. Reply STOP to stop.") === null);
+
+// Alerts outside someone's hours (2026-10-20/21, owner: "last two sign-ups didn't come by text"; "default 24 hours"):
+// held until their hours start, not dropped.
+const la = (d: Date) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", hourCycle: "h23", month: "short", day: "numeric" }).format(d);
+check("a sign-up at 11:40 PM waits for 7:00 the next morning (7 AM–9 PM)", la(hoursOpenAt(DAY, new Date("2026-10-20T06:40:00Z"))) === "Oct 20, 07:00", la(hoursOpenAt(DAY, new Date("2026-10-20T06:40:00Z"))));
+check("one at 3:10 AM waits for 7:00 the same morning", la(hoursOpenAt(DAY, new Date("2026-10-20T10:10:00Z"))) === "Oct 20, 07:00");
+check("across the clock change (Nov 1) it is still 7:00", la(hoursOpenAt(DAY, new Date("2026-11-02T06:30:00Z"))) === "Nov 2, 07:00", la(hoursOpenAt(DAY, new Date("2026-11-02T06:30:00Z"))));
+check("a 10 PM–6 AM person: a noon alert waits for 10 PM", la(hoursOpenAt(shift, noon)) === "Oct 15, 22:00", la(hoursOpenAt(shift, noon)));
+check("inside the hours, or any time: now", hoursOpenAt(DAY, noon).getTime() === noon.getTime() && hoursOpenAt(null, night).getTime() === night.getTime());
+check("every alert but 'busy right now' waits for the hours", holdsOffHours("signup") && holdsOffHours("paid") && holdsOffHours("support") && !holdsOffHours("surge"));
+check(
+  "the card says an alert is waiting, and what became of the last one",
+  deliveryWords({ status: "HELD", error: null, at: "", after: "2026-10-20T14:00:00Z" }, "alert")?.words === "Last alert waits for their texting hours — 7 AM" &&
+    deliveryWords({ status: "SKIPPED", error: "no-number", at: "" }, "alert")?.words === "Last alert not sent — JobFlex's number isn't approved yet" &&
+    deliveryWords({ status: "UNDELIVERED", error: "30032", at: "" }, "alert")?.words === "Last alert didn't arrive — JobFlex's toll-free number isn't verified yet",
+);
+check("task texts keep their words", deliveryWords({ status: "DELIVERED", error: null, at: "" })?.words === "Last text delivered");
+const roundup = jobflexRoundupText([
+  "JobFlex: new sign-up — Ridgeline Roofing (trial, card on file). https://www.jobflex.app/admin/traffic/signups",
+  "JobFlex: new sign-up — Cedar Decks (trial, no card). https://www.jobflex.app/admin/traffic/signups",
+  "JobFlex: support #A1B2 from Cedar Decks — “Can't add a photo”. https://www.jobflex.app/admin/support",
+]);
+check("the alerts held outside the hours fold into one text, each page once", roundup === "JobFlex: 3 alerts — new sign-up — Ridgeline Roofing (trial, card on file) · new sign-up — Cedar Decks (trial, no card) · support #A1B2 from Cedar Decks — “Can't add a photo”. https://www.jobflex.app/admin/traffic/signups https://www.jobflex.app/admin/support", roundup);
+check("one held alert goes as it was", jobflexRoundupText(["JobFlex: Cedar Decks canceled their trial on day 3. https://www.jobflex.app/admin/trials"]) === "JobFlex: Cedar Decks canceled their trial on day 3. https://www.jobflex.app/admin/trials");
 
 if (bad) {
   console.log(`\n${bad} FAILED`);
