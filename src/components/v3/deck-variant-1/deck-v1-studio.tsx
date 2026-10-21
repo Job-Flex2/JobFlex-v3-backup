@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { createWheelMotion, wheelPixels } from "@/lib/smooth-wheel";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Lock, Maximize2, Minimize2, Plus, RotateCcw, Send, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Lock, Maximize2, Minimize2, Plus, RotateCcw, Send, X, ZoomIn, ZoomOut } from "lucide-react";
 import { resolveMarket, parseStateZip, type MarketSnapshot } from "@/lib/fence/market";
 import { DECKING, DECKING_BRAND_LABEL, DECKING_BRAND_ORDER, DECKING_FAMILY_LABEL, DECKING_FAMILY_ORDER, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, treatedDecking, wallType, type DeckingFamily, type DeckingProduct } from "@/lib/deck/catalog";
 import { regionalPicks, regionalWords } from "@/lib/deck/regional";
@@ -404,6 +404,11 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       if (event.ctrlKey || event.metaKey || event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest('.v1-pop, [role="dialog"], textarea, select, [contenteditable="true"], input[type="range"], input[type="number"]')) return;
+      // In full view there is no form to scroll: the wheel zooms the scene, and nowhere else moves the page under it.
+      if (studio.classList.contains("is-full-view")) {
+        if (!target?.closest("canvas")) event.preventDefault();
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       if (desktop.matches) {
@@ -588,8 +593,17 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [editing, setEditing] = React.useState(false);
   // THE PHONE (owner, 2026-10-18: the deck estimator's own handheld design). The structure rides at the top of the
   // screen, compact, while the steps scroll under it, so every change is seen as it is made; "Full view" opens the
-  // whole viewer with its tools. Only the ≤768px stylesheet reads it — on a desk the scene is always pinned beside.
-  const [phoneFull, setPhoneFull] = React.useState(false);
+  // whole viewer with its tools. FULL VIEW (owner, 2026-10-19: "Full view doesn't do anything") — on every width the
+  // viewer then fills the window by itself, the form and the header hidden under it; Exit full view or Escape closes it.
+  const [fullView, setFullView] = React.useState(false);
+  React.useEffect(() => {
+    if (!fullView) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullView(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullView]);
+  // Zoom in flies to the part named below the scene; Zoom out, on the same part, goes back to the whole structure.
+  const [zoomedAt, setZoomedAt] = React.useState<string | null>(null);
   const r = design.roof;
   const polygon = r.plan.shape === "hexagon" || r.plan.shape === "octagon" || r.plan.shape === "round";
   /** A handle dragged in the 3D: the design number it stands for takes the dragged value, inside its rails. */
@@ -2795,7 +2809,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   ];
 
   return (
-    <div className="jf-deck-v1" ref={studioRef} data-nest>
+    <div className={cx("jf-deck-v1", fullView && "is-full-view")} ref={studioRef} data-nest>
       <header className="v1-top">
         <div className="v1-title-row">
           <h1 className="v1-title">Deck estimator</h1>
@@ -2994,13 +3008,13 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </FieldScope.Provider>
 
         {/* ── the structure, pinned ── */}
-        <aside className={cx("v1-stage", !phoneFull && "is-docked")} ref={viewerRef} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
+        <aside className={cx("v1-stage", !fullView && "is-docked", fullView && "is-full")} ref={viewerRef} aria-label={`The ${what.toLowerCase()}`} data-deck-viewer>
           <div className="v1-viewer">
             <div className="v1-view-head">
               <h2 className="v1-h3 v1-view-title">The {what.toLowerCase()}</h2>
-              <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" aria-pressed={phoneFull} onClick={() => setPhoneFull((f) => !f)} data-deck-dock>
-                {phoneFull ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
-                {phoneFull ? "Keep in view" : "Full view"}
+              <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" aria-pressed={fullView} onClick={() => setFullView((f) => !f)} data-deck-dock>
+                {fullView ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+                {fullView ? "Exit full view" : "Full view"}
               </button>
               <span className="v1-meta v1-view-facts" title={scene.facts}>{scene.facts}</span>
               <Seg label="View" value={view} onChange={setView} options={viewTabs} />
@@ -3013,14 +3027,6 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
               ) : view === "3d" ? (
                 <>
                   <Lit3D hover={hover} structure={structure} focusLit={focusLit} wallLit={wallLit} scene={scene} built={built} xray={xray} backdrop={ph.backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEditStable} resetToken={resetToken} focus={focus} onPick={onPickStable} className="v1-canvas" label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
-                  {editing && !placing ? (
-                    <div className="v1-banner" data-deck-editing>
-                      <span>Drag the blue knobs — width, depth, height, the roof and its pitch, each stair, the house&apos;s corners and steps. It re-frames and re-prices as you drag.</span>
-                      <button type="button" className="v1-btn v1-btn-sm" onClick={() => { setEditing(false); setHoverPick(null); }}>
-                        Done
-                      </button>
-                    </div>
-                  ) : null}
                   {hoverPick?.legend && !placing ? (
                     <div className="v1-tag" data-deck-hover>
                       <b>
@@ -3068,15 +3074,22 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
               <div className="v1-tools">
                 <div className="v1-tools-primary">
                   <button type="button" className={cx("v1-btn", "v1-btn-primary", "v1-edit3d", editing && "is-on")} aria-pressed={editing} onClick={() => { setEditing((x) => !x); setHoverPick(null); }} data-deck-edit>
-                    Edit in 3D
+                    {editing ? <><Check size={16} strokeWidth={2.5} aria-hidden="true" /> Done</> : "Edit in 3D"}
                   </button>
-                  {structure.frame ? (
+                  {structure.frame && !editing ? (
                     <button type="button" className={cx("v1-btn", placing?.kind === "stair" && "is-on")} aria-pressed={placing?.kind === "stair"} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => setPlacing(placing?.kind === "stair" ? null : { kind: "stair" })} data-deck-3d-add-stair>
                       {placing?.kind === "stair" ? "Click the deck…" : "Add stairs"}
                     </button>
                   ) : null}
                 </div>
-                <div className="v1-playback">
+                {/* The edit hint sits in the tool row, not over the scene, so it never hides a knob. */}
+                {editing && !placing ? (
+                  <p className="v1-edit-hint" data-deck-editing>
+                    <span className="v1-edit-hint-knob" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h16M8 7.5 3.5 12 8 16.5M16 7.5l4.5 4.5-4.5 4.5" /></svg></span>
+                    <span>Drag a knob the way its arrow points. The price follows.</span>
+                  </p>
+                ) : null}
+                <div className="v1-playback" hidden={editing && !placing}>
                   <button type="button" className={cx("v1-btn", "v1-btn-sm", playing && "is-on")} onClick={() => (playing ? setPlaying(false) : play())}>
                     {playing ? "Pause" : "Build it"}
                   </button>
@@ -3119,6 +3132,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                       onClick={() => {
                         setResetToken((t) => t + 1);
                         setPicked(null);
+                        setZoomedAt(null);
                       }}
                     >
                       Reset view
@@ -3144,9 +3158,15 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                 </div>
                 <p className="v1-pick-body">{picked.legend.note}</p>
                 <div className="v1-row-acts">
-                  <button type="button" className="v1-btn v1-btn-sm" onClick={() => setFocus([...picked.point] as [number, number, number])}>
-                    Zoom
-                  </button>
+                  {zoomedAt === picked.point.join(",") ? (
+                    <button type="button" className="v1-btn v1-btn-sm" onClick={() => { setResetToken((t) => t + 1); setZoomedAt(null); }} data-deck-zoom="out">
+                      <ZoomOut size={16} strokeWidth={2.5} aria-hidden="true" /> Zoom out
+                    </button>
+                  ) : (
+                    <button type="button" className="v1-btn v1-btn-sm" onClick={() => { setFocus([...picked.point] as [number, number, number]); setZoomedAt(picked.point.join(",")); }} data-deck-zoom="in">
+                      <ZoomIn size={16} strokeWidth={2.5} aria-hidden="true" /> Zoom in
+                    </button>
+                  )}
                   <button type="button" className="v1-btn v1-btn-sm v1-btn-quiet" onClick={() => setPicked(null)}>
                     Close
                   </button>

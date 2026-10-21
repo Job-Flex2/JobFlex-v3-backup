@@ -449,6 +449,35 @@
 .jf-deck-v1 .v1-pick { display: grid; gap: 8px; padding: 12px; border-top: 1px solid var(--ink); }
 .jf-deck-v1 .v1-pick-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 15px; }
 .jf-deck-v1 .v1-pick-body { font-size: 13.5px; color: var(--ink-soft); }
+.jf-deck-v1 .v1-pick .v1-row-acts .v1-btn { display: inline-flex; align-items: center; gap: 6px; }
+.jf-deck-v1 .v1-edit3d { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* Edit in 3D: the hint takes the playback's place in the tool row, so nothing lies over the knobs. Its little knob is
+   the scene's own (DeckModel3D's .dk-knob), so the words point at what to grab. */
+.jf-deck-v1 .v1-playback[hidden] { display: none; }
+.jf-deck-v1 .v1-edit-hint { display: flex; align-items: center; gap: var(--deck-space-xs); min-width: 0; margin: 0; font-size: var(--deck-meta); font-weight: 600; line-height: 1.3; color: var(--ink-soft); }
+.jf-deck-v1 .v1-edit-hint-knob { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 2px solid #fff; border-radius: 50%; background: #1854a0; box-shadow: 0 0 0 1px rgba(10, 34, 70, 0.45); }
+.jf-deck-v1 .v1-edit-hint-knob svg { width: 14px; height: 14px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* FULL VIEW (owner, 2026-10-19): the viewer alone, over the whole window — the form, the header and the shell are
+   under it. Every width; Exit full view or Escape closes it. */
+.jf-deck-v1.is-full-view .v1-stage.is-full { position: fixed; inset: 0; z-index: 400; display: grid; grid-template-columns: minmax(0, 1fr); padding: 12px; background: var(--paper); }
+.jf-deck-v1 .v1-stage.is-full .v1-viewer { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; }
+.jf-deck-v1 .v1-stage.is-full .v1-viewer > :not(.v1-view-box) { flex: none; }
+.jf-deck-v1 .v1-stage.is-full .v1-view-box,
+.jf-deck-v1 .v1-stage.is-full .v1-view-box.is-wall { flex: 1; height: auto; min-height: 0; }
+.jf-deck-v1 .v1-stage.is-full .v1-canvas { top: 0; height: 100%; }
+.jf-deck-v1 .v1-stage.is-full .v1-view-head { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.jf-deck-v1 .v1-stage.is-full .v1-view-head .v1-view-facts { grid-column: 2; grid-row: 1; }
+.jf-deck-v1 .v1-stage.is-full .v1-view-head .v1-seg { grid-column: 3; grid-row: 1; }
+.jf-deck-v1 .v1-stage.is-full .v1-view-head .v1-dock-btn { grid-column: 4; grid-row: 1; }
+.jf-deck-v1 .v1-stage.is-full .v1-pick { max-height: 30vh; overflow-y: auto; }
+/* `.main` (isolation) and `.content` (z-index 1) are stacking contexts, so a fixed layer inside them still paints
+   under the sidebar and the topbar (30) and the support button (≤95): while full view is open both are lifted over the chrome
+   (still under the overlay layer, 120), as the shell does for
+   its page dialogs (blueprint-global.css, "Page dialogs cover the sidebar too"). */
+.jf-blueprint .main:has(.jf-deck-v1.is-full-view) { z-index: 100; }
+.jf-blueprint .content:has(> .jf-deck-v1.is-full-view) { z-index: 31; }
 
 /* The photo of the house (dormant behind PHOTO_ENABLED, deck-v1-photo.tsx). */
 .jf-deck-v1 .v1-file-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
@@ -588,7 +617,19 @@
   .jf-deck-v1 .v1-work { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .jf-deck-v1 .v1-answers-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .jf-deck-v1 .v1-tools { grid-template-columns: minmax(0, 1fr) auto; }
-  .jf-deck-v1 .v1-playback { grid-column: 1 / -1; grid-row: 2; }
+  .jf-deck-v1 .v1-playback, .jf-deck-v1 .v1-edit-hint { grid-column: 1 / -1; grid-row: 2; }
+}
+/* Full view on a phone: the head stacks as it does docked, and the page under it holds still. */
+@media (max-width: 768px) {
+  .jf-deck-v1 .v1-stage.is-full { padding: 0; }
+  .jf-deck-v1 .v1-stage.is-full .v1-viewer { border-width: 0; border-radius: 0; }
+  .jf-deck-v1 .v1-stage.is-full .v1-view-head { grid-template-columns: minmax(0, 1fr) auto; padding-top: calc(var(--deck-space-sm) + env(safe-area-inset-top)); }
+  .jf-deck-v1 .v1-stage.is-full .v1-view-head .v1-view-facts { grid-column: 1 / -1; grid-row: 2; }
+  .jf-deck-v1 .v1-stage.is-full .v1-view-head .v1-seg { grid-column: 1 / -1; grid-row: 3; }
+  .jf-deck-v1 .v1-stage.is-full .v1-view-head .v1-dock-btn { grid-column: 2; grid-row: 1; }
+  .jf-deck-v1 .v1-stage.is-full .v1-tools { padding-bottom: calc(var(--deck-space-md) + env(safe-area-inset-bottom)); }
+  .jf-blueprint:has(.jf-deck-v1.is-full-view) .layout,
+  .jf-blueprint:has(.jf-deck-v1.is-full-view) .main { overflow: hidden; }
 }
 
 /* ── Handheld (≤768px): one column — the structure, its price, the question ─ */
@@ -660,7 +701,7 @@
    The structure DOCKS at the top of the screen — compact, its view tabs and
    the picture — while the numbered steps scroll under it, so every change is
    seen as it is made. "Full view" opens the whole viewer with its tools (Edit
-   in 3D, Build it, view options); "Keep in view" docks it again. The two
+   in 3D, Build it, view options) over the whole screen; "Exit full view" docks it again. The two
    tables read as lists: the name, its quantity under it, the cost at the
    right; the per-unit columns stay on the desk. */
 @media (max-width: 768px) {

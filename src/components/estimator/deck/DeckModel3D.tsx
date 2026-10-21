@@ -41,6 +41,10 @@ export interface DeckEdit {
   done: boolean;
 }
 
+/** The short name beside each edit knob, and which names win a crowded spot (the deck's own size first, the house last). */
+const KNOB_NAME: Record<SceneHandle["kind"], string> = { width: "Width", depth: "Depth", height: "Height", eave: "Post height", pitch: "Pitch", "roof-width": "Roof width", "roof-depth": "Roof depth", "lower-depth": "Lower level", stair: "Move stairs", "stair-width": "Stair width", jog: "Wall step", "house-left": "House corner", "house-right": "House corner" };
+const KNOB_RANK: Record<SceneHandle["kind"], number> = { width: 0, depth: 1, height: 2, eave: 3, pitch: 4, "roof-width": 5, "roof-depth": 6, "lower-depth": 7, "stair-width": 8, stair: 9, "house-left": 10, "house-right": 11, jog: 12 };
+
 /** What a touch landed on, for the studio's label and the fixture placer. */
 export interface DeckPick {
   /** The part's legend entry (null for the ground, the house or a part with no tag). */
@@ -505,6 +509,9 @@ interface Built {
   handles: THREE.Mesh[];
   /** The DOM knob over each handle (same order). */
   knobs: HTMLButtonElement[];
+  /** Each knob's short name, and the dashed leader back to its handle when the knob is pushed off it (same order). */
+  knobLabels: HTMLSpanElement[];
+  leaders: SVGGElement[];
   /** The world-space centre and size of every box (for the fly-to). */
   centres: Array<[THREE.Vector3, number]>;
   /** The scene this was built from (a newer one may be waiting for its rebuild). */
@@ -603,9 +610,28 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     mount.appendChild(renderer.domElement);
     // The edit knobs (M3): DOM buttons that follow the handles across the screen — a thumb's size, focusable, with the arrow keys as a second way to move them.
     if (getComputedStyle(mount).position === "static") mount.style.position = "relative";
+    // (owner, 2026-10-19: "the arrows look weird, it's not clear how they're used, they overflow each other") — each
+    // knob now carries its arrow turned along the way it really moves on the screen, a short name beside it, and the
+    // knobs are spread apart every frame so no two ever sit on each other (a dashed leader runs back to the point a
+    // pushed-away knob stands for). A name that would land on another knob or name is left off; the hovered knob's always shows.
+    const knobSize = coarse ? 38 : 30;
     const knobLayer = document.createElement("div");
-    knobLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden";
+    knobLayer.style.cssText = `position:absolute;inset:0;pointer-events:none;overflow:hidden;--dk:${knobSize}px`;
     knobLayer.dataset.deckKnobs = "";
+    knobLayer.innerHTML = `<style>
+[data-deck-knobs] .dk-knob{position:absolute;left:0;top:0;width:var(--dk);height:var(--dk);margin:calc(var(--dk) / -2) 0 0 calc(var(--dk) / -2);box-sizing:border-box;border-radius:50%;border:2px solid #fff;background:#1854a0;color:#fff;display:none;place-items:center;padding:0;box-shadow:0 0 0 1px rgba(10,34,70,.45),0 2px 6px rgba(0,0,0,.32);pointer-events:auto;touch-action:none;cursor:grab;transition:background-color .12s,box-shadow .12s,opacity .12s}
+[data-deck-knobs] .dk-knob svg{width:62%;height:62%;display:block;pointer-events:none}
+[data-deck-knobs] .dk-knob:hover,[data-deck-knobs] .dk-knob:focus-visible,[data-deck-knobs] .dk-knob[data-active]{background:#0d3a73;box-shadow:0 0 0 4px rgba(24,84,160,.32),0 2px 8px rgba(0,0,0,.38)}
+[data-deck-knobs] .dk-knob:focus-visible{outline:2px solid #f5a623;outline-offset:3px}
+[data-deck-knobs] .dk-knob[data-active]{cursor:grabbing}
+[data-deck-knobs][data-dragging] .dk-knob:not([data-active]){opacity:.3}
+[data-deck-knobs] .dk-label{position:absolute;left:0;top:0;display:none;box-sizing:border-box;height:20px;padding:0 7px;border-radius:10px;background:rgba(255,255,255,.95);color:#0f2747;font:700 11px/20px system-ui,-apple-system,"Segoe UI",sans-serif;white-space:nowrap;box-shadow:0 0 0 1px rgba(15,39,71,.18),0 1px 3px rgba(0,0,0,.2);pointer-events:none}
+[data-deck-knobs] .dk-label[data-hot]{background:#1854a0;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+[data-deck-knobs] .dk-leaders{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+[data-deck-knobs] .dk-leaders line{stroke:#1854a0;stroke-width:1.75;stroke-dasharray:3 3}
+[data-deck-knobs] .dk-leaders circle{fill:#1854a0;stroke:#fff;stroke-width:1.5}
+</style><svg class="dk-leaders" aria-hidden="true"></svg>`;
+    const leaderLayer = knobLayer.querySelector("svg") as SVGSVGElement;
     mount.appendChild(knobLayer);
 
     const world = new THREE.Scene();
@@ -687,6 +713,37 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const origin = (s: { widthFt: number; depthFt: number }) => pinned ?? { ox: s.widthFt / 2, oz: s.depthFt / 2 };
     // The knob that had the keyboard, so a rebuild hands it back.
     let focusedKnob: string | null = null;
+    // The knob under the pointer, focused or held: its name shows first, with its size, in blue.
+    let hotKnob: string | null = null;
+    const textRuler = document.createElement("canvas").getContext("2d");
+    const setKnobLabel = (tag: HTMLSpanElement, h: SceneHandle, hot: boolean) => {
+      const sized = h.kind === "width" || h.kind === "depth" || h.kind === "height" || h.kind === "eave" || h.kind === "pitch" || h.kind === "roof-width" || h.kind === "roof-depth" || h.kind === "lower-depth" || h.kind === "stair-width";
+      const now = h.kind === "pitch" ? `${Math.round(h.value)}:12` : h.perUnit === 1 ? `${Math.round(h.value * 2) / 2} ft` : `${Math.round(h.value)} in`;
+      tag.textContent = hot && sized ? `${KNOB_NAME[h.kind]} · ${now}` : KNOB_NAME[h.kind];
+      if (hot) tag.dataset.hot = "";
+      else delete tag.dataset.hot;
+      if (textRuler) textRuler.font = `700 11px system-ui, -apple-system, "Segoe UI", sans-serif`;
+      tag.dataset.w = String(Math.ceil((textRuler?.measureText(tag.textContent).width ?? tag.textContent.length * 6.5) + 16));
+    };
+    const setHotKnob = (key: string | null) => {
+      if (hotKnob === key) return;
+      hotKnob = key;
+      if (content) content.handles.forEach((m, i) => {
+        const h = m.userData.handle as SceneHandle;
+        const tag = content!.knobLabels[i];
+        if (tag) setKnobLabel(tag, h, `${h.kind}:${h.id}` === key);
+      });
+      invalidate();
+    };
+    const setDragging = (key: string | null) => {
+      if (key) knobLayer.dataset.dragging = "";
+      else delete knobLayer.dataset.dragging;
+      content?.knobs.forEach((k) => {
+        if (key && `${k.dataset.deckHandle}:${k.dataset.deckHandleId}` === key) k.dataset.active = "";
+        else delete k.dataset.active;
+      });
+      if (key) setHotKnob(key);
+    };
     let span = 20;
     let fitted: { w: number; d: number; h: number } | null = null;
 
@@ -1263,30 +1320,57 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         handles.push(m);
       }
       const knobs: HTMLButtonElement[] = [];
+      const knobLabels: HTMLSpanElement[] = [];
+      const leaders: SVGGElement[] = [];
       handles.forEach((m, i) => {
         const h = s.handles[i];
         const key = `${h.kind}:${h.id}`;
+        const leader = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        leader.innerHTML = `<line/><circle r="3.5"/>`;
+        leader.style.display = "none";
+        leaderLayer.appendChild(leader);
+        leaders.push(leader);
         const knob = document.createElement("button");
         knob.type = "button";
+        knob.className = "dk-knob";
         knob.dataset.deckHandle = h.kind;
         knob.dataset.deckHandleId = h.id;
         knob.setAttribute("aria-label", `${h.label} — drag, or press the arrow keys`);
         knob.title = h.label;
-        knob.textContent = h.axis === "z" ? "↕" : "↔";
-        knob.style.cssText = `position:absolute;left:0;top:0;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2.5px solid #fff;background:#1854a0;color:#fff;font:700 14px/1 system-ui,sans-serif;display:none;place-items:center;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.35);pointer-events:auto;touch-action:none;cursor:${h.axis === "z" ? "ns-resize" : "move"}`;
+        // A double arrow, turned every frame to the direction the drag really moves on the screen.
+        knob.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M8 7.5 3.5 12 8 16.5M16 7.5l4.5 4.5-4.5 4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        if (drag && `${drag.handle.kind}:${drag.handle.id}` === key) knob.dataset.active = "";
+        const tag = document.createElement("span");
+        tag.className = "dk-label";
+        tag.setAttribute("aria-hidden", "true");
+        knobLabels.push(tag);
+        setKnobLabel(tag, h, hotKnob === key);
         knob.addEventListener("pointerdown", (e) => knobDown(e, m, knob));
         knob.addEventListener("pointermove", (e) => dragMove(e.clientX, e.clientY, false));
         knob.addEventListener("pointerup", (e) => dragMove(e.clientX, e.clientY, true));
         knob.addEventListener("pointercancel", () => onCancel());
-        knob.addEventListener("pointerenter", () => hoverHandle(h));
+        knob.addEventListener("pointerenter", () => {
+          setHotKnob(key);
+          hoverHandle(h);
+        });
         knob.addEventListener("pointerleave", () => {
-          if (!drag) pickRef.current?.(null, "hover");
+          if (drag) return;
+          if (focusedKnob !== key) setHotKnob(null);
+          pickRef.current?.(null, "hover");
         });
         knob.addEventListener("focus", () => {
           focusedKnob = key;
+          setHotKnob(key);
           hoverHandle(h);
         });
+        knob.addEventListener("blur", () => {
+          // A rebuild removes the focused knob and hands the focus back to its successor; only a real blur lets go.
+          if (!knob.isConnected) return;
+          if (focusedKnob === key) focusedKnob = null;
+          if (hotKnob === key && !drag) setHotKnob(null);
+        });
         knob.addEventListener("keydown", (e) => knobKey(e, h));
+        knobLayer.appendChild(tag);
         knobLayer.appendChild(knob);
         knobs.push(knob);
         if (focusedKnob === key && editRef.current) queueMicrotask(() => knob.focus({ preventScroll: true }));
@@ -1442,10 +1526,14 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         callouts,
         handles,
         knobs,
+        knobLabels,
+        leaders,
         centres,
         scene: s,
         dispose: () => {
           for (const k of knobs) k.remove();
+          for (const t of knobLabels) t.remove();
+          for (const l of leaders) l.remove();
           for (const o of owned) o.dispose();
           for (const l of layers) for (const { mesh } of l) mesh.dispose();
         },
@@ -1512,7 +1600,12 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       for (const c of content.callouts) c.visible = connRef.current;
       for (const h of content.handles) h.visible = editRef.current;
       for (const k of content.knobs) k.style.display = editRef.current ? "grid" : "none";
+      if (!editRef.current) {
+        for (const t of content.knobLabels) t.style.display = "none";
+        for (const l of content.leaders) l.style.display = "none";
+      }
       if (!editRef.current && drag) {
+        setDragging(null);
         drag = null;
         orbit.enabled = true;
         renderer.domElement.style.cursor = "";
@@ -1809,6 +1902,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const start = planePoint(clientX, clientY, plane);
       if (!start) return;
       drag = { handle: h, plane, start, last: h.value };
+      setDragging(`${h.kind}:${h.id}`);
       pinned = origin(sceneRef.current);
       orbit.enabled = false;
       renderer.domElement.style.cursor = h.axis === "z" ? "ns-resize" : "move";
@@ -1828,6 +1922,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       editCbRef.current?.({ kind: h.kind, id: h.id, value, done });
       if (done) {
         drag = null;
+        setDragging(null);
         pinned = null;
         orbit.enabled = true;
         renderer.domElement.style.cursor = "";
@@ -1936,6 +2031,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const onCancel = () => {
       if (drag) {
         drag = null;
+        setDragging(null);
         pinned = null;
         orbit.enabled = true;
         renderer.domElement.style.cursor = "";
@@ -1948,19 +2044,111 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     renderer.domElement.addEventListener("pointercancel", onCancel);
 
     const knobV = new THREE.Vector3();
+    const knobT = new THREE.Vector3();
+    const KNOB_AXIS = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 0, 1), z: new THREE.Vector3(0, 1, 0) } as const;
+    /** Every knob onto the screen, then apart: no two knobs closer than a knob and a gap, the held one never moved
+     *  (it stays under the pointer); a knob pushed off its point gets a dashed leader back to it. Then the names, the
+     *  hot one first and the deck's own size before the rest, each beside its knob on the first side that is clear. */
     const placeKnobs = () => {
       const c = content;
       if (!c) return;
       const w = renderer.domElement.clientWidth;
       const hgt = renderer.domElement.clientHeight;
+      const r = knobSize / 2;
+      const apart = knobSize + 8;
+      const edge = r + 4;
+      const clampX = (x: number) => Math.min(w - edge, Math.max(edge, x));
+      const clampY = (y: number) => Math.min(hgt - edge, Math.max(edge, y));
+      const held = drag ? `${drag.handle.kind}:${drag.handle.id}` : null;
+      const spots: Array<{ i: number; key: string; ax: number; ay: number; x: number; y: number; pin: boolean; rank: number }> = [];
       c.handles.forEach((m, i) => {
         const k = c.knobs[i];
         if (!k) return;
-        m.getWorldPosition(knobV).project(camera);
+        const h = m.userData.handle as SceneHandle;
+        m.getWorldPosition(knobV);
+        knobT.copy(knobV).add(KNOB_AXIS[h.axis]);
+        knobV.project(camera);
+        knobT.project(camera);
         const off = knobV.z > 1 || Math.abs(knobV.x) > 1.05 || Math.abs(knobV.y) > 1.05;
-        k.style.display = off ? "none" : "grid";
-        if (!off) k.style.transform = `translate(${(((knobV.x + 1) / 2) * w).toFixed(1)}px, ${(((1 - knobV.y) / 2) * hgt).toFixed(1)}px)`;
+        if (off) {
+          k.style.display = "none";
+          c.knobLabels[i].style.display = "none";
+          c.leaders[i].style.display = "none";
+          return;
+        }
+        k.style.display = "grid";
+        const ax = ((knobV.x + 1) / 2) * w;
+        const ay = ((1 - knobV.y) / 2) * hgt;
+        const dx = ((knobT.x + 1) / 2) * w - ax;
+        const dy = ((1 - knobT.y) / 2) * hgt - ay;
+        // Straight at the camera, the axis has no screen direction: the arrow keeps the one it had.
+        if (Math.hypot(dx, dy) > 1) (k.firstElementChild as SVGElement | null)?.style.setProperty("transform", `rotate(${Math.atan2(dy, dx).toFixed(3)}rad)`);
+        const key = `${h.kind}:${h.id}`;
+        spots.push({ i, key, ax, ay, x: clampX(ax), y: clampY(ay), pin: key === held, rank: key === hotKnob ? -1 : KNOB_RANK[h.kind] });
       });
+      // Push overlapping knobs apart until none overlap (crowded far out, a dozen settle in a few dozen cheap passes); a pair on the same point splits
+      // the same way every frame, so nothing flickers.
+      for (let pass = 0; pass < 40; pass++) {
+        let moved = false;
+        for (let a = 0; a < spots.length; a++) {
+          for (let b = a + 1; b < spots.length; b++) {
+            const A = spots[a];
+            const B = spots[b];
+            if (A.pin && B.pin) continue;
+            let dx = B.x - A.x;
+            let dy = B.y - A.y;
+            let d = Math.hypot(dx, dy);
+            if (d >= apart) continue;
+            if (d < 0.5) {
+              dx = Math.cos(B.i * 2.399 + 0.6);
+              dy = Math.sin(B.i * 2.399 + 0.6);
+              d = 1;
+            }
+            const push = apart - d + 1;
+            const share = A.pin ? 0 : B.pin ? 1 : 0.5;
+            A.x = clampX(A.x - (dx / d) * push * share);
+            A.y = clampY(A.y - (dy / d) * push * share);
+            B.x = clampX(B.x + (dx / d) * push * (1 - share));
+            B.y = clampY(B.y + (dy / d) * push * (1 - share));
+            moved = true;
+          }
+        }
+        if (!moved) break;
+      }
+      const taken: Array<[number, number, number, number]> = spots.map((s) => [s.x - r - 3, s.y - r - 3, s.x + r + 3, s.y + r + 3]);
+      const clear = (x0: number, y0: number, x1: number, y1: number) => x0 >= 2 && y0 >= 2 && x1 <= w - 2 && y1 <= hgt - 2 && taken.every(([a0, b0, a1, b1]) => x1 <= a0 || x0 >= a1 || y1 <= b0 || y0 >= b1);
+      for (const s of spots) {
+        const k = c.knobs[s.i];
+        k.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`;
+        const leader = c.leaders[s.i];
+        if (Math.hypot(s.x - s.ax, s.y - s.ay) > r * 0.6) {
+          const [line, dot] = leader.children as unknown as [SVGLineElement, SVGCircleElement];
+          line.setAttribute("x1", s.ax.toFixed(1));
+          line.setAttribute("y1", s.ay.toFixed(1));
+          line.setAttribute("x2", s.x.toFixed(1));
+          line.setAttribute("y2", s.y.toFixed(1));
+          dot.setAttribute("cx", s.ax.toFixed(1));
+          dot.setAttribute("cy", s.ay.toFixed(1));
+          leader.style.display = "";
+        } else leader.style.display = "none";
+      }
+      // The names: outward from the middle of the picture first, so they cover the yard rather than the deck.
+      for (const s of [...spots].sort((p, q) => p.rank - q.rank)) {
+        const tag = c.knobLabels[s.i];
+        const lw = Number(tag.dataset.w) || 60;
+        const lh = 20;
+        const right: [number, number] = [s.x + r + 5, s.y - lh / 2];
+        const left: [number, number] = [s.x - r - 5 - lw, s.y - lh / 2];
+        const above: [number, number] = [s.x - lw / 2, s.y - r - 5 - lh];
+        const below: [number, number] = [s.x - lw / 2, s.y + r + 5];
+        const sides = s.x >= w / 2 ? [right, left, above, below] : [left, right, above, below];
+        const spot = sides.find(([x, y]) => clear(x, y, x + lw, y + lh));
+        if (spot) {
+          tag.style.transform = `translate(${spot[0].toFixed(1)}px, ${spot[1].toFixed(1)}px)`;
+          tag.style.display = "block";
+          taken.push([spot[0] - 2, spot[1] - 2, spot[0] + lw + 2, spot[1] + lh + 2]);
+        } else tag.style.display = "none";
+      }
     };
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
