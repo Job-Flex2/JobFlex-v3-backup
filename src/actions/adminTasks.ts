@@ -20,7 +20,7 @@ import { appBaseUrl } from "@/lib/appUrl";
 import { sendTaskNotices } from "@/lib/adminTasks/mail";
 import { PictureError, removeTaskPicture } from "@/lib/adminTasks/pictures";
 import { addMember, removeMember, sendTaskTexts, teamView, testMember, textingStatus, updateMember, type TeamWrite } from "@/lib/adminTasks/team";
-import { isAlertKey, type AlertKey, type TeamMemberView, type TextingStatus } from "@/lib/adminTasks/teamShared";
+import { cleanHours, isAlertKey, type AlertKey, type TeamMemberView, type TextingStatus } from "@/lib/adminTasks/teamShared";
 import { alertSettings, setSurgeThreshold, SURGE_DEFAULT } from "@/lib/adminAlerts";
 import {
   TaskError,
@@ -191,9 +191,12 @@ export async function addAdminTeamMember(name: string, phone: string): Promise<T
   return teamRun((actor) => addMember(clip(name, 120), clip(phone, 40), isConsoleEmail(actor.email) ? null : actor.name));
 }
 
-export async function updateAdminTeamMember(memberId: string, patch: { name?: string; phone?: string; on?: boolean; quietNights?: boolean; alerts?: string[]; alertSet?: { key: string; on: boolean } }): Promise<TeamResult> {
+export async function updateAdminTeamMember(memberId: string, patch: { name?: string; phone?: string; on?: boolean; hours?: { from: number; to: number } | null; alerts?: string[]; alertSet?: { key: string; on: boolean } }): Promise<TeamResult> {
   if (!isId(memberId)) return { ok: false, error: "That person isn't on the team any more." };
   const p = patch && typeof patch === "object" ? patch : {};
+  // Texting hours: null = any time; two different whole hours, else the box says so.
+  const hours = p.hours === null ? null : p.hours !== undefined ? cleanHours(p.hours) : undefined;
+  if (p.hours !== undefined && p.hours !== null && !hours) return { ok: false, error: "Pick two different hours — texts come from the first until the second." };
   const alerts = Array.isArray(p.alerts) ? (p.alerts.filter(isAlertKey) as AlertKey[]).slice(0, 8) : undefined;
   const alertSet = p.alertSet && isAlertKey(p.alertSet.key) && typeof p.alertSet.on === "boolean" ? { key: p.alertSet.key as AlertKey, on: p.alertSet.on } : undefined;
   return teamRun(() =>
@@ -201,7 +204,7 @@ export async function updateAdminTeamMember(memberId: string, patch: { name?: st
       name: typeof p.name === "string" ? clip(p.name, 120) : undefined,
       phone: typeof p.phone === "string" ? clip(p.phone, 40) : undefined,
       on: typeof p.on === "boolean" ? p.on : undefined,
-      quietNights: typeof p.quietNights === "boolean" ? p.quietNights : undefined,
+      hours,
       alerts,
       alertSet,
     }),

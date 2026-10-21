@@ -455,6 +455,10 @@
 :global(.jf-blueprint .content) .tdWho .conf { margin-right: 6px; }
 
 /* ── the platform-alert picks and the traffic-surge dial (team sheet, 2026-10-17) ── */
+:global(.jf-blueprint .content) .tmHours { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 8px; font-size: 13px; color: var(--ink); }
+:global(.jf-blueprint .content) .tmHours small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+:global(.jf-blueprint .content) .tmSel { height: 30px; padding: 0 8px; border: 1px solid var(--line, #d8d6cf); border-radius: 6px; background: var(--paper, #fff); color: var(--ink); font: inherit; font-size: 13px; }
+:global(.jf-blueprint .content) .tmSel:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 1px; }
 :global(.jf-blueprint .content) .tmAlerts { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line, #d8d6cf); }
 :global(.jf-blueprint .content) .tmAlertsHead { margin: 0 0 6px; font-size: 12px; color: var(--muted-foreground, #6b6b66); }
 :global(.jf-blueprint .content) .tmDial { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line, #d8d6cf); border-radius: 10px; font-size: 13px; }

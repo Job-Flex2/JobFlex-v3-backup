@@ -141,6 +141,19 @@ export function heldDigestText(org: string | null, lines: string[]): string {
   return brand(org, `overnight — ${clean.map((l) => l.replace(/\.$/, "")).join(" · ")}.`);
 }
 
+/** JobFlex's own texts held outside someone's texting hours (the team's alerts), folded into one text when the hours
+ *  start: each line once without its link, every page they point to once at the end. */
+export function jobflexRoundupText(lines: string[]): string {
+  const links: string[] = [];
+  const words = lines.map((raw) => {
+    const l = raw.replace(/^JobFlex:\s*/, "").replace(/\s+/g, " ").trim();
+    for (const u of l.match(/https?:\/\/\S+/g) ?? []) if (!links.includes(u)) links.push(u);
+    return l.replace(/\s*(?:—\s*)?(?:Live map:\s*)?https?:\/\/\S+/g, "").replace(/[\s.]+$/, "");
+  });
+  const head = words.length === 1 ? words[0] : `${words.length} alerts — ${words.join(" · ")}`;
+  return clip(`JobFlex: ${head}.${links.length ? ` ${links.join(" ")}` : ""}`);
+}
+
 export function welcomeText(org: string | null): string {
   return brand(org, "will text you job alerts through JobFlex. Reply STOP to opt out, HELP for help.");
 }

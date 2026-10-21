@@ -7,9 +7,14 @@ import "server-only";
 // log-ins; each member ticks which of these they want. Texts leave from JobFlex's own
 // number through lib/sms/send (kind "jobflex-admin-alert"), which already honours STOP,
 // drops duplicates inside ten minutes and caps the day — so a signup storm cannot run
-// up the bill. Quiet nights are the task texts' rule: a member who keeps quiet nights
-// is skipped 9 PM–7 AM (an alert about "right now" is noise by morning), the others
-// hear at any hour.
+// up the bill. Texting hours (2026-10-20/21, owner: "last two sign-ups didn't come by
+// text", then "set the time to receive texts — 24 hours or a limit, default 24 hours"):
+// everyone hears at any hour unless they set "only between" two hours on their card;
+// an alert outside them waits until their hours start, folded into one text with any
+// others (lib/sms/send holds them, the hourly sms-crew cron sends them). Night alerts
+// used to be DROPPED with no trace under a quiet-nights switch that was on for
+// everyone. Only the traffic surge ("busy right now") is skipped outside the hours:
+// by then it is noise.
 //
 // The traffic surge is the one alert with its own state: /api/cron/traffic-surge counts
 // the last five minutes' visitors (the live map's own "online now" window) and texts
@@ -22,7 +27,7 @@ import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { sendText } from "@/lib/sms/send";
 import { readMembers } from "@/lib/adminTasks/teamStore";
-import { isQuietHour, type AlertKey, type TeamMember } from "@/lib/adminTasks/teamShared";
+import { holdsOffHours, hoursOpenAt, inHours, type AlertKey } from "@/lib/adminTasks/teamShared";
 import { fetchLiveEvents } from "@/lib/traffic-server";
 
 const KIND = "jobflex-admin-alert";
@@ -66,19 +71,14 @@ export async function setSurgeThreshold(n: number): Promise<AlertSettings> {
   return next;
 }
 
-/** Who hears about `key` right now: on, subscribed, and not inside their quiet night. */
-function hearers(members: TeamMember[], key: AlertKey, now = new Date()): TeamMember[] {
-  const quiet = isQuietHour(now);
-  return members.filter((m) => m.on && (m.alerts ?? []).includes(key) && !(m.quietNights && quiet));
-}
-
-/** Text everyone subscribed to `key`. Never throws; a dead transport loses a text, not the caller.
- *  `once`: a SyncState key claimed before the first text — a webhook Stripe delivers again
- *  (a retry after a 500, a duplicate event for the same charge) texts nobody twice. Claimed
- *  only when someone is listening, so an alert nobody ticked writes nothing. */
+/** Text everyone subscribed to `key` — now, or when their texting hours start. Never throws; a dead
+ *  transport loses a text, not the caller. `once`: a SyncState key claimed before the first text — a webhook Stripe
+ *  delivers again (a retry after a 500, a duplicate event for the same charge) texts nobody twice. Claimed only when
+ *  someone is listening, so an alert nobody ticked writes nothing. Returns the texts sent now. */
 export async function fireAdminAlert(key: AlertKey, body: string, once?: string): Promise<number> {
   try {
-    const list = hearers(await readMembers(), key);
+    const now = new Date();
+    const list = (await readMembers()).filter((m) => m.on && (m.alerts ?? []).includes(key) && (inHours(m.hours, now) || holdsOffHours(key)));
     if (!list.length) return 0;
     if (once) {
       try {
@@ -88,11 +88,14 @@ export async function fireAdminAlert(key: AlertKey, body: string, once?: string)
       }
     }
     let sent = 0;
+    let held = 0;
     for (const m of list) {
-      const r = await sendText({ organizationId: null, to: m.phone, body, kind: KIND }).catch(() => null);
+      const later = inHours(m.hours, now) ? null : hoursOpenAt(m.hours, now);
+      const r = await sendText({ organizationId: null, to: m.phone, body, kind: KIND, ...(later ? { sendAfter: later } : {}) }).catch(() => null);
       if (r && r.ok && r.status === "SENT") sent += 1;
+      else if (r && r.ok && r.status === "HELD") held += 1;
     }
-    if (list.length) console.info(`[adminAlerts] ${key}: ${sent}/${list.length} texted — ${body.slice(0, 80)}`);
+    console.info(`[adminAlerts] ${key}: ${sent}/${list.length} texted${held ? `, ${held} held for their texting hours` : ""} — ${body.slice(0, 80)}`);
     return sent;
   } catch (err) {
     console.warn("[adminAlerts] not sent:", err instanceof Error ? err.message : err);
