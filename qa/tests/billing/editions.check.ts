@@ -1,13 +1,13 @@
 // THE EDITIONS (2026-10-11, lib/editions): the doors of one platform. The
-// cookie's values, who holds the Deck Studio (owner, 2026-10-20: the trial,
-// the $45/mo Deck Studio plan, the Advanced plan, the $45/mo add-on, a grant,
-// a platform admin), how far
+// cookie's values, who holds the Deck Studio (owner, 2026-10-21: the trial,
+// every paid plan, a Custom plan with the Deck estimator page, an older add-on
+// line, a grant, a platform admin), how far
 // the studio opens to everyone else, who may switch, where a sign-in lands,
 // what the deck workspace's sidebar keeps and drops, and the sign-up link each
 // door writes. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/billing/editions.check.ts
 import * as editions from "../../../src/lib/editions";
-import { EDITIONS, canSwitch, editionLevel, editionOnly, hasEdition, homeFor, navAllowed, parseDoor, registerHref, unlockedByEdition, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
+import { EDITIONS, canSwitch, editionLevel, hasEdition, homeFor, navAllowed, parseDoor, registerHref, unlockedByEdition, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
 import { DECK_ADDON_CENTS, addonHeld, deckAddonCents, deckAddonPriceWords, deckAddonShortWords, deckTrialWords, isDeckAddonLine, parseDeckAddonRecord, planLine, planLines } from "../../../src/lib/deckAddon";
 import { annualDeal, dealWords, savedWords } from "../../../src/lib/planDeal";
 import { autoPlanFor } from "../../../src/lib/signupAutoPlan";
@@ -25,7 +25,7 @@ const facts = (over: Partial<AccessFacts>): AccessFacts => ({ lapsed: false, ...
 console.log("── the door cookie");
 check("deck, platform and jobflex parse; junk does not; no deck door while it is coming soon", parseDoor("deck", true) === "deck" && parseDoor(" DECK ", true) === "deck" && parseDoor("deck", false) === null && parseDoor("platform") === "platform" && parseDoor("jobflex") === "platform" && parseDoor("roof") === null && parseDoor(null) === null);
 
-console.log("── WHO HOLDS DECK STUDIO (owner-locked 2026-10-20) — the seven cases");
+console.log("── WHO HOLDS DECK STUDIO (owner, 2026-10-21) — the cases");
 const trial = facts({ trialing: true });
 const paid = facts({});
 const paidAddon = facts({ addon: true });
@@ -33,47 +33,41 @@ const admin = facts({ fullAccess: true });
 const grant = facts({ granted: true });
 const trialEnded = facts({ lapsed: true });
 check("1. the trial: full, without the add-on", editionLevel(trial) === "full" && hasEdition(trial));
-check("2. a paid plan without the add-on: preview", editionLevel(paid) === "preview" && !hasEdition(paid));
-check("3. a paid plan with the add-on: full", editionLevel(paidAddon) === "full");
+check("2. a paid plan: full — every plan carries the Deck estimator", editionLevel(paid) === "full" && hasEdition(paid));
+check("3. a paid plan with an older add-on line: full too", editionLevel(paidAddon) === "full");
 check("4. a platform admin (hasFullAccess): full — whatever the plan, lapsed too, and while it is coming soon", editionLevel(admin) === "full" && editionLevel(facts({ fullAccess: true, lapsed: true })) === "full" && editionLevel(admin, "deck", false) === "full");
 check("5. a grant (MANUAL): full", editionLevel(grant) === "full");
 check("6. an ended trial (the Free plan): preview — not the whole studio, not a closed page", editionLevel(trialEnded) === "preview" && editionLevel(facts({ lapsed: true, trialing: true })) === "preview");
-check("7. the add-on taken off: preview again", editionLevel({ ...paidAddon, addon: false }) === "preview");
-check("8. Custom with the deck page: full — the add-on bought as a page", editionLevel(facts({ customDeckPage: true })) === "full" && hasEdition(facts({ customDeckPage: true })));
-check("9. Custom without the deck page: preview", editionLevel(facts({ customDeckPage: false })) === "preview");
-check("a lapsed Custom plan's deck page opens nothing", editionLevel(facts({ lapsed: true, customDeckPage: true })) === "preview");
+check("7. the add-on taken off a paid plan: still full", editionLevel({ ...paidAddon, addon: false }) === "full");
+check("8. Custom with the deck page: full", editionLevel(facts({ customPlan: true, customDeckPage: true })) === "full" && hasEdition(facts({ customPlan: true, customDeckPage: true })));
+check("9. Custom without the deck page: preview", editionLevel(facts({ customPlan: true, customDeckPage: false })) === "preview" && !hasEdition(facts({ customPlan: true })));
+check("a Custom plan's trial holds it without the page", editionLevel(facts({ customPlan: true, trialing: true })) === "full");
+check("a lapsed Custom plan's deck page opens nothing", editionLevel(facts({ lapsed: true, customPlan: true, customDeckPage: true })) === "preview");
 check("a lapsed plan's stale add-on record opens nothing", editionLevel(facts({ lapsed: true, addon: true })) === "preview");
 check("while it is coming soon: closed for everyone but an admin — the trial, the add-on and a grant included", editionLevel(paid, "deck", false) === "none" && editionLevel(trial, "deck", false) === "none" && editionLevel(paidAddon, "deck", false) === "none" && editionLevel(grant, "deck", false) === "none");
 check("the platform edition is everyone's", hasEdition(facts({ lapsed: true }), "platform"));
 
-console.log("── the Deck Studio plan and Advanced carry it (owner, 2026-10-20)");
-const deckPlan = facts({ deckPlan: true });
-check("the Deck Studio plan: full, its own workspace only, no switch", editionLevel(deckPlan) === "full" && editionOnly(deckPlan) && workspaceFor(deckPlan, null) === "deck" && workspaceFor(deckPlan, "platform") === "deck" && !canSwitch(deckPlan));
-check("Advanced: full, the whole platform, may switch", editionLevel(facts({ advancedPlan: true })) === "full" && !editionOnly(facts({ advancedPlan: true })) && workspaceFor(facts({ advancedPlan: true }), null) === "platform" && canSwitch(facts({ advancedPlan: true })));
-check("a lapsed Deck Studio or Advanced plan opens nothing", editionLevel(facts({ lapsed: true, deckPlan: true })) === "preview" && editionLevel(facts({ lapsed: true, advancedPlan: true })) === "preview" && !editionOnly(facts({ lapsed: true, deckPlan: true })));
-check("an admin in a Deck Studio plan's organization keeps the whole map", !editionOnly(facts({ deckPlan: true, fullAccess: true })));
-
-console.log("── the old plan branches stay gone");
-const gone = ["isEditionPlan", "upgradeTargetFrom", "planComingSoon", "featureLineForSale", "EDITION_FOR_EVERY_ACCOUNT", "EDITION_IN_TRIAL"].filter((k) => k in editions);
+console.log("── the old plan branches stay gone (and the 2026-10-20 plan with them)");
+const gone = ["isEditionPlan", "editionOnly", "upgradeTargetFrom", "planComingSoon", "featureLineForSale", "EDITION_FOR_EVERY_ACCOUNT", "EDITION_IN_TRIAL"].filter((k) => k in editions);
 check("no deck plan, no feature-line or custom-page rule, no every-account switch is exported", gone.length === 0, gone.join(" "));
 check("the deck edition names no plans or feature words", !("planSlugs" in EDITIONS.deck) && !("featureWords" in EDITIONS.deck) && !("customPage" in EDITIONS.deck));
 
-console.log("── the workspace, the switch and the home");
-check("the deck door opens the studio's workspace only for a holder; a preview works on the platform map", workspaceFor(paidAddon, "deck") === "deck" && workspaceFor(trial, "deck") === "deck" && workspaceFor(admin, "deck") === "deck" && workspaceFor(paid, "deck") === "platform" && workspaceFor(paidAddon, "platform") === "platform" && workspaceFor(paidAddon, null) === "platform");
-check("holders may switch; a preview and a lapsed account may not", canSwitch(paidAddon) && canSwitch(trial) && canSwitch(grant) && !canSwitch(paid) && !canSwitch(trialEnded));
-check("a sign-in lands where the door says", homeFor("deck") === "/dashboard/deck-estimator" && homeFor("platform") === "/dashboard" && homeFor(null) === "/dashboard");
+console.log("── one door (owner, 2026-10-21): no workspace switch, no deck sign-in");
+check("every request works on the whole platform, whatever the door", workspaceFor(paidAddon, "deck") === "platform" && workspaceFor(trial, "deck") === "platform" && workspaceFor(admin, "deck") === "platform" && workspaceFor(paid, null) === "platform");
+check("nobody switches", !canSwitch(paidAddon) && !canSwitch(trial) && !canSwitch(grant) && !canSwitch(paid) && !canSwitch(trialEnded));
+check("a sign-in lands on the overview, whichever door", homeFor("deck") === "/dashboard" && homeFor("platform") === "/dashboard" && homeFor(null) === "/dashboard");
 
-console.log("── the sign-up and the plan surfaces: the deck is an add-on on any plan");
+console.log("── the sign-up and the plan surfaces: the deck is a plan's row like any estimator");
 const signupPlans = [
   { slug: "starter", features: ["Proposals"], priceCents: 4500 },
   { slug: "professional", features: ["Everything in Starter"], priceCents: 9500, highlight: true },
   { slug: "enterprise", features: ["Everything in Professional", "Deck Studio"], priceCents: 19900 },
 ];
 const deckPick = autoPlanFor({ plans: signupPlans, tool: "deck" });
-check("a deck ad never moves the sign-up off Professional, even onto a plan whose features name Deck Studio", deckPick?.slug === "professional" && deckPick?.why === "default", JSON.stringify(deckPick));
-check("Deck Studio is an add-on tool: never marked on a plan's row, and the line says the trial includes it", isAddOnTool("deck") && !isAddOnTool("roof") && spotlightRow(["Deck Studio", "Roof estimator"], "deck") === null && spotlightRow(["Roof estimator"], "roof") === "Roof estimator" && spotlightLine("deck", true) === "You came for Deck Studio — the trial includes it, then it's $45/month on any plan.");
+check("a deck ad picks the cheapest plan whose row names the deck, like any estimator", deckPick?.slug === "enterprise", JSON.stringify(deckPick));
+check("Deck Studio is no add-on tool: marked on a plan's row like the roof", !isAddOnTool("deck") && !isAddOnTool("roof") && spotlightRow(["Deck estimator", "Roof estimator"], "deck") === "Deck estimator" && spotlightRow(["Roof estimator"], "roof") === "Roof estimator" && spotlightLine("deck", true) === "You came for Deck Studio — it's marked on every plan below.");
 
-console.log("── Before you go names the add-on when it is on the plan");
+console.log("── Before you go names an older add-on line when one is still on the plan");
 const withDeck = freePlanLosses({ pages: null, planProposals: null, freeProposals: 5, deckAddon: "$45/mo" });
 const without = freePlanLosses({ pages: null, planProposals: null, freeProposals: 5 });
 check("the add-on's line comes first, in the deck colour, and the list stays at five", withDeck[0]?.text === "Deck Studio — your $45/mo add-on ends with the plan" && withDeck[0]?.tone === "deck" && withDeck.length === 5, JSON.stringify(withDeck[0]));
@@ -107,7 +101,7 @@ check("no yearly price, a dearer year, or a free plan: no deal", annualDeal(8900
 
 console.log("── THE ADD-ON (lib/deckAddon)");
 check("$45 a month; $450 a year (ten months for twelve, the custom plan's rule)", DECK_ADDON_CENTS === 4500 && deckAddonCents("MONTH") === 4500 && deckAddonCents("YEAR") === 45000 && deckAddonPriceWords("MONTH") === "$45/month" && deckAddonPriceWords("YEAR") === "$450/year" && deckAddonShortWords("MONTH") === "$45/mo" && deckAddonShortWords("YEAR") === "$450/yr");
-check("the trial's words, as the owner wrote them", deckTrialWords() === "Included in your trial. After the trial, Deck Studio is a $45/mo add-on." && deckTrialWords("YEAR") === "Included in your trial. After the trial, Deck Studio is a $450/yr add-on.");
+check("the trial's words", deckTrialWords() === "Included in your trial. After the trial, Deck Studio comes with your plan." && deckTrialWords("YEAR") === deckTrialWords());
 const planItem = { id: "si_plan", price: { id: "price_pro", metadata: { planSlug: "professional" } } };
 const addonItem = { id: "si_deck", price: { id: "price_deck", metadata: { jfKind: "deck-addon", interval: "MONTH" } } };
 const pageItem = { id: "si_page", price: { id: "price_page", metadata: { jfKind: "custom-page" } } };

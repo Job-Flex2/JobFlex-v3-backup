@@ -92,7 +92,6 @@ import { UpdatePaymentCardButton } from "@/components/billing/PlanChangeNotes";
 import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgrade";
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import "./mobile-subscription.css";
-import { DeckAddonCard } from "@/components/v3/deck-addon/deck-addon";
 
 /** One enforced-limit row from the limits engine (finite caps only). */
 export interface MobileUsageRow {
@@ -231,6 +230,7 @@ export function MobileSubscription({
           yearlyPriceCents: p.yearlyPriceCents,
           trialDays: p.trialDays,
           features: p.features,
+          limits: p.limits,
           highlight: p.highlight,
         })),
     [plans],
@@ -438,9 +438,6 @@ export function MobileSubscription({
               </div>
             ) : null}
           </section>
-
-          {/* The Deck Studio add-on (2026-10-19) — reads its own state. */}
-          <DeckAddonCard />
 
           <section className="jfms-card" aria-labelledby="jfmsBillingInfoT">
             <div className="jfms-cardHead">

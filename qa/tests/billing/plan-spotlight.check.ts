@@ -22,9 +22,9 @@ check("a trade without an ad tool marks nothing", spotlightFromTrade("plumbing")
 check("the tool on the link wins over the trade; no link, the trade; neither, nothing", spotlightFor({ tool: "aidesk", industry: "roofing" }) === "aidesk" && spotlightFor({ industry: "roofing" }) === "roof" && spotlightFor({ tool: "nope", industry: "plumbing" }) === null && spotlightFor({}) === null);
 
 console.log("── the row it marks");
-const rows = ["Proposal management", "Client management", "Smart proposal generation", "Roof estimator", "Fence estimator", "HVAC estimator", "Blueprint estimator", "Deck Studio", "AI phone answering", "Unlimited users"];
+const rows = ["Proposal management", "Client management", "Smart proposal generation", "Roof estimator", "Fence estimator", "HVAC estimator", "Blueprint estimator", "Deck estimator", "AI phone answering", "Unlimited users"];
 check("each tool finds its line however the catalog words it", spotlightRow(rows, "roof") === "Roof estimator" && spotlightRow(rows, "fence") === "Fence estimator" && spotlightRow(rows, "hvac") === "HVAC estimator" && spotlightRow(rows, "smart") === "Smart proposal generation" && spotlightRow(rows, "blueprint") === "Blueprint estimator" && spotlightRow(rows, "aidesk") === "AI phone answering");
-check("Deck Studio is never a plan's line, whatever the catalog says (owner-locked 2026-10-20: an add-on on any plan)", spotlightRow(rows, "deck") === null && withSpotlightFirst(rows, "deck").join("|") === rows.join("|"));
+check("the deck finds its row like any estimator (owner, 2026-10-21)", spotlightRow(rows, "deck") === "Deck estimator" && withSpotlightFirst(rows, "deck")[0] === "Deck estimator");
 check("'AI desk' and 'receptionist' wordings also read as the desk", spotlightRow(["AI desk"], "aidesk") === "AI desk" && spotlightRow(["Phone receptionist"], "aidesk") === "Phone receptionist");
 check("a catalog without the line marks nothing", spotlightRow(["Proposal management", "CRM"], "roof") === null && spotlightRow(rows, null) === null);
 const first = withSpotlightFirst(rows, "blueprint");

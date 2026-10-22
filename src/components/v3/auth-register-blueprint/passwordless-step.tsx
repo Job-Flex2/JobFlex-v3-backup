@@ -698,19 +698,12 @@ export function PasswordlessStep({
           </svg>
           Sign up with Google
         </button>
-        {/* SAY WHO EACH WAY IS FOR (owner, 2026-10-15: "people think the Google button is for those who already have
-            an account"): Google signs up too, and anyone else uses their email — whatever the address. */}
-        <p className={css.googleSub} id="googleSub">
-          Gmail or any Google account · one tap, nothing to type
-        </p>
+        {/* The lines naming the email providers under the Google button and the divider are gone (owner, 2026-10-21). */}
         {inApp ? <HandoffHelp handoff={handoff} /> : null}
 
         <div className="divider">
           <span className="kpi-lbl">No Google? Use any email</span>
         </div>
-        <p className={css.anyEmail} id="anyEmail">
-          Yahoo, Outlook, iCloud, AOL, your work email — any address works.
-        </p>
 
         {/* WITHOUT JAVASCRIPT (2026-10-19) the short sign-up still works: the form posts to ./checkout, whose answer is
             Stripe's card page (or step 1 again with the reason). With it, onContinue takes over and the same server

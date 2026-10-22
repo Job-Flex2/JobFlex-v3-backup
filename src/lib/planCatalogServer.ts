@@ -14,7 +14,7 @@ import { db } from "@/lib/db";
 import { PLAN_TIERS, type Plan } from "@/lib/entitlements";
 import { parsePlanLimits } from "@/lib/planLimits";
 import { planDisplayName, type PlanDTO } from "@/lib/planCatalog";
-import { CUSTOM_PLAN_TIER, DECK_PLAN_TIER, isDeckPlan } from "@/lib/customPlan";
+import { CUSTOM_PLAN_TIER } from "@/lib/customPlan";
 
 /** Canonical parser for the PricingPlan.features JSON column. */
 export function parseFeatures(raw: string | null | undefined): string[] {
@@ -157,8 +157,6 @@ export async function getOrgPlanContext(organizationId: string): Promise<{
     ? (upper as Plan)
     : upper === "CUSTOM"
       ? CUSTOM_PLAN_TIER
-      : isDeckPlan(upper)
-      ? DECK_PLAN_TIER
       : plan
       ? "ENTERPRISE"
       : "FREE";

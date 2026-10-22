@@ -28,6 +28,8 @@
 //     next cycle bills the new total — no second charge for the base.
 
 import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { rowUsage } from "@/lib/planRowUsage";
+import type { PlanLimits } from "@/lib/planLimits";
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
 import { annualDeal, dealDollars, offersYearly, planTerm, sharedDealWords, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
@@ -59,6 +61,8 @@ export type UpgradePlan = {
   yearlyPriceCents: number | null;
   trialDays: number;
   features: string[];
+  /** The plan's caps (lib/planLimits) — the uses the cards print before each row (lib/planRowUsage). */
+  limits: PlanLimits;
   highlight: boolean;
 };
 
@@ -642,6 +646,8 @@ export function UpgradeContent({
                           under the name when the line cannot hold both, and the name
                           never breaks inside a word. */}
                       <span className="jf-up-ft">
+                        {/* The uses before the thing (lib/planRowUsage, owner 2026-10-21): the plan's cap, in blue. */}
+                        {has && rowUsage(f, p.limits) ? <b className="jf-up-use">{rowUsage(f, p.limits)!.words}</b> : null}
                         <span className="jf-up-fn">{f}</span>
                         {lit ? <span className="jf-up-spot-tag">{has ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
                       </span>

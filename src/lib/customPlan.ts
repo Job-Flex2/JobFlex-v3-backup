@@ -66,6 +66,10 @@ export const CUSTOM_PAGES: CustomPage[] = [
     aliases: ["/mobile-video-estimator-v1"] },
   { id: "hvac-estimator", label: "HVAC estimator", note: "Load, unit and price for a replacement", href: "/dashboard/hvac-estimator",
     aliases: [] },
+  // The Deck estimator is a page again (owner, 2026-10-21): the whole Deck Studio, $10/mo like the others. Its
+  // inventory sits under its prefix. (Lawn and the Design studio join here once they leave the admin preview.)
+  { id: "deck-estimator", label: "Deck estimator", note: "Size it, frame it to code, build it in 3D, price the package", href: "/dashboard/deck-estimator",
+    aliases: [] },
   { id: "calendar", label: "Calendar", note: "Scheduling and crew days", href: "/dashboard/calendar",
     aliases: ["/v3/calendar-a", "/mobile-calendar-v2"] },
   { id: "leads", label: "Leads", note: "Inbox and platform leads", href: "/dashboard/leads",
@@ -120,23 +124,11 @@ export const CUSTOM_BASE_FEATURES = [
   "Jobs, messages & financials",
 ];
 
-/** Pages no longer sold but still read off a stored selection, so a plan that holds one keeps its price.
- *  The Deck estimator (2026-10-19): not sold as a page any more — Deck Studio is its own $45/month add-on on
- *  any plan (lib/deckAddon). A stored selection still reads (the plan keeps its price) and counts as the add-on
- *  bought as a page: the whole Deck Studio, no second $45 line (owner, 2026-10-20 — lib/editions). */
+/** The Custom plan's page that is the whole Deck Studio (lib/editions hasEdition). Off sale 2026-10-19/20, on
+ *  sale again 2026-10-21 (owner): a plan that held it through the gap kept its price. */
 export const CUSTOM_DECK_PAGE: CustomPageId = "deck-estimator";
-const RETIRED_PAGES: readonly CustomPageId[] = [CUSTOM_DECK_PAGE];
-
-/** THE DECK STUDIO PLAN (owner, 2026-10-20): its own $45/month plan on the pricing page — the Deck Studio and the
- *  office around it (the Deck Studio workspace, lib/editions), no other estimator. It is gated like a Custom plan
- *  whose pages are fixed: these open, every other add-on page stays closed (lib/customPageAccess). Its limits are
- *  its own catalog row's; its feature tier is Professional's, like the Custom plan's. */
-export const DECK_PLAN_SLUG = "deck-studio";
-export const DECK_PLAN_PAGES: readonly CustomPageId[] = ["calendar", "leads", "workers", "company", "phone", CUSTOM_DECK_PAGE];
-export const DECK_PLAN_TIER = "PROFESSIONAL" as const;
-export function isDeckPlan(slug: string | null | undefined): boolean {
-  return (slug ?? "").trim().toLowerCase() === DECK_PLAN_SLUG;
-}
+/** Pages no longer sold but still read off a stored selection, so a plan that holds one keeps its price. None today. */
+const RETIRED_PAGES: readonly CustomPageId[] = [];
 
 const VALID = new Set<string>([...CUSTOM_PAGES.map((p) => p.id), ...RETIRED_PAGES]);
 
@@ -191,9 +183,6 @@ export const DEFAULT_CUSTOM_TRIAL_DAYS = 7;
  *  bought, and the gate says so (upgrade-gate). Not a page href, so the nav
  *  and isCustomBlockedPath never match it. */
 export const PLAN_ENDED_MARK = "#plan-ended";
-/** A marker the blocked list carries on the Deck Studio plan (lib/customPlan DECK_PLAN_SLUG): its closed pages are
- *  opened by a bigger plan, not added one by one, and the gate says so. Not a page href either. */
-export const DECK_PLAN_MARK = "#deck-plan";
 
 export function blockedCustomHrefs(bought: readonly string[] | null | undefined): string[] {
   const have = new Set(normalizeCustomPages(bought));

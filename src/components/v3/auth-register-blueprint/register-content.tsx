@@ -29,6 +29,7 @@
 // No server action, API route or Prisma call was added or altered.
 
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
+import { rowUsage } from "@/lib/planRowUsage";
 import * as React from "react";
 import Link from "next/link";
 import type { Route } from "next";
@@ -2318,6 +2319,8 @@ export function RegisterContent({
                                 name when the line cannot hold both, and the name never
                                 breaks inside a word. */}
                             <span className="pw-ft">
+                              {/* The uses before the thing (lib/planRowUsage, owner 2026-10-21): the plan's cap, in blue. */}
+                              {included && rowUsage(f, p.limits) ? <b className="pw-use">{rowUsage(f, p.limits)!.words}</b> : null}
                               <span className="pw-fn">{f}</span>
                               {lit ? <span className="pw-spot-tag">{included ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
                             </span>

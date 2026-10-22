@@ -2977,7 +2977,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           <p className="v1-hint" data-deck-address-hint>The address sets the state&apos;s and the county&apos;s codes, and the lot on the permit set&apos;s site plan — where you also say which side of the house the deck is on.</p>
         </form>
         {preview ? (
-          <DeckPreviewBanner mode="preview" saved={viewOnly} interval={addonInterval} onAdd={() => askAddon(viewOnly ? "Change saved decks with Deck Studio" : "Add Deck Studio to your plan")}>
+          <DeckPreviewBanner mode="preview" saved={viewOnly} interval={addonInterval} onAdd={() => askAddon(viewOnly ? "Changing a saved deck takes a plan" : "Deck Studio comes with your plan")}>
             {viewOnly ? (
               <>
                 {permitHref ? <a href={permitHref} target="_blank" rel="noopener" data-deck-saved-print="permit">Permit sheet</a> : null}

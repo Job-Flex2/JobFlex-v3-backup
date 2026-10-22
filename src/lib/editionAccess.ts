@@ -1,7 +1,7 @@
 import "server-only";
 // WHAT AN ORGANIZATION MAY OPEN, BY EDITION (2026-10-11, lib/editions): the
 // facts are read off the subscription — whether the plan has lapsed, the free
-// trial, the Deck Studio and Advanced plans, the Deck Studio add-on, a
+// trial, the Custom plan and its Deck estimator page, an older add-on line, a
 // complimentary grant — and off the asking
 // user (hasFullAccess), and the pure rules decide. The door a browser chose is
 // a cookie.
@@ -11,8 +11,8 @@ import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { deckAddonHeld } from "@/lib/deckAddonBilling";
 import { hasFullAccess } from "@/lib/fullAccess";
 import { customDeckPageHeld } from "@/lib/customPageAccess";
-import { isDeckPlan } from "@/lib/customPlan";
-import { DOOR_COOKIE, EDITIONS, canSwitch, editionLevel, editionOnly, hasEdition, homeFor, parseDoor, workspaceFor, type AccessFacts, type Door, type EditionLevel, type Workspace } from "@/lib/editions";
+import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
+import { DOOR_COOKIE, canSwitch, editionLevel, hasEdition, homeFor, parseDoor, workspaceFor, type AccessFacts, type Door, type EditionLevel, type Workspace } from "@/lib/editions";
 
 /** `userId` undefined = the session's user (lib/fullAccess); null = nobody (the organization's own plan alone). */
 export async function editionFacts(organizationId: string, userId?: string | null): Promise<AccessFacts> {
@@ -29,11 +29,9 @@ export async function editionFacts(organizationId: string, userId?: string | nul
     // The Custom plan's deck page, bought: the add-on as a page (lib/editions).
     customDeckPageHeld(organizationId, sub?.plan ?? null),
   ]);
-  // The plans that carry the studio (lib/editions): the Deck Studio plan, and Advanced (slug "enterprise").
-  const plan = ctx.rawPlan === "NONE" ? null : ctx.rawPlan;
-  const deckPlan = !lapsed && isDeckPlan(plan);
-  const advancedPlan = !lapsed && (plan ?? "").toUpperCase() === "ENTERPRISE";
-  return { lapsed, trialing: !lapsed && sub?.status === "TRIALING", addon, customDeckPage, deckPlan, advancedPlan, granted: !lapsed && sub?.provider === "MANUAL", fullAccess };
+  // The Custom plan holds the studio only with its Deck estimator page (lib/editions).
+  const customPlan = !lapsed && (ctx.rawPlan ?? "").toLowerCase() === CUSTOM_PLAN_SLUG;
+  return { lapsed, trialing: !lapsed && sub?.status === "TRIALING", addon, customPlan, customDeckPage, granted: !lapsed && sub?.provider === "MANUAL", fullAccess };
 }
 
 export async function readDoor(): Promise<Door | null> {
@@ -61,5 +59,5 @@ export interface WorkspaceView {
 
 export async function workspaceOf(organizationId: string): Promise<WorkspaceView> {
   const [facts, door] = await Promise.all([editionFacts(organizationId), readDoor()]);
-  return { facts, door, workspace: workspaceFor(facts, door), deckAccess: hasEdition(facts, "deck"), deckLevel: editionLevel(facts, "deck"), switchable: canSwitch(facts), home: editionOnly(facts) ? EDITIONS.deck.homeHref : homeFor(door) };
+  return { facts, door, workspace: workspaceFor(facts, door), deckAccess: hasEdition(facts, "deck"), deckLevel: editionLevel(facts, "deck"), switchable: canSwitch(facts), home: homeFor(door) };
 }

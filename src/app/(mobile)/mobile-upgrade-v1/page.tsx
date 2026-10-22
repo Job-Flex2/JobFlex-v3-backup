@@ -114,6 +114,7 @@ export default async function MobileUpgradeV1Page({
       yearlyPriceCents: p.yearlyPriceCents,
       trialDays: p.trialDays,
       features: p.features,
+      limits: p.limits,
       highlight: p.highlight,
     }));
 
