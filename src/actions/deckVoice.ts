@@ -5,8 +5,8 @@
 // read comes here: the AI reads it into the same commands (checked against lib/deck/voice/schema before they go back —
 // the browser runs them through the same engine as everything else), and the reading is kept as the shop's own phrase,
 // so the next time it is understood at once, offline. The shop's memory — taught phrases, the prices of things the
-// studio cannot draw, the wishes — is read and written here too. Behind the studio's design-time gate (Deck Studio or
-// its preview): talking designs, it saves nothing a preview may not.
+// studio cannot draw, the wishes — is read and written here too. Behind the WHOLE studio only (2026-10-22): the AI
+// reading is a paid OpenAI call, so a preview (no add-on) gets the browser-side rules alone, never the model.
 
 import { NoOrgError, UnauthorizedError, requireEstimatorOrManager } from "@/lib/orgContext";
 import { deckStudioAccess } from "@/lib/deck/access";
@@ -29,6 +29,7 @@ async function gate(): Promise<Gate> {
     const ctx = await requireEstimatorOrManager();
     const level = await deckStudioAccess(ctx.user, ctx.organizationId);
     if (level === "none") return { ok: false, error: "Deck Studio isn't open on this account." };
+    if (level !== "full") return { ok: false, error: "Talking to Deck Studio is part of Deck Studio — add it to your plan ($49/mo) from the Deck estimator." };
     return { ok: true, organizationId: ctx.organizationId };
   } catch (err) {
     if (err instanceof UnauthorizedError) return { ok: false, error: "Only an estimator, a manager or the owner can do this." };

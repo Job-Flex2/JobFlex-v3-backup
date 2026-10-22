@@ -5,7 +5,8 @@
 // to words — no prices, no measurements: lib/deck/voice/speak) is read here by OpenAI's speech model in the voice the
 // shop picked for its AI desk (Settings → AI desk; "marin" until one is picked) and played back on the page. The AI
 // desk's phone calls run through the voice server on Fly.io; a page needs no phone bridge, so this is the same voice,
-// straight from the app. The contractor's studio (signed in, Deck Studio open) or a client's deck link (its token).
+// straight from the app. The contractor's studio (signed in, the WHOLE Deck Studio — a preview gets the browser's
+// voice: this is paid OpenAI speech, 2026-10-22) or a client's deck link (its token).
 // Any failure answers an error and the page falls back to the browser's voice.
 
 import { NextResponse } from "next/server";
@@ -41,7 +42,7 @@ async function who(token: string | null): Promise<{ org: string; audience: "cont
   }
   try {
     const ctx = await requireEstimatorOrManager();
-    if ((await deckStudioAccess(ctx.user, ctx.organizationId)) === "none") return null;
+    if ((await deckStudioAccess(ctx.user, ctx.organizationId)) !== "full") return null;
     return { org: ctx.organizationId, audience: "contractor", key: `deckvoice-speak:${ctx.organizationId}` };
   } catch {
     return null;

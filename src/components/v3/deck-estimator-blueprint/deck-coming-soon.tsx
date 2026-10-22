@@ -2,12 +2,13 @@
 // edition, lib/editions) — what an account WITHOUT the whole Deck Studio sees
 // where the studio's pages would be (lib/deck/access). Since 2026-10-19 the
 // studio itself opens as a PREVIEW to every account (2026-10-20: the Free plan
-// too), so this is the deck inventory's page for a preview (a plan opens it —
-// owner, 2026-10-21: the Deck estimator comes with every plan), and the
-// studio's page while the edition is coming soon.
+// too), so this is the deck inventory's page for a preview (the $49/month
+// add-on), and the studio's page while the edition is coming soon.
 import Link from "next/link";
 import type { Route } from "next";
 import { isEditionOpen } from "@/lib/editions";
+import { deckAddonPriceWords, deckAddonShortWords } from "@/lib/deckAddon";
+import { DeckAddonButton } from "@/components/v3/deck-addon/deck-addon";
 import s from "./deck-studio.module.css";
 
 export function DeckComingSoon() {
@@ -25,7 +26,7 @@ export function DeckComingSoon() {
         <div className={s.head}>
           <div>
             <div className={s.cardTitle}>{open ? "Part of Deck Studio" : "Deck Studio — coming soon"}</div>
-            <div className={s.cardSub}>{open ? "The Deck estimator's preview is open to you. A plan opens the rest — every plan has it; on a Custom plan, add the Deck estimator page." : "It isn't open yet. Until it is, Smart Proposal prices a deck from a description."}</div>
+            <div className={s.cardSub}>{open ? `The Deck estimator's preview is open to you. Deck Studio — ${deckAddonPriceWords("MONTH")} on any plan — opens the rest.` : "It isn't open yet. Until it is, Smart Proposal prices a deck from a description."}</div>
           </div>
           <span className={`${s.stamp} ${s.stampWarn}`}>{open ? "Deck Studio" : "Coming soon"}</span>
         </div>
@@ -40,9 +41,7 @@ export function DeckComingSoon() {
           <div className={s.soonActs}>
             {open ? (
               <>
-                <Link className={`${s.btn} ${s.btnPrimary}`} href={"/dashboard/subscription" as Route}>
-                  Choose a plan
-                </Link>
+                <DeckAddonButton label={`Add Deck Studio · ${deckAddonShortWords("MONTH")}`} className={`${s.btn} ${s.btnPrimary}`} />
                 <Link className={s.btn} href={"/dashboard/deck-estimator" as Route}>
                   Design a deck in the preview
                 </Link>

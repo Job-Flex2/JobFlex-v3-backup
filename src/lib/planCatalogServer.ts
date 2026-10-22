@@ -15,6 +15,7 @@ import { PLAN_TIERS, type Plan } from "@/lib/entitlements";
 import { parsePlanLimits } from "@/lib/planLimits";
 import { planDisplayName, type PlanDTO } from "@/lib/planCatalog";
 import { CUSTOM_PLAN_TIER } from "@/lib/customPlan";
+import { DECK_ROW } from "@/lib/planRowUsage";
 
 /** Canonical parser for the PricingPlan.features JSON column. */
 export function parseFeatures(raw: string | null | undefined): string[] {
@@ -66,7 +67,14 @@ export async function getPlanCatalog(opts?: { includeInactive?: boolean }): Prom
     where: opts?.includeInactive ? {} : { active: true },
     orderBy: { order: "asc" },
   });
-  return rows.map(toPlanDTO);
+  return opts?.includeInactive ? rows.map(toPlanDTO) : rows.map(toPlanDTO).map(withoutDeckRows);
+}
+
+/** NO DECK LINE ON A PLAN (owner-locked 2026-10-20, CLAUDE.md): Deck Studio is the trial's, then the $49/mo add-on —
+ *  no plan carries it, so a feature row naming it (one typed in /admin/plans) is never shown on a plan card. The
+ *  admin's own list (includeInactive) keeps the rows as stored. */
+function withoutDeckRows(p: PlanDTO): PlanDTO {
+  return { ...p, features: p.features.filter((f) => !DECK_ROW.test(f)) };
 }
 
 /** Case-insensitive slug lookup (accepts "starter", "STARTER", …). */
@@ -82,7 +90,8 @@ export async function getPlanBySlug(
       ...(opts?.includeInactive ? {} : { active: true }),
     },
   });
-  return row ? toPlanDTO(row) : null;
+  if (!row) return null;
+  return opts?.includeInactive ? toPlanDTO(row) : withoutDeckRows(toPlanDTO(row));
 }
 
 /**

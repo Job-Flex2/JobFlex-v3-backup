@@ -1,12 +1,12 @@
 import "server-only";
 // THE DECK STUDIO ADD-ON ON STRIPE (owner, 2026-10-19 — lib/deckAddon for the rules): one more line on the
-// subscription the shop already has, $45 a month ($450 on a yearly plan). The same ways as the custom plan's pages
+// subscription the shop already has, $49 a month ($490 on a yearly plan). The same ways as the custom plan's pages
 // (lib/customBilling):
 //
 //   · ADD — proration_behavior "always_invoice": the rest of this period is invoiced and charged at once, under
 //     payment_behavior "pending_if_incomplete", so a declined card adds NOTHING (the pending update's invoice is
 //     voided). Never in a trial (owner, 2026-10-20): the trial holds the studio already, so the add is refused with
-//     "Included in your trial" and no line is made — a $45 line left from the trial would be billed unnoticed.
+//     "Included in your trial" and no line is made — a $49 line left from the trial would be billed unnoticed.
 //   · REMOVE — Stripe's own proration (owner, 2026-10-20): proration_behavior "create_prorations", so the unused
 //     rest of the period comes back as a credit on the next bill. The studio goes back to preview now.
 //
@@ -76,12 +76,8 @@ const customerOf = (sub: Stripe.Subscription) => (typeof sub.customer === "strin
 type Ready = { ok: true; stripe: Stripe; mode: StripeMode; sub: Stripe.Subscription } | { ok: false; error: string; code: DeckAddonFailure };
 export type DeckAddonFailure = "no-subscription" | "unreachable" | "not-live" | "trial" | "included" | "past-due" | "booked-switch" | "declined" | "failed";
 
-/** A Custom plan that bought the Deck estimator page holds the studio: never a second line (owner, 2026-10-20). */
+/** A Custom plan that bought the Deck estimator page holds the studio: never a second $49 line (owner, 2026-10-20). */
 export const CUSTOM_INCLUDED_WORDS = "Included in your Custom plan.";
-
-/** Every paid plan carries the studio (owner, 2026-10-21 — lib/editions): nothing is added any more; only an older
- *  line still on a subscription is read (addonHeld) and removed (removeDeckAddon). */
-export const PLAN_INCLUDED_WORDS = "Deck Studio is included in your plan.";
 
 const NO_PAID_PLAN = "Deck Studio goes on a paid plan. Pick a plan on Subscription first, then add it here.";
 
@@ -139,8 +135,6 @@ function recordOf(sub: Stripe.Subscription, line: Stripe.SubscriptionItem, since
  *  holds the studio, and nothing is put on the subscription for after it. */
 export async function addDeckAddon(organizationId: string): Promise<DeckAddonChange> {
   if (await customDeckPageHeld(organizationId)) return { ok: false, code: "included", error: CUSTOM_INCLUDED_WORDS };
-  // Not sold since 2026-10-21: every paid plan has the studio; a Custom plan buys the Deck estimator page instead.
-  if (!(await customDeckPageHeld(organizationId))) return { ok: false, code: "included", error: PLAN_INCLUDED_WORDS };
   const ready = await liveSubscription(organizationId, true);
   if (!ready.ok) return ready;
   const { stripe, mode } = ready;
@@ -240,9 +234,9 @@ export interface DeckAddonOffer {
   trialing: boolean;
   /** When the trial ends (ISO), while it runs. */
   trialEndsAt: string | null;
-  /** The studio is open without the add-on: the free trial, a complimentary plan, the Deck Studio or Advanced plan
-   *  ("plan"), or the Custom plan's deck page (lib/editions). */
-  included: "trial" | "grant" | "plan" | "custom" | null;
+  /** The studio is open without the add-on: the free trial, a complimentary plan, or the Custom plan's deck page
+   *  (lib/editions). */
+  included: "trial" | "grant" | "custom" | null;
 }
 
 /** What adding it would cost, before it is added. */
@@ -265,8 +259,6 @@ export async function deckAddonOffer(organizationId: string): Promise<DeckAddonO
   if (row?.provider === "MANUAL" && !onFreePlan(row)) return { ...base, included: "grant", reason: "Deck Studio is included in your complimentary plan." };
   // The Custom plan's deck page, bought: the add-on as a page — it outlasts the trial, so it is said before it.
   if (row && !onFreePlan(row) && (await customDeckPageHeld(organizationId, row.plan))) return { ...base, included: "custom", reason: CUSTOM_INCLUDED_WORDS };
-  // Every paid plan carries it (owner, 2026-10-21) — said before the trial is.
-  if (row && !onFreePlan(row)) return { ...base, included: "plan", reason: PLAN_INCLUDED_WORDS };
   const ready = await liveSubscription(organizationId, true).catch(() => null);
   if (!ready) return { ...base, reason: "Couldn't reach your subscription. Try again in a minute." };
   if (!ready.ok) return { ...base, reason: ready.error, included: ready.code === "trial" ? "trial" : null };

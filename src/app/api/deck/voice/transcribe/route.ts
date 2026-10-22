@@ -28,7 +28,10 @@ export async function POST(req: Request) {
   try {
     const ctx = await requireEstimatorOrManager();
     organizationId = ctx.organizationId;
-    if ((await deckStudioAccess(ctx.user, organizationId)) === "none") return NextResponse.json({ error: "Deck Studio isn't open on this account." }, { status: 403 });
+    // The whole studio only (2026-10-22): Whisper is paid — a preview (no add-on) hears through the browser alone.
+    const level = await deckStudioAccess(ctx.user, organizationId);
+    if (level === "none") return NextResponse.json({ error: "Deck Studio isn't open on this account." }, { status: 403 });
+    if (level !== "full") return NextResponse.json({ error: "Talking to Deck Studio is part of Deck Studio — add it to your plan ($49/mo) from the Deck estimator." }, { status: 403 });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Unauthorized" }, { status: 403 });
   }

@@ -3,11 +3,11 @@
 // Studio workspace: the deck studio and the office around it — proposals,
 // clients, calendar, jobs, crew, money — and nothing of the other trades. It
 // is the same account, the same data and the same sign-in as the whole
-// platform; the edition is a view, never a second app and never a plan or a
-// sign-in of its own (owner, 2026-10-21: no separate login, no separate plan).
-// Whether the account holds the studio is read off its subscription — any
-// running paid plan; a Custom plan with the Deck estimator page — and the
-// asking user. Pure — the server reads the facts, this decides.
+// platform; the edition is a view, never a second app, never a plan of its
+// own and never a sign-in of its own (one door — the switches are gone).
+// Whether the account holds the studio is read off its subscription (the
+// trial, the add-on, a grant) and the asking user. Pure — the server reads the
+// facts, this decides.
 
 export type EditionId = "platform" | "deck";
 export type Door = EditionId;
@@ -110,9 +110,7 @@ export interface AccessFacts {
   trialing?: boolean;
   /** The Deck Studio add-on is on the subscription (lib/deckAddon addonHeld). */
   addon?: boolean;
-  /** The plan is the Custom plan (lib/customPlan): it holds the studio only with the Deck estimator page. */
-  customPlan?: boolean;
-  /** A Custom plan whose bought pages include "deck-estimator" (lib/customPlan). */
+  /** A Custom plan whose bought pages include "deck-estimator" (lib/customPlan) — the add-on, bought as a page. */
   customDeckPage?: boolean;
   /** A complimentary plan (a grant, provider MANUAL — lib/planGrant) that has not ended. */
   granted?: boolean;
@@ -121,13 +119,13 @@ export interface AccessFacts {
 }
 
 /**
- * WHO HOLDS THE DECK STUDIO (owner, 2026-10-21 — CLAUDE.md): the Deck estimator is an estimator like the others.
- *   1. the 7-day free trial;
- *   2. every running paid plan — Starter, Professional, Advanced, monthly or yearly — with the plan's usage caps
- *      (lib/planLimits); a Custom plan holds it when its bought pages include "deck-estimator" ($10/mo, like any
- *      other page). An older add-on line still on a subscription (lib/deckAddon) keeps opening it;
+ * WHO HOLDS THE DECK STUDIO (owner-locked, 2026-10-20 — CLAUDE.md):
+ *   1. the 7-day free trial, without the add-on;
+ *   2. after the trial, on ANY plan — Starter, Professional, Advanced, Custom, Enterprise, monthly or yearly — only
+ *      the $49/month add-on ($490 on a yearly plan, lib/deckAddon). No plan carries it by itself: no plan of its own,
+ *      no feature line. A Custom plan whose pages include "deck-estimator" bought it as a page: that counts as the
+ *      add-on (owner, 2026-10-20), with no second $49 line — the page is off sale; Lone Oak Fence holds it;
  *   3. a platform admin (hasFullAccess) and a complimentary grant, always.
- * Free, lapsed and a Custom plan without the page preview it.
  */
 export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): boolean {
   if (edition === "platform") return true;
@@ -135,8 +133,7 @@ export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open
   if (!open) return false;
   if (facts.granted) return true;
   if (facts.lapsed) return false;
-  if (facts.trialing || facts.addon) return true;
-  return facts.customPlan ? !!facts.customDeckPage : true;
+  return !!facts.trialing || !!facts.addon || !!facts.customDeckPage;
 }
 
 /**
@@ -150,7 +147,7 @@ export function editionLevel(facts: AccessFacts, edition: EditionId = "deck", op
   return open ? "preview" : "none";
 }
 
-/** NO SECOND DOOR (owner, 2026-10-21): the studio is a page of the one platform. Nothing switches workspaces, every
+/** NO SECOND DOOR (since 2026-10-21, kept 2026-10-22): the studio is a page of the one platform. Nothing switches workspaces, every
  *  request works on the whole platform, and a sign-in lands on the overview. The deck door's cookie and the
  *  `/deck` landing's `?door=` still parse, and change nothing. */
 export function canSwitch(facts: AccessFacts, open?: boolean): boolean {
@@ -164,7 +161,7 @@ export function workspaceFor(facts: AccessFacts, door: Door | null, open?: boole
   return "platform";
 }
 
-/** Where a sign-in lands: the overview, whichever door was chosen (owner, 2026-10-21: no separate Deck Studio sign-in). */
+/** Where a sign-in lands: the overview, whichever door was chosen (no separate Deck Studio sign-in). */
 export function homeFor(door: Door | null): string {
   void door;
   return EDITIONS.platform.homeHref;

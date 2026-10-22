@@ -24,6 +24,7 @@ import { requireOrg } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
 import { isEditionOpen } from "@/lib/editions";
+import { deckAddonPriceWords } from "@/lib/deckAddon";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { getStripeMode } from "@/lib/stripeMode";
 import { isOwnerRole } from "@/lib/orgContext";
@@ -125,7 +126,7 @@ export default async function UpgradePage({
     <UpgradeResponsive
       spotlight={await orgSpotlight(ctx.organizationId)}
       focusSlug={null}
-      focusWords={params.edition === "deck" ? (isEditionOpen("deck") ? "Every plan has the Deck estimator, with the plan's monthly uses. On a Custom plan, add the Deck estimator page." : "Deck Studio is coming soon — it isn't on sale yet.") : null}
+      focusWords={params.edition === "deck" ? (isEditionOpen("deck") ? `Deck Studio is an add-on: ${deckAddonPriceWords("MONTH")} on any plan. Add it from the Deck estimator or Subscription.` : "Deck Studio is coming soon — it isn't on sale yet.") : null}
       plans={plans}
       currentPlan={onFree ? FREE_PLAN_NAME : (sub?.plan ?? null)}
       currentInterval={onFree ? null : term.currentInterval}
