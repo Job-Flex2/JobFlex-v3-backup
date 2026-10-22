@@ -55,7 +55,7 @@ import { HOUSE_LIMITS, deckShapeForHouse, houseForShape, houseWords, moveJogTo }
 import { buildStructure, type DeckStructure } from "@/lib/deck/structure";
 import { deckScene, sceneBuildLayers } from "@/lib/deck/scene";
 import { kindSample, type DeckSample } from "@/lib/deck/samples";
-import type { ClientStart, ClientUnsure } from "@/lib/deck/clientDesign";
+import { CLIENT_NOTE_MAX, type ClientStart, type ClientUnsure } from "@/lib/deck/clientDesign";
 import type { DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
 import { nearestStairEdge } from "@/components/v3/deck-estimator-blueprint/deck-plan";
 import { DeckKindPicker } from "@/components/v3/deck-estimator-blueprint/deck-kind-picker";
@@ -63,6 +63,13 @@ import { markDeckClientOpened, saveDeckClientWork, sendDeckClientDesign } from "
 import { Chips, Section, Stepper, clamp, cx, ftWords, half, inWords } from "./parts";
 import { ClientHouse } from "./client-house";
 import s from "./deck-client-designer.module.css";
+// The Talk to design button and the panel's styles load with the page (the panel itself loads when first opened).
+import "@/components/v3/deck-voice/deck-voice.css";
+import type { DeckVoiceHost } from "@/components/v3/deck-voice/deck-voice";
+import { Mic } from "lucide-react";
+
+// Talk to design (2026-10-21): the studio's voice panel in the client's mode — loaded when it is opened.
+const DeckVoice = dynamic(() => import("@/components/v3/deck-voice/deck-voice").then((m) => m.DeckVoice), { ssr: false, loading: () => null });
 
 const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3D").then((m) => m.DeckModel3D), {
   ssr: false,
@@ -335,6 +342,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   const [editing, setEditing] = React.useState(false);
   const [placing, setPlacing] = React.useState(false);
   const [resetToken, setResetToken] = React.useState(0);
+  const [talking, setTalking] = React.useState(false);
   const layers = React.useMemo(() => sceneBuildLayers(scene).length, [scene]);
   const [built, setBuilt] = React.useState<number>(Number.POSITIVE_INFINITY);
   const [playing, setPlaying] = React.useState(false);
@@ -508,6 +516,31 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   const boardNow = boardKeyOf(design.decking.product);
   const stateCode = design.site.state;
 
+  /** The voice panel's doors on the client's page: the same change() as a tap, the client's own Undo and Start over. */
+  const voiceHost: DeckVoiceHost = {
+    design,
+    readOnly: expired,
+    env: {},
+    apply: (next) => change(next),
+    view: (v) => {
+      if (v.reset) setResetToken((t) => t + 1);
+      if (v.build === "play") play();
+    },
+    light: () => {},
+    fly: () => {},
+    flash: () => {},
+    link: () => null,
+    go: () => {},
+    name: () => {},
+    address: () => {},
+    save: () => {},
+    reset: () => change(base),
+    audience: "client",
+    token,
+    // "Add a fire pit": written into the note that goes with their design, once.
+    note: (line) => setNote((n) => (n.toLowerCase().includes(line.toLowerCase()) ? n : (n.trim() ? `${n.trim()}\n${line}` : line).slice(0, CLIENT_NOTE_MAX))),
+  };
+
   return (
     <main className={cx(s.page, "jf-blueprint")} data-deck-client>
       <div className={cx("content", s.content)}>
@@ -537,6 +570,15 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
           <div className={s.viewCol}>
             <div className={s.viewer} data-client-viewer>
               <DeckModel3D scene={scene} built={built} edit={editing} onEdit={onEdit} placing={placing} onPick={onPick} resetToken={resetToken} className={s.canvas} label={`Your design in 3D: ${scene.facts}`} />
+              {/* Talk to design (2026-10-21, owner): the client says what they want; the studio changes the design and
+                  answers in words — no price, no numbers — with a quick next idea. */}
+              {talking ? (
+                <DeckVoice host={voiceHost} onClose={() => setTalking(false)} />
+              ) : !expired ? (
+                <button type="button" className="dv-open" onClick={() => setTalking(true)} data-client-talk>
+                  <Mic size={18} aria-hidden="true" /> Talk to design
+                </button>
+              ) : null}
               {placing ? (
                 <div className={s.banner} data-client-placing>
                   <span>Tap the edge of the deck where the stairs should go.</span>

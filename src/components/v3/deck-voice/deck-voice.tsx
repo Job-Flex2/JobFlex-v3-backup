@@ -18,7 +18,9 @@ import type { DeckCommand } from "@/lib/deck/voice/commands";
 import { designSummary, freshVoiceState, hear, runCommands, type BrainEnv, type Reply, type VoiceState } from "@/lib/deck/voice/assistant";
 import type { Flash, GoStep, ViewChange } from "@/lib/deck/voice/run";
 import { normalizeSpeech, phraseKey, trimClause } from "@/lib/deck/voice/words";
-import { deckVoiceInterpret, deckVoiceMemory, deckVoiceRemember, type VoiceMemoryView } from "@/actions/deckVoice";
+import { deckClientVoiceInterpret, deckClientVoiceMemory, deckVoiceInterpret, deckVoiceMemory, deckVoiceRemember, type VoiceMemoryView } from "@/actions/deckVoice";
+import { CLIENT_SAYS, clientChips, clientGate, clientOffer, clientText, isPraise, isPriceAsk, noteLine, spokenReply } from "@/lib/deck/voice/speak";
+import { dollars } from "@/lib/deck/voice/words";
 import { useDeckSpeech } from "./use-deck-speech";
 import "./deck-voice.css";
 
@@ -40,12 +42,21 @@ export interface DeckVoiceHost {
   address: (text: string) => void;
   save: () => void;
   reset: () => void;
+  /** Who is talking (2026-10-21): the contractor in the studio, or the client on their deck link — a client never
+   *  hears or reads a price, runs only the look of the deck, and gets a quick next idea after each change. */
+  audience?: "contractor" | "client";
+  /** The client's deck link (the AI, the shop's phrases and the natural voice are reached with it). */
+  token?: string | null;
+  /** A client's wish the studio can't draw ("a fire pit"), added to their note for the contractor — never priced. */
+  note?: (line: string) => void;
 }
 
 interface Line {
   id: number;
   who: "you" | "studio";
   text: string;
+  /** The price after a change, shown in the line — never read out (owner, 2026-10-21). */
+  price?: { after: number; delta: number } | null;
   link?: { href: string; label: string } | null;
   ask?: string | null;
   thinking?: boolean;
@@ -59,6 +70,15 @@ const EXAMPLES: ReadonlyArray<{ title: string; lines: string[] }> = [
   { title: "Roof and extras", lines: ["Add a gable roof", "Steeper", "9-foot ceiling", "Screen it in", "Make it a pergola", "Add two heaters", "Add a hot tub"] },
   { title: "Ask and look", lines: ["How much concrete do I need?", "How will the boards lay down?", "Do I need a permit?", "What if it was composite?", "Show me the joists", "Show it at night", "Spin it around", "From underneath"] },
   { title: "Memory", lines: ["When I say my usual, make it 16 by 12 with Trex and aluminum railing", "Add a fire pit for 1,200 dollars", "Undo", "Forget that"] },
+];
+
+/** What a client might say — the look of the deck, in their own words. */
+const CLIENT_EXAMPLES: ReadonlyArray<{ title: string; lines: string[] }> = [
+  { title: "Size and shape", lines: ["Make it bigger", "A little wider", "Closer to the ground", "Curved front"] },
+  { title: "Boards and railing", lines: ["Darker boards", "A gray floor", "Low maintenance boards", "See-through railing", "Black metal railing"] },
+  { title: "Stairs and lights", lines: ["Steps down to the yard", "Lights on the steps", "Show it at night"] },
+  { title: "Shade and extras", lines: ["Shade from the sun", "A covered roof", "Add a ceiling fan", "Room for a hot tub"] },
+  { title: "Look around", lines: ["Spin it around", "From the yard", "From above", "Undo"] },
 ];
 
 const read = (key: string, fallback: boolean) => {
@@ -77,19 +97,15 @@ const write = (key: string, on: boolean) => {
   }
 };
 
-/** What is read aloud: the reply's first two sentences, and its question. */
-function spoken(r: { say: string; pending: { ask: string } | null }): string {
-  const sentences = r.say.split(/(?<=[.!?])\s+(?=[A-Z"])/);
-  const head = sentences.slice(0, 2).join(" ");
-  const ask = r.pending && !head.includes(r.pending.ask) && sentences.length > 2 ? ` ${sentences[sentences.length - 1]}` : "";
-  return `${head}${ask}`.trim();
-}
-
 export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () => void }) {
   const [lines, setLines] = React.useState<Line[]>([]);
   const [interim, setInterim] = React.useState("");
   const [typed, setTyped] = React.useState("");
-  const [chips, setChips] = React.useState<string[]>(["Make it 20 by 14", "Add stairs", "How much concrete?", "Show me at night"]);
+  const client = host.audience === "client";
+  const [chips, setChips] = React.useState<string[]>(client ? ["Make it bigger", "Darker boards", "Add stairs", "Show it at night"] : ["Make it 20 by 14", "Add stairs", "How much concrete?", "Show me at night"]);
+  /** The quick ideas already offered to a client (each once). */
+  const offeredRef = React.useRef<string[]>([]);
+  const turns = React.useRef(0);
   const [pending, setPending] = React.useState<string | null>(null);
   const [handsFree, setHandsFree] = React.useState(() => (typeof window === "undefined" ? true : read("jf-deck-voice-hands", true)));
   const [muted, setMuted] = React.useState(() => (typeof window === "undefined" ? false : read("jf-deck-voice-muted", false)));
@@ -113,7 +129,8 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
   // The shop's memory: its taught phrases and priced items, read once.
   React.useEffect(() => {
     let live = true;
-    void deckVoiceMemory().then((r) => {
+    const h0 = hostRef.current;
+    void (h0.audience === "client" && h0.token ? deckClientVoiceMemory(h0.token) : deckVoiceMemory()).then((r) => {
       if (live && r.ok) memory.current = r.memory;
     });
     return () => {
@@ -131,6 +148,7 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
     onFinal: (alts) => handleRef.current?.(alts, false),
     onInterim: (t) => setInterim(t),
     onError: (m) => push({ who: "studio", text: m }),
+    token: host.audience === "client" ? (host.token ?? null) : null,
   });
   const speechRef = React.useRef(speech);
   React.useEffect(() => {
@@ -219,10 +237,30 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
       }
       stateRef.current = r.state;
       setPending(r.pending?.ask ?? null);
-      if (r.chips.length) setChips(r.pending ? ["Yes", "No", ...r.chips.slice(0, 3)] : r.chips.slice(0, 5));
+      const isClient = h.audience === "client";
+      // The client's quick next idea after a change: words only, each once.
+      const offer = isClient && r.design && !r.pending ? clientOffer(h.design, r.design, r.ran, offeredRef.current) : null;
+      if (offer) offeredRef.current = [...offeredRef.current, offer.key];
+      if (offer) setChips(offer.chips);
+      else if (r.chips.length) {
+        const shown = isClient ? clientChips(r.chips) : r.chips;
+        setChips(r.pending ? ["Yes", "No", ...shown.slice(0, 3)] : shown.slice(0, 5));
+      }
       if (say) {
-        push({ who: "studio", text: say, link, ask: r.pending?.ask ?? null });
-        if (!mutedRef.current) speechRef.current.say(spoken({ say, pending: r.pending }));
+        // The written line: everything for the contractor, its price in a line of its own (taken out of the sentence);
+        // no price at all for the client.
+        const delta = r.price ? Math.round(r.price.after - r.price.before) : 0;
+        const priceLine = !isClient && r.price && Math.abs(delta) >= 1 ? { after: r.price.after, delta } : null;
+        let text = priceLine ? say.replace(/\s*Price \$[\d,]+(?:\.\d+)? \((?:up|down) \$[\d,]+(?:\.\d+)?\)\.\s*/, " ").trim() : say;
+        if (isClient) text = clientText(text) || (r.design ? "Done." : CLIENT_SAYS.building);
+        if (offer) text = `${text} ${offer.say}`;
+        // What is spoken: short, and no number in it — not a price, not a measurement.
+        const spoken = spokenReply({ say: isClient ? text : say, pending: r.pending, changed: !!r.design }, isClient ? "client" : "contractor", turns.current++);
+        // A client reads what they hear when the reply had a number in it — no number repeated back to them; the 3D
+        // and the size line under it show the deck.
+        if (isClient && /\d/.test(text)) text = spoken;
+        push({ who: "studio", text, link: isClient ? null : link, ask: r.pending?.ask ?? null, price: priceLine });
+        if (!mutedRef.current) speechRef.current.say(spoken);
       }
     },
     [push],
@@ -236,7 +274,29 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
       setInterim("");
       push({ who: "you", text: alts[0] });
       const h = hostRef.current;
-      const r = hear(alts, h.design, stateRef.current, env());
+      // A client asking about money: the contractor prices it — no number, not even a ballpark.
+      if (h.audience === "client" && isPriceAsk(alts[0])) {
+        carry({ ...runCommands([], h.design, stateRef.current, env(), alts[0]), say: CLIENT_SAYS.price }, { typed: isTyped });
+        return;
+      }
+      // A client who likes it: a quick few ideas, nothing changed.
+      if (h.audience === "client" && isPraise(alts[0]) && !stateRef.current.pending) {
+        carry({ ...runCommands([], h.design, stateRef.current, env(), alts[0]), say: CLIENT_SAYS.praise, chips: ["Add a railing", "Lights on the steps", "Add a pergola"] }, { typed: isTyped });
+        return;
+      }
+      let r = hear(alts, h.design, stateRef.current, env());
+      // A client runs the look of the deck only: the building side, the paperwork and the shop's memory are answered;
+      // what the studio can't draw goes into their note for the contractor.
+      if (h.audience === "client" && r.ran.length) {
+        const g = clientGate(r.ran, alts[0]);
+        for (const w of g.wishes) h.note?.(noteLine(w));
+        if (g.keep.length !== r.ran.length) {
+          if (g.keep.length) {
+            const kept = runCommands(g.keep, h.design, stateRef.current, env(), r.heard);
+            r = { ...kept, say: g.wishes.length ? `${kept.say} ${CLIENT_SAYS.wish(g.wishes)}`.trim() : kept.say, unknown: r.unknown };
+          } else r = { ...runCommands([], h.design, stateRef.current, env(), r.heard), say: g.say ?? CLIENT_SAYS.building, unknown: [] };
+        }
+      }
       const known = r.ran.length > 0 || !!r.say;
       if (known) carry(r, { typed: isTyped });
       if (!r.unknown.length) {
@@ -248,10 +308,16 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
       setThinking(true);
       const tid = push({ who: "studio", text: "…", thinking: true });
       try {
-        const ai = await deckVoiceInterpret({ text: rest, summary: designSummary(hostRef.current.design) });
+        const hh = hostRef.current;
+        const isClient = hh.audience === "client";
+        const ai = isClient && hh.token ? await deckClientVoiceInterpret(hh.token, { text: rest, summary: designSummary(hh.design) }) : await deckVoiceInterpret({ text: rest, summary: designSummary(hh.design) });
         setLines((ls) => ls.filter((l) => l.id !== tid));
+        // A client's wish the AI found no command for ("privacy on one side") goes into their note, in their words.
+        const unsupported = isClient && ai.ok && ai.unsupported ? ai.unsupported : null;
+        if (unsupported) hh.note?.(noteLine(unsupported));
         if (!ai.ok || !ai.cmds.length) {
-          const fallback = ai.ok && ai.say ? ai.say : `I didn't catch "${rest}". Try "make it 20 by 14", "add stairs on the left", "how much concrete?" — or tap ? for more.`;
+          const tryThese = isClient ? `Try "make it bigger", "darker boards" or "steps down to the yard" — or tap ? for more.` : `Try "make it 20 by 14", "add stairs on the left", "how much concrete?" — or tap ? for more.`;
+          const fallback = unsupported ? CLIENT_SAYS.wish([unsupported]) : ai.ok && ai.say ? ai.say : `I didn't catch "${rest}". ${tryThese}`;
           carry({ ...runCommands([], hostRef.current.design, stateRef.current, env(), rest), say: ai.ok ? fallback : `${ai.error} ${fallback}` }, { typed: isTyped });
           return;
         }
@@ -260,8 +326,16 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
           memory.current = { ...memory.current, phrases: { ...memory.current.phrases, [key]: ai.cmds as DeckCommand[] } };
           lastLearned.current = key;
         }
-        const r2 = runCommands(ai.cmds, hostRef.current.design, stateRef.current, env(), rest);
-        carry({ ...r2, say: r2.say || ai.say || "Done." }, { typed: isTyped });
+        const allowed = isClient ? clientGate(ai.cmds, rest) : { keep: ai.cmds, say: null, wishes: [] as string[] };
+        for (const w of allowed.wishes) hh.note?.(noteLine(w));
+        const wishes = unsupported && !allowed.wishes.some((w) => w.toLowerCase() === unsupported.toLowerCase()) ? [...allowed.wishes, unsupported] : allowed.wishes;
+        if (!allowed.keep.length) {
+          carry({ ...runCommands([], hostRef.current.design, stateRef.current, env(), rest), say: wishes.length ? CLIENT_SAYS.wish(wishes) : (allowed.say ?? CLIENT_SAYS.building) }, { typed: isTyped });
+          return;
+        }
+        const r2 = runCommands(allowed.keep, hostRef.current.design, stateRef.current, env(), rest);
+        const said = r2.say || ai.say || "Done.";
+        carry({ ...r2, say: wishes.length ? `${said} ${CLIENT_SAYS.wish(wishes)}` : said }, { typed: isTyped });
       } finally {
         setThinking(false);
       }
@@ -297,9 +371,9 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
   const status = speech.mic === "listening" ? (speech.speaking ? "Talking…" : handsFree ? "Listening — just talk" : "Listening…") : speech.mic === "recording" ? "Recording — pause when done" : speech.mic === "sending" ? "Writing it down…" : thinking ? "Thinking…" : speech.mode === "none" ? "Type what you want" : "Tap the mic and talk, or type";
 
   return (
-    <section className="dv-panel" aria-label="Talk to Deck Studio" data-deck-voice>
+    <section className="dv-panel" aria-label={client ? "Talk to design your deck" : "Talk to Deck Studio"} data-deck-voice>
       <header className="dv-head">
-        <span className="dv-title">Talk to Deck Studio</span>
+        <span className="dv-title">{client ? "Talk to design your deck" : "Talk to Deck Studio"}</span>
         <span className="dv-status" role="status" data-deck-voice-status>{status}</span>
         <div className="dv-head-acts">
           <label className="dv-switch" title="Hands-free: keep listening after each answer">
@@ -320,8 +394,8 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
 
       {help ? (
         <div className="dv-help" data-deck-voice-examples>
-          <p className="dv-help-lead">Say it the way you would to a crew lead. Tap any line to try it.</p>
-          {EXAMPLES.map((g) => (
+          <p className="dv-help-lead">{client ? "Say it in your own words. Tap any line to try it." : "Say it the way you would to a crew lead. Tap any line to try it."}</p>
+          {(client ? CLIENT_EXAMPLES : EXAMPLES).map((g) => (
             <div key={g.title} className="dv-help-group">
               <span className="dv-help-title">{g.title}</span>
               <div className="dv-chips">
@@ -359,6 +433,11 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
         {lastStudio && !interim ? (
           <div className={`dv-studio${lastStudio.thinking ? " is-thinking" : ""}`} data-deck-voice-reply>
             <p>{lastStudio.thinking ? "Thinking it over…" : lastStudio.text}</p>
+            {lastStudio.price ? (
+              <p className="dv-price" data-deck-voice-price>
+                <b>{dollars(lastStudio.price.after)}</b> <span>{lastStudio.price.delta > 0 ? "up" : "down"} {dollars(Math.abs(lastStudio.price.delta))}</span>
+              </p>
+            ) : null}
             {lastStudio.link ? (
               <a className="dv-link" href={lastStudio.link.href} target="_blank" rel="noopener" data-deck-voice-link>
                 {lastStudio.link.label} ↗
@@ -366,7 +445,7 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
             ) : null}
           </div>
         ) : !lastYou ? (
-          <p className="dv-hint">Say what you want — “make it 20 by 14 with composite and an aluminum railing”, “add stairs on the left”, “how much concrete do I need?”. The 3D and the numbers change as you talk; “undo” takes anything back.</p>
+          <p className="dv-hint">{client ? "Say what you'd like — “make it bigger”, “darker boards”, “steps down to the yard”, “shade from the sun”. The 3D changes as you talk; “undo” takes anything back." : "Say what you want — “make it 20 by 14 with composite and an aluminum railing”, “add stairs on the left”, “how much concrete do I need?”. The 3D and the numbers change as you talk; “undo” takes anything back."}</p>
         ) : null}
         {lines.length > 2 ? (
           <button type="button" className="dv-more" onClick={() => setHistory((v) => !v)}>
@@ -387,7 +466,7 @@ export function DeckVoice({ host, onClose }: { host: DeckVoiceHost; onClose: () 
         <button type="button" className={`dv-mic${micOn ? " is-on" : ""}${speech.speaking ? " is-talking" : ""}`} aria-pressed={micOn} aria-label={micOn ? "Stop listening" : "Talk"} disabled={speech.mode === "none"} onClick={toggleMic} data-deck-voice-mic>
           {speech.mode === "none" ? <MicOff size={20} aria-hidden="true" /> : <Mic size={20} aria-hidden="true" />}
         </button>
-        <input className="dv-text" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={micOn ? "Listening… or type here" : "Type a command or a question"} aria-label="Type to Deck Studio" enterKeyHint="send" autoComplete="off" data-deck-voice-input />
+        <input className="dv-text" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={micOn ? "Listening… or type here" : client ? "Type what you'd like" : "Type a command or a question"} aria-label={client ? "Type what you'd like" : "Type to Deck Studio"} enterKeyHint="send" autoComplete="off" data-deck-voice-input />
         <button type="submit" className="dv-send" aria-label="Send" disabled={!typed.trim()}>
           <Send size={16} aria-hidden="true" />
         </button>

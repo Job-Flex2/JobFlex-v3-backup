@@ -5,8 +5,9 @@
 // said (shown as they come), and each finished sentence is handed on with the recogniser's other hearings of it — the
 // studio picks the one its rules read whole. Hands-free, it keeps listening sentence after sentence. Where the browser
 // has no recogniser (Firefox), the microphone is recorded until the speaker stops and the recording goes to the
-// server to be written down (api/deck/voice/transcribe). The studio's replies are read out with the browser's own
-// voice — and while it talks the microphone pauses, so it never hears itself.
+// server to be written down (api/deck/voice/transcribe). The studio's replies are read out in a natural voice — the
+// shop's AI desk voice, made by the server (api/deck/voice/speak, 2026-10-21), the browser's own voice when that cannot
+// answer — and while it talks the microphone pauses, so it never hears itself.
 
 import * as React from "react";
 
@@ -69,6 +70,8 @@ export interface SpeechHandlers {
   /** The words so far of the sentence being said. */
   onInterim: (text: string) => void;
   onError: (message: string) => void;
+  /** The client's deck link: the natural voice is asked for with its token (the studio's own session otherwise). */
+  token?: string | null;
 }
 
 export function useDeckSpeech(handlers: SpeechHandlers) {
@@ -86,6 +89,10 @@ export function useDeckSpeech(handlers: SpeechHandlers) {
   const talking = React.useRef(false);
   const restarts = React.useRef<number[]>([]);
   const media = React.useRef<{ stream: MediaStream; recorder: MediaRecorder; ctx: AudioContext | null; raf: number } | null>(null);
+  /** The natural voice playing, the answer it belongs to (a newer one drops a late one), and whether it works here. */
+  const audio = React.useRef<HTMLAudioElement | null>(null);
+  const sayRun = React.useRef(0);
+  const natural = React.useRef(true);
 
   const startNative = React.useCallback(() => {
     const Ctor = srCtor();
@@ -265,17 +272,16 @@ export function useDeckSpeech(handlers: SpeechHandlers) {
     setMic((m) => (m === "sending" ? m : "off"));
   }, [stopRecording]);
 
-  /** Read a reply out; the microphone pauses for it and comes back after (hands-free). */
+  /** Read a reply out — the natural voice, else the browser's; the microphone pauses for it and comes back after. */
   const say = React.useCallback(
     (text: string) => {
-      if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
-      const synth = window.speechSynthesis;
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(text.replace(/\bft\b/g, "feet").replace(/\bin\.(?=\s|$)/g, "inches").replace(/\bsq ft\b/g, "square feet").replace(/(\d)\/12\b/g, "$1 in 12").replace(/\bpsf\b/g, "pounds per square foot").replace(/×/g, " by ").replace(/\s*—\s*/g, ", ").replace(/\s+,/g, ","));
-      const v = pickVoice();
-      if (v) u.voice = v;
-      u.lang = v?.lang ?? "en-US";
-      u.rate = 1.04;
+      if (typeof window === "undefined" || !text.trim()) return;
+      const run = ++sayRun.current;
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      if (audio.current) {
+        audio.current.pause();
+        audio.current = null;
+      }
       const listening = wanted.current;
       talking.current = true;
       setSpeaking(true);
@@ -287,7 +293,10 @@ export function useDeckSpeech(handlers: SpeechHandlers) {
         }
       }
       if (listening && mode === "record") stopRecording(false);
+      let finished = false;
       const done = () => {
+        if (finished || run !== sayRun.current) return;
+        finished = true;
         talking.current = false;
         setSpeaking(false);
         if (wanted.current && hands.current) {
@@ -295,14 +304,60 @@ export function useDeckSpeech(handlers: SpeechHandlers) {
           else if (mode === "record") void startRecording();
         } else if (wanted.current && mode === "native") setMic("off");
       };
-      u.onend = done;
-      u.onerror = done;
-      synth.speak(u);
+      const browserVoice = () => {
+        if (run !== sayRun.current) return;
+        if (!("speechSynthesis" in window)) return done();
+        const synth = window.speechSynthesis;
+        const u = new SpeechSynthesisUtterance(text.replace(/\bft\b/g, "feet").replace(/\bin\.(?=\s|$)/g, "inches").replace(/\bsq ft\b/g, "square feet").replace(/(\d)\/12\b/g, "$1 in 12").replace(/\bpsf\b/g, "pounds per square foot").replace(/×/g, " by ").replace(/\s*—\s*/g, ", ").replace(/\s+,/g, ","));
+        const v = pickVoice();
+        if (v) u.voice = v;
+        u.lang = v?.lang ?? "en-US";
+        u.rate = 1.04;
+        u.onend = done;
+        u.onerror = done;
+        synth.speak(u);
+      };
+      if (!natural.current) return browserVoice();
+      void fetch("/api/deck/voice/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, token: h.current.token ?? null }) })
+        .then(async (res) => {
+          if (!res.ok) {
+            // Not set up, not allowed here: the browser's voice for the rest of the visit.
+            if (res.status === 403 || res.status === 503) natural.current = false;
+            throw new Error(String(res.status));
+          }
+          return res.blob();
+        })
+        .then((blob) => {
+          if (run !== sayRun.current) return;
+          const url = URL.createObjectURL(blob);
+          const a = new Audio(url);
+          audio.current = a;
+          const end = () => {
+            URL.revokeObjectURL(url);
+            if (audio.current === a) audio.current = null;
+            done();
+          };
+          a.onended = end;
+          a.onerror = () => {
+            URL.revokeObjectURL(url);
+            browserVoice();
+          };
+          void a.play().catch(() => {
+            URL.revokeObjectURL(url);
+            browserVoice();
+          });
+        })
+        .catch(() => browserVoice());
     },
     [mode, startNative, startRecording, stopRecording],
   );
 
   const hush = React.useCallback(() => {
+    sayRun.current++;
+    if (audio.current) {
+      audio.current.pause();
+      audio.current = null;
+    }
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     talking.current = false;
     setSpeaking(false);
@@ -311,6 +366,8 @@ export function useDeckSpeech(handlers: SpeechHandlers) {
   // Voices load late in Chrome; asking once wakes them. Everything stops when the panel goes.
   React.useEffect(() => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.getVoices();
+    const runs = sayRun;
+    const playing = audio;
     return () => {
       wanted.current = false;
       try {
@@ -319,6 +376,8 @@ export function useDeckSpeech(handlers: SpeechHandlers) {
         /* gone */
       }
       stopRecording(false);
+      runs.current++;
+      playing.current?.pause();
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, [stopRecording]);
