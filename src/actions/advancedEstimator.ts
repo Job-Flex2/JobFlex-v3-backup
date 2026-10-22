@@ -21,7 +21,7 @@ import { checkPlanLimit, enforcePlanLimit } from "@/lib/limitsEngine";
 import { PLAN_LIMIT_MESSAGE, type LimitKey } from "@/lib/planLimits";
 import { sellUnitPrice, resolveMarkupRates } from "@/lib/pricing/markup";
 import { PRICING_RULES, UNIT_RULES } from "@/lib/estimate/master-prompt";
-import { normalizeUnit, pairEstimateLines } from "@/lib/estimate/console-model";
+import { measureUnit, pairEstimateLines } from "@/lib/estimate/console-model";
 import { applyRepairs, repairInstruction, validateEstimate } from "@/lib/estimate/validate-estimate";
 import { computeLines, computedPromptBlock, mergeComputed } from "@/lib/estimate/computed-lines";
 import { detectTrade, GENERAL_TRADE, TRADES, type TradeProfile } from "@/lib/estimate/trade-knowledge";
@@ -48,6 +48,7 @@ import {
 import { trackActivation, trackProposalCreated } from "@/lib/activation-events";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { takeTrialCap } from "@/lib/trialMeter";
+import { briefFingerprint, keepEstimate, photoPrint, SAME_NOTE, sameEstimate } from "@/lib/estimate/sameBrief";
 import { requirePage } from "@/lib/customPageAccess";
 import { readPlanPass } from "@/lib/plans/planToken";
 import { bindLinesToTakeoff } from "@/lib/plans/tradeBrief";
@@ -123,6 +124,8 @@ interface GenerateInput {
    * Sent to the model as vision input, never stored. See `safePhotos`.
    */
   photos?: SitePhoto[];
+  /** "Ask for a fresh estimate": price it again even when this exact brief was priced before (lib/estimate/sameBrief). */
+  fresh?: boolean;
 }
 
 /**
@@ -246,10 +249,11 @@ export async function analyzeEstimatePrompt(input: {
   try {
     const client = getOpenAI();
     const completion = await client.chat.completions.create({
-      // The model this process may call (lib/sdk/openai), at the temperature
-      // the estimator was tuned to.
+      // The model this process may call (lib/sdk/openai), at temperature 0 with a seed (2026-10-21): this read
+      // corrects the place the job is priced in and words the questions, so the same brief should read the same way
+      // twice — at 0.2 the place could come back differently and move the city's price index.
       model: await resolveOpenAIModel(),
-      ...(await samplingOptions(0.2)),
+      ...(await samplingOptions(0, 42)),
       messages: [
         {
           role: "system",
@@ -574,6 +578,31 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
       return { ...r, items: merged.items as typeof r.items };
     };
 
+    // ── Same brief, same estimate (lib/estimate/sameBrief) ──────────────────
+    // The fingerprint of exactly this question: the built prompt carries the brief, the place, the price book, the
+    // procedures and the tier; the rest is what decides the answer outside it.
+    const fingerprint = briefFingerprint({
+      v: 1,
+      model,
+      system: overrides.system?.trim() || LEGACY_SYSTEM_MESSAGE,
+      prompt: legacy.prompt,
+      plan: plan?.block ?? null,
+      computed: computedBlock,
+      photos: photos.map(photoPrint),
+      company: companyOn ? snapshotOf(companyOn) : null,
+      markup: [org?.materialMarkupPct ?? null, org?.laborMarkupPct ?? null],
+      tier: qualityTier,
+    });
+    if (!input.fresh) {
+      const before = await sameEstimate(organizationId, fingerprint);
+      if (before) {
+        // No AI was spent: the trial's use goes back.
+        await refund().catch(() => {});
+        console.info(`[advancedEstimator] same brief as ${before.at} · the estimate it got then (${fingerprint.slice(0, 10)})`);
+        return { ok: true, data: { ...before.estimate, notes: [SAME_NOTE, ...(before.estimate.notes ?? [])], remembered: { at: before.at } } };
+      }
+    }
+
     let called = withComputed(await askEstimateOnce(computedBlock));
 
     /* ONE RE-ASK BUDGET, TWO REASONS TO SPEND IT (merge, 2026-09-19).
@@ -673,7 +702,7 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
       ...it,
       dimensions: null as string | null,
       quantity: Number.isFinite(it.quantity) && it.quantity > 0 ? it.quantity : 1,
-      unit: normalizeUnit(it.unit, it.materialUnitPrice > 0 ? "materials" : "labor"),
+      unit: measureUnit(it.unit, it.materialUnitPrice > 0 ? "materials" : "labor"),
     }));
     // ── The contractor's numbers win (lib/estimate/brief) ──────────────────
     // Work the brief never asked for comes off (a coatings reply's moisture
@@ -750,6 +779,8 @@ async function runSmartEstimate(organizationId: string, input: GenerateInput, pl
       ...(companyOn ? { pricing: snapshotOf(companyOn) } : {}),
     };
     console.info(`[advancedEstimator] Step 2 complete · ${materials.length} lines, ${labor.length} carry labor`);
+    // This brief's answer from now on (a fresh estimate replaces the one before).
+    await keepEstimate(organizationId, fingerprint, estimate);
 
     return { ok: true, data: estimate };
   } catch (err: any) {
@@ -1024,22 +1055,48 @@ const convertInput = z.object({
 const MEASUREMENT_FOR_UNIT: Record<string, string> = {
   sqft: "SQFT",
   "sq ft": "SQFT",
-  "sq yards": "SQFT",
-  sqyards: "SQFT",
+  "sq yards": "SQ_YARD",
+  sqyards: "SQ_YARD",
   lf: "LINEAR_FT",
   "linear ft": "LINEAR_FT",
   "ln ft": "LINEAR_FT",
   yards: "LINEAR_FT",
-  "cu yards": "CUBIC_FT",
-  "sq boards": "UNIT",
+  // Exact since 2026-10-21 (they had become cubic FEET, square feet and "unit").
+  "cu yards": "CU_YARD",
+  "sq boards": "SQUARE",
   unit: "UNIT",
-  each: "UNIT",
+  // The real measures a line is counted or bought in.
+  each: "EACH",
+  sheets: "SHEET",
+  bundles: "BUNDLE",
+  rolls: "ROLL",
+  boxes: "BOX",
+  bags: "BAG",
+  pieces: "PIECE",
+  gallons: "GALLON",
+  buckets: "BUCKET",
+  tubes: "TUBE",
+  sets: "SET",
+  tons: "TON",
   hour: "HOUR",
   hr: "HOUR",
   hours: "HOUR",
   fixed: "LUMP_SUM",
   "lump sum": "LUMP_SUM",
 };
+
+const MEASURED_IN: Record<string, string> = {
+  hour: "Measured in hours", hr: "Measured in hours", hrs: "Measured in hours", hours: "Measured in hours",
+  sqft: "Measured in square feet", "sq ft": "Measured in square feet",
+  lf: "Measured in linear feet", "linear ft": "Measured in linear feet", "ln ft": "Measured in linear feet", yards: "Measured in linear yards",
+  "cu yards": "Measured in cubic yards", "sq yards": "Measured in square yards", "sq boards": "Measured in roofing squares",
+  sheets: "Bought in sheets", bundles: "Bought in bundles", rolls: "Bought in rolls", boxes: "Bought in boxes", bags: "Bought in bags",
+  pieces: "Bought in pieces", gallons: "Bought in gallons", buckets: "Bought in buckets", tubes: "Bought in tubes", sets: "Bought in sets", tons: "Bought in tons",
+};
+/** A line's measure in words for the line's description — null for a lump sum or a plain count. */
+function measureCaption(unit: string | null | undefined): string | null {
+  return MEASURED_IN[(unit ?? "").trim().toLowerCase()] ?? null;
+}
 
 function measurementForUnit(unit: string | null | undefined): string {
   return MEASUREMENT_FOR_UNIT[(unit ?? "").trim().toLowerCase()] ?? "UNIT";
@@ -1101,8 +1158,9 @@ export async function convertEstimateToProposal(raw: unknown) {
     const quantity = m?.quantity ?? l?.quantity ?? 0;
     return {
       name,
-      // "Measured in hours", not "in hour" — a company-priced labor line is counted in hours.
-      description: src.unit ? `Measured in ${/^(hour|hr|hrs|hours)$/i.test(src.unit.trim()) ? "hours" : src.unit}` : null,
+      // The measure in words under the line (2026-10-21): "Measured in square feet", "Bought in bundles" — none for a
+      // lump sum or a plain count, which say it themselves ("Measured in fixed" read as nonsense to a client).
+      description: measureCaption(src.unit),
       measurementType: measurementForUnit(src.unit),
       quantity,
       unitPrice: sell,

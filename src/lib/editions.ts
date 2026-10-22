@@ -3,10 +3,11 @@
 // Studio workspace: the deck studio and the office around it — proposals,
 // clients, calendar, jobs, crew, money — and nothing of the other trades. It
 // is the same account, the same data and the same sign-in as the whole
-// platform; the edition is a view, never a second app. The door a browser
-// last chose is a cookie; whether the account holds the studio is read off its
-// subscription (the trial, the Deck Studio plan, the Advanced plan, the add-on,
-// a grant) and the asking user. Pure — the server reads the facts, this decides.
+// platform; the edition is a view, never a second app and never a plan or a
+// sign-in of its own (owner, 2026-10-21: no separate login, no separate plan).
+// Whether the account holds the studio is read off its subscription — any
+// running paid plan; a Custom plan with the Deck estimator page — and the
+// asking user. Pure — the server reads the facts, this decides.
 
 export type EditionId = "platform" | "deck";
 export type Door = EditionId;
@@ -109,12 +110,10 @@ export interface AccessFacts {
   trialing?: boolean;
   /** The Deck Studio add-on is on the subscription (lib/deckAddon addonHeld). */
   addon?: boolean;
-  /** A Custom plan whose bought pages include "deck-estimator" (lib/customPlan) — the add-on, bought as a page. */
+  /** The plan is the Custom plan (lib/customPlan): it holds the studio only with the Deck estimator page. */
+  customPlan?: boolean;
+  /** A Custom plan whose bought pages include "deck-estimator" (lib/customPlan). */
   customDeckPage?: boolean;
-  /** The Deck Studio plan itself (lib/customPlan DECK_PLAN_SLUG), running. */
-  deckPlan?: boolean;
-  /** The Advanced plan (slug "enterprise", sold as "Advanced" — lib/planCatalog planDisplayName), running. */
-  advancedPlan?: boolean;
   /** A complimentary plan (a grant, provider MANUAL — lib/planGrant) that has not ended. */
   granted?: boolean;
   /** The asking user sees everything in this organization (lib/fullAccess hasFullAccess — a platform admin). */
@@ -122,14 +121,13 @@ export interface AccessFacts {
 }
 
 /**
- * WHO HOLDS THE DECK STUDIO (owner, 2026-10-20 — CLAUDE.md):
- *   1. the 7-day free trial, without the add-on;
- *   2. the Deck Studio plan ($45/month, its own card on the pricing page — lib/customPlan DECK_PLAN_SLUG) and the
- *      Advanced plan;
- *   3. on any other plan — Starter, Professional, Custom, monthly or yearly — the $45/month add-on ($450 on a yearly
- *      plan, lib/deckAddon). A Custom plan whose pages include "deck-estimator" bought it as a page: that counts as
- *      the add-on, with no second line;
- *   4. a platform admin (hasFullAccess) and a complimentary grant, always.
+ * WHO HOLDS THE DECK STUDIO (owner, 2026-10-21 — CLAUDE.md): the Deck estimator is an estimator like the others.
+ *   1. the 7-day free trial;
+ *   2. every running paid plan — Starter, Professional, Advanced, monthly or yearly — with the plan's usage caps
+ *      (lib/planLimits); a Custom plan holds it when its bought pages include "deck-estimator" ($10/mo, like any
+ *      other page). An older add-on line still on a subscription (lib/deckAddon) keeps opening it;
+ *   3. a platform admin (hasFullAccess) and a complimentary grant, always.
+ * Free, lapsed and a Custom plan without the page preview it.
  */
 export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open: boolean = isEditionOpen(edition)): boolean {
   if (edition === "platform") return true;
@@ -137,12 +135,8 @@ export function hasEdition(facts: AccessFacts, edition: EditionId = "deck", open
   if (!open) return false;
   if (facts.granted) return true;
   if (facts.lapsed) return false;
-  return !!facts.trialing || !!facts.deckPlan || !!facts.advancedPlan || !!facts.addon || !!facts.customDeckPage;
-}
-
-/** The account is the Deck Studio plan and nothing more: the studio's workspace is the only one it has. */
-export function editionOnly(facts: AccessFacts): boolean {
-  return !facts.lapsed && !!facts.deckPlan && !facts.fullAccess;
+  if (facts.trialing || facts.addon) return true;
+  return facts.customPlan ? !!facts.customDeckPage : true;
 }
 
 /**
@@ -156,22 +150,24 @@ export function editionLevel(facts: AccessFacts, edition: EditionId = "deck", op
   return open ? "preview" : "none";
 }
 
-/** Both workspaces are open to the account, so a switch is worth drawing. */
-export function canSwitch(facts: AccessFacts, open: boolean = isEditionOpen("deck")): boolean {
-  return hasEdition(facts, "deck", open) && !editionOnly(facts);
+/** NO SECOND DOOR (owner, 2026-10-21): the studio is a page of the one platform. Nothing switches workspaces, every
+ *  request works on the whole platform, and a sign-in lands on the overview. The deck door's cookie and the
+ *  `/deck` landing's `?door=` still parse, and change nothing. */
+export function canSwitch(facts: AccessFacts, open?: boolean): boolean {
+  void facts; void open;
+  return false;
 }
 
-/** The workspace a request works in: the studio's on the Deck Studio plan, or through the deck door when the
- *  account holds the studio; else the whole platform. */
-export function workspaceFor(facts: AccessFacts, door: Door | null, open: boolean = isEditionOpen("deck")): Workspace {
-  if (editionOnly(facts)) return "deck";
-  return door === "deck" && hasEdition(facts, "deck", open) ? "deck" : "platform";
+/** The workspace a request works in: the whole platform, always (see canSwitch). */
+export function workspaceFor(facts: AccessFacts, door: Door | null, open?: boolean): Workspace {
+  void facts; void door; void open;
+  return "platform";
 }
 
-/** Where a sign-in lands: the deck door opens the studio (its page makes the offer to an account without it), the
- *  platform door the overview. */
+/** Where a sign-in lands: the overview, whichever door was chosen (owner, 2026-10-21: no separate Deck Studio sign-in). */
 export function homeFor(door: Door | null): string {
-  return door === "deck" ? EDITIONS.deck.homeHref : EDITIONS.platform.homeHref;
+  void door;
+  return EDITIONS.platform.homeHref;
 }
 
 /** A sidebar row stays in the workspace: everything on the platform; the edition's own list in its workspace. */

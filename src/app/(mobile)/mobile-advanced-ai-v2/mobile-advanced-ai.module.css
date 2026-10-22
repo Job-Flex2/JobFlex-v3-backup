@@ -779,6 +779,17 @@
 }
 .suggCash { flex: 0 0 auto; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); }
 .suggRow .lbadge { flex: 0 0 auto; margin-left: 0; }
+/* The estimate this same brief got before, and the way to a fresh one (lib/estimate/sameBrief). */
+.sameBrief {
+  margin: 10px var(--pad-x) 0; padding: 10px 12px; display: grid; gap: 8px;
+  border: 1.5px dashed var(--ink-soft); border-radius: 6px;
+  font-size: 12px; line-height: 1.5; color: var(--ink);
+}
+.sameFresh {
+  justify-self: start; min-height: 44px; padding: 0 14px; border: 1.5px solid var(--ink); border-radius: 6px;
+  background: var(--paper); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700;
+}
+.sameFresh:active { background: var(--paper-deep); }
 .checkNotes {
   margin: 8px var(--pad-x) 0; padding-left: 16px;
   font-size: 11px; line-height: 1.6; color: var(--muted);

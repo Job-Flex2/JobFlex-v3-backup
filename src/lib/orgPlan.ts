@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { PLAN_TIERS, type Plan } from "@/lib/entitlements";
-import { CUSTOM_PLAN_TIER, DECK_PLAN_TIER, isDeckPlan } from "@/lib/customPlan";
+import { CUSTOM_PLAN_TIER } from "@/lib/customPlan";
 import { planLapsed } from "@/lib/planStatus";
 import { readAccessSubscription } from "@/lib/subscriptionAccess";
 import { hasFullAccess } from "@/lib/fullAccess";
@@ -32,8 +32,6 @@ export async function getOrgPlanById(organizationId: string): Promise<Plan> {
   if ((PLAN_TIERS as readonly string[]).includes(upper)) return upper as Plan;
   // The custom plan rides on Professional (lib/customPlan CUSTOM_PLAN_TIER).
   if (upper === "CUSTOM") return CUSTOM_PLAN_TIER;
-  // So does the Deck Studio plan: its pages close the other estimators (lib/customPlan DECK_PLAN_PAGES).
-  if (isDeckPlan(upper)) return DECK_PLAN_TIER;
 
   // Custom assigned plan: confirm it maps to a real PricingPlan (case-insensitive),
   // then grant full feature access. Quotas come from that plan's limits, not here.

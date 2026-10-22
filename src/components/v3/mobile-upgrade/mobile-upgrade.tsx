@@ -37,6 +37,7 @@
 // the sidebar's locks and quota pills redraw.
 
 import { FreeSwitchNotice } from "@/components/billing/FreeSwitch";
+import { rowUsage } from "@/lib/planRowUsage";
 import { PlanConfetti } from "@/components/billing/PlanConfetti";
 import { DEV_EVENT, type DevUpgradeEvent } from "@/lib/devSimulation";
 import { ConfirmPlanChange } from "@/components/billing/ConfirmPlanChange";
@@ -614,7 +615,11 @@ export function MobileUpgradeContent({
             return (
               <li key={f} className={`mu-f${on ? "" : " is-no"}`}>
                 <Tick on={on} />
-                <span>{f}</span>
+                <span>
+                  {/* The uses before the thing (lib/planRowUsage, owner 2026-10-21): the plan's cap, in blue. */}
+                  {on && rowUsage(f, p.limits) ? <b className="mu-use">{rowUsage(f, p.limits)!.words}</b> : null}
+                  {f}
+                </span>
               </li>
             );
           })}

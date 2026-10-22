@@ -47,6 +47,8 @@ export default async function AdminRootLayout({ children }: { children: React.Re
 
   // The office screen goes on a TV (2026-10-13): guarded like every admin page, drawn without the console's chrome.
   if (pathname === "/admin/office" || pathname.startsWith("/admin/office/")) return <>{children}</>;
+  // The customer development report (2026-10-22) is a document to print or save as a PDF: guarded, no chrome.
+  if (pathname === "/admin/customer-development/report") return <>{children}</>;
 
   // Which door the admin came through decides what Sign out clears.
   const viaCookie = (await readAdminCookie()) !== null;

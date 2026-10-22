@@ -120,6 +120,20 @@ export const ESTIMATE_UNITS: readonly { value: string; label: string }[] = [
   { value: "unit", label: "unit" },
   { value: "hour", label: "hr" },
   { value: "fixed", label: "fixed" },
+  // The real measures a line is counted or bought in (2026-10-21, owner: "make sure it uses the right measures, not
+  // only units") — kept as they are by `measureUnit`, carried onto the proposal (LineItem.measurementType).
+  { value: "each", label: "each" },
+  { value: "sheets", label: "sheets" },
+  { value: "bundles", label: "bundles" },
+  { value: "rolls", label: "rolls" },
+  { value: "boxes", label: "boxes" },
+  { value: "bags", label: "bags" },
+  { value: "pieces", label: "pieces" },
+  { value: "gallons", label: "gallons" },
+  { value: "buckets", label: "buckets" },
+  { value: "tubes", label: "tubes" },
+  { value: "sets", label: "sets" },
+  { value: "tons", label: "tons" },
 ];
 
 export const ESTIMATE_UNIT_VALUES: readonly string[] = ESTIMATE_UNITS.map((u) => u.value);
@@ -181,8 +195,36 @@ const LEGACY_UNIT: Record<string, string> = {
 export function normalizeUnit(unit: string | null | undefined, fallback: LineGroup = "materials"): string {
   const raw = (unit ?? "").trim().toLowerCase();
   if (!raw) return fallback === "labor" ? "fixed" : "unit";
+  // The price checks (anchors, the validator) read a count as "unit": each, sheets, bundles… fold onto it here.
+  if (MEASURE_WORD[raw]) return "unit";
   if (ESTIMATE_UNIT_VALUES.includes(raw)) return raw;
   return LEGACY_UNIT[raw] ?? raw;
+}
+
+/** The real measure words and what they are written as. */
+const MEASURE_WORD: Record<string, string> = {
+  each: "each", ea: "each",
+  sheet: "sheets", sheets: "sheets",
+  bundle: "bundles", bundles: "bundles", bdl: "bundles",
+  roll: "rolls", rolls: "rolls",
+  box: "boxes", boxes: "boxes",
+  bag: "bags", bags: "bags",
+  piece: "pieces", pieces: "pieces", pc: "pieces", pcs: "pieces",
+  gal: "gallons", gallon: "gallons", gallons: "gallons",
+  bucket: "buckets", buckets: "buckets",
+  tube: "tubes", tubes: "tubes",
+  set: "sets", sets: "sets",
+  ton: "tons", tons: "tons",
+};
+
+/**
+ * A line's unit as it is SHOWN and STORED (2026-10-21): the picker's words, with a real measure kept as it is — a
+ * fixture "each", drywall "sheets", shingles "bundles" — where `normalizeUnit` folds those into "unit" for the price
+ * checks.
+ */
+export function measureUnit(unit: string | null | undefined, fallback: LineGroup = "materials"): string {
+  const raw = (unit ?? "").trim().toLowerCase();
+  return MEASURE_WORD[raw] ?? normalizeUnit(unit, fallback);
 }
 
 /** The picker's options — the same ten everywhere. The argument is ignored;
@@ -317,7 +359,7 @@ export function linesFromEstimate(est: GeneratedEstimate): ConsoleLine[] {
       id: m?.id || l?.id || `i${i + 1}-${newLineId("x")}`,
       name: src.name,
       qty: num(m?.quantity ?? l?.quantity),
-      unit: normalizeUnit(src.unit, m ? "materials" : "labor"),
+      unit: measureUnit(src.unit, m ? "materials" : "labor"),
       materialPrice,
       laborPrice: l ? num(l.unitPrice) : 0,
       // The listing's package price, set server-side. Older estimates carried

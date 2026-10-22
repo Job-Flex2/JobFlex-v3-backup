@@ -30,10 +30,7 @@ import { db } from "@/lib/db";
 import {
   CUSTOM_DECK_PAGE,
   CUSTOM_PAGES,
-  DECK_PLAN_MARK,
-  DECK_PLAN_PAGES,
   PLAN_ENDED_MARK,
-  isDeckPlan,
   blockedCustomHrefs,
   normalizeCustomPages,
   type CustomPageId,
@@ -68,11 +65,11 @@ export function isCustomPageLockedError(err: unknown): err is CustomPageLockedEr
  *  pages it holds; `lapsed` when its plan no longer opens anything. Throws
  *  when the plan cannot be read — callers that must fail closed (requirePage)
  *  let it propagate. */
-async function readPageAccess(organizationId: string): Promise<{ lapsed: boolean; pages: string[] | null; deckPlan?: boolean }> {
+async function readPageAccess(organizationId: string): Promise<{ lapsed: boolean; pages: string[] | null }> {
   if (await hasFullAccess(organizationId)) return { lapsed: false, pages: null };
   const sub = await readAccessSubscription(organizationId);
   if (planLapsed(sub)) return { lapsed: true, pages: [] };
-  return { lapsed: false, pages: await readCustomPages(organizationId, sub?.plan ?? null), deckPlan: isDeckPlan(sub?.plan) };
+  return { lapsed: false, pages: await readCustomPages(organizationId, sub?.plan ?? null) };
 }
 
 /** The organization is on the Custom plan and its bought pages include the Deck estimator — the Deck Studio
@@ -89,8 +86,6 @@ export async function readCustomPages(organizationId: string, knownPlan?: string
     knownPlan !== undefined
       ? knownPlan
       : (await db.subscription.findUnique({ where: { organizationId }, select: { plan: true } }))?.plan ?? null;
-  // The Deck Studio plan is a Custom plan whose pages are fixed (lib/customPlan DECK_PLAN_PAGES).
-  if (isDeckPlan(plan)) return [...DECK_PLAN_PAGES];
   if ((plan ?? "").toUpperCase() !== "CUSTOM") return null;
   const row = await db.syncState.findUnique({ where: { key: `orgPages:${organizationId}` } });
   if (!row) return [];
@@ -120,9 +115,7 @@ export async function getBlockedCustomPages(
   );
   if (!access) return null;
   if (access.lapsed) return [...blockedCustomHrefs([]), PLAN_ENDED_MARK];
-  if (access.pages === null) return null;
-  const blocked = blockedCustomHrefs(access.pages);
-  return access.deckPlan ? [...blocked, DECK_PLAN_MARK] : blocked;
+  return access.pages === null ? null : blockedCustomHrefs(access.pages);
 }
 
 /** Why `pages` are closed to the org, or null when one of them is open:

@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { createWheelMotion, wheelPixels } from "@/lib/smooth-wheel";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Lock, Maximize2, Minimize2, Plus, RotateCcw, Send, X, ZoomIn, ZoomOut } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, ExternalLink, FileText, Lock, Maximize2, Mic, Minimize2, Plus, RotateCcw, Send, X, ZoomIn, ZoomOut } from "lucide-react";
 import { resolveMarket, parseStateZip, type MarketSnapshot } from "@/lib/fence/market";
 import { DECKING, DECKING_BRAND_LABEL, DECKING_BRAND_ORDER, DECKING_FAMILY_LABEL, DECKING_FAMILY_ORDER, FRAMING_SPECIES, RAIL_TYPES, WALL_TYPES, defaultDecking, defaultFramingSpecies, treatedDecking, wallType, type DeckingFamily, type DeckingProduct } from "@/lib/deck/catalog";
 import { regionalPicks, regionalWords } from "@/lib/deck/regional";
@@ -58,7 +58,6 @@ import {
   SPA_LIMITS,
   defaultDeckDesign,
   defaultFixture,
-  defaultRoofDesign,
   defaultStair,
   hasDeck,
   hasRoof,
@@ -94,12 +93,15 @@ import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type
 import { convertDeckEstimateToProposal, updateDeckProposal, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckSite, saveDeckDraft, saveDeckRateBook, type DeckDraftRow, type ReturnedClientDesign } from "@/actions/deckEstimator";
 import { deckClientInbox } from "@/actions/deckClientDesign";
 import { jobLine, type ClientLinkRow } from "@/lib/deck/clientDesign";
-import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, deckShapeForHouse, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
-import { autoFixDesign, autoFixable, resizes, roofResizes, settleDesign } from "@/lib/deck/settle";
-import type { DeckEdit, DeckPick, SceneHighlight } from "@/components/estimator/deck/DeckModel3D";
+import { autoFixDesign, autoFixable, settleDesign } from "@/lib/deck/settle";
+import type { DeckEdit, DeckLook, DeckPick, SceneHighlight } from "@/components/estimator/deck/DeckModel3D";
+import { KINDS_FOR, patchDesign, patchRoof, switchStructure } from "@/lib/deck/edit";
+import type { Flash } from "@/lib/deck/voice/run";
+import type { DeckVoiceHost } from "@/components/v3/deck-voice/deck-voice";
 import { fieldLight, type FieldFocus } from "@/lib/deck/fieldParts";
 import { HouseWallPlan } from "@/components/v3/deck-estimator-blueprint/house-wall-plan";
 import { DeckKindPicker } from "@/components/v3/deck-estimator-blueprint/deck-kind-picker";
@@ -110,6 +112,8 @@ import { DeckAddonDialog, DeckPreviewBanner } from "@/components/v3/deck-addon/d
 import type { AddonInterval } from "@/lib/deckAddon";
 import { PHOTO_ENABLED, PhotoFileInput, PhotoSection, PhotoTools, PhotoViewBox, PhotoWhere, useDeckPhoto, type V1View } from "./deck-v1-photo";
 import "./deck-variant-1.css";
+// The Talk button and the panel's styles load with the studio (the panel itself loads when first opened).
+import "@/components/v3/deck-voice/deck-voice.css";
 
 const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3D").then((m) => m.DeckModel3D), {
   ssr: false,
@@ -117,6 +121,8 @@ const DeckModel3D = dynamic(() => import("@/components/estimator/deck/DeckModel3
 });
 /** The 3D re-renders only when what it shows changes (its callbacks are stable, below), not on every render of the studio. */
 const DeckModel3DView = React.memo(DeckModel3D);
+/** Talk to Deck Studio (components/v3/deck-voice): loaded the first time the panel opens. */
+const DeckVoice = dynamic(() => import("@/components/v3/deck-voice/deck-voice").then((m) => m.DeckVoice), { ssr: false, loading: () => null });
 
 /* THE HOVER LIGHT, OUTSIDE THE STUDIO'S STATE (2026-10-19, perf). The field under the pointer lights its part in 3D.
    As studio state, every field the mouse crossed re-rendered the whole studio — 60–150ms a hover, the "lag" of moving
@@ -143,11 +149,19 @@ function hoverStore(): HoverStore {
 const nothingLit = () => null;
 type Model3DProps = React.ComponentProps<typeof DeckModel3DView>;
 /** The 3D with its highlight: the wall being drawn, else the focused field, else the field under the pointer. */
-const Lit3D = React.memo(function Lit3D({ hover, structure, focusLit, wallLit, ...rest }: Omit<Model3DProps, "highlight"> & { hover: HoverStore; structure: Parameters<typeof fieldLight>[1]; focusLit: SceneHighlight | null; wallLit: SceneHighlight | null }) {
+const Lit3D = React.memo(function Lit3D({ hover, structure, focusLit, wallLit, voiceLit, ...rest }: Omit<Model3DProps, "highlight"> & { hover: HoverStore; structure: Parameters<typeof fieldLight>[1]; focusLit: SceneHighlight | null; wallLit: SceneHighlight | null; voiceLit: SceneHighlight | null }) {
   const hovered = React.useSyncExternalStore(hover.subscribe, hover.get, nothingLit);
   const hoverLit = React.useMemo<SceneHighlight | null>(() => (hovered ? fieldLight(rest.scene, structure, hovered) : null), [hovered, rest.scene, structure]);
-  return <DeckModel3DView {...rest} highlight={wallLit ?? focusLit ?? hoverLit} />;
+  return <DeckModel3DView {...rest} highlight={wallLit ?? focusLit ?? voiceLit ?? hoverLit} />;
 });
+
+/** A field of the form by its label: a stepper or a group of answers by its name, a labelled box by its words. */
+function findField(scope: ParentNode, label: string): HTMLElement | null {
+  const named = Array.from(scope.querySelectorAll<HTMLElement>("[aria-label]")).find((el) => el.getAttribute("aria-label") === label);
+  if (named) return named.closest<HTMLElement>(".v1-stepper, .v1-field") ?? named;
+  for (const span of Array.from(scope.querySelectorAll<HTMLElement>(".v1-lbl > span:first-child"))) if (span.textContent?.trim() === label) return span.closest<HTMLElement>(".v1-field, .v1-stepper") ?? span;
+  return null;
+}
 /** The hover tag shows a part's legend: the same legend under the pointer is the same tag (no re-render per pointer move). */
 const sameLegend = (a: SceneLegend | null | undefined, b: SceneLegend | null | undefined) => a === b || (!!a && !!b && a.role === b.role && a.nominal === b.nominal && a.lengthFt === b.lengthFt && a.note === b.note);
 
@@ -160,12 +174,6 @@ const HEIGHT_PRESETS: ReadonlyArray<{ label: string; inches: number }> = [
   { label: "Second storey", inches: 120 },
 ];
 const CORNER_LABEL: Record<NotchCorner, string> = { "front-left": "Front left", "front-right": "Front right", "back-left": "Back left", "back-right": "Back right" };
-const KINDS_FOR: Record<Structure, RoofKind[]> = {
-  deck: [],
-  "covered-deck": ["shed", "gable", "hip"],
-  gazebo: ["gable", "hip", "pyramid", "double-tier", "gambrel", "dutch-gable"],
-  pergola: ["pergola"],
-};
 const EAVE_PRESETS: ReadonlyArray<{ label: string; inches: number }> = [
   { label: "8 ft", inches: 96 },
   { label: "9 ft", inches: 108 },
@@ -284,28 +292,13 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     queueMicrotask(() => setAutoNotes((prev) => (prev.length === settled.fixes.length && prev.every((x, i) => x === settled.fixes[i]) ? prev : settled.fixes)));
     return settled.design;
   }, []);
+  // THE HOUSE AND THE DECK AGREE, THE FRAME SETTLES (lib/deck/edit — the one door every change goes through, the
+  // voice's too).
   const patch = React.useCallback(
     (p: DeckPatch, keys: string[] = []) => {
       for (const k of keys) touched.current.add(k);
       dirty.current = true;
-      setDesign((d) => {
-        let next = applyDeckPatch(d, p);
-        // THE HOUSE AND THE DECK AGREE (lib/deck/house).
-        if (p.house) {
-          const fit = deckShapeForHouse(next.shape, next.house);
-          if (JSON.stringify(fit.shape) !== JSON.stringify(next.shape)) next = applyDeckPatch(next, { shape: fit.shape });
-        } else if (p.shape) {
-          const resized = p.shape.widthFt !== d.shape.widthFt || p.shape.depthFt !== d.shape.depthFt;
-          if (resized) {
-            const fit = deckShapeForHouse(next.shape, next.house);
-            if (JSON.stringify(fit.shape) !== JSON.stringify(next.shape)) next = applyDeckPatch(next, { shape: fit.shape });
-          } else {
-            const h2 = houseForShape(next.house, next.shape);
-            if (h2 !== next.house) next = applyDeckPatch(next, { house: h2 });
-          }
-        }
-        return resizes(p) ? settle(next) : next;
-      });
+      setDesign((d) => patchDesign(d, p, settle));
     },
     [settle],
   );
@@ -313,10 +306,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const rp = React.useCallback(
     (p: Partial<RoofDesign>) => {
       dirty.current = true;
-      setDesign((d) => {
-        const next = applyDeckPatch(d, { roof: { ...d.roof, ...p } });
-        return roofResizes(p) ? settle(next) : next;
-      });
+      setDesign((d) => patchRoof(d, p, settle));
     },
     [settle],
   );
@@ -479,11 +469,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   /** Switching what is built: a different kind of roof starts from its own defaults; deck ↔ covered deck keeps the roof as set. */
   const setStructure = React.useCallback((next: Structure) => {
     dirty.current = true;
-    setDesign((d) => {
-      const family = (st: Structure) => (st === "deck" || st === "covered-deck" ? "cover" : st);
-      const roof = family(next) === family(d.structure) && d.structure !== "deck" ? d.roof : next === "covered-deck" && d.structure === "deck" && KINDS_FOR["covered-deck"].includes(d.roof.kind) ? d.roof : defaultRoofDesign(next);
-      return applyDeckPatch(d, { structure: next, roof, floor: next === "deck" || next === "covered-deck" ? "deck" : d.floor });
-    });
+    setDesign((d) => switchStructure(d, next));
   }, []);
   // A SAMPLE TO START FROM (lib/deck/samples), laid over the contractor's own address, site, house and lumber.
   const [applied, setApplied] = React.useState<{ id: string; design: DeckDesign } | null>(null);
@@ -588,7 +574,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [resetToken, setResetToken] = React.useState(0);
   const [hoverPick, setHoverPick] = React.useState<DeckPick | null>(null);
   const [picked, setPicked] = React.useState<{ legend: SceneLegend; point: [number, number, number] } | null>(null);
-  const [focus, setFocus] = React.useState<[number, number, number] | null>(null);
+  const [focus, setFocus] = React.useState<[number, number, number] | [number, number, number, number] | null>(null);
   const [placing, setPlacing] = React.useState<Placing>(null);
   const [editing, setEditing] = React.useState(false);
   // THE PHONE (owner, 2026-10-18: the deck estimator's own handheld design). The structure rides at the top of the
@@ -604,6 +590,22 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   }, [fullView]);
   // Zoom in flies to the part named below the scene; Zoom out, on the same part, goes back to the whole structure.
   const [zoomedAt, setZoomedAt] = React.useState<string | null>(null);
+  // TALK TO DECK STUDIO (2026-10-21; components/v3/deck-voice): the panel over the 3D, the part it lights (a few
+  // seconds, under a field being typed in), and the side the camera is asked to look from.
+  const [voiceOpen, setVoiceOpen] = React.useState(false);
+  const [voiceFocus, setVoiceFocus] = React.useState<FieldFocus | null>(null);
+  const [look, setLook] = React.useState<{ token: number; from: DeckLook } | null>(null);
+  React.useEffect(() => {
+    if (!voiceFocus) return;
+    const t = window.setTimeout(() => setVoiceFocus(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [voiceFocus]);
+  const openVoice = (on: boolean) => {
+    setVoiceOpen(on);
+    // On a phone the talking happens over the full view: the 3D fills the screen above the panel.
+    if (on && typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) setFullView(true);
+  };
+  const voiceLit = React.useMemo<SceneHighlight | null>(() => (voiceFocus ? fieldLight(scene, structure, voiceFocus) : null), [voiceFocus, scene, structure]);
   const r = design.roof;
   const polygon = r.plan.shape === "hexagon" || r.plan.shape === "octagon" || r.plan.shape === "round";
   /** A handle dragged in the 3D: the design number it stands for takes the dragged value, inside its rails. */
@@ -2801,6 +2803,105 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
 
   const stepBody: Record<StepId, () => React.ReactNode> = { size: sizeStep, kind: kindStep, house: houseStep, materials: materialsStep, stairs: stairsStep, roof: roofStep, extras: extrasStep, checks: checksStep, package: packageStep };
 
+  /* ── Talk to Deck Studio: what the panel may do, through the studio's own doors ── */
+  const voiceEnv = React.useMemo(() => ({ rates: book, market, homeState }), [book, market, homeState]);
+  const permitLink = () => {
+    if (savedRef) return `/deck-permit?${savedRef}`;
+    try {
+      return `/deck-permit?d=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify({ design, address })))))}`;
+    } catch {
+      return null;
+    }
+  };
+  /** The fields a spoken change set, glowing where they sit (a closed disclosure opened), the form glided to the first. */
+  const flashFields = (fields: Flash[], priceChanged: boolean) => {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const root = studioRef.current;
+        if (!root) return;
+        const hits: HTMLElement[] = [];
+        for (const f of fields) {
+          const scope = f.section ? root.querySelector<HTMLElement>(`[data-deck-section="${f.section === "house" ? "size" : f.section}"]`) : root.querySelector<HTMLElement>(".v1-q-scroll");
+          const el = scope ? findField(scope, f.label) : null;
+          if (el && !hits.includes(el)) hits.push(el);
+        }
+        const fieldsHit = hits.length;
+        if (priceChanged) {
+          const price = root.querySelector<HTMLElement>("[data-v1-price]");
+          if (price) hits.push(price);
+        }
+        for (const el of hits) {
+          const box = el.closest("details");
+          if (box && !box.open) box.open = true;
+          el.classList.remove("v1-voice-flash");
+          void el.offsetWidth;
+          el.classList.add("v1-voice-flash");
+          window.setTimeout(() => el.classList.remove("v1-voice-flash"), 2300);
+        }
+        if (fieldsHit && !fullView && window.matchMedia("(min-width: 769px)").matches) glideRef.current?.(hits[0]);
+      }),
+    );
+  };
+  const voiceHost: DeckVoiceHost = {
+    design,
+    readOnly: viewOnly,
+    env: voiceEnv,
+    apply: (next, keys) => {
+      for (const k of keys) touched.current.add(k);
+      dirty.current = true;
+      setDesign(next);
+    },
+    view: (v) => {
+      if (v.tab) setView(v.tab);
+      if (v.xray !== undefined) setXray(v.xray);
+      if (v.night !== undefined) setNight(v.night);
+      if (v.connections !== undefined) setConnections(v.connections);
+      if (v.full !== undefined) setFullView(v.full);
+      if (v.edit !== undefined) setEditing(v.edit);
+      if (v.build === "play") play();
+      else if (v.build === "stop") setPlaying(false);
+      else if (v.build === "done") {
+        setPlaying(false);
+        setBuilt(Number.POSITIVE_INFINITY);
+      }
+      if (v.reset) {
+        setResetToken((t) => t + 1);
+        setPicked(null);
+        setZoomedAt(null);
+      }
+      const from = v.look;
+      if (from) setLook((l) => ({ token: (l?.token ?? 0) + 1, from }));
+    },
+    light: (f, flyThere) => {
+      setVoiceFocus(f);
+      if (f && flyThere) {
+        const lit = fieldLight(scene, structure, f);
+        // Framed wide enough to see the part in the deck around it, not a close-up of one board.
+        if (lit?.tag) setFocus([lit.tag.x, lit.tag.y, Math.max(0.5, lit.tag.z - 1.4), 9]);
+      }
+    },
+    fly: (p) => setFocus([p[0], p[1], p[2], 11]),
+    flash: flashFields,
+    link: (what) => {
+      if (preview && !viewOnly) {
+        askAddon(what === "permit" ? "Print the permit set with Deck Studio" : "Print the material lists with Deck Studio");
+        return null;
+      }
+      return what === "permit" ? permitLink() : materialsHref(what);
+    },
+    go: (step) => go(step),
+    name: (title) => {
+      dirty.current = true;
+      setDraftTitle(title);
+    },
+    address: (text) => {
+      setAddressDraft(text);
+      commitAddress(text);
+    },
+    save: () => void convert(),
+    reset: () => startFresh(),
+  };
+
   const viewTabs: Array<{ value: V1View; label: string }> = [
     { value: "3d", label: "3D" },
     { value: "plan", label: "Framing plan" },
@@ -2876,7 +2977,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           <p className="v1-hint" data-deck-address-hint>The address sets the state&apos;s and the county&apos;s codes, and the lot on the permit set&apos;s site plan — where you also say which side of the house the deck is on.</p>
         </form>
         {preview ? (
-          <DeckPreviewBanner mode="preview" saved={viewOnly} interval={addonInterval} onAdd={() => askAddon(viewOnly ? "Change saved decks with Deck Studio" : "Add Deck Studio to your plan")}>
+          <DeckPreviewBanner mode="preview" saved={viewOnly} interval={addonInterval} onAdd={() => askAddon(viewOnly ? "Changing a saved deck takes a plan" : "Deck Studio comes with your plan")}>
             {viewOnly ? (
               <>
                 {permitHref ? <a href={permitHref} target="_blank" rel="noopener" data-deck-saved-print="permit">Permit sheet</a> : null}
@@ -3014,10 +3115,15 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           <div className="v1-viewer">
             <div className="v1-view-head">
               <h2 className="v1-h3 v1-view-title">The {what.toLowerCase()}</h2>
-              <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" aria-pressed={fullView} onClick={() => setFullView((f) => !f)} data-deck-dock>
-                {fullView ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
-                {fullView ? "Exit full view" : "Full view"}
-              </button>
+              <div className="v1-view-acts">
+                <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-dock-btn", "v1-talk-btn", voiceOpen && "is-on")} aria-pressed={voiceOpen} onClick={() => openVoice(!voiceOpen)} data-deck-talk>
+                  <Mic size={16} aria-hidden="true" /> Talk
+                </button>
+                <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" aria-pressed={fullView} onClick={() => setFullView((f) => !f)} data-deck-dock>
+                  {fullView ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+                  {fullView ? "Exit full view" : "Full view"}
+                </button>
+              </div>
               <span className="v1-meta v1-view-facts" title={scene.facts}>{scene.facts}</span>
               <Seg label="View" value={view} onChange={setView} options={viewTabs} />
             </div>
@@ -3028,7 +3134,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                 </div>
               ) : view === "3d" ? (
                 <>
-                  <Lit3D hover={hover} structure={structure} focusLit={focusLit} wallLit={wallLit} scene={scene} built={built} xray={xray} backdrop={ph.backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEditStable} resetToken={resetToken} focus={focus} onPick={onPickStable} className="v1-canvas" label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+                  <Lit3D hover={hover} structure={structure} focusLit={focusLit} wallLit={wallLit} voiceLit={voiceLit} look={look} scene={scene} built={built} xray={xray} backdrop={ph.backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEditStable} resetToken={resetToken} focus={focus} onPick={onPickStable} className="v1-canvas" label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                   {hoverPick?.legend && !placing ? (
                     <div className="v1-tag" data-deck-hover>
                       <b>
@@ -3071,6 +3177,14 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                   ) : null}
                 </div>
               )}
+              {/* Talk to Deck Studio: the panel over the picture, or its round mic when closed. */}
+              {voiceOpen ? (
+                <DeckVoice host={voiceHost} onClose={() => setVoiceOpen(false)} />
+              ) : !editing && !placing ? (
+                <button type="button" className="dv-fab" onClick={() => openVoice(true)} aria-label="Talk to Deck Studio" data-deck-talk-fab>
+                  <Mic size={18} aria-hidden="true" /> Talk
+                </button>
+              ) : null}
             </div>
             {view === "3d" ? (
               <div className="v1-tools">
@@ -3111,36 +3225,34 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                     />
                   </label>
                 </div>
-                <details className="v1-view-options">
-                  <summary>View options <ChevronDown size={18} aria-hidden="true" /></summary>
-                  <div className="v1-tools-quiet">
-                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", xray && "is-on")} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
-                      X-ray
+                {/* The view buttons, always in sight (owner, 2026-10-21: "keep all those buttons… with no foldable"). */}
+                <div className="v1-tools-quiet" data-deck-view-tools>
+                  <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", xray && "is-on")} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
+                    X-ray
+                  </button>
+                  {PHOTO_ENABLED && design.photo?.placed ? (
+                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", ph.showHouse && "is-on")} aria-pressed={ph.showHouse} onClick={() => ph.setShowHouse((v) => !v)} data-deck-house-toggle>
+                      House photo
                     </button>
-                    {PHOTO_ENABLED && design.photo?.placed ? (
-                      <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", ph.showHouse && "is-on")} aria-pressed={ph.showHouse} onClick={() => ph.setShowHouse((v) => !v)} data-deck-house-toggle>
-                        House photo
-                      </button>
-                    ) : null}
-                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", connections && "is-on")} aria-pressed={connections} onClick={() => setConnections((c) => !c)} data-deck-connections>
-                      Connections
-                    </button>
-                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", night && "is-on")} aria-pressed={night} onClick={() => setNight((x) => !x)} data-deck-night>
-                      Night
-                    </button>
-                    <button
-                      type="button"
-                      className="v1-btn v1-btn-sm v1-btn-quiet"
-                      onClick={() => {
-                        setResetToken((t) => t + 1);
-                        setPicked(null);
-                        setZoomedAt(null);
-                      }}
-                    >
-                      Reset view
-                    </button>
-                  </div>
-                </details>
+                  ) : null}
+                  <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", connections && "is-on")} aria-pressed={connections} onClick={() => setConnections((c) => !c)} data-deck-connections>
+                    Connections
+                  </button>
+                  <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", night && "is-on")} aria-pressed={night} onClick={() => setNight((x) => !x)} data-deck-night>
+                    Night
+                  </button>
+                  <button
+                    type="button"
+                    className="v1-btn v1-btn-sm v1-btn-quiet"
+                    onClick={() => {
+                      setResetToken((t) => t + 1);
+                      setPicked(null);
+                      setZoomedAt(null);
+                    }}
+                  >
+                    Reset view
+                  </button>
+                </div>
               </div>
             ) : null}
             {autoNotes.length ? (

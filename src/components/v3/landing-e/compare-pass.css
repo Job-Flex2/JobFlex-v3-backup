@@ -63,3 +63,109 @@
 }
 .jf-lp .lp-compare-mobile .lp-compare-partial { height: 32px; padding: 0 6px; font-size: 11px; line-height: 1; }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE BLUEPRINT PASS (owner, 2026-10-21: "redesign the second section to look
+   like the blueprint design"). The comparison drawn as one of the app's own
+   sheets (root DESIGN.md): an ink-framed white plate with a hard offset shadow
+   and square corners, an ink title bar with the vendors' names, JobFlex's
+   column on blueprint blue, square answer marks — a filled blue square for a
+   yes, an ink-framed empty one for a no — and a mono title block under the
+   plate. Selectors carry `.lp-compare-section--bp` so they outrank the base
+   rules in landing-e.css whatever the bundle's order. No gradients, no pills,
+   no blurred shadows. */
+.jf-lp .lp-compare-section--bp .lp-compare-stamp { color: var(--accent, #1854a0); font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: .14em; }
+.jf-lp .lp-compare-section--bp .lp-compare-heading h2 { margin-top: 14px; }
+.jf-lp .lp-compare-section--bp .lp-compare-intro { max-width: 640px; }
+.jf-lp .lp-compare-section--bp .lp-cmp-body { margin-top: 32px; }
+
+/* The plate: 2px ink, square, a 6px hard shadow — the signup cards' language, one size up for a sheet. */
+.jf-lp .lp-compare-section--bp .lp-compare-plate {
+  border: 2px solid var(--ink, #0a0a0a); border-radius: 0;
+  background: var(--paper-deep, #fff);
+  box-shadow: 6px 6px 0 var(--ink, #0a0a0a);
+}
+.jf-lp .lp-compare-section--bp .lp-compare-table { border-collapse: separate; border-spacing: 0; }
+.jf-lp .lp-compare-section--bp .lp-compare-table th,
+.jf-lp .lp-compare-section--bp .lp-compare-table td { border-bottom: 1px solid var(--ink-line, #d5d1c8); }
+
+/* The title bar: ink, the names in white, each column a mono stamp. */
+.jf-lp .lp-compare-section--bp .lp-compare-table thead th {
+  background: var(--ink, #0a0a0a); color: var(--paper-deep, #fff);
+  border-bottom: 2px solid var(--ink, #0a0a0a); padding-block: 18px;
+}
+.jf-lp .lp-compare-section--bp .lp-compare-table thead th + th { border-left: 1px solid rgba(255, 255, 255, 0.18); }
+.jf-lp .lp-compare-section--bp .lp-compare-brand { color: inherit; font: 700 clamp(12px, 1.05vw, 14px)/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; gap: 10px; }
+.jf-lp .lp-compare-section--bp .lp-compare-brand > img { width: 28px; height: 28px; background: var(--paper-deep, #fff); padding: 2px; }
+.jf-lp .lp-compare-section--bp .lp-compare-brand .lp-mark-box { --lp-mark-size: 60px; }
+/* JobFlex's column: a blueprint-blue head, a faint blue wash down the body, 2px blue rules on both sides. */
+.jf-lp .lp-compare-section--bp .lp-compare-table thead .lp-compare-us { background: var(--accent, #1854a0); color: #fff; box-shadow: none; border-left-color: var(--accent, #1854a0); }
+.jf-lp .lp-compare-section--bp .lp-compare-table tbody .lp-compare-us {
+  background: color-mix(in srgb, var(--accent, #1854a0) 7%, var(--paper-deep, #fff));
+  box-shadow: inset 2px 0 var(--accent, #1854a0), inset -2px 0 var(--accent, #1854a0);
+}
+.jf-lp .lp-compare-section--bp .lp-compare-table tbody tr:last-child .lp-compare-us { box-shadow: inset 2px 0 var(--accent, #1854a0), inset -2px 0 var(--accent, #1854a0), inset 0 -2px var(--accent, #1854a0); }
+
+/* The feature column: a bold ink label, its note under it in the annotation face. */
+.jf-lp .lp-compare-section--bp .lp-compare-table tbody th { font-size: 15px; font-weight: 700; color: var(--ink, #0a0a0a); }
+.jf-lp .lp-compare-section--bp .lp-compare-table tbody th small { font-family: var(--font-mono); font-size: 11px; letter-spacing: .02em; color: var(--ink-soft, #4a4a4a); }
+
+/* The marks. A yes: a blue square with a white tick. A no: an empty ink-framed square, the word in ink-soft.
+   No shadow or offset behind a coloured square (DESIGN.md). */
+.jf-lp .lp-compare-section--bp .lp-compare-answer {
+  min-width: 0; gap: 8px; padding: 0; border-radius: 0; background: none;
+  font: 700 13px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase;
+}
+.jf-lp .lp-compare-section--bp .lp-compare-answer svg {
+  width: 26px; height: 26px; padding: 4px; box-sizing: border-box; flex: none;
+  border: 1.5px solid var(--ink, #0a0a0a); border-radius: 0;
+}
+.jf-lp .lp-compare-section--bp .lp-compare-answer.is-yes { color: var(--accent, #1854a0); }
+.jf-lp .lp-compare-section--bp .lp-compare-answer.is-yes svg { background: var(--accent, #1854a0); border-color: var(--accent, #1854a0); color: #fff; }
+.jf-lp .lp-compare-section--bp .lp-compare-answer.is-no { color: var(--ink-soft, #4a4a4a); }
+.jf-lp .lp-compare-section--bp .lp-compare-answer.is-no svg { background: var(--paper-deep, #fff); color: var(--ink-soft, #4a4a4a); border-color: var(--ink-line, #c9c5bc); }
+/* A yes with a catch, and "Paid" / "Coming soon": square stamps in the annotation face. */
+.jf-lp .lp-compare-section--bp .lp-compare-partial {
+  border-radius: 0; padding: 0 10px; height: 28px; line-height: 26px;
+  background: color-mix(in srgb, var(--amber, #b8860b) 12%, var(--paper-deep, #fff));
+  box-shadow: none; border: 1.5px solid color-mix(in srgb, var(--amber, #b8860b) 55%, var(--ink, #0a0a0a));
+  font: 700 11px/26px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink, #0a0a0a);
+}
+.jf-lp .lp-compare-section--bp .lp-compare-qualified {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 2px;
+  font: 700 11px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft, #4a4a4a);
+}
+.jf-lp .lp-compare-section--bp .lp-compare-qualified small { margin-top: 0; font: 500 10.5px/1.3 var(--font-mono); letter-spacing: 0; text-transform: none; }
+
+/* The sheet's title block under the plate: three mono fields, framed in ink, flush right like a drawing's. */
+.jf-lp .lp-compare-section--bp .lp-compare-titleblock {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; margin: 22px 0 0 auto; max-width: 1120px;
+  border: 1.5px solid var(--ink, #0a0a0a); background: var(--paper-deep, #fff);
+}
+.jf-lp .lp-compare-section--bp .lp-compare-titleblock span {
+  padding: 8px 14px; font: 700 11px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink, #0a0a0a);
+}
+.jf-lp .lp-compare-section--bp .lp-compare-titleblock span + span { border-left: 1.5px solid var(--ink, #0a0a0a); }
+.jf-lp .lp-compare-section--bp .lp-compare-titleblock span:first-child { color: #fff; background: var(--accent, #1854a0); }
+@media (min-width: 769px) { .jf-lp .lp-compare-section--bp .lp-cmp-body > .lp-compare-plate { margin-right: 6px; } }
+
+/* The phone: the same sheet, the pinned columns opaque (sticky cells), the answers' squares a size down, and the
+   shadow a step smaller so it never pushes the plate past the gutter. */
+@media (max-width: 768px) {
+  .jf-lp .lp-compare-section--bp .lp-compare-plate { box-shadow: 4px 4px 0 var(--ink, #0a0a0a); margin-right: 4px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile th:first-child { background: var(--paper-deep, #fff); }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile thead th:first-child { background: var(--ink, #0a0a0a); }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile tbody .lp-compare-us { background: #eef3fa; border-right: 0; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile thead .lp-compare-us { background: var(--accent, #1854a0); box-shadow: none; border-right: 0; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile thead th { padding-block: 12px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile .lp-compare-brand { font-size: 10.5px; letter-spacing: .06em; gap: 4px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile .lp-compare-brand > img { width: 22px; height: 22px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile .lp-compare-brand .lp-mark-box { --lp-mark-size: 34px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile .lp-compare-answer { width: auto; height: auto; font-size: 0; gap: 0; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile .lp-compare-answer svg { width: 24px; height: 24px; padding: 3px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile .lp-compare-partial { height: 24px; line-height: 22px; padding: 0 6px; font-size: 9.5px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-table-mobile .lp-compare-qualified { font-size: 9.5px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-more { border-top-width: 2px; font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .jf-lp .lp-compare-section--bp .lp-compare-titleblock { margin-top: 18px; margin-right: 4px; }
+  .jf-lp .lp-compare-section--bp .lp-compare-titleblock span { padding: 7px 10px; font-size: 10px; }
+}

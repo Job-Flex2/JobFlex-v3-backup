@@ -219,6 +219,16 @@ const RULES: Rule[] = [
     },
   },
   /* Height, house and ground */
+  /* The hot-tub spot (2026-10-21): its shell and water, with what is under it. */
+  {
+    when: (f) => named(f, "Where the tub stands", "Tub, along the house", "Tub, out from the house"),
+    run: (c) => {
+      if (!c.d.spa.on) return null;
+      const tub = partsOf(c.sc, ["spa"], undefined, "any");
+      if (!tub.length) return null;
+      return light(c, { boxIdx: tub, polyIdx: facesOf(c.sc, ["spa"]) }, `Hot-tub spot · ${feetWords(c.d.spa.widthFt * 12)} × ${feetWords(c.d.spa.depthFt * 12)} · the joists under it doubled`);
+    },
+  },
   {
     when: (f) => named(f, "Deck height"),
     run: (c) => {

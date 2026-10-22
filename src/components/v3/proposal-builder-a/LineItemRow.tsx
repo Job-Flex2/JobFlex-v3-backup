@@ -25,8 +25,23 @@ const MEASUREMENT_OPTIONS: {
   { value: "LINEAR_FT", label: "Linear ft" },
   { value: "CUBIC_FT", label: "Cubic ft" },
   { value: "UNIT", label: "Unit" },
+  { value: "EACH", label: "Each" },
   { value: "HOUR", label: "Hour" },
   { value: "LUMP_SUM", label: "Lump sum" },
+  // What a material is bought in (2026-10-21).
+  { value: "SHEET", label: "Sheets" },
+  { value: "BUNDLE", label: "Bundles" },
+  { value: "ROLL", label: "Rolls" },
+  { value: "BOX", label: "Boxes" },
+  { value: "BAG", label: "Bags" },
+  { value: "PIECE", label: "Pieces" },
+  { value: "GALLON", label: "Gallons" },
+  { value: "BUCKET", label: "Buckets" },
+  { value: "TUBE", label: "Tubes" },
+  { value: "SET", label: "Sets" },
+  { value: "TON", label: "Tons" },
+  { value: "CU_YARD", label: "Cubic yd" },
+  { value: "SQ_YARD", label: "Sq yd" },
 ];
 
 const cents = (n: number) => Math.round(n * 100);

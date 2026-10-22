@@ -446,6 +446,21 @@
 .jf-deck-v1 .v1-build .v1-meta { font-family: var(--font-sans); font-size: var(--deck-meta); letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jf-deck-v1 .v1-build input[type="range"] { width: 100%; accent-color: var(--accent);  height: var(--deck-control); }
 .jf-deck-v1 .v1-tools-quiet { display: flex; flex-wrap: wrap; gap: var(--deck-space-xs); }
+/* The view buttons, always shown (owner, 2026-10-21 — no fold): a line of their own under Build it, sharing its width;
+   they wrap only when the bar is too narrow for them. */
+.jf-deck-v1 .v1-tools .v1-tools-quiet { grid-column: 1 / -1; }
+.jf-deck-v1 .v1-tools .v1-tools-quiet .v1-btn { flex: 1 1 auto; padding-inline: 8px; }
+/* A narrow 3D column (a laptop's two-column studio): Build it and its slider take a line of their own too, so the
+   slider never shrinks to a dot beside Edit in 3D and Add stairs. */
+.jf-deck-v1 .v1-tools { container-type: inline-size; }
+@container (max-width: 440px) {
+  .jf-deck-v1 .v1-tools > .v1-playback, .jf-deck-v1 .v1-tools > .v1-edit-hint { grid-column: 1 / -1; grid-row: 2; }
+  .jf-deck-v1 .v1-tools > .v1-tools-quiet { grid-row: 3; }
+}
+/* Too narrow for the four in a line (a phone, a laptop's narrow column): two by two, even. */
+@container (max-width: 360px) {
+  .jf-deck-v1 .v1-tools > .v1-tools-quiet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .jf-deck-v1 .v1-pick { display: grid; gap: 8px; padding: 12px; border-top: 1px solid var(--ink); }
 .jf-deck-v1 .v1-pick-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 15px; }
 .jf-deck-v1 .v1-pick-body { font-size: 13.5px; color: var(--ink-soft); }
@@ -568,10 +583,6 @@
 .jf-deck-v1 .v1-tools-primary { display: flex; flex-wrap: wrap; gap: var(--deck-space-sm); }
 .jf-deck-v1 .v1-tools-primary .v1-btn { flex: 1 1 0; min-width: 0; white-space: normal; }
 .jf-deck-v1 .v1-playback { display: flex; align-items: center; gap: var(--deck-space-md); }
-.jf-deck-v1 .v1-view-options { border-top: 1px solid var(--ink-line); }
-.jf-deck-v1 .v1-view-options > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--deck-space-xs); min-height: var(--deck-control); font-size: var(--deck-meta); font-weight: 700; cursor: pointer; list-style: none; }
-.jf-deck-v1 .v1-view-options > summary::-webkit-details-marker { display: none; }
-.jf-deck-v1 .v1-view-options[open] > summary svg { transform: rotate(180deg); }
 .jf-deck-v1 .v1-price-sources { display: flex; align-items: center; flex-wrap: wrap; gap: var(--deck-space-xs); padding: 0 var(--deck-space-md) var(--deck-space-md); }
 
 /* The desktop work area fills the space left by the actual shell and header.
@@ -600,9 +611,6 @@
   .jf-deck-v1 .v1-tools .v1-btn { flex: none; min-height: var(--deck-tool-control); padding: 0 var(--deck-space-xs); font-size: var(--deck-meta); white-space: nowrap; }
   .jf-deck-v1 .v1-playback { min-width: 0; gap: var(--deck-space-xs); }
   .jf-deck-v1 .v1-build input[type="range"] { height: var(--deck-space-lg); }
-  .jf-deck-v1 .v1-view-options { position: relative; border-top: 0; }
-  .jf-deck-v1 .v1-view-options > summary { min-height: var(--deck-tool-control); }
-  .jf-deck-v1 .v1-view-options .v1-tools-quiet { position: absolute; right: 0; bottom: calc(100% + var(--deck-space-xs)); z-index: 6; width: max-content; max-width: 280px; padding: var(--deck-space-sm); border: 1.5px solid var(--ink); background: var(--paper-deep); }
   .jf-deck-v1 .v1-price { padding: var(--deck-space-xs) var(--deck-space-sm); gap: var(--deck-space-xs); }
   .jf-deck-v1 .v1-price-sources { padding: 0 var(--deck-space-sm) var(--deck-space-xs); }
 }

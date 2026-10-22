@@ -7,6 +7,21 @@ const COUNTED: Record<string, [one: string, many: string]> = {
   HOUR: ["hour", "hours"],
   UNIT: ["unit", "units"],
   SQUARE: ["square", "squares"],
+  // The real measures (2026-10-21): what a line is counted or bought in.
+  EACH: ["each", "each"],
+  SHEET: ["sheet", "sheets"],
+  BUNDLE: ["bundle", "bundles"],
+  ROLL: ["roll", "rolls"],
+  BOX: ["box", "boxes"],
+  BAG: ["bag", "bags"],
+  PIECE: ["piece", "pieces"],
+  GALLON: ["gallon", "gallons"],
+  TON: ["ton", "tons"],
+  SET: ["set", "sets"],
+  BUCKET: ["bucket", "buckets"],
+  TUBE: ["tube", "tubes"],
+  CU_YARD: ["cubic yard", "cubic yards"],
+  SQ_YARD: ["sq yard", "sq yards"],
 };
 
 /** The measurement word for a quantity — plural where English wants it; null when the line has none. */

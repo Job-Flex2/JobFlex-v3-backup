@@ -99,8 +99,27 @@ export const MeasurementType = {
   HOUR: "HOUR",
   LUMP_SUM: "LUMP_SUM",
   SQUARE: "SQUARE",
+  // The real measures a line is counted or bought in (2026-10-21, owner: "make sure it uses the right measures, not
+  // only units"): a fixture is "each", drywall "sheets", shingles "bundles", concrete "cubic yards". The column is
+  // text on both databases, so these are plain values — no migration.
+  EACH: "EACH",
+  SHEET: "SHEET",
+  BUNDLE: "BUNDLE",
+  ROLL: "ROLL",
+  BOX: "BOX",
+  BAG: "BAG",
+  PIECE: "PIECE",
+  GALLON: "GALLON",
+  TON: "TON",
+  SET: "SET",
+  BUCKET: "BUCKET",
+  TUBE: "TUBE",
+  CU_YARD: "CU_YARD",
+  SQ_YARD: "SQ_YARD",
 } as const;
 export type MeasurementType = (typeof MeasurementType)[keyof typeof MeasurementType];
+/** Every value, for a schema (z.enum). */
+export const MEASUREMENT_TYPES = Object.values(MeasurementType) as [MeasurementType, ...MeasurementType[]];
 
 export const PaymentStatus = {
   PENDING: "PENDING",

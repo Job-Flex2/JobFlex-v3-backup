@@ -287,6 +287,29 @@
   stroke: currentColor;
   stroke-width: 2;
 }
+/* An estimate, or the sizes alone (2026-10-21): two tabs over the question. */
+.be.be .modes {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1.5px solid var(--be-ink);
+  border-radius: var(--be-r);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.be.be .mode {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  background: var(--be-paper);
+  color: var(--be-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.be.be .mode + .mode { border-left: 1.5px solid var(--be-ink); }
+.be.be .modeOn { background: var(--be-ink); color: #fff; }
+.be.be .mode:focus-visible { outline: 2px solid var(--be-blue); outline-offset: -3px; }
 .be.be .chips {
   display: flex;
   flex-wrap: wrap;

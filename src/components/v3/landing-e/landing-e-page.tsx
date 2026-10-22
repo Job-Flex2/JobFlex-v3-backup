@@ -106,15 +106,15 @@ export interface LandingEProps {
   utm?: UtmParams;
   /** Meta's click id from an ad link — carried into the register links. */
   fbclid?: string;
-  /** The in-app browser the request's user agent names (lib/inAppBrowser).
-   *  Unread since 2026-10-19: the hero has no Google button on any browser. */
+  /** The in-app browser the request's user agent names (lib/inAppBrowser), so
+   *  the hero's first paint already has no Google button there. */
   inAppBrowser?: InAppBrowser | null;
   /** The ad's opening line for the headline: a key of the trade's own table
    *  (LANDING_HOOKS), resolved by the entry point. Absent: the trade's hero. */
   hook?: string;
 }
 
-export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, hook, tool }: LandingEProps) {
+export async function LandingE({ variant, explicitVariant = false, utm = {}, fbclid, inAppBrowser = null, hook, tool }: LandingEProps) {
   // What the plan cards mark for this visitor: the ad's tool, else the trade's own estimator (lib/planSpotlight).
   const spotlight = spotlightFor({ tool, industry: variant });
   // The trade's hero — with the ad's two lines in place of its own when the
@@ -171,13 +171,14 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   // it is near the viewport — the mobile LCP's render delay was style/layout
   // of the whole page.
 
-  // The line under the hero's button (owner, 2026-10-16): one sentence, the
+  // The line under the hero's buttons (owner, 2026-10-16): one sentence, the
   // same for every trade, where the price line was (.lp-hero-price) — the
   // button says the trial. The price line (hero-price.ts heroPriceLine) and the
-  // Deck Studio's coming-soon note are off. Since 2026-10-19 the default page
-  // carries it too: the first screen is one order on every landing. The
-  // trial's terms are never here — they are on Stripe's page.
-  const heroLine = "Build your free estimates";
+  // Deck Studio's coming-soon note are off. The default page has no line.
+  // (The first screen is the one from before 2026-10-19 again — owner, 2026-10-21:
+  // headline, line, the pair of buttons, the shot under them; hero-proof.tsx and
+  // hero-fit.css are kept, unmounted.)
+  const heroLine = variant ? "Build your free estimates" : null;
   // THE BLOCKS BY SECTION KEY, LAID OUT IN THE LANDING'S ORDER (the header
   // above; lib/landing-sections). A block that this landing does not show is
   // null. The comparison is on the second screen in the usual order and is
@@ -187,7 +188,7 @@ export async function LandingE({ variant, explicitVariant = false, utm = {}, fbc
   const compareBelow = order.indexOf("compare") > 1;
   const blocks: Record<string, ReactNode> = {
     // The hook goes to the demo film's events (demo-film.tsx).
-    hero: <Hero variant={v} variantKey={variant} registerHref={register} cta={top} trialCta={low} priceLine={heroLine} hook={v.film ? hook : undefined} />,
+    hero: <Hero variant={v} variantKey={variant} utm={utm} registerHref={register} cta={top} trialCta={low} fbclid={fbclid} inAppBrowser={inAppBrowser} priceLine={heroLine} hook={v.film ? hook : undefined} />,
     compare: compareBelow ? <div className="lp-cv lp-cv--compare"><Intro /></div> : <Intro />,
     // The Deck Studio's landing shows its own three shots where the other landings show the estimators (owner, 2026-10-11).
     showcase: variant === "decking" ? <div className="lp-cv lp-cv--showcase"><DeckShots registerHref={register} cta={top} /></div> : <div className="lp-cv lp-cv--showcase"><EstimatorsShowcase slides={variant && isVariantReady(variant) ? v.showcaseSlides : undefined} ownSlide={variant && isVariantReady(variant) ? v.showcaseSlide : undefined} scenario={smart} registerHref={register} cta={top} /></div>,

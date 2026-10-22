@@ -22,7 +22,6 @@ import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { readScheduledSwitch } from "@/lib/planChange";
 import { onFreePlan } from "@/lib/freePlan";
 import { customDeckPageHeld } from "@/lib/customPageAccess";
-import { isDeckPlan } from "@/lib/customPlan";
 import {
   DECK_ADDON_KIND,
   DECK_ADDON_NAME,
@@ -80,14 +79,9 @@ export type DeckAddonFailure = "no-subscription" | "unreachable" | "not-live" | 
 /** A Custom plan that bought the Deck estimator page holds the studio: never a second line (owner, 2026-10-20). */
 export const CUSTOM_INCLUDED_WORDS = "Included in your Custom plan.";
 
-/** The Deck Studio plan and the Advanced plan carry the studio (owner, 2026-10-20 — lib/editions): no add-on line. */
+/** Every paid plan carries the studio (owner, 2026-10-21 — lib/editions): nothing is added any more; only an older
+ *  line still on a subscription is read (addonHeld) and removed (removeDeckAddon). */
 export const PLAN_INCLUDED_WORDS = "Deck Studio is included in your plan.";
-
-/** The running plan is one that carries the studio: the Deck Studio plan, or Advanced (slug "enterprise"). */
-function planCarriesStudio(row: { plan: string | null; status: string }): boolean {
-  if (onFreePlan(row)) return false;
-  return isDeckPlan(row.plan) || (row.plan ?? "").toUpperCase() === "ENTERPRISE";
-}
 
 const NO_PAID_PLAN = "Deck Studio goes on a paid plan. Pick a plan on Subscription first, then add it here.";
 
@@ -145,8 +139,8 @@ function recordOf(sub: Stripe.Subscription, line: Stripe.SubscriptionItem, since
  *  holds the studio, and nothing is put on the subscription for after it. */
 export async function addDeckAddon(organizationId: string): Promise<DeckAddonChange> {
   if (await customDeckPageHeld(organizationId)) return { ok: false, code: "included", error: CUSTOM_INCLUDED_WORDS };
-  const plan = await db.subscription.findUnique({ where: { organizationId } });
-  if (plan && planCarriesStudio(plan)) return { ok: false, code: "included", error: PLAN_INCLUDED_WORDS };
+  // Not sold since 2026-10-21: every paid plan has the studio; a Custom plan buys the Deck estimator page instead.
+  if (!(await customDeckPageHeld(organizationId))) return { ok: false, code: "included", error: PLAN_INCLUDED_WORDS };
   const ready = await liveSubscription(organizationId, true);
   if (!ready.ok) return ready;
   const { stripe, mode } = ready;
@@ -271,8 +265,8 @@ export async function deckAddonOffer(organizationId: string): Promise<DeckAddonO
   if (row?.provider === "MANUAL" && !onFreePlan(row)) return { ...base, included: "grant", reason: "Deck Studio is included in your complimentary plan." };
   // The Custom plan's deck page, bought: the add-on as a page — it outlasts the trial, so it is said before it.
   if (row && !onFreePlan(row) && (await customDeckPageHeld(organizationId, row.plan))) return { ...base, included: "custom", reason: CUSTOM_INCLUDED_WORDS };
-  // The Deck Studio plan and Advanced carry it — past the trial too, so it is said before the trial is.
-  if (row && planCarriesStudio(row)) return { ...base, included: "plan", reason: PLAN_INCLUDED_WORDS };
+  // Every paid plan carries it (owner, 2026-10-21) — said before the trial is.
+  if (row && !onFreePlan(row)) return { ...base, included: "plan", reason: PLAN_INCLUDED_WORDS };
   const ready = await liveSubscription(organizationId, true).catch(() => null);
   if (!ready) return { ...base, reason: "Couldn't reach your subscription. Try again in a minute." };
   if (!ready.ok) return { ...base, reason: ready.error, included: ready.code === "trial" ? "trial" : null };

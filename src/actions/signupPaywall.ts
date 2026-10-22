@@ -16,6 +16,7 @@ import { REFERRAL_DISCOUNT_PCT } from "@/lib/referralDiscount";
 //     the organization when that organization is created. One discount system,
 //     one binding path.
 import { getPlanCatalog } from "@/lib/planCatalogServer";
+import type { PlanLimits } from "@/lib/planLimits";
 import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { readPendingSignup } from "@/actions/signupCheckout";
 import { validateAttribution } from "@/lib/attribution";
@@ -32,6 +33,8 @@ export interface SignupPlan {
   yearlyPriceCents: number | null;
   trialDays: number;
   features: string[];
+  /** The plan's caps (lib/planLimits) — the uses the cards print before each row (lib/planRowUsage). */
+  limits: PlanLimits;
   highlight: boolean;
 }
 
@@ -84,6 +87,7 @@ export async function signupPlans(token?: string, ask: AutoPlanAsk = {}): Promis
         // Use the saved offer on every plan, matching Checkout's duration.
         trialDays,
         features: p.features,
+        limits: p.limits,
         highlight: p.highlight,
       })),
     promo,

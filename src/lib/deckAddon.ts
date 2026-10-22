@@ -32,10 +32,10 @@ export function deckAddonShortWords(interval: AddonInterval = "MONTH"): string {
   return `$${Math.round(deckAddonCents(interval) / 100)}/${interval === "YEAR" ? "yr" : "mo"}`;
 }
 
-/** What the trial says wherever the add-on is offered (owner, 2026-10-20): the trial holds the studio, and adding
- *  the add-on during it puts nothing on the subscription. */
-export function deckTrialWords(interval: AddonInterval = "MONTH"): string {
-  return `Included in your trial. After the trial, Deck Studio is a ${deckAddonShortWords(interval)} add-on.`;
+/** What the trial says in the studio (owner, 2026-10-21: the Deck estimator comes with every plan). */
+export function deckTrialWords(interval?: AddonInterval): string {
+  void interval;
+  return "Included in your trial. After the trial, Deck Studio comes with your plan.";
 }
 
 /** A Stripe line (or anything with its price's metadata) that is the add-on. */

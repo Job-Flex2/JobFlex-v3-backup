@@ -99,7 +99,7 @@ import {
   generateAdvancedEstimate,
   saveEstimate,
 } from "@/actions/advancedEstimator";
-import type { ClarifyQuestion, GeneratedEstimate, PricingSnapshotWire } from "@/lib/estimatorSchema";
+import { SAME_BRIEF_NOTE, type ClarifyQuestion, type GeneratedEstimate, type PricingSnapshotWire } from "@/lib/estimatorSchema";
 import { InventoryLinkChoice } from "@/components/v3/inventory-link/inventory-link-choice";
 import { isTradeId } from "@/lib/inventory";
 import { takePlanEstimate, type PlanEstimateDone } from "@/lib/plans/handoff";
@@ -306,6 +306,8 @@ export function MobileSmartProposal() {
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   /** What the post-generation check changed (lib/estimate/validate-estimate). */
   const [checkNotes, setCheckNotes] = useState<string[]>([]);
+  // The estimate this same brief got before (lib/estimate/sameBrief): when, for the line that offers a fresh one.
+  const [remembered, setRemembered] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [scope, setScope] = useState("");
   const [assumptions, setAssumptions] = useState<string[]>([]);
@@ -644,6 +646,7 @@ export function MobileSmartProposal() {
   const landPlans = (r: PlanEstimateDone) => {
     setLines(r.lines);
     setCheckNotes(r.notes);
+    setRemembered(null);
     setTitle(r.title);
     setScope(r.scope);
     setAssumptions(r.assumptions);
@@ -678,6 +681,7 @@ export function MobileSmartProposal() {
   ) => {
     setLines(linesFromEstimate(est));
     setCheckNotes(est.notes ?? []);
+    setRemembered(est.remembered?.at ?? null);
     setTitle(est.title || estTitle);
     setScope(est.scope || brief.trim());
     setAssumptions(est.assumptions);
@@ -753,7 +757,8 @@ export function MobileSmartProposal() {
     settleClarifyRef.current = settleClarify;
   });
 
-  const generate = async () => {
+  /** `fresh`: price it again even when this exact brief was priced before ("Ask for a fresh estimate"). */
+  const generate = async (fresh = false) => {
     if (!validate(1)) {
       goStep(1);
       return;
@@ -831,6 +836,7 @@ export function MobileSmartProposal() {
         description,
         location: location || undefined,
         photos: photoUrls,
+        ...(fresh ? { fresh: true } : {}),
       });
       if (stale()) return;
       if (!res.ok) {
@@ -1198,11 +1204,23 @@ export function MobileSmartProposal() {
             ))}
           </div>
         )}
-        {checkNotes.length > 0 && (
+        {remembered ? (
+          <div className={styles.sameBrief} data-sp-same>
+            <span>
+              Same brief as {new Date(remembered).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} — so the same estimate and the same price.
+            </span>
+            <button type="button" className={styles.sameFresh} onClick={() => void generate(true)} data-sp-fresh>
+              Ask for a fresh estimate
+            </button>
+          </div>
+        ) : null}
+        {checkNotes.filter((n) => !(remembered && n === SAME_BRIEF_NOTE)).length > 0 && (
           <ul className={styles.checkNotes}>
-            {checkNotes.map((n) => (
-              <li key={n}>{n}</li>
-            ))}
+            {checkNotes
+              .filter((n) => !(remembered && n === SAME_BRIEF_NOTE))
+              .map((n) => (
+                <li key={n}>{n}</li>
+              ))}
           </ul>
         )}
         {/* The empty state already carries the Add-line CTA — one per card. */}

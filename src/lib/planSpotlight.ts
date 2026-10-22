@@ -16,7 +16,6 @@
 // beside the trade; the signup writes it on the company (SyncState, no
 // schema change), so the Subscription page keeps marking it for the trial.
 
-import { deckAddonPriceWords } from "@/lib/deckAddon";
 
 export type SpotlightTool = "roof" | "hvac" | "fence" | "smart" | "blueprint" | "aidesk" | "deck";
 
@@ -91,9 +90,9 @@ export function withSpotlightFirst(rows: readonly string[], tool: SpotlightTool 
   return [hit, ...rows.filter((r) => r !== hit)];
 }
 
-/** Tools sold as an add-on to any plan, never by a plan: the Deck Studio (owner-locked 2026-10-20 — the free trial
- *  holds it, then $45/month on any plan; lib/deckAddon). */
-const ADD_ON: Partial<Record<SpotlightTool, string>> = { deck: `the trial includes it, then it's ${deckAddonPriceWords("MONTH")} on any plan` };
+/** Tools sold as an add-on to any plan, never by a plan. None today (the Deck Studio was one 2026-10-19/20; since
+ *  2026-10-21 every plan carries the Deck estimator — lib/editions). */
+const ADD_ON: Partial<Record<SpotlightTool, string>> = {};
 
 export function isAddOnTool(tool: SpotlightTool): boolean {
   return ADD_ON[tool] !== undefined;

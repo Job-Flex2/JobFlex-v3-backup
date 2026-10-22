@@ -63,7 +63,6 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useSearchParams } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
-import { DoorSwitchSignIn } from "@/components/auth/door-switch-signin";
 import "./mobile-auth-login.css";
 import { ProductMark } from "@/components/brand/ProductMark";
 
@@ -137,10 +136,7 @@ export function MobileLoginContent() {
         <section className="card rv rv-4">
           {/* THE FORM (2026-10-10): Google, then the email and "Email me a
               code"; the password one link away (components/auth/login-form). */}
-          {/* WHERE TO SIGN IN (owner, 2026-10-11): the JobFlex platform or the Deck
-              Studio — the same switch as the desktop card (lib/editions); the shared
-              LoginForm already lands by the door, so only the buttons were missing here. */}
-          <DoorSwitchSignIn />
+          {/* One door (owner, 2026-10-21): no "Open: JobFlex platform / Deck Studio" switch here either. */}
           <LoginForm
             nextPath={nextPath}
             initialEmail={emailParam ?? (isDev ? "owner@acme.test" : "")}
