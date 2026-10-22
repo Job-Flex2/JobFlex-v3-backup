@@ -55,6 +55,8 @@ import { LeadOfferPopup } from "@/components/leads/LeadOfferPopup";
 import { DashboardAnnouncementDismiss } from "@/app/(dashboard)/announcement-dismiss";
 import { AutoPlanWelcome } from "@/components/dashboard/AutoPlanWelcome";
 import { autoPlanWelcomeView, type AutoPlanWelcomeView } from "@/lib/autoPlanWelcome";
+import { metaStartTrialEvent, type MetaStartTrialEvent } from "@/lib/metaStartTrial";
+import { MetaStartTrial } from "@/components/dashboard/MetaStartTrial";
 import { TrafficContext } from "@/components/providers/traffic-context";
 import { TrialWatchMount } from "@/components/v3/trial-watch/trial-watch-mount";
 import { trialView, type TrialView } from "@/lib/cardlessTrial";
@@ -131,6 +133,8 @@ export default async function DashboardBlueprintLayout({
   let paymentFailed = false;
   // Came in by the short sign-up (lib/signupAutoPlan): "you're on Professional — change it any time", for the owner.
   let autoWelcome: AutoPlanWelcomeView | null = null;
+  // Meta's StartTrial, due on the live site in the first hour of a Stripe trial (lib/metaStartTrial).
+  let startTrial: MetaStartTrialEvent | null = null;
   try {
     const ctx = await requireOrg();
     role = ctx.role;
@@ -194,6 +198,7 @@ export default async function DashboardBlueprintLayout({
       .catch(() => undefined);
     plan = planRow === undefined ? null : (planRow?.plan ?? "FREE");
     paymentFailed = ["PAST_DUE", "UNPAID"].includes(planRow?.status ?? "");
+    if (planRow?.status === "TRIALING") startTrial = await metaStartTrialEvent(ctx.organizationId);
   } catch {
     // Signed out, or no membership yet. The page decides what happens next.
   }
@@ -248,38 +253,42 @@ export default async function DashboardBlueprintLayout({
     trial && organizationId ? trialNoticeDismissed(trial, (await cookies()).get(trialDismissCookie(organizationId))?.value) : false;
 
   return (
-    <ResponsiveDashboardShell
-      sidebarFolded={sidebarFolded}
-      user={user}
-      identity={{ role, name, hidden, view: navView }}
-      badges={badges}
-      locked={lockedPages ?? undefined}
-      limits={navLimits}
-      limitsExempt={navLimitsExempt}
-      handheldBanner={
-        trial && !onTrialPage ? (
-          trialDismissed ? null : <TrialRibbon view={trial} isOwner={role === "OWNER"} orgId={organizationId ?? ""} only="dock" />
-        ) : paymentFailed ? (
-          <PaymentRibbon isOwner={role === "OWNER"} only="dock" />
-        ) : null
-      }
-      overviewNotice={
-        autoWelcome || announcements.length > 0 ? (
-          <>
-            {autoWelcome ? <AutoPlanWelcome view={autoWelcome} /> : null}
-            {announcements.length > 0 ? <DashboardAnnouncementDismiss announcements={announcements} /> : null}
-          </>
-        ) : null
-      }
-    >
-      <TrafficContext role={role} plan={plan} organizationId={organizationId} userId={userId} />
-      {organizationId && <TrialWatchMount organizationId={organizationId} email={email} />}
-      {trial && !onTrialPage && !trialDismissed && <TrialRibbon view={trial} isOwner={role === "OWNER"} orgId={organizationId ?? ""} />}
-      {paymentFailed && !trial && <PaymentRibbon isOwner={role === "OWNER"} />}
-      {autoWelcome && <AutoPlanWelcome view={autoWelcome} />}
-      {announcements.length > 0 && <DashboardAnnouncementDismiss announcements={announcements} />}
-      {customGate ?? children}
-      {canHandleLeads ? <LeadOfferPopup /> : null}
-    </ResponsiveDashboardShell>
+    <>
+      {/* Outside the shell: on a phone the mapped handheld pages replace `children`, and this must mount on both. */}
+      {startTrial ? <MetaStartTrial event={startTrial} /> : null}
+      <ResponsiveDashboardShell
+        sidebarFolded={sidebarFolded}
+        user={user}
+        identity={{ role, name, hidden, view: navView }}
+        badges={badges}
+        locked={lockedPages ?? undefined}
+        limits={navLimits}
+        limitsExempt={navLimitsExempt}
+        handheldBanner={
+          trial && !onTrialPage ? (
+            trialDismissed ? null : <TrialRibbon view={trial} isOwner={role === "OWNER"} orgId={organizationId ?? ""} only="dock" />
+          ) : paymentFailed ? (
+            <PaymentRibbon isOwner={role === "OWNER"} only="dock" />
+          ) : null
+        }
+        overviewNotice={
+          autoWelcome || announcements.length > 0 ? (
+            <>
+              {autoWelcome ? <AutoPlanWelcome view={autoWelcome} /> : null}
+              {announcements.length > 0 ? <DashboardAnnouncementDismiss announcements={announcements} /> : null}
+            </>
+          ) : null
+        }
+      >
+        <TrafficContext role={role} plan={plan} organizationId={organizationId} userId={userId} />
+        {organizationId && <TrialWatchMount organizationId={organizationId} email={email} />}
+        {trial && !onTrialPage && !trialDismissed && <TrialRibbon view={trial} isOwner={role === "OWNER"} orgId={organizationId ?? ""} />}
+        {paymentFailed && !trial && <PaymentRibbon isOwner={role === "OWNER"} />}
+        {autoWelcome && <AutoPlanWelcome view={autoWelcome} />}
+        {announcements.length > 0 && <DashboardAnnouncementDismiss announcements={announcements} />}
+        {customGate ?? children}
+        {canHandleLeads ? <LeadOfferPopup /> : null}
+      </ResponsiveDashboardShell>
+    </>
   );
 }
