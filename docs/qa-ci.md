@@ -7,7 +7,7 @@
 | Когда | Workflow → job | Против чего | Наборы | Блокирует |
 | --- | --- | --- | --- | --- |
 | ~~каждый успешный **Preview**-деплой Vercel~~ **выключено** | [preview-smoke.yml](../.github/workflows/preview-smoke.yml) → `preview-smoke` | URL этого деплоя | lint:changed, typecheck, smoke (только Chromium) | — (required check не ставится) |
-| каждую ночь, 09:00 UTC (02:00 в Лос-Анджелесе летом, 01:00 зимой) | [qa-lab.yml](../.github/workflows/qa-lab.yml) → `qa` | production, `https://www.jobflex.app` | smoke, pages, perf | — (алерт команде) |
+| каждую ночь, 09:00 UTC (02:00 в Лос-Анджелесе летом, 01:00 зимой) | [qa-lab.yml](../.github/workflows/qa-lab.yml) → `qa` | production, `https://www.jobflex.app`; гостевые страницы + проверки `@readonly` под `qa@acme.test` (QA Co на проде) | smoke, pages, perf | — (алерт команде) |
 | каждую ночь, там же | qa-lab.yml → `nightly-billing` | `next dev`, который job поднимает сам на чистой SQLite-базе | signup, billing (Stripe test mode, test clocks) | — |
 | руками (Run workflow) | qa-lab.yml → `qa` | любой `base_url` | что впишешь (на production код пустит только smoke, pages, perf) | — |
 
@@ -25,7 +25,7 @@
 | Секрет | Кто читает | Что это |
 | --- | --- | --- |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | только preview-smoke — **сейчас не нужен** | Vercel → проект jobflex-v3 → Settings → **Deployment Protection** → **Protection Bypass for Automation** → Add/Generate secret. QA Lab шлёт его в заголовке `x-vercel-protection-bypass` только на сам деплой ([qa/lib/vercel.ts](../qa/lib/vercel.ts)) |
-| `QA_PASS_OWNER` | preview-smoke; qa — только при ручном запуске не против production | пароль `qa@acme.test` **в боевой базе**. **Для ночного прогона не нужен:** против production тесты под ролями пропускаются кодом. Нужен preview-smoke (без него тот прогон FAILED) |
+| `QA_PASS_OWNER` | qa (ночной), preview-smoke | пароль `qa@acme.test` **в боевой базе** — тот, с которым запускали `scripts/seed-qa-prod.ts`. **Нужен ночному прогону** для проверок `@readonly` (см. ниже). Без него они пропускаются, прогон остаётся зелёным, но дашборд не проверяется |
 | `QA_USER_ADMIN`, `QA_PASS_ADMIN` | preview-smoke; qa — только не против production (**ночью не нужны**) | QA-аккаунт с `isPlatformAdmin` в боевой базе, для `/admin/health`. Без него тест пропускается. Такой аккаунт видит всю платформу, так что заводи его осознанно |
 | `QA_SECRET` | qa (алерт), preview-smoke | **нужен ночному прогону**: им подписывается `POST /api/qa/alert`, значение = `QA_SECRET` в Vercel **Production** |
 | `QA_ALERT_SECRET` | qa | необязательно: вместо `QA_SECRET`, если для алерта нужен отдельный |
@@ -63,7 +63,18 @@
 ## Ночной прогон: какой адрес и почему
 
 - **A. Последнее превью ветки main** (`vercel ls`, свежий Preview-деплой с веткой main). На этом проекте не работает: у main превью не бывает (см. выше), есть только Production-деплои.
-- **B. Production, smoke + pages + perf.** **Выбрано.** Это то, что код разрешает против production (`productionSuites` в [qa.config.yaml](../qa/config/qa.config.yaml)): только гостевые страницы, никаких записей и входов. Адрес `https://www.jobflex.app` (голый `jobflex.app` отвечает 308 на www).
+- **B. Production, smoke + pages + perf.** **Выбрано.** Это то, что код разрешает против production (`productionSuites` в [qa.config.yaml](../qa/config/qa.config.yaml)). Адрес `https://www.jobflex.app` (голый `jobflex.app` отвечает 308 на www).
+
+### Вход на production — только QA-владелец, только чтение (2026-10-22)
+
+- **Кто.** Единственный, кто входит против production, — `qa@acme.test`, OWNER организации **QA Co** (`qa-co`) в боевой базе. Её создал [scripts/seed-qa-prod.ts](../scripts/seed-qa-prod.ts): Free, без подписки и Stripe-клиента. billingEmail `qa-co@qa.jobflex.test` ставит QA-метку (`lib/qaOrg`): организация не попадает в статистику, PostHog и `ApiSpendDaily`. Другие роли (manager, worker, admin) и любой другой адрес на production не входят — это проверяет код ([qa/lib/target.ts](../qa/lib/target.ts) `PROD_QA_OWNER`, `prodSignInAllowed`; [global-setup](../qa/lib/global-setup.ts) входит только им).
+- **Что.** Только тесты с тегом **`@readonly`**: открыть страницу и прочитать. Сейчас это:
+  - вход паролем (его делает сам setup, тест проверяет результат);
+  - `/dashboard`, `/dashboard/proposals`, `/dashboard/subscription`, `/dashboard/settings`;
+  - `/dashboard/crm` → правила. Страница сама дописывает стартовые правила follow-up в QA Co, если их нет (идемпотентно).
+- **Чего никогда.** Тест с `@writes` (регистрация, proposals, Checkout, Smart Proposal, отправка) на production пропускается кодом, даже с `@readonly`. Тест под ролью без `@readonly` (наборы pages, perf и всё остальное) тоже пропускается.
+- **Как добавить проверку.** Поставить тесту `@readonly`, только если он ничего не создаёт, не отправляет, не платит и не зовёт платные API (estimators, карты). Иначе он пойдёт только локально.
+- **Чем платим.** Одна попытка тормоза входа за ночь (8 на адрес за 15 минут).
 - Регистрация, Checkout и billing (сценарий «день 8» с test clock) ночью идут в отдельном job **nightly-billing**. Он поднимает `next dev` на свежей SQLite-базе (`prisma db push` + seed — только внутри одноразовой машины CI), со Stripe в test mode (`STRIPE_TEST_CLOCKS=1`) и вебхуками через Stripe CLI (`stripe listen`). Боевая база и live-ключи там не участвуют. В Actions этот job ещё ни разу не запускался: первый прогон покажет, хватает ли сида и окружения.
 
 ## Алерт при красном прогоне на production

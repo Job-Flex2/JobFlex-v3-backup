@@ -1,6 +1,6 @@
 // The one `test` every spec imports. It adds, to every test, without a line in the spec:
-//   · the production guard (lib/target.ts) — a write suite or a signed-in role is skipped
-//     against production, before the browser opens;
+//   · the production guard (lib/target.ts) — a write suite, or a signed-in role outside a @readonly
+//     test as the QA owner, is skipped against production, before the browser opens;
 //   · the role's storage state (test.use({ role: "owner" }));
 //   · the forbidden-action guard (qa/config/forbidden.yaml);
 //   · trackers answered with 204, and a made-up client address per context (the sign-in and
@@ -14,7 +14,7 @@ import { test as base, expect, type Page, type TestInfo } from "@playwright/test
 import { Collector } from "./collect";
 import { installForbidden } from "./forbidden";
 import { refusalFor } from "./target";
-import { authFile, hasAuth, type RoleName } from "./roles";
+import { authFile, credentials, hasAuth, type RoleName } from "./roles";
 import { baseUrl } from "./env";
 import { qaConfig } from "./config";
 import { redactDeep } from "./redact";
@@ -47,7 +47,7 @@ export const test = base.extend<{ role: RoleName; qa: Qa; _guard: void }>({
 
   _guard: [
     async ({ role }, provide, testInfo) => {
-      const why = refusalFor(testInfo.tags, role);
+      const why = refusalFor(testInfo.tags, role, undefined, credentials("owner")?.email ?? null);
       if (why) testInfo.skip(true, why);
       if (!hasAuth(role)) testInfo.skip(true, `no signed-in state for the ${role} role (credentials missing or sign-in refused — see the run's setup notes)`);
       await provide();

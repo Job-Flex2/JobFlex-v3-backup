@@ -27,6 +27,15 @@ export function targetKind(url = baseUrl()): TargetKind {
   return process.env.QA_TARGET_ENV === "preview" ? "preview" : "production";
 }
 
+/** The one account a run against PRODUCTION may sign in as (owner, 2026-10-22): the OWNER of QA Co on the
+ *  production database (scripts/seed-qa-prod.ts) — never anyone else's. */
+export const PROD_QA_OWNER = "qa@acme.test";
+
+/** The role may sign in against production: the owner role, and only as PROD_QA_OWNER. */
+export function prodSignInAllowed(role: string, email: string | null | undefined): boolean {
+  return role === "owner" && (email ?? "").trim().toLowerCase() === PROD_QA_OWNER;
+}
+
 /** Suites that write (accounts, payments, records) or sign in as non-guest roles. */
 export const WRITE_SUITES = ["signup", "billing", "forms", "roles"] as const;
 
@@ -50,9 +59,12 @@ export function previewWritesAllowed(): boolean {
   return process.env.QA_ALLOW_PREVIEW_WRITES === "1";
 }
 
-/** The guard a single test applies: write tags and signed-in roles are refused on production;
- *  write tags on a preview without its own database. */
-export function refusalFor(tags: string[], role: string, url = baseUrl()): string | null {
+/** The guard a single test applies. On production: writes (@writes) and the old checks are refused; a
+ *  signed-in role only as the QA owner (PROD_QA_OWNER) and only in a test tagged @readonly — one that opens
+ *  pages and reads (the dashboard, CRM, Subscription, Settings), never one that registers, creates proposals,
+ *  checks out or runs an estimator. On a preview without its own database: write tags are refused.
+ *  `ownerEmail`: whom the owner role signs in as (lib/roles credentials). */
+export function refusalFor(tags: string[], role: string, url = baseUrl(), ownerEmail: string | null = null): string | null {
   const kind = targetKind(url);
   if (kind === "local") return null;
   const names = tags.map((t) => t.replace(/^@/, ""));
@@ -65,7 +77,10 @@ export function refusalFor(tags: string[], role: string, url = baseUrl()): strin
   if (kind === "production") {
     if (suites.includes("writes")) return "QA guard: this test writes (@writes) — skipped against production.";
     if (suites.includes("legacy")) return "QA guard: the old checks (@legacy) never run against production.";
-    if (role !== "guest") return `QA guard: against production only guest pages are opened (role ${role} refused).`;
+    if (role !== "guest") {
+      if (!suites.includes("readonly")) return `QA guard: against production a signed-in test must be @readonly (role ${role} refused).`;
+      if (!prodSignInAllowed(role, ownerEmail)) return `QA guard: against production only ${PROD_QA_OWNER} (QA Co) signs in — role ${role}${role === "owner" ? ` as ${ownerEmail ?? "nobody"}` : ""} refused.`;
+    }
   }
   if (kind === "preview" && suites.includes("writes") && !previewWritesAllowed()) {
     return "QA guard: this test writes (@writes) — skipped against a preview on the production database (QA_ALLOW_PREVIEW_WRITES is not 1).";

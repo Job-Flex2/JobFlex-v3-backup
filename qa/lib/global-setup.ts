@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 import { baseUrl, runDir } from "./env";
-import { assertSuiteAllowed, targetKind } from "./target";
+import { PROD_QA_OWNER, assertSuiteAllowed, prodSignInAllowed, targetKind } from "./target";
 import { assertLocalDatabase } from "./db";
 import { SIGNED_IN, authFile, credentials, sessionEmail, signInRole } from "./roles";
 import { assertStripeTestOnly } from "./stripeTest";
@@ -44,13 +44,16 @@ export default async function globalSetup(): Promise<void> {
   }
   if (!up) throw new Error(`QA Lab: ${baseUrl()} does not answer as JobFlex. Start the dev server first (qa/README.md → "Run").`);
 
-  // Roles: only when a selected suite opens signed-in pages, and never against production.
+  // Roles: only when a selected suite opens signed-in pages. Against production only the QA owner
+  // (lib/target PROD_QA_OWNER — QA Co on the production database), for the @readonly checks.
   const setup: { role: string; ok: boolean; note: string }[] = [];
-  const needsRoles = kind !== "production" && suites.some((s) => s === "all" || ["smoke", "roles", "pages", "forms", "visual", "perf", "billing"].includes(s));
-  if (needsRoles) {
+  const needsRoles = suites.some((s) => s === "all" || ["smoke", "roles", "pages", "forms", "visual", "perf", "billing"].includes(s));
+  const roles = kind === "production" ? SIGNED_IN.filter((r) => prodSignInAllowed(r, credentials(r)?.email)) : SIGNED_IN;
+  if (kind === "production" && needsRoles && !roles.length) setup.push({ role: "owner", ok: false, note: `against production only ${PROD_QA_OWNER} signs in — no QA_PASS_OWNER for it; the @readonly checks are skipped` });
+  if (needsRoles && roles.length) {
     const browser = await chromium.launch();
     try {
-      for (const role of SIGNED_IN) {
+      for (const role of roles) {
         const file = authFile(role);
         if (!credentials(role)) {
           // A ready storage state in qa/auth/ is accepted as long as it is signed in.

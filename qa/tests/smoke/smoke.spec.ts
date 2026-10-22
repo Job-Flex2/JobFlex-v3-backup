@@ -3,8 +3,10 @@
 // as qa@acme.test, a Smart Proposal from text, sending it to a test client and opening its public link,
 // the CRM's follow-up rules and the platform admin's health page.
 //
-// Where it may run: every test here is safe against production — the ones that write (@writes) or sign
-// in are skipped there by the fixture (lib/target.ts). A preview deployment shares the production
+// Where it may run: every test here is safe against production — the ones that write (@writes) are
+// skipped there by the fixture (lib/target.ts), and a signed-in one runs there only when it is tagged
+// @readonly (it opens pages and reads) and signs in as qa@acme.test, the OWNER of QA Co on the
+// production database (scripts/seed-qa-prod.ts). A preview deployment shares the production
 // database on this project (docs/qa-ci.md), so there @writes is skipped too unless
 // QA_ALLOW_PREVIEW_WRITES=1; signed-in pages are only opened. Anything that needs a key the server
 // under test does not have (Stripe) is skipped with the reason, never failed.
@@ -160,8 +162,7 @@ function setupOf(role: string): { ok: boolean; note: string } | null {
 }
 
 test.describe("signed in", () => {
-  test("sign-in with a password works @smoke", async ({ page, qa }) => {
-    test.skip(targetKind() === "production", "against production only guest pages are opened");
+  test("sign-in with a password works @smoke @readonly", async ({ page, qa }) => {
     const creds = credentials("owner");
     test.skip(!creds, "no QA_PASS_OWNER");
     if (targetKind() !== "local") {
@@ -190,7 +191,7 @@ test.describe("signed in", () => {
   test.describe("as the owner", () => {
     test.use({ role: "owner" });
 
-    test("dashboard loads @smoke @webkit", async ({ page, qa }) => {
+    test("dashboard loads @smoke @readonly @webkit", async ({ page, qa }) => {
       const r = await open(page, "/dashboard", { settleMs: 1500 });
       expect(r.status).toBe(200);
       expect(r.finalPath).toMatch(/^\/dashboard/);
@@ -198,18 +199,30 @@ test.describe("signed in", () => {
       cleanRun(qa);
     });
 
-    test("/dashboard/proposals loads @smoke", async ({ page, qa }) => {
+    test("/dashboard/proposals loads @smoke @readonly", async ({ page, qa }) => {
       const r = await open(page, "/dashboard/proposals", { settleMs: 1200 });
       expect(r.status).toBe(200);
       expect(r.finalPath.startsWith("/dashboard/proposals"), `stayed on /dashboard/proposals, got ${r.finalPath}`).toBeTruthy();
       cleanRun(qa);
     });
 
+    // Subscription and Settings open on the account's own page — on QA Co (Free, no Stripe customer) neither
+    // reaches Stripe.
+    for (const path of ["/dashboard/subscription", "/dashboard/settings"]) {
+      test(`${path} opens @smoke @readonly`, async ({ page, qa }) => {
+        const r = await open(page, path, { settleMs: 1500 });
+        expect(r.status).toBe(200);
+        expect(r.finalPath.startsWith(path), `stayed on ${path}, got ${r.finalPath}`).toBeTruthy();
+        await expect(page.locator("h1").first()).toBeVisible({ timeout: 60_000 });
+        cleanRun(qa);
+      });
+    }
+
     // Opening /dashboard/crm puts the starter follow-up rules in place when the company has none of
     // its own (lib/followUps/defaults — idempotent); Workflows lists them. On a phone (this project)
     // the page is the handheld build, mobile-crm-v2, where the tab reads "Rules"; at desk width it is
     // the Blueprint console's "Workflows" tab.
-    test("CRM → Workflows lists the follow-up rules @smoke", async ({ page, qa }) => {
+    test("CRM → Workflows lists the follow-up rules @smoke @readonly", async ({ page, qa }) => {
       const r = await open(page, "/dashboard/crm", { settleMs: 1200 });
       expect(r.status).toBe(200);
       const phoneTab = page.getByRole("button", { name: "Rules", exact: true });
