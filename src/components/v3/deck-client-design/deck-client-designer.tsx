@@ -569,7 +569,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
         <div className={s.layout}>
           <div className={s.viewCol}>
             <div className={s.viewer} data-client-viewer>
-              <DeckModel3D scene={scene} built={built} edit={editing} onEdit={onEdit} placing={placing} onPick={onPick} resetToken={resetToken} className={s.canvas} label={`Your design in 3D: ${scene.facts}`} />
+              <DeckModel3D scene={scene} built={built} edit={editing} onEdit={onEdit} placing={placing} onPick={onPick} resetToken={resetToken} viewControls="top-right" className={s.canvas} label={`Your design in 3D: ${scene.facts}`} />
               {/* Talk to design (2026-10-21, owner): the client says what they want; the studio changes the design and
                   answers in words — no price, no numbers — with a quick next idea. */}
               {talking ? (

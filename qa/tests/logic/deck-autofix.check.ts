@@ -18,19 +18,25 @@ const has = (d: DeckDesign, id: string, level?: string) => run(d).some((c) => c.
 
 // The engine: posts held to the tables on decks of every size and on covered decks up to the 40 ft a truss spans,
 // at 40 and 60 psf. (Wider, a gable's king post honestly carries more than a footing table reads — see below.)
-let over = 0, n = 0, heaviest = 0;
+// 2026-10-22: these covered decks' attached hips used to fall back to gables (trussed when wide); a hip is a hip now, and
+// the biggest of them under 60 psf of snow (600 sq ft and up) honestly need more posts or an engineer — said, never hidden.
+let over = 0, n = 0, heaviest = 0, engineerHips = 0;
 for (const structure of ["deck", "covered-deck"] as const) for (const W of structure === "deck" ? [12, 16, 20, 24, 30, 36, 44] : [12, 16, 20, 24, 30, 36]) for (const D of [10, 12, 14, 16, 20, 24]) for (const load of [40, 60] as const) {
   const base = defaultDeckDesign({ state: "MN" });
   const d = applyDeckPatch(base, { structure, shape: { kind: "rect", widthFt: W, depthFt: D }, heightIn: 48, loadPsf: load, roof: structure === "covered-deck" ? { ...defaultRoofDesign("covered-deck"), kind: "hip", attach: "wall" } : base.roof });
   const st = buildStructure(d);
   n++;
+  const overChecks = deckChecks(st).filter((c) => ["post-area", "footing-size", "roof-post-footing", "roof-footings"].includes(c.id) && c.level === "fail");
+  const bigHeavyHip = structure === "covered-deck" && load === 60 && W * D >= 600;
+  if (bigHeavyHip && overChecks.length && overChecks.every((c) => /engineer/i.test(c.text))) { engineerHips++; continue; }
   for (const p of st.frame?.posts ?? []) heaviest = Math.max(heaviest, p.tributarySqFt);
-  if (deckChecks(st).some((c) => ["post-area", "footing-size", "roof-post-footing", "roof-footings"].includes(c.id) && c.level === "fail")) over++;
+  if (overChecks.length) over++;
 }
-check("no post, footing or roof post past its table on any of these decks", over === 0 && heaviest <= 160, `${over} of ${n} over; heaviest post ${Math.round(heaviest)} sq ft`);
+check("no post, footing or roof post past its table on any of these decks — the biggest attached hips under heavy snow aside, said for an engineer", over === 0 && heaviest <= 160 && engineerHips <= 4, `${over} of ${n} over; heaviest post ${Math.round(heaviest)} sq ft; ${engineerHips} big hips for an engineer`);
 // Past the truss span: a 44 ft gable's king post brings down more than any footing table — said for an engineer, never hidden.
 {
-  const wide = applyDeckPatch(defaultDeckDesign({ state: "MN" }), { structure: "covered-deck", shape: { kind: "rect", widthFt: 44, depthFt: 24 }, heightIn: 48, roof: { ...defaultRoofDesign("covered-deck"), kind: "hip", attach: "wall" } });
+  // A gable by name (2026-10-22): this used to be an attached hip that fell back to a gable; an attached hip is a hip now.
+  const wide = applyDeckPatch(defaultDeckDesign({ state: "MN" }), { structure: "covered-deck", shape: { kind: "rect", widthFt: 44, depthFt: 24 }, heightIn: 48, roof: { ...defaultRoofDesign("covered-deck"), kind: "gable", attach: "wall" } });
   const c = run(wide).find((x) => x.id === "roof-post-footing");
   const deckPostsOk = (buildStructure(wide).frame?.posts ?? []).filter((p) => !(p as { roof?: unknown }).roof).every((p) => p.tributarySqFt <= 160);
   check("a 44 ft gable (past a truss's 40 ft): the roof post's overload is said, for an engineer; the deck's own posts stay in the table", c?.level === "fail" && /engineer/i.test(c.text) && deckPostsOk, c?.text.slice(0, 90));
@@ -49,12 +55,13 @@ check("…and says what it did", fixed.fixes.length >= 2 && fixed.fixes.some((f)
 const again = autoFixDesign(fixed.design);
 check("a second auto-fix does nothing", again.fixes.length === 0 && JSON.stringify(again.design) === JSON.stringify(fixed.design), again.fixes.join(" · "));
 
-// The roof's shape: a hip too narrow for its wall becomes a gable, or a shed by choice.
+// The roof's shape (2026-10-22): an attached hip deeper than half its width is a hip — a hip end at the front, the
+// ridge into the wall — with no warning and nothing for auto-fix to change.
 const narrowHip = applyDeckPatch(base, { structure: "covered-deck", shape: { kind: "rect", widthFt: 14, depthFt: 12 }, roof: { ...defaultRoofDesign("covered-deck"), kind: "hip", attach: "wall" } });
 const kindCheck = run(narrowHip).find((c) => c.id === "roof-kind");
-check("an attached hip too narrow: the check offers a gable, and a shed", kindCheck?.level === "warn" && /gable/.test(kindCheck.fix?.label ?? "") && (kindCheck.alts ?? []).some((a) => /shed/.test(a.label)), kindCheck?.text.slice(0, 80));
+check("a deep attached hip is framed as a hip: no shape warning", !kindCheck && buildStructure(narrowHip).roof?.kind === "hip", kindCheck?.text.slice(0, 80));
 const roofFixed = autoFixDesign(narrowHip);
-check("auto-fix makes it the gable it is framed as; the warning goes", roofFixed.design.roof.kind === "gable" && !has(roofFixed.design, "roof-kind"), roofFixed.fixes.join(" · "));
+check("auto-fix leaves it a hip", roofFixed.design.roof.kind === "hip" && fails(roofFixed.design).length === 0, roofFixed.fixes.join(" · "));
 
 // A low pitch offers metal as the other answer.
 const lowPitch = applyDeckPatch(base, { structure: "covered-deck", roof: { ...defaultRoofDesign("covered-deck"), kind: "shed", pitch: 2 } });

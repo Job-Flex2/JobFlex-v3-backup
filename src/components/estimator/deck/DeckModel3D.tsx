@@ -33,7 +33,7 @@ import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SCENE_LAYERS, sceneBuildLayers, memberBoxCorners, memberIsSawn, MEMBER_BOX_FACES, type DeckScene, type SceneHandle, type SceneLayer, type SceneLegend } from "@/lib/deck/scene";
 
 /** Where the camera can be asked to look from. */
-export type DeckLook = "yard" | "top" | "front" | "left" | "right" | "under" | "house" | "spin";
+export type DeckLook = "yard" | "top" | "front" | "left" | "right" | "under" | "house" | "spin" | "in" | "out" | "turn-left" | "turn-right";
 
 /** A drag on a handle: the design number it moves, and the value it should take now (feet for sizes, inches for heights). */
 export interface DeckEdit {
@@ -94,6 +94,12 @@ export interface DeckModel3DProps {
   backdrop?: DeckBackdrop | null;
   /** A part lit up for the contractor — the wall field being typed in (lib/deck/house wallHighlight). */
   highlight?: SceneHighlight | null;
+  /**
+   * THE VIEW BAR (owner, 2026-10-22: "the good option to turn around the deck and look underneath"): turn ⟲, zoom −,
+   * Top, Under, 3D, zoom +, turn ⟳ — on the scene, in the corner the host keeps free. Under takes the camera below the
+   * ground, looking up at the framing; any other view brings it back above.
+   */
+  viewControls?: "top-right" | "bottom-left" | false;
 }
 
 /**
@@ -528,8 +534,10 @@ interface Built {
   dispose: () => void;
 }
 
-export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = false, night = false, connections = false, placing = false, className, label, resetToken = 0, onPick, focus = null, look = null, edit = false, onEdit, backdrop = null , highlight = null }: DeckModel3DProps) {
+export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = false, night = false, connections = false, placing = false, className, label, resetToken = 0, onPick, focus = null, look = null, edit = false, onEdit, backdrop = null , highlight = null, viewControls = false }: DeckModel3DProps) {
   const mountRef = React.useRef<HTMLDivElement>(null);
+  /** Where the view bar sits, read when the scene is set up (a host keeps one place). */
+  const viewControlsRef = React.useRef(viewControls);
   const [supported] = React.useState(webglSupported);
   const sceneRef = React.useRef(scene);
   const backdropRef = React.useRef(backdrop);
@@ -646,9 +654,24 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
 [data-deck-knobs] .dk-leaders{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 [data-deck-knobs] .dk-leaders line{stroke:#1854a0;stroke-width:1.75;stroke-dasharray:3 3}
 [data-deck-knobs] .dk-leaders circle{fill:#1854a0;stroke:#fff;stroke-width:1.5}
+.dk-views{position:absolute;z-index:4;display:flex;gap:4px;pointer-events:auto}
+.dk-views[data-at="top-right"]{top:10px;right:10px}
+.dk-views[data-at="bottom-left"]{left:10px;bottom:10px}
+.dk-views button{display:grid;place-items:center;min-width:34px;height:34px;padding:0 9px;border:1.5px solid #0f2747;border-radius:2px;background:rgba(255,255,255,.96);color:#0f2747;font:800 11px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:background-color .15s,color .15s}
+.dk-views button:hover{background:#e8eef7}
+.dk-views button[aria-pressed="true"]{background:#1854a0;border-color:#1854a0;color:#fff}
+.dk-views button:focus-visible{outline:2px solid #f5a623;outline-offset:2px}
+.dk-views svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+@media (pointer:coarse){.dk-views button{min-width:44px;height:44px;padding:0 9px}.dk-views button[data-view^="turn-"]{display:none}}
+@media (prefers-reduced-motion:reduce){.dk-views button{transition:none}}
 </style><svg class="dk-leaders" aria-hidden="true"></svg>`;
     const leaderLayer = knobLayer.querySelector("svg") as SVGSVGElement;
     mount.appendChild(knobLayer);
+    // The canvas is the picture; with a view bar beside it the box is a group, so the buttons are read too.
+    if (viewControlsRef.current) {
+      renderer.domElement.setAttribute("role", "img");
+      renderer.domElement.setAttribute("aria-label", mount.getAttribute("aria-label") ?? "The deck in 3D");
+    }
 
     const world = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(42, w0 / h0, 0.1, 4000);
@@ -701,6 +724,119 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     world.add(ground);
+
+    // THE YARD AROUND IT (owner, 2026-10-22, beside another studio's: "see if our 3D is better"): a haze that melts the
+    // lawn's far edge into the sky, low hills on the horizon and a ring of trees behind and beside the house — far enough
+    // out never to stand between the yard's view and the deck. Placed by the deck's size and the lawn's tilt (frame,
+    // tiltGround); left out where a photo of the house stands in for it.
+    const HAZE_DAY = new THREE.Color(0xdbe5ec);
+    const HAZE_NIGHT = new THREE.Color(0x121a27);
+    world.fog = new THREE.Fog(HAZE_DAY.getHex(), 60, 400);
+    const scenery = new THREE.Group();
+    world.add(scenery);
+    const TREE_COUNT = coarse ? 12 : 22;
+    const trunkGeo = new THREE.CylinderGeometry(0.28, 0.42, 1, 7);
+    const crownGeo = new THREE.IcosahedronGeometry(1, coarse ? 0 : 1);
+    const hillGeo = new THREE.SphereGeometry(1, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b5139, roughness: 1 });
+    const crownMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, flatShading: true });
+    const hillMat = new THREE.MeshStandardMaterial({ color: 0x8c9a72, roughness: 1 });
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, TREE_COUNT);
+    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, TREE_COUNT * 2);
+    const hills = new THREE.InstancedMesh(hillGeo, hillMat, 7);
+    for (const m of [trunks, crowns, hills]) {
+      m.frustumCulled = false;
+      scenery.add(m);
+    }
+    const CROWN_GREENS = [0x4f7a3a, 0x5b8743, 0x3f6b33, 0x6a8f49, 0x56803e].map((c) => new THREE.Color(c));
+    /** The lawn's height at a point (the same plane tiltGround lays). */
+    let groundAt: (x: number, z: number) => number = () => 0;
+    const placeScenery = (span: number) => {
+      // A fixed sequence, so the trees stand in the same places every time.
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+      const m4 = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const sc = new THREE.Vector3();
+      const pos = new THREE.Vector3();
+      for (let i = 0; i < TREE_COUNT; i++) {
+        // Behind the house and to the sides (from straight behind to 115° round each way); a few far out front.
+        const front = i % 7 === 6;
+        const a = front ? Math.PI + (rnd() - 0.5) * 1.6 : (rnd() - 0.5) * 2 * 2.0;
+        const r = front ? span * (4.6 + rnd() * 1.6) : span * (2.0 + rnd() * 1.9);
+        const x = Math.sin(a) * r;
+        const z = -Math.cos(a) * r;
+        const h = 7 + rnd() * 5;
+        const cr = 4.2 + rnd() * 3.2;
+        const y0 = groundAt(x, z) - 0.3;
+        m4.compose(pos.set(x, y0 + h / 2, z), q.identity(), sc.set(1 + h * 0.04, h, 1 + h * 0.04));
+        trunks.setMatrixAt(i, m4);
+        m4.compose(pos.set(x, y0 + h + cr * 0.55, z), q.identity(), sc.set(cr, cr * 0.95, cr));
+        crowns.setMatrixAt(i * 2, m4);
+        crowns.setColorAt(i * 2, CROWN_GREENS[i % CROWN_GREENS.length]);
+        const cr2 = cr * (0.55 + rnd() * 0.2);
+        m4.compose(pos.set(x + (rnd() - 0.5) * cr, y0 + h + cr * 1.25, z + (rnd() - 0.5) * cr), q.identity(), sc.set(cr2, cr2, cr2));
+        crowns.setMatrixAt(i * 2 + 1, m4);
+        crowns.setColorAt(i * 2 + 1, CROWN_GREENS[(i + 2) % CROWN_GREENS.length]);
+      }
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + rnd() * 0.5;
+        const r = span * (7.5 + rnd() * 2.5);
+        const wide = span * (2.6 + rnd() * 1.8);
+        m4.compose(pos.set(Math.sin(a) * r, groundAt(Math.sin(a) * r, -Math.cos(a) * r) - span * 0.05, -Math.cos(a) * r), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), a), sc.set(wide, span * (0.22 + rnd() * 0.25), wide * 0.6));
+        hills.setMatrixAt(i, m4);
+      }
+      trunks.instanceMatrix.needsUpdate = true;
+      crowns.instanceMatrix.needsUpdate = true;
+      if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
+      hills.instanceMatrix.needsUpdate = true;
+    };
+    let sceneSpan = 20;
+    /** The house is out of the picture while the camera is under the lawn. */
+    let houseHidden = false;
+
+    // THE VIEW BAR (2026-10-22): the camera's moves on the scene itself, for every pointer and keyboard.
+    let viewBar: HTMLDivElement | null = null;
+    const viewAt = viewControlsRef.current;
+    if (viewAt) {
+      viewBar = document.createElement("div");
+      viewBar.className = "dk-views";
+      viewBar.dataset.at = viewAt;
+      viewBar.setAttribute("role", "toolbar");
+      viewBar.setAttribute("aria-label", "Camera");
+      viewBar.dataset.deckViews = "";
+      const turnL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>';
+      const turnR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.5h-4.5"/></svg>';
+      const views: Array<[DeckLook, string, string]> = [
+        ["turn-left", turnL, "Turn left"],
+        ["out", "−", "Zoom out"],
+        ["top", "Top", "From above"],
+        ["under", "Under", "From underneath"],
+        ["yard", "3D", "From the yard"],
+        ["in", "+", "Zoom in"],
+        ["turn-right", turnR, "Turn right"],
+      ];
+      for (const [from, face, name] of views) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.innerHTML = face;
+        b.setAttribute("aria-label", name);
+        b.title = name;
+        b.dataset.view = from;
+        if (from === "top" || from === "under" || from === "yard") b.setAttribute("aria-pressed", from === "yard" ? "true" : "false");
+        b.addEventListener("click", () => api.current?.lookFrom(from));
+        viewBar.appendChild(b);
+      }
+      mount.appendChild(viewBar);
+    }
+    /** The bar's Top / Under / 3D: the one the camera stands at is pressed. */
+    const markView = (at: "top" | "under" | "yard" | null) => {
+      viewBar?.querySelectorAll<HTMLButtonElement>("button[aria-pressed]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === at ? "true" : "false"));
+    };
+    /** Under the ground (Under): the orbit may go below it; any other view brings the camera back up. */
+    const setBelow = (on: boolean) => {
+      orbit.maxPolarAngle = on ? Math.PI * 0.97 : Math.PI * 0.495;
+    };
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
@@ -820,6 +956,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const target = new THREE.Vector3(0, Math.max(1, peak * 0.45), 0);
       const narrow = Math.max(1, 1.4 / Math.max(0.3, camera.aspect));
       if (reset || !fitted) {
+        setBelow(false);
+        markView("yard");
         camera.position.set(target.x + next * 0.9 * narrow, target.y + (next * 0.5 + peak * 0.3) * narrow, target.z + next * 1.2 * narrow);
       } else {
         const offset = camera.position.clone().sub(orbit.target).multiplyScalar(next / span);
@@ -831,8 +969,15 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       camera.near = Math.max(0.05, span / 600);
       camera.far = span * 60 + 4000;
       camera.updateProjectionMatrix();
-      ground.scale.set(span * 14, span * 14, 1);
-      grass.repeat.set(span * 1.4, span * 1.4);
+      // The lawn runs far past the haze (its edge span × 20 out), so no edge ever shows against the sky.
+      ground.scale.set(span * 40, span * 40, 1);
+      grass.repeat.set(span * 4, span * 4);
+      // The haze: clear over the yard, the hills soft through it, gone by span × 12.
+      const fog = world.fog as THREE.Fog;
+      fog.near = span * 3.5;
+      fog.far = span * 12;
+      sceneSpan = span;
+      placeScenery(span);
       key.position.set(span * 0.9, span * 1.6 + peak, span * 0.75);
       key.target.position.set(0, 0, 0);
       const sc = key.shadow.camera as THREE.OrthographicCamera;
@@ -861,6 +1006,9 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       const n = new THREE.Vector3(acrossPerFt, 1, outPerFt).normalize();
       ground.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
       ground.position.set(0, -(outPerFt * oz + acrossPerFt * ox), 0);
+      const y0 = -(outPerFt * oz + acrossPerFt * ox);
+      groundAt = (x: number, z: number) => y0 - acrossPerFt * x - outPerFt * z;
+      placeScenery(sceneSpan);
     };
 
     const build = (): Built => {
@@ -1604,6 +1752,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       // Night: the sun under, the sky dark, the fixtures lit.
       tuneSky(sky, nightTime);
       (sky.material as THREE.ShaderMaterial).uniformsNeedUpdate = true;
+      (world.fog as THREE.Fog).color.copy(nightTime ? HAZE_NIGHT : HAZE_DAY);
       hemi.intensity = nightTime ? 0.12 : 0.75;
       hemi.color.set(nightTime ? 0x3a4a6a : 0xcfe0ff);
       key.intensity = nightTime ? 0.08 : 2.3;
@@ -1627,6 +1776,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         renderer.domElement.style.cursor = "";
       }
       renderer.domElement.style.cursor = placingRef.current ? "crosshair" : "";
+      // The view bar steps aside while a part is being placed or a knob dragged — the host's banner has that corner then.
+      if (viewBar) viewBar.style.display = placingRef.current || editRef.current ? "none" : "flex";
       invalidate();
       shadowsDirty = true;
     };
@@ -1661,8 +1812,39 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       spinRaf = 0;
     };
     renderer.domElement.addEventListener("pointerdown", stopSpin);
+    const calmMoves = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    /** Ease the camera (and what it looks at) to a new place, like a fly-to (at once, for reduced motion). */
+    const glide = (to: THREE.Vector3, target: THREE.Vector3, ms = 700) => {
+      const from0 = camera.position.clone();
+      const fromT = orbit.target.clone();
+      const t0 = performance.now();
+      const step = () => {
+        const t = calmMoves ? 1 : Math.min(1, (performance.now() - t0) / ms);
+        const e = 1 - Math.pow(1 - t, 3);
+        camera.position.lerpVectors(from0, to, e);
+        orbit.target.lerpVectors(fromT, target, e);
+        orbit.update();
+        invalidate();
+        spinRaf = t < 1 ? requestAnimationFrame(step) : 0;
+      };
+      step();
+    };
     const lookFrom = (from: DeckLook) => {
       stopSpin();
+      // Zoom and turn: around what the camera looks at now, from where it stands now.
+      if (from === "in" || from === "out") {
+        const off = camera.position.clone().sub(orbit.target);
+        const dist = THREE.MathUtils.clamp(off.length() * (from === "in" ? 0.72 : 1.38), orbit.minDistance, orbit.maxDistance);
+        glide(orbit.target.clone().add(off.setLength(dist)), orbit.target.clone(), 380);
+        return;
+      }
+      if (from === "turn-left" || from === "turn-right") {
+        const off = camera.position.clone().sub(orbit.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), (from === "turn-left" ? -1 : 1) * (Math.PI / 6));
+        glide(orbit.target.clone().add(off), orbit.target.clone(), 450);
+        return;
+      }
+      setBelow(from === "under");
+      markView(from === "top" || from === "under" ? from : from === "yard" || from === "front" ? "yard" : null);
       const s = sceneRef.current;
       const peak = Math.max(s.heightFt, s.peakFt ?? s.heightFt, s.house && !backdropRef.current ? s.house.heightFt : 0);
       const size = Math.max(s.widthFt, s.depthFt, peak * 1.4, 10);
@@ -1691,9 +1873,10 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           to = new THREE.Vector3(0, size * 1.9 * narrow, size * 0.08);
           break;
         case "under":
-          // Under the deck from the yard, at a crouch: the posts, the beams and the joists' undersides.
-          target.set(0, Math.max(0.3, Math.min(1.2, s.heightFt * 0.3)), -s.depthFt * 0.15);
-          to = new THREE.Vector3(size * 0.28, Math.max(0.45, Math.min(1.4, s.heightFt * 0.22)), s.depthFt / 2 + size * 0.75 * narrow);
+          // UNDER THE DECK (2026-10-22): the camera below the ground — the lawn is seen from above only, so it falls away
+          // — looking up and in at the framing: joists, beams, posts, footings, from the front corner toward the house.
+          target.set(0, Math.max(0.6, s.heightFt * 0.7), -s.depthFt * 0.1);
+          to = new THREE.Vector3(size * 0.32, -Math.max(2.5, size * 0.16), s.depthFt * 0.3 + size * 0.22);
           break;
         case "left":
           to = new THREE.Vector3(-size * 1.5 * narrow, size * 0.42 + peak * 0.2, size * 0.25);
@@ -1747,6 +1930,8 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       content = build();
       world.add(content.group);
       shadowsDirty = true;
+      houseHidden = false;
+      scenery.visible = !backdropRef.current;
       tiltGround();
       const s = sceneRef.current;
       const peak = Math.max(s.heightFt, s.peakFt ?? s.heightFt);
@@ -2289,6 +2474,12 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           content?.group.traverse(fit);
           lit?.group.traverse(fit);
         }
+        // From under the lawn (Under), the house is only its underside: it steps out of the picture (2026-10-22).
+        const underLawn = camera.position.y < groundAt(camera.position.x, camera.position.z) - 0.05;
+        if (content && underLawn !== houseHidden) {
+          for (const c of content.group.children) if (c.userData.layer === -2) c.visible = !underLawn;
+          houseHidden = underLawn;
+        }
         renderer.render(world, camera);
         if (retired.length) {
           for (const r of retired) r.dispose();
@@ -2385,6 +2576,10 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       concrete.dispose();
       groundGeo.dispose();
       groundMat.dispose();
+      for (const g of [trunkGeo, crownGeo, hillGeo]) g.dispose();
+      for (const m of [trunkMat, crownMat, hillMat]) m.dispose();
+      for (const m of [trunks, crowns, hills]) m.dispose();
+      viewBar?.remove();
       envTex?.dispose();
       (sky.material as THREE.Material).dispose();
       sky.geometry.dispose();
@@ -2403,5 +2598,5 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     );
   }
   // The host's class places and sizes the box (an absolute fill, in every host so far); the canvas follows it.
-  return <div ref={mountRef} className={className} data-deck3d="canvas" role="img" aria-label={label ?? "The deck in 3D"} style={{ overflow: "hidden" }} />;
+  return <div ref={mountRef} className={className} data-deck3d="canvas" role={viewControls ? "group" : "img"} aria-label={label ?? "The deck in 3D"} style={{ overflow: "hidden" }} />;
 }

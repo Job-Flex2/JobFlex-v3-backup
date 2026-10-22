@@ -3158,7 +3158,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                 </div>
               ) : view === "3d" ? (
                 <>
-                  <Lit3D hover={hover} structure={structure} focusLit={focusLit} wallLit={wallLit} voiceLit={voiceLit} look={look} scene={scene} built={built} xray={xray} backdrop={ph.backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEditStable} resetToken={resetToken} focus={focus} onPick={onPickStable} className="v1-canvas" label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
+                  <Lit3D hover={hover} structure={structure} focusLit={focusLit} wallLit={wallLit} voiceLit={voiceLit} look={look} viewControls="top-right" scene={scene} built={built} xray={xray} backdrop={ph.backdrop} night={night} connections={connections} placing={placing?.kind === "fixture" || placing?.kind === "stair"} edit={editing} onEdit={onEditStable} resetToken={resetToken} focus={focus} onPick={onPickStable} className="v1-canvas" label={`The ${what.toLowerCase()} in 3D: ${scene.facts}`} />
                   {hoverPick?.legend && !placing ? (
                     <div className="v1-tag" data-deck-hover>
                       <b>
