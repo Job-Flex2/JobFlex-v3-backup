@@ -17,8 +17,10 @@
 //    Twilio …). It knows the organization from the request — requireOrg notes
 //    it, the way lib/trialLock notes a locked write — adds the call's price
 //    (lib/paidApiCosts) to a per-request tally, and writes the tally once,
-//    after the response (next/server `after`), for an organization on a
-//    trial. Spend outside a trial is not recorded. /admin/trials reads it.
+//    after the response (next/server `after`): for every organization to its
+//    day in ApiSpendDaily (lib/apiSpend, 2026-10-22 — /admin/usage reads it),
+//    and, while it is on a trial, to the meter below as well (/admin/trials
+//    and the trial screens read that).
 //
 // THE RECORD is one SyncState row per organization, `trialMeter:<orgId>`,
 // JSON, advanced with a compare-and-swap (the same pattern as
@@ -30,6 +32,7 @@ import { cardlessTrialState } from "@/lib/trialState";
 import { TRIAL_CAPS, TRIAL_CAP_KEYS, trialCapHref, trialCapMessage, type TrialCapKey } from "@/lib/trialCaps";
 import type { PlanLimitFailure } from "@/lib/planLimits";
 import { unitCents, type PaidService } from "@/lib/paidApiCosts";
+import { recordApiSpend, type ApiSpendEntry } from "@/lib/apiSpend";
 
 import { TRIAL_ENDED_MESSAGE as ENDED_MESSAGE } from "@/lib/trialLock";
 
@@ -262,7 +265,8 @@ export async function trialCapUsage(orgId: string): Promise<Array<{ key: TrialCa
 
 // ── the spend ──────────────────────────────────────────────────────────────
 
-type Tally = Map<string, Map<PaidService, { cents: number; calls: number }>>;
+/** Per organization, per `service op`. */
+type Tally = Map<string, Map<string, ApiSpendEntry>>;
 type RequestNote = { orgId: string | null; tally: Tally; scheduled: boolean; gated: Set<TrialCapKey> };
 
 /** Keyed by the request's headers object — the same object for every
@@ -322,13 +326,14 @@ export async function notePaidCall(
     const orgId = opts.orgId ?? note?.orgId ?? null;
     if (!orgId) return;
     if (!note) {
-      await writeSpend(orgId, new Map([[service, { cents, calls }]]));
+      await writeSpend(orgId, [{ service, op, cents, calls }]);
       return;
     }
-    const byService = note.tally.get(orgId) ?? new Map();
-    const cur = byService.get(service) ?? { cents: 0, calls: 0 };
-    byService.set(service, { cents: cur.cents + cents, calls: cur.calls + calls });
-    note.tally.set(orgId, byService);
+    const byOp = note.tally.get(orgId) ?? new Map<string, ApiSpendEntry>();
+    const key = `${service} ${op}`;
+    const cur = byOp.get(key) ?? { service, op, cents: 0, calls: 0 };
+    byOp.set(key, { ...cur, cents: cur.cents + cents, calls: cur.calls + calls });
+    note.tally.set(orgId, byOp);
     if (!note.scheduled) {
       note.scheduled = true;
       const pending = note;
@@ -348,7 +353,7 @@ async function flushNote(note: RequestNote): Promise<void> {
   const tally = note.tally;
   note.tally = new Map();
   note.scheduled = false;
-  for (const [orgId, byService] of tally) await writeSpend(orgId, byService);
+  for (const [orgId, byOp] of tally) await writeSpend(orgId, [...byOp.values()]);
 }
 
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
@@ -367,10 +372,21 @@ async function isTrialing(orgId: string): Promise<boolean> {
   return trialing;
 }
 
+/** A request's spend: the organization's day (every organization), and its
+ *  trial meter while it is on a trial. */
+async function writeSpend(orgId: string, entries: ApiSpendEntry[]): Promise<void> {
+  await Promise.all([recordApiSpend(orgId, entries), writeTrialSpend(orgId, entries)]);
+}
+
 /** Add a request's spend to the organization's meter — only while it is on a trial. */
-async function writeSpend(orgId: string, byService: Map<PaidService, { cents: number; calls: number }>): Promise<void> {
+async function writeTrialSpend(orgId: string, entries: ApiSpendEntry[]): Promise<void> {
   try {
     if (!(await isTrialing(orgId))) return;
+    const byService = new Map<PaidService, { cents: number; calls: number }>();
+    for (const e of entries) {
+      const cur = byService.get(e.service) ?? { cents: 0, calls: 0 };
+      byService.set(e.service, { cents: cur.cents + e.cents, calls: cur.calls + e.calls });
+    }
     const now = new Date().toISOString();
     await mutateMeter(orgId, (m) => {
       const spend = { ...m.spend };

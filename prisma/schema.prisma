@@ -2619,6 +2619,28 @@ model EmailLog {
   @@index([status])
 }
 
+// What the paid APIs cost us, per organization, per UTC day (2026-10-22) —
+// one row per (organization, day, service, op), advanced by an upsert after
+// each request that made billed calls (lib/apiSpend, called from
+// lib/trialMeter notePaidCall). Every organization, not only trials; QA
+// organizations are not written. `day` is the UTC midnight. `cents` is a
+// Float: a map tile is half a cent and a static map a fifth, so whole cents
+// would round most calls to nothing. No relation to Organization: a deleted
+// company's rows age out (daily-cleanup keeps 13 months). Read by
+// /admin/usage and the /admin/users account sheet.
+model ApiSpendDaily {
+  id             String   @id @default(cuid())
+  organizationId String
+  day            DateTime
+  service        String // lib/paidApiCosts PaidService
+  op             String
+  calls          Int      @default(0)
+  cents          Float    @default(0)
+
+  @@unique([organizationId, day, service, op])
+  @@index([day])
+}
+
 // Persistent price-lookup cache for the estimator. Keyed on a normalized query
 // (see normalizeSearchQuery) + location so a repeated lookup reuses a prior
 // fetch when the price source (SerpAPI) is down. productsJson is a JSON-encoded

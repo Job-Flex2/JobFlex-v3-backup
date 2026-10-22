@@ -13,9 +13,12 @@
 // the organization's activity with the admin's email.
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/Toast";
 import { getAdminOrgUsage, resetAdminOrgUsage, type AdminUsage, type AdminUsageRow } from "@/actions/adminUsage";
+import { formatSpend } from "@/lib/paidApiCosts";
 import type { LimitKey } from "@/lib/planLimits";
 import shared from "./admin-shared.module.css";
 import s from "./admin-users.module.css";
@@ -33,7 +36,7 @@ function when(iso: string): string {
 
 export function UsageReset({ orgId, orgName }: { orgId: string; orgName: string | null }) {
   const router = useRouter();
-  const [data, setData] = useState<AdminUsage | null>(null);
+  const [data, setData] = useState<(AdminUsage & { apiSpendMonthCents: number | null }) | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [armed, setArmed] = useState<LimitKey | "all" | null>(null);
@@ -49,9 +52,17 @@ export function UsageReset({ orgId, orgName }: { orgId: string; orgName: string 
     }
   }, [orgId]);
 
+  // The first read on open — the same read as load(), its state set in the
+  // promise's callbacks rather than through a call the effect makes.
   useEffect(() => {
-    void load();
-  }, [load]);
+    getAdminOrgUsage(orgId).then(
+      (d) => {
+        setData(d);
+        setLoadErr(null);
+      },
+      (e) => setLoadErr(errorMessage(e, "Couldn't read the usage.")),
+    );
+  }, [orgId]);
 
   const reasonOk = reason.trim().length >= 3;
   const rows = data?.rows ?? [];
@@ -117,6 +128,15 @@ export function UsageReset({ orgId, orgName }: { orgId: string; orgName: string 
 
       {data ? (
         <>
+          {/* What its paid API calls cost us this calendar month, UTC (lib/apiSpend, 2026-10-22). */}
+          {data.apiSpendMonthCents !== null ? (
+            <p className={cx("au-us-spend")} data-api-spend="">
+              <span>
+                API spend this month: <b>{formatSpend(data.apiSpendMonthCents)}</b>
+              </span>
+              <Link href={`/admin/usage?period=month&org=${encodeURIComponent(orgId)}` as Route}>See services</Link>
+            </p>
+          ) : null}
           <div className={cx("au-us")} role="table" aria-label="Usage this cycle">
             <div className={cx("au-us-row", "au-us-head")} role="row">
               <span role="columnheader">Limit</span>

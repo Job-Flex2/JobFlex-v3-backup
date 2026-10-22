@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/cronAuth";
 import { sweepPendingDaysEverywhere } from "@/lib/workDays";
 import { EMAIL_LOG_KEEP_DAYS } from "@/lib/emailLog";
+import { API_SPEND_KEEP_MONTHS, utcMonthStart } from "@/lib/apiSpend";
 
 export const runtime = "nodejs";
 
@@ -65,8 +66,17 @@ export async function GET(req: Request) {
       return { count: 0 };
     });
 
+  // ── 5) The API spend keeps 13 months (lib/apiSpend) ───────────────────────
+  // Zero, not a failed cron, while the table is not in this database yet.
+  const apiSpend = await db.apiSpendDaily
+    .deleteMany({ where: { day: { lt: utcMonthStart(new Date(), -API_SPEND_KEEP_MONTHS) } } })
+    .catch((err) => {
+      console.warn("[cron/daily-cleanup] API spend not pruned:", err instanceof Error ? err.message : err);
+      return { count: 0 };
+    });
+
   console.info(
-    `[cron/daily-cleanup] revoked ${revoked} inactive worker token(s); pruned ${pruned.count} price-cache row(s); ${pendingDays} day(s) on site now pending; pruned ${mailLog.count} mail-log row(s).`,
+    `[cron/daily-cleanup] revoked ${revoked} inactive worker token(s); pruned ${pruned.count} price-cache row(s); ${pendingDays} day(s) on site now pending; pruned ${mailLog.count} mail-log row(s); pruned ${apiSpend.count} API-spend row(s).`,
   );
-  return NextResponse.json({ ok: true, revokedWorkers: revoked, prunedCache: pruned.count, prunedMetaAuthorizations: pendingMeta.count, pendingDays, prunedMailLog: mailLog.count });
+  return NextResponse.json({ ok: true, revokedWorkers: revoked, prunedCache: pruned.count, prunedMetaAuthorizations: pendingMeta.count, pendingDays, prunedMailLog: mailLog.count, prunedApiSpend: apiSpend.count });
 }

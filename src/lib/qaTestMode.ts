@@ -6,7 +6,7 @@ import "server-only";
 // addresses. Off — or on Vercel production, whatever the flag says — nothing
 // is kept and the endpoint answers 404.
 //
-// The statistics and analytics exclusions (qaOrgIds, below) do not depend on
+// The statistics and analytics exclusions (qaOrgIds, lib/qaOrg) do not depend on
 // the flag: a QA account never counts, in any environment.
 import { db } from "@/lib/db";
 import { QA_EMAIL_DOMAIN, isQaEmail } from "@/lib/qaEmail";
@@ -48,40 +48,4 @@ export async function readQaCode(email: string): Promise<QaCode | null> {
   }
 }
 
-/** Organisations of QA accounts: their billing address, or any member's address, is a QA one. */
-export async function qaOrgIds(): Promise<string[]> {
-  try {
-    const rows = await db.organization.findMany({
-      where: {
-        OR: [
-          { billingEmail: { endsWith: QA_EMAIL_DOMAIN } },
-          { memberships: { some: { user: { email: { endsWith: QA_EMAIL_DOMAIN } } } } },
-        ],
-      },
-      select: { id: true },
-    });
-    return rows.map((r) => r.id);
-  } catch {
-    return [];
-  }
-}
-
-/** One organisation, for the analytics senders that know only its id. */
-export async function isQaOrg(organizationId: string | null | undefined): Promise<boolean> {
-  if (!organizationId) return false;
-  try {
-    const hit = await db.organization.findFirst({
-      where: {
-        id: organizationId,
-        OR: [
-          { billingEmail: { endsWith: QA_EMAIL_DOMAIN } },
-          { memberships: { some: { user: { email: { endsWith: QA_EMAIL_DOMAIN } } } } },
-        ],
-      },
-      select: { id: true },
-    });
-    return !!hit;
-  } catch {
-    return false;
-  }
-}
+export { qaOrgIds, isQaOrg } from "@/lib/qaOrg";

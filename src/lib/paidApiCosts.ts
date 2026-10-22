@@ -55,6 +55,10 @@ export const UNIT_CENTS: Record<PaidService, Record<string, number>> = {
     // and out); a voice preview is a few seconds of gpt-4o-mini-tts.
     "realtime-minute": 4,
     "tts-preview": 1,
+    // Deck Studio's voice (2026-10-22, was recorded at no price): one spoken
+    // reply of gpt-4o-mini-tts, ~$0.015 an audio minute at list price; a reply
+    // is at most 320 characters (~20 s), rounded up to a cent like the preview.
+    "tts-deck-voice": 1,
   },
   "google-solar": { buildingInsights: 1, dataLayers: 7.5, raster: 0 },
   "google-geocoding": { geocode: 0.5, geocodeAddress: 0.5 },

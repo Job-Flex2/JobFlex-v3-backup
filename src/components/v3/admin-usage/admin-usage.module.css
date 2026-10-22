@@ -1,0 +1,98 @@
+/* ============================================================
+   ADMIN API USAGE — BLUEPRINT
+   /admin/usage
+   Page vocabulary only; the furniture is admin-influencers/admin-ui.module.css.
+   Every rule is `:global(.jf-blueprint .content) .cls` (0,3,0) so the shell's
+   margin/padding reset never wins on a production build.
+   ============================================================ */
+
+:global(.jf-blueprint .content) .root { display: flex; flex-direction: column; gap: 22px; transition: opacity 160ms var(--ease-out); }
+/* A period on its way: the numbers stay readable, only quieter. */
+:global(.jf-blueprint .content) .pending { opacity: 0.6; }
+
+:global(.jf-blueprint .content) .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+:global(.jf-blueprint .content) .period { width: 420px; }
+:global(.jf-blueprint .content) .range { margin: 0; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.04em; color: var(--ink-soft); }
+
+:global(.jf-blueprint .content) .note { margin: -8px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .focus { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 0; font-size: 13.5px; color: var(--ink); }
+:global(.jf-blueprint .content) .focus a { color: var(--accent); font-weight: 600; }
+:global(.jf-blueprint .content) .focus a:hover { color: var(--accent-ink); }
+
+/* The flat square: no shadow, no offset (DESIGN.md, owner 2026-10-18). */
+:global(.jf-blueprint .content) .flag { display: inline-block; flex: none; width: 10px; height: 10px; background: var(--muted-light); }
+:global(.jf-blueprint .content) .flag[data-flag="over"] { background: var(--danger); }
+:global(.jf-blueprint .content) .flag[data-flag="half"] { background: var(--warning); }
+:global(.jf-blueprint .content) .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .legend span { display: inline-flex; align-items: center; gap: 7px; }
+
+/* company · plan · status · period · all time · open */
+:global(.jf-blueprint .content) .cols { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 92px 112px 92px 104px; }
+/* service · calls · cost · share */
+:global(.jf-blueprint .content) .svcCols { grid-template-columns: minmax(0, 1fr) 96px 110px 72px; }
+
+:global(.jf-blueprint .content) .cell { font-size: 13px; color: var(--ink); min-width: 0; }
+:global(.jf-blueprint .content) .name { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); }
+:global(.jf-blueprint .content) .company { display: flex; align-items: center; gap: 9px; min-width: 0; }
+:global(.jf-blueprint .content) .org {
+  display: block; min-width: 0; font-size: 13.5px; font-weight: 700; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none;
+}
+:global(.jf-blueprint .content) .org:hover { color: var(--accent); text-decoration: underline; }
+:global(.jf-blueprint .content) .org:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+:global(.jf-blueprint .content) .amt { font-size: 14px; }
+:global(.jf-blueprint .content) .amt_over { color: var(--danger); }
+:global(.jf-blueprint .content) .amt_half { color: var(--warning); }
+:global(.jf-blueprint .content) .all { color: var(--ink-soft); }
+
+:global(.jf-blueprint .content) .sort {
+  padding: 0; border: 0; background: none; font: inherit; color: inherit; letter-spacing: inherit;
+  text-transform: inherit; cursor: pointer;
+}
+:global(.jf-blueprint .content) .sort:hover { color: var(--ink); }
+:global(.jf-blueprint .content) .sortOn { color: var(--ink); }
+:global(.jf-blueprint .content) .sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:global(.jf-blueprint .content) .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+:global(.jf-blueprint .content) .act { display: flex; justify-content: flex-end; }
+:global(.jf-blueprint .content) .open { min-width: 88px; justify-content: center; }
+
+/* The company `?org=` asked for: a light blueprint fill, run past the columns' edges. */
+:global(.jf-blueprint .content) .focused.focused { margin: 0 -10px; padding-left: 10px; padding-right: 10px; background: var(--accent-soft); }
+
+/* A company's services, under its row across every column. */
+:global(.jf-blueprint .content) .ops {
+  grid-column: 1 / -1; display: grid; margin: 2px 0 4px;
+  border: 1.5px solid var(--hair); background: #fff;
+}
+:global(.jf-blueprint .content) .op {
+  display: grid; grid-template-columns: minmax(0, 1fr) 110px 92px; gap: 12px; align-items: center;
+  padding: 9px 12px; border-top: 1px solid var(--hair-soft); font-size: 13px;
+}
+:global(.jf-blueprint .content) .op:first-child { border-top: 0; }
+:global(.jf-blueprint .content) .opName { min-width: 0; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .opKey { margin-left: 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .opNum { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-soft); white-space: nowrap; }
+:global(.jf-blueprint .content) .opAmt { font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); white-space: nowrap; }
+:global(.jf-blueprint .content) .opsNone { padding: 10px 12px; font-size: 13px; color: var(--ink-soft); }
+
+@media (max-width: 860px) {
+  :global(.jf-blueprint .content) .period { width: 100%; }
+  /* Four periods do not fit one 390px row in caps: two by two, the kit's rules between them. */
+  :global(.jf-blueprint .content) .period > [role="group"] { display: grid; grid-template-columns: 1fr 1fr; }
+  :global(.jf-blueprint .content) .period > [role="group"] > button:nth-child(2n) { border-right: none; }
+  :global(.jf-blueprint .content) .period > [role="group"] > button:nth-child(-n + 2) { border-bottom: 1.5px solid var(--ink); }
+  :global(.jf-blueprint .content) .org { display: flex; align-items: center; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+  :global(.jf-blueprint .content) .act { grid-column: 1 / -1; }
+  :global(.jf-blueprint .content) .open { flex: 1; min-height: 44px; }
+  :global(.jf-blueprint .content) .op { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 12px; }
+  :global(.jf-blueprint .content) .opNum { grid-row: 2; text-align: left; }
+  :global(.jf-blueprint .content) .opAmt { grid-row: 1 / span 2; grid-column: 2; }
+  /* A service row: its name across, the three numbers on one line under it. */
+  :global(.jf-blueprint .content) .svcCols.svcCols { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .root { transition: none; }
+}

@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
+import { withSentryConfig } from "@sentry/nextjs";
 
 // Content-Security-Policy, REPORT-ONLY for the first release. Enumerated from
 // the third parties the code actually loads: Stripe.js + Checkout, PayPal and
@@ -16,7 +17,7 @@ const CSP_REPORT_ONLY = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https://*.public.blob.vercel-storage.com",
-  "connect-src 'self' https://api.stripe.com https://checkout.stripe.com https://us.i.posthog.com https://us-assets.i.posthog.com https://maps.googleapis.com https://places.googleapis.com https://www.paypal.com https://www.sandbox.paypal.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com https://*.public.blob.vercel-storage.com https://vercel.live wss://ws-us3.pusher.com https://www.facebook.com https://connect.facebook.net https://accounts.google.com",
+  "connect-src 'self' https://api.stripe.com https://checkout.stripe.com https://us.i.posthog.com https://us-assets.i.posthog.com https://maps.googleapis.com https://places.googleapis.com https://www.paypal.com https://www.sandbox.paypal.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com https://*.public.blob.vercel-storage.com https://vercel.live wss://ws-us3.pusher.com https://www.facebook.com https://connect.facebook.net https://accounts.google.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
   "frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://www.google.com https://accounts.google.com https://vercel.live https://www.facebook.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -163,7 +164,7 @@ const nextConfig: NextConfig = {
 // the dev server, where it stops the static-paths worker from dying and taking
 // every dynamic route down with it, and off everywhere else, where it breaks
 // `next build`. Everything above is shared.
-export default function config(phase: string): NextConfig {
+function config(phase: string): NextConfig {
   const dev = phase === PHASE_DEVELOPMENT_SERVER;
   return {
     ...nextConfig,
@@ -171,6 +172,23 @@ export default function config(phase: string): NextConfig {
     ...(dev ? { webpack: relaxCssModules, allowedDevOrigins: ["192.168.88.*"] } : {}), // dev only: a phone on the LAN gets HMR, so the page hydrates
   };
 }
+
+// SENTRY SOURCE MAPS (2026-10-22; docs/sentry.md). Only a build that has
+// SENTRY_AUTH_TOKEN is wrapped: it uploads the client and server source maps
+// to Sentry (SENTRY_ORG / SENTRY_PROJECT name where) and deletes the browser
+// maps it generated, so production still publishes none. Without the token
+// the config is exactly the one above — Sentry's runtime needs no wrapper
+// (src/instrumentation.ts, src/instrumentation-client.ts start it).
+export default process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(config, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: !process.env.CI,
+      telemetry: false,
+      sourcemaps: { deleteSourcemapsAfterUpload: true },
+    })
+  : config;
 
 // WEBPACK FALLBACK, DEV ONLY (2026-09-14). Turbopack accepts a CSS-module rule
 // whose selector is `:global(...)` alone; webpack's css-loader runs CSS modules

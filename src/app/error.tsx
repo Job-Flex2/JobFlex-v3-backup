@@ -8,6 +8,7 @@
 
 import { useEffect } from "react";
 import { trackException } from "@/lib/traffic-client";
+import { captureClientException } from "@/lib/sentryClient";
 
 export default function RouteError({
   error,
@@ -20,6 +21,8 @@ export default function RouteError({
     console.error("[route-error]", error.digest ?? "", error);
     // $exception to PostHog: scrubbed message, digest, route, role, plan — see lib/traffic-client.
     trackException(error, "route");
+    // And to Sentry with the stack, when NEXT_PUBLIC_SENTRY_DSN is set (lib/sentryClient; scrubbed by lib/sentryScrub).
+    captureClientException(error, "route");
   }, [error]);
 
   return (

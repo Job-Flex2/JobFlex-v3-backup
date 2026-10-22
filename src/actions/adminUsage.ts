@@ -10,13 +10,17 @@ import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { revalidatePlanSurfaces } from "@/lib/planCatalogServer";
 import { orgUsageForAdmin, resetOrgUsage, type AdminUsage, type UsageResetResult } from "@/lib/usageReset";
+import { orgApiSpendCents } from "@/lib/apiSpend";
 
 export type { AdminUsage, AdminUsageRow, UsageResetResult, UsageResetDone } from "@/lib/usageReset";
 
-/** The organization's meters this cycle, with any reset marks in force. */
-export async function getAdminOrgUsage(organizationId: string): Promise<AdminUsage> {
+/** The organization's meters this cycle, with any reset marks in force, and
+ *  what its paid API calls cost us this month (lib/apiSpend; null while the
+ *  table is not in this database). */
+export async function getAdminOrgUsage(organizationId: string): Promise<AdminUsage & { apiSpendMonthCents: number | null }> {
   await requirePlatformAdmin();
-  return orgUsageForAdmin(organizationId);
+  const [usage, apiSpendMonthCents] = await Promise.all([orgUsageForAdmin(organizationId), orgApiSpendCents(organizationId)]);
+  return { ...usage, apiSpendMonthCents };
 }
 
 /** Reset one or more monthly meters for the organization. */

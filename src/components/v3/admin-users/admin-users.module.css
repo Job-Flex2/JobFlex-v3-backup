@@ -214,11 +214,17 @@
 :global(.jf-blueprint .content) .au-us-act { display: flex; justify-content: flex-end; min-width: 76px; }
 :global(.jf-blueprint .content) .au-us-seat { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-light); white-space: nowrap; }
 :global(.jf-blueprint .content) .au-us-loading { font-size: 12px; color: var(--muted); }
+/* "API spend this month: $X" over the meters, the link to /admin/usage at its end. */
+:global(.jf-blueprint .content) .au-us-spend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 0; font-size: 13px; color: var(--ink); }
+:global(.jf-blueprint .content) .au-us-spend b { font-weight: 800; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .au-us-spend a { color: var(--accent); font-weight: 600; }
+:global(.jf-blueprint .content) .au-us-spend a:hover { color: var(--accent-ink); }
 @media (max-width: 768px) {
   :global(.jf-blueprint .content) .au-us-row { grid-template-columns: 1fr auto; }
   :global(.jf-blueprint .content) .au-us-act { grid-column: 1 / -1; justify-content: stretch; }
   :global(.jf-blueprint .content) .au-us-act > button { flex: 1; }
   :global(.jf-blueprint .content) .au-us-head span:last-child { display: none; }
+  :global(.jf-blueprint .content) .au-us-spend a { display: inline-flex; align-items: center; min-height: 44px; }
 }
 @media (max-width: 768px) {
   :global(.jf-blueprint .content) .au-cmp { grid-template-columns: 1fr; }

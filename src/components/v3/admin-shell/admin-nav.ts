@@ -37,6 +37,9 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       // Added 2026-09-24: the trials to look at — accounts touring the product
       // to copy it, read off how they behave (lib/trialWatch).
       { label: "Trial watch", icon: "i-eye", href: "/admin/trials" },
+      // Added 2026-10-22: what each company's use of the paid APIs costs us — every company, not only
+      // trials — and the ones we pay more for than they pay us (lib/apiSpend, lib/apiUsageReport).
+      { label: "API usage", icon: "i-chart", href: "/admin/usage" },
       // Added 2026-10-22: customer development — the four steps, hypotheses with live evidence, segments, the voice
       // of the customer (support emails, cancellation reasons, trial notes) and the interview log (lib/custDev).
       { label: "Customer development", icon: "i-target", href: "/admin/customer-development" },
