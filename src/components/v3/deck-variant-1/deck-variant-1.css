@@ -423,6 +423,8 @@
    view tabs last. The button's size is set here, after .v1-btn, which would otherwise take it. */
 .jf-deck-v1 .v1-view-head { display: grid; align-items: center; grid-template-columns: minmax(0, 1fr) auto; gap: var(--deck-space-xs) var(--deck-space-md); padding: var(--deck-space-sm); border-bottom: 1px solid var(--ink); }
 .jf-deck-v1 .v1-view-title { grid-column: 1; grid-row: 1; align-self: center; white-space: nowrap; }
+/* The viewer's own buttons — Send to client, Talk, Full view (2026-10-22): one row, wrapping under the title when narrow. */
+.jf-deck-v1 .v1-view-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
 .jf-deck-v1 .v1-view-head .v1-dock-btn { display: inline-flex; grid-column: 2; grid-row: 1; align-self: center; gap: 5px; min-height: 32px; padding: 0 10px; font-size: 12px; }
 .jf-deck-v1 .v1-view-head .v1-dock-btn svg { width: 14px; height: 14px; }
 .jf-deck-v1 .v1-view-head .v1-view-facts { grid-column: 1 / -1; grid-row: 2; }
@@ -760,4 +762,12 @@
 
 @media (max-width: 768px) {
   .jf-deck-v1 .v1-pop .v1-btn, .jf-deck-v1 .v1-pop .v1-icon-btn { min-height: 44px; }
+}
+
+/* 2026-10-22, on a phone: the footer's price keeps its width (it was squeezed under "Save as proposal"), and the
+   viewer's own buttons — Send to client, Talk, Full view — are thumb-sized like every other button here. */
+@media (max-width: 768px) {
+  .jf-deck-v1 .v1-q-foot .v1-foot-sum { flex: none; }
+  .jf-deck-v1 .v1-q-foot .v1-foot-save { flex: 0 1 auto; min-width: 0; }
+  .jf-deck-v1 .v1-view-head .v1-dock-btn { min-height: 44px; }
 }
