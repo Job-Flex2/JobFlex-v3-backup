@@ -2,14 +2,16 @@
 
 Что гоняется автоматически, против чего, и что надо включить руками. Сам QA Lab описан в [qa/README.md](../qa/README.md).
 
+> **Сейчас (2026-10-22, решение владельца): работает только ночной прогон.** Smoke на каждый Preview-деплой выключен: в [preview-smoke.yml](../.github/workflows/preview-smoke.yml) триггер `deployment_status` заменён на `workflow_dispatch` (job при ручном запуске пропускается — ему нужен deployment_status). Переменные Vercel для Preview (`QA_TEST_MODE`, `QA_SECRET`), Protection Bypass (`VERCEL_AUTOMATION_BYPASS_SECRET`) и required check `preview-smoke` **не нужны и не ставятся**. Вернуть: одна строка `deployment_status:` вместо `workflow_dispatch:` в preview-smoke.yml, затем секреты и required check из разделов ниже, помеченных «только для preview-smoke».
+
 | Когда | Workflow → job | Против чего | Наборы | Блокирует |
 | --- | --- | --- | --- | --- |
-| каждый успешный **Preview**-деплой Vercel | [preview-smoke.yml](../.github/workflows/preview-smoke.yml) → `preview-smoke` | URL этого деплоя | lint:changed, typecheck, smoke (только Chromium) | merge в main (required check) |
+| ~~каждый успешный **Preview**-деплой Vercel~~ **выключено** | [preview-smoke.yml](../.github/workflows/preview-smoke.yml) → `preview-smoke` | URL этого деплоя | lint:changed, typecheck, smoke (только Chromium) | — (required check не ставится) |
 | каждую ночь, 09:00 UTC (02:00 в Лос-Анджелесе летом, 01:00 зимой) | [qa-lab.yml](../.github/workflows/qa-lab.yml) → `qa` | production, `https://www.jobflex.app` | smoke, pages, perf | — (алерт команде) |
 | каждую ночь, там же | qa-lab.yml → `nightly-billing` | `next dev`, который job поднимает сам на чистой SQLite-базе | signup, billing (Stripe test mode, test clocks) | — |
 | руками (Run workflow) | qa-lab.yml → `qa` | любой `base_url` | что впишешь (на production код пустит только smoke, pages, perf) | — |
 
-## Окружение Preview — что выяснено (2026-10-22)
+## Окружение Preview — что выяснено (2026-10-22; нужно только если вернуть preview-smoke)
 
 - **Preview ходит в боевую базу.** В Vercel `DATABASE_URL` (и все `PG*` / `POSTGRES_*`) — одна запись на «Preview, Production», отдельной ветки Neon для превью нет. Поэтому smoke на превью **ничего не создаёт**: тесты с тегом `@writes` (регистрация, переход в Checkout, Smart Proposal, отправка proposal) QA guard пропускает с причиной «skipped against a preview on the production database» ([qa/lib/target.ts](../qa/lib/target.ts)). Они идут на локальном сервере и в ночном `nightly-billing`. Если у превью появится своя база — выставь в preview-smoke.yml `QA_ALLOW_PREVIEW_WRITES: "1"`.
   Что всё-таки пишет на превью: вход `qa@acme.test` (строка тормоза входа в SyncState) и открытие `/dashboard/crm` — страница сама дописывает стартовые правила follow-up в QA-организацию, если их нет (идемпотентно).
@@ -22,11 +24,11 @@
 
 | Секрет | Кто читает | Что это |
 | --- | --- | --- |
-| `VERCEL_AUTOMATION_BYPASS_SECRET` | preview-smoke | Vercel → проект jobflex-v3 → Settings → **Deployment Protection** → **Protection Bypass for Automation** → Add/Generate secret. QA Lab шлёт его в заголовке `x-vercel-protection-bypass` только на сам деплой ([qa/lib/vercel.ts](../qa/lib/vercel.ts)) |
-| `QA_PASS_OWNER` | preview-smoke, qa | пароль `qa@acme.test` **в боевой базе** (превью ходит в неё). Без него тесты под владельцем пропускаются, и прогон становится FAILED (больше 20% пропусков) |
-| `QA_USER_ADMIN`, `QA_PASS_ADMIN` | preview-smoke, qa | QA-аккаунт с `isPlatformAdmin` в боевой базе, для `/admin/health`. Без него тест пропускается. Такой аккаунт видит всю платформу, так что заводи его осознанно |
-| `QA_SECRET` | preview-smoke, qa | то же значение, что `QA_SECRET` в Vercel. Им же подписывается алерт в production |
-| `QA_ALERT_SECRET` | qa | необязательно: если `QA_SECRET` в Production отличается от превьюшного |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | только preview-smoke — **сейчас не нужен** | Vercel → проект jobflex-v3 → Settings → **Deployment Protection** → **Protection Bypass for Automation** → Add/Generate secret. QA Lab шлёт его в заголовке `x-vercel-protection-bypass` только на сам деплой ([qa/lib/vercel.ts](../qa/lib/vercel.ts)) |
+| `QA_PASS_OWNER` | preview-smoke; qa — только при ручном запуске не против production | пароль `qa@acme.test` **в боевой базе**. **Для ночного прогона не нужен:** против production тесты под ролями пропускаются кодом. Нужен preview-smoke (без него тот прогон FAILED) |
+| `QA_USER_ADMIN`, `QA_PASS_ADMIN` | preview-smoke; qa — только не против production (**ночью не нужны**) | QA-аккаунт с `isPlatformAdmin` в боевой базе, для `/admin/health`. Без него тест пропускается. Такой аккаунт видит всю платформу, так что заводи его осознанно |
+| `QA_SECRET` | qa (алерт), preview-smoke | **нужен ночному прогону**: им подписывается `POST /api/qa/alert`, значение = `QA_SECRET` в Vercel **Production** |
+| `QA_ALERT_SECRET` | qa | необязательно: вместо `QA_SECRET`, если для алерта нужен отдельный |
 | `STRIPE_TEST_SECRET_KEY` | nightly-billing | тестовый ключ Stripe `sk_test_…` / `rk_test_…`. Любой другой отклоняется (в workflow и в [qa/lib/stripeTest.ts](../qa/lib/stripeTest.ts)). Без него nightly-billing пропускается |
 | `ANTHROPIC_API_KEY` | qa, nightly-billing | необязательно: анализ отчёта моделью. В preview-smoke отчёт строится только правилами (`--offline`) |
 | `QA_PASS_MANAGER`, `QA_PASS_WORKER` | qa (руками) | как было: роли для не-production целей |
@@ -35,13 +37,15 @@
 
 | Переменная | Окружение | Значение | Зачем |
 | --- | --- | --- | --- |
-| `QA_TEST_MODE` | **только Preview** | `1` | тестовый режим: коды для `@qa.jobflex.test` не уходят письмом, их отдаёт `GET /api/qa/otp`. На Production код его игнорирует (`VERCEL_ENV=production`), но ставить туда не нужно |
-| `QA_SECRET` | Preview | длинная случайная строка (как `QA_SECRET` в GitHub) | заголовок `x-qa-secret` для `/api/qa/otp` |
-| `QA_SECRET` | Production | то же значение (или своё — тогда это `QA_ALERT_SECRET` в GitHub) | открывает только `POST /api/qa/alert`. `/api/qa/otp` на production остаётся 404 |
+| `QA_TEST_MODE` | **только Preview** — сейчас **не нужен** | `1` | тестовый режим: коды для `@qa.jobflex.test` не уходят письмом, их отдаёт `GET /api/qa/otp`. На Production код его игнорирует (`VERCEL_ENV=production`), но ставить туда не нужно |
+| `QA_SECRET` | Preview — сейчас **не нужен** | длинная случайная строка (как `QA_SECRET` в GitHub) | заголовок `x-qa-secret` для `/api/qa/otp` |
+| `QA_SECRET` | Production — **нужен ночному алерту** | то же значение, что `QA_SECRET` в GitHub (или своё — тогда это `QA_ALERT_SECRET` в GitHub) | открывает только `POST /api/qa/alert`. `/api/qa/otp` на production остаётся 404 |
 
 После добавления переменных нужен новый деплой, чтобы он их подхватил.
 
-## Required check «preview-smoke»
+## Required check «preview-smoke» — не ставится
+
+Пока preview-smoke выключен, required check **не ставится**: проверка не запускается, и правило с ней заблокировало бы каждый PR. Ниже — как включить, если preview-smoke вернут.
 
 Имя проверки — имя job: `preview-smoke` (поле `name:` в preview-smoke.yml).
 

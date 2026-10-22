@@ -16,8 +16,11 @@
 #   QA_SECRET                        the Preview environment's QA_SECRET (QA test mode, /api/qa/otp)
 name: Preview smoke
 
+# OFF (2026-10-22, owner): only the nightly run against production (qa-lab.yml) is kept. The job's
+# `if` needs a deployment_status event, so a manual run here is skipped. To turn the preview smoke
+# back on, put `deployment_status:` back in place of `workflow_dispatch:` below (docs/qa-ci.md).
 on:
-  deployment_status:
+  workflow_dispatch:
 
 permissions:
   contents: read
