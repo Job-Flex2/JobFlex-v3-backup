@@ -32,10 +32,11 @@ import {
   type DeckShape,
   type Fixture,
   type RoofDesign,
+  type RoofKind,
   type StairDesign,
   type StairSide,
 } from "../design";
-import { KINDS_FOR, patchDesign, patchRoof, switchStructure } from "../edit";
+import { patchDesign, patchRoof, switchStructure } from "../edit";
 import type { FieldFocus } from "../fieldParts";
 import { HOUSE_ROOF_LABEL, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, houseForShape, quickWall, resizeDeckLeft, slideDeck } from "../house";
 import type { DeckPriceOptions } from "../pricing";
@@ -49,6 +50,20 @@ import { firstSentence, ftWords, halfFt, inWords } from "./words";
 export interface RunEnv extends DeckPriceOptions {
   /** The shop's state, for a job with no address yet (the regional boards). */
   homeState?: string | null;
+  /** The structure was switched earlier in the same sentence ("a covered porch with a gable roof"): its roof is new. */
+  freshRoof?: boolean;
+}
+
+/** The roof shapes a covered deck does not carry — they stand on posts all around, as a gazebo (over the deck or not). */
+const GAZEBO_ONLY = new Set<RoofKind>(["pyramid", "double-tier", "gambrel", "dutch-gable"]);
+const kindWord = (k: RoofKind) => ROOF_KIND_LABEL[k].split(" — ")[0].toLowerCase().replace(/^dutch/, "Dutch");
+
+/** A structure switched from one roofed kind to another keeps what was chosen for the roof: its roofing, ceiling, gutters, trim, height, pitch, posts and walls. */
+function carryRoof(next: DeckDesign, old: RoofDesign | null, fromStructure: string): DeckDesign {
+  if (!old || fromStructure === "deck" || next.structure === "deck") return next;
+  const keep: Partial<RoofDesign> = { eaveHeightIn: old.eaveHeightIn, overhangIn: old.overhangIn, post: old.post, braces: old.braces, extras: old.extras };
+  if (next.structure !== "pergola" && fromStructure !== "pergola") Object.assign(keep, { roofing: old.roofing, ceiling: old.ceiling, gutters: old.gutters, fascia: old.fascia, soffit: old.soffit, cupola: old.cupola, pitch: old.pitch, walls: old.walls });
+  return applyDeckPatch(next, { roof: { ...next.roof, ...keep } });
 }
 
 export type ViewChange = Partial<{ tab: "3d" | "plan" | "wall"; xray: boolean; night: boolean; connections: boolean; build: "play" | "stop" | "done"; full: boolean; reset: boolean; look: Look; edit: boolean }>;
@@ -287,6 +302,12 @@ export function runCommand(d0: DeckDesign, cmd: DeckCommand, env: RunEnv = {}): 
         return out(next, [`${ftWords(w)} × ${ftWords(pl.shape === "square" ? w : dp)}.`], { flash: [{ label: "Along the house" }, { label: "Out from the house" }], light: { label: "Along the house", step: "step-footprint" } });
       }
       const s = d.shape;
+      // "All the way across the house": the deck as wide as the wall, its ends at the house's corners.
+      if (cmd.from === "house") {
+        const full = toInch(clamp(s.widthFt + d.house.leftFt + d.house.rightFt, DECK_LIMITS.widthFt.min, DECK_LIMITS.widthFt.max));
+        const next = patchDesign(d, { shape: { ...s, widthFt: full } as DeckShape, house: { ...d.house, leftFt: 0, rightFt: 0, jogs: d.house.jogs.map((j) => ({ ...j, atFt: j.atFt + d.house.leftFt })) } }, settle);
+        return out(next, [`All the way across the house — ${ftWords(next.shape.widthFt)} along the wall.${s.widthFt + d.house.leftFt + d.house.rightFt > DECK_LIMITS.widthFt.max ? ` (The studio goes up to ${DECK_LIMITS.widthFt.max} ft.)` : ""}`], { flash: [{ label: "Along the house" }], light: { label: "Along the house", step: "step-shape" }, view: { reset: true } });
+      }
       let w = amt(s.widthFt, cmd.width);
       let dp = amt(s.depthFt, cmd.depth);
       if (cmd.areaSqFt) {
@@ -381,7 +402,7 @@ export function runCommand(d0: DeckDesign, cmd: DeckCommand, env: RunEnv = {}): 
     }
     case "structure": {
       if (cmd.to === d.structure) return out(d, [`It's already ${STRUCTURE_LABEL[d.structure].toLowerCase() === "deck" ? "a plain deck" : `a ${STRUCTURE_LABEL[d.structure].toLowerCase()}`}.`]);
-      const next = switchStructure(d, cmd.to);
+      const next = carryRoof(switchStructure(d, cmd.to), d.roof, d.structure);
       const r = next.roof;
       const words = cmd.to === "deck" ? "A plain deck — the roof is off (its settings are kept if you put it back)." : cmd.to === "pergola" ? `A pergola: ${r.slats.size} slats ${r.slats.spacingIn} in. apart over the headers.` : `A ${STRUCTURE_LABEL[cmd.to].toLowerCase()} with a ${ROOF_KIND_LABEL[r.kind].split(" — ")[0].toLowerCase()} roof at ${r.pitch}/12, ${lower(ROOFING_LABEL[r.roofing])}.`;
       return out(next, [words], { view: { reset: true, tab: "3d" }, light: cmd.to === "deck" ? null : { label: "Roofing", step: "step-roof" } });
@@ -609,6 +630,16 @@ export function runCommand(d0: DeckDesign, cmd: DeckCommand, env: RunEnv = {}): 
         house = quickWall(cmd.wall, d.shape, house);
         said.push(`${QUICK_WALL_LABEL[cmd.wall]}.`);
       }
+      if (cmd.widthFt) {
+        const past = Math.max(0, cmd.widthFt - d.shape.widthFt);
+        house = { ...house, leftFt: halfFt(past / 2), rightFt: halfFt(past / 2) };
+        said.push(cmd.widthFt > d.shape.widthFt ? `The house ${ftWords(cmd.widthFt)} wide — the deck centered on it, ${ftWords(past / 2)} of wall past each end.` : "The house wall is no wider than the deck.");
+      }
+      if (cmd.leftFt || cmd.rightFt) {
+        if (cmd.leftFt) house = { ...house, leftFt: halfFt(clamp(amt(house.leftFt, cmd.leftFt), 0, 60)) };
+        if (cmd.rightFt) house = { ...house, rightFt: halfFt(clamp(amt(house.rightFt, cmd.rightFt), 0, 60)) };
+        said.push(`The house runs ${ftWords(house.leftFt)} past the deck on the left and ${ftWords(house.rightFt)} on the right.`);
+      }
       const next = patchDesign(d, { house }, settle);
       return out(next, said, { flash: cmd.wall ? [{ label: "The wall's shape" }] : cmd.siding ? [{ label: "Siding" }] : cmd.roofColour ? [{ label: "Roof colour" }] : [{ label: "Storeys" }], view: { reset: true } });
     }
@@ -651,6 +682,18 @@ export function runCommand(d0: DeckDesign, cmd: DeckCommand, env: RunEnv = {}): 
       }
       const next = patchDesign(d, { extras: { items } }, settle);
       return out(next, [`Added ${qty > 1 ? `${qty} × ` : ""}${cmd.name.toLowerCase()} at $${price.toLocaleString("en-US")}${qty > 1 ? " each" : ""} — on the price and the material list as your own item. The 3D doesn't draw it.`], { meta: { remember: { name: cmd.name, unit: cmd.unit ?? "ea", price } } });
+    }
+    case "custom": {
+      // As the studio's "Custom — type your own…": the list's own choice stays what it works like; the name and the price are the shop's.
+      const p: DeckPatch = { custom: { [cmd.slot]: { name: cmd.name.slice(0, 80), price: cmd.slot === "species" ? 0 : Math.max(0, cmd.price) } } as DeckDesign["custom"] };
+      if (cmd.slot === "fascia" && d.decking.fascia === "none") p.decking = { fascia: "match" };
+      if ((cmd.slot === "ceiling" || cmd.slot === "gutters" || cmd.slot === "walls" || cmd.slot === "roofing" || cmd.slot === "roofFascia") && d.structure === "deck") return no("That goes on a roof — add one first (\"add a gable roof\").");
+      if (cmd.slot === "ceiling" && d.roof.ceiling === "none") p.roof = { ...d.roof, ceiling: "tongue-groove" };
+      if (cmd.slot === "gutters" && d.roof.gutters.kind === "none") p.roof = { ...d.roof, ...(p.roof ?? {}), gutters: { ...d.roof.gutters, kind: "k5" } };
+      if (cmd.slot === "walls" && d.roof.walls.fill === "none") p.roof = { ...d.roof, ...(p.roof ?? {}), walls: { ...d.roof.walls, fill: "screen" } };
+      const unit = cmd.slot === "decking" || cmd.slot === "fascia" || cmd.slot === "roofFascia" || cmd.slot === "gutters" ? "a foot" : cmd.slot === "roofing" ? "a square" : cmd.slot === "species" ? "" : "a square foot";
+      const next = patchDesign(d, p, settle);
+      return out(next, [`Your own ${cmd.slot === "roofFascia" ? "roof trim" : cmd.slot === "species" ? "framing lumber" : cmd.slot}: ${cmd.name}${unit ? ` at $${cmd.price.toLocaleString("en-US")} ${unit}` : ""}. It's built and drawn like the list's pick, priced as yours.`], { touched: cmd.slot === "decking" || cmd.slot === "species" ? [cmd.slot] : [] });
     }
     case "sample": {
       const sample = DECK_SAMPLES.find((x) => x.id === cmd.id);
@@ -746,22 +789,35 @@ function viewWords(v: Extract<DeckCommand, { do: "view" }>): string[] {
 type Out = (design: DeckDesign, said: string[], extra?: Omit<Outcome, "design" | "said">) => Outcome;
 type No = (why: string, extra?: Omit<Outcome, "design" | "said">) => Outcome;
 
-function runRoof(d: DeckDesign, s: RoofSet, env: RunEnv, settle: (x: DeckDesign) => DeckDesign, out: Out, no: No): Outcome {
-  if (d.structure === "deck") return no("There's no roof yet — say \"add a gable roof\" or \"make it a covered deck\".", { pending: { ask: "Add a roof?", yes: [{ do: "structure", to: "covered-deck" }, { do: "roof", set: s }] } });
-  const r = d.roof;
-  const p: Partial<RoofDesign> = {};
+function runRoof(d0: DeckDesign, s: RoofSet, env: RunEnv, settle: (x: DeckDesign) => DeckDesign, out: Out, no: No): Outcome {
   const said: string[] = [];
   const flash: Flash[] = [];
   let light: FieldFocus | null = { label: "Roofing", step: "step-roof" };
-  if (s.kind && s.kind === r.kind) said.push(`It's already a ${ROOF_KIND_LABEL[r.kind].split(" — ")[0].toLowerCase()} roof.`);
-  if (s.kind && s.kind !== r.kind) {
-    if (!KINDS_FOR[d.structure].includes(s.kind)) {
-      if (d.structure === "covered-deck") return no(`A ${ROOF_KIND_LABEL[s.kind].split(" ")[0].toLowerCase()} roof stands on its own posts all around — that's a gazebo. Make it a gazebo?`, { pending: { ask: "Make it a gazebo?", yes: [{ do: "structure", to: "gazebo" }, { do: "roof", set: { kind: s.kind } }] } });
-      if (d.structure === "pergola") return no("A pergola is open slats — want a covered deck with that roof instead?", { pending: { ask: "A covered deck instead?", yes: [{ do: "structure", to: s.kind === "gable" || s.kind === "hip" || s.kind === "shed" ? "covered-deck" : "gazebo" }, { do: "roof", set: { kind: s.kind } }] } });
-      if (d.structure === "gazebo" && s.kind === "shed") return no("A gazebo takes a gable, hip or pyramid roof — a shed roof goes on a covered deck. Make it a covered deck?", { pending: { ask: "A covered deck?", yes: [{ do: "structure", to: "covered-deck" }, { do: "roof", set: { kind: "shed" } }] } });
+  let d = d0;
+  // A ROOF SHAPE ASKED FOR IS THE SHAPE BUILT (owner, 2026-10-22: "it doesn't understand the different shapes of the
+  // roof — like a hip roof"). A bare deck gets a cover; a shape only a gazebo carries (pyramid, two-tier, gambrel, Dutch
+  // gable) makes it a gazebo over the deck; a shed comes off a gazebo or a pergola onto a covered deck — the roof's
+  // roofing, ceiling, gutters and trim kept.
+  if (s.kind && s.kind !== "pergola") {
+    const want = s.kind;
+    const target = want === "shed" ? "covered-deck" : GAZEBO_ONLY.has(want) ? "gazebo" : d.structure === "gazebo" || d.structure === "covered-deck" ? d.structure : "covered-deck";
+    if (target !== d.structure) {
+      const was = d.structure;
+      d = carryRoof(switchStructure(d, target), d.roof, was);
+      if (target === "gazebo") said.push(`A ${kindWord(want)} roof stands on posts all around, so it's built as a gazebo${hasDeck(d) ? " over the deck" : ""}.`);
+      else if (was === "gazebo" || was === "pergola") said.push(`A ${kindWord(want)} roof goes on a covered deck — the ${was} is now a covered deck.`);
+      else said.push(`A covered deck with a ${kindWord(want)} roof.`);
     }
+  } else if (d.structure === "deck") {
+    return no("There's no roof yet — say \"add a gable roof\" or \"make it a covered deck\".", { pending: { ask: "Add a roof?", yes: [{ do: "structure", to: "covered-deck" }, { do: "roof", set: s }] } });
+  }
+  const switched = d !== d0;
+  const r = d.roof;
+  const p: Partial<RoofDesign> = {};
+  if (s.kind && s.kind !== "pergola") {
     p.kind = s.kind;
-    said.push(`A ${ROOF_KIND_LABEL[s.kind].split(" — ")[0].toLowerCase()} roof.`);
+    if (!switched) said.push(s.kind === r.kind && !env.freshRoof ? `It's already a ${kindWord(r.kind)} roof.` : `A ${kindWord(s.kind)} roof.`);
+    if (said.length) said[said.length - 1] = said[said.length - 1].replace(/^a /, "A ");
     flash.push({ label: "Roof shape" });
   }
   if (s.pitch) {
@@ -786,7 +842,7 @@ function runRoof(d: DeckDesign, s: RoofSet, env: RunEnv, settle: (x: DeckDesign)
     light = { label: "Overhang past the posts", step: "step-roof" };
   }
   if (s.roofing) {
-    if (d.structure === "pergola") return no("A pergola has no roofing — it's open slats. A covered deck takes shingles or metal.");
+    if (d.structure === "pergola") return no("A pergola has no roofing — it's open slats. Say \"make it a covered deck\" for shingles or metal.", { pending: { ask: "A covered deck with that roofing?", yes: [{ do: "structure", to: "covered-deck" }, { do: "roof", set: { roofing: s.roofing } }] } });
     p.roofing = s.roofing;
     said.push(`${ROOFING_LABEL[s.roofing]}.`);
     flash.push({ label: "Roofing" });
@@ -838,7 +894,12 @@ function runRoof(d: DeckDesign, s: RoofSet, env: RunEnv, settle: (x: DeckDesign)
   }
   if (s.planShape) {
     p.plan = { ...(p.plan ?? r.plan), shape: s.planShape };
-    said.push(`A ${s.planShape === "follows-deck" ? "roof over the whole deck" : `${s.planShape === "rect" ? "rectangular" : s.planShape} roof`}.`);
+    // A square or a rectangle named without a size: as big as the deck under it allows.
+    if (hasDeck(d) && !s.widthFt && (s.planShape === "square" || s.planShape === "rect") && r.plan.shape === "follows-deck") {
+      const sq = Math.max(8, Math.floor(Math.min(d.shape.widthFt, d.shape.depthFt)) - 1);
+      p.plan = { ...p.plan, widthFt: s.planShape === "square" ? sq : d.shape.widthFt, depthFt: s.planShape === "square" ? sq : d.shape.depthFt };
+    }
+    said.push(s.planShape === "follows-deck" ? "The roof over the whole deck." : `${articled(s.planShape === "rect" ? "rectangular" : s.planShape)} roof.`.replace(/^a/, "A"));
     flash.push({ label: "Roof outline" });
   }
   if (s.widthFt || s.depthFt || s.acrossFt || s.offsetFt) {
@@ -850,7 +911,7 @@ function runRoof(d: DeckDesign, s: RoofSet, env: RunEnv, settle: (x: DeckDesign)
       acrossFt: clamp(halfFt(amt(pl.acrossFt, s.acrossFt)), ROOF_LIMITS.acrossFt.min, ROOF_LIMITS.acrossFt.max),
       offsetFt: clamp(halfFt(amt(pl.offsetFt, s.offsetFt)), ROOF_LIMITS.offsetFt.min, ROOF_LIMITS.offsetFt.max),
     };
-    said.push(s.acrossFt ? `${ftWords(p.plan.acrossFt)} across.` : `The roof ${ftWords(p.plan.widthFt)} × ${ftWords(p.plan.depthFt)}.`);
+    said.push(s.acrossFt ? `${ftWords(p.plan.acrossFt)} across.` : `The roof ${ftWords(p.plan.widthFt)} × ${ftWords(p.plan.shape === "square" ? p.plan.widthFt : p.plan.depthFt)}.`);
   }
   if (s.attach) {
     p.attach = s.attach;
@@ -861,19 +922,66 @@ function runRoof(d: DeckDesign, s: RoofSet, env: RunEnv, settle: (x: DeckDesign)
     said.push(`${s.post} roof posts.`);
     light = { label: "Posts", step: "step-roof" };
   }
+  if (s.header) {
+    p.header = s.header;
+    said.push(s.header === "lvl" ? "Engineered LVL headers throughout." : s.header === "auto" ? "Headers picked by the tables, least cost." : `${s.header} headers.`);
+    light = { label: "Headers", step: "step-roof" };
+  }
+  if (s.rafter || s.rafterSpacingIn) {
+    if (s.rafter) p.rafter = s.rafter;
+    if (s.rafterSpacingIn) p.rafterSpacingIn = s.rafterSpacingIn;
+    said.push(`Rafters ${s.rafter && s.rafter !== "auto" ? s.rafter : "sized by the tables"}${s.rafterSpacingIn ? ` at ${s.rafterSpacingIn} in. on center` : ""}.`);
+    flash.push({ label: "Rafters" });
+    light = { label: "Rafters", step: "step-roof" };
+  }
+  if (s.load) {
+    p.load = s.load;
+    said.push(s.load === "auto" ? "The roof load follows the ground snow here." : s.load === 20 ? "Built for a 20 psf roof live load." : `Built for ${s.load} psf of snow on the roof.`);
+  }
+  if (s.roofDeck) {
+    p.roofDeck = s.roofDeck;
+    if (r.roofing !== "metal-panel" && r.roofing !== "standing-seam" && s.roofDeck === "purlins") said.push("Purlins go under metal roofing — switched to metal panels.");
+    if (r.roofing !== "metal-panel" && r.roofing !== "standing-seam" && s.roofDeck === "purlins") p.roofing = "metal-panel";
+    said.push(s.roofDeck === "purlins" ? "The metal on purlins across the rafters." : "The roofing on sheathing.");
+  }
+  if (s.fasciaEave !== undefined || s.fasciaRake !== undefined) {
+    p.fascia = { ...(p.fascia ?? r.fascia), ...(s.fasciaEave !== undefined ? { eave: s.fasciaEave } : {}), ...(s.fasciaRake !== undefined ? { rake: s.fasciaRake } : {}) };
+    said.push(`${s.fasciaEave !== undefined ? (s.fasciaEave ? "Fascia on the eaves." : "No fascia on the eaves.") : ""}${s.fasciaRake !== undefined ? (s.fasciaRake ? " Rake boards on the gable ends." : " No rake boards.") : ""}`.trim());
+  }
   if (s.ridge) p.ridge = s.ridge;
   if (s.crossBeams !== undefined) p.crossBeams = clamp(s.crossBeams, ROOF_LIMITS.crossBeams.min, ROOF_LIMITS.crossBeams.max);
   if (s.braces !== undefined) {
     p.braces = s.braces;
     said.push(s.braces ? "Knee braces at the posts." : "No knee braces at the posts.");
   }
-  const next = patchRoof(d, p, settle);
+  let next = patchRoof(d, p, settle);
   const nr = next.roof;
   if (s.attach && nr.attach !== s.attach) said.push(s.attach === "wall" ? "This roof can't hang on the house — it stands on its own posts." : "It stands on its own posts.");
   else if (s.attach) said.push(nr.attach === "wall" ? "The back of the roof hangs on the house wall." : "On its own posts, free of the house.");
-  if (p.kind && nr.kind !== p.kind) said.push(`The studio made it a ${ROOF_KIND_LABEL[nr.kind].split(" — ")[0].toLowerCase()} — that shape doesn't go on this outline.`);
-  void env;
-  return out(next, said.length ? said : ["Done."], { flash, light });
+  // What the frame really is: the 3D shows the built roof, so the words say it too.
+  let pending: Pending | null = null;
+  if (p.kind) {
+    let built = buildStructure(next, { rates: env.rates, market: env.market }).roof;
+    if (p.kind === "hip" && built?.kind === "gable" && next.roof.attach === "wall") {
+      next = patchRoof(next, { attach: "free" }, settle);
+      built = buildStructure(next, { rates: env.rates, market: env.market }).roof;
+      said.push("Against the house a hip needs the cover twice as wide as it is deep, so this one stands on its own posts — a full hip on all four sides.");
+    }
+    if (built && built.kind !== p.kind) {
+      const W = next.shape.widthFt;
+      const D = next.shape.depthFt;
+      // The posts stand a few inches inside the deck's edges: a square a foot under its short side stays square.
+      const side = Math.max(8, Math.floor(Math.min(W, D)) - 1);
+      const plan = next.roof.plan.shape;
+      if (p.kind === "hip" && built.kind === "pyramid") said.push(plan === "hexagon" || plan === "octagon" || plan === "round" ? `On ${articled(plan === "round" ? "round" : plan)} outline every side slopes up to one peak — a pyramid roof.` : "On a square the four hips meet at one point — that's a pyramid roof.");
+      else if (p.kind === "pyramid" && built.kind === "hip") {
+        said.push(`A pyramid needs a square: over ${ftWords(W)} × ${ftWords(D)} the four sides meet at a short ridge — a hip roof. Say "square roof" for a true pyramid over ${ftWords(side)} × ${ftWords(side)}.`);
+        pending = { ask: "A square roof, a true pyramid?", yes: [{ do: "roof", set: { planShape: "square", widthFt: { to: side } } }] };
+      } else if (p.kind === "dutch-gable" && built.kind === "hip") said.push("A Dutch gable needs it longer one way than the other — on a square it frames as a hip.");
+      else said.push(`On this outline it frames as a ${kindWord(built.kind)} roof.${built.kindNote ? ` ${built.kindNote}` : ""}`);
+    }
+  }
+  return out(next, said.length ? said : ["Done."], { flash, light, pending, view: p.kind ? { tab: "3d", reset: true } : undefined });
 }
 
 function runDecking(d: DeckDesign, s: DeckingSet, env: RunEnv, settle: (x: DeckDesign) => DeckDesign, out: Out, no: No): Outcome {

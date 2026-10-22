@@ -7,7 +7,7 @@
 
 import type { DeckingBrand, DeckingFamily, FramingSpeciesId, RailTypeId, WallTypeId } from "../catalog";
 import type { JoistSize, LedgerFastener, LoadPsf, PostSize, SoilPsf, SpacingIn } from "../codeTables";
-import type { BeamKind, BeamSize, BeamStyle, CeilingKind, DeckPattern, FasciaFinish, FixtureKind, FixtureSupply, Floor, FootingType, GutterKind, Handrail, NotchCorner, OwnUnit, PergolaStyle, Placement, RailInfill, RidgeKind, RoofAttach, RoofKind, RoofPlanShape, RoofPostSize, Roofing, SlatSize, StairLanding, StairSide, Structure, WallFill } from "../design";
+import type { BeamKind, BeamSize, BeamStyle, CeilingKind, CustomSlot, DeckPattern, FasciaFinish, FixtureKind, FixtureSupply, Floor, FootingType, GutterKind, Handrail, NotchCorner, OwnUnit, PergolaStyle, Placement, RailInfill, RidgeKind, RoofAttach, RoofKind, RoofPlanShape, RoofPostSize, Roofing, SlatSize, StairLanding, StairSide, Structure, WallFill } from "../design";
 import type { HouseRoof, QuickWall, RoofColourId, SidingId } from "../house";
 
 /** A number said three ways: "to 20", "by 4 more" (signed), "times 2" ("double the width"). */
@@ -59,6 +59,14 @@ export interface RoofSet {
   ridge?: RidgeKind;
   crossBeams?: number;
   braces?: boolean;
+  /** Headers: the least-cost pick, engineered LVL throughout, or a size. */
+  header?: BeamSize | "auto" | "lvl";
+  rafter?: JoistSize | "auto";
+  rafterSpacingIn?: 12 | 16 | 24;
+  load?: "auto" | 20 | 30 | 50 | 70;
+  roofDeck?: "sheathing" | "purlins";
+  fasciaEave?: boolean;
+  fasciaRake?: boolean;
 }
 
 export interface DeckingSet {
@@ -112,7 +120,7 @@ export type StairPick = { side: StairSide } | { index: number } | "last" | "all"
 export type StairAt = "left" | "center" | "right" | "house" | "out" | { ft: number } | { by: number };
 
 export type DeckCommand =
-  | { do: "size"; width?: Amount; depth?: Amount; areaSqFt?: number; square?: boolean; from?: "left" | "right" }
+  | { do: "size"; width?: Amount; depth?: Amount; areaSqFt?: number; square?: boolean; from?: "left" | "right" | "house" }
   | { do: "height"; in: Amount }
   | { do: "shape"; kind: "rect" | "L" | "curve" | "clipped"; corner?: NotchCorner; notchWidthFt?: number; notchDepthFt?: number; bulgeFt?: number; clipFt?: number }
   | { do: "slide"; ft: number | "center" }
@@ -132,9 +140,11 @@ export type DeckCommand =
   | { do: "spa"; on?: boolean; width?: Amount; depth?: Amount; align?: Align }
   | { do: "fixture"; op: "add" | "remove" | "set"; kind: FixtureKind; qty?: Amount; supply?: FixtureSupply; volts240?: boolean }
   | { do: "electrical"; timer?: boolean; feedFt?: number; panelSide?: "left" | "right" }
-  | { do: "house"; storeys?: 1 | 2; roof?: HouseRoof; siding?: SidingId; roofColour?: RoofColourId; wall?: QuickWall }
+  | { do: "house"; storeys?: 1 | 2; roof?: HouseRoof; siding?: SidingId; roofColour?: RoofColourId; wall?: QuickWall; leftFt?: Amount; rightFt?: Amount; widthFt?: number }
   | { do: "extras"; demoSqFt?: number | "deck"; stainless?: boolean; drain?: boolean }
   | { do: "item"; op: "add" | "remove"; name: string; qty?: number; unit?: OwnUnit; price?: number }
+  /** A product of the shop's own in one of the studio's lists ("our own boards, Azek Timbertech, at 9 dollars a foot"). */
+  | { do: "custom"; slot: CustomSlot; name: string; price: number }
   | { do: "sample"; id: string }
   | { do: "autofix" }
   | { do: "reset" }
@@ -162,7 +172,7 @@ export type DeckCommand =
 export type CommandKind = DeckCommand["do"];
 
 /** Commands that change the design (the rest look, answer or steer). */
-export const CHANGES: ReadonlySet<CommandKind> = new Set<CommandKind>(["size", "height", "shape", "slide", "placement", "wall", "structure", "floor", "roof", "decking", "framing", "ledger", "footing", "site", "rail", "stairs", "lower", "spa", "fixture", "electrical", "house", "extras", "item", "sample", "autofix", "reset"]);
+export const CHANGES: ReadonlySet<CommandKind> = new Set<CommandKind>(["custom", "size", "height", "shape", "slide", "placement", "wall", "structure", "floor", "roof", "decking", "framing", "ledger", "footing", "site", "rail", "stairs", "lower", "spa", "fixture", "electrical", "house", "extras", "item", "sample", "autofix", "reset"]);
 
 /* ------------------------------------------------------------------ */
 /*  The words for the catalog's own things                            */
@@ -262,7 +272,7 @@ export const ROOF_COLOUR_WORDS: ReadonlyArray<[RegExp, RoofColourId]> = [
 /** Fixtures, by what people call them — the most specific first. */
 export const FIXTURE_WORDS: ReadonlyArray<[RegExp, FixtureKind]> = [
   [/\b(?:post ?cap lights?|lit (?:post )?caps?|solar (?:post )?caps?|cap lights?|post lights?|lights? on the posts)\b/, "post-cap"],
-  [/\b(?:stair lights?|step lights?|riser lights?|lights? (?:on|in) the (?:stairs|steps|risers)|stair lighting)\b/, "step-light"],
+  [/\b(?:stair lights?|step lights?|riser lights?|lights? (?:on|in|for) the (?:stairs|steps|risers)|stair lighting|light (?:up )?the (?:stairs|steps)|lit (?:stairs|steps))\b/, "step-light"],
   [/\b(?:string lights?|bistro lights?|cafe lights?|party lights?|edison (?:bulbs?|lights?)|fairy lights?|market lights?|festoon lights?)\b/, "string-light"],
   [/\b(?:led strips?|strip lights?|tape lights?|rope lights?|under[- ]?rail (?:lights?|lighting|leds?)|accent lights?|led lighting|leds)\b/, "led-strip"],
   [/\b(?:sconces?|wall lights?|lanterns?|coach lights?|wall lamps?|porch lights?|door lights?|lights? (?:over|by|above|next to|beside) the (?:door|back door|slider|patio door))\b/, "sconce"],

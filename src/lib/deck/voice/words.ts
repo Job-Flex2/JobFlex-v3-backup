@@ -65,6 +65,16 @@ const HEARD_AS: ReadonlyArray<[RegExp, string]> = [
   [/\bl-shaped\b|\bl-shape\b|\bel shaped\b|\bell shaped\b/g, "l shaped"],
   [/\bt-and-g\b|\bt&g\b|\bt and g\b|\btongue and groove\b|\btongue in groove\b/g, "tongue-and-groove"],
   [/\bpost and beam\b/g, "post-and-beam"],
+  // Roof shapes as a recogniser writes them: "cable roof" is a gable, "gamble roof" a gambrel, "hit roof" a hip.
+  [/\b(?:cable|gabel|gabble|able|gay bull|gay bowl)(?: style)? roofs?\b/g, "gable roof"],
+  [/\b(?:gabel|gabled|gable's|gables|gabble)\b/g, "gable"],
+  [/\b(?:hit|hips|hipp|hipped|hip's)(?: style)? roofs?\b/g, "hip roof"],
+  [/\bhip proof\b/g, "hip roof"],
+  [/\b(?:gamble|gambel|gambral|gamberel|gambrill|gamble style)(?: roofs?)?\b/g, "gambrel roof"],
+  [/\bdutch (?:cable|gabel|gable|gabble|hip)(?: roofs?)?\b/g, "dutch gable roof"],
+  [/\b(?:pa goda|pagota|pergoda roof)\b/g, "pagoda"],
+  [/\blean (?:too|2|two)\b/g, "lean to"],
+  [/\bskill ion\b/g, "skillion"],
   [/\bfull[- ]?screen\b/g, "fullscreen"],
   [/\bsalt and pepper\b/g, "salt-and-pepper"],
   [/\bbead board\b/g, "beadboard"],
@@ -175,7 +185,7 @@ function homophones(t: string): string {
     .replace(/\btoo by (4|6|8|10|12)(s?)\b/g, "2 by $1$2")
     .replace(/\ba couple(?: of)? (?=feet|foot|inches|inch)/g, "2 ")
     .replace(/\ba few (?=feet|foot|inches|inch)/g, "3 ")
-    .replace(/\ba (?=foot\b)/g, "1 ")
+    .replace(/(?<!(?:\$\d+(?:\.\d+)?|dollars|bucks|cents)\s)\ba (?=foot\b)/g, "1 ")
     .replace(/\ban (?=inch\b)/g, "1 ");
 }
 
@@ -280,7 +290,7 @@ export function normalizeSpeech(raw: string): string {
 
 /** The words a sentence opens with that carry no command: "hey", "can you", "I'd like to", "let's"… */
 const FILLER_HEAD = /^(?:(?:hey|hi|ok|okay|so|um+|uh+|uhm|hmm+|well|alright|all right|now|and|please|yeah so|right|deck studio|jobflex|studio|good|great|cool|nice|awesome|perfect)\b[,.!\s]*)+/;
-const ASK_HEAD = /^(?:(?:can|could|would|will) you (?:please |just |maybe )?|(?:i(?:'d| would) (?:like|love) (?:you )?(?:to )?)|i want (?:you )?(?:to )?|i wanna |i need (?:you )?(?:to )?|let's |let us |go ahead and |please |i'm gonna |we need (?:to )?|we want (?:to )?|we'd like (?:to )?|could we |can we |should we |can i |could i |may i |maybe |just |try to |i think (?:we should |it should )?|(?:do|go with|let's do) (?!(?:i|we|you|they|it|the|my|these|those|people|most|all|that|this)\b))+/;
+const ASK_HEAD = /^(?:(?:can|could|would|will) you (?:please |just |maybe )?|(?:i(?:'d| would) (?:like|love) (?:you )?(?:to )?)|i want (?:you )?to |i wanna |i need (?:you )?to |i (?:really )?(?:like|love|prefer) |i'd (?:prefer|rather have|rather go with|rather) |let's try |let's |let us |try |go ahead and |please |i'm gonna |we need to |we want to |we'd like (?:to )?|could we |can we |should we |can i |could i |may i |maybe |just |try to |i think (?:we should |it should )?|(?:do|go with|let's do) (?!(?:i|we|you|they|it|the|my|these|those|people|most|all|that|this)\b))+/;
 const FILLER_TAIL = /(?:[,\s]+(?:please|for me|thanks|thank you|now|right now|real quick|ok|okay|if you can|if possible))+\s*$/;
 
 /** A clause without the words around the command. */
