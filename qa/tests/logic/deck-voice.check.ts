@@ -11,7 +11,8 @@ import { hear, freshVoiceState, runCommands, designSummary, type BrainEnv, type 
 import { runCommand } from "../../../src/lib/deck/voice/run";
 import { answer } from "../../../src/lib/deck/voice/answer";
 import { checkCommands } from "../../../src/lib/deck/voice/schema";
-import { patchDesign, switchStructure } from "../../../src/lib/deck/edit";
+import { patchDesign, patchRoof, switchStructure } from "../../../src/lib/deck/edit";
+import { buildStructure } from "../../../src/lib/deck/structure";
 import type { DeckCommand } from "../../../src/lib/deck/voice/commands";
 
 let bad = 0;
@@ -187,7 +188,7 @@ console.log("── commands read from what was said");
     ["add under deck drainage", (c) => has(c, "extras")?.drain === true],
     // Roof and what is built
     ["add a roof", (c) => has(c, "structure")?.to === "covered-deck"],
-    ["add a gable roof", (c) => has(c, "structure")?.to === "covered-deck"],
+    ["add a gable roof", (c) => has(c, "roof")?.set.kind === "gable"],
     ["make it a hip roof", (c) => has(c, "roof")?.set.kind === "hip", covered],
     ["make the roof steeper", (c) => show(has(c, "roof")?.set.pitch) === show({ by: 2 }), covered],
     ["8 in 12 pitch", (c) => show(has(c, "roof")?.set.pitch) === show({ to: 8 }), covered],
@@ -303,6 +304,38 @@ console.log("── commands read from what was said");
     ["what's the cheapest way to build this", (c) => has(c, "ask")?.q === "compare"],
     ["what are my options for boards", (c) => has(c, "ask")?.q === "options"],
     ["is 2x6 enough for the joists", (c) => has(c, "ask")?.q === "joists"],
+    // The same meaning, other words (2026-10-22)
+    ["supersize it", (c) => ((has(c, "size")?.width as { by: number } | undefined)?.by ?? 0) > 0],
+    ["cut it down a little", (c) => show(has(c, "size")?.width) === show({ by: -1 })],
+    ["bring it in two feet", (c) => show(has(c, "size")?.depth) === show({ by: -2 })],
+    ["it's too deep", (c) => show(has(c, "size")?.depth) === show({ by: -2 })],
+    ["it's too wide", (c) => show(has(c, "size")?.width) === show({ by: -2 })],
+    ["make it come out farther", (c) => ((has(c, "size")?.depth as { by: number } | undefined)?.by ?? 0) > 0],
+    ["make the deck go all the way across the back of the house", (c) => has(c, "size")?.from === "house"],
+    ["bring it down six inches", (c) => show(has(c, "height")?.in) === show({ by: -6 })],
+    ["put it right on the ground", (c) => show(has(c, "height")?.in) === show({ to: 14 })],
+    ["take a corner out of it", (c) => has(c, "shape")?.kind === "L"],
+    ["round off the front", (c) => has(c, "shape")?.kind === "curve"],
+    ["round the corners", (c) => has(c, "shape")?.kind === "clipped"],
+    ["give it 45 degree corners", (c) => has(c, "shape")?.kind === "clipped" && has(c, "shape")?.clipFt === undefined],
+    ["we need steps to the yard", (c) => has(c, "stairs")?.op === "add"],
+    ["hide the screws", (c) => has(c, "decking")?.set.fastening === "hidden"],
+    ["I like the dark gray", (c) => has(c, "decking")?.set.color === "dark gray"],
+    ["the deck isn't attached", (c) => has(c, "placement")?.to === "detached"],
+    ["light up the stairs", (c) => has(c, "fixture")?.kind === "step-light"],
+    ["make it an octagon", (c) => c.some((x) => x.do === "roof" && x.set.planShape === "octagon")],
+    ["less steep roof", (c) => show(has(c, "roof")?.set.pitch) === show({ by: -2 }), covered],
+    ["make the ceiling 10 feet", (c) => show(has(c, "roof")?.set.eaveIn) === show({ to: 120 }), covered],
+    ["move the roof 3 feet to the right", (c) => show(has(c, "roof")?.set.offsetFt) === show({ by: 3 }) && !has(c, "roof")?.set.eaveIn, covered],
+    ["LVL headers", (c) => has(c, "roof")?.set.header === "lvl", covered],
+    ["2x8 rafters 16 inches on center", (c) => has(c, "roof")?.set.rafter === "2x8" && has(c, "roof")?.set.rafterSpacingIn === 16, covered],
+    ["purlins under the metal", (c) => has(c, "roof")?.set.roofDeck === "purlins", covered],
+    ["no rake boards", (c) => has(c, "roof")?.set.fasciaRake === false, covered],
+    ["roof load 50 psf", (c) => has(c, "roof")?.set.load === 50, covered],
+    ["the house goes 10 feet past the deck on the left", (c) => show(has(c, "house")?.leftFt) === show({ to: 10 })],
+    ["the house is 40 feet wide", (c) => has(c, "house")?.widthFt === 40],
+    ["use our own boards called azek timber at 9 dollars a foot", (c) => has(c, "custom")?.slot === "decking" && has(c, "custom")?.price === 9 && has(c, "custom")?.name === "Azek Timber"],
+    ["custom railing at 95 dollars a foot", (c) => has(c, "rail")?.set.type === "custom" && has(c, "rail")?.set.customPerFt === 95],
     // Sentences with several commands
     ["make it 16 by 12 with composite decking and aluminum railing", (c) => !!has(c, "size") && has(c, "decking")?.set.family === "composite" && has(c, "rail")?.set.type === "aluminum"],
     ["add stairs down the front and a heater", (c) => has(c, "stairs")?.side === "front" && has(c, "fixture")?.kind === "heater"],
@@ -406,6 +439,65 @@ console.log("── carried out on the design");
   check("a small, low, free deck may not", /may not need one/.test(small.say), small.say);
 }
 
+console.log("── every roof shape, said many ways, is the roof built");
+{
+  // The 3D draws the BUILT roof (lib/deck/roof may frame a hip as a gable against the house, a pyramid on a rectangle
+  // as a hip): what is said must end on the shape asked for, or say why not.
+  const builtKind = (d: DeckDesign) => buildStructure(d).roof?.kind ?? "none";
+  const deck = (w: number, dp: number) => base({ shape: { kind: "rect", widthFt: w, depthFt: dp } });
+  const sayOn = (d: DeckDesign, text: string, st = freshVoiceState()) => hear(text, d, st, {});
+  const cases: Array<[string, number, number, string]> = [
+    ["add a hip roof", 16, 12, "hip"],
+    ["hipped roof please", 16, 12, "hip"],
+    ["I want the roof to slope on all four sides", 16, 12, "hip"],
+    ["hit roof", 16, 12, "hip"],
+    ["add a gable roof", 16, 12, "gable"],
+    ["cable roof", 16, 12, "gable"],
+    ["a frame roof over it", 16, 12, "gable"],
+    ["a regular peaked roof", 16, 12, "gable"],
+    ["shed roof", 16, 12, "shed"],
+    ["a lean to roof", 16, 12, "shed"],
+    ["flat roof", 16, 12, "shed"],
+    ["single slope roof", 16, 12, "shed"],
+    ["gambrel roof", 24, 12, "gambrel"],
+    ["barn style roof", 24, 12, "gambrel"],
+    ["gamble roof", 24, 12, "gambrel"],
+    ["dutch gable roof", 24, 12, "dutch-gable"],
+    ["a hip roof with little gables on the ends", 24, 12, "dutch-gable"],
+    ["pagoda roof", 16, 12, "double-tier"],
+    ["two tier roof", 16, 12, "double-tier"],
+    ["pyramid roof", 14, 14, "pyramid"],
+    ["a roof that comes to a point", 14, 14, "pyramid"],
+  ];
+  for (const [text, w, dp, want] of cases) {
+    const r = sayOn(deck(w, dp), text);
+    const got = r.design ? builtKind(r.design) : "unchanged";
+    check(`"${text}" on a ${w} × ${dp} deck builds a ${want} roof`, got === want, `${got}: ${r.say}`);
+  }
+  // A pyramid asked for on a rectangle: the hip it frames as is said, and "yes" makes the square that is a pyramid.
+  let st = freshVoiceState();
+  const r1 = hear("pyramid roof", deck(16, 12), st, {});
+  check("a pyramid on 16 × 12 says it frames as a hip and offers a square", builtKind(r1.design!) === "hip" && /pyramid needs a square/.test(r1.say) && !!r1.pending, r1.say);
+  st = r1.state;
+  const r2 = hear("yes", r1.design!, st, {});
+  check("…and yes makes it a true pyramid over a square", !!r2.design && builtKind(r2.design) === "pyramid" && r2.design.roof.plan.shape === "square", r2.say);
+  // From a pergola or a gazebo, the shape decides what carries it.
+  const pergola = switchStructure(base(), "pergola");
+  const fromPergola = hear("make it a hip roof", pergola, freshVoiceState(), {});
+  check("a hip asked for on a pergola makes it a covered deck with a hip", fromPergola.design?.structure === "covered-deck" && builtKind(fromPergola.design) === "hip", fromPergola.say);
+  const gazebo = switchStructure(base(), "gazebo");
+  const shedOn = hear("shed roof", gazebo, freshVoiceState(), {});
+  check("a shed roof asked for on a gazebo makes it a covered deck", shedOn.design?.structure === "covered-deck" && builtKind(shedOn.design) === "shed", shedOn.say);
+  const covered = patchRoof(switchStructure(base(), "covered-deck"), { roofing: "standing-seam", ceiling: "beadboard" });
+  const barn = hear("barn roof", covered, freshVoiceState(), {});
+  check("a covered deck turned gazebo for a barn roof keeps its metal roofing and its ceiling", barn.design?.structure === "gazebo" && barn.design.roof.roofing === "standing-seam" && barn.design.roof.ceiling === "beadboard", barn.say);
+  const oct = hear("octagon gazebo", base(), freshVoiceState(), {});
+  const octHip = hear("hip roof", oct.design!, oct.state, {});
+  check("a hip on an octagon is a pyramid, said so", !!octHip.design && builtKind(octHip.design) === "pyramid" && /one peak/.test(octHip.say), octHip.say);
+  const part = hear("roof over the left half only", base(), freshVoiceState(), {});
+  check("a roof over the left half: a rectangle half the deck wide, shifted left", part.design?.roof.plan.shape === "rect" && part.design.roof.plan.widthFt === 8 && part.design.roof.plan.offsetFt === -4, part.say);
+}
+
 console.log("── the runner holds the engine's rails");
 {
   const d = base();
@@ -418,7 +510,7 @@ console.log("── the runner holds the engine's rails");
   const box = runCommand(d, { do: "stairs", op: "add", wrap: true });
   check("box steps on a 3-ft deck are refused, a flight offered", box.refused === true && box.pending?.yes[0].do === "stairs");
   const gazebo = runCommand(switchStructure(d, "covered-deck"), { do: "roof", set: { kind: "pyramid" } });
-  check("a pyramid roof on a covered deck asks to make it a gazebo", gazebo.refused === true && gazebo.pending?.yes[0].do === "structure");
+  check("a pyramid roof on a covered deck is built as a gazebo — and on a rectangle said to frame as a hip, with a square offered", gazebo.design.structure === "gazebo" && gazebo.design.roof.kind === "pyramid" && /short ridge — a hip roof/.test(gazebo.said.join(" ")) && gazebo.pending?.yes[0].do === "roof", gazebo.said.join(" "));
   const joists = runCommand(base({ shape: { kind: "rect", widthFt: 16, depthFt: 16 } }), { do: "framing", set: { joist: "2x6" } });
   check("joists asked smaller are framed to the tables (the beams come in) — no span left failing", !deckChecks(priceDeck(joists.design).structure).some((c) => c.level === "fail" && /^joist-span/.test(c.id)), joists.said.join(" "));
   const gray = runCommand(base({ decking: { product: "cedar-54" } }), { do: "decking", set: { color: "gray" } });
@@ -493,7 +585,7 @@ console.log("── the studio's doors (lib/deck/edit) keep the house and the de
 
 console.log("── a thousand sentences, none of them throws");
 {
-  const words = ["make", "it", "the", "deck", "stairs", "bigger", "smaller", "wider", "add", "remove", "a", "roof", "railing", "trex", "gray", "20", "by", "14", "feet", "inches", "higher", "lower", "left", "right", "show", "me", "night", "how", "much", "concrete", "what", "if", "composite", "and", "then", "heater", "hot", "tub", "lower level", "joists", "2x10", "pitch", "8/12", "undo", "yes", "no", "please", "with", "fire pit", "$500", "pergola", "gazebo", "screen", "it", "in"];
+  const words = ["make", "it", "the", "deck", "stairs", "bigger", "smaller", "wider", "add", "remove", "a", "roof", "railing", "trex", "gray", "20", "by", "14", "feet", "inches", "higher", "lower", "left", "right", "show", "me", "night", "how", "much", "concrete", "what", "if", "composite", "and", "then", "heater", "hot", "tub", "lower level", "joists", "2x10", "pitch", "8/12", "undo", "yes", "no", "please", "with", "fire pit", "$500", "pergola", "gazebo", "screen", "it", "in", "hip", "gambrel", "dutch gable", "pyramid", "pagoda", "half", "over", "octagon", "house", "past", "custom", "called", "a foot", "rafters", "headers", "too", "deep", "corner", "round", "all the way", "across"];
   let seed = 7;
   const rand = () => {
     seed = (seed * 1103515245 + 12345) % 2147483648;

@@ -45,11 +45,18 @@ const roofSet = z
     ridge: z.enum(["auto", "beam", "board", "none", "trusses"]),
     crossBeams: z.number().int().min(0).max(3),
     braces: z.boolean(),
+    header: z.enum(["auto", "lvl", "4x6", "4x8", "4x10", "4x12", "2-2x6", "2-2x8", "2-2x10", "2-2x12", "3-2x8", "3-2x10", "3-2x12"]),
+    rafter: z.enum(["auto", "2x6", "2x8", "2x10", "2x12"]),
+    rafterSpacingIn: z.union([z.literal(12), z.literal(16), z.literal(24)]),
+    load: z.union([z.literal("auto"), z.literal(20), z.literal(30), z.literal(50), z.literal(70)]),
+    roofDeck: z.enum(["sheathing", "purlins"]),
+    fasciaEave: z.boolean(),
+    fasciaRake: z.boolean(),
   })
   .partial();
 
 const COMMAND = z.discriminatedUnion("do", [
-  z.object({ do: z.literal("size"), width: amount.optional(), depth: amount.optional(), areaSqFt: z.number().positive().max(2400).optional(), square: z.boolean().optional(), from: z.enum(["left", "right"]).optional() }),
+  z.object({ do: z.literal("size"), width: amount.optional(), depth: amount.optional(), areaSqFt: z.number().positive().max(2400).optional(), square: z.boolean().optional(), from: z.enum(["left", "right", "house"]).optional() }),
   z.object({ do: z.literal("height"), in: amount }),
   z.object({ do: z.literal("shape"), kind: z.enum(["rect", "L", "curve", "clipped"]), corner: z.enum(["front-left", "front-right", "back-left", "back-right"]).optional(), notchWidthFt: z.number().positive().optional(), notchDepthFt: z.number().positive().optional(), bulgeFt: z.number().positive().optional(), clipFt: z.number().positive().optional() }),
   z.object({ do: z.literal("slide"), ft: z.union([z.number().finite(), z.literal("center")]) }),
@@ -132,9 +139,10 @@ const COMMAND = z.discriminatedUnion("do", [
   z.object({ do: z.literal("spa"), on: z.boolean().optional(), width: amount.optional(), depth: amount.optional(), align: align.optional() }),
   z.object({ do: z.literal("fixture"), op: z.enum(["add", "remove", "set"]), kind: fixtureKind, qty: amount.optional(), supply: z.enum(["we", "client"]).optional(), volts240: z.boolean().optional() }),
   z.object({ do: z.literal("electrical"), timer: z.boolean().optional(), feedFt: z.number().min(5).max(300).optional(), panelSide: z.enum(["left", "right"]).optional() }),
-  z.object({ do: z.literal("house"), storeys: z.union([z.literal(1), z.literal(2)]).optional(), roof: z.enum(["hip", "gable"]).optional(), siding: z.enum(["white", "cream", "grey", "blue", "sage"]).optional(), roofColour: z.enum(["charcoal", "brown", "slate", "forest", "terracotta"]).optional(), wall: z.enum(["straight", "bump-right", "bump-left", "nook"]).optional() }),
+  z.object({ do: z.literal("house"), storeys: z.union([z.literal(1), z.literal(2)]).optional(), roof: z.enum(["hip", "gable"]).optional(), siding: z.enum(["white", "cream", "grey", "blue", "sage"]).optional(), roofColour: z.enum(["charcoal", "brown", "slate", "forest", "terracotta"]).optional(), wall: z.enum(["straight", "bump-right", "bump-left", "nook"]).optional(), leftFt: amount.optional(), rightFt: amount.optional(), widthFt: z.number().min(4).max(200).optional() }),
   z.object({ do: z.literal("extras"), demoSqFt: z.union([z.number().min(0).max(4000), z.literal("deck")]).optional(), stainless: z.boolean().optional(), drain: z.boolean().optional() }),
   z.object({ do: z.literal("item"), op: z.enum(["add", "remove"]), name: z.string().min(1).max(80), qty: z.number().min(0).max(100000).optional(), unit: z.enum(["ea", "pcs", "ft", "sq ft", "bags"]).optional(), price: z.number().min(0).max(100000).optional() }),
+  z.object({ do: z.literal("custom"), slot: z.enum(["decking", "fastening", "fascia", "roofing", "ceiling", "roofFascia", "gutters", "walls", "species"]), name: z.string().min(1).max(80), price: z.number().min(0).max(100000) }),
   z.object({ do: z.literal("sample"), id: z.enum(samples) }),
   z.object({ do: z.literal("autofix") }),
   z.object({ do: z.literal("undo") }),
@@ -162,13 +170,13 @@ export function checkCommands(raw: unknown): { cmds: DeckCommand[]; dropped: num
 
 /** The language, for the AI's instructions: one line per command, the values each takes. */
 export const COMMAND_GUIDE = `Commands (JSON objects, "do" picks the kind). Amounts: {"to":n} sets, {"by":n} changes by n (negative = less), {"times":n} scales.
-size {width?, depth?: amount in FEET (width along the house, depth out from it); areaSqFt?; square?; from?: "left"|"right" (which end grows)}
+size {width?, depth?: amount in FEET (width along the house, depth out from it); areaSqFt?; square?; from?: "left"|"right" (which end grows) | "house" (the deck as wide as the whole house wall)}
 height {in: amount in INCHES (deck floor above ground)}
 shape {kind: rect|L|curve|clipped, corner?: front-left|front-right|back-left|back-right, notchWidthFt?, notchDepthFt?, bulgeFt?, clipFt?}
 slide {ft: number (+ right, − left) or "center"}  — moves the deck along the house wall
 placement {to: attached|beside|detached}; wall {to: wood-rim|engineered-rim|foam-sheathing|concrete|brick-veneer|hollow-block|cantilever|open-truss|sip-icf|unknown}
 structure {to: deck|covered-deck|gazebo|pergola}; floor {to: deck|slab|ground} (gazebo/pergola only)
-roof {set: {kind?: shed|gable|hip|pyramid|double-tier|gambrel|dutch-gable, pitch?: amount (rise per 12), eaveIn?: amount (inches, 84–144), overhangIn?, roofing?: arch-shingle|3tab-shingle|designer-shingle|cedar-shake|metal-panel|standing-seam, ceiling?: none|tongue-groove|beadboard, gutters?: none|k5|k6|half-round-alum|half-round-copper, guards?, cupola?, soffit?, fasciaFinish?: wood|pvc|aluminum-wrap, walls?: none|screen|lattice|solid, wallSides?, pergolaStyle?: flat|louvered|arched, slatSize?: 2x2|2x4|2x6, slatSpacingIn?, planShape?: follows-deck|square|rect|hexagon|octagon|round, widthFt?, depthFt?, acrossFt?, attach?: wall|free, post?: 4x4|6x6|8x8, braces?}}
+roof {set: {kind?: shed|gable|hip|pyramid|double-tier|gambrel|dutch-gable, pitch?: amount (rise per 12), eaveIn?: amount (inches, 84–144), overhangIn?, roofing?: arch-shingle|3tab-shingle|designer-shingle|cedar-shake|metal-panel|standing-seam, ceiling?: none|tongue-groove|beadboard, gutters?: none|k5|k6|half-round-alum|half-round-copper, guards?, cupola?, soffit?, fasciaFinish?: wood|pvc|aluminum-wrap, walls?: none|screen|lattice|solid, wallSides?, pergolaStyle?: flat|louvered|arched, slatSize?: 2x2|2x4|2x6, slatSpacingIn?, planShape?: follows-deck|square|rect|hexagon|octagon|round, widthFt?, depthFt?, acrossFt?, attach?: wall|free, post?: 4x4|6x6|8x8, braces?, header?: auto|lvl|beam size, rafter?: 2x6..2x12|auto, rafterSpacingIn?: 12|16|24, load?: auto|20|30|50|70, roofDeck?: sheathing|purlins, fasciaEave?, fasciaRake?}}
 decking {set: {product?: catalog id, color?: dark gray|light gray|gray|black|dark brown|reddish brown|red|light brown|brown, shade?: lighter|darker, family?: treated|softwood|hardwood|modified|composite|pvc|mineral|aluminum, tier?: good|better|best, pattern?: straight|diagonal|herringbone, border?: 0|1|2, fastening?: screws|hidden, fascia?: none|match, wastePct?}}
 framing {set: {species?, joist?: 2x6|2x8|2x10|2x12|auto|up|down, spacingIn?: 12|16|24|auto, beam?: 4x6..4x12 or 2-2x6..3-2x12 or auto, beamKind?: solid|built-up, beamStyle?: dropped|flush|auto, post?: 4x4|4x6|6x6|8x8, overhangFt?, doubleRim?, joistTape?, braces?, blocking?: auto|mid-span}}
 ledger {fastener?: lag|bolt|ledgerlok|sdws|anchor, lateral?: two|four}; footing {type?: poured|pier-block, aboveGradeIn?, frostAlways?}
@@ -177,8 +185,9 @@ rail {set: {type?: none|treated|cedar|composite|vinyl|aluminum|cable|glass|custo
 stairs {op: add|remove|change, which?: {side}|{index}|last|all|only, side?: front|left|right, at?: left|center|right|house|out|{ft}|{by}, width?: amount (feet), wrap?, wrapSides?: 1|3|4, landing?: pad|patio|grade, handrail?: auto|both|one|none, level?: upper|lower, count?: 1|2}
 lower {on?, width?, depth?, dropIn?, align?: left|centre|right}; spa {on?, width?, depth?, align?} (hot tub spot 5–10 ft)
 fixture {op: add|remove|set, kind: led-strip|post-cap|step-light|string-light|sconce|ceiling-light|chandelier|fan|outlet|heater|flood, qty?: amount, supply?: we|client, volts240?}
-electrical {timer?, feedFt?, panelSide?}; house {storeys?: 1|2, roof?: hip|gable, siding?: white|cream|grey|blue|sage, roofColour?: charcoal|brown|slate|forest|terracotta, wall?: straight|bump-right|bump-left|nook}
+electrical {timer?, feedFt?, panelSide?}; house {storeys?: 1|2, roof?: hip|gable, siding?: white|cream|grey|blue|sage, roofColour?: charcoal|brown|slate|forest|terracotta, wall?: straight|bump-right|bump-left|nook, leftFt?/rightFt?: amount (how far the house wall runs past the deck's ends), widthFt? (the house's whole width)}
 extras {demoSqFt?: number|"deck", stainless?, drain?}; item {op: add|remove, name, qty?, unit?: ea|pcs|ft|sq ft|bags, price?} — anything the studio cannot draw, priced as the contractor's own item
+custom {slot: decking|fastening|fascia|roofing|ceiling|roofFascia|gutters|walls|species, name, price (per ft of board, per sq ft, per square of roofing, per ft of gutter)} — the shop's own product in that list
 sample {id: ${DECK_SAMPLES.map((s) => s.id).join("|")}}; autofix {}; undo {}; redo {}
 view {tab?: 3d|plan|wall, xray?, night?, connections?, build?: play|stop|done, full?, reset?, look?: yard|top|front|left|right|under|house|spin}
 show {part: joists|beams|posts|footings|ledger|decking|border|fascia|frame|rails|stairs|roof|rafters|headers|gutters|ceiling|walls|lights|spa|lower|house|size|height, fixture?}

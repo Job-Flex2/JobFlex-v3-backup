@@ -283,6 +283,7 @@ export function runCommands(cmds: readonly DeckCommand[], design: DeckDesign, st
   };
 
   const seen = new Set<string>();
+  let ranStructure = false;
   for (const cmd of cmds) {
     // The same command twice in one sentence ("a covered porch with a hip roof" names the cover twice) runs once.
     const key = JSON.stringify(cmd);
@@ -337,7 +338,8 @@ export function runCommands(cmds: readonly DeckCommand[], design: DeckDesign, st
       said.push("Making the proposal.");
       continue;
     }
-    const o: Outcome = runCommand(d, cmd, env);
+    const o: Outcome = runCommand(d, cmd, ranStructure ? { ...env, freshRoof: true } : env);
+    if (cmd.do === "structure") ranStructure = true;
     if (o.said.length) said.push(...o.said);
     if (o.design !== d) {
       d = o.design;
