@@ -3225,36 +3225,34 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                     />
                   </label>
                 </div>
-                <details className="v1-view-options">
-                  <summary>View options <ChevronDown size={18} aria-hidden="true" /></summary>
-                  <div className="v1-tools-quiet">
-                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", xray && "is-on")} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
-                      X-ray
+                {/* The view buttons, always in sight (owner, 2026-10-21: "keep all those buttons… with no foldable"). */}
+                <div className="v1-tools-quiet" data-deck-view-tools>
+                  <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", xray && "is-on")} aria-pressed={xray} onClick={() => setXray((x) => !x)}>
+                    X-ray
+                  </button>
+                  {PHOTO_ENABLED && design.photo?.placed ? (
+                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", ph.showHouse && "is-on")} aria-pressed={ph.showHouse} onClick={() => ph.setShowHouse((v) => !v)} data-deck-house-toggle>
+                      House photo
                     </button>
-                    {PHOTO_ENABLED && design.photo?.placed ? (
-                      <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", ph.showHouse && "is-on")} aria-pressed={ph.showHouse} onClick={() => ph.setShowHouse((v) => !v)} data-deck-house-toggle>
-                        House photo
-                      </button>
-                    ) : null}
-                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", connections && "is-on")} aria-pressed={connections} onClick={() => setConnections((c) => !c)} data-deck-connections>
-                      Connections
-                    </button>
-                    <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", night && "is-on")} aria-pressed={night} onClick={() => setNight((x) => !x)} data-deck-night>
-                      Night
-                    </button>
-                    <button
-                      type="button"
-                      className="v1-btn v1-btn-sm v1-btn-quiet"
-                      onClick={() => {
-                        setResetToken((t) => t + 1);
-                        setPicked(null);
-                        setZoomedAt(null);
-                      }}
-                    >
-                      Reset view
-                    </button>
-                  </div>
-                </details>
+                  ) : null}
+                  <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", connections && "is-on")} aria-pressed={connections} onClick={() => setConnections((c) => !c)} data-deck-connections>
+                    Connections
+                  </button>
+                  <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-btn-quiet", night && "is-on")} aria-pressed={night} onClick={() => setNight((x) => !x)} data-deck-night>
+                    Night
+                  </button>
+                  <button
+                    type="button"
+                    className="v1-btn v1-btn-sm v1-btn-quiet"
+                    onClick={() => {
+                      setResetToken((t) => t + 1);
+                      setPicked(null);
+                      setZoomedAt(null);
+                    }}
+                  >
+                    Reset view
+                  </button>
+                </div>
               </div>
             ) : null}
             {autoNotes.length ? (
