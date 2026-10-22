@@ -39,7 +39,10 @@ export const DEFAULT_RULES: readonly DefaultFollowUpRule[] = [
 ];
 
 /**
- * Write the starter rules this company does not have yet. Idempotent: a rule
+ * Write the starter rules this company does not have yet. On (`enabled`) by
+ * default — a new company's follow-ups work from the first proposal sent; the
+ * backfill of companies that existed before the starter set writes them OFF
+ * (owner, 2026-10-22: `enabled: false`), for the owner to switch on. Idempotent: a rule
  * is looked up by its `defaultKey`, so one that exists — edited, turned off
  * (which is what deleting a starter rule does) — is never touched or brought
  * back; only a key with no row at all is written.
@@ -50,7 +53,7 @@ export const DEFAULT_RULES: readonly DefaultFollowUpRule[] = [
  */
 export async function ensureDefaultFollowUpRules(
   organizationId: string,
-  opts: { evenWithOwnRules?: boolean } = {},
+  opts: { evenWithOwnRules?: boolean; enabled?: boolean } = {},
 ): Promise<{ created: number }> {
   const rows = await db.followUpRule.findMany({ where: { organizationId }, select: { defaultKey: true } });
   const have = new Set(rows.map((r) => r.defaultKey).filter((k): k is string => Boolean(k)));
@@ -66,7 +69,7 @@ export async function ensureDefaultFollowUpRules(
           name: d.name,
           triggerStatus: d.triggerStatus,
           delayMinutes: d.delayMinutes,
-          enabled: true,
+          enabled: opts.enabled ?? true,
           template: encodeChannel(d.channel),
           isDefault: true,
           defaultKey: d.key,
