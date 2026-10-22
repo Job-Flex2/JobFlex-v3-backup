@@ -25,7 +25,7 @@
  * time"; then "text when payment got charged in Stripe or failed"). Off for everyone
  * until ticked — an alert text costs money and attention.
  * The texts themselves: lib/adminAlerts. */
-export const ALERT_KEYS = ["signup", "converted", "canceled", "paid", "failed", "support", "investor", "surge", "cleanup"] as const;
+export const ALERT_KEYS = ["signup", "converted", "canceled", "paid", "failed", "support", "investor", "surge", "cleanup", "email"] as const;
 export type AlertKey = (typeof ALERT_KEYS)[number];
 export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
   signup: { label: "Sign-ups", hint: "a company signs up" },
@@ -37,6 +37,8 @@ export const ALERT_WORDS: Record<AlertKey, { label: string; hint: string }> = {
   investor: { label: "Investor link requests", hint: "someone asks to see the investor figures — approve or decline" },
   surge: { label: "Traffic surge", hint: "the site is busy right now" },
   cleanup: { label: "Cleanup failures", hint: "a deleted company's Twilio number could not be released" },
+  // 2026-10-21 (lib/emailLog): past the daily limit the mail box stops sending for the day — sign-in codes first.
+  email: { label: "Email limit", hint: "today's mail passes 80% and 95% of the daily sending limit" },
 };
 /** An alert outside someone's texting hours waits until their hours start; "busy right now" is stale by then. */
 export const holdsOffHours = (k: AlertKey) => k !== "surge";

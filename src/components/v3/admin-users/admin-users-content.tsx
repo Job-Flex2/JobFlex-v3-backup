@@ -18,6 +18,8 @@
 import { freeWasLabel, onFreePlan } from "@/lib/freePlan";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import type { Route } from "next";
 import { Search, RefreshCw } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
 import { longDate } from "@/lib/format";
@@ -567,6 +569,10 @@ function UserForm({
           label="Platform admin"
           title={isMe ? "You can't remove your own flag" : "Not an org role"}
         />
+        {/* The mail log (2026-10-21): every letter to this address, the last 30 days. */}
+        <Link className={cx("btn", "btn-ghost", "btn-sm", "au-mail-link")} href={`/admin/mail/log?period=30d&q=${encodeURIComponent(user.email.toLowerCase())}` as Route} data-mail-log-link>
+          Emails to this address
+        </Link>
       </div>
 
       <div className={cx("sec")}>

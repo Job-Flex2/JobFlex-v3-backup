@@ -174,7 +174,7 @@ export async function sendDunningEmail(invoice: Stripe.Invoice): Promise<"first"
       pausesAt,
     }),
   );
-  await sendEmail({ to: to.email, subject, html });
+  await sendEmail({ to: to.email, subject, html, kind: "dunning" });
   return which;
 }
 

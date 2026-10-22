@@ -192,6 +192,7 @@ export async function notifyProposalSent({ proposalId }: NotifyProposalSentInput
     to: proposal.client.email,
     subject: subj,
     html,
+    kind: "proposal",
   });
   // Gmail meant, platform sent: the feed says so, the send is not lost.
   await noteGmailFallback(sent, {
@@ -265,6 +266,7 @@ export async function notifyProposalAccepted({ proposalId }: { proposalId: strin
       to: proposal.client.email,
       subject: acceptedSubject,
       html: acceptedHtml,
+      kind: "proposal",
     });
   }
 
@@ -1047,6 +1049,7 @@ export async function notifySupportTicket(t: SupportTicketNotice): Promise<Suppo
           // With replies by email on, the ticket's own address instead: the
           // answer then lands in the conversation and reaches the customer from there.
           replyTo: t.replyTo ?? t.submitterEmail ?? undefined,
+          kind: "support",
         });
         delivered += 1;
       } catch (err) {

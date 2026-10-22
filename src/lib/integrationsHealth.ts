@@ -29,6 +29,7 @@ import { isEagleViewEnabled } from "@/lib/eagleview";
 import { isOpenAIEnabled, getOpenAI, getOpenAIModel } from "@/lib/sdk/openai";
 import { isResendEnabled, isEmailEnabled } from "@/lib/sdk/resend";
 import { isSmtpEnabled } from "@/lib/sdk/smtp";
+import { emailDaySummary } from "@/lib/emailLog";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { isSquareEnabled, isSquareWebhookConfigured } from "@/lib/sdk/square";
@@ -254,8 +255,18 @@ async function checkMail(now: string): Promise<ServiceHealth> {
   if (!row) return { ...base, level: "degraded", reason: `${transport} configured — nothing sent yet` };
   const quiet = Date.now() - row.updatedAt.getTime() > SEND_QUIET_DAYS * DAY_MS;
   const asOf = iso(row.updatedAt);
-  const read = `${transport} · last sent ${ago(row.updatedAt)}`;
-  return { ...base, level: quiet ? "degraded" : "ok", asOf, reason: quiet ? `${read} — quiet for a month` : read };
+  // The mail log (lib/emailLog, 2026-10-21): today against the box's daily
+  // limit, and the newest failure when it came in the last day. Near the
+  // limit is degraded, never down — the nightly alert is itself an email. One
+  // failure (a mistyped address) is reported, not degraded; three in a day are.
+  const day = await emailDaySummary();
+  const today = day ? ` · ${day.sent}/${day.limit} today` : "";
+  const recentFail = day?.lastFailure && Date.now() - Date.parse(day.lastFailure.at) < DAY_MS ? day.lastFailure : null;
+  const failNote = recentFail ? ` · last failure ${new Date(recentFail.at).toISOString().slice(11, 16)} UTC: ${(recentFail.error ?? "unknown error").slice(0, 80)}` : "";
+  const nearLimit = day ? day.sent * 100 >= 80 * day.limit : false;
+  const read = `${transport} · last sent ${ago(row.updatedAt)}${today}${failNote}`;
+  const level: HealthLevel = quiet || nearLimit || (day?.failed ?? 0) >= 3 ? "degraded" : "ok";
+  return { ...base, level, asOf, reason: quiet ? `${read} — quiet for a month` : nearLimit ? `${read} — near the daily limit` : read };
 }
 
 /* ── Twilio ────────────────────────────────────────────────────────────────

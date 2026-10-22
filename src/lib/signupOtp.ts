@@ -184,6 +184,9 @@ export async function sendCode(
   // email — the code (and the button's link) is kept for GET /api/qa/otp.
   if (qaCaptures(d.email)) {
     await keepQaCode({ email: d.email, kind: d.kind, code: next.noAccount ? null : code, link: next.noAccount ? null : `/auth/register/code?k=${secret}`, draft: token, at: now });
+    // The mail log files it as skipped, the same as sendEmail's own QA gate.
+    const { recordEmail } = await import("@/lib/emailLog");
+    await recordEmail({ to: d.email, subject: `${d.kind === "login" ? "Sign-in" : "Sign-up"} code — kept for the QA Lab`, kind: "otp", transport: "skipped", status: "skipped", providerId: "qa-test-mode:skipped", durationMs: 0 });
     return { ok: true, ...draftClock(next) };
   }
 
@@ -199,7 +202,7 @@ export async function sendCode(
   // awaited — Continue waits for it — so its time is logged, without the address.
   const sentFrom = Date.now();
   try {
-    await sendEmail({ to: d.email, subject, html, text, replyTo: SUPPORT_REPLY_TO });
+    await sendEmail({ to: d.email, subject, html, text, replyTo: SUPPORT_REPLY_TO, kind: "otp" });
     console.info(`[otp] ${d.kind} ${next.noAccount ? "no-account" : "code"} email handed to the transport in ${Date.now() - sentFrom} ms`);
   } catch (err) {
     console.error("[otp] code email failed:", err);

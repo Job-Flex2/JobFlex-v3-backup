@@ -12,6 +12,7 @@ import { deskReadiness } from "@/lib/aiDesk/readiness";
 import { WebhookEventStatus } from "@/lib/prismaEnums";
 import { readSupportMailStatus } from "@/lib/supportMail/run";
 import { supportMailConfig } from "@/lib/supportMail/config";
+import { emailDaySummary } from "@/lib/emailLog";
 import {
   AdminHealthContent,
   type HealthData,
@@ -90,6 +91,8 @@ export default async function AdminHealthPage() {
   // The support inbox (lib/supportMail): what the cron last managed, and why it stopped if it did.
   const mailCfg = supportMailConfig();
   const mailStatus = database.state === "ok" ? await readSupportMailStatus().catch(() => null) : null;
+  // The mail log (lib/emailLog): today's letters against the box's daily limit, the newest failure.
+  const sentMail = database.state === "ok" ? await emailDaySummary(now) : null;
   if (database.state === "ok") {
     try {
       const [snapshot, sync] = await Promise.all([
@@ -134,6 +137,7 @@ export default async function AdminHealthPage() {
       lastError: mailStatus?.lastError ?? null,
       lastErrorAt: mailStatus?.lastErrorAt ?? null,
     },
+    sentMail,
   };
 
   return <AdminHealthContent data={data} />;

@@ -165,6 +165,8 @@ model Organization {
   // Why a plan was cancelled, and asks for more trial days (2026-10-20).
   cancellationFeedback CancellationFeedback[]
   trialExtensionRequests TrialExtensionRequest[]
+  // Every declined plan charge, for /admin/revenue/failed-payments (2026-10-21).
+  paymentFailures      PaymentFailure[]
   signupPromo          PromoCode?            @relation("OrgSignupPromo", fields: [signupPromoCodeId], references: [id], onDelete: SetNull)
 
   @@index([slug])
@@ -1461,8 +1463,16 @@ model FollowUpRule {
   delayMinutes   Int
   enabled        Boolean @default(true)
   template       String?
+  /// One of the starter rules every company gets (lib/followUps/defaults).
+  /// Deleting one turns it off instead, so ensureDefaultFollowUpRules never
+  /// brings it back.
+  isDefault      Boolean @default(false)
+  /// Which starter rule this row is (DEFAULT_RULES key); null on the owner's own rules.
+  defaultKey     String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, defaultKey])
 }
 
 model FollowUp {
@@ -1673,6 +1683,45 @@ model TrialExtensionRequest {
 
   @@index([organizationId, status])
   @@index([status, createdAt])
+}
+
+// ── Why plan charges fail (owner, 2026-10-21) ───────────────────────────────
+// One row per declined try of a JobFlex plan invoice, written by the Stripe
+// webhook (invoice.payment_failed) and by scripts/backfill-payment-failures.ts
+// through the same code (lib/paymentFailures). The reason is the attempt's own
+// (the payment intent's last_payment_error, else the failed charge); the card
+// is the one charged. `ignored`: Stripe sent the failure, but nothing was owed
+// — a declined plan change, or an old failure after the invoice was paid (the
+// subscription is active or trialing). `isTrialEnd`: the first charge after a
+// trial. `recoveredAt`: the invoice was paid in the end (invoice.paid). The
+// organization is kept loose (SetNull) so a deleted company's failures still
+// count. cardFunding: credit | debit | prepaid | unknown.
+model PaymentFailure {
+  id                   String    @id @default(cuid())
+  createdAt            DateTime  @default(now())
+  organizationId       String?
+  subscriptionId       String?
+  stripeInvoiceId      String
+  stripeSubscriptionId String?
+  attempt              Int
+  amountCents          Int
+  currency             String    @default("usd")
+  billingReason        String?
+  declineCode          String?
+  errorCode            String?
+  errorMessage         String?
+  cardBrand            String?
+  cardFunding          String    @default("unknown")
+  cardLast4            String?
+  isTrialEnd           Boolean   @default(false)
+  ignored              Boolean   @default(false)
+  recoveredAt          DateTime?
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@unique([stripeInvoiceId, attempt])
+  @@index([createdAt])
+  @@index([organizationId, createdAt])
 }
 
 // ── The conversation under a support ticket (owner, 2026-10-17) ─────────────
@@ -2541,6 +2590,33 @@ model SyncState {
   key       String   @id
   cursor    String
   updatedAt DateTime @updatedAt
+}
+
+// One row per letter handed to lib/sdk/resend sendEmail (2026-10-21) — sent,
+// failed after the retries, or skipped (QA test mode, preview guard, dev
+// outbox, no transport) — so "the code never came" can be told apart from
+// "the letter left". Written after the response (lib/emailLog), never in the
+// way of a send. `to` is lowercased, several addresses joined by ", ". No
+// relation to Organization: a deleted company's rows age out with the rest
+// (daily-cleanup drops rows older than 90 days). Read by /admin/mail/log,
+// /admin/health and the daily-limit alert.
+model EmailLog {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  to             String
+  subject        String
+  kind           String   @default("other") // lib/emailLog EMAIL_KINDS
+  transport      String // smtp | resend | skipped
+  status         String // sent | failed | skipped
+  providerId     String? // SMTP Message-ID, Resend id, or the skip's marker
+  error          String? // the last attempt's error, at most 500 chars
+  durationMs     Int      @default(0)
+  organizationId String?
+
+  @@index([createdAt])
+  @@index([to])
+  @@index([kind])
+  @@index([status])
 }
 
 // Persistent price-lookup cache for the estimator. Keyed on a normalized query

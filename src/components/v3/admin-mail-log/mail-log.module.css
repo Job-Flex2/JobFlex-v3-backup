@@ -1,0 +1,104 @@
+/* ============================================================
+   ADMIN SENT MAIL — BLUEPRINT
+   /admin/mail/log
+   Page vocabulary only; the furniture is admin-influencers/admin-ui.module.css.
+   The period switch and the search are /admin/activity's. Scoped (0,3,0).
+   ============================================================ */
+
+:global(.jf-blueprint .content) .root { display: flex; flex-direction: column; gap: 22px; }
+
+/* The period: a drawn switch in the page head — today · 7 · 30 days. */
+:global(.jf-blueprint .content) .range { display: flex; gap: 0; border: 1.5px solid var(--ink); }
+:global(.jf-blueprint .content) .rangeBtn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink); text-decoration: none; border-right: 1.5px solid var(--ink);
+  transition: background 0.13s var(--ease);
+}
+:global(.jf-blueprint .content) .rangeBtn:last-child { border-right: none; }
+:global(.jf-blueprint .content) .rangeBtn:hover { background: rgba(10, 10, 10, 0.05); }
+:global(.jf-blueprint .content) .rangeBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: -2px; }
+:global(.jf-blueprint .content) .rangeOn { background: var(--ink); color: var(--paper); }
+:global(.jf-blueprint .content) .rangeOn:hover { background: var(--ink); }
+
+/* The address search. */
+:global(.jf-blueprint .content) .find { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border: 1.5px solid var(--ink); background: #fff; }
+:global(.jf-blueprint .content) .find > :global(.ic) { width: 18px; height: 18px; flex: none; color: var(--muted); }
+:global(.jf-blueprint .content) .findIn { flex: 1; min-width: 0; min-height: 38px; border: none; background: none; font-family: inherit; font-size: 15px; color: var(--ink); }
+:global(.jf-blueprint .content) .findIn:focus-visible { outline: none; }
+:global(.jf-blueprint .content) .find:focus-within { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+:global(.jf-blueprint .content) .findX { appearance: none; border: none; background: none; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; }
+:global(.jf-blueprint .content) .findX :global(.ic) { width: 14px; height: 14px; }
+
+/* While the server reads the next filter the old rows stay, dimmed. */
+:global(.jf-blueprint .content) .busy .list { opacity: 0.55; transition: opacity 0.18s var(--ease); }
+
+/* Status chips on the left, the kind on the right; one line on a desk. */
+:global(.jf-blueprint .content) .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin: 0 0 14px; }
+:global(.jf-blueprint .content) .chips.chips { margin-left: 0; }
+:global(.jf-blueprint .content) .chips a { text-decoration: none; }
+:global(.jf-blueprint .content) .pick { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+:global(.jf-blueprint .content) .pickStatus { display: none; }
+:global(.jf-blueprint .content) .pickLbl { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+/* time · to · subject · kind · via · status · chevron */
+:global(.jf-blueprint .content) .cols { grid-template-columns: 112px minmax(0, 1.3fr) minmax(0, 2fr) 96px 58px 78px 16px; }
+:global(.jf-blueprint .content) .list { list-style: none; margin: 0; padding: 0; }
+:global(.jf-blueprint .content) .item { border-bottom: 1px solid var(--hair-soft); }
+:global(.jf-blueprint .content) .item:last-child { border-bottom: none; }
+:global(.jf-blueprint .content) .rowBtn.rowBtn { border-bottom: none; }
+:global(.jf-blueprint .content) .time { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+:global(.jf-blueprint .content) .addr { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .subjTxt { display: block; font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:global(.jf-blueprint .content) .errLine { display: block; margin-top: 3px; font-size: 12px; color: var(--danger); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:global(.jf-blueprint .content) .kind { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+:global(.jf-blueprint .content) .via { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
+:global(.jf-blueprint .content) .statTop { display: none; }
+:global(.jf-blueprint .content) .chev { display: inline-flex; justify-content: flex-end; color: var(--muted); }
+:global(.jf-blueprint .content) .chev :global(.ic) { width: 14px; height: 14px; transition: transform 0.18s var(--ease); }
+:global(.jf-blueprint .content) .rowBtn[aria-expanded="true"] .chev :global(.ic) { transform: rotate(180deg); }
+
+/* A row's details: label and value, the error in full. */
+:global(.jf-blueprint .content) .detail { display: grid; gap: 8px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--hair); border-radius: var(--radius); background: #fff; }
+:global(.jf-blueprint .content) .detail[hidden] { display: none; }
+:global(.jf-blueprint .content) .dRow { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; font-size: 13px; line-height: 1.45; color: var(--ink); }
+:global(.jf-blueprint .content) .dRow > * { min-width: 0; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .dK { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+:global(.jf-blueprint .content) .dErr { color: var(--danger); font-weight: 600; }
+:global(.jf-blueprint .content) .dMono { font-family: var(--font-mono); font-size: 12px; }
+
+:global(.jf-blueprint .content) .pager { margin-top: 4px; }
+:global(.jf-blueprint .content) .note { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  :global(.jf-blueprint .content) .range { width: 100%; }
+  :global(.jf-blueprint .content) .rangeBtn { flex: 1; min-height: 44px; padding: 0 6px; letter-spacing: 0.06em; white-space: nowrap; }
+  :global(.jf-blueprint .content) .findIn { min-height: 44px; font-size: 16px; }
+  :global(.jf-blueprint .content) .findX { min-width: 44px; min-height: 44px; }
+
+  /* Two selects side by side instead of the chips. */
+  :global(.jf-blueprint .content) .bar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  :global(.jf-blueprint .content) .chips.chips { display: none; }
+  :global(.jf-blueprint .content) .pick,
+  :global(.jf-blueprint .content) .pickStatus { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-left: 0; min-width: 0; }
+  :global(.jf-blueprint .content) .pick :global(.bp-sel) { display: block; width: 100%; }
+  :global(.jf-blueprint .content) .pick select { width: 100%; min-height: 44px; }
+
+  :global(.jf-blueprint .content) .statTop { display: flex; justify-content: flex-end; align-items: flex-start; }
+  :global(.jf-blueprint .content) .statCol,
+  :global(.jf-blueprint .content) .chev { display: none; }
+  :global(.jf-blueprint .content) .subjTxt { white-space: normal; overflow-wrap: anywhere; }
+  :global(.jf-blueprint .content) .errLine { white-space: normal; overflow-wrap: anywhere; }
+  :global(.jf-blueprint .content) .dRow { grid-template-columns: 1fr; gap: 2px; }
+  /* The shared pager draws 32px squares; a thumb gets 44. */
+  :global(.jf-blueprint .content) .pager nav button { min-width: 44px; height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .rangeBtn,
+  :global(.jf-blueprint .content) .chev :global(.ic),
+  :global(.jf-blueprint .content) .busy .list { transition: none; }
+}
+
+/* An open row shows its error once, in the details. */
+:global(.jf-blueprint .content) .rowBtn[aria-expanded="true"] .errLine { display: none; }

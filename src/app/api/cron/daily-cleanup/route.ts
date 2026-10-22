@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { isCronAuthorized } from "@/lib/cronAuth";
 import { sweepPendingDaysEverywhere } from "@/lib/workDays";
+import { EMAIL_LOG_KEEP_DAYS } from "@/lib/emailLog";
 
 export const runtime = "nodejs";
 
@@ -55,8 +56,17 @@ export async function GET(req: Request) {
   // ── 3) Days on site left open past their date read PENDING (stage A) ──────
   const pendingDays = await sweepPendingDaysEverywhere();
 
+  // ── 4) The mail log keeps 90 days (lib/emailLog) ──────────────────────────
+  // Zero, not a failed cron, while the table is not in this database yet.
+  const mailLog = await db.emailLog
+    .deleteMany({ where: { createdAt: { lt: new Date(Date.now() - EMAIL_LOG_KEEP_DAYS * 24 * 60 * 60 * 1000) } } })
+    .catch((err) => {
+      console.warn("[cron/daily-cleanup] mail log not pruned:", err instanceof Error ? err.message : err);
+      return { count: 0 };
+    });
+
   console.info(
-    `[cron/daily-cleanup] revoked ${revoked} inactive worker token(s); pruned ${pruned.count} price-cache row(s); ${pendingDays} day(s) on site now pending.`,
+    `[cron/daily-cleanup] revoked ${revoked} inactive worker token(s); pruned ${pruned.count} price-cache row(s); ${pendingDays} day(s) on site now pending; pruned ${mailLog.count} mail-log row(s).`,
   );
-  return NextResponse.json({ ok: true, revokedWorkers: revoked, prunedCache: pruned.count, prunedMetaAuthorizations: pendingMeta.count, pendingDays });
+  return NextResponse.json({ ok: true, revokedWorkers: revoked, prunedCache: pruned.count, prunedMetaAuthorizations: pendingMeta.count, pendingDays, prunedMailLog: mailLog.count });
 }

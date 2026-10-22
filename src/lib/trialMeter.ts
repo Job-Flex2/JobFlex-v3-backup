@@ -296,6 +296,13 @@ export async function noteRequestOrg(orgId: string): Promise<void> {
   if (note) note.orgId = orgId;
 }
 
+/** The organization requireOrg noted for this request; null outside a request
+ *  or before requireOrg ran. lib/emailLog files each letter under it. */
+export async function requestOrgId(): Promise<string | null> {
+  const h = await requestHeaders();
+  return (h && notes.get(h)?.orgId) || null;
+}
+
 /**
  * One billed request to a paid API. Priced from lib/paidApiCosts (`units`
  * of `op`), or `cents` when the caller knows better (an OpenAI response's own

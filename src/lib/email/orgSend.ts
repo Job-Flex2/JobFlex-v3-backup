@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/sdk/resend";
 import { parseGmailSettings } from "@/lib/settings";
 import { gmailErrorText, isGmailGrantDead, isGmailOAuthConfigured, openGmailTokens, sendViaGmail } from "@/lib/sdk/gmail";
 import { ActivityKind } from "@/lib/prismaEnums";
+import type { EmailKind } from "@/lib/emailLog";
 
 export interface OrgEmailSender {
   /** When known, a dead Gmail grant is marked on the row by id; without it
@@ -54,7 +55,7 @@ export interface OrgEmailTransports {
 
 export async function sendOrgEmail(
   org: OrgEmailSender,
-  opts: { to: string | string[]; subject: string; html: string },
+  opts: { to: string | string[]; subject: string; html: string; kind?: EmailKind },
   transports: OrgEmailTransports = { gmail: sendViaGmail, platform: sendEmail },
 ): Promise<OrgEmailResult> {
   const settings = parseGmailSettings(org.gmailSettingsJson);
@@ -89,7 +90,7 @@ export async function sendOrgEmail(
     }
   }
 
-  await transports.platform({ to: opts.to, subject: opts.subject, html: opts.html, replyTo });
+  await transports.platform({ to: opts.to, subject: opts.subject, html: opts.html, replyTo, kind: opts.kind, organizationId: org.id ?? null });
   return gmailFallback ? { via: "resend", gmailFallback } : { via: "resend" };
 }
 

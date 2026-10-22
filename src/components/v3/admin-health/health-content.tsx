@@ -26,9 +26,11 @@ import { Ic, ago, shortDay } from "@/components/v3/admin-overview/admin-ui";
 import { useAdminMotion } from "@/components/v3/admin-overview/admin-motion";
 import { assignPlatformLine, pointVoiceWebhook } from "@/actions/adminAiDesk";
 import type { DeskReadiness } from "@/lib/aiDesk/readiness";
+import type { EmailDaySummary } from "@/lib/emailLog";
 import h from "./health.module.css";
 
 const INTEGRATIONS = "/admin/integrations" as Route;
+const MAIL_LOG = "/admin/mail/log" as Route;
 
 export type ProbeState = "ok" | "error" | "off";
 
@@ -63,6 +65,8 @@ export interface HealthData {
   desk: DeskReadiness | null;
   /** Replies to support letters read from the Gmail box (lib/supportMail, 2026-10-18): the cron's last run. */
   supportInbox: { on: boolean; why: string | null; checkedAt: string | null; lastError: string | null; lastErrorAt: string | null };
+  /** The mail log (lib/emailLog, 2026-10-21): today (UTC) against EMAIL_DAILY_LIMIT and the newest failure. Null when the table is not in this database. */
+  sentMail: EmailDaySummary | null;
 }
 
 type Tone = "ok" | "warn" | "danger" | "ink" | "mute";
@@ -307,6 +311,59 @@ function DeskCard({ desk }: { desk: DeskReadiness | null }) {
   );
 }
 
+/** Sent mail today against the box's daily limit — Gmail stops sending past it, sign-in codes first. */
+function SentMailCard({ mail, generatedAt }: { mail: HealthData["sentMail"]; generatedAt: string }) {
+  const share = mail ? Math.round((mail.sent / mail.limit) * 100) : 0;
+  return (
+    <div className="card" data-sent-mail>
+      <div className={`card-head ${h.head}`}>
+        <div className="card-titles">
+          <div className="card-title">Sent mail · today</div>
+        </div>
+        <div className={h.colHead}>
+          <Link href={MAIL_LOG}>Open the log →</Link>
+        </div>
+      </div>
+      {mail === null ? (
+        <div className="empty">The mail log is not in this database yet — apply prisma/sql/prod-2026-10-21-email-log.sql.</div>
+      ) : (
+        <>
+          <div className={s.mix}>
+            <div className={s.mixCell}>
+              <div className={s.mixLbl}>Sent · UTC day</div>
+              <div className={`${s.mixVal} ${share >= 80 ? h.bad : ""}`} data-sent-today>
+                {mail.sent} / {mail.limit}
+              </div>
+            </div>
+            <div className={s.mixCell}>
+              <div className={s.mixLbl}>Of the daily limit</div>
+              <div className={`${s.mixVal} ${share >= 80 ? h.bad : ""}`}>{share}%</div>
+            </div>
+            <div className={s.mixCell}>
+              <div className={s.mixLbl}>Failed · today</div>
+              <div className={`${s.mixVal} ${mail.failed > 0 ? h.bad : ""}`}>{mail.failed}</div>
+            </div>
+            <div className={s.mixCell}>
+              <div className={s.mixLbl}>Skipped · today</div>
+              <div className={s.mixVal}>{mail.skipped}</div>
+            </div>
+            <div className={s.mixCell}>
+              <div className={s.mixLbl}>Last failure</div>
+              <div className={s.mixVal}>{mail.lastFailure ? ago(mail.lastFailure.at, generatedAt) : "—"}</div>
+            </div>
+          </div>
+          {mail.lastFailure ? (
+            <div className={`${s.connect} ${h.below}`} data-last-mail-failure>
+              Last failure · <b>{mail.lastFailure.to}</b> · {shortDay(mail.lastFailure.at)} · {mail.lastFailure.subject}
+              {mail.lastFailure.error ? <div className={s.err}>{mail.lastFailure.error}</div> : null}
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AdminHealthContent({ data }: { data: HealthData }) {
   useAdminMotion();
 
@@ -392,6 +449,8 @@ export function AdminHealthContent({ data }: { data: HealthData }) {
           />
         </div>
       </div>
+
+      <SentMailCard mail={data.sentMail} generatedAt={data.generatedAt} />
 
       <DeskCard desk={data.desk} />
 
