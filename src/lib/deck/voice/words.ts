@@ -237,9 +237,37 @@ function plies(t: string): string {
 }
 
 /** Everything above, in order: what the command rules read. */
+/**
+ * What a homeowner says, in the studio's words (2026-10-21, owner: "understand different wording for clients — what
+ * it means based on what we have in the Deck Studio"). Read before everything else, so the rules take them as their own.
+ */
+const EVERYDAY: ReadonlyArray<[RegExp, string]> = [
+  // Shade, not a board colour ("shade" alone is a colour's shade).
+  [/\b(?:some |more |a bit of |a little )?shade (?:from|against) the sun\b|\b(?:keep|block) (?:out )?the sun(?: off(?: us)?)?\b|\bsun (?:cover|shade)\b|\bsomething for (?:the )?shade\b|\bout of the sun\b/g, "a pergola"],
+  // A railing you can see through.
+  [/\b(?:see[- ]?through|clear|invisible) (?:rail(?:ing)?s?|fence|guards?|panels?)\b|\b(?:see|keep|not block|don'?t block|enjoy) (?:the |our )?view\b/g, "glass railing"],
+  [/\b(?:wire|steel cable) (?:rail(?:ing)?s?|fence)\b/g, "cable railing"],
+  // Lower, closer to the ground.
+  [/\b(?:make it |bring it |set it )?(?:closer|nearer|lower) (?:to )?the (?:ground|grass|lawn)\b|\bnot (?:so|as|that) high\b|\bless high\b/g, "make it lower"],
+  [/\b(?:make it |bring it )?(?:higher|taller) (?:off|above|from) the (?:ground|grass|lawn)\b/g, "make it higher"],
+  // A colour said as wood, boards or the floor.
+  // "darker wood", "a lighter floor", "a darker color" — the boards ("darker" alone keeps the studio's own subject).
+  [/\b(?:a |the )?(?:bit |little |touch )?(darker|lighter) (?:wood|woods|boards?|floor(?:ing)?|colou?r|deck(?:ing)?|stain|shade)\b/g, "make the decking $1"],
+  // Low upkeep — capped composite.
+  [/\b(?:low|no|zero) (?:maintenance|upkeep)(?: boards?| decking| floor)?\b|\bnever (?:have to )?(?:stain|paint) (?:it|again)\b/g, "composite decking"],
+  [/\b(?:looks? like|real looking|wood[- ]look(?:ing)?) (?:real )?wood\b/g, "composite decking"],
+  // Steps.
+  [/\b(?:steps|a way) (?:down )?(?:to|onto|into) the (?:yard|grass|lawn|garden|patio)\b/g, "stairs down the front"],
+  // Privacy on an open deck — a privacy screen the studio can't draw yet (commands NOT_DRAWN "privacy fence"; "privacy
+  // walls / panels / screens" stay a covered deck's walls; "lattice for privacy" stays lattice). The side is the
+  // contractor's to ask.
+  [/(?<!\bfor )\b(?:(?:some|more|a little|a bit of|a bit more|extra|get|give us|give me) )?privacy\b(?! (?:walls?|panels?|screens?|trellis|fence))(?: from (?:the )?(?:neighbou?rs?|street|road|house next door|people next door))?(?: (?:on|along|at) (?:one|1|the \w+|both|each|that|this) sides?| on the (?:left|right|back|front))?/g, "a privacy fence"],
+];
+
 export function normalizeSpeech(raw: string): string {
   let t = plain(raw);
   for (const [re, to] of HEARD_AS) t = t.replace(re, to);
+  for (const [re, to] of EVERYDAY) t = t.replace(re, to);
   t = numberWords(t.trim());
   t = fractions(t);
   t = homophones(t);

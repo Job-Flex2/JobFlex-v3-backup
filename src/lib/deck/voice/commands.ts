@@ -308,6 +308,9 @@ export const NOT_DRAWN: ReadonlyArray<[RegExp, string]> = [
   [/\bshade sail\b|\bsun ?shade\b|\bawning\b|\bretractable\b/, "Retractable awning"],
   [/\bstorage\b|\bshed\b|\bunder[- ]deck storage\b/, "Storage"],
   [/\bramp\b|\bwheelchair\b|\bada\b/, "Ramp"],
+  // An open deck's privacy ("privacy on one side", "more privacy" — lib/deck/voice/words EVERYDAY); a covered deck's
+  // "privacy walls / panels / screens" are its walls (parse ROOF_WORDS) and never reach this list.
+  [/\bprivacy fence\b/, "Privacy screen"],
   [/\btrellis\b|\bprivacy trellis\b/, "Privacy trellis"],
   [/\bhot water\b|\bwater line\b|\bhose bib\b|\bspigot\b/, "Water line"],
   [/\bgas line\b|\bnatural gas\b|\bpropane\b/, "Gas line"],

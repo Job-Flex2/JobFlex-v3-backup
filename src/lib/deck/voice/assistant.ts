@@ -18,6 +18,7 @@ import { CHANGES, FIXTURE_SAY, type DeckCommand, type PartName } from "./command
 import { bestHearing, matchRail, parseUtterance, type ParseContext, type Subject } from "./parse";
 import { runCommand, type Flash, type Meta, type Outcome, type Pending, type RunEnv, type ViewChange } from "./run";
 import { dollars, firstSentence, normalizeSpeech } from "./words";
+import { isPraise } from "./speak";
 
 export interface VoiceState {
   subject: Subject | null;
@@ -435,12 +436,16 @@ export function hear(utterance: string | readonly string[], design: DeckDesign, 
   const ctx: ParseContext = { design, subject: state.subject, last: state.last, fixture: state.fixture, learned: env.learned, items: env.items };
   const raw = typeof utterance === "string" ? utterance : bestHearing(utterance, ctx);
   const heard = normalizeSpeech(raw);
+  // "I like it", "looks great": answered, nothing changed (it used to go to the AI).
+  if (isPraise(raw) && !state.pending) return { ...runCommands([], design, state, env, heard), say: "Glad you like it. Anything you'd change?" };
   // A question waiting: a yes runs it, a no drops it, a price prices the item it asked about.
   if (state.pending) {
     const p = state.pending;
     const first = parseUtterance(raw, ctx);
     const only = first.clauses.length === 1 ? first.clauses[0].cmds : [];
-    const money = /\$?(\d+(?:\.\d+)?)/.exec(heard);
+    // A price, said as one: "$1,200", "1,200 dollars", "twelve hundred", "about 900", "900 each" — not a number in
+    // another sentence ("privacy on 1 side" was the fire pit's $1).
+    const money = /\$(\d+(?:\.\d+)?)/.exec(heard) ?? /^(?:(?:it'?s|it is|about|around|roughly|maybe|say|for|at|call it|the price is|price is)\s+)*(\d+(?:\.\d+)?)(?:\s+(?:each|apiece|total|flat))?[.!]?$/.exec(heard.trim());
     if (p.price && money && !first.clauses.some((c) => c.cmds.some((x) => CHANGES.has(x.do) && x.do !== "item"))) {
       const cmd: DeckCommand = { do: "item", op: "add", name: p.price.item, qty: 1, unit: "ea", price: Number(money[1]) };
       return runCommands([cmd], design, { ...state, pending: null }, env, heard, { confirmed: true });
