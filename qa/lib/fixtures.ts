@@ -5,6 +5,8 @@
 //   · the forbidden-action guard (qa/config/forbidden.yaml);
 //   · trackers answered with 204, and a made-up client address per context (the sign-in and
 //     sign-up brakes count per network);
+//   · the Vercel protection bypass on requests to a protected preview (lib/vercel.ts), the browser's
+//     and the `request` fixture's;
 //   · background collection (lib/collect.ts), a masked screenshot when the test fails, and the
 //     collected events attached for the reporter.
 import fs from "node:fs";
@@ -16,6 +18,7 @@ import { authFile, hasAuth, type RoleName } from "./roles";
 import { baseUrl } from "./env";
 import { qaConfig } from "./config";
 import { redactDeep } from "./redact";
+import { bypassHeaders } from "./vercel";
 
 export { expect };
 
@@ -52,6 +55,13 @@ export const test = base.extend<{ role: RoleName; qa: Qa; _guard: void }>({
     { auto: true },
   ],
 
+  // Playwright's own `request`, with the bypass header for a protected preview (none without the secret).
+  request: async ({ playwright }, provide) => {
+    const req = await playwright.request.newContext({ baseURL: baseUrl(), ignoreHTTPSErrors: true, extraHTTPHeaders: bypassHeaders() });
+    await provide(req);
+    await req.dispose();
+  },
+
   storageState: async ({ role, storageState }, provide) => {
     if (role === "guest" || role === "homeowner") return provide(storageState);
     const file = authFile(role);
@@ -62,7 +72,7 @@ export const test = base.extend<{ role: RoleName; qa: Qa; _guard: void }>({
     const collector = new Collector();
     collector.attach(context);
     // a tag @expects-404 (or any @expects-NNN) declares an expected status for the whole test
-    for (const tag of testInfo.tags) { const m = tag.match(/^@expects-(d{3})$/); if (m) collector.expectStatus(Number(m[1])); }
+    for (const tag of testInfo.tags) { const m = tag.match(/^@expects-(\d{3})$/); if (m) collector.expectStatus(Number(m[1])); }
     (testInfo as unknown as { __qaCollector: Collector }).__qaCollector = collector;
     await installForbidden(context, (hit) => collector.forbiddenHit(hit));
     const origin = new URL(baseUrl()).origin;
@@ -76,7 +86,7 @@ export const test = base.extend<{ role: RoleName; qa: Qa; _guard: void }>({
         const to = origin + url.replace(/^https?:\/\/0\.0\.0\.0(:\d+)?/, "");
         return route.fulfill({ status: 302, headers: { location: to } });
       }
-      if (url.startsWith(origin)) return route.fallback({ headers: { ...route.request().headers(), "x-forwarded-for": ip } });
+      if (url.startsWith(origin)) return route.fallback({ headers: { ...route.request().headers(), "x-forwarded-for": ip, ...bypassHeaders() } });
       if (block.some((r) => r.test(url))) return route.fulfill({ status: 204, body: "" });
       return route.fallback();
     });

@@ -1,14 +1,24 @@
-# QA Lab — stage 2 groundwork (qa/README.md). Started by hand only (workflow_dispatch):
-# no push or pull_request trigger on purpose. Runs the selected suites against `base_url`,
-# analyses the run and uploads report.html, report.md, raw.json and analysis.json as one artifact.
-#
-# Against production only smoke, pages (guest pages) and perf can run — the code refuses the
-# rest (qa/lib/target.ts), whatever is typed here.
+# QA Lab (qa/README.md, docs/qa-ci.md). Two ways in:
+#   · by hand (workflow_dispatch) against any `base_url`, with the suites typed;
+#   · every night at 09:00 UTC (02:00 in Los Angeles, PDT), two jobs:
+#       qa              production (https://www.jobflex.app) with smoke, pages, perf — the only
+#                       suites the code allows there (qa/lib/target.ts). main never gets a preview
+#                       deployment on this project (a push to main deploys Production), so "the
+#                       latest preview of main" does not exist; docs/qa-ci.md has both options.
+#       nightly-billing signup + billing on a server this job starts itself — `next dev` on a fresh
+#                       SQLite database seeded here, Stripe TEST mode with test clocks and the
+#                       webhooks forwarded by the Stripe CLI. Skipped while STRIPE_TEST_SECRET_KEY
+#                       is not set. Nothing it does touches production.
+# Each job analyses its run, uploads report.html / report.md / raw.json / screenshots as an
+# artifact and writes a short summary (qa/runs/latest-nightly*.md) to the job's summary page.
+# A red run against production texts the team's "QA failures" subscribers (POST /api/qa/alert).
 #
 # Secrets (Settings → Secrets and variables → Actions), all optional:
-#   ANTHROPIC_API_KEY  the analysis' model calls (without it the report is built by the rules)
-#   QA_SECRET          the test endpoint's secret, for a preview server started with QA_TEST_MODE=1
+#   ANTHROPIC_API_KEY      the analysis' model calls (without it the report is built by the rules)
+#   QA_SECRET              the test endpoint's secret; also signs the production alert (QA_ALERT_SECRET overrides)
+#   QA_ALERT_SECRET        if set: the production deployment's QA_SECRET, for /api/qa/alert only
 #   QA_PASS_OWNER / QA_PASS_MANAGER / QA_PASS_WORKER / QA_PASS_ADMIN  role passwords (non-production targets)
+#   STRIPE_TEST_SECRET_KEY nightly-billing: a Stripe TEST key (sk_test_ / rk_test_ — anything else is refused)
 name: QA Lab
 
 on:
@@ -28,12 +38,15 @@ on:
         required: false
         default: "1.50"
         type: string
+  schedule:
+    # 09:00 UTC = 02:00 in Los Angeles under daylight time (01:00 in winter)
+    - cron: "0 9 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: qa-lab
+  group: qa-lab-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
@@ -41,12 +54,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      QA_BASE_URL: ${{ inputs.base_url }}
+      QA_BASE_URL: ${{ inputs.base_url || 'https://www.jobflex.app' }}
+      QA_SUITES_INPUT: ${{ inputs.suites || 'smoke,pages,perf' }}
+      QA_BUDGET: ${{ inputs.budget_usd || '1.50' }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       QA_SECRET: ${{ secrets.QA_SECRET }}
+      QA_ALERT_SECRET: ${{ secrets.QA_ALERT_SECRET }}
       QA_PASS_OWNER: ${{ secrets.QA_PASS_OWNER }}
       QA_PASS_MANAGER: ${{ secrets.QA_PASS_MANAGER }}
       QA_PASS_WORKER: ${{ secrets.QA_PASS_WORKER }}
+      QA_USER_ADMIN: ${{ secrets.QA_USER_ADMIN }}
       QA_PASS_ADMIN: ${{ secrets.QA_PASS_ADMIN }}
       QA_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
       CI: "true"
@@ -72,11 +89,15 @@ jobs:
       - name: Run the suites
         id: run
         continue-on-error: true
-        run: npm run qa -- --suite "${{ inputs.suites }}"
+        run: npm run qa -- --suite "$QA_SUITES_INPUT"
 
       - name: Analyse the run
         if: always()
-        run: npm run qa:analyze -- --budget "${{ inputs.budget_usd }}"
+        run: npm run qa:analyze -- --budget "$QA_BUDGET"
+
+      - name: Summary
+        if: always()
+        run: npm run qa:summary -- --step-summary --title "QA Lab (${{ github.event_name == 'schedule' && 'nightly' || 'by hand' }})" --out qa/runs/latest-nightly.md
 
       - name: Upload the report
         if: always()
@@ -84,11 +105,137 @@ jobs:
         with:
           name: qa-lab-report-${{ github.run_id }}
           path: |
-            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/report.html
-            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/report.md
-            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/raw.json
-            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/analysis.json
-            qa/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}/screenshots/
+            qa/runs/latest-nightly.md
+            qa/runs/${{ env.QA_RUN_ID }}/report.html
+            qa/runs/${{ env.QA_RUN_ID }}/report.md
+            qa/runs/${{ env.QA_RUN_ID }}/raw.json
+            qa/runs/${{ env.QA_RUN_ID }}/analysis.json
+            qa/runs/${{ env.QA_RUN_ID }}/screenshots/
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Only a run against production texts anyone (qa/bin/alert.ts checks the target).
+      - name: Alert the team when production went red
+        if: steps.run.outcome == 'failure'
+        run: npm run qa:alert
+
+      - name: Fail the job when the suites failed
+        if: steps.run.outcome == 'failure'
+        run: exit 1
+
+  nightly-billing:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      QA_BASE_URL: http://localhost:3005
+      QA_RUN_ID: ci-billing-${{ github.run_id }}-${{ github.run_attempt }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CI: "true"
+    steps:
+      - name: Skip without a Stripe test key
+        id: key
+        run: |
+          case "$STRIPE_TEST_SECRET_KEY" in
+            sk_test_*|rk_test_*) echo "ok=true" >> "$GITHUB_OUTPUT" ;;
+            "") echo "ok=false" >> "$GITHUB_OUTPUT"; echo "### nightly-billing skipped — STRIPE_TEST_SECRET_KEY is not set" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "STRIPE_TEST_SECRET_KEY is not a Stripe TEST key — refusing to run billing on it." >&2; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            qa/package-lock.json
+
+      # A throwaway database for this job only: the schema and the seed (QA Co, qa@acme.test, plans).
+      # Secrets made up per run; only the Stripe TEST key is real. No live Stripe key, no mail, no SMS.
+      - name: A fresh database and the server's environment
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          {
+            echo 'DATABASE_URL="file:./ci.db"'
+            echo "NEXTAUTH_SECRET=$(openssl rand -hex 32)"
+            echo "AUTH_SECRET=$(openssl rand -hex 32)"
+            echo "NEXTAUTH_URL=$QA_BASE_URL"
+            echo "AUTH_TRUST_HOST=true"
+            echo "NEXT_PUBLIC_APP_URL=$QA_BASE_URL"
+            echo "STRIPE_SECRET_KEY_TEST=$STRIPE_TEST_SECRET_KEY"
+            echo "STRIPE_TEST_CLOCKS=1"
+            echo "QA_TEST_MODE=1"
+            echo "QA_SECRET=$(openssl rand -hex 24)"
+          } > .env
+          npm ci
+          npx prisma db push --skip-generate
+          npm run prisma:seed
+
+      - name: The QA Lab and Chromium
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          npm --prefix qa ci
+          npm --prefix qa exec -- playwright install --with-deps chromium
+
+      - name: Stripe CLI, webhooks forwarded to the server
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          curl -s https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" | sudo tee /etc/apt/sources.list.d/stripe.list > /dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq stripe
+          WHSEC=$(stripe listen --api-key "$STRIPE_TEST_SECRET_KEY" --print-secret)
+          echo "::add-mask::$WHSEC"
+          echo "STRIPE_WEBHOOK_SECRET=$WHSEC" >> .env
+          # the events api/webhooks/stripe handles for plans (current CLIs refuse `listen` without --events)
+          EVENTS=checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.subscription.trial_will_end,invoice.paid,invoice.payment_failed,payment_intent.succeeded
+          nohup stripe listen --api-key "$STRIPE_TEST_SECRET_KEY" --events "$EVENTS" --forward-to "$QA_BASE_URL/api/webhooks/stripe" > stripe-listen.log 2>&1 &
+          sleep 5; cat stripe-listen.log
+
+      - name: Start the server (next dev, port 3005)
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          nohup node --max-old-space-size=8192 node_modules/next/dist/bin/next dev -p 3005 > next-dev.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -sf -o /dev/null "$QA_BASE_URL/auth/login" && exit 0
+            sleep 5
+          done
+          echo "the server did not answer in 7.5 minutes" >&2; tail -50 next-dev.log; exit 1
+
+      - name: Run signup + billing
+        id: run
+        if: steps.key.outputs.ok == 'true'
+        continue-on-error: true
+        run: |
+          # the QA side reads QA_SECRET from .env like the server does (qa/lib/env.ts)
+          npm run qa -- --suite signup,billing --project chromium
+
+      - name: Analyse the run
+        if: always() && steps.key.outputs.ok == 'true'
+        run: npm run qa:analyze -- --budget 1.00
+
+      - name: Summary
+        if: always() && steps.key.outputs.ok == 'true'
+        run: npm run qa:summary -- --step-summary --title "QA Lab nightly — signup + billing (Stripe test mode)" --out qa/runs/latest-nightly-billing.md
+
+      - name: Upload the report
+        if: always() && steps.key.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-lab-billing-${{ github.run_id }}
+          path: |
+            qa/runs/latest-nightly-billing.md
+            qa/runs/${{ env.QA_RUN_ID }}/report.html
+            qa/runs/${{ env.QA_RUN_ID }}/report.md
+            qa/runs/${{ env.QA_RUN_ID }}/raw.json
+            qa/runs/${{ env.QA_RUN_ID }}/analysis.json
+            qa/runs/${{ env.QA_RUN_ID }}/screenshots/
+            next-dev.log
+            stripe-listen.log
           if-no-files-found: warn
           retention-days: 30
 

@@ -63,6 +63,8 @@ health:
     - "the custom plan is off on this server"
     - "has no Stripe key"
     - "against production"
+    - "against a preview on the production database"
+    - "needs an external key"
     - "сервер — next dev"
 
 # Severity rules that depend on the page (analyze/group.ts).

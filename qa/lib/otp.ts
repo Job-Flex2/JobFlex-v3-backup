@@ -3,12 +3,22 @@
 // trace; addSecret() masks it in everything the run writes.
 import { baseUrl } from "./env";
 import { addSecret } from "./redact";
+import { bypassHeaders } from "./vercel";
 
 export const QA_DOMAIN = "qa.jobflex.test";
 
 /** qa-<label>-<timestamp>-<random>@qa.jobflex.test */
 export function qaEmail(label: string): string {
   return `qa-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@${QA_DOMAIN}`;
+}
+
+/** The server runs the QA test mode with this QA_SECRET: the gate answers 400 for an address that is
+ *  not a QA one (a closed gate is a bare 404). Nothing is read or written. */
+export async function qaTestModeServing(): Promise<boolean> {
+  const secret = process.env.QA_SECRET;
+  if (!secret) return false;
+  const r = await fetch(`${baseUrl()}/api/qa/otp?email=${encodeURIComponent("probe@example.com")}`, { headers: { "x-qa-secret": secret, ...bypassHeaders() }, signal: AbortSignal.timeout(60_000) }).catch(() => null);
+  return r?.status === 400;
 }
 
 export type OtpEntry = { code: string | null; link: string | null; kind: string; at: number };
@@ -22,7 +32,7 @@ export async function fetchOtp(email: string, opts: { after?: number; timeoutMs?
   const until = Date.now() + (opts.timeoutMs ?? 30_000);
   let last = "";
   while (Date.now() < until) {
-    const r = await fetch(`${baseUrl()}/api/qa/otp?email=${encodeURIComponent(email)}`, { headers: { "x-qa-secret": secret }, signal: AbortSignal.timeout(60_000) }).catch((e: Error) => ({ status: 0, ok: false, json: async () => ({ error: e.message }) }) as unknown as Response);
+    const r = await fetch(`${baseUrl()}/api/qa/otp?email=${encodeURIComponent(email)}`, { headers: { "x-qa-secret": secret, ...bypassHeaders() }, signal: AbortSignal.timeout(60_000) }).catch((e: Error) => ({ status: 0, ok: false, json: async () => ({ error: e.message }) }) as unknown as Response);
     if (r.status === 404) {
       const body = (await r.json().catch(() => null)) as { found?: boolean } | null;
       if (!body) throw new TestModeOff("GET /api/qa/otp answered 404 — the server runs without QA_TEST_MODE=1, or its QA_SECRET is not this one");

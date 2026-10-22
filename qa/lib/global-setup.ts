@@ -1,6 +1,7 @@
 // Before the first test: the server answers, the production guard holds for the selected
-// suites, the database is a local one (for the suites that read or write it), and each role
-// has a signed-in state (kept from the last run when still valid — the sign-in brake).
+// suites, the database is a local one (for the suites that read or write it), a Stripe key the
+// billing suite could use is a TEST key, and each role has a signed-in state (kept from the last
+// run when still valid — the sign-in brake).
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "@playwright/test";
@@ -8,6 +9,8 @@ import { baseUrl, runDir } from "./env";
 import { assertSuiteAllowed, targetKind } from "./target";
 import { assertLocalDatabase } from "./db";
 import { SIGNED_IN, authFile, credentials, sessionEmail, signInRole } from "./roles";
+import { assertStripeTestOnly } from "./stripeTest";
+import { bypassHeaders, bypassSecret } from "./vercel";
 
 export default async function globalSetup(): Promise<void> {
   const dir = runDir();
@@ -16,6 +19,7 @@ export default async function globalSetup(): Promise<void> {
   const kind = targetKind();
   for (const s of suites) if (s !== "all") assertSuiteAllowed(s);
   if (kind === "local" && suites.some((s) => s !== "perf")) assertLocalDatabase();
+  if (suites.some((s) => s === "all" || s === "billing")) assertStripeTestOnly();
 
   // The server: up and answering as JobFlex (the logic suite alone needs none).
   if (suites.length && suites.every((s) => s === "logic")) {
@@ -26,9 +30,16 @@ export default async function globalSetup(): Promise<void> {
   let up = false;
   while (Date.now() < deadline && !up) {
     try {
-      const r = await fetch(baseUrl() + "/auth/login", { signal: AbortSignal.timeout(120_000) });
+      const r = await fetch(baseUrl() + "/auth/login", { headers: bypassHeaders(), signal: AbortSignal.timeout(120_000) });
+      // Vercel's own sign-in wall (Deployment Protection): waiting will not open it.
+      if (/^https:\/\/vercel\.com\//.test(r.url)) {
+        throw new Error(`QA Lab: ${new URL(baseUrl()).host} is behind Vercel Deployment Protection — ${bypassSecret() ? "VERCEL_AUTOMATION_BYPASS_SECRET was refused (a stale or wrong secret)" : "set VERCEL_AUTOMATION_BYPASS_SECRET"} (docs/qa-ci.md).`);
+      }
       up = r.ok && /jobflex/i.test(await r.text());
-    } catch { /* not yet */ }
+    } catch (e) {
+      if (/Deployment Protection/.test(String((e as Error).message))) throw e;
+      /* not yet */
+    }
     if (!up) await new Promise((r) => setTimeout(r, 3000));
   }
   if (!up) throw new Error(`QA Lab: ${baseUrl()} does not answer as JobFlex. Start the dev server first (qa/README.md → "Run").`);

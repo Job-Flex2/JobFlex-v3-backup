@@ -46,7 +46,7 @@ npm run dev                                  # в отдельном терми�
 Потом:
 
 ```bash
-npm run qa:smoke                             # 15 главных проверок, ~1–3 минуты
+npm run qa:smoke                             # денежный путь: ~20 проверок, ~1 минута
 npm run qa                                   # всё: все наборы + старые скрипты (около часа)
 npm run qa -- --suite signup                 # один набор (или несколько: --suite signup,billing)
 npm run qa -- --suite pages --grep /dashboard/jobs   # часть набора
@@ -87,6 +87,14 @@ Billing: смена года на месяц **во время триала** п
 forms, roles отказываются в коде (`lib/target.ts`): и в `bin/qa.ts` до старта, и в фикстуре
 каждого теста. Production — это `VERCEL_ENV=production`, хосты из `productionHosts` и любой
 нелокальный хост без `QA_TARGET_ENV=preview`. Тесты с тегом `@writes` против production пропускаются.
+
+## В CI
+
+Smoke на каждый Preview-деплой (required check `preview-smoke`), ночной прогон production и ночной
+signup + billing на своей базе, алерт команде при красном production — [docs/qa-ci.md](../docs/qa-ci.md).
+Таблица прогона для CI: `npm run qa:summary`; алерт: `npm run qa:alert`. Против защищённого превью
+нужен `VERCEL_AUTOMATION_BYPASS_SECRET`; на превью, которое делит базу с production, тесты `@writes`
+пропускаются (`QA_ALLOW_PREVIEW_WRITES=1` — только для превью со своей базой).
 
 ## Тестовый режим приложения
 

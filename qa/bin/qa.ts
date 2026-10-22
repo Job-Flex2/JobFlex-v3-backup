@@ -16,6 +16,8 @@ import { MATRIX_FILE, writeMatrixFromObserved } from "../lib/matrix";
 import { PreflightError, prismaPreflight } from "../lib/preflight";
 import { resetQaCo, seedLine } from "../lib/seed";
 import { disconnect } from "../lib/db";
+import { bypassHeaders } from "../lib/vercel";
+import { LiveKeyRefused, assertStripeTestOnly } from "../lib/stripeTest";
 
 const argv = process.argv.slice(2);
 const flag = (name: string) => argv.includes(`--${name}`);
@@ -30,7 +32,7 @@ const values = (name: string): string[] => {
 
 async function answersAsJobFlex(url: string): Promise<boolean> {
   try {
-    const r = await fetch(url + "/auth/login", { signal: AbortSignal.timeout(8000) });
+    const r = await fetch(url + "/auth/login", { headers: bypassHeaders(), signal: AbortSignal.timeout(8000) });
     return r.ok && /jobflex/i.test(await r.text());
   } catch {
     return false;
@@ -40,7 +42,7 @@ async function answersAsJobFlex(url: string): Promise<boolean> {
 /** `next dev` serves its hot-reload client in every page; a production build does not. */
 async function isDevServer(url: string): Promise<boolean> {
   try {
-    const r = await fetch(url + "/auth/login", { signal: AbortSignal.timeout(60_000) });
+    const r = await fetch(url + "/auth/login", { headers: bypassHeaders(), signal: AbortSignal.timeout(60_000) });
     return /hmr-client|webpack-hmr|__nextDevClientId|react-refresh/.test(await r.text());
   } catch {
     return false;
@@ -85,6 +87,11 @@ async function main(): Promise<number> {
       selected = selected.filter((s) => { try { assertSuiteAllowed(s, base); return true; } catch { return false; } });
       console.log(`Target is ${kind} (${new URL(base).host}): only ${selected.join(", ")} run there.`);
     }
+  }
+
+  // Stripe from the QA side is test mode only (lib/stripeTest): a live key stops billing before it starts.
+  if (selected.includes("billing")) {
+    try { assertStripeTestOnly(); } catch (e) { if (e instanceof LiveKeyRefused) { console.error(e.message); return 1; } throw e; }
   }
 
   process.env.QA_RUN_ID = process.env.QA_RUN_ID || runId();

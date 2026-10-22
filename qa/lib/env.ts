@@ -1,8 +1,9 @@
 // Where things are, and the few environment values the QA Lab reads.
 //
-// The app's own secrets stay with the app: only QA_* names, ANTHROPIC_API_KEY and VERCEL_ENV
-// are taken from .env.local / .env (the process environment wins, then .env.local, then .env —
-// Next's order). Values are never printed; lib/redact masks the ones that are secrets.
+// The app's own secrets stay with the app: only QA_* names, ANTHROPIC_API_KEY, VERCEL_ENV, the
+// Vercel protection bypass and the Stripe TEST key (lib/stripeTest — never STRIPE_SECRET_KEY) are
+// taken from .env.local / .env (the process environment wins, then .env.local, then .env — Next's
+// order). Values are never printed; lib/redact masks the ones that are secrets.
 import fs from "node:fs";
 import path from "node:path";
 
@@ -13,7 +14,7 @@ export const CONFIG_DIR = path.join(QA_DIR, "config");
 export const AUTH_DIR = path.join(QA_DIR, "auth");
 export const BASELINES_DIR = path.join(QA_DIR, "baselines");
 
-const WANTED = /^(QA_[A-Z0-9_]+|ANTHROPIC_API_KEY|VERCEL_ENV)$/;
+const WANTED = /^(QA_[A-Z0-9_]+|ANTHROPIC_API_KEY|VERCEL_ENV|VERCEL_AUTOMATION_BYPASS_SECRET|STRIPE_TEST_SECRET_KEY|STRIPE_SECRET_KEY_TEST)$/;
 
 function parseEnvFile(file: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -31,7 +32,7 @@ function parseEnvFile(file: string): Record<string, string> {
 }
 
 let loaded = false;
-/** QA_* / ANTHROPIC_API_KEY / VERCEL_ENV from the env files, without overriding the process. */
+/** The WANTED names from the env files, without overriding the process. */
 export function loadQaEnv(): void {
   if (loaded) return;
   loaded = true;

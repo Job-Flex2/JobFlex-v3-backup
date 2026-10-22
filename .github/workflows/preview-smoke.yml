@@ -1,0 +1,115 @@
+# Preview smoke (docs/qa-ci.md). Every successful Vercel PREVIEW deployment of a branch gets the
+# QA Lab's smoke suite against its own URL; a red run fails the "preview-smoke" check, which is the
+# required status check on main. The trigger is the deployment_status event the Vercel ↔ GitHub
+# integration sends; production deployments (environment "Production") do not run it.
+#
+# On this project a preview uses the PRODUCTION database (one DATABASE_URL for Preview and
+# Production, 2026-10-22). So the smoke here writes nothing: tests tagged @writes (sign-up, Checkout,
+# the Smart Proposal, sending) are skipped by the QA guard (qa/lib/target.ts) — they run on a local
+# server. What runs: the public pages, sign-in as qa@acme.test, signed-in pages, /admin/health.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   VERCEL_AUTOMATION_BYPASS_SECRET  Vercel → Project → Settings → Deployment Protection → Protection
+#                                    Bypass for Automation (the preview is behind Vercel Authentication)
+#   QA_PASS_OWNER                    password of qa@acme.test in the production database
+#   QA_USER_ADMIN / QA_PASS_ADMIN    a platform-admin QA account for /admin/health (optional: skipped without)
+#   QA_SECRET                        the Preview environment's QA_SECRET (QA test mode, /api/qa/otp)
+name: Preview smoke
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+  deployments: read
+
+concurrency:
+  group: preview-smoke-${{ github.event.deployment.sha }}
+  cancel-in-progress: true
+
+jobs:
+  preview-smoke:
+    # The check's name — the one to mark required on main (docs/qa-ci.md).
+    name: preview-smoke
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment_status.environment, 'Preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      QA_BASE_URL: ${{ github.event.deployment_status.target_url || github.event.deployment_status.environment_url }}
+      QA_TARGET_ENV: preview
+      QA_SECRET: ${{ secrets.QA_SECRET }}
+      QA_PASS_OWNER: ${{ secrets.QA_PASS_OWNER }}
+      QA_USER_ADMIN: ${{ secrets.QA_USER_ADMIN }}
+      QA_PASS_ADMIN: ${{ secrets.QA_PASS_ADMIN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      QA_RUN_ID: preview-${{ github.run_id }}-${{ github.run_attempt }}
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+          # lint:changed compares with origin/main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            qa/package-lock.json
+
+      - name: Install the app's dependencies
+        run: npm ci
+
+      - name: Install the QA Lab and Chromium
+        run: |
+          npm --prefix qa ci
+          npm --prefix qa exec -- playwright install --with-deps chromium
+
+      - name: Lint the changed files
+        run: npm run lint:changed
+
+      - name: Typecheck
+        # tsc on the whole app runs out of the default heap now and then (seen locally 2026-10-22)
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm run typecheck
+
+      - name: Smoke against the preview
+        id: run
+        continue-on-error: true
+        run: npm run qa -- --suite smoke --project chromium
+
+      - name: Report (rules only, no model calls)
+        if: always()
+        run: npm run qa:analyze -- --offline
+
+      - name: Summary
+        if: always()
+        run: npm run qa:summary -- --step-summary --title "Preview smoke" --link "$QA_BASE_URL"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            qa/runs/${{ env.QA_RUN_ID }}/raw.json
+            qa/runs/${{ env.QA_RUN_ID }}/report.html
+            qa/runs/${{ env.QA_RUN_ID }}/report.md
+            qa/runs/${{ env.QA_RUN_ID }}/screenshots/
+          if-no-files-found: warn
+          retention-days: 14
+
+      # A preview is never production, so this says "not production" and sends nothing; it is here so
+      # both workflows behave alike if the trigger ever widens (qa/bin/alert.ts decides).
+      - name: Alert the team when production went red
+        if: steps.run.outcome == 'failure'
+        run: npm run qa:alert
+
+      - name: Fail the check when the smoke failed
+        if: steps.run.outcome == 'failure'
+        run: exit 1

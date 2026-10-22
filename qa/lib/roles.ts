@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Browser } from "@playwright/test";
 import { AUTH_DIR, baseUrl } from "./env";
+import { bypassHeaders, installBypass } from "./vercel";
 
 export const ROLES = ["guest", "owner", "manager", "worker", "admin", "homeowner"] as const;
 export type RoleName = (typeof ROLES)[number];
@@ -48,7 +49,7 @@ export async function sessionEmail(browser: Browser, file: string): Promise<stri
   if (!fs.existsSync(file)) return null;
   const ctx = await browser.newContext({ storageState: file });
   try {
-    const r = await ctx.request.get(baseUrl() + "/api/auth/session", { timeout: 60_000 });
+    const r = await ctx.request.get(baseUrl() + "/api/auth/session", { timeout: 60_000, headers: bypassHeaders() });
     const j = (await r.json().catch(() => null)) as { user?: { email?: string } } | null;
     return j?.user?.email ?? null;
   } catch {
@@ -70,6 +71,7 @@ export async function signInRole(browser: Browser, role: RoleName): Promise<{ ok
   const who = await sessionEmail(browser, file);
   if (who && who.toLowerCase() === creds.email.toLowerCase()) return { ok: true, note: "kept session" };
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: {} });
+  await installBypass(ctx);
   const page = await ctx.newPage();
   try {
     // ?email= fills the field server-side; a dev server otherwise starts it on owner@acme.test.
