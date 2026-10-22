@@ -142,6 +142,8 @@ export async function sendDunningEmail(invoice: Stripe.Invoice): Promise<"first"
   if (!which) return null;
   const mirror = await db.subscription.findFirst({ where: { externalSubId: subId }, select: { organizationId: true, plan: true } });
   if (!mirror) return null;
+  // Always sent (owner, 2026-10-21): the "Billing problems" Email cell in Settings → Notifications does not switch
+  // these letters off — it governs only the extra notices.
   const key = DUNNING_KEY(invoice.id ?? "", which);
   try {
     await db.syncState.create({ data: { key, cursor: new Date().toISOString() } });

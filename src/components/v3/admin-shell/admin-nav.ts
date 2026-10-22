@@ -31,6 +31,9 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: "User activity", icon: "i-clock", href: "/admin/activity" },
       { label: "Subscribers", icon: "i-card", href: "/admin/subscribers" },
       { label: "Revenue", icon: "i-chart", href: "/admin/revenue" },
+      // Added 2026-10-21: why plan charges fail and how many come back — its own page under Revenue
+      // (lib/paymentFailures), read from the database, not from Stripe.
+      { label: "Failed payments", icon: "i-card", href: "/admin/revenue/failed-payments" },
       // Added 2026-09-24: the trials to look at — accounts touring the product
       // to copy it, read off how they behave (lib/trialWatch).
       { label: "Trial watch", icon: "i-eye", href: "/admin/trials" },

@@ -16,6 +16,7 @@ export type PrefKey =
   | "proposal-accepted"
   | "proposal-declined"
   | "payment-received"
+  | "billing-problems"
   | "change-order"
   | "appointment-booked"
   | "appointment-moved"
@@ -47,6 +48,9 @@ export interface PrefEventMeta {
   emailAvailable: boolean;
   /** False when nothing in the app texts this event (2026-09-24) — same rule. */
   smsAvailable: boolean;
+  /** False when the bell never carries this event (2026-10-21, billing problems: the payment banner is the in-app
+   *  notice, always on) — the In-app cell is a tag, not a checkbox. Absent = available. */
+  inAppAvailable?: boolean;
   /** Seed [inApp, email, sms] for a user who has never saved. The sms seed
    *  only matters once a mobile is verified — verifying is the opt-in. */
   seed: [boolean, boolean, boolean];
@@ -66,6 +70,11 @@ export const PREF_EVENTS: readonly PrefEventMeta[] = [
   { key: "proposal-accepted", name: "Proposal accepted", sub: "Signed and ready to schedule", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: true }, example: "Sarah Mitchell accepted \"Standing-seam metal · 18412 92nd Ave NE\" — $27,926. Schedule it: jobflex.app/…" },
   { key: "proposal-declined", name: "Proposal declined", sub: "With the reason the client gave", emailAvailable: true, smsAvailable: true, seed: [true, true, false], audience: { office: false, sales: true }, example: "Sarah Mitchell declined \"Architectural shingles · 18412 92nd Ave NE\": \"Going with a lower bid.\"" },
   { key: "payment-received", name: "Payment received", sub: "A stage was paid — card, Square or recorded by hand", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: false }, example: "Sarah Mitchell paid $8,378 on \"Standing-seam metal · 18412 92nd Ave NE\" — $19,548 still due." },
+  // JobFlex's own bill (owner, 2026-10-21): the company's plan payment did not go through. The Text cell gates the
+  // owner's one or two texts per invoice (lib/billingProblemText). The Email cell governs only extra notices: the
+  // dunning emails (lib/cardUpdate) always go, whatever it says. The in-app notice is the payment banner on every
+  // page, so the In-app cell is a tag.
+  { key: "billing-problems", name: "Billing problems", sub: "Your JobFlex plan payment didn't go through — sent to the account owner; the payment emails always go", emailAvailable: true, smsAvailable: true, inAppAvailable: false, seed: [false, true, true], audience: { office: true }, example: "JobFlex: payment of $95 for Professional didn't go through (insufficient funds). Update your card: jobflex.app/dashboard/subscription" },
   { key: "change-order", name: "Change order answered", sub: "The client approved or declined it", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: false }, example: "Sarah Mitchell approved change order #2 \"Skylight flashing\" ($640) on \"Standing-seam metal · 18412 92nd Ave NE\"." },
   { key: "appointment-booked", name: "Appointment booked", sub: "A visit goes on the calendar — by the team or online", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Booked: Roof inspection · Sarah Mitchell · Tue Oct 7, 9 AM–10 AM · 18412 92nd Ave NE · online." },
   { key: "appointment-moved", name: "Appointment moved or cancelled", sub: "A visit changes day or time, or comes off the calendar", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Moved: Roof inspection · Sarah Mitchell — was Tue Oct 7, 9 AM, now Thu Oct 9, 1 PM." },

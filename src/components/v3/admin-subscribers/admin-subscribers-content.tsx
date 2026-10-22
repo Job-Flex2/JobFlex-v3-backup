@@ -109,13 +109,15 @@ export function AdminSubscribersContent({
   const [status, setStatus] = useState("");
   const [promo, setPromo] = useState("");
   const [cardFilter, setCardFilter] = useState<CardFilter>("");
-  const [openId, setOpenId] = useState<string | null>(null);
+  // ?org=<organizationId> (2026-10-21, the Failed payments page links here): that company's row arrives open.
+  const searchParams = useSearchParams();
+  const orgParam = searchParams.get("org");
+  const [openId, setOpenId] = useState<string | null>(() => (orgParam ? (rows.find((r) => r.organizationId === orgParam)?.id ?? null) : null));
 
   // The address is the sort's one home. replaceState keeps it there without a
   // navigation, so the server (and Stripe) is never asked again for a re-order.
   // The state passed is null on purpose: Next's patched replaceState skips the
   // useSearchParams sync for a state that already carries its own __NA mark.
-  const searchParams = useSearchParams();
   const sort = useMemo(() => readSort(searchParams), [searchParams]);
   const setSort = (next: SortState) => {
     const url = new URL(window.location.href);
@@ -129,6 +131,11 @@ export function AdminSubscribersContent({
     window.history.replaceState(null, "", url.pathname + url.search + url.hash);
   };
   const preset = presetOf(sort);
+
+  // …and comes into view once.
+  useEffect(() => {
+    if (orgParam) document.querySelector(`[data-sub-org="${CSS.escape(orgParam)}"]`)?.scrollIntoView({ block: "center" });
+  }, [orgParam]);
 
   const plans = useMemo(() => Array.from(new Set(rows.map((r) => r.plan))).sort(), [rows]);
   // Slug → the catalog name the page prints; the slug stays the filter key.
@@ -569,6 +576,7 @@ function RowPair({
     <>
       <tr
         className={`${s.rowBtn} ${open ? s.open : ""}`}
+        data-sub-org={r.organizationId ?? undefined}
         tabIndex={0}
         role="button"
         aria-expanded={open}

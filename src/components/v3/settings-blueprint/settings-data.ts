@@ -756,6 +756,7 @@ export const NOTIFICATION_ICONS: Record<PrefKey, IconName> = {
   'proposal-accepted': 'i-check',
   'proposal-declined': 'i-x',
   'payment-received': 'i-bank',
+  'billing-problems': 'i-card',
   'change-order': 'i-pen',
   'job-scheduled': 'i-cal',
   'job-started': 'i-clock',
@@ -779,6 +780,10 @@ export const EMAIL_UNAVAILABLE_TITLE = 'In-app only — nothing in the app email
 /** Drawn IN the cell instead of a ghost checkbox, so it cannot be mistaken
  *  for an unchecked box. */
 export const EMAIL_UNAVAILABLE_TAG = 'In-app only' as const;
+
+/** The In-app cell of an event the bell never carries (billing problems: the payment banner is the in-app notice). */
+export const INAPP_UNAVAILABLE_TITLE = 'Shown as the payment banner in the app — always on.' as const;
+export const INAPP_UNAVAILABLE_TAG = 'Banner' as const;
 
 export type MatrixAction = 'enable-all' | 'email-only' | 'test';
 

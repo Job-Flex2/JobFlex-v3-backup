@@ -100,6 +100,8 @@ import {
   EMAIL_COLUMN_INDEX,
   EMAIL_UNAVAILABLE_TAG,
   EMAIL_UNAVAILABLE_TITLE,
+  INAPP_UNAVAILABLE_TAG,
+  INAPP_UNAVAILABLE_TITLE,
   FEE_NOTE_KICKER,
   MANAGE_ACTION,
   NOTIFICATIONS_CARD,
@@ -1005,6 +1007,11 @@ function IntegrationsPane({
 
 type Pair = [boolean, boolean];
 
+/** The columns this pane draws: In-app and Email — the two cells a Pair holds. Texts are set on Settings → Texting
+ *  (the desktop pane hides the Text column too); drawn here, the Text chip read a cell the Pair never carries and
+ *  always showed off. The save sends pairs, so the stored Text cell is kept as it is. */
+const PAIR_CHANNELS = NOTIFICATION_CHANNELS.slice(0, 2);
+
 /** One channel cell. On a phone the checkbox carries its channel name, because
  *  a bare box under a distant column header cannot be read one-handed. */
 function ChannelChip({
@@ -1049,7 +1056,7 @@ function NotificationsPane({ data }: { data: SettingsData }) {
   );
 
   const available = (ri: number, ci: number) =>
-    ci !== EMAIL_COLUMN_INDEX || PREF_EVENTS[ri].emailAvailable;
+    ci === EMAIL_COLUMN_INDEX ? PREF_EVENTS[ri].emailAvailable : ci !== 0 || PREF_EVENTS[ri].inAppAvailable !== false;
 
   const setCell = (row: number, col: number, next: boolean) => {
     if (!available(row, col)) return;
@@ -1119,7 +1126,7 @@ function NotificationsPane({ data }: { data: SettingsData }) {
       <div className="mst-nHead">
         <span className="mst-nHeadL">{NOTIFICATION_EVENT_COLUMN}</span>
         <div className="mst-chips">
-          {NOTIFICATION_CHANNELS.map((channel, ci) => (
+          {PAIR_CHANNELS.map((channel, ci) => (
             <ChannelChip
               key={channel}
               label={`${NOTIFICATION_COLUMN_LABEL} ${channel}`}
@@ -1144,7 +1151,7 @@ function NotificationsPane({ data }: { data: SettingsData }) {
               </span>
             </div>
             <div className="mst-chips">
-              {NOTIFICATION_CHANNELS.map((channel, ci) =>
+              {PAIR_CHANNELS.map((channel, ci) =>
                 available(ri, ci) ? (
                   <ChannelChip
                     key={channel}
@@ -1154,8 +1161,8 @@ function NotificationsPane({ data }: { data: SettingsData }) {
                     ariaLabel={`${channel} — ${event.name}`}
                   />
                 ) : (
-                  <span className="mst-chipOff" key={channel} title={EMAIL_UNAVAILABLE_TITLE}>
-                    {EMAIL_UNAVAILABLE_TAG}
+                  <span className="mst-chipOff" key={channel} title={ci === 0 ? INAPP_UNAVAILABLE_TITLE : EMAIL_UNAVAILABLE_TITLE}>
+                    {ci === 0 ? INAPP_UNAVAILABLE_TAG : EMAIL_UNAVAILABLE_TAG}
                   </span>
                 ),
               )}

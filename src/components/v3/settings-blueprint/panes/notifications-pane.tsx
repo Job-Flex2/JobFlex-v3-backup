@@ -29,6 +29,8 @@ import {
   EMAIL_COLUMN_INDEX,
   EMAIL_UNAVAILABLE_TAG,
   EMAIL_UNAVAILABLE_TITLE,
+  INAPP_UNAVAILABLE_TAG,
+  INAPP_UNAVAILABLE_TITLE,
   NOTIFICATIONS_CARD,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_COLUMN_LABEL,
@@ -56,7 +58,8 @@ export function NotificationsPane({ data }: PaneProps) {
     }),
   );
 
-  const available = (ri: number, ci: number) => (ci === EMAIL_COLUMN_INDEX ? PREF_EVENTS[ri].emailAvailable : true);
+  const available = (ri: number, ci: number) =>
+    ci === EMAIL_COLUMN_INDEX ? PREF_EVENTS[ri].emailAvailable : ci === 0 ? PREF_EVENTS[ri].inAppAvailable !== false : true;
 
   const setCell = (row: number, col: number, next: boolean) => {
     if (!available(row, col)) return;
@@ -172,8 +175,8 @@ export function NotificationsPane({ data }: PaneProps) {
                           ariaLabel={`${channel} — ${event.name}`}
                         />
                       ) : (
-                        <span className="ncell-off" title={EMAIL_UNAVAILABLE_TITLE}>
-                          {EMAIL_UNAVAILABLE_TAG}
+                        <span className="ncell-off" title={ci === 0 ? INAPP_UNAVAILABLE_TITLE : EMAIL_UNAVAILABLE_TITLE}>
+                          {ci === 0 ? INAPP_UNAVAILABLE_TAG : EMAIL_UNAVAILABLE_TAG}
                         </span>
                       )}
                     </td>

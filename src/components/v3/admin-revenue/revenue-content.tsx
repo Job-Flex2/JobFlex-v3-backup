@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowUpRight, RefreshCw, Search } from "lucide-react";
@@ -37,7 +38,7 @@ export function RevenueView({ data, mobile = false }: { data: RevenueReport; mob
     <div className={s.metrics}>
       {(["mrr", "arr", "collected"] as const).map(key => <button key={key} className={`${s.metric} ${metric === key ? s.selected : ""}`} onClick={() => { setMetric(key); setTab("overview"); }} aria-pressed={metric === key}><span>{labels[key]}</span><strong>{money(data[key])}</strong><small>{key === "mrr" ? "Active monthly revenue" : key === "arr" ? "MRR × 12 · not cash" : "Lifetime · after refunds / disputes"}</small></button>)}
     </div>
-    <nav className={s.tabs} aria-label="Revenue views"><button aria-pressed={tab === "overview"} onClick={() => setTab("overview")}>Overview</button><button aria-pressed={tab === "users"} onClick={() => setTab("users")}>Users <span>{data.customers.length}</span></button></nav>
+    <nav className={s.tabs} aria-label="Revenue views"><button aria-pressed={tab === "overview"} onClick={() => setTab("overview")}>Overview</button><button aria-pressed={tab === "users"} onClick={() => setTab("users")}>Users <span>{data.customers.length}</span></button><Link className={s.tabLink} href="/admin/revenue/failed-payments">Failed payments</Link></nav>
     {data.warnings.map(w => <p key={w} className={s.warning} role="status">{w}</p>)}
     {tab === "overview" ? <>
       <section className={s.sheet} aria-label={`${labels[metric]} chart`}>

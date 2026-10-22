@@ -25,6 +25,8 @@ import { cancelReplacedSubscription } from "@/lib/checkoutReturn";
 import { invoiceSubscriptionId, refId } from "@/lib/stripeCompat";
 import { alertInvoiceFailed, alertInvoicePaid, alertOneTimeCharge } from "@/lib/adminAlertsPayments";
 import { mirrorDeckAddon } from "@/lib/deckAddonBilling";
+import { markFailuresRecovered, noteInvoiceFailure } from "@/lib/paymentFailures";
+import { textOwnerPaymentFailed } from "@/lib/billingProblemText";
 
 export const runtime = "nodejs";
 
@@ -148,6 +150,8 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       await processReferralEffectsForInvoice(invoice);
       // The team's "Payments" text (lib/adminAlertsPayments) — once per invoice, $0 skipped.
       await alertInvoicePaid(invoice, event.livemode).catch((err) => console.warn("[adminAlerts] paid text:", err));
+      // Its failed tries on record are won back (lib/paymentFailures, /admin/revenue/failed-payments).
+      await markFailuresRecovered(invoice).catch((err) => console.warn("[payment-failure] recovered mark:", err));
       break;
     }
     // A lead paid through Checkout with a method that settles later (a Link
@@ -187,8 +191,15 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
          trialing means nothing is owed on it. */
       const failedSub = invoiceSubscriptionId(invoice);
       const live = failedSub ? await stripe.subscriptions.retrieve(failedSub).catch(() => null) : null;
-      if (live && (live.status === "active" || live.status === "trialing")) {
-        console.info(`[webhook] ${invoice.id}: payment failed, but ${failedSub} is ${live.status} — not a missed bill`);
+      const notOwed = Boolean(live && (live.status === "active" || live.status === "trialing"));
+      // Every declined try goes on record — the reason and the card (lib/paymentFailures), a
+      // not-owed one marked `ignored` so the statistics stay whole. Never fails the event.
+      const failed = await noteInvoiceFailure(stripe, invoice, { sub: live, ignored: notOwed }).catch((err) => {
+        console.warn(`[payment-failure] ${invoice.id}: Stripe read failed —`, err instanceof Error ? err.message : err);
+        return null;
+      });
+      if (notOwed) {
+        console.info(`[webhook] ${invoice.id}: payment failed, but ${failedSub} is ${live!.status} — not a missed bill`);
         break;
       }
       await markSubscriptionPastDue(invoice);
@@ -199,6 +210,8 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       await sendDunningEmail(invoice).catch((err) => console.warn("[webhook] dunning email failed:", err));
       // The team's "Failed payments" text, on the same two tries (lib/adminAlertsPayments).
       await alertInvoiceFailed(invoice, event.livemode, stripe).catch((err) => console.warn("[adminAlerts] failed text:", err));
+      // The owner's text: the first try, and one more three days on at most (lib/billingProblemText).
+      await textOwnerPaymentFailed(invoice, failed);
       break;
     }
     case "charge.refunded": {

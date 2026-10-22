@@ -1116,15 +1116,17 @@ body:has(.jf-mobile-settings)::before { content: none; }
   min-width: 116px;
   min-height: var(--tap);
   padding: 0 12px;
-  border: 1.5px dashed var(--dash);
+  border: 1px solid var(--hair);
   border-radius: var(--radius);
   background: var(--paper);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
+  box-shadow: none;
+  /* Plain text like CRM → Workflows' "Default" tag — never mono caps in a chip (DESIGN.md, 2026-10-18). */
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
 }
 .jf-mobile-settings .mst-nFoot {
   display: flex;
