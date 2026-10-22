@@ -1227,6 +1227,20 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     if (!glideRef.current?.(section)) heading.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
     setPlacing((p) => (p?.kind === "fixture" ? null : p));
   }, [setPlacing]);
+  /** Send to client from anywhere in the form (owner, 2026-10-22: "I don't see the option in the Deck Studio to send the
+   *  design to the client"): the panel opens at the finish, under the package, and is brought into view. */
+  const openSend = () => {
+    if (preview) return askAddon("Send the design to your client with Deck Studio");
+    setSendOpen(true);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>("[data-deck-client-link]");
+        if (!el) return go("package");
+        const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+      }),
+    );
+  };
   // Every section laid out once before the off-screen ones are skipped (deck-variant-1.css `data-sized`), so each is
   // skipped at its own height and the form never grows under the wheel. Again when the sections change.
   const sectionKey = stepList.map((x) => x.id).join(" ");
@@ -3116,12 +3130,22 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
             <div className="v1-view-head">
               <h2 className="v1-h3 v1-view-title">The {what.toLowerCase()}</h2>
               <div className="v1-view-acts">
+                {/* The design to the client, in sight from the first step (owner, 2026-10-22: "I don't see the option to send
+                    the design to the client") — with the count of designs that came back. The panel opens at the finish. */}
+                <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-dock-btn", "v1-send-btn", sendOpen && "is-on")} onClick={openSend} aria-label={inbox.length ? `Send to client — ${inbox.length} came back` : "Send to client"} data-v1-view-send>
+                  {preview ? <Lock size={14} strokeWidth={2.5} aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
+                  <span aria-hidden="true">
+                    Send<span className="v1-hide-s"> to client</span>
+                  </span>
+                  {inbox.length ? <span className="v1-count" aria-hidden="true">{inbox.length}</span> : null}
+                </button>
                 <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-dock-btn", "v1-talk-btn", voiceOpen && "is-on")} aria-pressed={voiceOpen} onClick={() => openVoice(!voiceOpen)} data-deck-talk>
                   <Mic size={16} aria-hidden="true" /> Talk
                 </button>
-                <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" aria-pressed={fullView} onClick={() => setFullView((f) => !f)} data-deck-dock>
+                <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" aria-pressed={fullView} aria-label={fullView ? "Exit full view" : "Full view"} onClick={() => setFullView((f) => !f)} data-deck-dock>
                   {fullView ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
-                  {fullView ? "Exit full view" : "Full view"}
+                  {/* On a phone the expand arrows alone (2026-10-22): the header keeps room for Send to client and Talk. */}
+                  <span className="v1-hide-s" aria-hidden="true">{fullView ? "Exit full view" : "Full view"}</span>
                 </button>
               </div>
               <span className="v1-meta v1-view-facts" title={scene.facts}>{scene.facts}</span>
