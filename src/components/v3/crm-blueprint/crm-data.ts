@@ -44,6 +44,9 @@ export type FollowUpRule = {
    *  from the trigger in src/lib/followUps/copy.ts, which is the same module
    *  the preview card and the dispatcher read. */
   channel: FollowUpChannel;
+  /** A starter rule (lib/followUps/defaults): deleting it turns it off, and
+   *  the row stays, reading "Turned off". */
+  isDefault?: boolean;
 };
 
 export type QueueItem = {
@@ -54,6 +57,8 @@ export type QueueItem = {
   rel: string;
   overdue: boolean;
   days: number;
+  /** When it goes (epoch ms) — the Workflows status line's "next send". */
+  runAt: number;
 };
 
 export const STATUS_ORDER = ['PAID', 'COMPLETED', 'ACCEPTED', 'VIEWED', 'SENT', 'DRAFT', 'DECLINED', 'EXPIRED', 'ARCHIVED'];
@@ -114,4 +119,6 @@ export type CrmContentData = {
   /** A configured Twilio number. Without one the TEXT channel is offered
    *  disabled, with the same note the client message dialog shows. */
   smsEnabled: boolean;
+  /** The server's clock at render, so "next send in 5 h" hydrates as rendered. */
+  renderedAt: number;
 };

@@ -31,6 +31,7 @@ import { parseSpotlightTool } from "@/lib/planSpotlight";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { ensureDefaultFollowUpRules } from "@/lib/followUps/defaults";
 import { TRADE_TYPES } from "@/lib/tradeTypes";
 import type Stripe from "stripe";
 import { bindAttributionToOrg } from "@/lib/attribution";
@@ -853,6 +854,11 @@ async function createAccountFromPending(
     }
     throw e;
   }
+
+  // Follow-ups work from the first proposal sent (lib/followUps/defaults).
+  // Never in the way of the account: /dashboard/crm writes them on the
+  // first visit if this fails.
+  await ensureDefaultFollowUpRules(orgId).catch((err) => console.warn("[signup] follow-up defaults:", err));
 
   // Sent after the response, so it reads the subscription row written below.
   trackActivation("organization_created", orgId, { flow: billing.flow === "cardless" ? "cardless" : "checkout" });

@@ -195,6 +195,17 @@ export function CrmContent({ data, brief }: { data: CrmContentData; brief: CrmBr
           (src/lib/followUps/copy.ts + lib/email/renderEmail), so what a
           contractor approves here is byte-for-byte what the homeowner opens. */}
       <section className="ppanel is-hidden" data-panel="workflows">
+        {/* One line over the rules: are follow-ups going out, and when the
+            next one goes (crm-behavior renderFuStatus). Off → Turn on defaults. */}
+        <div className="fu-status" id="fuStatus" role="status">
+          <p className="fu-status-txt">
+            <span className="fu-dot" aria-hidden="true" />
+            <span id="fuStatusTxt" />
+          </p>
+          <button className="btn btn-primary btn--sm is-hidden" type="button" id="fuDefaultsBtn">
+            Turn on defaults
+          </button>
+        </div>
         <div className="wf-cols">
           <div className="card">
             <div className="card-head">

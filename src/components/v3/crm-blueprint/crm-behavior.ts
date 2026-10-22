@@ -33,6 +33,7 @@ import {
   markFollowUpDone,
   runFollowUpNow,
   setFollowUpRuleEnabled,
+  turnOnDefaultFollowUps,
   upsertFollowUpRule,
 } from "@/actions/followUps";
 import { leaveRow, staggerIn } from "@/components/v3/blueprint-shell/list-motion";
@@ -44,6 +45,7 @@ import {
   TEXT_NEEDS_TWILIO,
   channelLabel,
   delayLabel,
+  followUpsStatus,
   readDelayDays,
   followUpEmailDoc,
   followUpSmsText,
@@ -180,6 +182,8 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
   let queueData: QueueItem[] = live.queue.map((q) => ({ ...q }));
   const orgBrand = { ...live.org };
   const smsEnabled = live.smsEnabled;
+  /** The server's clock at render — "next send in 5 h" hydrates as rendered. */
+  const renderedAt = live.renderedAt;
 
   /** True while any write is in flight, so a double click cannot fire twice. */
   const crm = {
@@ -525,7 +529,21 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
   }
 
   // ================= WORKFLOWS =================
+  /** The one line over the rules: on/off, how many, when the next one goes. */
+  function renderFuStatus() {
+    const box = $("#fuStatus");
+    if (!box) return;
+    const next = queueData.reduce<number | null>((m, q) => (m === null || q.runAt < m ? q.runAt : m), null);
+    const st = followUpsStatus(rulesData.filter((r) => r.enabled).length, next, renderedAt);
+    box.classList.toggle("is-off", !st.on);
+    const txt = $("#fuStatusTxt");
+    if (txt) txt.innerHTML = "<b>" + escapeAttr(st.lead) + "</b>" + (st.rest ? " " + escapeAttr(st.rest) : "");
+    const btn = $("#fuDefaultsBtn");
+    if (btn) btn.classList.toggle("is-hidden", st.on);
+  }
+
   function renderRules() {
+    renderFuStatus();
     const empty = $("#rulesEmpty");
     if (empty) empty.classList.toggle("is-hidden", rulesData.length !== 0 || crm.creating);
     const list = $("#rulesList");
@@ -547,10 +565,11 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
             '<div style="min-width:0;flex:1">' +
             '<div class="rule-name">' +
             escapeAttr(r.name) +
+            (r.isDefault ? '<span class="rule-def">Default</span>' : "") +
             '<span class="pstatus ' +
             (r.enabled ? "rst--on" : "rst--off") +
             '">' +
-            (r.enabled ? "active" : "off") +
+            ruleBadge(r) +
             "</span></div>" +
             '<div class="rule-meta">Trigger: <b>' +
             escapeAttr(trig) +
@@ -571,10 +590,19 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
             '" aria-label="Toggle rule"' +
             busy +
             "></button>" +
+            '<button class="btn btn-ghost btn--sm" type="button" data-act="preview" aria-label="Preview ' +
+            escapeAttr(r.name) +
+            '">Preview</button>' +
             '<button class="btn btn-ghost btn--sm" type="button" data-act="edit"' + busy + ">Edit</button>" +
-            '<button class="rule-del" type="button" data-act="del-rule" aria-label="Delete rule"' +
-            busy +
-            '><svg class="ic"><use href="#i-trash"/></svg></button>' +
+            // A turned-off starter rule has nothing left to delete; the switch turns it back on.
+            // The empty cell keeps its switch and Edit in line with the rows around it.
+            (r.isDefault && !r.enabled
+              ? '<span class="rule-del" aria-hidden="true" style="visibility:hidden"></span>'
+              : '<button class="rule-del" type="button" data-act="del-rule" aria-label="' +
+                (r.isDefault ? "Turn off rule" : "Delete rule") +
+                '"' +
+                busy +
+                '><svg class="ic"><use href="#i-trash"/></svg></button>') +
             "</div></li>"
           );
         })
@@ -1046,10 +1074,31 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
       return;
     }
 
+    const defaultsBtn = target.closest<HTMLButtonElement>("#fuDefaultsBtn");
+    if (defaultsBtn && root.contains(defaultsBtn)) {
+      if (!defaultsBtn.disabled) void turnOnDefaults(defaultsBtn);
+      return;
+    }
+
     const act = target.closest<HTMLElement>("[data-act]");
     if (!act || !root.contains(act)) return;
     const kind = act.dataset.act;
     const ruleLi = act.closest<HTMLElement>("[data-rule]");
+
+    // The rule's own message in the card beside the list, on the demo proposal
+    // (lib/followUps/copy previewContext) — nothing is sent.
+    if (kind === "preview" && ruleLi) {
+      const r = rulesData.find((x) => x.id === ruleLi.dataset.rule);
+      if (r) {
+        syncPreviewFromForm(r.triggerStatus, r.channel, r.delayMinutes);
+        const card = root.querySelector<HTMLElement>(".prev-card");
+        // Beside the list on a wide desk; under it once the columns stack.
+        if (card && card.getBoundingClientRect().top > window.innerHeight * 0.6) {
+          card.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+        }
+      }
+      return;
+    }
 
     if (kind === "toggle" && ruleLi) {
       if (crm.busyRule) return;
@@ -1099,13 +1148,18 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
   // ================= WRITES (real server actions) =================
   // src/actions/followUps.ts — the same actions the classic CRM pages called.
   // Rule CRUD is manager-gated; working the queue is allowed to sales too. All
-  // of them are org-scoped and they revalidate /dashboard/follow-ups and
+  // of them are org-scoped and they revalidate /dashboard/crm and
   // /dashboard/crm/queue, so the classic pages agree with this sheet.
 
   /** Enable / disable. The switch is patched IN PLACE, never re-rendered: an
    *  innerHTML rebuild replaces the switch node, so the knob's slide and the
    *  badge's colour crossfade never get to run. The optimistic flip is reverted
    *  on the same nodes if the action refuses. */
+  /** "Turned off" for a starter rule (deleting one turns it off), "off" for the company's own. */
+  function ruleBadge(r: FollowUpRule) {
+    return r.enabled ? "active" : r.isDefault ? "Turned off" : "off";
+  }
+
   function paintToggle(r: FollowUpRule, tgl: HTMLElement, li: HTMLElement) {
     tgl.classList.toggle("on", r.enabled);
     tgl.setAttribute("aria-pressed", r.enabled ? "true" : "false");
@@ -1113,7 +1167,7 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
     if (badge) {
       badge.classList.toggle("rst--on", r.enabled);
       badge.classList.toggle("rst--off", !r.enabled);
-      badge.textContent = r.enabled ? "active" : "off";
+      badge.textContent = ruleBadge(r);
     }
   }
 
@@ -1123,11 +1177,13 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
     showErr("#rulesErr", null);
     r.enabled = next;
     paintToggle(r, tgl, li);
+    renderFuStatus();
     try {
       await setFollowUpRuleEnabled(r.id, next);
     } catch (err) {
       r.enabled = !next;
       paintToggle(r, tgl, li);
+      renderFuStatus();
       showErr("#rulesErr", actionError(err));
     } finally {
       crm.busyRule = null;
@@ -1135,18 +1191,27 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
   }
 
   /** Delete. The row leaves alone and the rows below close the gap — the list
-   *  is NOT re-rendered, or the FLIP would have nothing left to move. */
+   *  is NOT re-rendered, or the FLIP would have nothing left to move. A starter
+   *  rule is turned off instead (actions/followUps): its row stays, repainted. */
   async function removeRule(li: HTMLElement) {
     const id = li.dataset.rule;
     if (!id) return;
     crm.busyRule = id;
     showErr("#rulesErr", null);
     try {
-      await deleteFollowUpRule(id);
+      const res = await deleteFollowUpRule(id);
+      const rule = rulesData.find((x) => x.id === id);
+      if (res.turnedOff && rule) {
+        rule.enabled = false;
+        crm.busyRule = null;
+        renderRules();
+        return;
+      }
       leaveRow(
         li,
         () => {
           rulesData = rulesData.filter((x) => x.id !== id);
+          renderFuStatus();
           const empty = $("#rulesEmpty");
           if (empty) empty.classList.toggle("is-hidden", rulesData.length !== 0 || crm.creating);
         },
@@ -1156,6 +1221,25 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
       showErr("#rulesErr", actionError(err));
     } finally {
       crm.busyRule = null;
+    }
+  }
+
+  /** "Turn on defaults": the starter rules written and switched on
+   *  (actions/followUps); the list repaints from the rules it hands back. */
+  async function turnOnDefaults(btn: HTMLButtonElement) {
+    showErr("#rulesErr", null);
+    btn.disabled = true;
+    btn.classList.add("is-busy");
+    try {
+      const res = await turnOnDefaultFollowUps();
+      rulesData = res.rules.map((r) => ({ ...r }));
+      crm.editing = null;
+      renderRules();
+    } catch (err) {
+      showErr("#rulesErr", actionError(err));
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove("is-busy");
     }
   }
 
@@ -1261,6 +1345,7 @@ export function initCrmContent(content: HTMLElement, options: CrmContentOptions)
         row,
         () => {
           queueData = queueData.filter((q) => q.id !== id);
+          renderFuStatus();
           // Chrome only — rebuilding #queueBody here would replace the very
           // rows the FLIP is closing the gap with.
           renderQueueChrome();

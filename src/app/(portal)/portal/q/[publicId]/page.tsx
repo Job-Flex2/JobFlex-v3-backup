@@ -180,6 +180,7 @@ export default async function PublicProposalPortal({
     // The company's own texts on the first opening (2026-09-29).
     const openedId = proposal.id;
     afterResponse(() => fireTextRules("proposal.viewed", proposalContext(openedId)));
+    if (proposal.status === "SENT") afterResponse(async () => { await (await import("@/lib/followUps/engine")).scheduleFollowUpsFor(openedId, "VIEWED"); }); // the "Viewed" follow-up rules (lib/followUps/defaults)
   }
 
   const org = proposal.organization;

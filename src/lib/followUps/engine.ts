@@ -19,6 +19,24 @@ import {
   parseDispatch,
 } from "@/lib/followUps/copy";
 import { trialBlocksText } from "@/lib/trialMeter";
+import { ProposalStatus } from "@/lib/prismaEnums";
+
+/** Appended to the note of a queued row that was closed without sending, so
+ *  the row says why it never went. */
+export const SKIPPED_MARK = " · skipped: ";
+
+/** The statuses in which a queued follow-up still makes sense, by the trigger
+ *  that queued it. "Haven't heard back" is wrong once the client accepted,
+ *  declined or paid, so the row is closed unsent instead. A client opening the
+ *  quote (VIEWED) is still no answer. Any trigger not listed must still be the
+ *  proposal's status. */
+const STILL_CURRENT: Record<string, readonly string[]> = {
+  [ProposalStatus.SENT]: [ProposalStatus.SENT, ProposalStatus.VIEWED],
+  [ProposalStatus.PAID]: [ProposalStatus.PAID, ProposalStatus.COMPLETED],
+};
+function stillCurrent(trigger: string, status: string): boolean {
+  return (STILL_CURRENT[trigger] ?? [trigger]).includes(status);
+}
 
 // Called from sendProposal / updateProposalStatus when a status changes — schedules any matching rule.
 export async function scheduleFollowUpsFor(proposalId: string, newStatus: string) {
@@ -32,6 +50,22 @@ export async function scheduleFollowUpsFor(proposalId: string, newStatus: string
       enabled: true,
     },
   });
+
+  // A re-send restarts the clock: what the last send queued under the same
+  // status is closed, or every re-send would add one more set of reminders.
+  if (rules.length) {
+    const queued = await db.followUp.findMany({
+      where: { proposalId: proposal.id, completedAt: null },
+      select: { id: true, templateId: true, note: true },
+    });
+    for (const q of queued) {
+      if ((parseDispatch(q.templateId).trigger ?? ProposalStatus.SENT) !== newStatus) continue;
+      await db.followUp.update({
+        where: { id: q.id },
+        data: { completedAt: new Date(), note: `${q.note ?? ""}${SKIPPED_MARK}re-${newStatus.toLowerCase()}` },
+      });
+    }
+  }
 
   let scheduled = 0;
   for (const r of rules) {
@@ -113,6 +147,16 @@ export async function dispatchOne(id: string): Promise<boolean> {
       })
     : null;
 
+  // Checked when it goes, not when it was queued: the client may have
+  // accepted, declined or paid since. Closed unsent, so it never fires later.
+  if (proposal && !stillCurrent(trigger ?? ProposalStatus.SENT, proposal.status)) {
+    await db.followUp.update({
+      where: { id },
+      data: { completedAt: new Date(), note: `${fu.note ?? ""}${SKIPPED_MARK}${proposal.status}` },
+    });
+    return false;
+  }
+
   /** What actually left the building, for the activity log. */
   let outcome: { kind: "EMAIL" | "TEXT"; to: string } | null = null;
 
@@ -151,6 +195,7 @@ export async function dispatchOne(id: string): Promise<boolean> {
         to: proposal.client.email,
         subject: subj,
         html,
+        kind: "follow-up",
       });
       outcome = { kind: "EMAIL", to: proposal.client.email };
     }

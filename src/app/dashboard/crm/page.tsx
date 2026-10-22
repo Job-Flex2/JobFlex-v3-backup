@@ -22,6 +22,7 @@ import { db } from "@/lib/db";
 import { longDate, relative } from "@/lib/format";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { parseChannel } from "@/lib/followUps/copy";
+import { ensureDefaultFollowUpRules } from "@/lib/followUps/defaults";
 import { actorsOf, whoOfEvent } from "@/lib/activityLog";
 import { CrmContent } from "@/components/v3/crm-blueprint/crm-content";
 import type {
@@ -78,6 +79,11 @@ export default async function CrmPage() {
     if (err instanceof NoOrgError) redirect("/dashboard?error=forbidden");
     throw err;
   }
+
+  // A company from before the starter rules (lib/followUps/defaults) gets them
+  // on its first visit here — the Workflows tab is where rules live.
+  // Idempotent, and never in the way of the page.
+  await ensureDefaultFollowUpRules(organizationId).catch((err) => console.warn("[crm] follow-up defaults:", err));
 
   const now = new Date();
 
@@ -155,6 +161,7 @@ export default async function CrmPage() {
       rel: queueRel(f.runAt, now),
       overdue,
       days: overdue ? Math.floor((now.getTime() - f.runAt.getTime()) / 86_400_000) : 0,
+      runAt: f.runAt.getTime(),
     };
   });
 
@@ -212,6 +219,7 @@ export default async function CrmPage() {
     delayMinutes: r.delayMinutes,
     enabled: r.enabled,
     channel: parseChannel(r.template),
+    isDefault: r.isDefault,
   }));
 
   const data: CrmContentData = {
@@ -234,6 +242,7 @@ export default async function CrmPage() {
       logoUrl: org?.logoUrl ?? null,
     },
     smsEnabled: await isTwilioEnabled(),
+    renderedAt: now.getTime(),
   };
 
   const brief = await briefP;

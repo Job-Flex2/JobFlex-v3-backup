@@ -5,6 +5,7 @@ import { z } from "zod";
 import { randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { ensureDefaultFollowUpRules } from "@/lib/followUps/defaults";
 import { appBaseUrl } from "@/lib/appUrl";
 import { slugify, uniqueOrgSlug } from "@/lib/orgSlug";
 import { TRADE_TYPES } from "@/lib/tradeTypes";
@@ -139,6 +140,11 @@ export async function registerAccount(raw: unknown): Promise<{ ok: true }> {
     }
     throw e;
   }
+
+  // Follow-ups work from the first proposal sent (lib/followUps/defaults).
+  // Never in the way of the account: /dashboard/crm writes them on the
+  // first visit if this fails.
+  await ensureDefaultFollowUpRules(orgId).catch((err) => console.warn("[register] follow-up defaults:", err));
 
   trackActivation("organization_created", orgId, { flow: "password" });
   // The team's "Sign-ups" alert texts (lib/adminAlerts) — after the response, never in the signup's way.

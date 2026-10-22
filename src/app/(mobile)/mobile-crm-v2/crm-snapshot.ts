@@ -139,6 +139,7 @@ export async function getCrmSnapshot(): Promise<CrmSnapshotResult> {
       rel: queueRel(f.runAt, now),
       overdue,
       days: overdue ? Math.floor((now.getTime() - f.runAt.getTime()) / 86_400_000) : 0,
+      runAt: f.runAt.getTime(),
     };
   });
 
@@ -198,6 +199,7 @@ export async function getCrmSnapshot(): Promise<CrmSnapshotResult> {
     delayMinutes: r.delayMinutes,
     enabled: r.enabled,
     channel: parseChannel(r.template),
+    isDefault: r.isDefault,
   }));
 
   return {
@@ -222,6 +224,7 @@ export async function getCrmSnapshot(): Promise<CrmSnapshotResult> {
         logoUrl: org?.logoUrl ?? null,
       },
       smsEnabled: await isTwilioEnabled(),
+      renderedAt: now.getTime(),
     },
   };
 }

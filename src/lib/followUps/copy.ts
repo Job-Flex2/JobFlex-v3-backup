@@ -305,3 +305,32 @@ export function previewContext(orgName: string, delayMinutes: number): FollowUpC
     delayLabel: delayLabel(delayMinutes),
   };
 }
+
+/** When the next queued follow-up goes, as the status line says it ("in 5 h").
+ *  The cron runs hourly, so a row already due goes out within the hour. */
+export function nextSendLabel(runAt: number, now: number): string {
+  const ms = runAt - now;
+  if (ms <= 0) return "within the hour";
+  const h = ms / 3_600_000;
+  if (h < 1) return "in under an hour";
+  if (h < 36) return `in ${Math.round(h)} h`;
+  const d = Math.round(h / 24);
+  return `in ${d} day${d === 1 ? "" : "s"}`;
+}
+
+/** The one status line over the rules (desk and phone CRM): whether any rule
+ *  is on, how many, and when the next queued follow-up goes. */
+export function followUpsStatus(
+  activeRules: number,
+  nextRunAt: number | null,
+  now: number,
+): { on: boolean; lead: string; rest: string } {
+  if (!activeRules) return { on: false, lead: "Follow-ups are off", rest: "" };
+  return {
+    on: true,
+    lead: "Follow-ups are on:",
+    rest:
+      `${activeRules} ${activeRules === 1 ? "rule" : "rules"} active · ` +
+      (nextRunAt === null ? "nothing queued yet" : `next send ${nextSendLabel(nextRunAt, now)}`),
+  };
+}

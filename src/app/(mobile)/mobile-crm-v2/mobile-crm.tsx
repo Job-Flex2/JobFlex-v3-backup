@@ -56,6 +56,7 @@ import {
   markFollowUpDone,
   runFollowUpNow,
   setFollowUpRuleEnabled,
+  turnOnDefaultFollowUps,
   upsertFollowUpRule,
 } from "@/actions/followUps";
 import { renderEmail } from "@/lib/email/renderEmail";
@@ -64,6 +65,7 @@ import {
   TEXT_NEEDS_TWILIO,
   channelLabel,
   delayLabel,
+  followUpsStatus,
   readDelayDays,
   followUpEmailDoc,
   followUpSmsText,
@@ -330,6 +332,8 @@ export function MobileCrm() {
      feed the preview card and the rule form's channel picker. */
   const [org, setOrg] = useState<PreviewOrg>(EMPTY_ORG);
   const [smsEnabled, setSmsEnabled] = useState(false);
+  /* The snapshot's server clock — the status line's "next send in 5 h". */
+  const [renderedAt, setRenderedAt] = useState(0);
   /* One row at a time: the id currently mid-write, so its controls disable. */
   const [busyId, setBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -401,6 +405,7 @@ export function MobileCrm() {
     setRules(res.data.rules);
     setOrg(res.data.org);
     setSmsEnabled(res.data.smsEnabled);
+    setRenderedAt(res.data.renderedAt);
     if (!prevSeeded.current && res.data.rules.length) {
       const first = res.data.rules[0];
       prevSeeded.current = true;
@@ -903,10 +908,11 @@ export function MobileCrm() {
             title: r.enabled ? "Turn off" : "Turn on",
             sub: r.enabled ? "Stops scheduling new follow-ups" : "Starts scheduling again",
           },
-          {
-            act: "del", icon: "i-trash", tone: styles.toneDanger, title: "Delete rule",
-            sub: "Scheduled follow-ups stay in the queue", danger: true,
-          },
+          // A starter rule is never deleted (actions/followUps turns it off
+          // instead), so its sheet keeps only the Turn off / Turn on row above.
+          ...(r.isDefault
+            ? []
+            : [{ act: "del", icon: "i-trash", tone: styles.toneDanger, title: "Delete rule", sub: "Scheduled follow-ups stay in the queue", danger: true }]),
         ],
       };
     }
@@ -1471,6 +1477,31 @@ export function MobileCrm() {
           )}
 
           {/* ============ TAB: WORKFLOWS ============ */}
+          {ready && tab === "rules" && (() => {
+            const next = queue.reduce<number | null>((m, q) => (m === null || q.runAt < m ? q.runAt : m), null);
+            const st = followUpsStatus(rulesOn.length, next, renderedAt);
+            return (
+              <div className={`${styles.fuStatus} ${st.on ? "" : styles.fuOff}`} role="status">
+                <p className={styles.fuTxt}>
+                  <span className={styles.fuDot} aria-hidden="true" />
+                  <span>
+                    <b>{st.lead}</b>
+                    {st.rest ? ` ${st.rest}` : ""}
+                  </span>
+                </p>
+                {st.on ? null : (
+                  <button
+                    className={styles.fuBtn}
+                    type="button"
+                    disabled={busyId === "fu-defaults"}
+                    onClick={() => void commit("fu-defaults", () => turnOnDefaultFollowUps())}
+                  >
+                    Turn on defaults
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {ready && tab === "rules" && (
             rules.length === 0 ? (
               <div className={styles.empty}>
@@ -1491,7 +1522,10 @@ export function MobileCrm() {
                     className={`${styles.row} ${styles.rowB} ${styles.rowIn} ${landedId === r.id ? styles.landed : ""}`}
                     style={{ animationDelay: `${i * 45}ms` }}
                   >
-                    <div className={styles.rname}>{r.name}</div>
+                    <div className={styles.rname}>
+                      {r.name}
+                      {r.isDefault ? <span className={styles.ruleDef}>Default</span> : null}
+                    </div>
                     <button
                       className={styles.rowOpen}
                       type="button"
@@ -1506,7 +1540,7 @@ export function MobileCrm() {
                     <div className={styles.rowFoot}>
                       <span className={styles.rowMeta}>
                         <span className={`${styles.pstatus} ${r.enabled ? styles.rstOn : styles.rstOff}`}>
-                          {r.enabled ? "active" : "off"}
+                          {r.enabled ? "active" : r.isDefault ? "Turned off" : "off"}
                         </span>
                         {/* A drawn switch: the native control carries neither
                             the ink frame nor a 44px tap height. */}

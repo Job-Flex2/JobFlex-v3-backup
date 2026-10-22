@@ -5,8 +5,9 @@ import { requireManager, requireSalesOrManager } from "@/lib/orgContext";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { db } from "@/lib/db";
 import { dispatchOne } from "@/lib/followUps/engine";
+import { ensureDefaultFollowUpRules } from "@/lib/followUps/defaults";
 import { isTwilioEnabled } from "@/lib/sdk/twilio";
-import { encodeChannel, MAX_DELAY_MINUTES, TEXT_NEEDS_TWILIO } from "@/lib/followUps/copy";
+import { encodeChannel, MAX_DELAY_MINUTES, parseChannel, TEXT_NEEDS_TWILIO, type FollowUpChannel } from "@/lib/followUps/copy";
 import { ProposalStatus } from "@/lib/prismaEnums";
 import { refusal, refused, type ActionResult } from "@/lib/actionResult";
 
@@ -45,13 +46,15 @@ export async function upsertFollowUpRule(raw: unknown): Promise<ActionResult<{ i
   // TEXT in the editor is gated on the same flag, but the server is the one that
   // has to refuse — otherwise a rule quietly stops sending the day the number
   // is removed.
-  if (data.channel === "TEXT" && !await isTwilioEnabled()) {
+  // A rule that already texts (a starter rule is written that way and falls
+  // back to email in the engine) keeps TEXT through an edit of its delay.
+  const existing = data.id ? await db.followUpRule.findUnique({ where: { id: data.id } }) : null;
+  if (data.channel === "TEXT" && existing?.template !== "TEXT" && !await isTwilioEnabled()) {
     return refused(TEXT_NEEDS_TWILIO, "channel");
   }
   const channel = encodeChannel(data.channel);
 
   if (data.id) {
-    const existing = await db.followUpRule.findUnique({ where: { id: data.id } });
     if (!existing || existing.organizationId !== organizationId) return refused("This rule is gone — it was deleted. Reload the page.");
     const updated = await db.followUpRule.update({
       where: { id: data.id },
@@ -63,7 +66,6 @@ export async function upsertFollowUpRule(raw: unknown): Promise<ActionResult<{ i
         template: channel,
       },
     });
-    revalidatePath("/dashboard/follow-ups");
     revalidatePath("/dashboard/crm");
     await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Updated follow-up rule settings — edited "${data.name}"`, meta: { area: "follow-up rules", ruleId: updated.id, channel: data.channel, enabled: data.enabled } });
     return { ok: true, id: updated.id };
@@ -79,7 +81,6 @@ export async function upsertFollowUpRule(raw: unknown): Promise<ActionResult<{ i
       template: channel,
     },
   });
-  revalidatePath("/dashboard/follow-ups");
   revalidatePath("/dashboard/crm");
   await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Updated follow-up rule settings — added "${data.name}"`, meta: { area: "follow-up rules", ruleId: created.id, channel: data.channel, enabled: data.enabled } });
   return { ok: true, id: created.id };
@@ -90,17 +91,45 @@ export async function setFollowUpRuleEnabled(id: string, enabled: boolean) {
   const rule = await db.followUpRule.findUnique({ where: { id } });
   if (!rule || rule.organizationId !== organizationId) throw new Error("Not found");
   await db.followUpRule.update({ where: { id }, data: { enabled } });
-  revalidatePath("/dashboard/follow-ups");
+  revalidatePath("/dashboard/crm");
   await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Updated follow-up rule settings — turned "${rule.name}" ${enabled ? "on" : "off"}`, meta: { area: "follow-up rules", ruleId: id, enabled } });
 }
 
-export async function deleteFollowUpRule(id: string) {
+/** A starter rule (lib/followUps/defaults) is turned off rather than deleted:
+ *  ensureDefaultFollowUpRules writes any starter rule that has no row, so a
+ *  deleted one would come back on the next visit to the page. */
+export async function deleteFollowUpRule(id: string): Promise<{ turnedOff: boolean }> {
   const { organizationId, user } = await requireManager();
   const rule = await db.followUpRule.findUnique({ where: { id } });
   if (!rule || rule.organizationId !== organizationId) throw new Error("Not found");
+  if (rule.isDefault) {
+    await db.followUpRule.update({ where: { id }, data: { enabled: false } });
+    revalidatePath("/dashboard/crm");
+    await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Updated follow-up rule settings — turned "${rule.name}" off`, meta: { area: "follow-up rules", ruleId: id, enabled: false } });
+    return { turnedOff: true };
+  }
   await db.followUpRule.delete({ where: { id } });
-  revalidatePath("/dashboard/follow-ups");
+  revalidatePath("/dashboard/crm");
   await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Updated follow-up rule settings — deleted "${rule.name}"`, meta: { area: "follow-up rules", ruleId: id, deleted: true } });
+  return { turnedOff: false };
+}
+
+/** "Turn on defaults": the starter rules written (even beside the company's
+ *  own) and every one of them switched on. The owner's own rules stay as they are. */
+export async function turnOnDefaultFollowUps(): Promise<{
+  created: number;
+  enabled: number;
+  /** The company's rules afterwards, in the CRM's order, so the desk sheet repaints from them. */
+  rules: Array<{ id: string; name: string; triggerStatus: string; delayMinutes: number; enabled: boolean; channel: FollowUpChannel; isDefault: boolean }>;
+}> {
+  const { organizationId, user } = await requireManager();
+  const { created } = await ensureDefaultFollowUpRules(organizationId, { evenWithOwnRules: true });
+  const { count } = await db.followUpRule.updateMany({ where: { organizationId, isDefault: true, enabled: false }, data: { enabled: true } });
+  revalidatePath("/dashboard/crm");
+  await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: "Updated follow-up rule settings — turned the default rules on", meta: { area: "follow-up rules", created, enabled: count } });
+  const rows = await db.followUpRule.findMany({ where: { organizationId }, orderBy: { name: "asc" } });
+  const rules = rows.map((r) => ({ id: r.id, name: r.name, triggerStatus: r.triggerStatus, delayMinutes: r.delayMinutes, enabled: r.enabled, channel: parseChannel(r.template), isDefault: r.isDefault }));
+  return { created, enabled: count, rules };
 }
 
 export async function runFollowUpNow(id: string) {
@@ -109,7 +138,7 @@ export async function runFollowUpNow(id: string) {
   const fu = await db.followUp.findUnique({ where: { id } });
   if (!fu || fu.organizationId !== organizationId) throw new Error("Not found");
   await dispatchOne(fu.id);
-  revalidatePath("/dashboard/follow-ups");
+  revalidatePath("/dashboard/crm");
   revalidatePath("/dashboard/crm/queue");
 }
 
@@ -119,7 +148,7 @@ export async function markFollowUpDone(id: string) {
   if (!fu || fu.organizationId !== organizationId) throw new Error("Not found");
   if (fu.completedAt) return;
   await db.followUp.update({ where: { id }, data: { completedAt: new Date() } });
-  revalidatePath("/dashboard/follow-ups");
+  revalidatePath("/dashboard/crm");
   revalidatePath("/dashboard/crm/queue");
   const proposal = fu.proposalId
     ? await db.proposal.findUnique({ where: { id: fu.proposalId }, select: { title: true, clientId: true } })

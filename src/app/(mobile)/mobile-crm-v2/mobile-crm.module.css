@@ -472,6 +472,33 @@
 /* Rule state — a status, so it takes the same three-tone treatment. */
 .rstOn { border-color: var(--success); background: var(--success-soft); color: var(--success); }
 .rstOff { border-color: var(--hair); background: var(--paper-deep); color: var(--muted); }
+/* A starter rule's tag (lib/followUps/defaults): flat, Inter, normal case. */
+.ruleDef {
+  display: inline-flex; align-items: center; vertical-align: 2px;
+  margin-left: 8px; padding: 1px 6px;
+  border: 1px solid var(--hair); border-radius: var(--radius);
+  font-size: 11px; font-weight: 600; line-height: 16px; letter-spacing: 0; text-transform: none;
+  color: var(--ink-soft);
+}
+/* Workflows status line: one framed line over the rules, a flat square in its
+   tone (no shadow behind a coloured square — owner, 2026-10-18). */
+.fuStatus {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+  margin-bottom: 14px; padding: 12px var(--card-pad);
+  border: var(--border); border-radius: var(--radius);
+  background: var(--paper);
+}
+.fuTxt { display: flex; align-items: flex-start; gap: 10px; min-width: 0; margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink-soft); }
+.fuTxt b { color: var(--ink); font-weight: 700; }
+.fuDot { width: 8px; height: 8px; flex-shrink: 0; margin-top: 6px; background: var(--success); }
+.fuOff .fuDot { background: var(--muted); }
+.fuBtn {
+  width: 100%; min-height: 44px; padding: 0 14px;
+  border: var(--border); border-radius: var(--radius);
+  background: var(--blueprint); color: #fff;
+  font: inherit; font-size: 14px; font-weight: 800;
+}
+.fuBtn:disabled { opacity: 0.6; cursor: progress; }
 /* Queue severity ladder */
 .sev {
   display: inline-block;

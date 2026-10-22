@@ -50,6 +50,9 @@ export type FollowUpRule = {
   delayMinutes: number;
   enabled: boolean;
   channel: FollowUpChannel;
+  /** A starter rule (lib/followUps/defaults): deleting it turns it off, and
+   *  the row stays, reading "Turned off". */
+  isDefault?: boolean;
 };
 
 /** The sender the preview renders as — the org's own lockup and footer. */
@@ -66,6 +69,8 @@ export type QueueItem = {
   rel: string;
   overdue: boolean;
   days: number;
+  /** When it goes (epoch ms) — the Workflows status line's "next send". */
+  runAt: number;
 };
 
 export type CrmStats = {
@@ -88,6 +93,8 @@ export type CrmSnapshot = {
   /** A configured Twilio number. Without one the TEXT channel is offered
    *  disabled, with the same note the client message dialog shows. */
   smsEnabled: boolean;
+  /** The server's clock when the snapshot was read — "next send in 5 h". */
+  renderedAt: number;
 };
 
 export const STATUS_ORDER = ['PAID', 'ACCEPTED', 'VIEWED', 'SENT', 'DRAFT', 'DECLINED', 'EXPIRED', 'ARCHIVED'];

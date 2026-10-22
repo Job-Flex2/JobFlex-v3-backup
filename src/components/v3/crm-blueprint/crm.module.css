@@ -1527,6 +1527,25 @@
    collapsing to one column when there isn't room for both.
    ============================================================ */
 .bp :global(.content .wf-cols) { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; align-items: start; }
+/* Workflows status line (crm-behavior renderFuStatus): one framed white line
+   over the rules, a flat square in its tone — no shadow behind it (owner,
+   2026-10-18) — and "Turn on defaults" only while every rule is off. */
+.bp :global(.content .fu-status) {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;
+  margin-bottom: 16px; padding: 10px 16px; min-height: 52px;
+  background: #fff; border: var(--border); border-radius: var(--radius);
+}
+.bp :global(.content .fu-status-txt) { display: flex; align-items: center; gap: 10px; min-width: 0; margin: 0; font-size: 14px; color: var(--ink-soft); }
+.bp :global(.content .fu-status-txt b) { color: var(--ink); font-weight: 700; }
+.bp :global(.content .fu-dot) { width: 8px; height: 8px; flex-shrink: 0; background: var(--success); }
+.bp :global(.content .fu-status.is-off .fu-dot) { background: var(--muted); }
+/* A starter rule's tag: flat, Inter, normal case. */
+.bp :global(.content .rule-def) {
+  display: inline-flex; align-items: center; padding: 1px 6px;
+  border: 1px solid var(--hair); border-radius: var(--radius);
+  font-size: 11px; font-weight: 600; line-height: 16px; letter-spacing: 0; text-transform: none;
+  color: var(--ink-soft);
+}
 .bp :global(.content .prev-card) { overflow: hidden; }
 .bp :global(.content .prev-pick) { flex-shrink: 0; margin-left: auto; }
 .bp :global(.content .prev-pick .bp-sel-in) { height: 34px; padding-left: 10px; font-size: 12.5px; border-color: var(--hair-soft); }
