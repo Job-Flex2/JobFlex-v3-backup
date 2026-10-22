@@ -1,0 +1,245 @@
+/* ============================================================
+   ADMIN · CUSTOMER DEVELOPMENT — BLUEPRINT
+   /admin/customer-development (owner, 2026-10-22)
+   Page vocabulary only; the furniture is admin-influencers/admin-ui.module.css.
+   Every rule is scoped `:global(.jf-blueprint .content) .cls` so it outranks the
+   shell's resets (CLAUDE.md). Tokens only; status colour carries status.
+   ============================================================ */
+
+:global(.jf-blueprint .content) .root, :global(.jf-blueprint .content) .panel { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+/* ── head ── */
+:global(.jf-blueprint .content) .head { align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .lead { margin: 8px 0 0; max-width: 68ch; font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .headActs { display: flex; gap: 8px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .missing { margin: 0; padding: 10px 12px; border: 1.5px solid var(--amber); background: color-mix(in srgb, var(--amber) 10%, #fff); font-size: 13px; color: var(--ink); }
+:global(.jf-blueprint .content) .err { margin: 0 0 12px; padding: 8px 10px; border: 1.5px solid var(--rose); background: color-mix(in srgb, var(--rose) 8%, #fff); font-size: 13px; color: var(--ink); }
+
+/* ── tabs: one white plate, rules between, the picked one blueprint (DESIGN.md filter bar) ── */
+:global(.jf-blueprint .content) .tabs { display: flex; min-width: 0; overflow-x: auto; scrollbar-width: none; border: 1.5px solid var(--ink-line); background: #fff; }
+:global(.jf-blueprint .content) .tabs::-webkit-scrollbar { display: none; }
+:global(.jf-blueprint .content) .tab {
+  flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px;
+  border: 0; border-right: 1px solid var(--ink-line); border-bottom: 2px solid transparent; background: transparent;
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink); white-space: nowrap; cursor: pointer;
+  transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out);
+}
+:global(.jf-blueprint .content) .tab:last-child { border-right: 0; }
+:global(.jf-blueprint .content) .tab i { font-style: normal; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .tab:hover { background: color-mix(in srgb, var(--accent-soft) 50%, #fff); }
+:global(.jf-blueprint .content) .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+:global(.jf-blueprint .content) .tabOn { background: var(--accent-soft); color: var(--accent-ink); border-bottom-color: var(--accent); }
+
+/* ── shared bits ── */
+:global(.jf-blueprint .content) .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+:global(.jf-blueprint .content) .secL { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .mono { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); }
+:global(.jf-blueprint .content) .num { font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--ink); white-space: nowrap; }
+:global(.jf-blueprint .content) .num small { font-size: 11.5px; color: var(--ink-muted); }
+:global(.jf-blueprint .content) .numSoft { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--ink-muted); text-align: right; }
+:global(.jf-blueprint .content) .cellStrong { font-weight: 700; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .note { margin: 14px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .note b { color: var(--ink); }
+:global(.jf-blueprint .content) .callout { margin: 0; padding: 14px 16px; border-left: 3px solid var(--emerald); background: color-mix(in srgb, var(--emerald) 7%, #fff); font-size: 14.5px; line-height: 1.5; color: var(--ink); }
+:global(.jf-blueprint .content) .cardActs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+:global(.jf-blueprint .content) .tblScroll { overflow-x: auto; }
+:global(.jf-blueprint .content) .rowTotal { border-top: 1.5px solid var(--ink); font-weight: 700; }
+:global(.jf-blueprint .content) .more { margin-top: 12px; }
+:global(.jf-blueprint .content) .sheetActs { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .bar { display: block; flex: 1; min-width: 40px; height: 8px; background: color-mix(in srgb, var(--ink) 6%, #fff); }
+:global(.jf-blueprint .content) .barFill { display: block; height: 100%; background: var(--accent); transition: width 240ms var(--ease-out); }
+:global(.jf-blueprint .content) .barFill[data-tone="ok"] { background: var(--emerald); }
+:global(.jf-blueprint .content) .barFill[data-tone="wait"] { background: var(--amber); }
+:global(.jf-blueprint .content) .barFill[data-tone="bad"] { background: var(--rose); }
+:global(.jf-blueprint .content) .barFill[data-tone="mute"] { background: var(--ink-muted); }
+:global(.jf-blueprint .content) .source {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink-soft); white-space: nowrap;
+}
+:global(.jf-blueprint .content) .source::before { content: ""; width: 8px; height: 8px; background: var(--accent); }
+:global(.jf-blueprint .content) .source[data-source="email"]::before { background: var(--ink); }
+:global(.jf-blueprint .content) .source[data-source="cancel"]::before { background: var(--rose); }
+:global(.jf-blueprint .content) .source[data-source="trial"]::before { background: var(--amber); }
+
+/* ── the four steps ── */
+:global(.jf-blueprint .content) .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0; padding: 0; list-style: none; border: 1.5px solid var(--ink); }
+:global(.jf-blueprint .content) .step { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px; border-right: 1px solid var(--ink); background: #fff; }
+:global(.jf-blueprint .content) .step:last-child { border-right: 0; }
+:global(.jf-blueprint .content) .stepNow { background: var(--accent-soft); box-shadow: inset 0 3px 0 var(--accent); }
+:global(.jf-blueprint .content) .stepDone { background: color-mix(in srgb, var(--emerald) 6%, #fff); }
+:global(.jf-blueprint .content) .stepHead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .stepNo { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1.5px solid var(--ink); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .stepName { font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.15; }
+:global(.jf-blueprint .content) .stepQ { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .checks { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+:global(.jf-blueprint .content) .check { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 13px; line-height: 1.35; }
+:global(.jf-blueprint .content) .checkBox { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 1.5px solid var(--ink-muted); font-size: 12px; font-weight: 900; color: #fff; }
+:global(.jf-blueprint .content) .checkMet .checkBox { border-color: var(--emerald); background: var(--emerald); }
+:global(.jf-blueprint .content) .checkLabel { display: block; color: var(--ink); }
+:global(.jf-blueprint .content) .checkNow { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+/* ── funnel and what we have proven ── */
+:global(.jf-blueprint .content) .funnel { display: flex; flex-direction: column; gap: 10px; }
+:global(.jf-blueprint .content) .funnelRow { display: grid; grid-template-columns: minmax(120px, 160px) minmax(0, 1fr) 48px 44px; align-items: center; gap: 12px; }
+:global(.jf-blueprint .content) .funnelLabel { font-size: 13.5px; color: var(--ink); }
+:global(.jf-blueprint .content) .funnelRow .num { text-align: right; font-weight: 700; }
+:global(.jf-blueprint .content) .proven { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1.5px solid var(--ink); }
+:global(.jf-blueprint .content) .provenCell { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-right: 1px solid var(--ink); font-size: 12.5px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .provenCell:last-child { border-right: 0; }
+:global(.jf-blueprint .content) .provenN { font-size: 26px; font-weight: 900; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .provenCell[data-tone="ok"] .provenN { color: var(--emerald); }
+:global(.jf-blueprint .content) .provenCell[data-tone="bad"] .provenN { color: var(--rose); }
+
+/* ── tables ── */
+:global(.jf-blueprint .content) .cohortCols { grid-template-columns: 90px repeat(5, minmax(90px, 1fr)); align-items: center; min-width: 620px; }
+:global(.jf-blueprint .content) .scoreCols { grid-template-columns: 96px repeat(6, minmax(80px, 1fr)); align-items: center; min-width: 660px; }
+:global(.jf-blueprint .content) .segCols { grid-template-columns: minmax(150px, 1.6fr) repeat(7, minmax(78px, 1fr)); align-items: center; min-width: 820px; }
+:global(.jf-blueprint .content) .segName { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+:global(.jf-blueprint .content) .segName .bar { flex: none; width: 100%; height: 5px; }
+:global(.jf-blueprint .content) .tracked { margin-top: 20px; }
+
+/* ── who to talk to ── */
+:global(.jf-blueprint .content) .calls { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+:global(.jf-blueprint .content) .call { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px; border: 1.5px solid var(--ink); background: #fff; }
+:global(.jf-blueprint .content) .callHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+:global(.jf-blueprint .content) .callGroup { flex-basis: 100%; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-ink); }
+:global(.jf-blueprint .content) .callCompany { font-size: 15px; font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .callTrade { font-size: 12.5px; color: var(--ink-muted); }
+:global(.jf-blueprint .content) .callWhy { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-soft); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .callContact { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; font-size: 13px; color: var(--ink); }
+:global(.jf-blueprint .content) .callContact a { color: var(--accent-ink); font-weight: 600; }
+:global(.jf-blueprint .content) .callEmail { color: var(--ink-soft); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .callQs summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--ink); min-height: 32px; display: flex; align-items: center; }
+:global(.jf-blueprint .content) .callQs ol { margin: 4px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .callActs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+:global(.jf-blueprint .content) .callGroupBlock + .callGroupBlock { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .groupWhy { margin: -2px 0 10px; font-size: 13px; color: var(--ink-soft); }
+
+/* ── hypotheses ── */
+:global(.jf-blueprint .content) .hypGroup + .hypGroup { margin-top: 18px; }
+:global(.jf-blueprint .content) .hyps { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .hyp { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 210px; gap: 16px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .hypMain { min-width: 0; }
+:global(.jf-blueprint .content) .hypStatement { margin: 0; font-size: 14.5px; font-weight: 700; line-height: 1.4; color: var(--ink); }
+:global(.jf-blueprint .content) .hypTest { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .hypBar { color: var(--ink-muted); }
+:global(.jf-blueprint .content) .hypNotes { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .hypHist { margin: 6px 0 0; font-size: 12px; color: var(--ink-muted); }
+:global(.jf-blueprint .content) .hypEvidence { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+:global(.jf-blueprint .content) .hypValue { font-size: 13.5px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .hypTalks { font-size: 12.5px; color: var(--ink-muted); }
+:global(.jf-blueprint .content) .plus { color: var(--emerald); }
+:global(.jf-blueprint .content) .minus { color: var(--rose); }
+:global(.jf-blueprint .content) .hypVerdict { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+:global(.jf-blueprint .content) .hypSelect { display: block; width: 100%; }
+:global(.jf-blueprint .content) .hypSelect :global(.bp-sel) { display: block; width: 100%; }
+:global(.jf-blueprint .content) .hypSelect select { width: 100%; }
+:global(.jf-blueprint .content) .histList ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--ink-soft); }
+
+/* ── voice of the customer ── */
+:global(.jf-blueprint .content) .syn { display: flex; flex-direction: column; gap: 14px; }
+:global(.jf-blueprint .content) .synHead { margin: 0; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); font-size: 15px; font-weight: 700; line-height: 1.45; color: var(--ink); }
+:global(.jf-blueprint .content) .synCols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+:global(.jf-blueprint .content) .synList { display: flex; flex-direction: column; gap: 10px; margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
+:global(.jf-blueprint .content) .synN { color: var(--ink-muted); font-size: 12.5px; }
+:global(.jf-blueprint .content) .synDetail { display: block; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .synQuote { display: block; margin-top: 4px; font-style: italic; color: var(--ink); }
+:global(.jf-blueprint .content) .themes { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+:global(.jf-blueprint .content) .theme {
+  display: grid; grid-template-columns: minmax(120px, 160px) minmax(0, 1fr) minmax(120px, auto); align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 4px 8px;
+  border: 0; border-left: 2px solid transparent; background: transparent; font: inherit; text-align: left; cursor: pointer;
+}
+:global(.jf-blueprint .content) .theme:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-soft) 60%, #fff); }
+:global(.jf-blueprint .content) .theme:disabled { cursor: default; opacity: 0.55; }
+:global(.jf-blueprint .content) .theme:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+:global(.jf-blueprint .content) .themeOn { background: var(--accent-soft); border-left-color: var(--accent); }
+:global(.jf-blueprint .content) .themeName { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+:global(.jf-blueprint .content) .themeN { font-size: 14px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+:global(.jf-blueprint .content) .themeN small { font-size: 12px; font-weight: 500; color: var(--ink-muted); }
+:global(.jf-blueprint .content) .tools { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+:global(.jf-blueprint .content) .tools li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--ink-line); font-size: 13.5px; }
+:global(.jf-blueprint .content) .toolName { font-weight: 600; color: var(--ink); }
+:global(.jf-blueprint .content) .toolN { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .pickInline :global(.bp-sel) { display: block; }
+:global(.jf-blueprint .content) .msgs { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .msg { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--ink-line); min-width: 0; }
+:global(.jf-blueprint .content) .msgHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+:global(.jf-blueprint .content) .msgCompany { font-size: 13.5px; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .msgTrade { font-size: 12.5px; color: var(--ink-muted); }
+:global(.jf-blueprint .content) .msgDate { margin-left: auto; font-size: 12.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .msgText { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .msgReasons { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .msgThemes { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ── interviews ── */
+:global(.jf-blueprint .content) .log { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .logRow { display: flex; flex-direction: column; gap: 6px; padding: 14px 0; border-bottom: 1px solid var(--ink-line); min-width: 0; }
+:global(.jf-blueprint .content) .logHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+:global(.jf-blueprint .content) .logDate { font-size: 12.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+:global(.jf-blueprint .content) .logCompany { font-size: 14.5px; font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .logPerson { font-size: 13px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .logKind { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--accent-ink); }
+:global(.jf-blueprint .content) .logFacts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 13px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .logQuote { display: block; font-size: 14px; font-style: italic; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .logHyps { margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .logHyps li[data-effect="supports"] b { color: var(--emerald); }
+:global(.jf-blueprint .content) .logHyps li[data-effect="refutes"] b { color: var(--rose); }
+:global(.jf-blueprint .content) .logActs { display: flex; justify-content: flex-end; }
+
+/* the interview form (in the sheet — the sheet sits under .jf-blueprint .content too) */
+:global(.jf-blueprint .content) .form .hintGap.hintGap { margin-top: 6px; }
+:global(.jf-blueprint .content) .form { display: flex; flex-direction: column; gap: 4px; }
+:global(.jf-blueprint .content) .effects { margin: 8px 0 0; padding: 0; border: 0; }
+:global(.jf-blueprint .content) .effect { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .effectText { font-size: 13px; line-height: 1.4; color: var(--ink); }
+:global(.jf-blueprint .content) .effectBtns { display: inline-flex; border: 1.5px solid var(--ink-line); }
+:global(.jf-blueprint .content) .effectBtn { min-height: 34px; padding: 0 10px; border: 0; background: #fff; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+:global(.jf-blueprint .content) .effectBtn + .effectBtn { border-left: 1px solid var(--ink-line); }
+:global(.jf-blueprint .content) .effectBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+:global(.jf-blueprint .content) .effectOn[data-effect="supports"] { background: color-mix(in srgb, var(--emerald) 14%, #fff); color: var(--ink); box-shadow: inset 0 -2px 0 var(--emerald); }
+:global(.jf-blueprint .content) .effectOn[data-effect="refutes"] { background: color-mix(in srgb, var(--rose) 12%, #fff); color: var(--ink); box-shadow: inset 0 -2px 0 var(--rose); }
+
+/* ── narrower desks ── */
+@media (max-width: 1180px) {
+  :global(.jf-blueprint .content) .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :global(.jf-blueprint .content) .step:nth-child(2) { border-right: 0; }
+  :global(.jf-blueprint .content) .step:nth-child(-n + 2) { border-bottom: 1px solid var(--ink); }
+  :global(.jf-blueprint .content) .hyp { grid-template-columns: minmax(0, 1fr) 200px; }
+  :global(.jf-blueprint .content) .hypEvidence { grid-column: 1; }
+  :global(.jf-blueprint .content) .hypVerdict { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* ── handheld ── */
+@media (max-width: 860px) {
+  :global(.jf-blueprint .content) .two { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .steps { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .step { border-right: 0; border-bottom: 1px solid var(--ink); }
+  :global(.jf-blueprint .content) .step:last-child { border-bottom: 0; }
+  :global(.jf-blueprint .content) .tab { min-height: 44px; flex: 0 0 auto; }
+  :global(.jf-blueprint .content) .tap { min-height: 44px; }
+  :global(.jf-blueprint .content) .headActs { width: 100%; }
+  :global(.jf-blueprint .content) .headActs > * { flex: 1 1 0; min-height: 44px; justify-content: center; }
+  :global(.jf-blueprint .content) .funnelRow { grid-template-columns: minmax(0, 1fr) 44px 40px; }
+  :global(.jf-blueprint .content) .funnelRow .bar { grid-column: 1 / -1; grid-row: 2; }
+  :global(.jf-blueprint .content) .hyp { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  :global(.jf-blueprint .content) .hypEvidence, :global(.jf-blueprint .content) .hypVerdict { grid-column: auto; grid-row: auto; }
+  :global(.jf-blueprint .content) .hypVerdict { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  :global(.jf-blueprint .content) .hypSelect { flex: 1 1 160px; width: auto; }
+  :global(.jf-blueprint .content) .hypSelect select { min-height: 44px; }
+  :global(.jf-blueprint .content) .theme { grid-template-columns: minmax(0, 1fr) auto; min-height: 48px; }
+  :global(.jf-blueprint .content) .theme .bar { grid-column: 1 / -1; grid-row: 2; }
+  :global(.jf-blueprint .content) .calls { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .callQs summary { min-height: 44px; }
+  :global(.jf-blueprint .content) .cardActs { width: 100%; }
+  :global(.jf-blueprint .content) .cardActs > * { flex: 1 1 140px; }
+  :global(.jf-blueprint .content) .pickInline select { min-height: 44px; width: 100%; }
+  :global(.jf-blueprint .content) .effect { grid-template-columns: minmax(0, 1fr); }
+  :global(.jf-blueprint .content) .effectBtn { min-height: 44px; flex: 1; }
+  :global(.jf-blueprint .content) .effectBtns { width: 100%; }
+  :global(.jf-blueprint .content) .msgDate { margin-left: 0; }
+  :global(.jf-blueprint .content) .logKind { margin-left: 0; }
+  :global(.jf-blueprint .content) .sheetActs > * { flex: 1 1 0; min-height: 44px; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.jf-blueprint .content) .tab, :global(.jf-blueprint .content) .barFill { transition: none; }
+}

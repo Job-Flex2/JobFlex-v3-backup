@@ -321,8 +321,10 @@ movement. Handheld website scrolling stays native, as do editable fields,
 nested demonstrations and modal scroll locks.
 Give the space freed by the step strip to the scene. Title the preview "The deck" (or the selected structure), with
 dimensions above compact 3D / Framing plan / House & deck controls. Keep editing
-and adding stairs prominent, playback distinct, and secondary controls under
-View options. Handheld keeps normal page scrolling, a 360px preview, and
+and adding stairs prominent and playback distinct; the view controls (X-ray,
+Connections, Night, Reset view) are always shown on their own line under the
+playback, two by two where the bar is narrow — no View options fold (owner,
+2026-10-21). Handheld keeps normal page scrolling, a 360px preview, and
 44px view controls. Retain the Blueprint palette and ink frames. Use cached
 still images for structure thumbnails in this estimator and defer starting
 layouts until opened. Keep the main 3D scene interactive, rendering on demand
