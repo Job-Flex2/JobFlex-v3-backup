@@ -704,15 +704,14 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const W = x1 - x0;
   const D = y1 - y0;
   let kind: RoofKind = r.kind;
-  let kindNote: string | null = null;
-  let tooWideForHip = false;
-  if (!regular && (kind === "pyramid" || (kind === "hip" && Math.abs(W - D) < 0.5))) kind = "pyramid";
+  const kindNote: string | null = null;
+  // Kept for what reads it: an attached hip is never framed as something else now (2026-10-22).
+  const tooWideForHip = false;
+  // An attached hip stays a hip on any outline (owner, 2026-10-22: "I marked the hip roof but it's not changing in the
+  // 3D"): one that comes out further than half its width is framed with a hip end at the front and a ridge running back
+  // into the house wall (below) — it used to fall back to a gable, and a square one to a pyramid that cannot hang on a wall.
+  if (!regular && (kind === "pyramid" || (kind === "hip" && Math.abs(W - D) < 0.5 && !wall))) kind = "pyramid";
   if (regular && kind === "hip") kind = "pyramid";
-  if (kind === "hip" && wall && W < 2 * (D + ovh) + 12) {
-    kind = "gable";
-    tooWideForHip = true;
-    kindNote = "An attached hip needs the cover at least twice as wide along the house as it comes out from it; this one is framed as a gable.";
-  }
   if (kind === "pyramid" && !regular && Math.abs(W - D) > 0.5) {
     kind = "hip";
   }
@@ -724,6 +723,8 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   const eaveX1 = x1 + ovh;
   const eaveY0 = wall ? y0 : y0 - ovh;
   const eaveY1 = y1 + ovh;
+  /** An attached hip out from the house further than half its width: a hip end at the front, the ridge into the wall. */
+  const deepWallHip = kind === "hip" && wall && eaveX1 - eaveX0 < 2 * (eaveY1 - eaveY0);
   const halfPi = Math.PI / 2;
   const faceSpecs: FaceSpec[] = [];
   let ridgeFrom: V2 | null = null;
@@ -790,6 +791,21 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       ridgeSpanIn = x1 - x0;
       ridgeSupports = "king-king";
     }
+    eaveRing = [{ x: eaveX0, y: eaveY0 }, { x: eaveX1, y: eaveY0 }, { x: eaveX1, y: eaveY1 }, { x: eaveX0, y: eaveY1 }];
+  } else if (kind === "hip" && wall && deepWallHip) {
+    // A DEEP ATTACHED HIP (2026-10-22): out from the house further than half its width. The sides rise to a ridge that
+    // runs square out of the house wall; the front is a hip end, its hips coming in from the front corners at 45°.
+    const We = eaveX1 - eaveX0;
+    const De = eaveY1 - eaveY0;
+    const runIn = We / 2;
+    faceSpecs.push(rectFace("hf", { x: eaveX0, y: eaveY1 }, { x: eaveX1, y: eaveY1 }, { x: 0, y: -1 }, runIn, "apex", "hip", "hip", ovh, We - ovh));
+    faceSpecs.push(rectFace("hl", { x: eaveX0, y: eaveY0 }, { x: eaveX0, y: eaveY1 }, { x: 1, y: 0 }, runIn, "ridge", "wall", "hip", 0, De - ovh));
+    faceSpecs.push(rectFace("hr", { x: eaveX1, y: eaveY1 }, { x: eaveX1, y: eaveY0 }, { x: -1, y: 0 }, runIn, "ridge", "hip", "wall", ovh, De));
+    const cx = (eaveX0 + eaveX1) / 2;
+    ridgeFrom = { x: cx, y: eaveY0 };
+    ridgeTo = { x: cx, y: eaveY1 - runIn };
+    ridgeSpanIn = ridgeTo.y - ridgeFrom.y;
+    ridgeSupports = "wall-king";
     eaveRing = [{ x: eaveX0, y: eaveY0 }, { x: eaveX1, y: eaveY0 }, { x: eaveX1, y: eaveY1 }, { x: eaveX0, y: eaveY1 }];
   } else if (kind === "hip" && wall) {
     const runIn = eaveY1 - eaveY0;
@@ -1062,7 +1078,10 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       const kingLoadLb = totalPsf * (faceSpecs[0].runIn / 12) * (ridgeSpanIn / (gableCross + 1) / 12) * 0.5;
       if (kingLoadLb > footingLimitLb) trusses = { ...trussPlan(acrossRidge, "post"), ridgeSpanIn: Math.round(ridgeSpanIn), kingLoadLb: Math.round(kingLoadLb) };
     }
-    const auto: "beam" | "board" | "none" = kind === "gable" ? "beam" : "board";
+    // A hip whose rafter ties would be longer than stock lumber carries its ridge on a beam instead (2026-10-22): a king
+    // post on a cross beam at each hip end — no ties at all — where a gable would be trussed.
+    const hipNeedsBeam = kind === "hip" && (!wall || deepWallHip) && acrossRidge > STOCK_MAX_IN;
+    const auto: "beam" | "board" | "none" = kind === "gable" || hipNeedsBeam ? "beam" : "board";
     const asked = r.ridge === "auto" || r.ridge === "trusses" ? auto : r.ridge;
     const rk: "beam" | "board" | "none" = kind === "hip" && asked === "none" ? "board" : kind === "gable" && asked === "none" ? "board" : asked;
     if (trusses) {
@@ -1100,7 +1119,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
         // Each cross beam's king post carries a span of ridge: half from each side.
         if (kind === "gable") for (let i = 1; i <= gableCross; i++) crossPlan.push({ ...crossAt(i / (gableCross + 1)), P: wRidge * (spanEach / 12) });
       }
-    } else if (rk === "beam" && kind === "hip" && !wall && ridgeLengthIn > 1) {
+    } else if (rk === "beam" && kind === "hip" && (!wall || deepWallHip) && ridgeLengthIn > 1) {
       // A FREE HIP'S RIDGE BEAM (2026-10-12): it spans between the hips' meeting points, each held up by a king post on a
       // CROSS BEAM from eave header to eave header — the hips then bear on it as the beams designHip takes them for
       // (R802.3), and nothing pushes the headers apart. Until now the "beam" was a doubled board resting on the hips.
@@ -1120,25 +1139,27 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       }
       ridgeBeyond = beyond;
       ridge = { kind: "beam", nominal: pick.spec.stock, lengthIn: ridgeLengthIn, spec: pick.spec, spanIn: Math.round(ridgeLengthIn), maxSpanIn: pick.maxSpanIn, eqJoistSpanFt: Math.round(eq * 10) / 10, fellBack: false };
-      kingPosts = 2;
+      // A deep attached hip's ridge: the house at one end, a king post at the hip end (2026-10-22).
+      kingPosts = deepWallHip ? 1 : 2;
       // On each king post: half the ridge, the tops of the two hips that meet there (2/3 of what each carries — its load
       // rises toward the top) and the top half of the common between them.
       const hipFace0 = faceSpecs.find((fs) => fs.tier === 1 && (fs.sideA === "hip" || fs.sideB === "hip"));
       const hipW = hipFace0 ? designHip(hipFace0.vTopIn, hipFace0.ovhIn, Math.PI / 4, rafterSize, rafterGroup, totalPsf, roofLoad >= 30, ceilingOn).loadLb : 0;
       const P = (wRidge * (ridgeLengthIn / 12)) / 2 + 2 * ((2 * hipW) / 3) + totalPsf * (spacing / 12) * (runFt / 2);
-      crossPlan.push({ ...crossAt(0), P }, { ...crossAt(1), P });
+      if (deepWallHip) crossPlan.push({ ...crossAt(1), P });
+      else crossPlan.push({ ...crossAt(0), P }, { ...crossAt(1), P });
     } else {
       const nominal = oneDeeper(rafterSize);
       ridge = { kind: "board", nominal, lengthIn: ridgeLengthIn, spec: null, spanIn: 0, maxSpanIn: 0, eqJoistSpanFt: 0, fellBack: false };
       // A ridge BOARD holds nothing up (2026-10-12): the rafters that meet on it push their headers apart unless rafter
       // ties hold them, 4 ft on centre at the header line (R802.5.2) — over a gable's whole ridge, and over the stretch
       // where commons meet the ridge on a free hip, a Dutch gable or a gambrel ("a hip roof ties itself" was wrong there).
-      if (kind === "gable" || kind === "gambrel" || kind === "dutch-gable" || (kind === "hip" && !wall)) {
+      if (kind === "gable" || kind === "gambrel" || kind === "dutch-gable" || (kind === "hip" && (!wall || deepWallHip))) {
         ties = Math.floor((kind === "gable" || kind === "gambrel" ? ridgeSpanIn : ridgeLengthIn) / TIE_SPACING_IN) + 1;
         if (acrossRidge > STOCK_MAX_IN) tiesBeyondStock = true;
         // A free hip's end: the common from the end header's middle up to the ridge pushes that header out too — a tie
         // runs from there back to the first rafter tie.
-        if (kind === "hip") hipEndTies = 2;
+        if (kind === "hip") hipEndTies = deepWallHip ? 1 : 2;
       }
     }
   }
@@ -1304,7 +1325,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
       // An eave header carries half its face's run and the overhang when a ridge BEAM takes the other half; under a ridge
       // board with ties, or trusses, nothing at the ridge carries anything — the whole face comes down on this header.
       // So does a free hip's long side under a ridge board (2026-10-12): its commons meet on nothing that holds them up.
-      } else if (face) tribFt = ridge?.kind !== "beam" && (kind === "gable" || (kind === "hip" && !wall && face.top === "ridge")) ? face.vTopIn / 12 : (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
+      } else if (face) tribFt = ridge?.kind !== "beam" && (kind === "gable" || (kind === "hip" && (!wall || deepWallHip) && face.top === "ridge")) ? face.vTopIn / 12 : (face.vTopIn - face.ovhIn) / 2 / 12 + face.ovhIn / 12;
       else if (kind === "gable") {
         // A gable end: the rakes bear on nothing; the king post does, when the ridge is a beam.
         const runFt = faceSpecs[0].runIn / 12;
@@ -2094,13 +2115,16 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
 
   // The ledger on the house, for a shed or an attached hip.
   let ledger: RoofFrame["ledger"] = null;
-  if (wall && (kind === "shed" || kind === "hip")) {
+  if (wall && (kind === "shed" || (kind === "hip" && !deepWallHip))) {
     const nominal = oneDeeper(rafterSize);
     const ld = depthOf(nominal);
     const top1 = faceSpecs.find((f) => f.id === "s" || f.id === "hf")!;
     const zTop = zTopAt(top1.vTopIn, top1.ovhIn, headerTopIn);
-    const lx0 = kind === "shed" ? x0 : ridgeFrom!.x;
-    const lx1 = kind === "shed" ? x1 : ridgeTo!.x;
+    // An attached hip whose hips meet at (or near) one point on the wall still bears their tops on a ledger block: 2 ft at
+    // least, centred on that point (2026-10-22 — it came out 0 in. long when the cover was exactly twice as wide as deep).
+    const mid = kind === "shed" ? 0 : (ridgeFrom!.x + ridgeTo!.x) / 2;
+    const lx0 = kind === "shed" ? x0 : Math.min(ridgeFrom!.x, mid - 12);
+    const lx1 = kind === "shed" ? x1 : Math.max(ridgeTo!.x, mid + 12);
     const L = lx1 - lx0;
     const fasteners = Math.max(4, Math.ceil(L / LEDGER_SCREW_SPACING_IN) * 2);
     ledger = { lengthIn: L, nominal, fasteners, zIn: zTop };
@@ -2377,7 +2401,7 @@ export function buildRoofFrame(design: DeckDesign, species: FramingSpecies, grou
   // (a load rising toward the top); along a hip of slope s·cos a that thrusts out H = (2W/3)/(s·cos a) at its corner, and
   // the two headers meeting there share it as T = H/(2 sin a) — a = 45° on a rectangle, 180°/n on an n-sided ring. A hip
   // on a ridge beam held up by king posts, or on the house wall, pushes nothing out.
-  const thrusting = !!hipDesign && slope > 0 && !wall && (kind === "pyramid" || kind === "double-tier" || kind === "dutch-gable" || (kind === "hip" && !(ridge?.kind === "beam" && crossPlan.length > 0)));
+  const thrusting = !!hipDesign && slope > 0 && (!wall || deepWallHip) && (kind === "pyramid" || kind === "double-tier" || kind === "dutch-gable" || (kind === "hip" && !(ridge?.kind === "beam" && crossPlan.length > 0)));
   const ringAngle = regular ? Math.PI / n : Math.PI / 4;
   const ringTensionLb = thrusting && hipDesign ? Math.round((2 * hipDesign.loadLb) / 3 / (slope * Math.cos(ringAngle)) / (2 * Math.sin(ringAngle))) : 0;
   const rafterCount = commons + jacks + flies;

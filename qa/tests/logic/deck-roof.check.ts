@@ -165,7 +165,9 @@ const base = (over: Over): DeckDesign => {
   // An attached hip too narrow for its hips falls back to a gable and says so.
   const d = base({ structure: "covered-deck", shape: { kind: "rect", widthFt: 12, depthFt: 12 }, roof: { kind: "hip", attach: "wall" } });
   const { roof } = buildStructure(d);
-  check("a 12 x 12 attached hip is framed as a gable, with a note", roof?.kind === "gable" && !!roof.kindNote && roof.flags.tooWideForHip);
+  // 2026-10-22 (owner: "I marked the hip roof but it's not changing in the 3D"): an attached hip of any depth is a hip.
+  const ids = (roof?.faces ?? []).map((f: { id: string }) => f.id).sort().join(",");
+  check("a 12 x 12 attached hip is framed as a hip — a hip end at the front, the ridge into the house wall, no note", roof?.kind === "hip" && !roof.kindNote && !roof.flags.tooWideForHip && ids === "hf,hl,hr" && !!roof.ridge && !roof.ledger, `${roof?.kind} ${ids} ${roof?.kindNote ?? ""}`);
 }
 
 console.log("── a sweep: every structure, shape and size the studio offers");
@@ -190,7 +192,7 @@ console.log("── a sweep: every structure, shape and size the studio offers")
         const pkg = priceDeck(d);
         const roof = pkg.roof!;
         const stock = STOCK_LENGTHS_FT[STOCK_LENGTHS_FT.length - 1] * 12;
-        const badMember = roof.members.find((m) => ![m.cx, m.cy, m.cz, m.sx, m.sy, m.sz, m.yaw, m.tilt, m.lengthIn].every(Number.isFinite) || m.sx <= 0 || m.sy <= 0 || m.sz <= 0 || m.lengthIn <= 0 || (m.lengthIn > stock && !["slat", "ridge", "header", "roof-ledger", "subfascia", "fascia-eave", "gutter", "roof-post", "truss"].includes(m.role)));
+        const badMember = roof.members.find((m) => ![m.cx, m.cy, m.cz, m.sx, m.sy, m.sz, m.yaw, m.tilt, m.lengthIn].every(Number.isFinite) || m.sx <= 0 || m.sy <= 0 || m.sz <= 0 || m.lengthIn <= 0 || (m.lengthIn > stock && !/^LVL/.test(m.nominal) && !["slat", "ridge", "header", "roof-ledger", "subfascia", "fascia-eave", "gutter", "roof-post", "truss"].includes(m.role)));
         if (badMember) trouble.push(`${tag}: ${badMember.role} ${badMember.nominal} ${Math.round(badMember.lengthIn)} in.`);
         if (!(roof.posts.length >= 2) || !roof.headers.length) trouble.push(`${tag}: no posts or headers`);
         if (roof.kind !== "pergola" && !(roof.roofAreaSqFt > roof.footprintSqFt * 0.99)) trouble.push(`${tag}: roof area ${roof.roofAreaSqFt} under its footprint ${roof.footprintSqFt}`);
@@ -208,7 +210,9 @@ console.log("── a sweep: every structure, shape and size the studio offers")
         if (!layers.includes("roof-post") || !layers.includes("rafter")) trouble.push(`${tag}: build order misses the roof`);
         const checks = deckChecks(pkg.structure);
         const fails = checks.filter((c) => c.level === "fail");
-        const allowed = new Set(["header-h1", "header-h2", "header-h3", "header-h4", "header-h5", "header-h6", "header-h7", "header-h8", "ridge", "roof-post-footing", "roof-footings", "footing-size", "post-area", "roof-post-height"]);
+        // A cross beam under a hip's ridge is a header too (2026-10-22: an attached hip is a hip now, and a wide one under
+        // heavy snow can be past the table — said, more posts or an engineer).
+        const allowed = new Set(["header-h1", "header-h2", "header-h3", "header-h4", "header-h5", "header-h6", "header-h7", "header-h8", "header-x1", "header-x2", "roof-engineered", "ridge", "roof-post-footing", "roof-footings", "footing-size", "post-area", "roof-post-height"]);
         for (const c of fails) {
           // A rafter past the table is a true finding when the strip offers the way back (closer spacing) or when even a 2x12 at 12 in. cannot make it.
           if (c.id === "rafter-span" && (c.fix || rafterMaxSpanIn(roof.roofLoad, roof.rafterGroup, "2x12", 12, d.roof.ceiling !== "none") < roof.rafters.spanIn)) continue;

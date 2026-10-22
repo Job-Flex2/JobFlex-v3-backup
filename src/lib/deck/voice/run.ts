@@ -954,19 +954,14 @@ function runRoof(d0: DeckDesign, s: RoofSet, env: RunEnv, settle: (x: DeckDesign
     p.braces = s.braces;
     said.push(s.braces ? "Knee braces at the posts." : "No knee braces at the posts.");
   }
-  let next = patchRoof(d, p, settle);
+  const next = patchRoof(d, p, settle);
   const nr = next.roof;
   if (s.attach && nr.attach !== s.attach) said.push(s.attach === "wall" ? "This roof can't hang on the house — it stands on its own posts." : "It stands on its own posts.");
   else if (s.attach) said.push(nr.attach === "wall" ? "The back of the roof hangs on the house wall." : "On its own posts, free of the house.");
   // What the frame really is: the 3D shows the built roof, so the words say it too.
   let pending: Pending | null = null;
   if (p.kind) {
-    let built = buildStructure(next, { rates: env.rates, market: env.market }).roof;
-    if (p.kind === "hip" && built?.kind === "gable" && next.roof.attach === "wall") {
-      next = patchRoof(next, { attach: "free" }, settle);
-      built = buildStructure(next, { rates: env.rates, market: env.market }).roof;
-      said.push("Against the house a hip needs the cover twice as wide as it is deep, so this one stands on its own posts — a full hip on all four sides.");
-    }
+    const built = buildStructure(next, { rates: env.rates, market: env.market }).roof;
     if (built && built.kind !== p.kind) {
       const W = next.shape.widthFt;
       const D = next.shape.depthFt;
