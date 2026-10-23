@@ -1373,7 +1373,7 @@ export function DeckStudioV4({ initialBook, homeState, initialAddress, clientId,
                   ) : null}
                   {permitHref ? (
                     <a className="v4-pop-link" href={permitHref as Route} target="_blank" rel="noopener" data-deck-permit>
-                      <b>Permit sheet ↗</b>
+                      <b>Permit &amp; build set ↗</b>
                       <span>The framing plan and the code tables it is sized from</span>
                     </a>
                   ) : null}

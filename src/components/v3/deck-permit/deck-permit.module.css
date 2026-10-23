@@ -162,3 +162,8 @@
 @media (max-width: 560px) {
   .sitePanel { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* The roof's framing plan inside the plan set's sheet (2026-10-23). */
+.roofPlan { width: 8.6in; height: 8.9in; display: grid; place-items: center; }
+.roofPlan > svg { width: 100%; height: 100%; }
+.panelActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

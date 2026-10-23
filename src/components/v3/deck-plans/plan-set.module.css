@@ -1,0 +1,152 @@
+/* THE PLAN SET (2026-10-23) — 11 × 17 permit sheets and letter crew sheets.
+   Black ink, one accent (the blueprint blue), lettering sized in points so
+   every sheet reads the same printed. */
+.set {
+  --ink: #0a0a0a; --ink2: #2a2a2a; --mut: #5b5b5b; --mut2: #8a8a8a; --hair: rgba(10,10,10,0.14); --hair2: rgba(10,10,10,0.08);
+  --blue: #1854a0; --blue2: #0e3d7a; --tint: rgba(24,84,160,0.06); --ok: #2c6335; --okSoft: rgba(44,99,53,0.08); --warn: #96691a; --warnSoft: rgba(184,132,32,0.10); --bad: #a83232; --badSoft: rgba(168,50,50,0.08);
+  --font: var(--font-inter), Inter, 'Helvetica Neue', Arial, sans-serif; --mono: var(--font-jbmono), 'JetBrains Mono', ui-monospace, monospace;
+  display: grid; justify-content: center; gap: 18px; color: var(--ink); font-family: var(--font);
+}
+
+/* ── A sheet ─────────────────────────────────────────────────────────── */
+.sheet { position: relative; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.10); border: 1px solid var(--hair); box-sizing: border-box; overflow: hidden; }
+.b { width: 17in; height: 11in; }
+.a { width: 8.5in; height: 11in; }
+/* The border: a binding margin on the left of a permit sheet. */
+.frame { position: absolute; inset: 0.25in 0.25in 0.25in 0.5in; border: 1.6pt solid var(--ink); display: grid; grid-template-columns: minmax(0, 1fr) 2.6in; }
+.a .frame { inset: 0.3in 0.3in 0.3in 0.4in; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+.field { position: relative; min-width: 0; min-height: 0; padding: 0.14in 0.16in; box-sizing: border-box; display: grid; gap: 0.12in; }
+
+/* ── The title block, down the right edge ───────────────────────────── */
+.tb { border-left: 1.6pt solid var(--ink); display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto auto auto; min-height: 0; font-size: 7.5pt; line-height: 1.32; }
+.tbCell { padding: 0.07in 0.1in; border-bottom: 0.6pt solid var(--ink); min-width: 0; }
+.tbKick { font-family: var(--mono); font-size: 5.6pt; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mut); margin-bottom: 2pt; }
+.tbShop { font-size: 11pt; font-weight: 900; letter-spacing: -0.01em; line-height: 1.1; text-transform: uppercase; }
+.tbLine { color: var(--ink2); }
+.tbProject { font-size: 10pt; font-weight: 900; line-height: 1.15; text-transform: uppercase; letter-spacing: -0.005em; }
+.tbIndex { display: grid; grid-template-columns: auto 1fr; column-gap: 6pt; row-gap: 1pt; font-size: 6.6pt; }
+.tbIndex b { font-family: var(--mono); font-weight: 700; }
+.tbIndex .on { font-weight: 800; color: var(--blue); }
+.tbRev { width: 100%; border-collapse: collapse; font-size: 6.2pt; }
+.tbRev th { text-align: left; font-family: var(--mono); font-size: 5.4pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mut); border-bottom: 0.6pt solid var(--ink); padding: 1pt 2pt; }
+.tbRev td { border-bottom: 0.4pt solid var(--hair); padding: 1.5pt 2pt; height: 9pt; }
+.tbStamp { height: 1.55in; display: grid; place-items: center; text-align: center; color: var(--mut2); font-family: var(--mono); font-size: 5.6pt; letter-spacing: 0.14em; text-transform: uppercase; border-bottom: 0.6pt solid var(--ink); background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(10,10,10,0.025) 6px 7px); }
+.tbMeta { display: grid; grid-template-columns: auto 1fr; column-gap: 6pt; font-size: 6.6pt; }
+.tbMeta span { font-family: var(--mono); font-size: 5.6pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mut); align-self: center; }
+.tbMeta b { font-weight: 600; text-align: right; }
+.tbSheet { padding: 0.08in 0.1in 0.1in; }
+.tbSheetName { font-size: 9pt; font-weight: 900; text-transform: uppercase; line-height: 1.15; letter-spacing: 0.01em; }
+.tbSheetNo { font-size: 40pt; font-weight: 900; letter-spacing: -0.04em; line-height: 0.95; margin-top: 4pt; }
+.tbOf { font-family: var(--mono); font-size: 6pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mut); margin-top: 2pt; }
+.tbFine { padding: 0.06in 0.1in; font-size: 5.6pt; line-height: 1.35; color: var(--mut); border-top: 0.6pt solid var(--ink); }
+.tbFine b { color: var(--ink); }
+
+/* ── A view: the drawing over its title (the bubble, the name, the scale) ── */
+.view { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
+.viewBody { display: grid; place-items: center; min-height: 0; min-width: 0; overflow: hidden; }
+.viewBody > svg { display: block; overflow: visible; }
+.viewTitle { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 7pt; padding-top: 4pt; }
+.viewNo { width: 0.34in; height: 0.34in; border: 1.1pt solid var(--ink); border-radius: 50%; display: grid; grid-template-rows: 1fr 1fr; place-items: center; font-weight: 800; font-size: 8.5pt; line-height: 1; position: relative; overflow: hidden; }
+.viewNo::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 0.6pt solid var(--ink); }
+.viewNo i { font-style: normal; font-family: var(--mono); font-size: 5.4pt; font-weight: 600; }
+.viewName { border-bottom: 1.1pt solid var(--ink); font-size: 10pt; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; padding-bottom: 1pt; display: flex; justify-content: space-between; gap: 8pt; }
+.viewScale { font-family: var(--mono); font-size: 6.4pt; font-weight: 600; letter-spacing: 0.06em; color: var(--mut); padding-top: 2pt; }
+
+/* ── Text blocks and schedules ──────────────────────────────────────── */
+.h { font-size: 8pt; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1.1pt solid var(--ink); padding-bottom: 1.5pt; margin: 0 0 3pt; display: flex; justify-content: space-between; gap: 6pt; align-items: baseline; }
+.h span { font-family: var(--mono); font-size: 5.8pt; font-weight: 600; letter-spacing: 0.08em; color: var(--mut); }
+.t { width: 100%; border-collapse: collapse; font-size: 6.6pt; line-height: 1.28; }
+.t th { text-align: left; font-family: var(--mono); font-size: 5.3pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); border-bottom: 0.8pt solid var(--ink); padding: 1.5pt 3pt; vertical-align: bottom; }
+.t td { border-bottom: 0.4pt solid var(--hair); padding: 1.6pt 3pt; vertical-align: top; }
+.t td.n, .t th.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.t td.c, .t th.c { text-align: center; }
+.t td.k { font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+.t tr.sub td { background: var(--tint); font-weight: 700; }
+.rule { font-family: var(--mono); font-size: 5.6pt; color: var(--blue); }
+.ok { color: var(--ok); font-weight: 800; font-family: var(--mono); font-size: 6pt; }
+.bad { color: var(--bad); font-weight: 800; font-family: var(--mono); font-size: 6pt; }
+.warn { color: var(--warn); font-weight: 800; font-family: var(--mono); font-size: 6pt; }
+.bar { display: inline-block; height: 4pt; background: var(--hair2); width: 34pt; position: relative; vertical-align: middle; margin-right: 3pt; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); }
+.bar i.hi { background: var(--warn); }
+.notes { margin: 0; padding-left: 11pt; font-size: 6.6pt; line-height: 1.36; }
+.notes li { margin-bottom: 2pt; break-inside: avoid; }
+.notes2 { columns: 2; column-gap: 0.18in; }
+.notes3 { columns: 3; column-gap: 0.18in; }
+.small { font-size: 6pt; color: var(--mut); line-height: 1.35; }
+.kv { width: 100%; border-collapse: collapse; font-size: 7pt; line-height: 1.3; }
+.kv th { text-align: left; width: 1.05in; font-family: var(--mono); font-size: 5.6pt; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); font-weight: 600; padding: 1.5pt 4pt 1.5pt 0; vertical-align: top; }
+.kv td { border-bottom: 0.4pt solid var(--hair); padding: 1.5pt 0; }
+
+/* ── Sheet layouts ──────────────────────────────────────────────────── */
+.foundation { grid-template-columns: minmax(0, 1fr) 4.15in; grid-template-rows: minmax(0, 1fr); }
+.stack2 { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.sections { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+.details { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
+.detail { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 3pt; min-height: 0; min-width: 0; border-bottom: 0.6pt solid var(--hair); padding-bottom: 3pt; }
+.detail .notes { font-size: 6pt; }
+.cover { grid-template-columns: minmax(0, 1fr) 4.5in; }
+.coverMain { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 4pt; min-width: 0; min-height: 0; }
+.coverKick { font-family: var(--mono); font-size: 7pt; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--blue); }
+.coverTitle { font-size: 24pt; font-weight: 900; line-height: 1.02; letter-spacing: -0.02em; text-transform: uppercase; text-wrap: balance; }
+.coverAddr { font-size: 10pt; font-weight: 600; color: var(--ink2); }
+.coverPic { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; border: 0.8pt solid var(--hair); background: linear-gradient(180deg, #f6f8fb 0%, #ffffff 70%); }
+.coverIso { width: 100%; height: 100%; min-height: 0; display: block; }
+.coverIsoSmall { width: 100%; height: 1.75in; display: block; }
+.coverPicNote { font-family: var(--mono); font-size: 5.6pt; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); padding: 2pt 5pt 3pt; }
+.coverRow { display: grid; grid-template-columns: 3.1in minmax(0, 1fr); gap: 0.16in; align-items: start; }
+.coverFrame { border: 0.8pt solid var(--hair); }
+.warnRow td { background: var(--warnSoft); }
+.notesSheet { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+.notesCol { min-width: 0; min-height: 0; overflow: hidden; display: grid; align-content: start; gap: 2pt; }
+.legendBox { display: grid; justify-items: start; }
+.abbr { display: grid; grid-template-columns: repeat(3, auto 1fr); column-gap: 5pt; row-gap: 1pt; font-size: 6.2pt; }
+.abbr b { font-family: var(--mono); font-weight: 700; }
+.mut { color: var(--mut); font-weight: 800; font-family: var(--mono); font-size: 6pt; }
+.mutText { color: var(--mut); }
+.schedules { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 3.3in; }
+.strip { border-top: 1.4pt solid var(--ink); display: grid; grid-template-columns: 1.6fr 2.2fr 1.2fr; gap: 0.12in; padding: 0.07in 0.12in; font-size: 7pt; }
+.strip > div { min-width: 0; }
+.stripShop { font-size: 9pt; font-weight: 900; text-transform: uppercase; line-height: 1.1; }
+.stripProject { font-size: 8.5pt; font-weight: 900; text-transform: uppercase; line-height: 1.15; }
+.stripSheet { text-align: right; }
+.stripNo { font-size: 24pt; font-weight: 900; letter-spacing: -0.03em; line-height: 1; }
+.crewCover { grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.crewTitle { font-size: 17pt; font-weight: 900; line-height: 1.05; text-transform: uppercase; letter-spacing: -0.015em; text-wrap: balance; margin-top: 2pt; }
+.crewPic { min-height: 0; border: 0.8pt solid var(--hair); background: linear-gradient(180deg, #f6f8fb 0%, #ffffff 70%); display: grid; }
+.crewCol { grid-template-rows: auto minmax(0, 1fr); align-content: start; }
+.bigGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1.1pt solid var(--ink); border-left: 0.6pt solid var(--hair); }
+.bigCell { border-right: 0.6pt solid var(--hair); border-bottom: 0.6pt solid var(--hair); padding: 4pt 6pt 5pt; display: grid; gap: 1pt; }
+.bigCell span { font-family: var(--mono); font-size: 5.6pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mut); }
+.bigCell b { font-size: 14pt; font-weight: 900; letter-spacing: -0.01em; line-height: 1.05; }
+.seq { display: grid; gap: 0.08in; align-content: start; }
+.phase { border: 0.8pt solid var(--ink); padding: 5pt 8pt 6pt; break-inside: avoid; }
+.phaseHead { font-size: 9pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; display: flex; gap: 6pt; align-items: baseline; }
+.phaseHead b { font-family: var(--mono); color: var(--blue); }
+.phase ul { list-style: none; margin: 3pt 0 0; padding: 0; display: grid; gap: 2pt; font-size: 7.2pt; line-height: 1.35; }
+.phase li { display: grid; grid-template-columns: 12pt 1fr; }
+.box { font-size: 9pt; line-height: 1; }
+.hold { margin-top: 4pt; padding: 2pt 6pt; background: var(--warnSoft); border-left: 3pt solid var(--warn); font-family: var(--mono); font-size: 6.4pt; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.signCell { width: 0.55in; border-left: 0.4pt solid var(--hair); }
+.side { display: grid; gap: 0.1in; align-content: start; min-width: 0; min-height: 0; overflow: hidden; }
+
+/* ── Screen only: the toolbar above the set ─────────────────────────── */
+.drawing { width: 17in; max-width: 100%; height: 3in; display: grid; place-items: center; background: #fff; border: 1px solid var(--hair); font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mut); }
+.toolbar { max-width: 17in; width: 100%; box-sizing: border-box; margin: 0 auto; background: #fff; border: 2px solid var(--ink); padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.seg { display: inline-grid; grid-auto-flow: column; border: 2px solid var(--ink); }
+.seg button { height: 32px; padding: 0 14px; border: 0; border-left: 1px solid var(--hair); background: #fff; font: 800 11px/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; color: var(--ink); }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+
+@media print {
+  .set { display: block; gap: 0; zoom: 1 !important; }
+  .sheet { box-shadow: none; border: 0; break-after: page; page-break-after: always; }
+  .sheet:last-child { break-after: auto; page-break-after: auto; }
+  .drawing { width: 17in; max-width: 100%; height: 3in; display: grid; place-items: center; background: #fff; border: 1px solid var(--hair); font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mut); }
+.toolbar { display: none !important; }
+  /* Each sheet prints on its own paper: the permit set on 11 × 17, the crew's set on letter. */
+  .b { page: jfPlanB; }
+  .a { page: jfPlanA; }
+}
+@page jfPlanB { size: 17in 11in; margin: 0; }
+@page jfPlanA { size: 8.5in 11in; margin: 0; }

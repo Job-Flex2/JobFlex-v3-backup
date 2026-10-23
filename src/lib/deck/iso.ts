@@ -80,7 +80,7 @@ export interface IsoOptions {
 
 const DEFAULT_SKIP: readonly SceneLayer[] = ["wire", "hardware", "blocking", "footing"];
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 type RGB = [number, number, number];
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -254,7 +254,7 @@ const Y: V3 = [0, 1, 0];
  *  Sloped members and braces come from the shared `memberBoxCorners`, so their ends are SAWN — plumb
  *  rafter tails that tuck under the roofing instead of poking through it as teeth, braces plumb at the
  *  post and level under the beam — and the WebGL viewer cuts them from the same corners. */
-function boxSolid(b: number[], role: string | null): V3[][] {
+export function boxSolid(b: number[], role: string | null): V3[][] {
   const cut = memberBoxCorners(b, role);
   if (cut) return MEMBER_BOX_FACES.map((f) => f.map((i) => cut[i] as V3));
   const [, cx, cy, cz, sx, sy, sz, , yaw, tilt] = b;

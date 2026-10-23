@@ -3095,7 +3095,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
             <div className={s.rowActs}>
               {permitHref ? (
                 <a className={cx(s.btn)} href={permitHref as Route} target="_blank" rel="noopener" data-deck-permit>
-                  Permit sheet
+                  Permit &amp; build set
                 </a>
               ) : null}
               {linked && !linked.lock ? (
