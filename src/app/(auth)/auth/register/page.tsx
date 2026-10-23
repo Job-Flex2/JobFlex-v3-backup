@@ -32,7 +32,12 @@ import { detectInAppBrowser } from "@/lib/inAppBrowser";
 import { signupTrialOffer } from "@/lib/trialOfferServer";
 import { readPendingSignup } from "@/actions/signupCheckout";
 import { TrialOfferProvider } from "@/components/providers/trial-offer";
-import { readSignupFlow, signupTrialMode } from "@/lib/trialPolicyServer";
+import { readSignupFlow, readSignupView, signupTrialMode } from "@/lib/trialPolicyServer";
+import { SIGNUP_VIEW_COOKIE, resolveSignupView, signupViewCoin } from "@/lib/signupView";
+import { identityFromCookie } from "@/lib/traffic-capture-server";
+import { clientIp } from "@/lib/rateLimit";
+import { SignupAppPreview } from "@/components/v3/auth-register-blueprint/app-preview";
+import { SignupViewBeacon } from "@/components/v3/auth-register-blueprint/signup-view-beacon";
 import { SIGNUP_MODE_COOKIE, resolveSignupMode } from "@/lib/signupMode";
 import { OTP_DRAFT_COOKIE, draftRestore } from "@/lib/signupOtp";
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from "@/lib/disposableEmail";
@@ -220,12 +225,24 @@ export default async function RegisterPage({
   const e1 = typeof sp.e1 === "string" ? STEP1_REFUSALS[sp.e1] : undefined;
   const step1Prefill = e1 ? { name: typeof sp.name === "string" ? sp.name.slice(0, 120) : "", email: typeof sp.email === "string" ? sp.email.slice(0, 200) : "" } : null;
   const pendingToken = typeof sp.signup === "string" ? sp.signup : (otpRestore?.signupToken ?? null);
+  const pending = pendingToken ? await readPendingSignup(pendingToken) : null;
+  /* THE SIGN-UP SCREEN (owner, 2026-10-22, lib/signupView): the page as built, or the same form in the middle of a
+     picture of the app — the overview with sample work for the trade they came in on, nothing to click. The owner's
+     switch, a `?view=` link, and under the half-and-half split the screen this browser was given. Only the drawing
+     changes: every step, check and redirect above is the same in both. */
+  const viewSetting = await readSignupView();
+  const visitor = identityFromCookie(jar.get(`ph_${process.env.NEXT_PUBLIC_POSTHOG_KEY}_posthog`)?.value, "")?.distinctId ?? `${await clientIp()}|${(await headers()).get("user-agent") ?? ""}`;
+  const viewChoice = resolveSignupView(viewSetting.mode, sp.view, jar.get(SIGNUP_VIEW_COOKIE)?.value, signupViewCoin(visitor));
+  const appView = viewChoice.view === "app";
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: STEP1_PRELUDE }} />
-      <TrialOfferProvider trackExposure={false} offer={(pendingToken ? (await readPendingSignup(pendingToken))?.trialOffer : null) ?? await signupTrialOffer()}>
+      {appView ? <SignupAppPreview trade={industry ?? pending?.landingIndustry ?? null} name={google?.name ?? setup?.name ?? pending?.name ?? null} /> : null}
+      <SignupViewBeacon view={viewChoice.view} source={viewChoice.source} />
+      <TrialOfferProvider trackExposure={false} offer={pending?.trialOffer ?? await signupTrialOffer()}>
       <RegisterResponsive
         requiresCard={requiresCard}
+        appView={appView}
         steps={signupFlow.steps}
         mode={mode}
         autoPlan={autoPlan}

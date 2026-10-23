@@ -28,6 +28,7 @@ import { isQaEmail } from "@/lib/qaEmail";
 import { readAttributionCookie } from "@/lib/attribution";
 import { captureTrafficEvent, identityFromCookie } from "@/lib/traffic-capture-server";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
+import { SIGNUP_VIEW_COOKIE } from "@/lib/signupView";
 import { startQuickSignup } from "@/actions/signupOtp";
 
 export const runtime = "nodejs";
@@ -89,12 +90,15 @@ async function handOff(
     return go(register({ signup: token, checkout: "failed", ...(reason === "plan_pick" ? { plan: planSlug } : {}) }));
   }
   if (tracked) {
+    // The sign-up screen this browser was drawn (lib/signupView): the browser's events carry it as a super property.
+    const view = (await cookies()).get(SIGNUP_VIEW_COOKIE)?.value?.replace(/!$/, "");
+    const signupView = view === "app" || view === "page" ? view : null;
     after(async () => {
-      const props = { reason, plan: planSlug, interval, plan_mode: reason === "plan_pick" ? "pick" : "auto" };
+      const props = { reason, plan: planSlug, interval, plan_mode: reason === "plan_pick" ? "pick" : "auto", signup_view: signupView };
       await Promise.all([
         captureTrafficEvent(identity, TRAFFIC_EVENTS.checkoutRedirect, props),
         // The funnel's own step, as the browser used to send it when it had the URL in hand.
-        captureTrafficEvent(identity, TRAFFIC_EVENTS.opened, { plan: planSlug, interval, plan_mode: props.plan_mode, flow: reason === "google" ? "google" : "otp" }),
+        captureTrafficEvent(identity, TRAFFIC_EVENTS.opened, { plan: planSlug, interval, plan_mode: props.plan_mode, flow: reason === "google" ? "google" : "otp", signup_view: signupView }),
       ]);
     });
   }

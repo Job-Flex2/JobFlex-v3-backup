@@ -1,7 +1,8 @@
 "use server";
 // THE TRIAL CARD SWITCH (2026-10-07) — platform admin only; lib/trialPolicyServer.
 import { requirePlatformAdmin } from "@/lib/orgContext";
-import { resetTrialPolicy, setSignupPlan, setSignupSteps, setTrialRequiresCard, signupTrialState, type SignupFlow, type SignupPlanSetting, type SignupTrialState } from "@/lib/trialPolicyServer";
+import { resetTrialPolicy, setSignupPlan, setSignupSteps, setSignupView, setTrialRequiresCard, signupTrialState, type SignupFlow, type SignupPlanSetting, type SignupTrialState, type SignupViewSetting } from "@/lib/trialPolicyServer";
+import { isSignupViewMode } from "@/lib/signupView";
 
 type Result = { ok: true; policy: SignupTrialState } | { ok: false; error: string };
 
@@ -42,6 +43,17 @@ export async function setSignupPlanAction(input: Record<string, unknown> = {}): 
   if (input.mode !== "auto" && input.mode !== "pick") return { ok: false, error: "Pick how the plan is chosen." };
   try {
     return { ok: true, plan: await setSignupPlan(input.mode, admin.name || admin.email || null) };
+  } catch {
+    return { ok: false, error: "The switch could not be saved. Try again." };
+  }
+}
+
+/** The sign-up screen: the page, inside the app, or half and half (lib/signupView). */
+export async function setSignupViewAction(input: Record<string, unknown> = {}): Promise<{ ok: true; view: SignupViewSetting } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  if (!isSignupViewMode(input.mode)) return { ok: false, error: "Pick the sign-up screen." };
+  try {
+    return { ok: true, view: await setSignupView(input.mode, admin.name || admin.email || null) };
   } catch {
     return { ok: false, error: "The switch could not be saved. Try again." };
   }

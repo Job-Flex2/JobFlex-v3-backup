@@ -101,8 +101,11 @@ function RegisterSwitch({
   mode,
   otpRestore,
   autoPlan,
+  appView = false,
 }: {
   mode: SignupMode;
+  /** The sign-up screen is "inside the app" (lib/signupView): the form is a card over the app's picture. */
+  appView?: boolean;
   autoPlan: AutoPlanOffer | null;
   otpRestore: OtpRestore | null;
   offerCustom: boolean;
@@ -145,7 +148,7 @@ function RegisterSwitch({
   void isHandheld;
   void params;
   return <RegisterContent setup={setup} google={google} industry={industry} spotlight={spotlight}
-        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} prefill={prefill} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />;
+        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} prefill={prefill} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} appView={appView} />;
 }
 
 // NO SUSPENSE BOUNDARY (2026-10-19). The page is dynamic (it reads cookies and
@@ -170,7 +173,10 @@ export function RegisterResponsive({
   mode = "password",
   otpRestore = null,
   autoPlan = null,
+  appView = false,
 }: {
+  /** The sign-up screen is "inside the app" (lib/signupView): the form is a card over the app's picture. */
+  appView?: boolean;
   /** The sign-up's mode (lib/signupMode): password as built, or passwordless. */
   mode?: SignupMode;
   /** Straight to Professional (lib/signupAutoPlan): the plan the server picked, or null for the plan cards. */
@@ -202,6 +208,6 @@ export function RegisterResponsive({
 }) {
   return (
     <RegisterSwitch setup={setup} google={google} industry={industry} spotlight={spotlight}
-        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} prefill={prefill} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} />
+        edition={edition} utm={utm} inAppBrowser={inAppBrowser} requiresCard={requiresCard} initialError={initialError} prefill={prefill} offerCustom={offerCustom} steps={steps} mode={mode} autoPlan={autoPlan} otpRestore={otpRestore} appView={appView} />
   );
 }

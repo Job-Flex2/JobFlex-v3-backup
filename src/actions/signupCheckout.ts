@@ -32,7 +32,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { ensureDefaultFollowUpRules } from "@/lib/followUps/defaults";
-import { TRADE_TYPES } from "@/lib/tradeTypes";
+import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
 import type Stripe from "stripe";
 import { bindAttributionToOrg } from "@/lib/attribution";
 import { syncSubscriptionFromStripe } from "@/lib/stripeSync";
@@ -226,6 +226,10 @@ export async function startPendingSignup(raw: unknown): Promise<{ ok: true; toke
 /** Read a live intent, or null when it is missing or stale. */
 export async function readPendingSignup(token: string): Promise<{
   email: string;
+  /** The person's name and the trade they arrived on: the app behind the sign-up (lib/signupView) keeps showing them
+   *  after a trip to the card page and back. */
+  name: string;
+  landingIndustry: TradeType | null;
   businessName: string;
   trialOffer: TrialOffer;
   customPages: string[];
@@ -235,6 +239,8 @@ export async function readPendingSignup(token: string): Promise<{
   return rec
     ? {
         email: rec.email,
+        name: rec.name,
+        landingIndustry: rec.landingIndustry ?? null,
         businessName: rec.businessName,
         trialOffer: storedTrialOffer(rec.trialOffer),
         customPages: normalizeCustomPages(rec.customPages),

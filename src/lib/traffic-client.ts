@@ -37,6 +37,7 @@ export function trafficReady(instance?: PostHog) {
   if (instance) client = instance;
   if (!client) return;
   applyMember();
+  applySignupView();
   const first = !available;
   available = true;
   if (first && typeof performance !== "undefined") readyAt = Math.round(performance.now());
@@ -100,7 +101,7 @@ function flushByBeacon() {
   const batch = queued.splice(0).map((q) => ({
     event: q.event,
     // No instance, so no parsed frames: type and message are what the beacon carries.
-    properties: { ...(q.error ? { $exception_list: [{ type: q.error.name, value: q.error.message, mechanism: { handled: true, synthetic: false } }], $exception_level: "error" } : {}), ...q.properties, $pathname: path, $current_url: window.location.href.split("#")[0], $lib: "web", $lib_version: "beacon", distinct_id: id, jf_hostname: window.location.hostname },
+    properties: { ...(q.error ? { $exception_list: [{ type: q.error.name, value: q.error.message, mechanism: { handled: true, synthetic: false } }], $exception_level: "error" } : {}), ...(signupView ? { signup_view: signupView } : {}), ...q.properties, $pathname: path, $current_url: window.location.href.split("#")[0], $lib: "web", $lib_version: "beacon", distinct_id: id, jf_hostname: window.location.hostname },
     timestamp: now,
   }));
   try {
@@ -154,6 +155,19 @@ export function setTrafficMember(organizationId: string | null, userId: string |
   if (member && member.org === organizationId && member.user === userId) return;
   member = { org: organizationId, user: userId };
   applyMember();
+}
+
+/* THE SIGN-UP SCREEN (2026-10-22, lib/signupView): the screen this visitor's sign-up was drawn in — the page or the
+   app — rides on every later event as a super property, so any step on the traffic page can be split by it. */
+let signupView: string | null = null;
+function applySignupView() {
+  if (!client || !signupView) return;
+  try { client.register({ signup_view: signupView }); } catch { /* analytics never breaks the app */ }
+}
+export function setTrafficSignupView(view: "app" | "page") {
+  if (signupView === view) return;
+  signupView = view;
+  applySignupView();
 }
 
 /** /dashboard/proposals/cmf3k2… → /dashboard/proposals/[id]; portal tokens fold the same way. */
