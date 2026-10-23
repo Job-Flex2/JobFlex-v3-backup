@@ -7,7 +7,8 @@
 //     and 1440 (desktop);
 //   · the same email path in Instagram's webview, iOS and Android user agents (no Google
 //     button on step 1 there);
-//   · the Google buttons (landing at 1440, step 1 at 390) hand off to accounts.google.com;
+//   · the Google buttons (step 1 at 1440, reached by the hero's CTA — the hero has none of its own —
+//     and step 1 at 390) hand off to accounts.google.com;
 //   · THE BRAKE: with one IP + User-Agent pair at its twenty step 2s for the hour
 //     (lib/signupBrake, 2026-10-10; it was five per IP), the next shows the brake's own
 //     words — "Too many sign-ups…" — not a React error; the same IP in another browser
@@ -207,14 +208,19 @@ async function brake(browser: any, ip: string) {
   }
 }
 
-/** The Google buttons hand off to Google: the landing's at 1440, step 1's at 390. */
+/** The Google buttons hand off to Google. The landing's hero has had no Google button since 2026-10-19 (one CTA,
+ *  hero.tsx): at 1440 the hero's CTA opens step 1 and step 1's button is pressed; at 390, step 1's straight away. */
 async function google(browser: any) {
-  for (const [kind, where] of [["desk", "landing"], ["phone", "step 1"]] as Array<[Kind, string]>) {
+  for (const [kind, where] of [["desk", "landing → step 1"], ["phone", "step 1"]] as Array<[Kind, string]>) {
     const v = await visitor(browser, kind, newIp());
     try {
-      await v.page.goto(`${BASE}/${where === "landing" ? "" : "auth/register"}`, { waitUntil: "load", timeout: 180000 });
+      if (kind === "desk") {
+        await landingToRegister(v, "");
+        const ghost = await v.page.locator("button.lp-cta--ghost").count();
+        check("landing hero (1440): one CTA, no Google button", ghost === 0, `${ghost} found`);
+      } else await v.page.goto(`${BASE}/auth/register`, { waitUntil: "load", timeout: 180000 });
       v.step(`${where} Google`);
-      const btn = where === "landing" ? v.page.locator("button.lp-cta--ghost").filter({ visible: true }).first() : v.page.locator("#googleBtn");
+      const btn = v.page.locator("#googleBtn").filter({ visible: true }).first();
       await btn.waitFor({ timeout: 60000 });
       await v.page.waitForTimeout(800);
       await btn.click();

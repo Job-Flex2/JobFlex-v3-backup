@@ -19,7 +19,7 @@ export function DeckComingSoon() {
       <div className={s.pageHead}>
         <div>
           <div className={s.kicker}>Automation · Estimating</div>
-          <h1 className={s.pageTitle}>Deck estimator</h1>
+          <h1 className={s.pageTitle}>Deck Studio</h1>
         </div>
       </div>
       <section className={`${s.card} ${s.soonCard}`} aria-label={open ? "Part of Deck Studio" : "Deck Studio — coming soon"}>

@@ -35,7 +35,7 @@ import type { LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "JobFlex · Deck Estimator",
+  title: "JobFlex · Deck Studio",
   description: "Deck estimator — size the deck, frame it to the code tables, watch it build in 3D, and price the material package.",
 };
 

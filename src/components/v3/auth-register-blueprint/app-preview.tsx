@@ -68,7 +68,7 @@ function Ic({ id, className }: { id: string; className?: string }) {
 
 /* THE WHOLE SIDEBAR (owner, 2026-10-22: "make sure the sidebar is shown in full"): every section and row of the app's
    own (blueprint-shell/nav-map NAV_SECTIONS), in the owner's order and words — the tools in their colours
-   (globals.css --tool-*), "Deck" as the sidebar shortens it. Rows share the window's height, so all of it is in view. */
+   (globals.css --tool-*), "Deck Studio" as the sidebar names it. Rows share the window's height, so all of it is in view. */
 type Row = { icon: string; label: string; on?: boolean; badge?: boolean; tone?: string; fold?: boolean };
 const NAV: Array<{ label: string; rows: Row[] }> = [
   {
@@ -93,7 +93,7 @@ const NAV: Array<{ label: string; rows: Row[] }> = [
       { icon: "i-fence", label: "Fence estimator", tone: "#2c7a5a", fold: true },
       { icon: "i-video", label: "Video estimator", tone: "#b8406a" },
       { icon: "i-heatpump", label: "HVAC estimator", tone: "#0d7a8a", fold: true },
-      { icon: "i-deck", label: "Deck", tone: "#a0582a", fold: true },
+      { icon: "i-deck", label: "Deck Studio", tone: "#a0582a", fold: true },
     ],
   },
   {

@@ -2927,7 +2927,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
     <div className={cx("jf-deck-v1", fullView && "is-full-view")} ref={studioRef} data-nest>
       <header className="v1-top">
         <div className="v1-title-row">
-          <h1 className="v1-title">Deck estimator</h1>
+          <h1 className="v1-title">Deck Studio</h1>
           <div className="v1-job-side">
             {saveState === "failed" ? <span className="v1-save-error" role="alert">Could not save</span> : null}
             <div className="v1-pop-wrap">
