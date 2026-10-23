@@ -1,25 +1,23 @@
 // THE HOUSE BUILT FROM ITS PHOTO (2026-10-23). Pure. Owner: "the client will just give the back wall picture where the
 // deck will be, and we just upload it, and it just takes the shapes and move it into our 3D shaper … preliminary
-// already pre-built the back wall, and then the only thing needed is just to adjust maybe sizing, how deep is it". And
-// the same afternoon: "if picture comes with a roof, with the porch roof, and old deck, show it on the 3D shaper as
-// well … some clients will say that deck should be demolished, and the roof … with one click you just remove it and
-// build new one".
+// already pre-built the back wall, and then the only thing needed is just to adjust maybe sizing, how deep is it". Only
+// the house itself — "read just a shape of that back wall and don't show existing deck or porch roofs, just shape and
+// windows" (the same day).
 //
 // From the read (lib/deck/houseRead, in the picture's own fractions) and the picture's size:
 //   · the SCALE — a wall width the contractor typed, else a measure drawn on the picture, else the back door's 80 in.,
 //     else the wall's storeys to the eave (the roughest: said so);
 //   · the WALL — its width, its steps (in the deck's feet, as the house keeps them), its storeys, its roof, what it is
 //     clad in, bump-outs as tall as the house when an upper window stands in one;
-//   · the DECK on it — centred on the back door, else on the old deck it replaces, else under the patio roof, else on
-//     the slab, else in the middle; the wall's reach past each end from there;
+//   · the DECK on it — centred on the back door, else on a patio at the wall's base, else in the middle; the wall's
+//     reach past each end from there;
 //   · the WINDOWS and DOORS where they are, their sizes and heights;
-//   · what STANDS THERE now — the old deck, the patio roof, the slab — each to keep or tear out;
 //   · the deck's height from the door's threshold (an inch below it), when there is a door;
 //   · what was seen, what was guessed, and what to check, in words.
 // The same read and the same picture always build the same house, so the QA script can prove it.
 
 import { baseYAt, DOOR_HEIGHT_FT, JOG_DEFAULT_FT, scaleFromRead, type PhotoScale } from "./photoFit";
-import { HOUSE_LIMITS, OPENING_LIMITS, isHouseHex, wallParts, type HouseDesign, type HouseExisting, type HouseHex, type HouseJog, type HouseMaterial, type HouseOpening, type HousePhoto, type HouseRoof } from "./house";
+import { HOUSE_LIMITS, OPENING_LIMITS, isHouseHex, wallParts, type HouseDesign, type HouseHex, type HouseJog, type HouseMaterial, type HouseOpening, type HousePhoto, type HouseRoof } from "./house";
 import type { HouseRead } from "./houseRead";
 
 export interface PhotoHouseInput {
@@ -56,7 +54,7 @@ export interface PhotoHouse {
   /** Where the deck's left end stands along the wall from its left corner, ft. */
   deckAtFt: number;
   /** What the deck was centred on. */
-  centredOn: "door" | "old deck" | "patio roof" | "patio" | "middle";
+  centredOn: "door" | "patio" | "middle";
   /** The deck's floor an inch below the back door's threshold, inches — null without a door. */
   heightIn: number | null;
   facts: PhotoFact[];
@@ -88,13 +86,11 @@ export function houseScale(read: HouseRead, photoW: number, photoH: number, wall
   return { pxPerFt: s.pxPerFt, by: s.by === "line" ? "line" : s.by === "door" ? "door" : s.by === "eave" ? "eave" : "none" };
 }
 
-const ROOF_OF: Record<NonNullable<HouseRead["roof"]["kind"]>, HouseRoof> = { hip: "hip", "gable-side": "gable", "gable-end": "gable", shed: "hip", flat: "hip" };
+const ROOF_OF: Record<NonNullable<HouseRead["roof"]["kind"]>, HouseRoof> = { hip: "hip", "gable-side": "gable", "gable-end": "gable-end", shed: "shed", flat: "flat" };
 const MATERIAL_OF: Record<NonNullable<HouseRead["material"]>, HouseMaterial> = { lap: "lap", brick: "brick", stucco: "stucco", "board-batten": "board-batten", stone: "stone", shingle: "lap" };
 const ROOF_WORDS: Record<NonNullable<HouseRead["roof"]["kind"]>, string> = { hip: "hip roof", "gable-side": "gable roof, the ridge along this wall", "gable-end": "gable roof, its end facing the yard", shed: "shed roof", flat: "flat roof" };
 const MATERIAL_WORDS: Record<NonNullable<HouseRead["material"]>, string> = { lap: "lap siding", brick: "brick", stucco: "stucco", "board-batten": "board and batten", stone: "stone", shingle: "shingle siding" };
 
-/** How deep an old deck, a patio roof and a slab are drawn when the picture cannot say (it is taken square on). */
-const DEPTH_GUESS_FT = 10;
 
 /** The house the photo shows, with the deck set on its wall. Null when nothing in the picture gives a size. */
 export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
@@ -122,19 +118,15 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   const within = (a: number, s: { x0: number; x1: number } | null) => !!s && a >= s.x0 - 0.01 && a <= s.x1 + 0.01;
   const mainDoor = read.door
     ? (doors.find((d) => Math.abs(d.cx - (read.door!.x0 + read.door!.x1) / 2) < 0.02) ?? null)
-    : (doors.find((d) => within(d.cx, read.oldDeck) || within(d.cx, read.cover) || within(d.cx, read.patio)) ?? doors.filter((d) => d.kind === "slider")[0] ?? doors[0] ?? null);
+    : (doors.find((d) => within(d.cx, read.patio)) ?? doors.filter((d) => d.kind === "slider")[0] ?? doors[0] ?? null);
 
   // WHERE THE DECK GOES along the wall, ft from the wall's left corner.
   const centreOf = (s: { x0: number; x1: number }) => along((s.x0 + s.x1) / 2);
   const [centre, centredOn]: [number, PhotoHouse["centredOn"]] = mainDoor
     ? [mainDoor.atFt, "door"]
-    : read.oldDeck
-      ? [centreOf(read.oldDeck), "old deck"]
-      : read.cover
-        ? [centreOf(read.cover), "patio roof"]
-        : read.patio
-          ? [centreOf(read.patio), "patio"]
-          : [wallFt / 2, "middle"];
+    : read.patio
+      ? [centreOf(read.patio), "patio"]
+      : [wallFt / 2, "middle"];
   const deckAtFt = half(wallFt >= W ? clamp(centre - W / 2, 0, wallFt - W) : (wallFt - W) / 2);
   /** Feet in the deck's frame (from its left end) of a point along the wall. */
   const deckFt = (x: number) => along(x) - deckAtFt;
@@ -171,25 +163,6 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   const parts = wallParts({ ...input.house, leftFt, rightFt, jogs }, { kind: "rect", widthFt: W, depthFt: 12 });
   const tallBump = storeys === 2 && openings.some((o) => upper(o) && parts.some((p) => p.depthFt > 0.4 && o.xFt > p.x0 && o.xFt < p.x1));
 
-  // WHAT STANDS THERE NOW — each to keep or tear out.
-  const existing: HouseExisting[] = [];
-  const slabDepth = DEPTH_GUESS_FT;
-  if (read.oldDeck) {
-    const cx = (read.oldDeck.x0 + read.oldDeck.x1) / 2;
-    const floor = read.oldDeck.top !== null ? above(read.oldDeck.top, cx) : null;
-    existing.push({ id: "old-deck", kind: "deck", x0Ft: q4(deckFt(read.oldDeck.x0)), x1Ft: q4(deckFt(read.oldDeck.x1)), depthFt: DEPTH_GUESS_FT, heightFt: q4(clamp(floor ?? 2, 0.5, 20)), posts: [], tearOut: false });
-  }
-  if (read.cover) {
-    const c = read.cover;
-    const cx = (c.x0 + c.x1) / 2;
-    const low = above(c.bottom, cx);
-    const high = above(c.top, cx);
-    existing.push({ id: "patio-roof", kind: "cover", x0Ft: q4(deckFt(c.x0)), x1Ft: q4(deckFt(c.x1)), depthFt: read.patio ? slabDepth : 8, heightFt: q4(clamp(low, 6, 24)), highFt: q4(clamp(Math.max(high, low + 0.5), 6.5, 26)), posts: c.posts.map((p) => q4(deckFt(p))), tearOut: false });
-  }
-  if (read.patio && !read.oldDeck) {
-    existing.push({ id: "patio", kind: "slab", x0Ft: q4(deckFt(read.patio.x0)), x1Ft: q4(deckFt(read.patio.x1)), depthFt: slabDepth, heightFt: 0.33, tearOut: false });
-  }
-
   // THE DECK'S HEIGHT from the back door: an inch under its threshold.
   const thresholdIn = mainDoor ? Math.round(mainDoor.sillFt * 12) : null;
   const heightIn = thresholdIn !== null && thresholdIn >= 7 ? thresholdIn - 1 : null;
@@ -206,8 +179,11 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
     material,
     bumpOuts: tallBump ? "full" : "low",
     openings,
-    existing,
   };
+  // The pitch the photo shows; else the one already set, when the roof is still the same shape; else the shape's own.
+  const pitch = read.roof.pitch && roof !== "flat" ? read.roof.pitch : roof === input.house.roof ? input.house.pitch : undefined;
+  if (pitch) house.pitch = pitch;
+  else delete house.pitch;
 
   // IN WORDS — what was seen and what was guessed.
   const scaleWords = scale.by === "width" ? "the wall's width you typed" : scale.by === "line" ? "your measure on the picture" : scale.by === "door" ? `the back door (${ftIn(DOOR_HEIGHT_FT)} tall)` : scale.by === "eave" ? `${storeys === 2 ? "two storeys" : "one storey"} of wall to the eave` : "nothing";
@@ -220,14 +196,11 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   facts.push({ id: "openings", label: "Openings", value: `${plural(winCount, "window")} · ${doorWords}`, guess: false });
   facts.push({ id: "look", label: "Siding", value: `${MATERIAL_WORDS[read.material ?? "lap"]}${sidingColour ? "" : " · colour kept"}`, guess: !read.material, ...(sidingColour ? { swatch: sidingColour } : {}) });
   if (roofColour) facts.push({ id: "roof-colour", label: "Roof colour", value: "from the picture", guess: false, swatch: roofColour });
-  for (const e of existing) facts.push({ id: `existing-${e.id}`, label: e.kind === "deck" ? "Old deck" : e.kind === "cover" ? "Patio roof" : "Patio", value: `${ftIn(Math.round((e.x1Ft - e.x0Ft) * 2) / 2)} along the wall · ${ftIn(e.depthFt)} out${e.kind === "cover" ? ` · its edge ${ftIn(Math.round(e.heightFt * 2) / 2)} up${e.posts?.length ? `, ${plural(e.posts.length, "post")}` : ""}` : e.kind === "deck" ? ` · ${ftIn(Math.round(e.heightFt * 2) / 2)} up` : ""}`, guess: true });
   facts.push({ id: "deck", label: "The deck", value: centredOn === "middle" ? "In the middle of the wall" : `Centred on the ${centredOn}`, guess: false });
 
   if (rough) checks.push("Sized by the storeys, the roughest way — type the wall's width (corner to corner) for a true size.");
   if (!mainDoor) checks.push("No back door seen — if there is one, mark it, and the deck's height comes from its threshold.");
   if (unsizedSteps) checks.push(`${unsizedSteps === 1 ? "The step's depth is" : "The steps' depths are"} a guess (${ftIn(JOG_DEFAULT_FT)}) — set ${unsizedSteps === 1 ? "it" : "them"} in the wall drawing.`);
-  if (existing.length) checks.push(`How far the ${existing.map((e) => (e.kind === "deck" ? "old deck" : e.kind === "cover" ? "patio roof" : "patio")).join(" and the ")} reach${existing.length === 1 ? "es" : ""} out can't be seen from the front — ${ftIn(DEPTH_GUESS_FT)} is a guess.`);
-  if (read.roof.kind === "shed" || read.roof.kind === "flat") checks.push(`A ${read.roof.kind} roof is drawn as a low hip for now.`);
   if (read.confidence < 0.5) checks.push("The picture was hard to read — look over the lines before building.");
   if (read.note) checks.push(read.note);
 
@@ -342,7 +315,7 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
 
 /**
  * Where to sample the wall's and the roof's colour on the picture, as fractions: the wall between its base and its
- * eave (or a storey's worth above the base), across its span, less every window, door and the patio roof with a margin;
+ * eave (or a storey's worth above the base), across its span, less every window and door with a margin;
  * the roof a band just above the eave. A point at (x, y) is sampled when `inWall` / `inRoof` say so.
  */
 export function colourZones(read: HouseRead, photoW: number, photoH: number): { wall: (x: number, y: number) => boolean; roof: ((x: number, y: number) => boolean) | null; box: { x0: number; x1: number; y0: number; y1: number } } {
@@ -358,7 +331,6 @@ export function colourZones(read: HouseRead, photoW: number, photoH: number): { 
   const holes = [
     ...read.windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill })),
     ...read.doors.map((d) => ({ x0: d.x0, x1: d.x1, top: d.top, bottom: d.bottom })),
-    ...(read.cover ? [{ x0: read.cover.x0, x1: read.cover.x1, top: read.cover.top, bottom: read.cover.bottom + 0.02 }] : []),
   ];
   const inset = (x1 - x0) * 0.03;
   const wall = (x: number, y: number) => {

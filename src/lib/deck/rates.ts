@@ -123,9 +123,6 @@ export const DECK_RATES: readonly DeckRateDef[] = [
   labor("fascia", "Fascia", "ft", 4),
   labor("brace", "Cut and fit one knee brace", "ea", 15, 2000),
   labor("demo", "Tear out and haul away an old deck", "sq ft", 4),
-  // What a photo of the house shows standing there (2026-10-23), torn out with one click. EXAMPLE prices.
-  labor("demoRoof", "Tear out and haul away an old patio roof", "sq ft", 6),
-  labor("demoSlab", "Break out and haul away a concrete patio", "sq ft", 7),
   ...RAIL_TYPES.filter((r) => r.id !== "none" && r.id !== "custom").flatMap((r): DeckRateDef[] => [
     { key: `rail.${r.id}.material`, label: `Railing, ${r.label.toLowerCase()} — material`, unit: "ft", price: r.perFt[0], group: "allowance", basis: r.basis, min: 0.5, max: 1500 },
     { key: `rail.${r.id}.labor`, label: `Railing, ${r.label.toLowerCase()} — labor`, unit: "ft", price: r.perFt[1], group: "allowance", basis: "labor", min: 0.5, max: 1500 },

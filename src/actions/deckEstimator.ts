@@ -31,7 +31,7 @@ import { logServerError } from "@/lib/server-events";
 import { runVisionJson } from "@/lib/sdk/openaiVision";
 import { friendlyAIError, isOpenAIEnabled } from "@/lib/sdk/openai";
 import { parseWallRead, WALL_READ_PROMPT, type WallRead } from "@/lib/deck/photoFit";
-import { HOUSE_READ_PROMPT, parseHouseRead, type HouseRead } from "@/lib/deck/houseRead";
+import { HOUSE_READ_PROMPT, HOUSE_ZOOM_NOTE, parseHouseRead, type HouseRead } from "@/lib/deck/houseRead";
 import { orgMayReadFolder } from "@/lib/home/files";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { sanitizeDeckRateBook, type DeckRateBook } from "@/lib/deck/rates";
@@ -171,7 +171,9 @@ export async function readHousePhoto(form: FormData): Promise<HousePhotoRead> {
   if (!isOpenAIEnabled()) return { ok: false, error: "Reading the picture needs the AI key on the server.", configured: false };
   try {
     const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
-    const raw = await runVisionJson<unknown>({ systemPrompt: HOUSE_READ_PROMPT, userPrompt: "Read this photo of the house and answer with the JSON.", imageUrl: dataUrl, detail: "high" });
+    // Two looks (2026-10-23): the whole picture, then the wall cut out and enlarged — the same JSON, told which it is.
+    const close = form.get("look") === "close";
+    const raw = await runVisionJson<unknown>({ systemPrompt: close ? `${HOUSE_READ_PROMPT}\n${HOUSE_ZOOM_NOTE}` : HOUSE_READ_PROMPT, userPrompt: close ? "Read the house's wall in this close picture and answer with the JSON." : "Read this photo of the house and answer with the JSON.", imageUrl: dataUrl, detail: "high" });
     const read = parseHouseRead(raw);
     if (!read) return { ok: false, error: "The house's wall could not be found in that picture — take it square on from the yard, the whole wall in it.", configured: true };
     return { ok: true, read };

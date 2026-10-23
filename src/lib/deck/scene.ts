@@ -33,7 +33,7 @@ import type { StairMember } from "./stairs";
 import type { RailMember } from "./rails";
 import { railWords } from "./rails";
 import { electricalWords } from "./electrical";
-import { HOUSE_MATERIALS, houseHandles, houseScene, type HouseMaterial, type HouseRoof } from "./house";
+import { HOUSE_MATERIALS, HOUSE_ROOFS, houseHandles, houseScene, type HouseMaterial, type HouseRoof } from "./house";
 
 export const DECK_SCENE_VERSION = 3;
 
@@ -189,7 +189,7 @@ export interface DeckScene {
   /** The outline as a flat ring, ft (the deck's, or the roof's posts when there is no deck). */
   outline: number[];
   /** The house, where the deck touches one: blocks [x0, y0, x1, y1], its height, and a door on the main wall [centre x, width, height]. */
-  house: { blocks: number[][]; heightFt: number; door: number[] | null; storeys?: 1 | 2; roof?: HouseRoof; windows?: number[][]; siding?: string; roofColour?: string; doors?: number[][]; material?: HouseMaterial; existing?: number[][] } | null;
+  house: { blocks: number[][]; heightFt: number; door: number[] | null; storeys?: 1 | 2; roof?: HouseRoof; windows?: number[][]; siding?: string; roofColour?: string; doors?: number[][]; material?: HouseMaterial; roofs?: number[][] } | null;
   /** The ground's fall across the deck, ft: out from the house over its depth, left to right over its width (null = flat). */
   ground: { outDropFt: number; acrossDropFt: number } | null;
   /** Fixtures that glow in the night view: [x, y, z, colour as 0xRRGGBB, sample (1 = the client's own fixture)], ft. */
@@ -804,10 +804,10 @@ export function deckScene(s: DeckStructure): DeckScene {
     const hShape = frame ? design.shape : { kind: "rect" as const, widthFt: Math.max(4, width / 12), depthFt: Math.max(4, depth / 12) };
     const hs = houseScene(hShape, design.house, { deckHeightFt: heightIn / 12, peakFt: peakIn / 12, mainEdge: main ? { x0: main.x0 / 12, x1: main.x1 / 12 } : null });
     house = { blocks: hs.blocks, heightFt: hs.heightFt, door: hs.door, storeys: hs.storeys, roof: hs.roof, windows: hs.windows, siding: hs.siding, roofColour: hs.roofColour };
-    // A house built from its photo (2026-10-23): its doors where they are, what it is clad in, what stands against it.
+    // A house built from its photo (2026-10-23): its doors where they are, what it is clad in.
     if (hs.doors) house.doors = hs.doors;
     if (hs.material) house.material = hs.material;
-    if (hs.existing) house.existing = hs.existing;
+    if (hs.roofs) house.roofs = hs.roofs;
   }
 
   // THE HOT TUB SPOT — the tub (by others) standing where the doubled
@@ -996,7 +996,7 @@ export function parseDeckScene(raw: unknown): DeckScene | null {
   let house: DeckScene["house"] = null;
   const h = (r.house && typeof r.house === "object" ? r.house : null) as Record<string, unknown> | null;
   if (h) {
-    if (!fin(h.heightFt) || !inside(h.heightFt, 1, 120) || !Array.isArray(h.blocks) || h.blocks.length > 12) return null;
+    if (!fin(h.heightFt) || !inside(h.heightFt, 1, 120) || !Array.isArray(h.blocks) || h.blocks.length > 16) return null;
     const blocks: number[][] = [];
     for (const b of h.blocks) {
       const n = numbers(b, Array.isArray(b) && b.length === 5 ? 5 : 4);
@@ -1008,14 +1008,18 @@ export function parseDeckScene(raw: unknown): DeckScene | null {
     house = { blocks, heightFt: h.heightFt, door };
     // The drawn house's look (2026-10-11): storeys, the roof, the windows — malformed ones are dropped, not fatal.
     if (h.storeys === 1 || h.storeys === 2) house.storeys = h.storeys;
-    if (h.roof === "hip" || h.roof === "gable") house.roof = h.roof;
+    if ((HOUSE_ROOFS as readonly unknown[]).includes(h.roof)) house.roof = h.roof as HouseRoof;
     if (Array.isArray(h.windows)) house.windows = h.windows.map((w) => numbers(w, 5)).filter((w): w is number[] => !!w).slice(0, 60);
     if (typeof h.siding === "string" && /^#[0-9a-f]{6}$/i.test(h.siding)) house.siding = h.siding;
     if (typeof h.roofColour === "string" && /^#[0-9a-f]{6}$/i.test(h.roofColour)) house.roofColour = h.roofColour;
-    // Built from a photo (2026-10-23): the doors, the cladding, what stands against the wall — malformed ones dropped.
+    // Built from a photo (2026-10-23): the doors and the cladding — malformed ones dropped.
     if (Array.isArray(h.doors)) house.doors = h.doors.map((d) => numbers(d, 6)).filter((d): d is number[] => !!d).slice(0, 8);
     if (typeof h.material === "string" && (HOUSE_MATERIALS as readonly string[]).includes(h.material)) house.material = h.material as HouseMaterial;
-    if (Array.isArray(h.existing)) house.existing = h.existing.filter((e): e is unknown[] => Array.isArray(e) && e.length >= 7 && e.length <= 15).map((e) => numbers(e, e.length)).filter((e): e is number[] => !!e).slice(0, 6);
+    // The roofs over the body and its bump-outs (2026-10-23): all of them or none (a roof per block, as before).
+    if (Array.isArray(h.roofs) && h.roofs.length <= 16) {
+      const roofs = h.roofs.map((x) => numbers(x, 7)).filter((x): x is number[] => !!x && Number.isInteger(x[0]) && x[0] >= 0 && x[0] <= 8);
+      if (roofs.length && roofs.length === h.roofs.length) house.roofs = roofs;
+    }
   }
   // Version 3: the legend, the tags, the callouts, the ground, the glows. Anything malformed is dropped, not fatal.
   let legend: SceneLegend[] = [];

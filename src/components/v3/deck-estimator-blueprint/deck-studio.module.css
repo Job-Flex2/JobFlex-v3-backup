@@ -755,3 +755,8 @@
 
 /* The wall drawing's quiet wrapper (2026-10-12): it only carries the press that puts the 3D's lights out — no box of its own. */
 .quiet { display: contents; }
+
+/* The doors and windows on the wall, from a photo of the house (2026-10-23). */
+.wallOpeningText { fill: var(--ink-muted); font-family: var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
+.wallWin { stroke: var(--blueprint); stroke-width: 4; vector-effect: non-scaling-stroke; stroke-linecap: butt; }
+.wallDoor { stroke: var(--ink); stroke-width: 7; vector-effect: non-scaling-stroke; stroke-linecap: butt; }

@@ -201,6 +201,8 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
   const xMin = -house.leftFt;
   const xMax = W + house.rightFt;
   const depths = parts.map((p) => p.depthFt);
+  /** The wall's face at a point along it (the part it is in). */
+  const faceAt = (x: number) => (parts.find((p) => x >= p.x0 - 1e-6 && x <= p.x1 + 1e-6) ?? parts[0]).depthFt;
   const yTop = Math.min(0, ...depths) - (roomy ? 6.5 : 7);
   const deepest = Math.max(0, ...depths);
   const span0 = Math.max(xMax - xMin + 5, (deepest + D + 4 - yTop) * 1.3);
@@ -735,6 +737,22 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
         data-deck-wall-deck
       />
       <polyline points={pts.join(" ")} className={s.wallLine} pointerEvents="none" />
+      {/* The doors and the ground-floor windows where the photo showed them, on the wall line. */}
+      {(house.openings ?? [])
+        .filter((o) => o.kind !== "window" || o.sillFt < 8)
+        .map((o) => {
+          const face = faceAt(o.xFt);
+          return o.kind === "window" ? (
+            <line key={o.id} x1={o.xFt - o.widthFt / 2} x2={o.xFt + o.widthFt / 2} y1={face} y2={face} className={s.wallWin} pointerEvents="none" data-deck-wall-window />
+          ) : (
+            <g key={o.id} pointerEvents="none" data-deck-wall-door>
+              <line x1={o.xFt - o.widthFt / 2} x2={o.xFt + o.widthFt / 2} y1={face} y2={face} className={s.wallDoor} />
+              <text x={o.xFt} y={face + font * 1.05} fontSize={font * 0.72} textAnchor="middle" className={s.wallOpeningText}>
+                door
+              </text>
+            </g>
+          );
+        })}
       {/* The words on the drawing: the house, each part's width and depth, the deck and its two dimensions, the wall's reach past the deck. */}
       <text x={(xMin + xMax) / 2} y={Math.min(0, ...depths) - font * 3.6} fontSize={font} textAnchor="middle" className={s.wallLabel}>the house</text>
       {parts.map((p, i) => {

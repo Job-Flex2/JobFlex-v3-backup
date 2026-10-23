@@ -93,7 +93,7 @@ import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type
 import { convertDeckEstimateToProposal, updateDeckProposal, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckSite, saveDeckDraft, saveDeckRateBook, type DeckDraftRow, type ReturnedClientDesign } from "@/actions/deckEstimator";
 import { deckClientInbox } from "@/actions/deckClientDesign";
 import { jobLine, type ClientLinkRow } from "@/lib/deck/clientDesign";
-import { HOUSE_LIMITS, HOUSE_MATERIALS, HOUSE_MATERIAL_LABEL, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, isHouseHex, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseMaterial, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_MATERIALS, HOUSE_MATERIAL_LABEL, HOUSE_PITCH_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, roofPitch, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, isHouseHex, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseMaterial, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
@@ -111,7 +111,7 @@ import { DeckV1Send } from "./deck-v1-send";
 import { DeckAddonDialog, DeckPreviewBanner } from "@/components/v3/deck-addon/deck-addon";
 import type { AddonInterval } from "@/lib/deckAddon";
 import { PHOTO_ENABLED, PhotoFileInput, PhotoSection, PhotoTools, PhotoViewBox, PhotoWhere, useDeckPhoto, type V1View } from "./deck-v1-photo";
-import { ExistingList, HousePhotoCard, HousePhotoReview, useHousePhoto } from "./deck-v1-house-photo";
+import { HousePhotoCard, HousePhotoReview, useHousePhoto } from "./deck-v1-house-photo";
 import "./deck-variant-1.css";
 // The Talk button and the panel's styles load with the studio (the panel itself loads when first opened).
 import "@/components/v3/deck-voice/deck-voice.css";
@@ -563,7 +563,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [view, setView] = React.useState<V1View>("3d");
   /* ── the photo of the house (dormant: PHOTO_ENABLED is false, as in the old studio) ── */
   const ph = useDeckPhoto({ design, patch, scene, view, setView });
-  /* ── the house built from its photo (2026-10-23): the wall, its windows and doors, what stands there now ── */
+  /* ── the house built from its photo (2026-10-23): the wall, its windows and doors ── */
   const hp = useHousePhoto({ design, patch, clientId, onBuilt: () => setView("3d") });
   const openWallLarge = () => {
     setView("wall");
@@ -1655,15 +1655,25 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       <p className={houseNotes(design.shape, design.house).length ? "v1-call v1-call-bad" : "v1-hint"} data-deck-wall-words>
         {wallWords(design.shape, design.house)}
       </p>
-      <ExistingList hp={hp} design={design} />
       <More title="The house and its wall" now={houseWords(design.house)} id="house-more">
         <div className="v1-grid2">
           <Field label="Storeys">
             <Seg label="Storeys" value={String(design.house.storeys)} onChange={(v) => setHouse({ storeys: v === "2" ? 2 : 1 })} options={[{ value: "1", label: "One" }, { value: "2", label: "Two" }]} />
           </Field>
           <Field label="Roof">
-            <Seg label="Roof" value={design.house.roof} onChange={(v: HouseRoof) => setHouse({ roof: v })} options={HOUSE_ROOFS.map((x) => ({ value: x, label: HOUSE_ROOF_LABEL[x] }))} />
+            <select className="v1-sel" value={design.house.roof} onChange={(e) => setHouse({ roof: e.target.value as HouseRoof })} data-deck-house-roof>
+              {HOUSE_ROOFS.map((x) => (
+                <option key={x} value={x}>
+                  {HOUSE_ROOF_LABEL[x]}
+                </option>
+              ))}
+            </select>
           </Field>
+          {design.house.roof !== "flat" ? (
+            <Field label="Roof pitch" aside="in. per ft">
+              <NumberInput label="Roof pitch, inches of rise per foot" value={roofPitch(design.house)} parse={(t) => (t.trim() === "" ? null : Number(t.replace(/\/12$/, "")))} format={(n2) => `${n2}/12`} min={HOUSE_PITCH_LIMITS.min} max={HOUSE_PITCH_LIMITS.max} onCommit={(n2) => setHouse({ pitch: n2 })} />
+            </Field>
+          ) : null}
         </div>
         <Field label="Siding" wide>
           <div className="v1-chips" role="group" aria-label="Siding">
